@@ -19,14 +19,13 @@ Tidak ada layar; milestone ini hanya tooling `cargo xtask`.
 - [ ] `pin --url http://...` → ditolak sebelum unduhan dengan `url must be an https:// URL` → AC-3
 - [ ] Tambahkan sementara entri NATS hasil `pin` di atas, jalankan `cargo xtask runtime verify` → `nats-2.15.1-macos-aarch64: OK`; ganti satu huruf `sha256` → `FAIL digest mismatch: ...`; ubah `size` → `FAIL size mismatch: ...`; exit 1 untuk keduanya; kembalikan file → AC-1, AC-3
 - [ ] Ubah satu byte file cache NATS, lalu jalankan `verify` lagi → peringatan `no longer matches its digest; deleting it`, file diunduh ulang, hasil tetap `OK` → AC-3 (cek ulang cache)
-- [ ] Di Linux (atau job `linux`), `pin` tidak mencetak `min_os` dan memberi catatan `min_os needs vtool`; cache berada di `$XDG_CACHE_HOME/stackly-xtask/runtime/` atau `~/.cache/stackly-xtask/runtime/` → value sourcing cache
+- [ ] Di Linux, `pin` tidak mencetak `min_os` dan memberi catatan `min_os needs vtool`; cache berada di `$XDG_CACHE_HOME/stackly-xtask/runtime/` atau `~/.cache/stackly-xtask/runtime/` → value sourcing cache. Tanpa host Linux langkah ini dicatat `BLOCKED`; path cache Linux tetap dicek di Mac ini oleh unit test `the_cache_folder_follows_the_platform_convention`
 - [ ] Entri dengan `upstream_signature` berjenis `gpg` (pertama kali di MySQL, milestone 2): tanpa `gpg` di PATH hasilnya `SKIP gpg`; dengan `gpg`, signature dicek dengan kunci di `runtimes/keys/` dan fingerprint entri → AC-1
-- [ ] Di pull request, langkah `Runtime inventory and evidence rules (spec 0003)` di job `linux` hijau → AC-2
 
 ### Acceptance-criteria coverage
 
 - AC-1 (inventaris, `pin`, `verify` menghasilkan nilai yang sama): langkah pin, verify, dan gpg. Delapan entri itu sendiri baru datang di milestone 2 dan 3.
-- AC-2 (`runtime check`, pesan `<id>: <aturan>`, job `linux`): langkah check, unit test, dan CI. Aturan 8 dan 9 baru datang di build step 7 dan 12.
+- AC-2 (`runtime check`, pesan `<id>: <aturan>`): langkah check dan unit test. Aturan 8 dan 9 baru datang di build step 7 dan 12.
 - AC-3 (digest dan ukuran dicek sebelum ekstraksi, cache rusak dihapus): langkah sha256 file lain, http, verify mismatch, dan cache rusak. Bagian worker dan hasil spike `FAIL` datang di milestone 2.
 
 ## Milestone 2: spike LaunchAgent untuk artefak upstream · 2026-10-17
@@ -51,7 +50,7 @@ Tidak ada layar; milestone ini hanya tooling `cargo xtask`.
 - [ ] `runtime record` pada report dari tree kotor → `the run is dirty: ...`; pada report fixture → `the run is a fixture run, not native evidence`; pada report commit lain → `the run is from commit ..., not HEAD ...` → AC-10
 - [ ] `grep -rE "$(whoami)|$(hostname -s)|/var/folders" evidence/runtime/` → tidak ada hasil → privasi evidence
 - [ ] Spike kedua untuk digest yang hasil quarantine-nya sudah di-commit → `quarantine.outcome` `skipped` dengan detail folder evidence itu → AC-9
-- [ ] Driver dan `cargo xtask runtime spike --prune-cache` tidak pernah menghapus `spike.lock` atau file cache yang digest-nya ada di inventaris → AC-4, AC-15
+- [ ] Driver dan `cargo xtask runtime spike --prune-cache` tidak pernah menghapus `spike.lock` atau file cache yang digest-nya ada di inventaris → AC-4
 
 ### Value sourcing
 
@@ -70,4 +69,5 @@ Tidak ada layar; milestone ini hanya tooling `cargo xtask`.
 - AC-5: NATS, Traefik, MySQL 8.4 dan 9.7 `PASS`; PostgreSQL di milestone 3.
 - AC-7: bagian closure dicek untuk setiap artefak; probe ICU, pgcrypto, lz4, dan zstd di milestone 3.
 - AC-13: ClickHouse `blocked` setelah aturan fallback (26.8 LTS dan 26.9 stable memakai aset self extracting yang sama).
-- AC-11, AC-12, AC-14, AC-15: belum di milestone ini.
+- AC-12: belum di milestone ini.
+- AC-11, AC-14, AC-15: dihapus 2026-10-17 (CI ditiadakan, pengembangan fokus di Mac ini dulu).

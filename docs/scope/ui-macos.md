@@ -76,7 +76,7 @@ Kumpulan view SwiftUI yang dipakai ulang oleh semua layar journey, supaya tiap l
 
 Data contoh dari mockup UI dijadikan fixture Swift untuk Xcode Previews dan snapshot, supaya tiap layar bisa dicek di semua state, tampilan, dan pengaturan aksesibilitas tanpa daemon nyata. Aksesibilitas dicek per layar saat layar itu dibangun, bukan diaudit di akhir.
 
-**Done when:** fixture memakai tipe kontrak yang sama dengan Swift client (fitur 13), bukan model terpisah; fixture mencakup kasus di mockup UI (instance running, starting, stopping, stopped, crash loop, konflik port, drift config, environment partially ready, operasi berjalan dan gagal, runtime external, daemon offline, dan workspace kosong); tiap layar yang dibangun journey punya snapshot light dan dark, teks besar, Increase Contrast, dan Reduce Transparency untuk state yang dimilikinya, plus pemeriksaan aksesibilitas otomatis (elemen tanpa label, target terlalu kecil, kontras); semuanya berjalan di pipeline PR, dan perubahan snapshot terlihat saat review.
+**Done when:** fixture memakai tipe kontrak yang sama dengan Swift client (fitur 13), bukan model terpisah; fixture mencakup kasus di mockup UI (instance running, starting, stopping, stopped, crash loop, konflik port, drift config, environment partially ready, operasi berjalan dan gagal, runtime external, daemon offline, dan workspace kosong); tiap layar yang dibangun journey punya snapshot light dan dark, teks besar, Increase Contrast, dan Reduce Transparency untuk state yang dimilikinya, plus pemeriksaan aksesibilitas otomatis (elemen tanpa label, target terlalu kecil, kontras); semuanya berjalan di Mac ini, dan perubahan snapshot terlihat saat review.
 
 **Trace:** REQ-024, REQ-027, NFR-012, AC-027, PRD bagian 28
 

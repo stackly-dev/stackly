@@ -4,17 +4,17 @@ Dokumen ini adalah catatan alasan untuk [index.md](index.md). `/develop` tidak p
 
 ## Context
 
-Repo ini masih greenfield: isinya baru `prd.md`, scope di `docs/scope/`, dan mockup UI. PRD sudah mengunci Rust untuk core, daemon, dan CLI, SwiftUI untuk macOS, SQLite untuk registry, Unix domain socket untuk IPC, serta macOS 27 di Apple Silicon. Yang masih terbuka: toolchain dan versinya, pembagian crate, encoding IPC dan tooling pembangkit kontrak (OQ-005), library yang dipakai lintas fitur, dan tooling build, test, serta CI. Tanpa keputusan ini, fitur Foundation 4 sampai 11 dan jalur SwiftUI (12, 13, 67 sampai 69) masing masing akan menebak strukturnya sendiri, dan walking skeleton (fitur 14) tidak punya tempat berpijak.
+Repo ini masih greenfield: isinya baru `prd.md`, scope di `docs/scope/`, dan mockup UI. PRD sudah mengunci Rust untuk core, daemon, dan CLI, SwiftUI untuk macOS, SQLite untuk registry, Unix domain socket untuk IPC, serta macOS 27 di Apple Silicon. Yang masih terbuka: toolchain dan versinya, pembagian crate, encoding IPC dan tooling pembangkit kontrak (OQ-005), library yang dipakai lintas fitur, dan tooling build serta test. Tanpa keputusan ini, fitur Foundation 4 sampai 11 dan jalur SwiftUI (12, 13, 67 sampai 69) masing masing akan menebak strukturnya sendiri, dan walking skeleton (fitur 14) tidak punya tempat berpijak.
 
 Gaya yang membentuk keputusan:
 
-- **Portabilitas yang dibuktikan, bukan dijanjikan.** NFR-010 dan AC-050 mewajibkan domain dan protocol bebas dari framework GUI dan API OS, dengan target check dan test fake platform di CI. REQ-050 meminta core, DTO, dan schema siap Windows, walau Windows baru dikerjakan nanti.
+- **Portabilitas yang dibuktikan, bukan dijanjikan.** NFR-010 dan AC-050 mewajibkan domain dan protocol bebas dari framework GUI dan API OS, dengan target check dan test fake platform. REQ-050 meminta core, DTO, dan schema siap Windows, walau Windows baru dikerjakan nanti.
 - **Daemon adalah pusat.** REQ-001 dan PRD 15.1 menyatakan GUI dan CLI hanya client, dan hanya daemon yang menulis registry serta menjalankan proses. Tidak ada listener TCP (PRD 18.1).
 - **Satu kontrak untuk tiga bahasa.** PRD 18.3 mewajibkan DTO Swift (dan C# nanti) berasal dari schema atau fixture yang sama dengan Rust, dengan test untuk enum, field opsional, timestamp, kode error, lebar integer, dan Unicode.
 - **Anggaran sumber daya daemon.** NFR-003 menargetkan daemon idle di bawah 150 MiB RSS dan 1% satu CPU. NFR-004 mewajibkan semua antrean dan buffer berbatas, dan NFR-011 mewajibkan correlation ID di setiap operasi dan error.
 - **Reproducible.** PRD 16 meminta toolchain dan dependency dipin setelah audit kompatibilitas, dan melarang membuat banyak crate kosong hanya untuk meniru pohon usulan.
 - **Keamanan.** NFR-009 melarang temuan critical atau high yang belum diselesaikan di IPC, eksekusi provider, dan operasi destruktif. Permukaan `unsafe` dan dependency ikut menentukan seberapa besar area yang harus diaudit.
-- **Realitas CI.** App dengan target macOS 27 hanya bisa dijalankan di macOS 27. Per 16 Oktober 2026, image macOS 27 di GitHub Actions masih preview. PRD 27 melarang test runtime nyata menyentuh data pribadi developer.
+- **Realitas mesin uji.** App dengan target macOS 27 hanya bisa dijalankan di macOS 27. PRD 27 melarang test runtime nyata menyentuh data pribadi developer.
 - **Tim dan proses.** Pemilik proyek perorangan dibantu agent, dengan rigor default Beta dan pendekatan Journey. Biaya operasional setiap tool tambahan terasa langsung.
 
 ## Options considered
@@ -26,8 +26,8 @@ Yang dibandingkan adalah stack utuh, bukan teknologi satu per satu. Pilihan per 
 Crate Rust terpisah hanya di batas yang perlu dijaga compiler (domain, platform, protocol, core, adapter, testkit, dua bin). Modul lain menjadi modul di dalam core. IPC memakai JSON dengan prefix panjang. Swift dibangkitkan dari tipe Rust oleh typeshare, dan JSON Schema oleh schemars, dengan fixture bersama sebagai penjaga.
 
 **Pros**:
-- Arah dependency domain ke adapter dijaga compiler, sehingga NFR-010 terbukti di CI.
-- Satu sumber kontrak. Perubahan protokol tanpa regenerasi Swift langsung gagal di CI.
+- Arah dependency domain ke adapter dijaga compiler, sehingga NFR-010 terbukti.
+- Satu sumber kontrak. Perubahan protokol tanpa regenerasi Swift langsung gagal di `cargo xtask codegen --check`.
 - Sedikit tool tambahan: tidak perlu Node, protoc, atau framework dependency injection.
 
 **Cons**:
@@ -57,7 +57,7 @@ Sekitar 17 crate persis seperti PRD 16, dengan Protobuf (prost, `swift-protobuf`
 
 **Cons**:
 - Banyak crate tipis yang belum punya isi, bertentangan dengan catatan PRD 16, dan memperlambat build.
-- Toolchain buf atau protoc ditambah plugin di setiap mesin dan runner. `oneof` kurang nyaman dipakai, debug pesan biner lebih sulit, dan PRD 18.1 menyebut Protobuf tidak perlu hanya demi IPC lokal.
+- Toolchain buf atau protoc ditambah plugin di setiap mesin. `oneof` kurang nyaman dipakai, debug pesan biner lebih sulit, dan PRD 18.1 menyebut Protobuf tidak perlu hanya demi IPC lokal.
 
 ## Rationale
 
@@ -78,12 +78,12 @@ Kamu memilih `cargo test` daripada `cargo-nextest`. Itu bisa berjalan, dengan sy
 | Crate saat scaffold | Rantai dependency, tanpa storage | Minimal | Cukup untuk membuktikan arah dependency. Storage menunggu skema fitur 5 |
 | Nama daemon | `stacklyd` | `stackly-daemon` | Konvensi Unix, pendek di `ps` dan Activity Monitor |
 | Lisensi | MIT OR Apache-2.0 | Apache-2.0 | Konvensi ekosistem Rust, sama dengan default PRD (OQ-013) |
-| Toolchain Rust | 1.99.1 dipin persis, edition 2024 | 1.98 | Reproducible. Naik versi lewat PR yang lulus CI (basis: PRD 16) |
+| Toolchain Rust | 1.99.1 dipin persis, edition 2024 | 1.98 | Reproducible. Naik versi lewat PR yang lulus semua cek di Mac ini (basis: PRD 16) |
 | Toolchain Swift | Xcode 27, mode Swift 6 strict | Mode Swift 5 | Data race antara socket dan UI tertangkap saat compile, sebelum kode bertambah |
 | Async runtime | tokio | smol | Socket, child process, sinyal, timer, dan channel berbatas dalam satu ekosistem (NFR-004) |
 | Encoding IPC | JSON | Protobuf | Mudah diperiksa saat debug dan dibaca native di Swift dan C# (basis: PRD 18.1) |
 | Framing | u32 big endian dengan batas | NDJSON | Batas dicek sebelum alokasi, sederhana di tiga bahasa, mudah diuji dengan fuzzing (basis: framing dengan prefix panjang) |
-| DTO Swift | typeshare dan fixture bersama | Swift tulisan tangan | Satu sumber kontrak, drift tertangkap di CI |
+| DTO Swift | typeshare dan fixture bersama | Swift tulisan tangan | Satu sumber kontrak, drift tertangkap oleh `cargo xtask codegen --check` |
 | JSON Schema | schemars dari tipe Rust | Ditulis tangan | Sumber yang sama dengan serde dan typeshare, dipakai C# dan validasi editor |
 | Registry | rusqlite `bundled`, satu thread penulis | sqlx | Versi SQLite terkunci, API sync cocok dengan pola satu penulis |
 | YAML | serde_yaml_ng | serde_norway | Fork serde_yaml yang dirawat dan disebut advisory RustSec |
@@ -100,14 +100,13 @@ Kamu memilih `cargo test` daripada `cargo-nextest`. Itu bisa berjalan, dengan sy
 | Test Swift | Swift Testing, plus XCUITest untuk UI | XCTest | Test berparameter cocok untuk fixture kontrak dan state mockup |
 | Lint dan format | rustfmt dan clippy, `swift-format` | SwiftLint | Semuanya ikut toolchain, tanpa install tambahan |
 | Audit dependency | `cargo-deny` | `cargo-deny` dan `cargo-about` | Lisensi, advisory, dan sumber dalam satu gate. Notice rilis milik fitur 60 |
-| CI | GitHub Actions hybrid dengan Mac self hosted khusus CI | Hosted saja | Test app macOS 27 butuh host macOS 27, dan image hosted masih preview |
 | Bundle ID sementara | `com.ojiepermana.stackly` | `io.github.ojiepermana.stackly` | Namespace pemilik repo, diganti sebelum rilis publik bila perlu (OQ-001) |
 
 Keputusan kecil yang saya ambil sendiri (RECOMMEND), dengan runner up:
 
 - **Profil release:** `panic = "unwind"`, `lto = "thin"`, `debug = "line-tables-only"`, dan `split-debuginfo = "packed"`, sehingga dSYM disimpan untuk diagnosis. Dengan unwind, tokio mengisolasi panic per task dan panic hook mencatatnya, sementara `abort` mematikan seluruh daemon karena satu bug. Runner up: `abort` demi binary lebih kecil.
 - **Penjaga arah dependency:** `cargo xtask check-deps` membaca `cargo metadata` dan menerapkan aturan di index.md. Runner up: `cargo-deny` `bans` per crate, yang kurang ekspresif untuk aturan per anggota workspace.
-- **Cek portabilitas:** `cargo check` native dan untuk target `aarch64-pc-windows-msvc` pada crate netral, dijalankan di runner Linux. `check` tidak melakukan link, jadi tidak butuh MSVC. Runner up: runner Windows sungguhan, yang baru perlu di fase Windows.
+- **Cek portabilitas:** `cargo check` untuk target `aarch64-pc-windows-msvc` pada crate netral, dijalankan di Mac ini. `check` tidak melakukan link, jadi tidak butuh MSVC. Runner up: mesin Windows sungguhan, yang baru perlu di fase Windows.
 - **Pusat versi dependency:** `[workspace.package]`, `[workspace.dependencies]`, dan `[workspace.lints]` di root, dan anggota memakai `workspace = true`. Runner up: versi per crate, yang mudah membuat versi ganda.
 - **Mekanisme larangan `unsafe`:** `deny` di workspace, ditambah `#![allow(unsafe_code)]` hanya di platform-macos dan pemindaian oleh `check-deps`. Efeknya sama dengan `forbid` kecuali satu crate, karena `forbid` tidak bisa dibuka per crate. Runner up: tabel `[lints]` terpisah di platform-macos, yang mudah menyimpang dari tabel workspace.
 - **App Sandbox mati di target app:** app perlu terhubung ke socket daemon dan membundel helper, dan distribusinya langsung, bukan lewat Mac App Store. Runner up: sandbox menyala dengan entitlement pengecualian, yang menambah kerumitan tanpa manfaat untuk distribusi langsung.
@@ -117,7 +116,7 @@ Keputusan kecil yang saya ambil sendiri (RECOMMEND), dengan runner up:
 
 ### Cross check 16 Oktober 2026
 
-Satu pass review read only oleh model lain menemukan enam celah yang akan membuat scaffold menebak (asal proyek Xcode, manifest SwiftPM, nilai workspace Cargo, mekanisme typeshare, aturan `check-deps` yang harus berlaku untuk dependency langsung, dan isi scaffold yang provisional) serta perbaikan teknis (siklus testkit dan core, huruf UUID di Swift, mekanisme lint `unsafe`, dependency macOS di bin, target toolchain, profil release, dan batas runner `macos-26`). Kedua belas perbaikan diterima engineer dan sudah masuk ke index.md.
+Satu pass review read only oleh model lain menemukan enam celah yang akan membuat scaffold menebak (asal proyek Xcode, manifest SwiftPM, nilai workspace Cargo, mekanisme typeshare, aturan `check-deps` yang harus berlaku untuk dependency langsung, dan isi scaffold yang provisional) serta perbaikan teknis (siklus testkit dan core, huruf UUID di Swift, mekanisme lint `unsafe`, dependency macOS di bin, target toolchain, dan profil release). Kedua belas perbaikan diterima engineer dan sudah masuk ke index.md.
 
 ### Bukti: pengecekan landscape 16 Oktober 2026
 
@@ -126,9 +125,12 @@ Dijalankan sekali lewat subagent researcher (5 pencarian, 8 halaman). Ringkasann
 - Rust stable terbaru 1.99.1. Edition 2024 stabil sejak 1.85.
 - Crate typeshare 1.0.5 terbit 2 Januari 2026. Status perawatannya tidak terkonfirmasi, karena halaman rilis GitHub tidak terjangkau.
 - serde_yml tidak aman dan tidak dirawat (RUSTSEC-2025-0068). Advisory itu menyebut serde_yaml_ng dan serde_norway sebagai fork yang dirawat.
-- Label runner arm64 hosted di GitHub: `macos-26` (alias `macos-latest`), `macos-15`, dan variasi xlarge. Label `xcode-27` masih preview, dan belum ada label `macos-27`.
 - Xcode 27 (Swift 6.4, SDK macOS 27, butuh macOS 26.6 atau lebih baru) hanya terkonfirmasi dari sumber pihak ketiga.
 - jiff 0.2.38 (6 Oktober 2026), belum 1.0.
+
+### Perubahan 2026-10-17
+
+CI ditiadakan atas keputusan pemilik proyek, dan pengembangan fokus di Mac ini dulu (macOS 27, Apple Silicon). Yang berubah: baris CI di tabel stack dan di Pilihan per lapisan dihapus, begitu juga Mac self hosted dan runner `macos-26`. Cek portabilitas kini hanya `cargo check --target aarch64-pc-windows-msvc` di Mac ini, tanpa cek native di Linux. `cargo xtask check-deps` dan `cargo xtask codegen --check` dijalankan manual, dan naik versi toolchain cukup lulus semua cek di Mac ini.
 
 ## References
 
@@ -152,4 +154,3 @@ Dijalankan sekali lewat subagent researcher (5 pencarian, 8 halaman). Ringkasann
 - typeshare di crates.io: https://crates.io/api/v1/crates/typeshare
 - jiff di crates.io: https://crates.io/api/v1/crates/jiff
 - RUSTSEC-2025-0068 (serde_yml): https://api.osv.dev/v1/vulns/RUSTSEC-2025-0068
-- GitHub Actions runner images: https://github.com/actions/runner-images

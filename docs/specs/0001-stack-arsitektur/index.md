@@ -25,12 +25,12 @@ Sudah dikunci PRD dan tidak dibahas ulang: Rust untuk core, daemon, dan CLI; Swi
 | --- | --- | --- |
 | Target platform | macOS 27, Apple Silicon (`aarch64-apple-darwin`) saja, tanpa universal binary | Dikunci PRD (OQ-002). Intel menunggu matrix lulus |
 | Pola arsitektur | Satu daemon per user (monolith berlapis) dengan CLI dan GUI sebagai client IPC. GUI tidak menautkan Rust lewat FFI | REQ-001: hanya daemon yang menulis registry dan menjalankan proses |
-| Toolchain Rust | Rust 1.99.1 dipin persis di `rust-toolchain.toml` (komponen rustfmt dan clippy), edition 2024 di semua crate, `rust-version = "1.99.1"` | Build reproducible. Naik versi lewat PR khusus yang lulus CI |
-| Toolchain Swift | Xcode 27 (Swift 6.4, SDK macOS 27) dipin di CI, mode bahasa Swift 6 dengan strict concurrency penuh | Data race antara client socket dan UI tertangkap saat compile |
+| Toolchain Rust | Rust 1.99.1 dipin persis di `rust-toolchain.toml` (komponen rustfmt dan clippy), edition 2024 di semua crate, `rust-version = "1.99.1"` | Build reproducible. Naik versi lewat PR khusus yang lulus semua cek di Mac ini |
+| Toolchain Swift | Xcode 27 (Swift 6.4, SDK macOS 27), mode bahasa Swift 6 dengan strict concurrency penuh | Data race antara client socket dan UI tertangkap saat compile |
 | Async runtime | tokio, runtime multi thread | Socket, child process, sinyal, timer, dan channel berbatas (NFR-004) dalam satu ekosistem |
 | Encoding IPC (OQ-005) | JSON `UTF-8` lewat serde_json, nama field camelCase | Mudah diperiksa saat debug, dan dibaca native oleh Swift dan C# nanti |
 | Framing IPC | Panjang `u32` big endian (4 byte) lalu payload. Batas 1 MiB untuk frame kontrol dan 64 KiB untuk batch log, dicek sebelum alokasi | Sederhana di tiga bahasa dan mudah diuji dengan fuzzing. Angka batas dari PRD 18.3 |
-| Kontrak Swift (OQ-005) | typeshare membangkitkan `Codable` Swift dari tipe di `stackly-protocol`. Hasilnya disimpan di git dan dicek ulang di CI. Fixture JSON bersama diuji di Rust dan Swift | Satu sumber kontrak. Fixture tetap menjadi kontrak kalau generator diganti |
+| Kontrak Swift (OQ-005) | typeshare membangkitkan `Codable` Swift dari tipe di `stackly-protocol`. Hasilnya disimpan di git dan dicek ulang dengan `cargo xtask codegen --check`. Fixture JSON bersama diuji di Rust dan Swift | Satu sumber kontrak. Fixture tetap menjadi kontrak kalau generator diganti |
 | JSON Schema | schemars dari tipe Rust yang sama, ditulis oleh `cargo xtask codegen` | Dipakai C# nanti, validasi editor manifest, dan dokumentasi |
 | Registry | rusqlite dengan fitur `bundled`, satu thread penulis yang menerima perintah lewat channel dari tokio | Versi SQLite terkunci, cocok dengan pola satu penulis |
 | YAML | serde_yaml_ng | Fork serde_yaml yang dirawat. serde_yml dilarang (RUSTSEC-2025-0068) |
@@ -47,7 +47,6 @@ Sudah dikunci PRD dan tidak dibahas ulang: Rust untuk core, daemon, dan CLI; Swi
 | Format dan lint | rustfmt dan clippy, `swift-format` (`.swift-format`) | Semuanya ikut toolchain |
 | Audit dependency | `cargo-deny` (lisensi, advisory RustSec, ban, sumber) | Satu gate untuk PRD 27 |
 | Task runner | `cargo xtask` (crate `xtask/`, alias di `.cargo/config.toml`) | Tanpa install tambahan, jalan juga di Windows |
-| CI | GitHub Actions: runner Linux hosted (fmt, clippy, `cargo-deny`, cek portabilitas), runner `macos-26` hosted khusus job Rust di darwin (Xcode 26 di sana tidak bisa membangun app macOS 27), dan satu Mac self hosted khusus CI (macOS 27, Xcode 27) untuk semua job Swift dan runtime nyata | Test app macOS 27 butuh host macOS 27. Image hosted masih preview |
 | Lisensi | `MIT OR Apache-2.0` (file `LICENSE-MIT` dan `LICENSE-APACHE`) | Konvensi Rust, default PRD (OQ-013) |
 | Nama dan identifier | CLI `stackly`, daemon `stacklyd`, bundle ID sementara `com.ojiepermana.stackly` | OQ-001 tetap terbuka sampai sebelum rilis publik |
 
@@ -72,7 +71,7 @@ Semua crate library memakai prefix `stackly-`. Kolom terakhir menunjukkan kapan 
 
 ### Aturan arah dependency
 
-Aturan ini dijaga oleh `cargo xtask check-deps`, yang membaca `cargo metadata` dan gagal kalau ada pelanggaran. Perintah ini berjalan di CI. Aturan hanya berlaku untuk **dependency langsung**, dibedakan menurut jenisnya (normal, dev, build). Dependency transitif tidak dicek, karena misalnya `uuid` v7 sah menarik `getrandom` lalu `libc`. Portabilitas dibuktikan oleh cek lintas target, bukan oleh daftar crate terlarang.
+Aturan ini dijaga oleh `cargo xtask check-deps`, yang membaca `cargo metadata` dan gagal kalau ada pelanggaran. Perintah ini dijalankan manual di Mac ini. Aturan hanya berlaku untuk **dependency langsung**, dibedakan menurut jenisnya (normal, dev, build). Dependency transitif tidak dicek, karena misalnya `uuid` v7 sah menarik `getrandom` lalu `libc`. Portabilitas dibuktikan oleh cek lintas target, bukan oleh daftar crate terlarang.
 
 - `stackly-domain`, `stackly-platform`, `stackly-protocol`, dan `stackly-core` tidak pernah bergantung langsung pada `stackly-platform-macos`, `stackly-storage`, atau crate yang hanya ada di macOS.
 - `stackly-domain` dan `stackly-protocol` tidak bergantung pada crate Stackly mana pun, dan tidak punya tokio atau libc sebagai dependency langsung.
@@ -81,7 +80,7 @@ Aturan ini dijaga oleh `cargo xtask check-deps`, yang membaca `cargo metadata` d
 - `stackly-testkit` hanya boleh muncul sebagai dependency berjenis dev, dan tidak bergantung pada `stackly-core`.
 - [Spec 0002](../0002-coding-standards-tooling/index.md) menambah crate daun `stackly-evidence` (`crates/evidence`) dengan aturannya sendiri: tanpa crate Stackly lain, hanya dependency dev kecuali di `xtask` dan `stackly-testkit`, dan boleh menjadi dependency dev `stackly-domain` serta `stackly-protocol`.
 - `#![allow(unsafe_code)]` hanya boleh ada di `stackly-platform-macos` (dan `stackly-storage` bila nanti terbukti perlu). `check-deps` memindai source crate lain dan gagal kalau menemukannya.
-- Cek portabilitas (NFR-010, AC-050): di runner Linux, jalankan `cargo check` native dan `cargo check --target aarch64-pc-windows-msvc` untuk `stackly-domain`, `stackly-platform`, `stackly-protocol`, dan `stackly-core`. `check` tidak melakukan link, jadi tidak butuh MSVC. Job Linux lain (clippy, test) memakai `--workspace --exclude stackly-platform-macos`.
+- Cek portabilitas (NFR-010, AC-050): di Mac ini, jalankan `cargo check --target aarch64-pc-windows-msvc` untuk `stackly-domain`, `stackly-platform`, `stackly-protocol`, dan `stackly-core`. `check` tidak melakukan link, jadi tidak butuh MSVC.
 
 ### Susunan repo
 
@@ -141,7 +140,7 @@ Integration test Rust berada di folder `tests/` milik masing masing crate. Spec 
 - `[workspace.dependencies]` memuat semua versi crate pihak ketiga sebagai rentang caret (misalnya `"1.47"`), dan versi persisnya dikunci oleh `Cargo.lock` yang disimpan di git. Anggota tidak menulis versi sendiri. Scaffold hanya menambahkan crate yang benar benar dipakai isi scaffold. Contohnya, rusqlite masuk di fitur 5, serde_yaml_ng di fitur 9, dan clap hanya dipakai kedua bin.
 - `[workspace.lints]` memuat `rust.unsafe_code = "deny"` dan `clippy.undocumented_unsafe_blocks = "deny"`, dan semua anggota mewarisinya (`lints.workspace = true`). `stackly-platform-macos` menambahkan `#![allow(unsafe_code)]` di `lib.rs`, dan `check-deps` menolak `allow` itu di crate lain. Mekanisme ini dipakai karena `forbid` tidak bisa dibuka per crate, dan crate yang menulis `[lints]` sendiri tidak bisa sekaligus mewarisi tabel workspace.
 - `[profile.release]` memakai `panic = "unwind"` (tokio mengisolasi panic per task, panic hook mencatatnya), `lto = "thin"`, `debug = "line-tables-only"`, dan `split-debuginfo = "packed"` tanpa `strip`, sehingga dSYM berisi informasi baris yang cukup untuk diagnosis crash. dSYM disimpan sebagai artefak dan tidak ikut ke app.
-- `rust-toolchain.toml` memasang target `aarch64-apple-darwin` dan `aarch64-pc-windows-msvc`. Target Windows hanya berisi std (kecil), supaya kamu bisa menjalankan cek portabilitas secara lokal. Linux dicek secara native di runner Linux.
+- `rust-toolchain.toml` memasang target `aarch64-apple-darwin` dan `aarch64-pc-windows-msvc`. Target Windows hanya berisi std (kecil), supaya kamu bisa menjalankan cek portabilitas secara lokal.
 - `.gitignore` mengabaikan `target/`, `DerivedData/`, `xcuserdata/`, `*.xcuserstate`, dan `.DS_Store`.
 - Saat scaffold, log daemon dan CLI hanya ke stderr. Lokasi file log daemon mengikuti resolver direktori di fitur 4, dan sink file serta rotasinya dipasang saat daemon dibangun di fitur 6.
 
@@ -166,7 +165,7 @@ Hal berikut sengaja tidak diputuskan di sini. Masing masing dimiliki fitur yang 
 
 | Keputusan | Pemilik |
 | --- | --- |
-| Format, lint, dan workflow CI yang dipasang (`rustfmt.toml`, `.swift-format`, `deny.toml`, `.github/workflows/`), plus pencatatan konvensi ke `AGENTS.md`. Batasannya: tanpa remap path, dan runner `macos-26` hanya untuk Rust | Fitur 2 |
+| Format dan lint yang dipasang (`rustfmt.toml`, `.swift-format`, `deny.toml`), plus pencatatan konvensi ke `AGENTS.md`. Batasannya: tanpa remap path | Fitur 2 |
 | Desain trait platform, resolver direktori, dan cara mengarahkan root alternatif untuk test | Fitur 4 |
 | Skema registry, mekanisme migrasi, dan letak port registry | Fitur 5 |
 | Bentuk pesan, handshake, envelope error, pemetaan tipe asing di typeshare (`Uuid`, `Timestamp`), integer 64 bit, enum yang tidak dikenal, adapter IO untuk framing, sink log daemon | Fitur 6 |
@@ -183,15 +182,14 @@ Hal berikut sengaja tidak diputuskan di sini. Masing masing dimiliki fitur yang 
 ## Consequences
 
 **Positive**:
-- Compiler menolak domain, platform, protocol, dan core yang menyentuh API macOS, dan cek lintas target membuktikannya di CI (NFR-010).
-- Satu kontrak untuk Rust dan Swift. Perubahan protokol tanpa regenerasi langsung gagal di CI.
+- Compiler menolak domain, platform, protocol, dan core yang menyentuh API macOS, dan cek lintas target membuktikannya (NFR-010).
+- Satu kontrak untuk Rust dan Swift. Perubahan protokol tanpa regenerasi langsung gagal di `cargo xtask codegen --check`.
 - Sedikit tool di luar toolchain: hanya `typeshare-cli` dan `cargo-deny`. Tidak perlu Node, protoc, atau XcodeGen.
 - Permukaan `unsafe` terkumpul di satu crate, sehingga review keamanan tahu persis harus melihat ke mana.
 
 **Negative / tradeoffs**:
 - **typeshare:** rilis terakhirnya Januari 2026. Bentuk enum terikat pada adjacently tagged, dan integer 64 bit butuh penanganan eksplisit. Kalau typeshare mandek, Swift bisa ditulis tangan tanpa mengubah wire, karena fixture tetap menjadi kontrak.
 - **`cargo test` tanpa nextest:** test dalam satu biner berbagi proses. Setiap integration test wajib membuat test root dan port sendiri, child process wajib dibereskan oleh guard, dan test tidak boleh memakai state global. Pindah ke `cargo-nextest` kalau muncul gejala saling ganggu.
-- **Mac self hosted:** ada biaya perawatan dan risiko keamanan. Runner tidak boleh menjalankan PR dari fork tanpa persetujuan, dan tidak pernah memegang secret signing. Selama runner mati, job Swift dan job runtime nyata tertahan.
 - **jiff masih 0.2:** satu kali upgrade breaking saat 1.0 keluar.
 - **Pin persis:** setiap sekitar enam minggu ada PR naik versi Rust, dan Xcode juga harus dinaikkan dengan sengaja.
 - **Delapan crate dan xtask sejak scaffold:** lebih banyak `Cargo.toml` dan sedikit lebih lama untuk build bersih dibanding satu crate.
@@ -206,9 +204,8 @@ Hal berikut sengaja tidak diputuskan di sini. Masing masing dimiliki fitur yang 
 
 ## Follow-up
 
-- [ ] Saat scaffold, verifikasi Xcode 27 dan versi Swift di dalamnya (diduga 6.4), lalu pin versi persisnya di CI dan di `swift-tools-version`. Cek juga nama setelan build untuk default isolation di Xcode 27.
+- [ ] Saat scaffold, verifikasi Xcode 27 dan versi Swift di dalamnya (diduga 6.4), lalu pin versi persisnya di `swift-tools-version`. Cek juga nama setelan build untuk default isolation di Xcode 27.
 - [ ] Saat scaffold, pin versi `typeshare-cli` dan cek aktivitas repo typeshare. Kalau mandek, ganti ke Swift tulisan tangan lewat `/architect` update (wire tidak berubah).
-- [ ] Siapkan Mac self hosted khusus CI (macOS 27, Xcode 27), batasi ke branch tepercaya tanpa PR dari fork, dan pindahkan job Swift ke image hosted saat `macos-27` GA.
 - [ ] OQ-001: tetapkan bundle ID final sebelum rilis publik (sementara `com.ojiepermana.stackly`).
 - [ ] OQ-013: konfirmasi lisensi `MIT OR Apache-2.0` dengan product owner sebelum source dipublikasikan.
 - [ ] Root `AGENTS.md` belum ada. `/audit` (fitur 2) perlu mencatat stack ini di sana.

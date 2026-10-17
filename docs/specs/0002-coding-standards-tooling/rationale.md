@@ -4,11 +4,11 @@
 
 ## Context
 
-Fitur 2 sudah memasang format, lint, deny, pre commit hook, CI, serta `TestRoot` dan `allocate_port` di `stackly-testkit`. Done when-nya masih menyisakan empat hal yang belum diputuskan spec mana pun: evidence record yang dihasilkan setiap test, pemisahan job fixture dari job runtime nyata, mesin benchmark baseline, dan fixture credential. Workspace ini ada di monorepo tunggal, dan keputusannya berlaku untuk seluruh repo (Rust lewat `cargo test`, Swift lewat `swift test`), bukan satu crate.
+Fitur 2 sudah memasang format, lint, deny, pre commit hook, serta `TestRoot` dan `allocate_port` di `stackly-testkit`. Done when-nya masih menyisakan empat hal yang belum diputuskan spec mana pun: evidence record yang dihasilkan setiap test, pemisahan run fixture dari run runtime nyata, mesin benchmark baseline, dan fixture credential. Workspace ini ada di monorepo tunggal, dan keputusannya berlaku untuk seluruh repo (Rust lewat `cargo test`, Swift lewat `swift test`), bukan satu crate.
 
 PRD bagian 28 menetapkan isi evidence record: AC ID, source commit, versi exact provider atau runtime, OS dan arch, test command atau langkah manual, expected dan actual, timestamp, evidence path, dan reviewer bila manual. Status awal setiap AC adalah `NOT_RUN`, dan laporan fixture harus dibedakan dari laporan integrasi runtime nyata. Fitur 65 (quality gates dan release report) mengagregasi "format laporan dari fitur 2", jadi format ini menjadi kontrak yang dibaca belakangan. Kesalahan di sini akan muncul sebagai laporan rilis yang tidak bisa membedakan bukti asli dari bukti fixture, atau yang menganggap test yang crash sebagai lulus.
 
-Batasan teknisnya: spec 0001 memilih `cargo test` tanpa nextest, dan output JSON libtest masih butuh flag unstable. Integration test berbagi proses dan dilarang memakai state global; di edition 2024, `std::env::set_var` bersifat `unsafe`. `cargo xtask check-deps` melarang `stackly-domain` dan `stackly-protocol` bergantung pada crate Stackly mana pun, termasuk sebagai dependency dev, padahal invariant domain (BR) dan kontrak protokol adalah bukti yang paling awal ditulis. Swift memakai Swift Testing untuk unit test dan XCUITest untuk UI test. CI hanya punya satu Mac self hosted macOS 27 untuk semua job Swift dan runtime nyata, dan Mac itu belum terdaftar di GitHub. Belum ada satu pun test native, dan belum ada test yang membuktikan PRD ID.
+Batasan teknisnya: spec 0001 memilih `cargo test` tanpa nextest, dan output JSON libtest masih butuh flag unstable. Integration test berbagi proses dan dilarang memakai state global; di edition 2024, `std::env::set_var` bersifat `unsafe`. `cargo xtask check-deps` melarang `stackly-domain` dan `stackly-protocol` bergantung pada crate Stackly mana pun, termasuk sebagai dependency dev, padahal invariant domain (BR) dan kontrak protokol adalah bukti yang paling awal ditulis. Swift memakai Swift Testing untuk unit test dan XCUITest untuk UI test. Belum ada satu pun test native, dan belum ada test yang membuktikan PRD ID.
 
 PRD bagian 27 meminta integration test memakai test root ephemeral, port yang dialokasikan, fixture credential, dan artefak log yang disanitasi. PRD mengusulkan baseline performa berupa Mac Apple Silicon 16 GB (OQ-011, sebelum beta). Fitur 11 (secret store) memiliki sentinel credential untuk test redaction, tetapi fitur 5 dan 6 datang lebih dulu dan sudah menyentuh secret reference dan pengiriman credential lewat IPC.
 
@@ -62,7 +62,7 @@ Laporan runner untuk setiap test, plus deklarasi di dalam test untuk hubungan ke
 Pilihan turunan yang dijawab di keputusan ini:
 
 - **Test mana**: hanya test yang membuktikan PRD ID (dipilih), atau setiap test. Setiap test memberi fitur 65 banyak record tanpa ID yang harus disaring.
-- **Penyimpanan**: satu file JSON per test di `target/evidence/<runId>/` plus artifact CI (dipilih), satu file JSON Lines per run (butuh lock karena test paralel dan biner terpisah menulis bersamaan), atau commit ke git (setiap run mengubah file, dan bukti satu commit selalu masuk di commit lain).
+- **Penyimpanan**: satu file JSON per test di `target/evidence/<runId>/` (dipilih), satu file JSON Lines per run (butuh lock karena test paralel dan biner terpisah menulis bersamaan), atau commit ke git (setiap run mengubah file, dan bukti satu commit selalu masuk di commit lain).
 - **Record manual**: JSON di `evidence/manual/` yang dicommit (dipilih), tabel Markdown di `docs/evidence/` (gampang ditulis, rapuh diparse), atau di `verify.md` (checklist, bukan record dengan commit, host, dan reviewer).
 - **Arti `NOT_RUN`**: ditulis saat test mulai lalu diganti di akhir (dipilih), atau hanya dihitung belakangan oleh fitur 65 untuk ID tanpa record (test yang crash tidak meninggalkan jejak).
 
@@ -70,13 +70,13 @@ Pilihan turunan yang dijawab di keputusan ini:
 
 #### Option 1: `#[ignore = "native: ..."]` khusus native
 
-`#[ignore]` dipakai hanya untuk test native, alasannya wajib diawali `native: `, job fixture melewatinya dengan sendirinya, dan job native menjalankan `-- --ignored`.
+`#[ignore]` dipakai hanya untuk test native, alasannya wajib diawali `native: `, run fixture melewatinya dengan sendirinya, dan run native menjalankan `-- --ignored`.
 
 **Pros**:
 
 - Fitur bawaan libtest, tanpa rebuild dan tanpa flag.
 - Alasan ignore tampil di output test.
-- Test native tidak pernah jalan tanpa sengaja di laptop atau runner hosted.
+- Test native tidak pernah jalan tanpa sengaja di laptop.
 
 **Cons**:
 
@@ -85,7 +85,7 @@ Pilihan turunan yang dijawab di keputusan ini:
 
 #### Option 2: `--cfg stackly_native`
 
-`#[cfg_attr(not(stackly_native), ignore)]`, dan job native mengisi `RUSTFLAGS`.
+`#[cfg_attr(not(stackly_native), ignore)]`, dan run native mengisi `RUSTFLAGS`.
 
 **Pros**:
 
@@ -118,26 +118,17 @@ Test native ada di `tests/native_*.rs` dan dipilih dengan `--test 'native*'`.
 
 **Cons**:
 
-- Job fixture harus mengecualikannya lewat nama, dan Rust tidak bisa melewati test saat runtime, jadi pengecualian yang terlewat langsung menjalankannya.
+- Run fixture harus mengecualikannya lewat nama, dan Rust tidak bisa melewati test saat runtime, jadi pengecualian yang terlewat langsung menjalankannya.
 
 Pilihan turunan:
 
-- **Garis native**: runtime provider asli atau fasilitas yang hanya ada di macOS 27 (dipilih); setiap fasilitas OS nyata (sebagian besar test `stackly-platform-macos` jadi antre di satu Mac); atau hanya binary provider asli (SMAppService dan perilaku macOS 27 tetap di runner hosted macOS 26 yang tidak bisa membuktikannya).
-- **Trigger job native**: PR dari repo yang sama, `main`, dan nightly (dipilih); `main`, nightly, dan PR berlabel (kerusakan bisa masuk `main` tanpa terlihat); atau nightly dan manual saja (umpan balik terlambat sampai sehari).
+- **Garis native**: runtime provider asli atau fasilitas yang hanya ada di macOS 27 (dipilih); setiap fasilitas OS nyata; atau hanya binary provider asli.
 
 ### Keputusan 3: mesin benchmark baseline
 
-#### Option 1: Mac self hosted khusus CI
+#### Option 1
 
-**Pros**:
-
-- Satu mesin bersih yang dikenal, selalu macOS 27, dan hanya mengerjakan satu job sekali jalan.
-- Benchmark bisa jalan di CI tanpa langkah manual.
-
-**Cons**:
-
-- Spesifikasinya belum diketahui sampai Mac itu didaftarkan.
-- Mesin yang sama memikul job Swift dan native.
+_Dihapus 2026-10-17: CI ditiadakan, pengembangan fokus di Mac ini dulu._
 
 #### Option 2: Mac yang dipakai sesi ini
 
@@ -160,9 +151,9 @@ Mac Studio `Mac13,1`, Apple M1 Max, 32 GB, macOS 27.0.
 
 **Cons**:
 
-- Mesinnya harus diadakan sebelum beta, dan jadi mesin keempat yang dirawat.
+- Mesinnya harus diadakan sebelum beta, dan jadi mesin kedua yang dirawat.
 
-Pilihan turunan untuk tempat pencatatan: `evidence/baseline-host.json` yang dibandingkan otomatis dengan host setiap run (dipilih), hanya tabel di spec (tidak bisa dicek tool), atau label runner saja (tool tahu runner-nya, bukan hardware-nya).
+Pilihan turunan untuk tempat pencatatan: `evidence/baseline-host.json` yang dibandingkan otomatis dengan host setiap run (dipilih), atau hanya tabel di spec (tidak bisa dicek tool).
 
 ### Keputusan 4: fixture credential bersama
 
@@ -189,11 +180,11 @@ Pilihan turunan untuk tempat pencatatan: `evidence/baseline-host.json` yang diba
 
 ## Rationale
 
-**Keputusan 1.** Kekuatan yang paling menentukan adalah fitur 65: ia harus tahu test mana membuktikan AC mana, pada commit dan host apa, dengan versi runtime apa, dan apakah hasilnya fixture atau native. Laporan runner (Option 2) hanya menjawab "lulus atau gagal"; sisanya tetap harus datang dari dalam test, jadi Option 2 dan 3 membangun dua mekanisme untuk menjawab satu pertanyaan. Option 1 menaruh semua jawaban di satu tempat, jalan di Rust stable tanpa nextest (sesuai spec 0001), dan membuat hubungan ke AC berubah bersama test-nya. Menulis `NOT_RUN` saat test mulai adalah cara paling sederhana untuk menepati PRD bagian 28 dengan jujur: test yang crash atau kena timeout meninggalkan record yang jelas belum punya hasil, bukan kekosongan yang bisa disalahartikan. Satu file per test menghindari lock antar thread dan antar biner, dan evidence otomatis tidak masuk git karena PRD meminta bukti dijalankan ulang per commit, bukan dibawa dari commit lain. Record manual masuk git karena CI tidak bisa mengulang hasil kerja manusia.
+**Keputusan 1.** Kekuatan yang paling menentukan adalah fitur 65: ia harus tahu test mana membuktikan AC mana, pada commit dan host apa, dengan versi runtime apa, dan apakah hasilnya fixture atau native. Laporan runner (Option 2) hanya menjawab "lulus atau gagal"; sisanya tetap harus datang dari dalam test, jadi Option 2 dan 3 membangun dua mekanisme untuk menjawab satu pertanyaan. Option 1 menaruh semua jawaban di satu tempat, jalan di Rust stable tanpa nextest (sesuai spec 0001), dan membuat hubungan ke AC berubah bersama test-nya. Menulis `NOT_RUN` saat test mulai adalah cara paling sederhana untuk menepati PRD bagian 28 dengan jujur: test yang crash atau kena timeout meninggalkan record yang jelas belum punya hasil, bukan kekosongan yang bisa disalahartikan. Satu file per test menghindari lock antar thread dan antar biner, dan evidence otomatis tidak masuk git karena PRD meminta bukti dijalankan ulang per commit, bukan dibawa dari commit lain. Record manual masuk git karena wrapper tidak bisa mengulang hasil kerja manusia.
 
-**Keputusan 2.** Rust tidak bisa melewati test saat runtime, jadi setiap mekanisme yang memilih test native lewat nama atau feature punya mode gagal yang sama: test native jalan diam diam di tempat yang salah. `#[ignore]` membalik default itu, karena test native tidak jalan kecuali diminta, dan itulah sifat yang dibutuhkan satu Mac self hosted yang berharga. Biayanya, `#[ignore]` hanya boleh berarti native, dan itu justru menutup kebiasaan buruk (mengabaikan test flaky). Garis native ditarik di runtime provider asli dan fasilitas khusus macOS 27, karena runner hosted macOS 26 tidak bisa membuktikan keduanya, sedangkan test filesystem, proses, dan Keychain bisa jalan di sana tanpa membebani Mac self hosted. Job native jalan di setiap PR dari repo yang sama karena PRD bagian 32.1 meminta integration test di PR terkait, dan satu engineer lebih murah membayar antrean daripada menemukan kerusakan native di `main`.
+**Keputusan 2.** Rust tidak bisa melewati test saat runtime, jadi setiap mekanisme yang memilih test native lewat nama atau feature punya mode gagal yang sama: test native jalan diam diam di tempat yang salah. `#[ignore]` membalik default itu, karena test native tidak jalan kecuali diminta. Biayanya, `#[ignore]` hanya boleh berarti native, dan itu justru menutup kebiasaan buruk (mengabaikan test flaky). Garis native ditarik di runtime provider asli dan fasilitas khusus macOS 27, sedangkan test filesystem, proses, dan Keychain tetap fixture.
 
-**Keputusan 3 dan 4.** Mac CI self hosted dipilih karena benchmark yang berguna harus bisa diulang di mesin yang sama tanpa beban lain, dan hanya mesin CI yang memenuhinya. Sidik jari di file JSON membuat setiap laporan bisa menyatakan sendiri apakah ia jalan di baseline, jadi angka dari laptop tidak tercampur dengan angka baseline. Fixture credential masuk sekarang karena Done when fitur 2 sendiri menyebutnya, fitur 5 dan 6 membutuhkannya lebih dulu dari fitur 11, dan pindaian prefix di wrapper adalah cara paling murah untuk menepati "artefak log yang disanitasi" sejak hari pertama.
+**Keputusan 3 dan 4.** Mac ini dipilih karena pengembangan fokus di Mac ini dulu dan ia tersedia sekarang. Bebannya sebagai mesin kerja harian membuat angkanya berisik, jadi fitur 64 menenangkan Mac sebelum mengukur. Sidik jari di file JSON membuat setiap laporan bisa menyatakan sendiri apakah ia jalan di baseline, jadi angka dari laptop tidak tercampur dengan angka baseline. Fixture credential masuk sekarang karena Done when fitur 2 sendiri menyebutnya, fitur 5 dan 6 membutuhkannya lebih dulu dari fitur 11, dan pindaian prefix di wrapper adalah cara paling murah untuk menepati "artefak log yang disanitasi" sejak hari pertama.
 
 ### Keputusan kecil yang diambil di spec ini
 
@@ -208,16 +199,12 @@ Pilihan turunan untuk tempat pencatatan: `evidence/baseline-host.json` yang diba
 | Native di Swift | target `*NativeTests` plus trait yang membatalkan test di luar run native | ID test Swift diawali nama target, jadi `--filter` dan `--skip` cukup, dan trait mencegah jalan tanpa sengaja | tag Swift Testing, yang belum bisa dipilih langsung dari `swift test` |
 | Test berparameter di Swift | satu record per fungsi, lewat `scopeProvider` yang hanya aktif saat `testCase` nil | `Test.Case` tidak punya ID publik, jadi record per case tidak punya nama yang stabil | satu record per case dengan nomor urut, yang berubah antar run |
 | Test Swift yang di cancel | `Evidence.blocked` menandai `BLOCKED` sebelum `Test.cancel`; cancel tanpa itu dibiarkan `NOT_RUN` | spike menunjukkan cancel tidak terlihat sebagai issue maupun error, hanya lewat `Task.isCancelled` | membaca event stream `swift test` di wrapper, yang menambah satu format lagi untuk dijaga |
-| Job native | workflow `native.yml` terpisah dengan `cancel-in-progress: false` | pembatalan run PR di `ci.yml` membatalkan semua job-nya, termasuk yang sedang menjalankan provider | `concurrency` per job di `ci.yml` |
 | `sourceDirty` (ditinjau ulang setelah spec 0003) | `git status --porcelain` biasa (ditulis dengan `--untracked-files=normal` supaya config tidak mengubahnya), wajib boolean | cross check kedua menunjukkan `--untracked-files=no` membuat file test baru yang belum di `git add` ikut dikompilasi tanpa membuat run dirty, sehingga bukti G0 bisa berasal dari kode yang tidak ada di commit. File yang di-gitignore sudah tidak dihitung, dan catatan pribadi cukup masuk `.git/info/exclude` | `--untracked-files=no` (sempat dipilih lalu dibatalkan), atau menghitung file untracked hanya di folder build, yang lebih rumit dijaga |
-| Commit di pull request | `sourceCommit` tetap `HEAD`, ditambah `ci.headSha` dan `ci.event` | `HEAD` adalah yang benar benar diuji; `headSha` menghubungkannya ke commit PR | menulis `headSha` sebagai `sourceCommit`, yang tidak jujur tentang apa yang diuji |
-| Sinyal di wrapper | `ctrlc` mencatat sinyal, wrapper meneruskannya lewat `kill -TERM`, lalu tetap menulis report | `unsafe` dilarang di `xtask`, dan report yang hilang saat CI dibatalkan membuat run sulit dibaca | tanpa handler, dan run tanpa `report.json` dianggap tidak lengkap |
+| Sinyal di wrapper | `ctrlc` mencatat sinyal, wrapper meneruskannya lewat `kill -TERM`, lalu tetap menulis report | `unsafe` dilarang di `xtask`, dan report yang hilang saat perintah dibatalkan membuat run sulit dibaca | tanpa handler, dan run tanpa `report.json` dianggap tidak lengkap |
 | Cek `#[ignore]` | `syn` di `cargo xtask evidence check` | atribut bisa terpecah beberapa baris, dan regex mudah salah | regex per baris |
-| `BLOCKED` di CI | warning, bukan job merah | `BLOCKED` adalah fakta yang dilaporkan, dan fitur 65 yang memutuskan dampaknya pada rilis | job gagal pada `BLOCKED` |
-| Jadwal nightly | `0 19 * * *` (02.00 WIB), semua job | advisory RustSec dan drift toolchain ikut tertangkap | hanya job native |
+| `BLOCKED` di run | dilaporkan, bukan run gagal | `BLOCKED` adalah fakta yang dilaporkan, dan fitur 65 yang memutuskan dampaknya pada rilis | run gagal pada `BLOCKED` |
 | Nilai acak credential | `Uuid::now_v7().simple()` | `uuid` dengan fitur `v7` sudah ada di workspace | crate `getrandom` langsung |
 | Kecocokan baseline | model, chip, memori, dan jumlah core harus sama; build OS dicatat terpisah | build OS berubah lebih sering dari hardware, dan bedanya perlu terlihat tanpa membatalkan kecocokan | build OS ikut wajib sama |
-| Retention artifact | default GitHub | evidence rilis disalin oleh fitur 65 | retention khusus per job |
 
 ### Hasil pengecekan lokal
 
@@ -237,6 +224,31 @@ Dicek di Mac sesi ini (Mac Studio `Mac13,1`, Apple M1 Max, 34359738368 byte memo
 
 ### Cross check
 
-Draf pertama spec ini dibaca ulang oleh model lain (Sonnet 5.5) dengan akses baca saja. Ia menemukan celah keputusan yang harus diisi builder sendiri, dan semua perbaikan yang direkomendasikan diterapkan atas persetujuan engineer: crate daun `stackly-evidence`, `pass(&self)` dengan `Drop` yang menulis, bentuk `report.json` dan `run.json`, validasi lewat serde, `ci.headSha` untuk pull request, aturan subject native, sumber identitas test, `evidencePath` dan `actual` yang wajib, rincian baseline (`--runner-name`, `virtualized`, volume penyimpanan), kebijakan probe yang gagal, aturan `evidence new`, sinyal di wrapper, cakupan `evidence check`, `native.yml` terpisah, serta `--tests --no-fail-fast`.
+Draf pertama spec ini dibaca ulang oleh model lain (Sonnet 5.5) dengan akses baca saja. Ia menemukan celah keputusan yang harus diisi builder sendiri, dan semua perbaikan yang direkomendasikan diterapkan atas persetujuan engineer: crate daun `stackly-evidence`, `pass(&self)` dengan `Drop` yang menulis, bentuk `report.json` dan `run.json`, validasi lewat serde, aturan subject native, sumber identitas test, `evidencePath` dan `actual` yang wajib, rincian baseline (`virtualized`, volume penyimpanan), kebijakan probe yang gagal, aturan `evidence new`, sinyal di wrapper, cakupan `evidence check`, serta `--tests --no-fail-fast`.
 
-Update spec ini setelah spec 0003 juga dibaca ulang model lain (Sonnet 5.5, baca saja). Temuan yang diterapkan atas persetujuan engineer: `sourceDirty` kembali ke `git status --porcelain` biasa dan wajib boolean, format `digest`, baris path report di wrapper, kondisi `if:` dan sesi login GUI untuk `native.yml`, urutan langkah dan timeout per langkah, pembersihan kedua dengan `if: always()`, `evidence/runtime/` sebagai pengecualian yang divalidasi `runtime check`, dan aturan penyalinan record. Filter `paths:` untuk `native.yml` tidak diterapkan, karena akan melewatkan test native fitur lain.
+Update spec ini setelah spec 0003 juga dibaca ulang model lain (Sonnet 5.5, baca saja). Temuan yang diterapkan atas persetujuan engineer: `sourceDirty` kembali ke `git status --porcelain` biasa dan wajib boolean, format `digest`, baris path report di wrapper, sesi login GUI untuk run native, urutan langkah, pembersihan kedua, `evidence/runtime/` sebagai pengecualian yang divalidasi `runtime check`, dan aturan penyalinan record.
+
+### Perubahan 2026-10-17
+
+CI ditiadakan atas keputusan pemilik proyek, dan pengembangan fokus di Mac ini dulu. Semua run fixture, run native, cek, dan pencatatan baseline dijalankan dengan tangan di Mac ini.
+
+- Keputusan 3: Option 1 (Mac self hosted khusus CI) dihapus, dan mesin baseline menjadi Mac ini (Option 2).
+- Keputusan 2: pilihan turunan trigger job native dihapus, begitu juga alasan runner hosted untuk garis native; garisnya sendiri tetap.
+- Keputusan kecil: baris job native, commit di pull request, jadwal nightly, dan retention artifact dihapus; `BLOCKED` tidak lagi menjadi `::warning::`, dan `--runner-name` hilang dari baseline.
+
+### Perubahan 2026-10-18
+
+Saat kode disesuaikan dengan spec tanpa CI, muncul satu benturan: aturan versi di spec ini menulis bahwa menghapus field menaikkan versi ke `v2`, sedangkan `context.ci` (di `RunContext`) dan `runnerName` (di `BaselineHost`) sudah hilang dari spec dengan versi tetap `v1`. Pemilik proyek memilih menghapus kedua field itu dan tetap di `v1` (`stackly.evidence/v1`, `stackly.evidence-report/v1`, dan `stackly.evidence-baseline/v1`). Ini satu pengecualian tercatat dari aturan versi, bukan aturan baru; penghapusan field berikutnya tetap menaikkan versi.
+
+Alasannya, tidak ada pembaca atau data yang terdampak:
+
+- `ci` opsional dengan nilai default, dan bernilai null di setiap record dan report yang sudah di commit di `evidence/runtime/`.
+- Decoder menerima field yang tidak dikenal, jadi report lama yang masih memuat `"ci": null` tetap bisa didecode dan lolos `runtime check` tanpa diedit.
+- `evidence/baseline-host.json` belum pernah ditulis, jadi belum ada file baseline yang memuat `runnerName`.
+- Fitur 65, pembaca format ini di luar `xtask`, belum dibangun.
+
+Opsi yang ditolak: naik ke `v2` (report `v1` yang sudah di commit tidak boleh diedit, jadi validasi dan aturan 7 `runtime check` di spec 0003 harus menerima dua versi sekaligus), dan mempertahankan `ci` sebagai field usang yang selalu null di `v1` (schema tetap membawa bentuk khusus CI tanpa ada yang mengisinya).
+
+Masih dari penghapusan CI: target `x86_64-unknown-linux-gnu` dibuang dari `[graph] targets` di `deny.toml`, karena tidak ada lagi yang dibangun atau dijalankan di Linux. Yang tersisa `aarch64-apple-darwin` dan cek portabilitas `aarch64-pc-windows-msvc`.
+
+Catatan ini dibaca ulang model lain (Sonnet 5.5, baca saja). Tiga temuannya diterapkan atas persetujuan engineer: kalimat di Validasi tentang field yang sudah dihapus, satu baris tentang cabang Linux yang tersisa dan target `cargo deny`, serta "field yang dikenal" pada aturan penyalinan record (di invariant spec ini dan di skenario test `runtime record` spec 0003), karena `runtime record` mendecode lalu menulis ulang report, sehingga field yang tidak dikenal tidak ikut tersalin.

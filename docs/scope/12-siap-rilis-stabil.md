@@ -6,7 +6,7 @@ Bukan journey pengguna, tapi pekerjaan yang membuat baseline layak disebut stabi
 
 ### 63. Security review & fuzzing · needs a decision · GA
 
-Review keamanan untuk archive parser, template engine, eksekusi proses native, purge dan adoption, framing IPC, credential, izin, update dan revocation, serta diagnostic export. Fuzz target untuk framing, manifest, archive, dan path sudah berjalan di CI sejak fitur 6, 9, 18, 20, dan 54; di sini cakupannya diperluas dan ditutup.
+Review keamanan untuk archive parser, template engine, eksekusi proses native, purge dan adoption, framing IPC, credential, izin, update dan revocation, serta diagnostic export. Fuzz target untuk framing, manifest, archive, dan path sudah berjalan di Mac ini sejak fitur 6, 9, 18, 20, dan 54; di sini cakupannya diperluas dan ditutup.
 
 **Done when:** tidak ada temuan critical atau high yang belum selesai di distribusi, IPC, eksekusi provider, atau operasi destruktif; residual risk di PRD bagian 23 tertulis di docs pengguna dan developer.
 
@@ -18,7 +18,7 @@ Review keamanan untuk archive parser, template engine, eksekusi proses native, p
 
 Harness untuk crash daemon dan provider, restart daemon terencana, daemon ganda, PID reuse, race port, disk penuh, download korup, operasi yang dibatalkan, jaringan mati, sleep dan wake, logout dan login ulang, dua user di satu Mac, serta benchmark dan soak pada hardware baseline yang tercatat.
 
-**Done when:** skenario AC-046 dan skenario lintas fitur AC-055 sampai AC-080 punya test yang bisa dijalankan; harness terjadwal sebagai job nightly dan release candidate di CI; target NFR-001 sampai NFR-007 diukur dan disimpan, termasuk outlier; process crash, OS restart, dan simulasi power loss dibedakan.
+**Done when:** skenario AC-046 dan skenario lintas fitur AC-055 sampai AC-080 punya test yang bisa dijalankan; harness dijalankan dengan tangan di Mac ini secara rutin dan untuk release candidate; target NFR-001 sampai NFR-007 diukur dan disimpan, termasuk outlier; process crash, OS restart, dan simulasi power loss dibedakan.
 
 **Trace:** NFR-001 sampai NFR-008, NFR-013, AC-046, AC-055 sampai AC-080, OQ-011, PRD bagian 27 dan 32
 

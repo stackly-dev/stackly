@@ -23,7 +23,7 @@ cargo xtask codegen                                      # regenerate after a pr
 ## Conventions
 
 - No `MainActor` default isolation in this package: socket IO runs off the main actor. Generated DTOs are `Sendable`, so they can cross to the UI.
-- Never edit `Generated/` by hand. Change the Rust type in `stackly-protocol`, then rerun codegen; `cargo xtask codegen --check` fails CI on drift.
+- Never edit `Generated/` by hand. Change the Rust type in `stackly-protocol`, then rerun codegen; `cargo xtask codegen --check` fails on drift.
 - Fixture tests compare decoded values, not raw JSON text. Swift encodes UUIDs in uppercase while Rust writes lowercase, and every reader treats them as case insensitive.
 
 ## Gotchas

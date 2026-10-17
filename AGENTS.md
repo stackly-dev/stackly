@@ -54,12 +54,13 @@ Stored in `docs/specs/`. Format: `docs/specs/NNNN-slug/index.md`, with the reaso
 
 ## Tooling
 
-Installed by feature 2: `rustfmt.toml`, `clippy.toml`, `.swift-format`, `deny.toml`, `.githooks/pre-commit`, and `.github/workflows/ci.yml`. Every CI job runs locally with the commands above.
+Installed by feature 2: `rustfmt.toml`, `clippy.toml`, `.swift-format`, `deny.toml`, and `.githooks/pre-commit`. Every check runs locally with the commands above.
 
 - Format with rustfmt and swift-format (`.swift-format`). Clippy runs with default lints plus `clippy::unwrap_used`, and warnings fail (`-D warnings`). `missing_docs` is on for every crate through `[workspace.lints]`, so bins and each integration test file also start with a `//!` doc. `unwrap()` is allowed only inside `#[test]` functions and `#[cfg(test)]` modules, so integration test helpers use `expect`.
 - swift-format ships with the Xcode 27 toolchain (`xcrun swift-format`), so it needs no separate install. It skips `Generated/`, which typeshare writes with tabs.
-- Pre commit: a plain git hook, no Node or extra tools, running `cargo fmt --check`, clippy on the changed crates, and `swift-format lint`. Tests run in CI.
-- CI on GitHub Actions as spec 0001 describes: Linux for fmt, clippy, tests, `cargo-deny`, and the portability check (clippy and tests there use `--workspace --exclude stackly-platform-macos`); `macos-26` for Rust jobs on darwin; one self hosted macOS 27 Mac for Swift and real runtime jobs (runner labels `self-hosted, macOS, ARM64, macos-27`; it never runs fork pull requests and holds no signing secrets; its job is skipped until the repository variable `SELF_HOSTED_MACOS27` is `true`). Builds never remap source paths.
+- Pre commit: a plain git hook, no Node or extra tools, running `cargo fmt --check`, clippy on the changed crates, and `swift-format lint`. Tests run by hand with the commands above.
+- No CI for now: development focuses on this Mac, and every check runs by hand with the commands above. Native tests and evidence runs also happen on this Mac, as spec 0002 describes ("Menjalankan test di Mac ini").
+- Builds never remap source paths.
 - `typeshare-cli` is pinned in xtask. The pin is 1.13.4 (`TYPESHARE_CLI_VERSION` in `xtask/src/codegen.rs`); install it with `cargo install --locked typeshare-cli --version 1.13.4`.
 - Markdown follows `.markdownlint.jsonc`: no line length limit, only `<a>` as inline HTML, compact tables.
 

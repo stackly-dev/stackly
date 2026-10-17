@@ -1,6 +1,7 @@
 #!/bin/sh
 # Stackly pre commit checks: rustfmt, clippy on the changed crates, and
-# swift-format lint on the changed Swift files. Tests run in CI.
+# swift-format lint on the changed Swift files. Tests run by hand; see
+# AGENTS.md.
 #
 # Install once per clone:  git config core.hooksPath .githooks
 #

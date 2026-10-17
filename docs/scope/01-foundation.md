@@ -21,23 +21,23 @@ Putuskan stack dan susunan monorepo, lalu scaffold proyek yang bisa dijalankan, 
 
 ### 2. Coding standards & tooling · in-progress
 
-Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang format, lint, typecheck, CI dasar, dan aturan test integrasi yang wajib diikuti semua fitur berikutnya.
+Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang format, lint, typecheck, dan aturan test integrasi yang wajib diikuti semua fitur berikutnya.
 
-**Done when:** root `AGENTS.md` mencerminkan stack nyata dan mewajibkan spec serta test mempertahankan ID AC dari PRD; pipeline PR menjalankan format, lint, build, unit test, validasi schema, audit lisensi dependency, dan security static checks dengan hasil bersih; integration test memakai test root ephemeral (bukan direktori Application Support pengguna), port yang dialokasikan, dan fixture credential, dan cleanup hanya menghapus path milik test run itu; job fixture dan job runtime nyata terpisah; tiap test yang membuktikan ID PRD menghasilkan evidence record sesuai PRD bagian 28 (termasuk versi provider, langkah test, hasil, waktu, dan reviewer bila manual) berlabel fixture atau native, dengan status awal `NOT_RUN`; mesin benchmark baseline tercatat.
+**Done when:** root `AGENTS.md` mencerminkan stack nyata dan mewajibkan spec serta test mempertahankan ID AC dari PRD; format, lint, build, unit test, validasi schema, audit lisensi dependency, dan security static checks berjalan di Mac ini dengan hasil bersih; integration test memakai test root ephemeral (bukan direktori Application Support pengguna), port yang dialokasikan, dan fixture credential, dan cleanup hanya menghapus path milik test run itu; run fixture dan run runtime nyata terpisah; tiap test yang membuktikan ID PRD menghasilkan evidence record sesuai PRD bagian 28 (termasuk versi provider, langkah test, hasil, waktu, dan reviewer bila manual) berlabel fixture atau native, dengan status awal `NOT_RUN`; mesin benchmark baseline tercatat.
 
 **Trace:** REQ-051, OQ-011, PRD bagian 27, 28, 31, 32.1, dan 32.3
 
-**Pointer:** spec [0002](../specs/0002-coding-standards-tooling/index.md) · code in `.github/workflows/ci.yml`, `.githooks/pre-commit`, `rustfmt.toml`, `clippy.toml`, `.swift-format`, `deny.toml`, `crates/testkit/`, `crates/evidence/`, `xtask/src/evidence/`, `schemas/evidence/`
+**Pointer:** spec [0002](../specs/0002-coding-standards-tooling/index.md) · code in `.githooks/pre-commit`, `rustfmt.toml`, `clippy.toml`, `.swift-format`, `deny.toml`, `crates/testkit/`, `crates/evidence/`, `xtask/src/evidence/`, `schemas/evidence/`
 
 - [x] Capture conventions and tooling choices: `/audit`
 - [x] Install the tooling: `/develop coding standards & tooling`
 - [x] Decide evidence, native tests, and baseline (spec): `/architect coding standards & tooling`
 - [ ] Build the evidence standard: `/develop coding standards & tooling`
-  - [x] Rust evidence path end to end: `stackly-evidence`, `check-deps` rules, `cargo xtask evidence run`, `linux` and `macos-rust` through the wrapper (REQ-051)
+  - [x] Rust evidence path end to end: `stackly-evidence`, `check-deps` rules, `cargo xtask evidence run` (REQ-051)
   - [ ] `cargo xtask evidence check` and `evidence new`, shared examples in `schemas/evidence/`
-  - [ ] Swift path: `StacklyTestSupport` trait, `macos-swift` through the wrapper
-  - [ ] `native.yml`, nightly schedule, fixture credential leak scan
-  - [ ] Baseline recorded on the self hosted CI Mac (needs the runner registered, OQ-011)
+  - [ ] Swift path: `StacklyTestSupport` trait
+  - [ ] Fixture credential leak scan
+  - [ ] Baseline recorded on this Mac (OQ-011)
 - [ ] Verify it: `/check verify coding standards & tooling`
 - [ ] Test it: `/test coding standards & tooling`
 
@@ -45,19 +45,20 @@ Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang forma
 
 Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka dipaketkan supaya bisa dipindah dan dipasang tanpa Homebrew global. Ini risiko terbesar proyek (RISK-01), jadi harus jelas sebelum install runtime (fitur 18) dibangun.
 
-**Done when:** tiap provider wajib punya sumber artefak, dependency closure, versi konkret, status lisensi, dan kebijakan verifikasi serta signing binary (ditandatangani upstream, ditandatangani ulang maintainer, atau ad hoc saat install) yang tercatat; satu executable tiap provider (PostgreSQL 17 dan 18 keduanya) berjalan dari artefak managed di Mac uji tanpa Homebrew global, dijalankan sebagai child process oleh proses noninteractive, bukan dari Terminal; provider yang belum punya artefak managed dicatat `BLOCKED` dengan alasan dan owner; spec memutuskan apakah pipeline artefak buatan maintainer (OQ-003) diperlukan.
+**Done when:** tiap provider wajib punya sumber artefak, dependency closure, versi konkret, status lisensi, dan kebijakan verifikasi serta signing binary (ditandatangani upstream, ditandatangani ulang maintainer, atau ad hoc saat install) yang tercatat; satu executable tiap provider (PostgreSQL 17 dan 18 keduanya) berjalan dari artefak managed di Mac uji tanpa Homebrew global, dijalankan sebagai child process oleh proses noninteractive, bukan dari Terminal; provider yang belum punya artefak managed dicatat `BLOCKED` dengan alasan dan owner; spec memutuskan apakah artefak buatan maintainer (OQ-003) diperlukan.
 
 **Trace:** OQ-003, OQ-004, RISK-01, RISK-12, AC-078, gate G0, PRD bagian 20.2, 25, dan 33.2 (M0)
 
-**Pointer:** spec [0003](../specs/0003-sumber-packaging-runtime/index.md) · code in `xtask/src/runtime/`, `xtask/tests/native_runtime.rs`, `runtimes/inventory.toml`, `runtimes/keys/`, `evidence/runtime/`, `.github/workflows/ci.yml`
+**Pointer:** spec [0003](../specs/0003-sumber-packaging-runtime/index.md) · code in `xtask/src/runtime/`, `xtask/tests/native_runtime.rs`, `runtimes/inventory.toml`, `runtimes/keys/`, `evidence/runtime/`
 
 - [x] Design it (spec): `/architect sumber & packaging runtime`
 - [ ] Build it: `/develop sumber & packaging runtime`
-  - [x] Inventory, `runtime pin`, `runtime verify`, and `runtime check` in the `linux` job (spec 0003 AC-1 to AC-3)
+  - [x] Inventory, `runtime pin`, `runtime verify`, and `runtime check` (spec 0003 AC-1 to AC-3)
   - [x] LaunchAgent spike end to end, proven on NATS, then Traefik, ClickHouse, MySQL 8.4 and 9.7, with evidence in `evidence/runtime/` (spec 0003 AC-1, AC-3 to AC-10, AC-13; needs spec 0002 step 1 built). NATS 2.15.1, Traefik 3.7.15, MySQL 8.4.11 dan 9.7.2 `PASS`; ClickHouse 26.8 `blocked` karena aset macOS berupa binary self extracting yang ditolak codesign; aset `.zip` bertanda tangan Developer ID dipakai lewat format `zip` yang diputuskan spec 0003 pada 2026-10-17 (Milestone 2b)
   - [ ] Milestone 2b: ClickHouse from the Developer ID signed `.zip` through the new `zip` format: format check, `/usr/bin/tar` extraction, `pin` support, the `archive_root` rule, then the ClickHouse entry and its evidence (spec 0003 AC-1 to AC-3, AC-5 to AC-10, AC-13, AC-16; build steps 15 and 16)
-  - [ ] `stackly-runtimes` pipeline for PostgreSQL 17 and 18 and Valkey, published with attestation, then their spikes (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-11, AC-12; needs the repo created first)
-  - [ ] Automation: `native.yml` cleanup, cache, and timeout, plus weekly `runtime-watch.yml` (spec 0003 AC-14, AC-15; the CI part needs spec 0002 step 4 built, the self hosted runner registered, and `SELF_HOSTED_MACOS27` set to `true`)
+  - [ ] Decide how PostgreSQL 17 and 18 and Valkey are built on this Mac (spec): `/architect sumber & packaging runtime`
+  - [ ] PostgreSQL 17 and 18 and Valkey built on this Mac, then their spikes (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-12; build steps 9, 10, and 12)
+  - [x] Cache pruning: `runtime spike --prune-cache`, run by hand on this Mac (spec 0003 AC-4; build step 13)
 - [ ] Verify it: `/check verify sumber & packaging runtime`
 - [ ] Test it: `/test sumber & packaging runtime`
 
@@ -65,7 +66,7 @@ Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka di
 
 Model domain (software, provider revision, runtime, instance, environment, operation, lease), tiga state machine yang terpisah, invariant bisnis, dan trait platform (termasuk resolver direktori per user untuk owned root, registry, runtimes, instances, logs, cache, retained, dan path socket pendek) dengan fake platform untuk test. Core tidak boleh tahu soal SwiftUI, WinUI, atau command macOS.
 
-**Done when:** domain bisa build tanpa dependency GUI atau API OS; state runtime, lifecycle instance, dan readiness/health terpisah; fake platform menjalankan test invariant di CI; layout direktori per user diputuskan lewat resolver platform tanpa path hardcode dan bisa diarahkan ke root alternatif untuk integration test; tiap direktori instance membawa metadata yang cukup untuk inventarisasi tanpa registry; capability Windows yang belum dibuat mengembalikan not supported.
+**Done when:** domain bisa build tanpa dependency GUI atau API OS; state runtime, lifecycle instance, dan readiness/health terpisah; fake platform menjalankan test invariant di Mac ini; layout direktori per user diputuskan lewat resolver platform tanpa path hardcode dan bisa diarahkan ke root alternatif untuk integration test; tiap direktori instance membawa metadata yang cukup untuk inventarisasi tanpa registry; capability Windows yang belum dibuat mengembalikan not supported.
 
 **Trace:** REQ-001, REQ-050, BR-001 sampai BR-025 (sebagai invariant), NFR-010, AC-050, AC-074, PRD bagian 6, 19.1, dan 20.1
 
@@ -94,7 +95,7 @@ Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision 
 
 Daemon per user dengan protokol berversi di atas encoding dan framing yang dikunci di fitur 1, lewat Unix domain socket privat: handshake, request ID, error terstruktur, event dengan cursor, dan otorisasi user lokal. GUI dan CLI hanya client; hanya daemon yang menulis registry dan mengendalikan lifecycle.
 
-**Done when:** handshake menolak protocol major yang berbeda dan peer dari user lain sebelum ada efek samping; client memverifikasi pemilik endpoint socket sebelum mengirim credential atau mutasi; hanya satu daemon per user yang aktif, daemon kedua berhenti tanpa menyentuh registry, socket, atau proses instance, dan `stackly daemon status` menunjukkan daemon pemiliknya; tidak ada listener TCP admin; batas ukuran pesan dan subscription berlaku; setiap error memakai satu envelope stabil sesuai VAL-020; reconnect memakai snapshot plus cursor; fixture kontrak dipakai bersama oleh Rust dan Swift; fuzz target framing IPC berjalan di CI.
+**Done when:** handshake menolak protocol major yang berbeda dan peer dari user lain sebelum ada efek samping; client memverifikasi pemilik endpoint socket sebelum mengirim credential atau mutasi; hanya satu daemon per user yang aktif, daemon kedua berhenti tanpa menyentuh registry, socket, atau proses instance, dan `stackly daemon status` menunjukkan daemon pemiliknya; tidak ada listener TCP admin; batas ukuran pesan dan subscription berlaku; setiap error memakai satu envelope stabil sesuai VAL-020; reconnect memakai snapshot plus cursor; fixture kontrak dipakai bersama oleh Rust dan Swift; fuzz target framing IPC berjalan di Mac ini.
 
 **Trace:** REQ-047, REQ-048, BR-011, VAL-017, VAL-020, NFR-001, NFR-004, NFR-006, NFR-011, AC-047, AC-070, AC-071, AC-079, NFR-009, RISK-03, RISK-09, OQ-005 (generation tooling), PRD bagian 18
 
@@ -124,7 +125,7 @@ CLI `stackly` sebagai client daemon dengan help, `--json`, exit code stabil, mod
 
 Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, interpolasi terkontrol, dan primitive aman yang menghasilkan execution plan tervalidasi. Kontrak adapter juga mencakup preflight kompatibilitas data dan runtime per provider, supaya tool baru yang cukup dengan primitive yang ada tidak perlu patch core atau GUI.
 
-**Done when:** manifest contoh NATS, Traefik (dengan daftar routes), dan fake provider lolos validasi di pipeline PR, dan fuzz target parser manifest serta template berjalan di CI; manifest yang merujuk primitive atau probe yang tidak dikenal ditolak saat validasi, bukan saat start; schema bisa menyatakan langkah reload (bila capability reload aktif) dan timeout readiness serta recovery per provider, bukan hanya stop timeout; field berisi shell metacharacter tidak pernah dijalankan lewat shell; field keamanan yang tidak dikenal dan capability yang tidak bisa dipenuhi ditolak; membaca catalog tidak menjalankan kode provider.
+**Done when:** manifest contoh NATS, Traefik (dengan daftar routes), dan fake provider lolos validasi di Mac ini, dan fuzz target parser manifest serta template berjalan di Mac ini; manifest yang merujuk primitive atau probe yang tidak dikenal ditolak saat validasi, bukan saat start; schema bisa menyatakan langkah reload (bila capability reload aktif) dan timeout readiness serta recovery per provider, bukan hanya stop timeout; field berisi shell metacharacter tidak pernah dijalankan lewat shell; field keamanan yang tidak dikenal dan capability yang tidak bisa dipenuhi ditolak; membaca catalog tidak menjalankan kode provider.
 
 **Trace:** REQ-029, REQ-031, VAL-002, VAL-012, VAL-018, VAL-019, AC-029, AC-031, NFR-009, RISK-07, RISK-08, PRD bagian 21
 
@@ -158,7 +159,7 @@ _Catatan:_ fitur 12 (Design system & UI foundation) dan 13 (App shell SwiftUI & 
 
 Satu irisan tipis yang membuktikan stack sudah tersambung: fake provider dibuat, dijalankan, dan dihentikan lewat CLI, statusnya tampil di GUI, dan registry mencatatnya. Belum ada download runtime atau provider nyata.
 
-**Done when:** `stackly instance create`, `start`, dan `stop` untuk fake provider berhasil lewat daemon; GUI menampilkan perubahan state lewat event; menutup GUI tidak menghentikan instance; restart daemon saat instance fake berjalan tidak menghasilkan instance ganda atau proses yatim; test fake provider berjalan di pipeline PR.
+**Done when:** `stackly instance create`, `start`, dan `stop` untuk fake provider berhasil lewat daemon; GUI menampilkan perubahan state lewat event; menutup GUI tidak menghentikan instance; restart daemon saat instance fake berjalan tidak menghasilkan instance ganda atau proses yatim; test fake provider berjalan di Mac ini.
 
 **Trace:** AC-001 (awal), AC-013 (awal), AC-029 (awal), fixture dummy server di PRD bagian 32.3
 

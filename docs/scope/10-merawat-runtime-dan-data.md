@@ -8,7 +8,7 @@ Journey pemeliharaan: hapus instance tanpa kehilangan data, bersihkan runtime ya
 
 Remove instance mempertahankan data sebagai retained record; purge adalah aksi terpisah dengan preview path, ukuran, dampak, dan konfirmasi eksplisit. Aturan purge di sini memakai primitive hapus aman dari fitur 7.
 
-**Done when:** remove tanpa purge menyisakan data dan tercatat sebagai retained; purge di luar owned root ditolak walau lewat symlink, termasuk race yang bisa direproduksi; purge memeriksa ulang revision, operasi aktif, reference environment, dan path saat commit; fuzz target path purge berjalan di CI; `stackly instance remove` dan `purge` setara dengan GUI, dan purge di mode noninteractive tetap butuh konfirmasi eksplisit.
+**Done when:** remove tanpa purge menyisakan data dan tercatat sebagai retained; purge di luar owned root ditolak walau lewat symlink, termasuk race yang bisa direproduksi; purge memeriksa ulang revision, operasi aktif, reference environment, dan path saat commit; fuzz target path purge berjalan di Mac ini; `stackly instance remove` dan `purge` setara dengan GUI, dan purge di mode noninteractive tetap butuh konfirmasi eksplisit.
 
 **Trace:** REQ-028, REQ-052, BR-006, VAL-007, VAL-015, AC-052, AC-057, NFR-009
 

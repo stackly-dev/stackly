@@ -420,7 +420,7 @@ ID, nama, provider dan revision dengan digest, runtime, line yang menginisialisa
 
 **Pros**:
 
-- Jujur dan teruji di Linux; tidak ada kode Windows yang tidak bisa dibuktikan.
+- Jujur dan teruji; tidak ada kode Windows yang tidak bisa dibuktikan.
 
 **Cons**:
 
@@ -434,7 +434,7 @@ ID, nama, provider dan revision dengan digest, runtime, line yang menginisialisa
 
 **Cons**:
 
-- Tidak ada runner Windows yang bisa membuktikannya, jadi kode itu hanya lulus compile.
+- Tidak ada mesin Windows yang bisa membuktikannya, jadi kode itu hanya lulus compile.
 
 ### Keputusan 15: cakupan BR-009
 
@@ -544,6 +544,10 @@ Draf pertama spec ini dibaca ulang oleh model lain (Sonnet 5.5) dengan akses bac
 - kurungan fake filesystem lewat parent canonical ditetapkan;
 - cek tumpuk root canonical ditambahkan;
 - health kini terikat lifecycle dan kesegaran.
+
+### Perubahan 2026-10-17
+
+CI ditiadakan atas keputusan pemilik proyek, dan pengembangan fokus di Mac ini dulu. Tidak ada keputusan yang berubah. Yang diganti hanya tempat test berjalan: test core untuk AC-9 sampai AC-11, test AC-13, dan cek portabilitas kini dijalankan manual di Mac ini, bukan di job CI Linux dan macOS. Pro dan kontra keputusan 14 disesuaikan, karena tidak ada lagi test di Linux.
 
 ## References
 

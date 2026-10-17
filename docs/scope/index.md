@@ -119,7 +119,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 - **Jalur kontributor sebelum lima provider.** Fase 06 sengaja datang sebelum fase 07, supaya NATS, Valkey, Traefik, MySQL, dan ClickHouse dibangun lewat SDK dan harness yang sama dengan kontributor (JOURNEY-07, REQ-029, gate G1).
 - **Enam provider sebelum environment.** Environment ERP di fase 08 memakai keenam provider, jadi fase 07 harus selesai lebih dulu.
 - **Checkpoint performa ringan di akhir fase 04.** Ukur NFR-001, NFR-003, dan NFR-006 sekali dengan fixture 100 instance terdaftar dan 10 berjalan, supaya masalah ketahuan sebelum IPC, registry, dan GUI membeku; angka final tetap diukur di fitur 64.
-- **Fuzzing sejak awal.** Tiap fitur 6, 9, 18, 20, dan 54 membawa fuzz target di Done when dan menjalankannya sebagai CI selektif; fitur 63 memperluas dan menutupnya.
+- **Fuzzing sejak awal.** Tiap fitur 6, 9, 18, 20, dan 54 membawa fuzz target di Done when dan menjalankannya di Mac ini; fitur 63 memperluas dan menutupnya.
 - **Pilot bukan fitur.** Pilot internal (gate G7) dijalankan setelah fitur 66, dengan backup teruji, dan hasilnya dicatat lewat `/scope` berikutnya. Peserta dan kapasitasnya (OQ-016) diputuskan product owner saat kickoff.
 
 ## Deferred
@@ -128,7 +128,7 @@ Di luar baseline macOS, dicatat supaya rencana tetap jujur.
 
 - **Community beta**: publikasi SDK dan docs, kontribusi source, alur review catalog · needs a decision
 - **Public registry**: discovery, publishing, trust roots, sinkronisasi catalog dan revocation list online, laporan kompatibilitas · needs a decision · GA
-- **Windows foundation**: IPC named pipe, adapter proses, secret, path, dan startup, runner dan packaging spike (OQ-014, OQ-015) · needs a decision
+- **Windows foundation**: IPC named pipe, adapter proses, secret, path, dan startup, serta packaging spike (OQ-014, OQ-015) · needs a decision
 - **WinUI 3 beta**: client C#, UI native, parity lifecycle dan recovery untuk provider yang tersedia · needs a decision
 - **Windows stable**: gate distribusi, keamanan, dan recovery untuk Windows · needs a decision · GA
 - **Linux dan plugin lanjutan**: distribusi Linux, mode headless, WASM atau custom hooks · needs a decision
