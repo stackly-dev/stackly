@@ -7,3 +7,46 @@
 # `cargo xtask runtime verify` downloads each artifact again to prove them.
 
 schema_version = 1
+
+[[artifact]]
+id = "nats-2.15.1-macos-aarch64"
+provider = "nats"
+line = "2.15"
+version = "2.15.1"
+os = "macos"
+arch = "aarch64"
+min_os = "13.0"
+status = "available"
+origin = "upstream"
+distribution = "upstream_download"
+format = "tar_gz"
+urls = ["https://github.com/nats-io/nats-server/releases/download/v2.15.1/nats-server-v2.15.1-darwin-arm64.tar.gz"]
+sha256 = "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd"
+size = 6785953
+archive_root = "nats-server-v2.15.1-darwin-arm64"
+upstream_checksum = { kind = "sha256sums", url = "https://github.com/nats-io/nats-server/releases/download/v2.15.1/SHA256SUMS" }
+upstream_signature = { kind = "none" }
+signing_policy = "keep_or_adhoc"
+license = "Apache-2.0"
+license_url = "https://github.com/nats-io/nats-server/blob/v2.15.1/LICENSE"
+executables = ["nats-server"]
+
+[[artifact.dependency]]
+name = "libSystem.B.dylib"
+kind = "system"
+install_name = "/usr/lib/libSystem.B.dylib"
+
+[[artifact.dependency]]
+name = "libresolv.9.dylib"
+kind = "system"
+install_name = "/usr/lib/libresolv.9.dylib"
+
+[[artifact.dependency]]
+name = "CoreFoundation"
+kind = "system"
+install_name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+
+[[artifact.dependency]]
+name = "Security"
+kind = "system"
+install_name = "/System/Library/Frameworks/Security.framework/Versions/A/Security"
