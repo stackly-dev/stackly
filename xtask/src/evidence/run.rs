@@ -1,6 +1,8 @@
 //! `cargo xtask evidence run --kind <fixture|native> [--out <folder>] -- <command>`:
 //! runs a test command as evidence and writes `report.json`.
 
+mod leak;
+
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -93,7 +95,9 @@ pub fn run(args: &[&str]) -> Result<ExitCode> {
     report.command_exit_code = outcome.exit_code;
     report.command_signal = outcome.signal;
     report.interrupted = INTERRUPTED.load(Ordering::SeqCst);
-    report.set_records(collected.records, collected.problems);
+    let mut problems = collected.problems;
+    problems.extend(leak::scan(&run_dir));
+    report.set_records(collected.records, problems);
     let report_path = run_dir.join("report.json");
     write_json_atomic(&report_path, &report).context("cannot write report.json")?;
     print_summary(&report);
