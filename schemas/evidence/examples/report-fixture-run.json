@@ -1,0 +1,192 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a15a2e-4c8b-7d10-8f3e-6a2b9c4d5e01",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "bc87d45e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c",
+    "sourceDirty": false,
+    "runId": "01a15a2e-4c8b-7d10-8f3e-6a2b9c4d5e01",
+    "runKind": "fixture",
+    "command": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--locked",
+      "--no-fail-fast"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-10-18T08:14:51.238Z",
+  "finishedAt": "2026-10-18T08:15:20.774Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 2,
+    "byStatus": {
+      "NOT_RUN": 1,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 2,
+      "native": 0
+    }
+  },
+  "problems": [
+    {
+      "code": "left_not_run",
+      "recordId": "01a15a2e-5b10-7e21-9c4d-0a1b2c3d4e60",
+      "message": "test `guard::tests::guard_writes_one_record_per_test_with_its_final_status` is still NOT_RUN although the command exited 0"
+    }
+  ],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a15a2e-5b10-7e21-9c4d-0a1b2c3d4e5f",
+      "covers": [
+        "AC-011"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "supervisor",
+        "name": "stop_never_sends_sigkill",
+        "file": "apps/daemon/tests/supervisor.rs",
+        "line": 42
+      },
+      "status": "PASS",
+      "expected": "a normal stop ends the dummy server with SIGTERM only",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T08:15:02.481Z",
+      "finishedAt": "2026-10-18T08:15:03.927Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "bc87d45e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c",
+        "sourceDirty": false,
+        "runId": "01a15a2e-4c8b-7d10-8f3e-6a2b9c4d5e01",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "--workspace",
+          "--locked",
+          "--no-fail-fast"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a15a2e-5b10-7e21-9c4d-0a1b2c3d4e60",
+      "covers": [
+        "REQ-051"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-evidence",
+        "target": "stackly_evidence",
+        "name": "guard::tests::guard_writes_one_record_per_test_with_its_final_status",
+        "file": "crates/evidence/src/guard.rs",
+        "line": 533
+      },
+      "status": "NOT_RUN",
+      "expected": "every test that proves a PRD ID leaves one record with an honest final status",
+      "actual": null,
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T08:15:02.502Z",
+      "finishedAt": null,
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "bc87d45e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c",
+        "sourceDirty": false,
+        "runId": "01a15a2e-4c8b-7d10-8f3e-6a2b9c4d5e01",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "--workspace",
+          "--locked",
+          "--no-fail-fast"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

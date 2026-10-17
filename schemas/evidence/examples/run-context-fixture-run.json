@@ -1,0 +1,34 @@
+{
+  "sourceCommit": "bc87d45e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c",
+  "sourceDirty": false,
+  "runId": "01a15a2e-4c8b-7d10-8f3e-6a2b9c4d5e01",
+  "runKind": "fixture",
+  "command": [
+    "cargo",
+    "test",
+    "--workspace",
+    "--locked",
+    "--no-fail-fast"
+  ],
+  "host": {
+    "os": "macos",
+    "arch": "aarch64",
+    "osVersion": "27.0",
+    "osBuild": "26A428",
+    "hardwareModel": "Mac13,1",
+    "chip": "Apple M1 Max",
+    "memoryBytes": 34359738368,
+    "performanceCores": 8,
+    "efficiencyCores": 2,
+    "virtualized": false
+  },
+  "baseline": {
+    "matches": true,
+    "osBuildMatches": true
+  },
+  "toolchain": {
+    "rustc": "1.99.1",
+    "xcode": "27.0 (27A266a)",
+    "swift": "6.4"
+  }
+}
