@@ -9,6 +9,12 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+stackly-domain.workspace = true
+stackly-platform.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+stackly-testkit.workspace = true
 
 [lints]
 workspace = true

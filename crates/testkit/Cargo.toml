@@ -9,6 +9,8 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+jiff.workspace = true
+stackly-domain.workspace = true
 stackly-evidence.workspace = true
 stackly-platform.workspace = true
 tempfile.workspace = true

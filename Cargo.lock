@@ -774,6 +774,12 @@ dependencies = [
 [[package]]
 name = "stackly-core"
 version = "0.1.0"
+dependencies = [
+ "stackly-domain",
+ "stackly-platform",
+ "stackly-testkit",
+ "thiserror",
+]
 
 [[package]]
 name = "stackly-domain"
@@ -800,6 +806,8 @@ dependencies = [
 name = "stackly-platform"
 version = "0.1.0"
 dependencies = [
+ "jiff",
+ "stackly-domain",
  "thiserror",
 ]
 
@@ -807,7 +815,11 @@ dependencies = [
 name = "stackly-platform-macos"
 version = "0.1.0"
 dependencies = [
+ "libc",
+ "stackly-core",
+ "stackly-domain",
  "stackly-platform",
+ "stackly-testkit",
 ]
 
 [[package]]
@@ -824,6 +836,8 @@ dependencies = [
 name = "stackly-testkit"
 version = "0.1.0"
 dependencies = [
+ "jiff",
+ "stackly-domain",
  "stackly-evidence",
  "stackly-platform",
  "tempfile",
@@ -834,10 +848,12 @@ name = "stacklyd"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "serde_json",
  "stackly-core",
  "stackly-platform",
  "stackly-platform-macos",
  "stackly-protocol",
+ "stackly-testkit",
  "tracing",
  "tracing-subscriber",
 ]

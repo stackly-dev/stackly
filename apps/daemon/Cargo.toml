@@ -19,5 +19,9 @@ tracing-subscriber.workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 stackly-platform-macos.workspace = true
 
+[dev-dependencies]
+serde_json.workspace = true
+stackly-testkit.workspace = true
+
 [lints]
 workspace = true
