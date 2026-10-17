@@ -20,6 +20,7 @@ use crate::runtime::macho::{FileKind, file_kind};
 const OTOOL: &str = "/usr/bin/otool";
 const LIPO: &str = "/usr/bin/lipo";
 const LSOF: &str = "/usr/sbin/lsof";
+const PGREP: &str = "/usr/bin/pgrep";
 
 /// Install name prefixes of system libraries, for the static audit.
 const SYSTEM_STATIC: [&str; 2] = ["/usr/lib/", "/System/Library/"];
@@ -344,21 +345,22 @@ fn under(path: &str, prefixes: &[&str]) -> bool {
         && !path.split('/').any(|part| part == "..")
 }
 
-/// The Mach-O files the running process `pid` maps: system files as
+/// The Mach-O files the running processes `pids` map: system files as
 /// absolute paths, artifact files relative to `root`, and the foreign
 /// ones, both sorted.
-pub fn runtime_libraries(pid: u32, root: &Path) -> Result<(Vec<String>, Vec<String>)> {
+pub fn runtime_libraries(pids: &[u32], root: &Path) -> Result<(Vec<String>, Vec<String>)> {
     let root = root
         .canonicalize()
         .with_context(|| format!("cannot resolve {}", root.display()))?;
+    let pids = pid_list(pids);
     let output = Command::new(LSOF)
         .env("LANG", "en_US.UTF-8")
-        .args(["-nP", "-p", &pid.to_string(), "-Ffn"])
+        .args(["-nP", "-p", &pids, "-Ffn"])
         .output()
         .with_context(|| format!("cannot run {LSOF}"))?;
     if !output.status.success() {
         bail!(
-            "lsof cannot read process {pid}: {}",
+            "lsof cannot read processes {pids}: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
@@ -424,14 +426,14 @@ fn unescape(name: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Every TCP listener of `pid`, from `lsof -iTCP -sTCP:LISTEN`.
-pub fn listeners(pid: u32) -> Result<Vec<Listener>> {
+/// Every TCP listener of `pids`, from `lsof -iTCP -sTCP:LISTEN`.
+pub fn listeners(pids: &[u32]) -> Result<Vec<Listener>> {
     let output = Command::new(LSOF)
         .args([
             "-nP",
             "-a",
             "-p",
-            &pid.to_string(),
+            &pid_list(pids),
             "-iTCP",
             "-sTCP:LISTEN",
             "-Fn",
@@ -440,6 +442,34 @@ pub fn listeners(pid: u32) -> Result<Vec<Listener>> {
         .with_context(|| format!("cannot run {LSOF}"))?;
     // lsof exits 1 when the process has no matching file.
     Ok(parse_lsof_listen(&String::from_utf8_lossy(&output.stdout)))
+}
+
+/// Every live process in the process group `pgid`, the leader first.
+///
+/// A server may fork its real work into children, such as the watchdog of
+/// ClickHouse or the backends of PostgreSQL; the runtime audit covers
+/// them all.
+pub fn group_pids(pgid: u32) -> Result<Vec<u32>> {
+    let output = Command::new(PGREP)
+        .args(["-g", &pgid.to_string()])
+        .output()
+        .with_context(|| format!("cannot run {PGREP}"))?;
+    // pgrep exits 1 when nothing matches; the leader is listed anyway.
+    let mut pids = vec![pgid];
+    pids.extend(
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| line.trim().parse::<u32>().ok())
+            .filter(|pid| *pid != pgid),
+    );
+    Ok(pids)
+}
+
+fn pid_list(pids: &[u32]) -> String {
+    pids.iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Reads `n<address>:<port>` lines.

@@ -376,8 +376,9 @@ impl Spike {
         })?;
         self.step("runtime audit", |s| {
             let root = &ctx.artifact_root;
-            let (runtime, foreign) = audit::runtime_libraries(server.pid(), root)?;
-            let listeners = audit::listeners(server.pid())?;
+            let pids = audit::group_pids(server.pid())?;
+            let (runtime, foreign) = audit::runtime_libraries(&pids, root)?;
+            let listeners = audit::listeners(&pids)?;
             let libraries = s.result.libraries.get_or_insert_with(Libraries::default);
             libraries.runtime = runtime;
             libraries.foreign.extend(foreign.iter().cloned());
