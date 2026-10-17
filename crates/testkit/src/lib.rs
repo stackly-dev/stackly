@@ -5,45 +5,31 @@
 //!
 //! Integration tests take their own [`TestRoot`] and ports from
 //! [`allocate_port`], so they never touch the real per user folders, never
-//! share state, and can run in parallel.
+//! share state, and can run in parallel. Use cases run against
+//! [`FakePlatform`], whose [`FakeFilesystem`] works on the real disk but
+//! fails any call that leaves the test root.
 //!
 //! Tests that prove a PRD ID write evidence through [`evidence`], the
 //! re-exported `stackly-evidence` crate (spec 0002).
+//!
+//! The fakes need Unix file ownership and modes, so they exist only on
+//! Unix; [`TestRoot`] and [`allocate_port`] work everywhere.
 
+#[cfg(unix)]
+mod conformance;
+#[cfg(unix)]
+mod fake_fs;
+#[cfg(unix)]
+mod fake_platform;
 mod port;
 mod test_root;
 
-use std::path::{Path, PathBuf};
-
-use stackly_platform::{DirectoryResolver, PlatformError};
-
+#[cfg(unix)]
+pub use conformance::fs_conformance;
+#[cfg(unix)]
+pub use fake_fs::{FakeFilesystem, Fault, FsOp, Mutation};
+#[cfg(unix)]
+pub use fake_platform::{FakeClock, FakeIdentity, FakePlatform, FakePlatformInfo};
 pub use port::allocate_port;
 pub use stackly_evidence as evidence;
 pub use test_root::TestRoot;
-
-/// A [`DirectoryResolver`] that points at a test root instead of the real
-/// per user folders.
-#[derive(Debug, Clone)]
-pub struct FakeDirectoryResolver {
-    root: PathBuf,
-}
-
-impl FakeDirectoryResolver {
-    /// Creates a resolver whose app support directory is `root`.
-    #[must_use]
-    pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
-    }
-
-    /// Returns the test root this resolver points at.
-    #[must_use]
-    pub fn root(&self) -> &Path {
-        &self.root
-    }
-}
-
-impl DirectoryResolver for FakeDirectoryResolver {
-    fn app_support_dir(&self) -> Result<PathBuf, PlatformError> {
-        Ok(self.root.clone())
-    }
-}

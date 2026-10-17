@@ -9,7 +9,13 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+libc.workspace = true
+stackly-domain.workspace = true
 stackly-platform.workspace = true
+
+[dev-dependencies]
+stackly-core.workspace = true
+stackly-testkit.workspace = true
 
 [lints]
 workspace = true

@@ -1,24 +1,21 @@
 //! macOS adapters for the Stackly platform traits.
 //!
+//! [`MacosPlatform::new`] resolves the per user roots from the user database
+//! and the private temporary directory (or from `STACKLY_ROOT`, which the
+//! binary passes in) and assembles a [`stackly_platform::Platform`].
+//!
 //! This is the only crate where `unsafe` code may live. Every `unsafe` block
 //! needs a `// SAFETY:` comment, and `cargo xtask check-deps` rejects this
 //! opt out anywhere else.
 #![allow(unsafe_code)]
 
-use std::path::PathBuf;
+mod dirs;
+mod fs;
+mod identity;
+mod info;
+mod platform;
 
-use stackly_platform::{DirectoryResolver, PlatformError};
-
-/// Resolves Stackly directories under the current user's `~/Library`.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct MacosDirectoryResolver;
-
-impl DirectoryResolver for MacosDirectoryResolver {
-    // provisional: F4 replaces this with the final resolver.
-    fn app_support_dir(&self) -> Result<PathBuf, PlatformError> {
-        let home = std::env::home_dir()
-            .filter(|path| path.is_absolute())
-            .ok_or(PlatformError::HomeDirUnavailable)?;
-        Ok(home.join("Library/Application Support/Stackly"))
-    }
-}
+pub use fs::MacosFilesystem;
+pub use identity::MacosIdentity;
+pub use info::MacosPlatformInfo;
+pub use platform::MacosPlatform;
