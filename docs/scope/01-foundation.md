@@ -55,7 +55,7 @@ Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka di
 - [ ] Build it: `/develop sumber & packaging runtime`
   - [x] Inventory, `runtime pin`, `runtime verify`, and `runtime check` (spec 0003 AC-1 to AC-3)
   - [x] LaunchAgent spike end to end, proven on NATS, then Traefik, ClickHouse, MySQL 8.4 and 9.7, with evidence in `evidence/runtime/` (spec 0003 AC-1, AC-3 to AC-10, AC-13; needs spec 0002 step 1 built). NATS 2.15.1, Traefik 3.7.15, MySQL 8.4.11 dan 9.7.2 `PASS`; ClickHouse 26.8 `blocked` karena aset macOS berupa binary self extracting yang ditolak codesign; aset `.zip` bertanda tangan Developer ID dipakai lewat format `zip` yang diputuskan spec 0003 pada 2026-10-17 (Milestone 2b)
-  - [ ] Milestone 2b: ClickHouse from the Developer ID signed `.zip` through the new `zip` format: format check, `/usr/bin/tar` extraction, `pin` support, the `archive_root` rule, then the ClickHouse entry and its evidence (spec 0003 AC-1 to AC-3, AC-5 to AC-10, AC-13, AC-16; build steps 15 and 16)
+  - [ ] Milestone 2b: ClickHouse from the Developer ID signed `.zip` through the new `zip` format: format check, `/usr/bin/tar` extraction, mode 0755 for zip executables, `pin` support, the `archive_root` rule, then the ClickHouse entry and its evidence (spec 0003 AC-1 to AC-3, AC-5 to AC-10, AC-13, AC-16; build steps 15 and 16)
   - [ ] Decide how PostgreSQL 17 and 18 and Valkey are built on this Mac (spec): `/architect sumber & packaging runtime`
   - [ ] PostgreSQL 17 and 18 and Valkey built on this Mac, then their spikes (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-12; build steps 9, 10, and 12)
   - [x] Cache pruning: `runtime spike --prune-cache`, run by hand on this Mac (spec 0003 AC-4; build step 13)

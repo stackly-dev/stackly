@@ -192,6 +192,52 @@ Selain itu: `tar -tf` dan `tar -xf <zip> --no-mac-metadata -- clickhouse` (satu 
 
 Update ini dibaca model lain (Sonnet 5.5, baca saja) sebelum diterima. Temuan yang diterapkan atas persetujuan kamu: nama jenis file dan letak cek format (`check_format` di `macho.rs`, dipanggil di `archive::extract` dan `runtime verify`, juga untuk `tar_gz` dan `binary`); penjelasan bahwa bukti milestone 2 tetap berlaku; rincian perubahan `pin` (field `format` pertama, klasifikasi di semua OS, catatan `unknown`, flag `tar` per jenis); aturan 3 untuk `archive_root`; urutan pengisian dependency ClickHouse dari spike lokal, plus baris Value sourcing untuk `archive_root`, `executables`, dan dependency; langkah verify untuk signature Developer ID dan `archive.files`; cek awal bit eksekusi di zip asli sebelum entri ditulis; alasan pemilihan bsdtar yang lebih jujur (ketiga alat menolak symlink, bedanya di `..` dan pemakaian ulang oleh `pin`); dan dua follow-up fitur 18 (entri `._` di `tar_gz`, dan uji ulang kasus AC-16 pada pembaca zip fitur 18). Kasus lain yang ditanyakan (zip64, zip terenkripsi, nama ganda, tabrakan huruf besar kecil di APFS, hard link, signature setelah ekstraksi, hardened runtime pada audit `lsof` dan probe quarantine) dinilai bukan masalah: anggota ClickHouse jauh di bawah 4 GiB, zip terenkripsi gagal karena tidak ada TTY di bawah launchd, nama dipin lewat digest, zip tidak punya hard link, signature tertanam di Mach-O, dan MySQL dengan hardened runtime sudah lulus kedua pemeriksaan itu.
 
+## Update 2026-10-18: bit eksekusi untuk executable di zip
+
+### Konteks
+
+Saat langkah 16, `runtime pin` untuk `clickhouse-macos-aarch64.zip` dari `v26.8.30.8-lts` (patch 26.8 terbaru, terbit 17 Oktober 2026; sha256 `097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402`, 216009716 byte) mencetak `format = "zip"` dan `min_os = "11.0"`, tapi cek awal langkah 16.2 gagal: `tar -tvf` menunjukkan `clickhouse` bermode `-rw-rw-r--`. Central directory zip itu mencatat asal Unix (version made by 3.0) dan atribut Unix 100664, jadi itu memang mode yang disimpan upstream, bukan mode bawaan karena atributnya kosong. Central directory rilis lain, dibaca lewat HTTP range tanpa mengunduh seluruh file, memberi hasil yang sama:
+
+| Rilis | Mode `clickhouse` di zip |
+| --- | --- |
+| `v26.8.11.7-lts`, `v26.8.20.9-lts`, `v26.8.29.10-lts`, `v26.8.30.8-lts` | 100664 |
+| `v26.7.33.3-stable`, `v26.9.21.9-stable` | 100664 |
+
+Setelah ekstraksi dengan umask 022 file itu menjadi 0644, sehingga tidak bisa dijalankan. Binary hasil ekstraksi bertanda tangan Developer ID (`ClickHouse Inc. (ZNDB5FJ8ZW)`, hardened runtime, timestamp 17 Oktober 2026), lulus `codesign --verify --strict`, dan tetap lulus setelah `chmod 0755`, karena mode file tidak masuk code signature. `otool -L` hanya menunjukkan library sistem. Binary itu tidak dijalankan saat pemeriksaan ini.
+
+### Opsi
+
+**Opsi A: spike memberi mode 0755 pada `executables` artefak `zip`.** Setelah ekstraksi, setiap path di `executables` dicek sebagai file biasa tanpa symlink di path-nya, lalu diberi mode tepat 0755.
+
+- Pro: aturan yang sama dengan format `binary`, yang sudah memberi 0755 karena unduhan satu file tidak membawa mode; tanpa field inventaris baru; digest archive dan signature Mach-O tetap utuh; `tar_gz` dan bukti milestone 2 tidak berubah.
+- Kontra: mode yang jalan berbeda dengan mode di archive; fitur 18 harus meniru aturan ini; `chmod` mengikuti symlink, jadi perlu guard sendiri.
+
+**Opsi B: field opt in di inventaris** (misalnya `set_executable_mode = true`), dengan perilaku seperti opsi A hanya untuk entri yang menulisnya.
+
+- Pro: keputusan per artefak terlihat saat inventaris direview.
+- Kontra: satu field, satu aturan `runtime check`, dan test tambahan untuk satu entri; setiap path di `executables` memang dijalankan spike, jadi field itu tidak menambah informasi; lupa menulis field berarti spike `FAIL` dengan pesan izin yang membingungkan.
+
+**Opsi C: tetap `blocked`, laporkan ke upstream** supaya zip menyimpan 0755.
+
+- Pro: tanpa kode baru; spike tetap tidak pernah mengubah mode.
+- Kontra: gate G0 tidak punya bukti ClickHouse untuk waktu yang tidak tentu, padahal artefak yang bertanda tangan dan lulus verifikasi sudah ada; upstream belum tentu berubah.
+
+### Keputusan
+
+Opsi A, dipilih pemilik proyek pada 2026-10-18. Yang dilindungi spec ini adalah byte yang dijalankan (digest archive, AC-3) dan identitas penerbitnya (signature, AC-8); mode file bukan bagian keduanya, dan format `binary` sudah memberi 0755 dengan alasan yang sama. Batasnya sempit: hanya `zip`, hanya path di `executables` yang sudah direview di inventaris dan memang dijalankan spike, hanya file biasa tanpa symlink. Runner up: opsi B, kalau suatu saat ada artefak `zip` yang salah satu path `executables`-nya sengaja tidak boleh dijalankan.
+
+Keputusan turunan:
+
+- **Mode tepat 0755**, bukan menambah bit eksekusi di tempat yang punya bit baca: hasilnya sama untuk setiap archive dan sama dengan `binary`.
+- **Cek symlink per komponen path sebelum `chmod`.** bsdtar sudah menolak menulis lewat symlink, tapi archive boleh berisi symlink folder ke luar tanpa anggota di bawahnya, dan `chmod` pada path lewat symlink itu akan mengubah file di luar root.
+- **Dicatat di detail langkah `extract`** (`set mode 0755 on <path> (was 0664)`), bukan field baru di hasil spike, supaya skema `stackly.runtime-spike-result/v1` tidak berubah, dan langkah verify milestone 2b tetap bisa melihatnya.
+- **Tidak berlaku untuk `tar_gz`**, karena keempat tarball yang sudah dipin menyimpan mode yang benar, dan bukti milestone 2 terikat pada perintah ekstraksi yang sama.
+- **Risiko sisa: race antara cek dan `chmod`.** Di antara `symlink_metadata` dan `chmod`, proses lain dengan uid yang sama bisa mengganti path dengan symlink. Risiko ini diterima: `tar` sudah selesai, provider belum jalan, foldernya di `TMPDIR` milik user itu sendiri, dan `fchmod` lewat `O_NOFOLLOW` butuh libc dan `unsafe`, yang tidak boleh ada di xtask.
+
+### Cross check update 2026-10-18
+
+Update ini dibaca model lain (Sonnet 5.5, baca saja). Temuan yang diterapkan atas persetujuan kamu: mode lama di catatan adalah mode di disk setelah `tar`, yang dipengaruhi umask (`clickhouse` menjadi 0644 di bawah umask 022, bukan 0664), dengan fixture 0644 di test; urutan cek per komponen path di bawah root artefak dan pesan untuk path yang tidak ada, symlink (termasuk yang targetnya tidak ada), dan folder; format detail `extract`; file yang sudah 0755 tidak dicatat; bit setuid dan setgid dibuang dengan bukti di catatan; clone quarantine dan tanda tangan ulang ad hoc mempertahankan mode (dicek); langkah verify ClickHouse hanya mengharapkan catatan itu kalau zip menyimpan mode tanpa bit eksekusi; executable `zip` berupa symlink sengaja `FAIL`; dan race di atas sebagai risiko sisa. Varian yang lebih sederhana (mencari path di hasil `archive::walk`) ditolak karena pesan untuk symlink folder menjadi kurang jelas.
+
 ## Update 2026-10-17: CI ditiadakan
 
 Pemilik proyek meniadakan CI; pengembangan fokus di Mac ini dulu, dan cek, test native, serta run evidence dijalankan dengan tangan. Keputusan yang berubah:
