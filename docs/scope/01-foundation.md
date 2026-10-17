@@ -49,12 +49,12 @@ Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka di
 
 **Trace:** OQ-003, OQ-004, RISK-01, RISK-12, AC-078, gate G0, PRD bagian 20.2, 25, dan 33.2 (M0)
 
-**Pointer:** spec [0003](../specs/0003-sumber-packaging-runtime/index.md) · code in `xtask/src/runtime/`, `runtimes/inventory.toml`, `.github/workflows/ci.yml`
+**Pointer:** spec [0003](../specs/0003-sumber-packaging-runtime/index.md) · code in `xtask/src/runtime/`, `xtask/tests/native_runtime.rs`, `runtimes/inventory.toml`, `runtimes/keys/`, `evidence/runtime/`, `.github/workflows/ci.yml`
 
 - [x] Design it (spec): `/architect sumber & packaging runtime`
 - [ ] Build it: `/develop sumber & packaging runtime`
   - [x] Inventory, `runtime pin`, `runtime verify`, and `runtime check` in the `linux` job (spec 0003 AC-1 to AC-3)
-  - [ ] LaunchAgent spike end to end, proven on NATS, then Traefik, ClickHouse, MySQL 8.4 and 9.7, with evidence in `evidence/runtime/` (spec 0003 AC-1, AC-3 to AC-10, AC-13; needs spec 0002 step 1 built)
+  - [x] LaunchAgent spike end to end, proven on NATS, then Traefik, ClickHouse, MySQL 8.4 and 9.7, with evidence in `evidence/runtime/` (spec 0003 AC-1, AC-3 to AC-10, AC-13; needs spec 0002 step 1 built). NATS 2.15.1, Traefik 3.7.15, MySQL 8.4.11 dan 9.7.2 `PASS`; ClickHouse 26.8 `blocked` karena aset macOS berupa binary self extracting yang ditolak codesign, dan aset `.zip` bertanda tangan Developer ID butuh format `zip` yang belum ada di spec 0003 (`/architect`)
   - [ ] `stackly-runtimes` pipeline for PostgreSQL 17 and 18 and Valkey, published with attestation, then their spikes (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-11, AC-12; needs the repo created first)
   - [ ] Automation: `native.yml` cleanup, cache, and timeout, plus weekly `runtime-watch.yml` (spec 0003 AC-14, AC-15; the CI part needs spec 0002 step 4 built, the self hosted runner registered, and `SELF_HOSTED_MACOS27` set to `true`)
 - [ ] Verify it: `/check verify sumber & packaging runtime`
