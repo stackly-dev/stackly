@@ -1,0 +1,9 @@
+# Runtime inventory (spec 0003): where every provider runtime Stackly
+# installs comes from, with its pinned digest, license, and signing policy.
+#
+# `cargo xtask runtime check` enforces the rules in spec 0003 (Key
+# invariants) on every pull request. `urls`, `sha256`, `size`, and `min_os`
+# come from `cargo xtask runtime pin`, never typed by hand, and
+# `cargo xtask runtime verify` downloads each artifact again to prove them.
+
+schema_version = 1

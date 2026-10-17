@@ -1,7 +1,8 @@
 # Stackly CI, as spec 0001 describes it.
 #
 # Fixture jobs (every pull request, hosted runners):
-#   linux        fmt, clippy, tests, dependency rules, portability check
+#   linux        fmt, clippy, tests, dependency and runtime inventory rules,
+#                portability check
 #   contract     generated Swift types and JSON Schemas match stackly-protocol
 #   deny         cargo-deny: licenses, RustSec advisories, bans, sources
 #   macos-rust   Rust on darwin, including stackly-platform-macos
@@ -68,6 +69,8 @@ jobs:
           path: target/evidence/
       - name: Dependency direction and unsafe rules
         run: cargo xtask check-deps
+      - name: Runtime inventory and evidence rules (spec 0003)
+        run: cargo xtask runtime check
       - name: Portable crates build natively
         run: cargo check --locked -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core
       - name: Portable crates build for Windows

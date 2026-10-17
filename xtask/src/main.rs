@@ -4,6 +4,7 @@ mod build_app;
 mod check_deps;
 mod codegen;
 mod evidence;
+mod runtime;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -21,6 +22,11 @@ Tasks:
   build-app --release  Same, with the Release configuration
   evidence run --kind <fixture|native> [--out <folder>] -- <command>
                        Run a test command as evidence and write report.json
+  runtime check        Check runtimes/inventory.toml and evidence/runtime/
+  runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]
+                       Download a runtime and print its pinned inventory values
+  runtime verify [--id <id>]
+                       Download every available runtime again and check it
 ";
 
 fn main() -> ExitCode {
@@ -47,6 +53,7 @@ fn run() -> Result<ExitCode> {
             done(build_app::run(&root, build_app::Configuration::Release))
         }
         ["evidence", rest @ ..] => evidence::run(rest),
+        ["runtime", rest @ ..] => runtime::run(&root, rest),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");
             Ok(ExitCode::SUCCESS)
