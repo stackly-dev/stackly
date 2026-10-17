@@ -145,6 +145,62 @@ Spec ditinjau oleh model lain (read only) sebelum diterima, lalu sekali lagi ber
 
 Setelah spec 0002 diupdate untuk spec ini, kedua spec dibaca ulang oleh model lain (Sonnet 5.5, baca saja). Temuan yang diterapkan atas persetujuan engineer: `runtime record` hanya menyalin record `PASS` dan `FAIL`, ikut menyalin `output.log`, dan menolak report bermasalah, commit yang bukan `HEAD`, serta folder yang sudah ada; aturan 7 mengecek nama folder dan `summary`; subject untuk `FAIL` sebelum versi terbaca; lock untuk `--cleanup`; `--prune-cache` terpisah yang hanya jalan di nightly; pencarian quarantine dari file yang dilacak git; guard `evidence!` di setiap fungsi test; filter report per package; format `actual` untuk `PASS`; dan pembersihan kedua di `native.yml`. Alur dua commit sekarang mengandalkan `sourceDirty` yang menghitung file untracked (spec 0002).
 
+## Update 2026-10-17: format `zip` untuk ClickHouse
+
+### Konteks
+
+Saat milestone 2, aset polos `clickhouse-macos-aarch64` dari `v26.8.29.10-lts` (dan dari 26.9 stable, dengan stub 17 load command yang sama) ternyata binary self extracting: identifier codesign-nya `decompressor`, ada payload terkompresi di ekor file, `codesign --verify` dan `codesign --force --sign -` sama sama gagal dengan "main executable failed strict validation", dan saat pertama kali jalan ia menulis ulang dirinya dari sekitar 177 MB menjadi binary 892 MB. `keep_or_adhoc` tidak bisa menandatanganinya, dan byte yang benar benar jalan bukan byte yang digest-nya dipin. Entri ClickHouse dicatat `blocked` (basis: `runtimes/inventory.toml`, entri `clickhouse-26.8.29.10-macos-aarch64`).
+
+Rilis yang sama membawa `clickhouse-macos-aarch64.zip` (sha256 `e93d4a5294f7dd1131fb860c73d6b4a64e9907730b961bcdaafb6ad8a15e7907`, 215990301 byte) berisi satu file `clickhouse`, binary biasa yang tidak mengekstrak dirinya sendiri, bertanda tangan Developer ID (team `ZNDB5FJ8ZW`, hardened runtime), yang lulus verifikasi. Run manual binary itu dengan config langkah spike ClickHouse (`xtask/src/runtime/spike/providers.rs`) ready dalam sekitar 11 detik, `SELECT version()` = `26.8.29.10`, dan berhenti dengan kode 0 sekitar 1 detik setelah SIGTERM. Spec hanya mengizinkan `format = "tar_gz"` atau `"binary"` (aturan 3 di `xtask/src/runtime/inventory.rs`).
+
+### Opsi
+
+**Opsi A: tambah format `zip`.** Unduh `.zip`, cek digest, ekstrak, lalu perlakukan seperti artefak upstream lain (basis: pin artefak dengan digest kriptografis).
+
+- Pro: binary yang jalan sama persis dengan byte yang diekstrak dari archive yang digest-nya dipin; signature Developer ID upstream dipakai apa adanya; langkah spike ClickHouse yang sudah ada tidak berubah.
+- Kontra: pembaca archive kedua, di spike sekarang dan di extractor fitur 18 nanti; ClickHouse bisa berhenti menerbitkan `.zip`.
+
+**Opsi B: langkah pra dekompresi untuk binary self extracting.** Jalankan stub sekali di folder sementara supaya ia mengekstrak dirinya, lalu tanda tangani hasilnya ad hoc.
+
+- Pro: tetap satu aset polos, format inventaris tidak bertambah.
+- Kontra: kode upstream jalan sebelum ada byte yang bisa diverifikasi signature-nya; binary 892 MB hasil dekompresi tidak punya digest yang dipin, jadi AC-3 hanya melindungi stub; signature Developer ID hilang diganti ad hoc; fitur 18 harus meniru langkah yang sama di daemon; dan perilaku stub adalah detail internal ClickHouse yang bisa berubah tanpa pemberitahuan.
+
+**Opsi C: tetap `blocked` sampai fitur 18.** Biarkan ClickHouse `blocked` dan putuskan formatnya saat extractor fitur 18 dibangun.
+
+- Pro: tanpa kode baru sekarang; fitur 3 tetap memenuhi Done when karena `blocked` dengan alasan dan owner diizinkan.
+- Kontra: provider wajib keenam tidak punya bukti jalan dari LaunchAgent di gate G0 walau artefak yang layak sudah ada; fitur 18 harus memutuskan format zip tanpa bukti native; AC-13 mencatat `blocked` untuk lini yang sebenarnya punya artefak managed.
+
+### Keputusan
+
+Opsi A. Opsi B melanggar janji utama spec ini (tidak ada byte yang jalan sebelum digest-nya cocok, AC-3) dan membuang signature Developer ID upstream, hanya demi menghindari satu nilai enum. Opsi C menunda keputusan yang biayanya kecil sekarang dan besar nanti: tanpa bukti native, fitur 18 harus memilih pembaca zip dan aturan ekstraksinya dari tebakan. Opsi A membuat ClickHouse sama dengan provider upstream lain, dengan risiko baru yang terbatas pada ekstraksi, dan risiko itu sudah dijawab oleh extractor yang sama dengan `tar_gz`.
+
+Keputusan turunan:
+
+- **Extractor `/usr/bin/tar` (bsdtar 3.5.3, libarchive 3.7.4) untuk zip**, bukan `/usr/bin/ditto -x -k` atau `/usr/bin/unzip`. Runner up: `ditto` dengan `--noextattr --noqtn`. Percobaan di bawah menunjukkan ketiganya menolak penulisan lewat symlink dan tidak ada yang menulis di luar folder ekstraksi. Bedanya dua: hanya bsdtar yang gagal dengan jelas pada anggota `..` (`unzip` dan `ditto` diam diam membuang `..` lalu menulis di dalam folder, sehingga archive yang aneh lolos tanpa tanda), dan bsdtar sudah menjadi extractor `tar_gz` yang dipakai `pin` untuk mendaftar dan mengekstrak satu anggota. `ditto` tidak bisa melakukan keduanya, jadi memilihnya berarti `pin` butuh alat kedua.
+- **`--no-mac-metadata` wajib untuk zip**, karena tanpa flag itu bsdtar macOS mencoba memulihkan `__MACOSX/._<nama>` sebagai xattr (bertentangan dengan man page-nya; di percobaan, isi palsu membuatnya gagal dengan `Failed to restore metadata`), dan zip buatan Mac bisa membawa metadata, termasuk atribut quarantine milik pembuatnya. Perintah `tar_gz` tidak diberi flag ini, supaya perintah `tar` yang menghasilkan bukti milestone 2 tetap sama; yang baru untuk `tar_gz` hanya cek format sebelum ekstraksi, dan bukti itu tetap berlaku karena aturan 8 terikat pada `sha256` dan keempat file itu gzip. Celahnya (archive `tar_gz` buatan Mac dengan entri `._` masih bisa memulihkan xattr) dicatat untuk fitur 18.
+- **Cek magic number terhadap `format`**, karena bsdtar mengenali format sendiri: `tar -xzf` pada file zip berhasil dengan kode 0. Tanpa cek ini, label `format` yang salah lolos spike lalu merusak extractor fitur 18, yang memilih pembaca dari label itu. `pin` mencetak `format` dari magic number supaya nilainya berasal dari byte, bukan diketik.
+- **`binary` tetap diterima** walau tidak ada entri yang memakainya. Membuangnya berarti mengubah kode dan test yang sudah jalan tanpa mengurangi risiko, dan langkah signing sudah menangkap binary self extracting. Fitur 18 boleh membuangnya kalau tetap tidak terpakai.
+- **Fixture zip dibuat di test oleh penulis zip `stored` kecil**, bukan crate `zip` sebagai dependency dev, karena kasus serangan (anggota `../x`, symlink lalu anggota di bawahnya) tidak bisa dibuat dengan `/usr/bin/zip` dari file nyata, dan workspace hanya menambah crate saat kode memakainya. Runner up: crate `zip` sebagai dependency dev.
+- **Lini tetap 26.8 LTS**, sesuai aturan fallback AC-13: rilis LTS terbaru yang punya aset macOS aarch64 yang bisa dipakai.
+
+### Percobaan extractor
+
+Dijalankan 2026-10-17 di Mac uji macOS 27 dengan zip buatan sendiri (dibuat dengan `zipfile` Python, anggota bermode Unix), masing masing diekstrak ke folder baru yang kosong. "Di dalam" berarti file tertulis di bawah folder ekstraksi; tidak ada satu pun percobaan yang menulis di luar folder itu.
+
+| Zip | `/usr/bin/tar -xf` | `/usr/bin/unzip` | `/usr/bin/ditto -x -k` |
+| --- | --- | --- | --- |
+| anggota `../escaped` | kode 1, `Path contains '..'`, anggota dilewati | kode 0, `..` dibuang diam diam, file di dalam | kode 0, `..` dibuang diam diam, file di dalam |
+| anggota path absolut | kode 0, `/` di depan dibuang, file di dalam | kode 1, peringatan, file di dalam | kode 0, `/` dibuang diam diam, file di dalam |
+| symlink `link` ke folder luar, lalu `link/escaped` | kode 1, `Cannot extract through symlink` | kode 2, `checkdir error` | kode 1, `Not a directory` |
+| satu file `clickhouse` mode 0755 | kode 0, mode 0755 | kode 0, mode 0755 | kode 0, mode 0755 |
+| `clickhouse` plus `__MACOSX/._clickhouse` | kode 1, `Failed to restore metadata`; dengan `--no-mac-metadata` kode 0 dan hanya `clickhouse` | kode 0, folder `__MACOSX/` ikut menjadi file | kode 1, folder `__MACOSX/` ikut sebagian |
+
+Selain itu: `tar -tf` dan `tar -xf <zip> --no-mac-metadata -- clickhouse` (satu anggota, seperti `pin`) bekerja pada zip, dan `tar -xzf` pada zip juga berhasil dengan kode 0 (dasar cek magic number). File hasil ekstraksi hanya membawa xattr `com.apple.provenance` yang diberi macOS sendiri, bukan dari archive.
+
+### Cross check update
+
+Update ini dibaca model lain (Sonnet 5.5, baca saja) sebelum diterima. Temuan yang diterapkan atas persetujuan kamu: nama jenis file dan letak cek format (`check_format` di `macho.rs`, dipanggil di `archive::extract` dan `runtime verify`, juga untuk `tar_gz` dan `binary`); penjelasan bahwa bukti milestone 2 tetap berlaku; rincian perubahan `pin` (field `format` pertama, klasifikasi di semua OS, catatan `unknown`, flag `tar` per jenis); aturan 3 untuk `archive_root`; urutan pengisian dependency ClickHouse dari spike lokal, plus baris Value sourcing untuk `archive_root`, `executables`, dan dependency; langkah verify untuk signature Developer ID dan `archive.files`; cek awal bit eksekusi di zip asli sebelum entri ditulis; alasan pemilihan bsdtar yang lebih jujur (ketiga alat menolak symlink, bedanya di `..` dan pemakaian ulang oleh `pin`); dan dua follow-up fitur 18 (entri `._` di `tar_gz`, dan uji ulang kasus AC-16 pada pembaca zip fitur 18). Kasus lain yang ditanyakan (zip64, zip terenkripsi, nama ganda, tabrakan huruf besar kecil di APFS, hard link, signature setelah ekstraksi, hardened runtime pada audit `lsof` dan probe quarantine) dinilai bukan masalah: anggota ClickHouse jauh di bawah 4 GiB, zip terenkripsi gagal karena tidak ada TTY di bawah launchd, nama dipin lewat digest, zip tidak punya hard link, signature tertanam di Mach-O, dan MySQL dengan hardened runtime sudah lulus kedua pemeriksaan itu.
+
 ## Landscape scan 2026-10-17
 
 Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum terkonfirmasi" dikonfirmasi saat `runtime pin`.
@@ -154,7 +210,7 @@ Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum ter
 | PostgreSQL | Rilis minor terbaru 17.11 dan 18.6. Tidak ada archive relocatable resmi untuk macOS arm64. Zip macOS EDB belum terkonfirmasi; panduan terbaru menyebut installer `.dmg`. `theseus-rs/postgresql-binaries` punya `postgresql-<v>-aarch64-apple-darwin.tar.gz` dan `.sha256` untuk 17.11.0 dan 18.6.0 (terbit 15 Agustus 2026), tanpa signature. |
 | MySQL | Halaman unduhan mendaftar 9.7.2 LTS dan 8.4.11 LTS, serta 26.7.0 sebagai GA teratas tanpa label LTS. Nama file tarball macOS ARM64, pola URL, signature untuk file macOS, dan perpindahan URL ke arsip belum terkonfirmasi. |
 | NATS | v2.15.1 (9 Oktober 2026), aset `nats-server-v2.15.1-darwin-arm64.tar.gz`, `SHA256SUMS`, SBOM per aset, tanpa signature. |
-| ClickHouse | Stable terbaru v26.9.20.23 (16 Oktober 2026) membawa `clickhouse-macos-aarch64` dan versi `.zip` aset itu; file `.sha512` hanya untuk paket Linux. Lini LTS 26.3; aset macOS di rilis LTS belum terkonfirmasi. |
+| ClickHouse | Stable terbaru v26.9.20.23 (16 Oktober 2026) membawa `clickhouse-macos-aarch64` dan versi `.zip` aset itu; file `.sha512` hanya untuk paket Linux. Lini LTS 26.3; aset macOS di rilis LTS belum terkonfirmasi. Dikoreksi saat milestone 2: 26.8 sudah LTS (`v26.8.29.10-lts`) dan membawa kedua aset, dan aset polosnya binary self extracting (lihat Update 2026-10-17). |
 | Valkey | 9.1.2 (1 September 2026), rilis GitHub tanpa aset. Binary macOS resmi belum terkonfirmasi ada di tempat lain. |
 | Traefik | v3.7.15 (15 Oktober 2026), aset `traefik_v3.7.15_darwin_arm64.tar.gz`, `traefik_v3.7.15_checksums.txt`, tanpa signature. |
 
@@ -166,6 +222,7 @@ Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum ter
 - `docs/scope/01-foundation.md` fitur 3, serta fitur 15, 18, 55, 56, dan 60 di scope lain.
 - Spec 0001 (stack, `cargo xtask`, kebijakan `unsafe`, Mac self hosted) dan spec 0002 (evidence `stackly.evidence/v1`, `native.yml`, follow up fitur 3).
 - `AGENTS.md` root (aturan workspace, testkit, CI).
+- `runtimes/inventory.toml` (entri ClickHouse `blocked`), `xtask/src/runtime/inventory.rs` (aturan 3), `xtask/src/runtime/spike/archive.rs` (ekstraksi), `xtask/src/runtime/pin.rs` (`min_os`), dan man page bsdtar di macOS 27 (`-P`, `--no-mac-metadata`).
 - Skill terpasang: `rust-best-practices`, `meson`, `signing-entitlements`.
 
 **Practices & standards**:

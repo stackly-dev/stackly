@@ -5,7 +5,7 @@
 
 ## Summary
 
-Spec ini memutuskan dari mana binary keenam provider berasal dan membuktikan bahwa binary itu jalan di Mac tanpa Homebrew. NATS, Traefik, ClickHouse, dan MySQL diunduh langsung dari rilis resmi upstream dengan digest (sidik jari SHA-256) yang dipin. PostgreSQL 17 dan 18 serta Valkey dibangun sendiri oleh pipeline maintainer (OQ-003: pipeline itu memang perlu), karena upstream tidak menerbitkan binary macOS yang bisa dipindah. Semua sumber, versi, lisensi, dependency, dan kebijakan signing dicatat di `runtimes/inventory.toml`, dan setiap artefak dibuktikan oleh test native yang menjalankannya dari LaunchAgent (proses latar yang dijalankan launchd, bukan Terminal), dengan evidence yang mengikuti spec 0002.
+Spec ini memutuskan dari mana binary keenam provider berasal dan membuktikan bahwa binary itu jalan di Mac tanpa Homebrew. NATS, Traefik, ClickHouse, dan MySQL diunduh langsung dari rilis resmi upstream dengan digest (sidik jari SHA-256) yang dipin; ClickHouse lewat aset `.zip` bertanda tangan Developer ID, karena binary polosnya mengekstrak dirinya sendiri dan ditolak codesign. PostgreSQL 17 dan 18 serta Valkey dibangun sendiri oleh pipeline maintainer (OQ-003: pipeline itu memang perlu), karena upstream tidak menerbitkan binary macOS yang bisa dipindah. Semua sumber, versi, lisensi, dependency, dan kebijakan signing dicatat di `runtimes/inventory.toml`, dan setiap artefak dibuktikan oleh test native yang menjalankannya dari LaunchAgent (proses latar yang dijalankan launchd, bukan Terminal), dengan evidence yang mengikuti spec 0002.
 
 ## Requirements
 
@@ -29,15 +29,18 @@ Spec ini memutuskan dari mana binary keenam provider berasal dan membuktikan bah
 - **AC-10**: `xtask/tests/native_runtime.rs` punya satu test native per lini provider yang menulis record `stackly.evidence/v1` (spec 0002) dengan `covers = ["AC-078", "REQ-005"]`, `kind` native, subject berisi versi teramati (atau versi inventaris untuk `FAIL` sebelum versi terbaca), `sha256`, dan `source: managed`. Record `PASS` membawa `actual` berformat `<provider> <observedVersion> ready in <ms> ms, stopped in <ms> ms`; record `FAIL` berasal dari panic dengan pesan `<langkah>: <alasan>`; entri `blocked`, entri yang belum ada, dan Mac tanpa sesi GUI menjadi `BLOCKED` dengan alasan dan owner. Setiap test memanggil `artifact_dir()` dan menyimpan hasil spike lengkap di sana. `cargo xtask runtime record <report.json>` menyalin record `PASS` dan `FAIL` test itu dari run native yang bersih ke `evidence/runtime/<report.runId>/` (record `BLOCKED` tidak disalin, karena alasan dan owner-nya sudah ada di inventaris, dan record `NOT_RUN` juga tidak), dan menolak run dirty, run fixture, run dengan `context.ci.event` `pull_request`, report dengan `problems` tidak kosong atau `interrupted: true`, report yang `context.sourceCommit` bukan `HEAD` saat perintah dijalankan, record yang `evidencePath` tidak berada di bawah `artifacts/` atau foldernya tidak memuat `spike-result.json`, report tanpa record yang bisa disimpan (`no record to keep`), serta folder tujuan yang sudah ada.
 - **AC-11**: Di repo `ojiepermana/stackly-runtimes`, push tag terlindungi `postgresql-<versi>-r<n>` atau `valkey-<versi>-r<n>` dari commit di `main` membangun artefak di runner hosted `macos-26` arm64 dari tarball source dengan checksum yang sudah dicek, mengubah install name ke `@rpath` dan `@loader_path`, menandatangani ad hoc setiap file Mach-O, lulus audit closure dan smoke test di path baru yang berisi spasi, membuat attestation provenance, lalu menerbitkan release immutable berisi `.tar.gz` dan `.sha256` (dibuat sebagai draft, aset diunggah, baru dipublikasikan). Pull request, termasuk dari fork, membangun dan menguji tapi tidak pernah menerbitkan dan tidak pernah mendapat izin `id-token` atau `contents: write`.
 - **AC-12**: Artefak buatan maintainer hanya berisi file biasa dan folder (tanpa symlink, setuid, setgid, atau file device), folder `LICENSES/` dengan teks lisensi software itu dan setiap dependency bundel, serta `STACKLY-ARTIFACT.json` yang mencatat source, commit resep, toolchain, deployment target, dan versi dependency. `gh attestation verify --repo ojiepermana/stackly-runtimes` lulus untuk setiap aset, sebagai langkah terakhir job tag.
-- **AC-13**: Lini yang tidak punya artefak managed (misalnya rilis tanpa aset macOS arm64, atau `FAIL` yang tidak bisa diperbaiki) dicatat `blocked` dengan alasan, owner, dan tanggal. Untuk ClickHouse, aturan fallback dijalankan dulu: rilis LTS terbaru yang membawa aset macOS aarch64, lalu stable terbaru; baru `blocked` kalau keduanya tidak ada.
+- **AC-13**: Lini yang tidak punya artefak managed (misalnya rilis tanpa aset macOS arm64, atau `FAIL` yang tidak bisa diperbaiki) dicatat `blocked` dengan alasan, owner, dan tanggal. Untuk ClickHouse, aturan fallback dijalankan dulu: rilis LTS terbaru yang membawa aset macOS aarch64, lalu stable terbaru; baru `blocked` kalau keduanya tidak ada. Aset ClickHouse yang dipakai adalah `clickhouse-macos-aarch64.zip`; aset polos `clickhouse-macos-aarch64` (binary self extracting yang gagal `codesign --verify --strict` dan menulis ulang dirinya saat jalan) tidak dihitung sebagai artefak managed.
 - **AC-14**: Workflow mingguan menjalankan `cargo xtask runtime watch`, membandingkan versi yang dipin dengan patch terbaru di lini yang sama untuk keenam provider dan dependency bundel (OpenSSL, ICU, lz4, zstd), lalu membuka atau memperbarui satu issue yang mendaftar versi baru. Workflow ini tidak pernah mengubah inventaris atau menerbitkan apa pun.
 - **AC-15**: `native.yml` (spec 0002) menjalankan test native runtime di setiap trigger workflow itu, dengan `timeout-minutes: 90`, `cargo xtask runtime spike --cleanup` sebelum dan sesudah langkah evidence (yang sesudah dengan `if: always()`), `cargo xtask runtime spike --prune-cache` hanya di trigger `schedule`, dan cache unduhan yang menetap di Mac self hosted (urutan lengkap di spec 0002, bagian Job CI). PR dari fork tidak pernah sampai ke Mac itu. Sampai runner terdaftar dan variable repo `SELF_HOSTED_MACOS27` bernilai `true`, kriteria ini `BLOCKED` dan bukti G0 datang dari run lokal di Mac uji.
+- **AC-16**: Artefak `format = "zip"` diekstrak dengan `/usr/bin/tar` setelah gerbang digest AC-3, dengan aturan yang sama dengan `tar_gz`: worker lebih dulu mencocokkan magic number file cache dengan `format` (tidak cocok berarti `FAIL` di langkah `extract` dengan alasan `format <format> does not match the file (<jenis>)`, dengan `<jenis>` salah satu dari `gzip`, `zip`, `mach-o`, atau `unknown`, sebelum `tar` dijalankan; cek yang sama berlaku untuk `tar_gz` dan `binary`, dan `cargo xtask runtime verify` mencetak `FAIL` dengan alasan yang sama); anggota dengan komponen `..` atau anggota yang tertulis lewat symlink membuat `tar` keluar dengan kode bukan 0 dan spike `FAIL` di langkah `extract`; tidak ada file yang tertulis di luar folder ekstraksi; metadata AppleDouble (`__MACOSX/`) tidak menjadi file maupun atribut tambahan (xattr); aturan `archive_root` dan laporan archive berlaku sama. `cargo xtask runtime pin` mencetak `format` dari magic number unduhan dan membaca `min_os` dari `--executable` di dalam `.zip`.
 
 ## Decision
 
 **Chosen option**: Option 1: Sumber campuran, upstream resmi bila ada dan pipeline maintainer untuk sisanya, dengan inventaris yang dicek mesin dan bukti dari test native.
 
 Binary diunduh langsung dari upstream dengan digest yang dipin kalau upstream menerbitkan build macOS arm64 resmi (MySQL, NATS, ClickHouse, Traefik); PostgreSQL dan Valkey dibangun pipeline Stackly di repo terpisah dengan attestation provenance. OQ-003 terjawab: pipeline artefak buatan maintainer diperlukan, untuk PostgreSQL dan Valkey.
+
+Format artefak upstream yang diterima ada tiga: `tar_gz`, `zip`, dan `binary`. `zip` ditambahkan 2026-10-17 untuk ClickHouse, dan diekstrak dengan `/usr/bin/tar` yang sama (bsdtar, yang juga membaca zip), bukan `ditto` atau `unzip`. Ketiganya menolak penulisan lewat symlink, tapi hanya bsdtar yang gagal dengan jelas pada anggota `..` (dua lainnya diam diam menulis ulang path-nya), dan hanya bsdtar yang sudah dipakai `pin` untuk mendaftar dan mengekstrak satu anggota, sehingga tidak perlu alat kedua. Runner up untuk keputusan ini: tetap `blocked` sampai fitur 18.
 
 **Implementation skills**: `rust-best-practices` (`apollographql/skills`, `.claude/skills/rust-best-practices/`) · `meson` (`mohitmishra786/low-level-dev-skills`, `.claude/skills/meson/`) · `signing-entitlements` (`openai/plugins`, `.claude/skills/signing-entitlements/`)
 
@@ -56,7 +59,7 @@ Versi adalah patch terbaru per 17 Oktober 2026 dari cek lanskap; nilai yang meng
 | MySQL 8.4 LTS | 8.4.11 | upstream | `upstream_download` | `tar_gz` (nama file macOS ARM64 dikonfirmasi saat pin) | `none` (tidak ada file checksum polos); GPG bila ada URL `.asc` mentah | `keep_or_adhoc` | `GPL-2.0-only WITH Universal-FOSS-exception-1.0` |
 | MySQL 9.7 LTS | 9.7.2 | upstream | `upstream_download` | `tar_gz` | sama | `keep_or_adhoc` | sama |
 | NATS 2.15 | 2.15.1 | upstream | `upstream_download` | `tar_gz` | `SHA256SUMS` | `keep_or_adhoc` | `Apache-2.0` |
-| ClickHouse | LTS terbaru dengan aset `clickhouse-macos-aarch64` (26.3, atau 26.8 bila sudah LTS); fallback stable terbaru (26.9) | upstream | `upstream_download` | `binary` | tidak ada untuk aset macOS (`none`) | `keep_or_adhoc` | `Apache-2.0` |
+| ClickHouse | LTS terbaru dengan aset macOS aarch64: 26.8.29.10 (`v26.8.29.10-lts`); fallback stable terbaru (26.9) | upstream | `upstream_download` | `zip`: aset `clickhouse-macos-aarch64.zip`, satu file `clickhouse` tanpa folder puncak, binary biasa yang tidak mengekstrak dirinya sendiri. Aset polos `clickhouse-macos-aarch64` tidak dipakai (binary self extracting) | tidak ada untuk aset macOS (`none`) | `keep_or_adhoc` (binary di dalam zip bertanda tangan Developer ID, team `ZNDB5FJ8ZW`, hardened runtime, jadi signature dipertahankan) | `Apache-2.0` |
 | Valkey 9.1 | 9.1.2, build r1 | maintainer | `stackly_hosted` | `tar_gz` | daftar `valkey-hashes` bila memuat versi itu, selain itu `none` | `adhoc_pipeline` | `BSD-3-Clause` |
 | Traefik 3.7 | 3.7.15 | upstream | `upstream_download` | `tar_gz` (tanpa folder puncak) | `checksums.txt` | `keep_or_adhoc` | `MIT` |
 
@@ -71,6 +74,35 @@ Signing policy:
 
 - `keep_or_adhoc`: setiap file Mach-O di salinan hasil ekstraksi dicek dengan `codesign --verify --strict`. Kalau semuanya lulus, signature upstream dipakai apa adanya. Kalau satu saja tidak ada atau rusak, semua file Mach-O di salinan itu ditandatangani ulang dengan `codesign --force --sign -` tanpa `--preserve-metadata` (hardened runtime dan library validation ikut lepas bersamaan, jadi binary tidak menolak library miliknya sendiri), dan hasil spike mencatat `adhocSignedAtInstall: true`. File di cache tidak pernah diubah.
 - `adhoc_pipeline`: pipeline menandatangani ad hoc setiap file Mach-O setelah `install_name_tool`, tanpa hardened runtime (supaya PostgreSQL bisa memuat extension). Developer ID dan notarization menyusul di fitur 60 setelah identity OQ-012 tersedia.
+
+### Format artefak
+
+`format` menentukan cara file cache menjadi root artefak. Ketiga format lewat gerbang digest AC-3 dulu, lalu cek format: satu fungsi bersama `check_format(format, kind)` di `xtask/src/runtime/macho.rs` mencocokkan `format` dengan jenis file dari `macho::file_kind`, dan gagal dengan `format <format> does not match the file (<jenis>)`. Jenis file punya nama tetap: `gzip`, `zip`, `mach-o`, dan `unknown`. Fungsi ini dipanggil sebagai langkah pertama `archive::extract` (sehingga juga berlaku untuk `tar_gz` dan `binary`), dan oleh `cargo xtask runtime verify` setelah digest dan ukuran cocok. Test `binary` yang ada memakai byte header Mach-O sebagai isi fixture, bukan teks.
+
+| Format | Magic number | Ekstraksi spike | `min_os` saat `pin` (macOS saja) |
+| --- | --- | --- | --- |
+| `tar_gz` | gzip `1f 8b` | `/usr/bin/tar -xzf <cache> -C <folder>` | anggota `--executable` dicari lewat `/usr/bin/tar -tzf`, lalu diekstrak sendiri dengan `/usr/bin/tar -xzf <cache> -C <folder> -- <anggota>` |
+| `zip` | `50 4b 03 04` | `/usr/bin/tar -xf <cache> --no-mac-metadata -C <folder>` | anggota `--executable` dicari lewat `/usr/bin/tar -tf`, lalu diekstrak sendiri dengan `/usr/bin/tar -xf <cache> --no-mac-metadata -C <folder> -- <anggota>` |
+| `binary` | Mach-O tipis atau universal | salin ke `<folder>/<executables[0]>`, mode 0755 | file itu sendiri |
+
+Perintah `tar` untuk `tar_gz` sama dengan milestone 2; yang baru untuk ketiga format hanya cek format sebelumnya. Bukti milestone 2 tetap berlaku tanpa run ulang, karena aturan 8 terikat pada `sha256`, dan keempat file yang sudah dipin berupa gzip sehingga lulus cek itu.
+
+Aturan untuk `tar_gz` dan `zip`:
+
+- `tar` tidak pernah diberi `-P`. Tanpa `-P`, bsdtar menolak anggota yang path-nya memuat `..` dan anggota yang akan tertulis lewat symlink (keluar dengan kode 1), dan membuang `/` di depan path absolut sehingga anggota itu tetap tertulis di dalam folder ekstraksi. Kode keluar bukan 0 berarti `FAIL` di langkah `extract`, dengan stderr `tar` di alasannya.
+- `--no-mac-metadata` wajib untuk `zip`. Tanpa flag itu, bsdtar di macOS mencoba memulihkan isi `__MACOSX/._<nama>` sebagai xattr (walau man page menyebut sebaliknya; di percobaan, isi yang bukan AppleDouble sah membuatnya gagal dengan `Failed to restore metadata`); dengan flag itu, entri `__MACOSX/._<nama>` dibuang dan tidak menjadi file ataupun xattr. Bukti percobaannya ada di rationale. File lain di bawah `__MACOSX/` yang tidak berpasangan belum dicoba: dengan `archive_root` ia membuat cek puncak gagal, dan tanpa `archive_root` ia muncul di `archive.files`, yang untuk ClickHouse dicek harus 1 (lihat Critical test scenarios).
+- Laporan archive (symlink internal dan yang keluar, setuid, file device) dan aturan `archive_root` sama untuk keduanya. Mode file diambil dari archive; spike tidak menambah bit eksekusi untuk `tar_gz` maupun `zip`.
+- Di Linux, `pin` tidak pernah mengekstrak (GNU tar tidak membaca zip), karena `min_os` hanya dibaca di macOS; `format` tetap dicetak dari magic number.
+
+Perubahan `pin`:
+
+- Struct `Pinned` mendapat `format` sebagai field pertama, sebelum `urls`, sesuai urutan di entri inventaris (`format`, `urls`, `sha256`, `size`), lalu `min_os` tetap terakhir. Test teks persis `pinned_values_print_as_inventory_toml` ikut berubah.
+- `pin` mengklasifikasi file lewat `macho::file_kind` sebelum cek macOS di `read_min_os`, sehingga `format` dicetak di semua OS dan hanya `min_os` yang memerlukan macOS.
+- `FileKind` mendapat varian `Zip` untuk `50 4b 03 04`. Test `macho` yang sekarang menyatakan `PK\x03\x04` sebagai `Other` dibalik menjadi `Zip`.
+- Untuk jenis `unknown`, `pin` tidak mencetak `format` maupun `min_os`, dengan catatan `pin: the download is not a Mach-O file, a .tar.gz, or a .zip; format and min_os left out`.
+- `extract_one` menerima flag `tar` per jenis (`-tzf` dan `-xzf` untuk gzip, `-tf` dan `-xf --no-mac-metadata` untuk zip), sehingga pencarian anggota dan ekstraksi satu anggota berlaku untuk keduanya.
+
+Saat ini tidak ada entri yang memakai `binary`. Format itu tetap diterima untuk aset satu file yang lulus `codesign`; binary self extracting seperti aset polos ClickHouse tertangkap di langkah signing (`codesign --verify --strict` dan `codesign --force --sign -` sama sama gagal), sehingga spike-nya `FAIL`.
 
 ### Data model sketch
 
@@ -88,7 +120,7 @@ Arti `kind` dependency: `bundled` adalah library pihak ketiga yang ikut di artef
 | --- | --- | --- | --- |
 | `id` | string | ya | upstream `<provider>-<version>-macos-aarch64`; maintainer `<provider>-<version>-r<build>-macos-aarch64` |
 | `provider` | enum | ya | `postgresql`, `mysql`, `nats`, `clickhouse`, `valkey`, `traefik` |
-| `line` | string | ya | `17`, `8.4`, `2.15`, `26.3`, dan seterusnya; `version` diawali `<line>.` |
+| `line` | string | ya | `17`, `8.4`, `2.15`, `26.8`, dan seterusnya; `version` diawali `<line>.` |
 | `version` | string | ya | exact, pola sama dengan subject spec 0002: `^[0-9]+(\.[0-9]+)+([+-][0-9A-Za-z.]+)?$`; ClickHouse memakai empat komponen penuh |
 | `build` | int | maintainer saja | mulai 1, naik setiap build ulang versi yang sama |
 | `os`, `arch` | enum | ya | `macos`, `aarch64` |
@@ -97,10 +129,10 @@ Arti `kind` dependency: `bundled` adalah library pihak ketiga yang ikut di artef
 | `blocked_reason`, `blocked_owner`, `blocked_since` | string, string `@handle`, tanggal | `blocked` | owner default `@ojiepermana` (runtime maintainer) |
 | `origin` | enum | ya | `upstream` atau `maintainer` |
 | `distribution` | enum | ya | `upstream_download` (origin upstream) atau `stackly_hosted` (origin maintainer) |
-| `format` | enum | `available` | `tar_gz` atau `binary` (maintainer selalu `tar_gz`) |
+| `format` | enum | `available` | `tar_gz`, `zip`, atau `binary` (maintainer selalu `tar_gz`); nilainya dicetak `runtime pin` dari magic number unduhan, lihat Format artefak |
 | `urls` | array string https | `available` | URL kandidat berurutan; digest yang menentukan identitas |
 | `sha256`, `size` | hex 64 huruf kecil, int byte | `available` | dari unduhan nyata |
-| `archive_root` | string | tidak | folder puncak di dalam archive. Kalau ada, puncak archive harus tepat folder itu. Kalau tidak ada (misalnya Traefik), archive diekstrak ke folder baru `<id>/` yang menjadi root artefak |
+| `archive_root` | string | tidak | folder puncak di dalam archive `tar_gz` atau `zip` (aturan 3: tidak boleh untuk `binary`, dan harus satu nama folder biasa). Kalau ada, puncak archive harus tepat folder itu. Kalau tidak ada (misalnya Traefik dan ClickHouse), archive diekstrak ke folder baru `<id>/` yang menjadi root artefak |
 | `upstream_checksum` | `{ kind, url }` | origin upstream | `kind`: `sha256sums`, `checksums_txt`, `sha512`, atau `none` |
 | `upstream_signature` | `{ kind, url, key, fingerprint }` | origin upstream | `kind`: `gpg` atau `none`; untuk `gpg`, `key` adalah file kunci publik yang disimpan di repo di `runtimes/keys/` dan `fingerprint` sidik jarinya |
 | `source_url`, `source_sha256` | https, hex | origin maintainer | tarball source upstream |
@@ -170,7 +202,7 @@ Port dialokasikan worker tepat sebelum setiap start lewat helper `xtask/src/runt
 
 `trust` di PostgreSQL spike aman karena satu satunya jalan masuk adalah socket di folder 0700 milik user yang sama, setara dengan peer auth; user database `stackly` menjaga nama user OS keluar dari evidence. Ini konfigurasi spike, bukan default instance (fitur 19).
 
-Urutan langkah worker: hitung ulang hash file cache terhadap plan, ekstrak dengan `/usr/bin/tar` (atau salin binary dan beri mode 0755), laporan archive (symlink internal dan yang keluar, setuid, file device), audit statis, cek dan tanda tangan sesuai `signing_policy`, ukur `min_os`, init, start, ready, baca versi, probe, audit runtime (`lsof` library dan listener), stop, lalu quarantine bila plan memintanya.
+Urutan langkah worker: hitung ulang hash file cache terhadap plan, cocokkan magic number dengan `format`, ekstrak dengan `/usr/bin/tar` untuk `tar_gz` dan `zip` (atau salin binary dan beri mode 0755), sesuai tabel Format artefak, laporan archive (symlink internal dan yang keluar, setuid, file device), audit statis, cek dan tanda tangan sesuai `signing_policy`, ukur `min_os`, init, start, ready, baca versi, probe, audit runtime (`lsof` library dan listener), stop, lalu quarantine bila plan memintanya.
 
 ### Mekanisme LaunchAgent dan pembersihan
 
@@ -190,8 +222,8 @@ Argumen diparse dengan tangan seperti task `xtask` lain.
 | Perintah | Tempat jalan | Input utama | Output utama | Izin | Error utama |
 | --- | --- | --- | --- | --- | --- |
 | `cargo xtask runtime check` | OS apa pun, job `linux` di setiap PR | `runtimes/inventory.toml`, `evidence/runtime/*/report.json` | exit 0, atau satu baris `<id>: <aturan>` per pelanggaran lalu exit 1 | read only | TOML tidak valid, pelanggaran invariant, evidence `PASS` tidak ada |
-| `cargo xtask runtime pin --url <https>... [--executable <path relatif>] [--sha256-url <https>]` | OS apa pun dengan `curl` | satu atau lebih URL kandidat; executable untuk `min_os`; file `.sha256` release untuk entri maintainer | potongan TOML berisi `urls`, `sha256`, `size`, dan `min_os` (di macOS) | jaringan | URL bukan https, unduhan gagal atau lebih dari 4 GiB, URL kandidat menghasilkan digest berbeda, digest tidak sama dengan `.sha256` |
-| `cargo xtask runtime verify [--id <id>]` | OS apa pun dengan `curl` | inventaris | `OK`, `FAIL <alasan>`, atau `SKIP gpg` per artefak; checksum upstream dicocokkan per `kind`, GPG hanya kalau `gpg` ada di PATH | jaringan | digest, ukuran, checksum, atau signature tidak cocok; URL tidak bisa dijangkau |
+| `cargo xtask runtime pin --url <https>... [--executable <path relatif>] [--sha256-url <https>]` | OS apa pun dengan `curl` | satu atau lebih URL kandidat; executable untuk `min_os`; file `.sha256` release untuk entri maintainer | potongan TOML berisi `format` (dari magic number, di semua OS), `urls`, `sha256`, `size`, dan `min_os` (di macOS) | jaringan | URL bukan https, unduhan gagal atau lebih dari 4 GiB, URL kandidat menghasilkan digest berbeda, digest tidak sama dengan `.sha256` |
+| `cargo xtask runtime verify [--id <id>]` | OS apa pun dengan `curl` | inventaris | `OK`, `FAIL <alasan>`, atau `SKIP gpg` per artefak; checksum upstream dicocokkan per `kind`, GPG hanya kalau `gpg` ada di PATH | jaringan | digest, ukuran, `format` (cek format), checksum, atau signature tidak cocok; URL tidak bisa dijangkau |
 | `cargo xtask runtime spike --id <id> --result <file>` | macOS saja | inventaris, cache, `evidence/runtime/` | file hasil spike; exit 0 `PASS`, 1 `FAIL`, 2 `BLOCKED` | domain launchd `gui` milik user sendiri, tanpa `sudo` | bukan macOS, tanpa sesi GUI, bootstrap gagal, melewati batas waktu |
 | `cargo xtask runtime spike --cleanup` | macOS | tidak ada | proses, agent, dan folder sisa dibersihkan (lihat Rutin pembersihan); cache tidak disentuh; exit 0 walau domain GUI tidak ada | domain user sendiri, lock spike | lock tidak didapat dalam 20 menit (`spike in progress`) |
 | `cargo xtask runtime spike --prune-cache` | macOS | inventaris | file cache yang digest-nya tidak ada di inventaris dihapus | folder cache, lock spike | lock tidak didapat dalam 20 menit (`spike in progress`) |
@@ -250,7 +282,8 @@ stackly-runtimes/
 
 | Aksi | Nilai | Sumber |
 | --- | --- | --- |
-| spike | URL, `sha256`, `size`, `archive_root`, `executables`, `signing_policy` | entri inventaris |
+| spike | URL, `sha256`, `size`, `format`, `archive_root`, `executables`, `signing_policy` | entri inventaris |
+| spike | perintah ekstraksi, cek magic number | `format` entri, lalu tabel Format artefak; jenis file dari `macho::file_kind` pada file cache |
 | spike | root ekstraksi | `TMPDIR` proses driver, lalu `stackly-runtime-spike-<runId>/Stackly Spike Ü/<id>/`; dikirim ke worker lewat plan |
 | spike | port | helper `xtask/src/runtime/ports.rs`, dialokasikan worker tepat sebelum start |
 | spike | folder socket | `/tmp/sk-<8 hex acak>`, mode 0700 |
@@ -274,7 +307,11 @@ stackly-runtimes/
 | test native | context, commit, host | wrapper spec 0002 |
 | check | record terbaru per `sha256` | `finishedAt` terbaru di antara record `evidence/runtime/*/report.json` dengan subject yang memuat digest itu |
 | check | daftar lini wajib (aturan 9) | konstanta di xtask: `postgresql` 17 dan 18, `mysql` 8.4 dan 9.7, `nats` 2.15, `clickhouse` (lini apa pun), `valkey` 9.1, `traefik` 3.7 |
-| pin | `sha256`, `size`, `min_os` | byte yang benar benar diunduh; `vtool` pada `--executable` (atau satu satunya file untuk format `binary`) |
+| pin | `sha256`, `size`, `min_os` | byte yang benar benar diunduh; `vtool` pada `--executable` di dalam `.tar.gz` atau `.zip` (atau satu satunya file untuk format `binary`) |
+| pin | `format` | magic number byte yang diunduh (`macho::file_kind`): gzip `tar_gz`, `PK\3\4` `zip`, Mach-O `binary`; jenis lain tidak mencetak `format` dan memberi catatan (teks di Perubahan `pin`) |
+| entri inventaris | `archive_root` | daftar anggota dari `/usr/bin/tar -tf <file cache>`: nama folder itu kalau semua anggota berada di satu folder puncak, selain itu tidak diisi |
+| entri inventaris | `executables` | daftar anggota archive, dibatasi ke file yang dijalankan tabel Langkah spike per provider; executable utama (yang start) di urutan pertama |
+| entri inventaris | `[[artifact.dependency]]` | `libraries.static` dari spike lokal pertama dengan entri tanpa baris dependency (run itu tidak disimpan sebagai evidence): setiap path di bawah `/usr/lib/` atau `/System/Library/` menjadi baris `system` dengan `name` nama file (atau nama framework) dan `install_name` path itu, seperti entri NATS; library di dalam artefak menjadi `own` atau `bundled` |
 | watch | patch terbaru per lini | API GitHub: `postgres/postgres` tag `REL_17_*` dan `REL_18_*`, `mysql/mysql-server` tag `mysql-8.4.*` dan `mysql-9.7.*` (fallback halaman unduhan MySQL kalau tag tidak lagi diterbitkan), rilis `nats-io/nats-server` `v2.15.*`, `ClickHouse/ClickHouse` di lini terpilih, `valkey-io/valkey` `9.1.*`, `traefik/traefik` `v3.7.*`, `openssl/openssl` `openssl-3.5.*`, `unicode-org/icu`, `lz4/lz4`, `facebook/zstd` |
 | watch | issue | `gh issue list/create/edit` di workflow, satu issue berjudul tetap |
 | pipeline | nomor build | tag `<provider>-<version>-r<n>` |
@@ -288,7 +325,7 @@ Aturan yang ditegakkan `cargo xtask runtime check`:
 
 1. `schema_version` bernilai 1; `id` unik dan sama dengan pola yang diturunkan dari `provider`, `version`, `build`, `os`, dan `arch`; `(provider, line, os, arch)` unik.
 2. `version` exact dan diawali `<line>.`; `os = "macos"` dan `arch = "aarch64"`.
-3. `available` mewajibkan `urls` (semua `https://`), `sha256` (64 hex huruf kecil), `size` > 0, `min_os`, `format`, `license`, `license_url`, `signing_policy`, dan `executables` (path relatif tanpa `..`).
+3. `available` mewajibkan `urls` (semua `https://`), `sha256` (64 hex huruf kecil), `size` > 0, `min_os`, `format` (`tar_gz`, `zip`, atau `binary`), `license`, `license_url`, `signing_policy`, dan `executables` (path relatif tanpa `..`). `archive_root`, kalau ada, hanya boleh bersama `format` `tar_gz` atau `zip`, dan harus satu nama folder biasa (tidak kosong, tanpa `/`, bukan `.` atau `..`).
 4. `blocked` mewajibkan `blocked_reason`, `blocked_owner` (diawali `@`), dan `blocked_since`.
 5. `origin = "maintainer"` jika dan hanya jika ada `build` (≥ 1), `source_url`, `source_sha256`, `recipe`, `attestation`, `distribution = "stackly_hosted"`, `signing_policy = "adhoc_pipeline"`, dan `format = "tar_gz"`. `origin = "upstream"` berarti tanpa `build`, dengan `distribution = "upstream_download"`, `signing_policy = "keep_or_adhoc"`, `upstream_checksum`, dan `upstream_signature`; `upstream_signature` berjenis `gpg` mewajibkan `url`, `key` yang menunjuk file yang ada di `runtimes/keys/`, dan `fingerprint`.
 6. Dependency: `name` unik per artefak; `bundled` mewajibkan `version`, `license`, `source_url`, dan `install_name` diawali `@rpath/`, `@loader_path/`, atau `@executable_path/`; `own` mewajibkan `install_name` dengan awalan yang sama; `system` mewajibkan `install_name` di bawah `/usr/lib/` atau `/System/Library/`.
@@ -298,7 +335,8 @@ Aturan yang ditegakkan `cargo xtask runtime check`:
 
 Aturan yang dijaga kode spike dan pipeline:
 
-- Tidak ada byte artefak yang diekstrak atau dijalankan sebelum `sha256` dan `size` cocok.
+- Tidak ada byte artefak yang diekstrak atau dijalankan sebelum `sha256` dan `size` cocok, dan sebelum magic number file cocok dengan `format`.
+- `tar` tidak pernah dijalankan dengan `-P`, dan ekstraksi `zip` selalu dengan `--no-mac-metadata`.
 - Spike hanya menulis di root spike miliknya, `/tmp/sk-*` miliknya, dan folder cache; tidak pernah di `~/Library/Application Support/Stackly`, tidak pernah `sudo`, tidak pernah menghapus atribut quarantine, dan tidak pernah mengubah setelan sistem.
 - Hanya satu spike berjalan di satu Mac pada satu waktu (lock di folder cache).
 - Proses provider berjalan langsung sebagai child di process group sendiri, dengan environment yang dikosongkan, dan group itu dimatikan (`/bin/kill -TERM -- -<pgid>`, lalu `-KILL`) di setiap jalur keluar worker; sisa dari run yang terputus ditemukan rutin pembersihan lewat `pgrep`.
@@ -332,7 +370,10 @@ Aturan yang dijaga kode spike dan pipeline:
 - Library asing: fixture Mach-O kecil yang dibangun di test lalu diubah dengan `install_name_tool -change` ke `/opt/homebrew/lib/libfoo.dylib` ditolak audit statis, dengan path itu di hasil. Memverifikasi **AC-6**.
 - Terputus: worker yang dihentikan di tengah run meninggalkan agent, proses provider, dan root; `runtime spike --cleanup` (atau run berikutnya) mematikan proses itu lewat `pgrep`, mencabut agent, dan menghapus root. Memverifikasi **AC-4**.
 - Paralel: delapan test native dijalankan libtest secara paralel tetap menghasilkan delapan spike berurutan tanpa bentrok port atau label. Memverifikasi **AC-4**.
-- Aturan inventaris: unit test `runtime check` dengan inventaris fixture, satu per aturan (field `available` hilang, URL `http://`, `blocked` tanpa owner, maintainer tanpa attestation, dependency `bundled` tanpa lisensi, `available` tanpa `PASS`, record terbaru `FAIL`, record dari `pull_request`, versi subject berbeda, folder `evidence/runtime/` yang namanya bukan `runId`, `summary` yang salah, record `BLOCKED` atau `NOT_RUN` di report yang di-commit, `evidencePath` tanpa `spike-result.json`). Memverifikasi **AC-2**, **AC-13**.
+- Aturan inventaris: unit test `runtime check` dengan inventaris fixture, satu per aturan (field `available` hilang, URL `http://`, `blocked` tanpa owner, maintainer tanpa attestation, dependency `bundled` tanpa lisensi, `available` tanpa `PASS`, record terbaru `FAIL`, record dari `pull_request`, versi subject berbeda, folder `evidence/runtime/` yang namanya bukan `runId`, `summary` yang salah, record `BLOCKED` atau `NOT_RUN` di report yang di-commit, `evidencePath` tanpa `spike-result.json`, `archive_root` pada `format = "binary"`, `archive_root` berisi `/` atau `..`). Memverifikasi **AC-2**, **AC-13**.
+- Format `zip`: unit test `archive::extract` dengan zip fixture yang dibuat di test oleh penulis zip `stored` kecil di modul test (header lokal dan central directory tanpa kompresi, tanpa crate baru). Test ini `#[cfg(target_os = "macos")]`, karena `/usr/bin/tar` di job `linux` adalah GNU tar yang tidak membaca zip; cek magic number dan aturan 3 tetap jalan di semua OS. Kasusnya: (1) satu file bermode 0755 tanpa `archive_root` terekstrak ke folder baru dengan mode tetap 0755, di path berisi spasi dan `Ü`; (2) satu folder puncak dengan `archive_root` yang cocok dan yang tidak cocok; (3) anggota `../x` membuat ekstraksi gagal dan tidak ada file di luar folder; (4) symlink `link` ke folder di luar, lalu anggota `link/x`, membuat ekstraksi gagal dan folder luar tetap kosong; (5) anggota `__MACOSX/._<nama>` tidak menghasilkan folder `__MACOSX` dan tidak menambah xattr selain yang diberi macOS sendiri (misalnya `com.apple.provenance`). Memverifikasi **AC-16**.
+- Magic number: unit test `check_format` untuk setiap pasangan `format` dan jenis file; `format = "zip"` dengan file cache `.tar.gz` gagal di `archive::extract` dengan `format zip does not match the file (gzip)`, dan `format = "tar_gz"` dengan file zip dengan `format tar_gz does not match the file (zip)`, keduanya tanpa menjalankan `tar`; `runtime verify` pada entri dengan `format` salah mencetak `FAIL format ... does not match the file (...)`. `pin` pada file zip mencetak `format = "zip"` sebagai baris pertama (di semua OS) dan, di macOS, membaca `min_os` dari `--executable` di dalam zip; `pin` pada file yang bukan Mach-O, gzip, atau zip tidak mencetak `format` maupun `min_os` dan mencetak catatan `unknown`. Aturan 3 menerima `zip` dan menolak nilai lain (test yang sekarang memakai `zip` sebagai contoh nilai salah diganti ke `tar_zst`, dan pesannya menjadi ``format must be `tar_gz`, `zip`, or `binary`, found `tar_zst` (rule 3)``). Memverifikasi **AC-1**, **AC-2**, **AC-16**.
+- ClickHouse: `clickhouse_runs_from_managed_artifact` `PASS` dari `.zip` 26.8 (test native tetap hanya menilai status `PASS`, seperti lini lain). Langkah `/check verify` milestone 2b membaca `spike-result.json` record itu dan mengharapkan `signature[].kind` `developer_id` dengan `teamId` `ZNDB5FJ8ZW`, `adhocSignedAtInstall` false, `archive.files` 1, `observedVersion` empat komponen penuh, listener hanya dua port loopback yang dialokasikan, dan stop karena SIGTERM dalam 60 detik. Signature Developer ID sengaja tidak dikunci di test: kalau upstream merusaknya, `keep_or_adhoc` boleh menandatangani ulang ad hoc, dan perubahan itu ketahuan di langkah verify. Memverifikasi **AC-5**, **AC-8**, **AC-13**, **AC-16**.
 - Penyalinan bukti: unit test `runtime record` dengan report fixture, satu per penolakan (dirty, kind fixture, `pull_request`, `problems` tidak kosong, `interrupted`, commit bukan `HEAD`, folder tanpa `spike-result.json`, folder tujuan sudah ada, tanpa record yang bisa disimpan, `output.log` yang masih memuat nama user), plus satu yang membuang record `BLOCKED` dan `NOT_RUN` lalu menghitung ulang `summary`, dengan isi record `PASS` dan `FAIL` yang disalin tetap sama byte demi byte, dan satu yang memastikan path workspace, home, dan root spike di `output.log` sudah diganti. Memverifikasi **AC-10**.
 - Lock: `--cleanup` dan `--prune-cache` yang dijalankan saat spike berjalan menunggu lock, lalu keluar dengan `spike in progress` tanpa mematikan proses spike atau menghapus file cache yang dipakainya. Memverifikasi **AC-4**.
 - Cache: `--prune-cache` menghapus file cache yang digest-nya tidak ada di inventaris dan tidak menyentuh `spike.lock`; `--cleanup` tidak menyentuh cache dan keluar 0 tanpa domain GUI. Memverifikasi **AC-4**, **AC-15**.
@@ -357,6 +398,20 @@ Urutan mengikuti pendekatan Journey: satu jalur maintainer (catat sumber, buktik
 7. Langkah spike NATS, test `nats_2_15_runs_from_managed_artifact`, `cargo xtask runtime record`, aturan 8 di `runtime check`, lalu entri NATS dan evidence pertamanya masuk repo lewat alur dua commit. Memenuhi **AC-1**, **AC-2**, **AC-5**, **AC-10**.
 8. Traefik, ClickHouse (dengan aturan fallback), MySQL 8.4, dan MySQL 9.7: langkah spike, test, entri (termasuk kunci GPG MySQL di `runtimes/keys/` bila URL `.asc` mentah tersedia), dan evidence; entri `blocked` bila artefak tidak ada. Memenuhi **AC-1**, **AC-5**, **AC-13**.
 
+**Milestone 2b: format `zip` dan ClickHouse**
+
+Ditambahkan 2026-10-17 setelah milestone 2 selesai dengan ClickHouse `blocked`. Langkahnya bernomor 15 dan 16 supaya nomor langkah 9 sampai 14 yang sudah dirujuk tidak bergeser. Tidak butuh milestone 3, jadi ini langkah berikutnya untuk jalur ClickHouse.
+
+15. Format `zip` sesuai tabel Format artefak: aturan 3 menerima `zip` dan membatasi `archive_root`; `FileKind::Zip` untuk `50 4b 03 04` dan `check_format` di `macho.rs`, dipanggil pertama di `archive::extract` dan di `runtime verify`; perubahan `pin` (field `format` pertama, klasifikasi sebelum cek macOS, catatan `unknown`, flag `tar` per jenis di `extract_one`); ekstraksi zip di worker dengan `/usr/bin/tar -xf <cache> --no-mac-metadata -C <folder>`; unit test Format `zip`, Magic number, dan dua kasus `archive_root` baru di Aturan inventaris. Memenuhi **AC-1**, **AC-2**, **AC-3**, **AC-16**.
+16. ClickHouse, berurutan:
+    1. `cargo xtask runtime pin --url <aset clickhouse-macos-aarch64.zip rilis v26.8.29.10-lts, atau patch 26.8 terbaru saat itu> --executable clickhouse`.
+    2. Cek awal mode file: `/usr/bin/tar -tvf <file cache>` harus menunjukkan `clickhouse` dengan bit eksekusi (`-rwxr-xr-x`). Kalau tidak, entri tetap `blocked` dengan alasan itu dan keputusan kembali ke `/architect`; spike tidak pernah menambah bit eksekusi (`chmod`).
+    3. Ubah entri `clickhouse-26.8.*` dari `blocked` ke `available`: hapus `blocked_reason`, `blocked_owner`, dan `blocked_since`; isi nilai dari `pin` (`format = "zip"`, `urls`, `sha256`, `size`, `min_os`), tanpa `archive_root`, `executables = ["clickhouse"]`, dan belum ada baris dependency.
+    4. Jalankan `cargo xtask runtime spike --id <id> --result <file>` sekali secara lokal (tree boleh kotor, hasilnya tidak disimpan sebagai evidence), lalu isi baris `[[artifact.dependency]]` dari `libraries.static` sesuai Value sourcing. Yang diharapkan hanya baris `system`; library non sistem apa pun membuat langkah `closure` (probe `dependencies`) `FAIL` dan perlu ditinjau.
+    5. Commit perubahan inventaris, lalu jalankan `clickhouse_runs_from_managed_artifact` lewat wrapper native di tree bersih dan masukkan evidence lewat alur dua commit.
+
+    Langkah spike ClickHouse di `providers.rs` dipakai apa adanya. Memenuhi **AC-1**, **AC-2**, **AC-5**, **AC-6**, **AC-7**, **AC-8**, **AC-9**, **AC-10**, **AC-13**, **AC-16**.
+
 **Milestone 3: Pipeline `stackly-runtimes` untuk PostgreSQL dan Valkey**
 
 9. `lib/common.sh` (relocate, sign, audit, package, smoke) dan `requirements.txt`, lalu resep dependency OpenSSL 3.5, ICU, lz4, dan zstd dengan opsi di atas. Memenuhi **AC-11**, **AC-12**.
@@ -377,6 +432,7 @@ Urutan mengikuti pendekatan Journey: satu jalur maintainer (catat sumber, buktik
 - RISK-01 terjawab dengan bukti: PostgreSQL relocatable, closure terlihat, tanpa Homebrew.
 - Bukti runtime memakai format evidence yang sama dengan semua test lain, jadi fitur 65 membacanya tanpa format kedua.
 - Upstream yang menarik artefak atau perubahan perilaku macOS ketahuan di run nightly `native.yml`.
+- ClickHouse jalan dari binary bertanda tangan Developer ID upstream (seperti MySQL), tanpa tanda tangan ad hoc saat install.
 
 **Negative / tradeoffs**:
 
@@ -384,7 +440,11 @@ Urutan mengikuti pendekatan Journey: satu jalur maintainer (catat sumber, buktik
 - Dua lini MySQL menggandakan biaya test MySQL di atas minimum PRD.
 - Tanpa Developer ID, model ini bergantung pada fakta bahwa file unduhan daemon tidak diberi quarantine dan bahwa binary ad hoc boleh dijalankan agent latar. Kalau macOS 27 memperketat ini, spike akan `FAIL` dan semuanya kembali ke OQ-012.
 - Artefak ClickHouse dan MySQL tidak punya file checksum upstream yang bisa dicek mesin; kepercayaannya hanya HTTPS saat `pin` dan digest yang dipin sesudahnya (plus GPG MySQL kalau tersedia).
-- Test native runtime menambah unduhan besar (tarball MySQL dan binary ClickHouse ratusan MB) dan beberapa menit ke setiap run `native.yml` di satu Mac yang sama, karena delapan spike berjalan berurutan.
+- Fitur 18 kini harus membaca tiga format, termasuk zip, di extractor amannya: satu pembaca archive lagi untuk diuji fuzzing, dengan aturan path dan symlink yang sama dengan `tar_gz`.
+- ClickHouse bergantung pada upstream yang terus menerbitkan `.zip` di samping binary self extracting. Kalau `.zip` hilang di rilis berikutnya, lini itu kembali `blocked` lewat AC-13.
+- bsdtar mengenali format sendiri, jadi `tar -xzf` pun membaca zip. Label `format` yang salah tidak akan ketahuan dari ekstraksi, sehingga cek magic number di worker wajib ada.
+- Satu run ClickHouse memakai sekitar 1,1 GB disk: zip 216 MB yang menetap di cache dan binary 892 MB hasil ekstraksi yang dihapus di akhir run (clone quarantine memakai clone APFS, jadi tidak menambah).
+- Test native runtime menambah unduhan besar (tarball MySQL dan zip ClickHouse ratusan MB) dan beberapa menit ke setiap run `native.yml` di satu Mac yang sama, karena delapan spike berjalan berurutan.
 - Spike butuh sesi login GUI di Mac uji dan Mac CI; tanpa itu semua test runtime `BLOCKED`.
 - Probe quarantine bisa meninggalkan dialog Gatekeeper di layar Mac, sekali per digest baru.
 - Langkah spike per provider di xtask akan diganti manifest provider (fitur 9); sampai saat itu ada dua tempat yang tahu cara menjalankan provider.
@@ -404,6 +464,8 @@ Urutan mengikuti pendekatan Journey: satu jalur maintainer (catat sumber, buktik
 - [ ] Fitur 60: Developer ID dan notarization untuk artefak buatan maintainer setelah OQ-012 selesai.
 - [ ] Fitur 9 dan 18: putuskan cara catalog (`versions.json`) membaca `runtimes/inventory.toml`, lalu ganti tipe inventaris dan langkah spike yang ditandai `// provisional: F9`.
 - [ ] Fitur 18: pakai `quarantine.outcome` untuk error terdiagnosis saat OS menolak binary, dan laporan symlink archive upstream untuk aturan ekstraksi.
+- [ ] Fitur 18: extractor aman menerima `tar_gz`, `zip`, dan `binary` dengan aturan yang sama untuk kedua archive (tolak `..`, tolak penulisan lewat symlink, abaikan metadata AppleDouble, dan sebaiknya tolak path absolut alih alih membuang `/` seperti bsdtar), pilih format dari `format` entri lalu cocokkan magic number, dan putuskan apakah `binary` masih perlu kalau tetap tidak ada entri yang memakainya. Jalankan ulang kasus AC-16 (`..`, symlink, path absolut, `__MACOSX/`) terhadap pembaca zip fitur 18 sendiri, karena cara bsdtar membaca central directory dan header lokal zip tidak otomatis sama dengan pembaca lain.
+- [ ] Fitur 18: archive `tar_gz` buatan Mac dengan entri `._<nama>` masih bisa memulihkan xattr (termasuk quarantine milik pembuatnya) lewat `/usr/bin/tar` spike, karena hanya `zip` yang diberi `--no-mac-metadata`. Extractor fitur 18 sebaiknya mengabaikan metadata AppleDouble untuk kedua format.
 - [ ] Extension pihak ketiga (pgvector, PostGIS) dan PL/Perl atau PL/Python sebagai keputusan terpisah nanti, dengan lisensi dan closure sendiri.
 - [ ] Gate G0: tech lead dan release owner menandatangani berdasarkan isi `evidence/runtime/` dan inventaris.
 - [ ] `/sync`: catat perintah `cargo xtask runtime ...`, folder `runtimes/` dan `evidence/runtime/`, dan skill `meson` serta `signing-entitlements` di `## Agent skills` root `AGENTS.md`. Skill `macos-launchd` (`alphaonedev/openclaw-graph`) dipilih tapi repo sumbernya sudah tidak ada (404), jadi catat sebagai tidak tersedia.
