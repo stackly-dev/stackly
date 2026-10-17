@@ -19,6 +19,7 @@ serde_json.workspace = true
 sha2.workspace = true
 stackly-evidence.workspace = true
 stackly-protocol.workspace = true
+syn.workspace = true
 tempfile.workspace = true
 toml.workspace = true
 uuid.workspace = true

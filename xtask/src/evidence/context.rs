@@ -15,10 +15,26 @@ use stackly_evidence::{BaselineHost, BaselineMatch, Host, Kind, RunContext, Tool
 use uuid::Uuid;
 
 /// The baseline host file, relative to the repository root.
-const BASELINE_FILE: &str = "evidence/baseline-host.json";
+pub(super) const BASELINE_FILE: &str = "evidence/baseline-host.json";
 
 /// Computes the context of a run.
 pub fn probe(root: &Path, run_id: Uuid, kind: Kind, command: &[String]) -> Result<RunContext> {
+    let mut context = probe_checkout(root)?;
+    context.run_id = Some(run_id);
+    context.run_kind = Some(kind);
+    context.command = Some(command.to_vec());
+    Ok(context)
+}
+
+/// Computes the context of a manual record: the checkout, host, and
+/// toolchain, with no run ID, kind, or command.
+pub fn probe_manual(root: &Path) -> Result<RunContext> {
+    probe_checkout(root)
+}
+
+/// The values every context holds: commit, dirty flag, host, baseline, and
+/// toolchain.
+fn probe_checkout(root: &Path) -> Result<RunContext> {
     let source_commit = git(root, &["rev-parse", "HEAD"])
         .context("cannot read the source commit with `git rev-parse HEAD`")?;
     let status = git(root, &["status", "--porcelain", "--untracked-files=normal"])
@@ -31,9 +47,6 @@ pub fn probe(root: &Path, run_id: Uuid, kind: Kind, command: &[String]) -> Resul
         host,
         probe_toolchain(root),
     );
-    context.run_id = Some(run_id);
-    context.run_kind = Some(kind);
-    context.command = Some(command.to_vec());
     context.baseline = baseline;
     Ok(context)
 }
@@ -57,7 +70,8 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
         .to_owned())
 }
 
-fn probe_host() -> Host {
+/// Probes the machine this runs on. Values that cannot be read are null.
+pub(super) fn probe_host() -> Host {
     let mut host = Host::new(env::consts::OS, env::consts::ARCH);
     match env::consts::OS {
         "macos" => {
