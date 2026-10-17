@@ -50,3 +50,357 @@ install_name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/C
 name = "Security"
 kind = "system"
 install_name = "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+
+[[artifact]]
+id = "traefik-3.7.15-macos-aarch64"
+provider = "traefik"
+line = "3.7"
+version = "3.7.15"
+os = "macos"
+arch = "aarch64"
+min_os = "12.0"
+status = "available"
+origin = "upstream"
+distribution = "upstream_download"
+format = "tar_gz"
+urls = ["https://github.com/traefik/traefik/releases/download/v3.7.15/traefik_v3.7.15_darwin_arm64.tar.gz"]
+sha256 = "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323"
+size = 48112917
+upstream_checksum = { kind = "checksums_txt", url = "https://github.com/traefik/traefik/releases/download/v3.7.15/traefik_v3.7.15_checksums.txt" }
+upstream_signature = { kind = "none" }
+signing_policy = "keep_or_adhoc"
+license = "MIT"
+license_url = "https://github.com/traefik/traefik/blob/v3.7.15/LICENSE.md"
+executables = ["traefik"]
+
+[[artifact.dependency]]
+name = "libSystem.B.dylib"
+kind = "system"
+install_name = "/usr/lib/libSystem.B.dylib"
+
+[[artifact.dependency]]
+name = "libresolv.9.dylib"
+kind = "system"
+install_name = "/usr/lib/libresolv.9.dylib"
+
+[[artifact.dependency]]
+name = "CoreFoundation"
+kind = "system"
+install_name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+
+[[artifact.dependency]]
+name = "Security"
+kind = "system"
+install_name = "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+
+[[artifact]]
+id = "clickhouse-26.8.29.10-macos-aarch64"
+provider = "clickhouse"
+line = "26.8"
+version = "26.8.29.10"
+os = "macos"
+arch = "aarch64"
+status = "blocked"
+blocked_reason = "the clickhouse-macos-aarch64 asset of 26.8 LTS (and of 26.9 stable) is a self extracting binary: codesign rejects it (main executable failed strict validation), so keep_or_adhoc cannot sign it, and it rewrites itself on first run; the Developer ID signed clickhouse-macos-aarch64.zip needs a zip format that spec 0003 does not allow yet"
+blocked_owner = "@ojiepermana"
+blocked_since = 2026-10-17
+origin = "upstream"
+distribution = "upstream_download"
+upstream_checksum = { kind = "none" }
+upstream_signature = { kind = "none" }
+signing_policy = "keep_or_adhoc"
+license = "Apache-2.0"
+license_url = "https://github.com/ClickHouse/ClickHouse/blob/v26.8.29.10-lts/LICENSE"
+
+[[artifact]]
+id = "mysql-8.4.11-macos-aarch64"
+provider = "mysql"
+line = "8.4"
+version = "8.4.11"
+os = "macos"
+arch = "aarch64"
+min_os = "14.0"
+status = "available"
+origin = "upstream"
+distribution = "upstream_download"
+format = "tar_gz"
+urls = ["https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.11-macos15-arm64.tar.gz"]
+sha256 = "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009"
+size = 167977240
+archive_root = "mysql-8.4.11-macos15-arm64"
+upstream_checksum = { kind = "none" }
+upstream_signature = { kind = "gpg", url = "https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.11-macos15-arm64.tar.gz.asc", key = "runtimes/keys/mysql-release-engineering.asc", fingerprint = "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C" }
+signing_policy = "keep_or_adhoc"
+license = "GPL-2.0-only WITH Universal-FOSS-exception-1.0"
+license_url = "https://github.com/mysql/mysql-server/blob/mysql-8.4.11/LICENSE"
+executables = ["bin/mysqld", "bin/mysql", "bin/mysqladmin"]
+
+[[artifact.dependency]]
+name = "libssl.3.dylib"
+kind = "bundled"
+install_name = "@loader_path/libssl.3.dylib"
+version = "3.5.7"
+license = "Apache-2.0"
+source_url = "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz"
+
+[[artifact.dependency]]
+name = "libcrypto.3.dylib"
+kind = "bundled"
+install_name = "@loader_path/libcrypto.3.dylib"
+version = "3.5.7"
+license = "Apache-2.0"
+source_url = "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz"
+
+[[artifact.dependency]]
+name = "libprotobuf-lite.24.4.0.dylib"
+kind = "bundled"
+install_name = "@loader_path/libprotobuf-lite.24.4.0.dylib"
+version = "24.4"
+license = "BSD-3-Clause"
+source_url = "https://github.com/protocolbuffers/protobuf/releases/download/v24.4/protobuf-24.4.tar.gz"
+
+[[artifact.dependency]]
+name = "libfido2.1.dylib"
+kind = "bundled"
+install_name = "@loader_path/libfido2.1.dylib"
+version = "1.15.0"
+license = "BSD-2-Clause"
+source_url = "https://developers.yubico.com/libfido2/Releases/libfido2-1.15.0.tar.gz"
+
+[[artifact.dependency]]
+name = "libgssapi_krb5.2.2.dylib"
+kind = "bundled"
+install_name = "@loader_path/libgssapi_krb5.2.2.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libkrb5.3.3.dylib"
+kind = "bundled"
+install_name = "@loader_path/libkrb5.3.3.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libk5crypto.3.1.dylib"
+kind = "bundled"
+install_name = "@loader_path/libk5crypto.3.1.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libkrb5support.1.1.dylib"
+kind = "bundled"
+install_name = "@loader_path/libkrb5support.1.1.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libcom_err.3.0.dylib"
+kind = "bundled"
+install_name = "@loader_path/libcom_err.3.0.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libSystem.B.dylib"
+kind = "system"
+install_name = "/usr/lib/libSystem.B.dylib"
+
+[[artifact.dependency]]
+name = "libc++.1.dylib"
+kind = "system"
+install_name = "/usr/lib/libc++.1.dylib"
+
+[[artifact.dependency]]
+name = "libresolv.9.dylib"
+kind = "system"
+install_name = "/usr/lib/libresolv.9.dylib"
+
+[[artifact.dependency]]
+name = "libsasl2.2.dylib"
+kind = "system"
+install_name = "/usr/lib/libsasl2.2.dylib"
+
+[[artifact.dependency]]
+name = "libncurses.5.4.dylib"
+kind = "system"
+install_name = "/usr/lib/libncurses.5.4.dylib"
+
+[[artifact.dependency]]
+name = "CoreFoundation"
+kind = "system"
+install_name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+
+[[artifact.dependency]]
+name = "CoreServices"
+kind = "system"
+install_name = "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices"
+
+[[artifact.dependency]]
+name = "IOKit"
+kind = "system"
+install_name = "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit"
+
+[[artifact.dependency]]
+name = "Kerberos"
+kind = "system"
+install_name = "/System/Library/Frameworks/Kerberos.framework/Versions/A/Kerberos"
+
+[[artifact]]
+id = "mysql-9.7.2-macos-aarch64"
+provider = "mysql"
+line = "9.7"
+version = "9.7.2"
+os = "macos"
+arch = "aarch64"
+min_os = "14.0"
+status = "available"
+origin = "upstream"
+distribution = "upstream_download"
+format = "tar_gz"
+urls = ["https://cdn.mysql.com/Downloads/MySQL-9.7/mysql-9.7.2-macos15-arm64.tar.gz"]
+sha256 = "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6"
+size = 177169946
+archive_root = "mysql-9.7.2-macos15-arm64"
+upstream_checksum = { kind = "none" }
+upstream_signature = { kind = "gpg", url = "https://cdn.mysql.com/Downloads/MySQL-9.7/mysql-9.7.2-macos15-arm64.tar.gz.asc", key = "runtimes/keys/mysql-release-engineering.asc", fingerprint = "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C" }
+signing_policy = "keep_or_adhoc"
+license = "GPL-2.0-only WITH Universal-FOSS-exception-1.0"
+license_url = "https://github.com/mysql/mysql-server/blob/mysql-9.7.2/LICENSE"
+executables = ["bin/mysqld", "bin/mysql", "bin/mysqladmin"]
+
+[[artifact.dependency]]
+name = "libssl.3.dylib"
+kind = "bundled"
+install_name = "@loader_path/libssl.3.dylib"
+version = "3.5.7"
+license = "Apache-2.0"
+source_url = "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz"
+
+[[artifact.dependency]]
+name = "libcrypto.3.dylib"
+kind = "bundled"
+install_name = "@loader_path/libcrypto.3.dylib"
+version = "3.5.7"
+license = "Apache-2.0"
+source_url = "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz"
+
+[[artifact.dependency]]
+name = "libprotobuf-lite.24.4.0.dylib"
+kind = "bundled"
+install_name = "@loader_path/libprotobuf-lite.24.4.0.dylib"
+version = "24.4"
+license = "BSD-3-Clause"
+source_url = "https://github.com/protocolbuffers/protobuf/releases/download/v24.4/protobuf-24.4.tar.gz"
+
+[[artifact.dependency]]
+name = "libprotobuf.24.4.0.dylib"
+kind = "bundled"
+install_name = "@loader_path/libprotobuf.24.4.0.dylib"
+version = "24.4"
+license = "BSD-3-Clause"
+source_url = "https://github.com/protocolbuffers/protobuf/releases/download/v24.4/protobuf-24.4.tar.gz"
+
+[[artifact.dependency]]
+name = "libfido2.1.dylib"
+kind = "bundled"
+install_name = "@loader_path/libfido2.1.dylib"
+version = "1.15.0"
+license = "BSD-2-Clause"
+source_url = "https://developers.yubico.com/libfido2/Releases/libfido2-1.15.0.tar.gz"
+
+[[artifact.dependency]]
+name = "libgssapi_krb5.2.2.dylib"
+kind = "bundled"
+install_name = "@loader_path/libgssapi_krb5.2.2.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libkrb5.3.3.dylib"
+kind = "bundled"
+install_name = "@loader_path/libkrb5.3.3.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libk5crypto.3.1.dylib"
+kind = "bundled"
+install_name = "@loader_path/libk5crypto.3.1.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libkrb5support.1.1.dylib"
+kind = "bundled"
+install_name = "@loader_path/libkrb5support.1.1.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libcom_err.3.0.dylib"
+kind = "bundled"
+install_name = "@loader_path/libcom_err.3.0.dylib"
+version = "1.22"
+license = "MIT"
+source_url = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+
+[[artifact.dependency]]
+name = "libSystem.B.dylib"
+kind = "system"
+install_name = "/usr/lib/libSystem.B.dylib"
+
+[[artifact.dependency]]
+name = "libc++.1.dylib"
+kind = "system"
+install_name = "/usr/lib/libc++.1.dylib"
+
+[[artifact.dependency]]
+name = "libresolv.9.dylib"
+kind = "system"
+install_name = "/usr/lib/libresolv.9.dylib"
+
+[[artifact.dependency]]
+name = "libsasl2.2.dylib"
+kind = "system"
+install_name = "/usr/lib/libsasl2.2.dylib"
+
+[[artifact.dependency]]
+name = "libncurses.5.4.dylib"
+kind = "system"
+install_name = "/usr/lib/libncurses.5.4.dylib"
+
+[[artifact.dependency]]
+name = "libcurl.4.dylib"
+kind = "system"
+install_name = "/usr/lib/libcurl.4.dylib"
+
+[[artifact.dependency]]
+name = "CoreFoundation"
+kind = "system"
+install_name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+
+[[artifact.dependency]]
+name = "CoreServices"
+kind = "system"
+install_name = "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices"
+
+[[artifact.dependency]]
+name = "IOKit"
+kind = "system"
+install_name = "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit"
+
+[[artifact.dependency]]
+name = "Kerberos"
+kind = "system"
+install_name = "/System/Library/Frameworks/Kerberos.framework/Versions/A/Kerberos"
