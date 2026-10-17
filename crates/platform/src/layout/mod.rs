@@ -6,7 +6,10 @@ mod roots;
 
 use std::path::{Path, PathBuf};
 
-use stackly_domain::{EnvironmentId, InstanceId, ShortKey};
+use stackly_domain::{
+    EnvironmentId, ExactVersion, InstanceId, ProviderRevisionKey, Sha256Digest, ShortKey,
+    SoftwareName, Target,
+};
 
 pub use root_override::{ROOT_OVERRIDE_ENV, validate_root_override};
 pub use roots::{
@@ -24,12 +27,16 @@ const INSTANCES_DIR: &str = "instances";
 
 /// Derives every Stackly path from a [`RootSet`], without any I/O.
 ///
-/// Path components come from validated domain values (IDs, short keys), so
-/// no function here can fail, and no other code joins Stackly paths by hand.
+/// Path components come from validated domain values (IDs, short keys,
+/// names, versions, and digests), so no function here can fail, and no other
+/// code joins Stackly paths by hand.
 ///
 /// ```text
-/// <data>/stacklyd.lock, registry/, providers/, runtimes/, instances/<id>/,
-///        environments/<id>/, operations/, backups/, retained/<id>/
+/// <data>/stacklyd.lock, registry/,
+///        providers/<namespace>/<name>/<revision>/<manifest sha256>/,
+///        runtimes/<software>/<version>/<os>-<arch>/<artifact sha256>/,
+///        instances/<id>/, environments/<id>/, operations/, backups/,
+///        retained/<id>/
 /// <logs>/daemon/, instances/<id>/
 /// <cache>/downloads/
 /// <runtime>/stacklyd.sock, i/<short key>/
@@ -107,10 +114,38 @@ impl DirectoryLayout {
         self.roots.data().join("providers")
     }
 
+    /// Returns one provider revision's folder,
+    /// `providers/<namespace>/<name>/<revision>/<manifest sha256>/`.
+    #[must_use]
+    pub fn provider_revision_dir(&self, key: &ProviderRevisionKey) -> PathBuf {
+        self.providers_dir()
+            .join(key.provider().namespace())
+            .join(key.provider().name())
+            .join(key.revision().as_str())
+            .join(key.manifest_sha256().to_string())
+    }
+
     /// Returns the folder that holds installed runtimes.
     #[must_use]
     pub fn runtimes_dir(&self) -> PathBuf {
         self.roots.data().join("runtimes")
+    }
+
+    /// Returns one managed runtime's folder,
+    /// `runtimes/<software>/<version>/<os>-<arch>/<artifact sha256>/`.
+    #[must_use]
+    pub fn runtime_dir(
+        &self,
+        software: &SoftwareName,
+        version: &ExactVersion,
+        target: Target,
+        artifact_sha256: &Sha256Digest,
+    ) -> PathBuf {
+        self.runtimes_dir()
+            .join(software.as_str())
+            .join(version.as_str())
+            .join(target.to_string())
+            .join(artifact_sha256.to_string())
     }
 
     /// Returns the folder that holds active instance folders.
@@ -248,6 +283,7 @@ mod tests {
     use super::*;
 
     const ID: &str = "01928c3e-6f1a-7b2c-8d4e-5f60718293a4";
+    const DIGEST: &str = "cb95f16d56a9ab7b938a03732ddf4ab691346124747fbb811ac6c09928f1fa6b";
 
     fn layout() -> DirectoryLayout {
         let base = if cfg!(windows) { r"C:\" } else { "/" };
@@ -333,6 +369,51 @@ mod tests {
         }
         assert!(dirs.contains(&layout.roots().runtime().join("i")));
         assert!(dirs.contains(&layout.roots().cache().join("downloads")));
+    }
+
+    #[test]
+    fn provider_revision_dir_nests_namespace_name_revision_and_digest() {
+        let layout = layout();
+        let key = ProviderRevisionKey::new(
+            "official/postgresql".parse().unwrap(),
+            "2026.10.1".parse().unwrap(),
+            DIGEST.parse().unwrap(),
+        );
+
+        assert_eq!(
+            layout.provider_revision_dir(&key),
+            layout
+                .roots()
+                .data()
+                .join("providers")
+                .join("official")
+                .join("postgresql")
+                .join("2026.10.1")
+                .join(DIGEST)
+        );
+    }
+
+    #[test]
+    fn runtime_dir_nests_software_version_target_and_digest() {
+        let layout = layout();
+        let dir = layout.runtime_dir(
+            &"postgresql".parse().unwrap(),
+            &"17.6".parse().unwrap(),
+            "macos-aarch64".parse().unwrap(),
+            &DIGEST.to_uppercase().parse().unwrap(),
+        );
+
+        assert_eq!(
+            dir,
+            layout
+                .roots()
+                .data()
+                .join("runtimes")
+                .join("postgresql")
+                .join("17.6")
+                .join("macos-aarch64")
+                .join(DIGEST)
+        );
     }
 
     #[test]
