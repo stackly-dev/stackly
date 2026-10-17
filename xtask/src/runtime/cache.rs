@@ -104,6 +104,11 @@ impl Cache {
         Ok(Self { dir })
     }
 
+    /// The cache folder itself, which also holds the spike lock.
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
     /// Where the file with this digest lives.
     pub fn path(&self, sha256: &str) -> PathBuf {
         self.dir.join(sha256)

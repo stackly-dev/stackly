@@ -27,6 +27,15 @@ Tasks:
                        Download a runtime and print its pinned inventory values
   runtime verify [--id <id>]
                        Download every available runtime again and check it
+  runtime spike --id <id> --result <file>
+                       Run one runtime under a LaunchAgent (macOS); exit 0 PASS,
+                       1 FAIL, 2 BLOCKED
+  runtime spike --cleanup
+                       Remove what interrupted spikes left behind (macOS)
+  runtime spike --prune-cache
+                       Delete cached downloads the inventory no longer pins
+  runtime record <report.json>
+                       Keep the native runtime evidence of a clean run
 ";
 
 fn main() -> ExitCode {

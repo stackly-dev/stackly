@@ -1,4 +1,4 @@
-//! `cargo xtask runtime check`: rules 1 to 7 of spec 0003 (*Key
+//! `cargo xtask runtime check`: rules 1 to 8 of spec 0003 (*Key
 //! invariants*) on `runtimes/inventory.toml` and `evidence/runtime/`.
 //! Read only; runs on any OS and in the `linux` CI job on every PR.
 
@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
-use stackly_evidence::{REPORT_SCHEMA, RunReport, Status, Summary};
+use stackly_evidence::{Kind, REPORT_SCHEMA, RunReport, Status, Summary};
 
 use super::inventory::{Inventory, Violation};
 
@@ -20,8 +20,10 @@ const SPIKE_RESULT: &str = "spike-result.json";
 pub fn run(root: &Path) -> Result<ExitCode> {
     let inventory = Inventory::load(root)?;
     let mut violations = inventory.violations(root);
-    let (runs, evidence) = evidence_violations(&root.join(EVIDENCE_DIR))?;
-    violations.extend(evidence);
+    let evidence = read_evidence(&root.join(EVIDENCE_DIR))?;
+    let runs = evidence.runs;
+    violations.extend(evidence.violations);
+    violations.extend(latest_record_violations(&inventory, &evidence.reports));
     if violations.is_empty() {
         println!(
             "runtime check: {} artifact(s) and {runs} evidence run(s) follow the rules",
@@ -39,12 +41,34 @@ pub fn run(root: &Path) -> Result<ExitCode> {
     Ok(ExitCode::FAILURE)
 }
 
+/// What `evidence/runtime/` holds.
+struct Evidence {
+    /// The number of run folders.
+    runs: usize,
+    /// Rule 7 violations.
+    violations: Vec<Violation>,
+    /// Every report that could be decoded, for rule 8.
+    reports: Vec<RunReport>,
+}
+
 /// Rule 7 on every run folder in `dir`: the number of run folders, and
 /// the violations. A missing `dir` has no runs.
+#[cfg(test)]
 fn evidence_violations(dir: &Path) -> Result<(usize, Vec<Violation>)> {
+    let evidence = read_evidence(dir)?;
+    Ok((evidence.runs, evidence.violations))
+}
+
+/// Reads every run folder in `dir` and checks rule 7 on it.
+fn read_evidence(dir: &Path) -> Result<Evidence> {
+    let mut evidence = Evidence {
+        runs: 0,
+        violations: Vec::new(),
+        reports: Vec::new(),
+    };
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok((0, Vec::new())),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(evidence),
         Err(err) => return Err(err).with_context(|| format!("cannot read {}", dir.display())),
     };
     let mut names = Vec::new();
@@ -62,19 +86,101 @@ fn evidence_violations(dir: &Path) -> Result<(usize, Vec<Violation>)> {
         }
     }
     names.sort();
-    let mut violations = Vec::new();
     for (name, is_symlink) in &names {
         let mut v = RunRules {
             subject: format!("{EVIDENCE_DIR}/{name}"),
-            out: &mut violations,
+            out: &mut evidence.violations,
         };
         if *is_symlink {
             v.push("a run must be a folder, not a symbolic link".to_owned());
             continue;
         }
-        check_run(&dir.join(name), name, &mut v)?;
+        if let Some(report) = check_run(&dir.join(name), name, &mut v)? {
+            evidence.reports.push(report);
+        }
     }
-    Ok((names.len(), violations))
+    evidence.runs = names.len();
+    Ok(evidence)
+}
+
+/// Rule 8: every `available` artifact has a record whose subject carries
+/// its digest, and the latest such record (by `finishedAt`) is a clean
+/// native `PASS` from macOS 27 on arm64, outside a pull request, with the
+/// inventory version.
+fn latest_record_violations(inventory: &Inventory, reports: &[RunReport]) -> Vec<Violation> {
+    let mut out = Vec::new();
+    for (index, artifact) in inventory.artifacts.iter().enumerate() {
+        if artifact.status.as_deref() != Some("available") {
+            continue;
+        }
+        let Some(sha256) = artifact.sha256.as_deref().filter(|sha| !sha.is_empty()) else {
+            continue;
+        };
+        let mut push = |message: String| {
+            out.push(Violation {
+                subject: artifact.label(index),
+                rule: 8,
+                message,
+            });
+        };
+        let latest = reports
+            .iter()
+            .flat_map(|report| report.records.iter().map(move |record| (report, record)))
+            .filter(|(_, record)| {
+                record
+                    .subjects
+                    .iter()
+                    .any(|subject| subject.digest.as_deref() == Some(sha256))
+            })
+            .max_by_key(|(_, record)| record.finished_at);
+        let Some((report, record)) = latest else {
+            push(format!(
+                "no native record in {EVIDENCE_DIR}/ for sha256 {sha256}; run the native test and `cargo xtask runtime record`"
+            ));
+            continue;
+        };
+        let id = record.id;
+        let context = record.context.as_ref().unwrap_or(&report.context);
+        if record.status != Status::Pass {
+            push(format!(
+                "the latest record {id} for this sha256 is {}, not PASS",
+                record.status.as_str()
+            ));
+        }
+        if record.kind != Kind::Native {
+            push(format!("the latest record {id} is not native"));
+        }
+        if context.source_dirty {
+            push(format!("the latest record {id} comes from a dirty tree"));
+        }
+        if context.ci.as_ref().and_then(|ci| ci.event.as_deref()) == Some("pull_request") {
+            push(format!(
+                "the latest record {id} comes from a pull_request run"
+            ));
+        }
+        let os_version = context.host.os_version.as_deref().unwrap_or("unknown");
+        if os_version.split('.').next() != Some("27") {
+            push(format!(
+                "the latest record {id} ran on macOS {os_version}, not 27"
+            ));
+        }
+        if !matches!(context.host.arch.as_str(), "arm64" | "aarch64") {
+            push(format!(
+                "the latest record {id} ran on {}, not arm64",
+                context.host.arch
+            ));
+        }
+        let version = artifact.version.as_deref().unwrap_or_default();
+        for subject in &record.subjects {
+            if subject.digest.as_deref() == Some(sha256) && subject.version != version {
+                push(format!(
+                    "the latest record {id} reports version {}, the inventory says {version}",
+                    subject.version
+                ));
+            }
+        }
+    }
+    out
 }
 
 /// Collects the rule 7 violations of one run folder.
@@ -93,18 +199,18 @@ impl RunRules<'_> {
     }
 }
 
-/// Rule 7 on one run folder named `name`.
-fn check_run(run_dir: &Path, name: &str, v: &mut RunRules<'_>) -> Result<()> {
+/// Rule 7 on one run folder named `name`; the report when it decodes.
+fn check_run(run_dir: &Path, name: &str, v: &mut RunRules<'_>) -> Result<Option<RunReport>> {
     let report_path = run_dir.join("report.json");
     let bytes = match fs::read(&report_path) {
         Ok(bytes) => bytes,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             v.push("report.json is missing".to_owned());
-            return Ok(());
+            return Ok(None);
         }
         Err(err) if err.kind() == io::ErrorKind::IsADirectory => {
             v.push("report.json must be a file".to_owned());
-            return Ok(());
+            return Ok(None);
         }
         Err(err) => {
             return Err(err).with_context(|| format!("cannot read {}", report_path.display()));
@@ -116,7 +222,7 @@ fn check_run(run_dir: &Path, name: &str, v: &mut RunRules<'_>) -> Result<()> {
             v.push(format!(
                 "report.json is not a {REPORT_SCHEMA} report: {err}"
             ));
-            return Ok(());
+            return Ok(None);
         }
     };
     if report.schema != REPORT_SCHEMA {
@@ -157,7 +263,7 @@ fn check_run(run_dir: &Path, name: &str, v: &mut RunRules<'_>) -> Result<()> {
             ));
         }
     }
-    Ok(())
+    Ok(Some(report))
 }
 
 /// True when `evidence_path` names a folder inside `run_dir` (after

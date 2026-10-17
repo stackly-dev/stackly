@@ -88,10 +88,6 @@ pub struct Artifact {
     /// The size of the download in bytes.
     pub size: Option<i64>,
     /// The single top folder of the archive, when it has one.
-    #[expect(
-        dead_code,
-        reason = "the spike extracts with it (spec 0003 build step 6)"
-    )]
     pub archive_root: Option<String>,
     /// The checksum file upstream publishes.
     pub upstream_checksum: Option<UpstreamChecksum>,

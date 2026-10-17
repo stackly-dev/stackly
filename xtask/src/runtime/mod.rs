@@ -2,9 +2,10 @@
 //!
 //! `check` enforces the inventory and evidence rules, `pin` turns real
 //! downloads into the `urls`, `sha256`, `size`, and `min_os` of an entry,
-//! and `verify` downloads every available artifact again to prove the
-//! pinned values still hold. The spike, `record`, and `watch` arrive with
-//! the next build steps of spec 0003.
+//! `verify` downloads every available artifact again to prove the pinned
+//! values still hold, `spike` runs one artifact under a LaunchAgent, and
+//! `record` keeps the native evidence of a clean run in
+//! `evidence/runtime/`. `watch` arrives with build step 14 of spec 0003.
 
 mod cache;
 mod check;
@@ -12,6 +13,9 @@ mod checksum;
 mod inventory;
 mod macho;
 mod pin;
+mod ports;
+mod record;
+mod spike;
 mod verify;
 
 use std::path::Path;
@@ -24,8 +28,11 @@ pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
         ["check"] => check::run(root),
         ["pin", rest @ ..] => pin::run(rest).map(|()| ExitCode::SUCCESS),
         ["verify", rest @ ..] => verify::run(root, rest),
+        ["spike", rest @ ..] => spike::run(root, rest),
+        ["spike-worker", rest @ ..] => spike::run_worker(rest),
+        ["record", report] => record::run(root, Path::new(report)),
         _ => bail!(
-            "unknown runtime task `{}`; use `cargo xtask runtime check`, `runtime pin`, or `runtime verify`",
+            "unknown runtime task `{}`; use `cargo xtask runtime check`, `pin`, `verify`, `spike`, or `record`",
             args.join(" ")
         ),
     }
