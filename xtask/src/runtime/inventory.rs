@@ -79,7 +79,7 @@ pub struct Artifact {
     pub origin: Option<String>,
     /// `upstream_download` or `stackly_hosted`.
     pub distribution: Option<String>,
-    /// `tar_gz` or `binary`.
+    /// `tar_gz`, `zip`, or `binary`.
     pub format: Option<String>,
     /// Candidate download URLs, in order; the digest decides identity.
     pub urls: Option<Vec<String>>,
@@ -87,7 +87,8 @@ pub struct Artifact {
     pub sha256: Option<String>,
     /// The size of the download in bytes.
     pub size: Option<i64>,
-    /// The single top folder of the archive, when it has one.
+    /// The single top folder of a `tar_gz` or `zip` archive, when it has
+    /// one.
     pub archive_root: Option<String>,
     /// The checksum file upstream publishes.
     pub upstream_checksum: Option<UpstreamChecksum>,
@@ -327,7 +328,8 @@ impl Artifact {
             ),
             None => v.push(3, "status is required".to_owned()),
         }
-        v.one_of(3, "format", &self.format, &["tar_gz", "binary"]);
+        v.one_of(3, "format", &self.format, &["tar_gz", "zip", "binary"]);
+        self.check_archive_root(v);
         v.one_of(
             3,
             "signing_policy",
@@ -424,6 +426,32 @@ impl Artifact {
                 }
             }
         }
+    }
+
+    /// Rule 3: `archive_root` goes only with an archive format and names
+    /// one plain folder.
+    fn check_archive_root(&self, v: &mut Rules<'_>) {
+        let Some(top) = self.archive_root.as_deref() else {
+            return;
+        };
+        let found = match self.format.as_deref() {
+            None => Some("no format"),
+            Some("binary") => Some("`binary`"),
+            // `tar_gz` and `zip` allow it, and an unknown format is a
+            // violation of its own.
+            Some(_) => None,
+        };
+        if let Some(found) = found {
+            v.push(
+                3,
+                format!("archive_root goes only with format `tar_gz` or `zip`, found {found}"),
+            );
+        }
+        v.check(3, is_plain_name(top), || {
+            format!(
+                "archive_root must be one plain folder name, without `/`, `.`, or `..`, found `{top}`"
+            )
+        });
     }
 
     /// Rule 4: a `blocked` artifact says why, who, and since when.
@@ -674,6 +702,11 @@ pub fn is_inner_relative_path(path: &str) -> bool {
         && path
             .split('/')
             .all(|part| !part.is_empty() && part != ".." && part != ".")
+}
+
+/// True for one non empty path part that is not `.` or `..`.
+fn is_plain_name(name: &str) -> bool {
+    !name.is_empty() && !name.contains('/') && name != "." && name != ".."
 }
 
 /// `a`, `a or b`, or `a, b, or c`, each in backticks.
@@ -999,17 +1032,74 @@ upstream_signature = { kind = "none" }
             "nats-2.15.1-macos-aarch64: status must be `available` or `blocked`, found `ready` (rule 3)",
         );
         assert_one(
-            &check(&edit(UPSTREAM, "format = \"tar_gz\"", "format = \"zip\"")),
-            "nats-2.15.1-macos-aarch64: format must be `tar_gz` or `binary`, found `zip` (rule 3)",
+            &check(&edit(
+                UPSTREAM,
+                "format = \"tar_gz\"",
+                "format = \"tar_zst\"",
+            )),
+            "nats-2.15.1-macos-aarch64: format must be `tar_gz`, `zip`, or `binary`, found `tar_zst` (rule 3)",
         );
+    }
+
+    #[test]
+    fn rule_3_accepts_a_zip_with_or_without_an_archive_root() {
+        let zip = edit(UPSTREAM, "format = \"tar_gz\"", "format = \"zip\"");
+        assert_eq!(check(&zip), Vec::<String>::new());
+        let without_root = edit(
+            &zip,
+            "archive_root = \"nats-server-v2.15.1-darwin-arm64\"\n",
+            "",
+        );
+        assert_eq!(check(&without_root), Vec::<String>::new());
+    }
+
+    #[test]
+    fn rule_3_allows_archive_root_only_on_an_archive() {
+        assert_one(
+            &check(&edit(
+                UPSTREAM,
+                "format = \"tar_gz\"",
+                "format = \"binary\"",
+            )),
+            "nats-2.15.1-macos-aarch64: archive_root goes only with format `tar_gz` or `zip`, found `binary` (rule 3)",
+        );
+        let blocked = edit(
+            BLOCKED,
+            "status = \"blocked\"",
+            "archive_root = \"clickhouse\"\nstatus = \"blocked\"",
+        );
+        assert_one(
+            &check(&blocked),
+            "clickhouse-26.9.1.1-macos-aarch64: archive_root goes only with format `tar_gz` or `zip`, found no format (rule 3)",
+        );
+    }
+
+    #[test]
+    fn rule_3_needs_archive_root_to_be_one_plain_folder_name() {
+        for top in ["nats/bin", "..", ".", "", "/nats"] {
+            let lines = check(&edit(
+                UPSTREAM,
+                "archive_root = \"nats-server-v2.15.1-darwin-arm64\"",
+                &format!("archive_root = \"{top}\""),
+            ));
+            assert_one(
+                &lines,
+                &format!(
+                    "nats-2.15.1-macos-aarch64: archive_root must be one plain folder name, without `/`, `.`, or `..`, found `{top}` (rule 3)"
+                ),
+            );
+        }
     }
 
     #[test]
     fn rule_3_needs_format_license_url_and_signing_policy() {
         let without_format = check(&edit(UPSTREAM, "format = \"tar_gz\"\n", ""));
-        assert_one(
-            &without_format,
-            "nats-2.15.1-macos-aarch64: an available artifact needs format (rule 3)",
+        assert_eq!(
+            without_format,
+            [
+                "nats-2.15.1-macos-aarch64: an available artifact needs format (rule 3)",
+                "nats-2.15.1-macos-aarch64: archive_root goes only with format `tar_gz` or `zip`, found no format (rule 3)",
+            ]
         );
         assert_one(
             &check(&edit(

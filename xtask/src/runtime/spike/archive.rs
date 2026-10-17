@@ -1,5 +1,5 @@
 //! Checking the cached download again, extracting it, and reporting what
-//! the archive holds (spec 0003, AC-3 and the archive report).
+//! the archive holds (spec 0003, AC-3, AC-16, and the archive report).
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -11,6 +11,7 @@ use anyhow::{Context, Result, bail};
 use super::plan::PlanArtifact;
 use super::result::ArchiveReport;
 use crate::runtime::cache::sha256_file;
+use crate::runtime::macho::{check_format, file_kind};
 
 const TAR: &str = "/usr/bin/tar";
 
@@ -31,43 +32,28 @@ pub fn check_digest(path: &Path, sha256: &str, size: u64) -> Result<()> {
 /// artifact root: `into/<archive_root>` when the entry names one, which
 /// must then be the only thing at the top of the archive, else `into`
 /// itself. A `binary` download is copied in under its executable name
-/// with mode 0755.
+/// with mode 0755. The magic number of the cached file must match
+/// `format` before anything is extracted (AC-16).
 pub fn extract(artifact: &PlanArtifact, cache_file: &Path, into: &Path) -> Result<PathBuf> {
+    check_format(&artifact.format, file_kind(cache_file)?)?;
     fs::create_dir_all(into).with_context(|| format!("cannot create {}", into.display()))?;
     match artifact.format.as_str() {
-        "tar_gz" => {
-            let output = Command::new(TAR)
-                .current_dir(into)
-                .arg("-xzf")
-                .arg(cache_file)
-                .arg("-C")
-                .arg(into)
-                .output()
-                .with_context(|| format!("cannot run {TAR}"))?;
-            if !output.status.success() {
-                bail!(
-                    "tar cannot extract the archive: {}",
-                    String::from_utf8_lossy(&output.stderr).trim()
-                );
-            }
-            match &artifact.archive_root {
-                None => Ok(into.to_path_buf()),
-                Some(top) => {
-                    let names = top_names(into)?;
-                    if names != [top.as_str()] {
-                        bail!(
-                            "the archive top must be exactly `{top}`, found {}",
-                            names.join(", ")
-                        );
-                    }
-                    let root = into.join(top);
-                    if !fs::symlink_metadata(&root).is_ok_and(|meta| meta.is_dir()) {
-                        bail!("the archive top `{top}` is not a folder");
-                    }
-                    Ok(root)
-                }
-            }
-        }
+        "tar_gz" => untar(
+            cache_file,
+            "-xzf",
+            &[],
+            into,
+            artifact.archive_root.as_deref(),
+        ),
+        // Without `--no-mac-metadata`, bsdtar turns `__MACOSX/._<name>`
+        // entries into extended attributes (or fails on them).
+        "zip" => untar(
+            cache_file,
+            "-xf",
+            &["--no-mac-metadata"],
+            into,
+            artifact.archive_root.as_deref(),
+        ),
         "binary" => {
             let target = into.join(artifact.main_executable());
             if let Some(parent) = target.parent() {
@@ -81,6 +67,50 @@ pub fn extract(artifact: &PlanArtifact, cache_file: &Path, into: &Path) -> Resul
             Ok(into.to_path_buf())
         }
         other => bail!("unknown format `{other}`"),
+    }
+}
+
+/// Extracts a `.tar.gz` or a `.zip` with the system tar, never with `-P`,
+/// so a `..` member or one written through a link makes tar fail, and
+/// returns the artifact root. File modes come from the archive.
+fn untar(
+    cache_file: &Path,
+    flag: &str,
+    options: &[&str],
+    into: &Path,
+    archive_root: Option<&str>,
+) -> Result<PathBuf> {
+    let output = Command::new(TAR)
+        .current_dir(into)
+        .arg(flag)
+        .arg(cache_file)
+        .args(options)
+        .arg("-C")
+        .arg(into)
+        .output()
+        .with_context(|| format!("cannot run {TAR}"))?;
+    if !output.status.success() {
+        bail!(
+            "tar cannot extract the archive: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    match archive_root {
+        None => Ok(into.to_path_buf()),
+        Some(top) => {
+            let names = top_names(into)?;
+            if names != [top] {
+                bail!(
+                    "the archive top must be exactly `{top}`, found {}",
+                    names.join(", ")
+                );
+            }
+            let root = into.join(top);
+            if !fs::symlink_metadata(&root).is_ok_and(|meta| meta.is_dir()) {
+                bail!("the archive top `{top}` is not a folder");
+            }
+            Ok(root)
+        }
     }
 }
 
@@ -194,6 +224,10 @@ fn stays_inside(parent: &Path, target: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::test_zip as zip;
+
+    /// The first bytes of a thin arm64 Mach-O executable.
+    const MACH_O: [u8; 8] = [0xcf, 0xfa, 0xed, 0xfe, 0x0c, 0, 0, 0x01];
 
     fn artifact(format: &str, archive_root: Option<&str>) -> PlanArtifact {
         PlanArtifact {
@@ -286,7 +320,7 @@ mod tests {
     fn a_binary_is_copied_under_its_executable_name_and_made_executable() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("download");
-        fs::write(&file, "bin").unwrap();
+        fs::write(&file, MACH_O).unwrap();
         let into = dir.path().join("x");
         let root = extract(&artifact("binary", None), &file, &into).unwrap();
         let mode = fs::metadata(root.join("bin/demo"))
@@ -294,6 +328,164 @@ mod tests {
             .permissions()
             .mode();
         assert_eq!(mode & 0o777, 0o755);
+    }
+
+    #[test]
+    fn a_file_of_another_format_is_refused_before_tar_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let tarball = tarball(dir.path(), &["demo-1/bin/demo"]);
+        let zipped = dir.path().join("a.zip");
+        fs::write(&zipped, zip::stored(&[zip::file("bin/demo", 0o755, b"x")])).unwrap();
+        let text = dir.path().join("text");
+        fs::write(&text, "bin").unwrap();
+        let cases = [
+            ("zip", &tarball, "format zip does not match the file (gzip)"),
+            (
+                "tar_gz",
+                &zipped,
+                "format tar_gz does not match the file (zip)",
+            ),
+            (
+                "binary",
+                &zipped,
+                "format binary does not match the file (zip)",
+            ),
+            (
+                "binary",
+                &text,
+                "format binary does not match the file (unknown)",
+            ),
+        ];
+        for (format, file, expected) in cases {
+            let into = dir.path().join(format!("into-{format}"));
+            let err = extract(&artifact(format, None), file, &into).unwrap_err();
+            assert_eq!(err.to_string(), expected);
+            // Refused before anything, the extraction folder included.
+            assert!(!into.exists(), "{format}: {}", into.display());
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_zip_without_a_root_keeps_the_mode_of_its_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("clickhouse-macos-aarch64.zip");
+        fs::write(&file, zip::stored(&[zip::file("clickhouse", 0o755, b"x")])).unwrap();
+        let into = dir
+            .path()
+            .join("Stackly Spike Ü/clickhouse-26.8.1.1-macos-aarch64");
+        let mut clickhouse = artifact("zip", None);
+        clickhouse.executables = vec!["clickhouse".to_owned()];
+
+        assert_eq!(extract(&clickhouse, &file, &into).unwrap(), into);
+        let mode = fs::metadata(into.join("clickhouse"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o755);
+        assert_eq!(top_names(&into).unwrap(), ["clickhouse"]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_zip_archive_root_must_be_the_only_top_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.zip");
+        let members = [
+            zip::dir("demo-1"),
+            zip::dir("demo-1/bin"),
+            zip::file("demo-1/bin/demo", 0o755, b"x"),
+            zip::file("demo-1/LICENSE", 0o644, b"x"),
+        ];
+        fs::write(&file, zip::stored(&members)).unwrap();
+        let into = dir.path().join("Stackly Spike Ü/one");
+        let root = extract(&artifact("zip", Some("demo-1")), &file, &into).unwrap();
+        assert_eq!(root, into.join("demo-1"));
+        assert!(root.join("bin/demo").is_file());
+
+        let err = extract(
+            &artifact("zip", Some("other")),
+            &file,
+            &dir.path().join("two"),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "the archive top must be exactly `other`, found demo-1"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_zip_member_that_climbs_out_fails_and_writes_nothing_outside() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.zip");
+        let members = [
+            zip::file("bin/demo", 0o755, b"x"),
+            zip::file("../x", 0o644, b"x"),
+        ];
+        fs::write(&file, zip::stored(&members)).unwrap();
+        let into = dir.path().join("spike/into");
+
+        let err = extract(&artifact("zip", None), &file, &into).unwrap_err();
+        assert!(
+            err.to_string()
+                .starts_with("tar cannot extract the archive"),
+            "{err}"
+        );
+        assert!(!dir.path().join("spike/x").exists());
+        assert!(!dir.path().join("x").exists());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_zip_member_written_through_a_link_fails_and_the_target_stays_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside");
+        fs::create_dir(&outside).unwrap();
+        let file = dir.path().join("a.zip");
+        let members = [
+            zip::symlink("link", outside.to_str().unwrap()),
+            zip::file("link/x", 0o644, b"x"),
+        ];
+        fs::write(&file, zip::stored(&members)).unwrap();
+
+        let err = extract(&artifact("zip", None), &file, &dir.path().join("into")).unwrap_err();
+        assert!(
+            err.to_string()
+                .starts_with("tar cannot extract the archive"),
+            "{err}"
+        );
+        assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn apple_double_entries_of_a_zip_become_neither_files_nor_attributes() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.zip");
+        let members = [
+            zip::file("clickhouse", 0o755, b"x"),
+            zip::dir("__MACOSX"),
+            zip::file("__MACOSX/._clickhouse", 0o644, b"not apple double"),
+        ];
+        fs::write(&file, zip::stored(&members)).unwrap();
+        let into = dir.path().join("into");
+
+        extract(&artifact("zip", None), &file, &into).unwrap();
+        assert_eq!(top_names(&into).unwrap(), ["clickhouse"]);
+        let names = Command::new("/usr/bin/xattr")
+            .arg(into.join("clickhouse"))
+            .output()
+            .unwrap();
+        assert!(names.status.success());
+        // macOS may add its own provenance attribute; nothing else.
+        let names = String::from_utf8(names.stdout).unwrap();
+        let extra: Vec<&str> = names
+            .lines()
+            .filter(|name| *name != "com.apple.provenance")
+            .collect();
+        assert!(extra.is_empty(), "{extra:?}");
     }
 
     #[test]

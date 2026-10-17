@@ -71,7 +71,7 @@ pub struct PlanArtifact {
     pub version: String,
     /// `upstream` or `maintainer`.
     pub origin: String,
-    /// `tar_gz` or `binary`.
+    /// `tar_gz`, `zip`, or `binary`.
     pub format: String,
     /// The single top folder of the archive, when it has one.
     pub archive_root: Option<String>,

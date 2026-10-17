@@ -1,10 +1,10 @@
 //! `cargo xtask runtime ...`: the runtime inventory of spec 0003.
 //!
 //! `check` enforces the inventory and evidence rules, `pin` turns real
-//! downloads into the `urls`, `sha256`, `size`, and `min_os` of an entry,
-//! `verify` downloads every available artifact again to prove the pinned
-//! values still hold, `spike` runs one artifact under a LaunchAgent, and
-//! `record` keeps the native evidence of a clean run in
+//! downloads into the `format`, `urls`, `sha256`, `size`, and `min_os` of
+//! an entry, `verify` downloads every available artifact again to prove
+//! the pinned values still hold, `spike` runs one artifact under a
+//! LaunchAgent, and `record` keeps the native evidence of a clean run in
 //! `evidence/runtime/`.
 
 mod cache;
@@ -16,6 +16,8 @@ mod pin;
 mod ports;
 mod record;
 mod spike;
+#[cfg(test)]
+mod test_zip;
 mod verify;
 
 use std::path::Path;

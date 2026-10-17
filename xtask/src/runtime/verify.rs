@@ -1,8 +1,9 @@
 //! `cargo xtask runtime verify [--id <id>]`: downloads every `available`
 //! artifact again from each of its URLs and checks that the bytes still
-//! have the pinned `sha256` and `size`, then checks the upstream checksum
-//! file by its kind and, when `gpg` is on PATH, the upstream signature
-//! (spec 0003). Prints `OK`, `FAIL <reason>`, or `SKIP gpg` per artifact.
+//! have the pinned `sha256` and `size` and the magic number its `format`
+//! names, then checks the upstream checksum file by its kind and, when
+//! `gpg` is on PATH, the upstream signature (spec 0003). Prints `OK`,
+//! `FAIL <reason>`, or `SKIP gpg` per artifact.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -12,6 +13,7 @@ use anyhow::{Context, Result, bail};
 use super::cache::{Cache, SIDE_FILE_MAX_SIZE, TooLarge, sha512_file};
 use super::checksum::{base_name, expected_digest, gpg_available, parse_sums, verify_gpg};
 use super::inventory::{Artifact, Inventory};
+use super::macho::{check_format, file_kind};
 
 /// The result for one artifact.
 #[derive(Debug, PartialEq, Eq)]
@@ -135,6 +137,13 @@ fn verify(
         }
     }
     let stored = stored.context("rule 3 guarantees at least one URL")?;
+    let format = artifact
+        .format
+        .as_deref()
+        .context("rule 3 guarantees format")?;
+    if let Some(outcome) = format_outcome(format, &stored)? {
+        return Ok(outcome);
+    }
     let names: Vec<&str> = urls.iter().map(|url| base_name(url)).collect();
 
     if let Some(checksum) = &artifact.upstream_checksum {
@@ -188,6 +197,14 @@ fn verify(
         }
     }
     Ok(Outcome::Ok)
+}
+
+/// A `FAIL` when the stored download is not the kind of file `format`
+/// names (AC-16), with the same reason the spike gives.
+fn format_outcome(format: &str, stored: &Path) -> Result<Option<Outcome>> {
+    Ok(check_format(format, file_kind(stored)?)
+        .err()
+        .map(|err| Outcome::Fail(err.to_string())))
 }
 
 #[cfg(test)]
@@ -252,5 +269,28 @@ upstream_signature = { kind = "none" }
             "clickhouse-26.9.1.1-macos-aarch64 is blocked, so there is nothing to download"
         );
         assert!(run(root.path(), &["--id"]).is_err());
+    }
+
+    #[test]
+    fn a_download_of_another_format_fails_with_the_spike_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let gzip = dir.path().join("gzip");
+        std::fs::write(&gzip, [0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0]).unwrap();
+        let zip = dir.path().join("zip");
+        std::fs::write(&zip, b"PK\x03\x04\x0a\0\0\0").unwrap();
+        assert_eq!(
+            format_outcome("zip", &gzip).unwrap(),
+            Some(Outcome::Fail(
+                "format zip does not match the file (gzip)".to_owned()
+            ))
+        );
+        assert_eq!(
+            format_outcome("tar_gz", &zip).unwrap(),
+            Some(Outcome::Fail(
+                "format tar_gz does not match the file (zip)".to_owned()
+            ))
+        );
+        assert_eq!(format_outcome("zip", &zip).unwrap(), None);
+        assert_eq!(format_outcome("tar_gz", &gzip).unwrap(), None);
     }
 }

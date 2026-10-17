@@ -1,5 +1,6 @@
-//! Recognizing Mach-O and gzip files by their magic number, and reading the
-//! minimum macOS version of an executable with `vtool` (spec 0003).
+//! Recognizing Mach-O, gzip, and zip files by their magic number, checking
+//! that against an inventory `format`, and reading the minimum macOS
+//! version of an executable with `vtool` (spec 0003).
 
 use std::fs::File;
 use std::io::{self, Read};
@@ -21,8 +22,43 @@ pub enum FileKind {
     MachO,
     /// A gzip stream, such as a `.tar.gz`.
     Gzip,
+    /// A zip archive whose first entry is a local file header.
+    Zip,
     /// Anything else.
     Other,
+}
+
+impl FileKind {
+    /// The fixed name format errors use: `mach-o`, `gzip`, `zip`, or
+    /// `unknown`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::MachO => "mach-o",
+            Self::Gzip => "gzip",
+            Self::Zip => "zip",
+            Self::Other => "unknown",
+        }
+    }
+
+    /// The inventory `format` of a file of this kind: `binary`, `tar_gz`,
+    /// or `zip`, and none for anything else.
+    pub fn format(self) -> Option<&'static str> {
+        match self {
+            Self::MachO => Some("binary"),
+            Self::Gzip => Some("tar_gz"),
+            Self::Zip => Some("zip"),
+            Self::Other => None,
+        }
+    }
+}
+
+/// Refuses a file whose magic number does not match `format`, with the
+/// reason AC-16 names. Runs before any byte of the file is extracted.
+pub fn check_format(format: &str, kind: FileKind) -> Result<()> {
+    if kind.format() != Some(format) {
+        bail!("format {format} does not match the file ({})", kind.name());
+    }
+    Ok(())
 }
 
 /// Reads the first eight bytes of `path` and classifies them.
@@ -56,6 +92,7 @@ pub fn classify(head: &[u8]) -> FileKind {
             }
         }
         [0x1f, 0x8b, ..] => FileKind::Gzip,
+        [0x50, 0x4b, 0x03, 0x04, ..] => FileKind::Zip,
         _ => FileKind::Other,
     }
 }
@@ -216,7 +253,7 @@ Load command 9
     }
 
     #[test]
-    fn magic_numbers_tell_mach_o_from_gzip_and_java() {
+    fn magic_numbers_tell_mach_o_from_gzip_zip_and_java() {
         assert_eq!(
             classify(&[0xcf, 0xfa, 0xed, 0xfe, 0x0c, 0, 0, 0x01]),
             FileKind::MachO
@@ -230,8 +267,47 @@ Load command 9
             FileKind::Other
         );
         assert_eq!(classify(&[0x1f, 0x8b, 0x08, 0]), FileKind::Gzip);
-        assert_eq!(classify(b"PK\x03\x04"), FileKind::Other);
+        assert_eq!(classify(b"PK\x03\x04\x14\0\0\0"), FileKind::Zip);
+        assert_eq!(classify(b"PK\x05\x06"), FileKind::Other);
         assert_eq!(classify(&[]), FileKind::Other);
+    }
+
+    #[test]
+    fn each_format_accepts_only_its_own_kind_of_file() {
+        let kinds = [
+            FileKind::MachO,
+            FileKind::Gzip,
+            FileKind::Zip,
+            FileKind::Other,
+        ];
+        for (format, own) in [
+            ("binary", FileKind::MachO),
+            ("tar_gz", FileKind::Gzip),
+            ("zip", FileKind::Zip),
+        ] {
+            for kind in kinds {
+                let checked = check_format(format, kind);
+                if kind == own {
+                    assert!(checked.is_ok(), "{format} refuses {kind:?}");
+                } else {
+                    assert_eq!(
+                        checked.unwrap_err().to_string(),
+                        format!("format {format} does not match the file ({})", kind.name())
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            check_format("zip", FileKind::Gzip).unwrap_err().to_string(),
+            "format zip does not match the file (gzip)"
+        );
+        assert_eq!(
+            check_format("tar_gz", FileKind::Other)
+                .unwrap_err()
+                .to_string(),
+            "format tar_gz does not match the file (unknown)"
+        );
+        assert!(check_format("tar_zst", FileKind::Gzip).is_err());
     }
 
     #[cfg(target_os = "macos")]
