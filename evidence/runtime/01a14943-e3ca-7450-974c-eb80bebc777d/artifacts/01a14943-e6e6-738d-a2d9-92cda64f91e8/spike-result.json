@@ -1,0 +1,187 @@
+{
+  "archive": {
+    "files": 3,
+    "setuid": [],
+    "specialFiles": [],
+    "symlinksEscaping": [],
+    "symlinksInternal": 0
+  },
+  "artifactId": "nats-2.15.1-macos-aarch64",
+  "closureProbes": [
+    {
+      "detail": "0 non system libraries, as listed",
+      "name": "dependencies",
+      "status": "PASS"
+    },
+    {
+      "detail": "GET /healthz?js-enabled-only=true gave 200 {\"status\":\"ok\"}",
+      "name": "jetstream",
+      "status": "PASS"
+    }
+  ],
+  "failure": null,
+  "launch": {
+    "controllingTty": false,
+    "domain": "gui/502",
+    "parentIsLaunchd": true
+  },
+  "libraries": {
+    "foreign": [],
+    "runtime": [
+      "/usr/lib/dyld",
+      "nats-server"
+    ],
+    "static": [
+      "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+      "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/libresolv.9.dylib"
+    ],
+    "warnings": []
+  },
+  "listeners": [
+    {
+      "address": "127.0.0.1",
+      "port": 60119
+    },
+    {
+      "address": "127.0.0.1",
+      "port": 60120
+    }
+  ],
+  "logTail": [
+    {
+      "process": "server",
+      "stderr": "[9407] 2026/10/17 16:49:10.123038 [INF] Starting nats-server\n[9407] 2026/10/17 16:49:10.123257 [INF]   Version:  2.15.1\n[9407] 2026/10/17 16:49:10.123277 [INF]   Git:      [b2fd3ef]\n[9407] 2026/10/17 16:49:10.123290 [INF]   Name:     NA7CPM65NRV6D2NHWWSLQ6WWSFF3AJNMUV6364NI7MPCDFJT5UJKIODM\n[9407] 2026/10/17 16:49:10.123301 [INF]   Node:     SD78pIAU\n[9407] 2026/10/17 16:49:10.123310 [INF]   ID:       NA7CPM65NRV6D2NHWWSLQ6WWSFF3AJNMUV6364NI7MPCDFJT5UJKIODM\n[9407] 2026/10/17 16:49:10.123377 [INF] Using configuration file: $ROOT/Stackly Spike Ü/run/nats.conf (sha256:7407b54fbe5210091e988048a82b38a58c8f80aa7f2bceb77ce589c31d1087e3)\n[9407] 2026/10/17 16:49:10.124633 [INF] Starting http monitor on 127.0.0.1:60120\n[9407] 2026/10/17 16:49:10.124952 [INF] Starting JetStream\n[9407] 2026/10/17 16:49:10.125939 [INF]     _ ___ _____ ___ _____ ___ ___   _   __  __\n[9407] 2026/10/17 16:49:10.125957 [INF]  _ | | __|_   _/ __|_   _| _ \\ __| /_\\ |  \\/  |\n[9407] 2026/10/17 16:49:10.125967 [INF] | || | _|  | | \\__ \\ | | |   / _| / _ \\| |\\/| |\n[9407] 2026/10/17 16:49:10.125976 [INF]  \\__/|___| |_| |___/ |_| |_|_\\___/_/ \\_\\_|  |_|\n[9407] 2026/10/17 16:49:10.125984 [INF] \n[9407] 2026/10/17 16:49:10.125992 [INF]          https://docs.nats.io/jetstream\n[9407] 2026/10/17 16:49:10.125999 [INF] \n[9407] 2026/10/17 16:49:10.126007 [INF] ---------------- JETSTREAM ----------------\n[9407] 2026/10/17 16:49:10.126015 [INF]   Strict:          true\n[9407] 2026/10/17 16:49:10.126024 [INF]   Max Memory:      24.00 GB\n[9407] 2026/10/17 16:49:10.126033 [INF]   Max Storage:     105.14 GB\n[9407] 2026/10/17 16:49:10.126041 [INF]   Store Directory: \"$ROOT/Stackly Spike Ü/run/jetstream/jetstream\"\n[9407] 2026/10/17 16:49:10.126049 [INF]   API Level:       5\n[9407] 2026/10/17 16:49:10.126056 [INF] -------------------------------------------\n[9407] 2026/10/17 16:49:10.127111 [INF] Took 2.136917ms to start JetStream\n[9407] 2026/10/17 16:49:10.127169 [INF] Listening for client connections on 127.0.0.1:60119\n[9407] 2026/10/17 16:49:10.127190 [INF] Server is ready\n[9407] 2026/10/17 16:49:10.634429 [INF] Trapped \"terminated\" signal\n[9407] 2026/10/17 16:49:10.634837 [INF] Initiating Shutdown...\n[9407] 2026/10/17 16:49:10.634895 [INF] Initiating JetStream Shutdown...\n[9407] 2026/10/17 16:49:10.634907 [INF] JetStream Shutdown\n[9407] 2026/10/17 16:49:10.635064 [INF] Server Exiting..\n",
+      "stdout": ""
+    }
+  ],
+  "minOsMeasured": "13.0",
+  "observedVersion": "2.15.1",
+  "quarantine": {
+    "detail": "still running after 30 s",
+    "outcome": "timeout"
+  },
+  "rawVersion": "nats-server: v2.15.1",
+  "schema": "stackly.runtime-spike-result/v1",
+  "sha256": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+  "signature": [
+    {
+      "adhocSignedAtInstall": false,
+      "authority": null,
+      "executable": "nats-server",
+      "kind": "linker_signed",
+      "teamId": null
+    }
+  ],
+  "status": "PASS",
+  "steps": [
+    {
+      "detail": "gui/502, parent launchd, no controlling terminal",
+      "durationMs": 0,
+      "name": "launch",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 81,
+      "name": "hash",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 35,
+      "name": "extract",
+      "status": "PASS"
+    },
+    {
+      "detail": "3 files, 0 internal links",
+      "durationMs": 0,
+      "name": "archive report",
+      "status": "PASS"
+    },
+    {
+      "detail": "1 Mach-O file(s), 4 libraries",
+      "durationMs": 138,
+      "name": "static audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 non system libraries, as listed",
+      "durationMs": 0,
+      "name": "closure",
+      "status": "PASS"
+    },
+    {
+      "detail": "kept the existing signatures",
+      "durationMs": 31,
+      "name": "signing",
+      "status": "PASS"
+    },
+    {
+      "detail": "13.0",
+      "durationMs": 11,
+      "name": "min_os",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "recipe",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "init",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "start",
+      "status": "PASS"
+    },
+    {
+      "detail": "ready 524 ms after the start",
+      "durationMs": 523,
+      "name": "ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "2.15.1",
+      "durationMs": 212,
+      "name": "version",
+      "status": "PASS"
+    },
+    {
+      "detail": "1 probe(s)",
+      "durationMs": 1,
+      "name": "probes",
+      "status": "PASS"
+    },
+    {
+      "detail": "2 listener(s)",
+      "durationMs": 20,
+      "name": "runtime audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit 0 after 130 ms",
+      "durationMs": 130,
+      "name": "stop",
+      "status": "PASS"
+    },
+    {
+      "detail": "timeout: still running after 30 s",
+      "durationMs": 30103,
+      "name": "quarantine",
+      "status": "PASS"
+    }
+  ],
+  "stop": {
+    "durationMs": 130,
+    "exitCode": 0,
+    "signal": null
+  }
+}

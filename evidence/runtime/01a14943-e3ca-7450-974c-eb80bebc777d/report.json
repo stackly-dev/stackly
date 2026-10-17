@@ -1,0 +1,136 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a14943-e3ca-7450-974c-eb80bebc777d",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "aed7595cbb1fb9ee820274c7d67cbd2747282202",
+    "sourceDirty": false,
+    "runId": "01a14943-e3ca-7450-974c-eb80bebc777d",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "xtask",
+      "--test",
+      "native_runtime",
+      "--",
+      "--ignored",
+      "nats"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": null,
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    },
+    "ci": null
+  },
+  "startedAt": "2026-10-17T09:49:08.426634Z",
+  "finishedAt": "2026-10-17T09:49:41.233258Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 1
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14943-e6e6-738d-a2d9-92cda64f91e8",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "nats_2_15_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 30
+      },
+      "status": "PASS",
+      "expected": "nats-server 2.15 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "nats 2.15.1 ready in 523 ms, stopped in 130 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "nats",
+          "version": "2.15.1",
+          "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-17T09:49:09.22236Z",
+      "finishedAt": "2026-10-17T09:49:41.226781Z",
+      "evidencePath": "artifacts/01a14943-e6e6-738d-a2d9-92cda64f91e8/",
+      "context": {
+        "sourceCommit": "aed7595cbb1fb9ee820274c7d67cbd2747282202",
+        "sourceDirty": false,
+        "runId": "01a14943-e3ca-7450-974c-eb80bebc777d",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored",
+          "nats"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": null,
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        },
+        "ci": null
+      }
+    }
+  ]
+}

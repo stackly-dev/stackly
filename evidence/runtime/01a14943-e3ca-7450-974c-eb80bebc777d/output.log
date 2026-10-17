@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/native_runtime.rs (target/debug/deps/native_runtime-7edbdcdcf3687b79)
+
+running 1 test
+spike nats-2.15.1-macos-aarch64: waiting for the spike lock
+spike nats-2.15.1-macos-aarch64: starting the worker in gui/502
+spike nats-2.15.1-macos-aarch64: PASS, version 2.15.1
+test nats_2_15_runs_from_managed_artifact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 32.01s
+
