@@ -1,0 +1,178 @@
+{
+  "archive": {
+    "files": 3,
+    "setuid": [],
+    "specialFiles": [],
+    "symlinksEscaping": [],
+    "symlinksInternal": 0
+  },
+  "artifactId": "traefik-3.7.15-macos-aarch64",
+  "closureProbes": [
+    {
+      "detail": "0 non system libraries, as listed",
+      "name": "dependencies",
+      "status": "PASS"
+    }
+  ],
+  "failure": null,
+  "launch": {
+    "controllingTty": false,
+    "domain": "gui/502",
+    "parentIsLaunchd": true
+  },
+  "libraries": {
+    "foreign": [],
+    "runtime": [
+      "/usr/lib/dyld",
+      "traefik"
+    ],
+    "static": [
+      "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+      "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/libresolv.9.dylib"
+    ],
+    "warnings": []
+  },
+  "listeners": [
+    {
+      "address": "127.0.0.1",
+      "port": 60618
+    }
+  ],
+  "logTail": [
+    {
+      "process": "server",
+      "stderr": "",
+      "stdout": ""
+    }
+  ],
+  "minOsMeasured": "12.0",
+  "observedVersion": "3.7.15",
+  "quarantine": {
+    "detail": "signal 9",
+    "outcome": "killed"
+  },
+  "rawVersion": "3.7.15",
+  "schema": "stackly.runtime-spike-result/v1",
+  "sha256": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+  "signature": [
+    {
+      "adhocSignedAtInstall": false,
+      "authority": null,
+      "executable": "traefik",
+      "kind": "linker_signed",
+      "teamId": null
+    }
+  ],
+  "status": "PASS",
+  "steps": [
+    {
+      "detail": "gui/502, parent launchd, no controlling terminal",
+      "durationMs": 0,
+      "name": "launch",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 473,
+      "name": "hash",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 214,
+      "name": "extract",
+      "status": "PASS"
+    },
+    {
+      "detail": "3 files, 0 internal links",
+      "durationMs": 0,
+      "name": "archive report",
+      "status": "PASS"
+    },
+    {
+      "detail": "1 Mach-O file(s), 4 libraries",
+      "durationMs": 81,
+      "name": "static audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 non system libraries, as listed",
+      "durationMs": 0,
+      "name": "closure",
+      "status": "PASS"
+    },
+    {
+      "detail": "kept the existing signatures",
+      "durationMs": 124,
+      "name": "signing",
+      "status": "PASS"
+    },
+    {
+      "detail": "12.0",
+      "durationMs": 36,
+      "name": "min_os",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "recipe",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 1,
+      "name": "init",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 9,
+      "name": "start",
+      "status": "PASS"
+    },
+    {
+      "detail": "ready 1880 ms after the start",
+      "durationMs": 1880,
+      "name": "ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "3.7.15",
+      "durationMs": 220,
+      "name": "version",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 probe(s)",
+      "durationMs": 0,
+      "name": "probes",
+      "status": "PASS"
+    },
+    {
+      "detail": "1 listener(s)",
+      "durationMs": 34,
+      "name": "runtime audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit 0 after 1685 ms",
+      "durationMs": 1685,
+      "name": "stop",
+      "status": "PASS"
+    },
+    {
+      "detail": "killed: signal 9",
+      "durationMs": 16944,
+      "name": "quarantine",
+      "status": "PASS"
+    }
+  ],
+  "stop": {
+    "durationMs": 1685,
+    "exitCode": 0,
+    "signal": null
+  }
+}

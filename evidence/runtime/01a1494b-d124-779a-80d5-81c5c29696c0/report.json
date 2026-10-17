@@ -1,0 +1,288 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1494b-d124-779a-80d5-81c5c29696c0",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "df8fb3875003d033ff8c2ef3d1c4f8d650f8176a",
+    "sourceDirty": false,
+    "runId": "01a1494b-d124-779a-80d5-81c5c29696c0",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "xtask",
+      "--test",
+      "native_runtime",
+      "--",
+      "--ignored",
+      "traefik",
+      "mysql",
+      "clickhouse"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": null,
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    },
+    "ci": null
+  },
+  "startedAt": "2026-10-17T09:57:47.940879Z",
+  "finishedAt": "2026-10-17T09:58:45.644775Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 3,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 3,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 3
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1494b-d2bc-7322-bdcd-d421f2097da6",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "traefik_3_7_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 41
+      },
+      "status": "PASS",
+      "expected": "traefik 3.7 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "traefik 3.7.15 ready in 1880 ms, stopped in 1685 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "traefik",
+          "version": "3.7.15",
+          "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-17T09:57:48.348383Z",
+      "finishedAt": "2026-10-17T09:58:11.521423Z",
+      "evidencePath": "artifacts/01a1494b-d2bc-7322-bdcd-d421f2097da6/",
+      "context": {
+        "sourceCommit": "df8fb3875003d033ff8c2ef3d1c4f8d650f8176a",
+        "sourceDirty": false,
+        "runId": "01a1494b-d124-779a-80d5-81c5c29696c0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored",
+          "traefik",
+          "mysql",
+          "clickhouse"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": null,
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        },
+        "ci": null
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1494b-d2bc-7322-bdcd-d4220d1df52e",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "mysql_8_4_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 63
+      },
+      "status": "PASS",
+      "expected": "mysqld 8.4 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "mysql 8.4.11 ready in 1112 ms, stopped in 2248 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-17T09:57:48.348383Z",
+      "finishedAt": "2026-10-17T09:58:29.537129Z",
+      "evidencePath": "artifacts/01a1494b-d2bc-7322-bdcd-d4220d1df52e/",
+      "context": {
+        "sourceCommit": "df8fb3875003d033ff8c2ef3d1c4f8d650f8176a",
+        "sourceDirty": false,
+        "runId": "01a1494b-d124-779a-80d5-81c5c29696c0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored",
+          "traefik",
+          "mysql",
+          "clickhouse"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": null,
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        },
+        "ci": null
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1494b-d2bc-7322-bdcd-d424deaf6420",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "mysql_9_7_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 74
+      },
+      "status": "PASS",
+      "expected": "mysqld 9.7 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "mysql 9.7.2 ready in 1024 ms, stopped in 1260 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-17T09:57:48.348401Z",
+      "finishedAt": "2026-10-17T09:58:45.635831Z",
+      "evidencePath": "artifacts/01a1494b-d2bc-7322-bdcd-d424deaf6420/",
+      "context": {
+        "sourceCommit": "df8fb3875003d033ff8c2ef3d1c4f8d650f8176a",
+        "sourceDirty": false,
+        "runId": "01a1494b-d124-779a-80d5-81c5c29696c0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored",
+          "traefik",
+          "mysql",
+          "clickhouse"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": null,
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        },
+        "ci": null
+      }
+    }
+  ]
+}
