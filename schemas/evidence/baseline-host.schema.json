@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "BaselineHost",
-  "description": "The fingerprint of the self hosted CI Mac, committed as\n`evidence/baseline-host.json` by `cargo xtask evidence baseline`.",
+  "description": "The fingerprint of the development Mac that runs the benchmarks, committed\nas `evidence/baseline-host.json` by `cargo xtask evidence baseline`.",
   "type": "object",
   "properties": {
     "host": {
@@ -12,10 +12,6 @@
       "description": "When the baseline was recorded.",
       "type": "string",
       "format": "date-time"
-    },
-    "runnerName": {
-      "description": "The GitHub runner name of the Mac.",
-      "type": "string"
     },
     "schema": {
       "description": "Always [`BASELINE_SCHEMA`].",
@@ -29,7 +25,6 @@
   "required": [
     "schema",
     "recordedAt",
-    "runnerName",
     "host",
     "storage"
   ],

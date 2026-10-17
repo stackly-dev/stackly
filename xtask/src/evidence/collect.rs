@@ -1,12 +1,11 @@
 //! Turns the raw records of a run into report records and problems.
 
 use std::collections::HashSet;
-use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use stackly_evidence::{EvidenceRecord, Kind, Problem, ProblemCode, RunContext, RunReport, Status};
+use stackly_evidence::{EvidenceRecord, Kind, Problem, ProblemCode, RunContext, Status};
 use uuid::Uuid;
 
 /// The records and problems found in a run's `records/` folder.
@@ -153,65 +152,6 @@ pub fn exit_code(command_exit: Option<i32>, signal: Option<i32>, problems: usize
             .filter(|code| *code != 0)
             .unwrap_or(1),
     }
-}
-
-/// Keeps free text inside one Markdown table cell.
-fn cell(text: &str) -> String {
-    text.replace('|', "\\|").replace(['\r', '\n'], " ")
-}
-
-/// The Markdown written to `$GITHUB_STEP_SUMMARY`: counts per status and per
-/// kind, then one row per `FAIL`, `BLOCKED`, and `NOT_RUN` record, then the
-/// problems.
-pub fn step_summary(report: &RunReport) -> String {
-    let mut out = String::new();
-    let _ = writeln!(out, "### Evidence: {} run\n", report.kind.as_str());
-    let _ = writeln!(out, "| Status | Records |\n| --- | --- |");
-    for (status, count) in &report.summary.by_status {
-        let _ = writeln!(out, "| {} | {count} |", status.as_str());
-    }
-    let _ = writeln!(out, "\n| Kind | Records |\n| --- | --- |");
-    for (kind, count) in &report.summary.by_kind {
-        let _ = writeln!(out, "| {} | {count} |", kind.as_str());
-    }
-    let notable: Vec<&EvidenceRecord> = report
-        .records
-        .iter()
-        .filter(|record| {
-            matches!(
-                record.status,
-                Status::Fail | Status::Blocked | Status::NotRun
-            )
-        })
-        .collect();
-    if !notable.is_empty() {
-        let _ = writeln!(
-            out,
-            "\n| Status | Covers | Test | Reason |\n| --- | --- | --- | --- |"
-        );
-        for record in notable {
-            let reason = record
-                .reason
-                .as_deref()
-                .or(record.actual.as_deref())
-                .unwrap_or("");
-            let _ = writeln!(
-                out,
-                "| {} | {} | `{}` | {} |",
-                record.status.as_str(),
-                record.covers.join(", "),
-                cell(&record.test.name),
-                cell(reason)
-            );
-        }
-    }
-    if !report.problems.is_empty() {
-        let _ = writeln!(out, "\n**Problems**\n");
-        for problem in &report.problems {
-            let _ = writeln!(out, "- `{}`: {}", problem.code.as_str(), problem.message);
-        }
-    }
-    out
 }
 
 #[cfg(test)]

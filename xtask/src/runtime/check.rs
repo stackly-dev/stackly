@@ -1,6 +1,6 @@
 //! `cargo xtask runtime check`: rules 1 to 8 of spec 0003 (*Key
 //! invariants*) on `runtimes/inventory.toml` and `evidence/runtime/`.
-//! Read only; runs on any OS and in the `linux` CI job on every PR.
+//! Read only; runs on any OS, by hand on this Mac.
 
 use std::fs;
 use std::io;
@@ -152,11 +152,6 @@ fn latest_record_violations(inventory: &Inventory, reports: &[RunReport]) -> Vec
         }
         if context.source_dirty {
             push(format!("the latest record {id} comes from a dirty tree"));
-        }
-        if context.ci.as_ref().and_then(|ci| ci.event.as_deref()) == Some("pull_request") {
-            push(format!(
-                "the latest record {id} comes from a pull_request run"
-            ));
         }
         let os_version = context.host.os_version.as_deref().unwrap_or("unknown");
         if os_version.split('.').next() != Some("27") {

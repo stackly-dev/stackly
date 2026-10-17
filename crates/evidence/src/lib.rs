@@ -41,7 +41,7 @@ use std::path::Path;
 use serde::Serialize;
 
 pub use baseline::{BaselineHost, Storage};
-pub use context::{BaselineMatch, Ci, Host, RunContext, Toolchain};
+pub use context::{BaselineMatch, Host, RunContext, Toolchain};
 pub use credential::{FIXTURE_CREDENTIAL_PREFIX, FixtureCredential};
 pub use guard::{EVIDENCE_DIR_ENV, EVIDENCE_KIND_ENV, Evidence, TestSite};
 pub use record::{

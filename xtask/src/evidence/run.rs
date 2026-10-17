@@ -1,7 +1,7 @@
 //! `cargo xtask evidence run --kind <fixture|native> [--out <folder>] -- <command>`:
 //! runs a test command as evidence and writes `report.json`.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, ExitStatus, Stdio};
@@ -13,9 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow, bail};
 use cargo_metadata::MetadataCommand;
 use jiff::Timestamp;
-use stackly_evidence::{
-    EVIDENCE_DIR_ENV, EVIDENCE_KIND_ENV, Kind, RunReport, Status, write_json_atomic,
-};
+use stackly_evidence::{EVIDENCE_DIR_ENV, EVIDENCE_KIND_ENV, Kind, RunReport, write_json_atomic};
 use uuid::Uuid;
 
 use super::{collect, context};
@@ -98,7 +96,6 @@ pub fn run(args: &[&str]) -> Result<ExitCode> {
     report.set_records(collected.records, collected.problems);
     let report_path = run_dir.join("report.json");
     write_json_atomic(&report_path, &report).context("cannot write report.json")?;
-    publish_to_github(&report)?;
     print_summary(&report);
     eprintln!("evidence report: {}", report_path.display());
     Ok(ExitCode::from(collect::exit_code(
@@ -285,48 +282,6 @@ fn signal_of(_status: ExitStatus) -> Option<i32> {
     None
 }
 
-/// Appends the run summary to `$GITHUB_STEP_SUMMARY` and prints one
-/// `::warning::` per `BLOCKED` record, when running on GitHub Actions.
-fn publish_to_github(report: &RunReport) -> Result<()> {
-    if let Some(path) = std::env::var_os("GITHUB_STEP_SUMMARY") {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .context("cannot open $GITHUB_STEP_SUMMARY")?;
-        file.write_all(collect::step_summary(report).as_bytes())
-            .context("cannot write $GITHUB_STEP_SUMMARY")?;
-    }
-    if std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true") {
-        for record in report
-            .records
-            .iter()
-            .filter(|r| r.status == Status::Blocked)
-        {
-            let message = format!(
-                "{} {}: {} (owner {})",
-                record.covers.join(","),
-                record.test.name,
-                record.reason.as_deref().unwrap_or("no reason"),
-                record.owner.as_deref().unwrap_or("none")
-            );
-            println!(
-                "::warning title=Evidence BLOCKED::{}",
-                annotation_data(&message)
-            );
-        }
-    }
-    Ok(())
-}
-
-/// Escapes text for the data part of a GitHub workflow command, so a
-/// multi line reason can never start a second command.
-fn annotation_data(text: &str) -> String {
-    text.replace('%', "%25")
-        .replace('\r', "%0D")
-        .replace('\n', "%0A")
-}
-
 fn print_summary(report: &RunReport) {
     let counts: Vec<String> = report
         .summary
@@ -376,14 +331,6 @@ mod tests {
                     .map(str::to_owned)
                     .to_vec(),
             }
-        );
-    }
-
-    #[test]
-    fn annotation_data_escapes_newlines_and_percent() {
-        assert_eq!(
-            annotation_data("50% done\n::error::fake"),
-            "50%25 done%0A::error::fake"
         );
     }
 

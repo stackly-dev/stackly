@@ -5,7 +5,7 @@
 //! `verify` downloads every available artifact again to prove the pinned
 //! values still hold, `spike` runs one artifact under a LaunchAgent, and
 //! `record` keeps the native evidence of a clean run in
-//! `evidence/runtime/`. `watch` arrives with build step 14 of spec 0003.
+//! `evidence/runtime/`.
 
 mod cache;
 mod check;

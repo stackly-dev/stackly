@@ -2,11 +2,10 @@
 # This is the dependency gate for PRD 27 (spec 0001). Run `cargo deny check`.
 
 [graph]
-# Every target Stackly builds or checks: the Mac app, the Linux CI runner,
-# and the Windows portability check.
+# Every target Stackly builds or checks: the Mac app and the Windows
+# portability check.
 targets = [
     "aarch64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
     "aarch64-pc-windows-msvc",
 ]
 

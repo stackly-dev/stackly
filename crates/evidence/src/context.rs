@@ -1,4 +1,4 @@
-//! The context of one run: commit, host, toolchain, and CI.
+//! The context of one run: commit, host, and toolchain.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -15,8 +15,7 @@ use crate::Kind;
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct RunContext {
-    /// The commit that was tested, from `git rev-parse HEAD`. In a pull
-    /// request this is the temporary merge commit GitHub builds.
+    /// The commit that was tested, from `git rev-parse HEAD`.
     pub source_commit: String,
     /// True when `git status --porcelain --untracked-files=normal` was not
     /// empty at the start of the run. A dirty run is never release evidence.
@@ -38,14 +37,11 @@ pub struct RunContext {
     pub baseline: Option<BaselineMatch>,
     /// Toolchain versions found on the host.
     pub toolchain: Toolchain,
-    /// GitHub Actions details, or null outside CI.
-    #[serde(default)]
-    pub ci: Option<Ci>,
 }
 
 impl RunContext {
     /// Creates the context of a run with the required values; the run ID,
-    /// kind, command, baseline, and CI details start as null.
+    /// kind, command, and baseline start as null.
     #[must_use]
     pub fn new(
         source_commit: impl Into<String>,
@@ -62,7 +58,6 @@ impl RunContext {
             host,
             baseline: None,
             toolchain,
-            ci: None,
         }
     }
 }
@@ -154,34 +149,20 @@ pub struct Toolchain {
     pub swift: Option<String>,
 }
 
-/// GitHub Actions details of a CI run.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-#[non_exhaustive]
-pub struct Ci {
-    /// `GITHUB_WORKFLOW`.
-    #[serde(default)]
-    pub workflow: Option<String>,
-    /// `GITHUB_JOB`.
-    #[serde(default)]
-    pub job: Option<String>,
-    /// `RUNNER_NAME`.
-    #[serde(default)]
-    pub runner: Option<String>,
-    /// `GITHUB_EVENT_NAME`, for example `pull_request` or `push`.
-    #[serde(default)]
-    pub event: Option<String>,
-    /// `GITHUB_REF`.
-    #[serde(default)]
-    pub r#ref: Option<String>,
-    /// `GITHUB_RUN_ATTEMPT`.
-    #[serde(default)]
-    pub run_attempt: Option<u32>,
-    /// The run URL, built from `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`,
-    /// and `GITHUB_RUN_ID`.
-    #[serde(default)]
-    pub run_url: Option<String>,
-    /// `STACKLY_CI_HEAD_SHA`: the pull request head, or the pushed commit.
-    #[serde(default)]
-    pub head_sha: Option<String>,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_v1_context_that_still_holds_the_removed_ci_field_decodes() {
+        let json = r#"{
+            "sourceCommit": "4f3a818",
+            "sourceDirty": false,
+            "host": { "os": "macos", "arch": "aarch64" },
+            "toolchain": {},
+            "ci": null
+        }"#;
+        let context: RunContext = serde_json::from_str(json).unwrap();
+        assert_eq!(context.source_commit, "4f3a818");
+    }
 }

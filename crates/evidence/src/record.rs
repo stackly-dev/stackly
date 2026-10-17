@@ -19,7 +19,7 @@ pub const PANIC_ACTUAL: &str = "test panicked, see output.log";
 pub const UNFINISHED_ACTUAL: &str = "test ended without pass() or blocked()";
 
 /// Whether a test needs only fakes and fixtures, or a real provider runtime
-/// or the self hosted macOS 27 Mac.
+/// or something only a macOS 27 Mac has.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
@@ -27,7 +27,7 @@ pub const UNFINISHED_ACTUAL: &str = "test ended without pass() or blocked()";
 pub enum Kind {
     /// Fakes, mocks, dummy servers, fake providers, or contract fixtures.
     Fixture,
-    /// A real provider binary, or something only the macOS 27 Mac has.
+    /// A real provider binary, or something only a macOS 27 Mac has.
     Native,
 }
 

@@ -97,9 +97,12 @@ pub struct Artifact {
     pub source_url: Option<String>,
     /// The SHA-256 of that source tarball.
     pub source_sha256: Option<String>,
-    /// `ojiepermana/stackly-runtimes@<commit>:recipes/<provider>.sh`.
+    /// Where the build recipe of a maintainer build lives. Its format waits
+    /// for the open decision in spec 0003 on how maintainer builds are made
+    /// on this Mac.
     pub recipe: Option<String>,
-    /// The GitHub attestation URL of a maintainer build.
+    /// The https URL that proves where a maintainer build came from. Whether
+    /// it stays required waits for the same decision.
     pub attestation: Option<String>,
     /// `keep_or_adhoc` or `adhoc_pipeline`.
     pub signing_policy: Option<String>,

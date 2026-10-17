@@ -11,7 +11,7 @@ use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
-use stackly_evidence::{BaselineHost, BaselineMatch, Ci, Host, Kind, RunContext, Toolchain};
+use stackly_evidence::{BaselineHost, BaselineMatch, Host, Kind, RunContext, Toolchain};
 use uuid::Uuid;
 
 /// The baseline host file, relative to the repository root.
@@ -35,7 +35,6 @@ pub fn probe(root: &Path, run_id: Uuid, kind: Kind, command: &[String]) -> Resul
     context.run_kind = Some(kind);
     context.command = Some(command.to_vec());
     context.baseline = baseline;
-    context.ci = probe_ci();
     Ok(context)
 }
 
@@ -179,34 +178,6 @@ fn parse_xcode(text: &str) -> Option<String> {
 fn parse_swift(text: &str) -> Option<String> {
     let (_, rest) = text.split_once("Swift version ")?;
     rest.split_whitespace().next().map(str::to_owned)
-}
-
-fn probe_ci() -> Option<Ci> {
-    if env::var("GITHUB_ACTIONS").as_deref() != Ok("true") {
-        return None;
-    }
-    let var = |name: &str| env::var(name).ok().filter(|value| !value.is_empty());
-    let run_url = match (
-        var("GITHUB_SERVER_URL"),
-        var("GITHUB_REPOSITORY"),
-        var("GITHUB_RUN_ID"),
-    ) {
-        (Some(server), Some(repository), Some(run)) => {
-            Some(format!("{server}/{repository}/actions/runs/{run}"))
-        }
-        _ => None,
-    };
-    let mut ci = Ci::default();
-    ci.workflow = var("GITHUB_WORKFLOW");
-    ci.job = var("GITHUB_JOB");
-    ci.runner = var("RUNNER_NAME");
-    ci.event = var("GITHUB_EVENT_NAME");
-    ci.r#ref = var("GITHUB_REF");
-    ci.run_attempt =
-        var("GITHUB_RUN_ATTEMPT").and_then(|value| number("GITHUB_RUN_ATTEMPT", &value));
-    ci.run_url = run_url;
-    ci.head_sha = var("STACKLY_CI_HEAD_SHA");
-    Some(ci)
 }
 
 /// Runs one probe command. On failure, prints one warning and returns null.

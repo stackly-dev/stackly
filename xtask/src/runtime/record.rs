@@ -76,15 +76,6 @@ fn keep(
     if report.context.source_dirty {
         bail!("the run is dirty: commit every change first, then run again");
     }
-    if report
-        .context
-        .ci
-        .as_ref()
-        .and_then(|ci| ci.event.as_deref())
-        == Some("pull_request")
-    {
-        bail!("a pull_request run is never kept");
-    }
     if !report.problems.is_empty() {
         bail!(
             "the report has {} problem(s); fix them and run again",
@@ -458,9 +449,6 @@ mod tests {
             refusal(fixture),
             "the run is a fixture run, not native evidence"
         );
-        let mut pull = base();
-        pull["context"]["ci"] = json!({ "event": "pull_request" });
-        assert_eq!(refusal(pull), "a pull_request run is never kept");
         let mut problems = base();
         problems["problems"] =
             json!([{ "code": "left_not_run", "message": "a record is still NOT_RUN" }]);

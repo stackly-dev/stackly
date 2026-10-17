@@ -108,78 +108,6 @@
         "osBuildMatches"
       ]
     },
-    "Ci": {
-      "description": "GitHub Actions details of a CI run.",
-      "type": "object",
-      "properties": {
-        "event": {
-          "description": "`GITHUB_EVENT_NAME`, for example `pull_request` or `push`.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "headSha": {
-          "description": "`STACKLY_CI_HEAD_SHA`: the pull request head, or the pushed commit.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "job": {
-          "description": "`GITHUB_JOB`.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "ref": {
-          "description": "`GITHUB_REF`.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "runAttempt": {
-          "description": "`GITHUB_RUN_ATTEMPT`.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "default": null,
-          "minimum": 0
-        },
-        "runUrl": {
-          "description": "The run URL, built from `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`,\nand `GITHUB_RUN_ID`.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "runner": {
-          "description": "`RUNNER_NAME`.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "workflow": {
-          "description": "`GITHUB_WORKFLOW`.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        }
-      }
-    },
     "EvidenceRecord": {
       "description": "One evidence record: one test function in one run, or one manual review.\n\nThe Rust types are the source of truth; `cargo xtask codegen` publishes\nthe JSON Schema to `schemas/evidence/`. Unknown fields are accepted, so\n`v1` can grow with optional fields.",
       "type": "object",
@@ -403,7 +331,7 @@
       ]
     },
     "Kind": {
-      "description": "Whether a test needs only fakes and fixtures, or a real provider runtime\nor the self hosted macOS 27 Mac.",
+      "description": "Whether a test needs only fakes and fixtures, or a real provider runtime\nor something only a macOS 27 Mac has.",
       "oneOf": [
         {
           "description": "Fakes, mocks, dummy servers, fake providers, or contract fixtures.",
@@ -411,7 +339,7 @@
           "const": "fixture"
         },
         {
-          "description": "A real provider binary, or something only the macOS 27 Mac has.",
+          "description": "A real provider binary, or something only a macOS 27 Mac has.",
           "type": "string",
           "const": "native"
         }
@@ -525,18 +453,6 @@
           ],
           "default": null
         },
-        "ci": {
-          "description": "GitHub Actions details, or null outside CI.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Ci"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "command": {
           "description": "The argv the wrapper ran, or null for a manual record.",
           "type": [
@@ -574,7 +490,7 @@
           "default": null
         },
         "sourceCommit": {
-          "description": "The commit that was tested, from `git rev-parse HEAD`. In a pull\nrequest this is the temporary merge commit GitHub builds.",
+          "description": "The commit that was tested, from `git rev-parse HEAD`.",
           "type": "string"
         },
         "sourceDirty": {

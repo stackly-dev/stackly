@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::rules::Violations;
 use crate::{BASELINE_SCHEMA, BaselineMatch, Host, RuleViolations};
 
-/// The fingerprint of the self hosted CI Mac, committed as
-/// `evidence/baseline-host.json` by `cargo xtask evidence baseline`.
+/// The fingerprint of the development Mac that runs the benchmarks, committed
+/// as `evidence/baseline-host.json` by `cargo xtask evidence baseline`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
@@ -17,8 +17,6 @@ pub struct BaselineHost {
     pub schema: String,
     /// When the baseline was recorded.
     pub recorded_at: Timestamp,
-    /// The GitHub runner name of the Mac.
-    pub runner_name: String,
     /// The same fields as `context.host`.
     pub host: Host,
     /// The volume that holds the temporary directory.
@@ -54,9 +52,6 @@ impl BaselineHost {
                 "schema must be `{BASELINE_SCHEMA}`, found `{}`",
                 self.schema
             )
-        });
-        v.check(!self.runner_name.trim().is_empty(), || {
-            "runnerName must not be empty".to_owned()
         });
         v.check(host.os == "macos", || {
             "the baseline host runs macOS".to_owned()
@@ -123,7 +118,6 @@ mod tests {
         BaselineHost {
             schema: BASELINE_SCHEMA.to_owned(),
             recorded_at: Timestamp::now(),
-            runner_name: "stackly-mac-ci".to_owned(),
             host: mac(),
             storage: Storage {
                 volume: "/".to_owned(),

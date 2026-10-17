@@ -86,8 +86,8 @@ pub fn verifies(path: &Path) -> Result<bool> {
 /// `keep_or_adhoc`: keep the upstream signatures when every file
 /// verifies, else sign every file ad hoc without `--preserve-metadata`, so
 /// hardened runtime and library validation drop together.
-/// `adhoc_pipeline`: the pipeline signed every file; one that does not
-/// verify fails the step.
+/// `adhoc_pipeline`: the maintainer build signed every file ad hoc; one
+/// that does not verify fails the step.
 pub fn apply_policy(policy: &str, files: &[&Path]) -> Result<bool> {
     let mut failing = Vec::new();
     for file in files {
@@ -110,7 +110,7 @@ pub fn apply_policy(policy: &str, files: &[&Path]) -> Result<bool> {
         }
         "adhoc_pipeline" if failing.is_empty() => Ok(false),
         "adhoc_pipeline" => bail!(
-            "the pipeline left files that do not verify: {}",
+            "the maintainer build left files that do not verify: {}",
             failing.join(", ")
         ),
         other => bail!("unknown signing_policy `{other}`"),
