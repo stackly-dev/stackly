@@ -1,0 +1,12 @@
+# Spec 0010 spike: signal, reap, and helper group TERM then KILL
+# Lines of the spike run that belong to this row (tags signal).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[signal] PASS SIGCONT to running process is harmless: 
+[signal] PASS kill after reap -> ESRCH: Err(3)
+[signal] PASS non-parent in another session can signal (SIGTERM): Ok(())
+[signal] PASS kill(zombie, 0) succeeded before reap; after reap ESRCH: Err(3)
+[signal] PASS helper group: fake (exec'd over sh) + sleep share the group: members [17432, 17433]
+[signal] PASS kill(-pgid, SIGTERM): both ignore it for the 5 s grace: members [17432, 17433], output Some("ignoring SIGTERM")
+[signal] PASS kill(-pgid, SIGKILL): helper exits signaled(9): Some("signaled(9)")
+[signal] PASS no group member survives the group SIGKILL: Ok([])

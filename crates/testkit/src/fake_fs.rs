@@ -1,12 +1,15 @@
-use std::ffi::OsString;
-use std::fs::{self, DirBuilder, File, OpenOptions};
+use std::ffi::{OsStr, OsString};
+use std::fs::{self, DirBuilder, File, Metadata, OpenOptions};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use stackly_platform::{DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError};
+use stackly_platform::{
+    DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, REMOVE_TREE_MAX_DEPTH,
+    RemoveReport, remove_tree_names,
+};
 
 use crate::TestRoot;
 
@@ -29,6 +32,8 @@ pub enum FsOp {
     ReadFileLimited,
     /// [`Filesystem::write_file_atomic`].
     WriteFileAtomic,
+    /// [`Filesystem::remove_tree`].
+    RemoveTree,
 }
 
 impl FsOp {
@@ -42,6 +47,7 @@ impl FsOp {
             Self::ReadDir => "read_dir",
             Self::ReadFileLimited => "read_file_limited",
             Self::WriteFileAtomic => "write_file_atomic",
+            Self::RemoveTree => "remove_tree",
         }
     }
 }
@@ -78,10 +84,11 @@ impl Fault {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Mutation {
-    /// The operation, [`FsOp::CreateDirPrivate`] or
-    /// [`FsOp::WriteFileAtomic`].
+    /// The operation, [`FsOp::CreateDirPrivate`],
+    /// [`FsOp::WriteFileAtomic`], or [`FsOp::RemoveTree`].
     pub op: FsOp,
-    /// The path it created or replaced.
+    /// The path it created, replaced, or removed (the target of a
+    /// removal, `root` joined with `relative`).
     pub path: PathBuf,
 }
 
@@ -106,7 +113,16 @@ struct State {
 /// Faults can be injected per operation with [`fail_next`](Self::fail_next)
 /// and [`fail_when`](Self::fail_when). A fault on
 /// [`FsOp::WriteFileAtomic`] fires after the temporary file is written and
-/// before the rename, so the cleanup path runs.
+/// before the rename, so the cleanup path runs. A fault on
+/// [`FsOp::RemoveTree`] matches the target path and fires before anything
+/// is removed.
+///
+/// [`remove_tree`](Filesystem::remove_tree) checks that its root and its
+/// target are confined, then walks the tree with `symlink_metadata`,
+/// `read_dir`, `remove_file`, and `remove_dir`, never following a symlink
+/// and checking each entry's device. Unlike the macOS adapter it is not
+/// safe against a folder swapped for a symlink during the walk, so race
+/// tests run only against the adapter.
 #[derive(Debug)]
 pub struct FakeFilesystem {
     roots: Vec<PathBuf>,
@@ -150,7 +166,9 @@ impl FakeFilesystem {
         state.when.clear();
     }
 
-    /// Returns every directory created and file written so far, in order.
+    /// Returns every directory created, file written, and tree removed so
+    /// far, in order. A removal counts when it removed at least one entry,
+    /// even if it then failed.
     #[must_use]
     pub fn mutations(&self) -> Vec<Mutation> {
         self.state().mutations.clone()
@@ -294,6 +312,140 @@ impl Filesystem for FakeFilesystem {
             .map_err(|err| PlatformError::from_io("sync directory", dir, &err))?;
         self.record(FsOp::WriteFileAtomic, path);
         Ok(())
+    }
+
+    fn remove_tree(&self, root: &Path, relative: &Path) -> Result<RemoveReport, PlatformError> {
+        let names = remove_tree_names(root, relative)?;
+        let target = root.join(relative);
+        self.confine(root)?;
+        self.enter(FsOp::RemoveTree, &target)?;
+        let mut report = RemoveReport::default();
+        let result = remove_tree_portable(root, &names, &mut report);
+        if report.files + report.dirs > 0 {
+            self.record(FsOp::RemoveTree, &target);
+        }
+        result.map(|()| report)
+    }
+}
+
+/// Removes `root` joined with `names` the way [`Filesystem::remove_tree`]
+/// describes, counting what it removed in `report` as it goes. Every check
+/// reads a path with `symlink_metadata` and acts on it afterwards, so a
+/// concurrent swap between the two can redirect it.
+fn remove_tree_portable(
+    root: &Path,
+    names: &[&OsStr],
+    report: &mut RemoveReport,
+) -> Result<(), PlatformError> {
+    let root_info = fs::symlink_metadata(root)
+        .map_err(|err| PlatformError::from_io("remove_tree", root, &err))?;
+    expect_dir_on_the_way(root, &root_info)?;
+    let device = root_info.dev();
+    let (last, parents) = names
+        .split_last()
+        .expect("remove_tree_names returns at least one name");
+    let mut path = root.to_path_buf();
+    for name in parents {
+        path.push(name);
+        let Some(info) = stat_entry(&path)? else {
+            *report = RemoveReport::missing();
+            return Ok(());
+        };
+        expect_dir_on_the_way(&path, &info)?;
+        expect_device(&path, &info, device)?;
+    }
+    path.push(last);
+    let Some(info) = stat_entry(&path)? else {
+        *report = RemoveReport::missing();
+        return Ok(());
+    };
+    expect_device(&path, &info, device)?;
+    if !info.is_dir() {
+        if remove_entry(&path)? {
+            report.files += 1;
+        } else {
+            *report = RemoveReport::missing();
+        }
+        return Ok(());
+    }
+    let mut stack = vec![(list_entries(&path)?, path)];
+    while let Some((pending, dir)) = stack.last_mut() {
+        if let Some(entry) = pending.pop() {
+            let Some(info) = stat_entry(&entry)? else {
+                continue;
+            };
+            expect_device(&entry, &info, device)?;
+            if info.is_dir() {
+                if stack.len() >= REMOVE_TREE_MAX_DEPTH {
+                    return Err(PlatformError::TooDeep {
+                        path: entry,
+                        max: REMOVE_TREE_MAX_DEPTH,
+                    });
+                }
+                stack.push((list_entries(&entry)?, entry));
+            } else if remove_entry(&entry)? {
+                report.files += 1;
+            }
+        } else {
+            let dir = std::mem::take(dir);
+            stack.pop();
+            match fs::remove_dir(&dir) {
+                Ok(()) => report.dirs += 1,
+                Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+                Err(err) => return Err(PlatformError::from_io("remove_tree", &dir, &err)),
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Reads an entry without following a symlink; `None` when it is gone.
+fn stat_entry(path: &Path) -> Result<Option<Metadata>, PlatformError> {
+    match fs::symlink_metadata(path) {
+        Ok(info) => Ok(Some(info)),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(PlatformError::from_io("remove_tree", path, &err)),
+    }
+}
+
+/// Fails unless a component on the way to the target is a real directory.
+fn expect_dir_on_the_way(path: &Path, info: &Metadata) -> Result<(), PlatformError> {
+    let path = path.to_path_buf();
+    if info.file_type().is_symlink() {
+        Err(PlatformError::SymlinkInPath { path })
+    } else if info.is_dir() {
+        Ok(())
+    } else {
+        Err(PlatformError::NotADirectory { path })
+    }
+}
+
+/// Fails when an entry lies on another device than the root.
+fn expect_device(path: &Path, info: &Metadata, device: u64) -> Result<(), PlatformError> {
+    if info.dev() == device {
+        Ok(())
+    } else {
+        Err(PlatformError::CrossesDevice {
+            path: path.to_path_buf(),
+        })
+    }
+}
+
+/// Lists the full paths of a directory's entries.
+fn list_entries(dir: &Path) -> Result<Vec<PathBuf>, PlatformError> {
+    let io_err = |err: io::Error| PlatformError::from_io("remove_tree", dir, &err);
+    fs::read_dir(dir)
+        .map_err(io_err)?
+        .map(|entry| entry.map(|entry| entry.path()).map_err(io_err))
+        .collect()
+}
+
+/// Unlinks an entry that is not a directory; false when it is already gone.
+fn remove_entry(path: &Path) -> Result<bool, PlatformError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(PlatformError::from_io("remove_tree", path, &err)),
     }
 }
 

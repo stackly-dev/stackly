@@ -1,0 +1,190 @@
+== spike0010 on this Mac ==
+darwin user temp: /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/
+test root: /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé
+runtime exe (as created): /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
+runtime exe (canonical):  /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
+spike pid 17276 sid Ok(17275) uid 502
+struct sizes: proc_bsdinfo 136 vnode_fdinfowithpath 1200 proc_fdinfo 8 (SDK: 136, 1200, 8)
+[setup] NOTE parent contamination: leaked fd 3 without CLOEXEC; parent p_sigignore 0x18489001 (SIGPIPE bit 0x1000, SIGHUP bit 0x1); SIGUSR1 blocked in the spawning thread
+[spawn] NOTE posix_spawn suspended pid 17282 in 935.709µs (flags SETSID|SETSIGDEF(all)|SETSIGMASK(empty)|CLOEXEC_DEFAULT|START_SUSPENDED)
+[suspend] PASS suspended child pbi_status is SSTOP: pbi_status 4 (SSTOP=4)
+[suspend] PASS suspended child kinfo p_stat is SSTOP: p_stat 4
+[suspend] PASS suspended child has run no user code: ri_user_time 0 ri_system_time 191
+[suspend] PASS suspended child wrote nothing after 400 ms: argv-serve.json exists: false
+[suspend] PASS suspended child does not listen: port 54734
+[suspend] PASS user time still 0 after 400 ms: Ok((0, 2701))
+[pidinfo] PASS child pbi_pid/ppid/pgid/uid: pid 17282 ppid 17276 pgid 17282 uid 502 (me 17276)
+[pidinfo] PASS start time has seconds and microseconds near now: start 1792315325.267546 (0.408 s before now)
+[exe] PASS proc_pidpath of suspended child equals canonical path: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server") vs /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
+[exe] NOTE path as created was /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server (the /var -> /private/var symlink makes it differ)
+[session] PASS getsid(child) == pid (SETSID): getsid Ok(17282), parent sid Ok(17275)
+[boot] PASS boot id readable while child suspended: 5E52ED28-4032-431E-9E64-B599BA083C49
+[spawn] PASS suspended child holds exactly fds 0,1,2,3: fds [(0, 1), (1, 1), (2, 1), (3, 1)] (type 1 = vnode)
+[spawn] PASS fd 0 is /dev/null: (549339365, 336, "/dev/null")
+[spawn] PASS fd 1 is stdout spool (dev+ino): (16777229, 43636849, "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/a/stdout.spool")
+[spawn] PASS fd 2 is stderr spool (dev+ino): (16777229, 43636850, "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/a/stderr.spool")
+[spawn] PASS fd 3 is instance.lock (dev+ino): (16777229, 43636848, "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/instance.lock")
+[fds] PASS holds_file(suspended child, lock) == Yes: PROC_PIDLISTFDS + PROC_PIDFDVNODEPATHINFO
+[spawn] PASS KERN_PROCARGS2 argv equals plan exactly (argv[0] canonical): argv ["/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "serve", "--config=/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/config.json", "--data=/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/data", "--port=54734", "--host=127.0.0.1", "--label=$(touch pwned); touch pwned2 `touch pwned3` \"q\" 'q' | & > ü 空 * ~"]
+[spawn] NOTE KERN_PROCARGS2 exec path "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server"; strings after argv: ["PATH=/usr/bin:/bin", "STACKLY_PLAN_VALUE=sp ace ü 空 $(touch pwned-env) `id`", "", "", "", "", "", "", "", "pfz=0xfffe20000", "stack_guard=0x3e904b9d933400d8", "malloc_entropy=0x1ce1cb60143e9ae2,0x14a446d70981402f", "ptr_munge=0xbc6a0e7960ea50b5", "main_stack=0x16ee04000,0x7fc000,0x16ae04000,0x4000000", "executable_file=0x1a0100000d,0x299d861", "dyld_file=0x1a0100000d,0xfffffff000b21c0", "executable_cdhash=6f1837ecb9f14aad20db3f86f227a546b8d03cbc", "executable_boothash=c83eba56b40c88b84d6cd240494479838e9222d3", "th_port=0x103", "security_config=0x0", "", "", "", "", "", "", ""]
+[spawn] PASS env equals plan exactly, nothing inherited: env part ["PATH=/usr/bin:/bin", "STACKLY_PLAN_VALUE=sp ace ü 空 $(touch pwned-env) `id`"]
+[spawn] PASS cwd is the plan cwd (addchdir_np): Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a")
+[spawn] PASS signal mask empty (SETSIGMASK): p_sigmask 0x0
+[spawn] PASS SETSIGDEF: child ignores only the kernel default-ignore set (SIGPIPE, SIGHUP back to default): child p_sigignore 0x18488000 == default-ignore set 0x18488000 (SIGURG|SIGCHLD|SIGIO|SIGWINCH|SIGINFO); parent 0x18489001
+[spawn] PASS no caught signal before exec runs: p_sigcatch 0x0
+[exit] PASS kqueue NOTE_EXIT|NOTE_EXITSTATUS registers on suspended child: Ok(())
+[suspend] PASS SIGCONT resumes: child serves /ready 200: port 54734
+[suspend] PASS status leaves SSTOP after SIGCONT: pbi_status 2
+[pidinfo] PASS start time unchanged by suspend/resume: 1792315325.267546
+[suspend] PASS user time > 0 after resume: Ok((30550, 58767))
+[spawn] PASS argv-serve.json equals plan args exactly: label arg Some("--label=$(touch pwned); touch pwned2 `touch pwned3` \"q\" 'q' | & > ü 空 * ~")
+[spawn] PASS no file created by shell interpretation: []
+[lock] PASS after daemon closes its fd, lock still Held by child: Held
+[fds] PASS holds_file(running child, lock) == Yes after daemon closed copy: 
+[signal] PASS SIGCONT to running process is harmless: 
+[exit] PASS NOTE_EXIT event carries exit status for child (SIGTERM -> exit 0): Some((17282, 2214592512, 0)) -> exited(0)
+[exit] PASS waitpid(WNOHANG) after NOTE_EXIT reaps: Some("exited(0)")
+[lock] PASS lock Free after child exit: Free
+[signal] PASS kill after reap -> ESRCH: Err(3)
+[pidinfo] PASS bsdinfo after reap -> error: Some("errno 3 (No such process (os error 3))")
+[suspend] PASS discard: SIGKILL on suspended child -> NOTE_EXIT signaled(9): Some((17302, 2214592512, 9)) -> signaled(9)
+[suspend] PASS discard: waitpid reaps signaled(9): Some("signaled(9)")
+[suspend] PASS discard: child never ran (user time 0, no argv file, no output): user_time 0 argv exists false
+[lock] PASS lock Free after discard: Free
+[spawn] NOTE daemon with fds 0,1,2 closed (with dup to fd >= 10), exit Some("exited(0)"): daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 1, 2, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: dev 16777229 ino 43637024 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/cf0/stdout.spool; child fd 2: dev 16777229 ino 43637025 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/cf0/stderr.spool; child fd 3: dev 16777229 ino 43637023 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/cf0/instance.lock; verdict=ok
+[spawn] PASS daemon with closed fds 0-2: child fds 0..3 are /dev/null, spools, lock: daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 1, 2, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: dev 16777229 ino 43637024 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/cf0/stdout.spool; child fd 2: dev 16777229 ino 43637025 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/cf0/stderr.spool; child fd 3: dev 16777229 ino 43637023 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/cf0/instance.lock; verdict=ok
+[spawn] NOTE daemon with fds 0,1,2 closed (naive, no dup), exit Some("exited(0)"): daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: missing; child fd 2: missing; child fd 3: dev 549339365 ino 336 /dev/null; verdict=wrong
+[spawn] PASS naive mapping without dup to >= 10 is wrong (hazard shown): daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: missing; child fd 2: missing; child fd 3: dev 549339365 ino 336 /dev/null; verdict=wrong
+[spawn] PASS missing executable: posix_spawn returns ENOENT, no child: Err("errno 2 (No such file or directory (os error 2))")
+[spawn] PASS non-executable file: posix_spawn returns EACCES, no child: Err("errno 13 (Permission denied (os error 13))")
+[spawn] PASS missing cwd: posix_spawn returns ENOENT from addchdir_np, no child: Err("errno 2 (No such file or directory (os error 2))")
+[spawn] PASS helper: stdin pipe written then closed, helper reads to EOF and exits 0: Some("exited(0)") stdout "initialized /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/init/fresh-data\n" stderr ""
+[spawn] PASS helper: token.sha256 equals SHA-256 of the stdin bytes: 35bb65be849f09ce0e6d308e7010dbfcc895bceec7ef4a0e050219acd7617846 vs 35bb65be849f09ce0e6d308e7010dbfcc895bceec7ef4a0e050219acd7617846
+[spawn] NOTE helper (InitStep) held the lock on fd 3 while running: Yes
+[orphan] NOTE daemon-a (running) pid 17320 exited Some("exited(0)"): daemon-a: spawned 17321 (running), exiting without reaping
+[orphan] NOTE identity recorded by daemon-a while suspended: {"start": "1792315326.054120", "pid": "17321", "status": "4", "lockdev": "16777229", "sid": "17321", "exe": "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "boot": "5E52ED28-4032-431E-9E64-B599BA083C49", "lockino": "43637055", "ppid": "17320"}
+[pidinfo] PASS non-child: bsdinfo readable, ppid 1 (launchd), not our child: ppid 1 pgid 17321 uid 502 status 2
+[pidinfo] PASS non-child: start time equals the one recorded at spawn by the old daemon: 1792315326.054120 vs 1792315326.054120
+[pidinfo] PASS non-child: uid matches current user, pgid == pid: 
+[exe] PASS non-child: proc_pidpath equals canonical path recorded at spawn: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[session] PASS non-child in another session: getsid works and equals recorded sid: getsid Ok(17321), our sid 17275
+[boot] PASS boot id read by old daemon equals ours: 5E52ED28-4032-431E-9E64-B599BA083C49 vs 5E52ED28-4032-431E-9E64-B599BA083C49
+[fds] PASS non-child: holds_file(lock inode) == Yes after old daemon exited: fds Ok([(0, 1), (1, 1), (2, 1), (3, 1), (4, 2), (5, 2), (6, 2)])
+[lock] PASS flock inherited at fd 3 survives the parent's exit: probe_lock == Held: Held
+[orphan] PASS orphan keeps serving after its parent died: 
+[spool] PASS spool keeps growing while no daemon holds it: 229 -> 10329 bytes in 1 s
+[spool] PASS new daemon reopens the orphan's spool (O_RDONLY|O_NOFOLLOW), SEEK_DATA 0, reads its output: SEEK_DATA Ok(0), first bytes "listening on 127.0.0.1:54742\nlog line 0000000000"
+[exit] NOTE non-child: register NOTE_EXIT|NOTE_EXITSTATUS -> Ok(())
+[exit] PASS non-child: register NOTE_EXIT works: Ok(())
+[exit] PASS start time re-read after registration still matches: 
+[signal] PASS non-parent in another session can signal (SIGTERM): Ok(())
+[exit] PASS non-child: NOTE_EXIT fires: Some((17321, 2147483648, 0))
+[exit] NOTE non-child NOTE_EXIT data (no status for non-child): Some(0)
+[exit] NOTE non-child NOTE_EXIT|NOTE_EXITSTATUS event: Some((17321, 2214592512, 0)) -> exited(0)
+[lock] PASS lock Free once the orphan exits: Free
+[orphan] PASS launchd reaps the orphan (bsdinfo -> ESRCH): Some("errno 3 (No such process (os error 3))")
+[orphan] NOTE daemon-a (suspended) pid 17379 exited Some("exited(0)"): daemon-a: spawned 17380 (suspended), exiting without reaping
+[orphan] PASS suspended orphan: still SSTOP after parent exit, ppid 1: status 4 ppid 1
+[orphan] PASS suspended orphan: no pending signal (no SIGHUP from orphaning): p_siglist 0x0
+[orphan] PASS suspended orphan: never ran (user time 0, no argv file): Ok((0, 998))
+[lock] PASS suspended orphan holds lock (Held): Held
+[fds] PASS suspended orphan: holds_file == Yes: 
+[orphan] PASS continue_stopped from a new daemon (non-parent SIGCONT) resumes it: Ok(())
+[orphan] PASS resumed orphan stops on SIGTERM, NOTE_EXIT seen: Some((17380, 2147483648, 0))
+[zombie] PASS zombie child: PROC_PIDTBSDINFO gives ESRCH (inspect -> None) while kinfo p_stat is SZOMB and the pid stays taken: bsdinfo Err("errno 3 (No such process (os error 3))"), kinfo p_stat Ok(5), kill(0) Ok(())
+[zombie] NOTE zombie: proc_pidpath Err("errno 3 (No such process (os error 3))"), PROC_PIDLISTFDS Err("errno 3 (No such process (os error 3))"), getsid Err("errno 3 (No such process (os error 3))"), kill(0) Ok(()), kinfo p_stat Ok(5)
+[exit] PASS register on an exited-but-unreaped child: ESRCH or an immediate event: register Err("errno 3 (No such process (os error 3))"), event None
+[exit] PASS waitpid(WNOHANG) reaps the zombie with its status: Some("exited(0)")
+[signal] PASS kill(zombie, 0) succeeded before reap; after reap ESRCH: Err(3)
+[pidinfo] PASS absent pid: bsdinfo ESRCH: Some("errno 3 (No such process (os error 3))")
+[exe] PASS absent pid: proc_pidpath fails: Some("errno 3 (No such process (os error 3))")
+[session] PASS absent pid: getsid ESRCH: Some("errno 3 (No such process (os error 3))")
+[exit] PASS absent pid: kqueue register ESRCH: 
+[fds] PASS absent pid: PROC_PIDLISTFDS fails: Some("errno 3 (No such process (os error 3))")
+[pidinfo] NOTE pid 1 (root launchd): bsdinfo Err("errno 1 (Operation not permitted (os error 1))")
+[fds] PASS other user's process: PROC_PIDLISTFDS refused (maps to Unreadable): Some("errno 1 (Operation not permitted (os error 1))") -> holds_file Unreadable(1)
+[exe] NOTE pid 1: proc_pidpath Ok("/sbin/launchd")
+[session] NOTE pid 1: getsid Ok(1)
+[pidinfo] NOTE pid 1 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781983, 398969)), pidpath ok, getsid Ok(1), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 101 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 286109)), pidpath ok, getsid Ok(101), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 104 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 321570)), pidpath ok, getsid Ok(104), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 106 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 352171)), pidpath ok, getsid Ok(106), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 107 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 352492)), pidpath ok, getsid Ok(107), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 111 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 353724)), pidpath ok, getsid Ok(111), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] PASS other users' processes: PROC_PIDTBSDINFO refused with EPERM for all of them: 168 of 168 refused
+[pidinfo] PASS other users' processes: sysctl KERN_PROC_PID still gives uid and start time: 168 of 168 readable
+[pidinfo] PASS kinfo_proc start time and uid equal PROC_PIDTBSDINFO for our own process: kinfo 1792315324.946766 uid 502, bsdinfo 1792315324.946766 uid 502
+[exe] NOTE darwin user temp /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/ canonicalizes to /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T
+[exe] PASS spawn via /var/... spelling: proc_pidpath returns the canonical /private/var/... path: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[exe] PASS spawn via a symlink: proc_pidpath returns the target, not the link: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[exe] NOTE via symlink argv[0] stays Some("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/paths/fake-link")
+[exe] PASS spawn via NFD spelling of an NFC path: proc_pidpath returns the stored (NFC) name: Ok(176) (nfd bytes 180, nfc bytes 176)
+[exe] NOTE executable renamed while process lives: proc_pidpath Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/paths/renamed-fake"); after unlink: Err("errno 2 (No such file or directory (os error 2))")
+[exe] PASS rename/unlink of the executable never yields the original recorded path by accident: 
+[boot] PASS sysctlbyname(kern.bootsessionuuid) is a UUID, stable across reads, equals sysctl(8): 5E52ED28-4032-431E-9E64-B599BA083C49 (case: upper)
+[boot] NOTE stored form (lowercase) 5e52ed28-4032-431e-9e64-b599ba083c49
+[boot] NOTE kern.boottime { sec = 1791781981, usec = 545776 } Mon Oct 12 12:13:01 2026
+[boot] NOTE a new value after a reboot was NOT exercised (needs a reboot of this Mac)
+[group] NOTE proc_listpgrppids returned 3 (a count of pids, not bytes)
+[group] PASS proc_listpids(PROC_PGRP_ONLY) lists leader + 2 children: Ok([17413, 17422, 17423])
+[group] PASS proc_listpgrppids agrees: Ok([17413, 17422, 17423])
+[group] PASS after the leader exits and is reaped, the leftover child is still listed by pgid: leader Some("exited(0)"), members Ok([17428])
+[group] NOTE leftover 17428: ppid 1 pgid 17426 (reparented to launchd)
+[group] PASS group empty after kill(-pgid, SIGKILL): Ok([])
+[signal] PASS helper group: fake (exec'd over sh) + sleep share the group: members [17432, 17433]
+[signal] PASS kill(-pgid, SIGTERM): both ignore it for the 5 s grace: members [17432, 17433], output Some("ignoring SIGTERM")
+[signal] PASS kill(-pgid, SIGKILL): helper exits signaled(9): Some("signaled(9)")
+[signal] PASS no group member survives the group SIGKILL: Ok([])
+[lock] PASS open(O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC, 0600) makes a regular 0600 file owned by us: mode 100600 uid 502
+[lock] PASS lock fd has FD_CLOEXEC: 
+[lock] PASS flock(LOCK_EX|LOCK_NB) acquires: 
+[lock] PASS a second open description in the same process gets EWOULDBLOCK (probe while held = Held): Err("errno 35 (Resource temporarily unavailable (os error 35))")
+[lock] PASS O_NOFOLLOW refuses a symlinked lock path with ELOOP: Err("errno 62 (Too many levels of symbolic links (os error 62))")
+[lock] PASS LOCK_UN on the daemon's copy releases the lock the child inherited (why spec forbids LOCK_UN): before Held, after LOCK_UN Free, child alive true
+[lock] PASS descendant that inherited fd 3 keeps the lock after the main process exits: descendant 17653, probe Held
+[lock] PASS after instance.lock is deleted, a new lock file is lockable although the old holder lives (why the observation guard exists): Ok(())
+[spool] NOTE page size (sysconf _SC_PAGESIZE) 16384
+[spool] NOTE f_bsize alignment (as spec 0010 says): align 4096: 4 MB appended, 40 punches; allocated 233472 B; SEEK_DATA Ok(294912) (released 3997696), SEEK_HOLE from it Ok(299008), bytes there [0, 0, 0, 0, 0, 0, 0, 0]; 37 of 40 SEEK_DATA answers were stale
+[spool] PASS f_bsize (4 KiB) alignment: punched blocks inside a 16 KiB page that is still written come back as zero-filled data: align 4096: 4 MB appended, 40 punches; allocated 233472 B; SEEK_DATA Ok(294912) (released 3997696), SEEK_HOLE from it Ok(299008), bytes there [0, 0, 0, 0, 0, 0, 0, 0]; 37 of 40 SEEK_DATA answers were stale
+[spool] PASS page (16 KiB) alignment: allocation stays small and SEEK_DATA == first unreleased byte after every punch: align 16384: 4 MB appended, 40 punches; allocated 4096 B; SEEK_DATA Ok(3997696) (released 3997696), SEEK_HOLE from it Ok(4000000), bytes there [97, 97, 97, 10, 97, 97, 97, 97]; 0 of 40 SEEK_DATA answers were stale
+[spool] NOTE no-punch control, stdout spool, 10 s at 2000 lines/s: max allocation beyond EOF 61440 B; samples size:allocated 25029:28672 50529:53248 76329:77824 102729:167936 128229:167936 153429:167936 179129:233472 204829:233472 229829:233472 255829:299008 281529:299008 307029:364544 333029:364544 358429:364544 383429:430080 409429:430080 419229:430080 460629:495616 481829:495616 507829:561152 518629:561152 563429:626688 588629:626688 614029:626688 639529:692224 664929:692224 690529:692224 715829:757760 741229:757760 766429:823296 792229:823296 817329:823296 843429:888832 868429:888832 894229:954368 919129:954368 945029:954368 970429:1019904 994929:1019904 1020929:1085440
+[spool] NOTE runtime root is under the darwin user temp folder: true
+[spool] NOTE fstatfs: f_bsize 4096 f_iosize 1048576 fstype apfs
+[spool] PASS create_spool again fails with EEXIST (O_EXCL): Err("errno 17 (File exists (os error 17))")
+[spool] PASS reader open O_NOFOLLOW refuses a symlink (ELOOP): 
+[spool] PASS spool is 0600: 600
+[spool] PASS SEEK_DATA on an empty file -> ENXIO: Err(6)
+[spool] PASS SEEK_DATA on a file with data at 0 -> 0: 
+[spool] FAIL F_PUNCHHOLE on an O_RDONLY descriptor: Err("errno 1 (Operation not permitted (os error 1))")
+[spool] NOTE F_PUNCHHOLE unaligned (offset 100, len 4096) on O_RDWR: Err("errno 22 (Invalid argument (os error 22))")
+[spool] PASS F_PUNCHHOLE aligned to f_bsize on O_RDWR frees blocks, keeps st_size: Ok(()); st_blocks 64 -> 40, st_size 32768
+[spool] PASS SEEK_DATA after punching 3 blocks -> 3 * f_bsize: Ok(12288)
+[spool] PASS a punched range reads back as zeros: 
+[spool] PASS SEEK_DATA on a fully punched file -> ENXIO: Err(6)
+[spool] NOTE [Bsize alignment 4096] t=15s allocated now 1531904 B (max 2256896 B)
+[spool] NOTE [Bsize alignment 4096] t=30s allocated now 1003520 B (max 2560000 B)
+[spool] NOTE [Bsize alignment 4096] t=45s allocated now 2523136 B (max 3022848 B)
+[spool] NOTE [Bsize alignment 4096] t=60s allocated now 2031616 B (max 3272704 B)
+[spool] NOTE [Bsize alignment 4096] load 60 s at 2000 lines/s: written [6009755, 6009700] B; stdout: 60096 log lines, 1 other lines, 0 bad, read 6009629 B, released 6008832 B, max allocated 1638400 B, max allocated beyond unreleased data 1634304 B; stderr: 60096 log lines, 0 other lines, 0 bad, read 6009600 B, released 6008832 B, max allocated 1634304 B, max allocated beyond unreleased data 1630208 B; fake exit Some("exited(0)")
+[spool] PASS [Bsize alignment 4096] punching while the child appends never failed: None
+[spool] PASS [Bsize alignment 4096] every log line intact and in sequence (100 bytes, seq +2 per stream): 
+[spool] PASS [Bsize alignment 4096] the fake really produced the load: 120193 lines vs 120000 expected
+[spool] FAIL [Bsize alignment 4096] allocated spool blocks stay under 2 MiB (both streams together): max allocated 3272704 B over 60 s
+[spool] FAIL [Bsize alignment 4096] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(32768) vs released 6008832
+[spool] FAIL [Bsize alignment 4096] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(32768) vs released 6008832
+[spool] FAIL [Bsize alignment 4096] resume from first data, drop to first newline, next line is whole: first data 32768, dropped 400 B, line ""
+[spool] NOTE [Page alignment 16384] t=15s allocated now 1253376 B (max 2039808 B)
+[spool] NOTE [Page alignment 16384] t=30s allocated now 368640 B (max 2105344 B)
+[spool] NOTE [Page alignment 16384] t=45s allocated now 1482752 B (max 2105344 B)
+[spool] NOTE [Page alignment 16384] t=60s allocated now 630784 B (max 2105344 B)
+[spool] NOTE [Page alignment 16384] load 60 s at 2000 lines/s: written [6016255, 6016100] B; stdout: 60129 log lines, 1 other lines, 0 bad, read 6012929 B, released 6012928 B, max allocated 1052672 B, max allocated beyond unreleased data 1044480 B; stderr: 60158 log lines, 0 other lines, 0 bad, read 6015800 B, released 6012928 B, max allocated 1052672 B, max allocated beyond unreleased data 1044480 B; fake exit Some("exited(0)")
+[spool] PASS [Page alignment 16384] punching while the child appends never failed: None
+[spool] PASS [Page alignment 16384] every log line intact and in sequence (100 bytes, seq +2 per stream): 
+[spool] PASS [Page alignment 16384] the fake really produced the load: 120288 lines vs 120000 expected
+[spool] FAIL [Page alignment 16384] allocated spool blocks stay under 2 MiB (both streams together): max allocated 2105344 B over 60 s
+[spool] PASS [Page alignment 16384] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(6012928) vs released 6012928
+[spool] PASS [Page alignment 16384] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(6012928) vs released 6012928
+[spool] PASS [Page alignment 16384] resume from first data, drop to first newline, next line is whole: first data 6012928, dropped 1 B, line "log line 0000120258 on stdout .........."
+[cleanup] PASS no spawned process left: leftovers []
+== done: 6 failing check(s) ["spool F_PUNCHHOLE on an O_RDONLY descriptor", "spool [Bsize alignment 4096] allocated spool blocks stay under 2 MiB (both streams together)", "spool [Bsize alignment 4096] SEEK_DATA after the run == first unreleased block (first_data_offset)", "spool [Bsize alignment 4096] SEEK_DATA after the run == first unreleased block (first_data_offset)", "spool [Bsize alignment 4096] resume from first data, drop to first newline, next line is whole", "spool [Page alignment 16384] allocated spool blocks stay under 2 MiB (both streams together)"] ==
+exit 1

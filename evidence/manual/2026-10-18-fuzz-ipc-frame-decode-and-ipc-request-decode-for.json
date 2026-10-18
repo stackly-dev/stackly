@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a14e48-2fd7-7507-a78e-5e3545c83443",
+  "covers": [
+    "NFR-009",
+    "VAL-017"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Fuzz ipc_frame_decode and ipc_request_decode for 5 minutes each on this Mac",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "cargo xtask fuzz run runs each IPC fuzz target for 300 seconds with the pinned nightly and cargo-fuzz and finds no crash.",
+  "actual": "no crash in either target and fuzz/artifacts/ empty; ipc_frame_decode: 4257637 runs in 301 s (14144 exec/s), cov 78, ft 232, corpus 53 inputs, peak RSS 588 MB; ipc_request_decode: 3400828 runs in 301 s (11298 exec/s), cov 3796, ft 10904, corpus 2792 inputs, peak RSS 462 MB",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 5fb8abe with a clean tree, install the pinned fuzz toolchain: `rustup toolchain install nightly-2026-10-17 --profile minimal` (rustc 1.101.0-nightly 5d8fec066 2026-10-16) and `cargo install --locked cargo-fuzz --version 0.13.2`",
+    "run `cargo xtask fuzz run ipc_frame_decode` and `cargo xtask fuzz run ipc_request_decode` side by side with the default --time 300; xtask checks both pins and fuzz/Cargo.lock, then runs libFuzzer with -max_len=65536 -max_total_time=300 on fuzz/corpus/<target> plus the committed fuzz/seeds/<target> (11 and 20 seeds), built by cargo-fuzz with AddressSanitizer; the runs went from 2026-10-18T05:39:41Z to 05:44:45Z",
+    "check that both commands exit 0 with `ran for 300 s without a crash`, that fuzz/artifacts/ holds no input for either target, and read the libFuzzer final stats",
+    "keep the full ipc_frame_decode log and the head and tail of the ipc_request_decode log in this record's files folder"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5)",
+  "startedAt": "2026-10-18T09:11:56.118749Z",
+  "finishedAt": "2026-10-18T09:12:34.528691Z",
+  "evidencePath": "evidence/manual/files/01a14e48-2fd7-7507-a78e-5e3545c83443/",
+  "context": {
+    "sourceCommit": "5fb8abe2559dacd9fd4506c7f1e0f3f692358194",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

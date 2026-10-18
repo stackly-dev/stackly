@@ -23,11 +23,21 @@ pub(crate) const KIND: &str = "Provider";
 
 /// `provider.yaml`.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "json-schema",
+    schemars(
+        rename = "ProviderManifest",
+        title = "Stackly provider manifest (stackly/v1alpha1)"
+    )
+)]
 pub(crate) struct RawManifest {
     #[expect(dead_code, reason = "checked by the header stage before this decode")]
+    #[cfg_attr(feature = "json-schema", schemars(extend("const" = API_VERSION)))]
     pub(crate) api_version: String,
     #[expect(dead_code, reason = "checked by the header stage before this decode")]
+    #[cfg_attr(feature = "json-schema", schemars(extend("const" = KIND)))]
     pub(crate) kind: String,
     pub(crate) metadata: RawMetadata,
     pub(crate) compatibility: RawCompatibility,
@@ -36,6 +46,7 @@ pub(crate) struct RawManifest {
     pub(crate) capabilities: RawCapabilities,
     pub(crate) resources: RawResources,
     #[serde(default)]
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::MANIFEST_NAME }, "maxProperties" = 16)))]
     pub(crate) config_files: BTreeMap<String, RawConfigFile>,
     pub(crate) lifecycle: RawLifecycle,
     pub(crate) readiness: RawReadiness,
@@ -48,48 +59,74 @@ pub(crate) struct RawManifest {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Metadata"))]
 pub(crate) struct RawMetadata {
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::PROVIDER_NAME), length(max = 127))
+    )]
     pub(crate) id: String,
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::NAME), length(max = 63))
+    )]
     pub(crate) software: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 64)))]
     pub(crate) display_name: String,
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::REVISION_LABEL), length(max = 64))
+    )]
     pub(crate) revision: String,
     pub(crate) category: String,
     pub(crate) description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Compatibility"))]
 pub(crate) struct RawCompatibility {
     pub(crate) platforms: Vec<RawPlatform>,
     #[serde(default)]
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::RUNTIME_LINE }, "additionalProperties" = { "type": "array", "items": { "type": "string", "pattern": super::json_schema::RUNTIME_LINE } })))]
     pub(crate) line_compatibility: BTreeMap<String, Vec<String>>,
     pub(crate) data_marker: Option<RawDataMarker>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Platform"))]
 pub(crate) struct RawPlatform {
     pub(crate) os: String,
     pub(crate) arch: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "DataMarker"))]
 pub(crate) struct RawDataMarker {
     pub(crate) file: String,
     pub(crate) pattern: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Runtime"))]
 pub(crate) struct RawRuntime {
     pub(crate) executable: String,
     pub(crate) execution_mode: String,
 }
 
 #[derive(Debug, Default, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Capabilities"))]
 pub(crate) struct RawCapabilities {
     #[serde(default)]
     pub(crate) reload: bool,
@@ -106,24 +143,36 @@ pub(crate) struct RawCapabilities {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Resources"))]
 pub(crate) struct RawResources {
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::ENDPOINT_NAME }, "minProperties" = 1, "maxProperties" = 16)))]
     pub(crate) endpoints: BTreeMap<String, RawEndpoint>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Endpoint"))]
 pub(crate) struct RawEndpoint {
     pub(crate) transport: String,
     pub(crate) purpose: String,
     pub(crate) default_host: Option<String>,
+    #[cfg_attr(feature = "json-schema", schemars(range(min = 1, max = 65535)))]
     pub(crate) default_port: Option<u64>,
     pub(crate) socket_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "ConfigFile"))]
 pub(crate) struct RawConfigFile {
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::TEMPLATE_PATH))
+    )]
     pub(crate) template: String,
     pub(crate) format: String,
     pub(crate) destination: String,
@@ -132,7 +181,9 @@ pub(crate) struct RawConfigFile {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Lifecycle"))]
 pub(crate) struct RawLifecycle {
     #[serde(default)]
     pub(crate) initialize: Vec<RawStep>,
@@ -143,7 +194,9 @@ pub(crate) struct RawLifecycle {
 
 /// One initialize step; `primitive` picks which other fields belong.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Step"))]
 pub(crate) struct RawStep {
     pub(crate) primitive: String,
     pub(crate) file: Option<String>,
@@ -152,6 +205,7 @@ pub(crate) struct RawStep {
     pub(crate) executable: Option<String>,
     pub(crate) args: Option<Vec<String>>,
     pub(crate) cwd: Option<String>,
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::ENV_KEY }, "maxProperties" = 32)))]
     pub(crate) env: Option<BTreeMap<String, String>>,
     pub(crate) stdin: Option<RawStdin>,
     pub(crate) timeout_seconds: Option<u64>,
@@ -159,24 +213,31 @@ pub(crate) struct RawStep {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Stdin"))]
 pub(crate) struct RawStdin {
     pub(crate) secret: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Command"))]
 pub(crate) struct RawCommand {
     pub(crate) executable: String,
     #[serde(default)]
     pub(crate) args: Vec<String>,
     pub(crate) cwd: Option<String>,
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::ENV_KEY }, "maxProperties" = 32)))]
     #[serde(default)]
     pub(crate) env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Stop"))]
 pub(crate) struct RawStop {
     pub(crate) strategy: String,
     pub(crate) signal: Option<String>,
@@ -185,7 +246,9 @@ pub(crate) struct RawStop {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Reload"))]
 pub(crate) struct RawReload {
     #[serde(default)]
     pub(crate) render: Vec<String>,
@@ -198,7 +261,9 @@ pub(crate) struct RawReload {
 
 /// One probe; `type` picks which other fields belong.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Probe"))]
 pub(crate) struct RawProbe {
     #[serde(rename = "type")]
     pub(crate) kind: String,
@@ -210,14 +275,18 @@ pub(crate) struct RawProbe {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "StatusRange"))]
 pub(crate) struct RawStatusRange {
     pub(crate) min: u16,
     pub(crate) max: u16,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Readiness"))]
 pub(crate) struct RawReadiness {
     pub(crate) probe: RawProbe,
     pub(crate) interval_milliseconds: Option<u64>,
@@ -225,7 +294,9 @@ pub(crate) struct RawReadiness {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Health"))]
 pub(crate) struct RawHealth {
     pub(crate) probe: Option<RawProbe>,
     pub(crate) interval_seconds: Option<u64>,
@@ -234,7 +305,9 @@ pub(crate) struct RawHealth {
 }
 
 #[derive(Debug, Default, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Timeouts"))]
 pub(crate) struct RawTimeouts {
     pub(crate) init_seconds: Option<u64>,
     pub(crate) readiness_seconds: Option<u64>,
@@ -244,38 +317,56 @@ pub(crate) struct RawTimeouts {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Logs"))]
 pub(crate) struct RawLogs {
     #[serde(default)]
     pub(crate) files: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Backup"))]
 pub(crate) struct RawBackup {
     pub(crate) cold: Option<RawColdBackup>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "ColdBackup"))]
 pub(crate) struct RawColdBackup {
     pub(crate) paths: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Permissions"))]
 pub(crate) struct RawPermissions {
     pub(crate) managed_filesystem: Vec<String>,
     pub(crate) execute_runtime_binary: bool,
     #[serde(default)]
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::MANIFEST_NAME }, "maxProperties" = 16)))]
     pub(crate) additional_executables: BTreeMap<String, String>,
 }
 
 /// `schemas/settings.schema.json`.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(
+    feature = "json-schema",
+    schemars(
+        rename = "SettingsSchema",
+        title = "Stackly provider settings schema (v1alpha1 dialect)"
+    )
+)]
 pub(crate) struct RawSettingsSchema {
     #[serde(rename = "$schema")]
+    #[cfg_attr(feature = "json-schema", schemars(extend("const" = super::settings::SCHEMA_DIALECT)))]
     pub(crate) schema: String,
     pub(crate) title: String,
     pub(crate) description: Option<String>,
@@ -283,6 +374,7 @@ pub(crate) struct RawSettingsSchema {
     pub(crate) kind: String,
     #[serde(rename = "additionalProperties")]
     pub(crate) additional_properties: bool,
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::MANIFEST_NAME }, "maxProperties" = 64)))]
     pub(crate) properties: BTreeMap<String, RawSettingField>,
     #[serde(default)]
     pub(crate) required: Vec<String>,
@@ -290,7 +382,9 @@ pub(crate) struct RawSettingsSchema {
 
 /// One root field of the settings schema.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "json-schema", schemars(rename = "SettingField"))]
 pub(crate) struct RawSettingField {
     #[serde(rename = "type")]
     pub(crate) kind: String,
@@ -317,12 +411,15 @@ pub(crate) struct RawSettingField {
 
 /// The `items` of an array field: one level of object.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Items"))]
 pub(crate) struct RawItems {
     #[serde(rename = "type")]
     pub(crate) kind: String,
     #[serde(rename = "additionalProperties")]
     pub(crate) additional_properties: bool,
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::MANIFEST_NAME }, "maxProperties" = 16)))]
     pub(crate) properties: BTreeMap<String, RawItemField>,
     #[serde(default)]
     pub(crate) required: Vec<String>,
@@ -330,7 +427,9 @@ pub(crate) struct RawItems {
 
 /// One scalar field of an array item.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "json-schema", schemars(rename = "ItemField"))]
 pub(crate) struct RawItemField {
     #[serde(rename = "type")]
     pub(crate) kind: String,
@@ -349,7 +448,9 @@ pub(crate) struct RawItemField {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "json-schema", schemars(rename = "XStackly"))]
 pub(crate) struct RawXStackly {
     pub(crate) apply: Option<String>,
     pub(crate) visibility: Option<String>,
@@ -360,18 +461,45 @@ pub(crate) struct RawXStackly {
 
 /// `versions.json`, schema `stackly.provider-versions/v1`.
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "json-schema",
+    schemars(
+        rename = "ProviderVersions",
+        title = "Stackly provider versions (stackly.provider-versions/v1)"
+    )
+)]
 pub(crate) struct RawVersions {
+    #[cfg_attr(feature = "json-schema", schemars(extend("const" = super::versions::VERSIONS_SCHEMA)))]
     pub(crate) schema: String,
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::NAME), length(max = 63))
+    )]
     pub(crate) software: String,
     pub(crate) artifacts: Vec<RawArtifact>,
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Artifact"))]
 pub(crate) struct RawArtifact {
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::ARTIFACT_ID))
+    )]
     pub(crate) id: String,
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::RUNTIME_LINE))
+    )]
     pub(crate) line: String,
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::EXACT_VERSION), length(max = 64))
+    )]
     pub(crate) version: String,
     pub(crate) os: String,
     pub(crate) arch: String,
@@ -390,10 +518,13 @@ pub(crate) struct RawArtifact {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Blocked"))]
 pub(crate) struct RawBlocked {
     pub(crate) reason: String,
     pub(crate) owner: String,
+    #[cfg_attr(feature = "json-schema", schemars(pattern(super::json_schema::DATE)))]
     pub(crate) since: String,
 }
 

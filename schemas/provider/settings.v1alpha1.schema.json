@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Stackly provider settings schema (v1alpha1 dialect)",
+  "description": "`schemas/settings.schema.json`.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "https://json-schema.org/draft/2020-12/schema"
+    },
+    "additionalProperties": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "properties": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/SettingField"
+      },
+      "maxProperties": 64,
+      "propertyNames": {
+        "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+      }
+    },
+    "required": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "title": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "title",
+    "type",
+    "additionalProperties",
+    "properties"
+  ],
+  "$defs": {
+    "ItemField": {
+      "description": "One scalar field of an array item.",
+      "type": "object",
+      "properties": {
+        "default": true,
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enum": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "maxLength": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "maximum": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "minLength": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "minimum": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "title"
+      ]
+    },
+    "Items": {
+      "description": "The `items` of an array field: one level of object.",
+      "type": "object",
+      "properties": {
+        "additionalProperties": {
+          "type": "boolean"
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ItemField"
+          },
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+          }
+        },
+        "required": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "additionalProperties",
+        "properties"
+      ]
+    },
+    "SettingField": {
+      "description": "One root field of the settings schema.",
+      "type": "object",
+      "properties": {
+        "default": true,
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enum": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "items": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Items"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxItems": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "maxLength": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "maximum": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "minItems": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "minLength": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "minimum": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "x-stackly": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/XStackly"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "title"
+      ]
+    },
+    "XStackly": {
+      "type": "object",
+      "properties": {
+        "apply": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "managed": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "secret": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "visibility": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

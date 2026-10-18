@@ -1,7 +1,13 @@
-//! The source scan of `cargo xtask check-deps` (spec 0004, "Peta modul dan
-//! dependency"): library crates never read environment variables and never
-//! hardcode a machine path. Bins read `STACKLY_ROOT` once in `main`, and
-//! every other path comes from `DirectoryLayout`.
+//! The source scan of `cargo xtask check-deps`. Two rule sets, each for its
+//! own list of crates:
+//!
+//! - Library rules (spec 0004, "Peta modul dan dependency"): library crates
+//!   never read environment variables and never hardcode a machine path.
+//!   Bins read `STACKLY_ROOT` once in `main`, and every other path comes
+//!   from `DirectoryLayout`.
+//! - Socket rule (spec 0006, AC-5): the transport, the daemon, and the CLI
+//!   never name `TcpListener`, `TcpStream`, `TcpSocket`, or `UdpSocket`, as
+//!   a path or any other identifier, so no TCP or UDP socket is opened.
 //!
 //! Each crate is read along its module tree, starting at its lib and bin
 //! targets, so `tests/` and a file only a `#[cfg(test)] mod` loads are never
@@ -13,6 +19,8 @@
 //! `env::var_os`), or a `use` of such a name or of `env::*`. A function of
 //! the same name elsewhere, such as the macOS adapter's own `home_dir`, is
 //! not one. Compile time `env!` reads the build environment and is allowed.
+//! A socket name inside a string or a doc comment is not an identifier and
+//! passes.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,7 +34,7 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{Attribute, Expr, ExprLit, ImplItem, Item, Lit, Macro, Meta, Token, UseTree};
 
-/// The crates whose source is scanned.
+/// The crates whose source the library rules scan.
 pub const SCANNED: [&str; 5] = [
     "stackly-domain",
     "stackly-platform",
@@ -34,6 +42,12 @@ pub const SCANNED: [&str; 5] = [
     "stackly-protocol",
     "stackly-platform-macos",
 ];
+/// The crates whose source the socket rule scans.
+pub const SOCKET_SCANNED: [&str; 3] = ["stackly-ipc", "stacklyd", "stackly-cli"];
+/// The identifiers the socket rule refuses.
+const SOCKET_NAMES: [&str; 4] = ["TcpListener", "TcpStream", "TcpSocket", "UdpSocket"];
+/// The socket rule's message.
+const SOCKET_RULE: &str = "no tcp or udp sockets (spec 0006)";
 /// The `std::env` functions a library never calls.
 const ENV_READS: [&str; 6] = ["var", "var_os", "vars", "vars_os", "home_dir", "temp_dir"];
 /// Text a string literal in a library never holds.
@@ -45,25 +59,51 @@ const MACHINE_PATHS: [&str; 5] = [
     "/var/folders",
 ];
 
-/// Scans the lib and bin targets of `package`. Messages read
+/// Which rule sets apply to a crate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rules {
+    /// The library rules: no environment reads, no machine paths.
+    pub library: bool,
+    /// The socket rule: no TCP or UDP socket names.
+    pub sockets: bool,
+}
+
+impl Rules {
+    /// The rule sets for the crate called `name`.
+    #[must_use]
+    pub fn for_crate(name: &str) -> Self {
+        Self {
+            library: SCANNED.contains(&name),
+            sockets: SOCKET_SCANNED.contains(&name),
+        }
+    }
+
+    /// Whether any rule set applies.
+    #[must_use]
+    pub const fn any(self) -> bool {
+        self.library || self.sockets
+    }
+}
+
+/// Scans the lib and bin targets of `package` with `rules`. Messages read
 /// `<crate> <file>:<line>: <rule>`, with `file` relative to `root`.
 ///
 /// # Errors
 ///
 /// Returns an error when a source file cannot be read or parsed, or a
 /// `mod` declaration names a file that does not exist.
-pub fn scan_package(root: &Path, package: &Package) -> Result<Vec<String>> {
+pub fn scan_package(root: &Path, package: &Package, rules: Rules) -> Result<Vec<String>> {
     let entries: Vec<PathBuf> = package
         .targets
         .iter()
         .filter(|target| target.is_lib() || target.is_bin())
         .map(|target| target.src_path.clone().into_std_path_buf())
         .collect();
-    scan_crate(root, package.name.as_str(), &entries)
+    scan_crate(root, package.name.as_str(), &entries, rules)
 }
 
 /// Scans one crate from its root source files.
-fn scan_crate(root: &Path, name: &str, entries: &[PathBuf]) -> Result<Vec<String>> {
+fn scan_crate(root: &Path, name: &str, entries: &[PathBuf], rules: Rules) -> Result<Vec<String>> {
     let mut pending: Vec<(PathBuf, PathBuf)> = entries
         .iter()
         .map(|entry| (entry.clone(), parent(entry)))
@@ -80,6 +120,7 @@ fn scan_crate(root: &Path, name: &str, entries: &[PathBuf]) -> Result<Vec<String
         let syntax = syn::parse_file(&source)
             .with_context(|| format!("cannot parse {} as Rust", file.display()))?;
         let mut scan = Scan {
+            rules,
             file_dir: parent(&file),
             module_dir,
             inline: Vec::new(),
@@ -143,6 +184,7 @@ impl OutOfLine {
 }
 
 struct Scan {
+    rules: Rules,
     /// The folder of the file being scanned.
     file_dir: PathBuf,
     /// The folder the file's own child modules sit in.
@@ -159,6 +201,9 @@ impl Scan {
     }
 
     fn env_read(&mut self, span: proc_macro2::Span, name: &str) {
+        if !self.rules.library {
+            return;
+        }
         self.report(
             span,
             format!(
@@ -168,6 +213,9 @@ impl Scan {
     }
 
     fn check_text(&mut self, span: proc_macro2::Span, text: &str) {
+        if !self.rules.library {
+            return;
+        }
         if let Some(path) = MACHINE_PATHS.iter().find(|path| text.contains(*path)) {
             self.report(
                 span,
@@ -191,15 +239,31 @@ impl Scan {
         }
     }
 
-    /// Reads a macro body token by token: string literals, and
-    /// `env :: <name>` sequences.
+    /// Reports a TCP or UDP socket name, once per line.
+    fn check_ident(&mut self, ident: &proc_macro2::Ident) {
+        if !self.rules.sockets || !SOCKET_NAMES.iter().any(|socket| ident == socket) {
+            return;
+        }
+        let line = ident.span().start().line;
+        if !self
+            .findings
+            .iter()
+            .any(|(seen, rule)| *seen == line && rule == SOCKET_RULE)
+        {
+            self.findings.push((line, SOCKET_RULE.to_owned()));
+        }
+    }
+
+    /// Reads a macro body token by token: string literals, identifiers,
+    /// and `env :: <name>` sequences.
     fn check_tokens(&mut self, tokens: TokenStream) {
         let tokens: Vec<TokenTree> = tokens.into_iter().collect();
         for (index, token) in tokens.iter().enumerate() {
             match token {
                 TokenTree::Group(group) => self.check_tokens(group.stream()),
                 TokenTree::Literal(literal) => self.check_lit(&Lit::new(literal.clone())),
-                TokenTree::Ident(ident) if ident == "env" => {
+                TokenTree::Ident(ident) if ident != "env" => self.check_ident(ident),
+                TokenTree::Ident(_) => {
                     if let [
                         TokenTree::Punct(first),
                         TokenTree::Punct(second),
@@ -308,6 +372,11 @@ impl<'ast> Visit<'ast> for Scan {
 
     fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
         self.check_use(&node.tree, None);
+        visit::visit_item_use(self, node);
+    }
+
+    fn visit_ident(&mut self, node: &'ast proc_macro2::Ident) {
+        self.check_ident(node);
     }
 
     fn visit_lit(&mut self, node: &'ast Lit) {
@@ -396,13 +465,24 @@ mod tests {
     /// Writes `files` (relative path, source) under a fresh crate folder
     /// and scans it from `src/lib.rs` as `stackly-core`.
     fn scan(files: &[(&str, &str)]) -> Vec<String> {
+        scan_as("stackly-core", files)
+    }
+
+    /// Like [`scan`], as the crate `name` with its own rule sets.
+    fn scan_as(name: &str, files: &[(&str, &str)]) -> Vec<String> {
         let dir = tempfile::tempdir().unwrap();
         for (path, source) in files {
             let path = dir.path().join(path);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, source).unwrap();
         }
-        scan_crate(dir.path(), "stackly-core", &[dir.path().join("src/lib.rs")]).unwrap()
+        scan_crate(
+            dir.path(),
+            name,
+            &[dir.path().join("src/lib.rs")],
+            Rules::for_crate(name),
+        )
+        .unwrap()
     }
 
     const ENV_RULE: &str = "library crates never read the environment";
@@ -543,8 +623,13 @@ mod tests {
         fs::create_dir_all(dir.path().join("src")).unwrap();
         fs::write(dir.path().join("src/lib.rs"), "mod gone;\n").unwrap();
 
-        let err =
-            scan_crate(dir.path(), "stackly-core", &[dir.path().join("src/lib.rs")]).unwrap_err();
+        let err = scan_crate(
+            dir.path(),
+            "stackly-core",
+            &[dir.path().join("src/lib.rs")],
+            Rules::for_crate("stackly-core"),
+        )
+        .unwrap_err();
 
         assert!(
             err.to_string()
@@ -618,6 +703,82 @@ mod tests {
             found[1].starts_with("stackly-core src/lib.rs:2: ")
                 && found[1].contains("(`env::temp_dir`)")
         );
+    }
+
+    const SOCKET: &str = "no tcp or udp sockets (spec 0006)";
+
+    #[test]
+    fn every_tcp_or_udp_socket_name_is_reported_once_per_line() {
+        let found = scan_as(
+            "stackly-ipc",
+            &[(
+                "src/lib.rs",
+                "use std::net::{TcpListener, TcpStream};\n\
+                 pub fn a() { let _ = std::net::UdpSocket::bind(\"x\"); }\n\
+                 pub type S = tokio::net::TcpSocket;\n\
+                 pub fn b() -> String { format!(\"{:?}\", TcpStream::connect(\"x\")) }\n\
+                 macro_rules! open { () => { TcpListener::bind(\"x\") }; }\n",
+            )],
+        );
+
+        assert_eq!(
+            found,
+            [1, 2, 3, 4, 5].map(|line| format!("stackly-ipc src/lib.rs:{line}: {SOCKET}"))
+        );
+    }
+
+    #[test]
+    fn socket_names_in_strings_doc_comments_and_test_code_pass() {
+        let found = scan_as(
+            "stacklyd",
+            &[(
+                "src/lib.rs",
+                "//! Never a TcpListener, see AC-5.\n\
+                 /// Not a `UdpSocket` either.\n\
+                 pub const NOTE: &str = \"TcpStream\";\n\
+                 pub struct UnixOnly;\n\
+                 #[cfg(test)]\n\
+                 mod tests {\n\
+                     #[test]\n\
+                     fn tcp() { let _ = std::net::TcpListener::bind(\"127.0.0.1:0\"); }\n\
+                 }\n",
+            )],
+        );
+
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn each_rule_set_scans_only_its_own_crates() {
+        let files = [(
+            "src/lib.rs",
+            "pub fn a() { let _ = std::env::var(\"X\"); let _ = std::net::TcpStream::connect(\"x\"); }\n",
+        )];
+
+        let library = scan_as("stackly-core", &files);
+        assert_eq!(library.len(), 1, "{library:?}");
+        assert!(library[0].contains("library crates never read the environment"));
+
+        for name in SOCKET_SCANNED {
+            assert_eq!(
+                scan_as(name, &files),
+                [format!("{name} src/lib.rs:1: {SOCKET}")]
+            );
+        }
+        assert!(scan_as("stackly-fake-server", &files).is_empty());
+    }
+
+    #[test]
+    fn the_socket_rule_scans_the_transport_the_daemon_and_the_cli() {
+        assert_eq!(SOCKET_SCANNED, ["stackly-ipc", "stacklyd", "stackly-cli"]);
+        assert_eq!(
+            Rules::for_crate("stackly-ipc"),
+            Rules {
+                library: false,
+                sockets: true,
+            }
+        );
+        assert!(!Rules::for_crate("stackly-storage").any());
     }
 
     #[test]

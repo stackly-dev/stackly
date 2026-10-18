@@ -4,6 +4,8 @@ mod build_app;
 mod check_deps;
 mod codegen;
 mod evidence;
+mod fuzz;
+mod provider;
 mod runtime;
 
 use std::path::{Path, PathBuf};
@@ -16,12 +18,17 @@ Usage: cargo xtask <task>
 
 Tasks:
   codegen              Regenerate the Swift contract types, the JSON Schemas, the
-                       error catalog, and the contract digest
-  codegen --check      Fail when the committed generated files are out of date or
-                       the contract changed without a new protocol version
+                       error catalog, the contract digest, and each provider's
+                       versions.json from runtimes/inventory.toml
+  codegen --check      Fail when the committed generated files (contract, schemas,
+                       provider versions.json) are out of date or the contract
+                       changed without a new protocol version
   codegen --amend      Same as codegen, but rewrite the digest recorded for the
                        current protocol version (only for a version not on main)
   check-deps           Check crate dependency direction and the unsafe policy
+  provider check [<dir>...]
+                       Read and validate provider packages (default: every folder
+                       in providers/) on macOS; exit 1 with one line per problem
   build-app            Build the macOS app with xcodebuild (scheme Stackly, Debug)
   build-app --release  Same, with the Release configuration
   evidence run --kind <fixture|native> [--out <folder>] -- <command>
@@ -31,6 +38,12 @@ Tasks:
                --expected <sentence> [--subject <provider>@<version>]...
                        Start a NOT_RUN manual record in evidence/manual/
   evidence baseline    Record this Mac as the benchmark baseline (macOS, not a VM)
+  fuzz list            List the cargo-fuzz targets in fuzz/
+  fuzz build [<target>]
+                       Build the fuzz targets with the pinned nightly
+  fuzz seed            Rebuild fuzz/seeds/ from the shared fixtures
+  fuzz run <target> [--time <seconds>]
+                       Fuzz one target, 300 seconds by default
   runtime check        Check runtimes/inventory.toml and evidence/runtime/
   runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]
                        Download a runtime and print its pinned inventory values
@@ -72,7 +85,9 @@ fn run() -> Result<ExitCode> {
             done(build_app::run(&root, build_app::Configuration::Release))
         }
         ["evidence", rest @ ..] => evidence::run(&root, rest),
+        ["fuzz", rest @ ..] => done(fuzz::run(&root, rest)),
         ["runtime", rest @ ..] => runtime::run(&root, rest),
+        ["provider", rest @ ..] => provider::run(&root, rest),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");
             Ok(ExitCode::SUCCESS)

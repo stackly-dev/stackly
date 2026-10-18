@@ -6,7 +6,7 @@ use stackly_domain::{Os, Target};
 use crate::capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 use crate::clock::SystemClock;
 use crate::error::PlatformError;
-use crate::fs::{DirEntryInfo, FileInfo, Filesystem};
+use crate::fs::{DirEntryInfo, FileInfo, Filesystem, RemoveReport};
 use crate::identity::{UserId, UserIdentity};
 use crate::info::PlatformInfo;
 use crate::layout::{DirectoryResolver, RootSet};
@@ -77,6 +77,10 @@ impl Filesystem for UnsupportedPlatform {
     }
 
     fn write_file_atomic(&self, _path: &Path, _bytes: &[u8]) -> Result<(), PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
+
+    fn remove_tree(&self, _root: &Path, _relative: &Path) -> Result<RemoveReport, PlatformError> {
         Err(self.not_supported(PlatformCapability::Filesystem))
     }
 }
@@ -157,6 +161,10 @@ mod tests {
         assert!(is_not_supported(fs.read_dir(path), Fs));
         assert!(is_not_supported(fs.read_file_limited(path, 1), Fs));
         assert!(is_not_supported(fs.write_file_atomic(path, b"x"), Fs));
+        assert!(is_not_supported(
+            fs.remove_tree(path, Path::new("instances")),
+            Fs
+        ));
         assert!(is_not_supported(
             platform.identity().current_user(),
             Identity

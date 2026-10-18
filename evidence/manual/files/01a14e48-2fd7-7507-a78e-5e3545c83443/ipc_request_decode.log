@@ -1,0 +1,71 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.13s
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.07s
+     Running `fuzz/target/aarch64-apple-darwin/release/ipc_request_decode -artifact_prefix=fuzz/artifacts/ipc_request_decode/ -max_len=65536 -max_total_time=300 -print_final_stats=1 fuzz/corpus/ipc_request_decode fuzz/seeds/ipc_request_decode`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3541847975
+INFO: Loaded 1 modules   (106883 inline 8-bit counters): 106883 [0x1056ea240, 0x1057043c3), 
+INFO: Loaded 1 PC tables (106883 PCs): 106883 [0x1057043c8,0x1058a5bf8), 
+INFO:        0 files found in fuzz/corpus/ipc_request_decode
+INFO:       20 files found in fuzz/seeds/ipc_request_decode
+INFO: seed corpus: files: 20 min: 89b max: 2454b total: 6887b rss: 45Mb
+#21	INITED cov: 1946 ft: 3429 corp: 20/6887b exec/s: 0 rss: 47Mb
+	NEW_FUNC[1/2]: 0x000105562518 in _RINvNtCsccconMumvMc_10serde_json4read5errorNtB2_9SliceReadINtB2_9ReferenceShEEB4_+0x0 (ipc_request_decode:arm64+0x1005c6518)
+	NEW_FUNC[2/2]: 0x0001055629d0 in _RINvNtCsccconMumvMc_10serde_json4read5errorNtB2_9SliceReaduEB4_+0x0 (ipc_request_decode:arm64+0x1005c69d0)
+#22	NEW    cov: 1968 ft: 3511 corp: 21/7019b lim: 2454 exec/s: 0 rss: 49Mb L: 132/2454 MS: 1 ChangeByte-
+#23	NEW    cov: 1969 ft: 3530 corp: 22/7318b lim: 2454 exec/s: 0 rss: 49Mb L: 299/2454 MS: 1 InsertRepeatedBytes-
+#24	NEW    cov: 1979 ft: 3592 corp: 23/9103b lim: 2454 exec/s: 0 rss: 49Mb L: 1785/2454 MS: 1 EraseBytes-
+#25	NEW    cov: 1981 ft: 3597 corp: 24/9234b lim: 2454 exec/s: 0 rss: 49Mb L: 131/2454 MS: 1 ChangeBit-
+#26	NEW    cov: 1981 ft: 3598 corp: 25/9525b lim: 2454 exec/s: 0 rss: 49Mb L: 291/2454 MS: 1 EraseBytes-
+#27	NEW    cov: 1983 ft: 3602 corp: 26/9618b lim: 2454 exec/s: 0 rss: 49Mb L: 93/2454 MS: 1 CMP- DE: "\001\000\000\007"-
+#28	NEW    cov: 2000 ft: 3632 corp: 27/9675b lim: 2454 exec/s: 0 rss: 49Mb L: 57/2454 MS: 1 EraseBytes-
+#30	NEW    cov: 2003 ft: 3659 corp: 28/9837b lim: 2454 exec/s: 0 rss: 49Mb L: 162/2454 MS: 2 ChangeASCIIInt-PersAutoDict- DE: "\001\000\000\007"-
+#32	NEW    cov: 2005 ft: 3679 corp: 29/9995b lim: 2454 exec/s: 0 rss: 49Mb L: 158/2454 MS: 2 ChangeASCIIInt-ShuffleBytes-
+#33	NEW    cov: 2005 ft: 3689 corp: 30/10243b lim: 2454 exec/s: 0 rss: 49Mb L: 248/2454 MS: 1 CrossOver-
+#38	NEW    cov: 2006 ft: 3690 corp: 31/10997b lim: 2454 exec/s: 0 rss: 49Mb L: 754/2454 MS: 5 CopyPart-ChangeByte-CrossOver-ChangeBit-CopyPart-
+#39	REDUCE cov: 2006 ft: 3690 corp: 31/10985b lim: 2454 exec/s: 0 rss: 49Mb L: 150/2454 MS: 1 EraseBytes-
+#40	NEW    cov: 2009 ft: 3696 corp: 32/11042b lim: 2454 exec/s: 0 rss: 49Mb L: 57/2454 MS: 1 ShuffleBytes-
+#50	NEW    cov: 2015 ft: 3718 corp: 33/11188b lim: 2454 exec/s: 0 rss: 49Mb L: 146/2454 MS: 5 CMP-InsertRepeatedBytes-ShuffleBytes-ShuffleBytes-ChangeBinInt- DE: "\370\000\000\000\000\000\000\000"-
+#51	NEW    cov: 2015 ft: 3729 corp: 34/11389b lim: 2454 exec/s: 0 rss: 49Mb L: 201/2454 MS: 1 CopyPart-
+#52	NEW    cov: 2017 ft: 3743 corp: 35/11502b lim: 2454 exec/s: 0 rss: 49Mb L: 113/2454 MS: 1 ChangeByte-
+#53	NEW    cov: 2021 ft: 3749 corp: 36/11691b lim: 2454 exec/s: 0 rss: 49Mb L: 189/2454 MS: 1 InsertRepeatedBytes-
+#56	REDUCE cov: 2021 ft: 3751 corp: 37/11819b lim: 2454 exec/s: 0 rss: 50Mb L: 128/2454 MS: 3 ShuffleBytes-ChangeByte-EraseBytes-
+#60	NEW    cov: 2022 ft: 3753 corp: 38/12038b lim: 2454 exec/s: 0 rss: 50Mb L: 219/2454 MS: 4 CrossOver-ShuffleBytes-ChangeASCIIInt-InsertRepeatedBytes-
+#61	NEW    cov: 2027 ft: 3758 corp: 39/12305b lim: 2454 exec/s: 0 rss: 50Mb L: 267/2454 MS: 1 CrossOver-
+[... 16794 lines of libFuzzer NEW, REDUCE, and pulse progress omitted ...]
+"\000\000\000y" # Uses: 537
+"\377\377\377\377\377\377\377\020" # Uses: 552
+"\001\000\000\000\000\000\000\005" # Uses: 539
+"\027\000\000\000\000\000\000\000" # Uses: 466
+"\000\000\000\000\000\000\000>" # Uses: 483
+"\000\000\000\000\000\000\000\003" # Uses: 481
+"\366\377\377\377" # Uses: 414
+"\000\000\000\000\000\000\001\320" # Uses: 347
+"\001\000\000\000\000\000\000\"" # Uses: 315
+"\377\377\377k" # Uses: 275
+"\000\000\000\000\000\000\000t" # Uses: 241
+"\377\377\377\377\377\377\377\234" # Uses: 233
+"\221\002\000\000\000\000\000\000" # Uses: 287
+"\324\000\000\000\000\000\000\000" # Uses: 200
+"\377\377\377\377\377\377\377\310" # Uses: 182
+"\001\000\000\000\000\000\000J" # Uses: 145
+"\377\377\377q" # Uses: 139
+"\377\377\377\370" # Uses: 95
+"\000\000\000\000\000\000\000+" # Uses: 60
+"\000\000`.\373\005?\360" # Uses: 52
+"\001\000\000\000\000\000\000\265" # Uses: 46
+"\033\000" # Uses: 4
+###### End of recommended dictionary. ######
+Done 3400828 runs in 301 second(s)
+stat::number_of_executed_units: 3400828
+stat::average_exec_per_sec:     11298
+stat::new_units_added:          16535
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              462
+fuzz run: ipc_request_decode ran for 300 s without a crash

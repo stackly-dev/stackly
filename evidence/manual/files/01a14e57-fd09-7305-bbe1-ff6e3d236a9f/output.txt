@@ -1,0 +1,10 @@
+# Spec 0010 spike: held file check by dev and inode
+# Lines of the spike run that belong to this row (tags fds).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[fds] PASS holds_file(suspended child, lock) == Yes: PROC_PIDLISTFDS + PROC_PIDFDVNODEPATHINFO
+[fds] PASS holds_file(running child, lock) == Yes after daemon closed copy: 
+[fds] PASS non-child: holds_file(lock inode) == Yes after old daemon exited: fds Ok([(0, 1), (1, 1), (2, 1), (3, 1), (4, 2), (5, 2), (6, 2)])
+[fds] PASS suspended orphan: holds_file == Yes: 
+[fds] PASS absent pid: PROC_PIDLISTFDS fails: Some("errno 3 (No such process (os error 3))")
+[fds] PASS other user's process: PROC_PIDLISTFDS refused (maps to Unreadable): Some("errno 1 (Operation not permitted (os error 1))") -> holds_file Unreadable(1)

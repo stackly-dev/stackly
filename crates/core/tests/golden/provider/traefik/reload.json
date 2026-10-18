@@ -1,0 +1,47 @@
+{
+  "steps": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic/routes.yaml",
+        "content": {
+          "configFile": "routes",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Written by Stackly from the routes setting; edits are replaced.\nhttp:\n  routers:\n    \"api\":\n      rule: \"Host(`api.localhost`)\"\n      service: \"api\"\n      entryPoints:\n        - web\n    \"web-app\":\n      rule: \"Host(`app.localhost`) && PathPrefix(`/v1`)\"\n      service: \"web-app\"\n      entryPoints:\n        - web\n    \"docs\":\n      rule: \"Host(\\\"docs.localhost\\\") || PathPrefix(`/docs`)\"\n      service: \"docs\"\n      entryPoints:\n        - web\n  services:\n    \"api\":\n      loadBalancer:\n        servers:\n          - url: \"http://127.0.0.1:3000\"\n    \"web-app\":\n      loadBalancer:\n        servers:\n          - url: \"http://localhost:5173/\"\n    \"docs\":\n      loadBalancer:\n        servers:\n          - url: \"http://[::1]:8080/docs\"\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    }
+  ],
+  "action": {
+    "type": "none"
+  },
+  "verify": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14000,
+        "path": "/ping",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "500ms",
+    "attemptTimeout": "2s",
+    "deadline": "30s"
+  },
+  "deadline": "30s"
+}

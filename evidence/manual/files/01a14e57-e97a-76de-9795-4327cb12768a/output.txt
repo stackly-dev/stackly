@@ -1,0 +1,16 @@
+# Spec 0010 spike: PROC_PIDTBSDINFO on other users' processes
+# Lines of the spike run that belong to this row (tags pidinfo, fds).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[pidinfo] PASS non-child: bsdinfo readable, ppid 1 (launchd), not our child: ppid 1 pgid 17321 uid 502 status 2
+[pidinfo] NOTE pid 1 (root launchd): bsdinfo Err("errno 1 (Operation not permitted (os error 1))")
+[fds] PASS other user's process: PROC_PIDLISTFDS refused (maps to Unreadable): Some("errno 1 (Operation not permitted (os error 1))") -> holds_file Unreadable(1)
+[pidinfo] NOTE pid 1 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781983, 398969)), pidpath ok, getsid Ok(1), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 101 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 286109)), pidpath ok, getsid Ok(101), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 104 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 321570)), pidpath ok, getsid Ok(104), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 106 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 352171)), pidpath ok, getsid Ok(106), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 107 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 352492)), pidpath ok, getsid Ok(107), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] NOTE pid 111 uid 0: bsdinfo Err("errno 1 (Operation not permitted (os error 1))"), kinfo (uid, start s, us) Ok((0, 1791781988, 353724)), pidpath ok, getsid Ok(111), fds Err("errno 1 (Operation not permitted (os error 1))")
+[pidinfo] PASS other users' processes: PROC_PIDTBSDINFO refused with EPERM for all of them: 168 of 168 refused
+[pidinfo] PASS other users' processes: sysctl KERN_PROC_PID still gives uid and start time: 168 of 168 readable
+[pidinfo] PASS kinfo_proc start time and uid equal PROC_PIDTBSDINFO for our own process: kinfo 1792315324.946766 uid 502, bsdinfo 1792315324.946766 uid 502
