@@ -6,8 +6,9 @@ import Testing
 enum Fixture {
     /// The repository root, found from this file's path. Builds must never
     /// remap source paths (`-file-prefix-map`), or this breaks.
-    private static let repositoryRoot = URL(filePath: #filePath)
+    static let repositoryRoot = URL(filePath: #filePath)
         .deletingLastPathComponent()  // Fixture.swift
+        .deletingLastPathComponent()  // Support
         .deletingLastPathComponent()  // StacklyClientTests
         .deletingLastPathComponent()  // Tests
         .deletingLastPathComponent()  // swift
@@ -17,6 +18,11 @@ enum Fixture {
     /// or `ipc/index.json`.
     static func data(_ name: String) throws -> Data {
         try Data(contentsOf: repositoryRoot.appending(path: "protocols/fixtures/\(name)"))
+    }
+
+    /// Reads a file by its path from the repository root.
+    static func repositoryFile(_ path: String) throws -> Data {
+        try Data(contentsOf: repositoryRoot.appending(path: path))
     }
 
     /// Decodes one fixture in `protocols/fixtures/ipc/` with `StacklyJSON`.
