@@ -487,7 +487,7 @@ mod tests {
     const ARTIFACT: &str = "valkey-9.1.2-r1-macos-aarch64.tar.gz";
     /// Its release URL, on a host that never resolves: a network call would
     /// fail the test.
-    const RELEASE_URL: &str = "https://stackly.invalid/ojiepermana/stackly/releases/download/runtime/valkey-9.1.2-r1-macos-aarch64/valkey-9.1.2-r1-macos-aarch64.tar.gz";
+    const RELEASE_URL: &str = "https://stackly.invalid/stackly-dev/stackly/releases/download/runtime/valkey-9.1.2-r1-macos-aarch64/valkey-9.1.2-r1-macos-aarch64.tar.gz";
 
     /// `out/<ARTIFACT>` with gzip bytes and the `.sha256` beside it, as
     /// `build.sh` writes them; returns the artifact path, its digest, and a

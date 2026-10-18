@@ -552,7 +552,7 @@ mod tests {
         fs::create_dir_all(root.path().join("runtimes")).unwrap();
         fs::write(
             root.path().join(crate::runtime::inventory::INVENTORY_FILE),
-            "schema_version = 1\n\n[[artifact]]\nid = \"valkey-9.1.2-r1-macos-aarch64\"\norigin = \"maintainer\"\nattestation = \"https://github.com/ojiepermana/stackly-runtimes/attestations/1\"\n",
+            "schema_version = 1\n\n[[artifact]]\nid = \"valkey-9.1.2-r1-macos-aarch64\"\norigin = \"maintainer\"\nattestation = \"https://github.com/stackly-dev/runtimes/attestations/1\"\n",
         )
         .unwrap();
         let err = format!("{:#}", run(root.path()).err().unwrap());

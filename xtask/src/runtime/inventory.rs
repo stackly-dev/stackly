@@ -799,13 +799,13 @@ status = "available"
 origin = "maintainer"
 distribution = "stackly_hosted"
 format = "tar_gz"
-urls = ["https://github.com/ojiepermana/stackly/releases/download/runtime/postgresql-18.6-r1-macos-aarch64/postgresql-18.6-r1-macos-aarch64.tar.gz"]
+urls = ["https://github.com/stackly-dev/stackly/releases/download/runtime/postgresql-18.6-r1-macos-aarch64/postgresql-18.6-r1-macos-aarch64.tar.gz"]
 sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 size = 52428800
 archive_root = "postgresql-18.6-r1-macos-aarch64"
 source_url = "https://ftp.postgresql.org/pub/source/v18.6/postgresql-18.6.tar.bz2"
 source_sha256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-recipe = "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh"
+recipe = "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh"
 signing_policy = "adhoc_pipeline"
 license = "PostgreSQL"
 license_url = "https://www.postgresql.org/about/licence/"
@@ -1186,7 +1186,7 @@ upstream_signature = { kind = "none" }
         assert_one(
             &check(&edit(
                 MAINTAINER,
-                "recipe = \"ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh\"\n",
+                "recipe = \"stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh\"\n",
                 "",
             )),
             "postgresql-18.6-r1-macos-aarch64: a maintainer artifact needs recipe (rule 5)",
@@ -1216,27 +1216,28 @@ upstream_signature = { kind = "none" }
 
     #[test]
     fn rule_5_needs_a_recipe_that_names_a_repository_commit_and_relative_path() {
-        const GOOD: &str = "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh";
+        const GOOD: &str =
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh";
         for recipe in [
             // no `@`
-            "ojiepermana/stackly-runtimes:recipes/postgresql.sh",
+            "stackly-dev/runtimes:recipes/postgresql.sh",
             // a short commit
-            "ojiepermana/stackly-runtimes@0123456789abcdef:recipes/postgresql.sh",
+            "stackly-dev/runtimes@0123456789abcdef:recipes/postgresql.sh",
             // an upper case commit
-            "ojiepermana/stackly-runtimes@0123456789ABCDEF0123456789abcdef01234567:recipes/postgresql.sh",
+            "stackly-dev/runtimes@0123456789ABCDEF0123456789abcdef01234567:recipes/postgresql.sh",
             // an absolute path
-            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:/recipes/postgresql.sh",
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:/recipes/postgresql.sh",
             // a path that climbs out
-            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/../../etc/passwd",
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/../../etc/passwd",
             // no owner, no repository, or no path
             "stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
-            "ojiepermana/@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
-            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:",
-            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567",
+            "stackly-dev/@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:",
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567",
             // characters the owner or repository pattern does not allow
             "ojie.permana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
-            "ojiepermana/stackly runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
-            "https://github.com/ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "stackly-dev/stackly runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "https://github.com/stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
         ] {
             assert_one(
                 &check(&edit(MAINTAINER, GOOD, recipe)),
@@ -1247,7 +1248,7 @@ upstream_signature = { kind = "none" }
         }
         assert!(is_recipe(GOOD));
         assert!(is_recipe(
-            "ojiepermana/stackly.runtimes_2@0123456789abcdef0123456789abcdef01234567:recipes/deps/openssl.sh"
+            "stackly-dev/stackly.runtimes_2@0123456789abcdef0123456789abcdef01234567:recipes/deps/openssl.sh"
         ));
     }
 
@@ -1256,7 +1257,7 @@ upstream_signature = { kind = "none" }
         let with_attestation = edit(
             MAINTAINER,
             "signing_policy = \"adhoc_pipeline\"",
-            "attestation = \"https://github.com/ojiepermana/stackly-runtimes/attestations/1\"\nsigning_policy = \"adhoc_pipeline\"",
+            "attestation = \"https://github.com/stackly-dev/runtimes/attestations/1\"\nsigning_policy = \"adhoc_pipeline\"",
         );
         let err = format!("{:#}", Inventory::parse(&with_attestation).err().unwrap());
         assert!(err.contains("unknown field `attestation`"), "{err}");
