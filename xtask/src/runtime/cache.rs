@@ -197,6 +197,37 @@ impl Cache {
         })
     }
 
+    /// Copies the bytes of a local file (never moving it, and without its
+    /// extended attributes) to a temporary file in the cache folder,
+    /// refusing more than `max_size` bytes, and hashes the copy. Nothing
+    /// reaches the network, and nothing is extracted or run.
+    pub fn import(&self, path: &Path, max_size: u64) -> Result<Download> {
+        let size = fs::metadata(path)
+            .with_context(|| format!("cannot read {}", path.display()))?
+            .len();
+        if size > max_size {
+            bail!("{} is larger than {max_size} bytes", path.display());
+        }
+        let mut source =
+            File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+        let mut file = tempfile::Builder::new()
+            .prefix(".import-")
+            .tempfile_in(&self.dir)
+            .with_context(|| format!("cannot create a copy in {}", self.dir.display()))?;
+        io::copy(&mut source, file.as_file_mut())
+            .with_context(|| format!("cannot copy {} into the cache", path.display()))?;
+        let (sha256, size) = sha256_file(file.path())?;
+        if size > max_size {
+            bail!("{} is larger than {max_size} bytes", path.display());
+        }
+        Ok(Download {
+            file,
+            url: path.display().to_string(),
+            sha256,
+            size,
+        })
+    }
+
     /// Moves a download into the cache under its digest. When a matching
     /// entry is already there, the download is dropped instead.
     pub fn store(&self, download: Download) -> Result<PathBuf> {
@@ -362,6 +393,30 @@ mod tests {
             .map(|e| e.unwrap().file_name())
             .collect();
         assert_eq!(names, [ABC_SHA256]);
+    }
+
+    #[test]
+    fn import_copies_the_bytes_and_leaves_the_source_in_place() {
+        let (dir, cache) = cache();
+        let source = dir.path().join("abc.tar.gz");
+        fs::write(&source, "abc").unwrap();
+        let copy = cache.import(&source, 10).unwrap();
+        assert_eq!((copy.sha256.as_str(), copy.size), (ABC_SHA256, 3));
+        assert!(copy.path().starts_with(&cache.dir));
+        let stored = cache.store(copy).unwrap();
+        assert_eq!(stored, cache.path(ABC_SHA256));
+        assert_eq!(fs::read_to_string(&source).unwrap(), "abc");
+        assert_eq!(fs::read_to_string(&stored).unwrap(), "abc");
+    }
+
+    #[test]
+    fn import_refuses_a_file_over_the_limit_without_a_copy() {
+        let (dir, cache) = cache();
+        let source = dir.path().join("abc.tar.gz");
+        fs::write(&source, "abc").unwrap();
+        let err = cache.import(&source, 2).err().unwrap();
+        assert!(err.to_string().ends_with("is larger than 2 bytes"), "{err}");
+        assert_eq!(fs::read_dir(&cache.dir).unwrap().count(), 0);
     }
 
     #[test]

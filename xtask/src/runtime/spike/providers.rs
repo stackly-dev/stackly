@@ -1,6 +1,6 @@
 //! How the spike starts, checks, and stops each provider (spec 0003,
-//! Langkah spike per provider). PostgreSQL and Valkey arrive with their
-//! maintainer artifacts (build step 12).
+//! Langkah spike per provider). PostgreSQL and Valkey run from maintainer
+//! artifacts built on this Mac.
 // provisional: F9 (the provider manifest takes over this lifecycle)
 
 use std::fs;
@@ -139,6 +139,8 @@ pub fn recipe(provider: &str) -> Option<Box<dyn Recipe>> {
         "traefik" => Some(Box::new(Traefik)),
         "clickhouse" => Some(Box::new(ClickHouse)),
         "mysql" => Some(Box::new(MySql)),
+        "postgresql" => Some(Box::new(Postgres)),
+        "valkey" => Some(Box::new(Valkey)),
         _ => None,
     }
 }
@@ -187,6 +189,30 @@ fn first_parts(version: &str, count: usize) -> Option<String> {
     let parts: Vec<&str> = version.split('.').collect();
     (parts.len() >= count && parts[..count].iter().all(|p| !p.is_empty()))
         .then(|| parts[..count].join("."))
+}
+
+/// The version at the very start of `text` (after white space), cut to its
+/// first `count` parts, as `^[0-9]+(\.[0-9]+){count - 1}` would take it.
+fn leading_version(text: &str, count: usize) -> Option<String> {
+    let digits: String = text
+        .trim_start()
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    first_parts(&digits, count)
+}
+
+/// Fails unless a one shot command exited 0 within `timeout`.
+fn require_success(finished: &Finished, what: &str, timeout: Duration) -> Result<()> {
+    match finished.status {
+        Some(status) if status.success() => Ok(()),
+        Some(status) => bail!(
+            "{what} failed with {}: {}",
+            process::describe(status),
+            finished.complaint()
+        ),
+        None => bail!("{what} did not finish within {} s", timeout.as_secs()),
+    }
 }
 
 /// A quoted string for a NATS configuration file.
@@ -603,6 +629,265 @@ impl Recipe for MySql {
     }
 }
 
+/// The database user of the PostgreSQL spike; it keeps the OS user name
+/// out of the evidence.
+const POSTGRES_USER: &str = "stackly";
+
+/// PostgreSQL: `initdb` with the ICU locale provider, then `bin/postgres`
+/// as a direct child that listens only on a socket in a private folder.
+struct Postgres;
+
+impl Postgres {
+    /// `psql` against the spike server, without `.psqlrc`, stopping at the
+    /// first error, printing bare values, and running each of `sql` in
+    /// order.
+    fn psql(ctx: &Ctx, sql: &[&str]) -> Result<Command> {
+        let mut command = ctx.command("psql")?;
+        command
+            .arg("-X")
+            .arg("-q")
+            .args(["-v", "ON_ERROR_STOP=1"])
+            .arg("-h")
+            .arg(ctx.socket_dir()?)
+            .arg("-p")
+            .arg(ctx.port(0)?.to_string())
+            .args(["-U", POSTGRES_USER, "-d", "postgres", "-At"]);
+        for statement in sql {
+            command.arg("-c").arg(statement);
+        }
+        Ok(command)
+    }
+
+    /// The bare output of `sql`, trimmed.
+    fn query(ctx: &Ctx, sql: &[&str]) -> Result<String> {
+        let what = sql.last().copied().unwrap_or("psql");
+        Ok(
+            output_of(&process::run(Self::psql(ctx, sql)?, CLIENT_TIMEOUT)?, what)?
+                .trim()
+                .to_owned(),
+        )
+    }
+
+    /// A probe that passes when the last of `sql` prints `expected`.
+    fn query_probe(ctx: &Ctx, name: &str, sql: &[&str], expected: &str) -> Probe {
+        match Self::query(ctx, sql) {
+            Ok(found) if found == expected => Probe {
+                name: name.to_owned(),
+                status: StepStatus::Pass,
+                detail: format!("{} gave {found}", sql.join("; ")),
+            },
+            Ok(found) => Probe {
+                name: name.to_owned(),
+                status: StepStatus::Fail,
+                detail: format!("{} gave `{found}`, not `{expected}`", sql.join("; ")),
+            },
+            Err(err) => Probe {
+                name: name.to_owned(),
+                status: StepStatus::Fail,
+                detail: format!("{err:#}"),
+            },
+        }
+    }
+
+    /// `pg_dump --compress=zstd` of the `postgres` database into a non
+    /// empty file in the run folder.
+    fn zstd_probe(ctx: &Ctx) -> Probe {
+        let outcome = (|| {
+            let dump = ctx.run_dir.join("dump.zst");
+            let mut command = ctx.command("pg_dump")?;
+            command
+                .arg("-h")
+                .arg(ctx.socket_dir()?)
+                .arg("-p")
+                .arg(ctx.port(0)?.to_string())
+                .args(["-U", POSTGRES_USER, "--compress=zstd", "-f"])
+                .arg(&dump)
+                .arg("postgres");
+            let finished = process::run(command, CLIENT_TIMEOUT)?;
+            require_success(&finished, "pg_dump --compress=zstd", CLIENT_TIMEOUT)?;
+            let size = fs::metadata(&dump)
+                .with_context(|| format!("pg_dump wrote no {}", dump.display()))?
+                .len();
+            if size == 0 {
+                bail!("pg_dump --compress=zstd wrote an empty file");
+            }
+            Ok(format!("pg_dump --compress=zstd wrote {size} bytes"))
+        })();
+        match outcome {
+            Ok(detail) => Probe {
+                name: "zstd".to_owned(),
+                status: StepStatus::Pass,
+                detail,
+            },
+            Err(err) => Probe {
+                name: "zstd".to_owned(),
+                status: StepStatus::Fail,
+                detail: format!("{err:#}"),
+            },
+        }
+    }
+}
+
+impl Recipe for Postgres {
+    fn uses_socket_dir(&self) -> bool {
+        true
+    }
+
+    fn init(&self, ctx: &mut Ctx) -> Result<()> {
+        let mut command = ctx.command("initdb")?;
+        command
+            .arg("-D")
+            .arg(&ctx.data_dir)
+            .args(["-U", POSTGRES_USER])
+            .arg("--auth-local=trust")
+            .arg("--auth-host=scram-sha-256")
+            .args(["-E", "UTF8"])
+            .arg("--locale=C")
+            .arg("--locale-provider=icu")
+            .arg("--icu-locale=und");
+        let finished = ctx.run_logged("initdb", command, INIT_TIMEOUT)?;
+        require_success(&finished, "initdb", INIT_TIMEOUT)
+    }
+
+    fn start(&self, ctx: &mut Ctx) -> Result<Command> {
+        // The port names the socket `.s.PGSQL.<port>` even with no TCP
+        // listener at all.
+        ctx.ports = ports::allocate(1)?;
+        let mut command = ctx.command("postgres")?;
+        command
+            .arg("-D")
+            .arg(&ctx.data_dir)
+            .arg("-k")
+            .arg(ctx.socket_dir()?)
+            .arg("-p")
+            .arg(ctx.port(0)?.to_string())
+            .args(["-c", "listen_addresses="]);
+        Ok(command)
+    }
+
+    fn ready(&self, ctx: &Ctx) -> Result<bool> {
+        Ok(process::run(Self::psql(ctx, &["select 1"])?, CLIENT_TIMEOUT)?.success())
+    }
+
+    fn version(&self, ctx: &Ctx) -> Result<String> {
+        Self::query(ctx, &["show server_version"])
+    }
+
+    fn normalize(&self, raw: &str) -> Option<String> {
+        leading_version(raw, 2)
+    }
+
+    /// The AC-7 closure probes: ICU, OpenSSL through pgcrypto, lz4, and
+    /// zstd.
+    fn probes(&self, ctx: &Ctx) -> Vec<Probe> {
+        vec![
+            Self::query_probe(
+                ctx,
+                "icu",
+                &["select datlocprovider from pg_database where datname = 'postgres'"],
+                "i",
+            ),
+            Self::query_probe(
+                ctx,
+                "pgcrypto",
+                &[
+                    "create extension pgcrypto",
+                    "select length(gen_random_bytes(16))",
+                ],
+                "16",
+            ),
+            Self::query_probe(
+                ctx,
+                "lz4",
+                &[
+                    "create table stackly_lz4 (value text compression lz4)",
+                    "insert into stackly_lz4 values (repeat('a', 10000))",
+                    "select pg_column_compression(value) from stackly_lz4",
+                ],
+                "lz4",
+            ),
+            Self::zstd_probe(ctx),
+        ]
+    }
+
+    /// SIGINT is the fast shutdown of the postmaster.
+    fn stop(&self, _ctx: &Ctx, server: &Server) -> Result<()> {
+        server.signal("INT")
+    }
+
+    fn version_args(&self) -> &'static [&'static str] {
+        &["--version"]
+    }
+}
+
+/// Valkey: one loopback port, data in the run folder, no persistence, and
+/// no daemonizing.
+struct Valkey;
+
+impl Valkey {
+    fn cli(ctx: &Ctx, args: &[&str]) -> Result<Command> {
+        let mut command = ctx.command("valkey-cli")?;
+        command
+            .args(["-h", "127.0.0.1", "-p"])
+            .arg(ctx.port(0)?.to_string())
+            .args(args);
+        Ok(command)
+    }
+}
+
+impl Recipe for Valkey {
+    fn init(&self, ctx: &mut Ctx) -> Result<()> {
+        process::create_dir(&ctx.data_dir)
+    }
+
+    fn start(&self, ctx: &mut Ctx) -> Result<Command> {
+        ctx.ports = ports::allocate(1)?;
+        let mut command = ctx.command("valkey-server")?;
+        command
+            .args(["--bind", "127.0.0.1", "--port"])
+            .arg(ctx.port(0)?.to_string())
+            .arg("--dir")
+            .arg(&ctx.data_dir)
+            .args(["--save", "", "--appendonly", "no", "--daemonize", "no"]);
+        Ok(command)
+    }
+
+    fn ready(&self, ctx: &Ctx) -> Result<bool> {
+        let finished = process::run(Self::cli(ctx, &["PING"])?, CLIENT_TIMEOUT)?;
+        Ok(finished.success() && finished.stdout.trim() == "PONG")
+    }
+
+    /// The `valkey_version` line of `INFO server`; Valkey also reports a
+    /// `redis_version` for compatibility, which is not its own version.
+    fn version(&self, ctx: &Ctx) -> Result<String> {
+        let text = output_of(
+            &process::run(Self::cli(ctx, &["INFO", "server"])?, CLIENT_TIMEOUT)?,
+            "INFO server",
+        )?;
+        text.lines()
+            .map(str::trim)
+            .find(|line| line.starts_with("valkey_version:"))
+            .map(str::to_owned)
+            .with_context(|| format!("INFO server printed no valkey_version: {}", text.trim()))
+    }
+
+    fn normalize(&self, raw: &str) -> Option<String> {
+        version_after(raw, "valkey_version:").and_then(|version| first_parts(&version, 3))
+    }
+
+    fn stop(&self, ctx: &Ctx, _server: &Server) -> Result<()> {
+        output_of(
+            &process::run(Self::cli(ctx, &["shutdown", "nosave"])?, CLIENT_TIMEOUT)?,
+            "valkey-cli shutdown nosave",
+        )
+        .map(drop)
+    }
+
+    fn version_args(&self) -> &'static [&'static str] {
+        &["--version"]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -628,7 +913,50 @@ mod tests {
             mysql.normalize("9.7.2-commercial").as_deref(),
             Some("9.7.2")
         );
-        assert!(recipe("postgresql").is_none());
+        assert!(recipe("redis").is_none());
+    }
+
+    #[test]
+    fn postgresql_and_valkey_have_recipes() {
+        let postgresql = recipe("postgresql").unwrap();
+        assert!(postgresql.uses_socket_dir());
+        assert_eq!(postgresql.version_args(), ["--version"]);
+        let valkey = recipe("valkey").unwrap();
+        assert!(!valkey.uses_socket_dir());
+        assert_eq!(valkey.version_args(), ["--version"]);
+    }
+
+    #[test]
+    fn a_postgresql_server_version_keeps_major_and_minor() {
+        let postgresql = recipe("postgresql").unwrap();
+        assert_eq!(postgresql.normalize("18.6\n").as_deref(), Some("18.6"));
+        assert_eq!(postgresql.normalize("17.11").as_deref(), Some("17.11"));
+        assert_eq!(
+            postgresql.normalize("18.6 (Stackly r1)").as_deref(),
+            Some("18.6")
+        );
+        assert_eq!(postgresql.normalize("PostgreSQL 18.6"), None);
+        assert_eq!(postgresql.normalize("18devel"), None);
+    }
+
+    #[test]
+    fn a_valkey_version_comes_from_the_valkey_version_line_of_info_server() {
+        let valkey = recipe("valkey").unwrap();
+        let info = "# Server\r\nredis_version:7.2.4\r\nserver_name:valkey\r\nvalkey_version:9.1.2\r\nvalkey_release_stage:ga\r\nredis_git_sha1:00000000\r\n";
+        assert_eq!(valkey.normalize(info).as_deref(), Some("9.1.2"));
+        assert_eq!(
+            valkey.normalize("valkey_version:9.1.2").as_deref(),
+            Some("9.1.2")
+        );
+        assert_eq!(valkey.normalize("redis_version:7.2.4\r\n"), None);
+    }
+
+    #[test]
+    fn leading_version_reads_only_from_the_start() {
+        assert_eq!(leading_version("  17.11\n", 2).as_deref(), Some("17.11"));
+        assert_eq!(leading_version("18.6.1", 2).as_deref(), Some("18.6"));
+        assert_eq!(leading_version("18", 2), None);
+        assert_eq!(leading_version("v18.6", 2), None);
     }
 
     #[test]

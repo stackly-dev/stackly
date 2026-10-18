@@ -20,10 +20,10 @@ use super::plan::{Layout, Plan, PlanArtifact, Redaction};
 use super::process::{self, CleanEnv, LOG_TAIL_BYTES, Server};
 use super::providers::{self, Ctx, Recipe};
 use super::result::{
-    ExecutableSignature, Launch, Libraries, LogTail, Probe, Quarantine, SpikeResult, SpikeStatus,
-    Step, StepStatus, Stop,
+    ExecutableSignature, Launch, Libraries, LogTail, Quarantine, SpikeResult, SpikeStatus, Step,
+    StepStatus, Stop,
 };
-use super::{SOCKET_PREFIX, archive, quarantine, signing};
+use super::{SOCKET_PREFIX, archive, closure, quarantine, signing};
 use crate::runtime::macho;
 
 /// How long the server may take to become ready (AC-5).
@@ -267,7 +267,7 @@ impl Spike {
             Ok(())
         })?;
         let machos = self.step("static audit", |s| s.static_audit(&root))?;
-        self.step("closure", |s| s.closure())?;
+        self.step("closure", |s| s.closure(&root))?;
         self.step("signing", |s| s.signing(&root, &machos))?;
         self.step("min_os", |s| {
             let minimum = macho::min_os(&root.join(artifact.main_executable()))?;
@@ -314,10 +314,10 @@ impl Spike {
         } else {
             self.result.quarantine = Some(Quarantine {
                 outcome: "skipped".to_owned(),
-                detail: match &self.plan.quarantine_recorded_in {
-                    Some(folder) => format!("already recorded in {folder}"),
-                    None => "not requested by the plan".to_owned(),
-                },
+                detail: skipped_detail(
+                    self.plan.local_run,
+                    self.plan.quarantine_recorded_in.as_deref(),
+                ),
             });
         }
         Ok(())
@@ -444,37 +444,23 @@ impl Spike {
         Ok(machos)
     }
 
-    /// AC-7: the bundled and own dependencies of the inventory are exactly
-    /// the non system libraries the static audit found.
-    fn closure(&mut self) -> Result<()> {
-        let listed: BTreeSet<String> = self
-            .artifact
-            .dependencies
-            .iter()
-            .filter(|dependency| matches!(dependency.kind.as_str(), "bundled" | "own"))
-            .map(|dependency| dependency.name.clone())
-            .collect();
-        let missing: Vec<&String> = self.non_system.difference(&listed).collect();
-        let extra: Vec<&String> = listed.difference(&self.non_system).collect();
-        let ok = missing.is_empty() && extra.is_empty();
-        let detail = if ok {
-            format!("{} non system libraries, as listed", listed.len())
-        } else {
-            format!("not in the inventory: {missing:?}; listed but not found: {extra:?}")
-        };
-        self.result.closure_probes.push(Probe {
-            name: "dependencies".to_owned(),
-            status: if ok {
-                StepStatus::Pass
-            } else {
-                StepStatus::Fail
-            },
-            detail: detail.clone(),
-        });
-        if !ok {
-            bail!("the inventory dependencies differ from the audit: {detail}");
+    /// AC-7 and AC-18: the `dependencies` probe, and the `manifest` probe
+    /// of a maintainer artifact; both are recorded before the step fails.
+    fn closure(&mut self, root: &Path) -> Result<()> {
+        let probes = closure::probes(
+            &self.artifact,
+            root,
+            &self.non_system,
+            self.result.archive.as_ref(),
+        );
+        let failure = closure::failure(&probes);
+        let details: Vec<&str> = probes.iter().map(|probe| probe.detail.as_str()).collect();
+        let note = details.join("; ");
+        self.result.closure_probes.extend(probes);
+        if let Some(reason) = failure {
+            bail!(reason);
         }
-        self.note = Some(detail);
+        self.note = Some(note);
         Ok(())
     }
 
@@ -573,4 +559,29 @@ impl Spike {
 
 fn millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// Why the quarantine probe did not run: a local run (AC-9), or the
+/// evidence folder that already holds its result for this digest.
+fn skipped_detail(local_run: bool, recorded_in: Option<&str>) -> String {
+    match (local_run, recorded_in) {
+        (true, _) => "local run".to_owned(),
+        (false, Some(folder)) => format!("already recorded in {folder}"),
+        (false, None) => "not requested by the plan".to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_skipped_quarantine_names_the_local_run_or_where_it_was_recorded() {
+        assert_eq!(skipped_detail(true, None), "local run");
+        assert_eq!(
+            skipped_detail(false, Some("evidence/runtime/019a/artifacts/019b/")),
+            "already recorded in evidence/runtime/019a/artifacts/019b/"
+        );
+        assert_eq!(skipped_detail(false, None), "not requested by the plan");
+    }
 }

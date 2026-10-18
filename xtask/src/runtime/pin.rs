@@ -3,7 +3,16 @@
 //! give the same bytes, and prints the `format`, `urls`, `sha256`, `size`,
 //! and `min_os` lines of an inventory entry (spec 0003). Digests are never
 //! typed by hand.
+//!
+//! `cargo xtask runtime pin --file <tar.gz> --url <https>...
+//! [--executable <path>]` does the same for a maintainer artifact built on
+//! this Mac, without the network: the file is checked against the
+//! `.sha256` beside it and copied into the cache, and `urls` are the
+//! release URLs it will be uploaded to (AC-19).
 
+use std::ffi::OsString;
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -11,7 +20,7 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 use super::cache::{Cache, Download, PIN_MAX_SIZE, SIDE_FILE_MAX_SIZE};
-use super::checksum::{base_name, expected_digest, parse_sums};
+use super::checksum::{SumLine, base_name, expected_digest, parse_sums};
 use super::inventory::{is_https, is_inner_relative_path};
 use super::macho::{self, FileKind};
 
@@ -24,6 +33,8 @@ struct Options {
     urls: Vec<String>,
     executable: Option<String>,
     sha256_url: Option<String>,
+    /// A local maintainer artifact; with it nothing is downloaded.
+    file: Option<PathBuf>,
 }
 
 /// What `pin` prints for a download that is not a Mach-O file, a `.tar.gz`,
@@ -46,6 +57,19 @@ struct Pinned {
 pub fn run(args: &[&str]) -> Result<()> {
     let options = parse(args)?;
     let cache = Cache::open()?;
+    let pinned = match &options.file {
+        Some(file) => pin_file(&cache, file, &options)?,
+        None => pin_download(&cache, &options)?,
+    };
+    print!(
+        "{}",
+        toml::to_string(&pinned).context("cannot write the pinned values as TOML")?
+    );
+    Ok(())
+}
+
+/// Downloads every candidate URL into the cache and pins the bytes.
+fn pin_download(cache: &Cache, options: &Options) -> Result<Pinned> {
     let downloads = options
         .urls
         .iter()
@@ -57,39 +81,117 @@ pub fn run(args: &[&str]) -> Result<()> {
     let first = same_bytes(&downloads)?;
     let (sha256, size) = (first.sha256.clone(), first.size);
     if let Some(sha256_url) = &options.sha256_url {
-        check_sha256_file(&cache, sha256_url, &options.urls, &sha256)?;
+        check_sha256_file(cache, sha256_url, &options.urls, &sha256)?;
     }
     let mut downloads = downloads.into_iter();
     let stored = cache.store(downloads.next().context("pin needs at least one --url")?)?;
     // The other candidates hold the same bytes; free their space now.
     drop(downloads);
+    pinned(&stored, options, sha256, size)
+}
+
+/// Pins a local maintainer artifact without the network: every `--url`
+/// must end in the file's own name (`gh` uploads it under that name), its
+/// digest must equal the one `<file>.sha256` gives, and only then is it
+/// copied, never moved, into the cache under that digest (AC-19).
+fn pin_file(cache: &Cache, file: &Path, options: &Options) -> Result<Pinned> {
+    let name = file
+        .file_name()
+        .and_then(|name| name.to_str())
+        .with_context(|| format!("--file {} has no file name", file.display()))?;
+    for url in &options.urls {
+        let url_name = base_name(url);
+        if url_name != name {
+            bail!(
+                "--url {url} ends in `{url_name}`, not in the file name `{name}`; gh uploads the file under its own name"
+            );
+        }
+    }
+    let expected = sha256_beside(file, name)?;
+    eprintln!("pin: copying {} into the cache", file.display());
+    let copy = cache.import(file, PIN_MAX_SIZE)?;
+    if copy.sha256 != expected {
+        bail!(
+            "digest {} of {} does not match {name}.sha256, which says {expected}",
+            copy.sha256,
+            file.display()
+        );
+    }
+    let (sha256, size) = (copy.sha256.clone(), copy.size);
+    let stored = cache.store(copy)?;
+    pinned(&stored, options, sha256, size)
+}
+
+/// The digest `<file>.sha256` gives: its one line must be
+/// `<sha256>  <name>`, with the file's own name.
+fn sha256_beside(file: &Path, name: &str) -> Result<String> {
+    let mut side = OsString::from(file.as_os_str());
+    side.push(".sha256");
+    let side = PathBuf::from(side);
+    let meta = match fs::metadata(&side) {
+        Ok(meta) => meta,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            bail!(
+                "{} is missing; build.sh writes it beside the artifact",
+                side.display()
+            )
+        }
+        Err(err) => return Err(err).with_context(|| format!("cannot read {}", side.display())),
+    };
+    if meta.len() > SIDE_FILE_MAX_SIZE {
+        bail!(
+            "{} is larger than {SIDE_FILE_MAX_SIZE} bytes",
+            side.display()
+        );
+    }
+    let text = fs::read_to_string(&side)
+        .with_context(|| format!("{} is not a text file", side.display()))?;
+    match parse_sums(&text).as_slice() {
+        [
+            SumLine {
+                hash,
+                name: Some(listed),
+            },
+        ] if hash.len() == 64 && listed == name => Ok(hash.clone()),
+        [
+            SumLine {
+                name: Some(listed), ..
+            },
+        ] if listed != name => bail!(
+            "{} names `{listed}`, not the file name `{name}`",
+            side.display()
+        ),
+        _ => bail!("{} must hold one line `<sha256>  {name}`", side.display()),
+    }
+}
+
+/// The lines `pin` prints for the bytes now in the cache at `stored`.
+fn pinned(stored: &Path, options: &Options, sha256: String, size: u64) -> Result<Pinned> {
     // The format comes from the bytes on every OS; only min_os needs macOS.
-    let kind = macho::file_kind(&stored)?;
+    let kind = macho::file_kind(stored)?;
     let format = kind.format();
     let min_os = if format.is_some() {
-        read_min_os(&stored, kind, options.executable.as_deref())?
+        read_min_os(stored, kind, options.executable.as_deref())?
     } else {
         eprintln!("{UNKNOWN_NOTE}");
         None
     };
-    let pinned = Pinned {
+    Ok(Pinned {
         format,
-        urls: options.urls,
+        urls: options.urls.clone(),
         sha256,
         size,
         min_os,
-    };
-    print!(
-        "{}",
-        toml::to_string(&pinned).context("cannot write the pinned values as TOML")?
-    );
-    Ok(())
+    })
 }
+
+const USAGE: &str = "use `cargo xtask runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]` or `cargo xtask runtime pin --file <tar.gz> --url <https>... [--executable <path>]`";
 
 fn parse(args: &[&str]) -> Result<Options> {
     let mut urls = Vec::new();
     let mut executable = None;
     let mut sha256_url = None;
+    let mut file = None;
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match *arg {
@@ -107,13 +209,22 @@ fn parse(args: &[&str]) -> Result<Options> {
                 sha256_url =
                     Some((*rest.next().context("--sha256-url needs an https:// URL")?).to_owned());
             }
-            other => bail!(
-                "unexpected argument `{other}`; use `cargo xtask runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]`"
-            ),
+            "--file" => {
+                let path = rest.next().context("--file needs the path of a .tar.gz")?;
+                if file.replace(PathBuf::from(path)).is_some() {
+                    bail!("--file is given more than once");
+                }
+            }
+            other => bail!("unexpected argument `{other}`; {USAGE}"),
         }
     }
     if urls.is_empty() {
         bail!("pin needs at least one --url");
+    }
+    if file.is_some() && sha256_url.is_some() {
+        bail!(
+            "--file cannot go with --sha256-url: a maintainer artifact is checked against the .sha256 beside it"
+        );
     }
     for url in urls.iter().chain(&sha256_url) {
         if !is_https(url) {
@@ -124,6 +235,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         urls,
         executable,
         sha256_url,
+        file,
     })
 }
 
@@ -308,7 +420,49 @@ mod tests {
                 ],
                 executable: Some("bin/mysqld".to_owned()),
                 sha256_url: Some("https://a.example/x.tar.gz.sha256".to_owned()),
+                file: None,
             }
+        );
+    }
+
+    #[test]
+    fn parse_reads_a_local_file_and_refuses_it_with_a_sha256_url() {
+        let options = parse(&[
+            "--file",
+            "out/valkey.tar.gz",
+            "--url",
+            "https://a.example/valkey.tar.gz",
+            "--executable",
+            "bin/valkey-server",
+        ])
+        .unwrap();
+        assert_eq!(options.file, Some(PathBuf::from("out/valkey.tar.gz")));
+        assert_eq!(options.urls, ["https://a.example/valkey.tar.gz"]);
+        let err = parse(&[
+            "--file",
+            "out/valkey.tar.gz",
+            "--url",
+            "https://a.example/valkey.tar.gz",
+            "--sha256-url",
+            "https://a.example/valkey.tar.gz.sha256",
+        ])
+        .err()
+        .unwrap();
+        assert_eq!(
+            err.to_string(),
+            "--file cannot go with --sha256-url: a maintainer artifact is checked against the .sha256 beside it"
+        );
+        assert!(parse(&["--file", "out/valkey.tar.gz"]).is_err());
+        assert!(
+            parse(&[
+                "--file",
+                "a.tar.gz",
+                "--file",
+                "b.tar.gz",
+                "--url",
+                "https://a.example/a.tar.gz"
+            ])
+            .is_err()
         );
     }
 
@@ -327,6 +481,155 @@ mod tests {
         );
         assert!(parse(&["--url", "https://a.example/x", "--executable", "../bin/x"]).is_err());
         assert!(parse(&["--url", "https://a.example/x", "--verbose"]).is_err());
+    }
+
+    /// The file name `build.sh` gives a maintainer artifact.
+    const ARTIFACT: &str = "valkey-9.1.2-r1-macos-aarch64.tar.gz";
+    /// Its release URL, on a host that never resolves: a network call would
+    /// fail the test.
+    const RELEASE_URL: &str = "https://stackly.invalid/ojiepermana/stackly/releases/download/runtime/valkey-9.1.2-r1-macos-aarch64/valkey-9.1.2-r1-macos-aarch64.tar.gz";
+
+    /// `out/<ARTIFACT>` with gzip bytes and the `.sha256` beside it, as
+    /// `build.sh` writes them; returns the artifact path, its digest, and a
+    /// cache in the same temporary folder.
+    fn maintainer_build(dir: &Path) -> (PathBuf, String, Cache) {
+        let out = dir.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let file = out.join(ARTIFACT);
+        std::fs::write(&file, [0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, b'x']).unwrap();
+        let (sha256, _) = crate::runtime::cache::sha256_file(&file).unwrap();
+        std::fs::write(
+            out.join(format!("{ARTIFACT}.sha256")),
+            format!("{sha256}  {ARTIFACT}\n"),
+        )
+        .unwrap();
+        (file, sha256, Cache::at(dir.join("cache")).unwrap())
+    }
+
+    fn file_options(file: &Path, url: &str) -> Options {
+        Options {
+            urls: vec![url.to_owned()],
+            executable: None,
+            sha256_url: None,
+            file: Some(file.to_path_buf()),
+        }
+    }
+
+    /// Every name in the cache folder, temporary files included.
+    fn cache_entries(cache: &Cache) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(cache.dir())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn pin_file_copies_a_matching_artifact_into_the_cache_and_prints_the_release_urls() {
+        let dir = tempfile::tempdir().unwrap();
+        let (file, sha256, cache) = maintainer_build(dir.path());
+        let pinned = pin_file(&cache, &file, &file_options(&file, RELEASE_URL)).unwrap();
+        assert_eq!(
+            toml::to_string(&pinned).unwrap(),
+            format!(
+                "format = \"tar_gz\"\nurls = [\"{RELEASE_URL}\"]\nsha256 = \"{sha256}\"\nsize = 9\n"
+            )
+        );
+        assert_eq!(cache_entries(&cache), std::slice::from_ref(&sha256));
+        assert_eq!(
+            std::fs::read(cache.path(&sha256)).unwrap(),
+            std::fs::read(&file).unwrap()
+        );
+        assert!(file.is_file(), "the artifact is copied, not moved");
+    }
+
+    #[test]
+    fn pin_file_needs_the_sha256_file_beside_the_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        let (file, _, cache) = maintainer_build(dir.path());
+        std::fs::remove_file(dir.path().join("out").join(format!("{ARTIFACT}.sha256"))).unwrap();
+        let err = pin_file(&cache, &file, &file_options(&file, RELEASE_URL))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            err.ends_with(&format!(
+                "{ARTIFACT}.sha256 is missing; build.sh writes it beside the artifact"
+            )),
+            "{err}"
+        );
+        assert_eq!(cache_entries(&cache), Vec::<String>::new());
+    }
+
+    #[test]
+    fn pin_file_refuses_a_digest_that_differs_from_the_sha256_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let (file, sha256, cache) = maintainer_build(dir.path());
+        let other = "0".repeat(64);
+        std::fs::write(
+            dir.path().join("out").join(format!("{ARTIFACT}.sha256")),
+            format!("{other}  {ARTIFACT}\n"),
+        )
+        .unwrap();
+        let err = pin_file(&cache, &file, &file_options(&file, RELEASE_URL))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            err.starts_with(&format!("digest {sha256} of "))
+                && err.ends_with(&format!(
+                    "does not match {ARTIFACT}.sha256, which says {other}"
+                )),
+            "{err}"
+        );
+        assert_eq!(cache_entries(&cache), Vec::<String>::new());
+    }
+
+    #[test]
+    fn pin_file_refuses_a_sha256_file_that_names_another_file_or_no_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let (file, sha256, cache) = maintainer_build(dir.path());
+        let side = dir.path().join("out").join(format!("{ARTIFACT}.sha256"));
+        std::fs::write(&side, format!("{sha256}  valkey.tar.gz\n")).unwrap();
+        let err = pin_file(&cache, &file, &file_options(&file, RELEASE_URL))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            err.ends_with(&format!(
+                "names `valkey.tar.gz`, not the file name `{ARTIFACT}`"
+            )),
+            "{err}"
+        );
+        std::fs::write(&side, format!("{sha256}\n")).unwrap();
+        let err = pin_file(&cache, &file, &file_options(&file, RELEASE_URL))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            err.ends_with(&format!("must hold one line `<sha256>  {ARTIFACT}`")),
+            "{err}"
+        );
+        assert_eq!(cache_entries(&cache), Vec::<String>::new());
+    }
+
+    #[test]
+    fn pin_file_refuses_a_url_that_ends_in_another_file_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let (file, _, cache) = maintainer_build(dir.path());
+        let url = "https://stackly.invalid/runtime/valkey-9.1.2-r1/valkey.tar.gz";
+        let err = pin_file(&cache, &file, &file_options(&file, url))
+            .err()
+            .unwrap()
+            .to_string();
+        assert_eq!(
+            err,
+            format!(
+                "--url {url} ends in `valkey.tar.gz`, not in the file name `{ARTIFACT}`; gh uploads the file under its own name"
+            )
+        );
+        assert_eq!(cache_entries(&cache), Vec::<String>::new());
     }
 
     #[test]

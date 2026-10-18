@@ -111,3 +111,46 @@ Tidak ada layar; milestone ini hanya tooling `cargo xtask`.
 - AC-13: ClickHouse 26.8 LTS dari `.zip` (lini LTS terbaru dengan aset macOS aarch64; 26.9 stable sebagai fallback tidak diperlukan).
 - AC-16: cek format, ekstraksi zip, `pin`, aturan `archive_root`, dan mode 0755 untuk executable zip.
 - AC-12: milestone 3.
+
+## Milestone 3, langkah 17: dukungan xtask untuk artefak maintainer · 2026-10-18
+
+Langkah dengan artefak nyata baru bisa dijalankan setelah sesi B membangun `out/<id>.tar.gz` dan `.sha256`-nya (langkah 9 dan 10); sampai saat itu yang bisa dicek hanya unit test dan perintah tanpa artefak.
+
+### UI / manual
+
+- [ ] Tidak ada layar. Spike lokal dengan `--no-quarantine` tidak menjalankan probe quarantine, jadi tidak ada dialog Gatekeeper → AC-9
+
+### Commands
+
+- [ ] `cargo test -p xtask runtime::` → semua lulus, termasuk `rule_5_needs_a_recipe_that_names_a_repository_commit_and_relative_path`, `rule_5_refuses_an_entry_that_still_carries_attestation_as_invalid_toml`, `an_entry_that_still_carries_attestation_fails_as_an_invalid_inventory`, test `pin_file_*` dan `import_*`, test `the_driver_*`, `a_skipped_quarantine_names_the_local_run_or_where_it_was_recorded`, semua test `spike::closure`, dan test recipe PostgreSQL dan Valkey di `spike::providers` → AC-2, AC-5, AC-9, AC-12, AC-18, AC-19
+- [ ] Tambahkan sementara `attestation = "https://example.org/a"` ke satu entri (jangan di-commit): `cargo xtask runtime check` → gagal dengan `runtimes/inventory.toml is not a valid inventory` dan ``unknown field `attestation` ``; kembalikan file → AC-2
+- [ ] `cargo xtask runtime pin --file ~/Development/ojiepermana/stackly-runtimes/out/valkey-9.1.2-r1-macos-aarch64.tar.gz --url https://github.com/ojiepermana/stackly/releases/download/runtime/valkey-9.1.2-r1-macos-aarch64/valkey-9.1.2-r1-macos-aarch64.tar.gz --executable bin/valkey-server` dengan jaringan mati → `format = "tar_gz"`, `urls` persis `--url`, `sha256` sama dengan isi `.sha256`, `size`, dan `min_os = "27.0"`; file ada di cache dengan nama digest-nya dan file asli tetap di `out/` → AC-1, AC-19
+- [ ] Ulangi dengan `.sha256` dipindah sementara, dengan digest di dalamnya diubah, dengan nama file lain di dalamnya, dan dengan `--url` yang nama file terakhirnya berbeda → masing masing gagal, dan `ls ~/Library/Caches/dev.stackly.xtask/runtime` sebelum dan sesudah sama → AC-19
+- [ ] `cargo xtask runtime pin --file <tar.gz> --url <https> --sha256-url <https>` → ditolak dengan `--file cannot go with --sha256-url` sebelum apa pun dibaca → AC-19
+- [ ] `cargo xtask runtime spike --id <id maintainer> --result <file> --no-quarantine` untuk entri lokal di langkah 12.2 → `quarantine.outcome` `skipped` dengan detail `local run`; `closureProbes` memuat `dependencies` lalu `manifest`, keduanya `PASS` → AC-9, AC-18
+- [ ] Ubah sementara `recipe` entri itu (jangan di-commit) dan ulangi spike lokal → `FAIL` di langkah `closure` dengan `recipe is "...", the entry says "..."` di detail probe `manifest`, dan probe `dependencies` tetap tercatat; kembalikan file → AC-18
+- [ ] Spike lokal Valkey → `observedVersion` `9.1.2` dari baris `valkey_version` (bukan `redis_version`), `listeners` hanya satu port 127.0.0.1 yang dialokasikan, stop lewat `valkey-cli shutdown nosave` dalam 60 detik → AC-5
+- [ ] Spike lokal PostgreSQL 18 lalu 17 → probe `icu`, `pgcrypto`, `lz4`, dan `zstd` `PASS`, `observedVersion` `18.6` dan `17.11`, `listeners` kosong (hanya socket di `/tmp/sk-*`), stop karena SIGINT dengan `stop.exitCode` 0 dalam 60 detik → AC-5, AC-7
+- [ ] `cargo test -p xtask --test native_runtime -- --list --ignored` → delapan test, termasuk `postgresql_17_runs_from_managed_artifact`, `postgresql_18_runs_from_managed_artifact`, dan `valkey_9_1_runs_from_managed_artifact` → AC-10
+- [ ] Wrapper native sebelum entri maintainer ada → ketiga test baru `BLOCKED` dengan `no inventory entry for postgresql 17`, `no inventory entry for postgresql 18`, dan `no inventory entry for valkey 9.1`, owner `@ojiepermana`; record itu tidak disalin `runtime record` → AC-10
+- [ ] `cargo xtask evidence check` → semua file Rust lulus aturan makro evidence → AC-10
+- [ ] `cargo xtask runtime check` → exit 0 (aturan 9 belum aktif) → AC-2
+
+### Value sourcing
+
+- [ ] `sha256`, `size`, `format`, dan `min_os` dari `pin --file` sama dengan `shasum -a 256`, `stat -f %z`, magic number gzip, dan `vtool -show-build` pada `bin/valkey-server` di dalam tarball → pin `--file`
+- [ ] `urls` dari `pin --file` persis nilai `--url` (`.../releases/download/runtime/<id>/<id>.tar.gz`) → `urls` pin `--file`
+- [ ] Probe `manifest` membaca `STACKLY-ARTIFACT.json` dan `LICENSES/` di root artefak, lalu jumlah symlink, setuid, dan file khusus dari laporan archive: detail `PASS` spike lokal menyebut jumlah teks lisensi (Valkey 1 ditambah komponen vendored, PostgreSQL 5), dan unit test `a_missing_license_text_is_named` serta `an_archive_with_a_link_setuid_or_special_file_fails` membuktikan sisi gagalnya → probe `manifest`
+- [ ] `build`, `source_url`, `source_sha256`, dan `recipe` entri sama dengan `build`, `source.url`, `source.sha256`, dan `recipe` di `STACKLY-ARTIFACT.json` → entri maintainer
+- [ ] `executables` entri PostgreSQL `bin/postgres`, `bin/initdb`, `bin/psql`, `bin/pg_dump`, dan Valkey `bin/valkey-server`, `bin/valkey-cli` → entri maintainer, `executables`
+- [ ] `logTail` dan detail spike PostgreSQL memakai user database `stackly`, tidak pernah nama user OS → user database PostgreSQL
+- [ ] `quarantine.detail` `local run` hanya pada run dengan `--no-quarantine`; spike tanpa flag tetap mencari hasil quarantine di `evidence/runtime/` → flag quarantine, `quarantine.outcome`
+
+### Acceptance-criteria coverage
+
+- AC-2: aturan 5 baru (pola `recipe`, field `attestation` ditolak sebagai TOML tidak valid).
+- AC-5, AC-7: recipe `Postgres` dan `Valkey`; `PASS` nyata menunggu artefak di langkah 12.
+- AC-9: `--no-quarantine` mencatat `skipped` dengan detail `local run`; test native tidak memakainya.
+- AC-10: tiga test native baru, `BLOCKED` sampai entrinya ada.
+- AC-12, AC-18: probe `manifest` dan cek isi archive di langkah `closure`.
+- AC-19: `pin --file` tanpa jaringan; urutan terbit dicek di langkah 12.

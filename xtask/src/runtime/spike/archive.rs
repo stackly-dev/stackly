@@ -328,6 +328,11 @@ mod tests {
             size: 1,
             urls: Vec::new(),
             dependencies: Vec::new(),
+            build: None,
+            source_url: None,
+            source_sha256: None,
+            recipe: None,
+            min_os: None,
         }
     }
 
