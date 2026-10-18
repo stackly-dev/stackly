@@ -14,7 +14,7 @@ use stackly_domain::{
 pub use root_override::{ROOT_OVERRIDE_ENV, validate_root_override};
 pub use roots::{
     DirectoryResolver, FixedRoots, RUNTIME_ROOT_MAX, RootKind, RootSet, SOCKET_NAME_MAX,
-    SOCKET_PATH_MAX,
+    SOCKET_PATH_MAX, default_runtime_root,
 };
 
 /// File name of the metadata file at the root of every instance folder.

@@ -17,10 +17,12 @@
 use std::time::Duration;
 
 mod error;
+mod trust;
 #[cfg(unix)]
 mod unix;
 
-pub use error::IpcError;
+pub use error::{IpcError, io_kind_name};
+pub use trust::{PathFacts, PathKind, evaluate_path, folder_reason, socket_reason};
 #[cfg(unix)]
 pub use unix::{
     Accepted, BindState, Client, ConnectPolicy, EventStream, FrameReader, FrameWriter,

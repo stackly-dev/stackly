@@ -28,6 +28,8 @@ const SWIFT_OUTPUT: &str = "clients/swift/Sources/StacklyClient/Generated/Stackl
 const OPEN_ENUMS_OUTPUT: &str = "clients/swift/Sources/StacklyClient/Generated/OpenEnums.swift";
 const CONTRACT_INFO_OUTPUT: &str =
     "clients/swift/Sources/StacklyClient/Generated/ContractInfo.swift";
+const CONTRACT_NAMES_OUTPUT: &str =
+    "clients/swift/Sources/StacklyClient/Generated/ContractNames.swift";
 const DIGEST_OUTPUT: &str = "crates/protocol/src/contract_digest.rs";
 const ERROR_CODES_OUTPUT: &str = "protocols/error-codes.json";
 const VERSIONS_FILE: &str = "protocols/contract-versions.json";
@@ -64,6 +66,14 @@ pub fn run(root: &Path, mode: Mode) -> Result<()> {
         Generated {
             path: PathBuf::from(OPEN_ENUMS_OUTPUT),
             contents: swift::open_enums(&swift.contents),
+        },
+        Generated {
+            path: PathBuf::from(CONTRACT_NAMES_OUTPUT),
+            contents: swift::contract_names(
+                &swift.contents,
+                stackly_protocol::events::EventKind::KINDS,
+                stackly_protocol::Call::METHODS,
+            )?,
         },
         swift,
     ];

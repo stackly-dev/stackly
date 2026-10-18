@@ -122,6 +122,10 @@ area! {
             details ["method", "length"], "daemon side: a reply is larger than a frame and is sent instead of it";
         TOO_MANY_CONNECTIONS = "ipc.too_many_connections", Unavailable, retryable true,
             details ["max"], "the daemon already serves the most connections it allows";
+        NOT_CONNECTED = "ipc.not_connected", Unavailable, retryable true,
+            details [], "client side: the client is not connected to the daemon, so it sent nothing";
+        CALL_TIMEOUT = "ipc.call_timeout", Timeout, retryable false,
+            details ["method"], "client side: the client stopped waiting for a reply, so the request may have run";
     }
 }
 
@@ -377,6 +381,7 @@ mod tests {
                 "ipc.connection_refused",
                 "ipc.io_error",
                 "ipc.too_many_connections",
+                "ipc.not_connected",
                 "request.too_many_in_flight",
                 "resource.busy",
                 "daemon.starting",

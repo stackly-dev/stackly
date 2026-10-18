@@ -1,0 +1,73 @@
+{
+  "fnv1a64": [
+    {
+      "input": "",
+      "hex": "cbf29ce484222325"
+    },
+    {
+      "input": "a",
+      "hex": "af63dc4c8601ec8c"
+    },
+    {
+      "input": "foobar",
+      "hex": "85944171f73967e8"
+    }
+  ],
+  "cases": [
+    {
+      "name": "default_root",
+      "tempDir": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/",
+      "override": null,
+      "runtimeRoot": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly",
+      "socketPath": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly/stacklyd.sock"
+    },
+    {
+      "name": "default_root_without_trailing_slash",
+      "tempDir": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T",
+      "override": null,
+      "runtimeRoot": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly",
+      "socketPath": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly/stacklyd.sock"
+    },
+    {
+      "name": "override_ascii",
+      "tempDir": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/",
+      "override": "/Users/dev/stackly-root",
+      "runtimeRoot": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-fc36e085",
+      "socketPath": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-fc36e085/stacklyd.sock"
+    },
+    {
+      "name": "override_space_and_nfc",
+      "tempDir": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/",
+      "override": "/Users/dev/Stackly Röot",
+      "runtimeRoot": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-528da572",
+      "socketPath": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-528da572/stacklyd.sock"
+    },
+    {
+      "name": "override_nfd",
+      "tempDir": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/",
+      "override": "/Users/dev/Stackly Röot",
+      "runtimeRoot": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-edb5a626",
+      "socketPath": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-edb5a626/stacklyd.sock"
+    },
+    {
+      "name": "override_under_private_var",
+      "tempDir": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/",
+      "override": "/private/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-test-root",
+      "runtimeRoot": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-33bcd0d1",
+      "socketPath": "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/stackly-33bcd0d1/stacklyd.sock"
+    },
+    {
+      "name": "runtime_root_76_bytes",
+      "tempDir": "/var/folders/zz/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/T/",
+      "override": null,
+      "runtimeRoot": "/var/folders/zz/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/T/stackly",
+      "socketPath": "/var/folders/zz/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/T/stackly/stacklyd.sock"
+    },
+    {
+      "name": "runtime_root_77_bytes",
+      "tempDir": "/var/folders/zz/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/T/",
+      "override": null,
+      "error": "runtime_root_too_long"
+    }
+  ]
+}
