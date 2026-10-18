@@ -1,6 +1,8 @@
-//! Validated value types: names, versions, and digests.
+//! Validated value types: names, versions, digests, ports, and codes.
 
+use std::borrow::Cow;
 use std::fmt;
+use std::num::{NonZeroU16, NonZeroU64};
 use std::str::FromStr;
 
 use crate::error::{ValueError, ValueKind};
@@ -17,6 +19,21 @@ const REVISION_LABEL_MAX: usize = 64;
 const EXACT_VERSION_MAX: usize = 64;
 /// Number of hex characters in a [`Sha256Digest`].
 const SHA256_HEX_LEN: usize = 64;
+/// Longest [`EndpointName`], in characters.
+const ENDPOINT_NAME_MAX: usize = 32;
+/// Longest [`SocketName`], in bytes. It matches the socket path budget of
+/// the layout in `stackly-platform`.
+const SOCKET_NAME_MAX: usize = 15;
+/// Longest [`IdempotencyKey`], in bytes.
+const IDEMPOTENCY_KEY_MAX: usize = 128;
+/// Longest [`SessionId`], in bytes.
+const SESSION_ID_MAX: usize = 64;
+/// Longest [`ReasonCode`] or [`FailureCode`], in bytes.
+const CODE_MAX: usize = 64;
+/// Longest [`StageName`], in bytes.
+const STAGE_NAME_MAX: usize = 32;
+/// Longest [`ObservationDetail`], in characters.
+const OBSERVATION_DETAIL_MAX: usize = 256;
 
 const NAME_RULE: &str = "must be 1 to 63 characters: a lowercase letter, then lowercase letters, \
                          digits, and single hyphens, not ending in a hyphen";
@@ -96,6 +113,78 @@ fn check_exact_version(s: &str) -> Result<(), &'static str> {
     }
 }
 
+fn check_endpoint_name(s: &str) -> Result<(), &'static str> {
+    if is_name(s) && s.len() <= ENDPOINT_NAME_MAX {
+        Ok(())
+    } else {
+        Err(
+            "must be 1 to 32 characters: a lowercase letter, then lowercase letters, digits, \
+             and single hyphens, not ending in a hyphen",
+        )
+    }
+}
+
+fn check_socket_name(s: &str) -> Result<(), &'static str> {
+    let allowed = |b: &u8| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-');
+    if (1..=SOCKET_NAME_MAX).contains(&s.len())
+        && s.as_bytes().iter().all(allowed)
+        && s != "."
+        && s != ".."
+    {
+        Ok(())
+    } else {
+        Err("must be 1 to 15 bytes of letters, digits, and . _ -, other than . and ..")
+    }
+}
+
+/// Whether `s` is 1 to `max` bytes of printable ASCII other than space
+/// (0x21 to 0x7e).
+fn is_printable_ascii(s: &str, max: usize) -> bool {
+    (1..=max).contains(&s.len()) && s.bytes().all(|b| (0x21..=0x7e).contains(&b))
+}
+
+fn check_idempotency_key(s: &str) -> Result<(), &'static str> {
+    if is_printable_ascii(s, IDEMPOTENCY_KEY_MAX) {
+        Ok(())
+    } else {
+        Err("must be 1 to 128 bytes of printable ASCII without spaces")
+    }
+}
+
+fn check_session_id(s: &str) -> Result<(), &'static str> {
+    if is_printable_ascii(s, SESSION_ID_MAX) {
+        Ok(())
+    } else {
+        Err("must be 1 to 64 bytes of printable ASCII without spaces")
+    }
+}
+
+fn check_observation_detail(s: &str) -> Result<(), &'static str> {
+    if (1..=OBSERVATION_DETAIL_MAX).contains(&s.chars().count()) {
+        Ok(())
+    } else {
+        Err("must be 1 to 256 characters")
+    }
+}
+
+/// Whether `s` is 1 to `max` bytes matching `^[a-z][a-z0-9_]*$`. It is a
+/// `const fn` so codes written as constants are checked at compile time.
+const fn is_code(s: &str, max: usize) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() || bytes.len() > max || !bytes[0].is_ascii_lowercase() {
+        return false;
+    }
+    let mut i = 1;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if !(b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
 fn check_runtime_line(s: &str) -> Result<(), &'static str> {
     if (1..=2).contains(&s.split('.').count()) && s.split('.').all(is_digits) {
         Ok(())
@@ -156,6 +245,52 @@ text_value! {
 }
 
 text_value! {
+    /// The name of an environment, with the same rules as [`InstanceName`].
+    #[derive(PartialOrd, Ord)]
+    EnvironmentName, EnvironmentName, "an environment name", check_name
+}
+
+text_value! {
+    /// The alias of an instance inside one environment, with the same rules
+    /// as [`InstanceName`]. Aliases are unique per environment.
+    #[derive(PartialOrd, Ord)]
+    MemberAlias, MemberAlias, "a member alias", check_name
+}
+
+text_value! {
+    /// The name of an endpoint of an instance: the rules of
+    /// [`InstanceName`], at most 32 characters.
+    #[derive(PartialOrd, Ord)]
+    EndpointName, EndpointName, "an endpoint name", check_endpoint_name
+}
+
+text_value! {
+    /// The file name of a Unix socket in an instance's run folder: 1 to 15
+    /// bytes of letters, digits, and `. _ -`, other than `.` and `..`.
+    #[derive(PartialOrd, Ord)]
+    SocketName, SocketName, "a socket name", check_socket_name
+}
+
+text_value! {
+    /// A client's idempotency key: 1 to 128 bytes of printable ASCII
+    /// without spaces.
+    IdempotencyKey, IdempotencyKey, "an idempotency key", check_idempotency_key
+}
+
+text_value! {
+    /// An opaque login session ID from the platform: 1 to 64 bytes of
+    /// printable ASCII without spaces. Feature 31 decides its source.
+    #[derive(PartialOrd, Ord)]
+    SessionId, SessionId, "a session ID", check_session_id
+}
+
+text_value! {
+    /// Free text that explains a readiness or health observation: 1 to 256
+    /// characters. It never holds a secret.
+    ObservationDetail, ObservationDetail, "an observation detail", check_observation_detail
+}
+
+text_value! {
     /// The optional human name of an instance: 1 to 128 Unicode characters
     /// with no control characters.
     #[derive(PartialOrd, Ord)]
@@ -212,6 +347,197 @@ impl RuntimeLine {
             .as_str()
             .strip_prefix(self.as_str())
             .is_some_and(|rest| rest.starts_with('.'))
+    }
+}
+
+/// Defines a code newtype over `Cow<'static, str>`: 1 to `$max` bytes
+/// matching `^[a-z][a-z0-9_]*$`, with a `const fn from_static` for codes
+/// that are fixed in the source.
+macro_rules! code_value {
+    ($(#[$meta:meta])* $name:ident, $kind:ident, $max:expr, $expecting:literal, $rule:literal) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        pub struct $name(Cow<'static, str>);
+
+        impl $name {
+            /// Creates a code that is fixed in the source.
+            ///
+            /// # Panics
+            ///
+            /// Panics when `code` breaks the rule. Use it in a `const` item,
+            /// where that panic stops the build instead of a running
+            /// program.
+            #[must_use]
+            pub const fn from_static(code: &'static str) -> Self {
+                assert!(is_code(code, $max), concat!("invalid ", stringify!($name), ": ", $rule));
+                Self(Cow::Borrowed(code))
+            }
+
+            /// Returns the code.
+            #[must_use]
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&self.0)
+            }
+        }
+
+        impl FromStr for $name {
+            type Err = ValueError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                if is_code(s, $max) {
+                    Ok(Self(Cow::Owned(s.to_owned())))
+                } else {
+                    Err(ValueError::new(ValueKind::$kind, $rule))
+                }
+            }
+        }
+
+        serde_as_text!($name => $expecting);
+    };
+}
+
+code_value! {
+    /// Why a readiness or health observation has its state, such as
+    /// `awaiting_probe`: 1 to 64 bytes matching `^[a-z][a-z0-9_]*$`.
+    ReasonCode, ReasonCode, CODE_MAX, "a reason code",
+    "must be 1 to 64 bytes: a lowercase letter, then lowercase letters, digits, and underscores"
+}
+
+impl ReasonCode {
+    /// No probe has reported yet since the instance was created.
+    pub const NEVER_OBSERVED: Self = Self::from_static("never_observed");
+    /// The instance just entered `running`, and no probe has reported yet.
+    pub const AWAITING_PROBE: Self = Self::from_static("awaiting_probe");
+    /// The instance is not `running`, so it is neither ready nor healthy.
+    pub const NOT_RUNNING: Self = Self::from_static("not_running");
+    /// The last observation is older than the allowed age.
+    pub const STALE: Self = Self::from_static("stale");
+}
+
+code_value! {
+    /// Why an instance or operation failed, such as `interrupted`: 1 to 64
+    /// bytes matching `^[a-z][a-z0-9_]*$`.
+    FailureCode, FailureCode, CODE_MAX, "a failure code",
+    "must be 1 to 64 bytes: a lowercase letter, then lowercase letters, digits, and underscores"
+}
+
+impl FailureCode {
+    /// The daemon stopped while the work ran, and reconciliation ended it.
+    pub const INTERRUPTED: Self = Self::from_static("interrupted");
+}
+
+code_value! {
+    /// The name of an operation stage, such as `download`: 1 to 32 bytes
+    /// matching `^[a-z][a-z0-9_]*$`.
+    StageName, StageName, STAGE_NAME_MAX, "a stage name",
+    "must be 1 to 32 bytes: a lowercase letter, then lowercase letters, digits, and underscores"
+}
+
+/// A TCP or UDP port, 1 to 65535.
+///
+/// ```
+/// use stackly_domain::Port;
+///
+/// assert_eq!(Port::new(5432)?.get(), 5432);
+/// assert!(Port::new(0).is_err());
+/// # Ok::<(), stackly_domain::ValueError>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Port(NonZeroU16);
+
+impl Port {
+    /// Wraps a port number.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ValueError`] for port 0.
+    pub const fn new(port: u16) -> Result<Self, ValueError> {
+        match NonZeroU16::new(port) {
+            Some(port) => Ok(Self(port)),
+            None => Err(ValueError::new(ValueKind::Port, "must be 1 to 65535")),
+        }
+    }
+
+    /// Returns the port number.
+    #[must_use]
+    pub const fn get(self) -> u16 {
+        self.0.get()
+    }
+}
+
+impl fmt::Display for Port {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl FromStr for Port {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let port = s
+            .parse::<u16>()
+            .map_err(|_| ValueError::new(ValueKind::Port, "must be 1 to 65535"))?;
+        Self::new(port)
+    }
+}
+
+/// The revision of an aggregate: it starts at 1 and grows by exactly 1 with
+/// every mutation other than a readiness or health observation. The
+/// registry uses it for compare and swap (feature 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ResourceRevision(NonZeroU64);
+
+impl ResourceRevision {
+    /// The revision of a new aggregate.
+    pub const INITIAL: Self = Self(NonZeroU64::MIN);
+
+    /// Wraps a stored revision.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ValueError`] for 0, because revisions start at 1.
+    pub const fn new(revision: u64) -> Result<Self, ValueError> {
+        match NonZeroU64::new(revision) {
+            Some(revision) => Ok(Self(revision)),
+            None => Err(ValueError::new(
+                ValueKind::ResourceRevision,
+                "must be at least 1",
+            )),
+        }
+    }
+
+    /// Returns the revision number.
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0.get()
+    }
+
+    /// Returns the revision after this one.
+    ///
+    /// # Panics
+    ///
+    /// Panics at `u64::MAX`, which one mutation per nanosecond would take
+    /// more than 500 years to reach.
+    #[must_use]
+    pub const fn next(self) -> Self {
+        Self(
+            self.0
+                .checked_add(1)
+                .expect("a resource revision never reaches u64::MAX"),
+        )
+    }
+}
+
+impl fmt::Display for ResourceRevision {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
     }
 }
 

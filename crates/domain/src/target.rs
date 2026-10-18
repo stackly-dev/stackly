@@ -150,6 +150,26 @@ impl FromStr for Target {
     }
 }
 
+/// Returns whether a provider runs natively on `host`: only when one of its
+/// artifacts is built for exactly the host's OS and architecture (AC-074).
+///
+/// There is no substitution of any kind: a `linux` artifact, including one
+/// built for WSL, never serves a Windows host, and a macOS artifact never
+/// serves another OS.
+///
+/// ```
+/// use stackly_domain::{Arch, Os, Target, native_support};
+///
+/// let mac = Target::new(Os::Macos, Arch::Aarch64);
+/// let windows = Target::new(Os::Windows, Arch::Aarch64);
+/// assert!(native_support(&[mac], mac));
+/// assert!(!native_support(&[mac], windows));
+/// ```
+#[must_use]
+pub fn native_support(artifact_targets: &[Target], host: Target) -> bool {
+    artifact_targets.contains(&host)
+}
+
 serde_as_text! {
     Os => "an os: macos, windows, or linux",
     Arch => "an arch: aarch64 or x86_64",
