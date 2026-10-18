@@ -1,0 +1,31 @@
+# Written by Stackly from the routes setting; edits are replaced.
+http:
+  routers:
+    "api":
+      rule: "Host(`api.localhost`)"
+      service: "api"
+      entryPoints:
+        - web
+    "web-app":
+      rule: "Host(`app.localhost`) && PathPrefix(`/v1`)"
+      service: "web-app"
+      entryPoints:
+        - web
+    "docs":
+      rule: "Host(\"docs.localhost\") || PathPrefix(`/docs`)"
+      service: "docs"
+      entryPoints:
+        - web
+  services:
+    "api":
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:3000"
+    "web-app":
+      loadBalancer:
+        servers:
+          - url: "http://localhost:5173/"
+    "docs":
+      loadBalancer:
+        servers:
+          - url: "http://[::1]:8080/docs"

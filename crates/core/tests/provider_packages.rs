@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
     InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError, PreflightOutcome,
-    ResolvedEndpoint, RuntimeContext, Segment, ValidatedPackage, read_package,
+    ReloadAction, ResolvedEndpoint, RuntimeContext, Segment, ValidatedPackage, read_package,
 };
 use stackly_domain::{
     Capability, ExactVersion, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
@@ -37,6 +37,10 @@ fn fake_dir() -> PathBuf {
 
 fn nats_dir() -> PathBuf {
     repo_root().join("providers/nats")
+}
+
+fn traefik_dir() -> PathBuf {
+    repo_root().join("providers/traefik")
 }
 
 fn fake_command_dir() -> PathBuf {
@@ -550,4 +554,123 @@ fn a_quote_in_the_data_folder_fails_the_nats_plan_without_the_value() {
     };
     assert!(field.contains("instance.data"), "{field}");
     assert!(!err.to_string().contains("o\"q"), "{err}");
+}
+
+/// The first `count` of the three example routes of the golden context.
+fn traefik_settings(count: usize) -> serde_json::Value {
+    let routes = [
+        serde_json::json!({
+            "name": "api",
+            "rule": "Host(`api.localhost`)",
+            "backendUrl": "http://127.0.0.1:3000",
+        }),
+        serde_json::json!({
+            "name": "web-app",
+            "rule": "Host(`app.localhost`) && PathPrefix(`/v1`)",
+            "backendUrl": "http://localhost:5173/",
+        }),
+        serde_json::json!({
+            "name": "docs",
+            "rule": "Host(\"docs.localhost\") || PathPrefix(`/docs`)",
+            "backendUrl": "http://[::1]:8080/docs",
+        }),
+    ];
+    serde_json::json!({ "routes": routes[..count] })
+}
+
+#[test]
+fn the_traefik_package_reads_without_writes_and_validates() {
+    let package = validated(&traefik_dir());
+
+    let key = package.key();
+    assert_eq!(key.provider().as_str(), "official/traefik");
+    assert_eq!(key.revision().as_str(), "1.0.0");
+    assert_eq!(package.software().as_str(), "traefik");
+    assert_eq!(
+        package
+            .provider_revision()
+            .capabilities()
+            .iter()
+            .collect::<Vec<_>>(),
+        [Capability::Reload, Capability::MultiInstance]
+    );
+}
+
+#[test]
+fn traefik_plans_with_three_routes_match_the_golden_files() {
+    let package = validated(&traefik_dir());
+    let context = golden_context(&package, traefik_settings(3));
+
+    let init = package
+        .init_plan(&context)
+        .expect("the traefik init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the traefik run plan builds");
+    let reload = package
+        .reload_plan(&context)
+        .expect("the traefik reload plan builds");
+
+    assert_golden("traefik", "init.json", &pretty(&init));
+    assert_golden("traefik", "run.json", &pretty(&run));
+    assert_golden("traefik", "reload.json", &pretty(&reload));
+    let renders = rendered(&init.steps);
+    assert_eq!(renders.len(), 2);
+    for (config, text) in renders {
+        assert_golden("traefik", &format!("render-{config}.txt"), &text);
+    }
+}
+
+#[test]
+fn traefik_routes_render_for_zero_one_and_three_routes() {
+    let package = validated(&traefik_dir());
+
+    // Three routes is the golden context, so its routes file is the one
+    // the init plan renders.
+    for (count, golden) in [
+        (0, "routes-zero.txt"),
+        (1, "routes-one.txt"),
+        (3, "render-routes.txt"),
+    ] {
+        let context = golden_context(&package, traefik_settings(count));
+        let reload = package
+            .reload_plan(&context)
+            .expect("the traefik reload plan builds");
+
+        let renders = rendered(&reload.steps);
+        let [(config, text)] = renders.as_slice() else {
+            panic!("a traefik reload renders only routes: {renders:?}");
+        };
+        assert_eq!(config, "routes");
+        assert_golden("traefik", golden, text);
+        let parsed: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str(text).expect("the routes file is YAML");
+        let routers = parsed["http"]["routers"]
+            .as_mapping()
+            .map_or(0, |map| map.len());
+        assert_eq!(routers, count, "{text}");
+    }
+}
+
+#[test]
+fn a_traefik_reload_rewrites_only_routes_and_verifies_readiness() {
+    let package = validated(&traefik_dir());
+    let context = golden_context(&package, traefik_settings(1));
+
+    let reload = package
+        .reload_plan(&context)
+        .expect("the traefik reload plan builds");
+
+    assert_eq!(reload.action, ReloadAction::None);
+    let verify = reload
+        .verify
+        .expect("traefik verifies readiness after reload");
+    assert_eq!(verify.deadline, std::time::Duration::from_secs(30));
+    let dynamic = context.paths.config.join("dynamic");
+    assert!(
+        reload.steps.iter().any(
+            |step| matches!(step, InitStep::EnsureDirectories(dirs) if dirs.contains(&dynamic))
+        ),
+        "the reload plan creates config/dynamic before writing routes"
+    );
 }
