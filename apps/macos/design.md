@@ -264,7 +264,101 @@ The Status page of the Design Gallery shows every instance row in both contexts 
 
 ## State patterns
 
-Filled by milestone 3.
+Every page or section that loads data from the daemon has one of five shapes. Build the shape with `ViewState.resolve` and show it with `StateView`; never pick a shape by hand. The code lives in `Packages/StacklyUI/Sources/StacklyUI/State/`, and the States page of the Design Gallery shows every shape, placeholder, banner, and the mutation gate.
+
+### Shapes
+
+| Shape | When | `StateView` shows | Actions |
+| --- | --- | --- | --- |
+| `.loading` | no data has loaded yet | `DelayedProgress`: a centered `ProgressView`, only after 300 ms | none |
+| `.empty` with `.noData` | the data loaded and holds nothing | stale and partial banners if any, then `StatePlaceholder` (symbol in `StacklyColor.decorative`, title, message in `textSecondary`) | up to two from `EmptyContent` (mockup: Browse Catalog, New Instance…) |
+| `.empty` with `.noResults(query:)` | the filter or search left nothing | banners if any, then `StatePlaceholder` with `magnifyingglass`, the title `No Results for “<query>”`, and the screen's suggestion (mockup: "Check the spelling or try another status.") | Clear Filters |
+| `.failed` | the first load failed | `StatePlaceholder` with the critical tone symbol, the screen's title, the daemon's message, and the error code in monospace | Retry, Open Diagnostics |
+| `.unsupported` | the capability is not supported | `StatePlaceholder` with `nosign`, the title (mockup: "Backups Aren’t Supported"), and the reason | none |
+| `.loaded` | the data loaded | stale and partial banners if any, then your content | Retry on the stale banner, item actions on the partial banner |
+
+`ViewState.resolve(unsupported:value:error:lastLoadedAt:isRefreshing:emptyContent:outdated:partial:)` picks the shape in a fixed order:
+
+1. `unsupported` is set: `.unsupported`.
+2. No `value` and an `error`: `.failed`.
+3. No `value`: `.loading`.
+4. `emptyContent(value)` returns content: `.empty`.
+5. Otherwise: `.loaded`.
+
+So a page never shows empty before a load succeeded, and never shows failed while it still has data. The notes (`ContentNotes`) of `.empty` and `.loaded` carry:
+
+- `stale`: `StaleNote(since: lastLoadedAt, reason: .refreshFailed(error))` when `value` and `error` are both set (a refresh failed). It wins over outdated.
+- Else `stale`: `StaleNote(since: outdated.since, reason: .outdated(source:))` when the daemon reports the data as out of date, such as the catalog.
+- `partial` and `isRefreshing` as you pass them.
+
+| Type | Fields | Built by |
+| --- | --- | --- |
+| `EmptyContent` | `kind` (`.noData` or `.noResults(query:)`), `symbol`, `title`, `message`, `primaryAction`, `secondaryAction` | `EmptyContent.noData(symbol:title:message:primaryAction:secondaryAction:)`, `EmptyContent.noResults(query:message:clearFilters:)` |
+| `FailureContent` | `title` (the screen's, such as "Couldn’t Load Instances"), `message` and `code` (from the daemon's error envelope, already redacted) | the screen |
+| `UnsupportedContent` | `title`, `reason` (from the provider's capabilities) | the screen |
+| `StaleNote` | `since`, `reason` (`.refreshFailed(FailureContent)` or `.outdated(source:)`) | `resolve` |
+| `PartialNote` | `summary`, `items` of `PartialItem(name:reason:action:)` | the screen, from the daemon's data |
+| `StateAction` | `title` (a verb), `mutates`, `perform` | the screen |
+
+`FailureContent`, `UnsupportedContent`, `StaleNote`, `EmptyKind`, and `MutationAvailability` are `nonisolated` and `Sendable`. The types that carry closures stay on the main actor.
+
+### View model contract
+
+Each screen's view model holds what `resolve` needs and follows these rules:
+
+- Keep the last data that loaded (`value`) and `lastLoadedAt` through refreshes and through filter or search changes, and set them together.
+- Apply filters on top of `value` and decide through `emptyContent`: no data when `value` is empty, no results when the filtered result is empty. A filter never empties `value`.
+- When a refresh starts, set `isRefreshing`. On success, set the new `value` and `lastLoadedAt` and clear `error`. On failure, set `error` and keep `value`.
+- Retry from `.failed` clears `error` and loads again, so the shape returns to `.loading`.
+- Build every `ViewState` with `resolve`, never a case by hand.
+
+### Placeholders
+
+- `StatePlaceholder` has two sizes. `.page`: title `.title2.weight(.semibold)`, symbol `ScaledSize.placeholderPageSymbol` (44), 80 pt vertical padding. `.section`: title `.title3.weight(.semibold)`, symbol `ScaledSize.placeholderSectionSymbol` (34), 34 pt vertical padding, inside a card (`.cardSurface()`).
+- Create one with `StatePlaceholder(_ empty:size:)`, `StatePlaceholder(_ failure:size:retry:openDiagnostics:)`, or `StatePlaceholder(_ unsupported:size:)`. `StateView` uses the page size.
+- The message wraps at 380 pt. The main action is `.borderedProminent` and sits after the secondary `.bordered` one, as in the mockup. Neither is the default button.
+- `InlineEmptyRow(text)` is a one sentence row inside a grouped list (mockup: "Nothing running."), in `textSecondary` with `Spacing.rowInsets`.
+
+### Banners
+
+`StateBanner(tone:title:message:code:items:actions:base:)`:
+
+- It always shows the tone symbol (`Tone.symbol` in the tone fill, `ScaledSize.bannerSymbol`), then the title in `.body.weight(.semibold)`, the message in `.callout` `textSecondary`, an optional code block (`.stacklyCode()` on `surfaceConsole` with `Radius.small`), an optional item list, and up to three native `.bordered` buttons.
+- The background is `.toneSurface(tone, on: base, strength: .banner)`. `base` is `.card` by default and `.window` for the shell's window banner. The padding is 12 vertical and 14 horizontal.
+- Items: five show, then "and N more" with a Show All link button (24 × 24 pt hit target) that opens the rest in place. Each item shows its name in semibold, its reason in `textSecondary`, and an optional small `.bordered` action.
+- Errors about one item (a failed instance, a port conflict, config drift) never use `ViewState`. Put a `StateBanner` at that item (mockup: the failure banner on Summary, drift on Configuration) and leave the rest of the page as it is.
+
+Page banners from `StateView`:
+
+| Note | Tone | Title | Message | Action |
+| --- | --- | --- | --- | --- |
+| stale, refresh failed | `caution` | `Showing the last known state from <time>.` (mockup) | `Couldn’t refresh: <daemon message>.` | Retry |
+| stale, outdated | `caution` | `Showing the last known state from <time>.` | `<source> last updated <time>.` | Retry |
+| partial | `caution` | the summary (mockup: "5 of 6 services ready") | the items that are not ready, each with its reason | per item |
+
+- The time comes from `StaleNote.formattedSince(now:calendar:locale:timeZone:)`: the short time in the locale's style (14:02 in a 24 hour locale, 2:02 PM in en_US), plus the short date when it is not today in that time zone. The banner reads the calendar, locale, and time zone from the environment and updates every minute.
+- While `isRefreshing`, Retry is disabled and shows a small `ProgressView` next to it.
+- Content is never dimmed while stale (the mockup's 0.6 opacity fails AA).
+- A daemon that cannot be reached is not a page stale note. The app shell (spec 0013) shows one `StateBanner(tone: .caution, …, base: .window)` for the whole window and sets `MutationAvailability`.
+
+### Loading
+
+- `DelayedProgress` shows a centered `ProgressView` only after 300 ms, so a fast load never flashes a spinner. A refresh never replaces content with a spinner.
+- The delay starts when `DelayedProgress` appears. `StateView` inserts a new one each time the shape enters `.loading`, so the delay starts over each time.
+- Its model, `DelayedVisibility`, takes an injectable `sleep: @Sendable (Duration) async throws -> Void` (default `Task.sleep(for:)`), so tests never wait real time.
+
+### Mutation gate and unsupported actions
+
+- `MutationAvailability` is `.available` or `.blocked(reason:since:)`. The app shell sets it with `.environment(\.mutationAvailability, …)`; the default is `.available`.
+- `.mutationGated()` disables a control while mutations are blocked, with the reason as its help (tooltip and VoiceOver help). Apply it to every control that changes data through the daemon. A `StateAction` with `mutates: true` in a placeholder or banner is gated the same way. Copy, navigation, Retry, Open Diagnostics, and Browse Catalog are never gated. The visible reason is the shell's window banner.
+- `.disabled(reason: String?)` disables a control whose capability is not supported, with the reason as its help. Always show the reason as text too: `DisabledReasonText(reason)` (`info.circle`, `.footnote`, `textSecondary`) next to the control or in the section footer, or an unsupported placeholder. Never hide an unsupported control. Draw capability buttons only after the screen's data, capabilities included, has loaded.
+- Apply `.mutationGated()` and `.disabled(reason:)` to the control itself, not to a container. They add the help only while there is a reason, so the control keeps its own `.help` while it is enabled.
+
+### Motion and VoiceOver
+
+- Shape changes, banners appearing, and the delayed spinner crossfade with `StacklyMotion.crossfade`. Nothing moves or scales.
+- A placeholder or banner is one VoiceOver group labeled by its title. Their symbols are decorative and hidden.
+- `StateView` announces the failure title once when the shape turns `.failed`, and a critical `StateBanner` announces its title once when it appears.
 
 ## Confirmation
 
