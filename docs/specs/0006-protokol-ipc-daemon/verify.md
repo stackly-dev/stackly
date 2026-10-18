@@ -35,3 +35,39 @@ _Langkah diturunkan dari acceptance criteria spec 0006. `/check verify` menjalan
 - AC-10 · `ProtocolVersion::CURRENT` 1.0, fixture minor lebih baru, enum terbuka, `SkippedEvent`, digest dan `contract-versions.json`; `contractDrift` saat handshake menunggu Milestone 4
 - AC-16 · bagian `stackly-protocol`; `stackly-ipc` dan capability `ipc_endpoint` menunggu Milestone 2 dan 4
 - AC-2 sampai AC-5, AC-9, AC-11 sampai AC-15, AC-17 · belum, milik Milestone 2 sampai 5
+
+## Milestone 3: Library daemon, lock, dan log
+
+Test yang menjalankan `stacklyd` memakai `SpawnedDaemon` dengan `STACKLY_ROOT` di `TestRoot`; runtime root nya ada di folder temp user asli dan dihapus sesudahnya hanya kalau kosong atau hanya berisi `i/` yang kosong.
+
+### UI / manual
+
+- [ ] Jalankan `STACKLY_ROOT=$(mktemp -d) cargo run -q -p stacklyd -- --print-roots` → satu baris JSON level `INFO` berisi `data_root`, `logs_root`, `cache_root`, `runtime_root`, `socket_path` (`<runtime_root>/stacklyd.sock`), dan `root_override: true`, exit 0, folder sementara itu tetap kosong, dan runtime root `stackly-<fnv8>` tidak dibuat → AC-17
+- [ ] Jalankan `stacklyd` dua kali dengan `STACKLY_ROOT` yang sama di dua terminal → yang kedua keluar 3 dengan satu baris `ERROR` `code` `daemon.lock_held` yang menyebut `owner_pid`, `owner_server_instance_id`, `owner_version`, dan `owner_started_at` milik yang pertama; Ctrl+C di terminal pertama keluar 0 dengan baris `stacklyd stopping` (`signal` `SIGINT`) dan `stacklyd stopped` → AC-4
+
+### Commands
+
+- [ ] `cargo test -p stackly-core --lib layout::tests::runtime_root` → 7 test lulus: runtime root dan `i/` dibuat ulang dengan mode 0700 setelah dihapus, layout yang ada tidak diubah, runtime root yang terbuka untuk group atau other, symlink, atau milik user lain ditolak tanpa diperbaiki, dan create yang gagal menjadi error platform → AC-11 (bagian core)
+- [ ] `cargo test -p stacklyd --lib lock::` → 11 test lulus: lock file baru bermode 0600 berisi JSON dengan kunci `pid`, `serverInstanceId`, `startedAt`, `version` berurutan; lock kedua mendapat `Held` dengan pemiliknya tanpa mengubah isi atau inode; `to_error_body` memberi `daemon.lock_held` dengan keempat details; isi yang tidak terbaca atau lebih dari 4 KiB menjadi `owner unknown`; symlink (juga yang menggantung), folder, dan FIFO ditolak tanpa memblokir dan tanpa menyentuh target → AC-4
+- [ ] `cargo test -p stacklyd --lib log_sink::` → 18 test lulus: rotasi dengan ambang kecil menyisakan tepat 5 file dengan urutan benar dan tidak menyentuh file lain; file baru 0600 dan ukurannya dihitung dari isi yang sudah ada; baris sebelum `install_file` hanya ke stderr, sesudahnya ke stderr dan file; antrian penuh membuang baris tanpa menahan pemanggil, menghitungnya, dan menulis satu baris `log lines dropped` dengan jumlahnya; pipe stderr yang tidak dibaca tidak menahan logging; file yang gagal ditulis membuang baris, ditandai degraded, dan dibuka ulang setelah jeda; `health` menjadi `ok` lagi setelah satu menit → AC-12
+- [ ] `cargo test -p stacklyd --lib startup::` → 4 test lulus: `STACKLY_LOG` kosong atau tidak ada berarti `info`, filter valid dipakai, filter tidak valid atau bukan UTF-8 ditolak dengan nilainya → AC-12
+- [ ] `cargo test -p stacklyd --test root_override` → 8 test lulus: `--print-roots` dengan override, tanpa override dengan `HOME` palsu (data root dari database user, bukan `HOME`), override kosong, relatif, dan tidak ada (exit 1), `STACKLY_LOG=stacklyd=loud` (exit 1 sebelum root dibaca), argumen asing (exit 2); daemon dengan override menulis baris start (versi, protokol, digest, `server_instance_id`, pid, uid, keempat root, `socket_path`, `root_override`) ke stderr dan ke `<logs>/daemon/stacklyd.log` bermode 0600, membuat registry, lalu SIGTERM membuatnya keluar 0; registry dengan `user_version` 999 dibiarkan utuh dan daemon tetap hidup sampai SIGTERM, lalu keluar 0 → AC-4, AC-12, AC-17
+- [ ] `cargo test -p stacklyd --test second_daemon` → 1 test lulus: daemon kedua keluar 3 dan menyebut pid, `serverInstanceId`, versi, dan waktu start daemon pertama; isi lock file, inode dan isi file log tidak berubah, file log tidak memuat `daemon.lock_held` atau pid daemon kedua; setelah daemon pertama berhenti, daemon berikutnya langsung mengambil lock → AC-4
+- [ ] `cargo test -p stackly-testkit --test spawned_daemon` → 9 test lulus: proses dihentikan saat drop, `stop` dan `wait_exit` memberi status, start gagal dengan isi stderr kalau proses keluar duluan, `STACKLY_ROOT` dan `STACKLY_LOG=debug` sampai ke proses, runtime root hanya dihapus kalau kosong atau hanya berisi `i/` yang kosong → AC-4 (alat test)
+- [ ] `cargo xtask check-deps` → lulus dengan dependency baru `stacklyd` (`tokio`, `uuid`, `libc` hanya untuk konstanta, `serde_json`, `thiserror`) → AC-16 (bagian `stacklyd`)
+
+### Value sourcing
+
+- [ ] Isi lock file: jalankan daemon, baca `<data>/stacklyd.lock` → `pid` sama dengan pid proses, `serverInstanceId` dan `startedAt` sama dengan baris start; jalankan lagi setelah berhenti → `serverInstanceId` baru, inode sama → AC-4
+- [ ] Info pemilik untuk daemon kedua: tulis isi lock file yang rusak saat daemon pertama memegangnya (test `unreadable_contents_of_a_held_lock_report_an_unknown_owner`) → pesan `owner unknown` tanpa details → AC-4
+- [ ] Path log: `DirectoryLayout::daemon_log_dir()` ditambah `stacklyd.log`; dengan override, file ada di `<root>/logs/daemon/stacklyd.log`, bukan di folder Logs asli → AC-12
+- [ ] Filter log: `STACKLY_LOG=debug` (dipakai `SpawnedDaemon`) dan tanpa variabel (default `info`) sama sama start; nilai tidak valid keluar 1 → AC-12
+- [ ] `root_override` dan `socket_path`: dengan `STACKLY_ROOT` bernilai `true` dan socket di `<user temp>/stackly-<fnv8>/stacklyd.sock`; tanpa variabel bernilai `false` dan socket di `<user temp>/stackly/stacklyd.sock` → AC-17
+
+### Acceptance-criteria coverage
+
+- AC-4 · lock, pesan `daemon.lock_held`, daemon kedua keluar 3 tanpa mengubah lock atau log; inode socket dan `stackly daemon status` menunggu Milestone 4
+- AC-11 · bagian core `ensure_runtime_root`; pemeriksa socket, rebind, dan urutan berhenti lengkap menunggu Milestone 4
+- AC-12 · penulis log tunggal, rotasi 20 MiB kali 5, antrian 8192 dengan penghitung drop, kebijakan tulis gagal, filter `STACKLY_LOG`; field log per koneksi dan request menunggu Milestone 4
+- AC-17 · `--print-roots` lengkap
+- AC-18 · sementara (keputusan engineer 2026-10-18): registry dalam recovery membuat daemon tetap hidup sampai sinyal dan exit 3 hanya untuk lock; balasan recovery mode menunggu langkah 18a
