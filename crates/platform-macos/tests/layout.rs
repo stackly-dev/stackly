@@ -169,7 +169,7 @@ fn identity_is_the_uid_that_owns_new_files() {
 }
 
 #[test]
-fn the_four_built_ports_are_supported_and_the_rest_name_their_feature() {
+fn the_built_capabilities_are_supported_and_the_rest_name_their_feature() {
     let platform = MacosPlatform::with_roots(TestRoot::new().unwrap().roots());
     let info = platform.info();
     let caps = info.capabilities();
@@ -181,7 +181,8 @@ fn the_four_built_ports_are_supported_and_the_rest_name_their_feature() {
             PlatformCapability::Directories
             | PlatformCapability::Filesystem
             | PlatformCapability::Clock
-            | PlatformCapability::UserIdentity => {
+            | PlatformCapability::UserIdentity
+            | PlatformCapability::IpcEndpoint => {
                 assert_eq!(status, CapabilityStatus::Supported, "{capability}");
             }
             _ => assert!(

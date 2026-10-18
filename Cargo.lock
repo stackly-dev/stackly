@@ -999,6 +999,14 @@ name = "stackly-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "serde",
+ "serde_json",
+ "stackly-ipc",
+ "stackly-platform",
+ "stackly-platform-macos",
+ "stackly-protocol",
+ "stackly-testkit",
+ "tokio",
 ]
 
 [[package]]
@@ -1143,6 +1151,7 @@ dependencies = [
  "serde_json",
  "stackly-core",
  "stackly-domain",
+ "stackly-ipc",
  "stackly-platform",
  "stackly-platform-macos",
  "stackly-protocol",

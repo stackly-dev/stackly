@@ -14,6 +14,20 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+stackly-ipc.workspace = true
+stackly-platform.workspace = true
+stackly-protocol.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+stackly-platform-macos.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+stackly-testkit.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "rt-multi-thread"] }
 
 [lints]
 workspace = true
