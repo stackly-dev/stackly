@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 clap.workspace = true
 stackly-core.workspace = true
+stackly-domain.workspace = true
 stackly-platform.workspace = true
 stackly-protocol.workspace = true
 stackly-storage.workspace = true

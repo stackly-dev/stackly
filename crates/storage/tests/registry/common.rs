@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::fs::DirBuilder;
 use std::os::unix::fs::DirBuilderExt;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use jiff::Timestamp;
@@ -19,7 +20,9 @@ use stackly_domain::{
 };
 use stackly_platform::{Clock, DirectoryLayout};
 use stackly_storage::{OpenSummary, RegistryOpen, SqliteRegistry, open_registry};
-use stackly_testkit::{FakeClock, FakePlatform, TestRoot};
+use stackly_testkit::{
+    BackupSeed, FakeClock, FakePlatform, RegistrySeed, SecretReferenceSeed, TestRoot,
+};
 
 /// The app version the registry is opened with.
 const APP_VERSION: &str = "0.1.0-test";
@@ -77,6 +80,15 @@ impl Harness {
         conn.busy_timeout(Duration::from_secs(5))
             .expect("a busy timeout can be set");
         conn
+    }
+
+    /// A [`RegistrySeed`] that writes through a second connection to the
+    /// registry file, the way the conformance suite seeds tables no
+    /// `WriteOp` covers yet.
+    pub fn seeder(&self) -> SideSeed {
+        SideSeed {
+            conn: Mutex::new(self.side()),
+        }
     }
 
     /// Commits `ops` and expects success.
@@ -329,4 +341,91 @@ pub fn as_new(operation: &Operation) -> Operation {
         ..stored_operation(operation)
     })
     .expect("an operation that was valid stays valid at revision 1")
+}
+
+/// Seeds rows through its own connection to the registry file. Seeding
+/// never raises the generation, and foreign keys still apply.
+pub struct SideSeed {
+    conn: Mutex<Connection>,
+}
+
+impl SideSeed {
+    fn run(&self, what: &str, write: impl FnOnce(&Connection) -> rusqlite::Result<()>) {
+        let conn = self.conn.lock().unwrap_or_else(PoisonError::into_inner);
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .and_then(|()| write(&conn))
+            .and_then(|()| conn.execute_batch("COMMIT"))
+            .unwrap_or_else(|err| panic!("seeding {what} failed: {err}"));
+    }
+}
+
+impl RegistrySeed for SideSeed {
+    fn seed_backup(&self, backup: BackupSeed) {
+        self.run("a backup", |conn| {
+            conn.execute(
+                "INSERT INTO backups (id, instance_id, runtime_id, runtime_identity, method, \
+                 scope, consistency, path, created_at) VALUES (?1, ?2, ?3, \
+                 'postgresql 17.6 macos aarch64', 'cold', 'instance', 'stopped', \
+                 '/Volumes/backups/stackly', ?4)",
+                (
+                    backup.id.to_string(),
+                    backup.instance_id.map(|id| id.to_string()),
+                    backup.runtime_id.map(|id| id.to_string()),
+                    format!("{:.9}", backup.created_at),
+                ),
+            )
+            .map(drop)
+        });
+    }
+
+    fn seed_audit_events(&self, count: u32, at: Timestamp) {
+        self.run("audit events", |conn| {
+            for _ in 0..count {
+                conn.execute(
+                    "INSERT INTO audit_events (id, actor, action, result, occurred_at) \
+                     VALUES (?1, 'daemon', 'instance.start', 'succeeded', ?2)",
+                    (OperationId::generate().to_string(), format!("{at:.9}")),
+                )?;
+            }
+            Ok(())
+        });
+    }
+
+    fn seed_observations(&self, instance: InstanceId, count: u32, at: Timestamp) {
+        self.run("process observations", |conn| {
+            for _ in 0..count {
+                conn.execute(
+                    "INSERT INTO process_observations (instance_id, pid, start_identity, \
+                     executable_identity, observed_at) VALUES (?1, 4242, 'start-1', \
+                     '/opt/stackly/bin/postgres', ?2)",
+                    (instance.to_string(), format!("{at:.9}")),
+                )?;
+            }
+            Ok(())
+        });
+    }
+
+    fn seed_secret_reference(&self, reference: SecretReferenceSeed) {
+        self.run("a secret reference", |conn| {
+            let at = format!("{:.9}", reference.created_at);
+            conn.execute(
+                "INSERT INTO secret_references (id, store_key, scope, purpose, status, revision, \
+                 created_at, updated_at) VALUES (?1, ?2, 'instance', ?3, 'present', 1, ?4, ?4)",
+                (
+                    reference.id.to_string(),
+                    &reference.store_key,
+                    &reference.purpose,
+                    at,
+                ),
+            )
+            .map(drop)
+        });
+    }
+}
+
+/// `path` with `suffix` appended to its file name, for `-wal` and `-shm`.
+pub fn suffixed(path: &std::path::Path, suffix: &str) -> std::path::PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(suffix);
+    name.into()
 }

@@ -123,6 +123,7 @@ fn an_accepted_root_override_prepares_the_layout_creates_the_registry_and_exits_
     assert_eq!(registry["level"], "INFO");
     assert_eq!(field(registry, "registry_state"), "ready");
     assert_eq!(field(registry, "created"), true);
+    assert_eq!(field(registry, "pruned_rows"), 0);
     assert_eq!(field(registry, "schema_version"), 1);
     assert!(
         field(registry, "sqlite_version")

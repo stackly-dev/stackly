@@ -2,14 +2,17 @@
 //! references, stored instance paths, instance lists, and paged operations
 //! (AC-10, AC-11).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
     InstallMode, Instance, InstanceFilter, InstanceId, InstanceLifecycle, InstancePathKind,
-    NewRuntime, Operation, OperationCursor, OperationEvent, OperationId, OperationQuery,
-    OperationResource, Registry, RegistryError, ResourceRef, Runtime, RuntimeId, WriteOp,
+    LogicalRoot, NewRuntime, Operation, OperationCursor, OperationEvent, OperationId,
+    OperationQuery, OperationResource, Registry, RegistryError, RelativePath, ResourceRef, Runtime,
+    RuntimeId, WriteOp,
 };
+
+use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::{Harness, as_new, retained, stored};
 
@@ -65,7 +68,14 @@ fn known_instance_ids_list_every_instance_in_id_order() {
 }
 
 #[test]
-fn runtime_references_list_instances_dependents_unfinished_operations_and_backups() {
+fn runtime_references_include_stopped_and_retained_instances() {
+    let ev = evidence!(
+        covers = ["BR-007"],
+        kind = Kind::Fixture,
+        expected = "runtime_references on the SQLite registry lists stopped and retained \
+                    instances, dependent runtimes, unfinished operations, and backups of the \
+                    runtime, and a raw DELETE of the runtime is refused by a foreign key",
+    );
     let harness = Harness::new();
     let base = harness.base();
     let at = harness.now();
@@ -155,10 +165,18 @@ fn runtime_references_list_instances_dependents_unfinished_operations_and_backup
         )
         .unwrap_err();
     assert!(err.to_string().contains("FOREIGN KEY"), "{err}");
+    ev.pass();
 }
 
 #[test]
-fn stored_paths_are_the_seven_layout_paths_and_survive_a_rename() {
+fn renaming_keeps_id_runtime_and_stored_paths() {
+    let ev = evidence!(
+        covers = ["BR-003"],
+        kind = Kind::Fixture,
+        expected = "renaming an instance in the SQLite registry changes only its name, revision, \
+                    and updated_at; its ID, runtime, creation, and seven stored paths stay, and \
+                    the paths still resolve to the layout",
+    );
     let harness = Harness::new();
     let base = harness.base();
     let instance = harness.instance(&base, "main");
@@ -225,6 +243,90 @@ fn stored_paths_are_the_seven_layout_paths_and_survive_a_rename() {
             .value,
         None
     );
+    let id = instance.id().to_string();
+    assert_eq!(
+        harness.raw(
+            "SELECT created_at || ' ' || created_by_operation || ' ' || \
+             coalesce(config_revision_id, '-') FROM instances WHERE id = ?1",
+            &id
+        ),
+        Some(format!(
+            "2026-01-01T00:00:00.000000000Z {} -",
+            instance.created_by()
+        ))
+    );
+    ev.pass();
+}
+
+#[test]
+fn stored_paths_resolve_to_the_layout_and_never_repeat() {
+    let ev = evidence!(
+        covers = ["BR-002"],
+        kind = Kind::Fixture,
+        expected = "for 1000 instances in the SQLite registry, every stored path resolves to the \
+                    layout path of its instance, and no stored path equals or lies inside a path \
+                    of another instance under the same root",
+    );
+    let harness = Harness::new();
+    let base = harness.base();
+    let instances: Vec<Instance> = (0..1000)
+        .map(|index| harness.instance(&base, &format!("i{index}")))
+        .collect();
+    harness.commit(
+        instances
+            .iter()
+            .cloned()
+            .map(WriteOp::InsertInstance)
+            .collect(),
+    );
+
+    let roots = harness.layout.roots();
+    let mut owners: HashMap<(LogicalRoot, RelativePath), InstanceId> = HashMap::new();
+    for instance in &instances {
+        let entries = harness
+            .registry
+            .instance_paths(instance.id())
+            .unwrap()
+            .value
+            .expect("a stored instance has stored paths");
+        let layout = harness.layout.instance_paths(instance.id());
+        let expected = [
+            layout.root,
+            layout.data,
+            layout.config,
+            layout.config_history,
+            layout.temp,
+            layout.logs,
+            layout.run,
+        ];
+        let resolved: Vec<_> = entries
+            .iter()
+            .map(|entry| roots.resolve(entry.root(), entry.path()))
+            .collect();
+        assert_eq!(resolved, expected, "{}", instance.id());
+        for entry in entries {
+            let key = (entry.root(), entry.path().clone());
+            assert!(
+                owners.insert(key, instance.id()).is_none(),
+                "a stored path repeats: {}:{}",
+                entry.root(),
+                entry.path()
+            );
+        }
+    }
+    for ((root, path), owner) in &owners {
+        let parts: Vec<&str> = path.components().collect();
+        for depth in 1..=parts.len() {
+            let ancestor: RelativePath = parts[..depth].join("/").parse().unwrap();
+            if let Some(other) = owners.get(&(*root, ancestor.clone()))
+                && other != owner
+            {
+                panic!("{root}:{path} of {owner} lies inside {root}:{ancestor} of {other}");
+            }
+        }
+    }
+    assert_eq!(owners.len(), 7000);
+    ev.pass();
 }
 
 #[test]

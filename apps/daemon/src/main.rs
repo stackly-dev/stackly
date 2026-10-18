@@ -2,8 +2,9 @@
 //!
 //! The daemon wires every dependency explicitly here. It is the only place
 //! that reads `STACKLY_ROOT`, once at start. For now it resolves its roots,
-//! prepares the layout, opens the registry, logs the outcome, and exits;
-//! the IPC server comes with the daemon build (feature 6).
+//! prepares the layout, opens the registry, prunes its history, logs the
+//! outcome, and exits; the IPC server comes with the daemon build
+//! (feature 6).
 
 use std::process::ExitCode;
 
@@ -39,6 +40,7 @@ fn main() -> ExitCode {
 #[cfg(target_os = "macos")]
 fn run(info: DaemonInfo, args: &Args) -> ExitCode {
     use stackly_core::prepare_layout;
+    use stackly_domain::{Registry, RetentionPolicy};
     use stackly_platform::ROOT_OVERRIDE_ENV;
     use stackly_platform_macos::MacosPlatform;
     use stackly_protocol::ProtocolVersion;
@@ -87,8 +89,17 @@ fn run(info: DaemonInfo, args: &Args) -> ExitCode {
     };
     match open_registry(&platform, prepared.layout(), info.version) {
         Ok(RegistryOpen::Ready { registry, summary }) => {
+            // provisional: F6 also prunes every 24 hours while it serves.
+            let pruned = match registry.prune(&RetentionPolicy::DEFAULT, platform.clock().now()) {
+                Ok(pruned) => pruned,
+                Err(err) => {
+                    tracing::error!(error = %err, "cannot prune the registry history");
+                    return ExitCode::FAILURE;
+                }
+            };
             tracing::info!(
                 registry_state = "ready",
+                pruned_rows = pruned.total(),
                 schema_version = summary.schema_version,
                 created = summary.created,
                 migrated_from = summary.migrated_from,
