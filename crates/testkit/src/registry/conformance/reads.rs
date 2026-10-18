@@ -11,8 +11,8 @@ use stackly_domain::{
     InstanceId, InstanceLifecycle, InstancePathKind, IpEndpoint, LeaseFilter, LineCompatibility,
     LogicalRoot, Operation, OperationCursor, OperationId, OperationKind, OperationQuery,
     OperationResource, OperationState, Ownership, Port, PortRequest, Progress, ReadinessState,
-    ReasonCode, RegistryError, ResourceRef, Runtime, RuntimeId, RuntimeState, StartupPolicy,
-    Transport, UnixEndpoint, WriteOp,
+    ReasonCode, RecoveryHint, RegistryError, ResourceRef, Runtime, RuntimeId, RuntimeState,
+    StartupPolicy, Transport, UnixEndpoint, WriteOp,
 };
 use stackly_platform::{DirectoryLayout, RootSet, instance_path_entries};
 
@@ -251,10 +251,17 @@ pub(super) fn round_trip(suite: &Suite<'_>) {
                 .build()
         })
         .collect();
+    let key = format!("req-{}", suffix(OperationId::generate()));
+    operations.push(
+        OperationBuilder::new()
+            .state(OperationState::NeedsRecovery)
+            .recovery_hint(RecoveryHint::Resume)
+            .build(),
+    );
     operations.push(
         OperationBuilder::new()
             .state(OperationState::Running)
-            .idempotency_key("req-7f3a")
+            .idempotency_key(&key)
             .stage("download")
             .progress(Progress::Counted {
                 done: 512,

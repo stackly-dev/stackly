@@ -885,19 +885,21 @@ fn write_operation(
         int(operation.revision().get(), "revision")?,
         ts(operation.created_at()),
         ts(operation.updated_at()),
+        operation.recovery_hint().map(|hint| hint.as_code()),
     ];
     let sql = match write {
         Write::Insert => {
             "INSERT INTO operations (id, kind, resource_kind, resource_id, idempotency_key, \
              state, stage, progress_done, progress_total, failure_code, failure_retryable, \
-             started_at, revision, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"
+             started_at, revision, created_at, updated_at, recovery_hint) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)"
         }
         Write::Update => {
             "UPDATE operations SET kind = ?2, resource_kind = ?3, resource_id = ?4, \
              idempotency_key = ?5, state = ?6, stage = ?7, progress_done = ?8, \
              progress_total = ?9, failure_code = ?10, failure_retryable = ?11, \
-             started_at = ?12, revision = ?13, created_at = ?14, updated_at = ?15 WHERE id = ?1"
+             started_at = ?12, revision = ?13, created_at = ?14, updated_at = ?15, \
+             recovery_hint = ?16 WHERE id = ?1"
         }
     };
     conn.execute(sql, values).map_err(sql_error)?;

@@ -12,7 +12,7 @@ use stackly_domain::{
 use stackly_platform::Clock;
 use stackly_testkit::{
     BackupSeed, FakeClock, FakeRegistry, InstanceBuilder, ProviderRevisionBuilder, RegistrySeed,
-    RuntimeBuilder, WrittenAt, registry_conformance,
+    RuntimeBuilder, WrittenAt, registry_conformance, registry_journal_conformance,
 };
 
 fn fake() -> (FakeClock, FakeRegistry) {
@@ -40,6 +40,22 @@ fn fake_registry_passes_the_conformance_suite() {
     let (clock, registry) = fake();
 
     registry_conformance(&registry, &registry, &clock);
+}
+
+#[test]
+fn fake_registry_passes_the_journal_conformance_suite() {
+    let (clock, registry) = fake();
+
+    registry_journal_conformance(&registry, &registry, &clock);
+}
+
+#[test]
+fn both_suites_pass_one_after_the_other_on_one_registry() {
+    let (clock, registry) = fake();
+
+    registry_conformance(&registry, &registry, &clock);
+    registry_journal_conformance(&registry, &registry, &clock);
+    registry_journal_conformance(&registry, &registry, &clock);
 }
 
 #[test]

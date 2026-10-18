@@ -13,9 +13,9 @@ use stackly_domain::{
     BatchError, DesiredState, Environment, EnvironmentId, EnvironmentMember, FailureCode,
     InstallMode, Instance, InstanceLifecycle, Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState,
     NewRuntime, Operation, OperationFailure, OperationId, OperationKind, OperationResource,
-    OperationState, Ownership, Progress, ReasonCode, Registry, RegistryError, ResourceRevision,
-    Runtime, RuntimeId, RuntimeState, StartupPolicy, StoredLease, StoredOperation, StoredRuntime,
-    WriteOp,
+    OperationState, Ownership, Progress, ReasonCode, RecoveryHint, Registry, RegistryError,
+    ResourceRevision, Runtime, RuntimeId, RuntimeState, StartupPolicy, StoredLease,
+    StoredOperation, StoredRuntime, WriteOp,
 };
 
 use crate::common::{Harness, restored, stored, stored_operation};
@@ -270,6 +270,8 @@ fn every_operation_state_kind_and_resource_round_trips() {
                 failure: failed.then(|| {
                     OperationFailure::new(FailureCode::from_static("disk_full"), index % 3 == 0)
                 }),
+                recovery_hint: (*state == OperationState::NeedsRecovery)
+                    .then_some(RecoveryHint::Abandon),
                 created_at: created,
                 updated_at: created.checked_add(SignedDuration::from_nanos(5)).unwrap(),
                 revision: ResourceRevision::INITIAL,

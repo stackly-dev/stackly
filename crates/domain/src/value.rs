@@ -34,6 +34,14 @@ const CODE_MAX: usize = 64;
 const STAGE_NAME_MAX: usize = 32;
 /// Longest [`ObservationDetail`], in characters.
 const OBSERVATION_DETAIL_MAX: usize = 256;
+/// Longest [`MethodName`], in bytes.
+const METHOD_NAME_MAX: usize = 64;
+/// Longest [`ErrorCodeName`], in bytes.
+const ERROR_CODE_NAME_MAX: usize = 96;
+/// Longest [`DetailKey`], in bytes.
+const DETAIL_KEY_MAX: usize = 32;
+/// Longest [`CustomItemKey`], in bytes.
+const CUSTOM_ITEM_KEY_MAX: usize = 256;
 
 const NAME_RULE: &str = "must be 1 to 63 characters: a lowercase letter, then lowercase letters, \
                          digits, and single hyphens, not ending in a hyphen";
@@ -183,6 +191,78 @@ const fn is_code(s: &str, max: usize) -> bool {
         i += 1;
     }
     true
+}
+
+/// Whether `bytes[start..end]` is a non empty code segment matching
+/// `^[a-z][a-z0-9_]*$`.
+const fn is_code_segment(bytes: &[u8], start: usize, end: usize) -> bool {
+    if start >= end || !bytes[start].is_ascii_lowercase() {
+        return false;
+    }
+    let mut i = start + 1;
+    while i < end {
+        let b = bytes[i];
+        if !(b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Whether `s` is 3 to `max` bytes matching
+/// `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`: exactly one dot between two code
+/// segments. A `const fn`, like [`is_code`].
+const fn is_dotted_code(s: &str, max: usize) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() < 3 || bytes.len() > max {
+        return false;
+    }
+    let mut dot = bytes.len();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'.' {
+            if dot != bytes.len() {
+                return false;
+            }
+            dot = i;
+        }
+        i += 1;
+    }
+    dot != bytes.len()
+        && is_code_segment(bytes, 0, dot)
+        && is_code_segment(bytes, dot + 1, bytes.len())
+}
+
+fn check_method_name(s: &str) -> Result<(), &'static str> {
+    if is_dotted_code(s, METHOD_NAME_MAX) {
+        Ok(())
+    } else {
+        Err(
+            "must be 3 to 64 bytes: two codes of lowercase letters, digits, and underscores, each \
+             starting with a letter, joined by one dot",
+        )
+    }
+}
+
+fn check_detail_key(s: &str) -> Result<(), &'static str> {
+    let bytes = s.as_bytes();
+    if (1..=DETAIL_KEY_MAX).contains(&bytes.len())
+        && bytes[0].is_ascii_lowercase()
+        && bytes.iter().all(u8::is_ascii_alphanumeric)
+    {
+        Ok(())
+    } else {
+        Err("must be 1 to 32 bytes of camelCase: a lowercase letter, then letters and digits")
+    }
+}
+
+fn check_custom_item_key(s: &str) -> Result<(), &'static str> {
+    if is_printable_ascii(s, CUSTOM_ITEM_KEY_MAX) {
+        Ok(())
+    } else {
+        Err("must be 1 to 256 bytes of printable ASCII without spaces")
+    }
 }
 
 fn check_runtime_line(s: &str) -> Result<(), &'static str> {
@@ -433,6 +513,106 @@ code_value! {
 impl FailureCode {
     /// The daemon stopped while the work ran, and reconciliation ended it.
     pub const INTERRUPTED: Self = Self::from_static("interrupted");
+    /// A step of the work failed, and its effects were compensated.
+    pub const STEP_FAILED: Self = Self::from_static("step_failed");
+    /// Someone abandoned the operation from `needs_recovery`.
+    pub const ABANDONED: Self = Self::from_static("abandoned");
+    /// The daemon stopped before the work passed its point of no return,
+    /// and its effects were compensated.
+    pub const DAEMON_STOPPING: Self = Self::from_static("daemon_stopping");
+    /// A precondition no longer held when the operation was about to
+    /// start, for example its resource changed while it was queued.
+    pub const PRECONDITION_FAILED: Self = Self::from_static("precondition_failed");
+    /// The work panicked, and its effects were compensated.
+    pub const PANICKED: Self = Self::from_static("panicked");
+}
+
+code_value! {
+    /// The name of a compensator a feature registers with the operation
+    /// engine, such as `supervisor_spawned_process`: 1 to 64 bytes matching
+    /// `^[a-z][a-z0-9_]*$`.
+    CompensatorName, CompensatorName, CODE_MAX, "a compensator name",
+    "must be 1 to 64 bytes: a lowercase letter, then lowercase letters, digits, and underscores"
+}
+
+code_value! {
+    /// The kind of client that asked for an operation, such as `cli` or
+    /// `gui`: 1 to 64 bytes matching `^[a-z][a-z0-9_]*$`. The set is open.
+    ClientCode, ClientCode, CODE_MAX, "a client code",
+    "must be 1 to 64 bytes: a lowercase letter, then lowercase letters, digits, and underscores"
+}
+
+text_value! {
+    /// The wire name of an IPC method, such as `instance.create`: 3 to 64
+    /// bytes, two codes joined by one dot.
+    MethodName, MethodName, "a method name", check_method_name
+}
+
+/// The code of an error in the IPC catalog, such as
+/// `operation.queue_full`: 3 to 96 bytes, two codes (`area.reason`) joined
+/// by one dot.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ErrorCodeName(Cow<'static, str>);
+
+impl ErrorCodeName {
+    /// Creates a code that is fixed in the source.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `code` breaks the rule. Use it in a `const` item, where
+    /// that panic stops the build instead of a running program.
+    #[must_use]
+    pub const fn from_static(code: &'static str) -> Self {
+        assert!(
+            is_dotted_code(code, ERROR_CODE_NAME_MAX),
+            "invalid ErrorCodeName: must be area.reason, 3 to 96 bytes"
+        );
+        Self(Cow::Borrowed(code))
+    }
+
+    /// Returns the code.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ErrorCodeName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl FromStr for ErrorCodeName {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if is_dotted_code(s, ERROR_CODE_NAME_MAX) {
+            Ok(Self(Cow::Owned(s.to_owned())))
+        } else {
+            Err(ValueError::new(
+                ValueKind::ErrorCodeName,
+                "must be 3 to 96 bytes: two codes of lowercase letters, digits, and underscores, \
+                 each starting with a letter, joined by one dot",
+            ))
+        }
+    }
+}
+
+serde_as_text!(ErrorCodeName => "an error code name");
+
+text_value! {
+    /// The key of one detail of a stored failure, such as `operationId`: 1
+    /// to 32 bytes of camelCase.
+    #[derive(PartialOrd, Ord)]
+    DetailKey, DetailKey, "a detail key", check_detail_key
+}
+
+text_value! {
+    /// The key a custom compensator gives an item an operation created: 1
+    /// to 256 bytes of printable ASCII without spaces.
+    #[derive(PartialOrd, Ord)]
+    CustomItemKey, CustomItemKey, "a custom item key", check_custom_item_key
 }
 
 code_value! {
@@ -890,5 +1070,44 @@ mod tests {
         );
         let err = serde_json::from_str::<ExactVersion>("17").unwrap_err();
         assert!(err.to_string().contains("an exact version"), "{err}");
+    }
+
+    #[test]
+    fn method_and_error_code_names_are_two_codes_joined_by_one_dot() {
+        for good in ["instance.create", "a.b", "operation.queue_full", "x9_.y_2"] {
+            assert!(good.parse::<MethodName>().is_ok(), "{good}");
+            assert!(good.parse::<ErrorCodeName>().is_ok(), "{good}");
+        }
+        for bad in [
+            "", "a", "a.", ".b", "a.b.c", "A.b", "a.B", "1a.b", "a-b.c", "a..b",
+        ] {
+            assert!(bad.parse::<MethodName>().is_err(), "{bad:?}");
+            assert!(bad.parse::<ErrorCodeName>().is_err(), "{bad:?}");
+        }
+        let long = format!("a.{}", "b".repeat(63));
+        assert!(long.parse::<MethodName>().is_err());
+        assert!(long.parse::<ErrorCodeName>().is_ok());
+        assert_eq!(
+            ErrorCodeName::from_static("internal.unexpected").as_str(),
+            "internal.unexpected"
+        );
+    }
+
+    #[test]
+    fn detail_keys_are_camel_case_and_custom_keys_are_printable_ascii() {
+        assert!("operationId".parse::<DetailKey>().is_ok());
+        for bad in ["", "OperationId", "operation_id", "a b", &"a".repeat(33)] {
+            assert!(bad.parse::<DetailKey>().is_err(), "{bad:?}");
+        }
+        assert!("pid:42".parse::<CustomItemKey>().is_ok());
+        assert!("a b".parse::<CustomItemKey>().is_err());
+        assert!("x".repeat(257).parse::<CustomItemKey>().is_err());
+        assert!(
+            "supervisor_spawned_process"
+                .parse::<CompensatorName>()
+                .is_ok()
+        );
+        assert!("gui".parse::<ClientCode>().is_ok());
+        assert!("Gui".parse::<ClientCode>().is_err());
     }
 }

@@ -2,6 +2,7 @@
 //! implementation passes, so the fake and the SQLite registry cannot drift
 //! apart unnoticed (spec 0005, AC-8 to AC-11, AC-14, AC-16).
 
+mod journal;
 mod prune;
 mod races;
 mod reads;
@@ -86,6 +87,49 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     reads::seeding(&suite);
     races::races(&suite);
     prune::prune(&suite);
+}
+
+/// Runs the scenarios of the operation journal tables (spec 0007, AC-2,
+/// AC-17) against any [`Registry`], and panics with the name of the first
+/// check that fails.
+///
+/// It covers round trips of journals, steps, created items, lock keys, and
+/// the recovery hint; the check order of the journal write ops; upserts
+/// that rewrite a row and keep its children; the unique rules of steps,
+/// created items, and lock keys; `IdempotencyKeyTaken`; the four journal
+/// reads; and prune deleting journal rows with their operation.
+///
+/// It runs apart from [`registry_conformance`] until the SQLite registry
+/// has the journal tables (spec 0007 build step 3). The caller provides
+/// what [`registry_conformance`] asks for. Its prune deletes every
+/// finished operation older than 30 days in the registry.
+///
+/// ```
+/// use std::sync::Arc;
+///
+/// use stackly_platform::Clock;
+/// use stackly_testkit::{FakeClock, FakeRegistry, registry_journal_conformance};
+///
+/// let clock = FakeClock::new();
+/// let registry = FakeRegistry::new(Arc::new(clock.clone()), clock.now());
+/// registry_journal_conformance(&registry, &registry, &clock);
+/// ```
+///
+/// # Panics
+///
+/// Panics with `registry_conformance check failed: <check>: <detail>` at
+/// the first check that fails.
+pub fn registry_journal_conformance(
+    registry: &dyn Registry,
+    seed: &dyn RegistrySeed,
+    clock: &FakeClock,
+) {
+    journal::journal(&Suite {
+        registry,
+        seed,
+        clock,
+        loaded_at: clock.now(),
+    });
 }
 
 /// What every scenario gets.

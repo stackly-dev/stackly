@@ -63,7 +63,7 @@ pub use port::allocate_port;
 pub use registry::{
     BackupSeed, EnvironmentBuilder, FakeRegistry, InstanceBuilder, LeaseBuilder, OperationBuilder,
     ProviderRevisionBuilder, RegistrySeed, RuntimeBuilder, SecretReferenceSeed, WrittenAt,
-    registry_conformance,
+    registry_conformance, registry_journal_conformance,
 };
 pub use stackly_evidence as evidence;
 pub use test_root::TestRoot;

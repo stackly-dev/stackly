@@ -369,6 +369,7 @@ pub(super) fn compare_and_swap(suite: &Suite<'_>) {
         "start the operation",
         started.apply(OperationEvent::Start, suite.loaded_at),
     );
+    started.touch(suite.loaded_at);
     suite.commit(
         "an operation update at the stored revision applies",
         vec![WriteOp::UpdateOperation {
