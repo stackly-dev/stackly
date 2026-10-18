@@ -224,6 +224,7 @@ fn an_accepted_override_starts_the_daemon_with_a_registry_and_sigterm_stops_it_w
     assert_eq!(registry["level"], "INFO");
     assert_eq!(field(registry, "registry_state"), "ready");
     assert_eq!(field(registry, "created"), true);
+    assert_eq!(field(registry, "pruned_rows"), 0);
     assert_eq!(field(registry, "schema_version"), 1);
     assert!(
         field(registry, "sqlite_version")

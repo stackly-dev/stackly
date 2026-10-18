@@ -3,14 +3,17 @@
 //! (spec 0005 step 10, AC-8, AC-10).
 
 use std::collections::BTreeSet;
+use std::sync::Barrier;
 
 use jiff::SignedDuration;
 use stackly_domain::{
-    BatchError, Environment, EnvironmentId, EnvironmentMember, Generation, InstallMode,
+    BatchError, Committed, Environment, EnvironmentId, EnvironmentMember, Generation, InstallMode,
     InstanceFilter, InstanceId, Lease, LeaseFilter, LeaseHolder, LeaseId, NewRuntime,
     OperationResource, Ownership, Registry, RegistryError, ResourceRef, ResourceRevision, Runtime,
     RuntimeEvent, RuntimeId, WriteBatch, WriteOp,
 };
+
+use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::{Base, Harness, artifact, managed_runtime, retained, stored};
 
@@ -66,7 +69,14 @@ fn a_stale_expected_generation_rejects_the_whole_batch() {
 }
 
 #[test]
-fn a_stale_revision_rejects_the_batch_and_nothing_before_it_applies() {
+fn stale_revision_is_rejected_and_nothing_in_the_batch_applies() {
+    let ev = evidence!(
+        covers = ["REQ-048", "NFR-005"],
+        kind = Kind::Fixture,
+        expected = "an instance update with a stale expected revision fails with \
+                    RevisionConflict at its op, and no other op of the batch reaches the SQLite \
+                    registry",
+    );
     let harness = Harness::new();
     let base = harness.base();
     let instance = harness.instance(&base, "main");
@@ -105,6 +115,7 @@ fn a_stale_revision_rejects_the_batch_and_nothing_before_it_applies() {
     let stored = harness.registry.instance(instance.id()).unwrap();
     assert_eq!(stored.generation, generation);
     assert_eq!(stored.value.unwrap().name().as_str(), "primary");
+    ev.pass();
 }
 
 #[test]
@@ -690,35 +701,108 @@ fn a_sql_constraint_that_still_refuses_a_write_is_integrity_at_its_op() {
     );
 }
 
-#[test]
-fn concurrent_inserts_of_one_name_leave_exactly_one_instance() {
-    let harness = Harness::new();
-    let base = harness.base();
-    let candidates: Vec<_> = (0..16).map(|_| harness.instance(&base, "main")).collect();
-    let barrier = std::sync::Barrier::new(candidates.len());
-
-    let results: Vec<_> = std::thread::scope(|scope| {
-        let handles: Vec<_> = candidates
-            .iter()
-            .map(|instance| {
+/// Runs every batch on its own thread, all released at once, and returns
+/// the results in batch order.
+fn race(harness: &Harness, batches: Vec<Vec<WriteOp>>) -> Vec<Result<Committed, BatchError>> {
+    let barrier = Barrier::new(batches.len());
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = batches
+            .into_iter()
+            .map(|ops| {
                 let registry = harness.registry.clone();
                 let barrier = &barrier;
                 scope.spawn(move || {
                     barrier.wait();
-                    registry.commit(WriteBatch::new(vec![WriteOp::InsertInstance(
-                        instance.clone(),
-                    )]))
+                    registry.commit(WriteBatch::new(ops))
                 })
             })
             .collect();
-        handles.into_iter().map(|h| h.join().unwrap()).collect()
-    });
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("a racing commit does not panic"))
+            .collect()
+    })
+}
 
-    assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 1);
+/// Asserts exactly one success, and that every failure matches `lost`.
+fn one_winner(
+    results: &[Result<Committed, BatchError>],
+    lost: impl Fn(&RegistryError) -> bool,
+    what: &str,
+) {
+    assert_eq!(
+        results.iter().filter(|result| result.is_ok()).count(),
+        1,
+        "{what}: {results:?}"
+    );
     assert!(
         results
             .iter()
-            .filter_map(|r| r.as_ref().err())
-            .all(|err| matches!(err.error, RegistryError::NameTaken { .. }))
+            .filter_map(|result| result.as_ref().err())
+            .all(|err| err.op_index == Some(0) && lost(&err.error)),
+        "{what}: {results:?}"
     );
+}
+
+#[test]
+fn concurrent_creates_produce_one_instance() {
+    let ev = evidence!(
+        covers = ["REQ-048", "NFR-005"],
+        kind = Kind::Fixture,
+        expected = "16 threads that insert an instance with the same name, a managed runtime for \
+                    the same artifact, or an update of the same instance revision into the SQLite \
+                    registry produce exactly one success each, and the others fail typed",
+    );
+    let harness = Harness::new();
+    let base = harness.base();
+
+    let names = race(
+        &harness,
+        (0..16)
+            .map(|_| vec![WriteOp::InsertInstance(harness.instance(&base, "main"))])
+            .collect(),
+    );
+    one_winner(
+        &names,
+        |err| matches!(err, RegistryError::NameTaken { .. }),
+        "same name",
+    );
+    let shared = artifact("postgresql");
+    harness.commit(vec![WriteOp::InsertArtifact(shared.clone())]);
+    let runtimes = race(
+        &harness,
+        (0..16)
+            .map(|_| vec![WriteOp::InsertRuntime(managed_runtime(&shared))])
+            .collect(),
+    );
+    one_winner(
+        &runtimes,
+        |err| matches!(err, RegistryError::DuplicateRuntime { .. }),
+        "same artifact",
+    );
+    let winner = harness
+        .registry
+        .instance_by_name(&"main".parse().unwrap())
+        .unwrap()
+        .value
+        .expect("one instance won the name");
+    let updates = race(
+        &harness,
+        (0..16)
+            .map(|index| {
+                let mut renamed = winner.clone();
+                renamed.rename(format!("renamed-{index}").parse().unwrap());
+                vec![WriteOp::UpdateInstance {
+                    instance: renamed,
+                    expected: winner.revision(),
+                }]
+            })
+            .collect(),
+    );
+    one_winner(
+        &updates,
+        |err| matches!(err, RegistryError::RevisionConflict { .. }),
+        "same revision",
+    );
+    ev.pass();
 }

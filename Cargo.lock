@@ -1140,6 +1140,7 @@ dependencies = [
  "serde",
  "serde_json",
  "stackly-core",
+ "stackly-domain",
  "stackly-platform",
  "stackly-platform-macos",
  "stackly-protocol",

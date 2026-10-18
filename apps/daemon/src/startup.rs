@@ -100,6 +100,7 @@ mod imp {
     use std::process::ExitCode;
 
     use stackly_core::{daemon_info, prepare_layout};
+    use stackly_domain::{Registry, RetentionPolicy};
     use stackly_platform::{DirectoryLayout, Platform, UserId};
     use stackly_platform_macos::MacosPlatform;
     use stackly_protocol::{CONTRACT_DIGEST, ProtocolVersion, Timestamp};
@@ -287,8 +288,18 @@ mod imp {
     ) -> Option<Option<stackly_storage::SqliteRegistry>> {
         match open_registry(platform, layout, version) {
             Ok(RegistryOpen::Ready { registry, summary }) => {
+                // provisional: F6 also prunes every 24 hours while it serves.
+                let pruned = match registry.prune(&RetentionPolicy::DEFAULT, platform.clock().now())
+                {
+                    Ok(pruned) => pruned,
+                    Err(error) => {
+                        tracing::error!(error = %error, "cannot prune the registry history");
+                        return None;
+                    }
+                };
                 tracing::info!(
                     registry_state = "ready",
+                    pruned_rows = pruned.total(),
                     schema_version = summary.schema_version,
                     created = summary.created,
                     migrated_from = summary.migrated_from,

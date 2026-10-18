@@ -6,6 +6,8 @@ use jiff::{SignedDuration, Timestamp};
 use rusqlite::Connection;
 use stackly_domain::{InstanceId, OperationId, PruneReport, Registry, RetentionPolicy, WriteOp};
 
+use stackly_testkit::evidence::{Kind, evidence};
+
 use crate::common::Harness;
 
 const DAY: i64 = 24 * 60 * 60;
@@ -73,7 +75,16 @@ fn count(conn: &Connection, sql: &str) -> i64 {
 }
 
 #[test]
-fn prune_bounds_history_by_age_and_rows_and_keeps_unfinished_work() {
+fn prune_keeps_unfinished_operations_and_bounds_history() {
+    let ev = evidence!(
+        covers = ["NFR-011"],
+        kind = Kind::Fixture,
+        expected = "prune on the SQLite registry deletes finished operations and audit events \
+                    past the age or row limit, released leases past the age limit, and process \
+                    observations past the newest per instance, keeps unfinished and \
+                    needs_recovery operations and active leases, and leaves the generation as it \
+                    was",
+    );
     let harness = Harness::new();
     let base = harness.base();
     let instance = harness.instance(&base, "main");
@@ -168,6 +179,7 @@ fn prune_bounds_history_by_age_and_rows_and_keeps_unfinished_work() {
         generation
     );
     assert_eq!(harness.registry.prune(&policy, now).unwrap().total(), 0);
+    ev.pass();
 }
 
 #[test]
