@@ -252,3 +252,14 @@ Opsi yang ditolak: naik ke `v2` (report `v1` yang sudah di commit tidak boleh di
 Masih dari penghapusan CI: target `x86_64-unknown-linux-gnu` dibuang dari `[graph] targets` di `deny.toml`, karena tidak ada lagi yang dibangun atau dijalankan di Linux. Yang tersisa `aarch64-apple-darwin` dan cek portabilitas `aarch64-pc-windows-msvc`.
 
 Catatan ini dibaca ulang model lain (Sonnet 5.5, baca saja). Tiga temuannya diterapkan atas persetujuan engineer: kalimat di Validasi tentang field yang sudah dihapus, satu baris tentang cabang Linux yang tersisa dan target `cargo deny`, serta "field yang dikenal" pada aturan penyalinan record (di invariant spec ini dan di skenario test `runtime record` spec 0003), karena `runtime record` mendecode lalu menulis ulang report, sehingga field yang tidak dikenal tidak ikut tersalin.
+
+### Perubahan 2026-10-18: pilihan build yang dicatat saat verify
+
+Tiga sesi build fitur 2 mengambil beberapa pilihan kecil yang tidak disebut spec ini. Saat `/check verify`, pilihan itu ditunjukkan ke pemilik proyek, yang memilih mencatat semuanya apa adanya. Kode tidak berubah; spec hanya menyusul perilaku yang sudah dibangun dan sudah dibuktikan di Mac ini.
+
+- Pindaian fixture credential fail closed. File yang tidak bisa dibaca menjadi `credential_leak` "cannot scan", karena tidak adanya prefix tidak bisa dibuktikan. Opsi yang ditolak: hanya peringatan, yang membuat run lolos walau sebagian output tidak pernah diperiksa.
+- Pindaian tidak mengikuti symlink, socket, atau pipe, supaya tidak keluar dari folder run dan tidak menggantung di FIFO. File `records/*.tmp` ikut dipindai, karena record yang setengah ditulis tetap bisa memuat prefix.
+- `evidence check` memangkas `-` di kedua ujung slug, menolak dua record manual dengan `id` yang sama (aturan "review ulang berarti file manual baru" jadi bisa dicek), dan hanya menerima `evidencePath` manual yang menunjuk file record itu sendiri atau `evidence/manual/files/<id>/`.
+- Pesan pindaian Rust menyebut file dan fungsi, bukan nomor baris. Nomor baris butuh fitur `span-locations` di `proc-macro2`; nama fungsi sudah cukup untuk menemukan test-nya. Opsi yang ditolak: menambah fitur itu hanya untuk pesan error.
+- Gate native Swift memanggil `Test.cancel` di `prepare(for:)`, sehingga Swift Testing melaporkan test itu skipped dengan alasannya. Memanggilnya di dalam `provideScope` sebelum body jalan membuat test hilang dari output `swift test`, jadi kata "cancelled" hanya berlaku untuk `Evidence.blocked` di dalam body.
+- Pindaian Swift melewati baris komentar `//`, supaya contoh `.evidence(` dan `kind: .native` di doc comment `StacklyTestSupport` tidak dianggap kode.
