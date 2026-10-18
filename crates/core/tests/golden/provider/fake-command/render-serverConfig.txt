@@ -1,0 +1,1 @@
+{"greeting": "hello from fake-command", "instanceName": "golden", "authToken": "<secret:authToken>"}

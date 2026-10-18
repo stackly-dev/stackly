@@ -1,0 +1,91 @@
+{
+  "spawn": {
+    "program": {
+      "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "relative": "stackly-fake-server"
+    },
+    "args": [
+      "serve",
+      "--config=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/fake.json",
+      "--data=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+      "--port=14000",
+      "--host=127.0.0.1",
+      "--label=$(touch pwned); rm -rf ~ `id` \"q\" 'q' | & > ü 空",
+      "--ready-delay-ms=0",
+      "--crash-after-ms=0",
+      "--crash-exit-code=70",
+      "--log-lines-per-second=0",
+      "--ignore-term=false"
+    ],
+    "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+    "env": [
+      [
+        "HOME",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+      ],
+      [
+        "PATH",
+        "/usr/bin:/bin:/usr/sbin:/sbin"
+      ],
+      [
+        "TMPDIR",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+      ]
+    ]
+  },
+  "readiness": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14000,
+        "path": "/ready",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "100ms",
+    "attemptTimeout": "1s",
+    "deadline": "30s"
+  },
+  "recoveryDeadline": "30s",
+  "health": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14000,
+        "path": "/health",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "5s",
+    "attemptTimeout": "2s",
+    "failureThreshold": 3
+  },
+  "stop": {
+    "type": "signal",
+    "content": {
+      "signal": "term",
+      "timeout": "10s"
+    }
+  },
+  "logFiles": [],
+  "endpoints": [
+    [
+      "http",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14000
+        }
+      }
+    ]
+  ]
+}

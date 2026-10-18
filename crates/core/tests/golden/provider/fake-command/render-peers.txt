@@ -1,0 +1,8 @@
+port: 14000
+peers:
+  - name: "east"
+    port: 6222
+    primary: true
+  - name: "west"
+    port: 4222
+    primary: false

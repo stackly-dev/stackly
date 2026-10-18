@@ -1,0 +1,774 @@
+//! Raw decode types for `stackly/v1alpha1`, and the strict YAML and JSON
+//! decoders that fill them.
+//!
+//! Every object denies unknown fields. Names, versions, enums, and tags stay
+//! strings or plain numbers here; the semantic pass in `validate` turns them
+//! into domain types and closed enums, so a wrong value gets a specific code
+//! and its field path. Variants share one flat struct with optional fields,
+//! and the semantic pass rejects a field that does not belong to the chosen
+//! variant.
+
+use std::collections::BTreeMap;
+use std::fmt;
+
+use serde::de::{self, DeserializeOwned, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
+
+use super::issue::{Issue, IssueCode, Location};
+
+/// The only `apiVersion` this engine reads.
+pub(crate) const API_VERSION: &str = "stackly/v1alpha1";
+/// The only `kind` this engine reads.
+pub(crate) const KIND: &str = "Provider";
+
+/// `provider.yaml`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawManifest {
+    #[expect(dead_code, reason = "checked by the header stage before this decode")]
+    pub(crate) api_version: String,
+    #[expect(dead_code, reason = "checked by the header stage before this decode")]
+    pub(crate) kind: String,
+    pub(crate) metadata: RawMetadata,
+    pub(crate) compatibility: RawCompatibility,
+    pub(crate) runtime: RawRuntime,
+    #[serde(default)]
+    pub(crate) capabilities: RawCapabilities,
+    pub(crate) resources: RawResources,
+    #[serde(default)]
+    pub(crate) config_files: BTreeMap<String, RawConfigFile>,
+    pub(crate) lifecycle: RawLifecycle,
+    pub(crate) readiness: RawReadiness,
+    pub(crate) health: Option<RawHealth>,
+    #[serde(default)]
+    pub(crate) timeouts: RawTimeouts,
+    pub(crate) logs: Option<RawLogs>,
+    pub(crate) backup: Option<RawBackup>,
+    pub(crate) permissions: RawPermissions,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawMetadata {
+    pub(crate) id: String,
+    pub(crate) software: String,
+    pub(crate) display_name: String,
+    pub(crate) revision: String,
+    pub(crate) category: String,
+    pub(crate) description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawCompatibility {
+    pub(crate) platforms: Vec<RawPlatform>,
+    #[serde(default)]
+    pub(crate) line_compatibility: BTreeMap<String, Vec<String>>,
+    pub(crate) data_marker: Option<RawDataMarker>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawPlatform {
+    pub(crate) os: String,
+    pub(crate) arch: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawDataMarker {
+    pub(crate) file: String,
+    pub(crate) pattern: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawRuntime {
+    pub(crate) executable: String,
+    pub(crate) execution_mode: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawCapabilities {
+    #[serde(default)]
+    pub(crate) reload: bool,
+    #[serde(default)]
+    pub(crate) metrics: bool,
+    #[serde(default)]
+    pub(crate) tls: bool,
+    #[serde(default)]
+    pub(crate) multi_instance: bool,
+    #[serde(default)]
+    pub(crate) persistence: bool,
+    #[serde(default)]
+    pub(crate) backup: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawResources {
+    pub(crate) endpoints: BTreeMap<String, RawEndpoint>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawEndpoint {
+    pub(crate) transport: String,
+    pub(crate) purpose: String,
+    pub(crate) default_host: Option<String>,
+    pub(crate) default_port: Option<u64>,
+    pub(crate) socket_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawConfigFile {
+    pub(crate) template: String,
+    pub(crate) format: String,
+    pub(crate) destination: String,
+    #[serde(default)]
+    pub(crate) sensitive: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawLifecycle {
+    #[serde(default)]
+    pub(crate) initialize: Vec<RawStep>,
+    pub(crate) start: RawCommand,
+    pub(crate) stop: RawStop,
+    pub(crate) reload: Option<RawReload>,
+}
+
+/// One initialize step; `primitive` picks which other fields belong.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawStep {
+    pub(crate) primitive: String,
+    pub(crate) file: Option<String>,
+    pub(crate) secret: Option<String>,
+    pub(crate) destination: Option<String>,
+    pub(crate) executable: Option<String>,
+    pub(crate) args: Option<Vec<String>>,
+    pub(crate) cwd: Option<String>,
+    pub(crate) env: Option<BTreeMap<String, String>>,
+    pub(crate) stdin: Option<RawStdin>,
+    pub(crate) timeout_seconds: Option<u64>,
+    pub(crate) success_exit_codes: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawStdin {
+    pub(crate) secret: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawCommand {
+    pub(crate) executable: String,
+    #[serde(default)]
+    pub(crate) args: Vec<String>,
+    pub(crate) cwd: Option<String>,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawStop {
+    pub(crate) strategy: String,
+    pub(crate) signal: Option<String>,
+    pub(crate) command: Option<RawCommand>,
+    pub(crate) success_exit_codes: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawReload {
+    #[serde(default)]
+    pub(crate) render: Vec<String>,
+    pub(crate) action: String,
+    pub(crate) signal: Option<String>,
+    pub(crate) command: Option<RawCommand>,
+    pub(crate) success_exit_codes: Option<Vec<u8>>,
+    pub(crate) verify: Option<String>,
+}
+
+/// One probe; `type` picks which other fields belong.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawProbe {
+    #[serde(rename = "type")]
+    pub(crate) kind: String,
+    pub(crate) endpoint: Option<String>,
+    pub(crate) path: Option<String>,
+    pub(crate) expect_status: Option<RawStatusRange>,
+    pub(crate) command: Option<RawCommand>,
+    pub(crate) success_exit_codes: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawStatusRange {
+    pub(crate) min: u16,
+    pub(crate) max: u16,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawReadiness {
+    pub(crate) probe: RawProbe,
+    pub(crate) interval_milliseconds: Option<u64>,
+    pub(crate) attempt_timeout_milliseconds: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawHealth {
+    pub(crate) probe: Option<RawProbe>,
+    pub(crate) interval_seconds: Option<u64>,
+    pub(crate) attempt_timeout_milliseconds: Option<u64>,
+    pub(crate) failure_threshold: Option<u64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawTimeouts {
+    pub(crate) init_seconds: Option<u64>,
+    pub(crate) readiness_seconds: Option<u64>,
+    pub(crate) recovery_seconds: Option<u64>,
+    pub(crate) stop_seconds: Option<u64>,
+    pub(crate) reload_seconds: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawLogs {
+    #[serde(default)]
+    pub(crate) files: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawBackup {
+    pub(crate) cold: Option<RawColdBackup>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawColdBackup {
+    pub(crate) paths: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawPermissions {
+    pub(crate) managed_filesystem: Vec<String>,
+    pub(crate) execute_runtime_binary: bool,
+    #[serde(default)]
+    pub(crate) additional_executables: BTreeMap<String, String>,
+}
+
+/// `schemas/settings.schema.json`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawSettingsSchema {
+    #[serde(rename = "$schema")]
+    pub(crate) schema: String,
+    pub(crate) title: String,
+    pub(crate) description: Option<String>,
+    #[serde(rename = "type")]
+    pub(crate) kind: String,
+    #[serde(rename = "additionalProperties")]
+    pub(crate) additional_properties: bool,
+    pub(crate) properties: BTreeMap<String, RawSettingField>,
+    #[serde(default)]
+    pub(crate) required: Vec<String>,
+}
+
+/// One root field of the settings schema.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawSettingField {
+    #[serde(rename = "type")]
+    pub(crate) kind: String,
+    pub(crate) title: String,
+    pub(crate) description: Option<String>,
+    pub(crate) default: Option<serde_json::Value>,
+    #[serde(rename = "enum")]
+    pub(crate) enum_values: Option<Vec<String>>,
+    #[serde(rename = "minLength")]
+    pub(crate) min_length: Option<u64>,
+    #[serde(rename = "maxLength")]
+    pub(crate) max_length: Option<u64>,
+    pub(crate) pattern: Option<String>,
+    pub(crate) minimum: Option<i64>,
+    pub(crate) maximum: Option<i64>,
+    pub(crate) items: Option<RawItems>,
+    #[serde(rename = "minItems")]
+    pub(crate) min_items: Option<u64>,
+    #[serde(rename = "maxItems")]
+    pub(crate) max_items: Option<u64>,
+    #[serde(rename = "x-stackly")]
+    pub(crate) x_stackly: Option<RawXStackly>,
+}
+
+/// The `items` of an array field: one level of object.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawItems {
+    #[serde(rename = "type")]
+    pub(crate) kind: String,
+    #[serde(rename = "additionalProperties")]
+    pub(crate) additional_properties: bool,
+    pub(crate) properties: BTreeMap<String, RawItemField>,
+    #[serde(default)]
+    pub(crate) required: Vec<String>,
+}
+
+/// One scalar field of an array item.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawItemField {
+    #[serde(rename = "type")]
+    pub(crate) kind: String,
+    pub(crate) title: String,
+    pub(crate) description: Option<String>,
+    pub(crate) default: Option<serde_json::Value>,
+    #[serde(rename = "enum")]
+    pub(crate) enum_values: Option<Vec<String>>,
+    #[serde(rename = "minLength")]
+    pub(crate) min_length: Option<u64>,
+    #[serde(rename = "maxLength")]
+    pub(crate) max_length: Option<u64>,
+    pub(crate) pattern: Option<String>,
+    pub(crate) minimum: Option<i64>,
+    pub(crate) maximum: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawXStackly {
+    pub(crate) apply: Option<String>,
+    pub(crate) visibility: Option<String>,
+    pub(crate) secret: Option<bool>,
+    pub(crate) managed: Option<String>,
+    pub(crate) key: Option<String>,
+}
+
+/// `versions.json`, schema `stackly.provider-versions/v1`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawVersions {
+    pub(crate) schema: String,
+    pub(crate) software: String,
+    pub(crate) artifacts: Vec<RawArtifact>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawArtifact {
+    pub(crate) id: String,
+    pub(crate) line: String,
+    pub(crate) version: String,
+    pub(crate) os: String,
+    pub(crate) arch: String,
+    pub(crate) status: String,
+    pub(crate) min_os: Option<String>,
+    pub(crate) format: Option<String>,
+    pub(crate) urls: Option<Vec<String>>,
+    pub(crate) sha256: Option<String>,
+    pub(crate) size: Option<u64>,
+    pub(crate) archive_root: Option<String>,
+    pub(crate) signing_policy: Option<String>,
+    pub(crate) license: Option<String>,
+    pub(crate) license_url: Option<String>,
+    pub(crate) executables: Option<Vec<String>>,
+    pub(crate) blocked: Option<RawBlocked>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct RawBlocked {
+    pub(crate) reason: String,
+    pub(crate) owner: String,
+    pub(crate) since: String,
+}
+
+/// Parses YAML text into a value. Anchors and aliases stay within the
+/// recursion and repetition limits of `serde_yaml_ng`; tags and merge keys
+/// are rejected afterwards by [`check_yaml_value`].
+pub(crate) fn parse_yaml(file: &str, text: &str) -> Result<serde_yaml_ng::Value, Issue> {
+    serde_yaml_ng::from_str(text).map_err(|err| {
+        let location = err
+            .location()
+            .map_or(Location::File, |at| Location::Position {
+                line: at.line(),
+                column: at.column(),
+            });
+        let message = clean_message(&strip_position(&err.to_string()));
+        let code = if message.contains("duplicate entry") {
+            IssueCode::DuplicateKey
+        } else {
+            IssueCode::YamlSyntax
+        };
+        Issue::new(file, location, code, message)
+    })
+}
+
+/// Rejects YAML tags and merge keys anywhere in the value.
+pub(crate) fn check_yaml_value(file: &str, value: &serde_yaml_ng::Value) -> Result<(), Issue> {
+    fn walk(file: &str, value: &serde_yaml_ng::Value, path: &str) -> Result<(), Issue> {
+        use serde_yaml_ng::Value;
+        match value {
+            Value::Tagged(_) => Err(Issue::new(
+                file,
+                Location::Field(display_path(path)),
+                IssueCode::InvalidValue,
+                "yaml tags are not allowed",
+            )),
+            Value::Sequence(items) => items
+                .iter()
+                .enumerate()
+                .try_for_each(|(index, item)| walk(file, item, &format!("{path}[{index}]"))),
+            Value::Mapping(map) => map.iter().try_for_each(|(key, item)| {
+                let key = match key {
+                    Value::String(key) => key.clone(),
+                    Value::Tagged(_) => {
+                        return Err(Issue::new(
+                            file,
+                            Location::Field(display_path(path)),
+                            IssueCode::InvalidValue,
+                            "yaml tags are not allowed",
+                        ));
+                    }
+                    other => format!("{other:?}"),
+                };
+                let child = join_path(path, &key);
+                if key == "<<" {
+                    return Err(Issue::new(
+                        file,
+                        Location::Field(child),
+                        IssueCode::InvalidValue,
+                        "yaml merge keys are not allowed",
+                    ));
+                }
+                walk(file, item, &child)
+            }),
+            _ => Ok(()),
+        }
+    }
+    walk(file, value, "")
+}
+
+/// Parses JSON bytes into a value, rejecting a key that appears twice in
+/// one object.
+pub(crate) fn parse_json(file: &str, text: &str) -> Result<serde_json::Value, Issue> {
+    let mut deserializer = serde_json::Deserializer::from_str(text);
+    let result = StrictJson::deserialize(&mut deserializer).and_then(|value| {
+        deserializer.end()?;
+        Ok(value.0)
+    });
+    result.map_err(|err| {
+        let location = if err.line() == 0 {
+            Location::File
+        } else {
+            Location::Position {
+                line: err.line(),
+                column: err.column(),
+            }
+        };
+        let code = if err.is_data() {
+            IssueCode::DuplicateKey
+        } else {
+            IssueCode::JsonSyntax
+        };
+        Issue::new(
+            file,
+            location,
+            code,
+            clean_message(&strip_position(&err.to_string())),
+        )
+    })
+}
+
+/// Decodes a YAML value into a raw type, reporting the first problem with
+/// its field path. Unknown fields get `unknown_code`.
+pub(crate) fn decode_yaml<T: DeserializeOwned>(
+    file: &str,
+    value: serde_yaml_ng::Value,
+    unknown_code: IssueCode,
+) -> Result<T, Issue> {
+    serde_path_to_error::deserialize(value).map_err(|err| {
+        path_issue(
+            file,
+            &err.path().to_string(),
+            &err.inner().to_string(),
+            unknown_code,
+        )
+    })
+}
+
+/// Decodes a JSON value into a raw type, reporting the first problem with
+/// its field path. Unknown fields get `unknown_code`.
+pub(crate) fn decode_json<T: DeserializeOwned>(
+    file: &str,
+    value: serde_json::Value,
+    unknown_code: IssueCode,
+) -> Result<T, Issue> {
+    serde_path_to_error::deserialize(value).map_err(|err| {
+        path_issue(
+            file,
+            &err.path().to_string(),
+            &err.inner().to_string(),
+            unknown_code,
+        )
+    })
+}
+
+/// Turns a serde error at `path` into an issue, naming the field that is
+/// unknown, missing, or repeated.
+fn path_issue(file: &str, path: &str, message: &str, unknown_code: IssueCode) -> Issue {
+    let path = if path == "." { "" } else { path };
+    let field = |prefix: &str| {
+        message
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.split('`').next())
+            .map(|name| join_path(path, name))
+    };
+    let (code, location) = if message.starts_with("unknown field `") {
+        (unknown_code, display_path(path))
+    } else if let Some(at) = field("missing field `") {
+        (IssueCode::MissingField, at)
+    } else if let Some(at) = field("duplicate field `") {
+        (IssueCode::DuplicateKey, at)
+    } else {
+        (IssueCode::InvalidValue, display_path(path))
+    };
+    Issue::new(
+        file,
+        Location::Field(location),
+        code,
+        clean_message(message),
+    )
+}
+
+/// Joins a field name onto a path.
+pub(crate) fn join_path(path: &str, name: &str) -> String {
+    if path.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{path}.{name}")
+    }
+}
+
+/// Shows the document root as `.`.
+fn display_path(path: &str) -> String {
+    if path.is_empty() {
+        ".".to_owned()
+    } else {
+        path.to_owned()
+    }
+}
+
+/// Removes the ` at line N column M` suffix serde_json adds.
+fn strip_position(message: &str) -> String {
+    message
+        .rfind(" at line ")
+        .map_or(message, |at| &message[..at])
+        .to_owned()
+}
+
+/// Makes a serde message follow the issue style: no trailing period.
+fn clean_message(message: &str) -> String {
+    message.trim_end_matches('.').to_owned()
+}
+
+/// A JSON value decoded with duplicate keys rejected.
+struct StrictJson(serde_json::Value);
+
+impl<'de> Deserialize<'de> for StrictJson {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(StrictJsonVisitor).map(Self)
+    }
+}
+
+struct StrictJsonVisitor;
+
+impl<'de> Visitor<'de> for StrictJsonVisitor {
+    type Value = serde_json::Value;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("any JSON value")
+    }
+
+    fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
+        Ok(v.into())
+    }
+
+    fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+        Ok(v.into())
+    }
+
+    fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+        Ok(v.into())
+    }
+
+    fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> {
+        Ok(serde_json::Number::from_f64(v).map_or(serde_json::Value::Null, Into::into))
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        Ok(v.into())
+    }
+
+    fn visit_string<E: de::Error>(self, v: String) -> Result<Self::Value, E> {
+        Ok(v.into())
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(serde_json::Value::Null)
+    }
+
+    fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(serde_json::Value::Null)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let mut items = Vec::new();
+        while let Some(StrictJson(item)) = seq.next_element()? {
+            items.push(item);
+        }
+        Ok(serde_json::Value::Array(items))
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut object = serde_json::Map::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if object.contains_key(&key) {
+                return Err(de::Error::custom(format!("duplicate key `{key}`")));
+            }
+            let StrictJson(value) = map.next_value()?;
+            object.insert(key, value);
+        }
+        Ok(serde_json::Value::Object(object))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Outer {
+        #[expect(dead_code, reason = "decoded to prove the path of an error inside it")]
+        inner: Inner,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Inner {
+        #[expect(dead_code, reason = "decoded to prove the path of an error inside it")]
+        list: Vec<u8>,
+    }
+
+    fn yaml(text: &str) -> Result<Outer, Issue> {
+        let value = parse_yaml("f.yaml", text)?;
+        check_yaml_value("f.yaml", &value)?;
+        decode_yaml("f.yaml", value, IssueCode::UnknownField)
+    }
+
+    #[test]
+    fn unknown_fields_are_reported_with_their_own_path() {
+        let issue = yaml("inner:\n  list: [1]\n  shell: true\n").unwrap_err();
+
+        assert_eq!(issue.code, IssueCode::UnknownField);
+        assert_eq!(issue.location, Location::Field("inner.shell".into()));
+        let root = yaml("inner:\n  list: [1]\nshell: true\n").unwrap_err();
+        assert_eq!(root.location, Location::Field("shell".into()));
+    }
+
+    #[test]
+    fn missing_fields_and_bad_values_name_their_path() {
+        let missing = yaml("inner: {}\n").unwrap_err();
+        let bad = yaml("inner:\n  list: [1, 300]\n").unwrap_err();
+
+        assert_eq!(missing.code, IssueCode::MissingField);
+        assert_eq!(missing.location, Location::Field("inner.list".into()));
+        assert_eq!(bad.code, IssueCode::InvalidValue);
+        assert_eq!(bad.location, Location::Field("inner.list[1]".into()));
+    }
+
+    #[test]
+    fn yaml_tags_merge_keys_and_duplicate_keys_are_rejected() {
+        let tag = yaml("inner:\n  list: !custom [1]\n").unwrap_err();
+        let merge = yaml("base: &b {list: [1]}\ninner:\n  <<: *b\n").unwrap_err();
+        let duplicate = yaml("inner:\n  list: [1]\n  list: [2]\n").unwrap_err();
+        let syntax = yaml("inner: [\n").unwrap_err();
+
+        assert_eq!(tag.code, IssueCode::InvalidValue);
+        assert_eq!(tag.location, Location::Field("inner.list".into()));
+        assert_eq!(merge.code, IssueCode::InvalidValue);
+        assert_eq!(merge.location, Location::Field("inner.<<".into()));
+        assert_eq!(duplicate.code, IssueCode::DuplicateKey);
+        assert_eq!(syntax.code, IssueCode::YamlSyntax);
+        assert!(matches!(syntax.location, Location::Position { .. }));
+    }
+
+    #[test]
+    fn json_duplicate_keys_and_syntax_errors_carry_a_position() {
+        let duplicate = parse_json("f.json", "{\"a\": 1, \"a\": 2}").unwrap_err();
+        let syntax = parse_json("f.json", "{\"a\": }").unwrap_err();
+        let trailing = parse_json("f.json", "{} x").unwrap_err();
+
+        assert_eq!(duplicate.code, IssueCode::DuplicateKey);
+        assert!(matches!(
+            duplicate.location,
+            Location::Position { line: 1, .. }
+        ));
+        assert_eq!(syntax.code, IssueCode::JsonSyntax);
+        assert_eq!(trailing.code, IssueCode::JsonSyntax);
+        assert!(!syntax.message.contains(" at line "), "{}", syntax.message);
+    }
+
+    #[test]
+    fn nested_aliases_in_a_256_kib_file_fail_within_two_seconds() {
+        let mut text = String::from("a0: &a0 [lol, lol, lol, lol, lol, lol, lol, lol, lol]\n");
+        for n in 1..10 {
+            let prev = format!("*a{}", n - 1);
+            let list = [prev.as_str(); 9].join(", ");
+            text.push_str(&format!("a{n}: &a{n} [{list}]\n"));
+        }
+        while text.len() < 256 * 1024 - 80 {
+            text.push_str("# padding to the provider.yaml size limit\n");
+        }
+        let start = std::time::Instant::now();
+
+        let issue = parse_yaml("provider.yaml", &text).unwrap_err();
+
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            start.elapsed()
+        );
+        assert_eq!(issue.code, IssueCode::YamlSyntax);
+        assert!(
+            issue.message.contains("repetition limit"),
+            "{}",
+            issue.message
+        );
+    }
+
+    #[test]
+    fn json_keeps_integers_and_floats_apart() {
+        let value = parse_json("f.json", "[5, 5.0, 1e3, -2]").unwrap();
+
+        assert!(value[0].is_i64() || value[0].is_u64());
+        assert!(value[1].is_f64());
+        assert!(value[2].is_f64());
+        assert!(value[3].is_i64());
+    }
+}

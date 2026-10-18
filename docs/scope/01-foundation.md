@@ -58,7 +58,7 @@ Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka di
   - [x] Milestone 2b: ClickHouse from the Developer ID signed `.zip` through the new `zip` format: format check, `/usr/bin/tar` extraction, mode 0755 for zip executables, `pin` support, the `archive_root` rule, then the ClickHouse entry and its evidence (spec 0003 AC-1 to AC-3, AC-5 to AC-10, AC-13, AC-16; build steps 15 and 16). ClickHouse 26.8.30.8 `PASS` dari `.zip` (evidence `01a14c52-92d2-75ee-b5ce-3e641036b90a`)
   - [x] Decide how PostgreSQL 17 and 18 and Valkey are built on this Mac (spec): `/architect sumber & packaging runtime`
   - [x] xtask support for maintainer artifacts: rule 5 `recipe` format without `attestation`, `runtime pin --file`, `runtime spike --no-quarantine`, the `manifest` probe, and the PostgreSQL and Valkey spike recipes with their native tests; needs Milestone 2b step 15 merged first (spec 0003 AC-2, AC-5, AC-7, AC-9, AC-10, AC-12, AC-18, AC-19; build step 17)
-  - [ ] Maintainer recipes in the new `ojiepermana/stackly-runtimes` repo: `build.sh` with a clean environment, then Valkey 9.1, OpenSSL, ICU, lz4, zstd, and PostgreSQL 17 and 18 built on this Mac (spec 0003 AC-7, AC-12, AC-17; build steps 9 and 10)
+  - [x] Maintainer recipes in the new `ojiepermana/stackly-runtimes` repo: `build.sh` with a clean environment, then Valkey 9.1, OpenSSL, ICU, lz4, zstd, and PostgreSQL 17 and 18 built on this Mac (spec 0003 AC-7, AC-12, AC-17; build steps 9 and 10)
   - [ ] PostgreSQL 17 and 18 and Valkey published and proven: `pin --file`, local spike, license gate per provider, upload after your approval, `runtime verify`, entries and evidence, then rule 9 (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-10, AC-19; build step 12)
   - [x] Cache pruning: `runtime spike --prune-cache`, run by hand on this Mac (spec 0003 AC-4; build step 13)
 - [ ] Verify it: `/check verify sumber & packaging runtime`
@@ -123,7 +123,7 @@ Daemon per user dengan protokol berversi di atas encoding dan framing yang dikun
 - [ ] Review it (fresh model): `/check review protokol IPC & daemon`
 - [ ] Document it: `/document protokol IPC & daemon`
 
-### 7. Operation engine · needs a decision · GA
+### 7. Operation engine · in-progress · GA
 
 Mesin operasi async yang dipakai semua mutasi: journal, idempotency key, lock per resource, state revision, progress, cancel, serta primitive cleanup dan kompensasi yang hanya menghapus path dan resource buatan operasi itu di bawah owned root. Inilah yang mencegah runtime atau instance ganda saat GUI dan CLI mengirim perintah bersamaan.
 
@@ -131,9 +131,20 @@ Mesin operasi async yang dipakai semua mutasi: journal, idempotency key, lock pe
 
 **Trace:** REQ-048, REQ-054, BR-023, VAL-007, VAL-015 (bagian cleanup), NFR-005, NFR-006, NFR-011, AC-048, AC-054
 
-- [ ] Design it (spec): `/architect operation engine`
+**Pointer:** spec [0007](../specs/0007-operation-engine/index.md) · code in `crates/core/src/operation/`, `crates/core/src/ownership.rs`, `crates/domain/`, `crates/storage/`, `crates/platform/`, `crates/platform-macos/`, `crates/testkit/`, `crates/protocol/`, `apps/daemon/`
 
-### 8. CLI client & kontrak output · needs a decision
+- [x] Design it (spec): `/architect operation engine`
+- [ ] Build it: `/develop operation engine`
+  - [ ] Journal di registry: tipe journal di domain, `Operation::touch`, `Outcome::Failed`, tambahan port `Registry`, `FakeRegistry`, migrasi `operation_journal` (key ganda, unique index, backfill), dan conformance di `SqliteRegistry` (spec 0007 AC-2, AC-10, AC-11, AC-17; build steps 1 to 3; langkah 1 dan 2 butuh spec 0005 milestone 2, langkah 3 butuh milestone 3)
+  - [ ] Primitive hapus aman: `Filesystem::remove_tree`, `FakeFilesystem`, adapter macOS berbasis file descriptor dengan test balapan dan `CrossesDevice`, dan `remove_owned_tree` (spec 0007 AC-8, AC-9; build steps 4 to 6; bisa mulai sekarang sebagai sesi paralel)
+  - [ ] Engine dari ujung ke ujung di atas fake: lock dan antrian FIFO, `begin` dengan idempotency, runner dengan langkah dan progress, cancel, kompensasi, `recover`, resume, abandon, shutdown, dan skenario AC-054 dengan evidence (spec 0007 AC-1 to AC-8, AC-10 to AC-16; build steps 7 to 12; butuh langkah 1 dan 2, kompensasi butuh langkah 4)
+  - [ ] Kontrak wire dan daemon: DTO, event, kode, sidik jari, fixture dan test Swift, lalu wiring engine di `stacklyd`, enam method, subsystem `operations`, hook shutdown, dan test integrasi daemon (spec 0007 AC-1, AC-3, AC-5, AC-6, AC-10, AC-11, AC-13, AC-14, AC-16, AC-18 to AC-20; build steps 13 to 15; langkah 13 bisa paralel dengan milestone engine setelah spec 0006 milestone 1, langkah 14 dan 15 butuh spec 0006 milestone 4)
+- [ ] Verify it: `/check verify operation engine`
+- [ ] Test it: `/test operation engine`
+- [ ] Review it (fresh model): `/check review operation engine`
+- [ ] Document it: `/document operation engine`
+
+### 8. CLI client & kontrak output · in-progress
 
 CLI `stackly` sebagai client daemon dengan help, `--json`, exit code stabil, mode noninteractive, progress ke stderr, input secret yang aman, dan `--wait` untuk operasi async. Command lain disebut di Done when fitur yang memilikinya dan menempel ke kontrak ini.
 
@@ -141,7 +152,14 @@ CLI `stackly` sebagai client daemon dengan help, `--json`, exit code stabil, mod
 
 **Trace:** REQ-028, BR-011, AC-028, PRD bagian 12
 
-- [ ] Design it (spec): `/architect CLI client & kontrak output`
+**Pointer:** spec [0008](../specs/0008-cli-client-kontrak-output/index.md) · code in `apps/cli/`, `crates/protocol/`, `crates/ipc/`, `xtask/`
+
+- [x] Design it (spec): `/architect CLI client & kontrak output`
+- [ ] Build it: `/develop CLI client & kontrak output`
+  - [ ] CLI framework and `stackly daemon status` end to end: `codes::cli`, the `check-deps` no spawn rule, exit code map, `--json` envelope, human output, progress, noninteractive mode and `Confirm`, `Session` with `call_detailed`, the final `daemon status`, scripted daemon, pty and golden tests (spec 0008 AC-1 to AC-6, AC-9 to AC-14; build steps 1 to 8; needs spec 0006 milestones 1, 2, and 4; step 2 can run as a parallel session)
+  - [ ] `stackly operation list`, `inspect`, `cancel`, and `--wait`: argument parsers, operation rendering, the three commands, `Waiter` with timeout, Ctrl+C, and reconnect, and the wait matrix (spec 0008 AC-3, AC-4, AC-7 to AC-9, AC-12; build steps 9 to 12; needs milestone 1 and the spec 0007 operation DTOs; the real daemon tests need the spec 0007 engine)
+- [ ] Verify it: `/check verify CLI client & kontrak output`
+- [ ] Test it: `/test CLI client & kontrak output`
 
 ### 9. Provider engine & manifest schema · in-progress · GA
 
@@ -155,7 +173,7 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 
 - [x] Design it (spec): `/architect provider engine & manifest schema`
 - [ ] Build it: `/develop provider engine & manifest schema`
-  - [ ] Fake provider from package to plan: domain capability additions, `stackly-fake-server` and its testkit helper, `read_package` and strict decode, interpolation, settings dialect, template renderer, semantic validation, `InitPlan`, `RunPlan`, `ReloadPlan`, preflight, `providers/fake`, and the `fake-command` fixture (spec 0009 AC-1 to AC-12, AC-15, AC-18; build steps 0 to 8)
+  - [x] Fake provider from package to plan: domain capability additions, `stackly-fake-server` and its testkit helper, `read_package` and strict decode, interpolation, settings dialect, template renderer, semantic validation, `InitPlan`, `RunPlan`, `ReloadPlan`, preflight, `providers/fake`, and the `fake-command` fixture (spec 0009 AC-1 to AC-12, AC-15, AC-18; build steps 0 to 8)
   - [ ] NATS and Traefik packages with goldens, `versions.json` generated from the inventory, JSON Schema in `schemas/provider/`, and `cargo xtask provider check` (spec 0009 AC-13, AC-14, AC-17; build steps 9 to 13)
   - [ ] Four fuzz targets run 10 minutes each on this Mac, the adversarial suite with evidence guards (including the billion laughs test), and spike markers moved to F36 (spec 0009 AC-1 to AC-10, AC-16, AC-18; build steps 14 to 16)
 - [ ] Verify it: `/check verify provider engine & manifest schema`
@@ -163,7 +181,7 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 - [ ] Review it (fresh model): `/check review provider engine & manifest schema`
 - [ ] Document it: `/document provider engine & manifest schema`
 
-### 10. Process supervisor · needs a decision · GA
+### 10. Process supervisor · in-progress · GA
 
 Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv eksplisit, mencatat identitas proses (bukan PID saja), menjalankan probe readiness, dan menghentikan proses secara graceful sesuai strategi provider. Spec ini juga pemilik tunggal rekonsiliasi dasar setelah daemon restart dan restart policy (backoff, jitter, retry budget, reset setelah periode sehat, timeout per provider).
 
@@ -171,7 +189,18 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
 
 **Trace:** REQ-011, REQ-012, REQ-013 (dasar), BR-010, AC-011, AC-012, AC-013 (fake provider), AC-058, AC-068, NFR-003, NFR-006, RISK-03, RISK-14, PRD bagian 19
 
-- [ ] Design it (spec): `/architect process supervisor`
+**Pointer:** spec [0010](../specs/0010-process-supervisor/index.md) · code in `crates/core/src/supervisor/`, `crates/platform/`, `crates/platform-macos/`, `crates/testkit/`, `crates/protocol/`, `crates/storage/`, `apps/daemon/`
+
+- [x] Design it (spec): `/architect process supervisor`
+- [ ] Build it: `/develop process supervisor`
+  - [ ] Process port and macOS adapter: spike on this Mac (suspended spawn, libproc identity, kqueue, flock inheritance, punch hole), domain `process` types, `ProcessSupervision` trait as the seventh platform port, `MacosProcessSupervision`, and `FakeProcessSupervision` (spec 0010 AC-1, AC-2, AC-5, AC-6, AC-15, AC-19; build steps 1 to 4; needs the spec 0004 update from spec 0010 Follow-up; after step 2, the adapter and the fake can run as two parallel sessions)
+  - [ ] Start to ready and safe stop on the fake provider: `classify`, restart policy math, `SupervisorConfig`, `PortProbe`, commit rules, probes `tcp`, `http`, and `exec`, `execute_init`, render before spawn, startup transaction with dry run and suspended spawn, stop, ports, readiness and health, `statusSeq`, and `execute_reload` (spec 0010 AC-2 to AC-8, AC-10, AC-13 to AC-15, AC-17 to AC-19, AC-22; build steps 5 to 8; needs spec 0009 milestone 1, spec 0011 `secret::delivery`, spec 0005 port and fake with its spec 0010 update, and the spec 0007 operation API; steps 5 and 6 can run as two parallel sessions)
+  - [ ] Crash, spool, and reconciliation: restart policy in the actor, spool reader with redaction and punch hole, reconciliation table, adoption, `unknown` recheck, and daemon shutdown without signals (spec 0010 AC-7 to AC-12, AC-17, AC-21, AC-22; build steps 9 to 11; the spool step can run as its own session)
+  - [ ] Daemon, IPC, and end to end proof: protocol DTOs, events, and error codes with fixtures and Swift contract tests, `stacklyd` start slot and shutdown step, `instance.create`, `start`, `stop`, `get`, and `list`, `install_fake`, daemon integration tests with evidence, `check-deps` rules, and the NFR-003 measurement (spec 0010 AC-3 to AC-12, AC-15 to AC-17, AC-20, AC-21, AC-23; build steps 12 to 15; needs the spec 0006 daemon server and the spec 0005 SQLite registry; protocol and `check-deps` can run as parallel sessions)
+- [ ] Verify it: `/check verify process supervisor`
+- [ ] Test it: `/test process supervisor`
+- [ ] Review it (fresh model): `/check review process supervisor`
+- [ ] Document it: `/document process supervisor`
 
 ### 11. Secret store & redaction · in-progress · GA
 

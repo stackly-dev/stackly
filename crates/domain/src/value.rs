@@ -418,6 +418,9 @@ impl ReasonCode {
     pub const NOT_RUNNING: Self = Self::from_static("not_running");
     /// The last observation is older than the allowed age.
     pub const STALE: Self = Self::from_static("stale");
+    /// The daemon loaded the instance from the registry and no probe has
+    /// reported since; readiness and health are never stored.
+    pub const DAEMON_RESTARTED: Self = Self::from_static("daemon_restarted");
 }
 
 code_value! {

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fake provider settings",
+  "description": "Every behavior of the dummy server, for supervisor and walking skeleton tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "greeting": {
+      "type": "string",
+      "title": "Greeting",
+      "description": "Text the server returns from GET /config.",
+      "maxLength": 256,
+      "default": "hello from stackly",
+      "x-stackly": { "apply": "reload" }
+    },
+    "label": {
+      "type": "string",
+      "title": "Label",
+      "description": "Free text passed as --label, to prove arguments never go through a shell.",
+      "maxLength": 256,
+      "default": "fake",
+      "x-stackly": { "apply": "restart" }
+    },
+    "readyDelayMs": {
+      "type": "integer",
+      "title": "Ready delay (ms)",
+      "description": "How long GET /ready answers 503 after start; 0 is ready at once.",
+      "minimum": 0,
+      "maximum": 600000,
+      "default": 0,
+      "x-stackly": { "apply": "restart" }
+    },
+    "crashAfterMs": {
+      "type": "integer",
+      "title": "Crash after (ms)",
+      "description": "Exit with the crash exit code after this long; 0 never crashes.",
+      "minimum": 0,
+      "maximum": 86400000,
+      "default": 0,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "crashExitCode": {
+      "type": "integer",
+      "title": "Crash exit code",
+      "minimum": 1,
+      "maximum": 255,
+      "default": 70,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "logLinesPerSecond": {
+      "type": "integer",
+      "title": "Log lines per second",
+      "description": "Log lines written to stdout and stderr in turn; 0 writes none.",
+      "minimum": 0,
+      "maximum": 10000,
+      "default": 0,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "ignoreTerm": {
+      "type": "boolean",
+      "title": "Ignore SIGTERM",
+      "default": false,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "failInit": {
+      "type": "boolean",
+      "title": "Fail initialization",
+      "default": false,
+      "x-stackly": { "apply": "immutableAfterInit", "visibility": "advanced" }
+    },
+    "authToken": {
+      "type": "string",
+      "title": "Auth token",
+      "description": "Written into the sensitive config and passed to init on stdin.",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-stackly": { "apply": "immutableAfterInit", "secret": true }
+    }
+  },
+  "required": ["authToken"]
+}

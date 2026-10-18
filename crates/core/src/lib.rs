@@ -14,6 +14,7 @@ mod inventory;
 mod layout;
 mod observation;
 mod ownership;
+pub mod provider;
 #[cfg(all(test, unix))]
 mod test_support;
 
