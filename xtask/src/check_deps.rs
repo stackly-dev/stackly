@@ -1,6 +1,6 @@
 //! `cargo xtask check-deps`: the dependency direction and `unsafe` rules
 //! from spec 0001 ("Aturan arah dependency"), plus the `stackly-evidence`
-//! rules from spec 0002.
+//! rules from spec 0002 and the `stackly-fake-server` rules from spec 0009.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
 //! build). Transitive dependencies are left alone: portability is proven by
@@ -34,6 +34,9 @@ const EVIDENCE: &str = "stackly-evidence";
 /// The only crates that may take `stackly-evidence` as a normal dependency.
 const EVIDENCE_NORMAL_USERS: [&str; 2] = ["xtask", TESTKIT];
 const UNSAFE_LINT: &str = "unsafe_code";
+/// The dummy server behind the `testing/fake` provider (spec 0009). Tests
+/// find its binary through `stackly_testkit::fake_server::binary`.
+const FAKE_SERVER: &str = "stackly-fake-server";
 
 pub fn run(root: &Path) -> Result<()> {
     let metadata = MetadataCommand::new()
@@ -114,6 +117,17 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
     }
     if name == TESTKIT && dependency.kind != DependencyKind::Development {
         deny("stackly-testkit is only ever a dev dependency");
+    }
+    if package == FAKE_SERVER
+        && is_stackly_crate(name)
+        && !(name == TESTKIT && dependency.kind == DependencyKind::Development)
+    {
+        deny(
+            "stackly-fake-server depends on no Stackly crate, except stackly-testkit as a dev dependency",
+        );
+    }
+    if name == FAKE_SERVER {
+        deny("no crate depends on stackly-fake-server; tests build it through stackly-testkit");
     }
     if name == EVIDENCE {
         let allowed = dependency.kind == DependencyKind::Development
@@ -346,5 +360,49 @@ mod tests {
         }
         assert!(violations(EVIDENCE, "serde", None).is_empty());
         assert!(violations(EVIDENCE, "tempfile", None).is_empty());
+    }
+
+    #[test]
+    fn stackly_fake_server_takes_no_stackly_crate_but_testkit_for_tests() {
+        assert!(violations(FAKE_SERVER, TESTKIT, Some("dev")).is_empty());
+        for name in ["serde_json", "sha2", "signal-hook"] {
+            assert!(violations(FAKE_SERVER, name, None).is_empty(), "{name}");
+        }
+        let rule = "stackly-fake-server depends on no Stackly crate, except stackly-testkit as a dev dependency";
+        for name in ["stackly-domain", "stackly-core", EVIDENCE, "stacklyd"] {
+            for kind in [None, Some("dev"), Some("build")] {
+                let found = violations(FAKE_SERVER, name, kind);
+                assert!(
+                    found.iter().any(|v| v.ends_with(rule)),
+                    "{name} {kind:?}: {found:?}"
+                );
+            }
+        }
+        for kind in [None, Some("build")] {
+            let found = violations(FAKE_SERVER, TESTKIT, kind);
+            assert!(
+                found.iter().any(|v| v.ends_with(rule)),
+                "{kind:?}: {found:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn no_crate_depends_on_stackly_fake_server() {
+        for package in [TESTKIT, "stackly-core", "stacklyd", "stackly-cli", "xtask"] {
+            for (kind, label) in [
+                (None, "normal"),
+                (Some("dev"), "dev"),
+                (Some("build"), "build"),
+            ] {
+                assert_eq!(
+                    violations(package, FAKE_SERVER, kind),
+                    [format!(
+                        "{package} has a {label} dependency on stackly-fake-server: \
+                         no crate depends on stackly-fake-server; tests build it through stackly-testkit"
+                    )]
+                );
+            }
+        }
     }
 }
