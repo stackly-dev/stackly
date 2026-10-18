@@ -115,6 +115,12 @@ impl LineCompatibility {
                 .get(data_line)
                 .is_some_and(|lines| lines.contains(runtime_line))
     }
+
+    /// Returns each data line with the other runtime lines allowed for its
+    /// data, both in line order. The registry stores the map this way.
+    pub fn iter(&self) -> impl Iterator<Item = (&RuntimeLine, &BTreeSet<RuntimeLine>)> {
+        self.0.iter()
+    }
 }
 
 /// One provider revision. It never changes once it exists (BR-017).
@@ -254,6 +260,28 @@ mod tests {
         assert!(compat.allows(&line("17"), &line("19")));
         assert!(!compat.allows(&line("18"), &line("17")));
         assert!(LineCompatibility::from_map(BTreeMap::new()).allows(&line("17"), &line("17")));
+    }
+
+    #[test]
+    fn iterating_line_compatibility_rebuilds_the_same_map() {
+        let compat = LineCompatibility::default()
+            .allow(line("8.0"), line("8.4"))
+            .allow(line("17"), line("19"))
+            .allow(line("17"), line("18"));
+
+        let map: BTreeMap<_, _> = compat
+            .iter()
+            .map(|(data, runtimes)| (data.clone(), runtimes.clone()))
+            .collect();
+
+        assert_eq!(
+            compat
+                .iter()
+                .map(|(data, _)| data.as_str())
+                .collect::<Vec<_>>(),
+            ["17", "8.0"]
+        );
+        assert_eq!(LineCompatibility::from_map(map), compat);
     }
 
     #[test]

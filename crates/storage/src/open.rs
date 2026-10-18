@@ -236,7 +236,7 @@ impl Opener<'_> {
             (conn, None, None)
         };
         let opened_at = self.platform.clock().now();
-        let registry = SqliteRegistry::start(conn, self.platform.shared_clock())?;
+        let registry = SqliteRegistry::start(conn, self.platform.shared_clock(), opened_at)?;
         let summary = OpenSummary {
             created,
             migrated_from,
@@ -874,8 +874,10 @@ mod tests {
 
     use stackly_testkit::{FakePlatform, TestRoot};
 
+    use stackly_domain::RegistryError;
+
     use super::*;
-    use crate::registry::CommandError;
+    use crate::registry::sql_error;
 
     fn open_ready(root: &TestRoot) -> SqliteRegistry {
         let fake = FakePlatform::new(root);
@@ -914,7 +916,7 @@ mod tests {
                         ],
                     ))
                 })()
-                .map_err(|err: rusqlite::Error| CommandError::from_sqlite(&err))
+                .map_err(sql_error)
             })
             .unwrap();
 
@@ -940,12 +942,12 @@ mod tests {
                      '0199f000-0000-7000-8000-000000000021')",
                     [],
                 )
-                .map_err(|err| CommandError::from_sqlite(&err))
+                .map_err(sql_error)
             })
             .unwrap_err();
 
         assert!(
-            matches!(&err, CommandError::Integrity { detail } if detail.contains("FOREIGN KEY")),
+            matches!(&err, RegistryError::Integrity { detail } if detail.contains("FOREIGN KEY")),
             "{err:?}"
         );
     }
