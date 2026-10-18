@@ -839,6 +839,7 @@ dependencies = [
 name = "stackly-core"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "stackly-domain",
  "stackly-platform",
  "stackly-testkit",
