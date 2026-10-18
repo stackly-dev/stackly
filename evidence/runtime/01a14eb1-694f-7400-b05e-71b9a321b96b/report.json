@@ -1,0 +1,140 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a14eb1-694f-7400-b05e-71b9a321b96b",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "72b2c4eb3607c17ace26914faab4401ac8cc2df0",
+    "sourceDirty": false,
+    "runId": "01a14eb1-694f-7400-b05e-71b9a321b96b",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "xtask",
+      "--test",
+      "native_runtime",
+      "--",
+      "--ignored",
+      "postgresql_18"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-10-18T11:06:52.111577Z",
+  "finishedAt": "2026-10-18T11:07:19.996421Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 1
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14eb1-6c78-7311-bd09-2b75053ea60d",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "postgresql_18_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 96
+      },
+      "status": "PASS",
+      "expected": "postgres 18 runs from its managed artifact under a LaunchAgent, passes the ICU, pgcrypto, lz4, and zstd probes, is ready within 120 s, and stops within 60 s",
+      "actual": "postgresql 18.6 ready in 493 ms, stopped in 184 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "postgresql",
+          "version": "18.6",
+          "digest": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:06:52.920847Z",
+      "finishedAt": "2026-10-18T11:07:19.973842Z",
+      "evidencePath": "artifacts/01a14eb1-6c78-7311-bd09-2b75053ea60d/",
+      "context": {
+        "sourceCommit": "72b2c4eb3607c17ace26914faab4401ac8cc2df0",
+        "sourceDirty": false,
+        "runId": "01a14eb1-694f-7400-b05e-71b9a321b96b",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored",
+          "postgresql_18"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

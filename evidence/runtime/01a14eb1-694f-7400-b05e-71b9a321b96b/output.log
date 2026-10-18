@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running tests/native_runtime.rs (target/debug/deps/native_runtime-dea9925e04cbc60a)
+
+running 1 test
+spike postgresql-18.6-r2-macos-aarch64: waiting for the spike lock
+spike postgresql-18.6-r2-macos-aarch64: starting the worker in gui/502
+spike postgresql-18.6-r2-macos-aarch64: PASS, version 18.6
+test postgresql_18_runs_from_managed_artifact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 27.07s
+
