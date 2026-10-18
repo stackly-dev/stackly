@@ -30,6 +30,8 @@ uuid.workspace = true
 stackly-platform-macos.workspace = true
 
 [dev-dependencies]
+regex.workspace = true
+stackly-domain.workspace = true
 stackly-testkit.workspace = true
 
 [lints]

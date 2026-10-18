@@ -1,0 +1,876 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Stackly provider manifest (stackly/v1alpha1)",
+  "description": "`provider.yaml`.",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "stackly/v1alpha1"
+    },
+    "backup": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Backup"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "capabilities": {
+      "$ref": "#/$defs/Capabilities"
+    },
+    "compatibility": {
+      "$ref": "#/$defs/Compatibility"
+    },
+    "configFiles": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ConfigFile"
+      },
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+      }
+    },
+    "health": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Health"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "kind": {
+      "type": "string",
+      "const": "Provider"
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/Lifecycle"
+    },
+    "logs": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Logs"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "permissions": {
+      "$ref": "#/$defs/Permissions"
+    },
+    "readiness": {
+      "$ref": "#/$defs/Readiness"
+    },
+    "resources": {
+      "$ref": "#/$defs/Resources"
+    },
+    "runtime": {
+      "$ref": "#/$defs/Runtime"
+    },
+    "timeouts": {
+      "$ref": "#/$defs/Timeouts"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "compatibility",
+    "runtime",
+    "resources",
+    "lifecycle",
+    "readiness",
+    "permissions"
+  ],
+  "$defs": {
+    "Backup": {
+      "type": "object",
+      "properties": {
+        "cold": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColdBackup"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Capabilities": {
+      "type": "object",
+      "properties": {
+        "backup": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "metrics": {
+          "type": "boolean",
+          "default": false
+        },
+        "multiInstance": {
+          "type": "boolean",
+          "default": false
+        },
+        "persistence": {
+          "type": "boolean",
+          "default": false
+        },
+        "reload": {
+          "type": "boolean",
+          "default": false
+        },
+        "tls": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "ColdBackup": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "paths"
+      ]
+    },
+    "Command": {
+      "type": "object",
+      "properties": {
+        "args": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "cwd": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          }
+        },
+        "executable": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "executable"
+      ]
+    },
+    "Compatibility": {
+      "type": "object",
+      "properties": {
+        "dataMarker": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataMarker"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lineCompatibility": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+            }
+          },
+          "default": {},
+          "propertyNames": {
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          }
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Platform"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "platforms"
+      ]
+    },
+    "ConfigFile": {
+      "type": "object",
+      "properties": {
+        "destination": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "sensitive": {
+          "type": "boolean",
+          "default": false
+        },
+        "template": {
+          "type": "string",
+          "pattern": "^templates/[a-z0-9][a-z0-9._-]{0,63}\\.tmpl$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "template",
+        "format",
+        "destination"
+      ]
+    },
+    "DataMarker": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "pattern"
+      ]
+    },
+    "Endpoint": {
+      "type": "object",
+      "properties": {
+        "defaultHost": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "defaultPort": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "socketName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transport": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "transport",
+        "purpose"
+      ]
+    },
+    "Health": {
+      "type": "object",
+      "properties": {
+        "attemptTimeoutMilliseconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "failureThreshold": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "intervalSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "probe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Probe"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Lifecycle": {
+      "type": "object",
+      "properties": {
+        "initialize": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Step"
+          }
+        },
+        "reload": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reload"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "start": {
+          "$ref": "#/$defs/Command"
+        },
+        "stop": {
+          "$ref": "#/$defs/Stop"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "stop"
+      ]
+    },
+    "Logs": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Metadata": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 1
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 127,
+          "pattern": "^[a-z]([a-z0-9]*(-[a-z0-9]+)*)?/[a-z]([a-z0-9]*(-[a-z0-9]+)*)?$"
+        },
+        "revision": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9+_-]*(\\.[A-Za-z0-9+_-]+)*\\.?$"
+        },
+        "software": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^[a-z]([a-z0-9]*(-[a-z0-9]+)*)?$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "software",
+        "displayName",
+        "revision",
+        "category"
+      ]
+    },
+    "Permissions": {
+      "type": "object",
+      "properties": {
+        "additionalExecutables": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+          }
+        },
+        "executeRuntimeBinary": {
+          "type": "boolean"
+        },
+        "managedFilesystem": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "managedFilesystem",
+        "executeRuntimeBinary"
+      ]
+    },
+    "Platform": {
+      "type": "object",
+      "properties": {
+        "arch": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "arch"
+      ]
+    },
+    "Probe": {
+      "description": "One probe; `type` picks which other fields belong.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Command"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endpoint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatusRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "successExitCodes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ]
+    },
+    "Readiness": {
+      "type": "object",
+      "properties": {
+        "attemptTimeoutMilliseconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "intervalMilliseconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "probe": {
+          "$ref": "#/$defs/Probe"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "probe"
+      ]
+    },
+    "Reload": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Command"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "render": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "signal": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "successExitCodes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
+        "verify": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "action"
+      ]
+    },
+    "Resources": {
+      "type": "object",
+      "properties": {
+        "endpoints": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Endpoint"
+          },
+          "maxProperties": 16,
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9]{0,31}$"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "endpoints"
+      ]
+    },
+    "Runtime": {
+      "type": "object",
+      "properties": {
+        "executable": {
+          "type": "string"
+        },
+        "executionMode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "executable",
+        "executionMode"
+      ]
+    },
+    "StatusRange": {
+      "type": "object",
+      "properties": {
+        "max": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "min": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "min",
+        "max"
+      ]
+    },
+    "Stdin": {
+      "type": "object",
+      "properties": {
+        "secret": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "secret"
+      ]
+    },
+    "Step": {
+      "description": "One initialize step; `primitive` picks which other fields belong.",
+      "type": "object",
+      "properties": {
+        "args": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "cwd": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "destination": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "env": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          }
+        },
+        "executable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "primitive": {
+          "type": "string"
+        },
+        "secret": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stdin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Stdin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "successExitCodes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
+        "timeoutSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "primitive"
+      ]
+    },
+    "Stop": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Command"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "signal": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "successExitCodes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "strategy"
+      ]
+    },
+    "Timeouts": {
+      "type": "object",
+      "properties": {
+        "initSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "readinessSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "recoverySeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "reloadSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "stopSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

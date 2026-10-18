@@ -9,6 +9,8 @@
 mod digest;
 mod interpolate;
 mod issue;
+#[cfg(feature = "json-schema")]
+mod json_schema;
 mod manifest;
 mod names;
 mod package;
@@ -24,6 +26,8 @@ mod versions;
 
 pub use interpolate::{EndpointTransport, InstanceDir};
 pub use issue::{Issue, IssueCode, Location, MAX_ISSUES};
+#[cfg(feature = "json-schema")]
+pub use json_schema::json_schemas;
 pub use manifest::{Category, EndpointPurpose, EndpointSpec, Manifest, StopSignal};
 pub use names::{InvalidSettingName, SettingName};
 pub use package::{
