@@ -38,3 +38,13 @@ extension Reply {
 		}
 	}
 }
+
+extension EventKind {
+	/// The event kind's wire name, such as `events.gap`.
+	public var kindName: String {
+		switch self {
+		case .eventsGap: "events.gap"
+		case .daemonShuttingDown: "daemon.shutting_down"
+		}
+	}
+}
