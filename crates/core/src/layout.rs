@@ -93,15 +93,41 @@ pub fn ensure_instance_run_dir(
     let fs = platform.fs();
     let user = platform.identity().current_user()?;
     let layout = prepared.layout();
+    ensure_runtime_dirs(fs, layout, &user)?;
     let run_dir = layout.instance_run_dir(key);
-    for dir in [
-        layout.roots().runtime(),
-        &layout.instance_runs_dir(),
-        &run_dir,
-    ] {
-        ensure_private_dir(fs, dir, &user)?;
-    }
+    ensure_private_dir(fs, &run_dir, &user)?;
     Ok(run_dir)
+}
+
+/// Makes sure the runtime root and its `i/` folder exist, so the daemon
+/// can bind its socket again after the OS emptied the runtime root (at
+/// boot, for example). Missing folders are created with mode 0700, and
+/// existing ones are checked like [`prepare_layout`] does; a folder that
+/// fails a check is never repaired. Running it again changes nothing.
+///
+/// # Errors
+///
+/// Returns [`CoreError::RootNotPrivate`] for a folder that fails a check,
+/// and [`CoreError::Platform`] when a port fails.
+pub fn ensure_runtime_root(
+    platform: &Platform,
+    prepared: &PreparedLayout,
+) -> Result<(), CoreError> {
+    let user = platform.identity().current_user()?;
+    ensure_runtime_dirs(platform.fs(), prepared.layout(), &user)
+}
+
+/// The runtime part of the layout both [`ensure_runtime_root`] and
+/// [`ensure_instance_run_dir`] rely on: the runtime root, then `i/`.
+fn ensure_runtime_dirs(
+    fs: &dyn Filesystem,
+    layout: &DirectoryLayout,
+    user: &UserId,
+) -> Result<(), CoreError> {
+    for dir in [layout.roots().runtime(), &layout.instance_runs_dir()] {
+        ensure_private_dir(fs, dir, user)?;
+    }
+    Ok(())
 }
 
 /// Creates the folder when nothing is there, then checks that it is a
@@ -421,6 +447,144 @@ mod tests {
             assert_eq!(mode(dir), 0o700, "{}", dir.display());
         }
         assert_eq!(fake.fs().violations(), 0);
+    }
+
+    #[test]
+    fn runtime_root_recreates_a_runtime_root_the_os_emptied() {
+        let root = TestRoot::new().unwrap();
+        let fake = FakePlatform::new(&root);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        let runtime = prepared.layout().roots().runtime().to_path_buf();
+        std::fs::remove_dir_all(&runtime).unwrap();
+        let mutations = fake.fs().mutations().len();
+
+        ensure_runtime_root(&platform, &prepared).unwrap();
+
+        for dir in [&runtime, &prepared.layout().instance_runs_dir()] {
+            assert_eq!(mode(dir), 0o700, "{}", dir.display());
+        }
+        assert_eq!(fake.fs().mutations().len(), mutations + 2);
+        assert_eq!(fake.fs().violations(), 0);
+    }
+
+    #[test]
+    fn runtime_root_that_exists_is_left_unchanged() {
+        let root = TestRoot::new().unwrap();
+        let fake = FakePlatform::new(&root);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        let mutations = fake.fs().mutations().len();
+
+        ensure_runtime_root(&platform, &prepared).unwrap();
+        ensure_runtime_root(&platform, &prepared).unwrap();
+
+        assert_eq!(fake.fs().mutations().len(), mutations);
+    }
+
+    #[test]
+    fn runtime_root_recreates_only_a_missing_runs_folder() {
+        let root = TestRoot::new().unwrap();
+        let fake = FakePlatform::new(&root);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        let runs = prepared.layout().instance_runs_dir();
+        std::fs::remove_dir(&runs).unwrap();
+        let mutations = fake.fs().mutations().len();
+
+        ensure_runtime_root(&platform, &prepared).unwrap();
+
+        assert_eq!(mode(&runs), 0o700);
+        assert_eq!(fake.fs().mutations().len(), mutations + 1);
+    }
+
+    #[test]
+    fn runtime_root_open_to_group_or_others_is_rejected_and_not_fixed() {
+        let root = TestRoot::new().unwrap();
+        let fake = FakePlatform::new(&root);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        let runtime = prepared.layout().roots().runtime().to_path_buf();
+        std::fs::set_permissions(&runtime, Permissions::from_mode(0o755)).unwrap();
+
+        let result = ensure_runtime_root(&platform, &prepared);
+
+        assert_eq!(
+            result,
+            Err(CoreError::RootNotPrivate {
+                path: runtime.clone(),
+                reason: "group or others have access",
+            })
+        );
+        assert_eq!(mode(&runtime), 0o755);
+    }
+
+    #[test]
+    fn runtime_root_replaced_by_a_symlink_is_rejected_and_its_target_is_not_touched() {
+        let root = TestRoot::new().unwrap();
+        let fake = FakePlatform::new(&root);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        let runtime = prepared.layout().roots().runtime().to_path_buf();
+        let target = root.run_dir().join("elsewhere");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::set_permissions(&target, Permissions::from_mode(0o700)).unwrap();
+        std::fs::remove_dir_all(&runtime).unwrap();
+        symlink(&target, &runtime).unwrap();
+
+        let result = ensure_runtime_root(&platform, &prepared);
+
+        assert_eq!(
+            result,
+            Err(CoreError::RootNotPrivate {
+                path: runtime,
+                reason: "a symlink",
+            })
+        );
+        assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn runtime_root_owned_by_another_user_is_rejected() {
+        let root = TestRoot::new().unwrap();
+        let fake = FakePlatform::new(&root);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        fake.identity().set_current(UserId::Unix(u32::MAX - 1));
+
+        let result = ensure_runtime_root(&platform, &prepared);
+
+        assert_eq!(
+            result,
+            Err(CoreError::RootNotPrivate {
+                path: prepared.layout().roots().runtime().to_path_buf(),
+                reason: "owned by another user",
+            })
+        );
+    }
+
+    #[test]
+    fn runtime_root_reports_a_failed_create_as_a_platform_error() {
+        let root = TestRoot::new().unwrap();
+        let fake = FakePlatform::new(&root);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        let runtime = prepared.layout().roots().runtime().to_path_buf();
+        std::fs::remove_dir_all(&runtime).unwrap();
+        let name = runtime.file_name().unwrap().to_string_lossy().into_owned();
+        fake.fs()
+            .fail_when(FsOp::CreateDirPrivate, &name, Fault::NoSpace);
+
+        let result = ensure_runtime_root(&platform, &prepared);
+
+        assert!(
+            matches!(
+                result,
+                Err(CoreError::Platform(PlatformError::NoSpace { .. }))
+            ),
+            "{result:?}"
+        );
+        assert!(!runtime.exists());
     }
 
     #[test]
