@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Request",
+  "description": "The only frame a client sends.",
+  "type": "object",
+  "properties": {
+    "call": {
+      "description": "The method and its params.",
+      "$ref": "#/$defs/Call"
+    },
+    "idempotencyKey": {
+      "description": "1 to 128 bytes of printable ASCII without spaces. Spec 0007 decides\nwhat it means.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "requestId": {
+      "description": "1 to 64 bytes of `[A-Za-z0-9._:-]`, chosen by the client and unique\non the connection while the request runs. `stackly-ipc` uses a\nlowercase UUID v7.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "requestId",
+    "call"
+  ],
+  "$defs": {
+    "Call": {
+      "description": "One variant per method, tagged by the method name. Methods without\nparams are unit variants, written without `content`.",
+      "oneOf": [
+        {
+          "description": "The first request on every connection.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/HandshakeParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.handshake"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Who the daemon is and where it keeps things.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "daemon.get_info"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "The daemon's health and counters.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "daemon.get_health"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Platform capabilities, methods, and event kinds the daemon knows.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "daemon.get_capabilities"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Starts an event subscription.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SubscribeParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "events.subscribe"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Ends an event subscription.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/UnsubscribeParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "events.unsubscribe"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
+    "ClientInfo": {
+      "description": "Who a client is, for the daemon log.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "The kind of client.",
+          "$ref": "#/$defs/ClientKind"
+        },
+        "pid": {
+          "description": "The client's process ID, when it shares it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "version": {
+          "description": "The client's own version, 1 to 64 bytes of printable ASCII without\nspaces.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "version"
+      ]
+    },
+    "ClientKind": {
+      "description": "The kinds of client. Open: a newer client may send a value an older\ndaemon reads as `unknown`.",
+      "oneOf": [
+        {
+          "description": "The `stackly` CLI.",
+          "type": "string",
+          "const": "cli"
+        },
+        {
+          "description": "The SwiftUI app.",
+          "type": "string",
+          "const": "gui"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "EventCursor": {
+      "description": "A position in the event stream of one daemon run.",
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "description": "The last sequence seen; 0 means no event yet.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "serverInstanceId": {
+          "description": "The daemon run the sequence belongs to.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "serverInstanceId",
+        "sequence"
+      ]
+    },
+    "HandshakeParams": {
+      "description": "Params of `daemon.handshake`.\n\n`protocol` is frozen across majors: a daemon of any major reads\n`protocol.major` before anything else, so a client of another major\nalways receives `protocol.major_mismatch`.",
+      "type": "object",
+      "properties": {
+        "client": {
+          "description": "Who the client is.",
+          "$ref": "#/$defs/ClientInfo"
+        },
+        "contractDigest": {
+          "description": "The client's contract digest, 64 lowercase hex characters.",
+          "type": "string"
+        },
+        "protocol": {
+          "description": "The protocol version the client speaks.",
+          "$ref": "#/$defs/ProtocolVersion"
+        }
+      },
+      "required": [
+        "protocol",
+        "client",
+        "contractDigest"
+      ]
+    },
+    "ProtocolVersion": {
+      "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
+      "type": "object",
+      "properties": {
+        "major": {
+          "description": "Bumped for every breaking change to the wire.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "minor": {
+          "description": "Bumped for every compatible addition.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "major",
+        "minor"
+      ]
+    },
+    "ResourceKind": {
+      "description": "The kinds of resource Stackly tracks. Open: a newer daemon may add\nvalues, which older clients read as `unknown`.",
+      "oneOf": [
+        {
+          "description": "An installed runtime version.",
+          "type": "string",
+          "const": "runtime"
+        },
+        {
+          "description": "A configured instance of a runtime.",
+          "type": "string",
+          "const": "instance"
+        },
+        {
+          "description": "A group of instances.",
+          "type": "string",
+          "const": "environment"
+        },
+        {
+          "description": "An asynchronous operation.",
+          "type": "string",
+          "const": "operation"
+        },
+        {
+          "description": "A provider package.",
+          "type": "string",
+          "const": "provider"
+        },
+        {
+          "description": "A backup of an instance.",
+          "type": "string",
+          "const": "backup"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "ResourceRef": {
+      "description": "Names one resource, in errors and events.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The canonical text of the resource key: a lowercase UUID for\nruntimes, instances, environments, operations, and backups. Spec 0009\nfixes the form for providers.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "What kind of resource this is.",
+          "$ref": "#/$defs/ResourceKind"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ]
+    },
+    "SubscribeParams": {
+      "description": "Params of `events.subscribe`.",
+      "type": "object",
+      "properties": {
+        "kinds": {
+          "description": "Full kinds such as `instance.state_changed` or area prefixes ending\nin a dot such as `operation.`; empty means every kind. At most 32.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "resource": {
+          "description": "Only events about this resource.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "since": {
+          "description": "Replay every event after this cursor, or null for new events only.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EventCursor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      }
+    },
+    "UnsubscribeParams": {
+      "description": "Params of `events.unsubscribe`.",
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "description": "The subscription to end.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "subscriptionId"
+      ]
+    }
+  }
+}
