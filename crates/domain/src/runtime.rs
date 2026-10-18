@@ -11,7 +11,7 @@ use crate::error::{DomainError, InvariantDetail, InvariantError, Machine, Transi
 use crate::id::{BackupId, InstanceId, OperationId, RuntimeId};
 use crate::manifest::InstallKind;
 use crate::target::Target;
-use crate::value::{ExactVersion, RuntimeLine, Sha256Digest, SoftwareName};
+use crate::value::{ExactVersion, ResourceRevision, RuntimeLine, Sha256Digest, SoftwareName};
 
 code_enum! {
     /// The state of an installed runtime (PRD section 19.1).
@@ -191,7 +191,37 @@ pub struct NewRuntime {
     pub depends_on: BTreeSet<RuntimeId>,
 }
 
+/// Every field of a [`Runtime`] as the registry stores it, for
+/// [`Runtime::restore`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredRuntime {
+    /// The runtime's ID.
+    pub id: RuntimeId,
+    /// The software it runs.
+    pub software: SoftwareName,
+    /// The exact version.
+    pub version: ExactVersion,
+    /// The line of that version.
+    pub line: RuntimeLine,
+    /// The OS and architecture it is built for.
+    pub target: Target,
+    /// How it is installed.
+    pub install: InstallMode,
+    /// The current state.
+    pub state: RuntimeState,
+    /// When the install or registration was last committed.
+    pub installed_at: Option<Timestamp>,
+    /// When verification last passed.
+    pub last_verified_at: Option<Timestamp>,
+    /// The runtimes it needs.
+    pub depends_on: BTreeSet<RuntimeId>,
+    /// The revision.
+    pub revision: ResourceRevision,
+}
+
 /// An installed runtime: one exact version of one software for one target.
+///
+/// Every successful mutation raises [`Runtime::revision`] by exactly 1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Runtime {
     id: RuntimeId,
@@ -204,11 +234,12 @@ pub struct Runtime {
     installed_at: Option<Timestamp>,
     last_verified_at: Option<Timestamp>,
     depends_on: BTreeSet<RuntimeId>,
+    revision: ResourceRevision,
 }
 
 impl Runtime {
     /// Creates a runtime in `resolving`, the state of a selector that
-    /// resolved to an exact identity.
+    /// resolved to an exact identity, at revision 1.
     #[must_use]
     pub fn new(new: NewRuntime) -> Self {
         Self {
@@ -222,7 +253,47 @@ impl Runtime {
             installed_at: None,
             last_verified_at: None,
             depends_on: new.depends_on,
+            revision: ResourceRevision::INITIAL,
         }
+    }
+
+    /// Rebuilds a runtime the registry stored. Only the registry and test
+    /// fakes call it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvariantError`] with
+    /// [`InvariantDetail::InconsistentRecord`] when the runtime depends on
+    /// itself, or is `installed`, `missing`, or `drifted` without
+    /// `installed_at`, which only a committed install sets.
+    pub fn restore(stored: StoredRuntime) -> Result<Self, InvariantError> {
+        let inconsistent = |reason| InvariantDetail::InconsistentRecord {
+            resource: "runtime",
+            reason,
+        };
+        if stored.depends_on.contains(&stored.id) {
+            return Err(inconsistent("it depends on itself").into());
+        }
+        let was_installed = matches!(
+            stored.state,
+            RuntimeState::Installed | RuntimeState::Missing | RuntimeState::Drifted
+        );
+        if was_installed && stored.installed_at.is_none() {
+            return Err(inconsistent("an installed runtime has no installed_at").into());
+        }
+        Ok(Self {
+            id: stored.id,
+            software: stored.software,
+            version: stored.version,
+            line: stored.line,
+            target: stored.target,
+            install: stored.install,
+            state: stored.state,
+            installed_at: stored.installed_at,
+            last_verified_at: stored.last_verified_at,
+            depends_on: stored.depends_on,
+            revision: stored.revision,
+        })
     }
 
     /// Returns the runtime's ID.
@@ -285,9 +356,17 @@ impl Runtime {
         &self.depends_on
     }
 
-    /// Applies `event` at `at`. `committed` records `installed_at`, and
-    /// `verified` and `reverified` record `last_verified_at`. Removal goes
-    /// through [`Runtime::remove`] instead, which checks references first.
+    /// Returns the revision: 1 when created, raised by exactly 1 per
+    /// successful mutation. The registry compares it before every update.
+    #[must_use]
+    pub const fn revision(&self) -> ResourceRevision {
+        self.revision
+    }
+
+    /// Applies `event` at `at` and raises the revision. `committed` records
+    /// `installed_at`, and `verified` and `reverified` record
+    /// `last_verified_at`. Removal goes through [`Runtime::remove`] instead,
+    /// which checks references first.
     ///
     /// # Errors
     ///
@@ -311,11 +390,13 @@ impl Runtime {
             RuntimeEvent::Verified | RuntimeEvent::Reverified => self.last_verified_at = Some(at),
             _ => {}
         }
+        self.revision = self.revision.next();
         Ok(self.state)
     }
 
     /// Removes the runtime: it checks the `removed` transition and
-    /// [`plan_runtime_removal`], then moves to `absent` and returns the plan.
+    /// [`plan_runtime_removal`], then moves to `absent`, raises the revision,
+    /// and returns the plan.
     ///
     /// # Errors
     ///
@@ -328,6 +409,7 @@ impl Runtime {
             .apply(RuntimeEvent::Removed, self.install.kind())?;
         let plan = plan_runtime_removal(self, refs)?;
         self.state = next;
+        self.revision = self.revision.next();
         Ok(plan)
     }
 }

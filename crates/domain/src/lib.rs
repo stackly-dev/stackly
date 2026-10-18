@@ -38,7 +38,7 @@ pub use capability::{Capability, CapabilitySet};
 pub use endpoint::{
     Endpoint, IpEndpoint, PortRequest, Transport, UnixEndpoint, endpoints_conflict, resolve_port,
 };
-pub use environment::{Environment, EnvironmentMember, Ownership};
+pub use environment::{Environment, EnvironmentMember, Ownership, StoredEnvironment};
 pub use error::{
     DomainError, InvariantDetail, InvariantError, Machine, ProgressError, TransitionError,
     ValueError, ValueKind,
@@ -48,9 +48,11 @@ pub use id::{
 };
 pub use instance::{
     DesiredState, Instance, InstanceLifecycle, LifecycleEvent, NewInstance, StartupPolicy,
+    StoredInstance,
 };
 pub use lease::{
-    Lease, LeaseHolder, LeaseState, StopDecision, StopRequest, evaluate_stop, should_autostart,
+    Lease, LeaseHolder, LeaseState, StopDecision, StopRequest, StoredLease, evaluate_stop,
+    should_autostart,
 };
 pub use manifest::{
     INSTANCE_MANIFEST_SCHEMA, InstallKind, InstanceManifest, ManifestData, ManifestRuntime,
@@ -62,16 +64,21 @@ pub use observation::{
 };
 pub use operation::{
     NewOperation, Operation, OperationEvent, OperationFailure, OperationKind, OperationResource,
-    OperationState, Outcome, Progress,
+    OperationState, Outcome, Progress, StoredOperation,
 };
 pub use provider::{
     AcceptedRevisionChange, LineCompatibility, ProviderRevision, ProviderRevisionKey,
 };
-pub use registry::{InstancePathEntry, InstancePathKind, LogicalRoot, RegistryId, RelativePath};
+pub use registry::{
+    ArtifactRecord, BatchError, Committed, Generation, InstanceFilter, InstancePathEntry,
+    InstancePathKind, LeaseFilter, LogicalRoot, OperationCursor, OperationPage, OperationQuery,
+    ProviderRevisionRecord, PruneReport, Registry, RegistryError, RegistryId, RelativePath,
+    ResourceRef, RetentionPolicy, Versioned, WriteBatch, WriteOp,
+};
 pub use rule::Rule;
 pub use runtime::{
     InstallMode, NewRuntime, RemovalBlocker, RemovalPlan, Runtime, RuntimeEvent, RuntimeReferences,
-    RuntimeState, plan_runtime_removal,
+    RuntimeState, StoredRuntime, plan_runtime_removal,
 };
 pub use target::{Arch, Os, Target, native_support};
 pub use value::{

@@ -143,6 +143,19 @@ impl ProviderRevision {
         }
     }
 
+    /// Rebuilds a provider revision the registry stored. It never changes
+    /// once recorded, so this is [`ProviderRevision::new`]; it exists so the
+    /// registry restores every aggregate the same way.
+    #[must_use]
+    pub const fn restore(
+        key: ProviderRevisionKey,
+        software: SoftwareName,
+        capabilities: CapabilitySet,
+        line_compatibility: LineCompatibility,
+    ) -> Self {
+        Self::new(key, software, capabilities, line_compatibility)
+    }
+
     /// Returns the key that names this revision.
     #[must_use]
     pub const fn key(&self) -> &ProviderRevisionKey {
