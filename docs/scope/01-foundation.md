@@ -143,7 +143,7 @@ CLI `stackly` sebagai client daemon dengan help, `--json`, exit code stabil, mod
 
 - [ ] Design it (spec): `/architect CLI client & kontrak output`
 
-### 9. Provider engine & manifest schema · needs a decision · GA
+### 9. Provider engine & manifest schema · in-progress · GA
 
 Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, interpolasi terkontrol, dan primitive aman yang menghasilkan execution plan tervalidasi. Kontrak adapter juga mencakup preflight kompatibilitas data dan runtime per provider, supaya tool baru yang cukup dengan primitive yang ada tidak perlu patch core atau GUI.
 
@@ -151,7 +151,17 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 
 **Trace:** REQ-029, REQ-031, VAL-002, VAL-012, VAL-018, VAL-019, AC-029, AC-031, NFR-009, RISK-07, RISK-08, PRD bagian 21
 
-- [ ] Design it (spec): `/architect provider engine & manifest schema`
+**Pointer:** spec [0009](../specs/0009-provider-engine-manifest-schema/index.md)
+
+- [x] Design it (spec): `/architect provider engine & manifest schema`
+- [ ] Build it: `/develop provider engine & manifest schema`
+  - [ ] Fake provider from package to plan: domain capability additions, `stackly-fake-server` and its testkit helper, `read_package` and strict decode, interpolation, settings dialect, template renderer, semantic validation, `InitPlan`, `RunPlan`, `ReloadPlan`, preflight, `providers/fake`, and the `fake-command` fixture (spec 0009 AC-1 to AC-12, AC-15, AC-18; build steps 0 to 8)
+  - [ ] NATS and Traefik packages with goldens, `versions.json` generated from the inventory, JSON Schema in `schemas/provider/`, and `cargo xtask provider check` (spec 0009 AC-13, AC-14, AC-17; build steps 9 to 13)
+  - [ ] Four fuzz targets run 10 minutes each on this Mac, the adversarial suite with evidence guards (including the billion laughs test), and spike markers moved to F36 (spec 0009 AC-1 to AC-10, AC-16, AC-18; build steps 14 to 16)
+- [ ] Verify it: `/check verify provider engine & manifest schema`
+- [ ] Test it: `/test provider engine & manifest schema`
+- [ ] Review it (fresh model): `/check review provider engine & manifest schema`
+- [ ] Document it: `/document provider engine & manifest schema`
 
 ### 10. Process supervisor · needs a decision · GA
 

@@ -46,7 +46,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 6 | Protokol IPC & daemon | Foundation | planned |
 | 7 | Operation engine | Foundation | planned |
 | 8 | CLI client & kontrak output | Foundation | planned |
-| 9 | Provider engine & manifest schema | Foundation | planned |
+| 9 | Provider engine & manifest schema | Foundation | in-progress |
 | 10 | Process supervisor | Foundation | planned |
 | 11 | Secret store & redaction | Foundation | planned |
 | 12 | Design system & UI foundation | Foundation | planned |
