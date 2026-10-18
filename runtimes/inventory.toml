@@ -593,3 +593,124 @@ install_name = "@rpath/libzstd.1.dylib"
 version = "1.5.7"
 license = "BSD-3-Clause"
 source_url = "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
+
+[[artifact]]
+id = "postgresql-17.11-r2-macos-aarch64"
+provider = "postgresql"
+line = "17"
+version = "17.11"
+build = 2
+os = "macos"
+arch = "aarch64"
+min_os = "27.0"
+status = "available"
+origin = "maintainer"
+distribution = "stackly_hosted"
+format = "tar_gz"
+urls = ["https://github.com/stackly-dev/stackly/releases/download/runtime/postgresql-17.11-r2-macos-aarch64/postgresql-17.11-r2-macos-aarch64.tar.gz"]
+sha256 = "04b1eff117441c0b6f1cbefa42ded6cf5726d656e54881674defea04b515d6d3"
+size = 27984415
+archive_root = "postgresql-17.11-r2-macos-aarch64"
+source_url = "https://ftp.postgresql.org/pub/source/v17.11/postgresql-17.11.tar.bz2"
+source_sha256 = "dd27f2b3c59e73ed14aa3324901242bf69a032a6347805f274e6260322d42979"
+recipe = "stackly-dev/runtimes@8d22ef98bab9f485d26578ceed2ed5b575f2a187:recipes/postgresql.sh"
+signing_policy = "adhoc_pipeline"
+license = "PostgreSQL"
+license_url = "https://github.com/postgres/postgres/blob/REL_17_11/COPYRIGHT"
+executables = ["bin/postgres", "bin/initdb", "bin/psql", "bin/pg_dump"]
+
+[[artifact.dependency]]
+name = "libSystem.B.dylib"
+kind = "system"
+install_name = "/usr/lib/libSystem.B.dylib"
+
+[[artifact.dependency]]
+name = "libc++.1.dylib"
+kind = "system"
+install_name = "/usr/lib/libc++.1.dylib"
+
+[[artifact.dependency]]
+name = "libedit.3.dylib"
+kind = "system"
+install_name = "/usr/lib/libedit.3.dylib"
+
+[[artifact.dependency]]
+name = "libxml2.2.dylib"
+kind = "system"
+install_name = "/usr/lib/libxml2.2.dylib"
+
+[[artifact.dependency]]
+name = "libz.1.dylib"
+kind = "system"
+install_name = "/usr/lib/libz.1.dylib"
+
+[[artifact.dependency]]
+name = "libcrypto.3.dylib"
+kind = "bundled"
+install_name = "@rpath/libcrypto.3.dylib"
+version = "3.5.9"
+license = "Apache-2.0"
+source_url = "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz"
+
+[[artifact.dependency]]
+name = "libecpg.6.dylib"
+kind = "own"
+install_name = "@rpath/libecpg.6.dylib"
+
+[[artifact.dependency]]
+name = "libicudata.78.dylib"
+kind = "bundled"
+install_name = "@rpath/libicudata.78.dylib"
+version = "78.3"
+license = "Unicode-3.0"
+source_url = "https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz"
+
+[[artifact.dependency]]
+name = "libicui18n.78.dylib"
+kind = "bundled"
+install_name = "@rpath/libicui18n.78.dylib"
+version = "78.3"
+license = "Unicode-3.0"
+source_url = "https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz"
+
+[[artifact.dependency]]
+name = "libicuuc.78.dylib"
+kind = "bundled"
+install_name = "@rpath/libicuuc.78.dylib"
+version = "78.3"
+license = "Unicode-3.0"
+source_url = "https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz"
+
+[[artifact.dependency]]
+name = "liblz4.1.dylib"
+kind = "bundled"
+install_name = "@rpath/liblz4.1.dylib"
+version = "1.10.0"
+license = "BSD-2-Clause"
+source_url = "https://github.com/lz4/lz4/releases/download/v1.10.0/lz4-1.10.0.tar.gz"
+
+[[artifact.dependency]]
+name = "libpgtypes.3.dylib"
+kind = "own"
+install_name = "@rpath/libpgtypes.3.dylib"
+
+[[artifact.dependency]]
+name = "libpq.5.dylib"
+kind = "own"
+install_name = "@rpath/libpq.5.dylib"
+
+[[artifact.dependency]]
+name = "libssl.3.dylib"
+kind = "bundled"
+install_name = "@rpath/libssl.3.dylib"
+version = "3.5.9"
+license = "Apache-2.0"
+source_url = "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz"
+
+[[artifact.dependency]]
+name = "libzstd.1.dylib"
+kind = "bundled"
+install_name = "@rpath/libzstd.1.dylib"
+version = "1.5.7"
+license = "BSD-3-Clause"
+source_url = "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
