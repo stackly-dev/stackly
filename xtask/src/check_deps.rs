@@ -431,4 +431,50 @@ mod tests {
 
         assert_eq!((crates, found), (1, Vec::<String>::new()));
     }
+
+    #[test]
+    fn a_bin_target_is_scanned_but_tests_examples_and_benches_are_not() {
+        let workspace = fixture_workspace("//! A fixture crate.\n");
+        let core = workspace.path().join("crates/core");
+        let leak = "fn main() { let _ = std::env::var(\"X\"); let _ = \"/tmp\"; }\n";
+        fs::write(core.join("src/main.rs"), leak).unwrap();
+        for dir in ["tests", "examples", "benches"] {
+            fs::create_dir_all(core.join(dir)).unwrap();
+            fs::write(core.join(dir).join("leak.rs"), leak).unwrap();
+        }
+
+        let (_, found) = find_violations(workspace.path()).unwrap();
+
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(
+            found
+                .iter()
+                .all(|message| message.starts_with("stackly-core crates/core/src/main.rs:1: ")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn every_scanned_crate_is_a_member_of_this_workspace() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("xtask sits one directory below the repository root");
+        let metadata = MetadataCommand::new()
+            .manifest_path(root.join("Cargo.toml"))
+            .no_deps()
+            .exec()
+            .unwrap();
+        let members: Vec<&str> = metadata
+            .workspace_packages()
+            .iter()
+            .map(|package| package.name.as_str())
+            .collect();
+
+        for name in source_scan::SCANNED {
+            assert!(
+                members.contains(&name),
+                "{name} is not a workspace member, so its source would never be scanned"
+            );
+        }
+    }
 }

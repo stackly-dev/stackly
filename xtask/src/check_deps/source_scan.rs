@@ -552,4 +552,85 @@ mod tests {
             "{err}"
         );
     }
+
+    #[test]
+    fn only_code_that_needs_test_is_skipped() {
+        let found = scan(&[(
+            "src/lib.rs",
+            "#[cfg(not(test))]\n\
+             pub fn a() { let _ = std::env::var(\"X\"); }\n\
+             #[cfg(any(test, feature = \"x\"))]\n\
+             pub const B: &str = \"/usr/local\";\n\
+             pub struct S;\n\
+             impl S {\n\
+                 #[cfg(test)]\n\
+                 fn helper() -> &'static str { \"/tmp\" }\n\
+                 pub fn c(&self) -> &'static str { \"/opt/homebrew\" }\n\
+             }\n\
+             #[cfg(test)]\n\
+             use std::env::var;\n",
+        )]);
+
+        assert_eq!(found.len(), 3, "{found:?}");
+        assert!(found[0].starts_with("stackly-core src/lib.rs:2: ") && found[0].contains(ENV_RULE));
+        assert!(
+            found[1].starts_with("stackly-core src/lib.rs:4: ") && found[1].contains("/usr/local")
+        );
+        assert!(
+            found[2].starts_with("stackly-core src/lib.rs:9: ")
+                && found[2].contains("/opt/homebrew")
+        );
+    }
+
+    #[test]
+    fn a_module_loaded_through_a_path_attribute_is_scanned() {
+        let found = scan(&[
+            (
+                "src/lib.rs",
+                "#[path = \"generated/paths.rs\"]\nmod paths;\n",
+            ),
+            (
+                "src/generated/paths.rs",
+                "pub const A: &str = \"/var/folders/x\";\n",
+            ),
+        ]);
+
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0].starts_with("stackly-core src/generated/paths.rs:1: "),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn a_c_string_literal_and_a_macro_rules_body_are_checked() {
+        let found = scan(&[(
+            "src/lib.rs",
+            "pub const A: &std::ffi::CStr = c\"/tmp/x\";\n\
+             macro_rules! root { () => { std::env::temp_dir() }; }\n",
+        )]);
+
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(
+            found[0].starts_with("stackly-core src/lib.rs:1: ") && found[0].contains("(`/tmp`)")
+        );
+        assert!(
+            found[1].starts_with("stackly-core src/lib.rs:2: ")
+                && found[1].contains("(`env::temp_dir`)")
+        );
+    }
+
+    #[test]
+    fn the_scanned_crates_are_the_five_the_spec_names() {
+        assert_eq!(
+            SCANNED,
+            [
+                "stackly-domain",
+                "stackly-platform",
+                "stackly-core",
+                "stackly-protocol",
+                "stackly-platform-macos",
+            ]
+        );
+    }
 }

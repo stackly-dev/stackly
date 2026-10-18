@@ -81,7 +81,7 @@ Model domain (software, provider revision, runtime, instance, environment, opera
   - [x] Domain model and state machines: runtime, instance lifecycle, readiness and health, operation, and lease (spec 0004 AC-1 to AC-4, AC-14, AC-16)
   - [x] Invariants and enforcement: evidence for every BR marked F4, AC-050, AC-074, and NFR-010, plus the `check-deps` source scan (spec 0004 AC-1, AC-5, AC-6, AC-12 to AC-14; uses `stackly-evidence` from spec 0002 step 1)
 - [x] Verify it: `/check verify domain core & platform abstraction`
-- [ ] Test it: `/test domain core & platform abstraction`
+- [x] Test it: `/test domain core & platform abstraction`
 
 ### 5. Data model registry · in-progress
 

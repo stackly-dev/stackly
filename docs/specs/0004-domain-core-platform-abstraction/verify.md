@@ -14,7 +14,7 @@ Tidak ada. Fitur ini tidak punya layar; `stacklyd` dan `check-deps` diperiksa di
 - [x] `cargo xtask check-deps` → exit 0, "10 crates follow the dependency, unsafe, and source rules" → AC-1, AC-6
 - [x] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → exit 0 → AC-1, AC-13
 - [x] Tambahkan sementara `std::env::var_os("HOME")` di `crates/core/src/daemon.rs` dan `"/opt/homebrew"` di `crates/platform/src/info.rs`, jalankan `cargo xtask check-deps` → exit 1 dengan `stackly-platform crates/platform/src/info.rs:24: library crates never hardcode a machine path (...)` dan `stackly-core crates/core/src/daemon.rs:18: library crates never read the environment (...)`; kembalikan, run berikutnya exit 0 → AC-6
-- [x] `cargo test -p xtask --bin xtask check_deps` → 13 test lulus: aturan tokio dan libc untuk `stackly-platform`, workspace fixture yang membaca env dan memuat `/opt/homebrew` gagal dengan file dan baris, kode test, doc comment, `env!`, dan fungsi senama seperti `home_dir()` milik adapter macOS tidak ikut tertangkap → AC-1, AC-6
+- [x] `cargo test -p xtask --bin xtask check_deps` → 19 test lulus: aturan tokio dan libc untuk `stackly-platform`, workspace fixture yang membaca env dan memuat `/opt/homebrew` gagal dengan file dan baris, target bin ikut dipindai sedangkan `tests/`, `examples/`, dan `benches/` tidak, modul lewat `#[path]` diikuti, kode `#[cfg(not(test))]` tetap dipindai, kode test, doc comment, `env!`, dan fungsi senama seperti `home_dir()` milik adapter macOS tidak ikut tertangkap, dan kelima crate yang dipindai memang anggota workspace → AC-1, AC-6
 
 ### Resolver macOS dan root alternatif (binary `stacklyd` asli)
 
