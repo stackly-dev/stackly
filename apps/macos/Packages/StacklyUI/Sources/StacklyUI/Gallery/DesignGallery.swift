@@ -35,7 +35,7 @@
                     isOn: $isNarrow
                 )
                 .help(
-                    "Show the page at \(Int(GalleryLayout.narrowWidth)) pt, the minimum window width"
+                    "Show the page at \(Int(GalleryLayout.narrowWidth)) pt, the minimum content width"
                 )
             }
         }
