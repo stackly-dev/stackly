@@ -61,7 +61,7 @@ Bahasa visual native macOS dari mockup UI dan pola state yang dipakai semua laya
 - [ ] Verify it: `/check verify design system & UI foundation`
 - [ ] Test it: `/test design system & UI foundation`
 
-### 13. App shell SwiftUI & Swift client · needs a decision
+### 13. App shell SwiftUI & Swift client · in-progress
 
 Shell aplikasi macOS dengan navigasi PRD bagian 11.1 dalam bentuk shell mockup UI, status koneksi daemon, operation center, reconnect, dan Swift client yang dibangkitkan dari schema atau fixture yang sama dengan Rust. Semua mutasi lewat API daemon.
 
@@ -69,7 +69,16 @@ Shell aplikasi macOS dengan navigasi PRD bagian 11.1 dalam bentuk shell mockup U
 
 **Trace:** REQ-024, AC-024, RISK-09, PRD bagian 11.1 dan 18.3
 
-- [ ] Design it (spec): `/architect app shell SwiftUI & Swift client`
+**Pointer:** spec [0013](../specs/0013-app-shell-swift-client/index.md)
+
+- [x] Design it (spec): `/architect app shell SwiftUI & Swift client`
+- [ ] Build it: `/develop app shell SwiftUI & Swift client`
+  - [ ] Swift transport and contract: socket path and endpoint fixtures shared with Rust, framing, three stage decode, handshake, calls with per call timeout, subscribe, client error catalog, and tests against a fake server and the real `stacklyd` (spec 0013 AC-1 to AC-6, AC-20, AC-23; needs feature 6 milestone 1, its integration tests need feature 6 milestone 4; can run in parallel with milestone 3)
+  - [ ] Connection and sync: `DaemonLink` with reconnect backoff and heartbeat, `SyncEngine` with snapshot plus cursor, `ResourceStore`, `DaemonModel` presence and `MutationAvailability`, and the mutation path (spec 0013 AC-7 to AC-11, AC-19; after milestone 1, can run in parallel with milestone 3)
+  - [ ] Shell UI: main `Window`, sidebar with badges, footer, toolbar chrome, unbuilt page placeholders, daemon banner, Diagnostics connection section, Settings placeholder, close window notice, and window sizes (spec 0013 AC-9 to AC-15, AC-21, AC-22; needs feature 12 milestones 2 to 4; can run in parallel with milestones 1 and 2)
+  - [ ] Wiring, instances, and operations: app wiring, status adapter, provisional instance list, operation center, end to end tests, and manual evidence (spec 0013 AC-7 to AC-11, AC-13, AC-15 to AC-18, AC-21; after milestones 1 to 3, the feature 7 operation DTO, and the feature 10 or 14 instance DTO)
+- [ ] Verify it: `/check verify app shell SwiftUI & Swift client`
+- [ ] Test it: `/test app shell SwiftUI & Swift client`
 
 ### 67. Komponen dasar Stackly · needs a decision
 

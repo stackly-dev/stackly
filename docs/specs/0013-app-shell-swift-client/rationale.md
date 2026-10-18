@@ -1,0 +1,525 @@
+# 0013. Rationale: app shell SwiftUI dan Swift client
+
+[Kembali ke spec](index.md)
+
+## Context
+
+> ⚠️ Premise note: fitur 13 menggabungkan dua hal yang biasanya dipisah, yaitu Swift client (transport, koneksi, sinkronisasi) dan shell jendela SwiftUI. Keduanya tetap satu spec karena Done when fitur 13 menyatukan keduanya (status koneksi, reconnect, dan banner offline adalah perilaku client yang terlihat di shell), dan karena gate mutasi spec 0012 butuh satu pemilik yang memegang status koneksi sekaligus mengisi environment UI. Risiko kedua: milestone terakhir bergantung pada kontrak yang belum ditulis (DTO operasi dari spec 0007 yang ditulis paralel, dan DTO instance dari spec 0010 atau build fitur 14). Spec ini menulis bentuk yang dibutuhkan sebagai Assumed dan menaruh pekerjaan yang bergantung padanya di milestone 4, supaya milestone lain tidak menunggu.
+
+Stackly punya satu daemon per user yang memegang registry dan semua proses; GUI hanya client yang bicara lewat socket Unix privat (BR-011, REQ-001). Spec 0006 sudah mengunci wire: frame 4 byte big endian, handshake berversi, envelope error dengan kategori tertutup, event dengan sequence dan cursor di memori, dan resep reconnect "subscribe dulu, lalu snapshot". Spec 0006 juga menulis transport Rust di `stackly-ipc`, tetapi GUI tidak boleh link Rust (spec 0001), jadi Swift butuh transport sendiri yang setara byte per byte, termasuk pemeriksaan path dan uid peer sebelum mengirim apa pun (AC-070). Spec 0004 menurunkan path socket dari temp dir user, `STACKLY_ROOT`, dan hash FNV-1a, dan Follow-up nya meminta GUI menghitung path yang sama dengan bukti fixture bersama.
+
+Dari sisi pengguna, PRD meminta GUI tetap terbuka dan berguna saat daemon tidak terjangkau: status koneksi, retry, dan diagnostics, tanpa menyatakan instance berhenti dan tanpa menjalankan binary sendiri (REQ-024, PRD AC-024). Drift protokol antara GUI dan daemon adalah risiko yang disebut PRD (RISK-09): GUI dan helper bisa berasal dari build berbeda. Scope menambah bentuk shell dari mockup (sidebar dengan grup Library dan System, badge, footer status daemon dengan tombol Settings, toolbar per halaman), banner yang menyebut waktu state terakhir, mutasi yang nonaktif saat offline, jendela yang bisa diubah ukurannya dengan minimum tercatat, dan menutup jendela yang tidak menghentikan daemon atau instance. Spec 0012 sudah menyerahkan ke spec ini: satu banner daemon tidak terjangkau, pengisian `MutationAvailability`, adapter DTO ke enum status UI dengan switch exhaustive, lebar minimum jendela, `SectionIcon` di sidebar, dan apakah `StacklyUI` bergantung pada `StacklyClient`.
+
+Fakta teknis yang membatasi: target macOS 27 dengan Swift 6 strict concurrency; `StacklyClient` sengaja tanpa default isolation `MainActor` dan sejauh ini tanpa dependency pihak ketiga; `StacklyUI` memakai `MainActor` sebagai default. `Network.framework` bisa membuka socket Unix tetapi tidak memberi akses ke file descriptor, sehingga uid peer tidak bisa dibaca lewat `getpeereid`. Panjang path socket macOS dibatasi 104 byte, jadi test dengan socket asli butuh folder pendek. Di macOS 27, text style tidak membesar dengan `dynamicTypeSize` (temuan milestone 1 fitur 12), jadi cek teks besar diganti cek lebar sempit di lebar konten minimum. Fitur 14 (walking skeleton) butuh GUI menampilkan perubahan state instance lewat event, padahal layar Instances milik fitur 22 yang jauh lebih belakang. Tidak ada CI; semua test dan evidence berjalan di Mac ini (spec 0002).
+
+## Options considered
+
+### Keputusan 1: apakah `StacklyUI` bergantung pada `StacklyClient`
+
+#### Option 1: ya, `StacklyUI` → `StacklyClient`
+
+**Pros**:
+
+- Layar dan view model per bagian tetap di `StacklyUI`, sesuai aturan folder per layar di `apps/macos/AGENTS.md`.
+- Preview dan fixture fitur 68 memakai DTO kontrak yang sama dengan client, seperti diminta Done when fitur 68.
+- Adapter DTO ke enum UI tinggal di sebelah enum UI nya.
+
+**Cons**:
+
+- `swift test` untuk `StacklyUI` ikut membangun client.
+- Nama yang sama di dua modul (`HealthStatus`) harus ditulis lengkap di kode `StacklyUI`.
+
+#### Option 2: target baru `StacklyShell`
+
+**Pros**:
+
+- `StacklyUI` tetap design system murni yang cepat dites.
+
+**Cons**:
+
+- Menyimpang dari aturan folder per layar di `StacklyUI`, dan setiap layar journey harus memilih target.
+- Satu target tambahan di package dan satu batas lagi yang harus dijaga.
+
+#### Option 3: glue di target app
+
+**Pros**:
+
+- `StacklyUI` tidak tahu protokol sama sekali.
+
+**Cons**:
+
+- Layar tidak bisa di preview dengan DTO asli tanpa app, dan setiap layar butuh model view terpisah yang menggandakan DTO.
+- Target app menjadi gemuk dan sulit dites di luar Xcode.
+
+### Keputusan 2: transport socket Unix
+
+#### Option 1: POSIX socket plus `DispatchIO`
+
+**Pros**:
+
+- `getpeereid`, `lstat`, `SO_NOSIGPIPE`, dan `FD_CLOEXEC` langsung tersedia, jadi verifikasi endpoint spec 0006 bisa ditiru persis.
+- Tanpa dependency; `DispatchIO` menangani baca tulis tanpa blocking di antrian privat.
+
+**Cons**:
+
+- Kode pointer, errno, dan siklus hidup fd harus ditulis teliti.
+
+#### Option 2: thread khusus dengan baca blocking
+
+**Pros**:
+
+- Paling sederhana dibaca.
+
+**Cons**:
+
+- Jembatan manual ke async/await, dan baca blocking sulit dibatalkan rapi saat koneksi ditutup.
+
+#### Option 3: swift-nio
+
+**Pros**:
+
+- Pipeline framing dan bootstrap socket Unix yang matang.
+
+**Cons**:
+
+- Dependency pihak ketiga pertama di package Swift, besar untuk satu koneksi lokal, dan `getpeereid` tetap harus lewat fd sendiri.
+
+#### Option 4: `Network.framework`
+
+**Pros**:
+
+- API Apple tingkat tinggi dengan async yang rapi.
+
+**Cons**:
+
+- Tidak memberi file descriptor, jadi uid peer tidak bisa diperiksa; melanggar AC-3 spec 0006. Tidak dibawa ke pertanyaan karena gugur di syarat keamanan.
+
+### Keputusan 3: kebijakan reconnect
+
+#### Option 1: jeda 0,5, 1, 2, 4 detik, lalu tiap 5 detik
+
+**Pros**:
+
+- Pulih cepat setelah restart daemon terencana, dan cap 5 detik cocok dengan rebind daemon yang paling lama 12 detik.
+- Percobaan langsung saat Reconnect, app aktif, dan Mac bangun menutup celah jeda.
+
+**Cons**:
+
+- Tetap mencoba tiap 5 detik selama daemon dimatikan lama.
+
+#### Option 2: tetap tiap 2 detik
+
+**Pros**:
+
+- Paling sederhana.
+
+**Cons**:
+
+- Terus membangunkan CPU dan mencatat penolakan di log daemon tanpa jeda.
+
+#### Option 3: jeda 1 sampai 30 detik
+
+**Pros**:
+
+- Paling hemat.
+
+**Cons**:
+
+- Pemulihan otomatis bisa terlambat sampai 30 detik.
+
+### Keputusan 4: perilaku saat jendela ditutup
+
+#### Option 1: app tetap hidup dan memberi notice
+
+**Pros**:
+
+- Cocok dengan copy mockup "Stackly is still running" dan dengan menu bar fitur 32 yang butuh proses tetap hidup.
+- Koneksi tetap hangat, jadi membuka jendela lagi langsung menampilkan state terbaru.
+
+**Cons**:
+
+- Pengguna yang ingin menutup app harus ⌘Q, dan sampai fitur 32 jalan kembali hanya lewat Dock.
+- Notice setelah jendela tertutup butuh panel AppKit kecil.
+
+#### Option 2: app tetap hidup tanpa notice
+
+**Pros**:
+
+- Tidak ada panel buatan sendiri.
+
+**Cons**:
+
+- Peta layar menaruh notice di fitur 13; pengguna tidak tahu app masih hidup.
+
+#### Option 3: app keluar saat jendela ditutup
+
+**Pros**:
+
+- Paling sederhana dan perilaku bawaan scene `Window`.
+
+**Cons**:
+
+- Fitur 32 harus membalik perilaku ini, dan copy mockup tidak berlaku.
+
+### Keputusan 5: tampilan instance sebelum fitur 22
+
+#### Option 1: daftar sementara di halaman Instances
+
+**Pros**:
+
+- Fitur 14 bisa membuktikan "GUI menampilkan perubahan state lewat event" di tempat pengguna mencarinya.
+- Fitur 22 mengganti view nya tetapi tetap memakai `InstanceStore`.
+
+**Cons**:
+
+- Kode view yang sengaja dibuang.
+
+#### Option 2: daftar sementara di Overview
+
+**Pros**:
+
+- Halaman pertama yang terlihat.
+
+**Cons**:
+
+- Fitur 22 harus memindahkannya, dan Instances tetap kosong lebih lama.
+
+#### Option 3: tanpa daftar
+
+**Pros**:
+
+- Tidak ada kode sementara.
+
+**Cons**:
+
+- Done when fitur 14 bergantung pada keputusan yang tidak dimiliki siapa pun.
+
+### Keputusan 6: state terakhir setelah app dibuka ulang
+
+#### Option 1: hanya di memori
+
+**Pros**:
+
+- Tidak ada nama instance atau path di cache disk, sejalan dengan spec 0012 (StacklyUI tidak menyimpan state ke disk).
+- Tidak ada invalidasi cache dan tidak ada risiko menampilkan state yang sangat lama.
+
+**Cons**:
+
+- Setelah relaunch tanpa daemon, pengguna hanya melihat banner dan placeholder.
+
+#### Option 2: cache snapshot di disk
+
+**Pros**:
+
+- Lebih informatif saat daemon mati sejak sebelum app dibuka.
+
+**Cons**:
+
+- File cache privat baru, aturan privasi, dan state yang bisa berumur hari tetapi tampil seperti nyata.
+
+### Keputusan 7: bukti test perilaku GUI
+
+#### Option 1: Swift Testing plus evidence manual
+
+**Pros**:
+
+- Logika shell (status, presentasi, gate, store) ada di model yang bisa dites Swift Testing dengan trait `.evidence` yang sudah ada.
+- Spec 0002 tidak perlu diubah sekarang; XCUITest dan snapshot tetap satu paket di fitur 68.
+
+**Cons**:
+
+- Regresi tampilan shell baru tertangkap saat `/check verify` sampai fitur 68.
+
+#### Option 2: XCUITest sekarang
+
+**Pros**:
+
+- Perilaku jendela dan banner teruji otomatis lebih awal.
+
+**Cons**:
+
+- Butuh helper evidence XCTest di spec 0002 lebih dulu, dan infrastrukturnya tumpang tindih dengan fitur 68.
+
+### Keputusan 8: letak diagnostics koneksi
+
+#### Option 1: seksi Connection di Diagnostics plus aksi banner
+
+**Pros**:
+
+- Satu tempat lengkap yang juga menjadi rumah hasil doctor fitur 34.
+- Banner offline memberi jalan langsung lewat Open Diagnostics.
+
+**Cons**:
+
+- Mockup banner hanya punya Reconnect; aksi kedua adalah selisih yang dicatat.
+
+#### Option 2: popover dari footer
+
+**Pros**:
+
+- Dekat dengan status daemon.
+
+**Cons**:
+
+- Popover sempit untuk path, kode, dan petunjuk, dan halaman Diagnostics tidak bisa dibuka saat offline sampai fitur 34.
+
+#### Option 3: keduanya
+
+**Pros**:
+
+- Ringkas dan lengkap sekaligus.
+
+**Cons**:
+
+- Dua tampilan yang harus dijaga tetap sama.
+
+### Keputusan 9: cakupan operation center
+
+#### Option 1: store plus badge sidebar
+
+**Pros**:
+
+- Memberi semua layar satu sumber operasi aktif dan cara mengikuti operasi yang mereka mulai, tanpa mengambil halaman fitur 35.
+
+**Cons**:
+
+- Pengguna belum melihat daftar operasi sampai fitur 35 atau 22.
+
+#### Option 2: ditambah daftar sementara di Operations
+
+**Pros**:
+
+- Store terlihat sebelum fitur 35.
+
+**Cons**:
+
+- Kode view tambahan yang dibuang.
+
+#### Option 3: ditambah popover aktivitas di toolbar
+
+**Pros**:
+
+- Progress terlihat dari halaman mana pun.
+
+**Cons**:
+
+- Tidak ada di mockup, dan bentrok dengan kartu operasi Overview.
+
+### Keputusan 10: halaman yang belum dibangun
+
+#### Option 1: placeholder netral
+
+**Pros**:
+
+- Sidebar lengkap sesuai Done when, dan setiap placeholder jelas ditandai untuk fitur pemiliknya.
+
+**Cons**:
+
+- Pengguna build awal melihat halaman yang belum berisi.
+
+#### Option 2: bagian disembunyikan
+
+**Pros**:
+
+- Tidak ada halaman kosong.
+
+**Cons**:
+
+- Bertentangan dengan Done when fitur 13.
+
+#### Option 3: bentuk unsupported
+
+**Pros**:
+
+- Memakai pola yang sudah ada.
+
+**Cons**:
+
+- Arti unsupported adalah capability yang tidak didukung, bukan fitur yang belum dibangun.
+
+### Keputusan 11: tampilan saat belum pernah ada state
+
+#### Option 1: banner plus placeholder halaman
+
+**Pros**:
+
+- Banner berperilaku sama di setiap keadaan offline; placeholder halaman memberi Reconnect dan Open Diagnostics di tempat konten.
+- Sejalan dengan `ViewState.resolve` spec 0012 (tanpa data dan ada error berarti failed).
+
+**Cons**:
+
+- Pesan "tidak tersambung" muncul dua kali di layar.
+
+#### Option 2: placeholder saja
+
+**Pros**:
+
+- Tidak ada pesan ganda.
+
+**Cons**:
+
+- Banner punya dua perilaku, dan halaman tanpa store (placeholder fitur lain) tidak menjelaskan apa pun.
+
+#### Option 3: banner saja, halaman loading
+
+**Pros**:
+
+- Pesan tunggal.
+
+**Cons**:
+
+- Spinner tanpa akhir terasa seperti app macet, dan melanggar urutan `ViewState` spec 0012.
+
+### Keputusan 12: tombol Settings sebelum fitur 32
+
+#### Option 1: scene Settings placeholder
+
+**Pros**:
+
+- Tombol, ⌘, dan menu app sudah benar sejak awal; fitur 32 hanya mengisi isinya.
+
+**Cons**:
+
+- Jendela Settings yang hampir kosong.
+
+#### Option 2: tombol nonaktif dengan alasan
+
+**Pros**:
+
+- Tidak ada jendela kosong.
+
+**Cons**:
+
+- Footer terlihat setengah jadi, dan ⌘, tidak melakukan apa pun.
+
+### Keputusan 13: cara menguji client terhadap daemon
+
+#### Option 1: `stacklyd` asli plus server palsu Swift
+
+**Pros**:
+
+- Membuktikan Swift dan daemon asli benar benar cocok (path socket, handshake, event, restart).
+- Kasus yang tidak bisa dipicu daemon asli (major berbeda, frame rusak, uid peer lain, byte yang tertulis) diuji server palsu.
+
+**Cons**:
+
+- Integration test butuh binary `stacklyd` yang sudah dibangun; tanpa binary test `BLOCKED`.
+
+#### Option 2: hanya server palsu
+
+**Pros**:
+
+- Cepat dan tanpa proses Rust.
+
+**Cons**:
+
+- Tidak membuktikan kecocokan dengan daemon nyata, jadi drift lolos sampai dipakai.
+
+#### Option 3: hanya daemon asli
+
+**Pros**:
+
+- Bukti paling kuat.
+
+**Cons**:
+
+- Kasus gagal protokol butuh flag uji khusus di daemon produksi.
+
+### Keputusan 14: ukuran minimum jendela
+
+#### Option 1: 900 × 600 pt
+
+**Pros**:
+
+- Dengan sidebar maksimal 260 pt, kolom konten tidak pernah kurang dari 640 pt, jadi cek lebar sempit spec 0012 tetap 640.
+- Muat di layar MacBook terkecil dengan Dock, dan bisa berdampingan dengan editor.
+
+**Cons**:
+
+- Overview dua kolom dan inspector harus menyesuaikan diri di lebar konten 640 pt.
+
+#### Option 2: 1024 × 640 pt
+
+**Pros**:
+
+- Ruang konten lebih lega.
+
+**Cons**:
+
+- Jendela tidak bisa dibuat kecil di samping editor.
+
+#### Option 3: 800 × 560 pt
+
+**Pros**:
+
+- Paling fleksibel.
+
+**Cons**:
+
+- Konten hanya sekitar 560 pt saat sidebar terbuka, jadi cek sempit spec 0012 harus turun.
+
+## Rationale
+
+Semua keputusan memakai opsi yang direkomendasikan, dan engineer mengonfirmasi setiap pilihan.
+
+**Client (keputusan 1, 2, 3, 13).** Kekuatan terbesar adalah AC-3 spec 0006: client tidak boleh menulis satu byte pun sebelum path dan uid peer terbukti milik user yang sama. Itu menggugurkan `Network.framework` dan membuat POSIX socket satu satunya jalan yang tidak menambah dependency, dengan `DispatchIO` sebagai mesin baca tulis yang sudah dipakai Apple sendiri untuk fd. Karena transport ditulis dua kali, bukti kecocokan harus dua lapis: fixture bersama untuk yang bisa diuji lewat data (framing, path socket, DTO, kode error), dan integration test terhadap `stacklyd` asli untuk yang hanya terlihat saat dua proses benar benar bicara (handshake, event, restart). Server palsu menutup sisanya tanpa menambah flag uji ke daemon produksi. Kebijakan reconnect mengikuti angka daemon sendiri: rebind paling lama 12 detik dan restart terencana, sehingga cap 5 detik cukup cepat tanpa memukul daemon yang memang dimatikan. `StacklyUI` bergantung pada `StacklyClient` karena aturan folder per layar dan Done when fitur 68 sama sama mengandaikan layar dan fixture memakai DTO kontrak langsung.
+
+**Kejujuran saat offline (keputusan 6, 8, 11).** PRD AC-024 adalah alasan semua perilaku offline: GUI tidak boleh berbohong tentang instance. Status item hanya berasal dari DTO daemon, koneksi putus hanya menambah banner dan gate, dan waktu state terakhir adalah waktu frame terakhir yang benar benar diterima. State terakhir sengaja hanya di memori: cache disk akan menampilkan data yang bisa berumur hari dengan tampilan yang sama dengan data hidup, dan menambah file privat baru yang harus dijaga. Diagnostics koneksi tinggal di halaman Diagnostics karena hanya halaman itu yang muat path, kode, alasan, dan petunjuk sekaligus, dan fitur 34 nanti melanjutkan halaman yang sama.
+
+**Shell (keputusan 4, 5, 7, 9, 10, 12, 14).** Shell dibuat lengkap sesuai Done when (semua bagian sidebar, footer, Settings) walau sebagian besar halaman belum ada, karena layar journey berikutnya harus bisa menempel ke bingkai yang sudah benar. App tetap hidup setelah jendela ditutup karena fitur 32 membutuhkannya dan copy mockup sudah mengandaikannya; notice hanya muncul sekali per peluncuran supaya tidak mengganggu. Daftar instance sementara ada karena fitur 14, bukan karena shell butuh daftar; ia hidup di halaman yang nanti dimiliki fitur 22 supaya penggantiannya hanya menukar view. Operation center berhenti di store dan badge supaya tidak mengambil halaman fitur 35. Ukuran minimum 900 × 600 pt dipilih dari dua angka yang sudah ada: sidebar mockup 236 pt dan lebar sempit 640 pt spec 0012; dengan sidebar dibatasi 260 pt, konten tidak pernah lebih sempit dari angka yang sudah dites fitur 12. Bukti GUI memakai Swift Testing plus evidence manual karena logika yang bisa salah ada di model, sedangkan XCUITest dan snapshot lebih masuk akal dibangun sekali di fitur 68.
+
+## Keputusan rekomendasi
+
+Keputusan kecil yang diambil saat menulis spec, masing masing dengan alasan satu baris dan alternatif yang ditolak:
+
+- **Satu scene `Window` utama**, bukan `WindowGroup`. Stackly adalah app satu jendela di mockup, dan `Window` memberi satu jendela yang bisa dibuka ulang. Alternatif: `WindowGroup`, yang memberi ⌘N jendela kedua dengan dua shell yang bersaing memegang koneksi yang sama.
+- **Satu subscription untuk semua jenis event**, lalu diarahkan di client. Batas 8 subscription per koneksi tetap tersisa untuk log (fitur 27). Alternatif: satu subscription per store, yang menggandakan event gap dan cursor.
+- **Snapshot mengganti isi store lalu memutar ulang event yang ditahan**, bukan menggabungkan per item. Aturan revision cukup untuk benar, dan hapus tidak bisa dihidupkan snapshot lama. Alternatif: merge per item dengan revision tertinggi, yang butuh penanda hapus dan rumit untuk item yang hilang dari snapshot.
+- **Timeout atau cancel hanya menggagalkan call itu**, dengan set ID yang ditinggalkan yang terbatas supaya balasan telat dibuang tanpa menganggapnya pelanggaran protokol. SwiftUI membatalkan `.task` setiap kali view hilang, jadi menutup koneksi untuk setiap cancel akan mengubah mutasi lain yang sedang berjalan menjadi `outcomeUnknown`. Koneksi hanya ditutup saat handshake atau heartbeat timeout. Alternatif yang ditolak (draf awal): timeout menutup seluruh koneksi.
+- **`requestId` dan `idempotencyKey` dari `UUID()` huruf kecil (v4)**. Spec 0006 hanya mengatur format; Foundation tidak punya UUID v7. Alternatif: menulis generator v7 sendiri demi urutan di log, yang tidak dibutuhkan GUI.
+- **Tiga hasil gagal (`notSent`, `rejected`, `outcomeUnknown`)**. Umpan balik "Nothing was sent" hanya jujur kalau client tahu tidak ada byte yang tertulis. Alternatif: satu `ErrorBody`, yang memaksa layar menebak dari kode.
+- **`MutationPath` hanya menolak lokal saat tidak tersambung**. Saat tersambung, daemon yang memutuskan (termasuk `daemon.starting`), jadi tidak ada `ErrorBody` daemon yang dipalsukan client. Alternatif: menolak lokal untuk setiap `.blocked`, yang harus mengarang kode untuk starting dan recovery.
+- **Heartbeat `daemon.get_health` tiap 15 detik (1 detik selama `starting`)**. Spec 0006 tidak punya event untuk perubahan health, daemon yang macet tidak pernah menutup socket, dan tanpa frame berkala `lastKnownAt` bisa berumur jam untuk daemon sehat yang diam. Satu call kecil menjawab ketiganya. Alternatif yang ditolak (draf awal): `get_health` hanya setelah handshake, yang membuat footer tertahan di "starting" dan daemon macet tidak terdeteksi.
+- **Status koneksi berubah per kode, bukan per kategori**. `request.unknown_method` juga berkategori `unsupported`, dan error `unauthorized` per call di masa depan tidak boleh memutus koneksi. Alternatif yang ditolak (draf awal): pemetaan per kategori.
+- **Presence sebagai fungsi murni dengan status `refreshing`**. Banner, gate, dan pengumuman baru berubah setelah semua store selesai resnapshot, supaya "State refreshed" tidak diumumkan sebelum state benar benar segar dan banner tidak berkedip di setiap percobaan. Alternatif: presence mengikuti `ConnectionState` mentah.
+- **Banner critical untuk incompatible, untrusted, recovery, dan misconfigured**, caution hanya untuk tidak terjangkau. Empat keadaan itu tidak pulih sendiri dan butuh tindakan pengguna. Alternatif: semua caution, yang menyamakan masalah keamanan dengan daemon yang sedang restart.
+- **`lastKnownAt` adalah waktu frame terakhir yang diterima setelah snapshot selesai**. Selama event mengalir, state benar sampai frame terakhir; daemon yang macet sebelum putus tidak membuat waktu itu terlihat lebih baru dari kenyataan. Alternatif: waktu putus terdeteksi, yang bisa lebih baru dari state sebenarnya.
+- **`misconfigured` tidak pernah mencoba connect**. Override yang salah hanya bisa dibetulkan dengan launch ulang. Alternatif: tetap mencoba, yang tidak mungkin berhasil.
+- **Jeda 30 detik untuk incompatible dan untrusted**. Keduanya butuh perubahan dari luar, dan setiap percobaan dicatat daemon sebagai koneksi ditolak. Alternatif: jeda yang sama dengan unreachable.
+- **Badge sidebar native (`.badge`)**. Aturan fidelity: kontrol native menang atas tiruan HTML, dan warna aksen bukan warna teks kustom (spec 0012). Alternatif: kapsul biru dan angka merah buatan sendiri seperti mockup.
+- **Lebar sidebar 200 sampai 260 pt dengan ideal 236 pt**. 236 pt adalah lebar mockup; 260 pt menjaga konten minimal 640 pt di jendela 900 pt. Alternatif: lebar bebas, yang bisa mendorong konten di bawah lebar yang sudah dites.
+- **Notice tutup jendela sekali per peluncuran, 4 detik, opak**. Cukup untuk memberi tahu tanpa mengganggu setiap kali, dan tanpa glass kustom (spec 0012). Alternatif: setiap kali ditutup, atau sekali seumur instalasi lewat `UserDefaults`, yang menyimpan state ke disk.
+- **Copy Details di seksi Connection**. Laporan bug dan pertanyaan dukungan butuh teks yang bisa ditempel. Alternatif: hanya tampilan, yang memaksa pengguna menyalin baris satu per satu.
+- **GUI tidak mengulang validasi kepemilikan dan mode folder override**. Verifikasi endpoint sudah menolak socket yang tidak dipercaya, dan GUI tidak membuat folder. Alternatif: memindahkan `validate_root_override` ke Swift, yang menggandakan aturan tanpa menambah keamanan.
+- **`STACKLY_DAEMON_BIN` dengan fallback `target/debug/stacklyd`**. Test Swift tidak menjalankan `cargo build` sendiri, dan binary yang tidak ada dicatat `BLOCKED` dengan jujur. Alternatif: test memanggil cargo, yang lambat dan mengejutkan.
+- **Test aturan sumber untuk spawn proses, API jaringan, dan `default:` di adapter**. Tiga invariant yang paling mudah dilanggar diam diam dijaga test, bukan ingatan reviewer. Alternatif: review manual.
+- **`SO_NOSIGPIPE` di setiap socket**. Tanpa itu, menulis ke socket yang sudah ditutup daemon mengirim SIGPIPE dan mematikan app. Alternatif: mengabaikan SIGPIPE di seluruh proses, yang mengubah perilaku global app.
+- **Jenis event yang dikenal memakai mekanisme fixture `skipped` fitur 6**. Satu sumber untuk tahu event mana yang dikenal Swift. Alternatif: daftar tulis tangan di transport, yang bisa berbeda dengan tipe hasil generate.
+
+Tidak ada tool baru yang dipilih (semua API Apple bawaan), jadi tawaran Agent Skill dan MCP dilewati. Engineer memilih tanpa bagian References.
+
+## Cross check
+
+Sonnet 5.5 membaca draf spec secara read only (tanpa mengubah file) dan membandingkannya dengan spec 0004, 0005, 0006, 0012, scope, dan AGENTS.md. Temuan yang dicek ulang terhadap repo (misalnya milestone 2 sampai 4 fitur 12 belum di main, `StacklyTestSupport` belum product, Rust menghitung hash `as_encoded_bytes`, dan join temp dir default ada di `stackly-platform-macos`) terbukti benar. Engineer memilih menerapkan semua perbaikan yang disarankan pada 2026-10-18:
+
+1. Milestone 2 sampai 4 fitur 12 menjadi prasyarat milestone 3; `StatusAdapter` (AC-16) pindah ke milestone 4 karena butuh enum DTO.
+2. Perubahan `Package.swift` ditulis persis: product `StacklyTestSupport`, dan referensi `.product(name:package: "swift")` dari `StacklyUI`.
+3. `ContractNames.swift` hasil codegen memberi daftar jenis event dan nama method, karena typeshare tidak menghasilkannya.
+4. Dua kode client baru diminta ke spec 0006 (`ipc.not_connected`, `ipc.call_timeout`), dengan `ClientErrorCatalog` Swift yang dites terhadap `error-codes.json` dan pesan tetapnya ditulis.
+5. Transisi status koneksi dikunci per kode, dan reply `rejected` tidak pernah mengubah status; handshake yang ditolak `request.*` menjadi `incompatible`.
+6. Presence menjadi fungsi murni dengan `refreshing` dan `connecting(slow:)`, supaya banner tidak berkedip, launch tidak menampilkan kegagalan palsu, dan pengumuman datang setelah state segar.
+7. Heartbeat `daemon.get_health` menjadi sumber health, deteksi daemon macet, dan batas umur `lastKnownAt`.
+8. Recovery dideteksi lewat satu sinyal (`RecoveryReport` di status daemon), dan banner tidak lagi menjanjikan laporan yang milik fitur 48.
+9. Selaras dengan spec 0012: banner informative untuk starting, connecting lambat, dan shutting down; setter `MutationAvailability` dicatat Assumed; aksi banner `mutates: false`; placeholder memakai Retry; error presence hanya diteruskan saat belum ada data.
+10. Footer memakai simbol tone; `stopping`, health asing, dan `peer_rejected` tanpa alasan punya baris dan teks sendiri.
+11. Sinkronisasi dirinci: definisi cursor dan gap, loop berurutan, token generasi, batas ulang, API reducer `ResourceStore`, tombstone, dan pagination token.
+12. Operation center: `needs_recovery` di `active` tanpa dihitung badge; badge dan subjudul dari `running` dan `cancel_requested`; pluralisasi "instance".
+13. `default_runtime_root` ditaruh di `stackly-platform` (portabel), dan Swift menghitung hash byte mentah `realpath`.
+14. Fixture bersama `protocols/fixtures/endpoint/checks.json` mengunci urutan cek endpoint dan kosakata `details.kind` di Rust dan Swift.
+15. Timeout atau cancel hanya menggagalkan call itu, dengan set ID yang ditinggalkan; koneksi hanya ditutup saat handshake atau heartbeat timeout.
+16. Frame error tanpa `requestId` setelah handshake membuat call tertunda `outcomeUnknown`, bukan `rejected`.
+17. Sambungan AppKit dirinci: `ShellRuntime` dengan hook lifecycle sinkron, `WindowOpener`, `MainWindowAccessor`, dan penanda Quit supaya notice tidak muncul saat keluar.
+18. Invariant "tanpa disk" mengecualikan restorasi scene milik sistem (`@SceneStorage`).
+19. Diagnostics: path socket dibungkus, Copy Details sama persis dengan baris, `lastDaemon`, `lastError`, dan `lastConnectedAt` disimpan, Reconnect nonaktif dengan alasan saat `misconfigured`.
+20. Badge Operations disembunyikan saat tidak tersambung; badge Instances tetap dengan label "last known".
+21. Mekanik test dan Swift 6: `now` disuntik, regex aturan sumber dengan batas kata, IO blocking di antrian khusus, `DispatchIO` dengan `lowWater` 1 dan resume hanya saat `done`, backpressure lewat penjadwalan baca, cek `sun_path`, multicast status, cek ulang setelah suspensi, `maxInFlight` minimal 1, dan versi bundle yang tidak valid menjadi `misconfigured`.
