@@ -15,8 +15,12 @@ const USAGE: &str = "\
 Usage: cargo xtask <task>
 
 Tasks:
-  codegen              Regenerate the Swift contract types and the JSON Schemas
-  codegen --check      Fail when the committed generated files are out of date
+  codegen              Regenerate the Swift contract types, the JSON Schemas, the
+                       error catalog, and the contract digest
+  codegen --check      Fail when the committed generated files are out of date or
+                       the contract changed without a new protocol version
+  codegen --amend      Same as codegen, but rewrite the digest recorded for the
+                       current protocol version (only for a version not on main)
   check-deps           Check crate dependency direction and the unsafe policy
   build-app            Build the macOS app with xcodebuild (scheme Stackly, Debug)
   build-app --release  Same, with the Release configuration
@@ -59,8 +63,9 @@ fn run() -> Result<ExitCode> {
     let root = repo_root();
     let done = |result: Result<()>| result.map(|()| ExitCode::SUCCESS);
     match args.as_slice() {
-        ["codegen"] => done(codegen::run(&root, codegen::Mode::Write)),
+        ["codegen"] => done(codegen::run(&root, codegen::Mode::Write { amend: false })),
         ["codegen", "--check"] => done(codegen::run(&root, codegen::Mode::Check)),
+        ["codegen", "--amend"] => done(codegen::run(&root, codegen::Mode::Write { amend: true })),
         ["check-deps"] => done(check_deps::run(&root)),
         ["build-app"] => done(build_app::run(&root, build_app::Configuration::Debug)),
         ["build-app", "--release"] => {

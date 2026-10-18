@@ -13,5 +13,8 @@ jiff.workspace = true
 stackly-domain.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+stackly-evidence.workspace = true
+
 [lints]
 workspace = true

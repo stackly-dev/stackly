@@ -29,7 +29,7 @@ pub use info::{PlatformInfo, host_target};
 pub use layout::{
     DirectoryLayout, DirectoryResolver, FixedRoots, INSTANCE_MANIFEST_FILE, InstancePaths,
     ROOT_OVERRIDE_ENV, RUNTIME_ROOT_MAX, RootKind, RootSet, SOCKET_NAME_MAX, SOCKET_PATH_MAX,
-    validate_root_override,
+    instance_path_entries, validate_root_override,
 };
 pub use platform::Platform;
 pub use unsupported::UnsupportedPlatform;

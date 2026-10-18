@@ -1,0 +1,249 @@
+{
+  "fixtures": [
+    {
+      "file": "request-handshake.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-get-info.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-get-health.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-get-capabilities.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-subscribe.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-subscribe-new-events-only.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-unsubscribe.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-content-before-type.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "request-handshake-newer-client.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "request-subscribe-uppercase-uuid.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "reject-malformed-json.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.malformed"
+    },
+    {
+      "file": "reject-malformed-shape.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.malformed"
+    },
+    {
+      "file": "reject-malformed-request-id.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.malformed",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-malformed-idempotency-key.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.malformed",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-too-deep.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.too_deep",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-unknown-method.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.unknown_method"
+    },
+    {
+      "file": "reject-invalid-params-type.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params"
+    },
+    {
+      "file": "reject-invalid-params-validate.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-unit-method-with-params.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-handshake-major-2.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params"
+    },
+    {
+      "file": "frame-response-handshake.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-get-info.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-get-health.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-get-capabilities.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-subscribe.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-unsubscribe.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-full.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-empty.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-gap.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-shutting-down.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-max-sequence.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-unknown-kind.json",
+      "type": "ServerFrame",
+      "expect": "skipped"
+    },
+    {
+      "file": "frame-response-handshake-newer-minor.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-get-info-newer-minor.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-event-newer-minor.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-health-unknown-statuses.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-event-gap-unknown-reason.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-event-shutdown-unknown-reason.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-error-unknown-resource-kind.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-event-time-with-offset.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-uppercase-uuid.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-event-sequence-too-large.json",
+      "type": "ServerFrame",
+      "expect": "reject",
+      "code": "ipc.protocol_violation",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-unknown-type.json",
+      "type": "ServerFrame",
+      "expect": "reject",
+      "code": "ipc.protocol_violation"
+    }
+  ]
+}
