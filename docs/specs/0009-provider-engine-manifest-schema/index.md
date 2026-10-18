@@ -236,7 +236,8 @@ Matriks posisi (ya berarti tipe itu diterima di posisi itu):
 | ekspresi `managed` di settings schema | `instance.*`, `runtime.version`, `runtime.line`, `endpoint.*`, `provider.*` | tidak | ya | tidak | tidak | tidak | tidak boleh `settings.*` atau `secret.*` (mencegah siklus) |
 | `{{ }}` di template | ya | ya | ya (sebagai teks) | ya (sebagai teks) | tidak | hanya di config `sensitive` | |
 
-- Setiap token folder di posisi mana pun (termasuk `args`, `env`, dan template) wajib tercantum di `permissions.managedFilesystem`.
+- Setiap token folder di posisi mana pun (termasuk `args`, `env`, dan template) wajib tercantum di `permissions.managedFilesystem`. `${instance.secrets}` dan setiap langkah `materializeSecret` mewajibkan `run` di daftar itu (`path_not_permitted`).
+- `${instance.secrets}` hanya diterima di `args`, nilai `env`, dan template, serta di `configFiles.destination` untuk config yang `sensitive: true` (file include plaintext mekanisme 5 spec 0011 di folder `secrets/`); di `cwd`, `logs.files`, dan destination config yang tidak sensitif ia ditolak (`token_not_allowed_here`).
 - `argument_injection_risk`: entri `args` yang diawali token `settings` teks tanpa `enum`, atau token `settings` integer dengan `minimum` negatif, ditolak, supaya nilai pengguna tidak bisa menjadi flag baru. Field `managed` tidak terkena aturan ini karena nilainya tidak datang dari pengguna.
 - Path dinormalisasi secara leksikal: komponen `.` dibuang, komponen `..` ditolak, garis miring ganda digabung. Containment dicek terhadap folder yang namanya disebut token, jadi `${instance.config}/../data/x` ditolak walau hasilnya masih di dalam instance.
 
@@ -405,7 +406,7 @@ pub struct InitPlan { pub steps: Vec<InitStep>, pub deadline: Duration, pub clea
 pub enum InitStep {
     EnsureDirectories(Vec<PathBuf>),          // parent selalu sebelum anak
     WriteFile(FileWrite),
-    MaterializeSecret { secret: PlanSecret, path: PathBuf },
+    MaterializeSecret { secret: PlanSecret, file_name: String },   // executor menaruhnya di instance_secrets_dir(short key)
     Run(RunSpec),
 }
 pub struct FileWrite { pub path: PathBuf, pub content: RenderedContent, pub sensitive: bool }
@@ -468,7 +469,7 @@ impl RenderedContent {
 
 `providers/fake` (ID `testing/fake`, software `fake`, category `testing`): endpoint `http` (tcp, client, 127.0.0.1, port saran 18080); config `fakeConfig` (format `json`, `sensitive: true`, berisi `greeting`, `instanceName`, dan `authToken` dari secret); initialize `createManagedDirectories`, `renderConfig`, lalu `runExecutable` init dengan `--token-stdin` dan `stdin: { secret: authToken }`; start `serve` dengan setiap perilaku diambil dari settings; stop `gracefulProcess` `term`; reload `render: [fakeConfig]`, `action: signal`, `signal: hup`; readiness `http` ke `/ready`; health `http` ke `/health`; `dataMarker` `FAKE_VERSION`; capability `reload`, `multiInstance`, `persistence`, dan backup `cold`; `managedFilesystem` semua lima folder. Settings: `greeting` (teks, reload), `label` (teks maks 256 tanpa pattern, restart, dipakai sebagai `--label=${settings.label}`), `readyDelayMs`, `crashAfterMs`, `crashExitCode` (1 sampai 255, default 70), `logLinesPerSecond` (integer, restart, advanced), `ignoreTerm`, `failInit` (boolean), `authToken` (secret, `immutableAfterInit`). `versions.json` tulisan tangan dengan satu artefak `fixture` yang versinya sama dengan versi crate `stackly-fake-server` (test memastikannya), line `<major>.<minor>`, dan `executables: ["stackly-fake-server"]`.
 
-Paket fixture `testing/fake-command` di `crates/core/tests/fixtures/packages/fake-command/` memakai binary yang sama untuk primitive sisanya: `materializeSecret` ke `${instance.run}/secrets/token`, probe readiness `tcp`, probe health `exec` (`stackly-fake-server version`), stop `command` (`shutdown --port=${endpoint.http.port}`), dan reload `run`.
+Paket fixture `testing/fake-command` di `crates/core/tests/fixtures/packages/fake-command/` memakai binary yang sama untuk primitive sisanya: `materializeSecret` dengan destination `token` (dirujuk lewat `${instance.secrets}/token`), probe readiness `tcp`, probe health `exec` (`stackly-fake-server version`), stop `command` (`shutdown --port=${endpoint.http.port}`), dan reload `run`.
 
 `stackly_testkit::fake_server::binary() -> PathBuf` menjalankan `cargo build -p stackly-fake-server --locked` sekali per proses test (lewat `OnceLock`, memakai variabel `CARGO` dan target dir workspace; testkit tidak termasuk crate yang dilarang membaca environment) lalu mengembalikan path binary. Cara binary itu dipasang sebagai runtime di test root adalah keputusan fitur 10 dan 14.
 

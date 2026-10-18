@@ -762,3 +762,4 @@ Pengecekan silang dengan spec 0008, 0010, dan 0013 dan keputusan engineer di pas
 | Perilaku dalam recovery mode registry tidak disebut | `recover` dan `start()` dilewati, subsystem `operations` `unavailable` | registry tidak boleh dibaca atau ditulis dalam recovery |
 | Asumsi `remove_file` dan `remove_empty_dir` | `remove_tree` satu satunya primitive (spec 0004) | keputusan engineer ronde 2 |
 
+Cross check model lain atas ronde 2 menambah, atas persetujuan engineer: untuk jenis `CloseInterrupted`, titik tak bisa dibalik hanya menahan kompensasi (kegagalan selesai `failed`, cancel tetap sampai ke pekerjaan), shutdown tidak menunggu runner nya, `recover` menutup yang `cancel_requested` sebagai `cancelled` dan mengosongkan `waiting_on` operasi antri, hook `precheck` di `BeginRequest` (`Reject`, `NoOp`, `Proceed`) dengan baris operasi `succeeded` tanpa langkah untuk `NoOp` yang menulis sesuatu, `NotReady` sampai `start()`, dan filter `manager`.
