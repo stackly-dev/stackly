@@ -39,7 +39,7 @@ Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang forma
   - [x] Fixture credential leak scan
   - [x] Baseline recorded on this Mac (OQ-011)
 - [x] Verify it: `/check verify coding standards & tooling`
-- [ ] Test it: `/test coding standards & tooling`
+- [x] Test it: `/test coding standards & tooling`
 
 ### 3. Sumber & packaging runtime · in-progress
 

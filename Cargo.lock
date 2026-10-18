@@ -1302,6 +1302,7 @@ dependencies = [
  "sha2",
  "stackly-evidence",
  "stackly-protocol",
+ "stackly-testkit",
  "syn 3.0.9",
  "tempfile",
  "toml",
