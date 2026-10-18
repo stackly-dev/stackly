@@ -83,7 +83,7 @@ Model domain (software, provider revision, runtime, instance, environment, opera
 - [ ] Verify it: `/check verify domain core & platform abstraction`
 - [ ] Test it: `/test domain core & platform abstraction`
 
-### 5. Data model registry · needs a decision
+### 5. Data model registry · in-progress
 
 Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision per resource. Model data adalah hal paling mahal untuk diulang, jadi ia diputuskan sebelum fitur apa pun menyimpan state.
 
@@ -91,7 +91,15 @@ Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision 
 
 **Trace:** BR-002, BR-003, REQ-048, NFR-005, AC-065 (bagian migrasi), PRD bagian 17
 
-- [ ] Design it (spec): `/architect data model registry`
+**Pointer:** spec [0005](../specs/0005-data-model-registry/index.md) · code in `crates/storage/`, `crates/domain/`, `crates/platform/`, `crates/testkit/`, `apps/daemon/`
+
+- [x] Design it (spec): `/architect data model registry`
+- [ ] Build it: `/develop data model registry`
+  - [ ] Opening the registry end to end: `stackly-storage`, migration 0001 with every PRD 17 table, open with snapshot and recovery, fixture v1, and `stacklyd` start (spec 0005 AC-1 to AC-7, AC-13, AC-15; build steps 1 to 7)
+  - [ ] Registry port and fake: domain `registry` module, `restore` constructors, `FakeRegistry`, `RegistrySeed`, and `registry_conformance` (spec 0005 AC-8 to AC-11, AC-14, AC-16; build steps 8 and 9; needs spec 0004 milestone 3)
+  - [ ] SQLite registry: `Registry` for `SqliteRegistry`, aggregate mapping, queries, prune, and conformance on SQLite (spec 0005 AC-7 to AC-16; build steps 10 to 13)
+- [ ] Verify it: `/check verify data model registry`
+- [ ] Test it: `/test data model registry`
 
 ### 6. Protokol IPC & daemon · needs a decision · GA
 
