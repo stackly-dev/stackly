@@ -1,0 +1,37 @@
+# The cargo-fuzz project (spec 0006, *Fuzzing*). It is its own workspace,
+# excluded from the main one, and builds only with the dated nightly in
+# `rust-toolchain.toml`. Run it through `cargo xtask fuzz`, never by hand.
+#
+# A new target adds a `[[bin]]` below, its file in `fuzz_targets/`, the
+# harness in the owning crate's `#[doc(hidden)] pub mod fuzzing`, and a row
+# in `TARGETS` in `xtask/src/fuzz.rs`.
+
+[package]
+name = "stackly-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+stackly-protocol = { path = "../crates/protocol" }
+
+[[bin]]
+name = "ipc_frame_decode"
+path = "fuzz_targets/ipc_frame_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ipc_request_decode"
+path = "fuzz_targets/ipc_request_decode.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

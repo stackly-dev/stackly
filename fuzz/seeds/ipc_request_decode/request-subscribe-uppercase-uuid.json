@@ -1,0 +1,15 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000001",
+  "idempotencyKey": null,
+  "call": {
+    "type": "events.subscribe",
+    "content": {
+      "since": {
+        "serverInstanceId": "0192F3A0-7C1E-7B2A-9D4E-5F6A7B8C9D0E",
+        "sequence": 0
+      },
+      "kinds": [],
+      "resource": null
+    }
+  }
+}

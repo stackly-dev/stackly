@@ -64,3 +64,28 @@ _Langkah diturunkan dari acceptance criteria spec 0006. `/check verify` menjalan
 - AC-8 · error sisi client di `stackly-ipc`; error daemon saat berjalan menunggu Milestone 4
 - AC-11 · bagian listener: bind lewat nama sementara, mode 0600, `check_bound`, `rebind`, `unlink_if_own`; urutan start, rebind otomatis, dan berhenti menunggu Milestone 4
 - AC-16 · bagian `stackly-ipc` dan larangan bergantung pada `stacklyd`; capability `ipc_endpoint` menunggu Milestone 4
+
+## Milestone 5: Fuzzing
+
+Butuh nightly dan cargo-fuzz yang dipin: `rustup toolchain install nightly-2026-10-17 --profile minimal` dan `cargo install --locked cargo-fuzz --version 0.13.2`.
+
+### UI / manual
+
+- [ ] Buka `evidence/manual/2026-10-18-fuzz-ipc-frame-decode-and-ipc-request-decode-for.json` → status `PASS`, `covers` NFR-009 dan VAL-017, `context.sourceCommit` `5fb8abe` dengan `sourceDirty` false, `actual` mencatat kedua target 300 detik tanpa crash, dan `evidencePath` menunjuk folder file berisi log kedua run → AC-14
+
+### Commands
+
+- [ ] `cargo xtask fuzz list` → mencetak `ipc_frame_decode` dan `ipc_request_decode` → AC-14
+- [ ] Ubah sementara `FUZZ_TOOLCHAIN` di `xtask/src/fuzz.rs` ke nightly yang tidak terpasang, jalankan `cargo xtask fuzz list` → gagal dengan petunjuk `rustup toolchain install <nightly> --profile minimal`; lakukan hal yang sama untuk `CARGO_FUZZ_VERSION` → gagal dengan petunjuk `cargo install --locked cargo-fuzz --version <versi>`; kembalikan keduanya → AC-14
+- [ ] `cargo xtask fuzz seed` lalu `git status` → menulis 11 seed `ipc_frame_decode` (byte 0 lalu byte vektor framing) dan 20 seed `ipc_request_decode` (setiap fixture `Request`, termasuk yang ditolak), dan tree tetap bersih → AC-14
+- [ ] `cargo xtask fuzz build` → kedua target terbangun dengan nightly-2026-10-17 dan AddressSanitizer; tambah sementara satu dependency di `fuzz/Cargo.toml` → gagal dengan `fuzz/Cargo.lock does not match fuzz/Cargo.toml`; kembalikan → AC-14
+- [ ] `cargo xtask fuzz run ipc_frame_decode` dan `cargo xtask fuzz run ipc_request_decode` (default 300 detik, `-max_len=65536`) → exit 0 dengan `ran for 300 s without a crash`, dan `fuzz/artifacts/` kosong → AC-14
+- [ ] `cargo xtask fuzz run ipc_frame_decode --time 0` dan `cargo xtask fuzz run ipc_nothing` → keduanya ditolak; yang kedua menyebut daftar target → AC-14
+- [ ] `cargo test -p stackly-protocol --test fuzz_regressions` di stable 1.99.1 → 4 test lulus: setiap input di `crates/protocol/tests/fuzz_regressions/<target>/` (belum ada, karena belum pernah crash) dan setiap seed di `fuzz/seeds/<target>/` diputar ulang lewat harness yang sama; folder regresi dengan nama target yang salah membuat test gagal → AC-14
+- [ ] `cargo test -p xtask fuzz` → 10 test lulus: pin nightly sama dengan `fuzz/rust-toolchain.toml`, setiap `[[bin]]` punya baris `TARGETS` dan file di `fuzz/fuzz_targets/`, nama `<area>_<objek>`, dan seed dibangun dari fixture → AC-14
+- [ ] `cargo deny --manifest-path fuzz/Cargo.toml check` dan `cargo deny check` → keduanya lulus; tanpa `NCSA` di `deny.toml`, lisensi `libfuzzer-sys` (`(MIT OR Apache-2.0) AND NCSA`) ditolak → AC-14
+- [ ] `git check-ignore fuzz/corpus/x fuzz/artifacts/x fuzz/target/x` → ketiganya diabaikan; root `Cargo.toml` memuat `exclude = ["fuzz"]` dan `cargo metadata --no-deps` tidak memuat `stackly-fuzz` → AC-14
+
+### Acceptance-criteria coverage
+
+- AC-14 · dipenuhi penuh: dua target 5 menit tanpa crash dengan evidence manual, seed dari `cargo xtask fuzz seed`, dan test regresi di stable

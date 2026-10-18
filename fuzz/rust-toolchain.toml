@@ -1,0 +1,5 @@
+# The dated nightly cargo-fuzz needs, used only inside `fuzz/`. It must match
+# `FUZZ_TOOLCHAIN` in `xtask/src/fuzz.rs`; change both together.
+[toolchain]
+channel = "nightly-2026-10-17"
+profile = "minimal"
