@@ -3,8 +3,9 @@
 //!
 //! Every field is read as written, with enum values kept as strings, so a
 //! wrong value becomes one `<id>: <rule>` line instead of a TOML error.
-//! Unknown keys are refused, so a typo never hides a field.
-// provisional: F9 (features 9 and 18 decide how the catalog reads this data)
+//! Unknown keys are refused, so a typo never hides a field. The provider
+//! catalog never reads this file: `cargo xtask codegen` copies what it
+//! needs into `providers/<package>/versions.json` (spec 0009).
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};

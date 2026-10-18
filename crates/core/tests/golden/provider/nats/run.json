@@ -1,0 +1,92 @@
+{
+  "spawn": {
+    "program": {
+      "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/nats/2.15.1/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "relative": "nats-server"
+    },
+    "args": [
+      "--config",
+      "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/nats.conf"
+    ],
+    "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+    "env": [
+      [
+        "HOME",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+      ],
+      [
+        "PATH",
+        "/usr/bin:/bin:/usr/sbin:/sbin"
+      ],
+      [
+        "TMPDIR",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+      ]
+    ]
+  },
+  "readiness": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14001,
+        "path": "/healthz",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "500ms",
+    "attemptTimeout": "2s",
+    "deadline": "30s"
+  },
+  "recoveryDeadline": "30s",
+  "health": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14001,
+        "path": "/healthz",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "10s",
+    "attemptTimeout": "2s",
+    "failureThreshold": 3
+  },
+  "stop": {
+    "type": "signal",
+    "content": {
+      "signal": "term",
+      "timeout": "30s"
+    }
+  },
+  "logFiles": [],
+  "endpoints": [
+    [
+      "client",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14000
+        }
+      }
+    ],
+    [
+      "monitoring",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14001
+        }
+      }
+    ]
+  ]
+}

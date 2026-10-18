@@ -1,0 +1,20 @@
+# Written by Stackly from the official/traefik provider; edits are replaced.
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+log:
+  level: {{ settings.logLevel }}
+entryPoints:
+  web:
+    address: {{ endpoint.web.address }}
+  ping:
+    address: {{ endpoint.ping.address }}
+ping:
+  entryPoint: ping
+api:
+  dashboard: false
+  insecure: false
+providers:
+  file:
+    directory: {{ settings.dynamicDir }}
+    watch: true

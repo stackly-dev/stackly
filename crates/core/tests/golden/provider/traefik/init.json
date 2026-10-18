@@ -1,0 +1,53 @@
+{
+  "steps": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
+        "/Volumes/Test Root/Ünï cödé/logs/instances/0192f000-0000-7000-8000-00000000000a",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/traefik.yaml",
+        "content": {
+          "configFile": "staticConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Written by Stackly from the official/traefik provider; edits are replaced.\nglobal:\n  checkNewVersion: false\n  sendAnonymousUsage: false\nlog:\n  level: \"ERROR\"\nentryPoints:\n  web:\n    address: \"127.0.0.1:14001\"\n  ping:\n    address: \"127.0.0.1:14000\"\nping:\n  entryPoint: ping\napi:\n  dashboard: false\n  insecure: false\nproviders:\n  file:\n    directory: \"/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic\"\n    watch: true\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic/routes.yaml",
+        "content": {
+          "configFile": "routes",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Written by Stackly from the routes setting; edits are replaced.\nhttp:\n  routers:\n    \"api\":\n      rule: \"Host(`api.localhost`)\"\n      service: \"api\"\n      entryPoints:\n        - web\n    \"web-app\":\n      rule: \"Host(`app.localhost`) && PathPrefix(`/v1`)\"\n      service: \"web-app\"\n      entryPoints:\n        - web\n    \"docs\":\n      rule: \"Host(\\\"docs.localhost\\\") || PathPrefix(`/docs`)\"\n      service: \"docs\"\n      entryPoints:\n        - web\n  services:\n    \"api\":\n      loadBalancer:\n        servers:\n          - url: \"http://127.0.0.1:3000\"\n    \"web-app\":\n      loadBalancer:\n        servers:\n          - url: \"http://localhost:5173/\"\n    \"docs\":\n      loadBalancer:\n        servers:\n          - url: \"http://[::1]:8080/docs\"\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    }
+  ],
+  "deadline": "120s",
+  "cleanup": []
+}
