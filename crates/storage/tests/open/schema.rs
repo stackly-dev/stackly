@@ -1,5 +1,6 @@
-//! The schema of migration 1 against the spec's data model (AC-1, AC-12,
-//! AC-13, AC-15).
+//! The schema of the latest migration against the data models of spec 0005
+//! (AC-1, AC-12, AC-13, AC-15) and of the operation journal of spec 0007
+//! (AC-17).
 
 use std::collections::BTreeSet;
 
@@ -252,6 +253,67 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
         ],
     ),
     (
+        "operation_journal",
+        &[
+            ("operation_id", "TEXT", true, 1),
+            ("method", "TEXT", false, 0),
+            ("request_fingerprint", "TEXT", false, 0),
+            ("trigger_origin", "TEXT", true, 0),
+            ("trigger_client", "TEXT", false, 0),
+            ("trigger_interactive", "INTEGER", true, 0),
+            ("resumable", "INTEGER", true, 0),
+            ("input", "TEXT", true, 0),
+            ("expected_revision", "INTEGER", false, 0),
+            ("waiting_on", "TEXT", false, 0),
+            ("point_of_no_return_at", "TEXT", false, 0),
+            ("cancel_requested_at", "TEXT", false, 0),
+            ("compensation_started_at", "TEXT", false, 0),
+            ("recovery_cause", "TEXT", false, 0),
+            ("failure_error_code", "TEXT", false, 0),
+            ("failure_message", "TEXT", false, 0),
+            ("failure_details", "TEXT", true, 0),
+            ("result", "TEXT", false, 0),
+        ],
+    ),
+    (
+        "operation_steps",
+        &[
+            ("operation_id", "TEXT", true, 1),
+            ("seq", "INTEGER", true, 2),
+            ("name", "TEXT", true, 0),
+            ("repeatable", "INTEGER", true, 0),
+            ("reversible", "INTEGER", true, 0),
+            ("state", "TEXT", true, 0),
+            ("attempts", "INTEGER", true, 0),
+            ("checkpoint", "TEXT", false, 0),
+            ("error_code", "TEXT", false, 0),
+            ("started_at", "TEXT", true, 0),
+            ("finished_at", "TEXT", false, 0),
+        ],
+    ),
+    (
+        "operation_created",
+        &[
+            ("operation_id", "TEXT", true, 1),
+            ("seq", "INTEGER", true, 2),
+            ("step_seq", "INTEGER", true, 0),
+            ("item_kind", "TEXT", true, 0),
+            ("item_ref", "TEXT", true, 0),
+            ("payload", "TEXT", false, 0),
+            ("state", "TEXT", true, 0),
+            ("detail", "TEXT", false, 0),
+            ("recorded_at", "TEXT", true, 0),
+            ("settled_at", "TEXT", false, 0),
+        ],
+    ),
+    (
+        "operation_locks",
+        &[
+            ("operation_id", "TEXT", true, 1),
+            ("lock_key", "TEXT", true, 2),
+        ],
+    ),
+    (
         "process_observations",
         &[
             ("id", "INTEGER", true, 1),
@@ -432,7 +494,7 @@ fn every_table_and_column_matches_the_data_model() {
         .unwrap();
     let expected: BTreeSet<String> = DATA_MODEL.iter().map(|(t, _)| (*t).to_owned()).collect();
     assert_eq!(tables, expected);
-    assert_eq!(tables.len(), 20);
+    assert_eq!(tables.len(), 24);
     for (table, expected_columns) in DATA_MODEL {
         let actual: Vec<_> = columns(&conn, table)
             .into_iter()

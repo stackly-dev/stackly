@@ -8,5 +8,6 @@ mod common;
 mod create;
 mod detect;
 mod fixture;
+mod journal;
 mod migrate;
 mod schema;

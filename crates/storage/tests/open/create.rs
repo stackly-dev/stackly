@@ -21,7 +21,7 @@ fn a_clean_root_creates_the_registry_with_the_fake_clock_and_private_files() {
     assert!(summary.created);
     assert_eq!(summary.migrated_from, None);
     assert_eq!(summary.snapshot, None);
-    assert_eq!(summary.schema_version, 1);
+    assert_eq!(summary.schema_version, MigrationSet::builtin().latest());
     assert_eq!(summary.opened_at, now);
     assert_eq!(summary.sqlite_version, rusqlite::version());
     assert!(!harness.layout.registry_dir().join(TEMP).exists());

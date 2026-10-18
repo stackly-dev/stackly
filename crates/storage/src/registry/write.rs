@@ -18,6 +18,7 @@ use stackly_domain::{
 use stackly_platform::instance_path_entries;
 
 use super::column::{corrupt, exists, first, int, opt_ts, sql_error, ts};
+use super::journal;
 use super::read::{self, resource_columns};
 
 /// Applies `batch` in one transaction stamped `now`: all of it, or none.
@@ -134,6 +135,7 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
         }
         WriteOp::InsertOperation(operation) => {
             expect_new(conn, "operations", &operation.id().to_string(), op)?;
+            journal::check_idempotency_key(conn, operation)?;
             write_operation(conn, operation, Write::Insert)
         }
         WriteOp::UpdateOperation {
@@ -147,8 +149,17 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
                 op,
                 *expected,
             )?;
+            journal::check_idempotency_key(conn, operation)?;
             write_operation(conn, operation, Write::Update)
         }
+        WriteOp::InsertJournal(record) => journal::write_journal(conn, record, op, false),
+        WriteOp::UpdateJournal(record) => journal::write_journal(conn, record, op, true),
+        WriteOp::UpsertStep { operation, step } => journal::upsert_step(conn, *operation, step),
+        WriteOp::UpsertCreated { operation, record } => {
+            journal::upsert_created(conn, *operation, record)
+        }
+        WriteOp::InsertLocks { operation, keys } => journal::insert_locks(conn, *operation, keys),
+        WriteOp::DeleteLocks { operation } => journal::delete_locks(conn, *operation),
         _ => Err(RegistryError::Integrity {
             detail: "the SQLite registry does not support this write op yet".to_owned(),
         }),

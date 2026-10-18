@@ -6,7 +6,7 @@ use std::io::{Seek, SeekFrom, Write};
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::time::Duration;
 
-use stackly_storage::{OpenOptions, RecoveryReason, RecoveryReport};
+use stackly_storage::{MigrationSet, OpenOptions, RecoveryReason, RecoveryReport};
 use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::{Harness, recovery};
@@ -146,7 +146,7 @@ fn a_user_version_newer_than_the_app_is_schema_newer_than_app() {
     let report = expect_recovery(&harness, "schema_newer_than_app");
 
     assert_eq!(report.db_schema_version, Some(999));
-    assert_eq!(report.app_schema_version, 1);
+    assert_eq!(report.app_schema_version, MigrationSet::builtin().latest());
 }
 
 #[test]
@@ -191,7 +191,10 @@ fn an_index_created_outside_the_runner_is_a_fingerprint_mismatch_even_in_an_unch
     let report = expect_recovery(&harness, "schema_fingerprint_mismatch");
 
     assert_eq!(fs::metadata(harness.wal()).unwrap().len(), wal_len);
-    assert_eq!(report.db_schema_version, Some(1));
+    assert_eq!(
+        report.db_schema_version,
+        Some(MigrationSet::builtin().latest())
+    );
     drop(writer);
 }
 
