@@ -496,7 +496,7 @@ pub trait Registry: Send + Sync {
 
 ### Fixture registry versi sebelumnya
 
-- `crates/storage/tests/fixtures/registry-v<N>.sql`: dump SQL teks dari registry versi N berisi data contoh (`PRAGMA application_id`, `PRAGMA user_version`, `CREATE` sesuai `sqlite_schema`, lalu `INSERT` per tabel urut kunci). Ditulis oleh test `#[ignore]` `write_registry_fixture` (dijalankan dengan tangan saat versi baru dibuat) yang menerapkan migrasi 1 sampai N, menjalankan `tests/fixtures/seed/v<N>.sql` dengan ID dan waktu tetap, lalu men-dump-nya dengan dumper kecil di test (tanpa tool luar).
+- `crates/storage/tests/fixtures/registry-v<N>.sql`: dump SQL teks dari registry versi N berisi data contoh (`PRAGMA application_id`, `PRAGMA user_version`, `CREATE` sesuai `sqlite_schema`, lalu `INSERT` per tabel urut kunci). Ditulis oleh test `write_registry_fixture` yang langsung selesai kecuali `STACKLY_WRITE_REGISTRY_FIXTURE=1` di-set (dijalankan dengan tangan saat versi baru dibuat; bukan `#[ignore]`, karena spec 0002 hanya mengizinkan `#[ignore]` untuk test native) yang menerapkan migrasi 1 sampai N, menjalankan `tests/fixtures/seed/v<N>.sql` dengan ID dan waktu tetap, lalu men-dump-nya dengan dumper kecil di test (tanpa tool luar).
 - `FIXTURE_SHA256: &[(u32, &str)]` di test mencatat sha256 setiap fixture; fixture yang berubah membuat test gagal. Test lain memastikan setiap versi di `MigrationSet::builtin()` punya fixture.
 - Di fitur ini hanya ada v1. Jalur migrasi dibuktikan dengan dua set migrasi test: v2 yang menambah satu kolom dan me-rebuild `provider_revisions` dengan 12 langkah (tabel itu punya trigger dan menjadi induk foreign key, jadi index, trigger, dan foreign key ke sana harus utuh setelahnya), dan v2 yang gagal setelah perintah pertamanya berhasil.
 
