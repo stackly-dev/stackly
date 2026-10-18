@@ -1,0 +1,16 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 42,
+    "at": "2026-10-18T03:04:05.123Z",
+    "resource": null,
+    "revision": null,
+    "kind": {
+      "type": "daemon.shutting_down",
+      "content": {
+        "reason": "signal"
+      }
+    }
+  }
+}

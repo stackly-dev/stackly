@@ -1,0 +1,315 @@
+{
+  "areas": [
+    {
+      "name": "protocol",
+      "owner": "spec 0006"
+    },
+    {
+      "name": "ipc",
+      "owner": "spec 0006"
+    },
+    {
+      "name": "request",
+      "owner": "spec 0006"
+    },
+    {
+      "name": "events",
+      "owner": "spec 0006"
+    },
+    {
+      "name": "resource",
+      "owner": "spec 0006"
+    },
+    {
+      "name": "daemon",
+      "owner": "spec 0006"
+    },
+    {
+      "name": "internal",
+      "owner": "spec 0006"
+    }
+  ],
+  "codes": [
+    {
+      "code": "daemon.lock_held",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "pid",
+        "serverInstanceId",
+        "version",
+        "startedAt"
+      ],
+      "summary": "another daemon holds the lock, only ever printed to stderr"
+    },
+    {
+      "code": "daemon.shutting_down",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [],
+      "summary": "the request arrived while the daemon stops"
+    },
+    {
+      "code": "daemon.starting",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "subsystem"
+      ],
+      "summary": "the method needs a subsystem that is not ready while the daemon starts"
+    },
+    {
+      "code": "events.too_many_subscriptions",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "max"
+      ],
+      "summary": "the connection already holds the most subscriptions it allows"
+    },
+    {
+      "code": "events.unknown_subscription",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "subscriptionId"
+      ],
+      "summary": "no subscription with this id exists on the connection"
+    },
+    {
+      "code": "internal.unexpected",
+      "category": "internal",
+      "retryable": false,
+      "details": [],
+      "summary": "a handler panicked or an invariant broke"
+    },
+    {
+      "code": "ipc.connection_closed",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [],
+      "summary": "client side: the daemon closed the connection before replying, so the request may have run"
+    },
+    {
+      "code": "ipc.connection_refused",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "path"
+      ],
+      "summary": "client side: connecting was refused, the socket is stale"
+    },
+    {
+      "code": "ipc.endpoint_missing",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "path"
+      ],
+      "summary": "client side: nothing exists at the socket path"
+    },
+    {
+      "code": "ipc.endpoint_occupied",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "path",
+        "kind"
+      ],
+      "summary": "daemon side: the socket path holds something that is not a socket"
+    },
+    {
+      "code": "ipc.endpoint_untrusted",
+      "category": "unauthorized",
+      "retryable": false,
+      "details": [
+        "path",
+        "reason"
+      ],
+      "summary": "client side: the socket path or the server peer failed a trust check"
+    },
+    {
+      "code": "ipc.frame_empty",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [],
+      "summary": "a frame header announces a length of 0"
+    },
+    {
+      "code": "ipc.frame_stalled",
+      "category": "timeout",
+      "retryable": false,
+      "details": [],
+      "summary": "a started frame was still incomplete after 30 seconds"
+    },
+    {
+      "code": "ipc.frame_too_large",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "length",
+        "max"
+      ],
+      "summary": "a frame header announces a length above the limit"
+    },
+    {
+      "code": "ipc.handshake_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [],
+      "summary": "the handshake frame was not complete within 5 seconds"
+    },
+    {
+      "code": "ipc.io_error",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "op",
+        "kind"
+      ],
+      "summary": "client side: another os error while checking the socket path or connecting"
+    },
+    {
+      "code": "ipc.peer_rejected",
+      "category": "unauthorized",
+      "retryable": false,
+      "details": [],
+      "summary": "the peer runs as another user or its credentials cannot be read"
+    },
+    {
+      "code": "ipc.protocol_violation",
+      "category": "internal",
+      "retryable": false,
+      "details": [],
+      "summary": "client side: a daemon frame cannot be decoded or its reply tag does not match the call"
+    },
+    {
+      "code": "ipc.reply_too_large",
+      "category": "internal",
+      "retryable": false,
+      "details": [
+        "method",
+        "length"
+      ],
+      "summary": "daemon side: a reply is larger than a frame and is sent instead of it"
+    },
+    {
+      "code": "ipc.too_many_connections",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "max"
+      ],
+      "summary": "the daemon already serves the most connections it allows"
+    },
+    {
+      "code": "ipc.write_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [],
+      "summary": "daemon side: the client read nothing for 30 seconds, only ever logged"
+    },
+    {
+      "code": "protocol.handshake_repeated",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [],
+      "summary": "a second handshake arrived on the same connection"
+    },
+    {
+      "code": "protocol.handshake_required",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "method"
+      ],
+      "summary": "the first request on a connection is valid but not a handshake"
+    },
+    {
+      "code": "protocol.major_mismatch",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "serverMajor",
+        "serverMinor"
+      ],
+      "summary": "the client speaks another protocol major"
+    },
+    {
+      "code": "request.duplicate_id",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [],
+      "summary": "another request with this requestId is still running on the connection"
+    },
+    {
+      "code": "request.invalid_params",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "method"
+      ],
+      "summary": "the params fail to decode or to validate, and fields lists each one"
+    },
+    {
+      "code": "request.malformed",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [],
+      "summary": "the json is broken, the request shape is wrong, or requestId or idempotencyKey has a bad format"
+    },
+    {
+      "code": "request.too_deep",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "max"
+      ],
+      "summary": "the json nests deeper than the limit"
+    },
+    {
+      "code": "request.too_many_in_flight",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "max"
+      ],
+      "summary": "the connection already has the most requests in flight it allows"
+    },
+    {
+      "code": "request.unknown_method",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "method"
+      ],
+      "summary": "the daemon does not know the method"
+    },
+    {
+      "code": "resource.busy",
+      "category": "conflict",
+      "retryable": true,
+      "details": [
+        "operationId"
+      ],
+      "summary": "another operation holds the resource lock, reserved for the operation engine"
+    },
+    {
+      "code": "resource.not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [],
+      "summary": "the resource does not exist, reserved for resource owners"
+    },
+    {
+      "code": "resource.revision_mismatch",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "expected",
+        "actual"
+      ],
+      "summary": "the resource revision is not the expected one, reserved for the registry compare and swap"
+    }
+  ]
+}

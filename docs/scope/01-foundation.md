@@ -75,13 +75,13 @@ Model domain (software, provider revision, runtime, instance, environment, opera
 **Pointer:** spec [0004](../specs/0004-domain-core-platform-abstraction/index.md) · code in `crates/domain/`, `crates/platform/`, `crates/core/`, `crates/platform-macos/`, `crates/testkit/`, `apps/daemon/`
 
 - [x] Design it (spec): `/architect domain core & platform abstraction`
-- [ ] Build it: `/develop domain core & platform abstraction`
+- [x] Build it: `/develop domain core & platform abstraction`
   - [x] Platform ports and directory layout end to end: `RootSet`, `DirectoryLayout`, `STACKLY_ROOT`, `MacosPlatform`, `UnsupportedPlatform`, testkit `FakePlatform`, and `prepare_layout` (spec 0004 AC-6 to AC-9, AC-12, AC-13, AC-15)
   - [x] Instance folders, `instance-manifest.json`, and inventory without the registry (spec 0004 AC-5, AC-10 to AC-12, AC-15)
   - [x] Domain model and state machines: runtime, instance lifecycle, readiness and health, operation, and lease (spec 0004 AC-1 to AC-4, AC-14, AC-16)
-  - [ ] Invariants and enforcement: evidence for every BR marked F4, AC-050, AC-074, and NFR-010, plus the `check-deps` source scan (spec 0004 AC-1, AC-5, AC-6, AC-12 to AC-14; uses `stackly-evidence` from spec 0002 step 1)
-- [ ] Verify it: `/check verify domain core & platform abstraction`
-- [ ] Test it: `/test domain core & platform abstraction`
+  - [x] Invariants and enforcement: evidence for every BR marked F4, AC-050, AC-074, and NFR-010, plus the `check-deps` source scan (spec 0004 AC-1, AC-5, AC-6, AC-12 to AC-14; uses `stackly-evidence` from spec 0002 step 1)
+- [x] Verify it: `/check verify domain core & platform abstraction`
+- [x] Test it: `/test domain core & platform abstraction`
 
 ### 5. Data model registry · in-progress
 
@@ -95,7 +95,7 @@ Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision 
 
 - [x] Design it (spec): `/architect data model registry`
 - [ ] Build it: `/develop data model registry`
-  - [ ] Opening the registry end to end: `stackly-storage`, migration 0001 with every PRD 17 table, open with snapshot and recovery, fixture v1, and `stacklyd` start (spec 0005 AC-1 to AC-7, AC-13, AC-15; build steps 1 to 7)
+  - [x] Opening the registry end to end: `stackly-storage`, migration 0001 with every PRD 17 table, open with snapshot and recovery, fixture v1, and `stacklyd` start (spec 0005 AC-1 to AC-7, AC-13, AC-15; build steps 1 to 7)
   - [ ] Registry port and fake: domain `registry` module, `restore` constructors, `FakeRegistry`, `RegistrySeed`, and `registry_conformance` (spec 0005 AC-8 to AC-11, AC-14, AC-16; build steps 8 and 9; needs spec 0004 milestone 3)
   - [ ] SQLite registry: `Registry` for `SqliteRegistry`, aggregate mapping, queries, prune, and conformance on SQLite (spec 0005 AC-7 to AC-16; build steps 10 to 13)
 - [ ] Verify it: `/check verify data model registry`
@@ -109,11 +109,11 @@ Daemon per user dengan protokol berversi di atas encoding dan framing yang dikun
 
 **Trace:** REQ-047, REQ-048, BR-011, VAL-017, VAL-020, NFR-001, NFR-004, NFR-006, NFR-011, AC-047, AC-070, AC-071, AC-079, NFR-009, RISK-03, RISK-09, OQ-005 (generation tooling), PRD bagian 18
 
-**Pointer:** spec [0006](../specs/0006-protokol-ipc-daemon/index.md)
+**Pointer:** spec [0006](../specs/0006-protokol-ipc-daemon/index.md) · code in `crates/protocol/`, `protocols/`, `clients/swift/`, `xtask/src/codegen/`
 
 - [x] Design it (spec): `/architect protokol IPC & daemon`
 - [ ] Build it: `/develop protokol IPC & daemon`
-  - [ ] Contract and codec: wire DTOs, error envelope and catalog, protocol 1.0 with contract digest and `contract-versions.json`, framing codec, staged request decode, shared fixtures, and Swift contract tests (spec 0006 AC-1, AC-6 to AC-8, AC-10)
+  - [x] Contract and codec: wire DTOs, error envelope and catalog, protocol 1.0 with contract digest and `contract-versions.json`, framing codec, staged request decode, shared fixtures, and Swift contract tests (spec 0006 AC-1, AC-6 to AC-8, AC-10)
   - [ ] `stackly-ipc` transport: listener with peer check, framed connection, verified client, and the new `check-deps` rules (spec 0006 AC-2, AC-3, AC-5, AC-6, AC-16; after milestone 1, can run in parallel with the next one and the fuzz milestone)
   - [ ] Daemon library, lock, and log: `stacklyd` as library plus bin, `--print-roots`, single daemon lock, rotating log writer (spec 0006 AC-4, AC-12, AC-17; after milestone 1)
   - [ ] Daemon server and `stackly daemon status` end to end: event bus, handshake, limits, socket watch, shutdown, CLI status, performance, and the manual two account check (spec 0006 AC-1, AC-2, AC-4, AC-5, AC-7, AC-9, AC-11, AC-13, AC-15, AC-16; needs the three milestones above)

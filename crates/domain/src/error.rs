@@ -16,6 +16,12 @@ use crate::value::{MemberAlias, Port, ProviderName, RuntimeLine, SoftwareName};
 pub enum ValueKind {
     /// A [`ShortKey`](crate::ShortKey).
     ShortKey,
+    /// A [`LogicalRoot`](crate::LogicalRoot).
+    LogicalRoot,
+    /// An [`InstancePathKind`](crate::InstancePathKind).
+    InstancePathKind,
+    /// A [`RelativePath`](crate::RelativePath).
+    RelativePath,
     /// An [`Os`](crate::Os).
     Os,
     /// An [`Arch`](crate::Arch).
@@ -96,6 +102,9 @@ impl ValueKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ShortKey => "short key",
+            Self::LogicalRoot => "logical root",
+            Self::InstancePathKind => "instance path kind",
+            Self::RelativePath => "relative path",
             Self::Os => "os",
             Self::Arch => "arch",
             Self::Target => "target",

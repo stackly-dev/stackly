@@ -7,4 +7,11 @@ default_decorators = ["Sendable", "Equatable"]
 default_generic_constraints = []
 codablevoid_constraints = []
 
+# Wire newtypes from `stackly-protocol::wire` and foreign types (spec 0006).
+# typeshare rejects plain `u64`, so every 64 bit integer is a newtype here.
 [swift.type_mappings]
+Uuid = "UUID"
+Timestamp = "Date"
+Revision = "UInt64"
+Sequence = "UInt64"
+Count = "UInt64"
