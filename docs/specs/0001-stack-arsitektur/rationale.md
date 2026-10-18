@@ -132,6 +132,16 @@ Dijalankan sekali lewat subagent researcher (5 pencarian, 8 halaman). Ringkasann
 
 CI ditiadakan atas keputusan pemilik proyek, dan pengembangan fokus di Mac ini dulu (macOS 27, Apple Silicon). Yang berubah: baris CI di tabel stack dan di Pilihan per lapisan dihapus, begitu juga Mac self hosted dan runner `macos-26`. Cek portabilitas kini hanya `cargo check --target aarch64-pc-windows-msvc` di Mac ini, tanpa cek native di Linux. `cargo xtask check-deps` dan `cargo xtask codegen --check` dijalankan manual, dan naik versi toolchain cukup lulus semua cek di Mac ini.
 
+### Perubahan 2026-10-18
+
+Rekonsiliasi dengan spec yang diterima sesudah scaffold. Keputusan di spec ini tidak berubah; yang diperbarui adalah peta dan aturan yang diturunkan spec lain:
+
+- *Peta crate*: crate baru `stackly-storage` (spec 0005), `stackly-ipc` dan `stacklyd` sebagai library plus bin (spec 0006), `stackly-fake-server` (spec 0009), `stackly-evidence` (spec 0002, sebelumnya hanya disebut di aturan), dan dependency baru tiap crate dari spec 0004, 0005, 0006, 0009, dan 0011. `stackly-storage` tidak lagi boleh bergantung pada core, karena port registry diputuskan ada di `stackly-domain` (spec 0005, dikonfirmasi engineer).
+- *Aturan arah dependency*: aturan `check-deps` dari spec 0004, 0005, 0006, 0009, dan 0011 dicatat di satu tempat; pengecualian `unsafe` untuk `stackly-storage` dihapus karena storage tidak memakainya.
+- *Proposed stack*: baris registry (WAL, `synchronous=FULL`, `fullfsync`, satu thread), manifest provider, secret, transport IPC, fuzzing, dan sink log.
+- *Susunan repo*, *Alur kontrak*, dan *Konfigurasi workspace* mengikuti spec 0006 dan 0009, termasuk fallback enum terbuka `unrecognized` yang diputuskan saat pengecekan silang spec 0006 dengan state `unknown` di spec 0004.
+- *Batas keputusan* mendapat kolom yang menunjuk spec yang sudah memutuskan setiap baris.
+
 ## References
 
 **Project sources**:

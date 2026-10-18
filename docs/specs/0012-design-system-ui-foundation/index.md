@@ -134,12 +134,14 @@ Lima tone dengan arti tetap:
 
 | Enum | Case |
 | --- | --- |
-| `LifecycleStatus` | `uninitialized`, `initializing`, `stopped`, `starting`, `running`, `recovering`, `stopping`, `failed`, `unknown`, `retained` (sepuluh state spec 0004) |
-| `ReadinessStatus` | `ready`; `awaitingProbe` (readiness `not_ready` dengan reason `awaiting_probe`); `notReady(detail: String?)` (readiness `not_ready` dengan reason lain, detail dari daemon); `unknown` (readiness `unknown`, termasuk hasil `effective` yang stale) |
-| `HealthStatus` | `unknown`, `healthy`, `degraded`, `unhealthy` |
-| `OperationStatus` | `queued`, `running`, `cancelRequested`, `succeeded`, `failed`, `cancelled`, `needsRecovery` |
+| `LifecycleStatus` | `uninitialized`, `initializing`, `stopped`, `starting`, `running`, `recovering`, `stopping`, `failed`, `unknown`, `retained` (sepuluh state spec 0004), plus `unrecognized` |
+| `ReadinessStatus` | `ready`; `awaitingProbe` (readiness `not_ready` dengan reason `awaiting_probe`); `notReady(detail: String?)` (readiness `not_ready` dengan reason lain, detail dari daemon); `unknown` (readiness `unknown`, termasuk hasil `effective` yang stale); `unrecognized` |
+| `HealthStatus` | `unknown`, `healthy`, `degraded`, `unhealthy`, `unrecognized` |
+| `OperationStatus` | `queued`, `running`, `cancelRequested`, `succeeded`, `failed`, `cancelled`, `needsRecovery`, `unrecognized` |
 
 Daemon yang menerapkan `effective(now, max_age)` spec 0004 sebelum mengirim readiness dan health, jadi GUI tidak menghitung kesegaran sendiri.
+
+`unrecognized` adalah nilai yang dikirim daemon yang lebih baru tetapi tidak dikenal versi app ini (fallback enum terbuka spec 0006). Ia berbeda dari `unknown`, yang adalah state asli spec 0004, dan tidak pernah ditebak menjadi state lain. Adapter spec 0013 memetakannya ke case ini hanya kalau DTO nya enum terbuka; enum tertutup tidak pernah menghasilkannya.
 
 `StatusAppearance` berisi `label: String`, `tone: Tone`, `symbol: String`, dan `detail: StatusDetail?`, dengan `StatusDetail { text: String, tone: Tone }`. Paling banyak satu detail.
 
@@ -162,6 +164,8 @@ Daemon yang menerapkan `effective(now, max_age)` spec 0004 sebelum mengirim read
 | `failed` | | Failed | `critical` | `xmark.circle.fill` | tidak ada (alasan kegagalan ditampilkan banner layar, fitur 33) |
 | `unknown` | | Unknown | `caution` | `questionmark.circle.fill` | Process identity not confirmed (`caution`) |
 | `retained` | | Retained | `neutral` | `archivebox.circle.fill` | tidak ada |
+| `unrecognized` | | Unrecognized State | `caution` | `questionmark.diamond.fill` | Update Stackly to see this state (`caution`) |
+| `running` | readiness atau health `unrecognized` | sama dengan baris readiness `unknown` atau health `unknown` | | | |
 
 **Status operasi** (state dari spec 0004; `partial` hanya berpengaruh saat `succeeded` dan diabaikan di state lain):
 
@@ -175,6 +179,7 @@ Daemon yang menerapkan `effective(now, max_age)` spec 0004 sebelum mengirim read
 | `failed` | Failed | `critical` |
 | `cancelled` | Cancelled | `neutral` |
 | `needsRecovery` | Needs Recovery | `critical` |
+| `unrecognized` | Unrecognized State | `caution` |
 
 Status operasi tampil sebagai `ToneBadge`, jadi `symbol` di `StatusAppearance.operation` adalah simbol tone dan `detail` selalu kosong.
 
@@ -349,8 +354,8 @@ XCUITest untuk cek ini adalah urusan fitur 68.
 ### Asumsi lintas spec
 
 - **Assumed** spec 0004 (sudah ditulis): state lifecycle instance, readiness dengan reason `awaiting_probe` dan detail maksimal 256 karakter tanpa secret, health, dan state operasi persis seperti tabel di spec itu.
-- **Assumed** spec 0006 (protokol IPC, ditulis paralel): DTO membawa lifecycle, readiness (state, reason, detail) dan health yang sudah melalui `effective(now, max_age)`, dan state operasi; error daemon membawa kategori, kode, dan pesan yang bisa ditampilkan.
-- **Assumed** spec 0009 (provider engine, ditulis paralel): capability provider sampai ke client bersama data layar, sehingga layar tahu capability yang unsupported dan alasannya.
+- **Assumed** spec 0006 (protokol IPC, ditulis paralel): DTO membawa lifecycle, readiness (state, reason, detail) dan health yang sudah melalui `effective(now, max_age)`, dan state operasi; error daemon membawa kategori, kode, dan pesan yang bisa ditampilkan. Nilai enum terbuka yang tidak dikenal datang sebagai `unrecognized` (spec 0006), bukan `unknown`.
+- **Assumed** spec 0013 dan fitur 20, diselaraskan 2026-10-18: capability provider sampai ke client bersama data layar lewat DTO yang ditetapkan spec 0013 dan fitur 20, sehingga layar tahu capability yang unsupported dan alasannya. Spec 0009 hanya memetakan capability manifest ke `Capability` domain, dan spec 0006 belum punya DTO itu.
 - **Assumed** spec 0011 (secret dan redaction, ditulis paralel): pesan error dan detail readiness sudah bebas secret saat sampai di GUI.
 - **Assumed** spec 0013 (app shell, ditulis berikutnya): shell memegang status koneksi, waktu snapshot terakhir, satu banner daemon tidak terjangkau memakai `StateBanner` dengan `base: .window`, pengisian `MutationAvailability`, adapter dari DTO ke `LifecycleStatus`, `ReadinessStatus`, `HealthStatus`, dan `OperationStatus` dengan switch exhaustive, lebar minimum jendela, keputusan apakah `StacklyUI` bergantung pada `StacklyClient`, dan pemasangan `SectionIcon` di sidebar.
 - **Assumed** spec 0007 (operation engine, belum ditulis): hasil operasi membawa penanda partial untuk label Partial.
@@ -403,7 +408,7 @@ Kesalahan tidak dilempar oleh API ini; semuanya view dan nilai. Error datang dar
 | `StaleNote.since` | waktu state terakhir | refresh gagal: `lastLoadedAt` dari view model layar; outdated: waktu pembaruan dari daemon (misalnya catalog, spec 0009 dan fitur 17) |
 | Teks waktu banner | jam pendek, plus tanggal bila bukan hari ini | `StaleNote.formattedSince(now:calendar:locale:timeZone:)` dengan nilai sistem |
 | `MutationAvailability` | `.blocked(reason:since:)` | shell spec 0013 (status koneksi dan waktu snapshot terakhir) |
-| `UnsupportedContent.reason`, `.disabled(reason:)` | alasan | capability provider dari daemon (spec 0004 `CapabilitySet`, dikirim spec 0009 dan 0006); operasi berjalan dari lock operasi (spec 0007); copy per layar |
+| `UnsupportedContent.reason`, `.disabled(reason:)` | alasan | capability provider dari daemon (spec 0004 `CapabilitySet`, dikirim lewat DTO spec 0013 dan fitur 20); operasi berjalan dari lock operasi (spec 0007); copy per layar |
 | `PartialNote` | ringkasan, item, aksi item | DTO layar (readiness environment di fitur 44 dan 46, hasil operasi di spec 0007); aksi dari layar |
 | `ConfirmationRequest` | judul, pesan, label, role | layar yang meminta, mengikuti aturan Konfirmasi; nama objek dari DTO |
 | Hasil konfirmasi saat offline | umpan balik "Nothing was sent" | jalur mutasi spec 0013 dan komponen umpan balik fitur 67 |
@@ -519,7 +524,7 @@ Pendekatan proyek adalah Journey, tapi fitur 12 adalah fondasi tanpa journey pen
 ## Follow-up
 
 - [ ] `/sync`: tambah `design.md` ke tabel Key files dan spec 0012 ke Related specs di `apps/macos/AGENTS.md`, dan aturan "warna, state, dan konfirmasi dari design.md" di Conventions.
-- [ ] Spec 0013: adapter DTO ke enum status UI dengan switch exhaustive, satu banner daemon tidak terjangkau dengan `StateBanner`, pengisian `MutationAvailability`, umpan balik offline, lebar minimum jendela, pemasangan `SectionIcon`, dan keputusan dependency `StacklyUI` ke `StacklyClient`.
+- [ ] Spec 0013: adapter DTO ke enum status UI dengan switch exhaustive (termasuk `unrecognized` untuk DTO berenum terbuka), satu banner daemon tidak terjangkau dengan `StateBanner`, pengisian `MutationAvailability`, umpan balik offline, lebar minimum jendela, pemasangan `SectionIcon`, dan keputusan dependency `StacklyUI` ke `StacklyClient`.
 - [ ] `/architect` fitur 67: pakai ulang `StatusLabel`, `ToneBadge`, `StateBanner`, `StatePlaceholder`, `.mutationGated()`, `.disabled(reason:)`, dan `.stacklyConfirmation`; umpan balik setelah aksi tanpa glass kustom; tile provider dekoratif di samping nama provider. Kalimat Done when fitur 67 yang menyebut label status, empty state, banner, dan dialog konfirmasi perlu diselaraskan lewat `/scope`.
 - [ ] `/architect` fitur 68: XCUITest untuk daftar Cek di /check verify, snapshot Increase Contrast dan Reduce Transparency yang mengatur appearance di host, dan pemakaian ulang tabel Pasangan kontras.
 - [ ] `/scope`: catat di `docs/scope/ui-macos.md` bagian Selisih yang sudah diketahui bahwa warna teks status, teks status di baris tabel, konten stale yang tidak diredupkan, dan dialog konfirmasi native menggantikan nilai mockup.

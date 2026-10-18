@@ -5,7 +5,7 @@
 
 ## Summary
 
-Spec ini mengunci skema SQLite registry Stackly: 18 tabel untuk semua entitas PRD bagian 17, ditambah dua tabel infrastruktur, lengkap dengan foreign key, constraint, dan revision per resource untuk compare and swap (CAS, update yang hanya berhasil kalau versi yang tersimpan masih sama dengan yang dibaca pemanggil). Migrasi hanya maju, semua migrasi tertunda berjalan dalam satu transaksi, dan sebelum migrasi registry selalu disalin dulu ke snapshot yang sudah diverifikasi. Kalau migrasi gagal atau schema tidak cocok saat daemon start, registry tidak disentuh dan daemon masuk recovery mode dengan laporan dan path backup. Kode hanya bisa menyentuh registry lewat trait `Registry` di `stackly-domain`, yang diimplementasikan crate baru `stackly-storage` dengan satu thread SQLite dan oleh fake di memori di `stackly-testkit`.
+Spec ini mengunci skema SQLite registry Stackly: 18 tabel untuk semua entitas PRD bagian 17, tabel `secret_reference_uses` milik spec 0011, dan dua tabel infrastruktur, lengkap dengan foreign key, constraint, dan revision per resource untuk compare and swap (CAS, update yang hanya berhasil kalau versi yang tersimpan masih sama dengan yang dibaca pemanggil). Migrasi hanya maju, semua migrasi tertunda berjalan dalam satu transaksi, dan sebelum migrasi registry selalu disalin dulu ke snapshot yang sudah diverifikasi. Kalau migrasi gagal atau schema tidak cocok saat daemon start, registry tidak disentuh dan daemon masuk recovery mode dengan laporan dan path backup. Kode hanya bisa menyentuh registry lewat trait `Registry` di `stackly-domain`, yang diimplementasikan crate baru `stackly-storage` dengan satu thread SQLite dan oleh fake di memori di `stackly-testkit`.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ Spec ini mengunci skema SQLite registry Stackly: 18 tabel untuk semua entitas PR
 
 **Acceptance criteria** (ID lokal spec ini; ID PRD selalu tiga digit, misalnya AC-065):
 
-- **AC-1**: Migrasi versi 1 membuat 18 tabel PRD bagian 17 dan dua tabel infrastruktur (`schema_migrations`, `registry_info`), semuanya `STRICT`. Test schema membaca `sqlite_schema` dan mencocokkan setiap tabel dan kolom dengan *Data model* dan *Peta field PRD* di spec ini; setiap foreign key punya index yang kolom awalnya adalah kolom anak foreign key itu, sesuai urutannya; `PRAGMA foreign_key_check` kosong (PRD bagian 17).
+- **AC-1**: Migrasi versi 1 membuat 18 tabel PRD bagian 17, tabel `secret_reference_uses` (spec 0011), dan dua tabel infrastruktur (`schema_migrations`, `registry_info`), semuanya `STRICT`. Test schema membaca `sqlite_schema` dan mencocokkan setiap tabel dan kolom dengan *Data model* dan *Peta field PRD* di spec ini; setiap foreign key punya index yang kolom awalnya adalah kolom anak foreign key itu, sesuai urutannya; `PRAGMA foreign_key_check` kosong (PRD bagian 17).
 - **AC-2**: Koneksi tulis berjalan dengan `foreign_keys=ON`, `journal_mode=WAL`, `synchronous=FULL`, `fullfsync=ON`, `checkpoint_fullfsync=ON`, `busy_timeout=5000`, dan `trusted_schema=OFF`, dan `application_id` file bernilai `0x53544B59`; koneksi inspeksi dan verifikasi snapshot memakai set pragma read only di *Open, migrasi, dan recovery*. Open membaca ulang setiap pragma koneksi tulis dan gagal dengan `StorageError::PragmaNotApplied { name, expected, actual }` kalau ada yang tidak berlaku. Insert yang melanggar foreign key ditolak, dan batch yang gagal di operasi ke N tidak meninggalkan satu baris pun dari operasi sebelumnya (PRD bagian 17, NFR-005).
 - **AC-3**: Di root data yang folder standarnya kosong, open membuat registry lewat file sementara `.stackly.sqlite.creating` (mode 0600, rollback journal, dikunci eksklusif selama create), menerapkan semua migrasi dalam satu transaksi, mengisi `registry_info` (registry ID baru, `created_at` dari `Clock`, versi app, generation 0) dan baris `schema_migrations` dengan sha256 dan `applied_at`, lalu mempublikasikannya sebagai `stackly.sqlite` lewat `hard_link` (tidak pernah menimpa file yang sudah ada), menghapus file sementara, sync folder, membuka dalam WAL, dan mengembalikan `Ready` dengan `created: true` tanpa snapshot. File `-wal` dan `-shm` bermode 0600. File sementara sisa create yang terputus (kuncinya bebas) dihapus pada open berikutnya; file sementara yang kuncinya masih dipegang proses lain menghasilkan `StorageError::CreateInProgress`.
 - **AC-4**: Dari fixture beku `registry-v1.sql` dan set migrasi test versi 2, open membuat snapshot `registry/pre-migration/v1-to-v2-<waktu>.sqlite` lewat `VACUUM INTO`, memverifikasi snapshot itu (`quick_check` ok, `user_version` 1, `application_id` benar, sha256 dicatat), menerapkan migrasi tertunda dalam satu transaksi dengan `foreign_key_check` bersih dan sidik jari schema sama dengan nilai yang diharapkan untuk versi 2, lalu mengembalikan `Ready` dengan `migrated_from: 1`. Data fixture tetap ada. Open kedua tidak membuat snapshot baru. Hanya tiga snapshot terbaru yang disimpan, kecuali snapshot yang disebut laporan recovery. Setiap versi schema punya fixture beku yang sha256-nya tercatat, dan fixture yang berubah membuat test gagal (AC-065 bagian migrasi, PRD bagian 32.3).
@@ -29,11 +29,12 @@ Spec ini mengunci skema SQLite registry Stackly: 18 tabel untuk semua entitas PR
 - **AC-9**: Suite `registry_conformance` lulus untuk `FakeRegistry` dan `SqliteRegistry`. Di dalamnya: 16 thread yang bersamaan memasukkan instance bernama sama menghasilkan tepat satu sukses dan sisanya `NameTaken`; 16 thread yang memasukkan runtime managed untuk artefak yang sama menghasilkan tepat satu sukses dan sisanya `DuplicateRuntime`; 16 thread yang mengupdate instance yang sama dengan expected revision yang sama menghasilkan tepat satu sukses (NFR-005, REQ-048).
 - **AC-10**: Nama instance unik di antara instance yang tidak retained (`NameTaken`), dan nama instance retained boleh dipakai lagi. Short key (8 hex terakhir ID) unik di semua instance (`ShortKeyTaken`). Rename hanya mengubah `name`, `revision`, dan `updated_at`; ID, runtime, config, dan ketujuh baris `instance_paths` tetap. Baris path dihitung registry sendiri dari ID lewat `stackly_platform::instance_path_entries`, relatif terhadap root bernama, dan hasil `RootSet::resolve`-nya sama persis dengan `DirectoryLayout::instance_paths(id)`. Untuk 1000 instance, tidak ada path tersimpan yang sama dengan atau berada di bawah path instance lain di root yang sama, dan pasangan (root, path relatif) yang sama ditolak (`PathTaken`) (BR-002, BR-003).
 - **AC-11**: `known_instance_ids` mengembalikan ID semua instance, termasuk retained, urut naik. `runtime_references(id)` mengembalikan instance di semua lifecycle (termasuk `stopped` dan `retained`), runtime yang bergantung padanya, operasi yang belum selesai pada runtime itu, dan backup yang menahannya, masing masing urut ID naik; ID runtime yang tidak dikenal menghasilkan `NotFound`. `DELETE` mentah pada runtime yang masih dirujuk ditolak foreign key (BR-007).
-- **AC-12**: `secret_references` hanya punya kolom `id`, `store_key`, `scope`, `purpose`, `status`, `revision`, `created_at`, dan `updated_at`; tidak ada tabel lain dengan kolom untuk nilai secret; dan tidak ada tipe parameter di trait `Registry` atau `WriteOp` yang bisa membawa nilai secret (hanya ID referensi). Sebagai smoke test, setelah suite conformance berjalan di `SqliteRegistry` sambil test memegang `FixtureCredential`, `assert_absent` atas `String::from_utf8_lossy` byte `stackly.sqlite` dan `-wal`, dibaca sebelum registry ditutup, lulus (BR-018).
+- **AC-12**: `secret_references` hanya punya kolom `id`, `reference`, `platform_store_key`, `owner_kind`, `owner_id`, `purpose`, `value_origin`, `status`, `status_observed_at`, `value_updated_at`, `revision`, `created_at`, dan `updated_at`, dan `secret_reference_uses` hanya `reference_id`, `resource_kind`, `resource_id`, dan `field` (model spec 0011); tidak ada tabel lain dengan kolom untuk nilai secret; dan tidak ada tipe parameter di trait `Registry` atau `WriteOp` yang bisa membawa nilai secret (hanya ID dan teks reference). Sebagai smoke test, setelah suite conformance berjalan di `SqliteRegistry` sambil test memegang `FixtureCredential`, `assert_absent` atas `String::from_utf8_lossy` byte `stackly.sqlite` dan `-wal`, dibaca sebelum registry ditutup, lulus (BR-018).
 - **AC-13**: Setiap kolom waktu dijaga CHECK bentuk UTC 30 karakter dengan sembilan digit pecahan dan akhiran `Z`. Nilai dengan offset lokal (`+07:00`) atau presisi lain ditolak. Nilai yang ditulis lalu dibaca kembali sama persis dengan `jiff::Timestamp` aslinya sampai nanodetik. Tidak ada kolom yang memakai waktu dari SQLite (`CURRENT_TIMESTAMP` atau default waktu); semua waktu berasal dari `Clock`, jadi nilai `FakeClock` muncul apa adanya.
 - **AC-14**: `prune(policy, now)` dengan `RetentionPolicy::DEFAULT` menghapus operasi berstate akhir dan audit event yang waktunya lebih kecil dari `now` dikurangi 30 hari atau di luar 100.000 baris terbaru yang boleh dihapus, lease `released` yang lebih tua dari 30 hari, dan process observation di luar 20 terbaru per instance. Operasi yang belum selesai atau `needs_recovery` dan lease `active` atau `suppressed` tidak pernah dihapus dan tidak dihitung dalam batas jumlah. Prune tidak menaikkan generation. Hasilnya jumlah baris yang dihapus per tabel (NFR-011).
 - **AC-15**: `UPDATE` pada field manifest `provider_revisions` ditolak trigger, sedangkan `approval` dan `approved_at` boleh diubah; `UPDATE` pada `audit_events` ditolak. Kode di luar set tertutup (misalnya lifecycle `paused`) ditolak CHECK. Kode set terbuka yang tidak dikenal saat dibaca menghasilkan `Corrupt { table, column, detail }` (BR-017).
 - **AC-16**: Setiap aggregate yang ditulis lalu dibaca kembali sama dengan aslinya, termasuk urutan endpoint dan member, kecuali readiness dan health yang dibaca `unknown` dengan reason `daemon_restarted` dan `observed_at` sama dengan waktu open registry. Setiap kode state spec 0004 (state runtime, lifecycle, desired, startup, state operasi, holder dan state lease, transport, install mode) bolak balik lewat kolomnya, diuji menyeluruh per nilai enum.
+- **AC-17**: Setiap varian `RegistryError` dan recovery mode punya kode di tabel *Kode error di wire*, dengan kategori, `retryable`, dan kunci `details` persis seperti tabel itu di katalog `stackly-protocol::codes::registry`; test di `stacklyd` memetakan setiap varian dan memastikan tidak ada yang jatuh ke kode lain (spec 0006 AC-8).
 
 ## Decision
 
@@ -55,6 +56,7 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang. Contohnya API re
 | `stackly-platform` | fungsi murni `instance_path_entries(InstanceId) -> [InstancePathEntry; 7]` (tidak butuh root), `DirectoryLayout::registry_snapshots_dir()` (`registry/pre-migration`) dan `registry_recovery_dir()` (`registry/recovery`), `RootSet::resolve(LogicalRoot, &RelativePath) -> PathBuf` |
 | `stackly-storage` (baru, `crates/storage`) | adapter SQLite: open dan recovery, runner migrasi, file SQL migrasi, sidik jari, snapshot, `SqliteRegistry`. Dependency: `stackly-domain`, `stackly-platform`, `rusqlite` (fitur `bundled` saja), `sha2`, `serde`, `serde_json`, `jiff`, `thiserror`, `tracing`. Dev: `stackly-testkit`, `stackly-evidence`, `tempfile` bila perlu |
 | `stackly-testkit` | `FakeRegistry`, trait `RegistrySeed` khusus test, builder fixture aggregate, suite `registry_conformance` |
+| `stackly-protocol` | submodul katalog `codes::registry` (AC-17), dibangun setelah milestone 1 spec 0006 |
 | `stacklyd` | dependency `stackly-storage`; start memanggil `prepare_layout`, `open_registry`, lalu `prune`; flag tersembunyi `--roots-only` (`// provisional: F6`) |
 | workspace `Cargo.toml` | `stackly-storage` sebagai member dan di `[workspace.dependencies]`; `rusqlite` versi stabil terbaru saat build dengan fitur `bundled`, dikunci `Cargo.lock` (SQLite yang dibundel minimal 3.45) |
 
@@ -241,7 +243,7 @@ PK `(instance_id, name)`, unik `(instance_id, position)`. CHECK bentuk: `ip` mew
 | --- | --- | --- |
 | `id` | `uuid` PK | |
 | `instance_id`* | `uuid` | FK `instances` cascade |
-| `config_values`* | `json` object | field secret hanya berisi referensi |
+| `config_values`* | `json` object | field secret hanya berisi teks reference `local:<path>` (spec 0011), tidak pernah nilai |
 | `rendered_sha256` | `sha256` | |
 | `previous_id` | `uuid` | FK `config_revisions(id)` set null |
 | `status`* | `code` | set terbuka |
@@ -250,7 +252,9 @@ PK `(instance_id, name)`, unik `(instance_id, position)`. CHECK bentuk: `ip` mew
 
 Unik `(instance_id, id)` untuk FK komposit dari `instances`, CHECK `previous_id <> id`, index `previous_id`.
 
-**`secret_references`**: `id` `uuid` PK · `store_key`* `TEXT` unik, 1 sampai 512 byte · `scope`* `TEXT` 1 sampai 256 · `purpose`* `code` · `status`* `code` · `revision`*, `created_at`*, `updated_at`*. Tidak ada kolom nilai. Format `store_key`, `scope`, dan kode milik spec 0011.
+**`secret_references`** (model logis milik spec 0011): `id` `uuid` PK · `reference`* `TEXT` unik, 9 sampai 255 byte, `GLOB 'local:*'` · `platform_store_key`* `TEXT` 1 sampai 512 byte · `owner_kind`* set tertutup `instance`, `environment`, `user` · `owner_id` `uuid` tanpa FK (polimorfik), CHECK `(owner_kind = 'user') = (owner_id IS NULL)` · `purpose`* `TEXT` 1 sampai 64, `GLOB '[a-z0-9]*'`, hanya `[a-z0-9._-]` · `value_origin` set tertutup `generated`, `entered`, `copied` · `status`* set tertutup `present`, `missing`, `unknown` · `status_observed_at` `ts` · `value_updated_at` `ts` · `revision`*, `created_at`*, `updated_at`*. Index `(owner_kind, owner_id)`. Trigger `secret_references_owner_fixed` menolak `UPDATE` yang mengubah `owner_kind` atau `owner_id`, kecuali perpindahan ke `owner_kind` `user` dengan `owner_id` NULL (satu satunya perpindahan pemilik di spec 0011). Tidak ada kolom nilai. Format `reference`, `platform_store_key`, dan purpose milik spec 0011; `revision` hanya naik lewat `put` dan pemulihan setelah delete gagal, tidak lewat probe.
+
+**`secret_reference_uses`** (spec 0011): `reference_id`* `uuid` FK `secret_references(id)` `ON DELETE RESTRICT` · `resource_kind`* set tertutup `instance`, `environment` · `resource_id`* `uuid` tanpa FK (polimorfik) · `field`* `TEXT` 1 sampai 64, `GLOB '[a-z]*'`, hanya `[A-Za-z0-9_-]`. PK `(reference_id, resource_kind, resource_id, field)`, index `(resource_kind, resource_id)`. Ditulis dalam transaksi yang sama dengan config revision atau environment yang memakainya. Karena `resource_id` tidak punya foreign key, purge instance (fitur 54) dan penghapusan environment menghapus baris pemakaian resource itu secara eksplisit di batch yang sama.
 
 **`environments`**: `id` `uuid` PK · `name`* `name` (index biasa; keunikan diputuskan fitur 44) · `manifest_location` `abspath` · `manifest_sha256` `sha256` · `lock_sha256` `sha256` · `last_operation_id` `uuid` tanpa FK · `revision`*, `created_at`*, `updated_at`*.
 
@@ -309,7 +313,7 @@ CHECK: `(resource_kind = 'manager') = (resource_id IS NULL)`; `progress_done` da
 
 Index `instance_id` dan `runtime_id`.
 
-**`audit_events`** (diisi fitur 35): `id` `uuid` PK · `actor`* `code` · `action`* `TEXT` 1 sampai 64, `GLOB '[a-z]*'`, hanya `[a-z0-9_.]` · `resource_kind` `code` · `resource_id` `uuid` · `operation_id` `uuid` tanpa FK · `result`* `code` · `safe_details`* `json` object, default `'{}'` · `occurred_at`* `ts`. Index `occurred_at` dan `operation_id`. Trigger `audit_events_append_only` menolak setiap `UPDATE`; baris hanya hilang lewat prune. Bukan klaim tamper proof.
+**`audit_events`** (baris pertama ditulis fitur 11 untuk aksi secret, tampilan di fitur 35): `id` `uuid` PK · `actor`* `code` · `action`* `TEXT` 1 sampai 64, `GLOB '[a-z]*'`, hanya `[a-z0-9_.]` · `resource_kind` `code` · `resource_id` `uuid` · `operation_id` `uuid` tanpa FK · `result`* `code` (`succeeded` atau `failed`; kode error kegagalan ditulis di `safe_details.errorCode`, karena kode wire memuat titik) · `safe_details`* `json` object, default `'{}'` · `occurred_at`* `ts`. Index `occurred_at` dan `operation_id`. Trigger `audit_events_append_only` menolak setiap `UPDATE`; baris hanya hilang lewat prune. Bukan klaim tamper proof.
 
 **`settings`** (kunci milik fitur 32): `key` `TEXT` PK, 1 sampai 128, `GLOB '[a-z]*'`, hanya `[a-z0-9_.]` · `typed_value`* `json` · `revision`* · `updated_at`*.
 
@@ -328,7 +332,7 @@ Field PRD yang tidak menjadi kolom dengan nama yang sama:
 | `instance_paths` | `resolved_path`, `owner` | `relative_path` terhadap `logical_root`, di resolve saat dipakai; pemilik selalu user yang menjalankan daemon dan diperiksa lewat `FileInfo.owner` saat dipakai |
 | `instance_endpoints` | `port`, `requested_mode` | `fixed_port` dan `bound_port`, `port_request` |
 | `config_revisions` | `values`, `rendered_digest` | `config_values`, `rendered_sha256` |
-| `secret_references` | `platform_store_key` | `store_key` |
+| `secret_references` | `scope` | `owner_kind` plus `owner_id` (spec 0011) |
 | `environments` | `manifest_digest`, `lock_digest`, `last_operation` | `manifest_sha256`, `lock_sha256`, `last_operation_id` |
 | `instance_demands` | `session_policy` | `session_id` plus aturan holder |
 | `operations` | `type`, `resource_id`, `status`, `progress`, `error_code` | `kind`, `resource_kind` plus `resource_id`, `state`, `progress_done` plus `progress_total`, `failure_code` plus `failure_retryable` |
@@ -451,6 +455,36 @@ pub trait Registry: Send + Sync {
 
 `ResourceRef` (`#[non_exhaustive]`): `Runtime(RuntimeId)`, `Instance(InstanceId)`, `Environment(EnvironmentId)`, `Operation(OperationId)`, `Lease(LeaseId)`, `ProviderRevision(ProviderRevisionKey)`, `Artifact(Sha256Digest)`.
 
+`WriteOp` yang ditambah fitur lain lewat update spec ini, dengan cek yang mengikuti urutan di atas: fitur 11 (spec 0011, langkah 0 build plan nya) menambah method baca untuk `secret_references`, `secret_reference_uses`, dan `audit_events`, varian `ResourceRef` untuk secret, dan op untuk `secret_references` (insert, update dengan `expected`, delete dengan `expected`), op yang mengganti seluruh baris `secret_reference_uses` satu resource, dan op insert `audit_events`, sehingga `put`, delete, dan pemakaian secret tertulis dalam satu batch dengan audit nya; fitur 20 dan 29 menambah op `config_revisions`, dan spec 0011 memasang penggantian pemakaian secret di batch yang sama. Nama dan cek op itu ditulis saat update spec ini oleh fitur pemiliknya.
+
+**Kode error di wire** (katalog `stackly-protocol::codes::registry`, area `registry` milik spec ini; dipetakan `stacklyd` di modul `map`). Semua `retryable` false: kegagalan registry di tengah satu request tidak menjamin request itu belum berefek apa pun, dan konflik generation sudah dicoba ulang lima kali oleh pemanggil. Resource yang punya `ResourceKind` di spec 0006 dikirim di `ErrorBody.resource`.
+
+| Varian | Kode | Kategori | Kunci `details` |
+| --- | --- | --- | --- |
+| `NotFound` | `resource.not_found` (spec 0006) | `not_found` | |
+| `RevisionConflict` | `resource.revision_mismatch` (spec 0006) | `conflict` | `expected`, `actual` |
+| `MissingReference` | `registry.missing_reference` | `conflict` | |
+| `DuplicateResource` | `registry.duplicate_resource` | `conflict` | |
+| `GenerationConflict` | `registry.generation_conflict` | `conflict` | `expected`, `actual` |
+| `NameTaken` | `registry.name_taken` | `conflict` | `name`, `existing` |
+| `ShortKeyTaken` | `registry.short_key_taken` | `conflict` | `key`, `existing` |
+| `PathTaken` | `registry.path_taken` | `conflict` | `root`, `path`, `existing` |
+| `DuplicateRuntime` | `registry.duplicate_runtime` | `conflict` | `existing` |
+| `DedicatedOwnerExists` | `registry.dedicated_owner_exists` | `conflict` | `instance`, `environment` |
+| `ActiveLeaseExists` | `registry.active_lease_exists` | `conflict` | `instance`, `environment` |
+| `SoftwareMismatch` | `registry.software_mismatch` | `invalid_input` | `instance`, `runtime`, `providerRevision` |
+| `NotUtf8Path` | `registry.path_not_utf8` | `invalid_input` | `field` |
+| `Busy` | `registry.busy` | `unavailable` | |
+| `Unavailable` | `registry.unavailable` | `unavailable` | |
+| `NoSpace` | `registry.no_space` | `failed` | |
+| `Io` | `registry.io_error` | `failed` | |
+| `Corrupt` | `registry.corrupt` | `internal` | `table`, `column` |
+| `Integrity` | `registry.integrity` | `internal` | |
+| `InvalidRevision`, `InvalidQuery` | `internal.unexpected` (spec 0006) | `internal` | |
+| recovery mode (spec 0006 AC-18) | `registry.recovery_mode` | `unavailable` | `reason`, `reportPath` |
+
+Teks `detail` di `Integrity`, `Corrupt`, dan `Io` hanya masuk log, tidak pernah ke `message` wire. `OperationCursor` menyimpan `created_at` dengan presisi nanodetik dan tidak pernah dikirim sebagai `Timestamp` wire (yang hanya tiga digit pecahan); spec 0007 mengirimnya sebagai string opaque yang memuat waktu sembilan digit dan ID.
+
 **Retensi**: `RetentionPolicy` berisi `operation_max_age`, `audit_max_age`, dan `released_lease_max_age` bertipe `std::time::Duration`, serta `operation_max_rows`, `audit_max_rows`, dan `observations_per_instance` bertipe `u32`. `RetentionPolicy::DEFAULT` (konstanta): 30 hari, 30 hari, 30 hari, 100.000, 100.000, dan 20. Batas umur: baris dengan waktu lebih kecil dari `now` dikurangi umur maksimum dihapus (`updated_at` untuk operasi berstate akhir, `occurred_at` untuk audit, `state_changed_at` untuk lease `released`). Batas jumlah hanya menghitung baris yang boleh dihapus, diurutkan menurut waktu itu lalu `id` turun, dan yang di luar batas dihapus. Observasi diurutkan `observed_at` lalu `id` turun per instance. Prune menghapus paling banyak 5.000 baris per transaksi (beberapa perintah berturut turut) dan tidak menaikkan generation. `PruneReport` berisi jumlah baris terhapus per tabel.
 
 ### Pemetaan aggregate
@@ -512,7 +546,7 @@ pub trait Registry: Send + Sync {
 
 ### Recovery mode (kontrak untuk fitur 6)
 
-Saat open menghasilkan `Recovery`, daemon tidak membaca atau menulis data registry, tidak mengadopsi, menyinyal, atau menjalankan proses instance apa pun, dan tidak membuat registry baru. Ia hanya menjawab handshake, status daemon (dengan `RecoveryReport`), dan doctor; setiap method lain ditolak dengan kategori error recovery yang stabil. Jalan keluar ada di fitur 48 (restore dari snapshot atau backup) dan fitur 57 (adoption), dan daemon baru keluar dari recovery lewat restart setelah registry diperbaiki.
+Saat open menghasilkan `Recovery`, daemon tidak membaca atau menulis data registry, tidak mengadopsi, menyinyal, atau menjalankan proses instance apa pun, dan tidak membuat registry baru. Ia hanya menjawab method yang bertanda `allowed_in_recovery` (spec 0006 AC-18): handshake, status daemon (dengan `RecoveryReport` sebagai `DaemonInfo.recovery`), dan doctor saat fitur 34 menambahkannya; setiap method lain ditolak dengan `registry.recovery_mode`. Reason `registry_locked` dicoba ulang daemon tiga kali sebelum masuk recovery mode (spec 0006). Jalan keluar ada di fitur 48 (restore dari snapshot atau backup) dan fitur 57 (adoption), dan daemon baru keluar dari recovery lewat restart setelah registry diperbaiki.
 
 ### State open registry
 
@@ -579,7 +613,7 @@ Saat open menghasilkan `Recovery`, daemon tidak membaca atau menulis data regist
 - Migrasi berjalan seluruhnya atau tidak sama sekali, dan hanya setelah snapshot terverifikasi ada.
 - Setiap commit adalah satu transaksi yang menaikkan generation tepat 1; setiap update aggregate memakai CAS revision.
 - Foreign key aktif di setiap koneksi tulis di luar langkah migrasi; durability `synchronous=FULL` dengan `fullfsync` tidak boleh dilemahkan, termasuk untuk demo atau test performa.
-- Tidak ada kolom yang menyimpan nilai secret; secret hanya `secret_references` dan ID-nya.
+- Tidak ada kolom yang menyimpan nilai secret; secret hanya muncul sebagai baris `secret_references`, pemakaiannya di `secret_reference_uses`, dan teks reference di `config_values`.
 - Semua waktu UTC 30 karakter dari `Clock`; tidak ada waktu lokal atau waktu dari SQLite.
 - Path instance tersimpan relatif terhadap root bernama, dan resolve-nya untuk instance di fitur ini selalu sama dengan `DirectoryLayout`; perbedaan adalah drift yang dilaporkan, bukan dipakai diam diam.
 - Readiness dan health tidak pernah dibaca dari registry.
@@ -604,7 +638,7 @@ Saat open menghasilkan `Recovery`, daemon tidak membaca atau menulis data regist
 - Balapan: 16 thread untuk nama sama, artefak sama, dan revision sama di kedua implementasi lewat `registry_conformance`. Memverifikasi **AC-9**.
 - Nama, short key, dan path: nama instance retained bisa dipakai lagi; dua ID dengan 8 hex terakhir sama ditolak; rename tidak mengubah path; path tersimpan resolve sama dengan layout. Memverifikasi **AC-10**.
 - Referensi runtime: instance `stopped` dan `retained`, runtime dependen, operasi `running`, dan backup semuanya muncul; `DELETE` runtime mentah ditolak foreign key. Memverifikasi **AC-11**.
-- Secret: kolom `secret_references` persis daftar AC-12, tidak ada kolom nilai secret di tabel lain, dan smoke test `FixtureCredential` atas file registry yang masih terbuka lulus. Memverifikasi **AC-12**.
+- Secret: kolom `secret_references` dan `secret_reference_uses` persis daftar AC-12, tidak ada kolom nilai secret di tabel lain, dan smoke test `FixtureCredential` atas file registry yang masih terbuka lulus. Memverifikasi **AC-12**.
 - Waktu: insert `2026-10-18T05:42:00+07:00` dan bentuk milidetik ditolak; seribu `Timestamp` acak bolak balik tanpa beda. Memverifikasi **AC-13**.
 - Retensi: data dengan umur dan jumlah di atas batas dipangkas sesuai kebijakan, operasi `needs_recovery` berumur 90 hari tetap ada. Memverifikasi **AC-14**.
 - Immutability dan kode: `UPDATE provider_revisions SET capabilities` ditolak, `approval` boleh; `UPDATE audit_events` ditolak; lifecycle `paused` ditolak; `kind` operasi tak dikenal yang disisipkan mentah dibaca sebagai `Corrupt`. Memverifikasi **AC-15**.
@@ -632,10 +666,10 @@ Urutan mengikuti pendekatan Journey: jalur "daemon start membuka registry dengan
 1. Crate `stackly-storage` (lints workspace, `//!` doc), `rusqlite` dengan `bundled` di workspace, dan aturan `check-deps` baru beserta test crate fixture yang melanggar. Memenuhi **AC-1**, **AC-2**.
 2. Domain: `RegistryId` dan value type path (`LogicalRoot`, `InstancePathKind`, `RelativePath`, `InstancePathEntry`) di modul baru. Platform: fungsi murni `instance_path_entries`, `RootSet::resolve`, `registry_snapshots_dir`, `registry_recovery_dir`. Memenuhi **AC-10**.
 3. Modul `files` storage dan pembuka koneksi: set pragma per jenis koneksi beserta verifikasinya, create lewat file sementara yang dikunci lalu `hard_link`, `application_id`. Memenuhi **AC-2**, **AC-3**.
-4. Migrasi `0001_registry.sql` (20 tabel, index, trigger, CHECK), `MigrationSet`, runner (`schema_migrations`, satu transaksi, `foreign_key_check`), sidik jari dengan normalisasi, test schema terhadap *Data model* dan *Peta field PRD*, dan test index foreign key. Memenuhi **AC-1**, **AC-13**, **AC-15**.
+4. Migrasi `0001_registry.sql` (21 tabel termasuk `secret_reference_uses`, index, trigger, CHECK), `MigrationSet`, runner (`schema_migrations`, satu transaksi, `foreign_key_check`), sidik jari dengan normalisasi, test schema terhadap *Data model* dan *Peta field PRD*, dan test index foreign key. Memenuhi **AC-1**, **AC-13**, **AC-15**.
 5. Alur open: pembersihan sisa milik storage, preflight, `registry_missing`, inspeksi read only, open tulis dengan probe `BEGIN IMMEDIATE`, snapshot (pakai ulang, verifikasi, nama tanpa menimpa, batas tiga), laporan recovery (dedupe, sha256 setelah koneksi ditutup), `StorageError`, dan `OpenSummary` dengan `opened_at`. Handle `SqliteRegistry` dengan thread, channel berbatas, shutdown, dan pemetaan error SQLite sudah dibuat di sini, tanpa method `Registry`. Memenuhi **AC-2**, **AC-3**, **AC-4**, **AC-5**, **AC-6**.
 6. Fixture `registry-v1.sql`, seed v1, dumper, `write_registry_fixture`, `FIXTURE_SHA256`, dan dua set migrasi test v2 (tambah kolom plus rebuild `provider_revisions`, dan yang gagal di tengah). Memenuhi **AC-4**, **AC-5**.
-7. `stacklyd`: `prepare_layout`, `open_registry`, log, kode keluar 0, 1, dan 3, flag `--roots-only`, pembaruan test yang ada di `apps/daemon/tests/root_override.rs`, dan test baru dengan tambalan `user_version` di header. Memenuhi **AC-7**.
+7. `stacklyd`: `prepare_layout`, `open_registry`, log, kode keluar 0, 1, dan 3, flag `--roots-only`, pembaruan test yang ada di `apps/daemon/tests/root_override.rs`, dan test baru dengan tambalan `user_version` di header. Memenuhi **AC-7**. Kalau `stacklyd --print-roots` (spec 0006 langkah 13) sudah ada di main saat langkah ini dibangun, pakai flag itu dan jangan tambah `--roots-only`.
 
 **Milestone 2: Port registry dan fake** (butuh milestone 3 spec 0004: model domain dan state machine)
 
@@ -648,6 +682,7 @@ Urutan mengikuti pendekatan Journey: jalur "daemon start membuka registry dengan
 11. Pemetaan baris ke aggregate dan sebaliknya untuk runtime, instance (endpoint dengan `position` dan path), provider revision, artefak, environment (member dengan `position`), lease, dan operasi, termasuk JSON terurut, path bukan UTF-8, dan cek bertipe. Memenuhi **AC-10**, **AC-13**, **AC-15**, **AC-16**.
 12. Query: `known_instance_ids`, `runtime_references`, `instance_paths`, `operations` berhalaman, dan `prune` per 5.000 baris. Memenuhi **AC-11**, **AC-14**.
 13. `registry_conformance` untuk `SqliteRegistry` dengan `RegistrySeed` lewat koneksi samping, test balapan, smoke test `FixtureCredential` atas file registry yang masih terbuka, dan `stacklyd` memanggil `prune` setelah `Ready`. Memenuhi **AC-7**, **AC-9**, **AC-12**, **AC-14**.
+14. Katalog `codes::registry` di `stackly-protocol` dan pemetaan `RegistryError` ke `ErrorBody` di `stacklyd::map`, dengan test yang memetakan setiap varian (butuh milestone 1 spec 0006). Memenuhi **AC-17**.
 
 **Sesi paralel**: Milestone 1 bisa berjalan di satu sesi sekarang, bersamaan dengan milestone 3 spec 0004. Langkah 2 menaruh tipe domain baru di modul baru dan memakai makro `uuid_id!` yang sudah ada, sehingga bentrok dengan sesi spec 0004 hanya mungkin di baris `mod` di `lib.rs`. Setelah langkah 8 masuk, langkah 9 (testkit) dan langkah 10 sampai 12 (storage) bisa berjalan di dua sesi terpisah karena menyentuh crate berbeda; langkah 13 menunggu keduanya.
 
@@ -685,32 +720,32 @@ Urutan mengikuti pendekatan Journey: jalur "daemon start membuka registry dengan
 
 Assumed (keputusan milik spec lain yang dipakai di sini):
 
-- [ ] Assumed (spec 0006): ada kategori error stabil untuk registry dalam recovery, konflik (revision dan generation), tidak ditemukan, dan tidak tersedia; `stacklyd` memetakan `RegistryError` ke kategori itu. Status daemon membawa `RecoveryReport` sebagai DTO. Cursor event tidak harus sama dengan generation registry.
+- [x] Assumed (spec 0006): ada kategori error stabil untuk registry dalam recovery, konflik (revision dan generation), tidak ditemukan, dan tidak tersedia; `stacklyd` memetakan `RegistryError` ke kategori itu. Status daemon membawa `RecoveryReport` sebagai DTO. Cursor event tidak harus sama dengan generation registry. Diselesaikan 2026-10-18: kodenya milik spec ini (*Kode error di wire*, AC-17), recovery mode dan `DaemonInfo.recovery` di spec 0006 AC-18.
 - [ ] Assumed (spec 0007): spec 0007 menambah tabel journal dan step serta unique index idempotency (dengan cakupan kuncinya) lewat migrasi versi 2 atau sesudahnya, memakai CAS revision dan generation dari port ini, tidak pernah memegang transaksi SQLite selama langkah panjang, dan membatasi commit yang hanya mengubah progress (misalnya paling banyak satu per operasi per detik) supaya pemanggil yang memakai `expected_generation` tidak terus bentrok.
-- [ ] Assumed (spec 0009): `capabilities` dan `line_compatibility` diisi dari manifest, `schema_version` adalah apiVersion manifest, dan provider revision fake provider didaftarkan lewat `InsertProviderRevision`.
-- [ ] Assumed (spec 0011): referensi secret adalah baris `secret_references` dengan ID UUID v7 dan `store_key` teks opaque maksimal 512 byte; field secret di `config_values` hanya berisi ID referensi dalam bentuk yang ditentukan 0011; `safe_details` audit sudah diredaksi pemanggil.
+- [x] Assumed (spec 0009): `capabilities` dan `line_compatibility` diisi dari manifest, `schema_version` adalah apiVersion manifest, dan provider revision fake provider didaftarkan lewat `InsertProviderRevision`. Cocok dengan spec 0009 (dicek 2026-10-18).
+- [x] Assumed (spec 0011): referensi secret adalah baris `secret_references` dengan model logis spec 0011 (kolom di *Data model*, plus `secret_reference_uses`); field secret di `config_values` berisi teks reference `local:<path>`, bukan ID; `safe_details` audit sudah diredaksi pemanggil, dan `result` audit hanya `succeeded` atau `failed`. Diselaraskan 2026-10-18.
 
 Perubahan yang dibutuhkan di spec 0001 (lewat `/architect`, bukan dari sesi paralel):
 
-- [ ] *Batas keputusan*: tandai baris Fitur 5 sudah diputuskan di spec 0005; port registry ada di `stackly-domain::registry`.
-- [ ] *Peta crate*: `stackly-storage` bergantung pada `stackly-domain`, `stackly-platform`, `rusqlite` (`bundled`), `sha2`, `serde`, `serde_json`, `jiff`, `thiserror`, dan `tracing`, tidak pada `stackly-core`; baris domain menyebut modul port `registry`; baris testkit menyebut `FakeRegistry` dan `registry_conformance`; `stacklyd` bergantung pada `stackly-storage`.
-- [ ] *Aturan arah dependency*: tambah tiga aturan `check-deps` di atas, dan hapus pengecualian `unsafe` "`stackly-storage` bila terbukti perlu" karena storage tidak memakai `unsafe`.
-- [ ] Baris *Registry* di *Proposed stack*: tambahkan WAL, `synchronous=FULL`, `fullfsync`, dan satu thread untuk baca dan tulis.
+- [x] *Batas keputusan*: tandai baris Fitur 5 sudah diputuskan di spec 0005; port registry ada di `stackly-domain::registry`. Diterapkan di spec 0001 (2026-10-18).
+- [x] *Peta crate*: `stackly-storage` bergantung pada `stackly-domain`, `stackly-platform`, `rusqlite` (`bundled`), `sha2`, `serde`, `serde_json`, `jiff`, `thiserror`, dan `tracing`, tidak pada `stackly-core`; baris domain menyebut modul port `registry`; baris testkit menyebut `FakeRegistry` dan `registry_conformance`; `stacklyd` bergantung pada `stackly-storage`. Diterapkan di spec 0001 (2026-10-18).
+- [x] *Aturan arah dependency*: tambah tiga aturan `check-deps` di atas, dan hapus pengecualian `unsafe` "`stackly-storage` bila terbukti perlu" karena storage tidak memakai `unsafe`. Diterapkan di spec 0001 (2026-10-18).
+- [x] Baris *Registry* di *Proposed stack*: tambahkan WAL, `synchronous=FULL`, `fullfsync`, dan satu thread untuk baca dan tulis. Diterapkan di spec 0001 (2026-10-18).
 
 Perubahan yang dibutuhkan di spec 0004 (lewat `/architect`, bukan dari sesi paralel):
 
-- [ ] Modul domain `registry` (port, error, batch, record, retensi) dan ID `RegistryId`.
-- [ ] Field `revision: ResourceRevision` di `Runtime`, `Environment`, dan `Operation` (mulai 1, naik tepat 1 per mutasi), dan `retained_by: Option<OperationId>` di `Instance` (cermin `retained.byOperation` di manifest).
-- [ ] Nama tipe resource operasi di domain: `OperationResource` (`runtime`, `instance`, `environment`, `manager`), dipakai `OperationQuery`.
-- [ ] Value type `LogicalRoot`, `InstancePathKind`, `RelativePath`, `InstancePathEntry`; fungsi murni `instance_path_entries(InstanceId)`, fungsi layout `registry_snapshots_dir` dan `registry_recovery_dir`, dan `RootSet::resolve`.
-- [ ] Konstruktor `restore` untuk `Runtime`, `Instance`, `Operation`, `Lease`, `Environment`, dan `ProviderRevision`, termasuk readiness dan health `unknown` reason `daemon_restarted` saat dimuat.
-- [ ] Field `data_version: ExactVersion` di `Instance` (cermin `data.initializedVersion` di manifest), yang diubah `record_data_migration`.
-- [ ] Tandai follow-up fitur 5 di spec 0004 selesai: kode state dipetakan ke tabel, `ResourceRevision` dipakai untuk CAS, `known` dari `known_instance_ids`, dan `RuntimeReferences` dari `runtime_references`.
-- [ ] Catat bahwa `stacklyd` memanggil `prepare_layout` sejak fitur 5.
+- [x] Modul domain `registry` (port, error, batch, record, retensi) dan ID `RegistryId`. Dicatat di spec 0004 sebagai titik perluasan fitur 5 (2026-10-18).
+- [x] Field `revision: ResourceRevision` di `Runtime`, `Environment`, dan `Operation` (mulai 1, naik tepat 1 per mutasi), dan `retained_by: Option<OperationId>` di `Instance` (cermin `retained.byOperation` di manifest). Dicatat di spec 0004 sebagai titik perluasan fitur 5 (2026-10-18).
+- [x] Nama tipe resource operasi di domain: `OperationResource` (`runtime`, `instance`, `environment`, `manager`), dipakai `OperationQuery`. Sudah dibangun fitur 4 dan dicatat di spec 0004 (2026-10-18).
+- [x] Value type `LogicalRoot`, `InstancePathKind`, `RelativePath`, `InstancePathEntry`; fungsi murni `instance_path_entries(InstanceId)`, fungsi layout `registry_snapshots_dir` dan `registry_recovery_dir`, dan `RootSet::resolve`. Dicatat di spec 0004 sebagai titik perluasan fitur 5 (2026-10-18).
+- [x] Konstruktor `restore` untuk `Runtime`, `Instance`, `Operation`, `Lease`, `Environment`, dan `ProviderRevision`, termasuk readiness dan health `unknown` reason `daemon_restarted` saat dimuat. Dicatat di spec 0004 sebagai titik perluasan fitur 5 (2026-10-18).
+- [x] Field `data_version: ExactVersion` di `Instance` (cermin `data.initializedVersion` di manifest), yang diubah `record_data_migration`. Sudah dibangun fitur 4 dan dicatat di spec 0004 (2026-10-18).
+- [x] Tandai follow-up fitur 5 di spec 0004 selesai: kode state dipetakan ke tabel, `ResourceRevision` dipakai untuk CAS, `known` dari `known_instance_ids`, dan `RuntimeReferences` dari `runtime_references`. Dicentang di spec 0004 (2026-10-18).
+- [x] Catat bahwa `stacklyd` memanggil `prepare_layout` sejak fitur 5. Dicatat di spec 0004 sebagai titik perluasan fitur 5 (2026-10-18).
 
 Untuk fitur lain:
 
-- [ ] Fitur 6: server daemon tetap hidup dalam recovery mode sesuai kontrak di atas (mengganti kode keluar 3), jalankan `prune` berkala, dan perlakukan `Unavailable` sebagai fatal.
+- [ ] Fitur 6: server daemon tetap hidup dalam recovery mode sesuai kontrak di atas (mengganti kode keluar 3), jalankan `prune` berkala, dan perlakukan `Unavailable` sebagai fatal. Dirancang spec 0006 (AC-18, langkah 18a).
 - [ ] Fitur 8 dan 13: tampilkan semua waktu registry dalam zona waktu lokal pengguna (bagian "ditampilkan sesuai locale" di Done when fitur 5 dipenuhi di sana).
 - [ ] Fitur 20: panggil `known_instance_ids` sebelum `create_instance_layout`, lalu `InsertInstance` dalam batch yang sama dengan progress operasi; cek konflik endpoint dengan `endpoints_conflict` atas data yang dibaca, commit dengan `expected_generation` dari baca itu, dan ulangi paling banyak lima kali saat `GenerationConflict`.
 - [ ] Fitur 29: putuskan kode `status` config revision dan apakah endpoint boleh dinonaktifkan (kolom `enabled`; domain `Endpoint` belum punya field itu).

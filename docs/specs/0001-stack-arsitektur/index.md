@@ -32,14 +32,18 @@ Sudah dikunci PRD dan tidak dibahas ulang: Rust untuk core, daemon, dan CLI; Swi
 | Framing IPC | Panjang `u32` big endian (4 byte) lalu payload. Batas 1 MiB untuk frame kontrol dan 64 KiB untuk batch log, dicek sebelum alokasi | Sederhana di tiga bahasa dan mudah diuji dengan fuzzing. Angka batas dari PRD 18.3 |
 | Kontrak Swift (OQ-005) | typeshare membangkitkan `Codable` Swift dari tipe di `stackly-protocol`. Hasilnya disimpan di git dan dicek ulang dengan `cargo xtask codegen --check`. Fixture JSON bersama diuji di Rust dan Swift | Satu sumber kontrak. Fixture tetap menjadi kontrak kalau generator diganti |
 | JSON Schema | schemars dari tipe Rust yang sama, ditulis oleh `cargo xtask codegen` | Dipakai C# nanti, validasi editor manifest, dan dokumentasi |
-| Registry | rusqlite dengan fitur `bundled`, satu thread penulis yang menerima perintah lewat channel dari tokio | Versi SQLite terkunci, cocok dengan pola satu penulis |
+| Registry | rusqlite dengan fitur `bundled`, satu thread `stackly-registry` yang memegang satu koneksi untuk baca dan tulis dan menerima perintah lewat channel berbatas; WAL, `synchronous=FULL`, dan `fullfsync` ([spec 0005](../0005-data-model-registry/index.md)) | Versi SQLite terkunci, cocok dengan pola satu penulis, dan tahan listrik padam di APFS |
+| YAML dan manifest provider | Decode serde ketat dua tahap (`serde_path_to_error`), tanpa validator JSON Schema generik, dan renderer template sendiri tanpa logika untuk format `yaml`, `json`, dan `natsConf` ([spec 0009](../0009-provider-engine-manifest-schema/index.md)) | Manifest jahat atau ceroboh ditolak oleh aturan tertutup, bukan oleh engine yang bisa menjalankan logika |
+| Secret | Keychain macOS lewat `security-framework`, nilai di newtype `zeroize`, input CLI lewat `rpassword` ([spec 0011](../0011-secret-store-redaction/index.md)) | Nilai secret hanya di Keychain dan memori proses, terhapus saat drop |
 | YAML | serde_yaml_ng | Fork serde_yaml yang dirawat. serde_yml dilarang (RUSTSEC-2025-0068) |
 | Waktu | jiff: `Timestamp` UTC di registry dan wire (RFC 3339), zona waktu lokal dari tzdb sistem untuk tampilan CLI | Benar untuk zona waktu, tanpa database zona yang dibundel |
 | ID resource | UUID v7 (crate `uuid`, fitur `v7` dan `serde`). Hanya daemon yang membuat ID dan path. Rust selalu menulis lowercase dalam format standar, dan semua pembaca tidak peka huruf besar kecil (`UUID` di Swift menulis huruf besar saat encode) | Berurutan waktu, ada tipe bawaannya di Swift dan C# |
 | Parser CLI | clap v4 derive | Subcommand bertingkat, value enum, completion |
 | Error | thiserror di setiap crate library, kategori kode stabil di `stackly-protocol`. anyhow hanya di `xtask` dan test | Exit code CLI berasal dari kategori, bukan teks pesan |
-| Logging | tracing dan `tracing-subscriber` dengan output JSON. Span membawa request ID dan operation ID | Correlation ID otomatis di setiap baris (NFR-011) |
-| Kebijakan `unsafe` | Dilarang di semua crate kecuali `stackly-platform-macos` (dan `stackly-storage` bila terbukti perlu). Mekanismenya ada di Konfigurasi workspace. Setiap blok `unsafe` wajib komentar `// SAFETY:` | Area audit keamanan sempit (NFR-009) |
+| Logging | tracing dan `tracing-subscriber` (fitur `env-filter`, filter dari `STACKLY_LOG`) dengan output JSON. Span membawa request ID dan operation ID. Daemon menulis lewat satu thread penulis ke stderr dan `<logs>/daemon/stacklyd.log` dengan rotasi ([spec 0006](../0006-protokol-ipc-daemon/index.md)) | Correlation ID otomatis di setiap baris (NFR-011) |
+| Transport IPC | crate `stackly-ipc` di atas tokio: socket Unix 0600 di runtime root, verifikasi path dan peer sebelum handshake (spec 0006) | Satu implementasi untuk daemon dan CLI; named pipe Windows nanti menjadi modul kedua |
+| Fuzzing | cargo-fuzz di folder `fuzz/` di luar workspace, dengan nightly bertanggal yang dipin hanya di `fuzz/rust-toolchain.toml` (spec 0006) | Toolchain utama tetap stable 1.99.1 |
+| Kebijakan `unsafe` | Dilarang di semua crate kecuali `stackly-platform-macos`. `stackly-storage` tidak memakai `unsafe` (spec 0005). Mekanismenya ada di Konfigurasi workspace. Setiap blok `unsafe` wajib komentar `// SAFETY:` | Area audit keamanan sempit (NFR-009) |
 | Proyek Xcode | `apps/macos/Stackly.xcodeproj` dibuat sekali dari template app macOS di Xcode 27, lalu disimpan di git dengan synchronized folder groups. Setelannya ada di bagian Proyek Xcode dan package Swift | Tanpa tool tambahan, konflik pbxproj jarang |
 | Modul Swift | Target app `Stackly`, package lokal `StacklyClient` (`clients/swift`) dan `StacklyUI` (`apps/macos/Packages/StacklyUI`) | Client dan UI bisa diuji dan dipratinjau tanpa app |
 | Test Rust | `cargo test` | Pilihan engineer. Lihat aturan isolasi di Consequences |
@@ -56,16 +60,21 @@ Semua crate library memakai prefix `stackly-`. Kolom terakhir menunjukkan kapan 
 
 | Crate (path) | Isi | Boleh bergantung pada | Dibuat |
 | --- | --- | --- | --- |
-| `stackly-domain` (`crates/domain`) | Model, invariant, state machine, policy | Crate pihak ketiga netral OS saja (serde, thiserror, uuid, jiff). Tidak ada crate Stackly lain, tokio, atau libc sebagai dependency langsung | Scaffold, dengan satu tipe `InstanceId` (UUID v7) |
-| `stackly-platform` (`crates/platform`) | Trait platform netral OS (proses, filesystem, resolver direktori, identitas user, secret, endpoint IPC, jam) dan tipe pendukungnya | `stackly-domain` | Scaffold, dengan satu trait resolver `app_support_dir()` yang ditandai `// provisional: F4` |
-| `stackly-protocol` (`crates/protocol`) | DTO request, response, dan event, envelope error, kategori kode, codec framing sebagai fungsi byte murni tanpa IO | Crate pihak ketiga netral OS saja (serde, serde_json, schemars, typeshare, uuid, jiff, thiserror). Tidak bergantung pada `stackly-domain` | Scaffold, dengan satu tipe `ProtocolVersion` |
-| `stackly-core` (`crates/core`) | Application services dan engine sebagai modul (runtime, instance, supervisor, provider engine, environment, operation, diagnostics), diekstrak menjadi crate saat batasnya terbukti | `stackly-domain`, `stackly-platform`, tokio, tracing | Scaffold, dengan satu use case info daemon yang mengembalikan versi crate (`CARGO_PKG_VERSION`) |
-| `stackly-platform-macos` (`crates/platform-macos`) | Implementasi trait platform untuk macOS | `stackly-platform`, `stackly-domain`, crate khusus macOS | Scaffold, dengan resolver dari `std::env::home_dir()` ditambah `Library/Application Support/Stackly`, tanpa `unsafe` (implementasi final di fitur 4) |
-| `stackly-storage` (`crates/storage`) | Adapter SQLite, migrasi, journal, audit | `stackly-domain`, `stackly-platform`, `stackly-core` bila port registry didefinisikan di sana, rusqlite | Fitur 5 |
-| `stackly-testkit` (`crates/testkit`) | Fake platform, builder fixture, test root ephemeral | `stackly-domain`, `stackly-platform` saja. Tidak boleh bergantung pada `stackly-core`, supaya unit test di core tidak melihat dua salinan tipe yang sama | Scaffold, dengan fake resolver direktori yang menunjuk ke test root |
-| `stacklyd` (`apps/daemon`) | Bin daemon: merangkai dependency secara eksplisit, server IPC | Semua crate library kecuali testkit. `stackly-platform-macos` dipasang di bawah `[target.'cfg(target_os = "macos")'.dependencies]` | Scaffold, dengan `--version` yang mencetak versi dari use case info daemon |
-| `stackly-cli`, bin `stackly` (`apps/cli`) | Client IPC dan presentasi | `stackly-protocol`, `stackly-platform`, clap, tokio, dan `stackly-platform-macos` di bawah `cfg(target_os = "macos")` | Scaffold, dengan `--version` |
-| `xtask` (`xtask/`) | `codegen`, `codegen --check`, `check-deps`, `build-app` | Bebas, tidak pernah dikirim ke pengguna | Scaffold |
+| `stackly-domain` (`crates/domain`) | Model, invariant, state machine, policy ([spec 0004](../0004-domain-core-platform-abstraction/index.md)); port `Registry` di modul `registry` ([spec 0005](../0005-data-model-registry/index.md)); modul `secret` berisi reference tanpa nilai ([spec 0011](../0011-secret-store-redaction/index.md)) | Crate pihak ketiga netral OS saja (serde, thiserror, uuid, jiff). Tidak ada crate Stackly lain, tokio, atau libc sebagai dependency langsung | Scaffold, dengan satu tipe `InstanceId` (UUID v7); model penuh di fitur 4 |
+| `stackly-platform` (`crates/platform`) | Trait platform netral OS (resolver direktori, filesystem, jam, identitas user, info dan capability, secret store lewat `with_secrets`, dan port proses, background agent, serta metrik yang menyusul) dan logika path portabel. Endpoint IPC tidak di sini, melainkan di `stackly-ipc` (spec 0006) | `stackly-domain`, `jiff`, `thiserror`, `zeroize` (spec 0011). Tanpa tokio dan libc | Scaffold, dengan satu trait resolver `app_support_dir()` yang ditandai `// provisional: F4`; port di fitur 4 |
+| `stackly-protocol` (`crates/protocol`) | DTO request, response, dan event, envelope error, katalog kode, codec framing sebagai fungsi byte murni tanpa IO | Crate pihak ketiga netral OS saja (serde, serde_json dengan fitur `raw_value`, schemars, typeshare, uuid, jiff, thiserror, `serde_path_to_error` dari spec 0006, `zeroize` dengan fitur `serde` dari spec 0011). Tidak bergantung pada `stackly-domain` | Scaffold, dengan satu tipe `ProtocolVersion`; pesan di fitur 6 |
+| `stackly-core` (`crates/core`) | Application services dan engine sebagai modul (runtime, instance, supervisor, provider engine, environment, operation, secret, diagnostics), diekstrak menjadi crate saat batasnya terbukti | `stackly-domain`, `stackly-platform`, tokio, tracing, dan crate pihak ketiga netral OS yang dipakai kodenya: `serde_json`, `thiserror` (spec 0004); `serde`, `serde_yaml_ng`, `serde_path_to_error`, `regex`, `sha2`, `schemars` opsional di balik fitur `json-schema` (spec 0009); `getrandom` (spec 0011); `jiff` saat signature core pertama kali menamainya | Scaffold, dengan satu use case info daemon yang mengembalikan versi crate (`CARGO_PKG_VERSION`) |
+| `stackly-platform-macos` (`crates/platform-macos`) | Implementasi trait platform untuk macOS, termasuk Keychain | `stackly-platform`, `stackly-domain`, `libc` (spec 0004), `security-framework` (spec 0011), crate khusus macOS lain; dev `stackly-core` dan `stackly-testkit` (spec 0004) | Scaffold, dengan resolver dari `std::env::home_dir()` ditambah `Library/Application Support/Stackly`, tanpa `unsafe`; adapter final di fitur 4 |
+| `stackly-storage` (`crates/storage`) | Adapter SQLite: open dan recovery, runner migrasi, file SQL migrasi, sidik jari schema, snapshot, `SqliteRegistry` (spec 0005) | `stackly-domain`, `stackly-platform`, `rusqlite` (`bundled`), `sha2`, `serde`, `serde_json`, `jiff`, `thiserror`, `tracing`; dev `stackly-testkit`, `stackly-evidence`. Tidak pernah `stackly-core`, `stackly-protocol`, atau `stackly-platform-macos`. Tanpa `unsafe`, dan tidak ikut cek lintas target Windows karena `bundled` mengompilasi C | Fitur 5 |
+| `stackly-ipc` (`crates/ipc`) | Transport socket Unix: listener, koneksi berframe, verifikasi endpoint dan peer, client dengan handshake (spec 0006) | `stackly-protocol` satu satunya crate Stackly untuk dependency normal, tokio, tracing, uuid, thiserror; dev `stackly-testkit`, `stackly-evidence`. Tanpa `unsafe` | Fitur 6 |
+| `stackly-testkit` (`crates/testkit`) | Fake platform dan `fs_conformance` (spec 0004), `FakeRegistry`, `RegistrySeed`, builder fixture, dan `registry_conformance` (spec 0005), `cargo_bin` dan `SpawnedDaemon` (spec 0006), modul `fake_server` (spec 0009), `FakeSecretStore` (spec 0011), test root ephemeral | `stackly-domain`, `stackly-platform` saja (plus `stackly-evidence`, spec 0002). Tidak boleh bergantung pada `stackly-core`, supaya unit test di core tidak melihat dua salinan tipe yang sama | Scaffold, dengan fake resolver direktori yang menunjuk ke test root |
+| `stackly-evidence` (`crates/evidence`) | Guard evidence untuk test yang membuktikan ID PRD ([spec 0002](../0002-coding-standards-tooling/index.md)) | Tanpa crate Stackly lain | Fitur 2 |
+| `stackly-fake-server` (`crates/fake-server`, bin) | Dummy server untuk paket provider `testing/fake` ([spec 0009](../0009-provider-engine-manifest-schema/index.md)) | `signal-hook`, `serde_json`, `sha2`; dev `stackly-testkit`. Tanpa dependency normal ke crate Stackly | Fitur 9 |
+| `stacklyd` (`apps/daemon`) | Library plus bin ([spec 0006](../0006-protokol-ipc-daemon/index.md)): `main.rs` tipis yang membaca argumen dan environment, library berisi startup, lock, log sink, server, dispatch, event bus, dan pemetaan domain ke DTO | Semua crate library kecuali testkit, termasuk `stackly-storage` dan `stackly-ipc`; tokio, uuid, serde_json, dan `libc` hanya untuk konstanta `O_NOFOLLOW` tanpa `unsafe`. `stackly-platform-macos` dipasang di bawah `[target.'cfg(target_os = "macos")'.dependencies]` | Scaffold, dengan `--version` yang mencetak versi dari use case info daemon |
+| `stackly-cli`, bin `stackly` (`apps/cli`) | Client IPC dan presentasi | `stackly-protocol`, `stackly-ipc` (spec 0006), `stackly-platform`, clap, tokio, serde_json, `rpassword` (spec 0011), dan `stackly-platform-macos` di bawah `cfg(target_os = "macos")` | Scaffold, dengan `--version` |
+| `xtask` (`xtask/`) | `codegen`, `codegen --check`, `check-deps`, `build-app`, plus subcommand milik spec lain: evidence (spec 0002), runtime (spec 0003), `fuzz` (spec 0006), dan `provider check` (spec 0009) | Bebas, tidak pernah dikirim ke pengguna. Antara lain `syn` dan `proc-macro2` (spec 0004 dan 0006), `stackly-core` dengan fitur `json-schema`, dan `stackly-platform-macos` di bawah `cfg(target_os = "macos")` (spec 0009) | Scaffold |
+
+Folder `fuzz/` (spec 0006) adalah proyek cargo-fuzz dengan `[workspace]` sendiri di luar workspace utama, dan memakai crate Stackly lewat path.
 
 `stackly-platform-windows` dan client C# baru dibuat di fase Windows.
 
@@ -76,10 +85,16 @@ Aturan ini dijaga oleh `cargo xtask check-deps`, yang membaca `cargo metadata` d
 - `stackly-domain`, `stackly-platform`, `stackly-protocol`, dan `stackly-core` tidak pernah bergantung langsung pada `stackly-platform-macos`, `stackly-storage`, atau crate yang hanya ada di macOS.
 - `stackly-domain` dan `stackly-protocol` tidak bergantung pada crate Stackly mana pun, dan tidak punya tokio atau libc sebagai dependency langsung.
 - `stackly-core` tidak bergantung pada `stackly-protocol` atau `stackly-storage`. Pemetaan dari domain ke DTO terjadi di `stacklyd`.
-- `stackly-cli` tidak pernah bergantung pada `stackly-core` atau `stackly-storage`, karena CLI tidak menjalankan binary provider dan tidak menulis registry.
+- `stackly-cli` tidak pernah bergantung pada `stackly-core` atau `stackly-storage`, karena CLI tidak menjalankan binary provider dan tidak menulis registry. CLI boleh bergantung pada `stackly-ipc` (spec 0006).
 - `stackly-testkit` hanya boleh muncul sebagai dependency berjenis dev, dan tidak bergantung pada `stackly-core`.
 - [Spec 0002](../0002-coding-standards-tooling/index.md) menambah crate daun `stackly-evidence` (`crates/evidence`) dengan aturannya sendiri: tanpa crate Stackly lain, hanya dependency dev kecuali di `xtask` dan `stackly-testkit`, dan boleh menjadi dependency dev `stackly-domain` serta `stackly-protocol`.
-- `#![allow(unsafe_code)]` hanya boleh ada di `stackly-platform-macos` (dan `stackly-storage` bila nanti terbukti perlu). `check-deps` memindai source crate lain dan gagal kalau menemukannya.
+- `#![allow(unsafe_code)]` hanya boleh ada di `stackly-platform-macos`. `check-deps` memindai source crate lain dan gagal kalau menemukannya.
+- `stackly-platform` tidak punya tokio atau libc sebagai dependency langsung, dan kode non test di `stackly-domain`, `stackly-platform`, `stackly-core`, `stackly-protocol`, serta `stackly-platform-macos` tidak membaca variabel environment atau memuat literal path hardcode (pindaian `syn`, [spec 0004](../0004-domain-core-platform-abstraction/index.md)).
+- `stackly-storage` hanya boleh bergantung langsung pada `stackly-domain` dan `stackly-platform` di antara crate Stackly (dev: `stackly-testkit`, `stackly-evidence`); `rusqlite` hanya boleh menjadi dependency langsung `stackly-storage`; dan di antara bin, hanya `stacklyd` yang boleh bergantung pada `stackly-storage` ([spec 0005](../0005-data-model-registry/index.md)).
+- `stackly-ipc` hanya boleh bergantung pada `stackly-protocol` di antara crate Stackly untuk dependency normal (dev: `stackly-testkit`, `stackly-evidence`). Tidak ada crate yang boleh bergantung pada library `stacklyd`. Kode non test di `crates/ipc`, `apps/daemon`, dan `apps/cli` tidak boleh menyebut `TcpListener`, `TcpStream`, `TcpSocket`, atau `UdpSocket` ([spec 0006](../0006-protokol-ipc-daemon/index.md)).
+- `stackly-fake-server` tidak punya dependency normal ke crate Stackly mana pun, dan tidak ada crate yang bergantung padanya ([spec 0009](../0009-provider-engine-manifest-schema/index.md)).
+- `security-framework` hanya boleh menjadi dependency langsung `stackly-platform-macos`, dan `rpassword` hanya `stackly-cli`. Spec 0011 juga membatasi pemanggilan `expose()` nilai secret ke modul yang diizinkan ([spec 0011](../0011-secret-store-redaction/index.md)).
+- Setiap crate mewarisi lint workspace (`[lints] workspace = true`) dan tidak menulis tabel `[lints]` sendiri.
 - Cek portabilitas (NFR-010, AC-050): di Mac ini, jalankan `cargo check --target aarch64-pc-windows-msvc` untuk `stackly-domain`, `stackly-platform`, `stackly-protocol`, dan `stackly-core`. `check` tidak melakukan link, jadi tidak butuh MSVC.
 
 ### Susunan repo
@@ -90,7 +105,7 @@ stackly/
 ├── Cargo.lock              # disimpan di git
 ├── rust-toolchain.toml     # 1.99.1, rustfmt, clippy, dua target
 ├── .cargo/config.toml      # alias xtask
-├── typeshare.toml          # konfigurasi generator Swift
+├── typeshare.toml          # konfigurasi generator Swift dan mapping tipe asing (spec 0006)
 ├── .gitignore              # target/, DerivedData, xcuserdata, .DS_Store
 ├── LICENSE-MIT
 ├── LICENSE-APACHE
@@ -102,7 +117,10 @@ stackly/
 │   ├── core/
 │   ├── platform-macos/
 │   ├── testkit/
-│   └── storage/            # dibuat di fitur 5
+│   ├── evidence/           # guard evidence (spec 0002)
+│   ├── storage/            # dibuat di fitur 5 (spec 0005)
+│   ├── ipc/                # dibuat di fitur 6 (spec 0006)
+│   └── fake-server/        # bin dummy server, dibuat di fitur 9 (spec 0009)
 ├── apps/
 │   ├── daemon/             # bin stacklyd
 │   ├── cli/                # bin stackly
@@ -111,12 +129,19 @@ stackly/
 │       ├── Stackly/        # target app (synchronized folder)
 │       └── Packages/StacklyUI/
 ├── clients/swift/          # package StacklyClient
-│   └── Sources/StacklyClient/Generated/StacklyProtocol.swift
+│   └── Sources/StacklyClient/Generated/  # StacklyProtocol.swift, OpenEnums.swift, ContractInfo.swift (spec 0006)
 ├── protocols/
 │   ├── schemas/            # JSON Schema protokol, hasil codegen
-│   └── fixtures/           # fixture JSON bersama Rust dan Swift
-├── schemas/                # schema provider, environment, lockfile (fitur 9, 44)
-├── providers/              # paket provider (fitur 19 dan seterusnya)
+│   ├── fixtures/           # fixture JSON bersama Rust dan Swift
+│   ├── error-codes.json    # katalog kode error, hasil codegen (spec 0006)
+│   └── contract-versions.json  # digest kontrak per versi protokol (spec 0006)
+├── schemas/
+│   ├── evidence/           # schema evidence record (spec 0002)
+│   └── provider/           # JSON Schema manifest provider, hasil codegen (fitur 9, spec 0009); environment dan lockfile menyusul (fitur 44)
+├── providers/              # paket provider; dibuat fitur 9 dengan fake, nats, dan traefik (spec 0009), provider lain di fitur 19 dan seterusnya
+├── runtimes/               # inventory.toml dan tooling runtime (spec 0003)
+├── evidence/               # evidence run lokal (spec 0002, 0003)
+├── fuzz/                   # proyek cargo-fuzz di luar workspace, nightly sendiri (spec 0006)
 ├── xtask/
 └── docs/
 ```
@@ -131,18 +156,22 @@ Integration test Rust berada di folder `tests/` milik masing masing crate. Spec 
 - **Pin `typeshare-cli`:** `typeshare-cli` adalah binary terpisah, jadi xtask menyimpan versinya sebagai konstanta, mencocokkannya dengan output `typeshare --version`, dan gagal dengan petunjuk `cargo install --locked typeshare-cli --version <versi>` kalau tidak cocok. Versi persisnya ditetapkan saat scaffold.
 - **Cek drift:** typeshare tidak punya mode check. `cargo xtask codegen --check` membangkitkan ke direktori sementara, membandingkannya dengan file yang disimpan di git, dan gagal kalau berbeda.
 - **Fixture:** satu file JSON per kasus di `protocols/fixtures/`. Test Rust membaca file itu dan memeriksa serialize serta deserialize. Test Swift Testing membaca file yang sama lewat path relatif dari `#filePath`, lalu membandingkan **nilai hasil decode**, bukan teks JSON mentah (contohnya, Swift menulis UUID dengan huruf besar). Cara ini bergantung pada path source yang asli, jadi build tidak boleh memakai remap path (`-file-prefix-map`).
-- **Bukti di scaffold:** satu tipe kecil (`ProtocolVersion` dengan `major` dan `minor` bertipe `u32`, fixture `{"major": 0, "minor": 1}`) melewati seluruh alur: codegen, fixture, test Rust, dan test Swift. Pesan protokol yang sebenarnya didesain di fitur 6.
+- **Bukti di scaffold:** satu tipe kecil (`ProtocolVersion` dengan `major` dan `minor` bertipe `u32`, fixture `{"major": 0, "minor": 1}`) melewati seluruh alur: codegen, fixture, test Rust, dan test Swift. Pesan protokol yang sebenarnya didesain di [spec 0006](../0006-protokol-ipc-daemon/index.md), yang menaikkan `ProtocolVersion::CURRENT` menjadi 1.0.
+- **Aturan wire dari spec 0006:** nilai enum tanpa data ditulis snake_case; field `Option` memakai `#[serde(default)]` dan ditulis `null`; tidak pernah `deny_unknown_fields`; DTO tidak memakai `BTreeMap` (typeshare menghasilkan Swift yang tidak valid), melainkan `Vec` berisi pasangan; `u64` hanya lewat newtype `Revision`, `Sequence`, dan `Count` (maksimal 2^53 − 1); waktu memakai `Timestamp` protokol dengan tepat tiga digit pecahan; enum terbuka diakhiri varian fallback `unrecognized`.
+- **Bagian yang dibekukan lintas major:** amplop `Request`, field `protocol` di params handshake, amplop `ServerFrame` dengan varian `error`, dan field `code`, `category`, `message`, serta `details` di `ErrorBody` (spec 0006).
+- **File hasil codegen tambahan (spec 0006):** `OpenEnums.swift`, `ContractInfo.swift`, `crates/protocol/src/contract_digest.rs`, `protocols/error-codes.json`, dan `protocols/contract-versions.json`. `typeshare.toml` memetakan `Uuid`, `Timestamp`, dan newtype `u64` ke tipe Swift (`UUID`, `Date`, `UInt64`).
 
 ### Konfigurasi workspace
 
-- `[workspace]` menulis `resolver = "3"` secara eksplisit. Workspace virtual tidak mewarisi resolver dari edition anggotanya.
+- `[workspace]` menulis `resolver = "3"` secara eksplisit. Workspace virtual tidak mewarisi resolver dari edition anggotanya. Sejak fitur 6, `[workspace]` juga menulis `exclude = ["fuzz"]`, karena `fuzz/` punya workspace dan toolchain nightly sendiri (spec 0006).
 - `[workspace.package]` memuat `version = "0.1.0"`, edition 2024, `rust-version = "1.99.1"`, `license = "MIT OR Apache-2.0"`, `repository = "https://github.com/ojiepermana/stackly"`, dan `publish = false`. Semua anggota mewarisinya dengan `workspace = true`, sehingga `--version` di kedua bin bersumber dari satu angka.
 - `[workspace.dependencies]` memuat semua versi crate pihak ketiga sebagai rentang caret (misalnya `"1.47"`), dan versi persisnya dikunci oleh `Cargo.lock` yang disimpan di git. Anggota tidak menulis versi sendiri. Scaffold hanya menambahkan crate yang benar benar dipakai isi scaffold. Contohnya, rusqlite masuk di fitur 5, serde_yaml_ng di fitur 9, dan clap hanya dipakai kedua bin.
 - `[workspace.lints]` memuat `rust.unsafe_code = "deny"` dan `clippy.undocumented_unsafe_blocks = "deny"`, dan semua anggota mewarisinya (`lints.workspace = true`). `stackly-platform-macos` menambahkan `#![allow(unsafe_code)]` di `lib.rs`, dan `check-deps` menolak `allow` itu di crate lain. Mekanisme ini dipakai karena `forbid` tidak bisa dibuka per crate, dan crate yang menulis `[lints]` sendiri tidak bisa sekaligus mewarisi tabel workspace.
 - `[profile.release]` memakai `panic = "unwind"` (tokio mengisolasi panic per task, panic hook mencatatnya), `lto = "thin"`, `debug = "line-tables-only"`, dan `split-debuginfo = "packed"` tanpa `strip`, sehingga dSYM berisi informasi baris yang cukup untuk diagnosis crash. dSYM disimpan sebagai artefak dan tidak ikut ke app.
 - `rust-toolchain.toml` memasang target `aarch64-apple-darwin` dan `aarch64-pc-windows-msvc`. Target Windows hanya berisi std (kecil), supaya kamu bisa menjalankan cek portabilitas secara lokal.
 - `.gitignore` mengabaikan `target/`, `DerivedData/`, `xcuserdata/`, `*.xcuserstate`, dan `.DS_Store`.
-- Saat scaffold, log daemon dan CLI hanya ke stderr. Lokasi file log daemon mengikuti resolver direktori di fitur 4, dan sink file serta rotasinya dipasang saat daemon dibangun di fitur 6.
+- Saat scaffold, log daemon dan CLI hanya ke stderr. Sink file daemon dan rotasinya diputuskan spec 0006 (*Log daemon*): satu thread penulis, `<logs>/daemon/stacklyd.log` mode 0600, rotasi 20 MiB dengan lima file.
+- Crate yang ditambahkan ke `[workspace.dependencies]` oleh spec sesudah scaffold, masing masing saat kodenya dibangun, antara lain: `rusqlite` dan `sha2` (spec 0005); `tokio`, `serde_path_to_error`, dan fitur `env-filter` untuk `tracing-subscriber` (spec 0006); `serde_yaml_ng`, `regex`, dan `signal-hook` (spec 0009); `zeroize`, `getrandom`, `security-framework`, dan `rpassword` (spec 0011). Aturan "hanya ditambah saat kode memakainya" tetap berlaku.
 
 ### Proyek Xcode dan package Swift
 
@@ -161,23 +190,23 @@ Integration test Rust berada di folder `tests/` milik masing masing crate. Spec 
 
 ### Batas keputusan
 
-Hal berikut sengaja tidak diputuskan di sini. Masing masing dimiliki fitur yang membutuhkannya.
+Hal berikut sengaja tidak diputuskan di sini. Masing masing dimiliki fitur yang membutuhkannya; kolom terakhir menunjuk spec yang sudah memutuskannya.
 
-| Keputusan | Pemilik |
-| --- | --- |
-| Format dan lint yang dipasang (`rustfmt.toml`, `.swift-format`, `deny.toml`), plus pencatatan konvensi ke `AGENTS.md`. Batasannya: tanpa remap path | Fitur 2 |
-| Desain trait platform, resolver direktori, dan cara mengarahkan root alternatif untuk test | Fitur 4 |
-| Skema registry, mekanisme migrasi, dan letak port registry | Fitur 5 |
-| Bentuk pesan, handshake, envelope error, pemetaan tipe asing di typeshare (`Uuid`, `Timestamp`), integer 64 bit, enum yang tidak dikenal, adapter IO untuk framing, sink log daemon | Fitur 6 |
-| Journal operasi, lock, dan idempotency | Fitur 7 |
-| Kontrak output CLI dan peta exit code | Fitur 8 |
-| Validator JSON Schema dan template engine manifest | Fitur 9 |
-| API proses macOS dan identitas proses | Fitur 10 |
-| Crate untuk Keychain | Fitur 11 |
-| Transport IPC di Swift dan shell aplikasi | Fitur 13 |
-| Memasukkan `stacklyd` dan `stackly` ke `.app`, signing, SMAppService, bundle ID helper | Fitur 15 |
-| HTTP client untuk download dan ekstraksi archive | Fitur 18 |
-| Library snapshot test Swift | Fitur 68 |
+| Keputusan | Pemilik | Diputuskan di |
+| --- | --- | --- |
+| Format dan lint yang dipasang (`rustfmt.toml`, `.swift-format`, `deny.toml`), plus pencatatan konvensi ke `AGENTS.md`. Batasannya: tanpa remap path | Fitur 2 | [spec 0002](../0002-coding-standards-tooling/index.md) |
+| Desain trait platform, resolver direktori, dan cara mengarahkan root alternatif untuk test | Fitur 4 | [spec 0004](../0004-domain-core-platform-abstraction/index.md): port sync `Arc<dyn Trait>`, port baru lewat `with_<port>`, `STACKLY_ROOT` |
+| Skema registry, mekanisme migrasi, dan letak port registry | Fitur 5 | [spec 0005](../0005-data-model-registry/index.md): port di `stackly-domain::registry`, migrasi maju saja dengan snapshot |
+| Bentuk pesan, handshake, envelope error, pemetaan tipe asing di typeshare (`Uuid`, `Timestamp`), integer 64 bit, enum yang tidak dikenal, adapter IO untuk framing, sink log daemon | Fitur 6 | [spec 0006](../0006-protokol-ipc-daemon/index.md) |
+| Journal operasi, lock, dan idempotency | Fitur 7 | belum |
+| Kontrak output CLI dan peta exit code | Fitur 8 | belum |
+| Validator JSON Schema dan template engine manifest | Fitur 9 | [spec 0009](../0009-provider-engine-manifest-schema/index.md): tanpa validator generik, renderer sendiri tanpa logika |
+| API proses macOS dan identitas proses | Fitur 10 | belum |
+| Crate untuk Keychain | Fitur 11 | [spec 0011](../0011-secret-store-redaction/index.md): `security-framework` |
+| Transport IPC di Swift dan shell aplikasi | Fitur 13 | belum |
+| Memasukkan `stacklyd` dan `stackly` ke `.app`, signing, SMAppService, bundle ID helper | Fitur 15 | belum |
+| HTTP client untuk download dan ekstraksi archive | Fitur 18 | belum |
+| Library snapshot test Swift | Fitur 68 | belum |
 
 ## Consequences
 
