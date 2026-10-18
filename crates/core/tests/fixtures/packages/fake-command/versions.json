@@ -1,0 +1,15 @@
+{
+  "schema": "stackly.provider-versions/v1",
+  "software": "fake",
+  "artifacts": [
+    {
+      "id": "fake-0.1.0-macos-aarch64",
+      "line": "0.1",
+      "version": "0.1.0",
+      "os": "macos",
+      "arch": "aarch64",
+      "status": "fixture",
+      "executables": ["stackly-fake-server"]
+    }
+  ]
+}

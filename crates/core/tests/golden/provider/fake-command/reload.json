@@ -1,0 +1,75 @@
+{
+  "steps": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf/server.json",
+        "content": {
+          "configFile": "serverConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "{\"greeting\": \"hello from fake-command\", \"instanceName\": \"golden\", \"authToken\": "
+            },
+            {
+              "type": "secret",
+              "content": {
+                "secret": "<secret:authToken>",
+                "format": "yaml"
+              }
+            },
+            {
+              "type": "text",
+              "content": "}\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    }
+  ],
+  "action": {
+    "type": "run",
+    "content": {
+      "command": {
+        "program": {
+          "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+          "relative": "stackly-fake-server"
+        },
+        "args": [
+          "version"
+        ],
+        "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+        "env": [
+          [
+            "HOME",
+            "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+          ],
+          [
+            "PATH",
+            "/usr/bin:/bin:/usr/sbin:/sbin"
+          ],
+          [
+            "TMPDIR",
+            "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+          ]
+        ]
+      },
+      "stdin": {
+        "type": "null"
+      },
+      "timeout": "20s",
+      "successExitCodes": [
+        0
+      ]
+    }
+  },
+  "verify": null,
+  "deadline": "20s"
+}

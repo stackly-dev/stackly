@@ -1,0 +1,83 @@
+{
+  "steps": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
+        "/Volumes/Test Root/Ünï cödé/logs/instances/0192f000-0000-7000-8000-00000000000a",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/fake.json",
+        "content": {
+          "configFile": "fakeConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "{\n  \"greeting\": \"hello from stackly\",\n  \"instanceName\": \"golden\",\n  \"authToken\": "
+            },
+            {
+              "type": "secret",
+              "content": {
+                "secret": "<secret:authToken>",
+                "format": "json"
+              }
+            },
+            {
+              "type": "text",
+              "content": "\n}\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    },
+    {
+      "type": "run",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "stackly-fake-server"
+          },
+          "args": [
+            "init",
+            "--data=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+            "--token-stdin",
+            "--fail=false"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+          "env": [
+            [
+              "HOME",
+              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            ],
+            [
+              "PATH",
+              "/usr/bin:/bin:/usr/sbin:/sbin"
+            ],
+            [
+              "TMPDIR",
+              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "secret",
+          "content": "<secret:authToken>"
+        },
+        "timeout": "30s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    }
+  ],
+  "deadline": "30s",
+  "cleanup": []
+}
