@@ -17,11 +17,6 @@ enum SharedExamples {
         .deletingLastPathComponent()  // clients
         .appending(path: "schemas/evidence/examples", directoryHint: .isDirectory)
 
-    /// True when the examples folder exists.
-    static var isPresent: Bool {
-        FileManager.default.fileExists(atPath: folder.path)
-    }
-
     /// Every example file name whose type is `type`, sorted.
     static func names(ofType type: String) throws -> [String] {
         try FileManager.default.contentsOfDirectory(atPath: folder.path)
@@ -48,14 +43,6 @@ enum SharedExamples {
     }
 }
 
-// provisional: F2. The examples come with the `evidence check` milestone,
-// built on its own branch; drop this condition once that branch is merged.
-// The Rust examples test fails when the folder is missing, so after the
-// merge this condition cannot hide a lost folder.
-@Suite(
-    .enabled(
-        if: SharedExamples.isPresent,
-        "schemas/evidence/examples/ is not on this branch yet (evidence check milestone)"))
 struct SharedExamplesTests {
     @Test func everyRecordExampleDecodes() throws {
         let names = try SharedExamples.names(ofType: "record")
