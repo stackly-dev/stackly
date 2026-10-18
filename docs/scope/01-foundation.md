@@ -141,7 +141,7 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
 
 - [ ] Design it (spec): `/architect process supervisor`
 
-### 11. Secret store & redaction · needs a decision · GA
+### 11. Secret store & redaction · in-progress · GA
 
 Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu terapkan masking yang sama di GUI, CLI, log, diagnostics, dan export. Reveal atau copy secret selalu butuh aksi eksplisit.
 
@@ -149,7 +149,18 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
 
 **Trace:** REQ-016, BR-018, AC-016, AC-062, OQ-008
 
-- [ ] Design it (spec): `/architect secret store & redaction`
+**Pointer:** spec [0011](../specs/0011-secret-store-redaction/index.md)
+
+- [x] Design it (spec): `/architect secret store & redaction`
+- [ ] Build it: `/develop secret store & redaction`
+  - [ ] Secret port, references, and Keychain adapter: `SecretRef`, `SecretStore`, `FakeSecretStore`, and `MacosSecretStore` with the `OSStatus` spike (spec 0011 AC-1 to AC-4, AC-7; build steps 1 to 3; needs features 4 and 5)
+  - [ ] Secret service and redaction through the daemon: `SecretWorker`, `put`, reveal, delete, `resolve_for_start`, `Redactor`, delivery rules, IPC handlers, the redacting log writer, the `check-deps` allowlist, and the daemon sentinel suite (spec 0011 AC-5, AC-6, AC-8 to AC-16; build steps 4 to 7; needs feature 6)
+  - [ ] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
+  - [ ] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19; build steps 9 to 11; needs features 12 and 13)
+- [ ] Verify it: `/check verify secret store & redaction`
+- [ ] Test it: `/test secret store & redaction`
+- [ ] Review it (fresh model): `/check review secret store & redaction`
+- [ ] Document it: `/document secret store & redaction`
 
 _Catatan:_ fitur 12 (Design system & UI foundation) dan 13 (App shell SwiftUI & Swift client) sekarang ada di [ui-macos.md](ui-macos.md), bersama fitur UI lintas layar lain yang diturunkan dari mockup UI. Nomor, urutan, dan statusnya tidak berubah.
 
