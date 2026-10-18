@@ -10,6 +10,7 @@ members = [
     "crates/evidence",
     "crates/fake-server",
     "crates/storage",
+    "crates/ipc",
     "apps/daemon",
     "apps/cli",
     "xtask",
@@ -28,6 +29,7 @@ publish = false
 stackly-core = { path = "crates/core" }
 stackly-domain = { path = "crates/domain" }
 stackly-evidence = { path = "crates/evidence" }
+stackly-ipc = { path = "crates/ipc" }
 stackly-platform = { path = "crates/platform" }
 stackly-platform-macos = { path = "crates/platform-macos" }
 stackly-protocol = { path = "crates/protocol" }
@@ -52,6 +54,7 @@ signal-hook = "0.4"
 syn = { version = "3.0", features = ["full", "visit"] }
 tempfile = "3"
 thiserror = "2.0"
+tokio = "1.53"
 toml = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json"] }
