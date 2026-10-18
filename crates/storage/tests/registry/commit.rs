@@ -807,3 +807,238 @@ fn concurrent_creates_produce_one_instance() {
     );
     ev.pass();
 }
+
+// covers: AC-10 (a stored path pair is unique; PathTaken). Through the port
+// the short key check comes first, so the test moves another instance's
+// stored path onto the new instance's root with raw SQL.
+#[test]
+fn a_path_another_instance_stores_is_refused_as_path_taken() {
+    let harness = Harness::new();
+    let base = harness.base();
+    let holder = harness.instance(&base, "holder");
+    harness.commit(vec![WriteOp::InsertInstance(holder.clone())]);
+    let newcomer = harness.instance(&base, "newcomer");
+    let taken = format!("instances/{}", newcomer.id());
+    harness
+        .side()
+        .execute(
+            "UPDATE instance_paths SET relative_path = ?1 WHERE instance_id = ?2 AND kind = 'temp'",
+            (&taken, holder.id().to_string()),
+        )
+        .unwrap();
+
+    let err = harness.reject(vec![WriteOp::InsertInstance(newcomer.clone())]);
+
+    assert_eq!(
+        err,
+        BatchError::at(
+            0,
+            RegistryError::PathTaken {
+                root: stackly_domain::LogicalRoot::Data,
+                path: taken.parse().unwrap(),
+                existing: holder.id(),
+            }
+        )
+    );
+    assert_eq!(
+        harness.registry.instance(newcomer.id()).unwrap().value,
+        None
+    );
+}
+
+// covers: AC-10 (names stay unique when an update renames)
+#[test]
+fn renaming_onto_a_name_another_instance_holds_is_name_taken() {
+    let harness = Harness::new();
+    let base = harness.base();
+    let first = harness.instance(&base, "first");
+    let second = harness.instance(&base, "second");
+    harness.commit(vec![
+        WriteOp::InsertInstance(first.clone()),
+        WriteOp::InsertInstance(second.clone()),
+    ]);
+    let mut renamed = second.clone();
+    renamed.rename("first".parse().unwrap());
+
+    let err = harness.reject(vec![WriteOp::UpdateInstance {
+        instance: renamed,
+        expected: second.revision(),
+    }]);
+
+    assert_eq!(
+        err.error,
+        RegistryError::NameTaken {
+            name: "first".parse().unwrap(),
+            existing: first.id(),
+        }
+    );
+}
+
+// covers: AC-10 (an update keeps the instance's software equal to its
+// runtime's)
+#[test]
+fn moving_an_instance_onto_a_runtime_of_other_software_is_a_software_mismatch() {
+    let harness = Harness::new();
+    let base = harness.base();
+    let other = harness.base_of("mysql");
+    let instance = harness.instance(&base, "main");
+    harness.commit(vec![WriteOp::InsertInstance(instance.clone())]);
+    let mut moved = stored(&instance);
+    moved.runtime_id = other.runtime.id();
+    moved.revision = instance.revision().next();
+
+    let err = harness.reject(vec![WriteOp::UpdateInstance {
+        instance: stackly_domain::Instance::restore(moved, harness.now()).unwrap(),
+        expected: instance.revision(),
+    }]);
+
+    assert_eq!(
+        err.error,
+        RegistryError::SoftwareMismatch {
+            instance: "postgresql".parse().unwrap(),
+            runtime: "mysql".parse().unwrap(),
+            provider_revision: "postgresql".parse().unwrap(),
+        }
+    );
+}
+
+// covers: AC-9 (one runtime per external folder, also through an update)
+#[test]
+fn updating_a_runtime_onto_another_runtimes_external_folder_is_a_duplicate() {
+    let harness = Harness::new();
+    let base = harness.base();
+    let external = |root: &str| {
+        Runtime::new(NewRuntime {
+            id: RuntimeId::generate(),
+            software: base.software(),
+            version: "17.5".parse().unwrap(),
+            line: "17".parse().unwrap(),
+            target: base.artifact.target,
+            install: InstallMode::External {
+                root: root.into(),
+                observed_sha256: None,
+            },
+            depends_on: BTreeSet::new(),
+        })
+    };
+    let first = external("/opt/pg-a");
+    let second = external("/opt/pg-b");
+    harness.commit(vec![
+        WriteOp::InsertRuntime(first.clone()),
+        WriteOp::InsertRuntime(second.clone()),
+    ]);
+    let mut same = first.clone();
+    same.apply(RuntimeEvent::Resolved, harness.now()).unwrap();
+    let moved = Runtime::restore(stackly_domain::StoredRuntime {
+        id: second.id(),
+        software: second.software().clone(),
+        version: second.version().clone(),
+        line: second.line().clone(),
+        target: second.target(),
+        install: first.install().clone(),
+        state: second.state(),
+        installed_at: None,
+        last_verified_at: None,
+        depends_on: BTreeSet::new(),
+        revision: second.revision().next(),
+    })
+    .unwrap();
+
+    let err = harness.reject(vec![WriteOp::UpdateRuntime {
+        runtime: moved,
+        expected: second.revision(),
+    }]);
+    assert_eq!(
+        err.error,
+        RegistryError::DuplicateRuntime {
+            existing: first.id(),
+        }
+    );
+    // Its own folder is no conflict for the runtime itself.
+    harness.commit(vec![WriteOp::UpdateRuntime {
+        runtime: same,
+        expected: first.revision(),
+    }]);
+}
+
+// covers: AC-8 (typed unique rules on a lease update)
+#[test]
+fn reactivating_a_released_lease_next_to_an_active_one_is_active_lease_exists() {
+    let harness = Harness::new();
+    let base = harness.base();
+    let instance = harness.instance(&base, "main");
+    let environment = Environment::new(
+        EnvironmentId::generate(),
+        "shop".parse().unwrap(),
+        None,
+        vec![],
+    )
+    .unwrap();
+    harness.commit(vec![
+        WriteOp::InsertInstance(instance.clone()),
+        WriteOp::InsertEnvironment(environment.clone()),
+    ]);
+    let now = harness.now();
+    let holder = LeaseHolder::Environment(environment.id());
+    let mut old = Lease::new(LeaseId::generate(), instance.id(), holder, None, now).unwrap();
+    old.release(now).unwrap();
+    let active = Lease::new(LeaseId::generate(), instance.id(), holder, None, now).unwrap();
+    harness.commit(vec![
+        WriteOp::InsertLease(old.clone()),
+        WriteOp::InsertLease(active),
+    ]);
+    let revived = Lease::restore(stackly_domain::StoredLease {
+        id: old.id(),
+        instance_id: instance.id(),
+        holder,
+        session: None,
+        state: stackly_domain::LeaseState::Active,
+        acquired_at: now,
+    })
+    .unwrap();
+
+    let err = harness.reject(vec![WriteOp::UpdateLease(revived)]);
+
+    assert_eq!(
+        err,
+        BatchError::at(
+            0,
+            RegistryError::ActiveLeaseExists {
+                instance: instance.id(),
+                environment: environment.id(),
+            }
+        )
+    );
+}
+
+// covers: AC-8 (no transaction outlives a command, and SQLITE_BUSY maps to
+// Busy for the batch as a whole)
+#[test]
+fn a_write_lock_held_elsewhere_past_the_busy_timeout_fails_writes_as_busy() {
+    let harness = Harness::with_options(
+        &stackly_storage::OpenOptions::new()
+            .with_busy_timeout(std::time::Duration::from_millis(200)),
+    );
+    let base = harness.base();
+    let side = harness.side();
+    side.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+    let err = harness
+        .registry
+        .commit(WriteBatch::new(vec![WriteOp::InsertInstance(
+            harness.instance(&base, "main"),
+        )]))
+        .unwrap_err();
+    let prune = harness
+        .registry
+        .prune(&stackly_domain::RetentionPolicy::DEFAULT, harness.now());
+    let read = harness.registry.runtime(base.runtime.id()).unwrap();
+    side.execute_batch("ROLLBACK").unwrap();
+
+    assert_eq!(err, BatchError::batch(RegistryError::Busy));
+    assert_eq!(prune, Err(RegistryError::Busy));
+    assert_eq!(read.value, Some(base.runtime.clone()));
+    harness.commit(vec![WriteOp::InsertInstance(
+        harness.instance(&base, "main"),
+    )]);
+}
