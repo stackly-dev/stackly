@@ -78,7 +78,7 @@ Model domain (software, provider revision, runtime, instance, environment, opera
 - [ ] Build it: `/develop domain core & platform abstraction`
   - [x] Platform ports and directory layout end to end: `RootSet`, `DirectoryLayout`, `STACKLY_ROOT`, `MacosPlatform`, `UnsupportedPlatform`, testkit `FakePlatform`, and `prepare_layout` (spec 0004 AC-6 to AC-9, AC-12, AC-13, AC-15)
   - [ ] Instance folders, `instance-manifest.json`, and inventory without the registry (spec 0004 AC-5, AC-10 to AC-12, AC-15)
-  - [ ] Domain model and state machines: runtime, instance lifecycle, readiness and health, operation, and lease (spec 0004 AC-1 to AC-4, AC-14, AC-16)
+  - [x] Domain model and state machines: runtime, instance lifecycle, readiness and health, operation, and lease (spec 0004 AC-1 to AC-4, AC-14, AC-16)
   - [ ] Invariants and enforcement: evidence for every BR marked F4, AC-050, AC-074, and NFR-010, plus the `check-deps` source scan (spec 0004 AC-1, AC-5, AC-6, AC-12 to AC-14; uses `stackly-evidence` from spec 0002 step 1)
 - [ ] Verify it: `/check verify domain core & platform abstraction`
 - [ ] Test it: `/test domain core & platform abstraction`
