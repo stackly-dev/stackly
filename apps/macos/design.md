@@ -362,7 +362,83 @@ Page banners from `StateView`:
 
 ## Confirmation
 
-Filled by milestone 4.
+Every confirmation in Stackly goes through one modifier: `.stacklyConfirmation(item: $request)` with a `ConfirmationRequest?` binding. Set the binding to show the dialog. No screen calls `confirmationDialog`, `.alert`, or `NSAlert` itself; the source rule test fails on any of them outside `Packages/StacklyUI/Sources/StacklyUI/Confirmation/`.
+
+```swift
+@State private var request: ConfirmationRequest?
+
+Button("Remove…") {
+    request = ConfirmationRequest(
+        title: "Remove “\(instance.id)”?",
+        message: "The instance is unregistered and its process stopped. The data directory (\(instance.dataSize)) stays on disk.",
+        actionTitle: "Remove",
+        role: .destructive
+    ) { remove(instance) }
+}
+.stacklyConfirmation(item: $request)
+```
+
+### When to confirm
+
+Confirm an action that deletes or overwrites data, deletes a record or a runtime, kills a process without a graceful stop, or disturbs another owner. A feature that adds such an action applies the same rule and adds a row here.
+
+| Action | Role | Feature |
+| --- | --- | --- |
+| Remove instance | `.destructive` | 54 |
+| Purge instance data | `.destructive` | 54 |
+| Remove runtime | `.destructive` | 55 |
+| Restore that overwrites an instance | `.destructive` | 52 |
+| Force stop | `.destructive` | 26 |
+| Stop an instance leased by an environment, or a shared one | `.destructive` | 26, 47 |
+| Stop All Services | `.destructive` | 32 |
+| Bring down an environment (stops only instances nothing else needs; data is kept) | `.standard` | 47 |
+
+No confirmation: start, stop, and restart without dependents, reload, copy, cancelling an operation, and cleaning up a cache that can be downloaded again.
+
+### Roles
+
+| Role | Action button | Return | Escape | Alert style |
+| --- | --- | --- | --- | --- |
+| `.destructive` | red (`hasDestructiveAction`), not the default | Cancel (the default button) | Cancel | `.critical` (caution badge) |
+| `.standard` | the default button | the action | Cancel | `.informational` |
+
+- Return never runs a destructive action. A keyboard user reaches it with Tab (when Keyboard navigation is on in System Settings › Keyboard) and presses it with Space. This is on purpose.
+- The default button sits at the trailing edge; the alert adds it first.
+
+### Copy
+
+- **Title:** a question that names the object, in curly quotes when it is an identifier: "Remove “pg17-dev”?", "Stop “mysql-erp”?", "Remove PostgreSQL 16.10?". Never empty.
+- **Message:** one or two sentences, first what happens, then what stays safe: "Data is kept.", "Instance data is never touched.". Name objects from the daemon's data, never a secret.
+- **Action title:** the verb from the title ("Remove", "Stop", "Overwrite", "Bring Down"), never "OK" or "Yes". Cancel is always "Cancel".
+- Mockup examples (also on the gallery's Confirmation page):
+
+| Title | Message | Action | Role |
+| --- | --- | --- | --- |
+| Remove “pg17-dev”? | The instance is unregistered and its process stopped. The data directory (1.24 GB) stays on disk. | Remove | `.destructive` |
+| Stop “mysql-erp”? | It’s leased by erp-development. Stopping it leaves the environment partially ready. Data is kept. | Stop | `.destructive` |
+| Overwrite “pg17-dev”? | Replaces the current data with bk-0412. A safety snapshot is taken first and the instance restarts. | Overwrite | `.destructive` |
+| Remove PostgreSQL 16.10? | Deletes the runtime binaries. No instance uses it. Instance data is never touched. | Remove | `.destructive` |
+| Bring down “erp-development”? | Releases the lease and stops only instances nothing else needs. Shared and manually started instances keep running. Data is kept. | Bring Down | `.standard` |
+
+- A test of a screen checks each request it builds with `request.copyProblems` (internal, through `@testable import StacklyUI`); it is empty when the copy follows these rules.
+
+### Behavior
+
+- The dialog is a native `NSAlert`: a sheet on the window of the view that has the modifier, or app modal (`runModal()`) when that view has no window, such as a menu bar popover (feature 32).
+- One confirmation at a time. A new request replaces the shown one (the old one closes without running), and setting the binding to `nil` closes the dialog without running the action. When the view disappears, the dialog closes and the binding is reset.
+- When the user answers, the modifier sets the binding to `nil`, then calls `perform` only for the action button. `perform` may set a new request.
+- `perform` sends the action through the mutation path of spec 0013. If stacklyd is unreachable when the user confirms, nothing is sent and feature 67's feedback says "stacklyd is unavailable. Nothing was sent."
+- The alert uses only system colors; custom tokens have no `NSColor` accessor.
+
+### Why NSAlert, not `confirmationDialog`
+
+Checked in build step 17 on macOS 27.0 (26A428) with Xcode 27.0 (27A266a), in the Debug Design Gallery with real Return and Escape key presses and the accessibility tree. SwiftUI's `confirmationDialog` is an `NSAlert` sheet underneath, and one button holds one key equivalent:
+
+- Cancel with `keyboardShortcut(.defaultAction)`: Return cancels, but Escape does nothing (the alert has no cancel button left).
+- Cancel without a shortcut, in either order, or with `.cancelAction`, or the action with another shortcut: Escape cancels, but Return does nothing (there is no default button).
+- A request replaced while the dialog is open updates the buttons but keeps the old title, message, and severity.
+
+So the modifier builds the `NSAlert` itself: for a destructive request, Cancel takes Return as its key equivalent and the modifier maps a plain Escape to Cancel with a local key monitor while the alert is open. Setting the window's `defaultButtonCell` instead does not work: it overwrites Cancel's Escape key equivalent with Return. A replaced request closes the old alert and shows a new one. With this path the check passed: destructive Return and Escape cancel without running the action, standard Return runs it and Escape cancels, and a replaced request shows its own title. `ConfirmationTests` pins the alert's buttons, order, styles, and key equivalents; `/check verify` repeats the key check and the Tab and Space check with Keyboard navigation on.
 
 ## Motion
 
