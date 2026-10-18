@@ -1,0 +1,158 @@
+{
+  "spawn": {
+    "program": {
+      "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "relative": "stackly-fake-server"
+    },
+    "args": [
+      "serve",
+      "--config=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf/server.json",
+      "--data=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+      "--port=14000",
+      "--label=quiet"
+    ],
+    "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+    "env": [
+      [
+        "FAKE_ADDRESS",
+        "127.0.0.1:14000"
+      ],
+      [
+        "FAKE_SOCKET",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/fake.14000"
+      ],
+      [
+        "HOME",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+      ],
+      [
+        "PATH",
+        "/usr/bin:/bin:/usr/sbin:/sbin"
+      ],
+      [
+        "TMPDIR",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+      ]
+    ]
+  },
+  "readiness": {
+    "probe": {
+      "type": "tcp",
+      "content": {
+        "target": {
+          "type": "ip",
+          "content": {
+            "host": "127.0.0.1",
+            "port": 14000
+          }
+        }
+      }
+    },
+    "interval": "500ms",
+    "attemptTimeout": "2s",
+    "deadline": "60s"
+  },
+  "recoveryDeadline": "60s",
+  "health": {
+    "probe": {
+      "type": "exec",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "stackly-fake-server"
+          },
+          "args": [
+            "version"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+          "env": [
+            [
+              "HOME",
+              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            ],
+            [
+              "PATH",
+              "/usr/bin:/bin:/usr/sbin:/sbin"
+            ],
+            [
+              "TMPDIR",
+              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "2s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    },
+    "interval": "10s",
+    "attemptTimeout": "2s",
+    "failureThreshold": 2
+  },
+  "stop": {
+    "type": "command",
+    "content": {
+      "run": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "stackly-fake-server"
+          },
+          "args": [
+            "shutdown",
+            "--port=14000"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+          "env": [
+            [
+              "HOME",
+              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            ],
+            [
+              "PATH",
+              "/usr/bin:/bin:/usr/sbin:/sbin"
+            ],
+            [
+              "TMPDIR",
+              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "30s",
+        "successExitCodes": [
+          0
+        ]
+      },
+      "timeout": "30s"
+    }
+  },
+  "logFiles": [
+    "/Volumes/Test Root/Ünï cödé/logs/instances/0192f000-0000-7000-8000-00000000000a/fake.log"
+  ],
+  "endpoints": [
+    [
+      "control",
+      {
+        "type": "unix"
+      }
+    ],
+    [
+      "http",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14000
+        }
+      }
+    ]
+  ]
+}
