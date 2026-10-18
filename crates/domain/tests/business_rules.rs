@@ -384,7 +384,12 @@ fn only_purge_deletes_data() {
     let mut instance = stopped_instance();
     let before = instance.clone();
     instance
-        .apply_lifecycle(LifecycleEvent::Retain, at(9))
+        .apply_lifecycle(
+            LifecycleEvent::Retain {
+                by: OperationId::generate(),
+            },
+            at(9),
+        )
         .unwrap();
     assert_eq!(instance.lifecycle(), InstanceLifecycle::Retained);
     assert_eq!(instance.data_initialized_at(), before.data_initialized_at());

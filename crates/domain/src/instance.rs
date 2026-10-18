@@ -84,7 +84,10 @@ pub enum LifecycleEvent {
     /// No process is running after all.
     ConfirmedStopped,
     /// The instance is removed and its data kept.
-    Retain,
+    Retain {
+        /// The operation that retains it.
+        by: OperationId,
+    },
 }
 
 impl LifecycleEvent {
@@ -104,7 +107,7 @@ impl LifecycleEvent {
             Self::IdentityLost => "identity_lost",
             Self::Adopted => "adopted",
             Self::ConfirmedStopped => "confirmed_stopped",
-            Self::Retain => "retain",
+            Self::Retain { .. } => "retain",
         }
     }
 }
@@ -139,7 +142,7 @@ impl InstanceLifecycle {
             (S::Starting | S::Running | S::Stopping | S::Recovering, E::IdentityLost) => {
                 Ok(S::Unknown)
             }
-            (S::Uninitialized | S::Stopped | S::Failed, E::Retain) => Ok(S::Retained),
+            (S::Uninitialized | S::Stopped | S::Failed, E::Retain { .. }) => Ok(S::Retained),
             _ => Err(TransitionError::new(
                 Machine::InstanceLifecycle,
                 self.as_code(),
@@ -227,6 +230,51 @@ pub struct Instance {
     created_at: Timestamp,
     created_by: OperationId,
     retained_at: Option<Timestamp>,
+    retained_by: Option<OperationId>,
+}
+
+/// Every stored field of an [`Instance`], for [`Instance::restore`].
+/// Readiness and health are never stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredInstance {
+    /// The ID.
+    pub id: InstanceId,
+    /// The name.
+    pub name: InstanceName,
+    /// The display name, if any.
+    pub display_name: Option<DisplayName>,
+    /// The exact provider revision.
+    pub provider_revision: ProviderRevisionKey,
+    /// The software.
+    pub software: SoftwareName,
+    /// The exact runtime.
+    pub runtime_id: RuntimeId,
+    /// The runtime line of the data.
+    pub data_line: RuntimeLine,
+    /// The exact runtime version of the data.
+    pub data_version: ExactVersion,
+    /// When data initialization succeeded.
+    pub data_initialized_at: Option<Timestamp>,
+    /// The endpoints, in order.
+    pub endpoints: Vec<Endpoint>,
+    /// The desired state.
+    pub desired: DesiredState,
+    /// The startup policy.
+    pub startup: StartupPolicy,
+    /// The lifecycle state.
+    pub lifecycle: InstanceLifecycle,
+    /// Why the last init, start, or process failed.
+    pub last_failure: Option<FailureCode>,
+    /// The revision.
+    pub revision: ResourceRevision,
+    /// When the instance was created.
+    pub created_at: Timestamp,
+    /// The operation that created it.
+    pub created_by: OperationId,
+    /// When it was retained.
+    pub retained_at: Option<Timestamp>,
+    /// The operation that retained it.
+    pub retained_by: Option<OperationId>,
 }
 
 impl Instance {
@@ -255,7 +303,70 @@ impl Instance {
             created_at: new.created_at,
             created_by: new.created_by,
             retained_at: None,
+            retained_by: None,
         }
+    }
+
+    /// Rebuilds an instance the registry stored, with readiness and health
+    /// `unknown`, reason `daemon_restarted`, observed at `loaded_at` (the
+    /// time the registry was opened), so the first probe after a restart is
+    /// never taken for a stale one. Only the registry and test fakes call
+    /// it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvariantError`] with
+    /// [`InvariantDetail::InconsistentRecord`] when `retained` and
+    /// `retained_at` disagree, `retained_at` and `retained_by` disagree, or
+    /// a lifecycle that runs or ran the software has no
+    /// `data_initialized_at` (BR-008).
+    pub fn restore(stored: StoredInstance, loaded_at: Timestamp) -> Result<Self, InvariantError> {
+        let inconsistent = |reason| InvariantDetail::InconsistentRecord {
+            resource: "instance",
+            reason,
+        };
+        let retained = stored.lifecycle == InstanceLifecycle::Retained;
+        if retained != stored.retained_at.is_some() {
+            return Err(inconsistent("retained_at is set exactly when it is retained").into());
+        }
+        if stored.retained_at.is_some() != stored.retained_by.is_some() {
+            return Err(inconsistent("retained_at and retained_by are set together").into());
+        }
+        let needs_data = matches!(
+            stored.lifecycle,
+            InstanceLifecycle::Stopped
+                | InstanceLifecycle::Starting
+                | InstanceLifecycle::Running
+                | InstanceLifecycle::Stopping
+                | InstanceLifecycle::Recovering
+                | InstanceLifecycle::Unknown
+        );
+        if needs_data && stored.data_initialized_at.is_none() {
+            return Err(inconsistent("its lifecycle needs initialized data (BR-008)").into());
+        }
+        Ok(Self {
+            id: stored.id,
+            name: stored.name,
+            display_name: stored.display_name,
+            provider_revision: stored.provider_revision,
+            software: stored.software,
+            runtime_id: stored.runtime_id,
+            data_line: stored.data_line,
+            data_version: stored.data_version,
+            data_initialized_at: stored.data_initialized_at,
+            endpoints: stored.endpoints,
+            desired: stored.desired,
+            startup: stored.startup,
+            lifecycle: stored.lifecycle,
+            last_failure: stored.last_failure,
+            readiness: Readiness::unknown(loaded_at, ReasonCode::DAEMON_RESTARTED),
+            health: Health::unknown(loaded_at, ReasonCode::DAEMON_RESTARTED),
+            revision: stored.revision,
+            created_at: stored.created_at,
+            created_by: stored.created_by,
+            retained_at: stored.retained_at,
+            retained_by: stored.retained_by,
+        })
     }
 
     /// Returns the ID. Every path of the instance follows from it.
@@ -382,6 +493,12 @@ impl Instance {
         self.retained_at
     }
 
+    /// Returns the operation that retained the instance, if it was.
+    #[must_use]
+    pub const fn retained_by(&self) -> Option<OperationId> {
+        self.retained_by
+    }
+
     /// Applies a lifecycle event at `at`, with the aggregate rules on top
     /// of the pure machine:
     ///
@@ -389,7 +506,7 @@ impl Instance {
     ///   (BR-008); `init_succeeded` records `data_initialized_at`.
     /// - `init_failed`, `start_failed`, and `crashed` record
     ///   `last_failure`; `spawned` and `adopted` clear it. `retain` records
-    ///   `retained_at`.
+    ///   `retained_at` and `retained_by`.
     /// - Entering `running` sets readiness `not_ready` and health
     ///   `unknown`, both with reason `awaiting_probe`; leaving `running`
     ///   sets both `unknown` with reason `not_running`.
@@ -422,7 +539,10 @@ impl Instance {
             | LifecycleEvent::StartFailed { reason }
             | LifecycleEvent::Crashed { reason, .. } => self.last_failure = Some(reason),
             LifecycleEvent::Spawned | LifecycleEvent::Adopted => self.last_failure = None,
-            LifecycleEvent::Retain => self.retained_at = Some(at),
+            LifecycleEvent::Retain { by } => {
+                self.retained_at = Some(at);
+                self.retained_by = Some(by);
+            }
             _ => {}
         }
         if next == InstanceLifecycle::Running {
@@ -713,13 +833,15 @@ mod tests {
     }
 
     #[test]
-    fn retain_records_when_and_is_final() {
+    fn retain_records_when_and_by_which_operation_and_is_final() {
         let mut instance = instance();
+        let by = OperationId::generate();
         instance
-            .apply_lifecycle(LifecycleEvent::Retain, at("2026-01-01T00:00:09Z"))
+            .apply_lifecycle(LifecycleEvent::Retain { by }, at("2026-01-01T00:00:09Z"))
             .unwrap();
 
         assert_eq!(instance.retained_at(), Some(at("2026-01-01T00:00:09Z")));
+        assert_eq!(instance.retained_by(), Some(by));
         assert!(
             instance
                 .apply_lifecycle(LifecycleEvent::InitBegin, at("2026-01-01T00:00:10Z"))
