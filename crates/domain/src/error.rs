@@ -1,7 +1,14 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use crate::capability::Capability;
+use crate::id::{InstanceId, LeaseId, OperationId};
+use crate::instance::InstanceLifecycle;
+use crate::operation::OperationState;
+use crate::provider::ProviderRevisionKey;
 use crate::rule::Rule;
+use crate::runtime::RemovalBlocker;
+use crate::value::{MemberAlias, Port, ProviderName, RuntimeLine, SoftwareName};
 
 /// The kind of value type a [`ValueError`] is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -41,6 +48,52 @@ pub enum ValueKind {
     InstallKind,
     /// An [`InstanceManifest`](crate::InstanceManifest) as a whole.
     InstanceManifest,
+    /// A [`Port`](crate::Port).
+    Port,
+    /// A [`SocketName`](crate::SocketName).
+    SocketName,
+    /// An [`EndpointName`](crate::EndpointName).
+    EndpointName,
+    /// An [`IdempotencyKey`](crate::IdempotencyKey).
+    IdempotencyKey,
+    /// A [`SessionId`](crate::SessionId).
+    SessionId,
+    /// A [`ReasonCode`](crate::ReasonCode).
+    ReasonCode,
+    /// A [`FailureCode`](crate::FailureCode).
+    FailureCode,
+    /// A [`StageName`](crate::StageName).
+    StageName,
+    /// An [`ObservationDetail`](crate::ObservationDetail).
+    ObservationDetail,
+    /// An [`EnvironmentName`](crate::EnvironmentName).
+    EnvironmentName,
+    /// A [`MemberAlias`](crate::MemberAlias).
+    MemberAlias,
+    /// A [`ResourceRevision`](crate::ResourceRevision).
+    ResourceRevision,
+    /// A [`Capability`](crate::Capability).
+    Capability,
+    /// A [`Transport`](crate::Transport).
+    Transport,
+    /// A [`ReadinessState`](crate::ReadinessState).
+    ReadinessState,
+    /// A [`HealthState`](crate::HealthState).
+    HealthState,
+    /// A [`RuntimeState`](crate::RuntimeState).
+    RuntimeState,
+    /// An [`InstanceLifecycle`](crate::InstanceLifecycle).
+    InstanceLifecycle,
+    /// A [`DesiredState`](crate::DesiredState).
+    DesiredState,
+    /// A [`StartupPolicy`](crate::StartupPolicy).
+    StartupPolicy,
+    /// An [`OperationState`](crate::OperationState).
+    OperationState,
+    /// An [`OperationKind`](crate::OperationKind).
+    OperationKind,
+    /// An [`Ownership`](crate::Ownership).
+    Ownership,
 }
 
 impl ValueKind {
@@ -65,6 +118,29 @@ impl ValueKind {
             Self::Sha256Digest => "sha256 digest",
             Self::InstallKind => "install mode",
             Self::InstanceManifest => "instance manifest",
+            Self::Port => "port",
+            Self::SocketName => "socket name",
+            Self::EndpointName => "endpoint name",
+            Self::IdempotencyKey => "idempotency key",
+            Self::SessionId => "session ID",
+            Self::ReasonCode => "reason code",
+            Self::FailureCode => "failure code",
+            Self::StageName => "stage name",
+            Self::ObservationDetail => "observation detail",
+            Self::EnvironmentName => "environment name",
+            Self::MemberAlias => "member alias",
+            Self::ResourceRevision => "resource revision",
+            Self::Capability => "capability",
+            Self::Transport => "transport",
+            Self::ReadinessState => "readiness state",
+            Self::HealthState => "health state",
+            Self::RuntimeState => "runtime state",
+            Self::InstanceLifecycle => "instance lifecycle",
+            Self::DesiredState => "desired state",
+            Self::StartupPolicy => "startup policy",
+            Self::OperationState => "operation state",
+            Self::OperationKind => "operation kind",
+            Self::Ownership => "ownership",
         }
     }
 }
@@ -228,6 +304,117 @@ pub enum InvariantDetail {
         /// The data root it overlaps.
         existing: PathBuf,
     },
+    /// A fixed port conflicts with another endpoint, and no other port is
+    /// ever substituted (BR-005).
+    FixedPortConflict {
+        /// The fixed port.
+        port: Port,
+    },
+    /// An `Auto` endpoint has no candidate port, or the candidate conflicts
+    /// (BR-005).
+    AutoPortUnavailable {
+        /// The candidate the caller found, if any.
+        candidate: Option<Port>,
+    },
+    /// References still need the runtime (BR-007).
+    RemovalBlocked {
+        /// Every reference that blocks the removal.
+        blockers: Vec<RemovalBlocker>,
+    },
+    /// A start was asked for before data initialization succeeded
+    /// (BR-008).
+    DataNotInitialized {
+        /// The instance.
+        instance: InstanceId,
+    },
+    /// The runtime's line may not run the data's line (BR-009).
+    IncompatibleRuntimeLine {
+        /// The line that initialized the data.
+        data_line: RuntimeLine,
+        /// The line of the requested runtime.
+        runtime_line: RuntimeLine,
+    },
+    /// A readiness of `ready` arrived while the lifecycle is not `running`
+    /// (BR-010).
+    ReadyWithoutProcess {
+        /// The lifecycle at the time.
+        lifecycle: InstanceLifecycle,
+    },
+    /// A health other than `unknown` arrived while the lifecycle is not
+    /// `running`. Not a BR.
+    HealthWithoutProcess {
+        /// The lifecycle at the time.
+        lifecycle: InstanceLifecycle,
+    },
+    /// A rebind was asked for while the lifecycle is not `stopped`. Not a
+    /// BR.
+    RebindRequiresStopped {
+        /// The lifecycle at the time.
+        lifecycle: InstanceLifecycle,
+    },
+    /// A rebind to a runtime of other software. Not a BR.
+    RebindOtherSoftware {
+        /// The instance's software.
+        current: SoftwareName,
+        /// The software of the requested runtime.
+        requested: SoftwareName,
+    },
+    /// The data line or version would change without a running
+    /// `migrate_data` operation on the instance (BR-013).
+    DataLineChangeWithoutMigration {
+        /// The operation that was offered.
+        operation: OperationId,
+    },
+    /// The provider does not support a capability (BR-016).
+    Unsupported {
+        /// The missing capability.
+        capability: Capability,
+    },
+    /// An accepted revision change does not start from the instance's
+    /// current revision (BR-017).
+    RevisionChangeNotFromCurrent {
+        /// The instance's current revision.
+        current: Box<ProviderRevisionKey>,
+        /// The revision the change starts from.
+        from: Box<ProviderRevisionKey>,
+    },
+    /// An accepted revision change moves to another provider (BR-017).
+    RevisionChangeOtherProvider {
+        /// The instance's provider.
+        current: ProviderName,
+        /// The provider the change moves to.
+        requested: ProviderName,
+    },
+    /// Two members of an environment share an alias. Not a BR.
+    DuplicateMemberAlias {
+        /// The alias.
+        alias: MemberAlias,
+    },
+    /// An instance joins an environment more than once. Not a BR.
+    DuplicateMemberInstance {
+        /// The instance.
+        instance: InstanceId,
+    },
+    /// An environment lease carries a session. Not a BR.
+    EnvironmentLeaseWithSession {
+        /// The lease.
+        lease: LeaseId,
+    },
+    /// A startup lease has no session. Not a BR.
+    StartupLeaseWithoutSession {
+        /// The lease.
+        lease: LeaseId,
+    },
+    /// A released lease was released again. Not a BR.
+    LeaseAlreadyReleased {
+        /// The lease.
+        lease: LeaseId,
+    },
+    /// Only an `active` startup lease can be suppressed. Not a BR.
+    SuppressNeedsActiveStartupLease {
+        /// The lease.
+        lease: LeaseId,
+    },
 }
 
 impl InvariantDetail {
@@ -237,6 +424,24 @@ impl InvariantDetail {
     pub const fn rule(&self) -> Option<Rule> {
         match self {
             Self::DataRootOverlap { .. } => Some(Rule::Br002),
+            Self::FixedPortConflict { .. } | Self::AutoPortUnavailable { .. } => Some(Rule::Br005),
+            Self::RemovalBlocked { .. } => Some(Rule::Br007),
+            Self::DataNotInitialized { .. } => Some(Rule::Br008),
+            Self::IncompatibleRuntimeLine { .. } => Some(Rule::Br009),
+            Self::ReadyWithoutProcess { .. } => Some(Rule::Br010),
+            Self::DataLineChangeWithoutMigration { .. } => Some(Rule::Br013),
+            Self::Unsupported { .. } => Some(Rule::Br016),
+            Self::RevisionChangeNotFromCurrent { .. }
+            | Self::RevisionChangeOtherProvider { .. } => Some(Rule::Br017),
+            Self::HealthWithoutProcess { .. }
+            | Self::RebindRequiresStopped { .. }
+            | Self::RebindOtherSoftware { .. }
+            | Self::DuplicateMemberAlias { .. }
+            | Self::DuplicateMemberInstance { .. }
+            | Self::EnvironmentLeaseWithSession { .. }
+            | Self::StartupLeaseWithoutSession { .. }
+            | Self::LeaseAlreadyReleased { .. }
+            | Self::SuppressNeedsActiveStartupLease { .. } => None,
         }
     }
 }
@@ -252,6 +457,87 @@ impl fmt::Display for InvariantDetail {
                 "data root {} overlaps the data root {}",
                 candidate.display(),
                 existing.display()
+            ),
+            Self::FixedPortConflict { port } => write!(
+                f,
+                "fixed port {port} conflicts with another endpoint, and no other port is used"
+            ),
+            Self::AutoPortUnavailable { candidate: None } => {
+                f.write_str("no free port was found for an auto port endpoint")
+            }
+            Self::AutoPortUnavailable {
+                candidate: Some(port),
+            } => write!(f, "candidate port {port} conflicts with another endpoint"),
+            Self::RemovalBlocked { blockers } => {
+                write!(
+                    f,
+                    "the runtime is still in use by {} references",
+                    blockers.len()
+                )
+            }
+            Self::DataNotInitialized { instance } => write!(
+                f,
+                "instance {instance} cannot start before its data is initialized"
+            ),
+            Self::IncompatibleRuntimeLine {
+                data_line,
+                runtime_line,
+            } => write!(
+                f,
+                "a runtime of line {runtime_line} cannot run data of line {data_line}"
+            ),
+            Self::ReadyWithoutProcess { lifecycle } => {
+                write!(f, "an instance in state {lifecycle} cannot be ready")
+            }
+            Self::HealthWithoutProcess { lifecycle } => write!(
+                f,
+                "an instance in state {lifecycle} has no health other than unknown"
+            ),
+            Self::RebindRequiresStopped { lifecycle } => write!(
+                f,
+                "an instance in state {lifecycle} cannot be rebound; it must be stopped"
+            ),
+            Self::RebindOtherSoftware { current, requested } => write!(
+                f,
+                "an instance of {current} cannot be rebound to a runtime of {requested}"
+            ),
+            Self::DataLineChangeWithoutMigration { operation } => write!(
+                f,
+                "operation {operation} is not a running migrate_data operation on this instance"
+            ),
+            Self::Unsupported { capability } => {
+                write!(f, "the provider does not support {capability}")
+            }
+            Self::RevisionChangeNotFromCurrent { current, from } => write!(
+                f,
+                "the change starts from revision {} of {}, not the current revision {} of {}",
+                from.revision(),
+                from.provider(),
+                current.revision(),
+                current.provider()
+            ),
+            Self::RevisionChangeOtherProvider { current, requested } => write!(
+                f,
+                "a revision change cannot move from provider {current} to {requested}"
+            ),
+            Self::DuplicateMemberAlias { alias } => {
+                write!(f, "alias {alias} is used by more than one member")
+            }
+            Self::DuplicateMemberInstance { instance } => {
+                write!(f, "instance {instance} is a member more than once")
+            }
+            Self::EnvironmentLeaseWithSession { lease } => {
+                write!(f, "environment lease {lease} cannot have a session")
+            }
+            Self::StartupLeaseWithoutSession { lease } => {
+                write!(f, "startup lease {lease} needs a session")
+            }
+            Self::LeaseAlreadyReleased { lease } => {
+                write!(f, "lease {lease} is already released")
+            }
+            Self::SuppressNeedsActiveStartupLease { lease } => write!(
+                f,
+                "lease {lease} cannot be suppressed; only an active startup lease can"
             ),
         }
     }
@@ -316,6 +602,61 @@ impl fmt::Display for InvariantError {
 }
 
 impl std::error::Error for InvariantError {}
+
+/// Error returned when a progress or stage report is refused. The
+/// operation does not change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum ProgressError {
+    /// `done` is more than `total`.
+    #[error("progress {done} is more than its total {total}")]
+    OutOfRange {
+        /// What is done.
+        done: u64,
+        /// The whole.
+        total: u64,
+    },
+    /// Progress changes only while the operation is `running` or
+    /// `cancel_requested`.
+    #[error("progress cannot change in state {state}")]
+    NotAllowedInState {
+        /// The operation's state.
+        state: OperationState,
+    },
+}
+
+impl ProgressError {
+    /// Returns the business rule this error enforces. Progress rules are
+    /// not business rules, so this is always `None`.
+    #[must_use]
+    pub const fn rule(&self) -> Option<Rule> {
+        None
+    }
+}
+
+/// Error of an action that can fail both ways: a missing transition, or a
+/// broken invariant.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum DomainError {
+    /// The state machine has no transition for the event.
+    #[error(transparent)]
+    Transition(#[from] TransitionError),
+    /// The action would break an invariant.
+    #[error(transparent)]
+    Invariant(#[from] InvariantError),
+}
+
+impl DomainError {
+    /// Returns the business rule this error enforces, if any.
+    #[must_use]
+    pub const fn rule(&self) -> Option<Rule> {
+        match self {
+            Self::Transition(err) => err.rule(),
+            Self::Invariant(err) => err.rule(),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

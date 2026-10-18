@@ -32,14 +32,14 @@ Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang forma
 - [x] Capture conventions and tooling choices: `/audit`
 - [x] Install the tooling: `/develop coding standards & tooling`
 - [x] Decide evidence, native tests, and baseline (spec): `/architect coding standards & tooling`
-- [ ] Build the evidence standard: `/develop coding standards & tooling`
+- [x] Build the evidence standard: `/develop coding standards & tooling`
   - [x] Rust evidence path end to end: `stackly-evidence`, `check-deps` rules, `cargo xtask evidence run` (REQ-051)
   - [x] `cargo xtask evidence check` and `evidence new`, shared examples in `schemas/evidence/`
   - [x] Swift path: `StacklyTestSupport` trait
   - [x] Fixture credential leak scan
   - [x] Baseline recorded on this Mac (OQ-011)
-- [ ] Verify it: `/check verify coding standards & tooling`
-- [ ] Test it: `/test coding standards & tooling`
+- [x] Verify it: `/check verify coding standards & tooling`
+- [x] Test it: `/test coding standards & tooling`
 
 ### 3. Sumber & packaging runtime · in-progress
 
@@ -57,7 +57,7 @@ Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka di
   - [x] LaunchAgent spike end to end, proven on NATS, then Traefik, ClickHouse, MySQL 8.4 and 9.7, with evidence in `evidence/runtime/` (spec 0003 AC-1, AC-3 to AC-10, AC-13; needs spec 0002 step 1 built). NATS 2.15.1, Traefik 3.7.15, MySQL 8.4.11 dan 9.7.2 `PASS`; ClickHouse 26.8 `blocked` karena aset macOS berupa binary self extracting yang ditolak codesign; aset `.zip` bertanda tangan Developer ID dipakai lewat format `zip` yang diputuskan spec 0003 pada 2026-10-17 (Milestone 2b)
   - [x] Milestone 2b: ClickHouse from the Developer ID signed `.zip` through the new `zip` format: format check, `/usr/bin/tar` extraction, mode 0755 for zip executables, `pin` support, the `archive_root` rule, then the ClickHouse entry and its evidence (spec 0003 AC-1 to AC-3, AC-5 to AC-10, AC-13, AC-16; build steps 15 and 16). ClickHouse 26.8.30.8 `PASS` dari `.zip` (evidence `01a14c52-92d2-75ee-b5ce-3e641036b90a`)
   - [x] Decide how PostgreSQL 17 and 18 and Valkey are built on this Mac (spec): `/architect sumber & packaging runtime`
-  - [ ] xtask support for maintainer artifacts: rule 5 `recipe` format without `attestation`, `runtime pin --file`, `runtime spike --no-quarantine`, the `manifest` probe, and the PostgreSQL and Valkey spike recipes with their native tests; needs Milestone 2b step 15 merged first (spec 0003 AC-2, AC-5, AC-7, AC-9, AC-10, AC-12, AC-18, AC-19; build step 17)
+  - [x] xtask support for maintainer artifacts: rule 5 `recipe` format without `attestation`, `runtime pin --file`, `runtime spike --no-quarantine`, the `manifest` probe, and the PostgreSQL and Valkey spike recipes with their native tests; needs Milestone 2b step 15 merged first (spec 0003 AC-2, AC-5, AC-7, AC-9, AC-10, AC-12, AC-18, AC-19; build step 17)
   - [ ] Maintainer recipes in the new `ojiepermana/stackly-runtimes` repo: `build.sh` with a clean environment, then Valkey 9.1, OpenSSL, ICU, lz4, zstd, and PostgreSQL 17 and 18 built on this Mac (spec 0003 AC-7, AC-12, AC-17; build steps 9 and 10)
   - [ ] PostgreSQL 17 and 18 and Valkey published and proven: `pin --file`, local spike, license gate per provider, upload after your approval, `runtime verify`, entries and evidence, then rule 9 (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-10, AC-19; build step 12)
   - [x] Cache pruning: `runtime spike --prune-cache`, run by hand on this Mac (spec 0003 AC-4; build step 13)
@@ -77,8 +77,8 @@ Model domain (software, provider revision, runtime, instance, environment, opera
 - [x] Design it (spec): `/architect domain core & platform abstraction`
 - [ ] Build it: `/develop domain core & platform abstraction`
   - [x] Platform ports and directory layout end to end: `RootSet`, `DirectoryLayout`, `STACKLY_ROOT`, `MacosPlatform`, `UnsupportedPlatform`, testkit `FakePlatform`, and `prepare_layout` (spec 0004 AC-6 to AC-9, AC-12, AC-13, AC-15)
-  - [ ] Instance folders, `instance-manifest.json`, and inventory without the registry (spec 0004 AC-5, AC-10 to AC-12, AC-15)
-  - [ ] Domain model and state machines: runtime, instance lifecycle, readiness and health, operation, and lease (spec 0004 AC-1 to AC-4, AC-14, AC-16)
+  - [x] Instance folders, `instance-manifest.json`, and inventory without the registry (spec 0004 AC-5, AC-10 to AC-12, AC-15)
+  - [x] Domain model and state machines: runtime, instance lifecycle, readiness and health, operation, and lease (spec 0004 AC-1 to AC-4, AC-14, AC-16)
   - [ ] Invariants and enforcement: evidence for every BR marked F4, AC-050, AC-074, and NFR-010, plus the `check-deps` source scan (spec 0004 AC-1, AC-5, AC-6, AC-12 to AC-14; uses `stackly-evidence` from spec 0002 step 1)
 - [ ] Verify it: `/check verify domain core & platform abstraction`
 - [ ] Test it: `/test domain core & platform abstraction`
@@ -101,7 +101,7 @@ Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision 
 - [ ] Verify it: `/check verify data model registry`
 - [ ] Test it: `/test data model registry`
 
-### 6. Protokol IPC & daemon · needs a decision · GA
+### 6. Protokol IPC & daemon · in-progress · GA
 
 Daemon per user dengan protokol berversi di atas encoding dan framing yang dikunci di fitur 1, lewat Unix domain socket privat: handshake, request ID, error terstruktur, event dengan cursor, dan otorisasi user lokal. GUI dan CLI hanya client; hanya daemon yang menulis registry dan mengendalikan lifecycle.
 
@@ -109,7 +109,19 @@ Daemon per user dengan protokol berversi di atas encoding dan framing yang dikun
 
 **Trace:** REQ-047, REQ-048, BR-011, VAL-017, VAL-020, NFR-001, NFR-004, NFR-006, NFR-011, AC-047, AC-070, AC-071, AC-079, NFR-009, RISK-03, RISK-09, OQ-005 (generation tooling), PRD bagian 18
 
-- [ ] Design it (spec): `/architect protokol IPC & daemon`
+**Pointer:** spec [0006](../specs/0006-protokol-ipc-daemon/index.md)
+
+- [x] Design it (spec): `/architect protokol IPC & daemon`
+- [ ] Build it: `/develop protokol IPC & daemon`
+  - [ ] Contract and codec: wire DTOs, error envelope and catalog, protocol 1.0 with contract digest and `contract-versions.json`, framing codec, staged request decode, shared fixtures, and Swift contract tests (spec 0006 AC-1, AC-6 to AC-8, AC-10)
+  - [ ] `stackly-ipc` transport: listener with peer check, framed connection, verified client, and the new `check-deps` rules (spec 0006 AC-2, AC-3, AC-5, AC-6, AC-16; after milestone 1, can run in parallel with the next one and the fuzz milestone)
+  - [ ] Daemon library, lock, and log: `stacklyd` as library plus bin, `--print-roots`, single daemon lock, rotating log writer (spec 0006 AC-4, AC-12, AC-17; after milestone 1)
+  - [ ] Daemon server and `stackly daemon status` end to end: event bus, handshake, limits, socket watch, shutdown, CLI status, performance, and the manual two account check (spec 0006 AC-1, AC-2, AC-4, AC-5, AC-7, AC-9, AC-11, AC-13, AC-15, AC-16; needs the three milestones above)
+  - [ ] Framing fuzz targets on this Mac: `fuzz/` with a pinned nightly, `cargo xtask fuzz`, 5 minute runs with evidence (spec 0006 AC-14; after milestone 1)
+- [ ] Verify it: `/check verify protokol IPC & daemon`
+- [ ] Test it: `/test protokol IPC & daemon`
+- [ ] Review it (fresh model): `/check review protokol IPC & daemon`
+- [ ] Document it: `/document protokol IPC & daemon`
 
 ### 7. Operation engine · needs a decision · GA
 
@@ -131,7 +143,7 @@ CLI `stackly` sebagai client daemon dengan help, `--json`, exit code stabil, mod
 
 - [ ] Design it (spec): `/architect CLI client & kontrak output`
 
-### 9. Provider engine & manifest schema · needs a decision · GA
+### 9. Provider engine & manifest schema · in-progress · GA
 
 Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, interpolasi terkontrol, dan primitive aman yang menghasilkan execution plan tervalidasi. Kontrak adapter juga mencakup preflight kompatibilitas data dan runtime per provider, supaya tool baru yang cukup dengan primitive yang ada tidak perlu patch core atau GUI.
 
@@ -139,7 +151,17 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 
 **Trace:** REQ-029, REQ-031, VAL-002, VAL-012, VAL-018, VAL-019, AC-029, AC-031, NFR-009, RISK-07, RISK-08, PRD bagian 21
 
-- [ ] Design it (spec): `/architect provider engine & manifest schema`
+**Pointer:** spec [0009](../specs/0009-provider-engine-manifest-schema/index.md)
+
+- [x] Design it (spec): `/architect provider engine & manifest schema`
+- [ ] Build it: `/develop provider engine & manifest schema`
+  - [ ] Fake provider from package to plan: domain capability additions, `stackly-fake-server` and its testkit helper, `read_package` and strict decode, interpolation, settings dialect, template renderer, semantic validation, `InitPlan`, `RunPlan`, `ReloadPlan`, preflight, `providers/fake`, and the `fake-command` fixture (spec 0009 AC-1 to AC-12, AC-15, AC-18; build steps 0 to 8)
+  - [ ] NATS and Traefik packages with goldens, `versions.json` generated from the inventory, JSON Schema in `schemas/provider/`, and `cargo xtask provider check` (spec 0009 AC-13, AC-14, AC-17; build steps 9 to 13)
+  - [ ] Four fuzz targets run 10 minutes each on this Mac, the adversarial suite with evidence guards (including the billion laughs test), and spike markers moved to F36 (spec 0009 AC-1 to AC-10, AC-16, AC-18; build steps 14 to 16)
+- [ ] Verify it: `/check verify provider engine & manifest schema`
+- [ ] Test it: `/test provider engine & manifest schema`
+- [ ] Review it (fresh model): `/check review provider engine & manifest schema`
+- [ ] Document it: `/document provider engine & manifest schema`
 
 ### 10. Process supervisor · needs a decision · GA
 
@@ -151,7 +173,7 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
 
 - [ ] Design it (spec): `/architect process supervisor`
 
-### 11. Secret store & redaction · needs a decision · GA
+### 11. Secret store & redaction · in-progress · GA
 
 Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu terapkan masking yang sama di GUI, CLI, log, diagnostics, dan export. Reveal atau copy secret selalu butuh aksi eksplisit.
 
@@ -159,7 +181,18 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
 
 **Trace:** REQ-016, BR-018, AC-016, AC-062, OQ-008
 
-- [ ] Design it (spec): `/architect secret store & redaction`
+**Pointer:** spec [0011](../specs/0011-secret-store-redaction/index.md)
+
+- [x] Design it (spec): `/architect secret store & redaction`
+- [ ] Build it: `/develop secret store & redaction`
+  - [ ] Secret port, references, and Keychain adapter: `SecretRef`, `SecretStore`, `FakeSecretStore`, and `MacosSecretStore` with the `OSStatus` spike (spec 0011 AC-1 to AC-4, AC-7; build steps 1 to 3; needs features 4 and 5)
+  - [ ] Secret service and redaction through the daemon: `SecretWorker`, `put`, reveal, delete, `resolve_for_start`, `Redactor`, delivery rules, IPC handlers, the redacting log writer, the `check-deps` allowlist, and the daemon sentinel suite (spec 0011 AC-5, AC-6, AC-8 to AC-16; build steps 4 to 7; needs feature 6)
+  - [ ] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
+  - [ ] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19; build steps 9 to 11; needs features 12 and 13)
+- [ ] Verify it: `/check verify secret store & redaction`
+- [ ] Test it: `/test secret store & redaction`
+- [ ] Review it (fresh model): `/check review secret store & redaction`
+- [ ] Document it: `/document secret store & redaction`
 
 _Catatan:_ fitur 12 (Design system & UI foundation) dan 13 (App shell SwiftUI & Swift client) sekarang ada di [ui-macos.md](ui-macos.md), bersama fitur UI lintas layar lain yang diturunkan dari mockup UI. Nomor, urutan, dan statusnya tidak berubah.
 

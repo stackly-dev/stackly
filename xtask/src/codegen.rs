@@ -167,3 +167,83 @@ fn stale_schemas(root: &Path, generated: &[Generated]) -> Result<Vec<PathBuf>> {
     }
     Ok(stale)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn repo_root() -> &'static Path {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("xtask sits one directory below the repository root")
+    }
+
+    /// The generated files that belong to `schemas/evidence/`.
+    fn evidence_schemas() -> Vec<Generated> {
+        generate_schemas()
+            .unwrap()
+            .into_iter()
+            .filter(|file| file.path.starts_with(EVIDENCE_SCHEMA_DIR))
+            .collect()
+    }
+
+    #[test]
+    fn the_four_evidence_schemas_are_generated_into_schemas_evidence() {
+        let mut paths: Vec<_> = evidence_schemas()
+            .into_iter()
+            .map(|file| file.path)
+            .collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            [
+                "schemas/evidence/baseline-host.schema.json",
+                "schemas/evidence/record.schema.json",
+                "schemas/evidence/report.schema.json",
+                "schemas/evidence/run-context.schema.json",
+            ]
+            .map(PathBuf::from)
+        );
+    }
+
+    #[test]
+    fn committed_evidence_schemas_match_the_rust_types() {
+        for file in evidence_schemas() {
+            let on_disk = fs::read_to_string(repo_root().join(&file.path)).unwrap();
+            assert!(
+                on_disk == file.contents,
+                "{} drifted from stackly-evidence; run `cargo xtask codegen`",
+                file.path.display()
+            );
+        }
+    }
+
+    #[test]
+    fn check_flags_a_drifted_schema_and_a_stale_one_but_never_the_examples() {
+        let root = tempfile::tempdir().unwrap();
+        let generated = evidence_schemas();
+        write(root.path(), &generated).unwrap();
+        let examples = root.path().join(EVIDENCE_SCHEMA_DIR).join("examples");
+        fs::create_dir(&examples).unwrap();
+        fs::write(examples.join("record-rust-fixture-pass.json"), "{}\n").unwrap();
+        assert!(check(root.path(), &generated).is_ok());
+
+        let record = root.path().join("schemas/evidence/record.schema.json");
+        fs::write(&record, "{}\n").unwrap();
+        assert!(check(root.path(), &generated).is_err());
+
+        write(root.path(), &generated).unwrap();
+        let stale = root.path().join("schemas/evidence/old.schema.json");
+        fs::write(&stale, "{}\n").unwrap();
+        assert_eq!(
+            stale_schemas(root.path(), &generated).unwrap(),
+            [PathBuf::from("schemas/evidence/old.schema.json")]
+        );
+        assert!(check(root.path(), &generated).is_err());
+
+        write(root.path(), &generated).unwrap();
+        assert!(!stale.exists(), "write removes a schema no type generates");
+        assert!(examples.join("record-rust-fixture-pass.json").exists());
+        assert!(check(root.path(), &generated).is_ok());
+    }
+}

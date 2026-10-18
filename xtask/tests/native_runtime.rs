@@ -79,6 +79,39 @@ fn mysql_9_7_runs_from_managed_artifact() {
     spike(&ev, "mysql", Some("9.7"));
 }
 
+#[test]
+#[ignore = "native: needs network, macOS 27, and provider artifacts"]
+fn postgresql_17_runs_from_managed_artifact() {
+    let ev = evidence!(
+        covers = ["AC-078", "REQ-005"],
+        kind = Kind::Native,
+        expected = "postgres 17 runs from its managed artifact under a LaunchAgent, passes the ICU, pgcrypto, lz4, and zstd probes, is ready within 120 s, and stops within 60 s",
+    );
+    spike(&ev, "postgresql", Some("17"));
+}
+
+#[test]
+#[ignore = "native: needs network, macOS 27, and provider artifacts"]
+fn postgresql_18_runs_from_managed_artifact() {
+    let ev = evidence!(
+        covers = ["AC-078", "REQ-005"],
+        kind = Kind::Native,
+        expected = "postgres 18 runs from its managed artifact under a LaunchAgent, passes the ICU, pgcrypto, lz4, and zstd probes, is ready within 120 s, and stops within 60 s",
+    );
+    spike(&ev, "postgresql", Some("18"));
+}
+
+#[test]
+#[ignore = "native: needs network, macOS 27, and provider artifacts"]
+fn valkey_9_1_runs_from_managed_artifact() {
+    let ev = evidence!(
+        covers = ["AC-078", "REQ-005"],
+        kind = Kind::Native,
+        expected = "valkey-server 9.1 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+    );
+    spike(&ev, "valkey", Some("9.1"));
+}
+
 /// Finds the inventory entry of `provider` (and `line`, when given), runs
 /// its spike, and turns the spike result into the test outcome.
 fn spike(ev: &Evidence, provider: &str, line: Option<&str>) {

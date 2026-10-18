@@ -1,5 +1,5 @@
-//! `cargo xtask runtime spike --id <id> --result <file>`: the driver of
-//! one spike (spec 0003, Mekanisme LaunchAgent).
+//! `cargo xtask runtime spike --id <id> --result <file> [--no-quarantine]`:
+//! the driver of one spike (spec 0003, Mekanisme LaunchAgent).
 //!
 //! It takes the spike lock, cleans up what earlier runs left, downloads
 //! and checks the artifact before its clock starts, writes the plan and
@@ -34,7 +34,9 @@ const POLL: Duration = Duration::from_secs(1);
 /// How long the worker gets to exit on its own after writing the result.
 const EXIT_GRACE: Duration = Duration::from_secs(5);
 
-pub fn run(repo: &Path, id: &str, result_path: &Path) -> Result<ExitCode> {
+/// Runs the spike of `id`. `no_quarantine` skips the quarantine probe for
+/// the local run before a maintainer upload (AC-9, AC-19).
+pub fn run(repo: &Path, id: &str, result_path: &Path, no_quarantine: bool) -> Result<ExitCode> {
     let inventory = Inventory::load(repo)?;
     let artifact = inventory
         .artifacts
@@ -107,7 +109,12 @@ pub fn run(repo: &Path, id: &str, result_path: &Path) -> Result<ExitCode> {
     let layout = Layout::new(std::env::temp_dir().join(format!("{ROOT_PREFIX}{run_id}")));
     let domain = launchd::gui_domain(uid);
     let guard = RootGuard::create(&layout, &domain, uid)?;
-    let (quarantine, quarantine_recorded_in) = quarantine_decision(repo, &artifact.sha256)?;
+    let (quarantine, quarantine_recorded_in) = if no_quarantine {
+        eprintln!("spike {id}: local run, the quarantine probe is skipped");
+        (false, None)
+    } else {
+        quarantine_decision(repo, &artifact.sha256)?
+    };
     let redactions = redactions(layout.root())?;
     let plan = Plan {
         schema: PLAN_SCHEMA.to_owned(),
@@ -118,6 +125,7 @@ pub fn run(repo: &Path, id: &str, result_path: &Path) -> Result<ExitCode> {
         domain: domain.clone(),
         quarantine,
         quarantine_recorded_in,
+        local_run: no_quarantine,
         worker_timeout_secs: WORKER_TIMEOUT.as_secs(),
         redactions: redactions.clone(),
     };

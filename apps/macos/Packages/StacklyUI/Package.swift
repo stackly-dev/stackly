@@ -11,6 +11,11 @@ let package = Package(
         .target(
             name: "StacklyUI",
             swiftSettings: [.defaultIsolation(MainActor.self)]
-        )
+        ),
+        .testTarget(
+            name: "StacklyUITests",
+            dependencies: ["StacklyUI"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
     ]
 )

@@ -320,6 +320,101 @@ mod tests {
     }
 
     #[test]
+    fn a_half_written_record_is_scanned_too() {
+        let (dir, id) = run_folder();
+        let credential = FixtureCredential::new();
+        fs::write(
+            dir.path().join("records").join(format!("{id}.json.tmp")),
+            format!(r#"{{"status":"NOT_RUN","actual":"{}"#, credential.value()),
+        )
+        .unwrap();
+
+        let problems = scan(dir.path());
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].record_id, Some(id));
+        assert_eq!(
+            problems[0].message,
+            format!("fixture credential prefix found in records/{id}.json.tmp")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_record_fails_the_scan_closed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (dir, id) = run_folder();
+        let record = dir.path().join("records").join(format!("{id}.json"));
+        fs::set_permissions(&record, fs::Permissions::from_mode(0o000)).unwrap();
+
+        let problems = scan(dir.path());
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].code, ProblemCode::CredentialLeak);
+        assert_eq!(problems[0].record_id, Some(id));
+        assert!(
+            problems[0].message.starts_with(&format!(
+                "cannot scan records/{id}.json for the fixture credential prefix: "
+            )),
+            "{}",
+            problems[0].message
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_artifact_folder_fails_the_scan_closed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (dir, id) = run_folder();
+        let folder = dir.path().join("artifacts").join(id.to_string());
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o000)).unwrap();
+        let problems = scan(dir.path());
+        // Give the folder back first, so the temporary directory can be removed.
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o700)).unwrap();
+
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].code, ProblemCode::CredentialLeak);
+        assert_eq!(problems[0].record_id, Some(id));
+        assert!(
+            problems[0].message.starts_with(&format!(
+                "cannot scan artifacts/{id} for the fixture credential prefix: "
+            )),
+            "{}",
+            problems[0].message
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pipes_and_sockets_are_never_opened() {
+        let (dir, id) = run_folder();
+        let fifo = dir
+            .path()
+            .join("artifacts")
+            .join(id.to_string())
+            .join("pipe");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let _socket =
+            std::os::unix::net::UnixListener::bind(dir.path().join("artifacts").join("s")).unwrap();
+
+        // Opening the pipe would block forever, so the scan runs on its own
+        // thread and the test fails after a timeout instead of hanging.
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let run_dir = dir.path().to_path_buf();
+        std::thread::spawn(move || {
+            let _ = sender.send(scan(&run_dir));
+        });
+        let problems = receiver
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("the scan returns instead of opening the pipe");
+        assert!(problems.is_empty(), "{problems:?}");
+    }
+
+    #[test]
     fn record_ids_come_from_records_and_artifact_folders() {
         let id = Uuid::now_v7();
         assert_eq!(

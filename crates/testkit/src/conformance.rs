@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::os::unix::fs::{MetadataExt, symlink};
 use std::path::Path;
-use std::process::Command;
 
 use stackly_platform::{FileKind, Filesystem, PlatformError, UserId};
 
@@ -238,13 +237,7 @@ fn expect_no_temp_files(check: &str, dir: &Path) {
 }
 
 fn make_fifo(path: &Path) {
-    let status = Command::new("mkfifo")
-        .arg(path)
-        .status()
-        .unwrap_or_else(|err| fail("run mkfifo", &err.to_string()));
-    if !status.success() {
-        fail("run mkfifo", &status.to_string());
-    }
+    crate::make_fifo(path).unwrap_or_else(|err| fail("run mkfifo", &err.to_string()));
 }
 
 fn must<T>(check: &str, result: Result<T, PlatformError>) -> T {

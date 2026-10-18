@@ -196,7 +196,7 @@ Kode masalah (`code`) yang menggagalkan run:
 | `kind_mismatch` | `kind` record berbeda dengan `kind` run |
 | `duplicate_test` | identitas test yang sama muncul dua kali |
 | `left_not_run` | record masih `NOT_RUN` padahal perintah selesai dengan exit 0 |
-| `credential_leak` | prefix fixture credential ditemukan di `output.log`, `artifacts/`, atau record |
+| `credential_leak` | prefix fixture credential ditemukan di `output.log`, `artifacts/`, atau record, atau salah satu file itu tidak bisa dipindai |
 
 ### Validasi
 
@@ -289,14 +289,15 @@ Cara kerja trait (dibuktikan lewat compile spike di Xcode 27, lihat rationale):
 - Setelah body: `BLOCKED` yang sudah ditandai menang; selain itu ada issue gagal berarti `FAIL`; selain itu `Task.isCancelled` bernilai true berarti record dibiarkan `NOT_RUN`; selain itu `PASS`.
 - Record yang sedang berjalan disimpan di `@TaskLocal`, jadi `Evidence.subject`, `Evidence.actual`, dan `Evidence.blocked` bisa menemukannya. Dipanggil di luar test dengan trait ini, ketiganya mencatat issue. State yang berubah ada di `final class` yang memegang `Mutex` dari modul `Synchronization`, karena `Mutex` tidak bisa disalin ke dalam closure yang escaping.
 - `Evidence.blocked(reason:owner:)` bertipe `throws -> Never`: ia menandai `BLOCKED`, lalu memanggil `Test.cancel(_:)`. Karena itu ia sah sebagai isi `else` pada `guard`.
-- `kind: .native` di luar run native (tanpa `STACKLY_EVIDENCE_KIND=native`) memanggil `Test.cancel` sebelum menulis apa pun, jadi test native tidak pernah jalan di laptop atau run fixture tanpa sengaja. `kind: .fixture` di dalam run native mencatat issue, jadi record-nya `FAIL`.
+- `kind: .native` di luar run native (tanpa `STACKLY_EVIDENCE_KIND=native`) memanggil `Test.cancel` di `prepare(for:)`, sebelum menulis apa pun, jadi test native tidak pernah jalan di laptop atau run fixture tanpa sengaja. Swift Testing melaporkan test itu skipped beserta alasannya, dan tidak ada record. `Test.cancel` di dalam `provideScope` sebelum body jalan tidak dipakai, karena test itu hilang dari output `swift test` (tidak cancelled, tidak skipped, tidak dihitung). `kind: .fixture` di dalam run native mencatat issue, jadi record-nya `FAIL`.
 - Test dengan trait ini tidak memanggil `Test.cancel` langsung; pakai `Evidence.blocked`.
 
 ### Record manual
 
 - `cargo xtask evidence new --covers <ID>... --kind <fixture|native> --title <judul> --expected <kalimat> [--subject <provider>@<versi>]...` menulis `evidence/manual/<yyyy-mm-dd>-<slug>.json` berstatus `NOT_RUN`, dengan `method: manual`, `evidencePath` menunjuk file itu sendiri, dan `context` dari checkout saat itu (commit, dirty, host, toolchain).
 - `--kind` wajib, tanpa default. `--subject` boleh diulang, dengan `source: managed` dan `digest` null; ubah file-nya untuk nilai lain.
-- Tanggal memakai UTC. Slug dibuat dari judul: huruf kecil, setiap deret karakter selain huruf ASCII dan angka menjadi satu `-`, paling panjang 48 karakter. Kalau nama file sudah ada, tambahkan `-2`, `-3`, dan seterusnya.
+- Tanggal memakai UTC. Slug dibuat dari judul: huruf kecil, setiap deret karakter selain huruf ASCII dan angka menjadi satu `-`, `-` di awal dan akhir dibuang, paling panjang 48 karakter. Kalau nama file sudah ada, tambahkan `-2`, `-3`, dan seterusnya.
+- `evidence check` menolak dua record manual dengan `id` yang sama (review ulang berarti record baru dari `evidence new`), dan menerima `evidencePath` hanya kalau nilainya file record itu sendiri atau `evidence/manual/files/<id>/` dengan `<id>` milik record itu.
 - Reviewer mengerjakan langkahnya pada commit itu, lalu mengisi `steps`, `actual`, `status`, `reviewer`, dan `finishedAt`, plus file bukti opsional di `evidence/manual/files/<id>/` (dan mengubah `evidencePath` ke folder itu).
 - `kind: native` untuk review yang memakai runtime provider asli di Mac macOS 27, selain itu `fixture`.
 - Record itu masuk git di commit berikutnya. `sourceCommit` tetap commit yang direview. Untuk bukti rilis, commit itu harus ada di `main` atau di tag release candidate (fitur 65 yang memeriksanya).
@@ -356,7 +357,8 @@ Sinyal dan exit code `evidence run`:
 Aturan pindaian `evidence check`:
 
 - Source Rust di `crates/`, `apps/`, dan `xtask/` (melewati `target/`) diparse dengan `syn` (fitur `full` dan `visit`, memakai major `syn` yang sudah ada di `Cargo.lock` supaya tidak menambah duplikat di `deny.toml`). Gagal kalau: `#[ignore]` tanpa alasan berawalan `native: `; ada `cfg_attr` yang berisi `ignore`; fungsi `#[ignore]` tanpa `evidence!` berisi `Kind::Native`; atau `evidence!` berisi `Kind::Native` di fungsi tanpa `#[ignore]`.
-- Source Swift di `clients/` dan `apps/macos/` dipindai sebagai teks, dengan atribut `@Test(...)` dibaca sampai kurung penutupnya walau terpecah beberapa baris. Gagal kalau: `@Test` di folder target `*NativeTests` tanpa `kind: .native`; `kind: .native` di luar folder seperti itu; atau file yang memakai `.evidence(` memanggil `Test.cancel(` langsung.
+- Pesan pelanggaran Rust menyebut file dan nama fungsi, bukan nomor baris, karena `syn` tanpa fitur `span-locations` di `proc-macro2` tidak memberi nomor baris.
+- Source Swift di `clients/` dan `apps/macos/` dipindai sebagai teks, dengan atribut `@Test(...)` dibaca sampai kurung penutupnya walau terpecah beberapa baris. Baris komentar `//` (termasuk `///`) dilewati. Gagal kalau: `@Test` di folder target `*NativeTests` tanpa `kind: .native`; `kind: .native` di luar folder seperti itu; atau file yang memakai `.evidence(` memanggil `Test.cancel(` langsung.
 - Test yang dibuat makro lain tidak terlihat oleh pindaian ini; karena itu test native wajib berupa fungsi `#[test]` biasa.
 
 ### Baseline benchmark
@@ -376,6 +378,7 @@ Aturan pindaian `evidence check`:
 - `value()` mengembalikan nilainya untuk diteruskan ke kode yang diuji. `Debug` mencetak `FixtureCredential(****)`, supaya pesan assertion tidak membocorkannya.
 - `assert_absent(haystack, what)` panic dengan pesan `fixture credential found in <what>` tanpa mencetak nilainya.
 - Wrapper memindai `output.log`, semua file di `artifacts/`, dan semua record untuk prefix itu secara streaming (PRD bagian 27, artefak log yang disanitasi). Ini penjagaan terbaik yang bisa dilakukan, bukan jaminan: bentuk yang di encode, dipotong, atau disamarkan sebagian tidak tertangkap. Test root dari `TestRoot` ada di luar folder run dan tidak dipindai, jadi test boleh menyimpan credential di sana dengan sengaja.
+- Pindaian itu fail closed: file atau folder yang tidak bisa dibaca juga menjadi masalah `credential_leak` (`cannot scan <path> ...`), karena tidak adanya prefix tidak bisa dibuktikan. Symlink, socket, dan pipe tidak pernah diikuti atau dibuka, jadi tidak ada file di luar folder run yang ikut dipindai dan FIFO tidak bisa membuat wrapper menggantung. File `records/*.tmp` ikut dipindai walau wrapper mengabaikannya saat mengumpulkan record.
 - Tidak pernah berisi secret asli, dan test tidak pernah menulis nilainya sebagai literal. Fitur 11 memakai ulang tipe ini untuk test redaction (secrets sentinel di PRD bagian 32.3) dan menambah sisi Swift saat test Swift pertama membutuhkannya.
 
 ### Invariant
@@ -447,7 +450,7 @@ Aturan pindaian `evidence check`:
 
 ## Follow-up
 
-- [ ] Jalankan `cargo xtask evidence baseline` di Mac ini, lalu commit `evidence/baseline-host.json`. Sampai itu terjadi, "mesin benchmark baseline tercatat" di Done when fitur 2 tetap terbuka.
+- [x] Jalankan `cargo xtask evidence baseline` di Mac ini, lalu commit `evidence/baseline-host.json`. Dicatat 2026-10-17 (Mac13,1, Apple M1 Max, 32 GB, macOS 27.0 26A428).
 - [ ] Kalau memori Mac ini bukan 16 GB, catat bedanya bersama OQ-011 saat fitur 64 menetapkan angka NFR.
 - [x] `/scope`: ubah "tiap test menghasilkan evidence record" di Done when fitur 2 menjadi "tiap test yang membuktikan ID PRD menghasilkan evidence record".
 - [ ] Fitur 65: tandai `NOT_RUN` untuk AC yang tidak punya record sama sekali; terima bukti rilis hanya dari commit yang ada di `main` atau tag release candidate; simpan evidence rilis; dan cek bahwa record manual final tidak diedit, dibandingkan dengan riwayat git.
