@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15a31-2f8b-7c90-b6d3-8e9f0a1b2c3d",
+  "covers": [
+    "AC-019"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyClientNativeTests",
+    "name": "PostgresNativeTests/clientSeesPostgres18Ready()",
+    "file": "/Users/dev/Stackly/clients/swift/Tests/StacklyClientNativeTests/PostgresNativeTests.swift",
+    "line": 9
+  },
+  "status": "PASS",
+  "expected": "the client sees PostgreSQL 18 ready",
+  "actual": "ready on port 54001",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "postgresql",
+      "version": "18.1",
+      "digest": "5f2a9c4e8b1d7a3f6c0e9b2d4a8f1c7e3b6d9a0f2c5e8b1d4a7f0c3e6b9d2a5f",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-18T09:05:30.507Z",
+  "finishedAt": "2026-10-18T09:05:33.871Z",
+  "evidencePath": "output.log"
+}

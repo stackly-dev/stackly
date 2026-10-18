@@ -1298,6 +1298,7 @@ dependencies = [
  "sha2",
  "stackly-evidence",
  "stackly-protocol",
+ "syn 3.0.9",
  "tempfile",
  "toml",
  "uuid",

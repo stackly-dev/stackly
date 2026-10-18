@@ -243,6 +243,48 @@ pub struct EvidenceRecord {
 }
 
 impl EvidenceRecord {
+    /// Starts a manual record the way `cargo xtask evidence new` writes it:
+    /// a new UUID v7, `NOT_RUN`, method `manual`, and a test identity that
+    /// holds only `title`. Subjects, steps, and the result start empty, and
+    /// `context` starts as null.
+    #[must_use]
+    pub fn manual(
+        covers: Vec<String>,
+        kind: Kind,
+        title: impl Into<String>,
+        expected: impl Into<String>,
+        started_at: Timestamp,
+        evidence_path: impl Into<String>,
+    ) -> Self {
+        Self {
+            schema: RECORD_SCHEMA.to_owned(),
+            id: Uuid::now_v7(),
+            covers,
+            kind,
+            method: Method::Manual,
+            test: TestIdentity {
+                language: Language::Manual,
+                package: None,
+                target: None,
+                name: title.into(),
+                file: None,
+                line: None,
+            },
+            status: Status::NotRun,
+            expected: expected.into(),
+            actual: None,
+            reason: None,
+            owner: None,
+            subjects: Vec::new(),
+            steps: None,
+            reviewer: None,
+            started_at,
+            finished_at: None,
+            evidence_path: evidence_path.into(),
+            context: None,
+        }
+    }
+
     /// Checks every rule of `stackly.evidence/v1` that the record can check
     /// on its own. Whether `context` must be present depends on where the
     /// record is read, so callers check that themselves.
@@ -492,6 +534,22 @@ mod tests {
         let mut escaping = record(Kind::Fixture, Status::NotRun);
         escaping.evidence_path = "../outside".to_owned();
         assert_eq!(violations(&escaping).len(), 1);
+    }
+
+    #[test]
+    fn a_new_manual_record_is_valid_and_not_run() {
+        let manual = EvidenceRecord::manual(
+            vec!["AC-031".to_owned()],
+            Kind::Fixture,
+            "Menu bar shows a stopped instance",
+            "the menu bar lists a stopped instance with a Start action",
+            Timestamp::now(),
+            "evidence/manual/2026-10-18-menu-bar-shows-a-stopped-instance.json",
+        );
+        assert_eq!(manual.status, Status::NotRun);
+        assert_eq!(manual.method, Method::Manual);
+        assert_eq!(manual.test.language, Language::Manual);
+        assert_eq!(violations(&manual), Vec::<String>::new());
     }
 
     #[test]

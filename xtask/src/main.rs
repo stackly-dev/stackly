@@ -22,6 +22,11 @@ Tasks:
   build-app --release  Same, with the Release configuration
   evidence run --kind <fixture|native> [--out <folder>] -- <command>
                        Run a test command as evidence and write report.json
+  evidence check       Check manual records, the baseline, and the native test markers
+  evidence new --covers <ID>... --kind <fixture|native> --title <title>
+               --expected <sentence> [--subject <provider>@<version>]...
+                       Start a NOT_RUN manual record in evidence/manual/
+  evidence baseline    Record this Mac as the benchmark baseline (macOS, not a VM)
   runtime check        Check runtimes/inventory.toml and evidence/runtime/
   runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]
                        Download a runtime and print its pinned inventory values
@@ -61,7 +66,7 @@ fn run() -> Result<ExitCode> {
         ["build-app", "--release"] => {
             done(build_app::run(&root, build_app::Configuration::Release))
         }
-        ["evidence", rest @ ..] => evidence::run(rest),
+        ["evidence", rest @ ..] => evidence::run(&root, rest),
         ["runtime", rest @ ..] => runtime::run(&root, rest),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");

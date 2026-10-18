@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15a2e-5b10-7e21-9c4d-0a1b2c3d4e5f",
+  "covers": [
+    "AC-011"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "supervisor",
+    "name": "stop_never_sends_sigkill",
+    "file": "apps/daemon/tests/supervisor.rs",
+    "line": 42
+  },
+  "status": "NOT_RUN",
+  "expected": "a normal stop ends the dummy server with SIGTERM only",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-18T08:15:02.481Z",
+  "finishedAt": null,
+  "evidencePath": "output.log"
+}

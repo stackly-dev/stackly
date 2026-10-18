@@ -1,0 +1,22 @@
+{
+  "schema": "stackly.evidence-baseline/v1",
+  "recordedAt": "2026-10-17T23:34:45.878744Z",
+  "host": {
+    "os": "macos",
+    "arch": "aarch64",
+    "osVersion": "27.0",
+    "osBuild": "26A428",
+    "hardwareModel": "Mac13,1",
+    "chip": "Apple M1 Max",
+    "memoryBytes": 34359738368,
+    "performanceCores": 8,
+    "efficiencyCores": 2,
+    "virtualized": false
+  },
+  "storage": {
+    "volume": "/System/Volumes/Data",
+    "filesystem": "apfs",
+    "internal": true,
+    "solidState": true
+  }
+}

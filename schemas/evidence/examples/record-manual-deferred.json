@@ -1,0 +1,58 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15a42-8c4f-7039-ab6d-3e4f5a6b7c8d",
+  "covers": [
+    "AC-102"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Import from Docker Compose",
+    "file": null,
+    "line": null
+  },
+  "status": "DEFERRED",
+  "expected": "a Compose file with two services becomes two instances",
+  "actual": null,
+  "reason": "Compose import is outside the 1.0 baseline",
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "read the scope for 1.0"
+  ],
+  "reviewer": "@ojiepermana",
+  "startedAt": "2026-10-18T11:00:00Z",
+  "finishedAt": "2026-10-18T11:05:00Z",
+  "evidencePath": "evidence/manual/2026-10-18-import-from-docker-compose.json",
+  "context": {
+    "sourceCommit": "bc87d45e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

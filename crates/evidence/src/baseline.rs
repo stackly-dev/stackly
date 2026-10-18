@@ -38,6 +38,17 @@ pub struct Storage {
 }
 
 impl BaselineHost {
+    /// Creates the baseline of `host`, recorded at `recorded_at`.
+    #[must_use]
+    pub fn new(recorded_at: Timestamp, host: Host, storage: Storage) -> Self {
+        Self {
+            schema: BASELINE_SCHEMA.to_owned(),
+            recorded_at,
+            host,
+            storage,
+        }
+    }
+
     /// Checks that the baseline names a real, non virtual Mac with every
     /// field the comparison needs.
     ///

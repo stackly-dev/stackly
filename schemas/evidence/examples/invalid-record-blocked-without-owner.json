@@ -1,0 +1,65 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15a31-1e44-7b05-8d2a-6c7e8f9a0b1c",
+  "covers": [
+    "AC-009"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "native_postgres",
+    "name": "postgres_18_reaches_ready_from_a_managed_runtime",
+    "file": "apps/daemon/tests/native_postgres.rs",
+    "line": 12
+  },
+  "status": "BLOCKED",
+  "expected": "PostgreSQL 18 reaches ready from the managed runtime",
+  "actual": null,
+  "reason": "no managed PostgreSQL 18 artifact on this Mac",
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-18T09:02:11.006Z",
+  "finishedAt": "2026-10-18T09:02:11.019Z",
+  "evidencePath": "output.log",
+  "context": {
+    "sourceCommit": "bc87d45e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c",
+    "sourceDirty": false,
+    "runId": "01a15a31-0d7e-7a42-b1c9-3f5e7a9b0c12",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--locked",
+      "--no-fail-fast",
+      "--tests",
+      "--",
+      "--ignored"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
