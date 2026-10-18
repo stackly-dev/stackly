@@ -117,17 +117,33 @@ pub fn contract_names(swift: &str, event_kinds: &[&str], methods: &[&str]) -> Re
         out.push_str(&format!("\t\t\"{kind}\",\n"));
     }
     out.push_str("\t]\n}\n");
-    for (name, doc) in [
-        ("Call", "The method name, such as `daemon.get_info`."),
-        ("Reply", "The method this reply answers."),
+    for (name, property, doc, table) in [
+        (
+            "Call",
+            "methodName",
+            "The method name, such as `daemon.get_info`.",
+            methods,
+        ),
+        (
+            "Reply",
+            "methodName",
+            "The method this reply answers.",
+            methods,
+        ),
+        (
+            "EventKind",
+            "kindName",
+            "The event kind's wire name, such as `events.gap`.",
+            event_kinds,
+        ),
     ] {
         let keys = coding_keys(swift, name)?;
         let wire: Vec<&str> = keys.iter().map(|(_, raw)| raw.as_str()).collect();
-        if wire != methods {
-            bail!("`{name}` cases {wire:?} do not match the method table {methods:?}");
+        if wire != table {
+            bail!("`{name}` cases {wire:?} do not match the method table {table:?}");
         }
         out.push_str(&format!(
-            "\nextension {name} {{\n\t/// {doc}\n\tpublic var methodName: String {{\n\t\tswitch self {{\n"
+            "\nextension {name} {{\n\t/// {doc}\n\tpublic var {property}: String {{\n\t\tswitch self {{\n"
         ));
         for (case, raw) in &keys {
             out.push_str(&format!("\t\tcase .{case}: \"{raw}\"\n"));
@@ -204,6 +220,14 @@ public enum Reply: Codable, Sendable, Equatable {
 \t\t\teventsSubscribe = \"events.subscribe\"
 \t}
 }
+
+public enum EventKind: Codable, Sendable, Equatable {
+\tcase eventsGap(Gap)
+
+\tenum CodingKeys: String, CodingKey, Codable {
+\t\tcase eventsGap = \"events.gap\"
+\t}
+}
 ";
 
     #[test]
@@ -235,11 +259,14 @@ public enum Reply: Codable, Sendable, Equatable {
         assert!(swift.contains("extension Call {"));
         assert!(swift.contains("extension Reply {"));
         assert!(swift.contains("case .eventsSubscribe: \"events.subscribe\""));
+        assert!(swift.contains("extension EventKind {"));
+        assert!(swift.contains("public var kindName: String"));
+        assert!(swift.contains("case .eventsGap: \"events.gap\""));
     }
 
     #[test]
     fn contract_names_refuse_cases_that_drift_from_the_method_table() {
-        let error = contract_names(TAGGED, &[], &["daemon.get_info"]).unwrap_err();
+        let error = contract_names(TAGGED, &["events.gap"], &["daemon.get_info"]).unwrap_err();
         assert!(error.to_string().contains("do not match the method table"));
     }
 }

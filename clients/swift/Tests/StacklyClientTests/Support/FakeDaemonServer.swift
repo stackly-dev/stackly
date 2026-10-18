@@ -146,6 +146,40 @@ final class FakeSession: @unchecked Sendable {
         return request
     }
 
+    /// Accepts the handshake, then answers the link's `daemon.get_info` and
+    /// `daemon.get_health`.
+    func startAsDaemon(
+        health: HealthStatus = .ready,
+        serverInstanceId: UUID = Samples.serverInstanceId
+    ) throws {
+        let request = try readRequest()
+        guard case .daemonHandshake = request.call else {
+            throw FakeServerError.unexpected("first frame was \(request.call.methodName)")
+        }
+        try reply(
+            to: request,
+            with: .daemonHandshake(Samples.accepted(serverInstanceId: serverInstanceId)))
+        try answerInfoAndHealth(health: health)
+    }
+
+    /// Answers the next `daemon.get_info` and `daemon.get_health`.
+    func answerInfoAndHealth(health: HealthStatus = .ready) throws {
+        let info = try readRequest()
+        try reply(to: info, with: .daemonGetInfo(Samples.info))
+        let check = try readRequest()
+        try reply(to: check, with: .daemonGetHealth(Samples.health(health)))
+    }
+
+    /// Sends one event frame of any kind, as raw JSON.
+    func sendEvent(subscription: UInt32, sequence: UInt64, kind: String, content: String = "{}")
+        throws
+    {
+        try sendPayload(
+            Array(
+                #"{"type":"event","content":{"subscriptionId":\#(subscription),"sequence":\#(sequence),"at":"2026-10-18T03:04:05.123Z","kind":{"type":"\#(kind)","content":\#(content)}}}"#
+                    .utf8))
+    }
+
     /// Sends `reply` for `request`.
     func reply(to request: Request, with reply: Reply) throws {
         try send(.response(Response(requestId: request.requestId, reply: reply)))
@@ -220,7 +254,11 @@ enum Samples {
     static let serverInstanceId = UUID(uuidString: "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e") ?? UUID()
 
     /// A handshake reply.
-    static func accepted(limits: Limits = limits, drift: Bool = false) -> HandshakeAccepted {
+    static func accepted(
+        limits: Limits = limits,
+        drift: Bool = false,
+        serverInstanceId: UUID = serverInstanceId
+    ) -> HandshakeAccepted {
         HandshakeAccepted(
             protocol: ContractInfo.protocolVersion,
             serverInstanceId: serverInstanceId,
@@ -229,6 +267,26 @@ enum Samples {
             contractDrift: drift,
             limits: limits,
             head: EventCursor(serverInstanceId: serverInstanceId, sequence: 0))
+    }
+
+    /// A `daemon.get_info` reply.
+    static let info = DaemonInfo(
+        version: "0.1.0", protocol: ContractInfo.protocolVersion,
+        contractDigest: ContractInfo.digest,
+        serverInstanceId: serverInstanceId, pid: 501, uid: 501,
+        startedAt: Date(timeIntervalSince1970: 1_792_245_000),
+        roots: DaemonRoots(
+            data: "/d/data", logs: "/d/logs", cache: "/d/cache", runtime: "/t/stackly",
+            rootOverride: true),
+        socketPath: "/t/stackly/stacklyd.sock")
+
+    /// A `daemon.get_health` reply with `status`.
+    static func health(_ status: HealthStatus) -> DaemonHealth {
+        DaemonHealth(
+            status: status, subsystems: [],
+            counters: DaemonCounters(
+                connectionsOpen: 1, connectionsTotal: 1, connectionsRejected: 0, framesRejected: 0,
+                eventsPublished: 0, eventsDropped: 0, logLinesDropped: 0, socketRebinds: 0))
     }
 
     /// The client info tests send.
