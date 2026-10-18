@@ -442,3 +442,33 @@ install_name = "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit"
 name = "Kerberos"
 kind = "system"
 install_name = "/System/Library/Frameworks/Kerberos.framework/Versions/A/Kerberos"
+
+[[artifact]]
+id = "valkey-9.1.2-r2-macos-aarch64"
+provider = "valkey"
+line = "9.1"
+version = "9.1.2"
+build = 2
+os = "macos"
+arch = "aarch64"
+min_os = "27.0"
+status = "available"
+origin = "maintainer"
+distribution = "stackly_hosted"
+format = "tar_gz"
+urls = ["https://github.com/stackly-dev/stackly/releases/download/runtime/valkey-9.1.2-r2-macos-aarch64/valkey-9.1.2-r2-macos-aarch64.tar.gz"]
+sha256 = "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370"
+size = 4581661
+archive_root = "valkey-9.1.2-r2-macos-aarch64"
+source_url = "https://github.com/valkey-io/valkey/archive/refs/tags/9.1.2.tar.gz"
+source_sha256 = "19c23908e7d57e8d91ef85b41f5646307582f10f4f0fb999bbf89ed24ec9c983"
+recipe = "stackly-dev/runtimes@8d22ef98bab9f485d26578ceed2ed5b575f2a187:recipes/valkey.sh"
+signing_policy = "adhoc_pipeline"
+license = "BSD-3-Clause"
+license_url = "https://github.com/valkey-io/valkey/blob/9.1.2/COPYING"
+executables = ["bin/valkey-server", "bin/valkey-cli"]
+
+[[artifact.dependency]]
+name = "libSystem.B.dylib"
+kind = "system"
+install_name = "/usr/lib/libSystem.B.dylib"
