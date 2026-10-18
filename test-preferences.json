@@ -1,0 +1,9 @@
+{
+  "tool": "cargo test",
+  "gate": null,
+  "additionalTools": ["Swift Testing (swift test --package-path clients/swift)", "stackly-testkit", "stackly-evidence"],
+  "e2eTool": "none",
+  "testDir": "#[cfg(test)] in the file for unit tests, <crate>/tests/ for integration tests, clients/swift/Tests/<Target>Tests/ for Swift",
+  "filePattern": "n/a",
+  "packageManager": "cargo"
+}

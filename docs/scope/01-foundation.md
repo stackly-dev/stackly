@@ -32,14 +32,14 @@ Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang forma
 - [x] Capture conventions and tooling choices: `/audit`
 - [x] Install the tooling: `/develop coding standards & tooling`
 - [x] Decide evidence, native tests, and baseline (spec): `/architect coding standards & tooling`
-- [ ] Build the evidence standard: `/develop coding standards & tooling`
+- [x] Build the evidence standard: `/develop coding standards & tooling`
   - [x] Rust evidence path end to end: `stackly-evidence`, `check-deps` rules, `cargo xtask evidence run` (REQ-051)
   - [x] `cargo xtask evidence check` and `evidence new`, shared examples in `schemas/evidence/`
   - [x] Swift path: `StacklyTestSupport` trait
   - [x] Fixture credential leak scan
   - [x] Baseline recorded on this Mac (OQ-011)
-- [ ] Verify it: `/check verify coding standards & tooling`
-- [ ] Test it: `/test coding standards & tooling`
+- [x] Verify it: `/check verify coding standards & tooling`
+- [x] Test it: `/test coding standards & tooling`
 
 ### 3. Sumber & packaging runtime · in-progress
 

@@ -24,5 +24,8 @@ tempfile.workspace = true
 toml.workspace = true
 uuid.workspace = true
 
+[dev-dependencies]
+stackly-testkit.workspace = true
+
 [lints]
 workspace = true

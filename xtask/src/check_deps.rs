@@ -240,3 +240,111 @@ fn kind_label(kind: DependencyKind) -> &'static str {
         _ => "unknown kind of",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One direct dependency as `cargo metadata` reports it. `kind` is null
+    /// for a normal dependency, otherwise `"dev"` or `"build"`.
+    fn dependency(name: &str, kind: Option<&str>) -> Dependency {
+        serde_json::from_value(serde_json::json!({
+            "name": name,
+            "source": null,
+            "req": "*",
+            "kind": kind,
+            "optional": false,
+            "uses_default_features": true,
+            "features": [],
+            "target": null,
+            "rename": null,
+            "registry": null,
+            "path": null,
+        }))
+        .unwrap()
+    }
+
+    fn violations(package: &str, name: &str, kind: Option<&str>) -> Vec<String> {
+        let mut violations = Vec::new();
+        check_dependency(package, &dependency(name, kind), &mut violations);
+        violations
+    }
+
+    #[test]
+    fn stackly_evidence_is_a_normal_dependency_only_of_xtask_and_testkit() {
+        assert!(violations("xtask", EVIDENCE, None).is_empty());
+        assert!(violations(TESTKIT, EVIDENCE, None).is_empty());
+        assert_eq!(
+            violations("stackly-core", EVIDENCE, None),
+            ["stackly-core has a normal dependency on stackly-evidence: \
+              stackly-evidence is a dev dependency everywhere except xtask and stackly-testkit"]
+        );
+        assert_eq!(
+            violations("stacklyd", EVIDENCE, Some("build")),
+            ["stacklyd has a build dependency on stackly-evidence: \
+              stackly-evidence is a dev dependency everywhere except xtask and stackly-testkit"]
+        );
+    }
+
+    #[test]
+    fn every_crate_may_take_stackly_evidence_as_a_dev_dependency() {
+        for package in [
+            "stackly-domain",
+            "stackly-protocol",
+            "stackly-platform",
+            "stackly-core",
+            "stackly-platform-macos",
+            "stackly-storage",
+            "stacklyd",
+            "stackly-cli",
+        ] {
+            assert!(
+                violations(package, EVIDENCE, Some("dev")).is_empty(),
+                "{package}"
+            );
+        }
+    }
+
+    #[test]
+    fn domain_and_protocol_take_no_other_stackly_crate_even_for_tests() {
+        for package in ["stackly-domain", "stackly-protocol"] {
+            let normal = violations(package, EVIDENCE, None);
+            assert!(
+                normal.iter().any(|v| v.ends_with(
+                    "this crate depends on no other Stackly crate, except stackly-evidence as a dev dependency"
+                )),
+                "{package}: {normal:?}"
+            );
+            assert!(
+                !violations(package, TESTKIT, Some("dev")).is_empty(),
+                "{package}"
+            );
+        }
+    }
+
+    #[test]
+    fn stackly_evidence_depends_on_no_stackly_crate_tokio_or_libc() {
+        for name in ["stackly-domain", TESTKIT, "stacklyd"] {
+            for kind in [None, Some("dev")] {
+                let found = violations(EVIDENCE, name, kind);
+                assert!(
+                    found
+                        .iter()
+                        .any(|v| v.ends_with("stackly-evidence depends on no Stackly crate")),
+                    "{name} {kind:?}: {found:?}"
+                );
+            }
+        }
+        for name in ["tokio", "libc"] {
+            assert_eq!(
+                violations(EVIDENCE, name, None),
+                [format!(
+                    "stackly-evidence has a normal dependency on {name}: \
+                     tokio and libc are never direct dependencies of this crate"
+                )]
+            );
+        }
+        assert!(violations(EVIDENCE, "serde", None).is_empty());
+        assert!(violations(EVIDENCE, "tempfile", None).is_empty());
+    }
+}
