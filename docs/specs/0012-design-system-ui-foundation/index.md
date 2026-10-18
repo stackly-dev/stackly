@@ -290,7 +290,7 @@ Tampilan per bentuk (`StateView(state:retry:openDiagnostics:content:)`, `retry` 
 - Error per item (instance gagal, konflik port, drift) tidak memakai `ViewState`; layar menaruh `StateBanner` di item itu (mockup: banner gagal di Summary, drift di Configuration).
 - Placeholder dan banner adalah satu kelompok VoiceOver dengan judul sebagai label; perubahan ke `failed` dan munculnya banner critical memanggil `announce` sekali.
 
-**Gate mutasi**: `MutationAvailability` (`.available` atau `.blocked(reason: String, since: Date)`) adalah nilai environment yang diisi shell (spec 0013) saat daemon tidak terjangkau atau sebab global lain. `.mutationGated()` menonaktifkan view selama `.blocked` dan memasang `.help(reason)`. `StatePlaceholder` dan `StateBanner` menerapkan gate yang sama ke `StateAction` dengan `mutates` true. Alasan yang terlihat untuk keadaan ini adalah banner jendela milik shell. Tombol yang tidak mengubah data tidak diberi `.mutationGated()`.
+**Gate mutasi**: `MutationAvailability` (`.available` atau `.blocked(reason: String, since: Date)`) adalah nilai environment yang diisi shell (spec 0013) saat daemon tidak terjangkau atau sebab global lain, lewat `EnvironmentValues.mutationAvailability` dan modifier publik `.mutationAvailability(_:)`. `.mutationGated()` menonaktifkan view selama `.blocked` dan memasang `.help(reason)`. `StatePlaceholder` dan `StateBanner` menerapkan gate yang sama ke `StateAction` dengan `mutates` true. Alasan yang terlihat untuk keadaan ini adalah banner jendela milik shell. Tombol yang tidak mengubah data tidak diberi `.mutationGated()`.
 
 **Unsupported di luar halaman**: `.disabled(reason: String?)` menonaktifkan view saat `reason` tidak nil dan memasang `.help(reason)`, yang di macOS menjadi tooltip dan bantuan VoiceOver. Layar wajib menaruh `DisabledReasonText(reason)` (simbol `info.circle`, `.footnote`, `textSecondary`) di dekat tombol, di footer seksi, atau di placeholder unsupported. Tombol capability unsupported tidak pernah disembunyikan, dan tombol capability baru digambar setelah data layar beserta capability nya termuat, jadi tidak ada keadaan "capability belum diketahui" di view yang sudah loaded.
 
@@ -358,7 +358,7 @@ XCUITest untuk cek ini adalah urusan fitur 68.
 - **Assumed** spec 0006 (protokol IPC, ditulis paralel): DTO membawa lifecycle, readiness (state, reason, detail) dan health yang sudah melalui `effective(now, max_age)`, dan state operasi; error daemon membawa kategori, kode, dan pesan yang bisa ditampilkan. Nilai enum terbuka yang tidak dikenal datang sebagai `unrecognized` (spec 0006), bukan `unknown`.
 - **Assumed** spec 0013 dan fitur 20, diselaraskan 2026-10-18: capability provider sampai ke client bersama data layar lewat DTO yang ditetapkan spec 0013 dan fitur 20, sehingga layar tahu capability yang unsupported dan alasannya. Spec 0009 hanya memetakan capability manifest ke `Capability` domain, dan spec 0006 belum punya DTO itu.
 - **Assumed** spec 0011 (secret dan redaction, ditulis paralel): pesan error dan detail readiness sudah bebas secret saat sampai di GUI.
-- **Assumed** spec 0013 (app shell, ditulis berikutnya): shell memegang status koneksi, waktu snapshot terakhir, satu banner daemon tidak terjangkau memakai `StateBanner` dengan `base: .window`, pengisian `MutationAvailability`, adapter dari DTO ke `LifecycleStatus`, `ReadinessStatus`, `HealthStatus`, dan `OperationStatus` dengan switch exhaustive, lebar minimum jendela, keputusan apakah `StacklyUI` bergantung pada `StacklyClient`, dan pemasangan `SectionIcon` di sidebar.
+- **Assumed** spec 0013 (app shell, ditulis berikutnya): shell memegang status koneksi, waktu snapshot terakhir, satu banner daemon tidak terjangkau memakai `StateBanner` dengan `base: .window`, pengisian `MutationAvailability`, adapter dari DTO ke `LifecycleStatus`, `ReadinessStatus`, `HealthStatus`, dan `OperationStatus` dengan switch exhaustive, lebar minimum jendela, keputusan apakah `StacklyUI` bergantung pada `StacklyClient`, dan pemasangan `SectionIcon` di sidebar. Diselaraskan 2026-10-18 dengan spec 0013: status daemon di footer sidebar memakai `StatusLabel` konteks `.row`; `StateBanner` jendela bertone `informative` untuk starting, connecting yang lambat, dan shutting down, dan bertone `critical` untuk incompatible, untrusted, recovery, dan misconfigured; `StatusAppearance(label:tone:symbol:detail:)` dan `StateAction(mutates:)` publik.
 - **Assumed** spec 0007 (operation engine, belum ditulis): hasil operasi membawa penanda partial untuk label Partial.
 - **Assumed** fitur 32: setting Appearance diterapkan dengan `preferredColorScheme` di scene, jadi token mengikuti tanpa kode tambahan.
 
@@ -414,7 +414,7 @@ Kesalahan tidak dilempar oleh API ini; semuanya view dan nilai. Error datang dar
 | `ConfirmationRequest` | judul, pesan, label, role | layar yang meminta, mengikuti aturan Konfirmasi; nama objek dari DTO |
 | Hasil konfirmasi saat offline | umpan balik "Nothing was sent" | jalur mutasi spec 0013 dan komponen umpan balik fitur 67 |
 | `SectionStyle` | simbol dan warna | tabel Ikon bagian di spec ini |
-| Lebar sempit untuk cek teks | lebar minimum jendela | spec 0013; 640 pt sementara |
+| Lebar sempit untuk cek teks | lebar konten minimum | 640 pt, final dari spec 0013 (jendela minimum 900 pt dikurangi sidebar terlebar 260 pt) |
 
 ### Keputusan rekomendasi
 

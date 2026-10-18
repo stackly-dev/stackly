@@ -617,3 +617,5 @@ Cross check model lain atas update ini menambah, atas persetujuan engineer: trig
 
 Catatan build fitur 5 milestone 1 dan keputusan engineer sesudahnya (2026-10-18): foreign key komposit `instances (id, config_revision_id)` dianggap ber index lewat primary key unik `id`, karena index unik pada kolom awal sudah cukup untuk pencarian baris anak; prune baru dipasang di langkah 13, jadi `stacklyd` milestone 1 belum menjalankannya; dan recovery sementara keluar dengan kode 1, bukan 3, karena spec 0006 memberi kode 3 arti "daemon lain memegang lock" (engineer memilih satu arti untuk kode 3 dan tanpa kode baru).
 
+Ronde 2 rekonsiliasi (2026-10-18): tambahan port, migrasi journal, `IdempotencyKeyTaken`, aturan `touch`, potongan prune 500 operasi (spec 0007), dan op serta baca observasi proses dan config revision awal (spec 0010) dicatat sebagai titik perluasan di *Port registry*; laporan recovery kini dikirim sebagai `DaemonHealth.recovery` (spec 0006).
+

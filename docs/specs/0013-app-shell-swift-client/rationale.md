@@ -523,3 +523,8 @@ Sonnet 5.5 membaca draf spec secara read only (tanpa mengubah file) dan membandi
 19. Diagnostics: path socket dibungkus, Copy Details sama persis dengan baris, `lastDaemon`, `lastError`, dan `lastConnectedAt` disimpan, Reconnect nonaktif dengan alasan saat `misconfigured`.
 20. Badge Operations disembunyikan saat tidak tersambung; badge Instances tetap dengan label "last known".
 21. Mekanik test dan Swift 6: `now` disuntik, regex aturan sumber dengan batas kata, IO blocking di antrian khusus, `DispatchIO` dengan `lowWater` 1 dan resume hanya saat `done`, backpressure lewat penjadwalan baca, cek `sun_path`, multicast status, cek ulang setelah suspensi, `maxInFlight` minimal 1, dan versi bundle yang tidak valid menjadi `misconfigured`.
+
+## Perubahan 2026-10-18 (rekonsiliasi lintas spec, ronde 2)
+
+Disetujui engineer: `ClientInfo.interactive` true untuk GUI; store menerapkan event menurut resep spec 0006 langkah 4 (revision, observasi per jenis, dan `statusSeq` untuk status instance), bukan "revision tidak lebih besar dilewati", supaya readiness dan health tetap hidup tanpa resnapshot; fallback enum terbuka `unrecognized`; `DaemonHealthStatus` menghapus bentrok nama dengan `HealthStatus` instance; laporan recovery dari `DaemonHealth.recovery` (`RegistryRecovery`). `ipc.not_connected` dan `ipc.call_timeout` kini ada di katalog spec 0006.
+

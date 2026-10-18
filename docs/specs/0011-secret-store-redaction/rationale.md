@@ -736,3 +736,5 @@ Pengecekan silang Assumed lines antara spec 0005, 0006, 0009, 0011, dan 0012 men
 
 Cross check model lain atas update ini menambah, atas persetujuan engineer: AC-20 (operasi hapus dibangun fitur ini sebagai satu satunya pembangun, `remove_file` untuk entri apa pun yang bukan folder termasuk socket), AC-21 (katalog kode), langkah 0 (update spec 0005 untuk method baca, `ResourceRef`, dan `WriteOp` secret dan audit sebelum langkah core), `ResolvedSecrets::for_tests` di balik fitur `test-support`, lokasi `password_file`, nilai `actor` audit, dan sumber waktu observasi blocker.
 
+Ronde 2 rekonsiliasi (2026-10-18), atas persetujuan engineer: semua penghapusan lewat `remove_owned_tree` spec 0007 (AC-20 ditulis ulang; fitur ini tidak lagi membangun `remove_file` dan `remove_empty_dir`), instance `unknown` dihitung berjalan saat sweep dan `learn_running`, dan blocker satu slot dengan prioritas spec 0010.
+

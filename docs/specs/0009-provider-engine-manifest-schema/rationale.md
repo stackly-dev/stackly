@@ -654,3 +654,5 @@ Pengecekan silang Assumed lines antara spec 0005, 0006, 0009, 0011, dan 0012 men
 
 Cross check model lain atas update ini menambah, atas persetujuan engineer: `ResolvedSecrets` sementara bertanda `// provisional: F11` supaya test plan fitur 9 bisa dibuat sebelum fitur 11, dan penolakan `secret_purpose_collision` untuk dua secret field yang purpose turunannya sama.
 
+Ronde 2 rekonsiliasi (2026-10-18), atas persetujuan engineer: `materializeSecret.destination` cukup nama file dengan token folder `${instance.secrets}` (spec 0010), `RunPlan.render` dijalankan sebelum setiap spawn, arti `foreground` mencakup tanpa re exec dan tanpa menutup fd warisan, file secret dihapus lewat `remove_owned_tree`, dan dua contoh test yang keliru dibetulkan (`...port}xy` 16 byte; kutip di dalam scalar YAML berkutip). Catatan kode: build milestone 1 masih memakai `materialize` dengan resolver dan tujuan `${instance.run}` atau `${instance.temp}`; penyesuaiannya ikut langkah berikut fitur 9 atau 10.
+

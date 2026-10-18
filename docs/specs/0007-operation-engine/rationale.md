@@ -747,3 +747,18 @@ Spec ini dibaca ulang oleh model lain (Sonnet 5.5) dalam pass read only pada 202
 - **Migrasi**: pengosongan key ganda, backfill journal, upsert `ON CONFLICT DO UPDATE`, dan prune per 500 operasi.
 - **Nama testkit** (`FakeFilesystem`, `MacosFilesystem`) dan semantik `FakeFilesystem::remove_tree` yang portabel; resep test `CrossesDevice` lewat `hdiutil`.
 - Detail kecil: throttle progress leading dan trailing, batch `waiting_on` per pass, penghalang tertua, `resource.busy` tanpa `operationId` untuk pemegang internal, alasan baru di `not_resumable` dan `not_abandonable`, `RecoveryInfo.cause` dan `error`, ulang commit `start`, definisi tipe yang belum ada, dan API `ScriptedWork`.
+
+## Perubahan 2026-10-18 (rekonsiliasi lintas spec, ronde 2)
+
+Pengecekan silang dengan spec 0008, 0010, dan 0013 dan keputusan engineer di pass rekonsiliasi:
+
+| Selisih | Perbaikan | Alasan |
+| --- | --- | --- |
+| Tabel resume menandai start, stop, restart, dan reload bisa dilanjutkan, dan kompensator spawn menghentikan proses, padahal spec 0010 (AC-9, AC-21) menjanjikan proses selamat dari restart daemon dan diadopsi rekonsiliasi | kebijakan baru `InterruptPolicy::CloseInterrupted` untuk keempat jenis itu: `recover` menutupnya `failed interrupted` tanpa kompensasi sebelum rekonsiliasi, dan shutdown membiarkannya tanpa sinyal | rekonsiliasi supervisor adalah satu satunya yang tahu apakah proses masih hidup; kompensasi yang menghentikan proses melanggar janji survival |
+| Fallback enum terbuka masih `unknown` | `unrecognized` (spec 0006) | `unknown` adalah state asli di spec 0004 dan 0011 |
+| `FailureError` tidak bisa membawa daftar | field `items` dan `hint` | `secret.needs_secret` dari operasi start tidak boleh kehilangan daftar reference nya |
+| Filter list tidak bisa memilih operasi `update_manager` | `ResourceKind` `manager` dengan id `self` | spec 0008 mengizinkan `--resource manager` |
+| Method pemula operasi selalu membuat operasi | boleh menjawab tanpa operasi untuk permintaan yang tidak mengubah apa pun, setelah pencarian key | spec 0010 menjawab `alreadyInState` tanpa operasi |
+| Perilaku dalam recovery mode registry tidak disebut | `recover` dan `start()` dilewati, subsystem `operations` `unavailable` | registry tidak boleh dibaca atau ditulis dalam recovery |
+| Asumsi `remove_file` dan `remove_empty_dir` | `remove_tree` satu satunya primitive (spec 0004) | keputusan engineer ronde 2 |
+

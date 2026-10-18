@@ -115,7 +115,7 @@ Decode memakai tipe mentah di `core::provider::raw` dengan `deny_unknown_fields`
 | `compatibility.lineCompatibility` | peta `RuntimeLine` ke daftar `RuntimeLine` | tidak | line runtime tambahan yang boleh menjalankan data line itu; line yang sama selalu boleh; kosong berarti BR-009 ketat |
 | `compatibility.dataMarker` | `{ file, pattern }` | tidak | `file` satu komponen di folder data (misalnya `PG_VERSION`); `pattern` dengan aturan pattern settings dan tepat satu capture group yang menghasilkan `RuntimeLine` |
 | `runtime.executable` | path relatif | ya | komponen literal, tanpa `..`; ada di `executables` artefak |
-| `runtime.executionMode` | enum | ya | `foreground` saja |
+| `runtime.executionMode` | enum | ya | `foreground` saja: proses utama tetap foreground, tidak me re exec dirinya, dan tidak menutup fd warisan (termasuk lock instance di fd 3, spec 0010) |
 | `capabilities` | object | tidak | `reload`, `metrics`, `tls`, `multiInstance`, `persistence` (boolean, default false), `backup` (daftar `cold`, `online`, `logical`, default kosong) |
 | `resources.endpoints` | peta nama ke Endpoint | ya | 1 sampai 16 |
 | `configFiles` | peta nama ke ConfigFile | tidak | paling banyak 16 |
@@ -140,7 +140,7 @@ Bentuk bagian:
 - **Langkah initialize** (`primitive` plus parameter):
   - `createManagedDirectories`: tanpa parameter; memastikan setiap folder di `permissions.managedFilesystem` ada.
   - `renderConfig`: `file` (nama di `configFiles`, `unknown_config_file` kalau tidak ada).
-  - `materializeSecret`: `secret` (nama field secret, `unknown_secret` kalau tidak ada), `destination` (`${instance.run}/secrets/` ditambah satu komponen literal, folder secret milik spec 0011 di runtime root); file 0600 berisi byte secret persis, dihapus executor di akhir aksi init, berhasil atau gagal. `${instance.temp}` tidak diterima, karena berada di root data yang ikut backup dan Time Machine (spec 0011).
+  - `materializeSecret`: `secret` (nama field secret, `unknown_secret` kalau tidak ada), `destination` (satu komponen literal saja, yaitu nama file; executor menaruhnya di folder `secrets/` spec 0011 di dalam folder run, `<runtime>/i/<short-key>/secrets/<nama>`, dan args, env, serta template merujuknya lewat token folder `${instance.secrets}`); file 0600 berisi byte secret persis, dihapus executor di akhir aksi init, berhasil atau gagal. `${instance.temp}` tidak diterima, karena berada di root data yang ikut backup dan Time Machine (spec 0011).
   - `runExecutable`: Command ditambah `stdin` (`{ secret: <nama> }`, opsional; byte secret persis tanpa newline tambahan, lalu stdin ditutup), `timeoutSeconds` (opsional, paling banyak `initSeconds`), `successExitCodes` (default `[0]`, 1 sampai 8 nilai 0 sampai 255).
 - **Stop**: `strategy: gracefulProcess` dengan `signal` `term` (default), `int`, atau `quit`; atau `strategy: command` dengan `command` (Command) dan `successExitCodes` (default `[0]`), lalu menunggu proses utama keluar. Tidak ada strategi kill.
 - **Reload**: `render` (daftar nama `configFiles`, paling banyak 16, boleh kosong), `action` (`signal` dengan `signal: hup`, `run` dengan `command` dan `successExitCodes` default `[0]`, atau `none` untuk provider yang mengawasi file), `verify` (`readiness` default, atau `none`).
@@ -206,6 +206,7 @@ Grammar: `${` path `}`, dengan path berupa segmen token yang dipisah titik. Tida
 | --- | --- | --- |
 | `instance.id`, `instance.name`, `instance.shortKey` | teks | `InstanceId` lowercase, `InstanceName`, `ShortKey` |
 | `instance.data`, `instance.config`, `instance.logs`, `instance.temp`, `instance.run` | folder (jenisnya sesuai nama) | `InstancePaths` dan `instance_run_dir(short key)` dari spec 0004 |
+| `instance.secrets` | folder secret | `<run>/secrets`, yaitu `instance_secrets_dir(short key)` spec 0004; butuh `run` di `managedFilesystem`; hanya untuk merujuk file `materializeSecret` (spec 0010) |
 | `runtime.root` | folder runtime | root runtime canonical |
 | `runtime.executable` | executable | root runtime ditambah `runtime.executable` |
 | `runtime.executables.<alias>` | executable | root runtime ditambah path alias di `additionalExecutables` |
@@ -227,7 +228,7 @@ Matriks posisi (ya berarti tipe itu diterima di posisi itu):
 | nilai `env` | ya | ya | ya | ya | ya | hanya sebagai seluruh nilai, satu token, dan hanya di `lifecycle.start` serta `runExecutable` | key mengikuti aturan Command |
 | `cwd` | tidak | tidak | satu token di awal | tidak | tidak | tidak | sufiks hanya komponen literal |
 | `configFiles.*.destination` | tidak | tidak | satu token di awal | tidak | tidak | tidak | lalu satu atau dua komponen literal; folder perantara dibuat plan |
-| `materializeSecret.destination` | tidak | tidak | `instance.run` di awal, diikuti komponen `secrets` | tidak | tidak | tidak | lalu satu komponen literal |
+| `materializeSecret.destination` | tidak | tidak | tidak (folder selalu `${instance.secrets}`) | tidak | tidak | tidak | tepat satu komponen literal (nama file) |
 | `logs.files` | tidak | tidak | `instance.logs` di awal | tidak | tidak | tidak | lalu komponen literal |
 | `socketName` | hanya `endpoint.<tcp>.port` | tidak | tidak | tidak | tidak | tidak | literal charset `SocketName` |
 | `http.path` | tidak | tidak | tidak | tidak | tidak | tidak | literal saja |
@@ -417,6 +418,7 @@ pub struct RunSpec { pub command: Command, pub stdin: Stdin, pub timeout: Durati
 pub enum Stdin { Null, Secret(PlanSecret) }
 
 pub struct RunPlan {
+    pub render: Vec<InitStep>,                // EnsureDirectories dan WriteFile setiap configFiles, urut nama, dijalankan sebelum setiap spawn (spec 0010)
     pub spawn: Command,                       // stdin null, stdout dan stderr ditangkap
     pub readiness: ProbePlan,                 // deadline = readinessSeconds
     pub recovery_deadline: Duration,          // recoverySeconds
@@ -567,7 +569,8 @@ Semua fungsi sync dan tanpa IO kecuali `read_package` (yang hanya membaca lewat 
   - menjalankan `EnsureDirectories` dengan semantik di *Execution plan*;
   - memeriksa ulang setiap path tulis dan hapus dengan `check_owned_path` (canonical) tepat sebelum IO;
   - memanggil `resolve_for_start` (spec 0011) sekali per aksi, lalu menyelesaikan dan meng escape semua segmen secret aksi itu lewat `materialize(&ResolvedSecrets)` sebelum efek samping pertama, dan menulis `WriteFile` lewat `write_file_atomic` (0600);
-  - membuat file `MaterializeSecret` dan menghapusnya di akhir aksi lewat operasi hapus yang ditambahkan ke port `Filesystem`;
+  - membuat file `MaterializeSecret` di `<run>/secrets/` dan menghapusnya di akhir aksi lewat `remove_owned_tree` (spec 0007, satu satunya jalur hapus);
+  - menjalankan `RunPlan.render` sebelum setiap spawn;
   - memverifikasi `ExecutablePath` (canonical, di dalam root runtime, file biasa, executable) tepat sebelum exec;
   - spawn dengan argv, env, dan cwd persis dari plan tanpa shell, dan menulis stdin secret lalu menutupnya;
   - menjalankan probe `tcp`, `http`, dan `exec`;
@@ -611,8 +614,8 @@ Tidak ada variabel environment baru untuk daemon atau CLI. Kode test membaca `ST
 - Capability: `reload: true` tanpa `lifecycle.reload`, `lifecycle.reload` tanpa capability, field `apply: reload` tanpa capability, `metrics` tanpa endpoint monitoring, `tls: true`, backup `online`, dan backup `cold` tanpa `persistence` masing masing ditolak. Memverifikasi **AC-5**.
 - Interpolasi: `executable: /bin/sh`, `executable: "${runtime.executable} -c"`, `${secret.authToken}` di `args`, di nilai `env` bersama teks lain (`--pass=${secret.authToken}`), dan di template tidak sensitif, `materializeSecret` ke `${instance.temp}/token` atau langsung ke `${instance.run}/token`, `args: ["${settings.label}"]`, `cwd: "${instance.data}/../config"`, `cwd: "${instance.data}/${settings.label}"`, `destination: "${instance.logs}/x"` saat `logs` tidak diizinkan, `--data=${instance.temp}` saat `temp` tidak diizinkan, `${unknown.x}`, `managed: "${settings.greeting}"`, dan env `DYLD_INSERT_LIBRARIES` masing masing ditolak; env `FAKE_TOKEN: "${secret.authToken}"` diterima di `lifecycle.start` dan menjadi `EnvValue::Secret`, tetapi ditolak di probe `exec` dan stop `command`; `$${HOME}` menghasilkan `${HOME}` literal. Memverifikasi **AC-7**.
 - Settings: keyword `$ref`, `oneOf`, dan `format` ditolak; field tanpa `maxLength`, enum `-x`, secret dengan `default`, default yang melanggar `maxLength`, field managed di `required`, 65 field root, dan object bersarang ditolak; pattern `a|b` hanya cocok `a` atau `b` penuh; field `apply: reload` yang dipakai di `args` ditolak; nilai dengan key asing, field managed yang diisi, route dengan `name` ganda, integer `5.0`, teks dengan newline, dan integer di luar batas ditolak dengan path field nya. Memverifikasi **AC-8** (VAL-012, VAL-019).
-- Template: `{{ settings.routes }}`, `{{#each settings.greeting}}`, `{{#each settings.routes as settings}}`, `{{ secret.authToken }}` di template tidak sensitif, tag tidak seimbang, nesting 5, dan `prefix-{{ endpoint.web.address }}` di template yaml (output tidak valid) ditolak dengan baris dan kolom; context dengan home berisi `"` membuat plan NATS gagal dengan `UnrepresentableValue` yang menyebut token, tanpa nilainya. Memverifikasi **AC-9**.
-- Endpoint: `defaultHost: 0.0.0.0`, socket `.s.PGSQL.${endpoint.client.port}x` (16 byte), socket `../x`, nama endpoint `client-tls`, probe ke endpoint yang tidak ada, dan probe `tcp` ke endpoint `udp` ditolak; context dengan host `0.0.0.0` menghasilkan `EndpointNotLoopback`. Memverifikasi **AC-6**, **AC-11**.
+- Template: `{{ settings.routes }}`, `{{#each settings.greeting}}`, `{{#each settings.routes as settings}}`, `{{ secret.authToken }}` di template tidak sensitif, tag tidak seimbang, nesting 5, dan `a: "prefix-{{ endpoint.web.address }}"` di template yaml (kutip ganda di dalam scalar berkutip membuat output tidak valid) ditolak dengan baris dan kolom; context dengan home berisi `"` membuat plan NATS gagal dengan `UnrepresentableValue` yang menyebut token, tanpa nilainya. Memverifikasi **AC-9**.
+- Endpoint: `defaultHost: 0.0.0.0`, socket `.s.PGSQL.${endpoint.client.port}xy` (16 byte), socket `../x`, nama endpoint `client-tls`, probe ke endpoint yang tidak ada, dan probe `tcp` ke endpoint `udp` ditolak; context dengan host `0.0.0.0` menghasilkan `EndpointNotLoopback`. Memverifikasi **AC-6**, **AC-11**.
 - Paket kotor: symlink di `templates/`, FIFO sebagai `provider.yaml`, `provider.yaml` 256 KiB plus 1 byte, `versions.json` yang hilang, file `notes.txt` di root, template yang tidak dirujuk, file berawalan BOM, dan folder `providers/nats2` dengan ID `official/nats` masing masing ditolak; `.DS_Store` dilewati; folder pinned dengan `NameCheck::Skip` diterima. Memverifikasi **AC-1**, **AC-3**.
 - VAL-002: ID `official/../x`, `Official/Nats`, `nats` tanpa namespace, revision kosong, dan revision `1..2` ditolak. Memverifikasi **AC-3**.
 - Timeout: `stopSeconds: 0`, `readinessSeconds: 601`, `reloadSeconds` tanpa capability reload, langkah run dengan timeout di atas `initSeconds`, dan `attemptTimeoutMilliseconds` di atas `readinessSeconds` ditolak; plan fake memuat timeout dan exit code sesuai tabel sumber. Memverifikasi **AC-10**.
@@ -687,7 +690,7 @@ Urutan mengikuti pendekatan Journey proyek: satu jalur dibuat lengkap lebih dulu
 
 ## Follow-up
 
-- [x] `/architect` update spec 0004: tambah `Capability::MultiInstance` (`multi_instance`) dan `Capability::Persistence` (`persistence`); pastikan `CapabilitySet` bisa dibangun dari daftar dan `LineCompatibility` punya konstruktor dari peta line ke himpunan line; tambah operasi hapus file (misalnya `remove_file` yang tidak mengikuti symlink) ke port `Filesystem` untuk file secret sementara spec 0010. Ini juga menutup Follow-up fitur 9 di spec 0004 (batas socket 15 byte, pemetaan capability, isi `LineCompatibility`). Diterapkan di spec 0004 (2026-10-18): capability sebagai titik perluasan fitur 9, `CapabilitySet` dari daftar sudah ada lewat `FromIterator`, dan operasi hapus berbentuk `remove_file` plus `remove_empty_dir` tanpa rekursif.
+- [x] `/architect` update spec 0004: tambah `Capability::MultiInstance` (`multi_instance`) dan `Capability::Persistence` (`persistence`); pastikan `CapabilitySet` bisa dibangun dari daftar dan `LineCompatibility` punya konstruktor dari peta line ke himpunan line; tambah operasi hapus file (misalnya `remove_file` yang tidak mengikuti symlink) ke port `Filesystem` untuk file secret sementara spec 0010. Ini juga menutup Follow-up fitur 9 di spec 0004 (batas socket 15 byte, pemetaan capability, isi `LineCompatibility`). Diterapkan di spec 0004 (2026-10-18): capability sebagai titik perluasan fitur 9, `CapabilitySet` dari daftar sudah ada lewat `FromIterator`, dan operasi hapus berbentuk `remove_file` plus `remove_empty_dir` tanpa rekursif. Ronde 2: `remove_file` dan `remove_empty_dir` dibuang; `remove_tree` lewat `remove_owned_tree` satu satunya jalur hapus.
 - [x] `/architect` update spec 0001: tandai baris "Validator JSON Schema dan template engine manifest" di *Batas keputusan* sudah diputuskan spec 0009 (tanpa validator generik, renderer sendiri); di *Peta crate*, core mendapat `serde`, `serde_yaml_ng`, `serde_path_to_error`, `regex`, `sha2`, dan `schemars` opsional, tambah crate bin `stackly-fake-server` (`crates/fake-server`; `signal-hook`, `serde_json`, `sha2`; dev `stackly-testkit`), dan xtask mendapat `stackly-core` serta `stackly-platform-macos` di bawah `cfg(target_os = "macos")`; di *Aturan arah dependency*, `stackly-fake-server` tanpa dependency normal ke crate Stackly dan tanpa crate yang bergantung padanya; di *Susunan repo*, `providers/` dibuat fitur 9 dan `schemas/provider/` berisi schema provider. Diterapkan di spec 0001 (2026-10-18).
 - [x] Update spec 0003 (pemiliknya): follow up "Fitur 9 dan 18: putuskan cara catalog membaca inventory" sudah diputuskan untuk bagian fitur 9 (catalog membaca `versions.json` hasil generator, inventory tetap tooling); penanda spike pindah ke fitur 36. Fitur 18 masih memutuskan cara install memakai `versions.json`. Diterapkan di spec 0003 (2026-10-18).
 - [ ] Fitur 18: kalau install butuh field di luar `stackly.provider-versions/v1`, tambahkan lewat `/architect` update spec ini sebagai perubahan additive.

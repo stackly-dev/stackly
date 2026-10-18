@@ -482,7 +482,9 @@ Holder environment, manual, atau startup, sesuai `instance_demands` (basis: PRD 
 
 - Keputusan stop harus melihat dua tempat, lease dan intent di instance.
 
-### Keputusan 17: operasi hapus di port `Filesystem` (2026-10-18)
+### Keputusan 17: operasi hapus di port `Filesystem` (2026-10-18, diganti di ronde 2)
+
+> Diganti pada hari yang sama, ronde 2 rekonsiliasi: engineer memilih satu primitive `remove_tree` dari spec 0007 (yang ia setujui di sesi spec 0007 dan sedang dibangun fitur 7 milestone 2), dipanggil hanya lewat `remove_owned_tree`, dengan kompensasi berbasis kepemilikan spec 0007. `remove_file` dan `remove_empty_dir` dibuang. Opsi di bawah adalah catatan pilihan ronde 1.
 
 Spec 0009 butuh `remove_file` untuk file secret sementara, spec 0011 butuh `remove_file` dan `remove_empty_dir` untuk menyapu folder `secrets/`, dan kompensasi fitur 7 (spec 0007, ditulis paralel) butuh membersihkan hasil create yang gagal (basis: Follow-up spec 0009 dan 0011, BR-023).
 
@@ -612,8 +614,8 @@ Spec 0011 menambah `SecretStore` sebagai port keenam, dan fitur 10, 15, dan 28 a
 | Folder `keychain/` | bukan subfolder standar `prepare_layout` | hanya dipakai dengan `STACKLY_ROOT` | selalu dibuat `prepare_layout` |
 | `ensure_private_dir` | privat sampai fitur di luar modul `layout` membutuhkannya | permukaan API core tetap kecil | publik sekarang |
 | Bukti VAL-001 dan VAL-002 | di test ujung ke ujung fitur 20 dan 9 | AC fitur 4 tidak bertambah, dan bukti dari input nyata lebih bermakna | guard di test value type fitur 4 |
-| Pembangun operasi hapus | fitur 11 saja (AC-20 spec 0011); fitur 7, 9, dan 10 memakainya | satu pembangun dengan satu AC, bukan "siapa pun yang lebih dulu" yang tidak punya AC | fitur 9 atau 11, mana yang lebih dulu |
-| Cakupan `remove_file` | semua entri yang bukan folder, termasuk socket dan FIFO | fitur 10 membersihkan socket basi di folder run | file biasa dan symlink saja |
+| Pembangun operasi hapus | fitur 7 milestone 2 (spec 0007), satu primitive `remove_tree` (ronde 2; ronde 1 sempat memilih fitur 11 dengan dua primitive) | primitive yang sudah diputuskan spec 0007 dan sedang dibangun; satu jalur hapus lewat `remove_owned_tree` lebih mudah diaudit daripada tiga | tiga primitive (tambah `remove_file` dan `remove_empty_dir` dari fitur 11) |
+| Target file atau symlink di `remove_tree` | dihapus sebagai dirinya sendiri, termasuk socket dan FIFO | satu primitive cukup untuk file secret, spool, dan socket basi | primitive terpisah per jenis entri |
 | OS di default Unsupported | dari `PlatformInfo::target()` milik `Platform` | `UnsupportedPlatform` untuk Windows diuji di Mac dan harus menjawab `windows` | OS host |
 | Status capability port tambahan | `Platform::capabilities()` memaksa not supported kalau port tidak dipasang | satu arah kesalahan yang aman, tanpa dua sumber kebenaran yang bisa saling bertentangan ke arah berbahaya | percaya `PlatformInfo` saja |
 | Pemeriksaan privasi folder di luar core | `check_private_dir` murni di `stackly-platform`, dipindah fitur 11 | adapter Keychain di `stackly-platform-macos` tidak boleh bergantung pada core | aturan disalin di adapter |
@@ -653,6 +655,16 @@ Update `/architect` untuk merekonsiliasi spec ini dengan spec yang diterima sesu
 - **Cross check model lain** (Sonnet 5.5, baca saja) atas update ini menemukan celah yang diperbaiki atas persetujuan engineer: pembangun tunggal operasi hapus (fitur 11) dan cakupan `remove_file`, OS default Unsupported, status capability port tambahan, `check_private_dir`, `observed_at` pada blocker, kewajiban event saat observasi basi, dan arti centang Follow-up.
 - **Penutupan fitur 4** (milestone 4, verify, test): modul core `observation` memegang `READINESS_MAX_AGE` bertipe `std::time::Duration` (core tetap tanpa `jiff`), `proc-macro2` dengan `span-locations` menjadi dependency langsung xtask untuk nomor baris, pindaian source tinggal di `check_deps/source_scan.rs` dengan pengecualian yang lebih rinci dari teks awal (target lib dan bin saja, item test, attribute, build script, `examples/`, `benches/`), dan engineer menerima keenam pilihan build yang sebelumnya tidak tertulis. Rinciannya di [verify.md](verify.md).
 - **Pengecekan silang Assumed** antara spec 0005, 0006, 0009, 0011, dan 0012 menemukan 24 selisih, yang diperbaiki di spec pemiliknya masing masing atas persetujuan engineer (lihat bagian perubahan di rationale spec itu).
+
+### Perubahan 2026-10-18, ronde 2
+
+Rekonsiliasi dengan spec 0007, 0008, 0010, dan 0013, dengan keputusan engineer (semua mengikuti rekomendasi):
+
+- **Hapus**: satu primitive `remove_tree` dan core `remove_owned_tree` dari spec 0007 menggantikan `remove_file` dan `remove_empty_dir` ronde 1 (keputusan 17 diganti).
+- **Recovery**: laporan recovery dikirim sebagai `DaemonHealth.recovery`, bukan `DaemonInfo.recovery`, karena GUI memanggil health setiap 15 detik (spec 0013).
+- **Urutan status instance**: `statusSeq` spec 0010 menjadi pengecualian resmi di resep snapshot plus cursor spec 0006.
+- **File secret**: `materializeSecret.destination` cukup nama file dengan token `${instance.secrets}` (spec 0010, diterapkan di spec 0009).
+- **Titik perluasan baru**: modul `operation::journal`, `LockKey`, `RecoveryHint`, `Operation::touch`, `OperationKind::resumable()`, `Outcome::Failed` (fitur 7); port `ProcessSupervision` lewat `with_processes`, modul domain `process`, blocker `DataInUse` dan `IdentityUnproven`, `set_bound_port`, `InstancePaths.lock`, `instance_spool` (fitur 10); `STACKLY_NO_INPUT` (fitur 8); `default_runtime_root` dan `STACKLY_ROOT` di app (fitur 13).
 
 ## References
 
