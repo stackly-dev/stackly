@@ -25,6 +25,6 @@ pub use instance_dir::{
     write_instance_manifest,
 };
 pub use inventory::{InstanceLocation, Inventory, InventoryEntry, inventory_instances};
-pub use layout::{PreparedLayout, ensure_instance_run_dir, prepare_layout};
+pub use layout::{PreparedLayout, ensure_instance_run_dir, ensure_runtime_root, prepare_layout};
 pub use observation::READINESS_MAX_AGE;
 pub use ownership::{OwnedPath, check_data_root_overlap, check_owned_path};

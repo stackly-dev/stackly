@@ -54,6 +54,7 @@ signal-hook = "0.4"
 syn = { version = "3.0", features = ["full", "visit"] }
 tempfile = "3"
 thiserror = "2.0"
+tokio = { version = "1.53", default-features = false }
 toml = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json"] }

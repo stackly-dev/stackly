@@ -12,6 +12,9 @@
 //! Tests that prove a PRD ID write evidence through [`evidence`], the
 //! re-exported `stackly-evidence` crate (spec 0002).
 //!
+//! Tests of the daemon run the real `stacklyd` through [`SpawnedDaemon`],
+//! which never lets the process outlive the test (spec 0006).
+//!
 //! Tests that need a process to supervise run the dummy server from
 //! [`fake_server::binary`], which builds `stackly-fake-server` once per
 //! test process (spec 0009).
@@ -31,6 +34,8 @@ pub mod fake_server;
 #[cfg(unix)]
 mod fifo;
 mod port;
+#[cfg(unix)]
+mod spawned_daemon;
 mod test_root;
 
 #[cfg(unix)]
@@ -42,5 +47,7 @@ pub use fake_platform::{FakeClock, FakeIdentity, FakePlatform, FakePlatformInfo}
 #[cfg(unix)]
 pub use fifo::make_fifo;
 pub use port::allocate_port;
+#[cfg(unix)]
+pub use spawned_daemon::{DAEMON_START_TIMEOUT, DAEMON_STOP_TIMEOUT, SpawnedDaemon};
 pub use stackly_evidence as evidence;
 pub use test_root::TestRoot;
