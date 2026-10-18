@@ -1,10 +1,12 @@
 //! `cargo xtask check-deps`: the dependency direction and `unsafe` rules
-//! from spec 0001 ("Aturan arah dependency"), plus the `stackly-evidence`
-//! rules from spec 0002.
+//! from spec 0001 ("Aturan arah dependency"), the `stackly-evidence` rules
+//! from spec 0002, and the platform rules and source scan from spec 0004.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
 //! build). Transitive dependencies are left alone: portability is proven by
 //! the cross target `cargo check`, not by a list of banned crates.
+
+mod source_scan;
 
 use std::fs;
 use std::path::Path;
@@ -36,6 +38,23 @@ const EVIDENCE_NORMAL_USERS: [&str; 2] = ["xtask", TESTKIT];
 const UNSAFE_LINT: &str = "unsafe_code";
 
 pub fn run(root: &Path) -> Result<()> {
+    let (crates, violations) = find_violations(root)?;
+    if violations.is_empty() {
+        println!("check-deps: {crates} crates follow the dependency, unsafe, and source rules");
+        return Ok(());
+    }
+    for violation in &violations {
+        eprintln!("  {violation}");
+    }
+    bail!(
+        "{} dependency rule violation(s), see specs 0001, 0002, and 0004",
+        violations.len()
+    )
+}
+
+/// Checks the workspace at `root` and returns its crate count and every
+/// violation.
+fn find_violations(root: &Path) -> Result<(usize, Vec<String>)> {
     let metadata = MetadataCommand::new()
         .manifest_path(root.join("Cargo.toml"))
         .no_deps()
@@ -52,22 +71,11 @@ pub fn run(root: &Path) -> Result<()> {
         if !UNSAFE_ALLOWED.contains(&package.name.as_str()) {
             check_unsafe_opt_out(package, &mut violations)?;
         }
+        if source_scan::SCANNED.contains(&package.name.as_str()) {
+            violations.extend(source_scan::scan_package(root, package)?);
+        }
     }
-
-    if violations.is_empty() {
-        println!(
-            "check-deps: {} crates follow the dependency and unsafe rules",
-            packages.len()
-        );
-        return Ok(());
-    }
-    for violation in &violations {
-        eprintln!("  {violation}");
-    }
-    bail!(
-        "{} dependency rule violation(s), see specs 0001 and 0002",
-        violations.len()
-    )
+    Ok((packages.len(), violations))
 }
 
 fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec<String>) {
@@ -102,6 +110,9 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
         if matches!(name, "tokio" | "libc") {
             deny("tokio and libc are never direct dependencies of this crate");
         }
+    }
+    if package == "stackly-platform" && matches!(name, "tokio" | "libc") {
+        deny("stackly-platform holds only portable traits and path logic, so never tokio or libc");
     }
     if package == "stackly-core" && matches!(name, "stackly-protocol" | "stackly-storage") {
         deny("stacklyd maps domain types to DTOs, so core never sees the protocol or storage");
@@ -346,5 +357,78 @@ mod tests {
         }
         assert!(violations(EVIDENCE, "serde", None).is_empty());
         assert!(violations(EVIDENCE, "tempfile", None).is_empty());
+    }
+
+    #[test]
+    fn stackly_platform_takes_neither_tokio_nor_libc() {
+        for name in ["tokio", "libc"] {
+            for (kind, label) in [(None, "normal"), (Some("dev"), "dev")] {
+                assert_eq!(
+                    violations("stackly-platform", name, kind),
+                    [format!(
+                        "stackly-platform has a {label} dependency on {name}: \
+                         stackly-platform holds only portable traits and path logic, so never tokio or libc"
+                    )]
+                );
+            }
+        }
+        assert!(violations("stackly-platform", "jiff", None).is_empty());
+        assert!(violations("stackly-platform-macos", "libc", None).is_empty());
+    }
+
+    /// Writes a one crate workspace named `stackly-core` whose `src/lib.rs`
+    /// is `lib`, and returns its root.
+    fn fixture_workspace(lib: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::write(
+            root.join("Cargo.toml"),
+            "[workspace]\nresolver = \"3\"\nmembers = [\"crates/core\"]\n\n\
+             [workspace.lints.rust]\nunsafe_code = \"deny\"\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("crates/core/src")).unwrap();
+        fs::write(
+            root.join("crates/core/Cargo.toml"),
+            "[package]\nname = \"stackly-core\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n\
+             [lints]\nworkspace = true\n",
+        )
+        .unwrap();
+        fs::write(root.join("crates/core/src/lib.rs"), lib).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_crate_that_reads_the_environment_or_names_homebrew_fails_with_file_and_line() {
+        let workspace = fixture_workspace(
+            "//! A fixture crate.\n\
+             pub fn root() -> Option<std::ffi::OsString> {\n\
+                 std::env::var_os(\"HOME\")\n\
+             }\n\
+             pub const BREW: &str = \"/opt/homebrew\";\n",
+        );
+
+        let (crates, found) = find_violations(workspace.path()).unwrap();
+
+        assert_eq!(crates, 1);
+        assert_eq!(
+            found,
+            [
+                "stackly-core crates/core/src/lib.rs:3: library crates never read the environment \
+                 (`env::var_os`); a bin reads it once in main and passes the value in",
+                "stackly-core crates/core/src/lib.rs:5: library crates never hardcode a machine path \
+                 (`/opt/homebrew`); derive it from DirectoryLayout",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_clean_fixture_crate_passes() {
+        let workspace =
+            fixture_workspace("//! A fixture crate.\npub const NAME: &str = \"stackly\";\n");
+
+        let (crates, found) = find_violations(workspace.path()).unwrap();
+
+        assert_eq!((crates, found), (1, Vec::<String>::new()));
     }
 }

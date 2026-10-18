@@ -877,6 +877,7 @@ version = "0.1.0"
 dependencies = [
  "jiff",
  "stackly-domain",
+ "stackly-evidence",
  "thiserror",
 ]
 
@@ -1297,6 +1298,7 @@ dependencies = [
  "cargo_metadata",
  "ctrlc",
  "jiff",
+ "proc-macro2",
  "schemars",
  "serde",
  "serde_json",

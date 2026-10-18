@@ -106,6 +106,7 @@ impl PlatformInfo for UnsupportedPlatform {
 #[cfg(test)]
 mod tests {
     use stackly_domain::Arch;
+    use stackly_evidence::{Kind, evidence};
 
     use super::*;
 
@@ -122,7 +123,14 @@ mod tests {
     }
 
     #[test]
-    fn windows_capabilities_report_not_supported_except_the_clock() {
+    fn windows_capabilities_report_not_supported() {
+        use PlatformCapability::{Directories, Filesystem as Fs, UserIdentity as Identity};
+
+        let ev = evidence!(
+            covers = ["AC-050", "REQ-050"],
+            kind = Kind::Fixture,
+            expected = "the windows platform reports every capability but the clock as not supported with reason `windows adapter not built`, and every method of the directory, filesystem, and identity ports answers NotSupported naming the capability and windows",
+        );
         let platform = UnsupportedPlatform::new(WINDOWS);
         let capabilities = platform.info().capabilities();
 
@@ -137,16 +145,8 @@ mod tests {
             };
             assert_eq!(capabilities.status(capability), expected, "{capability}");
         }
-    }
-
-    #[test]
-    fn every_method_of_the_unsupported_ports_answers_not_supported() {
-        use PlatformCapability::{Directories, Filesystem as Fs, UserIdentity as Identity};
-
-        let platform = UnsupportedPlatform::new(WINDOWS);
         let fs = platform.fs();
         let path = Path::new("C:\\stackly");
-
         assert!(is_not_supported(
             platform.directories().roots(),
             Directories
@@ -161,6 +161,7 @@ mod tests {
             platform.identity().current_user(),
             Identity
         ));
+        ev.pass();
     }
 
     #[test]
