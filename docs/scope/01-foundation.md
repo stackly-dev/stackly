@@ -91,7 +91,7 @@ Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision 
 
 - [ ] Design it (spec): `/architect data model registry`
 
-### 6. Protokol IPC & daemon · needs a decision · GA
+### 6. Protokol IPC & daemon · in-progress · GA
 
 Daemon per user dengan protokol berversi di atas encoding dan framing yang dikunci di fitur 1, lewat Unix domain socket privat: handshake, request ID, error terstruktur, event dengan cursor, dan otorisasi user lokal. GUI dan CLI hanya client; hanya daemon yang menulis registry dan mengendalikan lifecycle.
 
@@ -99,7 +99,19 @@ Daemon per user dengan protokol berversi di atas encoding dan framing yang dikun
 
 **Trace:** REQ-047, REQ-048, BR-011, VAL-017, VAL-020, NFR-001, NFR-004, NFR-006, NFR-011, AC-047, AC-070, AC-071, AC-079, NFR-009, RISK-03, RISK-09, OQ-005 (generation tooling), PRD bagian 18
 
-- [ ] Design it (spec): `/architect protokol IPC & daemon`
+**Pointer:** spec [0006](../specs/0006-protokol-ipc-daemon/index.md)
+
+- [x] Design it (spec): `/architect protokol IPC & daemon`
+- [ ] Build it: `/develop protokol IPC & daemon`
+  - [ ] Contract and codec: wire DTOs, error envelope and catalog, protocol 1.0 with contract digest and `contract-versions.json`, framing codec, staged request decode, shared fixtures, and Swift contract tests (spec 0006 AC-1, AC-6 to AC-8, AC-10)
+  - [ ] `stackly-ipc` transport: listener with peer check, framed connection, verified client, and the new `check-deps` rules (spec 0006 AC-2, AC-3, AC-5, AC-6, AC-16; after milestone 1, can run in parallel with the next one and the fuzz milestone)
+  - [ ] Daemon library, lock, and log: `stacklyd` as library plus bin, `--print-roots`, single daemon lock, rotating log writer (spec 0006 AC-4, AC-12, AC-17; after milestone 1)
+  - [ ] Daemon server and `stackly daemon status` end to end: event bus, handshake, limits, socket watch, shutdown, CLI status, performance, and the manual two account check (spec 0006 AC-1, AC-2, AC-4, AC-5, AC-7, AC-9, AC-11, AC-13, AC-15, AC-16; needs the three milestones above)
+  - [ ] Framing fuzz targets on this Mac: `fuzz/` with a pinned nightly, `cargo xtask fuzz`, 5 minute runs with evidence (spec 0006 AC-14; after milestone 1)
+- [ ] Verify it: `/check verify protokol IPC & daemon`
+- [ ] Test it: `/test protokol IPC & daemon`
+- [ ] Review it (fresh model): `/check review protokol IPC & daemon`
+- [ ] Document it: `/document protokol IPC & daemon`
 
 ### 7. Operation engine · needs a decision · GA
 
