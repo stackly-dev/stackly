@@ -1,7 +1,7 @@
 # 0012. Design system dan fondasi UI
 
 **Date**: 2026-10-18
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
