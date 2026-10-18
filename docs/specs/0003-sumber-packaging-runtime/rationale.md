@@ -337,6 +337,21 @@ Update ini dibaca model lain (Sonnet 5.5, baca saja) sebelum diterima. Klaim yan
 
 Perbaikan yang langsung diterapkan karena bukan keputusan: `make install USE_REDIS_SYMLINKS=no` (opsi itu ada di Makefile 9.1.2, dan `valkey-check-aof`, `valkey-check-rdb`, serta `valkey-sentinel` dipasang sebagai symlink ke server), cek `pg_config --sharedir` dan `--pkglibdir` dari salinan paket (cek `--version` saja hanya membuktikan dyld, bukan path relatif), kalimat tentang data ICU, dan catatan bahwa entri yang masih membawa `attestation` gagal sebagai TOML tidak valid. Temuan bahwa `-Drpath=false` perlu ternyata tidak berlaku: `meson.build` PostgreSQL tidak pernah menambah rpath di macOS dan memakai install name absolut, yang sekarang ditangani langkah relokasi 3. Saran link statis lz4 dan zstd ditolak (lihat Keputusan turunan).
 
+## Update 2026-10-18: kedua repo pindah ke org `stackly-dev`
+
+Sebelum unggahan pertama, kedua repo GitHub pindah ke org `stackly-dev`. Repo resep sekarang `stackly-dev/runtimes` (sebelumnya direncanakan `ojiepermana/stackly-runtimes`), dan repo utama sekarang `stackly-dev/stackly` (sebelumnya `ojiepermana/stackly`). GitHub mengalihkan nama lama, tapi kamu memilih memakai nama baru di semua tempat sebelum artefak terbit, karena `recipe` di dalam artefak dan URL di inventory tidak bisa diubah lagi setelah dipin dan diunggah.
+
+Yang berubah di `index.md`: setiap penyebutan kedua repo (Summary, AC-17, Decision, tabel sumber, field `recipe`, tabel API, perintah `gh release create`, bagian repo resep, alur `build.sh`, Value sourcing, prasyarat, langkah 12 Milestone 3, Consequences, dan Follow-up). Contoh di `verify.md` dan fixture xtask (`inventory.rs`, `pin.rs`, `check.rs`, `spike/closure.rs`) ikut diganti. Yang sengaja tetap:
+
+- checkout lokal tetap `~/Development/ojiepermana/stackly-runtimes`, karena foldernya memang di sana;
+- pesan `stackly-runtimes has uncommitted changes` di AC-17, karena `build.sh` masih mencetaknya;
+- owner default `@ojiepermana` untuk entri `blocked`, karena itu handle orang, bukan repo;
+- bagian lain di rationale ini (inventaris, tabel opsi) tetap memakai nama lama, sebagai catatan keadaan saat keputusan dibuat.
+
+Ketiga artefak dibangun ulang dari commit resep `38930060759d2e7f5fed000a5f1d82aa9ada7664`, supaya `recipe` di `STACKLY-ARTIFACT.json` berbunyi `stackly-dev/runtimes@...`. Probe `manifest` membandingkan string itu dengan entri, jadi artefak yang dibangun dengan nama lama tidak lulus spike.
+
+Di luar spec ini, `repository` di `Cargo.toml` dan spec 0001 (`[workspace.package]`) serta URL remote `origin` checkout ini masih memakai `ojiepermana/stackly`. Itu keputusan spec 0001, jadi dicatat di Follow-up, bukan diubah di sini.
+
 ## Landscape scan 2026-10-17
 
 Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum terkonfirmasi" dikonfirmasi saat `runtime pin`.
