@@ -1,0 +1,181 @@
+{
+  "archive": {
+    "files": 13,
+    "setuid": [],
+    "specialFiles": [],
+    "symlinksEscaping": [],
+    "symlinksInternal": 0
+  },
+  "artifactId": "valkey-9.1.2-r2-macos-aarch64",
+  "closureProbes": [
+    {
+      "detail": "0 non system libraries, as listed",
+      "name": "dependencies",
+      "status": "PASS"
+    },
+    {
+      "detail": "STACKLY-ARTIFACT.json matches the entry, 7 license texts, only regular files and folders",
+      "name": "manifest",
+      "status": "PASS"
+    }
+  ],
+  "failure": null,
+  "launch": {
+    "controllingTty": false,
+    "domain": "gui/502",
+    "parentIsLaunchd": true
+  },
+  "libraries": {
+    "foreign": [],
+    "runtime": [
+      "/usr/lib/dyld",
+      "bin/valkey-server"
+    ],
+    "static": [
+      "/usr/lib/libSystem.B.dylib"
+    ],
+    "warnings": []
+  },
+  "listeners": [
+    {
+      "address": "127.0.0.1",
+      "port": 52776
+    }
+  ],
+  "logTail": [
+    {
+      "process": "server",
+      "stderr": "",
+      "stdout": "49810:M 18 Oct 2026 18:20:39.490 * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo\n49810:M 18 Oct 2026 18:20:39.490 * Valkey version=9.1.2, bits=64, commit=00000000, modified=1, pid=49810, just started\n49810:M 18 Oct 2026 18:20:39.490 * Configuration loaded\n49810:M 18 Oct 2026 18:20:39.491 * Increased maximum number of open files to 10032 (it was originally set to 256).\n49810:M 18 Oct 2026 18:20:39.491 * monotonic clock: ARM CNTVCT @ 24 ticks/us\n49810:M 18 Oct 2026 18:20:39.491 * Running mode=standalone, port=52776.\n49810:M 18 Oct 2026 18:20:39.491 # WARNING: The TCP backlog setting of 511 cannot be enforced because kern.ipc.somaxconn is set to the lower value of 128.\n49810:M 18 Oct 2026 18:20:39.496 * Static Module 'lua' successfully loaded\n49810:M 18 Oct 2026 18:20:39.497 * Server initialized\n49810:M 18 Oct 2026 18:20:39.497 * Ready to accept connections tcp\n49810:M 18 Oct 2026 18:20:40.154 * User requested shutdown... (user request from 'id=5 addr=127.0.0.1:52781 laddr=127.0.0.1:52776 fd=7 name=*redacted* user=*redacted* lib-name= lib-ver=')\n49810:M 18 Oct 2026 18:20:40.154 * Module lua unloaded\n49810:M 18 Oct 2026 18:20:40.154 # Valkey is now ready to exit, bye bye...\n"
+    }
+  ],
+  "minOsMeasured": "27.0",
+  "observedVersion": "9.1.2",
+  "quarantine": {
+    "detail": "already recorded in evidence/runtime/01a14eae-ccfa-72c5-9740-dd77ca4e4a55/artifacts/01a14eae-e20c-77f9-a6cf-b945de794325/",
+    "outcome": "skipped"
+  },
+  "rawVersion": "valkey_version:9.1.2",
+  "schema": "stackly.runtime-spike-result/v1",
+  "sha256": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+  "signature": [
+    {
+      "adhocSignedAtInstall": false,
+      "authority": null,
+      "executable": "bin/valkey-server",
+      "kind": "adhoc",
+      "teamId": null
+    },
+    {
+      "adhocSignedAtInstall": false,
+      "authority": null,
+      "executable": "bin/valkey-cli",
+      "kind": "adhoc",
+      "teamId": null
+    }
+  ],
+  "status": "PASS",
+  "steps": [
+    {
+      "detail": "gui/502, parent launchd, no controlling terminal",
+      "durationMs": 0,
+      "name": "launch",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 51,
+      "name": "hash",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 30,
+      "name": "extract",
+      "status": "PASS"
+    },
+    {
+      "detail": "13 files, 0 internal links",
+      "durationMs": 0,
+      "name": "archive report",
+      "status": "PASS"
+    },
+    {
+      "detail": "5 Mach-O file(s), 1 libraries",
+      "durationMs": 193,
+      "name": "static audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 non system libraries, as listed; STACKLY-ARTIFACT.json matches the entry, 7 license texts, only regular files and folders",
+      "durationMs": 0,
+      "name": "closure",
+      "status": "PASS"
+    },
+    {
+      "detail": "kept the existing signatures",
+      "durationMs": 75,
+      "name": "signing",
+      "status": "PASS"
+    },
+    {
+      "detail": "27.0",
+      "durationMs": 9,
+      "name": "min_os",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "recipe",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "init",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 1,
+      "name": "start",
+      "status": "PASS"
+    },
+    {
+      "detail": "ready 826 ms after the start",
+      "durationMs": 826,
+      "name": "ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "9.1.2",
+      "durationMs": 133,
+      "name": "version",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 probe(s)",
+      "durationMs": 0,
+      "name": "probes",
+      "status": "PASS"
+    },
+    {
+      "detail": "1 listener(s)",
+      "durationMs": 45,
+      "name": "runtime audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit 0 after 139 ms",
+      "durationMs": 139,
+      "name": "stop",
+      "status": "PASS"
+    }
+  ],
+  "stop": {
+    "durationMs": 139,
+    "exitCode": 0,
+    "signal": null
+  }
+}

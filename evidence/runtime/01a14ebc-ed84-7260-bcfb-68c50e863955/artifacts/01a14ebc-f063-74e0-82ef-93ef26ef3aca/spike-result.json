@@ -1,0 +1,189 @@
+{
+  "archive": {
+    "files": 1,
+    "setuid": [],
+    "specialFiles": [],
+    "symlinksEscaping": [],
+    "symlinksInternal": 0
+  },
+  "artifactId": "clickhouse-26.8.30.8-macos-aarch64",
+  "closureProbes": [
+    {
+      "detail": "0 non system libraries, as listed",
+      "name": "dependencies",
+      "status": "PASS"
+    }
+  ],
+  "failure": null,
+  "launch": {
+    "controllingTty": false,
+    "domain": "gui/502",
+    "parentIsLaunchd": true
+  },
+  "libraries": {
+    "foreign": [],
+    "runtime": [
+      "/usr/lib/dyld",
+      "clickhouse"
+    ],
+    "static": [
+      "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+      "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+      "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+      "/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration",
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/libiconv.2.dylib",
+      "/usr/lib/libobjc.A.dylib"
+    ],
+    "warnings": []
+  },
+  "listeners": [
+    {
+      "address": "127.0.0.1",
+      "port": 52645
+    },
+    {
+      "address": "127.0.0.1",
+      "port": 52646
+    }
+  ],
+  "logTail": [
+    {
+      "process": "server",
+      "stderr": "Processing configuration file '$ROOT/Stackly Spike Ü/run/config.xml'.\nLogging information to $ROOT/Stackly Spike Ü/run/clickhouse-server.log\nLogging errors to $ROOT/Stackly Spike Ü/run/clickhouse-server.err.log\n",
+      "stdout": ""
+    },
+    {
+      "process": "clickhouse-server.log",
+      "stderr": "",
+      "stdout": "und executor for common operations (e.g. clearing old parts) with num_threads=8, num_tasks=8\n2026.10.18 18:20:18.006969 [ 15968372 ] {} <Information> Application: Loading metadata from $ROOT/Stackly Spike Ü/run/data/\n2026.10.18 18:20:18.007014 [ 15968372 ] {} <Information> Context: Database disk name: default\n2026.10.18 18:20:18.007015 [ 15968372 ] {} <Information> Context: Database disk name: default, path: $ROOT/Stackly Spike Ü/run/data/\n2026.10.18 18:20:18.007271 [ 15968372 ] {} <Information> DatabaseAtomic (system): Metadata disk default, path $ROOT/Stackly Spike Ü/run/data/\n2026.10.18 18:20:18.008477 [ 15968372 ] {} <Information> DatabaseAtomic (system): Metadata processed, database system has 0 tables, 0 dictionaries and 0 materialized views in total.\n2026.10.18 18:20:18.008496 [ 15968372 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 1 databases in 0.000 sec\n2026.10.18 18:20:18.044108 [ 15968372 ] {} <Information> DatabaseAtomic (default): Metadata disk default, path $ROOT/Stackly Spike Ü/run/data/\n2026.10.18 18:20:18.044603 [ 15968372 ] {} <Information> DatabaseAtomic (default): Metadata processed, database default has 0 tables, 0 dictionaries and 0 materialized views in total.\n2026.10.18 18:20:18.044610 [ 15968372 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 1 databases in 0.000 sec\n2026.10.18 18:20:18.044640 [ 15968372 ] {} <Information> loadMetadata: Start asynchronous loading of databases\n2026.10.18 18:20:18.044929 [ 15968372 ] {} <Information> UserDefinedSQLObjectsLoaderFromDisk: Loading user defined objects from $ROOT/Stackly Spike Ü/run/data/user_defined/\n2026.10.18 18:20:18.044944 [ 15968372 ] {} <Information> Application: TaskStats is not implemented for this OS. IO accounting will be disabled.\n2026.10.18 18:20:18.045330 [ 15968372 ] {} <Information> CertificateReloader: One of paths is empty. Cannot apply new configuration for certificates. Fill all paths and try again.\n2026.10.18 18:20:18.045332 [ 15968372 ] {} <Information> CertificateReloader: One of paths is empty. Cannot apply new configuration for certificates. Fill all paths and try again.\n2026.10.18 18:20:18.061803 [ 15968372 ] {} <Information> Application: Listening for http://127.0.0.1:52646\n2026.10.18 18:20:18.061815 [ 15968372 ] {} <Information> Application: Listening for native protocol (tcp): 127.0.0.1:52645\n2026.10.18 18:20:18.061817 [ 15968372 ] {} <Information> Application: Ready for connections.\n2026.10.18 18:20:18.149069 [ 15968862 ] {} <Information> MemoryTracker: Correcting the value of global memory tracker from 169.76 MiB to 339.69 MiB\n2026.10.18 18:20:18.404363 [ 15968855 ] {} <Information> BaseDaemon: Received termination signal (Terminated: 15)\n2026.10.18 18:20:18.813875 [ 15968372 ] {} <Information> Application: Closed all listening sockets.\n2026.10.18 18:20:18.813887 [ 15968372 ] {} <Information> Application: Closed connections.\n2026.10.18 18:20:18.813939 [ 15968372 ] {} <Information> Application: Stopping AsyncLoader.\n2026.10.18 18:20:18.814409 [ 15968372 ] {} <Information> Application: Shutting down storages.\n2026.10.18 18:20:18.820560 [ 15968372 ] {} <Information> Context: Shutdown disk default\n2026.10.18 18:20:18.850516 [ 15968372 ] {} <Information> Application: Waiting for background threads\n2026.10.18 18:20:18.853237 [ 15968372 ] {} <Information> Application: Background threads finished in 2 ms\n2026.10.18 18:20:18.853403 [ 15968372 ] {} <Information> Application: shutting down\n2026.10.18 18:20:18.853416 [ 15968855 ] {} <Information> BaseDaemon: Stop SignalListener thread\n"
+    },
+    {
+      "process": "clickhouse-server.err.log",
+      "stderr": "",
+      "stdout": "2026.10.18 18:20:17.988577 [ 15968372 ] {} <Warning> Context: Maximum number of threads is lower than 30000. There could be problems with handling a lot of simultaneous queries.\n2026.10.18 18:20:17.993378 [ 15968372 ] {} <Warning> DNSResolver: Cannot resolve host ($HOST), error 0: Host not found.\n2026.10.18 18:20:17.994040 [ 15968372 ] {} <Error> DNSResolver: bool DB::DNSResolver::updateHostNameAndAddresses(): Code: 198. DB::NetException: Not found address of host: $HOST. (DNS_ERROR), Stack trace (when copying this message, always include the lines below):\n\n0. Poco::Exception::Exception(String&&, int) @ 0x00000001168a4d3c\n1. DB::Exception::Exception(DB::Exception::MessageMasked&&, int, bool) @ 0x00000001068ada30\n2. DB::Exception::Exception(String&&, int, String, bool) @ 0x0000000102dcbe58\n3. DB::NetException::NetException<String const&>(int, FormatStringHelperImpl<std::type_identity<String const&>::type>, String const&) @ 0x000000010688d570\n4. DB::(anonymous namespace)::hostByName(String const&) @ 0x00000001068802b4\n5. DB::DNSResolver::updateHostNameAndAddresses() @ 0x000000010687fd30\n6. DB::Server::main(std::vector<String, std::allocator<String>> const&) @ 0x0000000106e62938\n7. Poco::Util::Application::run() @ 0x000000011693e97c\n8. DB::Server::run() @ 0x0000000106e564a0\n9. mainEntryClickHouseServer(int, char**) @ 0x0000000106e55bc8\n10. main @ 0x0000000100f40f30\n11. GCC_except_table26 @ 0x0000000186c13e80\n (version 26.8.30.8 (official build))\n2026.10.18 18:20:17.995936 [ 15968870 ] {BgSchPool::0e462012-dfe8-48ee-9b17-25612d00c619} <Warning> DNSResolver: Cannot resolve host ($HOST), error 0: Host not found.\n2026.10.18 18:20:17.996039 [ 15968870 ] {BgSchPool::0e462012-dfe8-48ee-9b17-25612d00c619} <Error> DNSResolver: bool DB::DNSResolver::updateHostNameAndAddresses(): Code: 198. DB::NetException: Not found address of host: $HOST. (DNS_ERROR), Stack trace (when copying this message, always include the lines below):\n\n0. Poco::Exception::Exception(String&&, int) @ 0x00000001168a4d3c\n1. DB::Exception::Exception(DB::Exception::MessageMasked&&, int, bool) @ 0x00000001068ada30\n2. DB::Exception::Exception(String&&, int, String, bool) @ 0x0000000102dcbe58\n3. DB::NetException::NetException<String const&>(int, FormatStringHelperImpl<std::type_identity<String const&>::type>, String const&) @ 0x000000010688d570\n4. DB::(anonymous namespace)::hostByName(String const&) @ 0x00000001068802b4\n5. DB::DNSResolver::updateHostNameAndAddresses() @ 0x000000010687fd30\n6. DB::DNSCacheUpdater::run() @ 0x000000010c5ee678\n7. DB::BackgroundSchedulePoolTaskInfo::execute(DB::BackgroundSchedulePool&) @ 0x000000010b2eff3c\n8. DB::BackgroundSchedulePool::threadFunction() @ 0x000000010b2f464c\n9. void std::__function::__policy_func<void ()>::__call_func[abi:fqe220101]<startThreadFromGlobalPool(std::shared_ptr<ThreadFromGlobalPoolState>, std::function<void ()>, unsigned long long, unsigned long long, bool, bool)::$_0>(std::__function::__policy_storage const*) @ 0x0000000106b03b0c\n10. ThreadPoolImpl<DB::ThreadWithStackSize>::ThreadFromThreadPool::worker() @ 0x0000000106afa59c\n11. void* DB::ThreadWithStackSize::run<std::tuple<void (ThreadPoolImpl<DB::ThreadWithStackSize>::ThreadFromThreadPool::*)(), ThreadPoolImpl<DB::ThreadWithStackSize>::ThreadFromThreadPool*>>(void*) @ 0x0000000106b020ec\n12. _pthread_start @ 0x0000000186fe9d00\n13. thread_start @ 0x0000000186fe4cec\n (version 26.8.30.8 (official build))\n"
+    }
+  ],
+  "minOsMeasured": "11.0",
+  "observedVersion": "26.8.30.8",
+  "quarantine": {
+    "detail": "already recorded in evidence/runtime/01a14c52-92d2-75ee-b5ce-3e641036b90a/artifacts/01a14c52-94f6-705c-a96b-32cb0c6ed407/",
+    "outcome": "skipped"
+  },
+  "rawVersion": "26.8.30.8",
+  "schema": "stackly.runtime-spike-result/v1",
+  "sha256": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+  "signature": [
+    {
+      "adhocSignedAtInstall": false,
+      "authority": "Developer ID Application: ClickHouse Inc. (ZNDB5FJ8ZW)",
+      "executable": "clickhouse",
+      "kind": "developer_id",
+      "teamId": "ZNDB5FJ8ZW"
+    }
+  ],
+  "status": "PASS",
+  "steps": [
+    {
+      "detail": "gui/502, parent launchd, no controlling terminal",
+      "durationMs": 0,
+      "name": "launch",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 2278,
+      "name": "hash",
+      "status": "PASS"
+    },
+    {
+      "detail": "set mode 0755 on clickhouse (was 0644)",
+      "durationMs": 1613,
+      "name": "extract",
+      "status": "PASS"
+    },
+    {
+      "detail": "1 files, 0 internal links",
+      "durationMs": 0,
+      "name": "archive report",
+      "status": "PASS"
+    },
+    {
+      "detail": "1 Mach-O file(s), 7 libraries",
+      "durationMs": 121,
+      "name": "static audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 non system libraries, as listed",
+      "durationMs": 0,
+      "name": "closure",
+      "status": "PASS"
+    },
+    {
+      "detail": "kept the existing signatures",
+      "durationMs": 617,
+      "name": "signing",
+      "status": "PASS"
+    },
+    {
+      "detail": "11.0",
+      "durationMs": 393,
+      "name": "min_os",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "recipe",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "init",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 57,
+      "name": "start",
+      "status": "PASS"
+    },
+    {
+      "detail": "ready 9397 ms after the start",
+      "durationMs": 9397,
+      "name": "ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "26.8.30.8",
+      "durationMs": 16,
+      "name": "version",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 probe(s)",
+      "durationMs": 0,
+      "name": "probes",
+      "status": "PASS"
+    },
+    {
+      "detail": "2 listener(s)",
+      "durationMs": 39,
+      "name": "runtime audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit 0 after 525 ms",
+      "durationMs": 525,
+      "name": "stop",
+      "status": "PASS"
+    }
+  ],
+  "stop": {
+    "durationMs": 525,
+    "exitCode": 0,
+    "signal": null
+  }
+}
