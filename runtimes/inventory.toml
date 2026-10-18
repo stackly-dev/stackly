@@ -2,8 +2,8 @@
 # installs comes from, with its pinned digest, license, and signing policy.
 #
 # `cargo xtask runtime check` enforces the rules in spec 0003 (Key
-# invariants) on every pull request. `urls`, `sha256`, `size`, and `min_os`
-# come from `cargo xtask runtime pin`, never typed by hand, and
+# invariants) on every pull request. `format`, `urls`, `sha256`, `size`, and
+# `min_os` come from `cargo xtask runtime pin`, never typed by hand, and
 # `cargo xtask runtime verify` downloads each artifact again to prove them.
 
 schema_version = 1
@@ -94,23 +94,61 @@ kind = "system"
 install_name = "/System/Library/Frameworks/Security.framework/Versions/A/Security"
 
 [[artifact]]
-id = "clickhouse-26.8.29.10-macos-aarch64"
+id = "clickhouse-26.8.30.8-macos-aarch64"
 provider = "clickhouse"
 line = "26.8"
-version = "26.8.29.10"
+version = "26.8.30.8"
 os = "macos"
 arch = "aarch64"
-status = "blocked"
-blocked_reason = "the clickhouse-macos-aarch64 asset of 26.8 LTS (and of 26.9 stable) is a self extracting binary: codesign rejects it (main executable failed strict validation), so keep_or_adhoc cannot sign it, and it rewrites itself on first run; the Developer ID signed clickhouse-macos-aarch64.zip needs a zip format that spec 0003 does not allow yet"
-blocked_owner = "@ojiepermana"
-blocked_since = 2026-10-17
+min_os = "11.0"
+status = "available"
 origin = "upstream"
 distribution = "upstream_download"
+format = "zip"
+urls = ["https://github.com/ClickHouse/ClickHouse/releases/download/v26.8.30.8-lts/clickhouse-macos-aarch64.zip"]
+sha256 = "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402"
+size = 216009716
 upstream_checksum = { kind = "none" }
 upstream_signature = { kind = "none" }
 signing_policy = "keep_or_adhoc"
 license = "Apache-2.0"
-license_url = "https://github.com/ClickHouse/ClickHouse/blob/v26.8.29.10-lts/LICENSE"
+license_url = "https://github.com/ClickHouse/ClickHouse/blob/v26.8.30.8-lts/LICENSE"
+executables = ["clickhouse"]
+
+[[artifact.dependency]]
+name = "AppKit"
+kind = "system"
+install_name = "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"
+
+[[artifact.dependency]]
+name = "CoreFoundation"
+kind = "system"
+install_name = "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+
+[[artifact.dependency]]
+name = "Security"
+kind = "system"
+install_name = "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+
+[[artifact.dependency]]
+name = "SystemConfiguration"
+kind = "system"
+install_name = "/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration"
+
+[[artifact.dependency]]
+name = "libSystem.B.dylib"
+kind = "system"
+install_name = "/usr/lib/libSystem.B.dylib"
+
+[[artifact.dependency]]
+name = "libiconv.2.dylib"
+kind = "system"
+install_name = "/usr/lib/libiconv.2.dylib"
+
+[[artifact.dependency]]
+name = "libobjc.A.dylib"
+kind = "system"
+install_name = "/usr/lib/libobjc.A.dylib"
 
 [[artifact]]
 id = "mysql-8.4.11-macos-aarch64"
