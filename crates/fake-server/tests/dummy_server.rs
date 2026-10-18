@@ -761,8 +761,19 @@ fn serve_exits_with_one_on_a_config_it_cannot_use() {
 
 #[test]
 fn serve_exits_with_one_when_the_port_is_taken() {
-    let setup = Setup::new();
-    let _taken = TcpListener::bind((Ipv4Addr::LOCALHOST, setup.port)).unwrap();
+    let mut setup = Setup::new();
+    // Another process can take the allocated port first; then take a fresh one.
+    let _taken = (0..BIND_ATTEMPTS)
+        .find_map(
+            |_| match TcpListener::bind((Ipv4Addr::LOCALHOST, setup.port)) {
+                Ok(listener) => Some(listener),
+                Err(_) => {
+                    setup.port = allocate_port().expect("a loopback port is free");
+                    None
+                }
+            },
+        )
+        .expect("a loopback port can be held for the test");
 
     let finished = Fake::spawn(&setup.serve_args(&[]), None, setup.root.path()).finish();
 
