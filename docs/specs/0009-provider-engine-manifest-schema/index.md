@@ -62,7 +62,7 @@ Semua aturan arah dependency spec 0001 dan 0004 tetap berlaku. Engine adalah mod
 | `xtask` | `stackly-core` dengan fitur `json-schema`; `stackly-platform-macos` di bawah `cfg(target_os = "macos")` | `provider check` (memakai `MacosFilesystem`, macOS saja), generator `versions.json` dan JSON Schema di `codegen` |
 | fuzz crate (lokasi dan toolchain dari spec 0006) | `stackly-core` | empat target di *Fuzz target* |
 
-Aturan baru di `cargo xtask check-deps`: `stackly-fake-server` tidak punya dependency normal ke crate Stackly mana pun (hanya `stackly-testkit` sebagai dev dependency), dan tidak ada crate yang bergantung padanya. `[workspace.dependencies]` mendapat `serde_yaml_ng`, `serde_path_to_error`, `regex`, dan `signal-hook`.
+Aturan baru di `cargo xtask check-deps`: `stackly-fake-server` tidak punya dependency normal ke crate Stackly mana pun (hanya `stackly-testkit` sebagai dev dependency), dan tidak ada crate yang bergantung padanya. `[workspace.dependencies]` mendapat `serde_yaml_ng`, `serde_path_to_error`, `regex`, dan `signal-hook`. `serde_yaml_ng` menarik `unsafe-libyaml` (RUSTSEC-2024-0449, tidak dirawat): fitur ini menambah `ignore` untuk advisory itu di `deny.toml` dengan alasan dan pemilik `feature 9`, dijaga test billion laughs dan fuzz target `provider_manifest` (keputusan engineer 2026-10-18).
 
 Selama spec 0011 belum dibangun, `core::provider::secret::SecretRef` adalah newtype teks opaque dengan `FromStr` (1 sampai 256 byte ASCII tercetak), dan `core::provider::secret::ResolvedSecrets` adalah peta field ke byte dengan konstruktor publik untuk test; keduanya ditandai `// provisional: F11` dan diganti tipe milik spec 0011 (yang untuk test memakai `ResolvedSecrets::for_tests` di balik fitur `test-support`).
 

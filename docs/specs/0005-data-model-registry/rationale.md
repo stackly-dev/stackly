@@ -615,3 +615,5 @@ Pengecekan silang Assumed lines antara spec 0005, 0006, 0009, 0011, dan 0012 men
 
 Cross check model lain atas update ini menambah, atas persetujuan engineer: trigger `secret_references_owner_fixed`, penghapusan eksplisit baris `secret_reference_uses` saat purge, method baca dan varian `ResourceRef` secret yang dirancang fitur 11 lewat update spec ini sebelum langkah core nya, tanda `allowed_in_recovery` dan percobaan ulang `registry_locked` dari spec 0006, dan aturan bahwa langkah 7 memakai `--print-roots` kalau sudah ada di main.
 
+Catatan build fitur 5 milestone 1 dan keputusan engineer sesudahnya (2026-10-18): foreign key komposit `instances (id, config_revision_id)` dianggap ber index lewat primary key unik `id`, karena index unik pada kolom awal sudah cukup untuk pencarian baris anak; prune baru dipasang di langkah 13, jadi `stacklyd` milestone 1 belum menjalankannya; dan recovery sementara keluar dengan kode 1, bukan 3, karena spec 0006 memberi kode 3 arti "daemon lain memegang lock" (engineer memilih satu arti untuk kode 3 dan tanpa kode baru).
+

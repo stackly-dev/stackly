@@ -78,16 +78,16 @@ Semua aturan arah dependency spec 0001 tetap berlaku. Spec ini menambah:
 | --- | --- | --- |
 | `stackly-domain` | `serde` (derive), `jiff` (fitur `serde`); `uuid` mendapat fitur `serde`; dev: `stackly-evidence`, `serde_json` | `id`, `value`, `target`, `endpoint`, `capability`, `provider`, `runtime`, `instance`, `observation`, `environment`, `lease`, `operation`, `manifest`, `rule`, `error`, plus modul internal `code` (makro enum berkode snake_case stabil) dan `text` (serde lewat bentuk teks) |
 | `stackly-platform` | `stackly-domain`, `jiff`; dev: `stackly-evidence` | `layout`, `fs`, `clock`, `identity`, `info`, `capability`, `unsupported`, `platform`, `error` |
-| `stackly-core` | `stackly-domain`, `stackly-platform`, `serde_json`, `thiserror`; dev: `stackly-testkit`. Tanpa `jiff` dan tanpa `serde` di fitur ini (lihat *Value sourcing*) | `layout`, `instance_dir`, `inventory`, `ownership`, `error` |
+| `stackly-core` | `stackly-domain`, `stackly-platform`, `serde_json`, `thiserror`; dev: `stackly-testkit`. Tanpa `jiff` dan tanpa `serde` di fitur ini (lihat *Value sourcing*) | `layout`, `instance_dir`, `inventory`, `ownership`, `observation` (`READINESS_MAX_AGE`), `error` |
 | `stackly-platform-macos` | `stackly-domain`, `libc`; dev: `stackly-core`, `stackly-testkit` | `dirs`, `fs`, `identity`, `info`, `platform` |
 | `stackly-testkit` | `stackly-domain` | `fake_fs`, `fake_platform`, `conformance`, `fifo` (`make_fifo`, membuat FIFO lewat `mkfifo` untuk `fs_conformance` dan test inventaris); `TestRoot` mendapat runtime folder pendek |
 | `stacklyd` | dev: `stackly-testkit`, `serde_json` | `main` membaca `STACKLY_ROOT` dan memakai `MacosPlatform` |
-| `xtask` | `syn` (fitur `full`, `visit`), kalau langkah 2 spec 0002 belum menambahkannya | pindaian source di `check_deps` |
+| `xtask` | `syn` (fitur `full`, `visit`), kalau langkah 2 spec 0002 belum menambahkannya; `proc-macro2` dengan fitur `span-locations` (dependency langsung xtask saja, untuk nomor baris) | pindaian source di `check_deps/source_scan.rs` (modul anak `check_deps`) |
 
 Aturan baru di `cargo xtask check-deps`:
 
 - `stackly-platform` tidak punya tokio atau libc sebagai dependency langsung, supaya ia tetap berisi trait dan logika path yang portabel.
-- Pindaian source lewat `syn` untuk `stackly-domain`, `stackly-platform`, `stackly-core`, `stackly-protocol`, dan `stackly-platform-macos` (di luar modul `#[cfg(test)]` dan folder `tests/`): tidak boleh ada pemanggilan `env::var`, `env::var_os`, `env::vars`, `env::vars_os`, `env::home_dir`, atau `env::temp_dir`, dan tidak boleh ada literal string yang memuat `/Users/`, `/opt/homebrew`, `/usr/local`, `/tmp`, atau `/var/folders`. Pesan gagalnya `<crate> <file>:<baris>: <aturan>`.
+- Pindaian source lewat `syn` untuk `stackly-domain`, `stackly-platform`, `stackly-core`, `stackly-protocol`, dan `stackly-platform-macos` (mengikuti pohon modul dari target lib dan bin, jadi `tests/`, `examples/`, `benches/`, `build.rs`, dan file yang hanya dimuat lewat `#[cfg(test)] mod x;` tidak pernah dipindai; item ber `#[test]`, `#[cfg(test)]`, atau `#[cfg(all(.., test, ..))]` dilewati; attribute, termasuk doc comment, dilewati; token di dalam makro ikut dibaca, jadi `format!("/tmp/..")` terhitung; pembacaan environment adalah path yang berakhir di `env::<var|var_os|vars|vars_os|home_dir|temp_dir>` atau `use` dari salah satunya atau `env::*`, sedangkan makro `env!` boleh): tidak boleh ada pemanggilan `env::var`, `env::var_os`, `env::vars`, `env::vars_os`, `env::home_dir`, atau `env::temp_dir`, dan tidak boleh ada literal string yang memuat `/Users/`, `/opt/homebrew`, `/usr/local`, `/tmp`, atau `/var/folders`. Pesan gagalnya `<crate> <file>:<baris>: <aturan>`.
 
 `stackly-protocol` tidak berubah. Pemetaan tipe domain ke DTO tetap terjadi di `stacklyd` (fitur 6).
 
@@ -567,7 +567,7 @@ Aturan privasi folder (`ensure_private_dir`, privat di modul `layout`: buat deng
 | `Instance::apply_provider_revision` | `accepted_diff_sha256` | digest diff yang disetujui pengguna (fitur 59) |
 | `plan_runtime_removal` | `RuntimeReferences` | registry (fitur 5 dan 55) |
 | `effective` readiness dan health | `now` | `Clock::now` |
-| `effective` readiness dan health | `max_age` | parameter bertipe `std::time::Duration`; default `READINESS_MAX_AGE = Duration::from_secs(30)` di core, `// provisional: F28` (tiga kali interval probe 10 detik). Karena tipenya dari std, core tidak bergantung pada `jiff` di fitur ini; fitur pertama yang menamai `jiff::Timestamp` di signature core menambahkannya (spec 0001 mengizinkan) |
+| `effective` readiness dan health | `max_age` | parameter bertipe `std::time::Duration`; default `READINESS_MAX_AGE = Duration::from_secs(30)` di modul `observation` core, `// provisional: F28` (tiga kali interval probe 10 detik). Karena tipenya dari std, core tidak bergantung pada `jiff` di fitur ini; fitur pertama yang menamai `jiff::Timestamp` di signature core menambahkannya (spec 0001 mengizinkan) |
 | readiness dan health saat registry dibuka *(fitur 5)* | state, reason, `observed_at` | `unknown`, `daemon_restarted`, dan `loaded_at` dari `OpenSummary::opened_at` (spec 0005) |
 | `evaluate_stop`, `should_autostart` | `session` | parameter; sumber platform diputuskan fitur 31 |
 | `resolve_port` | kandidat auto port | parameter dari pencari port platform (fitur 20 dan 10) |

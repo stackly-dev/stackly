@@ -141,6 +141,7 @@ Rekonsiliasi dengan spec yang diterima sesudah scaffold. Keputusan di spec ini t
 - *Proposed stack*: baris registry (WAL, `synchronous=FULL`, `fullfsync`, satu thread), manifest provider, secret, transport IPC, fuzzing, dan sink log.
 - *Susunan repo*, *Alur kontrak*, dan *Konfigurasi workspace* mengikuti spec 0006 dan 0009, termasuk fallback enum terbuka `unrecognized` yang diputuskan saat pengecekan silang spec 0006 dengan state `unknown` di spec 0004.
 - *Batas keputusan* mendapat kolom yang menunjuk spec yang sudah memutuskan setiap baris.
+- Baris YAML mencatat advisory RUSTSEC-2024-0449 (`unsafe-libyaml` tidak dirawat, ditarik serde_yaml_ng) yang diterima engineer dengan pemilik fitur 9; crate YAML tidak berubah.
 
 ## References
 
