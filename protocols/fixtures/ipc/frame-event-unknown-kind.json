@@ -1,0 +1,19 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 43,
+    "at": "2026-10-18T03:04:05.123Z",
+    "resource": {
+      "kind": "instance",
+      "id": "0192f3a2-1111-7aaa-8bbb-cccccccccccc"
+    },
+    "revision": 7,
+    "kind": {
+      "type": "instance.paused",
+      "content": {
+        "pausedBy": "user"
+      }
+    }
+  }
+}

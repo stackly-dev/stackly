@@ -1,0 +1,1124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ServerFrame",
+  "description": "Every frame the daemon sends. Adding a variant is a new major.",
+  "oneOf": [
+    {
+      "description": "The reply to one request.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/Response"
+        },
+        "type": {
+          "type": "string",
+          "const": "response"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ]
+    },
+    {
+      "description": "The error for one request, or for a frame without a readable\nrequest.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/ErrorFrame"
+        },
+        "type": {
+          "type": "string",
+          "const": "error"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ]
+    },
+    {
+      "description": "One event for one subscription.",
+      "type": "object",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/Event"
+        },
+        "type": {
+          "type": "string",
+          "const": "event"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ]
+    }
+  ],
+  "$defs": {
+    "Capabilities": {
+      "description": "Reply of `daemon.get_capabilities`.",
+      "type": "object",
+      "properties": {
+        "eventKinds": {
+          "description": "Every event kind the daemon knows (`EventKind::KINDS`).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "methods": {
+          "description": "Every method the daemon knows (`Call::METHODS`).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "platform": {
+          "description": "Each platform capability and whether this Mac supports it.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlatformCapabilityStatus"
+          }
+        }
+      }
+    },
+    "DaemonCounters": {
+      "description": "Counters since daemon start.",
+      "type": "object",
+      "properties": {
+        "connectionsOpen": {
+          "description": "Connections open now.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "connectionsRejected": {
+          "description": "Rejected peers, connections over the limit, and failed handshakes.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "connectionsTotal": {
+          "description": "Every accepted connection.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "eventsDropped": {
+          "description": "Events lagging subscribers lost; may exceed `eventsPublished`.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "eventsPublished": {
+          "description": "Published events.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "framesRejected": {
+          "description": "Frames answered with a framing or payload error.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "logLinesDropped": {
+          "description": "Log lines dropped because the queue was full or a write failed.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "socketRebinds": {
+          "description": "Times the socket was bound again after it went missing.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "connectionsOpen",
+        "connectionsTotal",
+        "connectionsRejected",
+        "framesRejected",
+        "eventsPublished",
+        "eventsDropped",
+        "logLinesDropped",
+        "socketRebinds"
+      ]
+    },
+    "DaemonHealth": {
+      "description": "Reply of `daemon.get_health`.",
+      "type": "object",
+      "properties": {
+        "counters": {
+          "description": "Counters since daemon start.",
+          "$ref": "#/$defs/DaemonCounters"
+        },
+        "status": {
+          "description": "The overall status.",
+          "$ref": "#/$defs/HealthStatus"
+        },
+        "subsystems": {
+          "description": "Each subsystem, by its fixed name (see [`subsystem`]).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SubsystemHealth"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "counters"
+      ]
+    },
+    "DaemonIdentity": {
+      "description": "The daemon's version and process ID.",
+      "type": "object",
+      "properties": {
+        "pid": {
+          "description": "The daemon's process ID.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "version": {
+          "description": "The daemon's version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "pid"
+      ]
+    },
+    "DaemonInfo": {
+      "description": "Reply of `daemon.get_info`: who the daemon is and where it keeps things.",
+      "type": "object",
+      "properties": {
+        "contractDigest": {
+          "description": "The daemon's contract digest.",
+          "type": "string"
+        },
+        "pid": {
+          "description": "The daemon's process ID.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "protocol": {
+          "description": "The protocol version the daemon speaks.",
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "roots": {
+          "description": "The four resolved roots.",
+          "$ref": "#/$defs/DaemonRoots"
+        },
+        "serverInstanceId": {
+          "description": "The UUID v7 of this daemon run.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "socketPath": {
+          "description": "The resolved path of the daemon socket.",
+          "type": "string"
+        },
+        "startedAt": {
+          "description": "When this daemon run started.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "uid": {
+          "description": "The daemon's Unix user ID, or null on a platform without one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "version": {
+          "description": "The daemon's version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "protocol",
+        "contractDigest",
+        "serverInstanceId",
+        "pid",
+        "startedAt",
+        "roots",
+        "socketPath"
+      ]
+    },
+    "DaemonRoots": {
+      "description": "The daemon's resolved (not canonical) roots, as lossy UTF-8 text.",
+      "type": "object",
+      "properties": {
+        "cache": {
+          "description": "The cache root.",
+          "type": "string"
+        },
+        "data": {
+          "description": "The data root.",
+          "type": "string"
+        },
+        "logs": {
+          "description": "The logs root.",
+          "type": "string"
+        },
+        "rootOverride": {
+          "description": "Whether `STACKLY_ROOT` was set when the daemon started.",
+          "type": "boolean"
+        },
+        "runtime": {
+          "description": "The runtime root, which holds the socket.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data",
+        "logs",
+        "cache",
+        "runtime",
+        "rootOverride"
+      ]
+    },
+    "ErrorBody": {
+      "description": "The error envelope every daemon error and every client side IPC error\nuses (VAL-020).\n\n`code`, `category`, `message`, and `details` are frozen across majors, so\npeers of any major can always exchange `protocol.major_mismatch`.",
+      "type": "object",
+      "properties": {
+        "category": {
+          "description": "The category the catalog gives the code.",
+          "$ref": "#/$defs/ErrorCategory"
+        },
+        "code": {
+          "description": "A catalog code, `<area>.<reason>`.",
+          "type": "string"
+        },
+        "details": {
+          "description": "Extra facts, with keys only from the code's catalog entry.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ErrorDetail"
+          }
+        },
+        "fields": {
+          "description": "The params fields that failed, for `request.invalid_params`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          }
+        },
+        "hint": {
+          "description": "A safe recovery step, in English.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "message": {
+          "description": "One safe English sentence: lowercase start, no trailing period, at\nmost 200 characters, never a secret.",
+          "type": "string"
+        },
+        "operationId": {
+          "description": "The operation that failed (spec 0007).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "resource": {
+          "description": "The resource concerned.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "retryable": {
+          "description": "True only when the daemon guarantees the request had no effect, so\nthe exact same request may be sent again.",
+          "type": "boolean"
+        },
+        "rule": {
+          "description": "The PRD rule ID behind the error, such as `BR-008`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "code",
+        "category",
+        "message",
+        "retryable"
+      ]
+    },
+    "ErrorCategory": {
+      "description": "What a client should do about an error. Closed: a new category is a new\nprotocol major. Feature 8 derives CLI exit codes from it.",
+      "oneOf": [
+        {
+          "description": "Fix the input; sending the same request again fails again.",
+          "type": "string",
+          "const": "invalid_input"
+        },
+        {
+          "description": "The resource does not exist; refresh the snapshot.",
+          "type": "string",
+          "const": "not_found"
+        },
+        {
+          "description": "State changed or the resource is in use; refresh, then decide.",
+          "type": "string",
+          "const": "conflict"
+        },
+        {
+          "description": "Identity, peer, or trust was refused; never retry on its own.",
+          "type": "string",
+          "const": "unauthorized"
+        },
+        {
+          "description": "The version, method, or capability is not supported.",
+          "type": "string",
+          "const": "unsupported"
+        },
+        {
+          "description": "The daemon or a dependency is not available yet; check `retryable`.",
+          "type": "string",
+          "const": "unavailable"
+        },
+        {
+          "description": "The work ran and failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "A time limit passed; the outcome may be unknown, check the operation.",
+          "type": "string",
+          "const": "timeout"
+        },
+        {
+          "description": "The work was cancelled.",
+          "type": "string",
+          "const": "cancelled"
+        },
+        {
+          "description": "A bug or a broken invariant in Stackly.",
+          "type": "string",
+          "const": "internal"
+        }
+      ]
+    },
+    "ErrorDetail": {
+      "description": "One extra fact on an error, as a key and a string value.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "A camelCase key from the code's catalog entry.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value, as text.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ]
+    },
+    "ErrorFrame": {
+      "description": "The error for one request.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "description": "The error.",
+          "$ref": "#/$defs/ErrorBody"
+        },
+        "requestId": {
+          "description": "The request that failed, or null only when its `requestId` could not\nbe read.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "error"
+      ]
+    },
+    "Event": {
+      "description": "One event as a daemon frame carries it.\n\nAn event about a resource always carries both `resource` and `revision`;\na daemon event carries neither.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "description": "When the event was published.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "kind": {
+          "description": "What happened.",
+          "$ref": "#/$defs/EventKind"
+        },
+        "resource": {
+          "description": "The resource the event is about.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "revision": {
+          "description": "The resource's revision after the change.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "sequence": {
+          "description": "Position in this daemon run, rising by one per published event.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "subscriptionId": {
+          "description": "The subscription this event is delivered for.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "sequence",
+        "at",
+        "kind"
+      ]
+    },
+    "EventCursor": {
+      "description": "A position in the event stream of one daemon run.",
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "description": "The last sequence seen; 0 means no event yet.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "serverInstanceId": {
+          "description": "The daemon run the sequence belongs to.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "serverInstanceId",
+        "sequence"
+      ]
+    },
+    "EventKind": {
+      "description": "What happened. Each kind is `<area>.<name>`; the owner of an area adds\nits kinds here. Clients skip kinds they do not know through\n[`EventProbe`], so a new kind is a minor bump.",
+      "oneOf": [
+        {
+          "description": "The subscriber missed events; take a new snapshot.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/Gap"
+            },
+            "type": {
+              "type": "string",
+              "const": "events.gap"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The daemon is shutting down.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ShuttingDown"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.shutting_down"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
+    "FieldError": {
+      "description": "One params field that failed to decode or validate.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "A code from the fixed set in [`FieldCode`].",
+          "type": "string"
+        },
+        "message": {
+          "description": "The fixed text of the code; never the input value.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Where the field sits, relative to the params, such as `name`,\n`since.sequence`, or `kinds[3]`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "code",
+        "message"
+      ]
+    },
+    "Gap": {
+      "description": "Content of `events.gap`.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Why events were missed.",
+          "$ref": "#/$defs/GapReason"
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "GapReason": {
+      "description": "Why a subscriber missed events. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "The subscriber fell more than the event buffer behind.",
+          "type": "string",
+          "const": "overflow"
+        },
+        {
+          "description": "The cursor is older than the replay ring.",
+          "type": "string",
+          "const": "cursor_expired"
+        },
+        {
+          "description": "The cursor belongs to another daemon run.",
+          "type": "string",
+          "const": "server_restarted"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "HandshakeAccepted": {
+      "description": "Reply of `daemon.handshake` when the majors match and the params are\nvalid.",
+      "type": "object",
+      "properties": {
+        "contractDigest": {
+          "description": "The daemon's contract digest.",
+          "type": "string"
+        },
+        "contractDrift": {
+          "description": "True when the versions match but the digests differ: the connection\nworks, and the daemon logs one warning.",
+          "type": "boolean"
+        },
+        "daemon": {
+          "description": "The daemon's version and process.",
+          "$ref": "#/$defs/DaemonIdentity"
+        },
+        "head": {
+          "description": "The newest event cursor at handshake time; sequence 0 means no event\nyet.",
+          "$ref": "#/$defs/EventCursor"
+        },
+        "limits": {
+          "description": "The limits the daemon enforces.",
+          "$ref": "#/$defs/Limits"
+        },
+        "protocol": {
+          "description": "The protocol version the daemon speaks.",
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "serverInstanceId": {
+          "description": "A fresh UUID v7 for each daemon run; event cursors belong to it.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "protocol",
+        "serverInstanceId",
+        "daemon",
+        "contractDigest",
+        "contractDrift",
+        "limits",
+        "head"
+      ]
+    },
+    "HealthStatus": {
+      "description": "The overall daemon status. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "The daemon is bound and running its start steps.",
+          "type": "string",
+          "const": "starting"
+        },
+        {
+          "description": "Every built subsystem is `ok`.",
+          "type": "string",
+          "const": "ready"
+        },
+        {
+          "description": "A built subsystem is `degraded` or `unavailable`.",
+          "type": "string",
+          "const": "degraded"
+        },
+        {
+          "description": "The daemon is shutting down.",
+          "type": "string",
+          "const": "stopping"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "Limits": {
+      "description": "The limits a daemon enforces, as sent in `HandshakeAccepted`.",
+      "type": "object",
+      "properties": {
+        "eventBufferLen": {
+          "description": "Events a subscriber may fall behind before an overflow gap.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "eventReplayLen": {
+          "description": "Recent events kept for replay.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxFrameBytes": {
+          "description": "Largest control frame payload, in bytes.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxInFlightRequests": {
+          "description": "Most requests in flight per connection.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxJsonDepth": {
+          "description": "Deepest JSON nesting accepted.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxLogBatchBytes": {
+          "description": "Largest log batch payload, in bytes.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxSubscriptions": {
+          "description": "Most subscriptions per connection.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "maxFrameBytes",
+        "maxLogBatchBytes",
+        "maxJsonDepth",
+        "maxInFlightRequests",
+        "maxSubscriptions",
+        "eventBufferLen",
+        "eventReplayLen"
+      ]
+    },
+    "PlatformCapabilityStatus": {
+      "description": "One platform capability (spec 0004) and its support.",
+      "type": "object",
+      "properties": {
+        "capability": {
+          "description": "The capability code, such as `ipc_endpoint`.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why not, when it is not supported.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "supported": {
+          "description": "Whether this platform supports it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "capability",
+        "supported"
+      ]
+    },
+    "ProtocolVersion": {
+      "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
+      "type": "object",
+      "properties": {
+        "major": {
+          "description": "Bumped for every breaking change to the wire.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "minor": {
+          "description": "Bumped for every compatible addition.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "major",
+        "minor"
+      ]
+    },
+    "Reply": {
+      "description": "One variant per method, with the same names and tags as [`Call`].",
+      "oneOf": [
+        {
+          "description": "The handshake was accepted.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/HandshakeAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.handshake"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Who the daemon is.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DaemonInfo"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.get_info"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The daemon's health.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DaemonHealth"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.get_health"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "What the daemon supports.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/Capabilities"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.get_capabilities"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The subscription started; its events follow.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/Subscribed"
+            },
+            "type": {
+              "type": "string",
+              "const": "events.subscribe"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The subscription ended.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "events.unsubscribe"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "ResourceKind": {
+      "description": "The kinds of resource Stackly tracks. Open: a newer daemon may add\nvalues, which older clients read as `unknown`.",
+      "oneOf": [
+        {
+          "description": "An installed runtime version.",
+          "type": "string",
+          "const": "runtime"
+        },
+        {
+          "description": "A configured instance of a runtime.",
+          "type": "string",
+          "const": "instance"
+        },
+        {
+          "description": "A group of instances.",
+          "type": "string",
+          "const": "environment"
+        },
+        {
+          "description": "An asynchronous operation.",
+          "type": "string",
+          "const": "operation"
+        },
+        {
+          "description": "A provider package.",
+          "type": "string",
+          "const": "provider"
+        },
+        {
+          "description": "A backup of an instance.",
+          "type": "string",
+          "const": "backup"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "ResourceRef": {
+      "description": "Names one resource, in errors and events.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The canonical text of the resource key: a lowercase UUID for\nruntimes, instances, environments, operations, and backups. Spec 0009\nfixes the form for providers.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "What kind of resource this is.",
+          "$ref": "#/$defs/ResourceKind"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ]
+    },
+    "Response": {
+      "description": "The reply to one request. Replies on one connection may arrive out of\norder; clients match them by `requestId`.",
+      "type": "object",
+      "properties": {
+        "reply": {
+          "description": "The reply, tagged like the request's call.",
+          "$ref": "#/$defs/Reply"
+        },
+        "requestId": {
+          "description": "The request this answers.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requestId",
+        "reply"
+      ]
+    },
+    "ShutdownReason": {
+      "description": "Why the daemon stops. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "SIGTERM or SIGINT.",
+          "type": "string",
+          "const": "signal"
+        },
+        {
+          "description": "A client asked it to stop.",
+          "type": "string",
+          "const": "requested"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "ShuttingDown": {
+      "description": "Content of `daemon.shutting_down`.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Why the daemon stops.",
+          "$ref": "#/$defs/ShutdownReason"
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "Subscribed": {
+      "description": "Reply of `events.subscribe`. It always precedes the subscription's first\nevent.",
+      "type": "object",
+      "properties": {
+        "head": {
+          "description": "The newest cursor when the subscription started.",
+          "$ref": "#/$defs/EventCursor"
+        },
+        "subscriptionId": {
+          "description": "Starts at 1 per connection and is never reused on it.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "head"
+      ]
+    },
+    "SubsystemHealth": {
+      "description": "The health of one subsystem.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "One safe English sentence, such as `socket missing, retrying`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The fixed subsystem name (see [`subsystem`]).",
+          "type": "string"
+        },
+        "status": {
+          "description": "The subsystem's status.",
+          "$ref": "#/$defs/SubsystemStatus"
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ]
+    },
+    "SubsystemStatus": {
+      "description": "The status of one subsystem. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "Working.",
+          "type": "string",
+          "const": "ok"
+        },
+        {
+          "description": "Working with losses, such as dropped log lines.",
+          "type": "string",
+          "const": "degraded"
+        },
+        {
+          "description": "Not working.",
+          "type": "string",
+          "const": "unavailable"
+        },
+        {
+          "description": "Not built yet in this release; it never lowers the overall status.",
+          "type": "string",
+          "const": "not_built"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    }
+  }
+}

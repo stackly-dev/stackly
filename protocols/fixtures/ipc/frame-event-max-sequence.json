@@ -1,0 +1,16 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 9007199254740991,
+    "at": "2026-10-18T03:04:05.123Z",
+    "resource": null,
+    "revision": null,
+    "kind": {
+      "type": "events.gap",
+      "content": {
+        "reason": "overflow"
+      }
+    }
+  }
+}

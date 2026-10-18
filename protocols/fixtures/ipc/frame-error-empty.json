@@ -1,0 +1,18 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": null,
+    "error": {
+      "code": "request.malformed",
+      "category": "invalid_input",
+      "message": "request is not valid json",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [],
+      "operationId": null,
+      "rule": null
+    }
+  }
+}

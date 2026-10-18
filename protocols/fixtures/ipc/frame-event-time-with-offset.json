@@ -1,0 +1,16 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 42,
+    "at": "2026-10-18T10:04:05+07:00",
+    "resource": null,
+    "revision": null,
+    "kind": {
+      "type": "events.gap",
+      "content": {
+        "reason": "server_restarted"
+      }
+    }
+  }
+}

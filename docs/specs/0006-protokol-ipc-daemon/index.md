@@ -1,7 +1,7 @@
 # 0006. Protokol IPC dan daemon
 
 **Date**: 2026-10-18
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
