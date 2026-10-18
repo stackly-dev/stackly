@@ -20,6 +20,7 @@ use stackly_core::provider::{
     RuntimeContext, Stdin, ValidatedPackage, read_package,
 };
 use stackly_domain::{InstanceId, Port};
+use stackly_evidence::{Kind, evidence};
 use stackly_platform::DirectoryLayout;
 use stackly_testkit::{FakePlatform, TestRoot, allocate_port, fake_server};
 
@@ -213,6 +214,11 @@ fn walk(dir: &Path, found: &mut Vec<PathBuf>) {
 
 #[test]
 fn the_fake_plans_run_without_a_shell_and_argv_matches_the_plan() {
+    let ev = evidence!(
+        covers = ["REQ-031", "AC-031", "AC-058"],
+        kind = Kind::Fixture,
+        expected = "the fake init and run plans run through std::process::Command with a label full of shell metacharacters; argv-serve.json equals the plan's args and no pwned file appears",
+    );
     let root = TestRoot::new().expect("a test root can be created");
     let binary = fake_server::binary();
     let package = package(&root);
@@ -293,6 +299,7 @@ fn the_fake_plans_run_without_a_shell_and_argv_matches_the_plan() {
             .all(|path| path.file_name().is_none_or(|name| name != "pwned")),
         "{found:#?}"
     );
+    ev.pass();
 }
 
 #[test]

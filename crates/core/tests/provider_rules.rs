@@ -12,6 +12,7 @@ use stackly_core::provider::{
     ResolvedEndpoint, RuntimeContext, SettingClass, ValidatedPackage, read_package,
 };
 use stackly_domain::{EndpointName, InstanceId, Port};
+use stackly_evidence::{Kind, evidence};
 use stackly_platform::{DirectoryLayout, RootSet};
 use stackly_testkit::{FakePlatform, TestRoot, make_fifo};
 
@@ -143,6 +144,11 @@ fn both_packages_pass_unchanged() {
 
 #[test]
 fn closed_sets_reject_unknown_primitives_probes_formats_signals_and_strategies() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "a manifest with an unknown primitive, probe (script or native), template format, signal, or stop strategy is rejected at validation with its code and location, never at start",
+    );
     let yaml = "provider.yaml";
     assert_manifest_issue(
         Edit::fake().replace(
@@ -186,10 +192,16 @@ fn closed_sets_reject_unknown_primitives_probes_formats_signals_and_strategies()
         "lifecycle.stop.strategy",
         IssueCode::InvalidValue,
     );
+    ev.pass();
 }
 
 #[test]
 fn unknown_security_fields_are_rejected_with_their_path() {
+    let ev = evidence!(
+        covers = ["VAL-018"],
+        kind = Kind::Fixture,
+        expected = "unknown security fields such as permissions.network, permissions.sandbox, and lifecycle.start.shell are rejected with unknown_field and their path",
+    );
     let yaml = "provider.yaml";
     assert_manifest_issue(
         Edit::fake().replace(
@@ -218,10 +230,16 @@ fn unknown_security_fields_are_rejected_with_their_path() {
         "lifecycle.start.shell",
         IssueCode::UnknownField,
     );
+    ev.pass();
 }
 
 #[test]
 fn another_api_version_or_kind_stops_before_the_rest_is_read() {
+    let ev = evidence!(
+        covers = ["VAL-018"],
+        kind = Kind::Fixture,
+        expected = "an apiVersion other than stackly/v1alpha1 or a kind other than Provider stops validation before the rest of provider.yaml is decoded",
+    );
     let version = Edit::fake()
         .replace(
             "provider.yaml",
@@ -254,6 +272,7 @@ fn another_api_version_or_kind_stops_before_the_rest_is_read() {
             IssueCode::UnknownKind
         )]
     );
+    ev.pass();
 }
 
 #[test]
@@ -314,6 +333,11 @@ fn capabilities_that_cannot_be_fulfilled_are_rejected() {
 
 #[test]
 fn interpolation_rejects_shells_secrets_flags_escapes_and_unpermitted_folders() {
+    let ev = evidence!(
+        covers = ["REQ-031", "VAL-019"],
+        kind = Kind::Fixture,
+        expected = "interpolation rejects literal and shell executables, secrets outside stdin, flags from free settings, path escapes, settings in paths, unpermitted folders, unknown tokens, and loader env keys",
+    );
     let yaml = "provider.yaml";
     let start = "    executable: \"${runtime.executable}\"\n    args:\n      - serve";
     assert_manifest_issue(
@@ -427,6 +451,7 @@ fn interpolation_rejects_shells_secrets_flags_escapes_and_unpermitted_folders() 
         "lifecycle.start.env.DYLD_INSERT_LIBRARIES",
         IssueCode::InvalidName,
     );
+    ev.pass();
 }
 
 #[test]
@@ -452,6 +477,11 @@ fn a_doubled_dollar_is_a_literal_dollar_brace() {
 
 #[test]
 fn managed_expressions_cannot_read_settings() {
+    let ev = evidence!(
+        covers = ["VAL-019"],
+        kind = Kind::Fixture,
+        expected = "a managed settings expression that reads another setting is rejected",
+    );
     let issues = Edit::fake_command()
         .replace(
             "schemas/settings.schema.json",
@@ -466,10 +496,16 @@ fn managed_expressions_cannot_read_settings() {
         "properties.serverName.x-stackly.managed",
         IssueCode::TokenNotAllowedHere,
     );
+    ev.pass();
 }
 
 #[test]
 fn the_settings_dialect_rejects_keywords_and_rules_outside_it() {
+    let ev = evidence!(
+        covers = ["VAL-012", "VAL-019"],
+        kind = Kind::Fixture,
+        expected = "the settings schema dialect rejects keywords such as $ref, oneOf, and format, and every rule outside the restricted dialect",
+    );
     let schema = "schemas/settings.schema.json";
     let file = "settings.schema.json";
     let label = "\"title\": \"Label\",";
@@ -479,6 +515,18 @@ fn the_settings_dialect_rejects_keywords_and_rules_outside_it() {
             .issues(),
         file,
         "properties.label.$ref",
+        IssueCode::SettingsSchemaKeyword,
+    );
+    assert_issue(
+        &Edit::fake()
+            .replace(
+                schema,
+                label,
+                "\"title\": \"Label\", \"oneOf\": [{ \"type\": \"string\" }],",
+            )
+            .issues(),
+        file,
+        "properties.label.oneOf",
         IssueCode::SettingsSchemaKeyword,
     );
     assert_issue(
@@ -572,6 +620,7 @@ fn the_settings_dialect_rejects_keywords_and_rules_outside_it() {
         "properties.peers.items.properties.inner.type",
         IssueCode::SettingsSchemaRule,
     );
+    ev.pass();
 }
 
 #[test]
@@ -594,6 +643,11 @@ fn a_reload_field_used_in_args_is_rejected() {
 
 #[test]
 fn settings_values_are_checked_with_their_field_path() {
+    let ev = evidence!(
+        covers = ["VAL-019"],
+        kind = Kind::Fixture,
+        expected = "settings values with an unknown key, a filled managed field, a duplicate item key, a non integral integer, a control character, or an out of range value are rejected with the field path",
+    );
     let package = Edit::fake_command()
         .validate()
         .expect("fake-command validates");
@@ -646,6 +700,7 @@ fn settings_values_are_checked_with_their_field_path() {
         values.to_json(),
         serde_json::json!({ "authToken": token, "greeting": "hello from fake-command", "mode": "quiet", "peers": [] })
     );
+    ev.pass();
 }
 
 #[test]
@@ -673,6 +728,11 @@ fn patterns_always_match_the_whole_value() {
 
 #[test]
 fn settings_fields_carry_their_val_012_classes() {
+    let ev = evidence!(
+        covers = ["VAL-012"],
+        kind = Kind::Fixture,
+        expected = "the typed settings model carries the six VAL-012 classes: managed, advanced, secret, immutable after init, reloadable, and restart required",
+    );
     let package = Edit::fake_command()
         .validate()
         .expect("fake-command validates");
@@ -694,6 +754,7 @@ fn settings_fields_carry_their_val_012_classes() {
         [SettingClass::Secret, SettingClass::ImmutableAfterInit]
     );
     assert_eq!(classes("greeting"), [SettingClass::Reloadable]);
+    ev.pass();
 }
 
 #[test]
@@ -824,6 +885,11 @@ fn endpoint_rules_reject_lan_hosts_bad_names_long_sockets_and_missing_targets() 
 
 #[test]
 fn provider_ids_and_revisions_follow_val_002() {
+    let ev = evidence!(
+        covers = ["VAL-002"],
+        kind = Kind::Fixture,
+        expected = "provider IDs need a namespace and valid names and revisions cannot be empty or hold .., following VAL-002",
+    );
     for id in ["official/../x", "Official/Nats", "nats"] {
         assert_manifest_issue(
             Edit::fake().replace(
@@ -851,10 +917,16 @@ fn provider_ids_and_revisions_follow_val_002() {
         "metadata.category",
         IssueCode::InvalidValue,
     );
+    ev.pass();
 }
 
 #[test]
 fn the_folder_name_must_match_unless_the_check_is_skipped() {
+    let ev = evidence!(
+        covers = ["VAL-002"],
+        kind = Kind::Fixture,
+        expected = "the name part of metadata.id must equal the package folder unless the pinned copy check is skipped",
+    );
     let mut renamed = Edit::fake();
     renamed.folder = "fake2".into();
     let issues = renamed.issues();
@@ -868,6 +940,7 @@ fn the_folder_name_must_match_unless_the_check_is_skipped() {
         IssueCode::DirectoryNameMismatch,
     );
     assert!(pinned.validate_as(NameCheck::Skip).is_ok());
+    ev.pass();
 }
 
 #[test]
@@ -1044,6 +1117,11 @@ fn read_codes(change: impl FnOnce(&Path)) -> Vec<(String, IssueCode)> {
 
 #[test]
 fn read_package_rejects_symlinks_fifos_and_stray_entries_and_skips_ds_store() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "reading a package rejects symlinks, FIFOs, and stray entries, skips .DS_Store, and never reads tests/",
+    );
     let symlink = read_codes(|dir| {
         std::os::unix::fs::symlink(dir.join("provider.yaml"), dir.join("templates/link.tmpl"))
             .expect("symlink")
@@ -1077,6 +1155,7 @@ fn read_package_rejects_symlinks_fifos_and_stray_entries_and_skips_ds_store() {
     let files = skipped.expect("skipped entries are fine");
     assert!(files.get(".DS_Store").is_none());
     assert!(files.iter().all(|(path, _)| !path.starts_with("tests")));
+    ev.pass();
 }
 
 fn context_for(package: &ValidatedPackage, settings: serde_json::Value, base: &str) -> PlanContext {
@@ -1250,4 +1329,63 @@ fn issues_name_their_location_kind() {
         ),
         "{issues:#?}"
     );
+}
+
+#[test]
+fn a_256_kib_manifest_of_nested_aliases_is_rejected_within_two_seconds() {
+    let ev = evidence!(
+        covers = ["VAL-018"],
+        kind = Kind::Fixture,
+        expected = "a 256 KiB provider.yaml of nested YAML aliases (billion laughs) is rejected with yaml_syntax within 2 seconds",
+    );
+    let mut text = String::from("a0: &a0 [lol, lol, lol, lol, lol, lol, lol, lol, lol]\n");
+    for n in 1..10 {
+        let previous = format!("*a{}", n - 1);
+        let list = [previous.as_str(); 9].join(", ");
+        text.push_str(&format!("a{n}: &a{n} [{list}]\n"));
+    }
+    while text.len() < 256 * 1024 - 80 {
+        text.push_str("# padding up to the provider.yaml size limit\n");
+    }
+    assert!(text.len() <= 256 * 1024);
+    let start = std::time::Instant::now();
+
+    let issues = Edit::fake().set("provider.yaml", text).issues();
+
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "{elapsed:?}");
+    assert!(
+        issues
+            .iter()
+            .any(|(file, _, code)| file == "provider.yaml" && *code == IssueCode::YamlSyntax),
+        "{issues:#?}"
+    );
+    ev.pass_with(&format!("rejected with yaml_syntax in {elapsed:?}"));
+}
+
+#[test]
+fn readme_and_tests_never_change_the_digest_of_a_read_package() {
+    let read = |change: &dyn Fn(&Path)| {
+        let files = read_changed(change).expect("the package reads");
+        ValidatedPackage::from_files(files, NameCheck::FolderName)
+            .expect("the package validates")
+            .key()
+            .clone()
+    };
+
+    let base = read(&|_| {});
+    let documented = read(&|dir| {
+        fs::write(dir.join("README.md"), "# changed\n").expect("README.md can be written");
+        fs::write(dir.join("LICENSE-NOTICES.md"), "notices\n").expect("notices can be written");
+        fs::create_dir_all(dir.join("tests")).expect("tests/ can be created");
+        fs::write(dir.join("tests/case.yaml"), [0xff, 0xfe]).expect("a test file can be written");
+    });
+    let changed = read(&|dir| {
+        let template = dir.join("templates/fake.json.tmpl");
+        let text = fs::read_to_string(&template).expect("the template reads");
+        fs::write(&template, text.replacen('{', "{ ", 1)).expect("the template can be written");
+    });
+
+    assert_eq!(base, documented);
+    assert_ne!(base.manifest_sha256(), changed.manifest_sha256());
 }

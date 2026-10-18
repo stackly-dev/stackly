@@ -1004,6 +1004,7 @@ dependencies = [
  "serde_yaml_ng",
  "sha2",
  "stackly-domain",
+ "stackly-evidence",
  "stackly-platform",
  "stackly-testkit",
  "thiserror",
