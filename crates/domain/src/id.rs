@@ -4,6 +4,8 @@ use std::str::FromStr;
 use uuid::Uuid;
 
 use crate::error::{ValueError, ValueKind};
+use crate::rule::Rule;
+use crate::text::serde_as_text;
 
 /// Length of a hyphenated UUID, the only text form an ID accepts.
 const HYPHENATED_LEN: usize = 36;
@@ -12,7 +14,8 @@ const SHORT_KEY_LEN: usize = 8;
 
 /// Defines a newtype over a UUID version 7 with the same rules for every
 /// kind of ID: only the daemon calls `generate()`, the text form is the
-/// lowercase hyphenated UUID, and parsing accepts any letter case.
+/// lowercase hyphenated UUID, parsing accepts any letter case, and serde
+/// goes through the text form, so it rejects every version other than 7.
 macro_rules! uuid_id {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
@@ -64,6 +67,8 @@ macro_rules! uuid_id {
                 Self::from_uuid(uuid)
             }
         }
+
+        serde_as_text!($name => "a hyphenated UUID version 7");
     };
 }
 
@@ -85,8 +90,31 @@ uuid_id! {
 }
 
 uuid_id! {
+    /// Stable identifier of an installed runtime, always a UUID version 7.
+    RuntimeId
+}
+
+uuid_id! {
     /// Stable identifier of an environment, always a UUID version 7.
     EnvironmentId
+}
+
+uuid_id! {
+    /// Stable identifier of an operation, always a UUID version 7.
+    OperationId
+}
+
+uuid_id! {
+    /// Stable identifier of a lease on an instance, always a UUID version 7.
+    LeaseId
+}
+
+uuid_id! {
+    /// Stable identifier of a backup, always a UUID version 7.
+    ///
+    /// Feature 4 uses it only to name recovery snapshots that keep a runtime
+    /// in use; backups themselves come with feature 49.
+    BackupId
 }
 
 impl InstanceId {
@@ -120,6 +148,15 @@ pub enum InvalidId {
     /// The UUID is well formed but not version 7.
     #[error("ID must be a UUID version 7, found version {0}")]
     WrongVersion(usize),
+}
+
+impl InvalidId {
+    /// Returns the business rule this error enforces. ID rules are not
+    /// business rules, so this is always `None`.
+    #[must_use]
+    pub const fn rule(&self) -> Option<Rule> {
+        None
+    }
 }
 
 /// The 8 lowercase hex characters that name an instance's run folder.
@@ -194,6 +231,37 @@ mod tests {
                 "{text}"
             );
         }
+    }
+
+    #[test]
+    fn every_id_type_serializes_as_its_lowercase_text_form() {
+        let upper = format!("\"{}\"", V7.to_uppercase());
+
+        let runtime: RuntimeId = serde_json::from_str(&upper).unwrap();
+        let operation: OperationId = serde_json::from_str(&upper).unwrap();
+        let lease: LeaseId = serde_json::from_str(&upper).unwrap();
+        let backup: BackupId = serde_json::from_str(&upper).unwrap();
+        let instance: InstanceId = serde_json::from_str(&upper).unwrap();
+        let environment: EnvironmentId = serde_json::from_str(&upper).unwrap();
+
+        let expected = format!("\"{V7}\"");
+        assert_eq!(serde_json::to_string(&runtime).unwrap(), expected);
+        assert_eq!(serde_json::to_string(&operation).unwrap(), expected);
+        assert_eq!(serde_json::to_string(&lease).unwrap(), expected);
+        assert_eq!(serde_json::to_string(&backup).unwrap(), expected);
+        assert_eq!(serde_json::to_string(&instance).unwrap(), expected);
+        assert_eq!(serde_json::to_string(&environment).unwrap(), expected);
+    }
+
+    #[test]
+    fn serde_rejects_ids_that_are_not_version_7_or_not_text() {
+        let v4 = "\"9f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f\"";
+
+        let err = serde_json::from_str::<OperationId>(v4).unwrap_err();
+        assert!(err.to_string().contains("found version 4"), "{err}");
+        let err = serde_json::from_str::<RuntimeId>("42").unwrap_err();
+        assert!(err.to_string().contains("UUID version 7"), "{err}");
+        assert_eq!(InvalidId::Malformed.rule(), None);
     }
 
     #[test]

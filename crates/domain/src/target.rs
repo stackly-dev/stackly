@@ -2,6 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::error::{ValueError, ValueKind};
+use crate::text::serde_as_text;
 
 /// An operating system that a host runs or an artifact is built for.
 ///
@@ -149,6 +150,12 @@ impl FromStr for Target {
     }
 }
 
+serde_as_text! {
+    Os => "an os: macos, windows, or linux",
+    Arch => "an arch: aarch64 or x86_64",
+    Target => "a target such as macos-aarch64",
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,6 +173,19 @@ mod tests {
             Target::new(Os::Linux, Arch::X86_64).to_string(),
             "linux-x86_64"
         );
+    }
+
+    #[test]
+    fn os_arch_and_target_serialize_as_their_codes() {
+        let target = Target::new(Os::Macos, Arch::Aarch64);
+
+        assert_eq!(serde_json::to_string(&target).unwrap(), "\"macos-aarch64\"");
+        assert_eq!(serde_json::to_string(&Os::Windows).unwrap(), "\"windows\"");
+        assert_eq!(
+            serde_json::from_str::<Arch>("\"x86_64\"").unwrap(),
+            Arch::X86_64
+        );
+        assert!(serde_json::from_str::<Os>("\"wsl\"").is_err());
     }
 
     #[test]

@@ -1,0 +1,16 @@
+{
+  "schema": "stackly.instance-manifest/v2",
+  "instanceId": "0199f2d0-1111-7222-8333-444455556666",
+  "identity": {
+    "name": "orders-db",
+    "software": "postgresql"
+  },
+  "provider": "official/postgresql@2026.11.0",
+  "runtimes": [
+    {
+      "id": "0199f2d0-7777-7888-9999-aaaabbbbcccc",
+      "version": "18.1"
+    }
+  ],
+  "createdAt": "2026-11-01T08:00:00Z"
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "stackly.instance-manifest/v1",
+  "instanceId": "0199f2a4-6b1e-7c3d-9e4f-5a6b7c8d9e0f",
+  "name": "orders-db",
+  "displayName": "Orders database",
+  "software": "postgresql",
+  "provider": {
+    "name": "official/postgresql",
+    "revision": "2026.10.1",
+    "manifestSha256": "cb95f16d56a9ab7b938a03732ddf4ab691346124747fbb811ac6c09928f1fa6b"
+  },
+  "runtime": {
+    "id": "0199f2a3-1d2e-7f30-8a41-b2c3d4e5f607",
+    "version": "17.6",
+    "line": "17",
+    "os": "macos",
+    "arch": "aarch64",
+    "installMode": "managed",
+    "artifactSha256": "da578821d15e9c0f59eb8e4672962c6f032074e802684576debc6dfc7f86815f"
+  },
+  "data": {
+    "initializedLine": "17",
+    "initializedVersion": "17.6",
+    "initializedAt": "2026-10-18T09:30:05Z"
+  },
+  "createdAt": "2026-10-18T09:30:00Z",
+  "createdByOperation": "0199f2a4-6a00-7b11-8c22-d33e44f55a66",
+  "updatedAt": "2026-10-18T11:00:00Z",
+  "stacklyVersion": "0.1.0",
+  "retained": {
+    "retainedAt": "2026-10-18T11:00:00Z",
+    "byOperation": "0199f2b0-0000-7123-8456-789abcdef012"
+  }
+}
