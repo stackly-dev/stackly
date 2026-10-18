@@ -4,6 +4,7 @@ mod build_app;
 mod check_deps;
 mod codegen;
 mod evidence;
+mod fuzz;
 mod runtime;
 
 use std::path::{Path, PathBuf};
@@ -31,6 +32,12 @@ Tasks:
                --expected <sentence> [--subject <provider>@<version>]...
                        Start a NOT_RUN manual record in evidence/manual/
   evidence baseline    Record this Mac as the benchmark baseline (macOS, not a VM)
+  fuzz list            List the cargo-fuzz targets in fuzz/
+  fuzz build [<target>]
+                       Build the fuzz targets with the pinned nightly
+  fuzz seed            Rebuild fuzz/seeds/ from the shared fixtures
+  fuzz run <target> [--time <seconds>]
+                       Fuzz one target, 300 seconds by default
   runtime check        Check runtimes/inventory.toml and evidence/runtime/
   runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]
                        Download a runtime and print its pinned inventory values
@@ -72,6 +79,7 @@ fn run() -> Result<ExitCode> {
             done(build_app::run(&root, build_app::Configuration::Release))
         }
         ["evidence", rest @ ..] => evidence::run(&root, rest),
+        ["fuzz", rest @ ..] => done(fuzz::run(&root, rest)),
         ["runtime", rest @ ..] => runtime::run(&root, rest),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");

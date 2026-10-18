@@ -22,6 +22,9 @@ allow = [
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "MIT",
+    # Only libfuzzer-sys (LLVM libFuzzer) uses it, and it enters only through
+    # the fuzz/ project, never a shipped binary (spec 0006, Fuzzing).
+    "NCSA",
     "Unicode-3.0",
 ]
 confidence-threshold = 0.93
