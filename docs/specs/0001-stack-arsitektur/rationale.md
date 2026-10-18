@@ -143,6 +143,10 @@ Rekonsiliasi dengan spec yang diterima sesudah scaffold. Keputusan di spec ini t
 - *Batas keputusan* mendapat kolom yang menunjuk spec yang sudah memutuskan setiap baris.
 - Baris YAML mencatat advisory RUSTSEC-2024-0449 (`unsafe-libyaml` tidak dirawat, ditarik serde_yaml_ng) yang diterima engineer dengan pemilik fitur 9; crate YAML tidak berubah.
 
+### Perubahan 2026-10-18, ronde 2
+
+Rekonsiliasi dengan spec 0007, 0008, 0010, dan 0013: baris *Batas keputusan* fitur 7, 8, 10, dan 13 menunjuk spec pemiliknya; core mendapat tokio, tracing, dan fitur `fixture`; protocol mendapat `sha2`; CLI mendapat `anstream`, `anstyle`, `unicode-width`, dan dependency lain spec 0008; aturan `check-deps` untuk proses di core dan daemon, `SIGKILL`, dan larangan spawn serta print di CLI; arah dependency Swift, product `StacklyTestSupport`, scene shell, larangan spawn dan jaringan di GUI; folder fixture `layout/` dan `endpoint/` serta `ContractNames.swift`.
+
 ## References
 
 **Project sources**:

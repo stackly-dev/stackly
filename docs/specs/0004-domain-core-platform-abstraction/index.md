@@ -55,7 +55,7 @@ Baris dan butir yang diberi tanda *(ditambah fitur N, spec NNNN)* adalah titik p
 | --- | --- | --- | --- |
 | Port `Registry` dan tipe pendukungnya (`RegistryError`, `BatchError`, `WriteBatch`, `WriteOp`, `Committed`, `Versioned<T>`, `Generation`, `ResourceRef`, filter dan query baca, `OperationCursor`, `RetentionPolicy`, `PruneReport`, `ArtifactRecord`, `ProviderRevisionRecord`) dan ID `RegistryId` | domain, modul `registry` | fitur 5, spec 0005 | port sync dan object safe seperti port platform; implementasi `SqliteRegistry` di `stackly-storage`, `FakeRegistry` di testkit |
 | Value type path tersimpan `LogicalRoot`, `InstancePathKind`, `RelativePath`, `InstancePathEntry` | domain, modul `registry` | fitur 5, spec 0005 | path instance disimpan relatif terhadap root bernama |
-| `revision: ResourceRevision` di `Runtime`, `Environment`, dan `Operation`; `retained_by: Option<OperationId>` di `Instance` | domain | fitur 5, spec 0005 | revision mulai 1 dan naik tepat 1 per mutasi; `retained_by` cermin `retained.byOperation` manifest |
+| `revision: ResourceRevision` di `Runtime`, `Environment`, dan `Operation`; `retained_by: Option<OperationId>` di `Instance` | domain | fitur 5, spec 0005 | revision mulai 1 dan naik tepat 1 per mutasi (untuk `Operation`: hanya lewat `Operation::touch`, sekali per batch, spec 0007); `retained_by` cermin `retained.byOperation` manifest |
 | Konstruktor `restore` untuk `Runtime`, `Instance`, `Operation`, `Lease`, `Environment`, dan `ProviderRevision` | domain | fitur 5, spec 0005 | menerima semua field tersimpan dan memeriksa invariant antar field; `Instance::restore` memasang readiness dan health `unknown` reason `daemon_restarted` dengan `observed_at` sama dengan `loaded_at` |
 | `instance_path_entries(InstanceId) -> [InstancePathEntry; 7]`, `RootSet::resolve(LogicalRoot, &RelativePath)`, `DirectoryLayout::registry_snapshots_dir()` (`registry/pre-migration`) dan `registry_recovery_dir()` (`registry/recovery`) | platform | fitur 5, spec 0005 | murni, tanpa IO |
 | `Platform::shared_clock() -> Arc<dyn Clock>` | platform | fitur 5, spec 0005 | handle registry memegang jam yang sama dengan `Platform` |
@@ -69,6 +69,12 @@ Baris dan butir yang diberi tanda *(ditambah fitur N, spec NNNN)* adalah titik p
 | Modul domain `secret` (`SecretRef`, `SecretRefError`, `SecretOwner`, `SecretPurpose`, `SecretStatus`, `SecretOrigin`, `NeedsSecretReason`, `InstanceBlocker`) dan observasi `blocker` di `Instance` | domain | fitur 11, spec 0011 | `InstanceBlocker::NeedsSecret { references, observed_at }`; blocker tidak mengubah lifecycle, desired state, atau revision, dan tidak disimpan di registry |
 | Port `SecretStore` lewat `Platform::with_secrets`, `UnsupportedSecretStore`, `FakeSecretStore` | platform, testkit | fitur 11, spec 0011 | lihat *Port platform* |
 | `DirectoryLayout::instance_secrets_dir(ShortKey)` dan `keychain_dir()` | platform | fitur 11, spec 0011 | lihat *Layout direktori per user* |
+| Modul domain `operation::journal` (`OperationJournal`, `JournalStep`, `StepState`, `StepSeq`, `CreatedItem`, `CreatedRecord`, `CreatedState`, `CreatedSeq`, `OperationTrigger`, `TriggerOrigin`, `FailureError`, `JournalPayload`, `JournalView`, `RecoveryCause`) dan value type `MethodName`, `ErrorCodeName`, `CompensatorName`, `DetailKey`, `ClientCode`, `LockKey`, `RecoveryHint` | domain | fitur 7, spec 0007 | aturan tiap tipe di *Model domain* spec 0007 |
+| `Operation::recovery_hint` dengan `set_recovery_hint(hint, at)` (hanya saat `needs_recovery`, dikosongkan otomatis saat keluar), parameter baru di `Operation::restore`, `Operation::touch(at)` sebagai satu satunya jalan menaikkan revision operasi, `OperationKind::resumable()`, `Outcome::Failed(OperationFailure)`, dan konstanta `FailureCode` `STEP_FAILED`, `ABANDONED`, `DAEMON_STOPPING`, `PRECONDITION_FAILED`, `PANICKED` | domain | fitur 7, spec 0007 | lihat *State operation* |
+| Modul domain `process` (`Pid`, `ProcessStart`, `BootId`, `ProcessIdentity`, `ProcessObservation`, `IdentityCheck`, `IdentityEvidence`), varian `InstanceBlocker::DataInUse { evidence }` dan `IdentityUnproven { evidence }`, `Instance::set_bound_port(endpoint, port)` (menaikkan revision), dan konstanta `FailureCode` serta `StageName` supervisor | domain | fitur 10, spec 0010 | blocker tetap satu nilai, dengan prioritas `identityUnproven`, lalu `dataInUse`, lalu `needsSecret` |
+| Port `ProcessSupervision` di modul `process` (`SpawnRequest`, `SuspendedChild`, `MainHandle`, `HelperHandle`, `ProcessFacts`, `ProcessError`, dan tipe lain di *Port `ProcessSupervision`* spec 0010) lewat `Platform::with_processes`, `UnsupportedProcessSupervision`, `FakeProcessSupervision` | platform, platform-macos, testkit | fitur 10, spec 0010 | port ketujuh dengan pola `with_<port>`; adapter macOS di `stackly-platform-macos::process` |
+| `InstancePaths.lock` (`<root>/instance.lock`) dan `DirectoryLayout::instance_spool(ShortKey, stream)` (`<run>/stdout.spool`, `<run>/stderr.spool`) | platform | fitur 10, spec 0010 | lihat *Layout direktori per user* |
+| Fungsi murni `default_runtime_root(temp: &Path) -> PathBuf` | platform | fitur 13, spec 0013 | dipakai `MacosPlatform` dan diuji paritasnya dengan Swift lewat `protocols/fixtures/layout/socket-paths.json` |
 
 ### Peta modul dan dependency
 
@@ -148,7 +154,7 @@ Tipe pendukung:
 
 - `InstallMode`: `Managed { artifact_sha256 }` (path diturunkan layout) atau `External { root: PathBuf, observed_sha256: Option<Sha256Digest> }` (path milik pengguna, BR-019).
 - `DesiredState`: `running`, `stopped`. `StartupPolicy`: `manual`, `at_login`.
-- `PortRequest`: `Fixed(Port)` atau `Auto`. Port efektif sebuah endpoint IP adalah `bound` kalau ada, selain itu port `Fixed`; endpoint `Auto` yang belum di bind tidak punya port efektif. `bound` hanya diisi setelah bind dan readiness berhasil (REQ-010, fitur 10).
+- `PortRequest`: `Fixed(Port)` atau `Auto`. Port efektif sebuah endpoint IP adalah `bound` kalau ada, selain itu port `Fixed`; endpoint `Auto` yang belum di bind tidak punya port efektif. `bound` hanya diisi setelah bind dan readiness berhasil (REQ-010, fitur 10). *(Diubah fitur 10, spec 0010:* `bound` *diisi saat proses yang memakai port itu di spawn, di batch* `spawned`*, lewat* `Instance::set_bound_port`*, dan ditampilkan sebagai final setelah readiness berhasil, REQ-010.)*
 - `Capability` (provider): `reload`, `online_backup`, `cold_backup`, `logical_backup`, `tls`, `metrics` (`#[non_exhaustive]`). `CapabilitySet::require(cap)` mengembalikan `InvariantError` BR-016 `Unsupported { capability }`. `CapabilitySet` dibangun dari daftar lewat `FromIterator<Capability>`. *(Ditambah fitur 9, spec 0009:* `multi_instance` *dan* `persistence` *setelah* `metrics`*, dan* `CapabilitySet::new(impl IntoIterator<Item = Capability>)`*.)*
 - `LineCompatibility`: peta `data line → runtime line yang boleh`, dari manifest provider (fitur 9). Kosong berarti hanya line yang sama (BR-009). Fitur 4 membangunnya dengan `allow(data_line, runtime_line)`; *(ditambah fitur 9, spec 0009: `LineCompatibility::from_map(BTreeMap<RuntimeLine, BTreeSet<RuntimeLine>>)`)*.
 - `RuntimeReferences { instances: Vec<InstanceId>, dependent_runtimes: Vec<RuntimeId>, active_operations: Vec<OperationId>, recovery_snapshots: Vec<BackupId> }`, diisi pemanggil dari registry; `instances` mencakup instance di semua lifecycle, termasuk `stopped` dan `retained`. `RemovalBlocker` adalah satu varian per jenis referensi itu, dengan ID-nya. `RemovalPlan`: `DeleteManagedFiles` atau `UnregisterOnly`.
@@ -255,7 +261,7 @@ Nilai `effective` dihitung saat dibaca dan tidak disimpan. Signature-nya `effect
 | `needs_recovery` | `resume` | `queued` |
 | `needs_recovery` | `resolve` (succeeded, failed, atau cancelled) | state yang disebut |
 
-`succeeded`, `failed`, dan `cancelled` adalah state akhir. `start` mengisi `started_at` dengan `at` kalau masih kosong. `resume` hanya dipakai engine untuk operasi yang menyatakan bisa dilanjutkan (fitur 7). Progress hanya boleh diubah saat `running` atau `cancel_requested`, dan `done ≤ total`; pelanggaran menghasilkan `ProgressError`. `Operation::set_stage(stage, at)` memakai aturan state yang sama dan mengembalikan `ProgressError::NotAllowedInState` di luar kedua state itu.
+`succeeded`, `failed`, dan `cancelled` adalah state akhir. `start` mengisi `started_at` dengan `at` kalau masih kosong. `resume` hanya dipakai engine untuk operasi yang bisa dilanjutkan menurut tabel resume spec 0007 (`OperationKind::resumable()`). Progress hanya boleh diubah saat `running` atau `cancel_requested`, dan `done ≤ total`; pelanggaran menghasilkan `ProgressError`. `Operation::set_stage(stage, at)` memakai aturan state yang sama dan mengembalikan `ProgressError::NotAllowedInState` di luar kedua state itu. *(Ditambah fitur 7, spec 0007:* `Outcome::Failed` *membawa* `OperationFailure` *dan* `apply(Resolve(..))` *mencatatnya, sehingga operasi yang ditutup* `failed` *lewat* `resolve` *selalu punya kode kegagalan;* `Outcome` *tidak lagi* `Copy`*. Event* `compensation_failed` *juga mencakup kompensasi yang tidak mungkin karena langkah yang tidak bisa dibalik sudah berjalan, jadi tabel di atas tidak berubah. Revision operasi hanya naik lewat* `Operation::touch(at)` *sekali per batch, bukan lewat* `apply`*,* `set_stage`*, progress, atau* `set_recovery_hint`*.)*
 
 ### Aturan lease dan demand
 
@@ -294,7 +300,7 @@ Nilai `effective` dihitung saat dibaca dan tidak disimpan. Signature-nya `effect
 | BR-020 | Dipetakan | kebijakan, ditulis di Security model | tidak ada | fitur 37, 66 |
 | BR-021 | Dipetakan | `Target` dan `native_support` dipakai untuk cek kompatibilitas restore | tidak ada | fitur 51 |
 | BR-022 | Dipetakan | tidak ada tipe di fitur ini | tidak ada | fitur 49, 51 |
-| BR-023 | F4 (sebagian) | core: `create_instance_layout` tidak pernah menghapus; error parsial membawa daftar persis path yang dibuat; manifest mencatat `createdByOperation` | `failed_create_reports_only_its_own_paths_and_deletes_nothing` | fitur 7 (kompensasi lewat `remove_file` dan `remove_empty_dir`, lihat *Port platform*) |
+| BR-023 | F4 (sebagian) | core: `create_instance_layout` tidak pernah menghapus; error parsial membawa daftar persis path yang dibuat; manifest mencatat `createdByOperation` | `failed_create_reports_only_its_own_paths_and_deletes_nothing` | fitur 7, spec 0007 (AC-8: kompensasi hanya untuk yang dimiliki operasi, lihat *Port platform*) |
 | BR-024 | F4 | domain: `Lease::suppress`, `should_autostart` | `explicit_stop_suppresses_autostart_for_the_session` | fitur 31 |
 | BR-025 | Dipetakan | tidak ada tipe di fitur ini | tidak ada | fitur 18 (compatibility record), 65 |
 
@@ -361,7 +367,8 @@ pub trait PlatformInfo: Send + Sync {
 **Port yang ditambah fitur lain.** `Platform::new` tetap lima port fitur 4 dan tidak pernah mendapat argumen baru. Setiap port yang ditambah fitur lain masuk lewat method builder `Platform::with_<port>(self, Arc<dyn Trait>) -> Platform` dan getter `<port>()`, dengan default implementasi Unsupported port itu, yang menjawab `NotSupported { capability, os }` dengan `os` dari `PlatformInfo::target()` milik `Platform` itu (bukan OS host, supaya `UnsupportedPlatform::new(windows-aarch64)` yang diuji di Mac tetap menjawab `windows`). Jadi konstruktor tidak patah setiap ada port baru, dan `UnsupportedPlatform` tetap jujur tanpa kode tambahan. Adapter yang membangun port itu (misalnya `MacosPlatform`) wajib memanggil `with_<port>` dan melaporkan capability nya supported. `Platform::capabilities()` menggabungkan status dari `PlatformInfo` dengan port yang terpasang: capability port tambahan yang port nya tidak dipasang lewat `with_<port>` selalu not supported, apa pun kata `PlatformInfo`, sehingga ketidakselarasan hanya bisa membuat capability tampak tidak didukung, tidak pernah sebaliknya. Port pertama yang memakai pola ini:
 
 - `SecretStore` *(ditambah fitur 11, spec 0011)*: trait di modul `secret` `stackly-platform` dengan `SecretValue` (berbasis `zeroize`), `Interaction`, `WriteMode`, `SecretPresence`, `StoreState`, `SecretBackend`, dan `SecretStoreError`, persis seperti *Port `SecretStore`* di spec 0011. `Platform::with_secrets(Arc<dyn SecretStore>)` dan getter `secrets() -> &dyn SecretStore`; defaultnya `UnsupportedSecretStore`. `FakePlatform` memasang `FakeSecretStore`, dan `MacosPlatform` memasang `MacosSecretStore` setelah milestone 1 spec 0011.
-- Fitur 10, 15, dan 28 mengikuti pola yang sama untuk port proses, background agent, dan metrik proses.
+- `ProcessSupervision` *(ditambah fitur 10, spec 0010)*: trait di modul `process` `stackly-platform` persis seperti *Port `ProcessSupervision`* spec 0010, lewat `Platform::with_processes(Arc<dyn ProcessSupervision>)` dan getter `processes()`; defaultnya `UnsupportedProcessSupervision`. `FakePlatform` memasang `FakeProcessSupervision`, dan `MacosPlatform` memasang `MacosProcessSupervision` setelah milestone 1 spec 0010.
+- Fitur 15 dan 28 mengikuti pola yang sama untuk background agent dan metrik proses.
 
 `PlatformError` (`#[non_exhaustive]`): `NotSupported { capability, os }`, `HomeDirUnavailable`, `TempDirUnavailable`, `InvalidRoots { reason }`, `RuntimeRootTooLong { path, len, max }`, `InvalidRootOverride { path, reason }`, `NotFound { path }`, `AlreadyExists { path }`, `PermissionDenied { path }`, `NoSpace { path }`, `NotARegularFile { path }`, `FileTooLarge { path, max }`, `Io { op, path, kind, message }`, dan `OutsideTestRoots { path }` (hanya dihasilkan fake di testkit). *(Ditambah fitur 11, spec 0011:* `IsADirectory { path }`, `NotADirectory { path }`, *dan* `DirectoryNotEmpty { path }` *untuk operasi hapus.)*
 
@@ -388,6 +395,7 @@ pub trait PlatformInfo: Send + Sync {
 ├── runtimes/<software>/<version>/<os>-<arch>/<artifact-sha256>/
 ├── instances/<instance-id>/
 │   ├── instance-manifest.json
+│   ├── instance.lock                  # flock data instance, diwarisi proses di fd 3 (fitur 10, spec 0010)
 │   ├── data/
 │   ├── config/
 │   ├── config-history/
@@ -403,7 +411,8 @@ pub trait PlatformInfo: Send + Sync {
 └── downloads/
 <runtime>/                             # hanya berisi file yang bisa dibuat ulang
 ├── stacklyd.sock                      # fitur 6
-└── i/<short-key>/                     # socket dan file PID per instance (fitur 10)
+└── i/<short-key>/                     # socket, spool, dan secrets/ per instance (fitur 10 dan 11)
+    ├── stdout.spool, stderr.spool     # output proses utama sebelum dibaca daemon (fitur 10, spec 0010)
     └── secrets/                       # file secret sementara selama instance jalan (fitur 11, spec 0011)
 ```
 
@@ -411,7 +420,7 @@ Lock daemon sengaja ada di root data, bukan di runtime root: OS bisa membersihka
 
 Folder yang ditambah fitur lain bukan subfolder standar `prepare_layout`: `registry/pre-migration/` dan `registry/recovery/` dibuat storage saat open (spec 0005), `keychain/` (berisi `stackly.keychain-db` dan `stackly.keychain-password`) dibuat adapter Keychain dengan `create_dir_private` hanya saat `STACKLY_ROOT` aktif (spec 0011), dan `i/<short-key>/secrets/` dibuat dan disapu modul `secret::delivery` (spec 0011). Semuanya memakai aturan privasi yang sama dengan `prepare_layout` (folder, bukan symlink, milik user, `mode & 0o077 == 0`).
 
-Fungsi `DirectoryLayout`: `owned_roots()`, `daemon_lock()`, `registry_dir()`, `registry_db()`, `providers_dir()`, `provider_revision_dir(&ProviderRevisionKey)`, `runtimes_dir()`, `runtime_dir(&SoftwareName, &ExactVersion, Target, &Sha256Digest)`, `instances_dir()`, `instance_paths(InstanceId) -> InstancePaths`, `retained_dir()`, `retained_instance_paths(InstanceId) -> InstancePaths`, `environments_dir()`, `environment_dir(EnvironmentId)`, `operations_dir()`, `backups_dir()`, `daemon_log_dir()`, `instance_log_dir(InstanceId)`, `downloads_dir()`, `daemon_socket()`, `instance_runs_dir()`, `instance_run_dir(ShortKey)`. `InstancePaths` memuat `root`, `manifest`, `data`, `config`, `config_history`, `temp`, `logs`, dan `run`. Ditambah fitur lain: `registry_snapshots_dir()` dan `registry_recovery_dir()` *(fitur 5, spec 0005)*; `keychain_dir()` (`<data>/keychain`) dan `instance_secrets_dir(ShortKey)` (`<runtime>/i/<short-key>/secrets`) *(fitur 11, spec 0011)*. Fungsi murni `instance_path_entries(InstanceId) -> [InstancePathEntry; 7]` dan `RootSet::resolve(LogicalRoot, &RelativePath) -> PathBuf` *(fitur 5, spec 0005)* menghubungkan path tersimpan di registry dengan layout ini.
+Fungsi `DirectoryLayout`: `owned_roots()`, `daemon_lock()`, `registry_dir()`, `registry_db()`, `providers_dir()`, `provider_revision_dir(&ProviderRevisionKey)`, `runtimes_dir()`, `runtime_dir(&SoftwareName, &ExactVersion, Target, &Sha256Digest)`, `instances_dir()`, `instance_paths(InstanceId) -> InstancePaths`, `retained_dir()`, `retained_instance_paths(InstanceId) -> InstancePaths`, `environments_dir()`, `environment_dir(EnvironmentId)`, `operations_dir()`, `backups_dir()`, `daemon_log_dir()`, `instance_log_dir(InstanceId)`, `downloads_dir()`, `daemon_socket()`, `instance_runs_dir()`, `instance_run_dir(ShortKey)`. `InstancePaths` memuat `root`, `manifest`, `data`, `config`, `config_history`, `temp`, `logs`, dan `run`. Ditambah fitur lain: `registry_snapshots_dir()` dan `registry_recovery_dir()` *(fitur 5, spec 0005)*; `keychain_dir()` (`<data>/keychain`) dan `instance_secrets_dir(ShortKey)` (`<runtime>/i/<short-key>/secrets`) *(fitur 11, spec 0011)*; `InstancePaths.lock` dan `instance_spool(ShortKey, stream)` *(fitur 10, spec 0010)*. Fungsi murni `instance_path_entries(InstanceId) -> [InstancePathEntry; 7]` dan `RootSet::resolve(LogicalRoot, &RelativePath) -> PathBuf` *(fitur 5, spec 0005)* menghubungkan path tersimpan di registry dengan layout ini.
 
 Anggaran path socket (konstanta di `layout`):
 
@@ -426,6 +435,7 @@ Path socket memakai bentuk runtime root apa adanya (`/var/folders/...`, bukan `/
 ### Root alternatif
 
 - Hanya bin yang membaca environment: `stacklyd` (spec ini) dan `stackly` (sejak fitur 6, spec 0006 AC-13; sebelumnya direncanakan fitur 8) membaca `STACKLY_ROOT` sekali di `main` sebagai `OsString`, lalu memanggil `MacosPlatform::new(root_override)`. Variabel yang tidak ada berarti root default; variabel yang ada tetapi kosong ditolak (`InvalidRootOverride` reason `empty`), supaya salah setel tidak diam diam kembali ke data asli. Library tidak pernah membaca environment (dijaga `check-deps`). Nama variabel ada sebagai konstanta `ROOT_OVERRIDE_ENV` di `stackly-platform`.
+- Variabel lain yang dibaca bin: `stackly` membaca `STACKLY_NO_INPUT` sekali di `main` (spec 0008), dan target app macOS membaca `STACKLY_ROOT` sekali saat launch dengan aturan yang sama, tanpa pernah menampilkannya (spec 0013). Library pihak ketiga yang berjalan di proses bin boleh membaca variabel standar mereka sendiri (`NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM`, `TZ`); aturan "library tidak membaca environment" berlaku untuk crate Stackly.
 - `validate_root_override(path, fs, identity, default_data_root)` (portabel, di `stackly-platform`) menerima root kalau: absolut; ada; folder dan bukan symlink pada komponen terakhir; dimiliki user yang sedang berjalan; `mode & 0o022 == 0`; dan path canonical-nya tidak sama dengan atau berada di dalam root data default (dibandingkan lewat identitas file kalau root default ada). Hasilnya path canonical. Setiap penolakan memakai `InvalidRootOverride { path, reason }` dengan reason seperti `empty`, `not absolute`, `does not exist`, `is a symlink`, `owned by another user`, `writable by group or others`, atau `inside the default data root`.
 - Dengan override, semua root (termasuk log dan cache) pindah. Tidak ada mode campuran.
 - `MacosPlatform::with_roots(RootSet)` merangkai adapter macOS dengan root set yang diberikan pemanggil, tanpa resolver default. Dipakai integration test supaya tidak ada folder yang tertinggal di temp dir user asli.
@@ -490,7 +500,7 @@ Pemilik dan wujud setiap capability platform:
 | `clock` | trait `Clock` | fitur 4 | supported |
 | `user_identity` | trait `UserIdentity` | fitur 4 | supported |
 | `ipc_endpoint` | tanpa trait di `stackly-platform`: crate `stackly-ipc` (socket Unix sekarang, named pipe Windows nanti sebagai modul kedua), kredensial peer lewat tokio, lock daemon lewat std | fitur 6, spec 0006 | not supported, menjadi supported di fitur 6 |
-| `process_supervision` | port lewat `with_<port>` | fitur 10 | not supported |
+| `process_supervision` | trait `ProcessSupervision` lewat `with_processes`; default `UnsupportedProcessSupervision` | fitur 10, spec 0010 | not supported, menjadi supported setelah milestone 1 spec 0010 |
 | `secret_store` | trait `SecretStore` lewat `with_secrets`; default `UnsupportedSecretStore` | fitur 11, spec 0011 | not supported, menjadi supported setelah milestone 1 spec 0011 |
 | `background_agent` | port lewat `with_<port>` | fitur 15 | not supported |
 | `process_metrics` | port lewat `with_<port>` | fitur 28 | not supported |
@@ -504,6 +514,7 @@ Semua use case core adalah fungsi sync yang menerima `&Platform`. Pemanggilnya s
 | Fungsi | Tempat | Input utama | Output utama | Pemanggil | Error utama |
 | --- | --- | --- | --- | --- | --- |
 | `DirectoryResolver::roots` | platform (trait) | tidak ada | `RootSet` | adapter | `HomeDirUnavailable`, `TempDirUnavailable`, `RuntimeRootTooLong`, `NotSupported` |
+| `default_runtime_root` *(ditambah fitur 13, spec 0013)* | platform | temp dir user | runtime root default `<temp>/stackly` | `MacosPlatform`, test paritas Swift | tidak ada (murni) |
 | `RootSet::new`, `RootSet::under_override` | platform | path absolut | `RootSet` | adapter, testkit | `InvalidRoots`, `RuntimeRootTooLong` |
 | `DirectoryLayout::*` | platform | `RootSet`, ID dan value type domain | `PathBuf`, `InstancePaths` | core, daemon | tidak ada (murni) |
 | `validate_root_override` | platform | path, `&dyn Filesystem`, `&dyn UserIdentity`, root data default | path canonical | adapter saat start | `InvalidRootOverride` |
@@ -551,7 +562,7 @@ Aturan privasi folder (`ensure_private_dir`, privat di modul `layout`: buat deng
 | `create_instance_layout` | ID instance | dibuat use case create (fitur 20) dengan `InstanceId::generate()`, dibuat ulang saat `ShortKeyTaken` |
 | `create_instance_layout` | `known` | ID dari registry (fitur 5); di test fitur ini dari `inventory_instances` |
 | manifest | `createdAt`, `updatedAt`, `retainedAt`, `data.initializedAt` | `Clock::now` |
-| manifest | `createdByOperation`, `byOperation` | ID operasi yang sedang berjalan (fitur 7); di test `OperationId::generate()` |
+| manifest | `createdByOperation`, `byOperation` | `OperationContext::id()` operasi yang sedang berjalan (spec 0007); di test `OperationId::generate()` |
 | manifest | `stacklyVersion` | `stackly_core::daemon_info().version` |
 | manifest | `data.initializedLine`, `data.initializedVersion` | `line` dan `version` runtime saat create |
 | `Instance` | `data_initialized_at` | argumen `at` dari `apply_lifecycle(init_succeeded, at)`, yang berasal dari `Clock::now` |
@@ -568,6 +579,7 @@ Aturan privasi folder (`ensure_private_dir`, privat di modul `layout`: buat deng
 | `plan_runtime_removal` | `RuntimeReferences` | registry (fitur 5 dan 55) |
 | `effective` readiness dan health | `now` | `Clock::now` |
 | `effective` readiness dan health | `max_age` | parameter bertipe `std::time::Duration`; default `READINESS_MAX_AGE = Duration::from_secs(30)` di modul `observation` core, `// provisional: F28` (tiga kali interval probe 10 detik). Karena tipenya dari std, core tidak bergantung pada `jiff` di fitur ini; fitur pertama yang menamai `jiff::Timestamp` di signature core menambahkannya (spec 0001 mengizinkan) |
+| probe readiness *(fitur 10)* | interval cek ulang dan ambang gagal | `READINESS_REFRESH_INTERVAL` 10 detik dan `READINESS_FAILURE_THRESHOLD` 2 di `SupervisorConfig` spec 0010, ditinjau fitur 28 bersama `READINESS_MAX_AGE` |
 | readiness dan health saat registry dibuka *(fitur 5)* | state, reason, `observed_at` | `unknown`, `daemon_restarted`, dan `loaded_at` dari `OpenSummary::opened_at` (spec 0005) |
 | `evaluate_stop`, `should_autostart` | `session` | parameter; sumber platform diputuskan fitur 31 |
 | `resolve_port` | kandidat auto port | parameter dari pencari port platform (fitur 20 dan 10) |
@@ -591,6 +603,7 @@ Selain tabel BR:
 - Kode state stabil; mengganti kode adalah perubahan kontrak yang butuh migrasi registry.
 - Observasi (readiness, health, dan `blocker` fitur 11) tidak pernah mengubah lifecycle, desired state, atau `revision`, dan tidak disimpan di registry.
 - `Platform::new` tidak pernah mendapat argumen baru; port baru masuk lewat `with_<port>` dengan default Unsupported.
+- Proses hanya dijalankan dan disinyal lewat port `ProcessSupervision` *(fitur 10)*: core dan `stacklyd` tidak memakai `std::process::Command` atau `tokio::process`, dan `SIGKILL` hanya untuk proses yang belum pernah berjalan atau grup pembantu (spec 0010, dijaga `check-deps`).
 
 ### Security model
 
@@ -703,11 +716,11 @@ Butir untuk fitur lain dicentang saat spec pemiliknya sudah merancangnya; pemban
 - [x] Fitur 6: panggil `prepare_layout` saat daemon start, ambil lock di `daemon_lock()` (root data, bukan runtime root), bind socket di `daemon_socket()`, periksa ulang socket secara berkala dan bind ulang kalau hilang, dan tampilkan root aktif serta status override di `stackly daemon status`. Dirancang spec 0006 (urutan start, `DaemonLock`, pemeriksa socket, `stackly daemon status`); `prepare_layout` saat start sudah dipanggil sejak fitur 5.
 - [x] Fitur 8: `stackly` membaca `STACKLY_ROOT` sekali saat start dengan aturan yang sama dengan daemon. Dipindah ke fitur 6 (spec 0006, AC-13).
 - [x] Fitur 9: tolak nama socket lebih dari 15 byte, petakan capability manifest ke `Capability`, dan isi `LineCompatibility`. Diputuskan spec 0009 (2026-10-18): batas socket 15 byte, pemetaan capability termasuk `multi_instance` dan `persistence`, dan `LineCompatibility` dari peta; dibangun fitur 9.
-- [ ] Fitur 10: panggil `ensure_instance_run_dir` sebelum setiap start, dan ubah capability `process_supervision` menjadi supported. Port proses masuk lewat `with_<port>` (lihat *Port platform*).
+- [x] Fitur 10: panggil `ensure_instance_run_dir` sebelum setiap start, dan ubah capability `process_supervision` menjadi supported. Port proses masuk lewat `with_<port>` (lihat *Port platform*). Dirancang spec 0010 (2026-10-18): port `ProcessSupervision` lewat `with_processes`, `ensure_instance_run_dir` di startup transaction.
 - [ ] Fitur 20: tulis ulang manifest dengan `data.initializedAt` setelah `init_succeeded`.
 - [x] Fitur 11: `SecretStore` lewat `with_secrets`, modul domain `secret`, operasi hapus, dan layout secret dirancang spec 0011 (2026-10-18) dan dicatat sebagai titik perluasan di sini.
 - [ ] Fitur 15, 28, dan 31: tambahkan port masing masing lewat `/architect` update spec ini dengan pola `with_<port>` dan ubah capability-nya menjadi supported. Fitur 28 juga mengganti `READINESS_MAX_AGE`, dan fitur 31 menentukan sumber `SessionId`.
-- [ ] Fitur 13: GUI menghitung path socket daemon dengan algoritma yang sama (`confstr`, `STACKLY_ROOT`, FNV-1a), dijaga fixture bersama berisi contoh input dan path hasilnya di `protocols/fixtures/`. Spec 0006 belum menetapkan fixture ini; tugasnya pindah ke spec 0013.
+- [x] Fitur 13: GUI menghitung path socket daemon dengan algoritma yang sama (`confstr`, `STACKLY_ROOT`, FNV-1a), dijaga fixture bersama berisi contoh input dan path hasilnya di `protocols/fixtures/`. Dirancang spec 0013 (2026-10-18): fixture `protocols/fixtures/layout/socket-paths.json`, test `crates/platform/tests/socket_path_fixture.rs`, dan fungsi murni `default_runtime_root`.
 - [ ] Fitur 54: tambahkan `rename_no_replace` ke `Filesystem` untuk memindahkan folder ke `retained/`. Fitur 54 juga memutuskan penghapusan rekursif data instance untuk purge.
 - [ ] Fitur 6 (test native): pastikan di macOS 27 kapan isi `_CS_DARWIN_USER_TEMP_DIR` dibersihkan, dan catat hasilnya di spec ini. Langkah 22 build plan spec 0006 merekam pengamatannya.
 - [ ] Spec 0007: pakai bentuk kompensasi di *Port platform* (hapus persis path yang dicatat, urut terbalik, tanpa rekursif, folder berisi menjadi `needs_recovery`).
