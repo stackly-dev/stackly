@@ -1,0 +1,52 @@
+{
+  "steps": [
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/fake.json",
+        "content": {
+          "configFile": "fakeConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "{\n  \"greeting\": \"hello from stackly\",\n  \"instanceName\": \"golden\",\n  \"authToken\": "
+            },
+            {
+              "type": "secret",
+              "content": {
+                "secret": "<secret:authToken>",
+                "format": "json"
+              }
+            },
+            {
+              "type": "text",
+              "content": "\n}\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    }
+  ],
+  "action": {
+    "type": "hangup"
+  },
+  "verify": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14000,
+        "path": "/ready",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "100ms",
+    "attemptTimeout": "1s",
+    "deadline": "10s"
+  },
+  "deadline": "10s"
+}

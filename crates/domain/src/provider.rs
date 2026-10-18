@@ -77,6 +77,26 @@ impl ProviderRevisionKey {
 pub struct LineCompatibility(BTreeMap<RuntimeLine, BTreeSet<RuntimeLine>>);
 
 impl LineCompatibility {
+    /// Creates the compatibility from a map of each data line to the other
+    /// runtime lines that may run its data, such as
+    /// `compatibility.lineCompatibility` in a provider manifest.
+    ///
+    /// ```
+    /// use std::collections::{BTreeMap, BTreeSet};
+    ///
+    /// use stackly_domain::{LineCompatibility, RuntimeLine};
+    ///
+    /// let line = |text: &str| text.parse::<RuntimeLine>().expect("valid line");
+    /// let map = BTreeMap::from([(line("0.1"), BTreeSet::from([line("0.2")]))]);
+    /// let compat = LineCompatibility::from_map(map);
+    /// assert!(compat.allows(&line("0.1"), &line("0.2")));
+    /// assert!(!compat.allows(&line("0.2"), &line("0.1")));
+    /// ```
+    #[must_use]
+    pub const fn from_map(lines: BTreeMap<RuntimeLine, BTreeSet<RuntimeLine>>) -> Self {
+        Self(lines)
+    }
+
     /// Returns the map with `runtime_line` also allowed for data that
     /// `data_line` initialized.
     #[must_use]
@@ -197,6 +217,31 @@ mod tests {
     use super::*;
 
     const DIGEST: &str = "cb95f16d56a9ab7b938a03732ddf4ab691346124747fbb811ac6c09928f1fa6b";
+
+    fn line(text: &str) -> RuntimeLine {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn line_compatibility_from_a_map_equals_the_same_allows_chained() {
+        let map = BTreeMap::from([
+            (line("17"), BTreeSet::from([line("18"), line("19")])),
+            (line("8.0"), BTreeSet::from([line("8.4")])),
+        ]);
+
+        let compat = LineCompatibility::from_map(map);
+
+        assert_eq!(
+            compat,
+            LineCompatibility::default()
+                .allow(line("17"), line("18"))
+                .allow(line("17"), line("19"))
+                .allow(line("8.0"), line("8.4"))
+        );
+        assert!(compat.allows(&line("17"), &line("19")));
+        assert!(!compat.allows(&line("18"), &line("17")));
+        assert!(LineCompatibility::from_map(BTreeMap::new()).allows(&line("17"), &line("17")));
+    }
 
     #[test]
     fn revision_key_serializes_the_provider_as_name() {

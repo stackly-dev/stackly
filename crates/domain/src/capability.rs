@@ -26,6 +26,10 @@ code_enum! {
         Tls => "tls",
         /// Expose metrics.
         Metrics => "metrics",
+        /// Run more than one instance side by side.
+        MultiInstance => "multi_instance",
+        /// Keep data across restarts in the instance's data folder.
+        Persistence => "persistence",
     }
 }
 
@@ -43,6 +47,20 @@ code_enum! {
 pub struct CapabilitySet(BTreeSet<Capability>);
 
 impl CapabilitySet {
+    /// Creates the set from a list of capabilities, such as the ones a
+    /// provider manifest declares. Duplicates collapse into one.
+    ///
+    /// ```
+    /// use stackly_domain::{Capability, CapabilitySet};
+    ///
+    /// let caps = CapabilitySet::new([Capability::Persistence, Capability::MultiInstance]);
+    /// assert!(caps.contains(Capability::MultiInstance));
+    /// ```
+    #[must_use]
+    pub fn new(capabilities: impl IntoIterator<Item = Capability>) -> Self {
+        Self(capabilities.into_iter().collect())
+    }
+
     /// Returns whether the set holds `capability`.
     #[must_use]
     pub fn contains(&self, capability: Capability) -> bool {
@@ -72,7 +90,7 @@ impl CapabilitySet {
 
 impl FromIterator<Capability> for CapabilitySet {
     fn from_iter<I: IntoIterator<Item = Capability>>(iter: I) -> Self {
-        Self(iter.into_iter().collect())
+        Self::new(iter)
     }
 }
 
@@ -89,6 +107,33 @@ mod tests {
             );
         }
         assert!("Reload".parse::<Capability>().is_err());
+    }
+
+    #[test]
+    fn feature_9_capabilities_have_snake_case_codes() {
+        assert_eq!(Capability::MultiInstance.as_code(), "multi_instance");
+        assert_eq!(Capability::Persistence.as_code(), "persistence");
+        assert_eq!(
+            "multi_instance".parse::<Capability>().unwrap(),
+            Capability::MultiInstance
+        );
+    }
+
+    #[test]
+    fn a_set_built_from_a_list_matches_one_collected_from_it() {
+        let list = [
+            Capability::Persistence,
+            Capability::Reload,
+            Capability::Persistence,
+        ];
+
+        let set = CapabilitySet::new(list);
+
+        assert_eq!(set, list.into_iter().collect());
+        assert_eq!(
+            set.iter().collect::<Vec<_>>(),
+            [Capability::Reload, Capability::Persistence]
+        );
     }
 
     #[test]

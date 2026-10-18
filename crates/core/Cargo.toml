@@ -11,7 +11,12 @@ publish.workspace = true
 [dependencies]
 stackly-domain.workspace = true
 stackly-platform.workspace = true
+regex.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+serde_path_to_error.workspace = true
+serde_yaml_ng.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

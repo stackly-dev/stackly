@@ -1,0 +1,91 @@
+# Fixture package for the primitives the fake provider does not use:
+# materializeSecret, tcp and exec probes, the command stop strategy, the run
+# reload action, a unix endpoint, an executable alias, and a config file in a
+# subfolder. It runs the same stackly-fake-server binary.
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: testing/fake-command
+  software: fake
+  displayName: Fake Command Provider
+  revision: "0.1.0"
+  category: testing
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+  lineCompatibility:
+    "0.1": ["0.2"]
+runtime:
+  executable: stackly-fake-server
+  executionMode: foreground
+capabilities:
+  reload: true
+  persistence: true
+resources:
+  endpoints:
+    http: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 18081 }
+    control: { transport: unix, purpose: admin, socketName: "fake.${endpoint.http.port}" }
+configFiles:
+  serverConfig:
+    template: templates/server.json.tmpl
+    format: yaml
+    destination: "${instance.config}/conf/server.json"
+    sensitive: true
+  peers:
+    template: templates/peers.yaml.tmpl
+    format: yaml
+    destination: "${instance.config}/peers.yaml"
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+    - { primitive: materializeSecret, secret: authToken, destination: "${instance.run}/token" }
+    - { primitive: renderConfig, file: serverConfig }
+    - { primitive: renderConfig, file: peers }
+    - primitive: runExecutable
+      executable: "${runtime.executable}"
+      args: [init, "--data=${instance.data}"]
+      timeoutSeconds: 20
+      successExitCodes: [0]
+  start:
+    executable: "${runtime.executable}"
+    args:
+      - serve
+      - "--config=${instance.config}/conf/server.json"
+      - "--data=${instance.data}"
+      - "--port=${endpoint.http.port}"
+      - "--label=${settings.mode}"
+    env:
+      FAKE_SOCKET: "${endpoint.control.socket}"
+      FAKE_ADDRESS: "${endpoint.http.address}"
+  stop:
+    strategy: command
+    command:
+      executable: "${runtime.executable}"
+      args: [shutdown, "--port=${endpoint.http.port}"]
+    successExitCodes: [0]
+  reload:
+    render: [serverConfig]
+    action: run
+    command:
+      executable: "${runtime.executables.fakeCli}"
+      args: [version]
+    verify: none
+readiness:
+  probe: { type: tcp, endpoint: http }
+health:
+  probe:
+    type: exec
+    command:
+      executable: "${runtime.executable}"
+      args: [version]
+  failureThreshold: 2
+timeouts:
+  initSeconds: 60
+  reloadSeconds: 20
+logs:
+  files: ["${instance.logs}/fake.log"]
+permissions:
+  managedFilesystem: [data, config, logs, temp, run]
+  executeRuntimeBinary: true
+  additionalExecutables:
+    fakeCli: stackly-fake-server

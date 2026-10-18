@@ -1,0 +1,12 @@
+{{! peers known to this instance; stackly-fake-server never reads this }}
+port: {{ settings.listenPort }}
+peers:
+{{#if settings.peers}}
+{{#each settings.peers as peer}}
+  - name: {{ peer.name }}
+    port: {{ peer.port }}
+    primary: {{ loop.first }}
+{{/each}}
+{{else}}
+  []
+{{/if}}

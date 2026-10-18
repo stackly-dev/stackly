@@ -1,0 +1,111 @@
+{
+  "steps": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
+        "/Volumes/Test Root/Ünï cödé/logs/instances/0192f000-0000-7000-8000-00000000000a",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a"
+      ]
+    },
+    {
+      "type": "materializeSecret",
+      "content": {
+        "secret": "<secret:authToken>",
+        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/token"
+      }
+    },
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf/server.json",
+        "content": {
+          "configFile": "serverConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "{\"greeting\": \"hello from fake-command\", \"instanceName\": \"golden\", \"authToken\": "
+            },
+            {
+              "type": "secret",
+              "content": {
+                "secret": "<secret:authToken>",
+                "format": "yaml"
+              }
+            },
+            {
+              "type": "text",
+              "content": "}\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/peers.yaml",
+        "content": {
+          "configFile": "peers",
+          "segments": [
+            {
+              "type": "text",
+              "content": "port: 14000\npeers:\n  - name: \"east\"\n    port: 6222\n    primary: true\n  - name: \"west\"\n    port: 4222\n    primary: false\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "run",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "stackly-fake-server"
+          },
+          "args": [
+            "init",
+            "--data=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+          "env": [
+            [
+              "HOME",
+              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            ],
+            [
+              "PATH",
+              "/usr/bin:/bin:/usr/sbin:/sbin"
+            ],
+            [
+              "TMPDIR",
+              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "20s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    }
+  ],
+  "deadline": "60s",
+  "cleanup": [
+    "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/token"
+  ]
+}
