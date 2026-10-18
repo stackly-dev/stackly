@@ -2,6 +2,7 @@
 //! the archive holds (spec 0003, AC-3, AC-16, and the archive report).
 
 use std::fs;
+use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
@@ -11,6 +12,7 @@ use anyhow::{Context, Result, bail};
 use super::plan::PlanArtifact;
 use super::result::ArchiveReport;
 use crate::runtime::cache::sha256_file;
+use crate::runtime::inventory::is_inner_relative_path;
 use crate::runtime::macho::{check_format, file_kind};
 
 const TAR: &str = "/usr/bin/tar";
@@ -28,32 +30,50 @@ pub fn check_digest(path: &Path, sha256: &str, size: u64) -> Result<()> {
     Ok(())
 }
 
+/// What [`extract`] made.
+#[derive(Debug)]
+pub struct Extracted {
+    /// The artifact root.
+    pub root: PathBuf,
+    /// One `set mode 0755 on <path> (was <mode>)` per executable of a `zip`
+    /// whose mode changed, in `executables` order.
+    pub mode_notes: Vec<String>,
+}
+
 /// Extracts the artifact into `into` (a new folder) and returns the
 /// artifact root: `into/<archive_root>` when the entry names one, which
 /// must then be the only thing at the top of the archive, else `into`
 /// itself. A `binary` download is copied in under its executable name
-/// with mode 0755. The magic number of the cached file must match
-/// `format` before anything is extracted (AC-16).
-pub fn extract(artifact: &PlanArtifact, cache_file: &Path, into: &Path) -> Result<PathBuf> {
+/// with mode 0755, and every executable of a `zip` gets mode 0755 too. The
+/// magic number of the cached file must match `format` before anything is
+/// extracted (AC-16).
+pub fn extract(artifact: &PlanArtifact, cache_file: &Path, into: &Path) -> Result<Extracted> {
     check_format(&artifact.format, file_kind(cache_file)?)?;
     fs::create_dir_all(into).with_context(|| format!("cannot create {}", into.display()))?;
     match artifact.format.as_str() {
-        "tar_gz" => untar(
-            cache_file,
-            "-xzf",
-            &[],
-            into,
-            artifact.archive_root.as_deref(),
-        ),
+        "tar_gz" => Ok(Extracted {
+            root: untar(
+                cache_file,
+                "-xzf",
+                &[],
+                into,
+                artifact.archive_root.as_deref(),
+            )?,
+            mode_notes: Vec::new(),
+        }),
         // Without `--no-mac-metadata`, bsdtar turns `__MACOSX/._<name>`
         // entries into extended attributes (or fails on them).
-        "zip" => untar(
-            cache_file,
-            "-xf",
-            &["--no-mac-metadata"],
-            into,
-            artifact.archive_root.as_deref(),
-        ),
+        "zip" => {
+            let root = untar(
+                cache_file,
+                "-xf",
+                &["--no-mac-metadata"],
+                into,
+                artifact.archive_root.as_deref(),
+            )?;
+            let mode_notes = make_executable(&root, &artifact.executables)?;
+            Ok(Extracted { root, mode_notes })
+        }
         "binary" => {
             let target = into.join(artifact.main_executable());
             if let Some(parent) = target.parent() {
@@ -64,15 +84,79 @@ pub fn extract(artifact: &PlanArtifact, cache_file: &Path, into: &Path) -> Resul
                 .with_context(|| format!("cannot copy the binary to {}", target.display()))?;
             fs::set_permissions(&target, fs::Permissions::from_mode(0o755))
                 .with_context(|| format!("cannot make {} executable", target.display()))?;
-            Ok(into.to_path_buf())
+            Ok(Extracted {
+                root: into.to_path_buf(),
+                mode_notes: Vec::new(),
+            })
         }
         other => bail!("unknown format `{other}`"),
     }
 }
 
+/// Gives every listed executable of a `zip` mode 0755, since a zip may store
+/// it without an execute bit (ClickHouse stores 0664). Returns one note per
+/// file whose mode changed; a file already at 0755 is left alone.
+fn make_executable(root: &Path, executables: &[String]) -> Result<Vec<String>> {
+    let mut notes = Vec::new();
+    for listed in executables {
+        let path = regular_file_below(root, listed)?;
+        let mode = fs::symlink_metadata(&path)
+            .with_context(|| format!("cannot read {}", path.display()))?
+            .permissions()
+            .mode()
+            & 0o7777;
+        if mode != 0o755 {
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+                .with_context(|| format!("cannot make {} executable", path.display()))?;
+            notes.push(format!("set mode 0755 on {listed} (was {mode:04o})"));
+        }
+    }
+    Ok(notes)
+}
+
+/// `root/<listed>`, once every part of `listed` below the root exists, no
+/// part is a link (`chmod` would follow it), and the last part is a regular
+/// file. The root and the folders above it are not checked: the macOS temp
+/// folder itself sits behind the `/var` link.
+fn regular_file_below(root: &Path, listed: &str) -> Result<PathBuf> {
+    if !is_inner_relative_path(listed) {
+        bail!(
+            "executable `{listed}` must be a plain relative path, without `..`, `.`, or empty parts"
+        );
+    }
+    let parts: Vec<&str> = listed.split('/').collect();
+    let mut path = root.to_path_buf();
+    for (index, part) in parts.iter().enumerate() {
+        path.push(part);
+        let meta = match fs::symlink_metadata(&path) {
+            Ok(meta) => meta,
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                ) =>
+            {
+                bail!("the artifact has no executable {listed}");
+            }
+            Err(err) => {
+                return Err(err).with_context(|| format!("cannot read {}", path.display()));
+            }
+        };
+        let last = index + 1 == parts.len();
+        if meta.file_type().is_symlink() || (last && !meta.is_file()) {
+            bail!("executable {listed} is not a regular file");
+        }
+        if !last && !meta.is_dir() {
+            bail!("the artifact has no executable {listed}");
+        }
+    }
+    Ok(path)
+}
+
 /// Extracts a `.tar.gz` or a `.zip` with the system tar, never with `-P`,
 /// so a `..` member or one written through a link makes tar fail, and
-/// returns the artifact root. File modes come from the archive.
+/// returns the artifact root. File modes are the archive's under the
+/// process umask, since tar runs without `-p`.
 fn untar(
     cache_file: &Path,
     flag: &str,
@@ -288,7 +372,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let archive = tarball(dir.path(), &["demo-1/bin/demo", "demo-1/LICENSE"]);
         let into = dir.path().join("Stackly Spike Ü/one");
-        let root = extract(&artifact("tar_gz", Some("demo-1")), &archive, &into).unwrap();
+        let root = extract(&artifact("tar_gz", Some("demo-1")), &archive, &into)
+            .unwrap()
+            .root;
         assert_eq!(root, into.join("demo-1"));
         assert!(root.join("bin/demo").is_file());
 
@@ -310,7 +396,9 @@ mod tests {
         let archive = tarball(dir.path(), &["traefik", "LICENSE.md"]);
         let into = dir.path().join("x");
         assert_eq!(
-            extract(&artifact("tar_gz", None), &archive, &into).unwrap(),
+            extract(&artifact("tar_gz", None), &archive, &into)
+                .unwrap()
+                .root,
             into
         );
         assert!(into.join("traefik").is_file());
@@ -322,7 +410,9 @@ mod tests {
         let file = dir.path().join("download");
         fs::write(&file, MACH_O).unwrap();
         let into = dir.path().join("x");
-        let root = extract(&artifact("binary", None), &file, &into).unwrap();
+        let root = extract(&artifact("binary", None), &file, &into)
+            .unwrap()
+            .root;
         let mode = fs::metadata(root.join("bin/demo"))
             .unwrap()
             .permissions()
@@ -365,25 +455,114 @@ mod tests {
         }
     }
 
+    fn mode(path: &Path) -> u32 {
+        fs::symlink_metadata(path).unwrap().permissions().mode() & 0o7777
+    }
+
+    fn zip_artifact(executables: &[&str]) -> PlanArtifact {
+        let mut zipped = artifact("zip", None);
+        zipped.executables = executables.iter().map(|e| (*e).to_owned()).collect();
+        zipped
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
-    fn a_zip_without_a_root_keeps_the_mode_of_its_file() {
+    fn a_zip_without_a_root_extracts_into_its_own_folder() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("clickhouse-macos-aarch64.zip");
         fs::write(&file, zip::stored(&[zip::file("clickhouse", 0o755, b"x")])).unwrap();
         let into = dir
             .path()
             .join("Stackly Spike Ü/clickhouse-26.8.1.1-macos-aarch64");
-        let mut clickhouse = artifact("zip", None);
-        clickhouse.executables = vec!["clickhouse".to_owned()];
 
-        assert_eq!(extract(&clickhouse, &file, &into).unwrap(), into);
-        let mode = fs::metadata(into.join("clickhouse"))
-            .unwrap()
-            .permissions()
-            .mode();
-        assert_eq!(mode & 0o777, 0o755);
+        let extracted = extract(&zip_artifact(&["clickhouse"]), &file, &into).unwrap();
+        assert_eq!(extracted.root, into);
+        assert_eq!(mode(&into.join("clickhouse")), 0o755);
+        // Already 0755, so nothing to note.
+        assert!(extracted.mode_notes.is_empty());
         assert_eq!(top_names(&into).unwrap(), ["clickhouse"]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_executables_of_a_zip_get_mode_0755_and_other_files_keep_theirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.zip");
+        // Stored 0644, so the result is the same under umask 022 or 002.
+        let members = [
+            zip::file("clickhouse", 0o644, b"x"),
+            zip::dir("bin"),
+            zip::file("bin/tool", 0o755, b"x"),
+            zip::file("LICENSE", 0o644, b"x"),
+        ];
+        fs::write(&file, zip::stored(&members)).unwrap();
+        let into = dir.path().join("into");
+
+        let extracted = extract(&zip_artifact(&["clickhouse", "bin/tool"]), &file, &into).unwrap();
+        assert_eq!(mode(&into.join("clickhouse")), 0o755);
+        assert_eq!(mode(&into.join("bin/tool")), 0o755);
+        assert_eq!(mode(&into.join("LICENSE")), 0o644);
+        assert_eq!(
+            extracted.mode_notes,
+            ["set mode 0755 on clickhouse (was 0644)"]
+        );
+    }
+
+    #[test]
+    fn an_executable_mode_is_set_exactly_and_noted_in_listed_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::create_dir_all(root.join("bin")).unwrap();
+        for (name, bits) in [("bin/a", 0o600), ("bin/b", 0o4755), ("bin/c", 0o755)] {
+            fs::write(root.join(name), "x").unwrap();
+            fs::set_permissions(root.join(name), fs::Permissions::from_mode(bits)).unwrap();
+        }
+        let listed = ["bin/b", "bin/c", "bin/a", "bin/a"].map(str::to_owned);
+
+        let notes = make_executable(root, &listed).unwrap();
+        assert_eq!(
+            notes,
+            [
+                "set mode 0755 on bin/b (was 4755)",
+                "set mode 0755 on bin/a (was 0600)",
+            ]
+        );
+        for name in ["bin/a", "bin/b", "bin/c"] {
+            assert_eq!(mode(&root.join(name)), 0o755, "{name}");
+        }
+    }
+
+    #[test]
+    fn an_executable_behind_a_link_is_refused_and_its_target_keeps_its_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("tool"), "x").unwrap();
+        fs::set_permissions(outside.join("tool"), fs::Permissions::from_mode(0o600)).unwrap();
+        let root = dir.path().join("root");
+        fs::create_dir_all(root.join("real")).unwrap();
+        fs::write(root.join("real/tool"), "x").unwrap();
+        std::os::unix::fs::symlink(outside.join("tool"), root.join("link")).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("dir")).unwrap();
+        std::os::unix::fs::symlink(root.join("gone"), root.join("dangling")).unwrap();
+
+        for listed in ["link", "dir/tool", "dangling", "real"] {
+            let err = make_executable(&root, &[listed.to_owned()]).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                format!("executable {listed} is not a regular file")
+            );
+        }
+        assert_eq!(mode(&outside.join("tool")), 0o600);
+        for listed in ["missing", "real/missing", "real/tool/x"] {
+            let err = make_executable(&root, &[listed.to_owned()]).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                format!("the artifact has no executable {listed}")
+            );
+        }
+        assert!(make_executable(&root, &["../outside/tool".to_owned()]).is_err());
+        assert_eq!(mode(&outside.join("tool")), 0o600);
     }
 
     #[cfg(target_os = "macos")]
@@ -399,7 +578,9 @@ mod tests {
         ];
         fs::write(&file, zip::stored(&members)).unwrap();
         let into = dir.path().join("Stackly Spike Ü/one");
-        let root = extract(&artifact("zip", Some("demo-1")), &file, &into).unwrap();
+        let root = extract(&artifact("zip", Some("demo-1")), &file, &into)
+            .unwrap()
+            .root;
         assert_eq!(root, into.join("demo-1"));
         assert!(root.join("bin/demo").is_file());
 
@@ -472,7 +653,7 @@ mod tests {
         fs::write(&file, zip::stored(&members)).unwrap();
         let into = dir.path().join("into");
 
-        extract(&artifact("zip", None), &file, &into).unwrap();
+        extract(&zip_artifact(&["clickhouse"]), &file, &into).unwrap();
         assert_eq!(top_names(&into).unwrap(), ["clickhouse"]);
         let names = Command::new("/usr/bin/xattr")
             .arg(into.join("clickhouse"))
