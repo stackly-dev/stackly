@@ -1,6 +1,7 @@
 //! `cargo xtask check-deps`: the dependency direction and `unsafe` rules
 //! from spec 0001 ("Aturan arah dependency"), the `stackly-evidence` rules
-//! from spec 0002, the platform rules and source scan from spec 0004, and the
+//! from spec 0002, the platform rules and source scan from spec 0004, the
+//! `stackly-storage` and `rusqlite` rules from spec 0005, and the
 //! `stackly-fake-server` rules from spec 0009.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
@@ -28,8 +29,16 @@ const LEAVES: [&str; 3] = ["stackly-domain", "stackly-protocol", EVIDENCE];
 /// Adapters the portable crates never see.
 const ADAPTERS: [&str; 2] = ["stackly-platform-macos", "stackly-storage"];
 /// Crates whose source may opt out of the workspace `unsafe_code` lint.
-/// Add `stackly-storage` only once it is proven to need `unsafe`.
 const UNSAFE_ALLOWED: [&str; 1] = ["stackly-platform-macos"];
+/// The registry adapter, the only crate that opens SQLite.
+const STORAGE: &str = "stackly-storage";
+/// The Stackly crates `stackly-storage` may depend on.
+const STORAGE_NORMAL_DEPS: [&str; 2] = ["stackly-domain", "stackly-platform"];
+/// The Stackly crates `stackly-storage` may take as dev dependencies, on
+/// top of [`STORAGE_NORMAL_DEPS`].
+const STORAGE_DEV_DEPS: [&str; 2] = [TESTKIT, EVIDENCE];
+/// The workspace binaries; of them, only `stacklyd` may use storage.
+const BINARIES: [&str; 3] = ["stacklyd", "stackly-cli", "xtask"];
 const MACOS_ADAPTER: &str = "stackly-platform-macos";
 const MACOS_ONLY_TARGET: &str = r#"cfg(target_os = "macos")"#;
 const TESTKIT: &str = "stackly-testkit";
@@ -51,7 +60,7 @@ pub fn run(root: &Path) -> Result<()> {
         eprintln!("  {violation}");
     }
     bail!(
-        "{} dependency rule violation(s), see specs 0001, 0002, 0004, and 0009",
+        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, and 0009",
         violations.len()
     )
 }
@@ -153,6 +162,22 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
     }
     if name == MACOS_ADAPTER && target.as_deref() != Some(MACOS_ONLY_TARGET) {
         deny("declare it under [target.'cfg(target_os = \"macos\")'.dependencies]");
+    }
+    if package == STORAGE && is_stackly_crate(name) {
+        let allowed = STORAGE_NORMAL_DEPS.contains(&name)
+            || (dependency.kind == DependencyKind::Development && STORAGE_DEV_DEPS.contains(&name));
+        if !allowed {
+            deny(
+                "stackly-storage depends only on stackly-domain and stackly-platform \
+                 (dev: stackly-testkit, stackly-evidence)",
+            );
+        }
+    }
+    if name == "rusqlite" && package != STORAGE {
+        deny("only stackly-storage opens SQLite");
+    }
+    if name == STORAGE && BINARIES.contains(&package) && package != "stacklyd" {
+        deny("of the binaries, only stacklyd uses the registry");
     }
 }
 
@@ -294,6 +319,123 @@ mod tests {
         let mut violations = Vec::new();
         check_dependency(package, &dependency(name, kind), &mut violations);
         violations
+    }
+
+    #[test]
+    fn storage_depends_only_on_domain_and_platform_and_tests_with_testkit_and_evidence() {
+        for name in ["stackly-domain", "stackly-platform"] {
+            assert!(violations(STORAGE, name, None).is_empty(), "{name}");
+        }
+        for name in [TESTKIT, EVIDENCE, "stackly-domain"] {
+            assert!(violations(STORAGE, name, Some("dev")).is_empty(), "{name}");
+        }
+        for name in ["stackly-core", "stackly-protocol", MACOS_ADAPTER] {
+            for kind in [None, Some("dev")] {
+                let found = violations(STORAGE, name, kind);
+                assert!(
+                    found.iter().any(|v| v.ends_with(
+                        "stackly-storage depends only on stackly-domain and stackly-platform \
+                         (dev: stackly-testkit, stackly-evidence)"
+                    )),
+                    "{name} {kind:?}: {found:?}"
+                );
+            }
+        }
+        assert!(violations(STORAGE, "rusqlite", None).is_empty());
+    }
+
+    #[test]
+    fn rusqlite_is_a_direct_dependency_of_storage_only() {
+        for package in ["stacklyd", "stackly-core", TESTKIT, "xtask"] {
+            for kind in [None, Some("dev")] {
+                let found = violations(package, "rusqlite", kind);
+                assert!(
+                    found
+                        .iter()
+                        .any(|v| v.ends_with("only stackly-storage opens SQLite")),
+                    "{package} {kind:?}: {found:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn of_the_binaries_only_stacklyd_uses_storage() {
+        assert!(violations("stacklyd", STORAGE, None).is_empty());
+        for package in ["stackly-cli", "xtask"] {
+            let found = violations(package, STORAGE, None);
+            assert!(
+                found
+                    .iter()
+                    .any(|v| v.ends_with("of the binaries, only stacklyd uses the registry")),
+                "{package}: {found:?}"
+            );
+        }
+    }
+
+    /// Writes one crate of a fixture workspace.
+    fn write_crate(root: &Path, dir: &str, name: &str, dependencies: &str, bin: bool) {
+        let path = root.join(dir);
+        std::fs::create_dir_all(path.join("src")).unwrap();
+        std::fs::write(
+            path.join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"{name}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+                 [dependencies]\n{dependencies}\n[lints]\nworkspace = true\n"
+            ),
+        )
+        .unwrap();
+        let (file, body) = if bin {
+            ("main.rs", "//! Fixture.\nfn main() {}\n")
+        } else {
+            ("lib.rs", "//! Fixture.\n")
+        };
+        std::fs::write(path.join("src").join(file), body).unwrap();
+    }
+
+    #[test]
+    fn a_fixture_workspace_that_breaks_the_storage_rules_is_rejected() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[workspace]\nresolver = \"3\"\nmembers = [\"domain\", \"core\", \"storage\", \"xtask\"]\n\n\
+             [workspace.lints.rust]\nunsafe_code = \"deny\"\n",
+        )
+        .unwrap();
+        write_crate(root, "domain", "stackly-domain", "", false);
+        write_crate(root, "core", "stackly-core", "", false);
+        write_crate(
+            root,
+            "storage",
+            STORAGE,
+            "stackly-domain = { path = \"../domain\" }\nstackly-core = { path = \"../core\" }\n\
+             rusqlite = \"0.40\"\n",
+            false,
+        );
+        write_crate(
+            root,
+            "xtask",
+            "xtask",
+            "stackly-storage = { path = \"../storage\" }\nrusqlite = \"0.40\"\n",
+            true,
+        );
+
+        let (crates, mut found) = find_violations(root).unwrap();
+        found.sort();
+
+        assert_eq!(crates, 4);
+        assert_eq!(
+            found,
+            [
+                "stackly-storage has a normal dependency on stackly-core: stackly-storage \
+                 depends only on stackly-domain and stackly-platform (dev: stackly-testkit, \
+                 stackly-evidence)",
+                "xtask has a normal dependency on rusqlite: only stackly-storage opens SQLite",
+                "xtask has a normal dependency on stackly-storage: of the binaries, only \
+                 stacklyd uses the registry",
+            ]
+        );
     }
 
     #[test]

@@ -19,6 +19,7 @@ mod code;
 mod endpoint;
 mod environment;
 mod error;
+#[macro_use]
 mod id;
 mod instance;
 mod lease;
@@ -26,6 +27,7 @@ mod manifest;
 mod observation;
 mod operation;
 mod provider;
+mod registry;
 mod rule;
 mod runtime;
 mod target;
@@ -65,6 +67,7 @@ pub use operation::{
 pub use provider::{
     AcceptedRevisionChange, LineCompatibility, ProviderRevision, ProviderRevisionKey,
 };
+pub use registry::{InstancePathEntry, InstancePathKind, LogicalRoot, RegistryId, RelativePath};
 pub use rule::Rule;
 pub use runtime::{
     InstallMode, NewRuntime, RemovalBlocker, RemovalPlan, Runtime, RuntimeEvent, RuntimeReferences,
