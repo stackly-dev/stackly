@@ -319,8 +319,6 @@ impl Drop for Inner {
     }
 }
 
-/// The registry thread: one command at a time until shutdown, then
-/// `PRAGMA optimize` and close.
 /// The error of a journal read before the journal tables exist.
 // provisional: F7 (spec 0007 build step 3)
 fn no_journal_yet() -> RegistryError {
@@ -329,6 +327,8 @@ fn no_journal_yet() -> RegistryError {
     }
 }
 
+/// The registry thread: one command at a time until shutdown, then
+/// `PRAGMA optimize` and close.
 fn serve(mut conn: Connection, receiver: &Receiver<Message>) {
     while let Ok(Message::Run(job)) = receiver.recv() {
         job(&mut conn);
