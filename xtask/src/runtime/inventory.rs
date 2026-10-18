@@ -98,13 +98,10 @@ pub struct Artifact {
     pub source_url: Option<String>,
     /// The SHA-256 of that source tarball.
     pub source_sha256: Option<String>,
-    /// Where the build recipe of a maintainer build lives. Its format waits
-    /// for the open decision in spec 0003 on how maintainer builds are made
-    /// on this Mac.
+    /// The build recipe of a maintainer build, as
+    /// `<owner>/<repo>@<40 hex commit>:<relative path>`, copied from the
+    /// artifact's `STACKLY-ARTIFACT.json`.
     pub recipe: Option<String>,
-    /// The https URL that proves where a maintainer build came from. Whether
-    /// it stays required waits for the same decision.
-    pub attestation: Option<String>,
     /// `keep_or_adhoc` or `adhoc_pipeline`.
     pub signing_policy: Option<String>,
     /// The SPDX license expression.
@@ -503,8 +500,14 @@ impl Artifact {
             self.source_sha256.as_deref().is_some_and(is_sha256_hex),
             || format!("{WHEN} needs source_sha256 as 64 lowercase hex characters"),
         );
-        v.require(5, "recipe", &self.recipe, WHEN);
-        v.require_https(5, "attestation", &self.attestation, WHEN);
+        match filled(&self.recipe) {
+            None => v.push(5, format!("{WHEN} needs recipe")),
+            Some(recipe) => v.check(5, is_recipe(recipe), || {
+                format!(
+                    "recipe must be `<owner>/<repo>@<commit as 40 lowercase hex characters>:<relative path>`, found `{recipe}`"
+                )
+            }),
+        }
         v.require_eq(
             5,
             "distribution",
@@ -704,6 +707,30 @@ pub fn is_inner_relative_path(path: &str) -> bool {
             .all(|part| !part.is_empty() && part != ".." && part != ".")
 }
 
+/// True for `<owner>/<repo>@<commit>:<path>`: the pattern
+/// `^[A-Za-z0-9-]+/[A-Za-z0-9._-]+@[0-9a-f]{40}:[^/].*$` of rule 5, with a
+/// path that [`is_inner_relative_path`] accepts.
+pub fn is_recipe(recipe: &str) -> bool {
+    let Some((repository, rest)) = recipe.split_once('@') else {
+        return false;
+    };
+    let Some((owner, repo)) = repository.split_once('/') else {
+        return false;
+    };
+    let Some((commit, path)) = rest.split_once(':') else {
+        return false;
+    };
+    let all = |text: &str, ok: fn(char) -> bool| !text.is_empty() && text.chars().all(ok);
+    all(owner, |c| c.is_ascii_alphanumeric() || c == '-')
+        && all(repo, |c| {
+            c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')
+        })
+        && commit.len() == 40
+        && all(commit, |c| matches!(c, '0'..='9' | 'a'..='f'))
+        && is_inner_relative_path(path)
+        && !path.contains(char::is_control)
+}
+
 /// True for one non empty path part that is not `.` or `..`.
 fn is_plain_name(name: &str) -> bool {
     !name.is_empty() && !name.contains('/') && name != "." && name != ".."
@@ -767,19 +794,18 @@ version = "18.6"
 build = 1
 os = "macos"
 arch = "aarch64"
-min_os = "26.0"
+min_os = "27.0"
 status = "available"
 origin = "maintainer"
 distribution = "stackly_hosted"
 format = "tar_gz"
-urls = ["https://github.com/ojiepermana/stackly-runtimes/releases/download/postgresql-18.6-r1/postgresql-18.6-r1-macos-aarch64.tar.gz"]
+urls = ["https://github.com/ojiepermana/stackly/releases/download/runtime/postgresql-18.6-r1-macos-aarch64/postgresql-18.6-r1-macos-aarch64.tar.gz"]
 sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 size = 52428800
 archive_root = "postgresql-18.6-r1-macos-aarch64"
 source_url = "https://ftp.postgresql.org/pub/source/v18.6/postgresql-18.6.tar.bz2"
 source_sha256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 recipe = "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh"
-attestation = "https://github.com/ojiepermana/stackly-runtimes/attestations/1"
 signing_policy = "adhoc_pipeline"
 license = "PostgreSQL"
 license_url = "https://www.postgresql.org/about/licence/"
@@ -1160,10 +1186,14 @@ upstream_signature = { kind = "none" }
         assert_one(
             &check(&edit(
                 MAINTAINER,
-                "attestation = \"https://github.com/ojiepermana/stackly-runtimes/attestations/1\"\n",
+                "recipe = \"ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh\"\n",
                 "",
             )),
-            "postgresql-18.6-r1-macos-aarch64: a maintainer artifact needs attestation (rule 5)",
+            "postgresql-18.6-r1-macos-aarch64: a maintainer artifact needs recipe (rule 5)",
+        );
+        assert_one(
+            &check(&edit(MAINTAINER, "format = \"tar_gz\"", "format = \"zip\"")),
+            "postgresql-18.6-r1-macos-aarch64: a maintainer artifact needs format = \"tar_gz\" (rule 5)",
         );
         assert_one(
             &check(&edit(
@@ -1182,6 +1212,54 @@ upstream_signature = { kind = "none" }
             &lines,
             "postgresql-18.6-macos-aarch64: a maintainer artifact needs build of 1 or more (rule 5)",
         );
+    }
+
+    #[test]
+    fn rule_5_needs_a_recipe_that_names_a_repository_commit_and_relative_path() {
+        const GOOD: &str = "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh";
+        for recipe in [
+            // no `@`
+            "ojiepermana/stackly-runtimes:recipes/postgresql.sh",
+            // a short commit
+            "ojiepermana/stackly-runtimes@0123456789abcdef:recipes/postgresql.sh",
+            // an upper case commit
+            "ojiepermana/stackly-runtimes@0123456789ABCDEF0123456789abcdef01234567:recipes/postgresql.sh",
+            // an absolute path
+            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:/recipes/postgresql.sh",
+            // a path that climbs out
+            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/../../etc/passwd",
+            // no owner, no repository, or no path
+            "stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "ojiepermana/@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:",
+            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567",
+            // characters the owner or repository pattern does not allow
+            "ojie.permana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "ojiepermana/stackly runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "https://github.com/ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+        ] {
+            assert_one(
+                &check(&edit(MAINTAINER, GOOD, recipe)),
+                &format!(
+                    "postgresql-18.6-r1-macos-aarch64: recipe must be `<owner>/<repo>@<commit as 40 lowercase hex characters>:<relative path>`, found `{recipe}` (rule 5)"
+                ),
+            );
+        }
+        assert!(is_recipe(GOOD));
+        assert!(is_recipe(
+            "ojiepermana/stackly.runtimes_2@0123456789abcdef0123456789abcdef01234567:recipes/deps/openssl.sh"
+        ));
+    }
+
+    #[test]
+    fn rule_5_refuses_an_entry_that_still_carries_attestation_as_invalid_toml() {
+        let with_attestation = edit(
+            MAINTAINER,
+            "signing_policy = \"adhoc_pipeline\"",
+            "attestation = \"https://github.com/ojiepermana/stackly-runtimes/attestations/1\"\nsigning_policy = \"adhoc_pipeline\"",
+        );
+        let err = format!("{:#}", Inventory::parse(&with_attestation).err().unwrap());
+        assert!(err.contains("unknown field `attestation`"), "{err}");
     }
 
     #[test]

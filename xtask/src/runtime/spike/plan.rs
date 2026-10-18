@@ -39,6 +39,9 @@ pub struct Plan {
     /// The evidence folder that already holds the quarantine result for
     /// this digest, when `quarantine` is false.
     pub quarantine_recorded_in: Option<String>,
+    /// True for `runtime spike --no-quarantine`, the local run before a
+    /// maintainer upload; its quarantine is `skipped` with `local run`.
+    pub local_run: bool,
     /// How long the worker may take in total, in seconds.
     pub worker_timeout_secs: u64,
     /// Text every string in the result is cleaned of: `(from, to)`.
@@ -87,6 +90,16 @@ pub struct PlanArtifact {
     pub urls: Vec<String>,
     /// Every dependency the inventory lists.
     pub dependencies: Vec<PlanDependency>,
+    /// The maintainer build number.
+    pub build: Option<i64>,
+    /// The source tarball of a maintainer build.
+    pub source_url: Option<String>,
+    /// The SHA-256 of that source tarball.
+    pub source_sha256: Option<String>,
+    /// The build recipe reference of a maintainer build.
+    pub recipe: Option<String>,
+    /// The minimum macOS version the entry records.
+    pub min_os: Option<String>,
 }
 
 /// One `[[artifact.dependency]]`.
@@ -99,6 +112,12 @@ pub struct PlanDependency {
     pub kind: String,
     /// The install name as `otool -L` prints it.
     pub install_name: String,
+    /// Bundled only: the exact version.
+    pub version: Option<String>,
+    /// Bundled only: the SPDX license.
+    pub license: Option<String>,
+    /// Bundled only: where the source came from.
+    pub source_url: Option<String>,
 }
 
 impl PlanArtifact {
@@ -128,6 +147,9 @@ impl PlanArtifact {
                     name: text(&dependency.name, "dependency name")?,
                     kind: text(&dependency.kind, "dependency kind")?,
                     install_name: text(&dependency.install_name, "dependency install_name")?,
+                    version: dependency.version.clone(),
+                    license: dependency.license.clone(),
+                    source_url: dependency.source_url.clone(),
                 })
             })
             .collect::<Result<_>>()?;
@@ -145,6 +167,11 @@ impl PlanArtifact {
             size,
             urls: artifact.urls.clone().unwrap_or_default(),
             dependencies,
+            build: artifact.build,
+            source_url: artifact.source_url.clone(),
+            source_sha256: artifact.source_sha256.clone(),
+            recipe: artifact.recipe.clone(),
+            min_os: artifact.min_os.clone(),
         })
     }
 

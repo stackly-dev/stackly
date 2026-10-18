@@ -545,4 +545,21 @@ mod tests {
         fs::write(dir.path().join(".DS_Store"), "").unwrap();
         assert_eq!(lines(dir.path()), Vec::<String>::new());
     }
+
+    #[test]
+    fn an_entry_that_still_carries_attestation_fails_as_an_invalid_inventory() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("runtimes")).unwrap();
+        fs::write(
+            root.path().join(crate::runtime::inventory::INVENTORY_FILE),
+            "schema_version = 1\n\n[[artifact]]\nid = \"valkey-9.1.2-r1-macos-aarch64\"\norigin = \"maintainer\"\nattestation = \"https://github.com/ojiepermana/stackly-runtimes/attestations/1\"\n",
+        )
+        .unwrap();
+        let err = format!("{:#}", run(root.path()).err().unwrap());
+        assert!(
+            err.starts_with("runtimes/inventory.toml is not a valid inventory"),
+            "{err}"
+        );
+        assert!(err.contains("unknown field `attestation`"), "{err}");
+    }
 }
