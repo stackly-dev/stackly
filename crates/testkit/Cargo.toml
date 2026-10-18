@@ -14,6 +14,7 @@ stackly-domain.workspace = true
 stackly-evidence.workspace = true
 stackly-platform.workspace = true
 tempfile.workspace = true
+uuid.workspace = true
 
 [lints]
 workspace = true

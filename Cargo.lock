@@ -1077,6 +1077,7 @@ dependencies = [
  "stackly-evidence",
  "stackly-platform",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]
