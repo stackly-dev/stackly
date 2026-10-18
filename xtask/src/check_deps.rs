@@ -1,8 +1,9 @@
 //! `cargo xtask check-deps`: the dependency direction and `unsafe` rules
 //! from spec 0001 ("Aturan arah dependency"), the `stackly-evidence` rules
 //! from spec 0002, the platform rules and source scan from spec 0004, the
-//! `stackly-storage` and `rusqlite` rules from spec 0005, and the
-//! `stackly-fake-server` rules from spec 0009.
+//! `stackly-storage` and `rusqlite` rules from spec 0005, the
+//! `stackly-ipc` and `stacklyd` rules and the socket scan from spec 0006,
+//! and the `stackly-fake-server` rules from spec 0009.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
 //! build). Transitive dependencies are left alone: portability is proven by
@@ -49,6 +50,16 @@ const UNSAFE_LINT: &str = "unsafe_code";
 /// The dummy server behind the `testing/fake` provider (spec 0009). Tests
 /// find its binary through `stackly_testkit::fake_server::binary`.
 const FAKE_SERVER: &str = "stackly-fake-server";
+/// The IPC transport (spec 0006). Its only Stackly dependency is the
+/// protocol.
+const IPC: &str = "stackly-ipc";
+const PROTOCOL: &str = "stackly-protocol";
+/// The Stackly crates `stackly-ipc` may take as dev dependencies, on top of
+/// [`PROTOCOL`].
+const IPC_DEV_DEPS: [&str; 2] = [TESTKIT, EVIDENCE];
+/// The daemon, a library plus bin whose library only its own `main.rs` and
+/// `apps/daemon/tests/` use.
+const DAEMON: &str = "stacklyd";
 
 pub fn run(root: &Path) -> Result<()> {
     let (crates, violations) = find_violations(root)?;
@@ -60,7 +71,7 @@ pub fn run(root: &Path) -> Result<()> {
         eprintln!("  {violation}");
     }
     bail!(
-        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, and 0009",
+        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, and 0009",
         violations.len()
     )
 }
@@ -84,8 +95,9 @@ fn find_violations(root: &Path) -> Result<(usize, Vec<String>)> {
         if !UNSAFE_ALLOWED.contains(&package.name.as_str()) {
             check_unsafe_opt_out(package, &mut violations)?;
         }
-        if source_scan::SCANNED.contains(&package.name.as_str()) {
-            violations.extend(source_scan::scan_package(root, package)?);
+        let rules = source_scan::Rules::for_crate(package.name.as_str());
+        if rules.any() {
+            violations.extend(source_scan::scan_package(root, package, rules)?);
         }
     }
     Ok((packages.len(), violations))
@@ -172,6 +184,25 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
                  (dev: stackly-testkit, stackly-evidence)",
             );
         }
+    }
+    if package == IPC && is_stackly_crate(name) {
+        let allowed = match dependency.kind {
+            DependencyKind::Normal => name == PROTOCOL,
+            DependencyKind::Development => name == PROTOCOL || IPC_DEV_DEPS.contains(&name),
+            _ => false,
+        };
+        if !allowed {
+            deny(
+                "stackly-ipc depends only on stackly-protocol \
+                 (dev: stackly-testkit, stackly-evidence)",
+            );
+        }
+    }
+    if name == DAEMON {
+        deny(
+            "no crate depends on stacklyd; its library serves only its own main.rs \
+             and apps/daemon/tests",
+        );
     }
     if name == "rusqlite" && package != STORAGE {
         deny("only stackly-storage opens SQLite");
@@ -671,11 +702,166 @@ mod tests {
             .map(|package| package.name.as_str())
             .collect();
 
-        for name in source_scan::SCANNED {
+        for name in source_scan::SCANNED
+            .iter()
+            .chain(&source_scan::SOCKET_SCANNED)
+        {
             assert!(
-                members.contains(&name),
+                members.contains(name),
                 "{name} is not a workspace member, so its source would never be scanned"
             );
         }
+    }
+
+    const IPC_RULE: &str =
+        "stackly-ipc depends only on stackly-protocol (dev: stackly-testkit, stackly-evidence)";
+    const DAEMON_RULE: &str = "no crate depends on stacklyd; its library serves only its own \
+                               main.rs and apps/daemon/tests";
+
+    #[test]
+    fn stackly_ipc_depends_only_on_protocol_and_tests_with_testkit_and_evidence() {
+        assert!(violations(IPC, PROTOCOL, None).is_empty());
+        for name in [PROTOCOL, TESTKIT, EVIDENCE] {
+            assert!(violations(IPC, name, Some("dev")).is_empty(), "{name}");
+        }
+        for name in ["tokio", "tracing", "uuid", "thiserror", "serde_json"] {
+            assert!(violations(IPC, name, None).is_empty(), "{name}");
+        }
+        for name in [
+            "stackly-core",
+            "stackly-domain",
+            "stackly-platform",
+            STORAGE,
+            DAEMON,
+        ] {
+            for kind in [None, Some("dev"), Some("build")] {
+                let found = violations(IPC, name, kind);
+                assert!(
+                    found.iter().any(|v| v.ends_with(IPC_RULE)),
+                    "{name} {kind:?}: {found:?}"
+                );
+            }
+        }
+        assert_eq!(
+            violations(IPC, PROTOCOL, Some("build")),
+            [format!(
+                "stackly-ipc has a build dependency on stackly-protocol: {IPC_RULE}"
+            )]
+        );
+    }
+
+    #[test]
+    fn no_crate_depends_on_stacklyd() {
+        for package in ["stackly-cli", IPC, TESTKIT, "stackly-core", "xtask"] {
+            for (kind, label) in [
+                (None, "normal"),
+                (Some("dev"), "dev"),
+                (Some("build"), "build"),
+            ] {
+                let found = violations(package, DAEMON, kind);
+                assert!(
+                    found.contains(&format!(
+                        "{package} has a {label} dependency on stacklyd: {DAEMON_RULE}"
+                    )),
+                    "{package} {kind:?}: {found:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_daemon_and_the_cli_may_use_the_transport() {
+        assert!(violations(DAEMON, IPC, None).is_empty());
+        assert!(violations("stackly-cli", IPC, None).is_empty());
+        assert!(violations("stackly-cli", PROTOCOL, None).is_empty());
+    }
+
+    /// Writes `path` under `root`, creating its folders.
+    fn write_file(root: &Path, path: &str, contents: &str) {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, contents).unwrap();
+    }
+
+    #[test]
+    fn a_fixture_workspace_that_breaks_the_ipc_rules_fails_with_file_and_line() {
+        let ev = stackly_evidence::evidence!(
+            covers = ["AC-070", "REQ-047"],
+            kind = stackly_evidence::Kind::Fixture,
+            expected = "check-deps rejects a TCP or UDP socket name in the non test code of the transport, the daemon, and the CLI with file and line, a transport that depends on another Stackly crate, re-enables unsafe, or skips the workspace lints, and any crate that depends on stacklyd",
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_file(
+            root,
+            "Cargo.toml",
+            "[workspace]\nresolver = \"3\"\n\
+             members = [\"crates/protocol\", \"crates/core\", \"crates/ipc\", \"apps/daemon\", \"apps/cli\"]\n\n\
+             [workspace.lints.rust]\nunsafe_code = \"deny\"\n",
+        );
+        write_crate(root, "crates/protocol", PROTOCOL, "", false);
+        write_crate(root, "crates/core", "stackly-core", "", false);
+        write_file(
+            root,
+            "crates/ipc/Cargo.toml",
+            "[package]\nname = \"stackly-ipc\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+             [dependencies]\nstackly-protocol = { path = \"../protocol\" }\n\
+             stackly-core = { path = \"../core\" }\n",
+        );
+        write_file(
+            root,
+            "crates/ipc/src/lib.rs",
+            // Built from parts, so this file never holds the opt out itself.
+            &format!(
+                "//! Fixture.\n#![allow({UNSAFE_LINT})]\n\
+                 pub fn open() {{ let _ = std::net::UdpSocket::bind(\"127.0.0.1:0\"); }}\n"
+            ),
+        );
+        write_crate(root, "apps/daemon", DAEMON, "", true);
+        write_file(root, "apps/daemon/src/lib.rs", "//! Fixture.\n");
+        write_file(
+            root,
+            "apps/daemon/src/main.rs",
+            "//! Fixture.\nfn main() {\n    let _ = std::net::TcpListener::bind(\"127.0.0.1:0\");\n}\n",
+        );
+        write_file(
+            root,
+            "apps/daemon/tests/tcp.rs",
+            "//! Tests may open TCP sockets.\n#[test]\nfn t() { let _ = std::net::TcpStream::connect(\"x\"); }\n",
+        );
+        write_crate(
+            root,
+            "apps/cli",
+            "stackly-cli",
+            "stacklyd = { path = \"../daemon\" }\nstackly-ipc = { path = \"../../crates/ipc\" }\n",
+            true,
+        );
+
+        let (crates, mut found) = find_violations(root).unwrap();
+        let unsafe_opt_out: Vec<String> = found
+            .extract_if(.., |v| {
+                v.starts_with("stackly-ipc re-enables `unsafe_code` in ")
+            })
+            .collect();
+        found.sort();
+
+        assert_eq!(crates, 5);
+        assert_eq!(
+            found,
+            [
+                format!("stackly-cli has a normal dependency on stacklyd: {DAEMON_RULE}"),
+                "stackly-ipc crates/ipc/src/lib.rs:3: no tcp or udp sockets (spec 0006)".to_owned(),
+                format!("stackly-ipc has a normal dependency on stackly-core: {IPC_RULE}"),
+                "stackly-ipc must inherit the workspace lints with `[lints] workspace = true`"
+                    .to_owned(),
+                "stacklyd apps/daemon/src/main.rs:3: no tcp or udp sockets (spec 0006)".to_owned(),
+            ]
+        );
+        assert_eq!(unsafe_opt_out.len(), 1, "{unsafe_opt_out:?}");
+        assert!(
+            unsafe_opt_out[0].ends_with("crates/ipc/src/lib.rs; only stackly-platform-macos may"),
+            "{unsafe_opt_out:?}"
+        );
+        ev.pass();
     }
 }

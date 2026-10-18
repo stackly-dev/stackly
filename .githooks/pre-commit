@@ -46,6 +46,9 @@ for file in $staged; do
             rust_changed=yes
             whole_workspace=yes
             ;;
+        # The cargo-fuzz project is its own nightly workspace (spec 0006).
+        fuzz/*)
+            ;;
         *.rs | */Cargo.toml)
             rust_changed=yes
             package=$(package_of "$file")

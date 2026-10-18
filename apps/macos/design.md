@@ -456,5 +456,70 @@ So the modifier builds the `NSAlert` itself: for a destructive request, Cancel t
 - **Reduce Motion.** See [Motion](#motion).
 - **Keyboard.** Every button in placeholders, banners, and dialogs can be focused and pressed (Tab and Space). Custom click areas are at least 24 × 24 pt.
 - **VoiceOver.** Every view has a label. Decorative icons (section icons, placeholder symbols, swatches) are hidden with `accessibilityHidden(true)`. A placeholder or banner is one group labeled by its title.
-- **Large text on macOS 27.** Checked in build step 4 on macOS 27 with Xcode 27.0 (27A266a): `.dynamicTypeSize` does not change the size of any text style (`.body` stays 13 pt from `.xSmall` to `.accessibility5`, both through `Font.resolve(in:)` and in a rendered `Text`), and `@ScaledMetric` does not scale either. So there is no homemade scaling layer. The large text check becomes a narrow width check: every gallery page and its third preview ("Narrow width") render at 640 pt, the minimum window width (`GalleryLayout.narrowWidth`, provisional until spec 0013 records the real minimum), with the longest labels and details, to prove labels are not cut and text wraps. In the Design Gallery window, use the Narrow Width toolbar toggle. `TypographyTests.textStylesIgnoreDynamicTypeSizeOnMacOS` guards this finding: if it fails, macOS now scales text styles, so switch the third preview to `.dynamicTypeSize(.accessibility3)` and update this paragraph.
+- **Large text on macOS 27.** Checked in build step 4 on macOS 27 with Xcode 27.0 (27A266a): `.dynamicTypeSize` does not change the size of any text style (`.body` stays 13 pt from `.xSmall` to `.accessibility5`, both through `Font.resolve(in:)` and in a rendered `Text`), and `@ScaledMetric` does not scale either. So there is no homemade scaling layer. The large text check becomes a narrow width check: every gallery page and its third preview ("Narrow width") render at 640 pt, the minimum content width of the main window (`GalleryLayout.narrowWidth`, from spec 0013; see [App shell](#app-shell)), with the longest labels and details, to prove labels are not cut and text wraps. In the Design Gallery window, use the Narrow Width toolbar toggle. `TypographyTests.textStylesIgnoreDynamicTypeSizeOnMacOS` guards this finding: if it fails, macOS now scales text styles, so switch the third preview to `.dynamicTypeSize(.accessibility3)` and update this paragraph.
 - **Checking in the real app.** Build Debug, open Window › Design Gallery, then change System Settings › Accessibility › Display (Increase contrast, Reduce transparency, Differentiate without color, Reduce motion) and the light or dark appearance. Spec 0012 lists what `/check verify` checks there.
+
+## App shell
+
+The main window of spec 0013: a sidebar, one daemon banner, and the selected page. The code lives in `Packages/StacklyUI/Sources/StacklyUI/Shell/`, `Diagnostics/`, and `Settings/`; the scenes and the AppKit hooks live in the app target (`StacklyApp.swift`, `AppDelegate.swift`).
+
+### Scenes and window
+
+- `Window("Stackly", id: "main")` with `AppShell`, `.defaultSize(width: 1280, height: 800)`, and `.windowResizability(.contentMinSize)`. `AppShell` sets `.frame(minWidth: 900, minHeight: 600)`, the sidebar column `min: 200, ideal: 236, max: 260`, and the content column `min: 640`, so content is never narrower than 640 pt.
+- `Settings { SettingsPlaceholder() }`: one General tab, "Coming in a later build." (provisional until feature 32). The footer's `SettingsLink` and ⌘, open it.
+- The Debug `Design Gallery` window stays.
+- `AppDelegate`: `applicationShouldTerminateAfterLastWindowClosed` is `false`; `applicationShouldHandleReopen` calls `WindowOpener.openMain()` when no window is visible; `applicationShouldTerminate` marks the app as quitting before any window closes.
+- `AppShell` captures the scene's `openWindow` into `WindowOpener` when it appears, and `MainWindowAccessor` (an `NSViewRepresentable` in its background) reports the main window's `willCloseNotification`. The main window is known through this accessor, never through an identifier SwiftUI generates.
+
+Checked on macOS 27.0 (26A428) with Xcode 27.0 (27A266a), in the Debug app driven through the accessibility API (close button, a `kAEReopenApplication` Apple event as the Dock sends, the Quit menu item, and `AXSize`):
+
+- Closing the main window keeps the app running; AppKit asks `applicationShouldTerminateAfterLastWindowClosed` right after the window's `willClose`.
+- With no visible window, the reopen event reports `hasVisibleWindows: false`, and the captured `openWindow` reopens the `Window` scene at its last size. A minimized main window counts as visible (`hasVisibleWindows: true`), and returning `true` lets AppKit restore it.
+- On Quit with the window open, the order is `applicationShouldTerminate`, `applicationWillTerminate`, then the main window's `willClose`. So the quitting mark is always set before the close, and the close notice never shows while quitting.
+- After quitting with the main window closed, the next launch opens the main window again; no `defaultLaunchBehavior` is needed.
+- Setting the window to 500 × 400 stops at 900 × 632: 900 × 600 of content plus the 32 pt title bar.
+
+### Sidebar
+
+- `List(selection:)` in `.sidebar` style: Overview, Instances, Environments without a title, then Library (Catalog, Runtimes) and System (Operations, Diagnostics). Each row is a `Label` with `SectionIcon` and a native `.badge`.
+- The selection is `@SceneStorage("shell.section")`, Overview by default, so the system restores it per window.
+- Badges come only from loaded snapshots (`SidebarSection.badge(counts:isConnected:)`): no badge at zero or before a snapshot loaded. Instances keeps its count while the daemon is unreachable, read by VoiceOver as "3 instances, last known". Operations shows running and cancelling operations only while connected, with `.badgeProminence(.increased)`. The badges are native, not the mockup's blue capsule and red numbers.
+- `DaemonFooter` sits in the sidebar's bottom safe area: a `StatusLabel` in the `.row` context (`.callout`) and an icon only `SettingsLink` (`slider.horizontal.3`, help "Settings (⌘,)", VoiceOver "Settings", 24 × 24 pt hit target).
+
+### Daemon status
+
+`ShellStatus` has one case for each row of the daemon status table of spec 0013, and `ShellPresentation(status:lastErrorCode:isReconnecting:)` turns it into the footer status, the window banner, `MutationAvailability`, and the "Waiting for stacklyd" placeholder for pages without data. `ShellPresentationTests` pins every row.
+
+| Status | Footer | Banner tone | Banner actions | Mutations |
+| --- | --- | --- | --- | --- |
+| connected, ready | positive, "stacklyd running" | none | | available |
+| connected, degraded or unknown health | caution | none | | available |
+| refreshing | caution, "Refreshing…" | the previous banner | the previous actions | the previous gate, or "Loading the latest state." after launch |
+| starting | caution | informative | none | blocked |
+| stopping | caution | informative | Open Diagnostics | blocked |
+| connecting | caution, "Connecting…" | none, informative after 1 s | Open Diagnostics | blocked |
+| unreachable | critical, "stacklyd unavailable" | caution | Reconnect, Open Diagnostics | blocked |
+| incompatible, untrusted | critical | critical | Reconnect, Open Diagnostics | blocked |
+| recovery, misconfigured | critical | critical | Open Diagnostics | blocked |
+
+- `DaemonBanner` is a `StateBanner(…, base: .window)` in one `safeAreaInset(edge: .top)` of the content column, above every page. "Showing the last known state from <time>." uses `StaleNote.formattedSince` with the system calendar, locale, and time zone, and updates every minute. Banner actions never mutate, so the gate never disables them. Reconnect shows a small spinner while an attempt runs. A new banner is a new view, so a new critical banner is announced.
+- Item status never comes from the daemon status: a lost connection adds the banner and blocks mutations, and nothing turns Stopped or Unknown.
+
+### Pages
+
+- Each page sets its toolbar title and subtitle with `.pageChrome(title:subtitle:)` and adds its own actions with `.toolbar`; an action that changes data also takes `.mutationGated()`.
+- `UnbuiltPage(section:)`: a page size `StatePlaceholder` with the section symbol, the section title, and "Coming in a later build.", with no action and no subtitle. Overview, Environments, Catalog, Runtimes, and Operations use it until features 22, 44, 17, 18, and 35; Instances uses it until milestone 4 of feature 13 adds the provisional instance list.
+- Diagnostics: the Connection section, then the place for feature 34's doctor results.
+
+### Diagnostics connection section
+
+- A `.cardSurface()` card of `LabeledContent` rows: the label in `textSecondary` in a 120 pt column, the value filling the rest. The rows are Status, Socket, Last error, What to do, Next attempt, Last connected, stacklyd, Protocol, Contract, and Health; a row without a value is left out, except Last error ("None") and Last connected ("Never").
+- Codes and the socket path are `.callout.monospaced()`. Every value wraps and can be selected; the socket path breaks after its slashes at 640 pt.
+- Times use `DiagnosticsTime.format` (abbreviated date and time with seconds) with the system calendar, locale, and time zone.
+- Below the card: Reconnect while there is no connection (disabled with "Relaunch Stackly after fixing the problem." shown as `DisabledReasonText` while misconfigured), Refresh while there is one, and Copy Details, which copies the same rows as `Label: value` lines. Nothing shows the value of `STACKLY_ROOT`.
+- `ConnectionHint` holds the words for every untrusted reason and the hint for every connection error code.
+
+### Close notice
+
+`CloseNotice` shows once per launch, on the first close of the main window that is not part of quitting: a borderless, non activating `NSPanel` at the bottom center of the window's screen with an opaque `.cardSurface(radius: .large)` card, "Stackly is still running" and "Closing the window doesn’t stop stacklyd or your instances. Click Stackly in the Dock to reopen it." (provisional until feature 32). It fades in and out with the 0.2 s crossfade, stays 4 seconds or until clicked, and its text is announced to VoiceOver. It is AppKit because SwiftUI has no presentation that outlives its window.
+

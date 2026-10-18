@@ -1,0 +1,33 @@
+# Spec 0010 spike: spool as specified (O_RDONLY reader, f_bsize punch)
+# Lines of the spike run that belong to this row (tags spool).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[spool] PASS spool keeps growing while no daemon holds it: 229 -> 10329 bytes in 1 s
+[spool] PASS new daemon reopens the orphan's spool (O_RDONLY|O_NOFOLLOW), SEEK_DATA 0, reads its output: SEEK_DATA Ok(0), first bytes "listening on 127.0.0.1:54742\nlog line 0000000000"
+[spool] NOTE f_bsize alignment (as spec 0010 says): align 4096: 4 MB appended, 40 punches; allocated 233472 B; SEEK_DATA Ok(294912) (released 3997696), SEEK_HOLE from it Ok(299008), bytes there [0, 0, 0, 0, 0, 0, 0, 0]; 37 of 40 SEEK_DATA answers were stale
+[spool] PASS f_bsize (4 KiB) alignment: punched blocks inside a 16 KiB page that is still written come back as zero-filled data: align 4096: 4 MB appended, 40 punches; allocated 233472 B; SEEK_DATA Ok(294912) (released 3997696), SEEK_HOLE from it Ok(299008), bytes there [0, 0, 0, 0, 0, 0, 0, 0]; 37 of 40 SEEK_DATA answers were stale
+[spool] NOTE runtime root is under the darwin user temp folder: true
+[spool] NOTE fstatfs: f_bsize 4096 f_iosize 1048576 fstype apfs
+[spool] PASS create_spool again fails with EEXIST (O_EXCL): Err("errno 17 (File exists (os error 17))")
+[spool] PASS reader open O_NOFOLLOW refuses a symlink (ELOOP): 
+[spool] PASS spool is 0600: 600
+[spool] PASS SEEK_DATA on an empty file -> ENXIO: Err(6)
+[spool] PASS SEEK_DATA on a file with data at 0 -> 0: 
+[spool] FAIL F_PUNCHHOLE on an O_RDONLY descriptor: Err("errno 1 (Operation not permitted (os error 1))")
+[spool] NOTE F_PUNCHHOLE unaligned (offset 100, len 4096) on O_RDWR: Err("errno 22 (Invalid argument (os error 22))")
+[spool] PASS F_PUNCHHOLE aligned to f_bsize on O_RDWR frees blocks, keeps st_size: Ok(()); st_blocks 64 -> 40, st_size 32768
+[spool] PASS SEEK_DATA after punching 3 blocks -> 3 * f_bsize: Ok(12288)
+[spool] PASS a punched range reads back as zeros: 
+[spool] PASS SEEK_DATA on a fully punched file -> ENXIO: Err(6)
+[spool] NOTE [Bsize alignment 4096] t=15s allocated now 1531904 B (max 2256896 B)
+[spool] NOTE [Bsize alignment 4096] t=30s allocated now 1003520 B (max 2560000 B)
+[spool] NOTE [Bsize alignment 4096] t=45s allocated now 2523136 B (max 3022848 B)
+[spool] NOTE [Bsize alignment 4096] t=60s allocated now 2031616 B (max 3272704 B)
+[spool] NOTE [Bsize alignment 4096] load 60 s at 2000 lines/s: written [6009755, 6009700] B; stdout: 60096 log lines, 1 other lines, 0 bad, read 6009629 B, released 6008832 B, max allocated 1638400 B, max allocated beyond unreleased data 1634304 B; stderr: 60096 log lines, 0 other lines, 0 bad, read 6009600 B, released 6008832 B, max allocated 1634304 B, max allocated beyond unreleased data 1630208 B; fake exit Some("exited(0)")
+[spool] PASS [Bsize alignment 4096] punching while the child appends never failed: None
+[spool] PASS [Bsize alignment 4096] every log line intact and in sequence (100 bytes, seq +2 per stream): 
+[spool] PASS [Bsize alignment 4096] the fake really produced the load: 120193 lines vs 120000 expected
+[spool] FAIL [Bsize alignment 4096] allocated spool blocks stay under 2 MiB (both streams together): max allocated 3272704 B over 60 s
+[spool] FAIL [Bsize alignment 4096] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(32768) vs released 6008832
+[spool] FAIL [Bsize alignment 4096] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(32768) vs released 6008832
+[spool] FAIL [Bsize alignment 4096] resume from first data, drop to first newline, next line is whole: first data 32768, dropped 400 B, line ""

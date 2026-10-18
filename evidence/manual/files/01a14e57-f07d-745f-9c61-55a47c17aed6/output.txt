@@ -1,0 +1,8 @@
+# Spec 0010 spike: getsid for a child and for a process in another session
+# Lines of the spike run that belong to this row (tags session).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[session] PASS getsid(child) == pid (SETSID): getsid Ok(17282), parent sid Ok(17275)
+[session] PASS non-child in another session: getsid works and equals recorded sid: getsid Ok(17321), our sid 17275
+[session] PASS absent pid: getsid ESRCH: Some("errno 3 (No such process (os error 3))")
+[session] NOTE pid 1: getsid Ok(1)

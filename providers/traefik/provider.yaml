@@ -1,0 +1,51 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: official/traefik
+  software: traefik
+  displayName: Traefik Proxy
+  revision: "1.0.0"
+  category: proxy
+  description: Traefik reverse proxy for local services, with routes kept in a watched dynamic file.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+runtime:
+  executable: traefik
+  executionMode: foreground
+capabilities:
+  reload: true
+  multiInstance: true
+resources:
+  endpoints:
+    web: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 8000 }
+    ping: { transport: tcp, purpose: monitoring, defaultHost: "127.0.0.1", defaultPort: 8082 }
+configFiles:
+  staticConfig:
+    template: templates/traefik.yaml.tmpl
+    format: yaml
+    destination: "${instance.config}/traefik.yaml"
+  routes:
+    template: templates/routes.yaml.tmpl
+    format: yaml
+    destination: "${instance.config}/dynamic/routes.yaml"
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+    - { primitive: renderConfig, file: staticConfig }
+    - { primitive: renderConfig, file: routes }
+  start:
+    executable: "${runtime.executable}"
+    args: ["--configFile=${instance.config}/traefik.yaml"]
+    cwd: "${instance.data}"
+  stop: { strategy: gracefulProcess, signal: term }
+  reload:
+    render: [routes]
+    action: none
+    verify: readiness
+readiness:
+  probe: { type: http, endpoint: ping, path: /ping }
+timeouts: { readinessSeconds: 30, stopSeconds: 30, reloadSeconds: 30 }
+permissions:
+  managedFilesystem: [data, config, logs, temp]
+  executeRuntimeBinary: true

@@ -1,0 +1,13 @@
+# Written by Stackly from the routes setting; edits are replaced.
+http:
+  routers:
+    "api":
+      rule: "Host(`api.localhost`)"
+      service: "api"
+      entryPoints:
+        - web
+  services:
+    "api":
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:3000"

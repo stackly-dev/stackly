@@ -5,12 +5,61 @@ use std::collections::BTreeSet;
 
 use stackly_domain::{Arch, ExactVersion, Os, RuntimeLine, SoftwareName, Target};
 
-use super::issue::{FileIssues, IssueCode};
+use super::issue::{FileIssues, Issue, IssueCode, Location};
 use super::names::is_component;
-use super::raw::{RawArtifact, RawVersions};
+use super::package::MANIFEST_FILE;
+use super::raw::{
+    RawArtifact, RawMetadata, RawVersions, check_yaml_value, decode_yaml, join_path, parse_yaml,
+};
 
 /// The only `schema` of `versions.json` this engine reads.
-pub(crate) const VERSIONS_SCHEMA: &str = "stackly.provider-versions/v1";
+pub const VERSIONS_SCHEMA: &str = "stackly.provider-versions/v1";
+
+/// Reads `metadata.software` from the text of a `provider.yaml`, for the
+/// `versions.json` generator of `cargo xtask codegen`.
+///
+/// The YAML is parsed and checked like the loader does (no tags, merge
+/// keys, or duplicate keys), and only the `metadata` mapping is decoded,
+/// strictly. The rest of the manifest is not read, so a package whose
+/// other parts are broken still gets its catalog generated.
+///
+/// # Errors
+///
+/// Returns the first [`Issue`] in `provider.yaml`: YAML that does not
+/// parse, a tag or merge key, a missing or unknown `metadata` field, or a
+/// `software` that is not a valid software name.
+pub fn manifest_software(manifest: &str) -> Result<SoftwareName, Issue> {
+    let file = MANIFEST_FILE;
+    let value = parse_yaml(file, manifest)?;
+    check_yaml_value(file, &value)?;
+    let metadata = value.get("metadata").cloned().ok_or_else(|| {
+        Issue::new(
+            file,
+            Location::Field("metadata".into()),
+            IssueCode::MissingField,
+            "missing field `metadata`",
+        )
+    })?;
+    let raw: RawMetadata =
+        decode_yaml(file, metadata, IssueCode::UnknownField).map_err(|mut issue| {
+            if let Location::Field(path) = &issue.location {
+                issue.location = Location::Field(if path == "." {
+                    "metadata".to_owned()
+                } else {
+                    join_path("metadata", path)
+                });
+            }
+            issue
+        })?;
+    raw.software.parse().map_err(|_| {
+        Issue::new(
+            file,
+            Location::Field("metadata.software".into()),
+            IssueCode::InvalidName,
+            "software is not a valid software name",
+        )
+    })
+}
 
 /// What the catalog is checked against from the manifest.
 pub(crate) struct VersionsContext<'a> {
@@ -329,4 +378,51 @@ fn is_date(text: &str) -> bool {
             .iter()
             .enumerate()
             .all(|(index, b)| index == 4 || index == 7 || b.is_ascii_digit())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const METADATA: &str = "metadata:\n  id: official/nats\n  software: nats\n  displayName: NATS\n  revision: \"1\"\n  category: messaging\n";
+
+    #[test]
+    fn the_software_comes_from_metadata_without_reading_the_rest() {
+        let manifest = format!("apiVersion: stackly/v9\n{METADATA}lifecycle: broken\n");
+
+        let software = manifest_software(&manifest).unwrap();
+
+        assert_eq!(software.as_str(), "nats");
+    }
+
+    #[test]
+    fn metadata_problems_are_reported_under_metadata() {
+        let unknown = manifest_software(&format!("{METADATA}  shell: true\n")).unwrap_err();
+        let missing = manifest_software("metadata:\n  id: official/nats\n").unwrap_err();
+        let absent = manifest_software("kind: Provider\n").unwrap_err();
+        let invalid =
+            manifest_software(&METADATA.replace("software: nats", "software: Nats")).unwrap_err();
+
+        assert_eq!(unknown.code, IssueCode::UnknownField);
+        assert_eq!(unknown.location, Location::Field("metadata.shell".into()));
+        assert_eq!(missing.code, IssueCode::MissingField);
+        assert_eq!(
+            missing.location,
+            Location::Field("metadata.software".into())
+        );
+        assert_eq!(absent.location, Location::Field("metadata".into()));
+        assert_eq!(invalid.code, IssueCode::InvalidName);
+        assert_eq!(
+            invalid.location,
+            Location::Field("metadata.software".into())
+        );
+    }
+
+    #[test]
+    fn yaml_tags_in_the_manifest_are_rejected_before_metadata_is_read() {
+        let issue = manifest_software(&format!("{METADATA}x: !tag y\n")).unwrap_err();
+
+        assert_eq!(issue.code, IssueCode::InvalidValue);
+        assert_eq!(issue.file, "provider.yaml");
+    }
 }

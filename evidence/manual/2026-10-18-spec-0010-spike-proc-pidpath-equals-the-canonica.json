@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a14e57-ec7b-76f3-9be8-734022aa999a",
+  "covers": [
+    "AC-013",
+    "REQ-013"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0010 spike: proc_pidpath equals the canonical executable path",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "proc_pidpath returns the canonical path of the executable inside the runtime root, for a suspended child and for a non-child, whatever spelling of the path was spawned (spec 0010 AC-9, Adapter macOS row Executable)",
+  "actual": "The darwin user temp folder is /var/folders/..., which canonicalizes to /private/var/folders/...; proc_pidpath of the suspended child and of the non-child orphan both equal fs::canonicalize of the runtime executable (/private/var/.../Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server), equal to what the old daemon recorded. Spawned through the /var spelling: canonical /private/var path returned. Spawned through a symlink: the target is returned, while KERN_PROCARGS2 argv[0] stays the link path. Spawned through an NFD spelling of the NFC folder name: the stored NFC name is returned (176 bytes, not 180). Executable renamed while the process lives: proc_pidpath reports the new name; after unlink: ENOENT. So the recorded path must be the canonical path (as spec 0010 says) and a moved or deleted runtime never matches by accident. Absent and zombie pids: ESRCH. pid 1 (root): /sbin/launchd.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "Checked out d99e5ea (clean) in worktree f10-spike-a90e60 on this Mac (macOS 27.0 build 26A428, arm64, Apple Silicon, page size 16384).",
+    "cargo build -p stackly-fake-server --locked; the child in every scenario is target/debug/stackly-fake-server (or /bin/sh and /bin/sleep where a process group or a descendant is needed).",
+    "Built the throwaway spike outside the workspace: spike-main.rs.txt as src/main.rs and spike-Cargo.toml.txt as Cargo.toml (libc =0.2.190, the workspace's version, plus serde_json), cargo build --offline --release. Source, full run log, and the extra experiments are in the evidence folder of the first record of this set (title 'Spec 0010 spike: posix_spawn flags, fd map, argv, env, cwd').",
+    "Ran `spike0010 run target/debug/stackly-fake-server 60`. Test root under the darwin user temp folder (confstr _CS_DARWIN_USER_TEMP_DIR) at stackly-spike0010-<pid>/Test Root Ünï cödé, fake runtime copied to runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server and spawned by its canonical path, data and instance.lock under data/instances/<name>/, spools under run/i/<name>/. Every spawned pid was registered and killed or reaped at the end; the run's cleanup check found no leftover process, and the test root was removed.",
+    "Rows checked by the [exe] lines of output.txt: suspended child, orphan, /var spelling, symlink, NFD spelling, rename and unlink of a copied executable, absent pid, pid 1."
+  ],
+  "reviewer": "Claude Opus 5.5 (session f10-spike, for ojiepermana)",
+  "startedAt": "2026-10-18T09:29:07.450755Z",
+  "finishedAt": "2026-10-18T09:29:27Z",
+  "evidencePath": "evidence/manual/files/01a14e57-ec7b-76f3-9be8-734022aa999a/",
+  "context": {
+    "sourceCommit": "d99e5eaa1fc8c556adfae425ac020b4529be74f7",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

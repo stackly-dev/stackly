@@ -1,0 +1,12 @@
+[package]
+name = "spike0010"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Standalone throwaway spike for spec 0010 milestone 1 step 1. Not a workspace member.
+[workspace]
+
+[dependencies]
+libc = "=0.2.190"
+serde_json = "1"

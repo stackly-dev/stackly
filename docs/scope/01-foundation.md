@@ -96,7 +96,7 @@ Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision 
 - [x] Design it (spec): `/architect data model registry`
 - [ ] Build it: `/develop data model registry`
   - [x] Opening the registry end to end: `stackly-storage`, migration 0001 with every PRD 17 table, open with snapshot and recovery, fixture v1, and `stacklyd` start (spec 0005 AC-1 to AC-7, AC-13, AC-15; build steps 1 to 7)
-  - [ ] Registry port and fake: domain `registry` module, `restore` constructors, `FakeRegistry`, `RegistrySeed`, and `registry_conformance` (spec 0005 AC-8 to AC-11, AC-14, AC-16; build steps 8 and 9; needs spec 0004 milestone 3)
+  - [x] Registry port and fake: domain `registry` module, `restore` constructors, `FakeRegistry`, `RegistrySeed`, and `registry_conformance` (spec 0005 AC-8 to AC-11, AC-14, AC-16; build steps 8 and 9; needs spec 0004 milestone 3)
   - [ ] SQLite registry: `Registry` for `SqliteRegistry`, aggregate mapping, queries, prune, and conformance on SQLite (spec 0005 AC-7 to AC-16; build steps 10 to 13)
 - [ ] Verify it: `/check verify data model registry`
 - [ ] Test it: `/test data model registry`
@@ -114,10 +114,10 @@ Daemon per user dengan protokol berversi di atas encoding dan framing yang dikun
 - [x] Design it (spec): `/architect protokol IPC & daemon`
 - [ ] Build it: `/develop protokol IPC & daemon`
   - [x] Contract and codec: wire DTOs, error envelope and catalog, protocol 1.0 with contract digest and `contract-versions.json`, framing codec, staged request decode, shared fixtures, and Swift contract tests (spec 0006 AC-1, AC-6 to AC-8, AC-10)
-  - [ ] `stackly-ipc` transport: listener with peer check, framed connection, verified client, and the new `check-deps` rules (spec 0006 AC-2, AC-3, AC-5, AC-6, AC-16; after milestone 1, can run in parallel with the next one and the fuzz milestone)
+  - [x] `stackly-ipc` transport: listener with peer check, framed connection, verified client, and the new `check-deps` rules (spec 0006 AC-2, AC-3, AC-5, AC-6, AC-16; after milestone 1, can run in parallel with the next one and the fuzz milestone)
   - [x] Daemon library, lock, and log: `stacklyd` as library plus bin, `--print-roots`, single daemon lock, rotating log writer (spec 0006 AC-4, AC-12, AC-17; after milestone 1)
   - [ ] Daemon server and `stackly daemon status` end to end: event bus, handshake, limits, socket watch, shutdown, CLI status, performance, and the manual two account check (spec 0006 AC-1, AC-2, AC-4, AC-5, AC-7, AC-9, AC-11, AC-13, AC-15, AC-16; needs the three milestones above)
-  - [ ] Framing fuzz targets on this Mac: `fuzz/` with a pinned nightly, `cargo xtask fuzz`, 5 minute runs with evidence (spec 0006 AC-14; after milestone 1)
+  - [x] Framing fuzz targets on this Mac: `fuzz/` with a pinned nightly, `cargo xtask fuzz`, 5 minute runs with evidence (spec 0006 AC-14; after milestone 1)
 - [ ] Verify it: `/check verify protokol IPC & daemon`
 - [ ] Test it: `/test protokol IPC & daemon`
 - [ ] Review it (fresh model): `/check review protokol IPC & daemon`
@@ -136,7 +136,7 @@ Mesin operasi async yang dipakai semua mutasi: journal, idempotency key, lock pe
 - [x] Design it (spec): `/architect operation engine`
 - [ ] Build it: `/develop operation engine`
   - [ ] Journal di registry: tipe journal di domain, `Operation::touch`, `Outcome::Failed`, tambahan port `Registry`, `FakeRegistry`, migrasi `operation_journal` (key ganda, unique index, backfill), dan conformance di `SqliteRegistry` (spec 0007 AC-2, AC-10, AC-11, AC-17; build steps 1 to 3; langkah 1 dan 2 butuh spec 0005 milestone 2, langkah 3 butuh milestone 3)
-  - [ ] Primitive hapus aman: `Filesystem::remove_tree`, `FakeFilesystem`, adapter macOS berbasis file descriptor dengan test balapan dan `CrossesDevice`, dan `remove_owned_tree` (spec 0007 AC-8, AC-9; build steps 4 to 6; bisa mulai sekarang sebagai sesi paralel)
+  - [x] Primitive hapus aman: `Filesystem::remove_tree`, `FakeFilesystem`, adapter macOS berbasis file descriptor dengan test balapan dan `CrossesDevice`, dan `remove_owned_tree` (spec 0007 AC-8, AC-9; build steps 4 to 6; bisa mulai sekarang sebagai sesi paralel)
   - [ ] Engine dari ujung ke ujung di atas fake: lock dan antrian FIFO, `begin` dengan idempotency, runner dengan langkah dan progress, cancel, kompensasi, `recover`, resume, abandon, shutdown, dan skenario AC-054 dengan evidence (spec 0007 AC-1 to AC-8, AC-10 to AC-16; build steps 7 to 12; butuh langkah 1 dan 2, kompensasi butuh langkah 4)
   - [ ] Kontrak wire dan daemon: DTO, event, kode, sidik jari, fixture dan test Swift, lalu wiring engine di `stacklyd`, enam method, subsystem `operations`, hook shutdown, dan test integrasi daemon (spec 0007 AC-1, AC-3, AC-5, AC-6, AC-10, AC-11, AC-13, AC-14, AC-16, AC-18 to AC-20; build steps 13 to 15; langkah 13 bisa paralel dengan milestone engine setelah spec 0006 milestone 1, langkah 14 dan 15 butuh spec 0006 milestone 4)
 - [ ] Verify it: `/check verify operation engine`
@@ -174,7 +174,7 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 - [x] Design it (spec): `/architect provider engine & manifest schema`
 - [ ] Build it: `/develop provider engine & manifest schema`
   - [x] Fake provider from package to plan: domain capability additions, `stackly-fake-server` and its testkit helper, `read_package` and strict decode, interpolation, settings dialect, template renderer, semantic validation, `InitPlan`, `RunPlan`, `ReloadPlan`, preflight, `providers/fake`, and the `fake-command` fixture (spec 0009 AC-1 to AC-12, AC-15, AC-18; build steps 0 to 8)
-  - [ ] NATS and Traefik packages with goldens, `versions.json` generated from the inventory, JSON Schema in `schemas/provider/`, and `cargo xtask provider check` (spec 0009 AC-13, AC-14, AC-17; build steps 9 to 13)
+  - [x] NATS and Traefik packages with goldens, `versions.json` generated from the inventory, JSON Schema in `schemas/provider/`, and `cargo xtask provider check` (spec 0009 AC-13, AC-14, AC-17; build steps 9 to 13)
   - [ ] Four fuzz targets run 10 minutes each on this Mac, the adversarial suite with evidence guards (including the billion laughs test), and spike markers moved to F36 (spec 0009 AC-1 to AC-10, AC-16, AC-18; build steps 14 to 16)
 - [ ] Verify it: `/check verify provider engine & manifest schema`
 - [ ] Test it: `/test provider engine & manifest schema`

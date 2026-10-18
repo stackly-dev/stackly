@@ -1,0 +1,1947 @@
+//! Spike for spec 0010 (process supervisor), milestone 1 step 1.
+//!
+//! Proves every row of the "Adapter macOS" table on this Mac with the real
+//! `stackly-fake-server` binary as the child. Throwaway code: it lives outside
+//! the workspace and is attached to the manual evidence records only so the
+//! run can be repeated.
+//!
+//! Usage: `spike0010 run <stackly-fake-server> [spool-seconds]`.
+//! The `daemon-a` and `closed-fds` subcommands are spawned by `run` itself.
+
+#![allow(non_camel_case_types, clippy::all)]
+
+use std::ffi::{CStr, CString, OsStr};
+use std::fs;
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::os::fd::RawFd;
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::{PermissionsExt, symlink};
+use std::path::{Path, PathBuf};
+use std::ptr::{null, null_mut};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+use libc::{c_char, c_int, c_void, pid_t};
+
+/// Declarations the adapter needs that libc 0.2.190 does not have.
+mod sys {
+    use libc::c_int;
+
+    /// `sys/spawn.h`: `POSIX_SPAWN_SETSID` (macOS 10.15+).
+    pub const POSIX_SPAWN_SETSID: c_int = 0x0400;
+    /// `sys/proc_info.h`: flavor for `proc_pidfdinfo`.
+    pub const PROC_PIDFDVNODEPATHINFO: c_int = 2;
+    /// `sys/proc_info.h`: type for `proc_listpids`.
+    pub const PROC_PGRP_ONLY: u32 = 2;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct proc_fileinfo {
+        pub fi_openflags: u32,
+        pub fi_status: u32,
+        pub fi_offset: i64,
+        pub fi_type: i32,
+        pub fi_guardflags: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct vnode_fdinfowithpath {
+        pub pfi: proc_fileinfo,
+        pub pvip: libc::vnode_info_path,
+    }
+
+    /// `struct kinfo_proc` has no binding for Apple in libc; offsets from
+    /// `offsetof` in a C program against the macOS 27 SDK.
+    pub const KINFO_PROC_SIZE: usize = 648;
+    pub const OFF_P_STAT: usize = 36;
+    pub const OFF_P_SIGLIST: usize = 208;
+    pub const OFF_P_SIGMASK: usize = 228;
+    pub const OFF_P_SIGIGNORE: usize = 232;
+    pub const OFF_P_SIGCATCH: usize = 236;
+    pub const OFF_P_STARTTIME_USEC: usize = 8;
+    pub const OFF_CR_UID: usize = 420;
+}
+
+static FAILS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static CLEANUP: Mutex<Vec<(pid_t, u64, u64)>> = Mutex::new(Vec::new());
+
+fn check(row: &str, name: &str, ok: bool, detail: impl AsRef<str>) {
+    let tag = if ok { "PASS" } else { "FAIL" };
+    println!("[{row}] {tag} {name}: {}", detail.as_ref());
+    if !ok {
+        FAILS.lock().unwrap().push(format!("{row} {name}"));
+    }
+}
+
+fn note(row: &str, text: impl AsRef<str>) {
+    println!("[{row}] NOTE {}", text.as_ref());
+}
+
+fn errno() -> c_int {
+    std::io::Error::last_os_error().raw_os_error().unwrap_or(0)
+}
+
+fn errstr(e: c_int) -> String {
+    format!("errno {e} ({})", std::io::Error::from_raw_os_error(e))
+}
+
+fn cstr(p: &Path) -> CString {
+    CString::new(p.as_os_str().as_bytes()).unwrap()
+}
+
+// ---------------------------------------------------------------- spawn
+
+enum Stdin {
+    Null,
+    Fd(RawFd),
+}
+
+struct Req<'a> {
+    program: &'a Path,
+    args: &'a [String],
+    env: &'a [(String, String)],
+    cwd: &'a Path,
+    stdin: Stdin,
+    stdout: RawFd,
+    stderr: RawFd,
+    lock: Option<RawFd>,
+    suspended: bool,
+    /// Skip the "duplicate source fds to 10 and up" step (shows the hazard).
+    naive_fds: bool,
+}
+
+const ENV: &[(&str, &str)] = &[
+    ("PATH", "/usr/bin:/bin"),
+    ("STACKLY_PLAN_VALUE", "sp ace ü 空 $(touch pwned-env) `id`"),
+];
+
+fn plan_env() -> Vec<(String, String)> {
+    ENV.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+}
+
+/// posix_spawn with the flags of spec 0010 AC-1. Returns the errno that
+/// posix_spawn returned on failure.
+fn spawn(req: &Req) -> Result<pid_t, c_int> {
+    // SAFETY: spike; every pointer passed below outlives the call.
+    unsafe {
+        let mut dups: Vec<RawFd> = Vec::new();
+        let mut map = |fd: RawFd| -> RawFd {
+            if req.naive_fds {
+                return fd;
+            }
+            let d = libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 10);
+            assert!(d >= 10, "F_DUPFD_CLOEXEC failed: {}", errstr(errno()));
+            dups.push(d);
+            d
+        };
+        let stdin_fd = match req.stdin {
+            Stdin::Null => None,
+            Stdin::Fd(fd) => Some(map(fd)),
+        };
+        let out = map(req.stdout);
+        let err = map(req.stderr);
+        let lock = req.lock.map(&mut map);
+
+        let mut fa: libc::posix_spawn_file_actions_t = null_mut();
+        assert_eq!(libc::posix_spawn_file_actions_init(&mut fa), 0);
+        let devnull = CString::new("/dev/null").unwrap();
+        match stdin_fd {
+            None => assert_eq!(
+                libc::posix_spawn_file_actions_addopen(
+                    &mut fa,
+                    0,
+                    devnull.as_ptr(),
+                    libc::O_RDONLY,
+                    0
+                ),
+                0
+            ),
+            Some(fd) => assert_eq!(libc::posix_spawn_file_actions_adddup2(&mut fa, fd, 0), 0),
+        }
+        assert_eq!(libc::posix_spawn_file_actions_adddup2(&mut fa, out, 1), 0);
+        assert_eq!(libc::posix_spawn_file_actions_adddup2(&mut fa, err, 2), 0);
+        if let Some(l) = lock {
+            assert_eq!(libc::posix_spawn_file_actions_adddup2(&mut fa, l, 3), 0);
+        }
+        let cwd = cstr(req.cwd);
+        assert_eq!(libc::posix_spawn_file_actions_addchdir_np(&mut fa, cwd.as_ptr()), 0);
+
+        let mut attr: libc::posix_spawnattr_t = null_mut();
+        assert_eq!(libc::posix_spawnattr_init(&mut attr), 0);
+        let mut flags = sys::POSIX_SPAWN_SETSID
+            | libc::POSIX_SPAWN_SETSIGDEF
+            | libc::POSIX_SPAWN_SETSIGMASK
+            | libc::POSIX_SPAWN_CLOEXEC_DEFAULT;
+        if req.suspended {
+            flags |= libc::POSIX_SPAWN_START_SUSPENDED;
+        }
+        assert_eq!(libc::posix_spawnattr_setflags(&mut attr, flags as libc::c_short), 0);
+        let mut def: libc::sigset_t = 0;
+        libc::sigfillset(&mut def);
+        assert_eq!(libc::posix_spawnattr_setsigdefault(&mut attr, &def), 0);
+        let mut mask: libc::sigset_t = 0;
+        libc::sigemptyset(&mut mask);
+        assert_eq!(libc::posix_spawnattr_setsigmask(&mut attr, &mask), 0);
+
+        let prog = cstr(req.program);
+        let mut argv_c: Vec<CString> = vec![prog.clone()];
+        argv_c.extend(req.args.iter().map(|a| CString::new(a.as_bytes()).unwrap()));
+        let mut argv: Vec<*mut c_char> = argv_c.iter().map(|c| c.as_ptr() as *mut c_char).collect();
+        argv.push(null_mut());
+        let env_c: Vec<CString> = req
+            .env
+            .iter()
+            .map(|(k, v)| CString::new(format!("{k}={v}")).unwrap())
+            .collect();
+        let mut envp: Vec<*mut c_char> = env_c.iter().map(|c| c.as_ptr() as *mut c_char).collect();
+        envp.push(null_mut());
+
+        let mut pid: pid_t = 0;
+        let rc = libc::posix_spawn(&mut pid, prog.as_ptr(), &fa, &attr, argv.as_ptr(), envp.as_ptr());
+        libc::posix_spawn_file_actions_destroy(&mut fa);
+        libc::posix_spawnattr_destroy(&mut attr);
+        for d in dups {
+            libc::close(d);
+        }
+        if rc != 0 {
+            return Err(rc);
+        }
+        register_cleanup(pid);
+        Ok(pid)
+    }
+}
+
+fn register_cleanup(pid: pid_t) {
+    if let Ok(b) = bsdinfo(pid) {
+        CLEANUP.lock().unwrap().push((pid, b.pbi_start_tvsec, b.pbi_start_tvusec));
+    }
+}
+
+fn cleanup_all() {
+    let list = CLEANUP.lock().unwrap().clone();
+    let me = unsafe { libc::getpid() };
+    for (pid, s, us) in list {
+        if let Ok(b) = bsdinfo(pid) {
+            let same = b.pbi_start_tvsec == s && b.pbi_start_tvusec == us;
+            if same && b.pbi_status != libc::SZOMB {
+                // Group first, so helpers' children go too (pgid == pid by SETSID).
+                unsafe {
+                    libc::kill(-pid, libc::SIGKILL);
+                    libc::kill(pid, libc::SIGKILL);
+                }
+                println!("[cleanup] killed leftover pid {pid}");
+            }
+            if same && b.pbi_ppid as pid_t == me {
+                let mut st = 0;
+                unsafe { libc::waitpid(pid, &mut st, 0) };
+            }
+        }
+    }
+    // Every registered pid must be gone now (or about to be reaped by launchd).
+    let list = CLEANUP.lock().unwrap().clone();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    for (pid, s, us) in list {
+        loop {
+            match bsdinfo(pid) {
+                Ok(b) if b.pbi_start_tvsec == s && b.pbi_start_tvusec == us => {
+                    if Instant::now() > deadline {
+                        println!("[cleanup] WARNING pid {pid} still present (status {})", b.pbi_status);
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                _ => break,
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- inspect
+
+fn bsdinfo(pid: pid_t) -> Result<libc::proc_bsdinfo, c_int> {
+    // SAFETY: buffer is a zeroed proc_bsdinfo of the size passed.
+    unsafe {
+        let mut info: libc::proc_bsdinfo = std::mem::zeroed();
+        let size = std::mem::size_of::<libc::proc_bsdinfo>() as c_int;
+        let n = libc::proc_pidinfo(pid, libc::PROC_PIDTBSDINFO, 0, &mut info as *mut _ as *mut c_void, size);
+        if n == size {
+            Ok(info)
+        } else if n <= 0 {
+            Err(errno())
+        } else {
+            Err(-n)
+        }
+    }
+}
+
+fn pidpath(pid: pid_t) -> Result<PathBuf, c_int> {
+    let mut buf = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    // SAFETY: buffer length passed matches.
+    let n = unsafe { libc::proc_pidpath(pid, buf.as_mut_ptr() as *mut c_void, buf.len() as u32) };
+    if n <= 0 {
+        return Err(errno());
+    }
+    buf.truncate(n as usize);
+    Ok(PathBuf::from(OsStr::from_bytes(&buf)))
+}
+
+fn list_fds(pid: pid_t) -> Result<Vec<(i32, u32)>, c_int> {
+    // SAFETY: buffer length passed matches.
+    unsafe {
+        let n = libc::proc_pidinfo(pid, libc::PROC_PIDLISTFDS, 0, null_mut(), 0);
+        if n <= 0 {
+            return Err(errno());
+        }
+        let item = std::mem::size_of::<libc::proc_fdinfo>();
+        let count = n as usize / item + 16;
+        let mut v: Vec<libc::proc_fdinfo> = vec![std::mem::zeroed(); count];
+        let n = libc::proc_pidinfo(pid, libc::PROC_PIDLISTFDS, 0, v.as_mut_ptr() as *mut c_void, (count * item) as c_int);
+        if n <= 0 {
+            return Err(errno());
+        }
+        v.truncate(n as usize / item);
+        Ok(v.iter().map(|f| (f.proc_fd, f.proc_fdtype)).collect())
+    }
+}
+
+fn fd_vnode(pid: pid_t, fd: i32) -> Result<(u32, u64, String), c_int> {
+    // SAFETY: buffer is a zeroed vnode_fdinfowithpath of the size passed.
+    unsafe {
+        let mut info: sys::vnode_fdinfowithpath = std::mem::zeroed();
+        let size = std::mem::size_of::<sys::vnode_fdinfowithpath>() as c_int;
+        let n = libc::proc_pidfdinfo(pid, fd, sys::PROC_PIDFDVNODEPATHINFO, &mut info as *mut _ as *mut c_void, size);
+        if n != size {
+            return Err(if n <= 0 { errno() } else { -n });
+        }
+        let st = info.pvip.vip_vi.vi_stat;
+        let path = CStr::from_ptr(info.pvip.vip_path.as_ptr() as *const c_char).to_string_lossy().into_owned();
+        Ok((st.vst_dev, st.vst_ino, path))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum Holds {
+    Yes,
+    No,
+    Unreadable(c_int),
+}
+
+fn holds_file(pid: pid_t, dev: u32, ino: u64) -> Holds {
+    match list_fds(pid) {
+        Err(e) => Holds::Unreadable(e),
+        Ok(fds) => {
+            for (fd, ty) in fds {
+                if ty == libc::PROX_FDTYPE_VNODE as u32 {
+                    if let Ok((d, i, _)) = fd_vnode(pid, fd) {
+                        if d == dev && i == ino {
+                            return Holds::Yes;
+                        }
+                    }
+                }
+            }
+            Holds::No
+        }
+    }
+}
+
+fn kinfo(pid: pid_t) -> Result<Vec<u8>, c_int> {
+    let mut mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid];
+    let mut buf = vec![0u8; sys::KINFO_PROC_SIZE];
+    let mut len = buf.len();
+    // SAFETY: buffer length passed matches.
+    let rc = unsafe { libc::sysctl(mib.as_mut_ptr(), 4, buf.as_mut_ptr() as *mut c_void, &mut len, null_mut(), 0) };
+    if rc != 0 {
+        Err(errno())
+    } else if len != sys::KINFO_PROC_SIZE {
+        Err(libc::ESRCH)
+    } else {
+        Ok(buf)
+    }
+}
+
+fn u32_at(b: &[u8], off: usize) -> u32 {
+    u32::from_ne_bytes(b[off..off + 4].try_into().unwrap())
+}
+
+/// `KERN_PROCARGS2`: (exec path, argv, every string after argv).
+fn procargs(pid: pid_t) -> Result<(String, Vec<String>, Vec<String>), c_int> {
+    let mut argmax: c_int = 0;
+    let mut sz = std::mem::size_of::<c_int>();
+    let mut mib = [libc::CTL_KERN, libc::KERN_ARGMAX];
+    // SAFETY: sizes passed match the buffers.
+    unsafe { libc::sysctl(mib.as_mut_ptr(), 2, &mut argmax as *mut _ as *mut c_void, &mut sz, null_mut(), 0) };
+    let mut buf = vec![0u8; argmax as usize];
+    let mut len = buf.len();
+    let mut mib = [libc::CTL_KERN, libc::KERN_PROCARGS2, pid];
+    let rc = unsafe { libc::sysctl(mib.as_mut_ptr(), 3, buf.as_mut_ptr() as *mut c_void, &mut len, null_mut(), 0) };
+    if rc != 0 {
+        return Err(errno());
+    }
+    buf.truncate(len);
+    let argc = i32::from_ne_bytes(buf[0..4].try_into().unwrap()) as usize;
+    let mut pos = 4;
+    let end = pos + buf[pos..].iter().position(|b| *b == 0).unwrap();
+    let exec = String::from_utf8_lossy(&buf[pos..end]).into_owned();
+    pos = end;
+    while pos < buf.len() && buf[pos] == 0 {
+        pos += 1;
+    }
+    let mut strings = Vec::new();
+    while pos < buf.len() {
+        let end = pos + buf[pos..].iter().position(|b| *b == 0).unwrap_or(buf.len() - pos);
+        strings.push(String::from_utf8_lossy(&buf[pos..end]).into_owned());
+        pos = end + 1;
+    }
+    let rest = strings.split_off(argc.min(strings.len()));
+    Ok((exec, strings, rest))
+}
+
+fn cwd_of(pid: pid_t) -> Result<String, c_int> {
+    // SAFETY: buffer is a zeroed proc_vnodepathinfo of the size passed.
+    unsafe {
+        let mut info: libc::proc_vnodepathinfo = std::mem::zeroed();
+        let size = std::mem::size_of::<libc::proc_vnodepathinfo>() as c_int;
+        let n = libc::proc_pidinfo(pid, libc::PROC_PIDVNODEPATHINFO, 0, &mut info as *mut _ as *mut c_void, size);
+        if n != size {
+            return Err(if n <= 0 { errno() } else { -n });
+        }
+        Ok(CStr::from_ptr(info.pvi_cdir.vip_path.as_ptr() as *const c_char).to_string_lossy().into_owned())
+    }
+}
+
+fn user_time(pid: pid_t) -> Result<(u64, u64), c_int> {
+    // SAFETY: buffer is a zeroed rusage_info_v2.
+    unsafe {
+        let mut ri: libc::rusage_info_v2 = std::mem::zeroed();
+        let rc = libc::proc_pid_rusage(pid, libc::RUSAGE_INFO_V2, &mut ri as *mut _ as *mut libc::rusage_info_t);
+        if rc != 0 {
+            return Err(errno());
+        }
+        Ok((ri.ri_user_time, ri.ri_system_time))
+    }
+}
+
+fn boot_id() -> Result<String, c_int> {
+    let name = CString::new("kern.bootsessionuuid").unwrap();
+    let mut len = 0usize;
+    // SAFETY: first call asks for the size, second fills a buffer of that size.
+    unsafe {
+        if libc::sysctlbyname(name.as_ptr(), null_mut(), &mut len, null_mut(), 0) != 0 {
+            return Err(errno());
+        }
+        let mut buf = vec![0u8; len];
+        if libc::sysctlbyname(name.as_ptr(), buf.as_mut_ptr() as *mut c_void, &mut len, null_mut(), 0) != 0 {
+            return Err(errno());
+        }
+        buf.truncate(len);
+        while buf.last() == Some(&0) {
+            buf.pop();
+        }
+        Ok(String::from_utf8_lossy(&buf).into_owned())
+    }
+}
+
+fn pgrp_members(pgid: pid_t) -> Result<Vec<pid_t>, c_int> {
+    // SAFETY: buffer length passed matches.
+    unsafe {
+        let n = libc::proc_listpids(sys::PROC_PGRP_ONLY, pgid as u32, null_mut(), 0);
+        if n < 0 {
+            return Err(errno());
+        }
+        let mut v = vec![0 as pid_t; n as usize / 4 + 16];
+        let n = libc::proc_listpids(sys::PROC_PGRP_ONLY, pgid as u32, v.as_mut_ptr() as *mut c_void, (v.len() * 4) as c_int);
+        if n < 0 {
+            return Err(errno());
+        }
+        v.truncate(n as usize / 4);
+        v.retain(|p| *p != 0);
+        v.sort();
+        Ok(v)
+    }
+}
+
+fn pgrp_members_libproc(pgid: pid_t) -> Result<Vec<pid_t>, c_int> {
+    let mut v = vec![0 as pid_t; 256];
+    // SAFETY: buffer length passed matches.
+    let n = unsafe { libc::proc_listpgrppids(pgid, v.as_mut_ptr() as *mut c_void, (v.len() * 4) as c_int) };
+    if n < 0 {
+        return Err(errno());
+    }
+    println!("[group] NOTE proc_listpgrppids returned {n} (a count of pids, not bytes)");
+    v.truncate(n as usize);
+    v.retain(|p| *p != 0);
+    v.sort();
+    Ok(v)
+}
+
+fn getsid(pid: pid_t) -> Result<pid_t, c_int> {
+    let s = unsafe { libc::getsid(pid) };
+    if s < 0 { Err(errno()) } else { Ok(s) }
+}
+
+fn kill(pid: pid_t, sig: c_int) -> Result<(), c_int> {
+    if unsafe { libc::kill(pid, sig) } == 0 { Ok(()) } else { Err(errno()) }
+}
+
+fn status_text(st: c_int) -> String {
+    if libc::WIFEXITED(st) {
+        format!("exited({})", libc::WEXITSTATUS(st))
+    } else if libc::WIFSIGNALED(st) {
+        format!("signaled({})", libc::WTERMSIG(st))
+    } else if libc::WIFSTOPPED(st) {
+        format!("stopped({})", libc::WSTOPSIG(st))
+    } else {
+        format!("raw({st:#x})")
+    }
+}
+
+fn waitpid_timeout(pid: pid_t, timeout: Duration) -> Option<c_int> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let mut st = 0;
+        let r = unsafe { libc::waitpid(pid, &mut st, libc::WNOHANG) };
+        if r == pid {
+            return Some(st);
+        }
+        if Instant::now() > deadline {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn wait_until(timeout: Duration, mut f: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if f() {
+            return true;
+        }
+        if Instant::now() > deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn gone(pid: pid_t, start: (u64, u64)) -> bool {
+    match bsdinfo(pid) {
+        Ok(b) => !(b.pbi_start_tvsec == start.0 && b.pbi_start_tvusec == start.1) || b.pbi_status == libc::SZOMB,
+        Err(_) => true,
+    }
+}
+
+// ---------------------------------------------------------------- kqueue
+
+struct Kq(c_int);
+
+impl Kq {
+    fn new() -> Kq {
+        Kq(unsafe { libc::kqueue() })
+    }
+
+    fn add(&self, pid: pid_t, fflags: u32) -> Result<(), c_int> {
+        let ev = libc::kevent {
+            ident: pid as usize,
+            filter: libc::EVFILT_PROC,
+            flags: libc::EV_ADD | libc::EV_ONESHOT,
+            fflags,
+            data: 0,
+            udata: null_mut(),
+        };
+        // SAFETY: one change, no events.
+        let rc = unsafe { libc::kevent(self.0, &ev, 1, null_mut(), 0, null()) };
+        if rc < 0 { Err(errno()) } else { Ok(()) }
+    }
+
+    fn wait(&self, timeout: Duration) -> Option<(usize, u32, isize)> {
+        let ts = libc::timespec { tv_sec: timeout.as_secs() as _, tv_nsec: timeout.subsec_nanos() as _ };
+        // SAFETY: zeroed event buffer of one entry.
+        let mut ev: libc::kevent = unsafe { std::mem::zeroed() };
+        let n = unsafe { libc::kevent(self.0, null(), 0, &mut ev, 1, &ts) };
+        if n == 1 {
+            let (ident, fflags, data) = (ev.ident, ev.fflags, ev.data);
+            Some((ident, fflags, data))
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for Kq {
+    fn drop(&mut self) {
+        unsafe { libc::close(self.0) };
+    }
+}
+
+// ---------------------------------------------------------------- files
+
+fn open_lock(path: &Path) -> Result<RawFd, c_int> {
+    let c = cstr(path);
+    let fd = unsafe { libc::open(c.as_ptr(), libc::O_RDWR | libc::O_CREAT | libc::O_NOFOLLOW | libc::O_CLOEXEC, 0o600 as libc::c_uint) };
+    if fd < 0 { Err(errno()) } else { Ok(fd) }
+}
+
+fn flock_nb(fd: RawFd) -> Result<(), c_int> {
+    if unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) } == 0 { Ok(()) } else { Err(errno()) }
+}
+
+fn probe_lock(path: &Path) -> String {
+    let c = cstr(path);
+    let fd = unsafe { libc::open(c.as_ptr(), libc::O_RDWR | libc::O_NOFOLLOW | libc::O_CLOEXEC) };
+    if fd < 0 {
+        return format!("open failed {}", errstr(errno()));
+    }
+    let r = match flock_nb(fd) {
+        Ok(()) => "Free".to_string(),
+        Err(e) if e == libc::EWOULDBLOCK => "Held".to_string(),
+        Err(e) => format!("flock failed {}", errstr(e)),
+    };
+    unsafe { libc::close(fd) };
+    r
+}
+
+fn create_spool(path: &Path) -> Result<RawFd, c_int> {
+    let c = cstr(path);
+    let fd = unsafe {
+        libc::open(
+            c.as_ptr(),
+            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_APPEND | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0o600 as libc::c_uint,
+        )
+    };
+    if fd < 0 { Err(errno()) } else { Ok(fd) }
+}
+
+fn open_flags(path: &Path, flags: c_int) -> Result<RawFd, c_int> {
+    let c = cstr(path);
+    let fd = unsafe { libc::open(c.as_ptr(), flags | libc::O_CLOEXEC) };
+    if fd < 0 { Err(errno()) } else { Ok(fd) }
+}
+
+fn fstat(fd: RawFd) -> libc::stat {
+    // SAFETY: zeroed stat buffer.
+    unsafe {
+        let mut st: libc::stat = std::mem::zeroed();
+        assert_eq!(libc::fstat(fd, &mut st), 0);
+        st
+    }
+}
+
+fn punch(fd: RawFd, offset: i64, length: i64) -> Result<(), c_int> {
+    let p = libc::fpunchhole_t { fp_flags: 0, reserved: 0, fp_offset: offset, fp_length: length };
+    // SAFETY: fcntl reads the struct.
+    if unsafe { libc::fcntl(fd, libc::F_PUNCHHOLE, &p) } == 0 { Ok(()) } else { Err(errno()) }
+}
+
+fn seek_data(fd: RawFd, offset: i64) -> Result<i64, c_int> {
+    let r = unsafe { libc::lseek(fd, offset, libc::SEEK_DATA) };
+    if r < 0 { Err(errno()) } else { Ok(r) }
+}
+
+fn pread(fd: RawFd, buf: &mut [u8], offset: i64) -> isize {
+    unsafe { libc::pread(fd, buf.as_mut_ptr() as *mut c_void, buf.len(), offset) }
+}
+
+fn statfs_of(fd: RawFd) -> (u32, i32, String) {
+    // SAFETY: zeroed statfs buffer.
+    unsafe {
+        let mut s: libc::statfs = std::mem::zeroed();
+        assert_eq!(libc::fstatfs(fd, &mut s), 0);
+        let name = CStr::from_ptr(s.f_fstypename.as_ptr()).to_string_lossy().into_owned();
+        (s.f_bsize, s.f_iosize, name)
+    }
+}
+
+fn darwin_user_temp() -> PathBuf {
+    let mut buf = vec![0u8; 1024];
+    // SAFETY: buffer length passed matches.
+    let n = unsafe { libc::confstr(libc::_CS_DARWIN_USER_TEMP_DIR, buf.as_mut_ptr() as *mut c_char, buf.len()) };
+    assert!(n > 0 && n <= buf.len());
+    buf.truncate(n - 1);
+    PathBuf::from(OsStr::from_bytes(&buf))
+}
+
+fn mkdir_private(p: &Path) {
+    fs::create_dir_all(p).unwrap();
+    fs::set_permissions(p, fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+fn free_port() -> u16 {
+    TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+}
+
+fn http_status(port: u16, path: &str) -> Option<u16> {
+    let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
+    let mut s = TcpStream::connect_timeout(&addr, Duration::from_millis(500)).ok()?;
+    s.set_read_timeout(Some(Duration::from_secs(1))).ok()?;
+    write!(s, "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n").ok()?;
+    let mut out = String::new();
+    s.read_to_string(&mut out).ok()?;
+    out.split_whitespace().nth(1)?.parse().ok()
+}
+
+fn find_named(root: &Path, prefix: &str, found: &mut Vec<PathBuf>) {
+    if let Ok(rd) = fs::read_dir(root) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if e.file_name().to_string_lossy().starts_with(prefix) {
+                found.push(p.clone());
+            }
+            if e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                find_named(&p, prefix, found);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- fixture
+
+struct Inst {
+    dir: PathBuf,
+    data: PathBuf,
+    config: PathBuf,
+    lock: PathBuf,
+    run: PathBuf,
+}
+
+impl Inst {
+    fn new(root: &Path, runtime_root: &Path, name: &str) -> Inst {
+        let dir = root.join("data/instances").join(name);
+        let data = dir.join("data");
+        let run = runtime_root.join("i").join(name);
+        mkdir_private(&data);
+        mkdir_private(&run);
+        let config = dir.join("config.json");
+        fs::write(
+            &config,
+            format!("{{\"greeting\":\"hello\",\"instanceName\":\"{name}\",\"authToken\":\"spike-fixture-token\"}}"),
+        )
+        .unwrap();
+        Inst { lock: dir.join("instance.lock"), dir: fs::canonicalize(&dir).unwrap(), data, config, run }
+    }
+
+    fn serve_args(&self, port: u16, extra: &[&str]) -> Vec<String> {
+        let mut v = vec![
+            "serve".to_string(),
+            format!("--config={}", self.config.display()),
+            format!("--data={}", self.data.display()),
+            format!("--port={port}"),
+            "--host=127.0.0.1".to_string(),
+        ];
+        v.extend(extra.iter().map(|s| s.to_string()));
+        v
+    }
+}
+
+const LABEL: &str = "$(touch pwned); touch pwned2 `touch pwned3` \"q\" 'q' | & > ü 空 * ~";
+
+// ---------------------------------------------------------------- main
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    match args.get(1).map(String::as_str) {
+        Some("run") => {
+            let fake = PathBuf::from(&args[2]);
+            let spool_secs: u64 = args.get(3).map(|s| s.parse().unwrap()).unwrap_or(60);
+            let code = run(&fake, spool_secs);
+            std::process::exit(code);
+        }
+        Some("daemon-a") => daemon_a(&args[2..]),
+        Some("closed-fds") => closed_fds(&args[2..]),
+        Some("seek-exp") => seek_exp(Path::new(&args[2]), &args[3]),
+        Some("load-fsync") => {
+            let base = darwin_user_temp().join(format!("stackly-spike0010-load-{}", std::process::id()));
+            let root = base.join("root");
+            let rt = base.join("run");
+            mkdir_private(&root);
+            mkdir_private(&rt);
+            row_spool_load(&root, &rt, Path::new(&args[2]), args[3].parse().unwrap(), Align::PageFsync);
+            let _ = fs::remove_dir_all(&base);
+        }
+        _ => {
+            eprintln!("usage: spike0010 run <stackly-fake-server> [spool-seconds]");
+            std::process::exit(2);
+        }
+    }
+}
+
+fn run(fake_src: &Path, spool_secs: u64) -> i32 {
+    unsafe { libc::umask(0o022) };
+    let tmp = darwin_user_temp();
+    let base = tmp.join(format!("stackly-spike0010-{}", std::process::id()));
+    let root = base.join("Test Root Ünï cödé");
+    let runtime_root = base.join("run");
+    mkdir_private(&root);
+    mkdir_private(&runtime_root);
+    let bin_dir = root.join("runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin");
+    mkdir_private(&bin_dir);
+    let exe = bin_dir.join("stackly-fake-server");
+    fs::copy(fake_src, &exe).unwrap();
+    fs::set_permissions(&exe, fs::Permissions::from_mode(0o755)).unwrap();
+    let canonical = fs::canonicalize(&exe).unwrap();
+    let me_exe = fs::canonicalize(std::env::current_exe().unwrap()).unwrap();
+
+    println!("== spike0010 on this Mac ==");
+    println!("darwin user temp: {}", tmp.display());
+    println!("test root: {}", root.display());
+    println!("runtime exe (as created): {}", exe.display());
+    println!("runtime exe (canonical):  {}", canonical.display());
+    println!("spike pid {} sid {:?} uid {}", unsafe { libc::getpid() }, getsid(0), unsafe { libc::getuid() });
+    println!(
+        "struct sizes: proc_bsdinfo {} vnode_fdinfowithpath {} proc_fdinfo {} (SDK: 136, 1200, 8)",
+        std::mem::size_of::<libc::proc_bsdinfo>(),
+        std::mem::size_of::<sys::vnode_fdinfowithpath>(),
+        std::mem::size_of::<libc::proc_fdinfo>()
+    );
+
+    // Contaminate the parent the way a Rust daemon is: SIGPIPE ignored by the
+    // Rust runtime already; add SIGHUP ignored, SIGUSR1 blocked, a leaked
+    // non-CLOEXEC fd, and an env var that must not reach the child.
+    unsafe {
+        libc::signal(libc::SIGHUP, libc::SIG_IGN);
+        let mut set: libc::sigset_t = 0;
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, libc::SIGUSR1);
+        libc::pthread_sigmask(libc::SIG_BLOCK, &set, null_mut());
+        std::env::set_var("STACKLY_SPIKE_PARENT_ONLY", "must-not-leak");
+    }
+    let leak_fd = unsafe { libc::open(c"/dev/null".as_ptr(), libc::O_RDONLY) };
+    let me = unsafe { libc::getpid() };
+    let pk = kinfo(me).unwrap();
+    note(
+        "setup",
+        format!(
+            "parent contamination: leaked fd {leak_fd} without CLOEXEC; parent p_sigignore {:#010x} (SIGPIPE bit {:#x}, SIGHUP bit {:#x}); SIGUSR1 blocked in the spawning thread",
+            u32_at(&pk, sys::OFF_P_SIGIGNORE),
+            1u32 << (libc::SIGPIPE - 1),
+            1u32 << (libc::SIGHUP - 1)
+        ),
+    );
+
+    let boot = boot_id().unwrap();
+
+    let rows = std::panic::catch_unwind(|| {
+    row_spawn_suspend(&root, &runtime_root, &canonical, &exe, &boot);
+    row_discard(&root, &runtime_root, &canonical);
+    row_closed_fds(&root, &runtime_root, &canonical, &me_exe);
+    row_spawn_errors(&root, &bin_dir);
+    row_helper_stdin(&root, &runtime_root, &canonical);
+    row_orphan_running(&root, &runtime_root, &canonical, &me_exe, &boot);
+    row_orphan_suspended(&root, &runtime_root, &canonical, &me_exe);
+    row_zombie_and_gone(&root, &runtime_root, &canonical);
+    row_other_user();
+    row_other_users_sample();
+    row_exec_paths(&root, &runtime_root, &canonical, &exe, &tmp);
+    row_boot(&me_exe, &base);
+    row_groups(&root, &runtime_root, &canonical);
+    row_lock(&root, &runtime_root, &canonical);
+    row_seek_align(&runtime_root);
+    row_prealloc(&root, &runtime_root, &canonical);
+    row_spool(&root, &runtime_root, &canonical, &tmp, spool_secs, Align::Bsize);
+    row_spool_load(&root, &runtime_root, &canonical, spool_secs, Align::Page);
+    });
+    if rows.is_err() {
+        FAILS.lock().unwrap().push("a row panicked".to_string());
+    }
+
+    cleanup_all();
+    let mut leftovers = Vec::new();
+    for (pid, s, us) in CLEANUP.lock().unwrap().iter() {
+        if !gone(*pid, (*s, *us)) {
+            leftovers.push(*pid);
+        }
+    }
+    check("cleanup", "no spawned process left", leftovers.is_empty(), format!("leftovers {leftovers:?}"));
+    let _ = fs::remove_dir_all(&base);
+    let fails = FAILS.lock().unwrap().clone();
+    println!("== done: {} failing check(s) {:?} ==", fails.len(), fails);
+    if fails.is_empty() { 0 } else { 1 }
+}
+
+// ---------------------------------------------------------------- rows
+
+fn row_spawn_suspend(root: &Path, rt: &Path, canonical: &Path, exe_as_created: &Path, boot: &str) {
+    let r = "spawn";
+    let inst = Inst::new(root, rt, "a");
+    let lock = open_lock(&inst.lock).unwrap();
+    flock_nb(lock).unwrap();
+    let lst = fstat(lock);
+    let out = create_spool(&inst.run.join("stdout.spool")).unwrap();
+    let err = create_spool(&inst.run.join("stderr.spool")).unwrap();
+    let (ost, est) = (fstat(out), fstat(err));
+    let port = free_port();
+    let args = inst.serve_args(port, &[&format!("--label={LABEL}")]);
+    let env = plan_env();
+    let t0 = Instant::now();
+    let pid = spawn(&Req {
+        program: canonical,
+        args: &args,
+        env: &env,
+        cwd: &inst.dir,
+        stdin: Stdin::Null,
+        stdout: out,
+        stderr: err,
+        lock: Some(lock),
+        suspended: true,
+        naive_fds: false,
+    })
+    .expect("spawn");
+    note(r, format!("posix_spawn suspended pid {pid} in {:?} (flags SETSID|SETSIGDEF(all)|SETSIGMASK(empty)|CLOEXEC_DEFAULT|START_SUSPENDED)", t0.elapsed()));
+    unsafe { libc::close(out) };
+    unsafe { libc::close(err) };
+
+    // --- while suspended (row "Tertahan dan lanjut" + identity capture)
+    let s = "suspend";
+    let b = bsdinfo(pid).unwrap();
+    check(s, "suspended child pbi_status is SSTOP", b.pbi_status == libc::SSTOP, format!("pbi_status {} (SSTOP={})", b.pbi_status, libc::SSTOP));
+    let k = kinfo(pid).unwrap();
+    check(s, "suspended child kinfo p_stat is SSTOP", k[sys::OFF_P_STAT] as u32 == libc::SSTOP, format!("p_stat {}", k[sys::OFF_P_STAT]));
+    let ut = user_time(pid).unwrap();
+    check(s, "suspended child has run no user code", ut.0 == 0, format!("ri_user_time {} ri_system_time {}", ut.0, ut.1));
+    std::thread::sleep(Duration::from_millis(400));
+    let argv_file = inst.data.join("argv-serve.json");
+    check(s, "suspended child wrote nothing after 400 ms", !argv_file.exists(), format!("argv-serve.json exists: {}", argv_file.exists()));
+    check(s, "suspended child does not listen", http_status(port, "/ready").is_none(), format!("port {port}"));
+    check(s, "user time still 0 after 400 ms", user_time(pid).unwrap().0 == 0, format!("{:?}", user_time(pid)));
+
+    // identity capture while suspended
+    let start = (b.pbi_start_tvsec, b.pbi_start_tvusec);
+    let me = unsafe { libc::getpid() };
+    check("pidinfo", "child pbi_pid/ppid/pgid/uid", b.pbi_pid as pid_t == pid && b.pbi_ppid as pid_t == me && b.pbi_pgid as pid_t == pid && b.pbi_uid == unsafe { libc::getuid() },
+        format!("pid {} ppid {} pgid {} uid {} (me {me})", b.pbi_pid, b.pbi_ppid, b.pbi_pgid, b.pbi_uid));
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap();
+    let skew = now.as_secs_f64() - (start.0 as f64 + start.1 as f64 / 1e6);
+    check("pidinfo", "start time has seconds and microseconds near now", start.1 < 1_000_000 && (0.0..5.0).contains(&skew),
+        format!("start {}.{:06} ({skew:.3} s before now)", start.0, start.1));
+    let path = pidpath(pid);
+    check("exe", "proc_pidpath of suspended child equals canonical path", path.as_deref().ok() == Some(canonical), format!("{path:?} vs {}", canonical.display()));
+    note("exe", format!("path as created was {} (the /var -> /private/var symlink makes it differ)", exe_as_created.display()));
+    let sid = getsid(pid);
+    check("session", "getsid(child) == pid (SETSID)", sid == Ok(pid), format!("getsid {sid:?}, parent sid {:?}", getsid(0)));
+    check("boot", "boot id readable while child suspended", !boot.is_empty(), boot.to_string());
+
+    // fd list of the suspended child (AC-1)
+    let fds = list_fds(pid).unwrap();
+    let nums: Vec<i32> = fds.iter().map(|f| f.0).collect();
+    check(r, "suspended child holds exactly fds 0,1,2,3", nums == vec![0, 1, 2, 3], format!("fds {fds:?} (type 1 = vnode)"));
+    let v0 = fd_vnode(pid, 0).unwrap();
+    let v1 = fd_vnode(pid, 1).unwrap();
+    let v2 = fd_vnode(pid, 2).unwrap();
+    let v3 = fd_vnode(pid, 3).unwrap();
+    check(r, "fd 0 is /dev/null", v0.2 == "/dev/null", format!("{v0:?}"));
+    check(r, "fd 1 is stdout spool (dev+ino)", v1.0 == ost.st_dev as u32 && v1.1 == ost.st_ino, format!("{v1:?}"));
+    check(r, "fd 2 is stderr spool (dev+ino)", v2.0 == est.st_dev as u32 && v2.1 == est.st_ino, format!("{v2:?}"));
+    check(r, "fd 3 is instance.lock (dev+ino)", v3.0 == lst.st_dev as u32 && v3.1 == lst.st_ino, format!("{v3:?}"));
+    check("fds", "holds_file(suspended child, lock) == Yes", holds_file(pid, lst.st_dev as u32, lst.st_ino) == Holds::Yes, "PROC_PIDLISTFDS + PROC_PIDFDVNODEPATHINFO");
+
+    // argv/env/cwd/signals of the suspended child, read from the kernel
+    let (exec, argv, rest) = procargs(pid).unwrap();
+    let mut want_argv = vec![canonical.to_string_lossy().into_owned()];
+    want_argv.extend(args.iter().cloned());
+    check(r, "KERN_PROCARGS2 argv equals plan exactly (argv[0] canonical)", argv == want_argv, format!("argv {argv:?}"));
+    note(r, format!("KERN_PROCARGS2 exec path {exec:?}; strings after argv: {rest:?}"));
+    let want_env: Vec<String> = env.iter().map(|(k, v)| format!("{k}={v}")).collect();
+    check(r, "env equals plan exactly, nothing inherited", rest.len() >= want_env.len() && rest[..want_env.len()] == want_env[..] && !rest.iter().any(|s| s.contains("STACKLY_SPIKE_PARENT_ONLY")),
+        format!("env part {:?}", &rest[..want_env.len().min(rest.len())]));
+    let cwd = cwd_of(pid);
+    check(r, "cwd is the plan cwd (addchdir_np)", cwd.as_deref().ok() == Some(&*inst.dir.to_string_lossy()), format!("{cwd:?}"));
+    check(r, "signal mask empty (SETSIGMASK)", u32_at(&k, sys::OFF_P_SIGMASK) == 0, format!("p_sigmask {:#x}", u32_at(&k, sys::OFF_P_SIGMASK)));
+    let default_ignore: u32 = [libc::SIGURG, libc::SIGCHLD, libc::SIGIO, libc::SIGWINCH, libc::SIGINFO].iter().map(|s| 1u32 << (s - 1)).sum();
+    let parent_ignore = u32_at(&kinfo(me).unwrap(), sys::OFF_P_SIGIGNORE);
+    let child_ignore = u32_at(&k, sys::OFF_P_SIGIGNORE);
+    check(r, "SETSIGDEF: child ignores only the kernel default-ignore set (SIGPIPE, SIGHUP back to default)", child_ignore == default_ignore && parent_ignore & (1 << (libc::SIGPIPE - 1)) != 0,
+        format!("child p_sigignore {child_ignore:#010x} == default-ignore set {default_ignore:#010x} (SIGURG|SIGCHLD|SIGIO|SIGWINCH|SIGINFO); parent {parent_ignore:#010x}"));
+    check(r, "no caught signal before exec runs", u32_at(&k, sys::OFF_P_SIGCATCH) == 0, format!("p_sigcatch {:#x}", u32_at(&k, sys::OFF_P_SIGCATCH)));
+
+    // --- exit watch on the suspended child, then SIGCONT
+    let kq = Kq::new();
+    let reg = kq.add(pid, libc::NOTE_EXIT | libc::NOTE_EXITSTATUS);
+    check("exit", "kqueue NOTE_EXIT|NOTE_EXITSTATUS registers on suspended child", reg.is_ok(), format!("{reg:?}"));
+    kill(pid, libc::SIGCONT).unwrap();
+    let ready = wait_until(Duration::from_secs(5), || http_status(port, "/ready") == Some(200));
+    check(s, "SIGCONT resumes: child serves /ready 200", ready, format!("port {port}"));
+    let b2 = bsdinfo(pid).unwrap();
+    check(s, "status leaves SSTOP after SIGCONT", b2.pbi_status != libc::SSTOP, format!("pbi_status {}", b2.pbi_status));
+    check("pidinfo", "start time unchanged by suspend/resume", (b2.pbi_start_tvsec, b2.pbi_start_tvusec) == start, format!("{}.{:06}", b2.pbi_start_tvsec, b2.pbi_start_tvusec));
+    check(s, "user time > 0 after resume", user_time(pid).unwrap().0 > 0, format!("{:?}", user_time(pid)));
+
+    let got: Vec<String> = serde_json::from_slice(&fs::read(&argv_file).unwrap()).unwrap();
+    check(r, "argv-serve.json equals plan args exactly", got == args, format!("label arg {:?}", got.iter().find(|a| a.starts_with("--label="))));
+    let mut pwned = Vec::new();
+    find_named(root, "pwned", &mut pwned);
+    check(r, "no file created by shell interpretation", pwned.is_empty(), format!("{pwned:?}"));
+
+    // --- lock inherited, daemon closes its copy (never LOCK_UN)
+    unsafe { libc::close(lock) };
+    check("lock", "after daemon closes its fd, lock still Held by child", probe_lock(&inst.lock) == "Held", probe_lock(&inst.lock));
+    check("fds", "holds_file(running child, lock) == Yes after daemon closed copy", holds_file(pid, lst.st_dev as u32, lst.st_ino) == Holds::Yes, "");
+
+    // --- SIGCONT to a running process is harmless
+    kill(pid, libc::SIGCONT).unwrap();
+    check("signal", "SIGCONT to running process is harmless", http_status(port, "/ready") == Some(200), "");
+
+    // --- stop via SIGTERM: kqueue gives exit status, waitpid reaps
+    kill(pid, libc::SIGTERM).unwrap();
+    let ev = kq.wait(Duration::from_secs(5));
+    let ok = matches!(ev, Some((id, ff, data)) if id == pid as usize && ff & libc::NOTE_EXIT != 0 && libc::WIFEXITED(data as c_int) && libc::WEXITSTATUS(data as c_int) == 0);
+    check("exit", "NOTE_EXIT event carries exit status for child (SIGTERM -> exit 0)", ok, format!("{ev:?} -> {}", ev.map(|e| status_text(e.2 as c_int)).unwrap_or_default()));
+    let st = waitpid_timeout(pid, Duration::from_secs(1));
+    check("exit", "waitpid(WNOHANG) after NOTE_EXIT reaps", st.is_some(), format!("{:?}", st.map(status_text)));
+    check("lock", "lock Free after child exit", probe_lock(&inst.lock) == "Free", probe_lock(&inst.lock));
+    check("signal", "kill after reap -> ESRCH", kill(pid, 0) == Err(libc::ESRCH), format!("{:?}", kill(pid, 0)));
+    check("pidinfo", "bsdinfo after reap -> error", bsdinfo(pid).is_err(), format!("{:?}", bsdinfo(pid).err().map(errstr)));
+}
+
+fn row_discard(root: &Path, rt: &Path, canonical: &Path) {
+    let s = "suspend";
+    let inst = Inst::new(root, rt, "b");
+    let lock = open_lock(&inst.lock).unwrap();
+    flock_nb(lock).unwrap();
+    let out = create_spool(&inst.run.join("stdout.spool")).unwrap();
+    let err = create_spool(&inst.run.join("stderr.spool")).unwrap();
+    let port = free_port();
+    let args = inst.serve_args(port, &[]);
+    let env = plan_env();
+    let pid = spawn(&Req { program: canonical, args: &args, env: &env, cwd: &inst.dir, stdin: Stdin::Null, stdout: out, stderr: err, lock: Some(lock), suspended: true, naive_fds: false }).unwrap();
+    unsafe { libc::close(out) };
+    unsafe { libc::close(err) };
+    let kq = Kq::new();
+    kq.add(pid, libc::NOTE_EXIT | libc::NOTE_EXITSTATUS).unwrap();
+    std::thread::sleep(Duration::from_millis(200));
+    let ut = user_time(pid).unwrap();
+    kill(pid, libc::SIGKILL).unwrap();
+    let ev = kq.wait(Duration::from_secs(5));
+    let ok = matches!(ev, Some((_, _, data)) if libc::WIFSIGNALED(data as c_int) && libc::WTERMSIG(data as c_int) == libc::SIGKILL);
+    check(s, "discard: SIGKILL on suspended child -> NOTE_EXIT signaled(9)", ok, format!("{ev:?} -> {}", ev.map(|e| status_text(e.2 as c_int)).unwrap_or_default()));
+    let st = waitpid_timeout(pid, Duration::from_secs(2));
+    check(s, "discard: waitpid reaps signaled(9)", st.map(|s| libc::WIFSIGNALED(s) && libc::WTERMSIG(s) == 9) == Some(true), format!("{:?}", st.map(status_text)));
+    check(s, "discard: child never ran (user time 0, no argv file, no output)", ut.0 == 0 && !inst.data.join("argv-serve.json").exists() && fs::metadata(inst.run.join("stdout.spool")).unwrap().len() == 0,
+        format!("user_time {} argv exists {}", ut.0, inst.data.join("argv-serve.json").exists()));
+    unsafe { libc::close(lock) };
+    check("lock", "lock Free after discard", probe_lock(&inst.lock) == "Free", probe_lock(&inst.lock));
+}
+
+fn row_closed_fds(root: &Path, rt: &Path, canonical: &Path, me_exe: &Path) {
+    let r = "spawn";
+    for naive in ["0", "1"] {
+        let inst = Inst::new(root, rt, &format!("cf{naive}"));
+        let result = root.join(format!("closed-fds-{naive}.txt"));
+        let log = fs::File::create(root.join(format!("closed-fds-{naive}.log"))).unwrap();
+        use std::os::fd::AsRawFd;
+        let args = vec![
+            "closed-fds".to_string(),
+            canonical.to_string_lossy().into_owned(),
+            inst.dir.to_string_lossy().into_owned(),
+            inst.data.to_string_lossy().into_owned(),
+            inst.config.to_string_lossy().into_owned(),
+            inst.run.to_string_lossy().into_owned(),
+            free_port().to_string(),
+            result.to_string_lossy().into_owned(),
+            naive.to_string(),
+        ];
+        let pid = spawn(&Req { program: me_exe, args: &args, env: &plan_env(), cwd: root, stdin: Stdin::Null, stdout: log.as_raw_fd(), stderr: log.as_raw_fd(), lock: None, suspended: false, naive_fds: false }).unwrap();
+        let st = waitpid_timeout(pid, Duration::from_secs(10));
+        let text = fs::read_to_string(&result).unwrap_or_default();
+        let mode = if naive == "0" { "with dup to fd >= 10" } else { "naive, no dup" };
+        note(r, format!("daemon with fds 0,1,2 closed ({mode}), exit {:?}: {}", st.map(status_text), text.trim().replace('\n', "; ")));
+        if naive == "0" {
+            check(r, "daemon with closed fds 0-2: child fds 0..3 are /dev/null, spools, lock", text.contains("verdict=ok"), text.trim().replace('\n', "; "));
+        } else {
+            check(r, "naive mapping without dup to >= 10 is wrong (hazard shown)", text.contains("verdict=wrong"), text.trim().replace('\n', "; "));
+        }
+    }
+}
+
+/// Subcommand: a "daemon" with fds 0, 1, 2 closed, so the lock and spools
+/// land on fds 0, 1, 2. Writes its verdict to the result file.
+fn closed_fds(a: &[String]) {
+    let (exe, dir, data, config, run, port, result, naive) = (&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &a[6], a[7] == "1");
+    unsafe {
+        libc::close(0);
+        libc::close(1);
+        libc::close(2);
+    }
+    let lock = open_lock(&Path::new(dir).join("instance.lock")).unwrap();
+    flock_nb(lock).unwrap();
+    let out = create_spool(&Path::new(run).join("stdout.spool")).unwrap();
+    let err = create_spool(&Path::new(run).join("stderr.spool")).unwrap();
+    let (lst, ost, est) = (fstat(lock), fstat(out), fstat(err));
+    let args = vec![
+        "serve".to_string(),
+        format!("--config={config}"),
+        format!("--data={data}"),
+        format!("--port={port}"),
+        "--host=127.0.0.1".to_string(),
+    ];
+    let env = plan_env();
+    let mut lines = vec![format!("daemon fds: lock={lock} stdout={out} stderr={err}")];
+    let pid = spawn(&Req { program: Path::new(exe), args: &args, env: &env, cwd: Path::new(dir), stdin: Stdin::Null, stdout: out, stderr: err, lock: Some(lock), suspended: true, naive_fds: naive });
+    let mut ok = false;
+    match pid {
+        Err(e) => lines.push(format!("spawn failed {}", errstr(e))),
+        Ok(pid) => {
+            let fds = list_fds(pid).unwrap_or_default();
+            lines.push(format!("child fds {:?}", fds.iter().map(|f| f.0).collect::<Vec<_>>()));
+            let v: Vec<_> = (0..4).map(|fd| fd_vnode(pid, fd).ok()).collect();
+            for (fd, x) in v.iter().enumerate() {
+                lines.push(format!("child fd {fd}: {}", x.as_ref().map(|x| format!("dev {} ino {} {}", x.0, x.1, x.2)).unwrap_or("missing".into())));
+            }
+            ok = fds.len() == 4
+                && v[0].as_ref().map(|x| x.2 == "/dev/null").unwrap_or(false)
+                && v[1].as_ref().map(|x| x.1 == ost.st_ino).unwrap_or(false)
+                && v[2].as_ref().map(|x| x.1 == est.st_ino).unwrap_or(false)
+                && v[3].as_ref().map(|x| x.1 == lst.st_ino).unwrap_or(false);
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+            let mut st = 0;
+            unsafe { libc::waitpid(pid, &mut st, 0) };
+        }
+    }
+    lines.push(format!("verdict={}", if ok { "ok" } else { "wrong" }));
+    fs::write(result, lines.join("\n") + "\n").unwrap();
+}
+
+fn row_spawn_errors(root: &Path, bin_dir: &Path) {
+    let r = "spawn";
+    let env = plan_env();
+    let devnull = unsafe { libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY | libc::O_CLOEXEC) };
+    let missing = bin_dir.join("does-not-exist");
+    let e = spawn(&Req { program: &missing, args: &[], env: &env, cwd: root, stdin: Stdin::Null, stdout: devnull, stderr: devnull, lock: None, suspended: true, naive_fds: false });
+    check(r, "missing executable: posix_spawn returns ENOENT, no child", e == Err(libc::ENOENT), format!("{:?}", e.map_err(errstr)));
+    let noexec = bin_dir.join("not-executable");
+    fs::write(&noexec, b"#!/bin/sh\n").unwrap();
+    fs::set_permissions(&noexec, fs::Permissions::from_mode(0o644)).unwrap();
+    let e = spawn(&Req { program: &noexec, args: &[], env: &env, cwd: root, stdin: Stdin::Null, stdout: devnull, stderr: devnull, lock: None, suspended: true, naive_fds: false });
+    check(r, "non-executable file: posix_spawn returns EACCES, no child", e == Err(libc::EACCES), format!("{:?}", e.map_err(errstr)));
+    let bad_cwd = root.join("no-such-dir");
+    let e = spawn(&Req { program: Path::new("/bin/sleep"), args: &["5".into()], env: &env, cwd: &bad_cwd, stdin: Stdin::Null, stdout: devnull, stderr: devnull, lock: None, suspended: true, naive_fds: false });
+    check(r, "missing cwd: posix_spawn returns ENOENT from addchdir_np, no child", e == Err(libc::ENOENT), format!("{:?}", e.map_err(errstr)));
+    if let Ok(pid) = e {
+        kill(pid, libc::SIGKILL).ok();
+        waitpid_timeout(pid, Duration::from_secs(1));
+    }
+    unsafe { libc::close(devnull) };
+}
+
+fn row_helper_stdin(root: &Path, rt: &Path, canonical: &Path) {
+    let r = "spawn";
+    let inst = Inst::new(root, rt, "init");
+    let init_dir = inst.dir.join("fresh-data");
+    let lock = open_lock(&inst.lock).unwrap();
+    flock_nb(lock).unwrap();
+    let mut pin = [0; 2];
+    let mut pout = [0; 2];
+    let mut perr = [0; 2];
+    unsafe {
+        libc::pipe(pin.as_mut_ptr());
+        libc::pipe(pout.as_mut_ptr());
+        libc::pipe(perr.as_mut_ptr());
+        for fd in [pin[0], pin[1], pout[0], pout[1], perr[0], perr[1]] {
+            libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
+        }
+    }
+    let args = vec!["init".to_string(), format!("--data={}", init_dir.display()), "--token-stdin".to_string()];
+    let env = plan_env();
+    let pid = spawn(&Req { program: canonical, args: &args, env: &env, cwd: &inst.dir, stdin: Stdin::Fd(pin[0]), stdout: pout[1], stderr: perr[1], lock: Some(lock), suspended: false, naive_fds: false }).unwrap();
+    unsafe {
+        libc::close(pin[0]);
+        libc::close(pout[1]);
+        libc::close(perr[1]);
+    }
+    // helper holds the lock on fd 3 while it runs (InitStep role)
+    let lst = fstat(lock);
+    let held = holds_file(pid, lst.st_dev as u32, lst.st_ino);
+    let payload = b"fixture-init-payload \xc3\xbc\n";
+    let mut w = unsafe { <fs::File as std::os::fd::FromRawFd>::from_raw_fd(pin[1]) };
+    w.write_all(payload).unwrap();
+    drop(w);
+    let mut so = String::new();
+    let mut se = String::new();
+    unsafe { <fs::File as std::os::fd::FromRawFd>::from_raw_fd(pout[0]) }.read_to_string(&mut so).unwrap();
+    unsafe { <fs::File as std::os::fd::FromRawFd>::from_raw_fd(perr[0]) }.read_to_string(&mut se).unwrap();
+    let st = waitpid_timeout(pid, Duration::from_secs(5));
+    unsafe { libc::close(lock) };
+    let token = fs::read_to_string(init_dir.join("token.sha256")).unwrap_or_default();
+    let tmp = root.join("payload.bin");
+    fs::write(&tmp, payload).unwrap();
+    let sum = std::process::Command::new("/usr/bin/shasum").args(["-a", "256"]).arg(&tmp).output().unwrap();
+    let sum = String::from_utf8_lossy(&sum.stdout).split_whitespace().next().unwrap_or("").to_string();
+    check(r, "helper: stdin pipe written then closed, helper reads to EOF and exits 0", st.map(|s| libc::WIFEXITED(s) && libc::WEXITSTATUS(s) == 0) == Some(true), format!("{:?} stdout {so:?} stderr {se:?}", st.map(status_text)));
+    check(r, "helper: token.sha256 equals SHA-256 of the stdin bytes", token == sum && !sum.is_empty(), format!("{token} vs {sum}"));
+    note(r, format!("helper (InitStep) held the lock on fd 3 while running: {held:?}"));
+}
+
+/// Subcommand: a daemon that spawns the main process, records its identity,
+/// and exits without reaping (simulates a daemon crash).
+fn daemon_a(a: &[String]) {
+    let (mode, exe, dir, data, config, run, port, out_file) = (&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &a[6], &a[7]);
+    let lock = open_lock(&Path::new(dir).join("instance.lock")).unwrap();
+    flock_nb(lock).unwrap();
+    let out = create_spool(&Path::new(run).join("stdout.spool")).unwrap();
+    let err = create_spool(&Path::new(run).join("stderr.spool")).unwrap();
+    let args = vec![
+        "serve".to_string(),
+        format!("--config={config}"),
+        format!("--data={data}"),
+        format!("--port={port}"),
+        "--host=127.0.0.1".to_string(),
+        "--log-lines-per-second=200".to_string(),
+    ];
+    let env = plan_env();
+    let pid = spawn(&Req { program: Path::new(exe), args: &args, env: &env, cwd: Path::new(dir), stdin: Stdin::Null, stdout: out, stderr: err, lock: Some(lock), suspended: true, naive_fds: false }).unwrap();
+    let b = bsdinfo(pid).unwrap();
+    let lst = fstat(lock);
+    let text = format!(
+        "pid={pid}\nstart={}.{:06}\nexe={}\nsid={}\nboot={}\nlockdev={}\nlockino={}\nstatus={}\nppid={}\n",
+        b.pbi_start_tvsec,
+        b.pbi_start_tvusec,
+        pidpath(pid).unwrap().display(),
+        getsid(pid).unwrap(),
+        boot_id().unwrap(),
+        lst.st_dev as u32,
+        lst.st_ino,
+        b.pbi_status,
+        b.pbi_ppid
+    );
+    fs::write(out_file, text).unwrap();
+    if mode == "running" {
+        kill(pid, libc::SIGCONT).unwrap();
+    }
+    unsafe { libc::close(lock) };
+    println!("daemon-a: spawned {pid} ({mode}), exiting without reaping");
+    std::process::exit(0);
+}
+
+fn read_identity(path: &Path) -> std::collections::HashMap<String, String> {
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .filter_map(|l| l.split_once('=').map(|(k, v)| (k.to_string(), v.to_string())))
+        .collect()
+}
+
+fn run_daemon_a(mode: &str, root: &Path, inst: &Inst, canonical: &Path, me_exe: &Path, port: u16) -> std::collections::HashMap<String, String> {
+    let id_file = root.join(format!("identity-{mode}.txt"));
+    let log_path = root.join(format!("daemon-a-{mode}.log"));
+    let log = fs::File::create(&log_path).unwrap();
+    use std::os::fd::AsRawFd;
+    let args = vec![
+        "daemon-a".to_string(),
+        mode.to_string(),
+        canonical.to_string_lossy().into_owned(),
+        inst.dir.to_string_lossy().into_owned(),
+        inst.data.to_string_lossy().into_owned(),
+        inst.config.to_string_lossy().into_owned(),
+        inst.run.to_string_lossy().into_owned(),
+        port.to_string(),
+        id_file.to_string_lossy().into_owned(),
+    ];
+    let pid = spawn(&Req { program: me_exe, args: &args, env: &plan_env(), cwd: root, stdin: Stdin::Null, stdout: log.as_raw_fd(), stderr: log.as_raw_fd(), lock: None, suspended: false, naive_fds: false }).unwrap();
+    let st = waitpid_timeout(pid, Duration::from_secs(10));
+    note("orphan", format!("daemon-a ({mode}) pid {pid} exited {:?}: {}", st.map(status_text), fs::read_to_string(&log_path).unwrap_or_default().trim()));
+    let id = read_identity(&id_file);
+    let child: pid_t = id["pid"].parse().unwrap();
+    register_cleanup(child);
+    id
+}
+
+fn row_orphan_running(root: &Path, rt: &Path, canonical: &Path, me_exe: &Path, boot: &str) {
+    let o = "orphan";
+    let inst = Inst::new(root, rt, "orphan-run");
+    let port = free_port();
+    let id = run_daemon_a("running", root, &inst, canonical, me_exe, port);
+    let pid: pid_t = id["pid"].parse().unwrap();
+    note(o, format!("identity recorded by daemon-a while suspended: {id:?}"));
+    // wait for reparenting
+    wait_until(Duration::from_secs(2), || bsdinfo(pid).map(|b| b.pbi_ppid == 1).unwrap_or(false));
+    let b = bsdinfo(pid).unwrap();
+    let me = unsafe { libc::getpid() };
+    let start = format!("{}.{:06}", b.pbi_start_tvsec, b.pbi_start_tvusec);
+    check("pidinfo", "non-child: bsdinfo readable, ppid 1 (launchd), not our child", b.pbi_ppid == 1 && b.pbi_ppid as pid_t != me, format!("ppid {} pgid {} uid {} status {}", b.pbi_ppid, b.pbi_pgid, b.pbi_uid, b.pbi_status));
+    check("pidinfo", "non-child: start time equals the one recorded at spawn by the old daemon", start == id["start"], format!("{start} vs {}", id["start"]));
+    check("pidinfo", "non-child: uid matches current user, pgid == pid", b.pbi_uid == unsafe { libc::getuid() } && b.pbi_pgid as pid_t == pid, "");
+    let p = pidpath(pid);
+    check("exe", "non-child: proc_pidpath equals canonical path recorded at spawn", p.as_deref().ok() == Some(canonical) && p.as_ref().map(|p| p.to_string_lossy() == id["exe"]).unwrap_or(false), format!("{p:?}"));
+    let sid = getsid(pid);
+    let my_sid = getsid(0).unwrap();
+    check("session", "non-child in another session: getsid works and equals recorded sid", sid.map(|s| s.to_string()) == Ok(id["sid"].clone()) && sid != Ok(my_sid), format!("getsid {sid:?}, our sid {my_sid}"));
+    check("boot", "boot id read by old daemon equals ours", id["boot"] == boot, format!("{} vs {boot}", id["boot"]));
+    let (dev, ino): (u32, u64) = (id["lockdev"].parse().unwrap(), id["lockino"].parse().unwrap());
+    check("fds", "non-child: holds_file(lock inode) == Yes after old daemon exited", holds_file(pid, dev, ino) == Holds::Yes, format!("fds {:?}", list_fds(pid)));
+    check("lock", "flock inherited at fd 3 survives the parent's exit: probe_lock == Held", probe_lock(&inst.lock) == "Held", probe_lock(&inst.lock));
+    let ready = wait_until(Duration::from_secs(5), || http_status(port, "/ready") == Some(200));
+    check(o, "orphan keeps serving after its parent died", ready, "");
+    let size = |p: &Path| fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    let s0 = size(&inst.run.join("stdout.spool"));
+    std::thread::sleep(Duration::from_millis(1000));
+    let s1 = size(&inst.run.join("stdout.spool"));
+    check("spool", "spool keeps growing while no daemon holds it", s1 > s0, format!("{s0} -> {s1} bytes in 1 s"));
+    // resume reading as a new daemon: SEEK_DATA then skip to the first newline
+    let rfd = open_flags(&inst.run.join("stdout.spool"), libc::O_RDONLY | libc::O_NOFOLLOW).unwrap();
+    let first = seek_data(rfd, 0);
+    let mut buf = vec![0u8; 512];
+    let n = pread(rfd, &mut buf, first.unwrap_or(0));
+    let text = String::from_utf8_lossy(&buf[..n.max(0) as usize]).into_owned();
+    check("spool", "new daemon reopens the orphan's spool (O_RDONLY|O_NOFOLLOW), SEEK_DATA 0, reads its output", first == Ok(0) && text.starts_with("listening on ") && text.contains("log line "), format!("SEEK_DATA {first:?}, first bytes {:?}", &text[..text.len().min(48)]));
+    unsafe { libc::close(rfd) };
+
+    let kq = Kq::new();
+    let with_status = kq.add(pid, libc::NOTE_EXIT | libc::NOTE_EXITSTATUS);
+    note("exit", format!("non-child: register NOTE_EXIT|NOTE_EXITSTATUS -> {:?}", with_status.map_err(errstr)));
+    let kq2 = Kq::new();
+    let plain = kq2.add(pid, libc::NOTE_EXIT);
+    check("exit", "non-child: register NOTE_EXIT works", plain.is_ok(), format!("{plain:?}"));
+    // re-read start time after registration (closes the classify/watch window)
+    let b2 = bsdinfo(pid).unwrap();
+    check("exit", "start time re-read after registration still matches", format!("{}.{:06}", b2.pbi_start_tvsec, b2.pbi_start_tvusec) == id["start"], "");
+    kill(pid, libc::SIGCONT).unwrap();
+    let t = kill(pid, libc::SIGTERM);
+    check("signal", "non-parent in another session can signal (SIGTERM)", t.is_ok(), format!("{t:?}"));
+    let ev = kq2.wait(Duration::from_secs(5));
+    check("exit", "non-child: NOTE_EXIT fires", matches!(ev, Some((id, ff, _)) if id == pid as usize && ff & libc::NOTE_EXIT != 0), format!("{ev:?}"));
+    note("exit", format!("non-child NOTE_EXIT data (no status for non-child): {:?}", ev.map(|e| e.2)));
+    let ev1 = kq.wait(Duration::from_millis(500));
+    note("exit", format!("non-child NOTE_EXIT|NOTE_EXITSTATUS event: {ev1:?} -> {}", ev1.map(|e| status_text(e.2 as c_int)).unwrap_or_default()));
+    let free = wait_until(Duration::from_secs(2), || probe_lock(&inst.lock) == "Free");
+    check("lock", "lock Free once the orphan exits", free, probe_lock(&inst.lock));
+    let reaped = wait_until(Duration::from_secs(2), || bsdinfo(pid).is_err());
+    check(o, "launchd reaps the orphan (bsdinfo -> ESRCH)", reaped, format!("{:?}", bsdinfo(pid).err().map(errstr)));
+}
+
+fn row_orphan_suspended(root: &Path, rt: &Path, canonical: &Path, me_exe: &Path) {
+    let o = "orphan";
+    let inst = Inst::new(root, rt, "orphan-susp");
+    let port = free_port();
+    let id = run_daemon_a("suspended", root, &inst, canonical, me_exe, port);
+    let pid: pid_t = id["pid"].parse().unwrap();
+    wait_until(Duration::from_secs(2), || bsdinfo(pid).map(|b| b.pbi_ppid == 1).unwrap_or(false));
+    std::thread::sleep(Duration::from_millis(300));
+    let b = bsdinfo(pid).unwrap();
+    let k = kinfo(pid).unwrap();
+    check(o, "suspended orphan: still SSTOP after parent exit, ppid 1", b.pbi_status == libc::SSTOP && b.pbi_ppid == 1, format!("status {} ppid {}", b.pbi_status, b.pbi_ppid));
+    check(o, "suspended orphan: no pending signal (no SIGHUP from orphaning)", u32_at(&k, sys::OFF_P_SIGLIST) == 0, format!("p_siglist {:#x}", u32_at(&k, sys::OFF_P_SIGLIST)));
+    check(o, "suspended orphan: never ran (user time 0, no argv file)", user_time(pid).unwrap().0 == 0 && !inst.data.join("argv-serve.json").exists(), format!("{:?}", user_time(pid)));
+    check("lock", "suspended orphan holds lock (Held)", probe_lock(&inst.lock) == "Held", probe_lock(&inst.lock));
+    let (dev, ino): (u32, u64) = (id["lockdev"].parse().unwrap(), id["lockino"].parse().unwrap());
+    check("fds", "suspended orphan: holds_file == Yes", holds_file(pid, dev, ino) == Holds::Yes, "");
+    let c = kill(pid, libc::SIGCONT);
+    let ready = wait_until(Duration::from_secs(5), || http_status(port, "/ready") == Some(200));
+    check(o, "continue_stopped from a new daemon (non-parent SIGCONT) resumes it", c.is_ok() && ready, format!("{c:?}"));
+    let kq = Kq::new();
+    kq.add(pid, libc::NOTE_EXIT).unwrap();
+    kill(pid, libc::SIGTERM).unwrap();
+    let ev = kq.wait(Duration::from_secs(5));
+    check(o, "resumed orphan stops on SIGTERM, NOTE_EXIT seen", ev.is_some(), format!("{ev:?}"));
+    wait_until(Duration::from_secs(2), || bsdinfo(pid).is_err());
+}
+
+fn row_zombie_and_gone(root: &Path, rt: &Path, canonical: &Path) {
+    let z = "zombie";
+    let inst = Inst::new(root, rt, "zombie");
+    let devnull = unsafe { libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY | libc::O_CLOEXEC) };
+    let args = vec!["version".to_string()];
+    let pid = spawn(&Req { program: canonical, args: &args, env: &plan_env(), cwd: &inst.dir, stdin: Stdin::Null, stdout: devnull, stderr: devnull, lock: None, suspended: false, naive_fds: false }).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    let b = bsdinfo(pid);
+    let kz = kinfo(pid).map(|k| k[sys::OFF_P_STAT] as u32);
+    check(z, "zombie child: PROC_PIDTBSDINFO gives ESRCH (inspect -> None) while kinfo p_stat is SZOMB and the pid stays taken", b.err() == Some(libc::ESRCH) && kz == Ok(libc::SZOMB) && kill(pid, 0).is_ok(),
+        format!("bsdinfo {:?}, kinfo p_stat {kz:?}, kill(0) {:?}", b.map(|b| b.pbi_status).map_err(errstr), kill(pid, 0)));
+    note(z, format!("zombie: proc_pidpath {:?}, PROC_PIDLISTFDS {:?}, getsid {:?}, kill(0) {:?}, kinfo p_stat {:?}",
+        pidpath(pid).map_err(errstr), list_fds(pid).map_err(errstr), getsid(pid).map_err(errstr), kill(pid, 0).map_err(errstr), kinfo(pid).map(|k| k[sys::OFF_P_STAT])));
+    let kq = Kq::new();
+    let reg = kq.add(pid, libc::NOTE_EXIT | libc::NOTE_EXITSTATUS);
+    let ev = if reg.is_ok() { kq.wait(Duration::from_millis(500)) } else { None };
+    check("exit", "register on an exited-but-unreaped child: ESRCH or an immediate event", reg == Err(libc::ESRCH) || ev.is_some(), format!("register {:?}, event {ev:?}", reg.map_err(errstr)));
+    let st = waitpid_timeout(pid, Duration::from_secs(1));
+    check("exit", "waitpid(WNOHANG) reaps the zombie with its status", st.map(|s| libc::WIFEXITED(s) && libc::WEXITSTATUS(s) == 0) == Some(true), format!("{:?}", st.map(status_text)));
+    check("signal", "kill(zombie, 0) succeeded before reap; after reap ESRCH", kill(pid, 0) == Err(libc::ESRCH), format!("{:?}", kill(pid, 0)));
+    // a pid that does not exist
+    let mut ghost: pid_t = 99_000;
+    while kill(ghost, 0) != Err(libc::ESRCH) {
+        ghost += 1;
+    }
+    let kq = Kq::new();
+    check("pidinfo", "absent pid: bsdinfo ESRCH", bsdinfo(ghost).err() == Some(libc::ESRCH), format!("{:?}", bsdinfo(ghost).err().map(errstr)));
+    check("exe", "absent pid: proc_pidpath fails", pidpath(ghost).is_err(), format!("{:?}", pidpath(ghost).err().map(errstr)));
+    check("session", "absent pid: getsid ESRCH", getsid(ghost) == Err(libc::ESRCH), format!("{:?}", getsid(ghost).err().map(errstr)));
+    check("exit", "absent pid: kqueue register ESRCH", kq.add(ghost, libc::NOTE_EXIT) == Err(libc::ESRCH), "");
+    check("fds", "absent pid: PROC_PIDLISTFDS fails", list_fds(ghost).is_err(), format!("{:?}", list_fds(ghost).err().map(errstr)));
+    unsafe { libc::close(devnull) };
+}
+
+fn row_other_user() {
+    let b = bsdinfo(1);
+    note("pidinfo", format!("pid 1 (root launchd): bsdinfo {:?}", b.map(|b| (b.pbi_uid, b.pbi_start_tvsec)).map_err(errstr)));
+    let fds = list_fds(1);
+    check("fds", "other user's process: PROC_PIDLISTFDS refused (maps to Unreadable)", fds.is_err(), format!("{:?} -> holds_file {:?}", fds.err().map(errstr), holds_file(1, 0, 0)));
+    note("exe", format!("pid 1: proc_pidpath {:?}", pidpath(1).map_err(errstr)));
+    note("session", format!("pid 1: getsid {:?}", getsid(1).map_err(errstr)));
+}
+
+fn row_exec_paths(root: &Path, rt: &Path, canonical: &Path, exe_as_created: &Path, tmp: &Path) {
+    let x = "exe";
+    let inst = Inst::new(root, rt, "paths");
+    let devnull = unsafe { libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY | libc::O_CLOEXEC) };
+    let env = plan_env();
+    let spawn_s = |prog: &Path| spawn(&Req { program: prog, args: &["version".to_string()], env: &env, cwd: &inst.dir, stdin: Stdin::Null, stdout: devnull, stderr: devnull, lock: None, suspended: true, naive_fds: false });
+    let discard = |pid: pid_t| {
+        kill(pid, libc::SIGKILL).ok();
+        waitpid_timeout(pid, Duration::from_secs(2));
+    };
+    // non-canonical spelling through /var
+    note(x, format!("darwin user temp {} canonicalizes to {}", tmp.display(), fs::canonicalize(tmp).unwrap().display()));
+    let pid = spawn_s(exe_as_created).unwrap();
+    let p = pidpath(pid);
+    check(x, "spawn via /var/... spelling: proc_pidpath returns the canonical /private/var/... path", p.as_deref().ok() == Some(canonical), format!("{p:?}"));
+    discard(pid);
+    // symlink to the executable
+    let link = inst.dir.join("fake-link");
+    symlink(canonical, &link).unwrap();
+    let pid = spawn_s(&link).unwrap();
+    let p = pidpath(pid);
+    check(x, "spawn via a symlink: proc_pidpath returns the target, not the link", p.as_deref().ok() == Some(canonical), format!("{p:?}"));
+    let (_, argv, _) = procargs(pid).unwrap();
+    note(x, format!("via symlink argv[0] stays {:?}", argv.first()));
+    discard(pid);
+    // NFD spelling of the NFC directory name
+    let nfc = canonical.to_string_lossy().into_owned();
+    let nfd = nfc.replace('Ü', "U\u{308}").replace('ï', "i\u{308}").replace('ö', "o\u{308}").replace('é', "e\u{301}");
+    assert_ne!(nfc, nfd);
+    match spawn_s(Path::new(&nfd)) {
+        Ok(pid) => {
+            let p = pidpath(pid);
+            check(x, "spawn via NFD spelling of an NFC path: proc_pidpath returns the stored (NFC) name", p.as_ref().map(|p| p.to_string_lossy() == nfc).unwrap_or(false), format!("{:?} (nfd bytes {}, nfc bytes {})", p.as_ref().map(|p| p.as_os_str().len()), nfd.len(), nfc.len()));
+            discard(pid);
+        }
+        Err(e) => note(x, format!("NFD spelling spawn failed {}", errstr(e))),
+    }
+    // executable renamed, then deleted, while the process lives
+    let movable = inst.dir.join("movable-fake");
+    fs::copy(canonical, &movable).unwrap();
+    let movable = fs::canonicalize(&movable).unwrap();
+    let pid = spawn_s(&movable).unwrap();
+    let renamed = inst.dir.join("renamed-fake");
+    fs::rename(&movable, &renamed).unwrap();
+    let after_rename = pidpath(pid);
+    fs::remove_file(&renamed).unwrap();
+    let after_unlink = pidpath(pid);
+    note(x, format!("executable renamed while process lives: proc_pidpath {after_rename:?}; after unlink: {:?}", after_unlink.as_ref().map_err(|e| errstr(*e))));
+    check(x, "rename/unlink of the executable never yields the original recorded path by accident", after_rename.as_deref().ok() != Some(&movable), "");
+    discard(pid);
+    unsafe { libc::close(devnull) };
+}
+
+fn row_boot(me_exe: &Path, base: &Path) {
+    let r = "boot";
+    let a = boot_id();
+    let b = boot_id();
+    let cli = std::process::Command::new("/usr/sbin/sysctl").args(["-n", "kern.bootsessionuuid"]).output().unwrap();
+    let cli = String::from_utf8_lossy(&cli.stdout).trim().to_string();
+    let a = a.unwrap();
+    let is_uuid = a.len() == 36 && a.chars().enumerate().all(|(i, c)| if [8, 13, 18, 23].contains(&i) { c == '-' } else { c.is_ascii_hexdigit() });
+    check(r, "sysctlbyname(kern.bootsessionuuid) is a UUID, stable across reads, equals sysctl(8)", is_uuid && Ok(a.clone()) == b && a == cli, format!("{a} (case: {})", if a.chars().any(|c| c.is_ascii_lowercase()) { "has lowercase" } else { "upper" }));
+    note(r, format!("stored form (lowercase) {}", a.to_lowercase()));
+    let bt = std::process::Command::new("/usr/sbin/sysctl").args(["-n", "kern.boottime"]).output().unwrap();
+    note(r, format!("kern.boottime {}", String::from_utf8_lossy(&bt.stdout).trim()));
+    let _ = (me_exe, base);
+    note(r, "a new value after a reboot was NOT exercised (needs a reboot of this Mac)");
+}
+
+fn row_groups(root: &Path, rt: &Path, canonical: &Path) {
+    let g = "group";
+    let inst = Inst::new(root, rt, "groups");
+    let devnull = unsafe { libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY | libc::O_CLOEXEC) };
+    let env = plan_env();
+    let sh = |script: &str, lock: Option<RawFd>| spawn(&Req { program: Path::new("/bin/sh"), args: &["-c".to_string(), script.to_string()], env: &env, cwd: &inst.dir, stdin: Stdin::Null, stdout: devnull, stderr: devnull, lock, suspended: false, naive_fds: false }).unwrap();
+    // group with leader and two children
+    let pid = sh("/bin/sleep 30 & /bin/sleep 30 & wait", None);
+    std::thread::sleep(Duration::from_millis(300));
+    let m = pgrp_members(pid);
+    let m2 = pgrp_members_libproc(pid);
+    check(g, "proc_listpids(PROC_PGRP_ONLY) lists leader + 2 children", m.as_ref().map(|v| v.len() == 3 && v.contains(&pid)).unwrap_or(false), format!("{m:?}"));
+    check(g, "proc_listpgrppids agrees", m == m2, format!("{m2:?}"));
+    kill(-pid, libc::SIGKILL).unwrap();
+    waitpid_timeout(pid, Duration::from_secs(2));
+    // leader exits, a child stays in the group
+    let pid = sh("/bin/sleep 30 & exit 0", None);
+    let st = waitpid_timeout(pid, Duration::from_secs(2));
+    std::thread::sleep(Duration::from_millis(100));
+    let m = pgrp_members(pid);
+    check(g, "after the leader exits and is reaped, the leftover child is still listed by pgid", m.as_ref().map(|v| v.len() == 1 && !v.contains(&pid)).unwrap_or(false), format!("leader {:?}, members {m:?}", st.map(status_text)));
+    if let Ok(v) = &m {
+        for p in v {
+            register_cleanup(*p);
+            let b = bsdinfo(*p).unwrap();
+            note(g, format!("leftover {p}: ppid {} pgid {} (reparented to launchd)", b.pbi_ppid, b.pbi_pgid));
+        }
+    }
+    kill(-pid, libc::SIGKILL).unwrap();
+    let empty = wait_until(Duration::from_secs(2), || pgrp_members(pid).map(|v| v.is_empty()).unwrap_or(false));
+    check(g, "group empty after kill(-pgid, SIGKILL)", empty, format!("{:?}", pgrp_members(pid)));
+
+    // helper group: TERM ignored by everyone, then KILL to the group
+    let s = "signal";
+    let port = free_port();
+    let out_path = inst.run.join("helper-out.txt");
+    let out = fs::File::create(&out_path).unwrap();
+    use std::os::fd::AsRawFd;
+    let script = format!(
+        "trap '' TERM; /bin/sleep 60 & exec '{}' serve --config='{}' --data='{}' --port={port} --host=127.0.0.1 --ignore-term=true",
+        canonical.display(),
+        inst.config.display(),
+        inst.data.display()
+    );
+    let pid = spawn(&Req { program: Path::new("/bin/sh"), args: &["-c".to_string(), script], env: &env, cwd: &inst.dir, stdin: Stdin::Null, stdout: out.as_raw_fd(), stderr: out.as_raw_fd(), lock: None, suspended: false, naive_fds: false }).unwrap();
+    let kq = Kq::new();
+    kq.add(pid, libc::NOTE_EXIT | libc::NOTE_EXITSTATUS).unwrap();
+    let ready = wait_until(Duration::from_secs(5), || http_status(port, "/ready") == Some(200));
+    let members = pgrp_members(pid).unwrap_or_default();
+    for p in &members {
+        register_cleanup(*p);
+    }
+    check(s, "helper group: fake (exec'd over sh) + sleep share the group", ready && members.len() == 2, format!("members {members:?}"));
+    kill(-pid, libc::SIGTERM).unwrap();
+    std::thread::sleep(Duration::from_secs(5));
+    let after_term = pgrp_members(pid).unwrap_or_default();
+    let text = fs::read_to_string(&out_path).unwrap_or_default();
+    check(s, "kill(-pgid, SIGTERM): both ignore it for the 5 s grace", after_term.len() == 2 && text.contains("ignoring SIGTERM"), format!("members {after_term:?}, output {:?}", text.lines().last()));
+    kill(-pid, libc::SIGKILL).unwrap();
+    let ev = kq.wait(Duration::from_secs(5));
+    check(s, "kill(-pgid, SIGKILL): helper exits signaled(9)", ev.map(|e| libc::WIFSIGNALED(e.2 as c_int) && libc::WTERMSIG(e.2 as c_int) == 9) == Some(true), format!("{:?}", ev.map(|e| status_text(e.2 as c_int))));
+    waitpid_timeout(pid, Duration::from_secs(2));
+    let empty = wait_until(Duration::from_secs(2), || pgrp_members(pid).map(|v| v.is_empty()).unwrap_or(false));
+    check(s, "no group member survives the group SIGKILL", empty, format!("{:?}", pgrp_members(pid)));
+    unsafe { libc::close(devnull) };
+}
+
+fn row_lock(root: &Path, rt: &Path, canonical: &Path) {
+    let l = "lock";
+    let inst = Inst::new(root, rt, "locks");
+    let fd = open_lock(&inst.lock).unwrap();
+    let st = fstat(fd);
+    check(l, "open(O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC, 0600) makes a regular 0600 file owned by us", (st.st_mode & libc::S_IFMT) == libc::S_IFREG && (st.st_mode & 0o777) == 0o600 && st.st_uid == unsafe { libc::getuid() },
+        format!("mode {:o} uid {}", st.st_mode, st.st_uid));
+    let cloexec = unsafe { libc::fcntl(fd, libc::F_GETFD) } & libc::FD_CLOEXEC != 0;
+    check(l, "lock fd has FD_CLOEXEC", cloexec, "");
+    check(l, "flock(LOCK_EX|LOCK_NB) acquires", flock_nb(fd).is_ok(), "");
+    let fd2 = open_lock(&inst.lock).unwrap();
+    let second = flock_nb(fd2);
+    check(l, "a second open description in the same process gets EWOULDBLOCK (probe while held = Held)", second == Err(libc::EWOULDBLOCK), format!("{:?}", second.map_err(errstr)));
+    unsafe { libc::close(fd2) };
+    let link = inst.dir.join("lock-link");
+    symlink(&inst.lock, &link).unwrap();
+    let e = open_lock(&link);
+    check(l, "O_NOFOLLOW refuses a symlinked lock path with ELOOP", e == Err(libc::ELOOP), format!("{:?}", e.map_err(errstr)));
+
+    let devnull = unsafe { libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY | libc::O_CLOEXEC) };
+    let env = plan_env();
+    let sh = |script: &str, lock: RawFd| spawn(&Req { program: Path::new("/bin/sh"), args: &["-c".to_string(), script.to_string()], env: &env, cwd: &inst.dir, stdin: Stdin::Null, stdout: devnull, stderr: devnull, lock: Some(lock), suspended: false, naive_fds: false }).unwrap();
+
+    // LOCK_UN in the daemon would release the child's lock too
+    let pid = sh("exec /bin/sleep 30", fd);
+    std::thread::sleep(Duration::from_millis(100));
+    let before = probe_lock(&inst.lock);
+    unsafe { libc::flock(fd, libc::LOCK_UN) };
+    let after = probe_lock(&inst.lock);
+    check(l, "LOCK_UN on the daemon's copy releases the lock the child inherited (why spec forbids LOCK_UN)", before == "Held" && after == "Free", format!("before {before}, after LOCK_UN {after}, child alive {}", kill(pid, 0).is_ok()));
+    kill(pid, libc::SIGKILL).ok();
+    waitpid_timeout(pid, Duration::from_secs(2));
+    unsafe { libc::close(fd) };
+
+    // descendant keeps the lock after the main process exits
+    let fd = open_lock(&inst.lock).unwrap();
+    flock_nb(fd).unwrap();
+    let st = fstat(fd);
+    let pid = sh("/bin/sleep 30 & exit 0", fd);
+    unsafe { libc::close(fd) };
+    waitpid_timeout(pid, Duration::from_secs(2));
+    std::thread::sleep(Duration::from_millis(100));
+    let members = pgrp_members(pid).unwrap_or_default();
+    for p in &members {
+        register_cleanup(*p);
+    }
+    let holder = members.first().copied().unwrap_or(-1);
+    check(l, "descendant that inherited fd 3 keeps the lock after the main process exits", probe_lock(&inst.lock) == "Held" && holds_file(holder, st.st_dev as u32, st.st_ino) == Holds::Yes, format!("descendant {holder}, probe {}", probe_lock(&inst.lock)));
+    // lock file removed while held: a new file is a new inode, flock succeeds
+    fs::remove_file(&inst.lock).unwrap();
+    let fd3 = open_lock(&inst.lock).unwrap();
+    let r = flock_nb(fd3);
+    check(l, "after instance.lock is deleted, a new lock file is lockable although the old holder lives (why the observation guard exists)", r.is_ok() && kill(holder, 0).is_ok(), format!("{r:?}"));
+    unsafe { libc::close(fd3) };
+    kill(-pid, libc::SIGKILL).ok();
+    wait_until(Duration::from_secs(2), || pgrp_members(pid).map(|v| v.is_empty()).unwrap_or(false));
+    let _ = canonical;
+    unsafe { libc::close(devnull) };
+}
+
+fn row_spool(root: &Path, rt: &Path, canonical: &Path, tmp: &Path, secs: u64, align: Align) {
+    let s = "spool";
+    // basic file rules in the darwin user temp folder
+    let dir = rt.join("spool-basics");
+    mkdir_private(&dir);
+    note(s, format!("runtime root is under the darwin user temp folder: {}", rt.starts_with(tmp)));
+    let p = dir.join("a.spool");
+    let w = create_spool(&p).unwrap();
+    let (bsize, iosize, fstype) = statfs_of(w);
+    note(s, format!("fstatfs: f_bsize {bsize} f_iosize {iosize} fstype {fstype}"));
+    let again = create_spool(&p);
+    check(s, "create_spool again fails with EEXIST (O_EXCL)", again == Err(libc::EEXIST), format!("{:?}", again.map_err(errstr)));
+    let link = dir.join("link.spool");
+    symlink(&p, &link).unwrap();
+    check(s, "reader open O_NOFOLLOW refuses a symlink (ELOOP)", open_flags(&link, libc::O_RDONLY | libc::O_NOFOLLOW) == Err(libc::ELOOP), "");
+    let st = fstat(w);
+    check(s, "spool is 0600", st.st_mode & 0o777 == 0o600, format!("{:o}", st.st_mode & 0o777));
+    let empty_seek = seek_data(w, 0);
+    check(s, "SEEK_DATA on an empty file -> ENXIO", empty_seek == Err(libc::ENXIO), format!("{empty_seek:?}"));
+    let block = bsize as usize;
+    let chunk = vec![b'x'; block * 8];
+    unsafe { libc::write(w, chunk.as_ptr() as *const c_void, chunk.len()) };
+    let ro = open_flags(&p, libc::O_RDONLY | libc::O_NOFOLLOW).unwrap();
+    let rw = open_flags(&p, libc::O_RDWR | libc::O_NOFOLLOW).unwrap();
+    check(s, "SEEK_DATA on a file with data at 0 -> 0", seek_data(ro, 0) == Ok(0), "");
+    let ro_punch = punch(ro, 0, (block * 2) as i64);
+    check(s, "F_PUNCHHOLE on an O_RDONLY descriptor", ro_punch.is_ok(), format!("{:?}", ro_punch.map_err(errstr)));
+    let unaligned = punch(rw, 100, block as i64);
+    note(s, format!("F_PUNCHHOLE unaligned (offset 100, len {block}) on O_RDWR: {:?}", unaligned.map_err(errstr)));
+    let blocks_before = fstat(rw).st_blocks;
+    let aligned = punch(rw, 0, (block * 3) as i64);
+    let after = fstat(rw);
+    check(s, "F_PUNCHHOLE aligned to f_bsize on O_RDWR frees blocks, keeps st_size", aligned.is_ok() && after.st_blocks < blocks_before && after.st_size == (block * 8) as i64,
+        format!("{:?}; st_blocks {} -> {}, st_size {}", aligned.map_err(errstr), blocks_before, after.st_blocks, after.st_size));
+    let sd = seek_data(rw, 0);
+    check(s, "SEEK_DATA after punching 3 blocks -> 3 * f_bsize", sd == Ok((block * 3) as i64), format!("{sd:?}"));
+    let mut buf = vec![1u8; 16];
+    pread(rw, &mut buf, 10);
+    check(s, "a punched range reads back as zeros", buf.iter().all(|b| *b == 0), "");
+    let all = punch(rw, 0, (block * 8) as i64);
+    let sd = seek_data(rw, 0);
+    check(s, "SEEK_DATA on a fully punched file -> ENXIO", all.is_ok() && sd == Err(libc::ENXIO), format!("{sd:?}"));
+    unsafe {
+        libc::close(w);
+        libc::close(ro);
+        libc::close(rw);
+    }
+
+    let _ = ro_punch;
+    row_spool_load(root, rt, canonical, secs, align);
+}
+
+/// The AC-12 load: fake at 2000 lines/s for `secs`, drained every 500 ms,
+/// reader on O_RDWR (O_RDONLY cannot punch), punch aligned as `align` says.
+fn row_spool_load(root: &Path, rt: &Path, canonical: &Path, secs: u64, align: Align) {
+    let s = "spool";
+    let bsize = match align {
+        Align::Bsize => 4096u32,
+        Align::Page | Align::PageFsync => page_size() as u32,
+    };
+    let tag = format!("[{align:?} alignment {bsize}]");
+    let inst = Inst::new(root, rt, &format!("spool-load-{align:?}"));
+    let outp = inst.run.join("stdout.spool");
+    let errp = inst.run.join("stderr.spool");
+    let out = create_spool(&outp).unwrap();
+    let err = create_spool(&errp).unwrap();
+    let port = free_port();
+    let args = inst.serve_args(port, &["--log-lines-per-second=2000"]);
+    let env = plan_env();
+    let pid = spawn(&Req { program: canonical, args: &args, env: &env, cwd: &inst.dir, stdin: Stdin::Null, stdout: out, stderr: err, lock: None, suspended: false, naive_fds: false }).unwrap();
+    unsafe {
+        libc::close(out);
+        libc::close(err);
+    }
+    let reader_flags = libc::O_RDWR | libc::O_NOFOLLOW;
+    struct Stream {
+        fd: RawFd,
+        offset: i64,
+        pending: Vec<u8>,
+        next_seq: Option<u64>,
+        lines: u64,
+        other: u64,
+        bad: u64,
+        max_alloc: i64,
+        max_excess: i64,
+        released: i64,
+    }
+    let mut streams: Vec<Stream> = [&outp, &errp]
+        .iter()
+        .map(|p| Stream { fd: open_flags(p, reader_flags).unwrap(), offset: 0, pending: Vec::new(), next_seq: None, lines: 0, other: 0, bad: 0, max_alloc: 0, max_excess: 0, released: 0 })
+        .collect();
+    let mut max_total = 0i64;
+    let t0 = Instant::now();
+    let mut buf = vec![0u8; 1 << 20];
+    let mut punch_err = None;
+    while t0.elapsed() < Duration::from_secs(secs) {
+        std::thread::sleep(Duration::from_millis(500));
+        let mut total = 0;
+        for st in streams.iter_mut() {
+            loop {
+                let n = pread(st.fd, &mut buf, st.offset);
+                if n <= 0 {
+                    break;
+                }
+                st.offset += n as i64;
+                st.pending.extend_from_slice(&buf[..n as usize]);
+                while let Some(nl) = st.pending.iter().position(|b| *b == b'\n') {
+                    let line: Vec<u8> = st.pending.drain(..=nl).collect();
+                    st.lines += 1;
+                    let text = String::from_utf8_lossy(&line);
+                    if !text.starts_with("log line ") {
+                        st.other += 1;
+                        continue;
+                    }
+                    let seq = text.strip_prefix("log line ").and_then(|t| t.get(..10)).and_then(|d| d.parse::<u64>().ok());
+                    match (seq, st.next_seq) {
+                        (Some(q), Some(want)) if q == want && line.len() == 100 => st.next_seq = Some(q + 2),
+                        (Some(q), None) if line.len() == 100 => st.next_seq = Some(q + 2),
+                        _ => st.bad += 1,
+                    }
+                }
+            }
+            let boundary = (st.offset / bsize as i64) * bsize as i64;
+            if boundary > st.released {
+                if let Err(e) = punch(st.fd, st.released, boundary - st.released) {
+                    punch_err = Some(e);
+                } else {
+                    st.released = boundary;
+                    if matches!(align, Align::PageFsync) {
+                        unsafe { libc::fsync(st.fd) };
+                    }
+                }
+            }
+            let fs_now = fstat(st.fd);
+            let alloc = fs_now.st_blocks * 512;
+            st.max_alloc = st.max_alloc.max(alloc);
+            let live = ((fs_now.st_size + 4095) / 4096 * 4096) - st.released;
+            st.max_excess = st.max_excess.max(alloc - live);
+            total += alloc;
+        }
+        max_total = max_total.max(total);
+        let el = t0.elapsed().as_secs();
+        if el > 0 && el % 15 == 0 && (t0.elapsed().as_millis() % 15000) < 500 {
+            println!("[spool] NOTE {tag} t={el}s allocated now {total} B (max {max_total} B)");
+        }
+    }
+    kill(pid, libc::SIGTERM).unwrap();
+    let ex = waitpid_timeout(pid, Duration::from_secs(5));
+    let written: Vec<i64> = streams.iter().map(|st| fstat(st.fd).st_size).collect();
+    let summary: Vec<String> = streams
+        .iter()
+        .zip(["stdout", "stderr"])
+        .map(|(st, name)| format!("{name}: {} log lines, {} other lines, {} bad, read {} B, released {} B, max allocated {} B, max allocated beyond unreleased data {} B", st.lines - st.other, st.other, st.bad, st.offset, st.released, st.max_alloc, st.max_excess))
+        .collect();
+    note(s, format!("{tag} load {secs} s at 2000 lines/s: written {written:?} B; {}; fake exit {:?}", summary.join("; "), ex.map(status_text)));
+    check(s, &format!("{tag} punching while the child appends never failed"), punch_err.is_none(), format!("{:?}", punch_err.map(errstr)));
+    check(s, &format!("{tag} every log line intact and in sequence (100 bytes, seq +2 per stream)"), streams.iter().all(|st| st.bad == 0 && st.lines > 0), "");
+    let expected_lines = 2000 * secs;
+    let got: u64 = streams.iter().map(|st| st.lines).sum();
+    check(s, &format!("{tag} the fake really produced the load"), got as f64 >= expected_lines as f64 * 0.9, format!("{got} lines vs {expected_lines} expected"));
+    check(s, &format!("{tag} allocated spool blocks stay under 2 MiB (both streams together)"), max_total < 2 * 1024 * 1024, format!("max allocated {max_total} B over {secs} s"));
+    for st in &streams {
+        let sd = seek_data(st.fd, 0);
+        let tail = st.offset - st.released;
+        let ok = if tail > 0 { sd == Ok(st.released) } else { sd == Err(libc::ENXIO) };
+        check(s, &format!("{tag} SEEK_DATA after the run == first unreleased block (first_data_offset)"), ok, format!("{sd:?} vs released {}", st.released));
+        unsafe { libc::close(st.fd) };
+    }
+    // resume as a restarted daemon: SEEK_DATA then drop bytes up to the first newline
+    let fd = open_flags(&outp, libc::O_RDONLY | libc::O_NOFOLLOW).unwrap();
+    let first = seek_data(fd, 0).unwrap_or(0);
+    let mut b = vec![0u8; 400];
+    let n = pread(fd, &mut b, first) as usize;
+    let cut = b[..n].iter().position(|c| *c == b'\n').map(|i| i + 1).unwrap_or(n);
+    let line = String::from_utf8_lossy(&b[cut..(cut + 100).min(n)]).into_owned();
+    check(s, &format!("{tag} resume from first data, drop to first newline, next line is whole"), line.starts_with("log line ") && line.len() == 100, format!("first data {first}, dropped {cut} B, line {:?}", &line[..line.len().min(40)]));
+    unsafe { libc::close(fd) };
+}
+
+/// Subcommand: how SEEK_DATA behaves on APFS while a file is appended and
+/// punched from the front. `mode`: `plain`, `fsync` (fsync the writer before
+/// each punch), or `sync-reader` (fsync the reader fd after each punch).
+fn seek_exp(dir: &Path, mode: &str) {
+    mkdir_private(dir);
+    let p = dir.join(format!("seek-{mode}.spool"));
+    let _ = fs::remove_file(&p);
+    let w = create_spool(&p).unwrap();
+    let r = open_flags(&p, libc::O_RDWR | libc::O_NOFOLLOW).unwrap();
+    let mut line = vec![b'a'; 99];
+    line.push(b'\n');
+    let chunk: Vec<u8> = line.iter().cycle().take(100 * 1000).cloned().collect();
+    let mut released = 0i64;
+    for i in 0..40 {
+        unsafe { libc::write(w, chunk.as_ptr() as *const c_void, chunk.len()) };
+        if mode == "fsync" {
+            unsafe { libc::fsync(w) };
+        }
+        let size = fstat(r).st_size;
+        let align: i64 = mode.strip_prefix("align").and_then(|n| n.parse().ok()).unwrap_or(4096);
+        let boundary = size / align * align;
+        let pr = punch(r, released, boundary - released);
+        if pr.is_ok() {
+            released = boundary;
+        }
+        if mode == "sync-reader" {
+            unsafe { libc::fsync(r) };
+        }
+        let sd = seek_data(r, 0);
+        let mut b = [0u8; 8];
+        let nonzero = sd.map(|o| { pread(r, &mut b, o); b.iter().any(|c| *c != 0) }).unwrap_or(false);
+        if i < 3 || i % 8 == 7 || i == 39 {
+            println!("{mode} iter {i}: size {size} released {released} punch {pr:?} alloc {} SEEK_DATA {sd:?} nonzero_at_seek {nonzero}", fstat(r).st_blocks * 512);
+        }
+    }
+    // reopen, as a restarted daemon would
+    let r2 = open_flags(&p, libc::O_RDWR | libc::O_NOFOLLOW).unwrap();
+    println!("{mode} reopen: SEEK_DATA {:?}; SEEK_HOLE from it {:?}", seek_data(r2, 0), seek_data(r2, 0).map(|o| unsafe { libc::lseek(r2, o, libc::SEEK_HOLE) }));
+    unsafe { libc::fsync(r2) };
+    println!("{mode} after fsync: SEEK_DATA {:?}", seek_data(r2, 0));
+    std::thread::sleep(Duration::from_secs(2));
+    println!("{mode} after 2 s: SEEK_DATA {:?}", seek_data(r2, 0));
+    unsafe { libc::close(w); libc::close(r); libc::close(r2) };
+    let _ = fs::remove_file(&p);
+}
+
+fn row_other_users_sample() {
+    let r = "pidinfo";
+    let out = std::process::Command::new("/bin/ps").args(["-axo", "pid=,uid="]).output().unwrap();
+    let me = unsafe { libc::getuid() };
+    let mut seen = 0;
+    let mut bsd_denied = 0;
+    let mut kinfo_ok = 0;
+    let mut samples = Vec::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let mut it = line.split_whitespace();
+        let (Some(pid), Some(uid)) = (it.next(), it.next()) else { continue };
+        let (pid, uid): (pid_t, u32) = (pid.parse().unwrap(), uid.parse::<i64>().unwrap() as u32);
+        if uid == me || pid == 0 {
+            continue;
+        }
+        let b = bsdinfo(pid);
+        if b.err() == Some(libc::ESRCH) {
+            continue; // exited since ps listed it
+        }
+        seen += 1;
+        if b.err() == Some(libc::EPERM) {
+            bsd_denied += 1;
+        }
+        let k = kinfo(pid);
+        let kfacts = k.as_ref().map(|k| (u32_at(k, sys::OFF_CR_UID), i64::from_ne_bytes(k[0..8].try_into().unwrap()), u32_at(k, sys::OFF_P_STARTTIME_USEC)));
+        if kfacts.as_ref().map(|f| f.0 == uid && f.1 > 0).unwrap_or(false) {
+            kinfo_ok += 1;
+        } else {
+            note(r, format!("kinfo exception: pid {pid} uid {uid}: {kfacts:?}"));
+        }
+        if b.err() != Some(libc::EPERM) {
+            note(r, format!("bsdinfo exception: pid {pid} uid {uid} comm {:?}: {:?}", pidpath(pid).ok(), b.map(|b| b.pbi_uid).map_err(errstr)));
+        }
+        if samples.len() < 6 {
+            samples.push(format!("pid {pid} uid {uid}: bsdinfo {:?}, kinfo (uid, start s, us) {:?}, pidpath {}, getsid {:?}, fds {:?}",
+                b.map(|b| b.pbi_uid).map_err(errstr), kfacts.map_err(|e| errstr(*e)), pidpath(pid).map(|_| "ok".to_string()).unwrap_or_else(errstr), getsid(pid).map_err(errstr), list_fds(pid).map(|v| v.len()).map_err(errstr)));
+        }
+    }
+    for s in &samples {
+        note(r, s);
+    }
+    check(r, "other users' processes: PROC_PIDTBSDINFO refused with EPERM for all of them", seen > 0 && bsd_denied == seen, format!("{bsd_denied} of {seen} refused"));
+    check(r, "other users' processes: sysctl KERN_PROC_PID still gives uid and start time", seen > 0 && kinfo_ok == seen, format!("{kinfo_ok} of {seen} readable"));
+    // kinfo agrees with bsdinfo for our own process
+    let pid = unsafe { libc::getpid() };
+    let b = bsdinfo(pid).unwrap();
+    let k = kinfo(pid).unwrap();
+    let ks = (i64::from_ne_bytes(k[0..8].try_into().unwrap()) as u64, u32_at(&k, sys::OFF_P_STARTTIME_USEC) as u64);
+    check(r, "kinfo_proc start time and uid equal PROC_PIDTBSDINFO for our own process", ks == (b.pbi_start_tvsec, b.pbi_start_tvusec) && u32_at(&k, sys::OFF_CR_UID) == b.pbi_uid,
+        format!("kinfo {}.{:06} uid {}, bsdinfo {}.{:06} uid {}", ks.0, ks.1, u32_at(&k, sys::OFF_CR_UID), b.pbi_start_tvsec, b.pbi_start_tvusec, b.pbi_uid));
+}
+
+/// Punch alignment for the spool load.
+#[derive(Clone, Copy, Debug)]
+enum Align {
+    /// `f_bsize` from fstatfs, as spec 0010 says.
+    Bsize,
+    /// The VM page size (`sysconf(_SC_PAGESIZE)`).
+    Page,
+    /// Page alignment plus `fsync` on the reader after each punch.
+    PageFsync,
+}
+
+fn page_size() -> i64 {
+    unsafe { libc::sysconf(libc::_SC_PAGESIZE) as i64 }
+}
+
+/// Append 100 kB, punch everything below the aligned size, 40 times, then
+/// look at allocation and SEEK_DATA. Compares f_bsize and page alignment.
+fn row_seek_align(rt: &Path) {
+    let s = "spool";
+    let dir = rt.join("seek-align");
+    mkdir_private(&dir);
+    note(s, format!("page size (sysconf _SC_PAGESIZE) {}", page_size()));
+    for align in [4096i64, page_size()] {
+        let p = dir.join(format!("a{align}.spool"));
+        let w = create_spool(&p).unwrap();
+        let r = open_flags(&p, libc::O_RDWR | libc::O_NOFOLLOW).unwrap();
+        let mut line = vec![b'a'; 99];
+        line.push(b'\n');
+        let chunk: Vec<u8> = line.iter().cycle().take(100_000).cloned().collect();
+        let mut released = 0i64;
+        let mut stale = 0;
+        for _ in 0..40 {
+            unsafe { libc::write(w, chunk.as_ptr() as *const c_void, chunk.len()) };
+            let boundary = fstat(r).st_size / align * align;
+            punch(r, released, boundary - released).unwrap();
+            released = boundary;
+            if seek_data(r, 0) != Ok(released) {
+                stale += 1;
+            }
+        }
+        let alloc = fstat(r).st_blocks * 512;
+        let sd = seek_data(r, 0);
+        let mut b = [0u8; 8];
+        pread(r, &mut b, sd.unwrap_or(0));
+        let hole_end = sd.map(|o| unsafe { libc::lseek(r, o, libc::SEEK_HOLE) });
+        let detail = format!("align {align}: 4 MB appended, 40 punches; allocated {alloc} B; SEEK_DATA {sd:?} (released {released}), SEEK_HOLE from it {hole_end:?}, bytes there {:?}; {stale} of 40 SEEK_DATA answers were stale", b);
+        if align == 4096 {
+            note(s, format!("f_bsize alignment (as spec 0010 says): {detail}"));
+            check(s, "f_bsize (4 KiB) alignment: punched blocks inside a 16 KiB page that is still written come back as zero-filled data", sd != Ok(released) && b == [0u8; 8], detail);
+        } else {
+            check(s, "page (16 KiB) alignment: allocation stays small and SEEK_DATA == first unreleased byte after every punch", sd == Ok(released) && stale == 0 && alloc <= 2 * page_size(), detail);
+        }
+        unsafe {
+            libc::close(w);
+            libc::close(r);
+        }
+    }
+}
+
+/// Control: the same 2000 lines/s writer for 10 s with no punching at all.
+/// Shows how far APFS allocation runs ahead of the file size.
+fn row_prealloc(root: &Path, rt: &Path, canonical: &Path) {
+    let s = "spool";
+    let inst = Inst::new(root, rt, "prealloc");
+    let outp = inst.run.join("stdout.spool");
+    let out = create_spool(&outp).unwrap();
+    let err = create_spool(&inst.run.join("stderr.spool")).unwrap();
+    let port = free_port();
+    let args = inst.serve_args(port, &["--log-lines-per-second=2000"]);
+    let env = plan_env();
+    let pid = spawn(&Req { program: canonical, args: &args, env: &env, cwd: &inst.dir, stdin: Stdin::Null, stdout: out, stderr: err, lock: None, suspended: false, naive_fds: false }).unwrap();
+    unsafe {
+        libc::close(out);
+        libc::close(err);
+    }
+    let r = open_flags(&outp, libc::O_RDONLY | libc::O_NOFOLLOW).unwrap();
+    let t0 = Instant::now();
+    let mut max_ahead = 0i64;
+    let mut samples = Vec::new();
+    while t0.elapsed() < Duration::from_secs(10) {
+        std::thread::sleep(Duration::from_millis(250));
+        let st = fstat(r);
+        let ahead = st.st_blocks * 512 - (st.st_size + 4095) / 4096 * 4096;
+        max_ahead = max_ahead.max(ahead);
+        if samples.len() < 40 {
+            samples.push(format!("{}:{}", st.st_size, st.st_blocks * 512));
+        }
+    }
+    kill(pid, libc::SIGTERM).unwrap();
+    waitpid_timeout(pid, Duration::from_secs(5));
+    note(s, format!("no-punch control, stdout spool, 10 s at 2000 lines/s: max allocation beyond EOF {max_ahead} B; samples size:allocated {}", samples.join(" ")));
+    unsafe { libc::close(r) };
+}

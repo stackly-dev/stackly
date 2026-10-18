@@ -1,0 +1,18 @@
+# Spec 0010 spike: inherited instance.lock flock survives the parent
+# Lines of the spike run that belong to this row (tags lock).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[lock] PASS after daemon closes its fd, lock still Held by child: Held
+[lock] PASS lock Free after child exit: Free
+[lock] PASS lock Free after discard: Free
+[lock] PASS flock inherited at fd 3 survives the parent's exit: probe_lock == Held: Held
+[lock] PASS lock Free once the orphan exits: Free
+[lock] PASS suspended orphan holds lock (Held): Held
+[lock] PASS open(O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC, 0600) makes a regular 0600 file owned by us: mode 100600 uid 502
+[lock] PASS lock fd has FD_CLOEXEC: 
+[lock] PASS flock(LOCK_EX|LOCK_NB) acquires: 
+[lock] PASS a second open description in the same process gets EWOULDBLOCK (probe while held = Held): Err("errno 35 (Resource temporarily unavailable (os error 35))")
+[lock] PASS O_NOFOLLOW refuses a symlinked lock path with ELOOP: Err("errno 62 (Too many levels of symbolic links (os error 62))")
+[lock] PASS LOCK_UN on the daemon's copy releases the lock the child inherited (why spec forbids LOCK_UN): before Held, after LOCK_UN Free, child alive true
+[lock] PASS descendant that inherited fd 3 keeps the lock after the main process exits: descendant 17653, probe Held
+[lock] PASS after instance.lock is deleted, a new lock file is lockable although the old holder lives (why the observation guard exists): Ok(())

@@ -1,0 +1,27 @@
+{
+  "schema": "stackly.provider-versions/v1",
+  "software": "traefik",
+  "artifacts": [
+    {
+      "id": "traefik-3.7.15-macos-aarch64",
+      "line": "3.7",
+      "version": "3.7.15",
+      "os": "macos",
+      "arch": "aarch64",
+      "status": "available",
+      "minOs": "12.0",
+      "format": "tar_gz",
+      "urls": [
+        "https://github.com/traefik/traefik/releases/download/v3.7.15/traefik_v3.7.15_darwin_arm64.tar.gz"
+      ],
+      "sha256": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+      "size": 48112917,
+      "signingPolicy": "keep_or_adhoc",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/traefik/traefik/blob/v3.7.15/LICENSE.md",
+      "executables": [
+        "traefik"
+      ]
+    }
+  ]
+}

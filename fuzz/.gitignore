@@ -1,0 +1,6 @@
+# Build output, the corpus libFuzzer grows, crash inputs, and coverage data.
+# Seeds in `seeds/` are committed; `cargo xtask fuzz seed` rebuilds them.
+/target/
+/corpus/
+/artifacts/
+/coverage/

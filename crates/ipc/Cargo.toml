@@ -1,0 +1,25 @@
+[package]
+name = "stackly-ipc"
+description = "Stackly IPC transport: the private Unix socket listener, framed connections, and the verified client."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+stackly-protocol.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "io-util", "time", "sync", "rt", "macros"] }
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+stackly-evidence.workspace = true
+stackly-testkit.workspace = true
+tokio = { workspace = true, features = ["net", "io-util", "time", "sync", "rt", "macros", "test-util"] }
+
+[lints]
+workspace = true

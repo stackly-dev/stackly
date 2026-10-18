@@ -1,0 +1,7 @@
+{
+  "requestId": "has space",
+  "idempotencyKey": null,
+  "call": {
+    "type": "daemon.get_info"
+  }
+}

@@ -36,6 +36,35 @@ _Langkah diturunkan dari acceptance criteria spec 0006. `/check verify` menjalan
 - AC-16 · bagian `stackly-protocol`; `stackly-ipc` dan capability `ipc_endpoint` menunggu Milestone 2 dan 4
 - AC-2 sampai AC-5, AC-9, AC-11 sampai AC-15, AC-17 · belum, milik Milestone 2 sampai 5
 
+## Milestone 2: Transport `stackly-ipc`
+
+### UI / manual
+
+- [ ] Buka `crates/ipc/Cargo.toml` → dependency normal Stackly hanya `stackly-protocol`, dev hanya `stackly-testkit` dan `stackly-evidence`, ada `[lints] workspace = true`; `grep -rn unsafe crates/ipc/src` kosong → AC-16
+- [ ] Buka `crates/ipc/src/unix/listener.rs` → `Listener::bind` mem-bind di `<path>.tmp`, `chmod` 0600, lalu `rename`; doc comment menyebut pemanggil wajib memegang lock daemon; `accept` membaca kredensial lewat `PeerCredSource` sebelum `FramedConnection` dibuat → AC-2, AC-11
+
+### Commands
+
+- [ ] `cargo test -p stackly-ipc --lib` → 7 unit test lulus, termasuk setiap varian `IpcError` lewat `to_error_body` menjadi kode katalog dengan `category`, `retryable`, dan kunci `details` dari katalog, pesan huruf kecil tanpa titik dan tanpa path → AC-8
+- [ ] `cargo test -p stackly-ipc --test transport` → 36 integration test lulus, semua socket di folder run `TestRoot` → AC-2, AC-3, AC-6, AC-11
+- [ ] `cargo test -p stackly-ipc --test transport listener::` → path akhir tidak pernah terlihat dengan mode selain 0600 selama 200 kali rebind; file, folder, dan symlink di path socket atau `.tmp` menghasilkan `ipc.endpoint_occupied` dengan `kind` yang benar tanpa dihapus; socket basi diganti; `check_bound` melaporkan `Missing` dan `Replaced`, `unlink_if_own` tidak pernah menghapus socket lain; listener dengan uid harapan `uid + 1` menolak client sungguhan dengan `ipc.peer_rejected` (tanpa `requestId`, handshake tidak dibaca) beserta uid dan pid peer; `PeerCredSource` yang gagal menolak dengan uid dan pid kosong; 32 peer ditolak yang tidak membaca tidak menahan accept → AC-2, AC-11
+- [ ] `cargo test -p stackly-ipc --test transport framing::` → panjang 0 menjadi `ipc.frame_empty` lalu frame error terkirim sebelum koneksi ditutup; header 1 MiB plus 1 menjadi `ipc.frame_too_large` dengan kapasitas buffer di bawah 1 KiB; frame 1 MiB persis terbaca dengan buffer paling besar `max + 4 + READ_CHUNK`; frame yang ditulis byte per byte terbaca sama; header terpotong atau payload terpotong lalu diam menjadi `ipc.frame_stalled` tepat setelah 30 detik pada jam yang dijeda; koneksi diam di antara frame tidak pernah terhenti; deadline handshake memberi `ipc.handshake_timeout` tepat 5 detik → AC-6
+- [ ] `cargo test -p stackly-ipc --test transport endpoint::` → socket 0666, folder 0755, symlink ke socket asli, folder yang berupa symlink, file biasa, dan pemilik lain ditolak `ipc.endpoint_untrusted` dengan `reason` yang benar; `ConnectPolicy` dengan `peer_uid` lain ditolak `peer_uid_mismatch` dan listener menerima nol byte; path kosong `ipc.endpoint_missing`; socket basi `ipc.connection_refused`; folder 0000 `ipc.io_error` dengan `op` `stat` dan `kind` `permission_denied` → AC-3
+- [ ] `cargo test -p stackly-ipc --test transport client::` → handshake mengirim `ProtocolVersion::CURRENT`, `CONTRACT_DIGEST`, dan `requestId` UUID v7 huruf kecil; `protocol.major_mismatch` kembali sebagai error daemon; client yang ditolak uid nya melaporkan `ipc.peer_rejected`, bukan `ipc.connection_closed` (20 kali); balasan dicocokkan lewat `requestId` walau tidak berurutan; tag balasan yang salah dan frame yang tidak terbaca menjadi `ipc.protocol_violation`; event jenis asing menjadi `SkippedEvent` dan event subscription lain tidak pernah keluar; daemon yang menutup sebelum membalas memberi `ipc.connection_closed` (tidak retryable); error tingkat koneksi menggagalkan setiap call yang menunggu; request di atas 1 MiB ditolak `ipc.frame_too_large` sebelum terkirim → AC-3, AC-8
+- [ ] `cargo test -p xtask check_deps` → 33 test lulus, termasuk workspace fixture yang melanggar: `UdpSocket` di `crates/ipc` dan `TcpListener` di `apps/daemon/src/main.rs` gagal dengan file dan baris (`no tcp or udp sockets (spec 0006)`), sedangkan `tests/` boleh; `stackly-ipc` yang bergantung pada `stackly-core`, membuka lagi `unsafe_code`, atau tanpa `[lints] workspace = true` ditolak; `stackly-cli` yang bergantung pada `stacklyd` ditolak → AC-5, AC-16
+- [ ] `cargo xtask check-deps` → "13 crates follow the dependency, unsafe, and source rules" → AC-5, AC-16
+- [ ] Tambah sementara `pub fn x() { let _ = std::net::TcpListener::bind("127.0.0.1:0"); }` di `crates/ipc/src/lib.rs`, jalankan `cargo xtask check-deps` → gagal dengan `stackly-ipc crates/ipc/src/lib.rs:<baris>: no tcp or udp sockets (spec 0006)`; kembalikan → AC-5
+
+### Acceptance-criteria coverage
+
+- AC-2 · bagian listener: uid harapan yang disuntikkan, `PeerCredSource` yang gagal, penolakan di task terpisah; log uid dan pid peer di daemon dan pemeriksaan dua akun nyata menunggu Milestone 4
+- AC-3 · lengkap di `stackly-ipc`: `verify_path`, `verify_peer`, `connect_verified`, pemetaan error OS, dan tanpa byte tertulis
+- AC-5 · bagian `check-deps`; uji `lsof` terhadap daemon sungguhan menunggu Milestone 4
+- AC-6 · bagian transport: stall 30 detik, deadline handshake, frame error sebelum menutup, batas buffer di socket sungguhan
+- AC-8 · error sisi client di `stackly-ipc`; error daemon saat berjalan menunggu Milestone 4
+- AC-11 · bagian listener: bind lewat nama sementara, mode 0600, `check_bound`, `rebind`, `unlink_if_own`; urutan start, rebind otomatis, dan berhenti menunggu Milestone 4
+- AC-16 · bagian `stackly-ipc` dan larangan bergantung pada `stacklyd`; capability `ipc_endpoint` menunggu Milestone 4
+
 ## Milestone 3: Library daemon, lock, dan log
 
 Test yang menjalankan `stacklyd` memakai `SpawnedDaemon` dengan `STACKLY_ROOT` di `TestRoot`; runtime root nya ada di folder temp user asli dan dihapus sesudahnya hanya kalau kosong atau hanya berisi `i/` yang kosong.
@@ -71,3 +100,28 @@ Test yang menjalankan `stacklyd` memakai `SpawnedDaemon` dengan `STACKLY_ROOT` d
 - AC-12 · penulis log tunggal, rotasi 20 MiB kali 5, antrian 8192 dengan penghitung drop, kebijakan tulis gagal, filter `STACKLY_LOG`; field log per koneksi dan request menunggu Milestone 4
 - AC-17 · `--print-roots` lengkap
 - AC-18 · sementara (keputusan engineer 2026-10-18): registry dalam recovery membuat daemon tetap hidup sampai sinyal dan exit 3 hanya untuk lock; balasan recovery mode menunggu langkah 18a
+
+## Milestone 5: Fuzzing
+
+Butuh nightly dan cargo-fuzz yang dipin: `rustup toolchain install nightly-2026-10-17 --profile minimal` dan `cargo install --locked cargo-fuzz --version 0.13.2`.
+
+### UI / manual
+
+- [ ] Buka `evidence/manual/2026-10-18-fuzz-ipc-frame-decode-and-ipc-request-decode-for.json` → status `PASS`, `covers` NFR-009 dan VAL-017, `context.sourceCommit` `5fb8abe` dengan `sourceDirty` false, `actual` mencatat kedua target 300 detik tanpa crash, dan `evidencePath` menunjuk folder file berisi log kedua run → AC-14
+
+### Commands
+
+- [ ] `cargo xtask fuzz list` → mencetak `ipc_frame_decode` dan `ipc_request_decode` → AC-14
+- [ ] Ubah sementara `FUZZ_TOOLCHAIN` di `xtask/src/fuzz.rs` ke nightly yang tidak terpasang, jalankan `cargo xtask fuzz list` → gagal dengan petunjuk `rustup toolchain install <nightly> --profile minimal`; lakukan hal yang sama untuk `CARGO_FUZZ_VERSION` → gagal dengan petunjuk `cargo install --locked cargo-fuzz --version <versi>`; kembalikan keduanya → AC-14
+- [ ] `cargo xtask fuzz seed` lalu `git status` → menulis 11 seed `ipc_frame_decode` (byte 0 lalu byte vektor framing) dan 20 seed `ipc_request_decode` (setiap fixture `Request`, termasuk yang ditolak), dan tree tetap bersih → AC-14
+- [ ] `cargo xtask fuzz build` → kedua target terbangun dengan nightly-2026-10-17 dan AddressSanitizer; tambah sementara satu dependency di `fuzz/Cargo.toml` → gagal dengan `fuzz/Cargo.lock does not match fuzz/Cargo.toml`; kembalikan → AC-14
+- [ ] `cargo xtask fuzz run ipc_frame_decode` dan `cargo xtask fuzz run ipc_request_decode` (default 300 detik, `-max_len=65536`) → exit 0 dengan `ran for 300 s without a crash`, dan `fuzz/artifacts/` kosong → AC-14
+- [ ] `cargo xtask fuzz run ipc_frame_decode --time 0` dan `cargo xtask fuzz run ipc_nothing` → keduanya ditolak; yang kedua menyebut daftar target → AC-14
+- [ ] `cargo test -p stackly-protocol --test fuzz_regressions` di stable 1.99.1 → 4 test lulus: setiap input di `crates/protocol/tests/fuzz_regressions/<target>/` (belum ada, karena belum pernah crash) dan setiap seed di `fuzz/seeds/<target>/` diputar ulang lewat harness yang sama; folder regresi dengan nama target yang salah membuat test gagal → AC-14
+- [ ] `cargo test -p xtask fuzz` → 10 test lulus: pin nightly sama dengan `fuzz/rust-toolchain.toml`, setiap `[[bin]]` punya baris `TARGETS` dan file di `fuzz/fuzz_targets/`, nama `<area>_<objek>`, dan seed dibangun dari fixture → AC-14
+- [ ] `cargo deny --manifest-path fuzz/Cargo.toml check` dan `cargo deny check` → keduanya lulus; tanpa `NCSA` di `deny.toml`, lisensi `libfuzzer-sys` (`(MIT OR Apache-2.0) AND NCSA`) ditolak → AC-14
+- [ ] `git check-ignore fuzz/corpus/x fuzz/artifacts/x fuzz/target/x` → ketiganya diabaikan; root `Cargo.toml` memuat `exclude = ["fuzz"]` dan `cargo metadata --no-deps` tidak memuat `stackly-fuzz` → AC-14
+
+### Acceptance-criteria coverage
+
+- AC-14 · dipenuhi penuh: dua target 5 menit tanpa crash dengan evidence manual, seed dari `cargo xtask fuzz seed`, dan test regresi di stable

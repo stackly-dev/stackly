@@ -11,7 +11,7 @@
 mod cache;
 mod check;
 mod checksum;
-mod inventory;
+pub(crate) mod inventory;
 mod macho;
 mod pin;
 mod ports;

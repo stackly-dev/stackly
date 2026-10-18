@@ -1,0 +1,24 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000001",
+  "idempotencyKey": null,
+  "call": {
+    "type": "daemon.handshake",
+    "content": {
+      "protocol": {
+        "major": 1,
+        "minor": 99
+      },
+      "client": {
+        "kind": "watch_app",
+        "version": "9.0.0",
+        "pid": null,
+        "locale": "id-ID"
+      },
+      "contractDigest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "features": [
+        "compression"
+      ]
+    }
+  },
+  "traceId": "abc"
+}
