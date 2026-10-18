@@ -160,7 +160,107 @@ Scaled sizes are named defaults for `@ScaledMetric`. Declare one in the view tha
 
 ## Status
 
-Filled by milestone 2.
+Status shows as text first and color second. Every status is a `StatusAppearance` (label, tone, symbol, and at most one detail), drawn by `StatusLabel` or `ToneBadge`. The code lives in `Packages/StacklyUI/Sources/StacklyUI/Status/`.
+
+### UI status enums
+
+The app shell (spec 0013) maps the daemon's DTOs to these enums with an exhaustive switch, so a new protocol state fails to compile until the tables below cover it. The daemon applies `effective(now, max_age)` (spec 0004) before it sends readiness and health, so the UI never computes freshness itself.
+
+| Swift | Cases |
+| --- | --- |
+| `LifecycleStatus` | `uninitialized`, `initializing`, `stopped`, `starting`, `running`, `recovering`, `stopping`, `failed`, `unknown`, `retained` (the ten states of spec 0004) |
+| `ReadinessStatus` | `ready`; `awaitingProbe` (`not_ready` with reason `awaiting_probe`); `notReady(detail: String?)` (`not_ready` with any other reason, with the daemon's detail); `unknown` (including a stale result) |
+| `HealthStatus` | `unknown`, `healthy`, `degraded`, `unhealthy` |
+| `OperationStatus` | `queued`, `running`, `cancelRequested`, `succeeded`, `failed`, `cancelled`, `needsRecovery` |
+
+All of them, `StatusDetail`, and `StatusAppearance` are `nonisolated` and `Sendable`, so the adapter can build them off the main actor.
+
+### Instance status
+
+`StatusAppearance.instance(lifecycle:readiness:health:)`. Readiness is read only while `running`, and health only while readiness is `ready`. "Running" is `positive` only when running and ready.
+
+| Lifecycle | Readiness and health | Label | Tone | Status symbol | Detail (detail tone) |
+| --- | --- | --- | --- | --- | --- |
+| `uninitialized` | | Not Initialized | `neutral` | `circle.dashed` | none |
+| `initializing` | | Initializing… | `caution` | `hourglass.circle.fill` | none |
+| `stopped` | | Stopped | `neutral` | `stop.circle.fill` | none |
+| `starting` | | Starting… | `caution` | `hourglass.circle.fill` | none |
+| `running` | `awaitingProbe` | Starting… | `caution` | `hourglass.circle.fill` | Waiting for probe (`caution`) |
+| `running` | `notReady(detail)` | Not Ready | `caution` | `exclamationmark.circle.fill` | the daemon's detail, or "Readiness check failed" when it is missing or only white space (`caution`) |
+| `running` | `unknown` | Running | `caution` | `questionmark.circle.fill` | Readiness unknown (`caution`) |
+| `running` | `ready`, health `healthy` or `unknown` | Running | `positive` | `checkmark.circle.fill` | none |
+| `running` | `ready`, health `degraded` | Running | `positive` | `checkmark.circle.fill` | Degraded (`caution`) |
+| `running` | `ready`, health `unhealthy` | Running | `positive` | `checkmark.circle.fill` | Unhealthy (`critical`) |
+| `recovering` | | Recovering… | `caution` | `arrow.clockwise.circle.fill` | none |
+| `stopping` | | Stopping… | `caution` | `hourglass.circle.fill` | none |
+| `failed` | | Failed | `critical` | `xmark.circle.fill` | none (the screen's failure banner shows the reason, feature 33) |
+| `unknown` | | Unknown | `caution` | `questionmark.circle.fill` | Process identity not confirmed (`caution`) |
+| `retained` | | Retained | `neutral` | `archivebox.circle.fill` | none |
+
+Each state has its own symbol shape, so Stopped and Retained stay apart without color. Transitional labels end with the ellipsis character (…), never three periods.
+
+### Operation status
+
+`StatusAppearance.operation(state:partial:)`. `partial` matters only for `succeeded`. Operations show as a `ToneBadge`, so the symbol is the tone symbol (`Tone.symbol`) and there is never a detail.
+
+| State | Label | Tone |
+| --- | --- | --- |
+| `queued` | Queued | `neutral` |
+| `running` | Running | `informative` |
+| `cancelRequested` | Cancelling… | `caution` |
+| `succeeded` | Done | `neutral` |
+| `succeeded`, `partial` true | Partial | `caution` |
+| `failed` | Failed | `critical` |
+| `cancelled` | Cancelled | `neutral` |
+| `needsRecovery` | Needs Recovery | `critical` |
+
+The mockup has five of these labels (Running, Stopped, Starting…, Stopping…, Failed) and the detail "Waiting for probe". Every other label is new copy from spec 0012.
+
+### StatusLabel
+
+`StatusLabel(_ appearance: StatusAppearance, context: StatusContext = .standard)` draws a dot, the label, and the optional detail (mockup: a 7 px dot, a 6 px gap, the label, then " · " and the readiness text).
+
+- **Dot.** 7 pt (`ScaledSize.statusDot`) in the tone fill, `Spacing.s6` before the label.
+- **Detail.** After a "·" separator, in the detail's own tone. At most one.
+- **Font.** The label takes the font around it: `.body` in a card, `.callout` in a table cell (mockup 12 px).
+- **`.standard` context** (cards, banners, sheets, panels). The label uses the `critical` tone text for `critical` and `StacklyColor.textSecondary` for every other tone (mockup `stFg`). The detail uses its tone's text color.
+- **`.row` context** (`List` and `Table` rows, the sidebar, menus, popovers). The label and detail use `.primary`, because an inactive selection or glass behind the row cannot be guaranteed for tone text (red text on a dark inactive selection drops to about 4.03:1). While the row is selected and `backgroundProminence` is `.increased`, the dot and symbols use `.primary` too. Pass `context: .row` in every row; never put tone text in a row.
+- **Differentiate Without Color.** The dot becomes the status symbol in the tone fill, and the detail starts with its tone symbol. Symbols take the font around them.
+- **Truncation.** The label is never cut (`fixedSize(horizontal: true, vertical: false)`); the detail truncates at the tail first, on one line.
+- **VoiceOver.** One element: `Status: <label>`, plus `, <detail>` when there is one ("Status: Starting…, Waiting for probe"). The dot, symbols, and separator are hidden.
+- **Motion.** A change of status crossfades with `StacklyMotion.crossfade`. Nothing moves or scales.
+
+### ToneBadge
+
+`ToneBadge(_ appearance: StatusAppearance)` is a tag: the label in `.subheadline.weight(.semibold)` and the tone text color, on `toneSurface(tone, strength: .badge)` (a capsule, 16% tint over `surfaceCard`).
+
+- At least 20 pt high (`ScaledSize.badgeHeight`) and 9 pt horizontal padding (mockup `padding: 0 9px`; the one padding off the `Spacing` scale, kept inside `ToneBadge`).
+- Increase Contrast adds a 1 pt border in the tone fill, through `toneSurface`.
+- Differentiate Without Color puts the tone symbol before the label. The symbol uses the tone text color, not the fill, so it keeps AA contrast on the tint.
+- VoiceOver reads the label. The label never truncates.
+- Use it for operation states everywhere (Overview, Operations, the menu bar), so one state always has one tone.
+
+### Section icons
+
+`SectionStyle` gives each top level section a `symbol` and a system `color`. `SectionIcon(_ section: SectionStyle)` draws the symbol in that color with the font around it, hidden from VoiceOver (`accessibilityHidden(true)`), because the section label carries the meaning. The app shell (spec 0013) places it in the sidebar.
+
+| Section | Swift | Symbol | System color |
+| --- | --- | --- | --- |
+| Overview | `SectionStyle.overview` | `square.grid.2x2` | `systemBlue` |
+| Instances | `SectionStyle.instances` | `server.rack` | `systemGreen` |
+| Environments | `SectionStyle.environments` | `square.3.layers.3d` | `systemPurple` |
+| Catalog | `SectionStyle.catalog` | `book` | `systemOrange` |
+| Runtimes | `SectionStyle.runtimes` | `shippingbox` | `systemTeal` |
+| Operations | `SectionStyle.operations` | `arrow.triangle.2.circlepath` | `systemIndigo` |
+| Diagnostics | `SectionStyle.diagnostics` | `waveform.path.ecg` | `systemPink` |
+
+### New status sets
+
+A new status set (for example runtime states in feature 18) maps each state to one of the five tones by the Meaning column in [Tones](#tones), gives each state its own SF Symbol shape, builds its appearances with `StatusAppearance(label:tone:symbol:detail:)`, and adds its table here. `StatusAppearanceTests` checks every row of the tables above and that every symbol exists on macOS 27.
+
+### Checking status in the gallery
+
+The Status page of the Design Gallery shows every instance row in both contexts (the row context in a native `List`, so selection can be checked), every operation badge, and the section icons. Its Differentiate Without Color columns use an internal environment value, `showsStatusSymbols`, because the system setting cannot be set in a preview; in the real app, turn on the system setting instead.
 
 ## State patterns
 
