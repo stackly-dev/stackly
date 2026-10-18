@@ -1,11 +1,12 @@
 //! Behavior of `FakeFilesystem`: confinement to the test roots, fault
-//! injection, the mutation log, and the shared `fs_conformance` suite.
+//! injection, the mutation log, and the shared `fs_conformance` and
+//! `fs_cross_device_conformance` suites.
 #![cfg(unix)]
 
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
-use stackly_platform::{Filesystem, PlatformError};
+use stackly_platform::{Filesystem, PlatformError, RemoveReport};
 use stackly_testkit::{FakeFilesystem, Fault, FsOp, TestRoot, fs_conformance};
 
 fn fake() -> (TestRoot, FakeFilesystem) {
@@ -184,4 +185,89 @@ fn faults_and_reads_on_other_operations_leave_the_log_empty() {
         "{result:?}"
     );
     assert!(fs.mutations().is_empty());
+}
+
+#[test]
+fn remove_tree_outside_the_test_roots_fails_and_removes_nothing() {
+    let (root, fs) = fake();
+    let other = TestRoot::new().unwrap();
+    std::fs::create_dir(other.path().join("x")).unwrap();
+    std::fs::write(other.path().join("x").join("file"), b"keep").unwrap();
+    symlink(other.path(), root.path().join("out")).unwrap();
+
+    let outside_root = fs.remove_tree(other.path(), Path::new("x"));
+    let through_link = fs.remove_tree(root.path(), Path::new("out/x"));
+
+    for result in [outside_root, through_link] {
+        assert!(
+            matches!(result, Err(PlatformError::OutsideTestRoots { .. })),
+            "{result:?}"
+        );
+    }
+    assert_eq!(fs.violations(), 2);
+    assert_eq!(
+        std::fs::read(other.path().join("x").join("file")).unwrap(),
+        b"keep"
+    );
+    assert!(fs.mutations().is_empty());
+}
+
+#[test]
+fn a_remove_tree_fault_fires_before_anything_is_removed() {
+    let (root, fs) = fake();
+    let tree = root.path().join("tree");
+    std::fs::create_dir(&tree).unwrap();
+    std::fs::write(tree.join("file"), b"x").unwrap();
+    fs.fail_when(FsOp::RemoveTree, "tree", Fault::PermissionDenied);
+
+    let result = fs.remove_tree(root.path(), Path::new("tree"));
+
+    assert!(
+        matches!(result, Err(PlatformError::PermissionDenied { .. })),
+        "{result:?}"
+    );
+    assert!(tree.join("file").exists());
+    assert!(fs.mutations().is_empty());
+}
+
+#[test]
+fn mutations_log_a_removed_tree_but_not_a_missing_one() {
+    let (root, fs) = fake();
+    let tree = root.path().join("tree");
+    std::fs::create_dir_all(tree.join("sub")).unwrap();
+    std::fs::write(tree.join("sub").join("file"), b"x").unwrap();
+
+    let removed = fs.remove_tree(root.path(), Path::new("tree")).unwrap();
+    let missing = fs.remove_tree(root.path(), Path::new("tree")).unwrap();
+
+    assert_eq!(
+        (removed, missing),
+        (RemoveReport::removed(1, 2), RemoveReport::missing())
+    );
+    let log: Vec<_> = fs.mutations().into_iter().map(|m| (m.op, m.path)).collect();
+    assert_eq!(log, [(FsOp::RemoveTree, tree)]);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn fake_remove_tree_stops_at_another_device() {
+    use stackly_testkit::evidence::{Kind, evidence};
+    use stackly_testkit::{CrossDevice, fs_cross_device_conformance};
+
+    let ev = evidence!(
+        covers = ["VAL-007"],
+        kind = Kind::Fixture,
+        expected = "FakeFilesystem::remove_tree stops with CrossesDevice at a disk image attached inside, as, or on the way to the target, and the file on the image stays intact (VAL-007)",
+    );
+    let (root, fs) = fake();
+
+    match fs_cross_device_conformance(&fs, &root) {
+        CrossDevice::Checked => ev.pass(),
+        CrossDevice::Blocked(reason) => ev.blocked(
+            &format!("hdiutil cannot attach a disk image on this host: {reason}"),
+            "feature 7",
+        ),
+        other => panic!("unexpected cross device outcome {other:?}"),
+    }
+    assert_eq!(fs.violations(), 0);
 }

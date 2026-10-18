@@ -1,8 +1,10 @@
 use std::fmt::Debug;
 use std::os::unix::fs::{MetadataExt, symlink};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use stackly_platform::{FileKind, Filesystem, PlatformError, UserId};
+use stackly_platform::{
+    FileKind, Filesystem, PlatformError, REMOVE_TREE_MAX_DEPTH, RemoveReport, UserId,
+};
 
 use crate::TestRoot;
 
@@ -13,8 +15,13 @@ use crate::TestRoot;
 /// 0700 for new directories and 0600 for written files, `AlreadyExists` for
 /// an existing path and for a symlink, `symlink_metadata` without following,
 /// `NotARegularFile` for a symlink, directory, and FIFO, the
-/// `read_file_limited` size limit, and that no temporary file is left after
-/// a failed write.
+/// `read_file_limited` size limit, that no temporary file is left after
+/// a failed write, and that `remove_tree` removes a tree with files,
+/// symlinks, and a FIFO while every symlink's target stays intact, removes
+/// a symlink or file target as itself, reports a missing target, refuses a
+/// symlink or file on the way to the target and a symlinked root without
+/// removing anything, rejects invalid arguments, and stops past
+/// [`REMOVE_TREE_MAX_DEPTH`] levels with `TooDeep`.
 ///
 /// # Panics
 ///
@@ -35,6 +42,7 @@ pub fn fs_conformance(fs: &dyn Filesystem, root: &TestRoot) {
     check_limited_reads(fs, &base);
     check_listing(fs, &base);
     check_failed_write_cleanup(fs, &base);
+    check_removal(fs, &base);
 }
 
 fn check_directories(fs: &dyn Filesystem, base: &Path, uid: u32) {
@@ -222,6 +230,310 @@ fn check_failed_write_cleanup(fs: &dyn Filesystem, base: &Path) {
         Some(FileKind::Dir),
     );
     expect_no_temp_files("a failed write leaves no temporary file", base);
+}
+
+/// The outcome of [`fs_cross_device_conformance`].
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CrossDevice {
+    /// Every check ran and passed.
+    Checked,
+    /// The disk image could not be attached, so nothing was checked. The
+    /// reason names the failed `hdiutil` step and its output.
+    Blocked(String),
+}
+
+/// Checks that `remove_tree` stops with `CrossesDevice` at a disk image
+/// attached inside the tree, before touching anything on it: when the image
+/// is in the tree, when it is the target, and when it is on the way to the
+/// target. After the image is detached the same tree is removed.
+///
+/// It works in a fresh `cross-device` folder inside `root` and attaches a
+/// [`DiskImage`](crate::DiskImage), which it always detaches before it
+/// returns or unwinds.
+///
+/// # Panics
+///
+/// Panics with the name of the first check that fails.
+#[cfg(target_os = "macos")]
+#[must_use = "a blocked check proves nothing; record it as BLOCKED"]
+pub fn fs_cross_device_conformance(fs: &dyn Filesystem, root: &TestRoot) -> CrossDevice {
+    let tree = root.path().join("cross-device").join("tree");
+    must_io("create the tree", std::fs::create_dir_all(&tree));
+    must_io(
+        "write a file in the tree",
+        std::fs::write(tree.join("file"), b"f"),
+    );
+    let mount = tree.join("mnt");
+    let image = match crate::DiskImage::attach(root, &mount) {
+        Ok(image) => image,
+        Err(err) => return CrossDevice::Blocked(err.to_string()),
+    };
+    let keep = mount.join("keep");
+    must_io("write a file on the image", std::fs::write(&keep, b"image"));
+
+    for relative in [
+        "cross-device/tree",
+        "cross-device/tree/mnt",
+        "cross-device/tree/mnt/keep",
+    ] {
+        expect_err(
+            "remove_tree stops at a mount point in, as, or on the way to the target",
+            fs.remove_tree(root.path(), Path::new(relative)),
+            |err| matches!(err, PlatformError::CrossesDevice { path } if *path == mount),
+        );
+    }
+    expect_eq(
+        "remove_tree touches nothing on another device",
+        must_io("read the file on the image", std::fs::read(&keep)),
+        b"image".to_vec(),
+    );
+    drop(image);
+    let report = must(
+        "remove_tree after the image is detached",
+        fs.remove_tree(root.path(), Path::new("cross-device/tree")),
+    );
+    expect_eq(
+        "remove_tree finds the tree after the image is detached",
+        report.missing,
+        false,
+    );
+    expect_absent("remove_tree removes the former mount point", &tree);
+    CrossDevice::Checked
+}
+
+fn check_removal(fs: &dyn Filesystem, base: &Path) {
+    let removal = base.join("removal");
+    must_io("create the removal folder", std::fs::create_dir(&removal));
+    let sentinel = removal.join("sentinel");
+    must_io(
+        "create the sentinel folder",
+        std::fs::create_dir_all(sentinel.join("inner")),
+    );
+    must_io(
+        "write a sentinel file",
+        std::fs::write(sentinel.join("keep"), b"sentinel"),
+    );
+    must_io(
+        "write a nested sentinel file",
+        std::fs::write(sentinel.join("inner").join("deep"), b"deep"),
+    );
+
+    check_removing_a_tree(fs, base, &removal, &sentinel);
+    check_removing_single_entries(fs, base, &removal, &sentinel);
+    check_refusals(fs, base, &removal, &sentinel);
+    check_depth_limit(fs, base, &removal);
+}
+
+fn check_removing_a_tree(fs: &dyn Filesystem, base: &Path, removal: &Path, sentinel: &Path) {
+    let tree = removal.join("tree");
+    must_io(
+        "create a nested tree",
+        std::fs::create_dir_all(tree.join("sub").join("nested")),
+    );
+    must_io(
+        "create an empty folder in the tree",
+        std::fs::create_dir(tree.join("sub").join("empty")),
+    );
+    must_io(
+        "write a file in the tree",
+        std::fs::write(tree.join("file"), b"a"),
+    );
+    must_io(
+        "write a nested file in the tree",
+        std::fs::write(tree.join("sub").join("nested").join("file"), b"b"),
+    );
+    must_io(
+        "link a folder outside the tree",
+        symlink(sentinel, tree.join("link-dir")),
+    );
+    must_io(
+        "link a file outside the tree",
+        symlink(sentinel.join("keep"), tree.join("sub").join("link-file")),
+    );
+    must_io(
+        "create a dangling symlink in the tree",
+        symlink(removal.join("nowhere"), tree.join("dangling")),
+    );
+    make_fifo(&tree.join("fifo"));
+
+    expect_eq(
+        "remove_tree removes a tree and counts files and folders",
+        must(
+            "remove_tree on a tree",
+            fs.remove_tree(base, Path::new("removal/tree")),
+        ),
+        RemoveReport::removed(6, 4),
+    );
+    expect_absent("remove_tree leaves nothing of the tree", &tree);
+    expect_sentinel_intact("remove_tree never follows a symlink in the tree", sentinel);
+    expect_eq(
+        "remove_tree on a removed tree reports it missing",
+        must(
+            "remove_tree twice",
+            fs.remove_tree(base, Path::new("removal/tree")),
+        ),
+        RemoveReport::missing(),
+    );
+    expect_eq(
+        "remove_tree under a missing folder reports it missing",
+        must(
+            "remove_tree under a missing folder",
+            fs.remove_tree(base, Path::new("removal/absent/child")),
+        ),
+        RemoveReport::missing(),
+    );
+}
+
+fn check_removing_single_entries(
+    fs: &dyn Filesystem,
+    base: &Path,
+    removal: &Path,
+    sentinel: &Path,
+) {
+    must_io(
+        "link the sentinel folder as a target",
+        symlink(sentinel, removal.join("alias")),
+    );
+    expect_eq(
+        "remove_tree removes a symlink target as itself",
+        must(
+            "remove_tree on a symlink",
+            fs.remove_tree(base, Path::new("removal/alias")),
+        ),
+        RemoveReport::removed(1, 0),
+    );
+    expect_absent("remove_tree removes the symlink", &removal.join("alias"));
+    expect_sentinel_intact("remove_tree never follows a symlink target", sentinel);
+
+    must_io(
+        "write a single file",
+        std::fs::write(removal.join("single"), b"x"),
+    );
+    expect_eq(
+        "remove_tree removes a file target",
+        must(
+            "remove_tree on a file",
+            fs.remove_tree(base, Path::new("removal/single")),
+        ),
+        RemoveReport::removed(1, 0),
+    );
+    expect_absent("remove_tree removes the file", &removal.join("single"));
+}
+
+fn check_refusals(fs: &dyn Filesystem, base: &Path, removal: &Path, sentinel: &Path) {
+    let via = removal.join("via");
+    must_io(
+        "link the sentinel folder on the way",
+        symlink(sentinel, &via),
+    );
+    expect_err(
+        "remove_tree refuses a symlink on the way to the target",
+        fs.remove_tree(base, Path::new("removal/via/keep")),
+        |err| matches!(err, PlatformError::SymlinkInPath { path } if *path == via),
+    );
+    expect_err(
+        "remove_tree refuses a symlinked root",
+        fs.remove_tree(&via, Path::new("keep")),
+        |err| matches!(err, PlatformError::SymlinkInPath { path } if *path == via),
+    );
+    let plain = removal.join("plain");
+    must_io("write a file on the way", std::fs::write(&plain, b"p"));
+    expect_err(
+        "remove_tree refuses a file on the way to the target",
+        fs.remove_tree(base, Path::new("removal/plain/child")),
+        |err| matches!(err, PlatformError::NotADirectory { path } if *path == plain),
+    );
+    for relative in ["", "../conformance", "/removal", "removal/../removal"] {
+        expect_err(
+            "remove_tree rejects an empty, absolute, or dotted relative path",
+            fs.remove_tree(base, Path::new(relative)),
+            |err| {
+                matches!(
+                    err,
+                    PlatformError::Io {
+                        kind: std::io::ErrorKind::InvalidInput,
+                        ..
+                    }
+                )
+            },
+        );
+    }
+    expect_sentinel_intact("a refused removal removes nothing", sentinel);
+    expect_eq(
+        "a refused removal keeps the file on the way",
+        must_io("read the file on the way", std::fs::read(&plain)),
+        b"p".to_vec(),
+    );
+    expect_eq(
+        "a rejected argument removes nothing",
+        removal.exists(),
+        true,
+    );
+}
+
+fn check_depth_limit(fs: &dyn Filesystem, base: &Path, removal: &Path) {
+    let at_limit = nested(&removal.join("deep"), REMOVE_TREE_MAX_DEPTH);
+    must_io(
+        "create folders nested at the limit",
+        std::fs::create_dir_all(&at_limit),
+    );
+    expect_eq(
+        "remove_tree removes folders nested at the limit",
+        must(
+            "remove_tree at the depth limit",
+            fs.remove_tree(base, Path::new("removal/deep")),
+        ),
+        RemoveReport::removed(0, REMOVE_TREE_MAX_DEPTH as u64),
+    );
+    let past_limit = nested(&removal.join("deep"), REMOVE_TREE_MAX_DEPTH + 1);
+    must_io(
+        "create folders nested past the limit",
+        std::fs::create_dir_all(&past_limit),
+    );
+    expect_err(
+        "remove_tree stops past the depth limit",
+        fs.remove_tree(base, Path::new("removal/deep")),
+        |err| {
+            matches!(
+                err,
+                PlatformError::TooDeep { path, max: REMOVE_TREE_MAX_DEPTH } if *path == past_limit
+            )
+        },
+    );
+    expect_eq(
+        "a removal stopped past the depth limit keeps the deepest folder",
+        past_limit.is_dir(),
+        true,
+    );
+}
+
+/// `top` with `levels - 1` more folders named `d` below it.
+fn nested(top: &Path, levels: usize) -> PathBuf {
+    let mut path = top.to_path_buf();
+    for _ in 1..levels {
+        path.push("d");
+    }
+    path
+}
+
+fn expect_absent(check: &str, path: &Path) {
+    if std::fs::symlink_metadata(path).is_ok() {
+        fail(check, &format!("{} still exists", path.display()));
+    }
+}
+
+fn expect_sentinel_intact(check: &str, sentinel: &Path) {
+    let keep =
+        std::fs::read(sentinel.join("keep")).unwrap_or_else(|err| fail(check, &err.to_string()));
+    let deep = std::fs::read(sentinel.join("inner").join("deep"))
+        .unwrap_or_else(|err| fail(check, &err.to_string()));
+    expect_eq(
+        check,
+        (keep, deep),
+        (b"sentinel".to_vec(), b"deep".to_vec()),
+    );
 }
 
 fn expect_no_temp_files(check: &str, dir: &Path) {

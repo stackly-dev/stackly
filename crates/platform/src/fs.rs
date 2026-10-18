@@ -1,15 +1,21 @@
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::ffi::{OsStr, OsString};
+use std::io;
+use std::path::{Component, Path, PathBuf};
 
 use crate::error::PlatformError;
 use crate::identity::UserId;
+
+/// The deepest directory nesting [`Filesystem::remove_tree`] walks, with
+/// the target counted as the first level.
+pub const REMOVE_TREE_MAX_DEPTH: usize = 128;
 
 /// The filesystem operations Stackly's use cases need, on paths the caller
 /// already derived from the layout.
 ///
 /// No method follows a symlink in the last path component except
 /// [`canonicalize`](Self::canonicalize), and no method deletes anything
-/// except the temporary file of a failed atomic write.
+/// except [`remove_tree`](Self::remove_tree) and the temporary file of a
+/// failed atomic write.
 pub trait Filesystem: Send + Sync {
     /// Returns the absolute path with every symlink resolved and no `.` or
     /// `..` component.
@@ -65,6 +71,111 @@ pub trait Filesystem: Send + Sync {
     ///
     /// Returns an error when any step fails; the old file is then intact.
     fn write_file_atomic(&self, path: &Path, bytes: &[u8]) -> Result<(), PlatformError>;
+
+    /// Removes the entry at `root` joined with `relative`, and everything
+    /// under it when it is a directory, without ever following a symlink.
+    ///
+    /// `root` is a canonical owned root, and `relative` names at least one
+    /// entry below it with plain names only (see [`remove_tree_names`]).
+    /// Every component of `relative` but the last must be a real directory
+    /// on the device of `root`; otherwise nothing is removed. A symlink
+    /// found as the target or anywhere in the tree is removed as itself,
+    /// never its target. Removal stops at an entry on another device than
+    /// `root` before touching that device, and at a directory nested more
+    /// than [`REMOVE_TREE_MAX_DEPTH`] levels deep. Entries removed before an
+    /// error stay removed.
+    ///
+    /// A target that does not exist, or whose parent does not, yields a
+    /// report with [`missing`](RemoveReport::missing) set, so removing the
+    /// same tree twice succeeds both times.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::SymlinkInPath`] or
+    /// [`PlatformError::NotADirectory`] for a component on the way to the
+    /// target that is a symlink or not a directory,
+    /// [`PlatformError::CrossesDevice`] for an entry on another device,
+    /// [`PlatformError::TooDeep`] past the depth limit,
+    /// [`PlatformError::Io`] with kind `InvalidInput` for an invalid
+    /// argument, and other variants when an entry cannot be read or
+    /// removed.
+    fn remove_tree(&self, root: &Path, relative: &Path) -> Result<RemoveReport, PlatformError>;
+}
+
+/// What one [`Filesystem::remove_tree`] call removed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct RemoveReport {
+    /// Entries removed that were not directories: regular files, symlinks
+    /// (never their targets), FIFOs, sockets, and devices.
+    pub files: u64,
+    /// Directories removed, the target included when it was one.
+    pub dirs: u64,
+    /// True when the target or a directory on the way to it did not exist,
+    /// so nothing was removed.
+    pub missing: bool,
+}
+
+impl RemoveReport {
+    /// The report of a target that was found and removed.
+    #[must_use]
+    pub const fn removed(files: u64, dirs: u64) -> Self {
+        Self {
+            files,
+            dirs,
+            missing: false,
+        }
+    }
+
+    /// The report of a target that did not exist.
+    #[must_use]
+    pub const fn missing() -> Self {
+        Self {
+            files: 0,
+            dirs: 0,
+            missing: true,
+        }
+    }
+}
+
+/// Checks the arguments of [`Filesystem::remove_tree`] and returns the
+/// names `relative` walks through, the target's last.
+///
+/// `root` must be absolute, and `relative` must hold at least one
+/// component, every one a plain name: no root, prefix, `.`, or `..`.
+///
+/// # Errors
+///
+/// Returns [`PlatformError::Io`] with kind `InvalidInput` when an argument
+/// breaks these rules.
+pub fn remove_tree_names<'a>(
+    root: &Path,
+    relative: &'a Path,
+) -> Result<Vec<&'a OsStr>, PlatformError> {
+    let invalid = |message: &str| PlatformError::Io {
+        op: "remove_tree",
+        path: root.join(relative),
+        kind: io::ErrorKind::InvalidInput,
+        message: message.to_owned(),
+    };
+    if !root.is_absolute() {
+        return Err(invalid("the root must be an absolute path"));
+    }
+    let names = relative
+        .components()
+        .map(|component| match component {
+            Component::Normal(name) => Ok(name),
+            _ => Err(invalid(
+                "the relative path must hold plain names only, with no root, `.`, or `..`",
+            )),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if names.is_empty() {
+        return Err(invalid(
+            "the relative path must name an entry below the root",
+        ));
+    }
+    Ok(names)
 }
 
 /// What a path is, without following a symlink.
@@ -209,4 +320,66 @@ pub fn is_same_or_inside(
         }
     }
     Ok(false)
+}
+
+#[cfg(test)]
+#[cfg(unix)]
+mod tests {
+    use super::*;
+
+    fn is_invalid_input<T: std::fmt::Debug>(result: Result<T, PlatformError>) -> bool {
+        matches!(
+            result,
+            Err(PlatformError::Io {
+                op: "remove_tree",
+                kind: io::ErrorKind::InvalidInput,
+                ..
+            })
+        )
+    }
+
+    #[test]
+    fn remove_tree_names_splits_a_relative_path_into_its_names() {
+        let names = remove_tree_names(Path::new("/root"), Path::new("instances/abc/")).unwrap();
+
+        assert_eq!(names, [OsStr::new("instances"), OsStr::new("abc")]);
+    }
+
+    #[test]
+    fn remove_tree_names_rejects_an_empty_absolute_or_dotted_relative_path() {
+        for relative in [
+            "",
+            "/instances",
+            "../instances",
+            "./instances",
+            "a/../b",
+            ".",
+        ] {
+            assert!(
+                is_invalid_input(remove_tree_names(Path::new("/root"), Path::new(relative))),
+                "{relative:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn remove_tree_names_needs_an_absolute_root() {
+        let result = remove_tree_names(Path::new("root"), Path::new("instances"));
+
+        assert!(is_invalid_input(result));
+    }
+
+    #[test]
+    fn a_remove_report_says_whether_the_target_was_there() {
+        assert_eq!(
+            RemoveReport::missing(),
+            RemoveReport {
+                files: 0,
+                dirs: 0,
+                missing: true
+            }
+        );
+        assert!(!RemoveReport::removed(2, 1).missing);
+        assert_eq!(RemoveReport::default(), RemoveReport::removed(0, 0));
+    }
 }
