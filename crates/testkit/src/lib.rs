@@ -12,8 +12,13 @@
 //! Tests that prove a PRD ID write evidence through [`evidence`], the
 //! re-exported `stackly-evidence` crate (spec 0002).
 //!
-//! The fakes need Unix file ownership and modes, so they exist only on
-//! Unix; [`TestRoot`] and [`allocate_port`] work everywhere.
+//! Tests that need a process to supervise run the dummy server from
+//! [`fake_server::binary`], which builds `stackly-fake-server` once per
+//! test process (spec 0009).
+//!
+//! The fakes need Unix file ownership and modes, and the dummy server
+//! handles Unix signals, so they exist only on Unix; [`TestRoot`] and
+//! [`allocate_port`] work everywhere.
 
 #[cfg(unix)]
 mod conformance;
@@ -21,6 +26,8 @@ mod conformance;
 mod fake_fs;
 #[cfg(unix)]
 mod fake_platform;
+#[cfg(unix)]
+pub mod fake_server;
 #[cfg(unix)]
 mod fifo;
 mod port;

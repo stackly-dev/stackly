@@ -58,6 +58,13 @@ impl Platform {
         &*self.clock
     }
 
+    /// Returns a shared handle to the clock, for a component that outlives
+    /// the call that received the platform, such as the registry thread.
+    #[must_use]
+    pub fn shared_clock(&self) -> Arc<dyn Clock> {
+        Arc::clone(&self.clock)
+    }
+
     /// Returns the user identity.
     #[must_use]
     pub fn identity(&self) -> &dyn UserIdentity {

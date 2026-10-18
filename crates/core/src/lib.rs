@@ -12,6 +12,7 @@ mod error;
 mod instance_dir;
 mod inventory;
 mod layout;
+mod observation;
 mod ownership;
 pub mod provider;
 #[cfg(all(test, unix))]
@@ -25,4 +26,5 @@ pub use instance_dir::{
 };
 pub use inventory::{InstanceLocation, Inventory, InventoryEntry, inventory_instances};
 pub use layout::{PreparedLayout, ensure_instance_run_dir, prepare_layout};
+pub use observation::READINESS_MAX_AGE;
 pub use ownership::{OwnedPath, check_data_root_overlap, check_owned_path};

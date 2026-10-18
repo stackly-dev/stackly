@@ -6,18 +6,18 @@ import Testing
 /// also read, comparing decoded values rather than raw JSON text.
 struct ProtocolVersionFixtureTests {
     @Test func fixtureDecodesToCurrentVersion() throws {
-        let decoded = try JSONDecoder().decode(
+        let decoded = try StacklyJSON.decoder().decode(
             ProtocolVersion.self, from: Fixture.data("protocol-version.json"))
 
-        #expect(decoded == ProtocolVersion(major: 0, minor: 1))
+        #expect(decoded == ProtocolVersion(major: 1, minor: 0))
     }
 
     @Test func encodedValueDecodesLikeTheFixture() throws {
-        let fixture = try JSONDecoder().decode(
+        let fixture = try StacklyJSON.decoder().decode(
             ProtocolVersion.self, from: Fixture.data("protocol-version.json"))
 
-        let encoded = try JSONEncoder().encode(ProtocolVersion(major: 0, minor: 1))
-        let roundTripped = try JSONDecoder().decode(ProtocolVersion.self, from: encoded)
+        let encoded = try StacklyJSON.encoder().encode(ProtocolVersion(major: 1, minor: 0))
+        let roundTripped = try StacklyJSON.decoder().decode(ProtocolVersion.self, from: encoded)
 
         #expect(roundTripped == fixture)
     }

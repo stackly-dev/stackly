@@ -1,0 +1,105 @@
+{
+  "vectors": [
+    {
+      "name": "one frame",
+      "hex": "000000027b7d",
+      "max": 16,
+      "frames": [
+        "7b7d"
+      ]
+    },
+    {
+      "name": "two frames in one chunk",
+      "hex": "000000027b7d000000035b315d",
+      "max": 16,
+      "frames": [
+        "7b7d",
+        "5b315d"
+      ]
+    },
+    {
+      "name": "one frame cut at every byte",
+      "hex": "000000027b7d",
+      "chunks": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "max": 16,
+      "frames": [
+        "7b7d"
+      ]
+    },
+    {
+      "name": "two frames cut across the second header",
+      "hex": "000000027b7d000000035b315d",
+      "chunks": [
+        8,
+        2,
+        3
+      ],
+      "max": 16,
+      "frames": [
+        "7b7d",
+        "5b315d"
+      ]
+    },
+    {
+      "name": "length of exactly max",
+      "hex": "0000000422616222",
+      "max": 4,
+      "frames": [
+        "22616222"
+      ]
+    },
+    {
+      "name": "length of max plus one",
+      "hex": "000000052261626322",
+      "max": 4,
+      "frames": [],
+      "error": "ipc.frame_too_large"
+    },
+    {
+      "name": "length above the control frame limit",
+      "hex": "00100001",
+      "chunks": [
+        2,
+        2
+      ],
+      "max": 1048576,
+      "frames": [],
+      "error": "ipc.frame_too_large"
+    },
+    {
+      "name": "length of zero",
+      "hex": "00000000",
+      "max": 16,
+      "frames": [],
+      "error": "ipc.frame_empty"
+    },
+    {
+      "name": "frame then length of zero",
+      "hex": "000000027b7d00000000",
+      "max": 16,
+      "frames": [
+        "7b7d"
+      ],
+      "error": "ipc.frame_empty"
+    },
+    {
+      "name": "truncated header",
+      "hex": "000000",
+      "max": 16,
+      "frames": []
+    },
+    {
+      "name": "truncated payload",
+      "hex": "000000057b2261",
+      "max": 16,
+      "frames": []
+    }
+  ]
+}

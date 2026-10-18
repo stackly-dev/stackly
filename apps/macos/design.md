@@ -160,15 +160,285 @@ Scaled sizes are named defaults for `@ScaledMetric`. Declare one in the view tha
 
 ## Status
 
-Filled by milestone 2.
+Status shows as text first and color second. Every status is a `StatusAppearance` (label, tone, symbol, and at most one detail), drawn by `StatusLabel` or `ToneBadge`. The code lives in `Packages/StacklyUI/Sources/StacklyUI/Status/`.
+
+### UI status enums
+
+The app shell (spec 0013) maps the daemon's DTOs to these enums with an exhaustive switch, so a new protocol state fails to compile until the tables below cover it. The daemon applies `effective(now, max_age)` (spec 0004) before it sends readiness and health, so the UI never computes freshness itself.
+
+| Swift | Cases |
+| --- | --- |
+| `LifecycleStatus` | `uninitialized`, `initializing`, `stopped`, `starting`, `running`, `recovering`, `stopping`, `failed`, `unknown`, `retained` (the ten states of spec 0004) |
+| `ReadinessStatus` | `ready`; `awaitingProbe` (`not_ready` with reason `awaiting_probe`); `notReady(detail: String?)` (`not_ready` with any other reason, with the daemon's detail); `unknown` (including a stale result) |
+| `HealthStatus` | `unknown`, `healthy`, `degraded`, `unhealthy` |
+| `OperationStatus` | `queued`, `running`, `cancelRequested`, `succeeded`, `failed`, `cancelled`, `needsRecovery` |
+
+All of them, `StatusDetail`, and `StatusAppearance` are `nonisolated` and `Sendable`, so the adapter can build them off the main actor.
+
+### Instance status
+
+`StatusAppearance.instance(lifecycle:readiness:health:)`. Readiness is read only while `running`, and health only while readiness is `ready`. "Running" is `positive` only when running and ready.
+
+| Lifecycle | Readiness and health | Label | Tone | Status symbol | Detail (detail tone) |
+| --- | --- | --- | --- | --- | --- |
+| `uninitialized` | | Not Initialized | `neutral` | `circle.dashed` | none |
+| `initializing` | | Initializing… | `caution` | `hourglass.circle.fill` | none |
+| `stopped` | | Stopped | `neutral` | `stop.circle.fill` | none |
+| `starting` | | Starting… | `caution` | `hourglass.circle.fill` | none |
+| `running` | `awaitingProbe` | Starting… | `caution` | `hourglass.circle.fill` | Waiting for probe (`caution`) |
+| `running` | `notReady(detail)` | Not Ready | `caution` | `exclamationmark.circle.fill` | the daemon's detail, or "Readiness check failed" when it is missing or only white space (`caution`) |
+| `running` | `unknown` | Running | `caution` | `questionmark.circle.fill` | Readiness unknown (`caution`) |
+| `running` | `ready`, health `healthy` or `unknown` | Running | `positive` | `checkmark.circle.fill` | none |
+| `running` | `ready`, health `degraded` | Running | `positive` | `checkmark.circle.fill` | Degraded (`caution`) |
+| `running` | `ready`, health `unhealthy` | Running | `positive` | `checkmark.circle.fill` | Unhealthy (`critical`) |
+| `recovering` | | Recovering… | `caution` | `arrow.clockwise.circle.fill` | none |
+| `stopping` | | Stopping… | `caution` | `hourglass.circle.fill` | none |
+| `failed` | | Failed | `critical` | `xmark.circle.fill` | none (the screen's failure banner shows the reason, feature 33) |
+| `unknown` | | Unknown | `caution` | `questionmark.circle.fill` | Process identity not confirmed (`caution`) |
+| `retained` | | Retained | `neutral` | `archivebox.circle.fill` | none |
+
+Each state has its own symbol shape, so Stopped and Retained stay apart without color. Transitional labels end with the ellipsis character (…), never three periods.
+
+### Operation status
+
+`StatusAppearance.operation(state:partial:)`. `partial` matters only for `succeeded`. Operations show as a `ToneBadge`, so the symbol is the tone symbol (`Tone.symbol`) and there is never a detail.
+
+| State | Label | Tone |
+| --- | --- | --- |
+| `queued` | Queued | `neutral` |
+| `running` | Running | `informative` |
+| `cancelRequested` | Cancelling… | `caution` |
+| `succeeded` | Done | `neutral` |
+| `succeeded`, `partial` true | Partial | `caution` |
+| `failed` | Failed | `critical` |
+| `cancelled` | Cancelled | `neutral` |
+| `needsRecovery` | Needs Recovery | `critical` |
+
+The mockup has five of these labels (Running, Stopped, Starting…, Stopping…, Failed) and the detail "Waiting for probe". Every other label is new copy from spec 0012.
+
+### StatusLabel
+
+`StatusLabel(_ appearance: StatusAppearance, context: StatusContext = .standard)` draws a dot, the label, and the optional detail (mockup: a 7 px dot, a 6 px gap, the label, then " · " and the readiness text).
+
+- **Dot.** 7 pt (`ScaledSize.statusDot`) in the tone fill, `Spacing.s6` before the label.
+- **Detail.** After a "·" separator, in the detail's own tone. At most one.
+- **Font.** The label takes the font around it: `.body` in a card, `.callout` in a table cell (mockup 12 px).
+- **`.standard` context** (cards, banners, sheets, panels). The label uses the `critical` tone text for `critical` and `StacklyColor.textSecondary` for every other tone (mockup `stFg`). The detail uses its tone's text color.
+- **`.row` context** (`List` and `Table` rows, the sidebar, menus, popovers). The label and detail use `.primary`, because an inactive selection or glass behind the row cannot be guaranteed for tone text (red text on a dark inactive selection drops to about 4.03:1). While the row is selected and `backgroundProminence` is `.increased`, the dot and symbols use `.primary` too. Pass `context: .row` in every row; never put tone text in a row.
+- **Differentiate Without Color.** The dot becomes the status symbol in the tone fill, and the detail starts with its tone symbol. Symbols take the font around them.
+- **Truncation.** The label is never cut (`fixedSize(horizontal: true, vertical: false)`); the detail truncates at the tail first, on one line.
+- **VoiceOver.** One element: `Status: <label>`, plus `, <detail>` when there is one ("Status: Starting…, Waiting for probe"). The dot, symbols, and separator are hidden.
+- **Motion.** A change of status crossfades with `StacklyMotion.crossfade`. Nothing moves or scales.
+
+### ToneBadge
+
+`ToneBadge(_ appearance: StatusAppearance)` is a tag: the label in `.subheadline.weight(.semibold)` and the tone text color, on `toneSurface(tone, strength: .badge)` (a capsule, 16% tint over `surfaceCard`).
+
+- At least 20 pt high (`ScaledSize.badgeHeight`) and 9 pt horizontal padding (mockup `padding: 0 9px`; the one padding off the `Spacing` scale, kept inside `ToneBadge`).
+- Increase Contrast adds a 1 pt border in the tone fill, through `toneSurface`.
+- Differentiate Without Color puts the tone symbol before the label. The symbol uses the tone text color, not the fill, so it keeps AA contrast on the tint.
+- VoiceOver reads the label. The label never truncates.
+- Use it for operation states everywhere (Overview, Operations, the menu bar), so one state always has one tone.
+
+### Section icons
+
+`SectionStyle` gives each top level section a `symbol` and a system `color`. `SectionIcon(_ section: SectionStyle)` draws the symbol in that color with the font around it, hidden from VoiceOver (`accessibilityHidden(true)`), because the section label carries the meaning. The app shell (spec 0013) places it in the sidebar.
+
+| Section | Swift | Symbol | System color |
+| --- | --- | --- | --- |
+| Overview | `SectionStyle.overview` | `square.grid.2x2` | `systemBlue` |
+| Instances | `SectionStyle.instances` | `server.rack` | `systemGreen` |
+| Environments | `SectionStyle.environments` | `square.3.layers.3d` | `systemPurple` |
+| Catalog | `SectionStyle.catalog` | `book` | `systemOrange` |
+| Runtimes | `SectionStyle.runtimes` | `shippingbox` | `systemTeal` |
+| Operations | `SectionStyle.operations` | `arrow.triangle.2.circlepath` | `systemIndigo` |
+| Diagnostics | `SectionStyle.diagnostics` | `waveform.path.ecg` | `systemPink` |
+
+### New status sets
+
+A new status set (for example runtime states in feature 18) maps each state to one of the five tones by the Meaning column in [Tones](#tones), gives each state its own SF Symbol shape, builds its appearances with `StatusAppearance(label:tone:symbol:detail:)`, and adds its table here. `StatusAppearanceTests` checks every row of the tables above and that every symbol exists on macOS 27.
+
+### Checking status in the gallery
+
+The Status page of the Design Gallery shows every instance row in both contexts (the row context in a native `List`, so selection can be checked), every operation badge, and the section icons. Its Differentiate Without Color columns use an internal environment value, `showsStatusSymbols`, because the system setting cannot be set in a preview; in the real app, turn on the system setting instead.
 
 ## State patterns
 
-Filled by milestone 3.
+Every page or section that loads data from the daemon has one of five shapes. Build the shape with `ViewState.resolve` and show it with `StateView`; never pick a shape by hand. The code lives in `Packages/StacklyUI/Sources/StacklyUI/State/`, and the States page of the Design Gallery shows every shape, placeholder, banner, and the mutation gate.
+
+### Shapes
+
+| Shape | When | `StateView` shows | Actions |
+| --- | --- | --- | --- |
+| `.loading` | no data has loaded yet | `DelayedProgress`: a centered `ProgressView`, only after 300 ms | none |
+| `.empty` with `.noData` | the data loaded and holds nothing | stale and partial banners if any, then `StatePlaceholder` (symbol in `StacklyColor.decorative`, title, message in `textSecondary`) | up to two from `EmptyContent` (mockup: Browse Catalog, New Instance…) |
+| `.empty` with `.noResults(query:)` | the filter or search left nothing | banners if any, then `StatePlaceholder` with `magnifyingglass`, the title `No Results for “<query>”`, and the screen's suggestion (mockup: "Check the spelling or try another status.") | Clear Filters |
+| `.failed` | the first load failed | `StatePlaceholder` with the critical tone symbol, the screen's title, the daemon's message, and the error code in monospace | Retry, Open Diagnostics |
+| `.unsupported` | the capability is not supported | `StatePlaceholder` with `nosign`, the title (mockup: "Backups Aren’t Supported"), and the reason | none |
+| `.loaded` | the data loaded | stale and partial banners if any, then your content | Retry on the stale banner, item actions on the partial banner |
+
+`ViewState.resolve(unsupported:value:error:lastLoadedAt:isRefreshing:emptyContent:outdated:partial:)` picks the shape in a fixed order:
+
+1. `unsupported` is set: `.unsupported`.
+2. No `value` and an `error`: `.failed`.
+3. No `value`: `.loading`.
+4. `emptyContent(value)` returns content: `.empty`.
+5. Otherwise: `.loaded`.
+
+So a page never shows empty before a load succeeded, and never shows failed while it still has data. The notes (`ContentNotes`) of `.empty` and `.loaded` carry:
+
+- `stale`: `StaleNote(since: lastLoadedAt, reason: .refreshFailed(error))` when `value` and `error` are both set (a refresh failed). It wins over outdated.
+- Else `stale`: `StaleNote(since: outdated.since, reason: .outdated(source:))` when the daemon reports the data as out of date, such as the catalog.
+- `partial` and `isRefreshing` as you pass them.
+
+| Type | Fields | Built by |
+| --- | --- | --- |
+| `EmptyContent` | `kind` (`.noData` or `.noResults(query:)`), `symbol`, `title`, `message`, `primaryAction`, `secondaryAction` | `EmptyContent.noData(symbol:title:message:primaryAction:secondaryAction:)`, `EmptyContent.noResults(query:message:clearFilters:)` |
+| `FailureContent` | `title` (the screen's, such as "Couldn’t Load Instances"), `message` and `code` (from the daemon's error envelope, already redacted) | the screen |
+| `UnsupportedContent` | `title`, `reason` (from the provider's capabilities) | the screen |
+| `StaleNote` | `since`, `reason` (`.refreshFailed(FailureContent)` or `.outdated(source:)`) | `resolve` |
+| `PartialNote` | `summary`, `items` of `PartialItem(name:reason:action:)` | the screen, from the daemon's data |
+| `StateAction` | `title` (a verb), `mutates`, `perform` | the screen |
+
+`FailureContent`, `UnsupportedContent`, `StaleNote`, `EmptyKind`, and `MutationAvailability` are `nonisolated` and `Sendable`. The types that carry closures stay on the main actor.
+
+### View model contract
+
+Each screen's view model holds what `resolve` needs and follows these rules:
+
+- Keep the last data that loaded (`value`) and `lastLoadedAt` through refreshes and through filter or search changes, and set them together.
+- Apply filters on top of `value` and decide through `emptyContent`: no data when `value` is empty, no results when the filtered result is empty. A filter never empties `value`.
+- When a refresh starts, set `isRefreshing`. On success, set the new `value` and `lastLoadedAt` and clear `error`. On failure, set `error` and keep `value`.
+- Retry from `.failed` clears `error` and loads again, so the shape returns to `.loading`.
+- Build every `ViewState` with `resolve`, never a case by hand.
+
+### Placeholders
+
+- `StatePlaceholder` has two sizes. `.page`: title `.title2.weight(.semibold)`, symbol `ScaledSize.placeholderPageSymbol` (44), 80 pt vertical padding. `.section`: title `.title3.weight(.semibold)`, symbol `ScaledSize.placeholderSectionSymbol` (34), 34 pt vertical padding, inside a card (`.cardSurface()`).
+- Create one with `StatePlaceholder(_ empty:size:)`, `StatePlaceholder(_ failure:size:retry:openDiagnostics:)`, or `StatePlaceholder(_ unsupported:size:)`. `StateView` uses the page size.
+- The message wraps at 380 pt. The main action is `.borderedProminent` and sits after the secondary `.bordered` one, as in the mockup. Neither is the default button.
+- `InlineEmptyRow(text)` is a one sentence row inside a grouped list (mockup: "Nothing running."), in `textSecondary` with `Spacing.rowInsets`.
+
+### Banners
+
+`StateBanner(tone:title:message:code:items:actions:base:)`:
+
+- It always shows the tone symbol (`Tone.symbol` in the tone fill, `ScaledSize.bannerSymbol`), then the title in `.body.weight(.semibold)`, the message in `.callout` `textSecondary`, an optional code block (`.stacklyCode()` on `surfaceConsole` with `Radius.small`), an optional item list, and up to three native `.bordered` buttons.
+- The background is `.toneSurface(tone, on: base, strength: .banner)`. `base` is `.card` by default and `.window` for the shell's window banner. The padding is 12 vertical and 14 horizontal.
+- Items: five show, then "and N more" with a Show All link button (24 × 24 pt hit target) that opens the rest in place. Each item shows its name in semibold, its reason in `textSecondary`, and an optional small `.bordered` action.
+- Errors about one item (a failed instance, a port conflict, config drift) never use `ViewState`. Put a `StateBanner` at that item (mockup: the failure banner on Summary, drift on Configuration) and leave the rest of the page as it is.
+
+Page banners from `StateView`:
+
+| Note | Tone | Title | Message | Action |
+| --- | --- | --- | --- | --- |
+| stale, refresh failed | `caution` | `Showing the last known state from <time>.` (mockup) | `Couldn’t refresh: <daemon message>.` | Retry |
+| stale, outdated | `caution` | `Showing the last known state from <time>.` | `<source> last updated <time>.` | Retry |
+| partial | `caution` | the summary (mockup: "5 of 6 services ready") | the items that are not ready, each with its reason | per item |
+
+- The time comes from `StaleNote.formattedSince(now:calendar:locale:timeZone:)`: the short time in the locale's style (14:02 in a 24 hour locale, 2:02 PM in en_US), plus the short date when it is not today in that time zone. The banner reads the calendar, locale, and time zone from the environment and updates every minute.
+- While `isRefreshing`, Retry is disabled and shows a small `ProgressView` next to it.
+- Content is never dimmed while stale (the mockup's 0.6 opacity fails AA).
+- A daemon that cannot be reached is not a page stale note. The app shell (spec 0013) shows one `StateBanner(tone: .caution, …, base: .window)` for the whole window and sets `MutationAvailability`.
+
+### Loading
+
+- `DelayedProgress` shows a centered `ProgressView` only after 300 ms, so a fast load never flashes a spinner. A refresh never replaces content with a spinner.
+- The delay starts when `DelayedProgress` appears. `StateView` inserts a new one each time the shape enters `.loading`, so the delay starts over each time.
+- Its model, `DelayedVisibility`, takes an injectable `sleep: @Sendable (Duration) async throws -> Void` (default `Task.sleep(for:)`), so tests never wait real time.
+
+### Mutation gate and unsupported actions
+
+- `MutationAvailability` is `.available` or `.blocked(reason:since:)`. The app shell sets it with `.environment(\.mutationAvailability, …)`; the default is `.available`.
+- `.mutationGated()` disables a control while mutations are blocked, with the reason as its help (tooltip and VoiceOver help). Apply it to every control that changes data through the daemon. A `StateAction` with `mutates: true` in a placeholder or banner is gated the same way. Copy, navigation, Retry, Open Diagnostics, and Browse Catalog are never gated. The visible reason is the shell's window banner.
+- `.disabled(reason: String?)` disables a control whose capability is not supported, with the reason as its help. Always show the reason as text too: `DisabledReasonText(reason)` (`info.circle`, `.footnote`, `textSecondary`) next to the control or in the section footer, or an unsupported placeholder. Never hide an unsupported control. Draw capability buttons only after the screen's data, capabilities included, has loaded.
+- Apply `.mutationGated()` and `.disabled(reason:)` to the control itself, not to a container. They add the help only while there is a reason, so the control keeps its own `.help` while it is enabled.
+
+### Motion and VoiceOver
+
+- Shape changes, banners appearing, and the delayed spinner crossfade with `StacklyMotion.crossfade`. Nothing moves or scales.
+- A placeholder or banner is one VoiceOver group labeled by its title. Their symbols are decorative and hidden.
+- `StateView` announces the failure title once when the shape turns `.failed`, and a critical `StateBanner` announces its title once when it appears.
 
 ## Confirmation
 
-Filled by milestone 4.
+Every confirmation in Stackly goes through one modifier: `.stacklyConfirmation(item: $request)` with a `ConfirmationRequest?` binding. Set the binding to show the dialog. No screen calls `confirmationDialog`, `.alert`, or `NSAlert` itself; the source rule test fails on any of them outside `Packages/StacklyUI/Sources/StacklyUI/Confirmation/`.
+
+```swift
+@State private var request: ConfirmationRequest?
+
+Button("Remove…") {
+    request = ConfirmationRequest(
+        title: "Remove “\(instance.id)”?",
+        message: "The instance is unregistered and its process stopped. The data directory (\(instance.dataSize)) stays on disk.",
+        actionTitle: "Remove",
+        role: .destructive
+    ) { remove(instance) }
+}
+.stacklyConfirmation(item: $request)
+```
+
+### When to confirm
+
+Confirm an action that deletes or overwrites data, deletes a record or a runtime, kills a process without a graceful stop, or disturbs another owner. A feature that adds such an action applies the same rule and adds a row here.
+
+| Action | Role | Feature |
+| --- | --- | --- |
+| Remove instance | `.destructive` | 54 |
+| Purge instance data | `.destructive` | 54 |
+| Remove runtime | `.destructive` | 55 |
+| Restore that overwrites an instance | `.destructive` | 52 |
+| Force stop | `.destructive` | 26 |
+| Stop an instance leased by an environment, or a shared one | `.destructive` | 26, 47 |
+| Stop All Services | `.destructive` | 32 |
+| Bring down an environment (stops only instances nothing else needs; data is kept) | `.standard` | 47 |
+
+No confirmation: start, stop, and restart without dependents, reload, copy, cancelling an operation, and cleaning up a cache that can be downloaded again.
+
+### Roles
+
+| Role | Action button | Return | Escape | Alert style |
+| --- | --- | --- | --- | --- |
+| `.destructive` | red (`hasDestructiveAction`), not the default | Cancel (the default button) | Cancel | `.critical` (caution badge) |
+| `.standard` | the default button | the action | Cancel | `.informational` |
+
+- Return never runs a destructive action. A keyboard user reaches it with Tab (when Keyboard navigation is on in System Settings › Keyboard) and presses it with Space. This is on purpose.
+- The default button sits at the trailing edge; the alert adds it first.
+
+### Copy
+
+- **Title:** a question that names the object, in curly quotes when it is an identifier: "Remove “pg17-dev”?", "Stop “mysql-erp”?", "Remove PostgreSQL 16.10?". Never empty.
+- **Message:** one or two sentences, first what happens, then what stays safe: "Data is kept.", "Instance data is never touched.". Name objects from the daemon's data, never a secret.
+- **Action title:** the verb from the title ("Remove", "Stop", "Overwrite", "Bring Down"), never "OK" or "Yes". Cancel is always "Cancel".
+- Mockup examples (also on the gallery's Confirmation page):
+
+| Title | Message | Action | Role |
+| --- | --- | --- | --- |
+| Remove “pg17-dev”? | The instance is unregistered and its process stopped. The data directory (1.24 GB) stays on disk. | Remove | `.destructive` |
+| Stop “mysql-erp”? | It’s leased by erp-development. Stopping it leaves the environment partially ready. Data is kept. | Stop | `.destructive` |
+| Overwrite “pg17-dev”? | Replaces the current data with bk-0412. A safety snapshot is taken first and the instance restarts. | Overwrite | `.destructive` |
+| Remove PostgreSQL 16.10? | Deletes the runtime binaries. No instance uses it. Instance data is never touched. | Remove | `.destructive` |
+| Bring down “erp-development”? | Releases the lease and stops only instances nothing else needs. Shared and manually started instances keep running. Data is kept. | Bring Down | `.standard` |
+
+- A test of a screen checks each request it builds with `request.copyProblems` (internal, through `@testable import StacklyUI`); it is empty when the copy follows these rules.
+
+### Behavior
+
+- The dialog is a native `NSAlert`: a sheet on the window of the view that has the modifier, or app modal (`runModal()`) when that view has no window, such as a menu bar popover (feature 32).
+- One confirmation at a time. A new request replaces the shown one (the old one closes without running), and setting the binding to `nil` closes the dialog without running the action. When the view disappears, the dialog closes and the binding is reset.
+- When the user answers, the modifier sets the binding to `nil`, then calls `perform` only for the action button. `perform` may set a new request.
+- `perform` sends the action through the mutation path of spec 0013. If stacklyd is unreachable when the user confirms, nothing is sent and feature 67's feedback says "stacklyd is unavailable. Nothing was sent."
+- The alert uses only system colors; custom tokens have no `NSColor` accessor.
+
+### Why NSAlert, not `confirmationDialog`
+
+Checked in build step 17 on macOS 27.0 (26A428) with Xcode 27.0 (27A266a), in the Debug Design Gallery with real Return and Escape key presses and the accessibility tree. SwiftUI's `confirmationDialog` is an `NSAlert` sheet underneath, and one button holds one key equivalent:
+
+- Cancel with `keyboardShortcut(.defaultAction)`: Return cancels, but Escape does nothing (the alert has no cancel button left).
+- Cancel without a shortcut, in either order, or with `.cancelAction`, or the action with another shortcut: Escape cancels, but Return does nothing (there is no default button).
+- A request replaced while the dialog is open updates the buttons but keeps the old title, message, and severity.
+
+So the modifier builds the `NSAlert` itself: for a destructive request, Cancel takes Return as its key equivalent and the modifier maps a plain Escape to Cancel with a local key monitor while the alert is open. Setting the window's `defaultButtonCell` instead does not work: it overwrites Cancel's Escape key equivalent with Return. A replaced request closes the old alert and shows a new one. With this path the check passed: destructive Return and Escape cancel without running the action, standard Return runs it and Escape cancels, and a replaced request shows its own title. `ConfirmationTests` pins the alert's buttons, order, styles, and key equivalents; `/check verify` repeats the key check and the Tab and Space check with Keyboard navigation on.
 
 ## Motion
 
