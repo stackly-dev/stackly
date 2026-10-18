@@ -123,7 +123,11 @@ impl LockError {
 }
 
 /// The exclusive daemon lock, held until [`DaemonLock::release`] or until
-/// the value is dropped (closing the file releases the lock too).
+/// the value is dropped.
+///
+/// Prefer `release`: it unlocks at once. Dropping only closes the file,
+/// and `flock` lasts until every copy of the open file is closed; a child
+/// process spawned at that moment holds a copy until its `exec` closes it.
 #[derive(Debug)]
 pub struct DaemonLock {
     file: File,
@@ -231,6 +235,8 @@ fn write_owner(file: &mut File, owner: &LockOwner) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
+    use std::thread;
+    use std::time::{Duration, Instant};
 
     use stackly_testkit::{TestRoot, make_fifo};
 
@@ -383,7 +389,19 @@ mod tests {
         let path = lock_path(&root);
         drop(DaemonLock::acquire(&path, owner(41)).unwrap());
 
-        DaemonLock::acquire(&path, owner(42)).unwrap();
+        // Other tests in this process spawn `mkfifo`; a child spawned while
+        // the first lock was open holds a copy of it until its exec, so the
+        // lock may stay held for a moment after the drop.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match DaemonLock::acquire(&path, owner(42)) {
+                Ok(_) => break,
+                Err(LockError::Held { .. }) if Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("the dropped lock was not released: {error:?}"),
+            }
+        }
     }
 
     #[test]
