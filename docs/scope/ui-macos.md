@@ -59,7 +59,7 @@ Bahasa visual native macOS dari mockup UI dan pola state yang dipakai semua laya
   - [x] State patterns: `ViewState.resolve`, `StateView`, placeholders, banners, `DelayedProgress`, `MutationAvailability`, and `.disabled(reason:)` (spec 0012 AC-1, AC-8 to AC-14, AC-16 to AC-18, AC-20; can run in parallel after milestone 1)
   - [x] Confirmation: the keyboard check on macOS 27, then `.stacklyConfirmation(item:)` and the confirmation rules (spec 0012 AC-1, AC-15, AC-17, AC-18; can run in parallel after milestone 1)
 - [ ] Verify it: `/check verify design system & UI foundation`
-- [ ] Test it: `/test design system & UI foundation`
+- [x] Test it: `/test design system & UI foundation`
 
 ### 13. App shell SwiftUI & Swift client · needs a decision
 
