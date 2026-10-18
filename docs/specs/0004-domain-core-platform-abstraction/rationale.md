@@ -482,6 +482,79 @@ Holder environment, manual, atau startup, sesuai `instance_demands` (basis: PRD 
 
 - Keputusan stop harus melihat dua tempat, lease dan intent di instance.
 
+### Keputusan 17: operasi hapus di port `Filesystem` (2026-10-18, diganti di ronde 2)
+
+> Diganti pada hari yang sama, ronde 2 rekonsiliasi: engineer memilih satu primitive `remove_tree` dari spec 0007 (yang ia setujui di sesi spec 0007 dan sedang dibangun fitur 7 milestone 2), dipanggil hanya lewat `remove_owned_tree`, dengan kompensasi berbasis kepemilikan spec 0007. `remove_file` dan `remove_empty_dir` dibuang. Opsi di bawah adalah catatan pilihan ronde 1.
+
+Spec 0009 butuh `remove_file` untuk file secret sementara, spec 0011 butuh `remove_file` dan `remove_empty_dir` untuk menyapu folder `secrets/`, dan kompensasi fitur 7 (spec 0007, ditulis paralel) butuh membersihkan hasil create yang gagal (basis: Follow-up spec 0009 dan 0011, BR-023).
+
+#### Option 1: Dua primitive tanpa rekursif
+
+`remove_file` (file biasa atau symlink itu sendiri, tidak pernah folder) dan `remove_empty_dir` (hanya folder kosong). Port tidak memeriksa root; core memanggil `check_owned_path` dulu. Kompensasi menghapus persis path yang dicatat, urut terbalik, dan folder berisi membuat operasi `needs_recovery`.
+
+**Pros**:
+
+- Tidak ada satu panggilan pun yang bisa menghapus pohon data karena salah path; kesalahan paling buruk menghapus satu file.
+- Cukup untuk 0009, 0011, dan kompensasi create sebelum `initdb`.
+- Mudah diuji sama persis untuk fake dan adapter macOS lewat `fs_conformance`.
+
+**Cons**:
+
+- Create yang gagal setelah `initdb` setengah jalan tidak bersih otomatis; pengguna melihat `needs_recovery`.
+- Purge (fitur 54) tetap harus memutuskan penghapusan rekursif sendiri.
+
+#### Option 2: Ditambah `remove_tree` sekarang
+
+Primitive di atas plus penghapusan rekursif tanpa follow symlink di port.
+
+**Pros**:
+
+- Kompensasi dan purge langsung punya satu jalan yang sama.
+
+**Cons**:
+
+- Operasi paling berbahaya di Stackly dirancang sebelum fitur yang memakainya (fitur 54) menulis aturannya, termasuk apa yang terjadi pada data yang mungkin masih dibutuhkan restore.
+- Satu bug path di kompensasi bisa menghapus seluruh `data/`.
+
+#### Option 3: `remove_file` saja
+
+Sesuai 0009 saja.
+
+**Pros**:
+
+- Permukaan port paling kecil.
+
+**Cons**:
+
+- 0011 tidak bisa menyapu folder `secrets/`, jadi update spec ini datang lagi segera.
+
+### Keputusan 18: cara port baru masuk ke `Platform` (2026-10-18)
+
+Spec 0011 menambah `SecretStore` sebagai port keenam, dan fitur 10, 15, dan 28 akan menambah port lagi (basis: Follow-up spec 0011, Keputusan 1).
+
+#### Option 1: `with_<port>` dengan default Unsupported
+
+`Platform::new` tetap lima port fitur 4; port baru masuk lewat builder `with_<port>` dan defaultnya implementasi Unsupported.
+
+**Pros**:
+
+- Konstruktor tidak patah setiap ada port baru, jadi `FakePlatform`, `MacosPlatform`, `UnsupportedPlatform`, dan semua test tidak ikut berubah.
+- Windows tetap jujur tanpa kode tambahan: port yang tidak dipasang menjawab not supported.
+
+**Cons**:
+
+- Adapter yang lupa memasang portnya diam diam menjawab not supported; harus dijaga test capability adapter.
+
+#### Option 2: Argumen baru di `Platform::new` (bentuk asli spec 0011)
+
+**Pros**:
+
+- Compiler memaksa setiap pemanggil memikirkan port baru.
+
+**Cons**:
+
+- Setiap fitur yang menambah port mengubah semua pemanggil konstruktor, dan fitur yang ditulis paralel saling bentrok di satu signature.
+
 ## Rationale
 
 **Batas dan port (keputusan 1, 4, 12, 14).** Kekuatan yang paling menentukan adalah aturan arah dependency spec 0001 dan kewajiban PRD bagian 15.2 bahwa semua mutasi penting bisa diuji dengan fake platform. Port yang hanya dibuat saat dipakai (keputusan 1) menghindari desain ganda di fitur 6, 10, dan 11, sementara daftar capability lengkap sudah cukup untuk AC-050. Trait sync yang dibundel (keputusan 4) adalah satu satunya bentuk yang object safe tanpa tokio di `stackly-platform`, dan biaya `spawn_blocking` jatuh di daemon yang memang async. Fake di atas disk asli (keputusan 12) dipilih karena bug yang paling mahal di fitur ini justru di perilaku filesystem: symlink, nama yang beda huruf di APFS, dan path yang bocor keluar root. Fake di memori akan menguji tiruan, bukan perilaku itu. Windows tidak mendapat kode yang tidak bisa dibuktikan (keputusan 14), karena REQ-050 meminta siap, bukan selesai.
@@ -489,6 +562,8 @@ Holder environment, manual, atau startup, sesuai `instance_demands` (basis: PRD 
 **Layout (keputusan 5, 6, 7, 8, 10, 11).** Angka 104 byte adalah batas keras yang memaksa dua lapis root: data yang panjang dan tahan lama di `~/Library`, dan socket yang pendek dan sementara di temp dir user. Temp dir Darwin dipilih di atas `/tmp` karena privasi folder itu dijamin OS, bukan oleh pemeriksaan kita sendiri, dan risiko pembersihan berkala bisa ditangani daemon yang memeriksa ulang socket, sedangkan risiko squatting di `/tmp` adalah masalah keamanan. Kunci pendek dari ID (keputusan 11) menjaga path socket instance di bawah anggaran tanpa field baru. `STACKLY_ROOT` (keputusan 7) adalah satu satunya cara yang membuat biner daemon asli bisa diuji ke test root, dan aturan bahwa override tidak boleh menunjuk ke root data default menutup risiko terbesarnya. Path runtime dengan digest dan pemindahan ke `retained/` (keputusan 8 dan 10) mengikuti prinsip yang sama dengan manifest: folder harus menjelaskan dirinya sendiri.
 
 **Domain (keputusan 2, 3, 9, 13, 15, 16).** State machine berbasis tabel (keputusan 13) dipilih karena state hidup di registry dan di IPC, dan reconciliation harus bisa memuat state apa pun; typestate akan memaksa konversi di setiap batas. Operation masuk domain (keputusan 3) supaya fitur 5 menyimpan kode state yang sudah teruji. BR yang bisa dicek menjadi kode (keputusan 2), karena evidence untuk fungsi kosong lebih berbahaya daripada tidak ada evidence. BR-009 diperluas ke semua provider (keputusan 15), karena kerusakan data akibat binary yang salah tidak khas PostgreSQL. Satu Lease untuk semua demand (keputusan 16) membuat BR-014, BR-015, dan BR-024 menjadi satu fungsi murni yang mudah diuji. Manifest berhenti di kompatibilitas data (keputusan 9), karena field yang sering berubah adalah sumber drift.
+
+**Rekonsiliasi (keputusan 17, 18).** Operasi hapus dibuat sekecil mungkin karena kekuatan yang paling menentukan adalah BR-023 (kompensasi hanya menghapus yang dibuat operasinya) dan kerugian yang tidak bisa dibatalkan kalau data pengguna terhapus; kebersihan otomatis setelah `initdb` setengah jalan kalah penting dibanding jaminan bahwa satu bug path tidak menghapus pohon data. Pola `with_<port>` dipilih karena lima spec ditulis paralel dan semuanya menyentuh `Platform`; konstruktor yang tetap menghilangkan bentrok itu, dan default Unsupported menjaga janji REQ-050 bahwa capability yang belum dibuat menjawab jujur. Port registry di domain dan `ipc_endpoint` tanpa trait diterima apa adanya dari spec 0005 dan 0006 (alasannya di rationale masing masing): trait yang sync dan tanpa IO cocok di domain, dan transport async tidak cocok di port sync tanpa tokio.
 
 ### Keputusan kecil yang diambil di spec ini
 
@@ -523,6 +598,27 @@ Holder environment, manual, atau startup, sesuai `instance_demands` (basis: PRD 
 | Pembacaan manifest | decode `schema` lebih dulu, `O_NOFOLLOW` plus `fstat` | schema baru terbaca sebagai `UnsupportedSchema`, bukan rusak; FIFO tidak pernah membuat inventaris macet | decode penuh langsung |
 | Entri `.DS_Store` | dilewati tanpa entri | Finder membuatnya begitu folder dibuka, dan melaporkannya hanya menambah bising | dilaporkan sebagai entri asing |
 | Nama enum capability platform | `PlatformCapability` | tidak tertukar dengan `Capability` provider di domain | nama sama di dua crate |
+| Manifest di `InventoryEntry::Found` | `Box<InstanceManifest>` (build fitur 4) | lint clippy `large_enum_variant` gagal dengan `-D warnings` | field tanpa box dengan `allow` lint |
+| `ObservationDetail` kosong | ditolak; tidak ada detail ditulis `None` (build fitur 4) | satu bentuk untuk "tidak ada" | string kosong diterima |
+| Revision pada `rename` dan `set_desired` | naik tepat 1 setiap panggilan, juga saat nilainya sama (build fitur 4) | aturan "setiap mutasi naik tepat 1" tanpa pengecualian; pemanggil yang ingin idempoten memeriksa dulu, sama seperti state machine | tidak naik kalau nilai sama |
+| Kode konstanta | `const fn from_static` di `ReasonCode`, `FailureCode`, `StageName` (build fitur 4) | kode yang ditulis sebagai konstanta dicek saat compile, tanpa `expect` di runtime | parse saat runtime dengan `expect` |
+| Readiness dan health | satu `Observation<S>` generik dengan alias (build fitur 4) | aturan observasi lama dan kesegaran ditulis sekali | dua tipe terpisah |
+| Tipe `max_age` | `std::time::Duration` (build fitur 4) | durasi bukan waktu kalender, dan core tidak perlu `jiff` | `jiff::SignedDuration` |
+| Waktu di runtime | `Runtime::apply(event, at)` (build fitur 4) | `installed_at` dan `last_verified_at` butuh sumber, dan domain tidak membuat waktu sendiri | field diisi pemanggil secara terpisah |
+| Bentuk endpoint | `Endpoint::Ip(IpEndpoint)` dan `Endpoint::Unix(UnixEndpoint)` (build fitur 4) | `resolve_port` tidak bisa menerima endpoint Unix karena tipenya | satu enum dengan field langsung dan cek saat runtime |
+| Nama environment dan alias member | `EnvironmentName` dan `MemberAlias` (build fitur 4) | setiap nama punya tipe sendiri, seperti nama lain di domain | `InstanceName` dipakai ulang |
+| Error yang gagal dua cara | `DomainError { Transition, Invariant }` (build fitur 4) | satu tipe dengan `rule()` untuk `apply_lifecycle` dan `Runtime::remove` | `Box<dyn Error>` |
+| Input `evaluate_stop` | `InstanceId` plus semua lease, lease instance lain diabaikan (build fitur 4) | pemanggil tidak perlu menyaring | pemanggil wajib menyaring |
+| Baca dan tulis manifest | menerima `&Platform` (build fitur 4) | sama dengan semua use case core | `&dyn Filesystem` saja |
+| `jiff` di core | belum di fitur 4 | aturan workspace: crate masuk saat kode memakainya | dependency langsung sekarang |
+| Folder `keychain/` | bukan subfolder standar `prepare_layout` | hanya dipakai dengan `STACKLY_ROOT` | selalu dibuat `prepare_layout` |
+| `ensure_private_dir` | privat sampai fitur di luar modul `layout` membutuhkannya | permukaan API core tetap kecil | publik sekarang |
+| Bukti VAL-001 dan VAL-002 | di test ujung ke ujung fitur 20 dan 9 | AC fitur 4 tidak bertambah, dan bukti dari input nyata lebih bermakna | guard di test value type fitur 4 |
+| Pembangun operasi hapus | fitur 7 milestone 2 (spec 0007), satu primitive `remove_tree` (ronde 2; ronde 1 sempat memilih fitur 11 dengan dua primitive) | primitive yang sudah diputuskan spec 0007 dan sedang dibangun; satu jalur hapus lewat `remove_owned_tree` lebih mudah diaudit daripada tiga | tiga primitive (tambah `remove_file` dan `remove_empty_dir` dari fitur 11) |
+| Target file atau symlink di `remove_tree` | dihapus sebagai dirinya sendiri, termasuk socket dan FIFO | satu primitive cukup untuk file secret, spool, dan socket basi | primitive terpisah per jenis entri |
+| OS di default Unsupported | dari `PlatformInfo::target()` milik `Platform` | `UnsupportedPlatform` untuk Windows diuji di Mac dan harus menjawab `windows` | OS host |
+| Status capability port tambahan | `Platform::capabilities()` memaksa not supported kalau port tidak dipasang | satu arah kesalahan yang aman, tanpa dua sumber kebenaran yang bisa saling bertentangan ke arah berbahaya | percaya `PlatformInfo` saja |
+| Pemeriksaan privasi folder di luar core | `check_private_dir` murni di `stackly-platform`, dipindah fitur 11 | adapter Keychain di `stackly-platform-macos` tidak boleh bergantung pada core | aturan disalin di adapter |
 
 ### Cross check
 
@@ -549,6 +645,27 @@ Draf pertama spec ini dibaca ulang oleh model lain (Sonnet 5.5) dengan akses bac
 
 CI ditiadakan atas keputusan pemilik proyek, dan pengembangan fokus di Mac ini dulu. Tidak ada keputusan yang berubah. Yang diganti hanya tempat test berjalan: test core untuk AC-9 sampai AC-11, test AC-13, dan cek portabilitas kini dijalankan manual di Mac ini, bukan di job CI Linux dan macOS. Pro dan kontra keputusan 14 disesuaikan, karena tidak ada lagi test di Linux.
 
+### Perubahan 2026-10-18
+
+Update `/architect` untuk merekonsiliasi spec ini dengan spec yang diterima sesudahnya (0005, 0006, 0009, 0011, 0012) dan dengan keputusan build fitur 4.
+
+- **Titik perluasan**: semua yang diminta Follow-up spec 0005, 0006, 0009, dan 0011 dicatat dengan tanda *(ditambah fitur N, spec NNNN)* dan tabel *Titik perluasan dari fitur lain*. Acceptance criteria fitur 4 tidak bertambah; hanya AC-1 yang dirumuskan ulang supaya tidak mencakup titik perluasan.
+- **Keputusan engineer**: operasi hapus dua primitive tanpa rekursif dan bentuk kompensasi untuk spec 0007 (keputusan 17); port baru lewat `with_<port>` (keputusan 18, mengganti bentuk "argumen keenam" di spec 0011); port registry tetap di `stackly-domain` sesuai spec 0005; `ipc_endpoint` tanpa trait sesuai spec 0006; `Capability::MultiInstance` dan `Capability::Persistence` sesuai spec 0009; bukti VAL-001 dan VAL-002 di fitur 9 dan 20. Semua mengikuti rekomendasi.
+- **Keputusan build fitur 4** yang sebelumnya tidak tertulis kini masuk *Model domain*, *State machine*, *API surface*, dan *Value sourcing*, dengan alasan di tabel keputusan kecil (sumber: catatan hand-over langkah 8, milestone 2, dan milestone 3, serta kode di `crates/domain` dan `crates/core`).
+- **Cross check model lain** (Sonnet 5.5, baca saja) atas update ini menemukan celah yang diperbaiki atas persetujuan engineer: pembangun tunggal operasi hapus (fitur 11) dan cakupan `remove_file`, OS default Unsupported, status capability port tambahan, `check_private_dir`, `observed_at` pada blocker, kewajiban event saat observasi basi, dan arti centang Follow-up.
+- **Penutupan fitur 4** (milestone 4, verify, test): modul core `observation` memegang `READINESS_MAX_AGE` bertipe `std::time::Duration` (core tetap tanpa `jiff`), `proc-macro2` dengan `span-locations` menjadi dependency langsung xtask untuk nomor baris, pindaian source tinggal di `check_deps/source_scan.rs` dengan pengecualian yang lebih rinci dari teks awal (target lib dan bin saja, item test, attribute, build script, `examples/`, `benches/`), dan engineer menerima keenam pilihan build yang sebelumnya tidak tertulis. Rinciannya di [verify.md](verify.md).
+- **Pengecekan silang Assumed** antara spec 0005, 0006, 0009, 0011, dan 0012 menemukan 24 selisih, yang diperbaiki di spec pemiliknya masing masing atas persetujuan engineer (lihat bagian perubahan di rationale spec itu).
+
+### Perubahan 2026-10-18, ronde 2
+
+Rekonsiliasi dengan spec 0007, 0008, 0010, dan 0013, dengan keputusan engineer (semua mengikuti rekomendasi):
+
+- **Hapus**: satu primitive `remove_tree` dan core `remove_owned_tree` dari spec 0007 menggantikan `remove_file` dan `remove_empty_dir` ronde 1 (keputusan 17 diganti).
+- **Recovery**: laporan recovery dikirim sebagai `DaemonHealth.recovery`, bukan `DaemonInfo.recovery`, karena GUI memanggil health setiap 15 detik (spec 0013).
+- **Urutan status instance**: `statusSeq` spec 0010 menjadi pengecualian resmi di resep snapshot plus cursor spec 0006.
+- **File secret**: `materializeSecret.destination` cukup nama file dengan token `${instance.secrets}` (spec 0010, diterapkan di spec 0009).
+- **Titik perluasan baru**: modul `operation::journal`, `LockKey`, `RecoveryHint`, `Operation::touch`, `OperationKind::resumable()`, `Outcome::Failed` (fitur 7); port `ProcessSupervision` lewat `with_processes`, modul domain `process`, blocker `DataInUse` dan `IdentityUnproven`, `set_bound_port`, `InstancePaths.lock`, `instance_spool` (fitur 10); `STACKLY_NO_INPUT` (fitur 8); `default_runtime_root` dan `STACKLY_ROOT` di app (fitur 13).
+
 ## References
 
 **Project sources**:
@@ -558,6 +675,8 @@ CI ditiadakan atas keputusan pemilik proyek, dan pengembangan fokus di Mac ini d
 - Spec [0002](../0002-coding-standards-tooling/index.md): guard evidence, crate `stackly-evidence` sebagai dependency dev domain, dan test yang membuktikan ID PRD.
 - Spec [0003](../0003-sumber-packaging-runtime/index.md): pola versi exact, id artefak `<provider>-<version>-macos-aarch64`, dan folder socket pendek `/tmp/sk-<8 hex>` di spike.
 - `docs/scope/01-foundation.md`: Done when fitur 4.
+- Spec [0005](../0005-data-model-registry/index.md), [0006](../0006-protokol-ipc-daemon/index.md), [0009](../0009-provider-engine-manifest-schema/index.md), dan [0011](../0011-secret-store-redaction/index.md): Follow-up untuk spec ini dan titik perluasan yang dicatat.
+- Catatan hand-over build fitur 4 (langkah 8, milestone 2, milestone 3) dan kode `crates/domain/src/`, `crates/core/src/`: keputusan build yang direkam di update 2026-10-18.
 - PRD bagian 6, 9 (BR-001 sampai BR-025), 10 (VAL-001, VAL-002, VAL-007, VAL-008), 13.2, 15, 17, 18.2, 19.1 sampai 19.5, 20.1, dan 26; REQ-001, REQ-050, REQ-053; NFR-010; AC-050, AC-052, AC-053, AC-074.
 - Kode scaffold: `crates/domain/src/instance_id.rs`, `crates/platform/src/lib.rs`, `crates/platform-macos/src/lib.rs`, `crates/testkit/src/test_root.rs`, `apps/daemon/src/main.rs`.
 - Skill `rust-best-practices` (`.claude/skills/rust-best-practices/`): newtype dengan validasi, error dengan thiserror.

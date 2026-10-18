@@ -651,3 +651,18 @@ Draft dibaca ulang oleh Sonnet 5.5 sebagai kritik read only (2026-10-18). Hasiln
 - Follow-up baru: langkah berhenti daemon di spec 0006, baris pohon layout di spec 0004, `unknown` dihitung berjalan di spec 0011, arti `foreground` di spec 0009, dan harness konformitas fitur 36.
 
 Residual risk yang dinyatakan alih alih diperbaiki: spool tumbuh tanpa batas selama daemon mati, proses tertahan dari daemon yang mati di jendela spawn menjadi `unknown`, dan secret yang terpotong batas `LOG_LINE_HARD_MAX`.
+
+## Perubahan 2026-10-18 (rekonsiliasi lintas spec, ronde 2)
+
+Pengecekan silang dengan spec 0007, 0008, dan 0013 dan keputusan engineer di pass rekonsiliasi:
+
+| Selisih | Perbaikan | Alasan |
+| --- | --- | --- |
+| Spec ini mengasumsikan `begin(kind, resource, trigger, ..) -> OperationHandle`, yang tidak ada di spec 0007 | operasi instance ditulis di atas `OperationWork` dan `StepSpec` spec 0007, dengan pemetaan origin, `BusyPolicy`, `LockTable::holder`, dan `try_lock_internal` | satu engine untuk semua operasi; API yang diasumsikan akan menjadi engine kedua |
+| Spec 0007 menandai operasi instance bisa dilanjutkan dan mengompensasi spawn dengan stop, padahal AC-9 dan AC-21 menjanjikan proses selamat dari restart daemon | kebijakan `CloseInterrupted` di spec 0007: `recover` menutup operasi instance yang terputus `failed interrupted` tanpa kompensasi, lalu rekonsiliasi mengadopsi prosesnya | janji survival hanya bisa ditepati kalau tidak ada kompensasi yang menyinyal proses |
+| Penolakan state dijawab sebelum pencarian idempotency key | key lebih dulu, lalu state; `InstanceActionAccepted` membungkus `OperationAccepted` | replay harus tetap mengembalikan reply aslinya |
+| `Platform::new` mendapat argumen ketujuh | `with_processes` (spec 0004 keputusan 18) | konstruktor tetap untuk semua port tambahan |
+| `needs_secret` tanpa area, dan daftar di `details` | `secret.needs_secret`; daftar `checks` dan `environments` menjadi `items` (spec 0006) | aturan kode dan `ErrorItem` spec 0006 |
+| Spec 0013 butuh versi runtime, halaman yang dibatasi ukuran, dan kabar instance yang di retain | `runtimeVersion` di summary, halaman di bawah 900 KiB dengan cursor opaque, dan `instance.state_changed` dengan lifecycle `retained` | batas frame spec 0006 dan daftar GUI yang selalu benar |
+
+Cross check model lain atas ronde 2 menambah, atas persetujuan engineer: start sistem dari rekonsiliasi dikirim setelah `start()` dengan `BusyPolicy::Queue`, jawaban `alreadyInState` lewat `precheck` spec 0007 (mengikat key kalau menulis desired state), field status di `instance.state_changed` ikut `statusSeq`, dan sweep `secrets/` menghitung lifecycle `starting`, `running`, `recovering`, `stopping`, dan `unknown` sebagai berjalan.

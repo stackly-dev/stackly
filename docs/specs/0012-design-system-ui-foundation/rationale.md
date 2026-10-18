@@ -839,3 +839,19 @@ Dijalankan 2026-10-18 oleh model lain (Sonnet 5.5) sebagai pembacaan read only. 
 - Judul dialog yang disimpan selama ditutup, window untuk cadangan `NSAlert`, dan cek keyboard sebagai langkah pertama milestone 4.
 - Tombol capability baru digambar setelah data termuat.
 - Copy yang mengikuti mockup ("try another status", "Showing the last known state from…"), AC-16 yang dirumuskan ulang, dan AC-20 baru untuk gate mutasi.
+
+## Perubahan 2026-10-18 (rekonsiliasi lintas spec)
+
+Pengecekan silang Assumed lines antara spec 0005, 0006, 0009, 0011, dan 0012 menemukan dua selisih yang menyentuh spec ini. Engineer menyetujui keduanya.
+
+| Selisih | Perbaikan | Alasan | Runner up |
+| --- | --- | --- | --- |
+| Spec 0006 meminta nilai enum terbuka yang tidak dikenal ditampilkan apa adanya, tetapi enum status UI tidak punya case untuk itu, dan fallback 0006 semula bernama `unknown` yang bentrok dengan state asli | case `unrecognized` di `LifecycleStatus`, `ReadinessStatus`, `HealthStatus`, dan `OperationStatus`: label "Unrecognized State", tone `caution`, simbol `questionmark.diamond.fill`, detail "Update Stackly to see this state" | pengguna melihat bahwa app nya lebih tua dari daemon, bukan state yang ditebak, dan labelnya tidak tertukar dengan "Unknown" (cross check) | memetakan ke `unknown` yang sudah ada |
+| Asumsi bahwa capability provider dikirim spec 0009 dan 0006, padahal keduanya tidak punya DTO itu | asumsi diarahkan ke spec 0013 dan fitur 20 | DTO layar ditetapkan spec yang membangun layar dan data instance | |
+
+### Temuan langkah 17 (2026-10-18, dicatat atas persetujuan engineer)
+
+Cek di macOS 27.0 dan Xcode 27.0, di Design Gallery dengan event keyboard nyata dan pohon aksesibilitas: `confirmationDialog` SwiftUI adalah sheet `NSAlert`, dan satu tombol hanya memegang satu key equivalent. Dengan desain spec (Cancel destructive sebagai `.defaultAction`), Return membatalkan tetapi Escape tidak berbuat apa apa; tanpa shortcut atau dengan `.cancelAction`, Escape membatalkan tetapi Return tidak berbuat apa apa. Keduanya gagal AC-15. Jalur cadangan yang sudah ada di spec dipakai: `NSAlert` langsung, dengan Cancel memegang Return dan monitor `keyDown` lokal untuk Escape pada role destructive. Empat run penuh lolos (satu run pertama kehilangan Return sintetis tepat setelah peluncuran, tanpa aksi yang berjalan). API modifier tidak berubah, jadi layar tidak terpengaruh.
+
+Ronde 2 rekonsiliasi (2026-10-18), dari Follow-up spec 0013 dan atas persetujuan engineer: lebar konten minimum 640 pt menjadi final, setter environment bernama `.mutationAvailability(_:)`, footer status daemon memakai `StatusLabel` `.row`, dan tone banner status daemon (informative untuk starting, connecting lambat, shutting down; critical untuk incompatible, untrusted, recovery, misconfigured).
+

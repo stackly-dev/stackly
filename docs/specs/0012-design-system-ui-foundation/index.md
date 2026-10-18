@@ -5,7 +5,7 @@
 
 ## Summary
 
-Spec ini menetapkan bahasa visual aplikasi macOS Stackly dan pola yang dipakai semua layar: tipografi dari text style bawaan macOS, warna netral dari sistem kecuali teks sekunder dan permukaan kartu, palet status lima tone dengan warna teks yang lolos WCAG AA (dan 7:1 saat Increase Contrast), Liquid Glass hanya dari kontrol native, lima bentuk state halaman (loading, empty, failed, unsupported, dan loaded yang bisa membawa keterangan stale atau partial), serta satu pola konfirmasi di atas `confirmationDialog` native. Aturannya ditulis untuk builder di `apps/macos/design.md` (bahasa Inggris). Kodenya ada di package `StacklyUI`: token, `StatusLabel`, `ToneBadge`, `ViewState` beserta view state, gate mutasi lewat environment, modifier konfirmasi, dan galeri, dengan test kontras dan test aturan sumber yang otomatis. Fitur 13, 14, 67 sampai 69, dan semua layar journey membangun di atasnya tanpa memutuskan ulang warna, state, atau konfirmasi.
+Spec ini menetapkan bahasa visual aplikasi macOS Stackly dan pola yang dipakai semua layar: tipografi dari text style bawaan macOS, warna netral dari sistem kecuali teks sekunder dan permukaan kartu, palet status lima tone dengan warna teks yang lolos WCAG AA (dan 7:1 saat Increase Contrast), Liquid Glass hanya dari kontrol native, lima bentuk state halaman (loading, empty, failed, unsupported, dan loaded yang bisa membawa keterangan stale atau partial), serta satu pola konfirmasi native (`NSAlert` di macOS 27, karena `confirmationDialog` gagal cek keyboard). Aturannya ditulis untuk builder di `apps/macos/design.md` (bahasa Inggris). Kodenya ada di package `StacklyUI`: token, `StatusLabel`, `ToneBadge`, `ViewState` beserta view state, gate mutasi lewat environment, modifier konfirmasi, dan galeri, dengan test kontras dan test aturan sumber yang otomatis. Fitur 13, 14, 67 sampai 69, dan semua layar journey membangun di atasnya tanpa memutuskan ulang warna, state, atau konfirmasi.
 
 ## Requirements
 
@@ -134,12 +134,14 @@ Lima tone dengan arti tetap:
 
 | Enum | Case |
 | --- | --- |
-| `LifecycleStatus` | `uninitialized`, `initializing`, `stopped`, `starting`, `running`, `recovering`, `stopping`, `failed`, `unknown`, `retained` (sepuluh state spec 0004) |
-| `ReadinessStatus` | `ready`; `awaitingProbe` (readiness `not_ready` dengan reason `awaiting_probe`); `notReady(detail: String?)` (readiness `not_ready` dengan reason lain, detail dari daemon); `unknown` (readiness `unknown`, termasuk hasil `effective` yang stale) |
-| `HealthStatus` | `unknown`, `healthy`, `degraded`, `unhealthy` |
-| `OperationStatus` | `queued`, `running`, `cancelRequested`, `succeeded`, `failed`, `cancelled`, `needsRecovery` |
+| `LifecycleStatus` | `uninitialized`, `initializing`, `stopped`, `starting`, `running`, `recovering`, `stopping`, `failed`, `unknown`, `retained` (sepuluh state spec 0004), plus `unrecognized` |
+| `ReadinessStatus` | `ready`; `awaitingProbe` (readiness `not_ready` dengan reason `awaiting_probe`); `notReady(detail: String?)` (readiness `not_ready` dengan reason lain, detail dari daemon); `unknown` (readiness `unknown`, termasuk hasil `effective` yang stale); `unrecognized` |
+| `HealthStatus` | `unknown`, `healthy`, `degraded`, `unhealthy`, `unrecognized` |
+| `OperationStatus` | `queued`, `running`, `cancelRequested`, `succeeded`, `failed`, `cancelled`, `needsRecovery`, `unrecognized` |
 
 Daemon yang menerapkan `effective(now, max_age)` spec 0004 sebelum mengirim readiness dan health, jadi GUI tidak menghitung kesegaran sendiri.
+
+`unrecognized` adalah nilai yang dikirim daemon yang lebih baru tetapi tidak dikenal versi app ini (fallback enum terbuka spec 0006). Ia berbeda dari `unknown`, yang adalah state asli spec 0004, dan tidak pernah ditebak menjadi state lain. Adapter spec 0013 memetakannya ke case ini hanya kalau DTO nya enum terbuka; enum tertutup tidak pernah menghasilkannya.
 
 `StatusAppearance` berisi `label: String`, `tone: Tone`, `symbol: String`, dan `detail: StatusDetail?`, dengan `StatusDetail { text: String, tone: Tone }`. Paling banyak satu detail.
 
@@ -162,6 +164,8 @@ Daemon yang menerapkan `effective(now, max_age)` spec 0004 sebelum mengirim read
 | `failed` | | Failed | `critical` | `xmark.circle.fill` | tidak ada (alasan kegagalan ditampilkan banner layar, fitur 33) |
 | `unknown` | | Unknown | `caution` | `questionmark.circle.fill` | Process identity not confirmed (`caution`) |
 | `retained` | | Retained | `neutral` | `archivebox.circle.fill` | tidak ada |
+| `unrecognized` | | Unrecognized State | `caution` | `questionmark.diamond.fill` | Update Stackly to see this state (`caution`) |
+| `running` | readiness atau health `unrecognized` | sama dengan baris readiness `unknown` atau health `unknown` | | | |
 
 **Status operasi** (state dari spec 0004; `partial` hanya berpengaruh saat `succeeded` dan diabaikan di state lain):
 
@@ -175,6 +179,7 @@ Daemon yang menerapkan `effective(now, max_age)` spec 0004 sebelum mengirim read
 | `failed` | Failed | `critical` |
 | `cancelled` | Cancelled | `neutral` |
 | `needsRecovery` | Needs Recovery | `critical` |
+| `unrecognized` | Unrecognized State | `caution` |
 
 Status operasi tampil sebagai `ToneBadge`, jadi `symbol` di `StatusAppearance.operation` adalah simbol tone dan `detail` selalu kosong.
 
@@ -285,7 +290,7 @@ Tampilan per bentuk (`StateView(state:retry:openDiagnostics:content:)`, `retry` 
 - Error per item (instance gagal, konflik port, drift) tidak memakai `ViewState`; layar menaruh `StateBanner` di item itu (mockup: banner gagal di Summary, drift di Configuration).
 - Placeholder dan banner adalah satu kelompok VoiceOver dengan judul sebagai label; perubahan ke `failed` dan munculnya banner critical memanggil `announce` sekali.
 
-**Gate mutasi**: `MutationAvailability` (`.available` atau `.blocked(reason: String, since: Date)`) adalah nilai environment yang diisi shell (spec 0013) saat daemon tidak terjangkau atau sebab global lain. `.mutationGated()` menonaktifkan view selama `.blocked` dan memasang `.help(reason)`. `StatePlaceholder` dan `StateBanner` menerapkan gate yang sama ke `StateAction` dengan `mutates` true. Alasan yang terlihat untuk keadaan ini adalah banner jendela milik shell. Tombol yang tidak mengubah data tidak diberi `.mutationGated()`.
+**Gate mutasi**: `MutationAvailability` (`.available` atau `.blocked(reason: String, since: Date)`) adalah nilai environment yang diisi shell (spec 0013) saat daemon tidak terjangkau atau sebab global lain, lewat `EnvironmentValues.mutationAvailability` dan modifier publik `.mutationAvailability(_:)`. `.mutationGated()` menonaktifkan view selama `.blocked` dan memasang `.help(reason)`. `StatePlaceholder` dan `StateBanner` menerapkan gate yang sama ke `StateAction` dengan `mutates` true. Alasan yang terlihat untuk keadaan ini adalah banner jendela milik shell. Tombol yang tidak mengubah data tidak diberi `.mutationGated()`.
 
 **Unsupported di luar halaman**: `.disabled(reason: String?)` menonaktifkan view saat `reason` tidak nil dan memasang `.help(reason)`, yang di macOS menjadi tooltip dan bantuan VoiceOver. Layar wajib menaruh `DisabledReasonText(reason)` (simbol `info.circle`, `.footnote`, `textSecondary`) di dekat tombol, di footer seksi, atau di placeholder unsupported. Tombol capability unsupported tidak pernah disembunyikan, dan tombol capability baru digambar setelah data layar beserta capability nya termuat, jadi tidak ada keadaan "capability belum diketahui" di view yang sudah loaded.
 
@@ -306,8 +311,9 @@ extension View {
 }
 ```
 
-- Dibangun di atas `confirmationDialog(_:item:titleVisibility: .visible:actions:message:)` SDK 27. Judul overload itu bukan closure, jadi modifier menyimpan request terakhir yang tidak nil di `@State` dan memakai judulnya, supaya judul tidak kosong selama animasi tutup. Destructive: `Button(role: .destructive)`, `dialogSeverity(.critical)`, dan Cancel dengan `keyboardShortcut(.defaultAction)`. Standard: tombol aksi dengan `keyboardShortcut(.defaultAction)`, Cancel role `.cancel`.
-- Langkah 17, langkah pertama milestone 4, memeriksa perilaku Return dan Escape di macOS 27 sebelum apa pun dibangun di atasnya. Kalau `confirmationDialog` tidak bisa menjadikan Cancel default untuk destructive, modifier yang sama memakai `NSAlert` (gaya `.critical` untuk destructive, tombol aksi `hasDestructiveAction`, Cancel dengan key equivalent Return). Window nya diambil dari anchor `NSViewRepresentable` kecil di view yang memasang modifier (`beginSheetModal(for:)`); kalau tidak ada window (misalnya popover menu bar fitur 32), dipakai `runModal()`. Layar tidak berubah karena API nya tetap.
+- Dibangun di atas `NSAlert` (keputusan setelah cek langkah 17, 2026-10-18). Di macOS 27, `confirmationDialog` adalah sheet `NSAlert` yang hanya memberi satu key equivalent per tombol: dengan Cancel destructive sebagai `.defaultAction`, Return membatalkan tetapi Escape tidak berbuat apa apa; tanpa itu, Escape membatalkan tetapi Return tidak berbuat apa apa. Keduanya gagal AC-15, jadi jalur cadangan di bawah menjadi implementasi. Modifier tetap menyimpan request terakhir yang tidak nil di `@State`, supaya judul tidak kosong selama dialog ditutup.
+- Destructive: gaya `.critical`, tombol ditambah Cancel lebih dulu lalu aksi, Cancel dengan key equivalent Return (tombol default biru), aksi `hasDestructiveAction` tanpa key equivalent, dan monitor `keyDown` lokal yang memetakan Escape polos ke Cancel selama alert terbuka. `window.defaultButtonCell` tidak dipakai, karena menulis ulang key equivalent Cancel. Standard: gaya `.informational`, aksi lebih dulu dengan Return, Cancel dengan Escape.
+- Langkah 17, langkah pertama milestone 4, memeriksa perilaku Return dan Escape di macOS 27 sebelum apa pun dibangun, dengan event keyboard nyata dan pohon aksesibilitas (skrip pemeriksaan di catatan hand-over fitur 12 milestone 4); hasilnya memilih `NSAlert`. Kalau rilis macOS berikutnya memperbaiki `confirmationDialog`, pemeriksaan yang sama bisa memindahkan modifier kembali tanpa mengubah API nya. Window alert diambil dari anchor `NSViewRepresentable` kecil di view yang memasang modifier (`beginSheetModal(for:)`); kalau tidak ada window (misalnya popover menu bar fitur 32), dipakai `runModal()`. Layar tidak berubah karena API nya tetap.
 - Hanya satu konfirmasi pada satu waktu; request baru mengganti binding.
 - Konfirmasi wajib untuk aksi yang menghapus atau menimpa data, menghapus record atau runtime, mematikan proses tanpa stop yang wajar, atau mengganggu pemilik lain. Role destructive: remove instance (54), purge data (54), remove runtime (55), restore overwrite (52), force stop (26), stop instance yang dipakai lease environment atau shared (26, 47), Stop All Services (32). Role standard: bring down environment (47), karena hanya menghentikan instance yang tidak dibutuhkan pihak lain dan data tetap ada. Tanpa konfirmasi: start, stop, dan restart tanpa dependen, reload, copy, cancel operasi, dan clean up cache yang bisa diunduh ulang. Fitur lain menerapkan aturan yang sama dan menambah baris di design.md.
 - Copy: judul pertanyaan dengan nama objek dalam kutip lengkung ("Stop “mysql-erp”?"), pesan satu atau dua kalimat yang menyebut akibat lalu apa yang aman ("Data is kept."), label tombol kata kerja dari judul. Copy contoh dari mockup.
@@ -349,10 +355,10 @@ XCUITest untuk cek ini adalah urusan fitur 68.
 ### Asumsi lintas spec
 
 - **Assumed** spec 0004 (sudah ditulis): state lifecycle instance, readiness dengan reason `awaiting_probe` dan detail maksimal 256 karakter tanpa secret, health, dan state operasi persis seperti tabel di spec itu.
-- **Assumed** spec 0006 (protokol IPC, ditulis paralel): DTO membawa lifecycle, readiness (state, reason, detail) dan health yang sudah melalui `effective(now, max_age)`, dan state operasi; error daemon membawa kategori, kode, dan pesan yang bisa ditampilkan.
-- **Assumed** spec 0009 (provider engine, ditulis paralel): capability provider sampai ke client bersama data layar, sehingga layar tahu capability yang unsupported dan alasannya.
+- **Assumed** spec 0006 (protokol IPC, ditulis paralel): DTO membawa lifecycle, readiness (state, reason, detail) dan health yang sudah melalui `effective(now, max_age)`, dan state operasi; error daemon membawa kategori, kode, dan pesan yang bisa ditampilkan. Nilai enum terbuka yang tidak dikenal datang sebagai `unrecognized` (spec 0006), bukan `unknown`.
+- **Assumed** spec 0013 dan fitur 20, diselaraskan 2026-10-18: capability provider sampai ke client bersama data layar lewat DTO yang ditetapkan spec 0013 dan fitur 20, sehingga layar tahu capability yang unsupported dan alasannya. Spec 0009 hanya memetakan capability manifest ke `Capability` domain, dan spec 0006 belum punya DTO itu.
 - **Assumed** spec 0011 (secret dan redaction, ditulis paralel): pesan error dan detail readiness sudah bebas secret saat sampai di GUI.
-- **Assumed** spec 0013 (app shell, ditulis berikutnya): shell memegang status koneksi, waktu snapshot terakhir, satu banner daemon tidak terjangkau memakai `StateBanner` dengan `base: .window`, pengisian `MutationAvailability`, adapter dari DTO ke `LifecycleStatus`, `ReadinessStatus`, `HealthStatus`, dan `OperationStatus` dengan switch exhaustive, lebar minimum jendela, keputusan apakah `StacklyUI` bergantung pada `StacklyClient`, dan pemasangan `SectionIcon` di sidebar.
+- **Assumed** spec 0013 (app shell, ditulis berikutnya): shell memegang status koneksi, waktu snapshot terakhir, satu banner daemon tidak terjangkau memakai `StateBanner` dengan `base: .window`, pengisian `MutationAvailability`, adapter dari DTO ke `LifecycleStatus`, `ReadinessStatus`, `HealthStatus`, dan `OperationStatus` dengan switch exhaustive, lebar minimum jendela, keputusan apakah `StacklyUI` bergantung pada `StacklyClient`, dan pemasangan `SectionIcon` di sidebar. Diselaraskan 2026-10-18 dengan spec 0013: status daemon di footer sidebar memakai `StatusLabel` konteks `.row`; `StateBanner` jendela bertone `informative` untuk starting, connecting yang lambat, dan shutting down, dan bertone `critical` untuk incompatible, untrusted, recovery, dan misconfigured; `StatusAppearance(label:tone:symbol:detail:)` dan `StateAction(mutates:)` publik.
 - **Assumed** spec 0007 (operation engine, belum ditulis): hasil operasi membawa penanda partial untuk label Partial.
 - **Assumed** fitur 32: setting Appearance diterapkan dengan `preferredColorScheme` di scene, jadi token mengikuti tanpa kode tambahan.
 
@@ -403,12 +409,12 @@ Kesalahan tidak dilempar oleh API ini; semuanya view dan nilai. Error datang dar
 | `StaleNote.since` | waktu state terakhir | refresh gagal: `lastLoadedAt` dari view model layar; outdated: waktu pembaruan dari daemon (misalnya catalog, spec 0009 dan fitur 17) |
 | Teks waktu banner | jam pendek, plus tanggal bila bukan hari ini | `StaleNote.formattedSince(now:calendar:locale:timeZone:)` dengan nilai sistem |
 | `MutationAvailability` | `.blocked(reason:since:)` | shell spec 0013 (status koneksi dan waktu snapshot terakhir) |
-| `UnsupportedContent.reason`, `.disabled(reason:)` | alasan | capability provider dari daemon (spec 0004 `CapabilitySet`, dikirim spec 0009 dan 0006); operasi berjalan dari lock operasi (spec 0007); copy per layar |
+| `UnsupportedContent.reason`, `.disabled(reason:)` | alasan | capability provider dari daemon (spec 0004 `CapabilitySet`, dikirim lewat DTO spec 0013 dan fitur 20); operasi berjalan dari lock operasi (spec 0007); copy per layar |
 | `PartialNote` | ringkasan, item, aksi item | DTO layar (readiness environment di fitur 44 dan 46, hasil operasi di spec 0007); aksi dari layar |
 | `ConfirmationRequest` | judul, pesan, label, role | layar yang meminta, mengikuti aturan Konfirmasi; nama objek dari DTO |
 | Hasil konfirmasi saat offline | umpan balik "Nothing was sent" | jalur mutasi spec 0013 dan komponen umpan balik fitur 67 |
 | `SectionStyle` | simbol dan warna | tabel Ikon bagian di spec ini |
-| Lebar sempit untuk cek teks | lebar minimum jendela | spec 0013; 640 pt sementara |
+| Lebar sempit untuk cek teks | lebar konten minimum | 640 pt, final dari spec 0013 (jendela minimum 900 pt dikurangi sidebar terlebar 260 pt) |
 
 ### Keputusan rekomendasi
 
@@ -483,7 +489,7 @@ Pendekatan proyek adalah Journey, tapi fitur 12 adalah fondasi tanpa journey pen
 
 **Milestone 4: Konfirmasi** (paralel setelah milestone 1)
 
-17. Cek perilaku Return dan Escape untuk kedua role di macOS 27 dengan `confirmationDialog` di jendela Design Gallery, lalu bangun `ConfirmationRequest` dan `.stacklyConfirmation(item:)` di atas jalur yang lolos (`confirmationDialog`, atau `NSAlert` dengan anchor window dan `runModal()` tanpa window), termasuk judul yang disimpan selama dialog ditutup. Memenuhi **AC-15**, **AC-17**.
+17. Cek perilaku Return dan Escape untuk kedua role di macOS 27 dengan `confirmationDialog` di jendela Design Gallery, lalu bangun `ConfirmationRequest` dan `.stacklyConfirmation(item:)` di atas jalur yang lolos (hasil 2026-10-18: `NSAlert` dengan anchor window dan `runModal()` tanpa window, karena `confirmationDialog` gagal), termasuk judul yang disimpan selama dialog ditutup. Memenuhi **AC-15**, **AC-17**.
 18. Halaman galeri Confirmation (contoh destructive dan standard dari mockup) dan bagian Confirmation di design.md, termasuk daftar aksi yang wajib dikonfirmasi. Memenuhi **AC-1**, **AC-15**, **AC-18**.
 
 ## Consequences
@@ -519,7 +525,7 @@ Pendekatan proyek adalah Journey, tapi fitur 12 adalah fondasi tanpa journey pen
 ## Follow-up
 
 - [ ] `/sync`: tambah `design.md` ke tabel Key files dan spec 0012 ke Related specs di `apps/macos/AGENTS.md`, dan aturan "warna, state, dan konfirmasi dari design.md" di Conventions.
-- [ ] Spec 0013: adapter DTO ke enum status UI dengan switch exhaustive, satu banner daemon tidak terjangkau dengan `StateBanner`, pengisian `MutationAvailability`, umpan balik offline, lebar minimum jendela, pemasangan `SectionIcon`, dan keputusan dependency `StacklyUI` ke `StacklyClient`.
+- [ ] Spec 0013: adapter DTO ke enum status UI dengan switch exhaustive (termasuk `unrecognized` untuk DTO berenum terbuka), satu banner daemon tidak terjangkau dengan `StateBanner`, pengisian `MutationAvailability`, umpan balik offline, lebar minimum jendela, pemasangan `SectionIcon`, dan keputusan dependency `StacklyUI` ke `StacklyClient`.
 - [ ] `/architect` fitur 67: pakai ulang `StatusLabel`, `ToneBadge`, `StateBanner`, `StatePlaceholder`, `.mutationGated()`, `.disabled(reason:)`, dan `.stacklyConfirmation`; umpan balik setelah aksi tanpa glass kustom; tile provider dekoratif di samping nama provider. Kalimat Done when fitur 67 yang menyebut label status, empty state, banner, dan dialog konfirmasi perlu diselaraskan lewat `/scope`.
 - [ ] `/architect` fitur 68: XCUITest untuk daftar Cek di /check verify, snapshot Increase Contrast dan Reduce Transparency yang mengatur appearance di host, dan pemakaian ulang tabel Pasangan kontras.
 - [ ] `/scope`: catat di `docs/scope/ui-macos.md` bagian Selisih yang sudah diketahui bahwa warna teks status, teks status di baris tabel, konten stale yang tidak diredupkan, dan dialog konfirmasi native menggantikan nilai mockup.

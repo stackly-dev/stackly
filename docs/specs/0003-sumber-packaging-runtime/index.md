@@ -118,7 +118,7 @@ Saat ini tidak ada entri yang memakai `binary`. Format itu tetap diterima untuk 
 
 ### Data model sketch
 
-**`runtimes/inventory.toml`** (field TOML snake_case; tipe Rust tooling di `xtask/src/runtime/inventory.rs`, `// provisional: F9` sampai fitur 9 dan 18 memutuskan cara catalog membaca data ini):
+**`runtimes/inventory.toml`** (field TOML snake_case; tipe Rust tooling di `xtask/src/runtime/inventory.rs`. Inventory tetap file tooling: [spec 0009](../0009-provider-engine-manifest-schema/index.md) memutuskan bahwa catalog tidak pernah membacanya, melainkan membaca `providers/<software>/versions.json` yang ditulis `cargo xtask codegen` dari inventory ini, dan langkah 9 build plan spec 0009 menghapus penanda `// provisional: F9` di file itu):
 
 | Entitas | Kunci | Field | Relasi |
 | --- | --- | --- | --- |
@@ -587,7 +587,7 @@ C boleh mulai dengan Valkey begitu langkah 9 selesai, sementara B masih mengerja
 - Test native runtime menambah unduhan besar (tarball MySQL dan zip ClickHouse ratusan MB) dan beberapa menit ke setiap run test native di Mac ini, karena delapan spike berjalan berurutan.
 - Spike butuh sesi login GUI di Mac uji; tanpa itu semua test runtime `BLOCKED`.
 - Probe quarantine bisa meninggalkan dialog Gatekeeper di layar Mac, sekali per digest baru.
-- Langkah spike per provider di xtask akan diganti manifest provider (fitur 9); sampai saat itu ada dua tempat yang tahu cara menjalankan provider.
+- Langkah spike per provider di xtask akan diganti harness fitur 36 yang membangun langkah spike dari paket provider (spec 0009); sampai saat itu ada dua tempat yang tahu cara menjalankan provider, dan penanda di `xtask/src/runtime/spike/` menjadi `// provisional: F36`.
 - Bukti di `evidence/runtime/` berasal dari commit branch fitur; dengan squash merge, commit itu tidak sampai ke `main`, jadi ia hanya berlaku sebagai bukti G0, bukan bukti rilis.
 
 **Neutral**:
@@ -608,7 +608,9 @@ C boleh mulai dengan Valkey begitu langkah 9 selesai, sementara B masih mengerja
 - [ ] Pertimbangkan immutable releases di repo `ojiepermana/stackly` (setelan repo, keputusan kamu), supaya aset runtime yang sudah terbit tidak bisa diganti diam diam. Digest yang dipin tetap gerbang utamanya.
 - [ ] Kalau rilis PostgreSQL berikutnya butuh meson di atas 1.11.2 atau bison di atas 2.3, atau `/usr/bin/python3` hilang dari Xcode, putuskan ulang tool build lewat `/architect` (runner up: Python standalone yang dipin, lihat rationale).
 - [ ] Fitur 60: Developer ID dan notarization untuk artefak buatan maintainer setelah OQ-012 selesai.
-- [ ] Fitur 9 dan 18: putuskan cara catalog (`versions.json`) membaca `runtimes/inventory.toml`, lalu ganti tipe inventaris dan langkah spike yang ditandai `// provisional: F9`.
+- [x] Fitur 9 dan 18: putuskan cara catalog (`versions.json`) membaca `runtimes/inventory.toml`, lalu ganti tipe inventaris dan langkah spike yang ditandai `// provisional: F9`. Bagian fitur 9 diputuskan spec 0009 (2026-10-18): catalog membaca `versions.json` hasil generator `cargo xtask codegen`, inventory tetap tooling, penanda di `inventory.rs` dihapus langkah 9 build plan spec 0009, dan penanda spike pindah ke `// provisional: F36` di langkah 16 spec yang sama.
+- [ ] Fitur 18: putuskan cara install memakai `versions.json` (spec 0009 *`versions.json`*); field di luar `stackly.provider-versions/v1` ditambahkan lewat update spec 0009 secara additive.
+- [ ] Fitur 36: harness yang membangun langkah spike dari paket provider menggantikan langkah spike per provider di xtask dan menghapus penanda `// provisional: F36`.
 - [ ] Fitur 18: pakai `quarantine.outcome` untuk error terdiagnosis saat OS menolak binary, dan laporan symlink archive upstream untuk aturan ekstraksi.
 - [ ] Fitur 18: extractor aman menerima `tar_gz`, `zip`, dan `binary` dengan aturan yang sama untuk kedua archive (tolak `..`, tolak penulisan lewat symlink, abaikan metadata AppleDouble, dan sebaiknya tolak path absolut alih alih membuang `/` seperti bsdtar), pilih format dari `format` entri lalu cocokkan magic number, beri mode 0755 pada path `executables` artefak `zip` dengan guard symlink yang sama dengan spike, dan putuskan apakah `binary` masih perlu kalau tetap tidak ada entri yang memakainya. Jalankan ulang kasus AC-16 (`..`, symlink, path absolut, `__MACOSX/`) terhadap pembaca zip fitur 18 sendiri, karena cara bsdtar membaca central directory dan header lokal zip tidak otomatis sama dengan pembaca lain.
 - [ ] Fitur 18: archive `tar_gz` buatan Mac dengan entri `._<nama>` masih bisa memulihkan xattr (termasuk quarantine milik pembuatnya) lewat `/usr/bin/tar` spike, karena hanya `zip` yang diberi `--no-mac-metadata`. Extractor fitur 18 sebaiknya mengabaikan metadata AppleDouble untuk kedua format.

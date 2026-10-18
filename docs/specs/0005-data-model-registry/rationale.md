@@ -600,3 +600,22 @@ Dua saran dikoreksi:
 - Usul menghitung sidik jari yang diharapkan dengan memutar ulang migrasi di memori ditolak (lihat *Keputusan kecil*); sebagai gantinya normalisasi membuang tanda kutip.
 
 Tidak diterapkan: trigger yang menolak `DELETE` pada `provider_revisions`. Immutability di sini berarti isi manifest tidak berubah; revision yang tidak dirujuk mungkin sah dihapus oleh garbage collection (fitur 55, 59), dan foreign key restrict sudah melindungi revision yang dipakai.
+
+## Perubahan 2026-10-18 (rekonsiliasi lintas spec)
+
+Pengecekan silang Assumed lines antara spec 0005, 0006, 0009, 0011, dan 0012 menemukan selisih yang keputusannya milik spec ini. Engineer menyetujui semua perbaikan berikut, sebelum migrasi `0001_registry.sql` pernah dirilis, jadi belum ada data yang perlu dimigrasi.
+
+| Selisih | Perbaikan | Alasan | Runner up |
+| --- | --- | --- | --- |
+| Kolom `secret_references` (`store_key`, `scope`, `purpose` berpola `code`) tidak bisa menampung model logis spec 0011, dan purpose seperti `admin-password` ditolak CHECK `code` | kolom spec 0011 di migrasi 0001, plus tabel `secret_reference_uses`; AC-1 dan AC-12 menyesuaikan; `scope` PRD dipetakan ke `owner_kind` plus `owner_id` | spec ini memegang skema fisik, spec 0011 memegang model logisnya, dan mengubah migrasi yang belum dirilis lebih murah daripada migrasi v2 | fitur 11 menambah migrasi v2 yang membangun ulang tabel |
+| Field secret di `config_values` disebut "ID referensi", padahal spec 0009 dan 0011 menyimpan teks `local:<path>` | teks reference | reference bukan secret dan terbaca di diagnostics; ID saja butuh join untuk setiap render | ID referensi |
+| `result` audit berpola `code`, padahal spec 0011 menulis `failed:<kode>` | `result` hanya `succeeded` atau `failed`, kode error di `safe_details.errorCode` | kode wire memuat titik, dan kolom kode yang tertutup tetap mudah difilter | pola `result` dilonggarkan |
+| Belum ada spec yang mendefinisikan kode `registry.*` | tabel *Kode error di wire* dan AC-17; CAS memakai `resource.revision_mismatch`, data hilang memakai `resource.not_found`, recovery memakai `registry.recovery_mode` | spec 0006 menyerahkan area `registry` ke spec ini; semua `retryable` false karena kegagalan registry di tengah request tidak menjamin request itu belum berefek | kode generik `registry.error` dengan detail varian |
+| `OperationCursor` bernanodetik, wire hanya tiga digit | cursor tidak pernah lewat `Timestamp` wire; spec 0007 mengirimnya sebagai string opaque | baris di milidetik yang sama akan terlewat atau terulang kalau presisi dipotong | membandingkan cursor di milidetik |
+
+Cross check model lain atas update ini menambah, atas persetujuan engineer: trigger `secret_references_owner_fixed`, penghapusan eksplisit baris `secret_reference_uses` saat purge, method baca dan varian `ResourceRef` secret yang dirancang fitur 11 lewat update spec ini sebelum langkah core nya, tanda `allowed_in_recovery` dan percobaan ulang `registry_locked` dari spec 0006, dan aturan bahwa langkah 7 memakai `--print-roots` kalau sudah ada di main.
+
+Catatan build fitur 5 milestone 1 dan keputusan engineer sesudahnya (2026-10-18): foreign key komposit `instances (id, config_revision_id)` dianggap ber index lewat primary key unik `id`, karena index unik pada kolom awal sudah cukup untuk pencarian baris anak; prune baru dipasang di langkah 13, jadi `stacklyd` milestone 1 belum menjalankannya; dan recovery sementara keluar dengan kode 1, bukan 3, karena spec 0006 memberi kode 3 arti "daemon lain memegang lock" (engineer memilih satu arti untuk kode 3 dan tanpa kode baru).
+
+Ronde 2 rekonsiliasi (2026-10-18): tambahan port, migrasi journal, `IdempotencyKeyTaken`, aturan `touch`, potongan prune 500 operasi (spec 0007), dan op serta baca observasi proses dan config revision awal (spec 0010) dicatat sebagai titik perluasan di *Port registry*; laporan recovery kini dikirim sebagai `DaemonHealth.recovery` (spec 0006).
+

@@ -350,6 +350,10 @@ Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum ter
 | Valkey | 9.1.2 (1 September 2026), rilis GitHub tanpa aset. Binary macOS resmi belum terkonfirmasi ada di tempat lain. |
 | Traefik | v3.7.15 (15 Oktober 2026), aset `traefik_v3.7.15_darwin_arm64.tar.gz`, `traefik_v3.7.15_checksums.txt`, tanpa signature. |
 
+### Perubahan 2026-10-18 (rekonsiliasi dengan spec 0009)
+
+Follow-up "Fitur 9 dan 18" dijawab untuk bagian fitur 9 oleh spec 0009: catalog tidak membaca `runtimes/inventory.toml`, melainkan `versions.json` per paket yang ditulis generator `cargo xtask codegen` dari inventory, sehingga inventory tetap file tooling milik spec ini. Langkah spike per provider tidak diganti manifest di fitur 9; penggantinya harness fitur 36, jadi penanda spike berpindah dari `// provisional: F9` ke `// provisional: F36`. Fitur 18 masih memutuskan cara install memakai `versions.json`. Tidak ada keputusan spec ini yang berubah.
+
 ## References
 
 **Project sources**:
