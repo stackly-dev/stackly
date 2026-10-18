@@ -415,6 +415,15 @@ pub enum InvariantDetail {
         /// The lease.
         lease: LeaseId,
     },
+    /// A stored record handed to a `restore` constructor breaks an
+    /// invariant between its fields. Not a BR: the registry reports it as
+    /// corrupt.
+    InconsistentRecord {
+        /// What was restored, for example `instance`.
+        resource: &'static str,
+        /// The invariant it breaks.
+        reason: &'static str,
+    },
 }
 
 impl InvariantDetail {
@@ -441,7 +450,8 @@ impl InvariantDetail {
             | Self::EnvironmentLeaseWithSession { .. }
             | Self::StartupLeaseWithoutSession { .. }
             | Self::LeaseAlreadyReleased { .. }
-            | Self::SuppressNeedsActiveStartupLease { .. } => None,
+            | Self::SuppressNeedsActiveStartupLease { .. }
+            | Self::InconsistentRecord { .. } => None,
         }
     }
 }
@@ -539,6 +549,9 @@ impl fmt::Display for InvariantDetail {
                 f,
                 "lease {lease} cannot be suppressed; only an active startup lease can"
             ),
+            Self::InconsistentRecord { resource, reason } => {
+                write!(f, "a stored {resource} is inconsistent: {reason}")
+            }
         }
     }
 }
