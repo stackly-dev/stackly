@@ -1,6 +1,8 @@
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
+use stackly_domain::{LogicalRoot, RelativePath};
+
 use crate::error::PlatformError;
 
 /// Longest Unix socket path, in bytes, that fits macOS `sun_path` (104
@@ -209,6 +211,22 @@ impl RootSet {
     pub fn entries(&self) -> [(RootKind, &Path); 4] {
         RootKind::ALL.map(|kind| (kind, self.get(kind)))
     }
+
+    /// Turns a stored path back into an absolute one: the root `root`
+    /// names, joined with each component of `path`. A [`RelativePath`] has
+    /// no `.` or `..` component, so the result always lies inside the
+    /// root.
+    #[must_use]
+    pub fn resolve(&self, root: LogicalRoot, path: &RelativePath) -> PathBuf {
+        let base = match root {
+            LogicalRoot::Data => &self.data,
+            LogicalRoot::Logs => &self.logs,
+            LogicalRoot::Runtime => &self.runtime,
+        };
+        let mut resolved = base.clone();
+        resolved.extend(path.components());
+        resolved
+    }
 }
 
 /// A [`DirectoryResolver`] that always returns the same root set, for an
@@ -392,6 +410,25 @@ mod tests {
         let second = RootSet::under_override(&abs("/x/two"), &abs("/run")).unwrap();
 
         assert_ne!(first.runtime(), second.runtime());
+    }
+
+    #[test]
+    fn resolve_joins_the_components_under_the_named_root() {
+        let roots = roots_with_runtime(abs("/run")).unwrap();
+        let path: RelativePath = "a/b/c".parse().unwrap();
+
+        assert_eq!(
+            roots.resolve(LogicalRoot::Data, &path),
+            abs("/r/data").join("a").join("b").join("c")
+        );
+        assert_eq!(
+            roots.resolve(LogicalRoot::Logs, &path),
+            abs("/r/logs").join("a").join("b").join("c")
+        );
+        assert_eq!(
+            roots.resolve(LogicalRoot::Runtime, &path),
+            abs("/run").join("a").join("b").join("c")
+        );
     }
 
     #[test]

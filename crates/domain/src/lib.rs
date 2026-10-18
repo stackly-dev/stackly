@@ -6,9 +6,11 @@
 //! valid, and value types travel through serde in their text form.
 
 mod error;
+#[macro_use]
 mod id;
 mod manifest;
 mod provider;
+mod registry;
 mod rule;
 mod target;
 mod text;
@@ -23,6 +25,7 @@ pub use manifest::{
     NewInstanceManifest, RetainedMarker,
 };
 pub use provider::ProviderRevisionKey;
+pub use registry::{InstancePathEntry, InstancePathKind, LogicalRoot, RegistryId, RelativePath};
 pub use rule::Rule;
 pub use target::{Arch, Os, Target};
 pub use value::{

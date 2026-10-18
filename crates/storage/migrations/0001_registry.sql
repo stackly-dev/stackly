@@ -1,0 +1,349 @@
+-- Migration 1: every PRD section 17 table plus registry_info and
+-- schema_migrations (spec 0005, "Data model").
+--
+-- Released migrations are never edited. A change is a new file, a new
+-- fingerprint, and a new frozen fixture. Allowed statements: CREATE, DROP,
+-- ALTER TABLE ... ADD COLUMN, INSERT, UPDATE, DELETE, and the 12 step
+-- table rebuild. RENAME COLUMN and DROP COLUMN are not allowed.
+--
+-- Every CHECK for a column kind is the exact expression from the spec's
+-- "Aturan kolom bersama" table, with the column name filled in.
+
+CREATE TABLE registry_info (
+    singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1),
+    registry_id TEXT NOT NULL CHECK (length(registry_id) = 36 AND registry_id NOT GLOB '*[^0-9a-f-]*' AND substr(registry_id,9,1) = '-' AND substr(registry_id,14,1) = '-' AND substr(registry_id,19,1) = '-' AND substr(registry_id,24,1) = '-' AND substr(registry_id,15,1) = '7'),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    created_by_version TEXT NOT NULL CHECK (length(created_by_version) BETWEEN 1 AND 64),
+    generation INTEGER NOT NULL CHECK (generation >= 0)
+) STRICT;
+
+CREATE TABLE schema_migrations (
+    version INTEGER PRIMARY KEY NOT NULL CHECK (version >= 1),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 64 AND name NOT GLOB '*[^a-z0-9_]*'),
+    sha256 TEXT NOT NULL CHECK (length(sha256) = 64 AND sha256 NOT GLOB '*[^0-9a-f]*'),
+    applied_at TEXT NOT NULL CHECK (length(applied_at) = 30 AND applied_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    app_version TEXT NOT NULL CHECK (length(app_version) BETWEEN 1 AND 64)
+) STRICT;
+
+CREATE TABLE provider_sources (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    kind TEXT NOT NULL CHECK (length(kind) BETWEEN 1 AND 64 AND kind GLOB '[a-z]*' AND kind NOT GLOB '*[^a-z0-9_]*'),
+    location TEXT NOT NULL CHECK (length(location) BETWEEN 1 AND 4096),
+    trust_root TEXT,
+    last_sync_at TEXT CHECK (length(last_sync_at) = 30 AND last_sync_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    status TEXT NOT NULL CHECK (length(status) BETWEEN 1 AND 64 AND status GLOB '[a-z]*' AND status NOT GLOB '*[^a-z0-9_]*'),
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    updated_at TEXT NOT NULL CHECK (length(updated_at) = 30 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    UNIQUE (kind, location)
+) STRICT;
+
+CREATE TABLE provider_revisions (
+    pk INTEGER PRIMARY KEY NOT NULL,
+    provider TEXT NOT NULL CHECK (length(provider) BETWEEN 3 AND 127 AND provider GLOB '[a-z]*/[a-z]*' AND provider NOT GLOB '*/*/*' AND provider NOT GLOB '*[^a-z0-9/-]*'),
+    revision TEXT NOT NULL CHECK (length(revision) BETWEEN 1 AND 64 AND revision GLOB '[0-9A-Za-z]*' AND revision NOT GLOB '*[^0-9A-Za-z.+_-]*' AND revision NOT GLOB '*..*'),
+    manifest_sha256 TEXT NOT NULL CHECK (length(manifest_sha256) = 64 AND manifest_sha256 NOT GLOB '*[^0-9a-f]*'),
+    software TEXT NOT NULL CHECK (length(software) BETWEEN 1 AND 63 AND software GLOB '[a-z]*' AND software NOT GLOB '*[^a-z0-9-]*' AND software NOT GLOB '*--*' AND software NOT GLOB '*-'),
+    schema_version TEXT,
+    publisher TEXT,
+    capabilities TEXT NOT NULL CHECK (json_valid(capabilities) AND json_type(capabilities) = 'array'),
+    line_compatibility TEXT NOT NULL CHECK (json_valid(line_compatibility) AND json_type(line_compatibility) = 'object'),
+    source_id TEXT CHECK (length(source_id) = 36 AND source_id NOT GLOB '*[^0-9a-f-]*' AND substr(source_id,9,1) = '-' AND substr(source_id,14,1) = '-' AND substr(source_id,19,1) = '-' AND substr(source_id,24,1) = '-' AND substr(source_id,15,1) = '7') REFERENCES provider_sources (id) ON DELETE RESTRICT,
+    approval TEXT CHECK (length(approval) BETWEEN 1 AND 64 AND approval GLOB '[a-z]*' AND approval NOT GLOB '*[^a-z0-9_]*'),
+    approved_at TEXT CHECK (length(approved_at) = 30 AND approved_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    UNIQUE (provider, revision, manifest_sha256)
+) STRICT;
+
+CREATE INDEX provider_revisions_source_id ON provider_revisions (source_id);
+
+-- BR-017: a provider revision never changes once recorded; only the
+-- approval may follow later.
+CREATE TRIGGER provider_revisions_immutable
+BEFORE UPDATE OF pk, provider, revision, manifest_sha256, software, schema_version, publisher, capabilities, line_compatibility, source_id, created_at ON provider_revisions
+BEGIN
+    SELECT RAISE(ABORT, 'provider revision is immutable');
+END;
+
+CREATE TABLE artifacts (
+    pk INTEGER PRIMARY KEY NOT NULL,
+    sha256 TEXT NOT NULL UNIQUE CHECK (length(sha256) = 64 AND sha256 NOT GLOB '*[^0-9a-f]*'),
+    software TEXT NOT NULL CHECK (length(software) BETWEEN 1 AND 63 AND software GLOB '[a-z]*' AND software NOT GLOB '*[^a-z0-9-]*' AND software NOT GLOB '*--*' AND software NOT GLOB '*-'),
+    version TEXT NOT NULL CHECK (length(version) BETWEEN 3 AND 64 AND version GLOB '[0-9]*.[0-9]*' AND version NOT GLOB '*[^0-9A-Za-z.+-]*'),
+    os TEXT NOT NULL CHECK (os IN ('macos', 'windows', 'linux')),
+    arch TEXT NOT NULL CHECK (arch IN ('aarch64', 'x86_64')),
+    minimum_os TEXT,
+    source TEXT,
+    signature_info TEXT CHECK (json_valid(signature_info) AND json_type(signature_info) = 'object'),
+    dependency_manifest TEXT CHECK (json_valid(dependency_manifest) AND json_type(dependency_manifest) = 'object'),
+    provider_revision_pk INTEGER REFERENCES provider_revisions (pk) ON DELETE RESTRICT,
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z')
+) STRICT;
+
+CREATE INDEX artifacts_provider_revision_pk ON artifacts (provider_revision_pk);
+
+CREATE TABLE runtimes (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    software TEXT NOT NULL CHECK (length(software) BETWEEN 1 AND 63 AND software GLOB '[a-z]*' AND software NOT GLOB '*[^a-z0-9-]*' AND software NOT GLOB '*--*' AND software NOT GLOB '*-'),
+    version TEXT NOT NULL CHECK (length(version) BETWEEN 3 AND 64 AND version GLOB '[0-9]*.[0-9]*' AND version NOT GLOB '*[^0-9A-Za-z.+-]*'),
+    line TEXT NOT NULL CHECK (length(line) BETWEEN 1 AND 16 AND line GLOB '[0-9]*' AND line NOT GLOB '*[^0-9.]*'),
+    os TEXT NOT NULL CHECK (os IN ('macos', 'windows', 'linux')),
+    arch TEXT NOT NULL CHECK (arch IN ('aarch64', 'x86_64')),
+    install_mode TEXT NOT NULL CHECK (install_mode IN ('managed', 'external')),
+    artifact_sha256 TEXT CHECK (length(artifact_sha256) = 64 AND artifact_sha256 NOT GLOB '*[^0-9a-f]*') REFERENCES artifacts (sha256) ON DELETE RESTRICT,
+    external_root TEXT CHECK (length(external_root) BETWEEN 2 AND 4096 AND external_root GLOB '/*'),
+    observed_sha256 TEXT CHECK (length(observed_sha256) = 64 AND observed_sha256 NOT GLOB '*[^0-9a-f]*'),
+    state TEXT NOT NULL CHECK (state IN ('absent', 'resolving', 'downloading', 'verifying', 'installing', 'installed', 'failed', 'missing', 'drifted')),
+    installed_at TEXT CHECK (length(installed_at) = 30 AND installed_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    last_verified_at TEXT CHECK (length(last_verified_at) = 30 AND last_verified_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    updated_at TEXT NOT NULL CHECK (length(updated_at) = 30 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    CHECK ((install_mode = 'managed' AND artifact_sha256 IS NOT NULL AND external_root IS NULL AND observed_sha256 IS NULL) OR (install_mode = 'external' AND artifact_sha256 IS NULL AND external_root IS NOT NULL))
+) STRICT;
+
+CREATE UNIQUE INDEX runtimes_managed_artifact ON runtimes (artifact_sha256) WHERE install_mode = 'managed';
+CREATE UNIQUE INDEX runtimes_external_root ON runtimes (external_root) WHERE install_mode = 'external';
+CREATE INDEX runtimes_artifact_sha256 ON runtimes (artifact_sha256);
+
+CREATE TABLE runtime_dependencies (
+    runtime_id TEXT NOT NULL CHECK (length(runtime_id) = 36 AND runtime_id NOT GLOB '*[^0-9a-f-]*' AND substr(runtime_id,9,1) = '-' AND substr(runtime_id,14,1) = '-' AND substr(runtime_id,19,1) = '-' AND substr(runtime_id,24,1) = '-' AND substr(runtime_id,15,1) = '7') REFERENCES runtimes (id) ON DELETE CASCADE,
+    dependency_runtime_id TEXT NOT NULL CHECK (length(dependency_runtime_id) = 36 AND dependency_runtime_id NOT GLOB '*[^0-9a-f-]*' AND substr(dependency_runtime_id,9,1) = '-' AND substr(dependency_runtime_id,14,1) = '-' AND substr(dependency_runtime_id,19,1) = '-' AND substr(dependency_runtime_id,24,1) = '-' AND substr(dependency_runtime_id,15,1) = '7') REFERENCES runtimes (id) ON DELETE RESTRICT,
+    version_constraint TEXT,
+    PRIMARY KEY (runtime_id, dependency_runtime_id),
+    CHECK (runtime_id <> dependency_runtime_id)
+) STRICT;
+
+CREATE INDEX runtime_dependencies_dependency_runtime_id ON runtime_dependencies (dependency_runtime_id);
+
+-- BR-008: a lifecycle that runs or ran the software needs initialized
+-- data. Comments go above a statement, never inside it, because SQLite
+-- stores the statement text in sqlite_schema.
+CREATE TABLE instances (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 63 AND name GLOB '[a-z]*' AND name NOT GLOB '*[^a-z0-9-]*' AND name NOT GLOB '*--*' AND name NOT GLOB '*-'),
+    display_name TEXT CHECK (length(display_name) BETWEEN 1 AND 128),
+    provider_revision_pk INTEGER NOT NULL REFERENCES provider_revisions (pk) ON DELETE RESTRICT,
+    software TEXT NOT NULL CHECK (length(software) BETWEEN 1 AND 63 AND software GLOB '[a-z]*' AND software NOT GLOB '*[^a-z0-9-]*' AND software NOT GLOB '*--*' AND software NOT GLOB '*-'),
+    runtime_id TEXT NOT NULL CHECK (length(runtime_id) = 36 AND runtime_id NOT GLOB '*[^0-9a-f-]*' AND substr(runtime_id,9,1) = '-' AND substr(runtime_id,14,1) = '-' AND substr(runtime_id,19,1) = '-' AND substr(runtime_id,24,1) = '-' AND substr(runtime_id,15,1) = '7') REFERENCES runtimes (id) ON DELETE RESTRICT,
+    data_line TEXT NOT NULL CHECK (length(data_line) BETWEEN 1 AND 16 AND data_line GLOB '[0-9]*' AND data_line NOT GLOB '*[^0-9.]*'),
+    data_version TEXT NOT NULL CHECK (length(data_version) BETWEEN 3 AND 64 AND data_version GLOB '[0-9]*.[0-9]*' AND data_version NOT GLOB '*[^0-9A-Za-z.+-]*'),
+    data_initialized_at TEXT CHECK (length(data_initialized_at) = 30 AND data_initialized_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    desired TEXT NOT NULL CHECK (desired IN ('running', 'stopped')),
+    startup TEXT NOT NULL CHECK (startup IN ('manual', 'at_login')),
+    lifecycle TEXT NOT NULL CHECK (lifecycle IN ('uninitialized', 'initializing', 'stopped', 'starting', 'running', 'stopping', 'recovering', 'failed', 'unknown', 'retained')),
+    last_failure TEXT CHECK (length(last_failure) BETWEEN 1 AND 64 AND last_failure GLOB '[a-z]*' AND last_failure NOT GLOB '*[^a-z0-9_]*'),
+    config_revision_id TEXT CHECK (length(config_revision_id) = 36 AND config_revision_id NOT GLOB '*[^0-9a-f-]*' AND substr(config_revision_id,9,1) = '-' AND substr(config_revision_id,14,1) = '-' AND substr(config_revision_id,19,1) = '-' AND substr(config_revision_id,24,1) = '-' AND substr(config_revision_id,15,1) = '7'),
+    ownership TEXT NOT NULL CHECK (length(ownership) BETWEEN 1 AND 64 AND ownership GLOB '[a-z]*' AND ownership NOT GLOB '*[^a-z0-9_]*'),
+    retained_at TEXT CHECK (length(retained_at) = 30 AND retained_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    retained_by_operation TEXT CHECK (length(retained_by_operation) = 36 AND retained_by_operation NOT GLOB '*[^0-9a-f-]*' AND substr(retained_by_operation,9,1) = '-' AND substr(retained_by_operation,14,1) = '-' AND substr(retained_by_operation,19,1) = '-' AND substr(retained_by_operation,24,1) = '-' AND substr(retained_by_operation,15,1) = '7'),
+    created_by_operation TEXT NOT NULL CHECK (length(created_by_operation) = 36 AND created_by_operation NOT GLOB '*[^0-9a-f-]*' AND substr(created_by_operation,9,1) = '-' AND substr(created_by_operation,14,1) = '-' AND substr(created_by_operation,19,1) = '-' AND substr(created_by_operation,24,1) = '-' AND substr(created_by_operation,15,1) = '7'),
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    updated_at TEXT NOT NULL CHECK (length(updated_at) = 30 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    CHECK ((lifecycle = 'retained') = (retained_at IS NOT NULL)),
+    CHECK ((retained_at IS NULL) = (retained_by_operation IS NULL)),
+    CHECK (lifecycle NOT IN ('stopped', 'starting', 'running', 'stopping', 'recovering', 'unknown') OR data_initialized_at IS NOT NULL),
+    FOREIGN KEY (id, config_revision_id) REFERENCES config_revisions (instance_id, id) DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+
+CREATE UNIQUE INDEX instances_active_name ON instances (name) WHERE retained_at IS NULL;
+CREATE UNIQUE INDEX instances_short_key ON instances (substr(id, 29));
+CREATE INDEX instances_runtime_id ON instances (runtime_id);
+CREATE INDEX instances_provider_revision_pk ON instances (provider_revision_pk);
+
+CREATE TABLE instance_paths (
+    instance_id TEXT NOT NULL CHECK (length(instance_id) = 36 AND instance_id NOT GLOB '*[^0-9a-f-]*' AND substr(instance_id,9,1) = '-' AND substr(instance_id,14,1) = '-' AND substr(instance_id,19,1) = '-' AND substr(instance_id,24,1) = '-' AND substr(instance_id,15,1) = '7') REFERENCES instances (id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('root', 'data', 'config', 'config_history', 'temp', 'logs', 'run')),
+    logical_root TEXT NOT NULL CHECK (logical_root IN ('data', 'logs', 'runtime')),
+    relative_path TEXT NOT NULL CHECK (length(relative_path) BETWEEN 1 AND 1024 AND relative_path NOT GLOB '/*' AND relative_path NOT GLOB '*/' AND relative_path NOT GLOB '*//*' AND ('/' || relative_path || '/') NOT GLOB '*/./*' AND ('/' || relative_path || '/') NOT GLOB '*/../*'),
+    managed INTEGER NOT NULL CHECK (managed IN (0, 1)),
+    PRIMARY KEY (instance_id, kind),
+    UNIQUE (logical_root, relative_path)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE instance_endpoints (
+    instance_id TEXT NOT NULL CHECK (length(instance_id) = 36 AND instance_id NOT GLOB '*[^0-9a-f-]*' AND substr(instance_id,9,1) = '-' AND substr(instance_id,14,1) = '-' AND substr(instance_id,19,1) = '-' AND substr(instance_id,24,1) = '-' AND substr(instance_id,15,1) = '7') REFERENCES instances (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK (position >= 0),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 63 AND name GLOB '[a-z]*' AND name NOT GLOB '*[^a-z0-9-]*' AND name NOT GLOB '*--*' AND name NOT GLOB '*-' AND length(name) <= 32),
+    kind TEXT NOT NULL CHECK (kind IN ('ip', 'unix')),
+    transport TEXT CHECK (transport IN ('tcp', 'udp')),
+    address TEXT,
+    port_request TEXT CHECK (port_request IN ('fixed', 'auto')),
+    fixed_port INTEGER CHECK (fixed_port BETWEEN 1 AND 65535),
+    bound_port INTEGER CHECK (bound_port BETWEEN 1 AND 65535),
+    socket_name TEXT CHECK (length(CAST(socket_name AS BLOB)) BETWEEN 1 AND 15 AND socket_name NOT GLOB '*[^A-Za-z0-9._-]*' AND socket_name NOT IN ('.', '..')),
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    PRIMARY KEY (instance_id, name),
+    UNIQUE (instance_id, position),
+    UNIQUE (instance_id, socket_name),
+    CHECK ((kind = 'ip' AND transport IS NOT NULL AND address IS NOT NULL AND port_request IS NOT NULL AND (port_request = 'fixed') = (fixed_port IS NOT NULL) AND socket_name IS NULL) OR (kind = 'unix' AND socket_name IS NOT NULL AND transport IS NULL AND address IS NULL AND port_request IS NULL AND fixed_port IS NULL AND bound_port IS NULL))
+) STRICT;
+
+CREATE TABLE config_revisions (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    instance_id TEXT NOT NULL CHECK (length(instance_id) = 36 AND instance_id NOT GLOB '*[^0-9a-f-]*' AND substr(instance_id,9,1) = '-' AND substr(instance_id,14,1) = '-' AND substr(instance_id,19,1) = '-' AND substr(instance_id,24,1) = '-' AND substr(instance_id,15,1) = '7') REFERENCES instances (id) ON DELETE CASCADE,
+    config_values TEXT NOT NULL CHECK (json_valid(config_values) AND json_type(config_values) = 'object'),
+    rendered_sha256 TEXT CHECK (length(rendered_sha256) = 64 AND rendered_sha256 NOT GLOB '*[^0-9a-f]*'),
+    previous_id TEXT CHECK (length(previous_id) = 36 AND previous_id NOT GLOB '*[^0-9a-f-]*' AND substr(previous_id,9,1) = '-' AND substr(previous_id,14,1) = '-' AND substr(previous_id,19,1) = '-' AND substr(previous_id,24,1) = '-' AND substr(previous_id,15,1) = '7') REFERENCES config_revisions (id) ON DELETE SET NULL,
+    status TEXT NOT NULL CHECK (length(status) BETWEEN 1 AND 64 AND status GLOB '[a-z]*' AND status NOT GLOB '*[^a-z0-9_]*'),
+    created_by_operation TEXT CHECK (length(created_by_operation) = 36 AND created_by_operation NOT GLOB '*[^0-9a-f-]*' AND substr(created_by_operation,9,1) = '-' AND substr(created_by_operation,14,1) = '-' AND substr(created_by_operation,19,1) = '-' AND substr(created_by_operation,24,1) = '-' AND substr(created_by_operation,15,1) = '7'),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    UNIQUE (instance_id, id),
+    CHECK (previous_id <> id)
+) STRICT;
+
+CREATE INDEX config_revisions_previous_id ON config_revisions (previous_id);
+
+-- BR-018: a secret reference names a secret in the OS store; no column
+-- anywhere holds a secret value.
+CREATE TABLE secret_references (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    store_key TEXT NOT NULL UNIQUE CHECK (length(CAST(store_key AS BLOB)) BETWEEN 1 AND 512),
+    scope TEXT NOT NULL CHECK (length(scope) BETWEEN 1 AND 256),
+    purpose TEXT NOT NULL CHECK (length(purpose) BETWEEN 1 AND 64 AND purpose GLOB '[a-z]*' AND purpose NOT GLOB '*[^a-z0-9_]*'),
+    status TEXT NOT NULL CHECK (length(status) BETWEEN 1 AND 64 AND status GLOB '[a-z]*' AND status NOT GLOB '*[^a-z0-9_]*'),
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    updated_at TEXT NOT NULL CHECK (length(updated_at) = 30 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z')
+) STRICT;
+
+CREATE TABLE environments (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 63 AND name GLOB '[a-z]*' AND name NOT GLOB '*[^a-z0-9-]*' AND name NOT GLOB '*--*' AND name NOT GLOB '*-'),
+    manifest_location TEXT CHECK (length(manifest_location) BETWEEN 2 AND 4096 AND manifest_location GLOB '/*'),
+    manifest_sha256 TEXT CHECK (length(manifest_sha256) = 64 AND manifest_sha256 NOT GLOB '*[^0-9a-f]*'),
+    lock_sha256 TEXT CHECK (length(lock_sha256) = 64 AND lock_sha256 NOT GLOB '*[^0-9a-f]*'),
+    last_operation_id TEXT CHECK (length(last_operation_id) = 36 AND last_operation_id NOT GLOB '*[^0-9a-f-]*' AND substr(last_operation_id,9,1) = '-' AND substr(last_operation_id,14,1) = '-' AND substr(last_operation_id,19,1) = '-' AND substr(last_operation_id,24,1) = '-' AND substr(last_operation_id,15,1) = '7'),
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    updated_at TEXT NOT NULL CHECK (length(updated_at) = 30 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z')
+) STRICT;
+
+CREATE INDEX environments_name ON environments (name);
+
+CREATE TABLE environment_instances (
+    environment_id TEXT NOT NULL CHECK (length(environment_id) = 36 AND environment_id NOT GLOB '*[^0-9a-f-]*' AND substr(environment_id,9,1) = '-' AND substr(environment_id,14,1) = '-' AND substr(environment_id,19,1) = '-' AND substr(environment_id,24,1) = '-' AND substr(environment_id,15,1) = '7') REFERENCES environments (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK (position >= 0),
+    alias TEXT NOT NULL CHECK (length(alias) BETWEEN 1 AND 63 AND alias GLOB '[a-z]*' AND alias NOT GLOB '*[^a-z0-9-]*' AND alias NOT GLOB '*--*' AND alias NOT GLOB '*-'),
+    instance_id TEXT NOT NULL CHECK (length(instance_id) = 36 AND instance_id NOT GLOB '*[^0-9a-f-]*' AND substr(instance_id,9,1) = '-' AND substr(instance_id,14,1) = '-' AND substr(instance_id,19,1) = '-' AND substr(instance_id,24,1) = '-' AND substr(instance_id,15,1) = '7') REFERENCES instances (id) ON DELETE RESTRICT,
+    ownership TEXT NOT NULL CHECK (ownership IN ('dedicated', 'shared')),
+    dependency_conditions TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(dependency_conditions) AND json_type(dependency_conditions) = 'array'),
+    PRIMARY KEY (environment_id, alias),
+    UNIQUE (environment_id, position),
+    UNIQUE (environment_id, instance_id)
+) STRICT;
+
+CREATE UNIQUE INDEX environment_instances_dedicated ON environment_instances (instance_id) WHERE ownership = 'dedicated';
+CREATE INDEX environment_instances_instance_id ON environment_instances (instance_id);
+
+CREATE TABLE instance_demands (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    instance_id TEXT NOT NULL CHECK (length(instance_id) = 36 AND instance_id NOT GLOB '*[^0-9a-f-]*' AND substr(instance_id,9,1) = '-' AND substr(instance_id,14,1) = '-' AND substr(instance_id,19,1) = '-' AND substr(instance_id,24,1) = '-' AND substr(instance_id,15,1) = '7') REFERENCES instances (id) ON DELETE CASCADE,
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('environment', 'manual', 'startup')),
+    source_id TEXT CHECK (length(source_id) = 36 AND source_id NOT GLOB '*[^0-9a-f-]*' AND substr(source_id,9,1) = '-' AND substr(source_id,14,1) = '-' AND substr(source_id,19,1) = '-' AND substr(source_id,24,1) = '-' AND substr(source_id,15,1) = '7') REFERENCES environments (id) ON DELETE RESTRICT,
+    session_id TEXT CHECK (length(session_id) BETWEEN 1 AND 64 AND session_id NOT GLOB '*[^!-~]*'),
+    state TEXT NOT NULL CHECK (state IN ('active', 'suppressed', 'released')),
+    state_changed_at TEXT CHECK (length(state_changed_at) = 30 AND state_changed_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    acquired_at TEXT NOT NULL CHECK (length(acquired_at) = 30 AND acquired_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    CHECK ((source_kind = 'environment') = (source_id IS NOT NULL)),
+    CHECK (source_kind <> 'environment' OR session_id IS NULL),
+    CHECK (source_kind <> 'startup' OR session_id IS NOT NULL),
+    CHECK ((state = 'active') = (state_changed_at IS NULL)),
+    CHECK (state <> 'suppressed' OR source_kind = 'startup')
+) STRICT;
+
+CREATE UNIQUE INDEX instance_demands_active_environment ON instance_demands (instance_id, source_id) WHERE source_kind = 'environment' AND state = 'active';
+CREATE INDEX instance_demands_instance_state ON instance_demands (instance_id, state);
+CREATE INDEX instance_demands_source_id ON instance_demands (source_id);
+
+CREATE TABLE operations (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    kind TEXT NOT NULL CHECK (length(kind) BETWEEN 1 AND 64 AND kind GLOB '[a-z]*' AND kind NOT GLOB '*[^a-z0-9_]*'),
+    resource_kind TEXT NOT NULL CHECK (resource_kind IN ('runtime', 'instance', 'environment', 'manager')),
+    resource_id TEXT CHECK (length(resource_id) = 36 AND resource_id NOT GLOB '*[^0-9a-f-]*' AND substr(resource_id,9,1) = '-' AND substr(resource_id,14,1) = '-' AND substr(resource_id,19,1) = '-' AND substr(resource_id,24,1) = '-' AND substr(resource_id,15,1) = '7'),
+    idempotency_key TEXT CHECK (length(idempotency_key) BETWEEN 1 AND 128 AND idempotency_key NOT GLOB '*[^!-~]*'),
+    state TEXT NOT NULL CHECK (state IN ('queued', 'running', 'succeeded', 'failed', 'cancel_requested', 'cancelled', 'needs_recovery')),
+    stage TEXT CHECK (length(stage) BETWEEN 1 AND 64 AND stage GLOB '[a-z]*' AND stage NOT GLOB '*[^a-z0-9_]*' AND length(stage) <= 32),
+    progress_done INTEGER,
+    progress_total INTEGER,
+    failure_code TEXT CHECK (length(failure_code) BETWEEN 1 AND 64 AND failure_code GLOB '[a-z]*' AND failure_code NOT GLOB '*[^a-z0-9_]*'),
+    failure_retryable INTEGER CHECK (failure_retryable IN (0, 1)),
+    recovery_hint TEXT CHECK (length(recovery_hint) BETWEEN 1 AND 64 AND recovery_hint GLOB '[a-z]*' AND recovery_hint NOT GLOB '*[^a-z0-9_]*'),
+    started_at TEXT CHECK (length(started_at) = 30 AND started_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    updated_at TEXT NOT NULL CHECK (length(updated_at) = 30 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    CHECK ((resource_kind = 'manager') = (resource_id IS NULL)),
+    CHECK ((progress_done IS NULL) = (progress_total IS NULL)),
+    CHECK (progress_done IS NULL OR (progress_done >= 0 AND progress_done <= progress_total)),
+    CHECK ((failure_code IS NULL) = (failure_retryable IS NULL)),
+    CHECK (state <> 'failed' OR failure_code IS NOT NULL)
+) STRICT;
+
+CREATE INDEX operations_resource ON operations (resource_kind, resource_id);
+CREATE INDEX operations_idempotency_key ON operations (idempotency_key);
+CREATE INDEX operations_created ON operations (created_at, id);
+CREATE INDEX operations_state_updated ON operations (state, updated_at);
+CREATE INDEX operations_active ON operations (created_at) WHERE state IN ('queued', 'running', 'cancel_requested', 'needs_recovery');
+
+CREATE TABLE process_observations (
+    id INTEGER PRIMARY KEY NOT NULL,
+    instance_id TEXT NOT NULL CHECK (length(instance_id) = 36 AND instance_id NOT GLOB '*[^0-9a-f-]*' AND substr(instance_id,9,1) = '-' AND substr(instance_id,14,1) = '-' AND substr(instance_id,19,1) = '-' AND substr(instance_id,24,1) = '-' AND substr(instance_id,15,1) = '7') REFERENCES instances (id) ON DELETE CASCADE,
+    pid INTEGER NOT NULL CHECK (pid > 0),
+    start_identity TEXT NOT NULL CHECK (length(start_identity) BETWEEN 1 AND 256),
+    executable_identity TEXT NOT NULL CHECK (length(executable_identity) BETWEEN 1 AND 1024),
+    boot_id TEXT,
+    session_id TEXT,
+    observed_at TEXT NOT NULL CHECK (length(observed_at) = 30 AND observed_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z')
+) STRICT;
+
+CREATE INDEX process_observations_instance_observed ON process_observations (instance_id, observed_at);
+
+CREATE TABLE backups (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    instance_id TEXT CHECK (length(instance_id) = 36 AND instance_id NOT GLOB '*[^0-9a-f-]*' AND substr(instance_id,9,1) = '-' AND substr(instance_id,14,1) = '-' AND substr(instance_id,19,1) = '-' AND substr(instance_id,24,1) = '-' AND substr(instance_id,15,1) = '7') REFERENCES instances (id) ON DELETE SET NULL,
+    runtime_id TEXT CHECK (length(runtime_id) = 36 AND runtime_id NOT GLOB '*[^0-9a-f-]*' AND substr(runtime_id,9,1) = '-' AND substr(runtime_id,14,1) = '-' AND substr(runtime_id,19,1) = '-' AND substr(runtime_id,24,1) = '-' AND substr(runtime_id,15,1) = '7') REFERENCES runtimes (id) ON DELETE RESTRICT,
+    runtime_identity TEXT NOT NULL CHECK (length(runtime_identity) BETWEEN 1 AND 256),
+    method TEXT NOT NULL CHECK (length(method) BETWEEN 1 AND 64 AND method GLOB '[a-z]*' AND method NOT GLOB '*[^a-z0-9_]*'),
+    scope TEXT NOT NULL CHECK (length(scope) BETWEEN 1 AND 64 AND scope GLOB '[a-z]*' AND scope NOT GLOB '*[^a-z0-9_]*'),
+    consistency TEXT NOT NULL CHECK (length(consistency) BETWEEN 1 AND 64 AND consistency GLOB '[a-z]*' AND consistency NOT GLOB '*[^a-z0-9_]*'),
+    path TEXT NOT NULL CHECK (length(path) BETWEEN 2 AND 4096 AND path GLOB '/*'),
+    checksum_manifest TEXT CHECK (json_valid(checksum_manifest) AND json_type(checksum_manifest) = 'object'),
+    created_at TEXT NOT NULL CHECK (length(created_at) = 30 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    verified_at TEXT CHECK (length(verified_at) = 30 AND verified_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z'),
+    restore_verified_at TEXT CHECK (length(restore_verified_at) = 30 AND restore_verified_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z')
+) STRICT;
+
+CREATE INDEX backups_instance_id ON backups (instance_id);
+CREATE INDEX backups_runtime_id ON backups (runtime_id);
+
+CREATE TABLE audit_events (
+    id TEXT PRIMARY KEY NOT NULL CHECK (length(id) = 36 AND id NOT GLOB '*[^0-9a-f-]*' AND substr(id,9,1) = '-' AND substr(id,14,1) = '-' AND substr(id,19,1) = '-' AND substr(id,24,1) = '-' AND substr(id,15,1) = '7'),
+    actor TEXT NOT NULL CHECK (length(actor) BETWEEN 1 AND 64 AND actor GLOB '[a-z]*' AND actor NOT GLOB '*[^a-z0-9_]*'),
+    action TEXT NOT NULL CHECK (length(action) BETWEEN 1 AND 64 AND action GLOB '[a-z]*' AND action NOT GLOB '*[^a-z0-9_.]*'),
+    resource_kind TEXT CHECK (length(resource_kind) BETWEEN 1 AND 64 AND resource_kind GLOB '[a-z]*' AND resource_kind NOT GLOB '*[^a-z0-9_]*'),
+    resource_id TEXT CHECK (length(resource_id) = 36 AND resource_id NOT GLOB '*[^0-9a-f-]*' AND substr(resource_id,9,1) = '-' AND substr(resource_id,14,1) = '-' AND substr(resource_id,19,1) = '-' AND substr(resource_id,24,1) = '-' AND substr(resource_id,15,1) = '7'),
+    operation_id TEXT CHECK (length(operation_id) = 36 AND operation_id NOT GLOB '*[^0-9a-f-]*' AND substr(operation_id,9,1) = '-' AND substr(operation_id,14,1) = '-' AND substr(operation_id,19,1) = '-' AND substr(operation_id,24,1) = '-' AND substr(operation_id,15,1) = '7'),
+    result TEXT NOT NULL CHECK (length(result) BETWEEN 1 AND 64 AND result GLOB '[a-z]*' AND result NOT GLOB '*[^a-z0-9_]*'),
+    safe_details TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(safe_details) AND json_type(safe_details) = 'object'),
+    occurred_at TEXT NOT NULL CHECK (length(occurred_at) = 30 AND occurred_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z')
+) STRICT;
+
+CREATE INDEX audit_events_occurred_at ON audit_events (occurred_at);
+CREATE INDEX audit_events_operation_id ON audit_events (operation_id);
+
+-- Audit rows only ever disappear through retention pruning. This is not a
+-- tamper proof claim.
+CREATE TRIGGER audit_events_append_only
+BEFORE UPDATE ON audit_events
+BEGIN
+    SELECT RAISE(ABORT, 'audit events are append only');
+END;
+
+CREATE TABLE settings (
+    key TEXT PRIMARY KEY NOT NULL CHECK (length(key) BETWEEN 1 AND 128 AND key GLOB '[a-z]*' AND key NOT GLOB '*[^a-z0-9_.]*'),
+    typed_value TEXT NOT NULL CHECK (json_valid(typed_value)),
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    updated_at TEXT NOT NULL CHECK (length(updated_at) = 30 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]Z')
+) STRICT;

@@ -7,8 +7,8 @@ mod roots;
 use std::path::{Path, PathBuf};
 
 use stackly_domain::{
-    EnvironmentId, ExactVersion, InstanceId, ProviderRevisionKey, Sha256Digest, ShortKey,
-    SoftwareName, Target,
+    EnvironmentId, ExactVersion, InstanceId, InstancePathEntry, InstancePathKind, LogicalRoot,
+    ProviderRevisionKey, RelativePath, Sha256Digest, ShortKey, SoftwareName, Target,
 };
 
 pub use root_override::{ROOT_OVERRIDE_ENV, validate_root_override};
@@ -24,6 +24,16 @@ pub const INSTANCE_MANIFEST_FILE: &str = "instance-manifest.json";
 const INSTANCE_RUNS_DIR: &str = "i";
 /// Folder name used under both `data` and `logs` for per instance folders.
 const INSTANCES_DIR: &str = "instances";
+/// The software's data directory inside an instance folder.
+const INSTANCE_DATA_DIR: &str = "data";
+/// The rendered configuration inside an instance folder.
+const INSTANCE_CONFIG_DIR: &str = "config";
+/// Earlier configurations inside an instance folder.
+const INSTANCE_CONFIG_HISTORY_DIR: &str = "config-history";
+/// Scratch space inside an instance folder.
+const INSTANCE_TEMP_DIR: &str = "temp";
+/// Folder under the data root that holds the registry.
+const REGISTRY_DIR: &str = "registry";
 
 /// Derives every Stackly path from a [`RootSet`], without any I/O.
 ///
@@ -32,7 +42,7 @@ const INSTANCES_DIR: &str = "instances";
 /// code joins Stackly paths by hand.
 ///
 /// ```text
-/// <data>/stacklyd.lock, registry/,
+/// <data>/stacklyd.lock, registry/{pre-migration,recovery}/,
 ///        providers/<namespace>/<name>/<revision>/<manifest sha256>/,
 ///        runtimes/<software>/<version>/<os>-<arch>/<artifact sha256>/,
 ///        instances/<id>/, environments/<id>/, operations/, backups/,
@@ -99,13 +109,27 @@ impl DirectoryLayout {
     /// Returns the folder that holds the registry database.
     #[must_use]
     pub fn registry_dir(&self) -> PathBuf {
-        self.roots.data().join("registry")
+        self.roots.data().join(REGISTRY_DIR)
     }
 
     /// Returns the registry database file.
     #[must_use]
     pub fn registry_db(&self) -> PathBuf {
         self.registry_dir().join("stackly.sqlite")
+    }
+
+    /// Returns the folder that holds the verified registry snapshots taken
+    /// before a migration, `registry/pre-migration/`.
+    #[must_use]
+    pub fn registry_snapshots_dir(&self) -> PathBuf {
+        self.registry_dir().join("pre-migration")
+    }
+
+    /// Returns the folder that holds registry recovery reports,
+    /// `registry/recovery/`.
+    #[must_use]
+    pub fn registry_recovery_dir(&self) -> PathBuf {
+        self.registry_dir().join("recovery")
     }
 
     /// Returns the folder that holds provider revisions.
@@ -245,15 +269,55 @@ impl DirectoryLayout {
         let root = parent.join(id.to_string());
         InstancePaths {
             manifest: root.join(INSTANCE_MANIFEST_FILE),
-            data: root.join("data"),
-            config: root.join("config"),
-            config_history: root.join("config-history"),
-            temp: root.join("temp"),
+            data: root.join(INSTANCE_DATA_DIR),
+            config: root.join(INSTANCE_CONFIG_DIR),
+            config_history: root.join(INSTANCE_CONFIG_HISTORY_DIR),
+            temp: root.join(INSTANCE_TEMP_DIR),
             logs: self.instance_log_dir(id),
             run: self.instance_run_dir(id.short_key()),
             root,
         }
     }
+}
+
+/// Returns the seven paths of an active instance as the registry stores
+/// them, relative to a logical root, in [`InstancePathKind::ALL`] order:
+///
+/// | Kind | Root | Path |
+/// | --- | --- | --- |
+/// | `root` | data | `instances/<id>` |
+/// | `data` | data | `instances/<id>/data` |
+/// | `config` | data | `instances/<id>/config` |
+/// | `config_history` | data | `instances/<id>/config-history` |
+/// | `temp` | data | `instances/<id>/temp` |
+/// | `logs` | logs | `instances/<id>` |
+/// | `run` | runtime | `i/<short key>` |
+///
+/// It needs no roots: [`RootSet::resolve`] of each entry equals the
+/// matching field of [`DirectoryLayout::instance_paths`].
+#[must_use]
+pub fn instance_path_entries(id: InstanceId) -> [InstancePathEntry; 7] {
+    let instance = format!("{INSTANCES_DIR}/{id}");
+    let inside = |dir: &str| format!("{instance}/{dir}");
+    InstancePathKind::ALL.map(|kind| {
+        let (root, path) = match kind {
+            InstancePathKind::Root => (LogicalRoot::Data, instance.clone()),
+            InstancePathKind::Data => (LogicalRoot::Data, inside(INSTANCE_DATA_DIR)),
+            InstancePathKind::Config => (LogicalRoot::Data, inside(INSTANCE_CONFIG_DIR)),
+            InstancePathKind::ConfigHistory => {
+                (LogicalRoot::Data, inside(INSTANCE_CONFIG_HISTORY_DIR))
+            }
+            InstancePathKind::Temp => (LogicalRoot::Data, inside(INSTANCE_TEMP_DIR)),
+            InstancePathKind::Logs => (LogicalRoot::Logs, instance.clone()),
+            InstancePathKind::Run => (
+                LogicalRoot::Runtime,
+                format!("{INSTANCE_RUNS_DIR}/{}", id.short_key()),
+            ),
+        };
+        let path = RelativePath::new(path)
+            .expect("an instance path joins fixed folder names, an ID, and a short key");
+        InstancePathEntry::new(kind, root, path)
+    })
 }
 
 /// Every path of one instance.
@@ -314,6 +378,76 @@ mod tests {
         assert_eq!(paths.temp, paths.root.join("temp"));
         assert_eq!(paths.logs, roots.logs().join("instances").join(ID));
         assert_eq!(paths.run, roots.runtime().join("i").join("718293a4"));
+    }
+
+    #[test]
+    fn instance_path_entries_resolve_to_the_layout_paths() {
+        let layout = layout();
+        for _ in 0..1000 {
+            let id = InstanceId::generate();
+            let paths = layout.instance_paths(id);
+            let entries = instance_path_entries(id);
+            let resolved = |kind: InstancePathKind| {
+                let entry = entries.iter().find(|entry| entry.kind() == kind).unwrap();
+                layout.roots().resolve(entry.root(), entry.path())
+            };
+
+            let kinds: Vec<_> = entries.iter().map(InstancePathEntry::kind).collect();
+            assert_eq!(kinds, InstancePathKind::ALL);
+            assert_eq!(resolved(InstancePathKind::Root), paths.root);
+            assert_eq!(resolved(InstancePathKind::Data), paths.data);
+            assert_eq!(resolved(InstancePathKind::Config), paths.config);
+            assert_eq!(
+                resolved(InstancePathKind::ConfigHistory),
+                paths.config_history
+            );
+            assert_eq!(resolved(InstancePathKind::Temp), paths.temp);
+            assert_eq!(resolved(InstancePathKind::Logs), paths.logs);
+            assert_eq!(resolved(InstancePathKind::Run), paths.run);
+        }
+    }
+
+    #[test]
+    fn instance_path_entries_of_one_id_are_the_documented_table() {
+        let id: InstanceId = ID.parse().unwrap();
+        let entries: Vec<_> = instance_path_entries(id)
+            .iter()
+            .map(|entry| {
+                format!(
+                    "{} {}:{}",
+                    entry.kind(),
+                    entry.root(),
+                    entry.path().as_str()
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            entries,
+            [
+                format!("root data:instances/{ID}"),
+                format!("data data:instances/{ID}/data"),
+                format!("config data:instances/{ID}/config"),
+                format!("config_history data:instances/{ID}/config-history"),
+                format!("temp data:instances/{ID}/temp"),
+                format!("logs logs:instances/{ID}"),
+                "run runtime:i/718293a4".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn snapshot_and_recovery_folders_sit_in_the_registry_folder() {
+        let layout = layout();
+
+        assert_eq!(
+            layout.registry_snapshots_dir(),
+            layout.registry_dir().join("pre-migration")
+        );
+        assert_eq!(
+            layout.registry_recovery_dir(),
+            layout.registry_dir().join("recovery")
+        );
     }
 
     #[test]
