@@ -241,11 +241,15 @@ impl Spike {
             archive::check_digest(&s.plan.cache_file, &artifact.sha256, artifact.size)
         })?;
         let root = self.step("extract", |s| {
-            let root = archive::extract(
+            let extracted = archive::extract(
                 &artifact,
                 &s.plan.cache_file,
                 &s.layout.extract_dir(&artifact.id),
             )?;
+            if !extracted.mode_notes.is_empty() {
+                s.note = Some(extracted.mode_notes.join("; "));
+            }
+            let root = extracted.root;
             for executable in &artifact.executables {
                 if !root.join(executable).is_file() {
                     bail!("the artifact has no executable {executable}");

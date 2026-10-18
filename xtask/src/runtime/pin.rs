@@ -1,7 +1,7 @@
 //! `cargo xtask runtime pin --url <https>... [--executable <path>]
 //! [--sha256-url <https>]`: downloads every candidate URL, checks that they
-//! give the same bytes, and prints the `urls`, `sha256`, `size`, and
-//! `min_os` lines of an inventory entry (spec 0003). Digests are never
+//! give the same bytes, and prints the `format`, `urls`, `sha256`, `size`,
+//! and `min_os` lines of an inventory entry (spec 0003). Digests are never
 //! typed by hand.
 
 use std::path::{Path, PathBuf};
@@ -26,9 +26,16 @@ struct Options {
     sha256_url: Option<String>,
 }
 
+/// What `pin` prints for a download that is not a Mach-O file, a `.tar.gz`,
+/// or a `.zip`.
+const UNKNOWN_NOTE: &str =
+    "pin: the download is not a Mach-O file, a .tar.gz, or a .zip; format and min_os left out";
+
 /// The TOML lines `pin` prints, in inventory order.
 #[derive(Debug, Serialize)]
 struct Pinned {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    format: Option<&'static str>,
     urls: Vec<String>,
     sha256: String,
     size: u64,
@@ -56,8 +63,17 @@ pub fn run(args: &[&str]) -> Result<()> {
     let stored = cache.store(downloads.next().context("pin needs at least one --url")?)?;
     // The other candidates hold the same bytes; free their space now.
     drop(downloads);
-    let min_os = read_min_os(&stored, options.executable.as_deref())?;
+    // The format comes from the bytes on every OS; only min_os needs macOS.
+    let kind = macho::file_kind(&stored)?;
+    let format = kind.format();
+    let min_os = if format.is_some() {
+        read_min_os(&stored, kind, options.executable.as_deref())?
+    } else {
+        eprintln!("{UNKNOWN_NOTE}");
+        None
+    };
     let pinned = Pinned {
+        format,
         urls: options.urls,
         sha256,
         size,
@@ -148,27 +164,40 @@ fn check_sha256_file(cache: &Cache, sha256_url: &str, urls: &[String], sha256: &
 }
 
 /// The macOS minimum of the main executable: the file itself for a
-/// `binary` download, `--executable` inside a `.tar.gz`. Only on macOS,
-/// where `vtool` exists; elsewhere the line is left out with a note.
-fn read_min_os(stored: &Path, executable: Option<&str>) -> Result<Option<String>> {
+/// `binary` download, `--executable` inside a `.tar.gz` or a `.zip`. Only
+/// on macOS, where `vtool` exists (and where `/usr/bin/tar` reads zip);
+/// elsewhere the line is left out with a note.
+fn read_min_os(stored: &Path, kind: FileKind, executable: Option<&str>) -> Result<Option<String>> {
     if !cfg!(target_os = "macos") {
         eprintln!("pin: min_os needs vtool; run pin on macOS to fill it");
         return Ok(None);
     }
-    match macho::file_kind(stored)? {
+    match kind {
         FileKind::MachO => macho::min_os(stored).map(Some),
-        FileKind::Gzip => {
+        FileKind::Gzip | FileKind::Zip => {
             let Some(executable) = executable else {
                 eprintln!("pin: pass --executable <path in the archive> to read min_os");
                 return Ok(None);
             };
             let folder = tempfile::tempdir().context("cannot create a folder to extract into")?;
-            let path = extract_one(stored, executable, folder.path())?;
+            let path = extract_one(stored, kind, executable, folder.path())?;
             macho::min_os(&path).map(Some)
         }
         FileKind::Other => {
-            eprintln!("pin: the download is neither a Mach-O file nor a .tar.gz; min_os left out");
+            eprintln!("{UNKNOWN_NOTE}");
             Ok(None)
+        }
+    }
+}
+
+/// The tar flags that list an archive of `kind`, extract from it, and the
+/// options that follow the archive when extracting.
+fn tar_flags(kind: FileKind) -> Result<(&'static str, &'static str, &'static [&'static str])> {
+    match kind {
+        FileKind::Gzip => Ok(("-tzf", "-xzf", &[])),
+        FileKind::Zip => Ok(("-tf", "-xf", &["--no-mac-metadata"])),
+        FileKind::MachO | FileKind::Other => {
+            bail!("a {} file is not an archive tar can list", kind.name())
         }
     }
 }
@@ -176,9 +205,10 @@ fn read_min_os(stored: &Path, executable: Option<&str>) -> Result<Option<String>
 /// Extracts only `executable` from the archive into `into` and returns its
 /// path. `executable` is relative to the artifact root, which is the
 /// archive itself or its single top folder.
-fn extract_one(archive: &Path, executable: &str, into: &Path) -> Result<PathBuf> {
+fn extract_one(archive: &Path, kind: FileKind, executable: &str, into: &Path) -> Result<PathBuf> {
+    let (list, extract, options) = tar_flags(kind)?;
     let listing = Command::new(TAR)
-        .arg("-tzf")
+        .arg(list)
         .arg(archive)
         .output()
         .with_context(|| format!("cannot run {TAR}"))?;
@@ -197,8 +227,9 @@ fn extract_one(archive: &Path, executable: &str, into: &Path) -> Result<PathBuf>
     // the working folder keeps anything tar writes inside `into`.
     let status = Command::new(TAR)
         .current_dir(into)
-        .arg("-xzf")
+        .arg(extract)
         .arg(archive)
+        .args(options)
         .arg("-C")
         .arg(into)
         .arg("--")
@@ -253,6 +284,7 @@ fn normalize_member(member: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::test_zip as zip;
 
     #[test]
     fn parse_reads_every_url_and_the_options() {
@@ -342,6 +374,7 @@ mod tests {
     #[test]
     fn pinned_values_print_as_inventory_toml() {
         let pinned = Pinned {
+            format: Some("tar_gz"),
             urls: vec!["https://a.example/x.tar.gz".to_owned()],
             sha256: "a".repeat(64),
             size: 42,
@@ -350,10 +383,43 @@ mod tests {
         assert_eq!(
             toml::to_string(&pinned).unwrap(),
             format!(
-                "urls = [\"https://a.example/x.tar.gz\"]\nsha256 = \"{}\"\nsize = 42\nmin_os = \"11.0\"\n",
+                "format = \"tar_gz\"\nurls = [\"https://a.example/x.tar.gz\"]\nsha256 = \"{}\"\nsize = 42\nmin_os = \"11.0\"\n",
                 "a".repeat(64)
             )
         );
+    }
+
+    #[test]
+    fn an_unknown_download_prints_neither_format_nor_min_os() {
+        let pinned = Pinned {
+            format: FileKind::Other.format(),
+            urls: vec!["https://a.example/x.tar.zst".to_owned()],
+            sha256: "a".repeat(64),
+            size: 42,
+            min_os: None,
+        };
+        assert_eq!(
+            toml::to_string(&pinned).unwrap(),
+            format!(
+                "urls = [\"https://a.example/x.tar.zst\"]\nsha256 = \"{}\"\nsize = 42\n",
+                "a".repeat(64)
+            )
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("x.tar.zst");
+        std::fs::write(&file, [0x28, 0xb5, 0x2f, 0xfd, 0, 0, 0, 0]).unwrap();
+        assert_eq!(
+            read_min_os(&file, FileKind::Other, Some("bin/x")).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_zip_download_pins_format_zip_on_every_os() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("clickhouse-macos-aarch64.zip");
+        std::fs::write(&file, zip::stored(&[zip::file("clickhouse", 0o755, b"x")])).unwrap();
+        assert_eq!(macho::file_kind(&file).unwrap().format(), Some("zip"));
     }
 
     #[test]
@@ -387,7 +453,7 @@ mod tests {
         let into = dir.path().join("into");
         std::fs::create_dir(&into).unwrap();
 
-        assert!(extract_one(&archive, "nats-server", &into).is_err());
+        assert!(extract_one(&archive, FileKind::Gzip, "nats-server", &into).is_err());
         assert!(!into.join("MARK").exists());
         assert_eq!(std::fs::read_dir(&into).unwrap().count(), 0);
     }
@@ -410,9 +476,30 @@ mod tests {
             .unwrap();
         assert!(status.success());
 
-        let minimum = read_min_os(&archive, Some("bin/tool")).unwrap().unwrap();
+        let minimum = read_min_os(&archive, FileKind::Gzip, Some("bin/tool"))
+            .unwrap()
+            .unwrap();
         assert_eq!(minimum, macho::min_os(Path::new("/usr/bin/true")).unwrap());
-        assert_eq!(read_min_os(&archive, None).unwrap(), None);
-        assert!(read_min_os(&archive, Some("bin/missing")).is_err());
+        assert_eq!(read_min_os(&archive, FileKind::Gzip, None).unwrap(), None);
+        assert!(read_min_os(&archive, FileKind::Gzip, Some("bin/missing")).is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn min_os_is_read_from_an_executable_inside_a_zip() {
+        let dir = tempfile::tempdir().unwrap();
+        let tool = std::fs::read("/usr/bin/true").unwrap();
+        let archive = dir.path().join("tool.zip");
+        std::fs::write(
+            &archive,
+            zip::stored(&[zip::file("clickhouse", 0o755, &tool)]),
+        )
+        .unwrap();
+
+        let minimum = read_min_os(&archive, FileKind::Zip, Some("clickhouse"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(minimum, macho::min_os(Path::new("/usr/bin/true")).unwrap());
+        assert!(read_min_os(&archive, FileKind::Zip, Some("missing")).is_err());
     }
 }

@@ -1,0 +1,217 @@
+{
+  "archive": {
+    "files": 281,
+    "setuid": [],
+    "specialFiles": [],
+    "symlinksEscaping": [],
+    "symlinksInternal": 34
+  },
+  "artifactId": "mysql-8.4.11-macos-aarch64",
+  "closureProbes": [
+    {
+      "detail": "9 non system libraries, as listed",
+      "name": "dependencies",
+      "status": "PASS"
+    }
+  ],
+  "failure": null,
+  "launch": {
+    "controllingTty": false,
+    "domain": "gui/502",
+    "parentIsLaunchd": true
+  },
+  "libraries": {
+    "foreign": [],
+    "runtime": [
+      "/usr/lib/dyld",
+      "bin/mysqld",
+      "lib/libcrypto.3.dylib",
+      "lib/libprotobuf-lite.24.4.0.dylib",
+      "lib/libssl.3.dylib",
+      "lib/plugin/component_reference_cache.so"
+    ],
+    "static": [
+      "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+      "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+      "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+      "/System/Library/Frameworks/Kerberos.framework/Versions/A/Kerberos",
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/libc++.1.dylib",
+      "/usr/lib/libncurses.5.4.dylib",
+      "/usr/lib/libresolv.9.dylib",
+      "/usr/lib/libsasl2.2.dylib",
+      "lib/libcom_err.3.0.dylib",
+      "lib/libcrypto.3.dylib",
+      "lib/libfido2.1.15.0.dylib",
+      "lib/libgssapi_krb5.2.2.dylib",
+      "lib/libk5crypto.3.1.dylib",
+      "lib/libkrb5.3.3.dylib",
+      "lib/libkrb5support.1.1.dylib",
+      "lib/libprotobuf-lite.24.4.0.dylib",
+      "lib/libssl.3.dylib"
+    ],
+    "warnings": [
+      "bin/mysqld-debug: LC_RPATH /Volumes/hd2/pb2/build/sb_0-23035487-1782838243.689719/debug/library_output_directory is absolute outside the system",
+      "lib/plugin/debug/group_replication.so: LC_RPATH /Volumes/hd2/pb2/build/sb_0-23035487-1782838243.689719/debug/library_output_directory is absolute outside the system"
+    ]
+  },
+  "listeners": [],
+  "logTail": [
+    {
+      "process": "init",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "process": "server",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "process": "init.err",
+      "stderr": "",
+      "stdout": "2026-10-18T00:04:49.805655Z 0 [System] [MY-015017] [Server] MySQL Server Initialization - start.\n2026-10-18T00:04:49.808886Z 0 [System] [MY-013169] [Server] $ROOT/Stackly Spike Ü/mysql-8.4.11-macos-aarch64/mysql-8.4.11-macos15-arm64/bin/mysqld (mysqld 8.4.11) initializing of server in progress as process 96979\n2026-10-18T00:04:49.810812Z 0 [Warning] [MY-010159] [Server] Setting lower_case_table_names=2 because file system for $ROOT/Stackly Spike Ü/run/data/ is case insensitive\n2026-10-18T00:04:49.814218Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.\n2026-10-18T00:04:49.910173Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.\n2026-10-18T00:04:50.371383Z 5 [Warning] [MY-010453] [Server] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.\n2026-10-18T00:04:50.714343Z 0 [System] [MY-013172] [Server] Received SHUTDOWN from user <via user signal>. Shutting down mysqld (Version: 8.4.11).\n2026-10-18T00:04:51.259008Z 0 [System] [MY-015018] [Server] MySQL Server Initialization - end.\n"
+    },
+    {
+      "process": "mysqld.err",
+      "stderr": "",
+      "stdout": "2026-10-18T00:04:51.357933Z 0 [System] [MY-015015] [Server] MySQL Server - start.\n2026-10-18T00:04:51.509769Z 0 [System] [MY-010116] [Server] $ROOT/Stackly Spike Ü/mysql-8.4.11-macos-aarch64/mysql-8.4.11-macos15-arm64/bin/mysqld (mysqld 8.4.11) starting as process 97040\n2026-10-18T00:04:51.512694Z 0 [Warning] [MY-010159] [Server] Setting lower_case_table_names=2 because file system for $ROOT/Stackly Spike Ü/run/data/ is case insensitive\n2026-10-18T00:04:51.828658Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.\n2026-10-18T00:04:51.963008Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.\n2026-10-18T00:04:52.141482Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.\n2026-10-18T00:04:52.141503Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.\n2026-10-18T00:04:52.147679Z 0 [System] [MY-010931] [Server] $ROOT/Stackly Spike Ü/mysql-8.4.11-macos-aarch64/mysql-8.4.11-macos15-arm64/bin/mysqld: ready for connections. Version: '8.4.11'  socket: '/tmp/sk-4a7b5cdd/m.sock'  port: 0  MySQL Community Server - GPL.\n2026-10-18T00:04:52.637878Z 9 [System] [MY-013172] [Server] Received SHUTDOWN from user root. Shutting down mysqld (Version: 8.4.11).\n2026-10-18T00:04:52.637974Z 0 [System] [MY-013172] [Server] Received SHUTDOWN from user <via user signal>. Shutting down mysqld (Version: 8.4.11).\n2026-10-18T00:04:53.200276Z 0 [System] [MY-010910] [Server] $ROOT/Stackly Spike Ü/mysql-8.4.11-macos-aarch64/mysql-8.4.11-macos15-arm64/bin/mysqld: Shutdown complete (mysqld 8.4.11)  MySQL Community Server - GPL.\n2026-10-18T00:04:53.200323Z 0 [System] [MY-015016] [Server] MySQL Server - end.\n"
+    }
+  ],
+  "minOsMeasured": "14.0",
+  "observedVersion": "8.4.11",
+  "quarantine": {
+    "detail": "already recorded in evidence/runtime/01a1494b-d124-779a-80d5-81c5c29696c0/artifacts/01a1494b-d2bc-7322-bdcd-d4220d1df52e/",
+    "outcome": "skipped"
+  },
+  "rawVersion": "8.4.11",
+  "schema": "stackly.runtime-spike-result/v1",
+  "sha256": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+  "signature": [
+    {
+      "adhocSignedAtInstall": false,
+      "authority": "Developer ID Application: Oracle America, Inc. (VB5E2TV963)",
+      "executable": "bin/mysqld",
+      "kind": "developer_id",
+      "teamId": "VB5E2TV963"
+    },
+    {
+      "adhocSignedAtInstall": false,
+      "authority": "Developer ID Application: Oracle America, Inc. (VB5E2TV963)",
+      "executable": "bin/mysql",
+      "kind": "developer_id",
+      "teamId": "VB5E2TV963"
+    },
+    {
+      "adhocSignedAtInstall": false,
+      "authority": "Developer ID Application: Oracle America, Inc. (VB5E2TV963)",
+      "executable": "bin/mysqladmin",
+      "kind": "developer_id",
+      "teamId": "VB5E2TV963"
+    }
+  ],
+  "status": "PASS",
+  "steps": [
+    {
+      "detail": "gui/502, parent launchd, no controlling terminal",
+      "durationMs": 0,
+      "name": "launch",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 1689,
+      "name": "hash",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 916,
+      "name": "extract",
+      "status": "PASS"
+    },
+    {
+      "detail": "281 files, 34 internal links",
+      "durationMs": 3,
+      "name": "archive report",
+      "status": "PASS"
+    },
+    {
+      "detail": "95 Mach-O file(s), 18 libraries",
+      "durationMs": 2935,
+      "name": "static audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "9 non system libraries, as listed",
+      "durationMs": 0,
+      "name": "closure",
+      "status": "PASS"
+    },
+    {
+      "detail": "kept the existing signatures",
+      "durationMs": 2820,
+      "name": "signing",
+      "status": "PASS"
+    },
+    {
+      "detail": "14.0",
+      "durationMs": 19,
+      "name": "min_os",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "recipe",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 3557,
+      "name": "init",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 1,
+      "name": "start",
+      "status": "PASS"
+    },
+    {
+      "detail": "ready 967 ms after the start",
+      "durationMs": 967,
+      "name": "ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "8.4.11",
+      "durationMs": 267,
+      "name": "version",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 probe(s)",
+      "durationMs": 0,
+      "name": "probes",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 listener(s)",
+      "durationMs": 54,
+      "name": "runtime audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit 0 after 1161 ms",
+      "durationMs": 1161,
+      "name": "stop",
+      "status": "PASS"
+    }
+  ],
+  "stop": {
+    "durationMs": 1161,
+    "exitCode": 0,
+    "signal": null
+  }
+}

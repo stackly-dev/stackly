@@ -1,0 +1,28 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/native_runtime.rs (target/debug/deps/native_runtime-7edbdcdcf3687b79)
+
+running 5 tests
+spike spike mysql-8.4.11-macos-aarch64: waiting for the spike lock
+traefik-3.7.15-macos-aarch64: waiting for the spike lock
+spike mysql-9.7.2-macos-aarch64spike spike nats-2.15.1-macos-aarch64: waiting for the spike lock
+: waiting for the spike lock
+clickhouse-26.8.30.8-macos-aarch64: waiting for the spike lock
+spike traefik-3.7.15-macos-aarch64: starting the worker in gui/502
+spike traefik-3.7.15-macos-aarch64: PASS, version 3.7.15
+test traefik_3_7_runs_from_managed_artifact ... ok
+spike nats-2.15.1-macos-aarch64: starting the worker in gui/502
+spike nats-2.15.1-macos-aarch64: PASS, version 2.15.1
+test nats_2_15_runs_from_managed_artifact ... ok
+spike clickhouse-26.8.30.8-macos-aarch64: starting the worker in gui/502
+spike clickhouse-26.8.30.8-macos-aarch64: PASS, version 26.8.30.8
+test clickhouse_runs_from_managed_artifact ... ok
+spike mysql-8.4.11-macos-aarch64: starting the worker in gui/502
+spike mysql-8.4.11-macos-aarch64: PASS, version 8.4.11
+test mysql_8_4_runs_from_managed_artifact ... ok
+spike mysql-9.7.2-macos-aarch64: starting the worker in gui/502
+test mysql_9_7_runs_from_managed_artifact has been running for over 60 seconds
+spike mysql-9.7.2-macos-aarch64: PASS, version 9.7.2
+test mysql_9_7_runs_from_managed_artifact ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 68.78s
+

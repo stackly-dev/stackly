@@ -1,4 +1,4 @@
-# Verify: Sumber & packaging runtime · spec 0003 · updated 2026-10-17
+# Verify: Sumber & packaging runtime · spec 0003 · updated 2026-10-18
 
 _Langkah ini diturunkan dari acceptance criteria spec 0003. `/check verify` menjalankannya; `/test` mengunci yang tahan lama._
 
@@ -71,3 +71,43 @@ Tidak ada layar; milestone ini hanya tooling `cargo xtask`.
 - AC-13: ClickHouse `blocked` setelah aturan fallback (26.8 LTS dan 26.9 stable memakai aset self extracting yang sama).
 - AC-12: belum di milestone ini.
 - AC-11, AC-14, AC-15: dihapus 2026-10-17 (CI ditiadakan, pengembangan fokus di Mac ini dulu).
+
+## Milestone 2b: format `zip` dan ClickHouse · 2026-10-18
+
+### UI / manual
+
+- [ ] Tidak ada layar. Run pertama untuk digest ClickHouse menjalankan probe quarantine; dialog Gatekeeper bisa muncul (spike lokal 26.8.30.8 tercatat `ran`, exit 0, tanpa dialog). Kalau muncul, tutup tanpa mengubah setelan → AC-8, AC-9
+
+### Commands
+
+- [ ] `cargo test -p xtask runtime::` → semua lulus, termasuk `each_format_accepts_only_its_own_kind_of_file`, test zip di `spike::archive` (kasus 1 sampai 5 dan 1b, serta `an_executable_behind_a_link_is_refused_and_its_target_keeps_its_mode`), `a_download_of_another_format_fails_with_the_spike_reason`, `a_zip_download_pins_format_zip_on_every_os`, `min_os_is_read_from_an_executable_inside_a_zip`, dan tiga test aturan 3 untuk `zip` dan `archive_root` → AC-2, AC-16
+- [ ] `cargo xtask runtime pin --url https://github.com/ClickHouse/ClickHouse/releases/download/v26.8.30.8-lts/clickhouse-macos-aarch64.zip --executable clickhouse` → baris pertama `format = "zip"`, lalu `urls`, `sha256 = "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402"`, `size = 216009716`, dan `min_os = "11.0"`, sama dengan entri inventaris → AC-1, AC-16
+- [ ] `pin --url https://raw.githubusercontent.com/ClickHouse/ClickHouse/v26.8.30.8-lts/LICENSE` → `urls`, `sha256`, dan `size` saja, tanpa `format` dan `min_os`, dengan catatan `pin: the download is not a Mach-O file, a .tar.gz, or a .zip; format and min_os left out` → AC-16
+- [ ] `/usr/bin/tar -tvf ~/Library/Caches/dev.stackly.xtask/runtime/097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402` → satu anggota `clickhouse`, file biasa bermode `-rw-rw-r--` (0664), 892587392 byte → build step 16.2
+- [ ] `cargo xtask runtime verify --id clickhouse-26.8.30.8-macos-aarch64` → `OK` → AC-1
+- [ ] Ganti sementara `format = "zip"` ClickHouse menjadi `tar_gz` (jangan di-commit): `runtime verify --id clickhouse-26.8.30.8-macos-aarch64` → `FAIL format tar_gz does not match the file (zip)`, exit 1; spike → exit 1, `failure.step` `extract` dengan alasan yang sama, tanpa folder hasil ekstraksi; kembalikan file → AC-16
+- [ ] `cargo xtask runtime check` → semua artefak dan run evidence lulus aturan, exit 0 → AC-1, AC-2
+- [ ] Di tree bersih: `cargo xtask evidence run --kind native -- cargo test -p xtask --test native_runtime -- --ignored` → NATS, Traefik, MySQL 8.4, MySQL 9.7, dan ClickHouse `PASS` (tarball milestone 2 tetap lulus dengan cek format baru) → AC-5, AC-10, AC-13
+- [ ] `spike-result.json` record ClickHouse di folder evidence → `signature[].kind` `developer_id`, `teamId` `ZNDB5FJ8ZW`, `adhocSignedAtInstall` false, `archive.files` 1, detail langkah `extract` `set mode 0755 on clickhouse (was 0644)`, `observedVersion` `26.8.30.8`, `listeners` hanya dua port 127.0.0.1 yang dialokasikan, `stop.exitCode` 0 dalam 60 detik tanpa SIGKILL, probe `dependencies` PASS, `quarantine.outcome` selain `skipped` → AC-5, AC-6, AC-7 (closure), AC-8, AC-9, AC-13, AC-16
+- [ ] Ekstrak zip ke folder sementara dengan `tar -xf ... --no-mac-metadata`: `codesign -dv --verbose=2` → Authority `Developer ID Application: ClickHouse Inc. (ZNDB5FJ8ZW)`, flag `runtime`; `codesign --verify --strict` lulus sebelum dan sesudah `chmod 0755`; jangan jalankan binary-nya → AC-8, keputusan 2026-10-18
+- [ ] Spike kedua untuk digest ClickHouse setelah evidence di-commit → `quarantine.outcome` `skipped` dengan folder evidence itu → AC-9
+- [ ] `grep -rE "$(whoami)|$(hostname -s)|/var/folders" evidence/runtime/` → tidak ada hasil → privasi evidence
+
+### Value sourcing
+
+- [ ] `format` entri ClickHouse sama dengan jenis file dari magic number unduhan (`zip`), dicetak `pin` → `format` dari `pin`
+- [ ] Detail `extract` memuat mode lama di disk setelah `tar` (0644 di bawah umask 022 launchd, walau zip menyimpan 0664) dan mode baru 0755 → mode executable artefak `zip`
+- [ ] Baris `[[artifact.dependency]]` ClickHouse adalah tujuh baris `system` dari `libraries.static` spike lokal: AppKit, CoreFoundation, Security, SystemConfiguration, `libSystem.B.dylib`, `libiconv.2.dylib`, dan `libobjc.A.dylib` → dependency dari spike lokal
+- [ ] `executables = ["clickhouse"]` tanpa `archive_root`, karena zip tidak punya folder puncak → `archive_root`, `executables`
+- [ ] `minOsMeasured` 11.0 sama dengan `min_os` inventaris → `vtool`
+
+### Acceptance-criteria coverage
+
+- AC-1: entri ClickHouse `available` dari `pin`, dan `verify` OK.
+- AC-2: aturan 3 menerima `zip` dan membatasi `archive_root`; aturan 8 lulus setelah evidence ClickHouse di-commit.
+- AC-3: gerbang digest tetap sebelum cek format dan ekstraksi.
+- AC-5, AC-6, AC-8, AC-9, AC-10: record native ClickHouse dan isi `spike-result.json`.
+- AC-7: bagian closure untuk ClickHouse; probe PostgreSQL di milestone 3.
+- AC-13: ClickHouse 26.8 LTS dari `.zip` (lini LTS terbaru dengan aset macOS aarch64; 26.9 stable sebagai fallback tidak diperlukan).
+- AC-16: cek format, ekstraksi zip, `pin`, aturan `archive_root`, dan mode 0755 untuk executable zip.
+- AC-12: milestone 3.
