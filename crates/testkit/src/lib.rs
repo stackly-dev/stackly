@@ -16,12 +16,18 @@
 //! [`fake_server::binary`], which builds `stackly-fake-server` once per
 //! test process (spec 0009).
 //!
+//! On macOS, [`DiskImage`] attaches a small disk image inside a test root,
+//! so [`fs_cross_device_conformance`] can check that a removal never
+//! crosses onto another device (spec 0007).
+//!
 //! The fakes need Unix file ownership and modes, and the dummy server
 //! handles Unix signals, so they exist only on Unix; [`TestRoot`] and
 //! [`allocate_port`] work everywhere.
 
 #[cfg(unix)]
 mod conformance;
+#[cfg(target_os = "macos")]
+mod disk_image;
 #[cfg(unix)]
 mod fake_fs;
 #[cfg(unix)]
@@ -35,6 +41,10 @@ mod test_root;
 
 #[cfg(unix)]
 pub use conformance::fs_conformance;
+#[cfg(target_os = "macos")]
+pub use conformance::{CrossDevice, fs_cross_device_conformance};
+#[cfg(target_os = "macos")]
+pub use disk_image::DiskImage;
 #[cfg(unix)]
 pub use fake_fs::{FakeFilesystem, Fault, FsOp, Mutation};
 #[cfg(unix)]

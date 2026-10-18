@@ -5,14 +5,18 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use stackly_platform::{DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError};
+use stackly_platform::{DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, RemoveReport};
+
+mod remove_tree;
 
 /// Counter that makes each temporary file name unique within the process.
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// The macOS filesystem, through `std::fs` plus `O_NOFOLLOW` and
 /// `O_NONBLOCK` for reads, so a symlink is never followed and a FIFO never
-/// blocks.
+/// blocks. [`remove_tree`](Filesystem::remove_tree) works on file
+/// descriptors (`openat`, `fstatat`, `unlinkat`, `fdopendir`), so a folder
+/// swapped for a symlink while it runs is never followed.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MacosFilesystem;
 
@@ -99,6 +103,10 @@ impl Filesystem for MacosFilesystem {
         File::open(dir)
             .and_then(|dir| dir.sync_all())
             .map_err(|err| PlatformError::from_io("sync directory", dir, &err))
+    }
+
+    fn remove_tree(&self, root: &Path, relative: &Path) -> Result<RemoveReport, PlatformError> {
+        remove_tree::remove_tree(root, relative)
     }
 }
 

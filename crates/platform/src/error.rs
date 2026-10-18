@@ -98,6 +98,34 @@ pub enum PlatformError {
         /// The OS error message.
         message: String,
     },
+    /// A component on the way to the target of a removal is a symlink, so
+    /// nothing was removed.
+    #[error("{} is a symlink on the way to the target", path.display())]
+    SymlinkInPath {
+        /// The symlink.
+        path: PathBuf,
+    },
+    /// The path exists but is not a directory where one is needed.
+    #[error("{} is not a directory", path.display())]
+    NotADirectory {
+        /// The path that is not a directory.
+        path: PathBuf,
+    },
+    /// An entry lies on another device than the root of the removal, so
+    /// the removal stopped before touching that device.
+    #[error("{} is on another device than its root", path.display())]
+    CrossesDevice {
+        /// The first entry found on another device.
+        path: PathBuf,
+    },
+    /// A directory is nested deeper than the removal walks.
+    #[error("{} is nested more than {max} directories deep", path.display())]
+    TooDeep {
+        /// The first directory past the limit.
+        path: PathBuf,
+        /// The deepest nesting allowed, the target counted as one level.
+        max: usize,
+    },
     /// A path lies outside the roots a test owns. Only the fake filesystem
     /// in `stackly-testkit` returns this.
     #[error("{} is outside the test roots", path.display())]

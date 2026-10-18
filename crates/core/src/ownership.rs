@@ -2,7 +2,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf, is_separator};
 
 use stackly_domain::{InvariantDetail, InvariantError};
-use stackly_platform::{Platform, RootKind, is_same_or_inside};
+use stackly_platform::{Platform, RemoveReport, RootKind, is_same_or_inside};
 
 use crate::error::CoreError;
 use crate::layout::PreparedLayout;
@@ -61,6 +61,64 @@ pub fn check_owned_path(
     Err(CoreError::OutsideOwnedRoots {
         path: path.to_path_buf(),
     })
+}
+
+/// Removes an owned path and everything under it, without following a
+/// symlink and without leaving its owned root (VAL-007).
+///
+/// The path first passes [`check_owned_path`]: absolute, with no `.` or
+/// `..`, and resolving strictly inside an owned root. It must also lie, as
+/// written, inside an owned root as the layout gives it or in its canonical
+/// form; the rest after that root goes to
+/// [`Filesystem::remove_tree`](stackly_platform::Filesystem::remove_tree)
+/// with the root's canonical form. So the removal walks the names as
+/// given, one open directory at a time: a symlink on the way fails with
+/// `SymlinkInPath`, and a symlink as the target or inside the tree is
+/// removed as itself, never its target. A target symlink that resolves
+/// outside every owned root already fails the first check. A missing
+/// target yields a report with `missing` set, so removing twice is fine.
+///
+/// This is core's only recursive removal: operation compensation (feature
+/// 7) and purge (feature 54) use it.
+///
+/// # Errors
+///
+/// Returns [`CoreError::NotNormalized`], [`CoreError::OutsideOwnedRoots`]
+/// (also for a path that reaches a root only through a symlink outside it),
+/// [`CoreError::IsOwnedRoot`], or [`CoreError::Platform`] with the error of
+/// the check or of the removal.
+pub fn remove_owned_tree(
+    platform: &Platform,
+    prepared: &PreparedLayout,
+    path: &Path,
+) -> Result<RemoveReport, CoreError> {
+    check_owned_path(platform, prepared, path)?;
+    let (root, relative) =
+        split_at_owned_root(prepared, path).ok_or_else(|| CoreError::OutsideOwnedRoots {
+            path: path.to_path_buf(),
+        })?;
+    Ok(platform.fs().remove_tree(root, relative)?)
+}
+
+/// Returns the canonical form of the owned root `path` lies in as written
+/// (matching the root as the layout gives it or its canonical form), and
+/// the non empty rest of `path` after it.
+fn split_at_owned_root<'a>(
+    prepared: &'a PreparedLayout,
+    path: &'a Path,
+) -> Option<(&'a Path, &'a Path)> {
+    let given = prepared.layout().owned_roots();
+    prepared
+        .canonical_roots()
+        .into_iter()
+        .zip(given)
+        .find_map(|((_, canonical), given)| {
+            [given, canonical]
+                .into_iter()
+                .find_map(|root| path.strip_prefix(root).ok())
+                .filter(|rest| !rest.as_os_str().is_empty())
+                .map(|rest| (canonical, rest))
+        })
 }
 
 /// Checks that a candidate data root shares no folder with an existing
@@ -162,6 +220,7 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     use stackly_domain::{InstanceId, Rule};
+    use stackly_platform::PlatformError;
     use stackly_testkit::evidence::{Kind, evidence};
     use stackly_testkit::{FakePlatform, TestRoot};
 
@@ -409,5 +468,203 @@ mod tests {
             check_data_root_overlap(&fake.platform(), &data, Vec::<PathBuf>::new()),
             Ok(())
         );
+    }
+
+    fn sentinel(root: &TestRoot) -> PathBuf {
+        let sentinel = root.path().join("sentinel");
+        std::fs::create_dir_all(sentinel.join("inner")).unwrap();
+        std::fs::write(sentinel.join("keep"), b"sentinel").unwrap();
+        std::fs::write(sentinel.join("inner").join("deep"), b"deep").unwrap();
+        sentinel
+    }
+
+    fn sentinel_intact(sentinel: &Path) -> bool {
+        std::fs::read(sentinel.join("keep")).is_ok_and(|bytes| bytes == b"sentinel")
+            && std::fs::read(sentinel.join("inner").join("deep"))
+                .is_ok_and(|bytes| bytes == b"deep")
+    }
+
+    fn new_instance(
+        fake: &FakePlatform,
+        prepared: &PreparedLayout,
+    ) -> stackly_platform::InstancePaths {
+        let platform = fake.platform();
+        let id = InstanceId::generate();
+        create_instance_layout(&platform, prepared, &manifest_for(&platform, id), &[]).unwrap()
+    }
+
+    #[test]
+    fn remove_owned_tree_removes_an_instance_tree_and_then_reports_it_missing() {
+        let root = TestRoot::new().unwrap();
+        let (fake, prepared) = prepared(&root);
+        let paths = new_instance(&fake, &prepared);
+        std::fs::write(paths.data.join("PG_VERSION"), b"17").unwrap();
+
+        let first = remove_owned_tree(&fake.platform(), &prepared, &paths.root).unwrap();
+        let second = remove_owned_tree(&fake.platform(), &prepared, &paths.root).unwrap();
+
+        assert!(
+            !first.missing && first.files >= 2 && first.dirs >= 2,
+            "{first:?}"
+        );
+        assert_eq!(second, RemoveReport::missing());
+        assert!(!paths.root.exists());
+        assert!(prepared.layout().instances_dir().is_dir());
+        assert_eq!(fake.fs().violations(), 0);
+    }
+
+    #[test]
+    fn remove_owned_tree_refuses_paths_outside_the_roots_the_roots_and_dotted_paths() {
+        let root = TestRoot::new().unwrap();
+        let (fake, prepared) = prepared(&root);
+        let sentinel = sentinel(&root);
+        let instances = prepared.layout().instances_dir();
+        let platform = fake.platform();
+
+        let outside = remove_owned_tree(&platform, &prepared, &sentinel);
+        let dotted = remove_owned_tree(
+            &platform,
+            &prepared,
+            &instances.join("..").join("instances"),
+        );
+        let relative = remove_owned_tree(&platform, &prepared, Path::new("instances"));
+
+        assert_eq!(
+            outside,
+            Err(CoreError::OutsideOwnedRoots {
+                path: sentinel.clone()
+            })
+        );
+        assert!(
+            matches!(dotted, Err(CoreError::NotNormalized { .. })),
+            "{dotted:?}"
+        );
+        assert!(
+            matches!(relative, Err(CoreError::NotNormalized { .. })),
+            "{relative:?}"
+        );
+        for owned in prepared.layout().owned_roots() {
+            assert_eq!(
+                remove_owned_tree(&platform, &prepared, owned),
+                Err(CoreError::IsOwnedRoot {
+                    path: owned.to_path_buf()
+                })
+            );
+        }
+        assert!(sentinel_intact(&sentinel));
+        assert!(instances.is_dir());
+        assert!(
+            fake.fs()
+                .mutations()
+                .iter()
+                .all(|m| m.op != stackly_testkit::FsOp::RemoveTree)
+        );
+    }
+
+    #[test]
+    fn a_symlink_planted_in_an_owned_tree_is_removed_as_itself() {
+        let ev = evidence!(
+            covers = ["VAL-007"],
+            kind = Kind::Fixture,
+            expected = "remove_owned_tree on an instance tree holding symlinks to a sentinel folder outside the owned roots removes the symlinks as themselves and leaves every sentinel file identical (VAL-007)",
+        );
+        let root = TestRoot::new().unwrap();
+        let (fake, prepared) = prepared(&root);
+        let sentinel = sentinel(&root);
+        let paths = new_instance(&fake, &prepared);
+        symlink(&sentinel, paths.data.join("escape")).unwrap();
+        symlink(sentinel.join("keep"), paths.config.join("keep")).unwrap();
+
+        let report = remove_owned_tree(&fake.platform(), &prepared, &paths.root).unwrap();
+
+        assert!(!report.missing && report.files >= 2, "{report:?}");
+        assert!(!paths.root.exists());
+        assert!(sentinel_intact(&sentinel));
+        assert_eq!(fake.fs().violations(), 0);
+        ev.pass();
+    }
+
+    #[test]
+    fn a_target_symlink_is_removed_without_touching_the_folder_it_names() {
+        let root = TestRoot::new().unwrap();
+        let (fake, prepared) = prepared(&root);
+        let other = new_instance(&fake, &prepared);
+        let alias = prepared
+            .layout()
+            .instances_dir()
+            .join(InstanceId::generate().to_string());
+        symlink(&other.root, &alias).unwrap();
+
+        let report = remove_owned_tree(&fake.platform(), &prepared, &alias).unwrap();
+
+        assert_eq!(report, RemoveReport::removed(1, 0));
+        assert!(std::fs::symlink_metadata(&alias).is_err());
+        assert!(other.data.is_dir() && other.manifest.is_file());
+    }
+
+    #[test]
+    fn a_symlink_on_the_way_to_the_target_removes_nothing() {
+        let root = TestRoot::new().unwrap();
+        let (fake, prepared) = prepared(&root);
+        let other = new_instance(&fake, &prepared);
+        let alias = prepared
+            .layout()
+            .instances_dir()
+            .join(InstanceId::generate().to_string());
+        symlink(&other.root, &alias).unwrap();
+
+        let result = remove_owned_tree(&fake.platform(), &prepared, &alias.join("data"));
+
+        assert_eq!(
+            result,
+            Err(CoreError::Platform(PlatformError::SymlinkInPath {
+                path: alias.clone()
+            }))
+        );
+        assert!(other.data.is_dir());
+        assert!(std::fs::symlink_metadata(&alias).is_ok());
+    }
+
+    #[test]
+    fn a_target_symlink_out_of_the_roots_is_refused() {
+        let root = TestRoot::new().unwrap();
+        let (fake, prepared) = prepared(&root);
+        let sentinel = sentinel(&root);
+        let escape = prepared.layout().instances_dir().join("escape");
+        symlink(&sentinel, &escape).unwrap();
+
+        let result = remove_owned_tree(&fake.platform(), &prepared, &escape);
+
+        assert_eq!(
+            result,
+            Err(CoreError::OutsideOwnedRoots {
+                path: escape.clone()
+            })
+        );
+        assert!(std::fs::symlink_metadata(&escape).is_ok());
+        assert!(sentinel_intact(&sentinel));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_runtime_path_through_the_tmp_symlink_is_removed_inside_the_canonical_root() {
+        use stackly_platform::RootSet;
+
+        let root = TestRoot::new().unwrap();
+        let short_run =
+            Path::new("/tmp").join(root.run_dir().strip_prefix("/private/tmp").unwrap());
+        let roots = RootSet::under_override(root.path(), &short_run).unwrap();
+        let fake = FakePlatform::new(&root).with_roots(roots);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        let run = prepared.layout().instance_runs_dir().join("0000beef");
+        std::fs::create_dir(&run).unwrap();
+        std::fs::write(run.join("pid"), b"1").unwrap();
+
+        let report = remove_owned_tree(&platform, &prepared, &run).unwrap();
+
+        assert!(run.starts_with("/tmp"));
+        assert_eq!(report, RemoveReport::removed(1, 1));
+        assert!(!run.exists());
     }
 }

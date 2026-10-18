@@ -23,7 +23,10 @@ mod unsupported;
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 pub use clock::{Clock, SystemClock};
 pub use error::PlatformError;
-pub use fs::{DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, is_same_or_inside};
+pub use fs::{
+    DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
+    RemoveReport, is_same_or_inside, remove_tree_names,
+};
 pub use identity::{UserId, UserIdentity};
 pub use info::{PlatformInfo, host_target};
 pub use layout::{
