@@ -1,7 +1,8 @@
-//! The provider engine on real packages: `providers/fake` and the
-//! `fake-command` fixture are copied into a `TestRoot`, read through the
-//! `Filesystem` port of `FakePlatform`, validated, and planned against the
-//! fixed golden context of spec 0009 ("Context golden").
+//! The provider engine on real packages: `providers/fake`,
+//! `providers/nats`, `providers/traefik`, and the `fake-command` fixture are
+//! copied into a `TestRoot`, read through the `Filesystem` port of
+//! `FakePlatform`, validated, and planned against the fixed golden context
+//! of spec 0009 ("Context golden").
 //!
 //! `STACKLY_UPDATE_GOLDEN=1` rewrites the golden files.
 #![cfg(unix)]
@@ -14,7 +15,9 @@ use stackly_core::provider::{
     InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError, PreflightOutcome,
     ResolvedEndpoint, RuntimeContext, Segment, ValidatedPackage, read_package,
 };
-use stackly_domain::{Capability, InstanceId, Port, RuntimeLine, Sha256Digest, Target};
+use stackly_domain::{
+    Capability, ExactVersion, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
+};
 use stackly_platform::{DirectoryLayout, RootSet};
 use stackly_testkit::{FakePlatform, TestRoot};
 
@@ -30,6 +33,10 @@ fn repo_root() -> PathBuf {
 
 fn fake_dir() -> PathBuf {
     repo_root().join("providers/fake")
+}
+
+fn nats_dir() -> PathBuf {
+    repo_root().join("providers/nats")
 }
 
 fn fake_command_dir() -> PathBuf {
@@ -80,9 +87,35 @@ fn validated(source: &Path) -> ValidatedPackage {
     })
 }
 
+/// The version and line of the package's first artifact, which name the
+/// runtime folder of the golden context.
+fn first_artifact(package: &ValidatedPackage) -> (ExactVersion, RuntimeLine) {
+    let versions: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("versions.json")
+            .expect("every package has versions.json"),
+    )
+    .expect("versions.json is JSON");
+    let artifact = &versions["artifacts"][0];
+    let text = |field: &str| artifact[field].as_str().expect("the field is text");
+    (
+        text("version").parse().expect("valid version"),
+        text("line").parse().expect("valid line"),
+    )
+}
+
 /// The fixed golden context of spec 0009 for a package.
 fn golden_context(package: &ValidatedPackage, settings: serde_json::Value) -> PlanContext {
-    let base = Path::new("/Volumes/Test Root/Ünï cödé");
+    context_under(Path::new("/Volumes/Test Root/Ünï cödé"), package, settings)
+}
+
+/// The golden context with the data and logs roots under `base`.
+fn context_under(
+    base: &Path,
+    package: &ValidatedPackage,
+    settings: serde_json::Value,
+) -> PlanContext {
     let roots = RootSet::new(
         base.join("data"),
         base.join("logs"),
@@ -94,7 +127,7 @@ fn golden_context(package: &ValidatedPackage, settings: serde_json::Value) -> Pl
     let id: InstanceId = "0192f000-0000-7000-8000-00000000000a"
         .parse()
         .expect("the golden ID is a UUID v7");
-    let version = "0.1.0".parse().expect("valid version");
+    let (version, line) = first_artifact(package);
     let zeros: Sha256Digest = "0".repeat(64).parse().expect("64 zeros are a digest");
     let mut port = 14000;
     let mut endpoints = BTreeMap::new();
@@ -124,7 +157,7 @@ fn golden_context(package: &ValidatedPackage, settings: serde_json::Value) -> Pl
                 &zeros,
             ),
             version,
-            line: "0.1".parse().expect("valid line"),
+            line,
         },
         endpoints,
         settings: package
@@ -421,4 +454,100 @@ fn preflight_reads_the_fake_data_marker() {
             runtime: line("0.2"),
         }
     );
+}
+
+#[test]
+fn the_nats_package_reads_without_writes_and_validates() {
+    let package = validated(&nats_dir());
+
+    let key = package.key();
+    assert_eq!(key.provider().as_str(), "official/nats");
+    assert_eq!(key.revision().as_str(), "1.0.0");
+    assert_eq!(package.software().as_str(), "nats");
+    assert_eq!(
+        package
+            .provider_revision()
+            .capabilities()
+            .iter()
+            .collect::<Vec<_>>(),
+        [
+            Capability::ColdBackup,
+            Capability::Metrics,
+            Capability::MultiInstance,
+            Capability::Persistence
+        ]
+    );
+    assert_eq!(
+        package.data_marker_path(&golden_context(&package, serde_json::json!({})).paths),
+        None
+    );
+}
+
+#[test]
+fn nats_plans_match_the_golden_files() {
+    let package = validated(&nats_dir());
+    let context = golden_context(&package, serde_json::json!({}));
+
+    let init = package
+        .init_plan(&context)
+        .expect("the nats init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds");
+
+    assert_golden("nats", "init.json", &pretty(&init));
+    assert_golden("nats", "run.json", &pretty(&run));
+    let renders = rendered(&init.steps);
+    assert_eq!(renders.len(), 1);
+    for (config, text) in renders {
+        assert_golden("nats", &format!("render-{config}.txt"), &text);
+    }
+}
+
+#[test]
+fn nats_without_jetstream_renders_no_jetstream_block() {
+    let package = validated(&nats_dir());
+    let context = golden_context(&package, serde_json::json!({ "jetstream": false }));
+
+    let init = package
+        .init_plan(&context)
+        .expect("the nats init plan builds");
+
+    let (_, text) = rendered(&init.steps)
+        .into_iter()
+        .next()
+        .expect("nats renders nats.conf");
+    assert!(!text.contains("jetstream"), "{text}");
+    assert!(text.contains("max_payload: 1048576\n"), "{text}");
+}
+
+#[test]
+fn reload_of_nats_is_unsupported() {
+    let package = validated(&nats_dir());
+    let context = golden_context(&package, serde_json::json!({}));
+
+    assert_eq!(
+        package.reload_plan(&context).unwrap_err(),
+        PlanError::Unsupported {
+            capability: Capability::Reload
+        }
+    );
+}
+
+#[test]
+fn a_quote_in_the_data_folder_fails_the_nats_plan_without_the_value() {
+    let package = validated(&nats_dir());
+    let context = context_under(
+        Path::new("/Users/o\"q/Library/Application Support/Stackly"),
+        &package,
+        serde_json::json!({}),
+    );
+
+    let err = package.init_plan(&context).unwrap_err();
+
+    let PlanError::UnrepresentableValue { field } = &err else {
+        panic!("expected UnrepresentableValue, got {err:?}");
+    };
+    assert!(field.contains("instance.data"), "{field}");
+    assert!(!err.to_string().contains("o\"q"), "{err}");
 }

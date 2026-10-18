@@ -970,6 +970,7 @@ name = "stackly-core"
 version = "0.1.0"
 dependencies = [
  "regex",
+ "schemars",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -1482,7 +1483,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "stackly-core",
  "stackly-evidence",
+ "stackly-platform-macos",
  "stackly-protocol",
  "stackly-testkit",
  "syn 3.0.9",

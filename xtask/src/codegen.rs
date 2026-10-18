@@ -1,9 +1,12 @@
 //! `cargo xtask codegen [--check | --amend]`: the Swift contract types,
 //! the JSON Schemas, the error catalog, and the contract digest generated
-//! from `stackly-protocol` (specs 0001 and 0006), plus the evidence JSON
-//! Schemas generated from `stackly-evidence` (spec 0002).
+//! from `stackly-protocol` (specs 0001 and 0006), the evidence JSON
+//! Schemas generated from `stackly-evidence` (spec 0002), and the provider
+//! catalogs `providers/<package>/versions.json` generated from the runtime
+//! inventory (spec 0009).
 
 mod contract;
+mod provider_versions;
 mod swift;
 
 use std::fs;
@@ -65,6 +68,7 @@ pub fn run(root: &Path, mode: Mode) -> Result<()> {
     let (contract_files, digest) = generate_contract()?;
     generated.extend(contract_files);
     generated.extend(generate_schemas()?);
+    generated.extend(provider_versions::generate(root)?);
     let versions_mode = match mode {
         Mode::Write { amend } => VersionsMode::Write { amend },
         Mode::Check => VersionsMode::Check,
@@ -252,7 +256,7 @@ fn check(root: &Path, generated: &[Generated]) -> Result<()> {
         eprintln!("  out of date: {}", path.display());
     }
     bail!(
-        "generated files drifted from stackly-protocol or stackly-evidence; run `cargo xtask codegen` and commit the result"
+        "generated files drifted from stackly-protocol, stackly-evidence, stackly-core, or runtimes/inventory.toml; run `cargo xtask codegen` and commit the result"
     )
 }
 
