@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Traefik settings",
+  "description": "Log level and the HTTP routes Traefik serves on the web endpoint.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "logLevel": {
+      "type": "string",
+      "title": "Log level",
+      "enum": ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"],
+      "default": "ERROR",
+      "x-stackly": { "apply": "restart" }
+    },
+    "dynamicDir": {
+      "type": "string",
+      "title": "Dynamic config folder",
+      "description": "The folder Traefik watches for routes, inside the instance's config folder.",
+      "maxLength": 4096,
+      "x-stackly": { "managed": "${instance.config}/dynamic" }
+    },
+    "routes": {
+      "type": "array",
+      "title": "Routes",
+      "description": "Each route sends requests that match its rule to a local backend.",
+      "maxItems": 64,
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "maxLength": 63,
+            "pattern": "[a-z][a-z0-9-]{0,62}"
+          },
+          "rule": {
+            "type": "string",
+            "title": "Rule",
+            "description": "A Traefik router rule, such as Host(`api.localhost`).",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "backendUrl": {
+            "type": "string",
+            "title": "Backend URL",
+            "description": "A loopback HTTP URL, such as http://127.0.0.1:3000.",
+            "maxLength": 2048,
+            "pattern": "http://(127\\.0\\.0\\.1|\\[::1\\]|localhost):[0-9]{1,5}(/[^\\s]*)?"
+          }
+        },
+        "required": ["name", "rule", "backendUrl"]
+      },
+      "x-stackly": { "apply": "reload", "key": "name" }
+    }
+  }
+}

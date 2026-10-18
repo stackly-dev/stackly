@@ -26,6 +26,7 @@ thiserror.workspace = true
 json-schema = ["dep:schemars"]
 
 [dev-dependencies]
+stackly-evidence.workspace = true
 stackly-testkit.workspace = true
 
 [lints]
