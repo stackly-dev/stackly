@@ -52,14 +52,14 @@ Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka di
 **Pointer:** spec [0003](../specs/0003-sumber-packaging-runtime/index.md) · code in `xtask/src/runtime/`, `xtask/tests/native_runtime.rs`, `runtimes/inventory.toml`, `runtimes/keys/`, `evidence/runtime/`
 
 - [x] Design it (spec): `/architect sumber & packaging runtime`
-- [ ] Build it: `/develop sumber & packaging runtime`
+- [x] Build it: `/develop sumber & packaging runtime`
   - [x] Inventory, `runtime pin`, `runtime verify`, and `runtime check` (spec 0003 AC-1 to AC-3)
   - [x] LaunchAgent spike end to end, proven on NATS, then Traefik, ClickHouse, MySQL 8.4 and 9.7, with evidence in `evidence/runtime/` (spec 0003 AC-1, AC-3 to AC-10, AC-13; needs spec 0002 step 1 built). NATS 2.15.1, Traefik 3.7.15, MySQL 8.4.11 dan 9.7.2 `PASS`; ClickHouse 26.8 `blocked` karena aset macOS berupa binary self extracting yang ditolak codesign; aset `.zip` bertanda tangan Developer ID dipakai lewat format `zip` yang diputuskan spec 0003 pada 2026-10-17 (Milestone 2b)
   - [x] Milestone 2b: ClickHouse from the Developer ID signed `.zip` through the new `zip` format: format check, `/usr/bin/tar` extraction, mode 0755 for zip executables, `pin` support, the `archive_root` rule, then the ClickHouse entry and its evidence (spec 0003 AC-1 to AC-3, AC-5 to AC-10, AC-13, AC-16; build steps 15 and 16). ClickHouse 26.8.30.8 `PASS` dari `.zip` (evidence `01a14c52-92d2-75ee-b5ce-3e641036b90a`)
   - [x] Decide how PostgreSQL 17 and 18 and Valkey are built on this Mac (spec): `/architect sumber & packaging runtime`
   - [x] xtask support for maintainer artifacts: rule 5 `recipe` format without `attestation`, `runtime pin --file`, `runtime spike --no-quarantine`, the `manifest` probe, and the PostgreSQL and Valkey spike recipes with their native tests; needs Milestone 2b step 15 merged first (spec 0003 AC-2, AC-5, AC-7, AC-9, AC-10, AC-12, AC-18, AC-19; build step 17)
   - [x] Maintainer recipes in the new `stackly-dev/runtimes` repo: `build.sh` with a clean environment, then Valkey 9.1, OpenSSL, ICU, lz4, zstd, and PostgreSQL 17 and 18 built on this Mac (spec 0003 AC-7, AC-12, AC-17; build steps 9 and 10)
-  - [ ] PostgreSQL 17 and 18 and Valkey published and proven: `pin --file`, local spike, license gate per provider, upload after your approval, `runtime verify`, entries and evidence, then rule 9 (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-10, AC-19; build step 12)
+  - [x] PostgreSQL 17 and 18 and Valkey published and proven: `pin --file`, local spike, license gate per provider, upload after your approval, `runtime verify`, entries and evidence, then rule 9 (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-10, AC-19; build step 12)
   - [x] Cache pruning: `runtime spike --prune-cache`, run by hand on this Mac (spec 0003 AC-4; build step 13)
 - [ ] Verify it: `/check verify sumber & packaging runtime`
 - [ ] Test it: `/test sumber & packaging runtime`

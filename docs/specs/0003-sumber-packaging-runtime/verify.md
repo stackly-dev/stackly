@@ -154,3 +154,53 @@ Langkah dengan artefak nyata baru bisa dijalankan setelah sesi B membangun `out/
 - AC-10: tiga test native baru, `BLOCKED` sampai entrinya ada.
 - AC-12, AC-18: probe `manifest` dan cek isi archive di langkah `closure`.
 - AC-19: `pin --file` tanpa jaringan; urutan terbit dicek di langkah 12.
+
+## Milestone 3, langkah 12: PostgreSQL 17 dan 18 serta Valkey terbit dan terbukti · 2026-10-18
+
+Artefak yang terbit: `valkey-9.1.2-r2-macos-aarch64`, `postgresql-18.6-r2-macos-aarch64`, dan `postgresql-17.11-r2-macos-aarch64`, dari commit resep `stackly-dev/runtimes@8d22ef98bab9f485d26578ceed2ed5b575f2a187`. Build r1 tidak pernah diunggah (gerbang lisensi Valkey menolaknya, lihat Notice pihak ketiga di spec).
+
+### UI / manual
+
+- [ ] Follow-up spec 0003: kedua checkbox gerbang lisensi (Valkey, PostgreSQL) dicentang dengan tanggal 2026-10-18, `@ojiepermana`, id dan sha256 artefak r2 → langkah 12.3, AC-12
+- [ ] Halaman release `https://github.com/stackly-dev/stackly/releases/tag/runtime/<id>` untuk ketiga id: judul sama dengan id, bukan release "Latest", dua aset (`<id>.tar.gz` dan `<id>.tar.gz.sha256`), catatan berisi source, `recipe`, toolchain, dependency atau komponen vendored, dan lisensi, tanpa path lokal → API surface, AC-19
+- [ ] Tidak ada layar lain. Run native pertama untuk digest baru menjalankan probe quarantine dan dialog Gatekeeper bisa muncul; kalau muncul, tutup tanpa mengubah setelan → AC-9
+
+### Commands
+
+- [ ] `git -C ~/Development/ojiepermana/stackly-runtimes branch -r --contains 8d22ef98bab9f485d26578ceed2ed5b575f2a187` → `origin/main` → langkah 12.3a
+- [ ] `cargo xtask runtime pin --file ~/Development/ojiepermana/stackly-runtimes/out/valkey-9.1.2-r2-macos-aarch64.tar.gz --url https://github.com/stackly-dev/stackly/releases/download/runtime/valkey-9.1.2-r2-macos-aarch64/valkey-9.1.2-r2-macos-aarch64.tar.gz --executable bin/valkey-server` dengan jaringan mati → `format = "tar_gz"`, `urls` persis `--url`, `sha256 = "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370"`, `size = 4581661`, `min_os = "27.0"`, sama dengan entri → AC-19
+- [ ] Sama untuk PostgreSQL dengan `--executable bin/postgres` → 18.6: `sha256 = "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590"`, `size = 28311215`; 17.11: `sha256 = "04b1eff117441c0b6f1cbefa42ded6cf5726d656e54881674defea04b515d6d3"`, `size = 27984415`; keduanya `min_os = "27.0"` → AC-19
+- [ ] `cargo xtask runtime verify --id valkey-9.1.2-r2-macos-aarch64`, lalu `--id postgresql-18.6-r2-macos-aarch64` dan `--id postgresql-17.11-r2-macos-aarch64` → masing masing mengunduh dari URL release dan mencetak `OK` → AC-1
+- [ ] `gh release view runtime/<id> --repo stackly-dev/stackly --json assets --jq '.assets[]|{name,size}'` untuk ketiga id → `<id>.tar.gz` dengan ukuran sama dengan `size` entri, dan `<id>.tar.gz.sha256` → AC-1, AC-19
+- [ ] `gh api repos/stackly-dev/runtimes/commits/8d22ef98bab9f485d26578ceed2ed5b575f2a187 --jq .sha` → sha itu, jadi rujukan `recipe` di artefak bisa dibuka publik → AC-18, langkah 12.3a
+- [ ] `cargo test -p xtask runtime::` → semua lulus, termasuk `rule_9_accepts_exactly_one_entry_per_required_line`, `rule_9_names_a_required_line_without_an_entry`, `rule_9_takes_any_clickhouse_line_but_only_one`, `rule_9_counts_a_blocked_entry_and_ignores_lines_it_does_not_require`, dan `an_inventory_without_the_required_lines_fails_rule_9` → AC-2
+- [ ] `cargo xtask runtime check` → `runtime check: 8 artifact(s) and 6 evidence run(s) follow the rules`, exit 0, dengan aturan 9 aktif → AC-1, AC-2
+- [ ] Hapus sementara entri Valkey dari `runtimes/inventory.toml` (jangan di-commit): `cargo xtask runtime check` → `inventory: the required line valkey 9.1 has no entry (rule 9)`, exit 1; kembalikan file → AC-2
+- [ ] Di tree bersih: `cargo xtask evidence run --kind native -- cargo test -p xtask --test native_runtime -- --ignored` → delapan test `PASS` (NATS, Traefik, ClickHouse, MySQL 8.4 dan 9.7, PostgreSQL 17 dan 18, Valkey), dan `quarantine.outcome` `skipped` untuk ketiga digest maintainer dengan folder evidence yang sudah memuat hasilnya → AC-5, AC-9, AC-10
+- [ ] `spike-result.json` di `evidence/runtime/01a14eae-ccfa-72c5-9740-dd77ca4e4a55/` (Valkey) → `observedVersion` `9.1.2`, `listeners` hanya satu port 127.0.0.1, `libraries.static` hanya `/usr/lib/libSystem.B.dylib`, probe `dependencies` dan `manifest` PASS (detail `7 license texts`), `quarantine.outcome` `timeout`, `stop.exitCode` 0 → AC-5, AC-9, AC-18
+- [ ] `spike-result.json` di `evidence/runtime/01a14eb1-694f-7400-b05e-71b9a321b96b/` (PostgreSQL 18) dan `evidence/runtime/01a14eb2-ecac-77c2-9c09-d03c0f2d367d/` (PostgreSQL 17) → `observedVersion` `18.6` dan `17.11`, `listeners` kosong, probe `dependencies` (`10 non system libraries, as listed`), `manifest` (`5 license texts`), `icu` (`datlocprovider` `i`), `pgcrypto` (16), `lz4`, dan `zstd` PASS, `quarantine.outcome` `killed`, `stop.exitCode` 0 → AC-5, AC-7, AC-9, AC-18
+- [ ] `tar -tzf ~/Library/Caches/dev.stackly.xtask/runtime/<sha256> | grep LICENSES/` → Valkey tujuh file (`valkey`, `lua`, `libvalkey`, `linenoise`, `hdr_histogram`, `fpconv`, `fast_float`); PostgreSQL lima file (`postgresql`, `openssl`, `icu`, `lz4`, `zstd`) → AC-12
+- [ ] `tar -xOzf <cache file> <id>/LICENSES/<provider>.txt | grep -c "^Third party notices"` → 1 untuk ketiganya; daftar path di bawahnya: Valkey 41 file di `src/`, PostgreSQL 83 file di `src/` dan `contrib/` → AC-12, Notice pihak ketiga
+- [ ] `archive` di ketiga `spike-result.json` → `symlinksInternal` 0, `setuid` dan `specialFiles` kosong → AC-12
+- [ ] `grep -rE "$(whoami)|$(hostname -s)|/var/folders" evidence/runtime/` → tidak ada hasil → privasi evidence
+
+### Value sourcing
+
+- [ ] `urls` setiap entri maintainer persis nilai `--url` `pin --file`; `sha256`, `size`, dan `min_os` dari keluaran `pin --file` → pin `--file`
+- [ ] `build` (2), `source_url`, `source_sha256`, dan `recipe` entri sama dengan `STACKLY-ARTIFACT.json` di artefak → entri maintainer
+- [ ] `executables`: PostgreSQL `bin/postgres`, `bin/initdb`, `bin/psql`, `bin/pg_dump`; Valkey `bin/valkey-server`, `bin/valkey-cli` → entri maintainer
+- [ ] Baris dependency PostgreSQL dari `libraries.static` spike lokal pertama: lima `system` (`libSystem.B`, `libc++.1`, `libedit.3`, `libxml2.2`, `libz.1`), tujuh `bundled` dengan `version`, `license`, dan `source_url` dari `dependencies[]` manifest (OpenSSL 3.5.9, ICU 78.3, lz4 1.10.0, zstd 1.5.7), dan tiga `own` (`libecpg.6`, `libpgtypes.3`, `libpq.5`); `libecpg_compat.3.dylib` tidak punya baris karena tidak dimuat Mach-O mana pun → `[[artifact.dependency]]`
+- [ ] `license_url`: PostgreSQL `COPYRIGHT` di tag `REL_18_6` dan `REL_17_11` mirror `postgres/postgres`; Valkey `COPYING` di tag `9.1.2` `valkey-io/valkey` → `license`, `license_url`
+- [ ] Release: tag `runtime/<id>`, judul `<id>`, catatan dari `STACKLY-ARTIFACT.json` → release
+
+### Acceptance-criteria coverage
+
+- AC-1: ketiga entri maintainer `available`, dan `runtime verify` OK dari URL release.
+- AC-2: aturan 9 aktif dengan unit test-nya; aturan 8 lulus untuk ketiga digest.
+- AC-5, AC-10: record native PASS untuk PostgreSQL 17, 18, dan Valkey 9.1 dari LaunchAgent.
+- AC-7: probe ICU, pgcrypto, lz4, dan zstd dari artefak PostgreSQL yang terbit.
+- AC-9: probe quarantine tercatat sekali per digest (`timeout` untuk Valkey, `killed` untuk PostgreSQL).
+- AC-12: `LICENSES/` dengan notice pihak ketiga, archive hanya file biasa dan folder.
+- AC-18: probe `manifest` PASS, dan commit `recipe` ada di repo publik.
+- AC-19: urutan `pin --file`, spike lokal, gerbang lisensi, commit resep di remote, persetujuan unggahan, unggah, `verify`, commit entri, lalu evidence.
+- AC-17: sisi build ada di repo `stackly-dev/runtimes` (`tests/check.sh`), bukan di sini.
