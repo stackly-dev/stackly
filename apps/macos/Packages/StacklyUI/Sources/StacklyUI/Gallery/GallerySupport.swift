@@ -3,11 +3,11 @@
 
     /// Layout values of the design gallery.
     enum GalleryLayout {
-        /// The width large text is checked at: the minimum window width. Text styles do
-        /// not scale with `dynamicTypeSize` on macOS 27, so a narrow width with the
-        /// longest labels stands in for the large text check (see `apps/macos/design.md`,
-        /// Accessibility).
-        static let narrowWidth: CGFloat = 640  // provisional: F13
+        /// The width large text is checked at: the minimum content width of the main
+        /// window (spec 0013). Text styles do not scale with `dynamicTypeSize` on macOS 27,
+        /// so a narrow width with the longest labels stands in for the large text check
+        /// (see `apps/macos/design.md`, Accessibility).
+        static let narrowWidth: CGFloat = 640
         /// The width of the light and dark previews.
         static let previewWidth: CGFloat = 960
         /// The height of every preview.
