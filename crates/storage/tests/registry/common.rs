@@ -19,7 +19,7 @@ use stackly_domain::{
     Target, Transport, UnixEndpoint, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, DirectoryLayout};
-use stackly_storage::{OpenSummary, RegistryOpen, SqliteRegistry, open_registry};
+use stackly_storage::{OpenOptions, OpenSummary, RegistryOpen, SqliteRegistry};
 use stackly_testkit::{
     BackupSeed, FakeClock, FakePlatform, RegistrySeed, SecretReferenceSeed, TestRoot,
 };
@@ -41,6 +41,11 @@ pub struct Harness {
 
 impl Harness {
     pub fn new() -> Self {
+        Self::with_options(&OpenOptions::new())
+    }
+
+    /// A registry opened with `options`, for example a short busy timeout.
+    pub fn with_options(options: &OpenOptions) -> Self {
         let root = TestRoot::new().expect("a test root can be created");
         let fake = FakePlatform::new(&root);
         let layout = DirectoryLayout::new(root.roots());
@@ -49,7 +54,8 @@ impl Harness {
         builder
             .create(layout.registry_dir())
             .expect("the registry folder can be created");
-        let open = open_registry(&fake.platform(), &layout, APP_VERSION)
+        let open = options
+            .open(&fake.platform(), &layout, APP_VERSION)
             .expect("opening a registry in a clean root succeeds");
         let (registry, summary) = match open {
             RegistryOpen::Ready { registry, summary } => (registry, summary),

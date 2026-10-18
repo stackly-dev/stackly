@@ -98,8 +98,8 @@ Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision 
   - [x] Opening the registry end to end: `stackly-storage`, migration 0001 with every PRD 17 table, open with snapshot and recovery, fixture v1, and `stacklyd` start (spec 0005 AC-1 to AC-7, AC-13, AC-15; build steps 1 to 7)
   - [x] Registry port and fake: domain `registry` module, `restore` constructors, `FakeRegistry`, `RegistrySeed`, and `registry_conformance` (spec 0005 AC-8 to AC-11, AC-14, AC-16; build steps 8 and 9; needs spec 0004 milestone 3)
   - [x] SQLite registry: `Registry` for `SqliteRegistry`, aggregate mapping, queries, prune, and conformance on SQLite (spec 0005 AC-7 to AC-16; build steps 10 to 13)
-- [ ] Verify it: `/check verify data model registry`
-- [ ] Test it: `/test data model registry`
+- [x] Verify it: `/check verify data model registry`
+- [x] Test it: `/test data model registry`
 
 ### 6. Protokol IPC & daemon · in-progress · GA
 
