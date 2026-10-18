@@ -1,0 +1,16 @@
+# Spec 0010 spike: kqueue EVFILT_PROC exit watch and reap
+# Lines of the spike run that belong to this row (tags exit).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[exit] PASS kqueue NOTE_EXIT|NOTE_EXITSTATUS registers on suspended child: Ok(())
+[exit] PASS NOTE_EXIT event carries exit status for child (SIGTERM -> exit 0): Some((17282, 2214592512, 0)) -> exited(0)
+[exit] PASS waitpid(WNOHANG) after NOTE_EXIT reaps: Some("exited(0)")
+[exit] NOTE non-child: register NOTE_EXIT|NOTE_EXITSTATUS -> Ok(())
+[exit] PASS non-child: register NOTE_EXIT works: Ok(())
+[exit] PASS start time re-read after registration still matches: 
+[exit] PASS non-child: NOTE_EXIT fires: Some((17321, 2147483648, 0))
+[exit] NOTE non-child NOTE_EXIT data (no status for non-child): Some(0)
+[exit] NOTE non-child NOTE_EXIT|NOTE_EXITSTATUS event: Some((17321, 2214592512, 0)) -> exited(0)
+[exit] PASS register on an exited-but-unreaped child: ESRCH or an immediate event: register Err("errno 3 (No such process (os error 3))"), event None
+[exit] PASS waitpid(WNOHANG) reaps the zombie with its status: Some("exited(0)")
+[exit] PASS absent pid: kqueue register ESRCH: 

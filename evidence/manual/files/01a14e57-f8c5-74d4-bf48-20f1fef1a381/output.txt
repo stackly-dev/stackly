@@ -1,0 +1,7 @@
+# Spec 0010 spike: kern.bootsessionuuid changes after a reboot
+# Lines of the spike run that belong to this row (tags boot).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[boot] PASS sysctlbyname(kern.bootsessionuuid) is a UUID, stable across reads, equals sysctl(8): 5E52ED28-4032-431E-9E64-B599BA083C49 (case: upper)
+[boot] NOTE kern.boottime { sec = 1791781981, usec = 545776 } Mon Oct 12 12:13:01 2026
+[boot] NOTE a new value after a reboot was NOT exercised (needs a reboot of this Mac)

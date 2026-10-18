@@ -1,0 +1,15 @@
+# Spec 0010 spike: PROC_PIDTBSDINFO facts for this user's processes
+# Lines of the spike run that belong to this row (tags pidinfo, zombie).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[pidinfo] PASS child pbi_pid/ppid/pgid/uid: pid 17282 ppid 17276 pgid 17282 uid 502 (me 17276)
+[pidinfo] PASS start time has seconds and microseconds near now: start 1792315325.267546 (0.408 s before now)
+[pidinfo] PASS start time unchanged by suspend/resume: 1792315325.267546
+[pidinfo] PASS non-child: bsdinfo readable, ppid 1 (launchd), not our child: ppid 1 pgid 17321 uid 502 status 2
+[pidinfo] PASS non-child: start time equals the one recorded at spawn by the old daemon: 1792315326.054120 vs 1792315326.054120
+[pidinfo] PASS non-child: uid matches current user, pgid == pid: 
+[zombie] PASS zombie child: PROC_PIDTBSDINFO gives ESRCH (inspect -> None) while kinfo p_stat is SZOMB and the pid stays taken: bsdinfo Err("errno 3 (No such process (os error 3))"), kinfo p_stat Ok(5), kill(0) Ok(())
+[zombie] NOTE zombie: proc_pidpath Err("errno 3 (No such process (os error 3))"), PROC_PIDLISTFDS Err("errno 3 (No such process (os error 3))"), getsid Err("errno 3 (No such process (os error 3))"), kill(0) Ok(()), kinfo p_stat Ok(5)
+[pidinfo] PASS absent pid: bsdinfo ESRCH: Some("errno 3 (No such process (os error 3))")
+[pidinfo] PASS other users' processes: sysctl KERN_PROC_PID still gives uid and start time: 168 of 168 readable
+[pidinfo] PASS kinfo_proc start time and uid equal PROC_PIDTBSDINFO for our own process: kinfo 1792315324.946766 uid 502, bsdinfo 1792315324.946766 uid 502

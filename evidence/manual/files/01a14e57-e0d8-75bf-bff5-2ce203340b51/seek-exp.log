@@ -1,0 +1,55 @@
+plain iter 0: size 100000 released 98304 punch Ok(()) alloc 4096 SEEK_DATA Ok(98304) nonzero_at_seek true
+plain iter 1: size 200000 released 196608 punch Ok(()) alloc 4096 SEEK_DATA Ok(196608) nonzero_at_seek true
+plain iter 2: size 300000 released 299008 punch Ok(()) alloc 4096 SEEK_DATA Ok(299008) nonzero_at_seek true
+plain iter 7: size 800000 released 798720 punch Ok(()) alloc 36864 SEEK_DATA Ok(294912) nonzero_at_seek false
+plain iter 15: size 1600000 released 1597440 punch Ok(()) alloc 77824 SEEK_DATA Ok(294912) nonzero_at_seek false
+plain iter 23: size 2400000 released 2396160 punch Ok(()) alloc 131072 SEEK_DATA Ok(294912) nonzero_at_seek false
+plain iter 31: size 3200000 released 3198976 punch Ok(()) alloc 176128 SEEK_DATA Ok(294912) nonzero_at_seek false
+plain iter 39: size 4000000 released 3997696 punch Ok(()) alloc 233472 SEEK_DATA Ok(294912) nonzero_at_seek false
+plain reopen: SEEK_DATA Ok(294912); SEEK_HOLE from it Ok(299008)
+plain after fsync: SEEK_DATA Ok(294912)
+plain after 2 s: SEEK_DATA Ok(294912)
+fsync iter 0: size 100000 released 98304 punch Ok(()) alloc 4096 SEEK_DATA Ok(98304) nonzero_at_seek true
+fsync iter 1: size 200000 released 196608 punch Ok(()) alloc 4096 SEEK_DATA Ok(196608) nonzero_at_seek true
+fsync iter 2: size 300000 released 299008 punch Ok(()) alloc 4096 SEEK_DATA Ok(299008) nonzero_at_seek true
+fsync iter 7: size 800000 released 798720 punch Ok(()) alloc 36864 SEEK_DATA Ok(294912) nonzero_at_seek false
+fsync iter 15: size 1600000 released 1597440 punch Ok(()) alloc 77824 SEEK_DATA Ok(294912) nonzero_at_seek false
+fsync iter 23: size 2400000 released 2396160 punch Ok(()) alloc 131072 SEEK_DATA Ok(294912) nonzero_at_seek false
+fsync iter 31: size 3200000 released 3198976 punch Ok(()) alloc 176128 SEEK_DATA Ok(294912) nonzero_at_seek false
+fsync iter 39: size 4000000 released 3997696 punch Ok(()) alloc 233472 SEEK_DATA Ok(294912) nonzero_at_seek false
+fsync reopen: SEEK_DATA Ok(294912); SEEK_HOLE from it Ok(299008)
+fsync after fsync: SEEK_DATA Ok(294912)
+fsync after 2 s: SEEK_DATA Ok(294912)
+sync-reader iter 0: size 100000 released 98304 punch Ok(()) alloc 4096 SEEK_DATA Ok(98304) nonzero_at_seek true
+sync-reader iter 1: size 200000 released 196608 punch Ok(()) alloc 4096 SEEK_DATA Ok(196608) nonzero_at_seek true
+sync-reader iter 2: size 300000 released 299008 punch Ok(()) alloc 4096 SEEK_DATA Ok(299008) nonzero_at_seek true
+sync-reader iter 7: size 800000 released 798720 punch Ok(()) alloc 36864 SEEK_DATA Ok(294912) nonzero_at_seek false
+sync-reader iter 15: size 1600000 released 1597440 punch Ok(()) alloc 77824 SEEK_DATA Ok(294912) nonzero_at_seek false
+sync-reader iter 23: size 2400000 released 2396160 punch Ok(()) alloc 131072 SEEK_DATA Ok(294912) nonzero_at_seek false
+sync-reader iter 31: size 3200000 released 3198976 punch Ok(()) alloc 176128 SEEK_DATA Ok(294912) nonzero_at_seek false
+sync-reader iter 39: size 4000000 released 3997696 punch Ok(()) alloc 233472 SEEK_DATA Ok(294912) nonzero_at_seek false
+sync-reader reopen: SEEK_DATA Ok(294912); SEEK_HOLE from it Ok(299008)
+sync-reader after fsync: SEEK_DATA Ok(294912)
+sync-reader after 2 s: SEEK_DATA Ok(294912)
+align16384 iter 0: size 100000 released 98304 punch Ok(()) alloc 4096 SEEK_DATA Ok(98304) nonzero_at_seek true
+align16384 iter 1: size 200000 released 196608 punch Ok(()) alloc 4096 SEEK_DATA Ok(196608) nonzero_at_seek true
+align16384 iter 2: size 300000 released 294912 punch Ok(()) alloc 8192 SEEK_DATA Ok(294912) nonzero_at_seek true
+align16384 iter 7: size 800000 released 786432 punch Ok(()) alloc 16384 SEEK_DATA Ok(786432) nonzero_at_seek true
+align16384 iter 15: size 1600000 released 1589248 punch Ok(()) alloc 12288 SEEK_DATA Ok(1589248) nonzero_at_seek true
+align16384 iter 23: size 2400000 released 2392064 punch Ok(()) alloc 8192 SEEK_DATA Ok(2392064) nonzero_at_seek true
+align16384 iter 31: size 3200000 released 3194880 punch Ok(()) alloc 8192 SEEK_DATA Ok(3194880) nonzero_at_seek true
+align16384 iter 39: size 4000000 released 3997696 punch Ok(()) alloc 4096 SEEK_DATA Ok(3997696) nonzero_at_seek true
+align16384 reopen: SEEK_DATA Ok(3997696); SEEK_HOLE from it Ok(4000000)
+align16384 after fsync: SEEK_DATA Ok(3997696)
+align16384 after 2 s: SEEK_DATA Ok(3997696)
+align65536 iter 0: size 100000 released 65536 punch Ok(()) alloc 36864 SEEK_DATA Ok(65536) nonzero_at_seek true
+align65536 iter 1: size 200000 released 196608 punch Ok(()) alloc 4096 SEEK_DATA Ok(196608) nonzero_at_seek true
+align65536 iter 2: size 300000 released 262144 punch Ok(()) alloc 40960 SEEK_DATA Ok(262144) nonzero_at_seek true
+align65536 iter 7: size 800000 released 786432 punch Ok(()) alloc 16384 SEEK_DATA Ok(786432) nonzero_at_seek true
+align65536 iter 15: size 1600000 released 1572864 punch Ok(()) alloc 28672 SEEK_DATA Ok(1572864) nonzero_at_seek true
+align65536 iter 23: size 2400000 released 2359296 punch Ok(()) alloc 40960 SEEK_DATA Ok(2359296) nonzero_at_seek true
+align65536 iter 31: size 3200000 released 3145728 punch Ok(()) alloc 57344 SEEK_DATA Ok(3145728) nonzero_at_seek true
+align65536 iter 39: size 4000000 released 3997696 punch Ok(()) alloc 4096 SEEK_DATA Ok(3997696) nonzero_at_seek true
+align65536 reopen: SEEK_DATA Ok(3997696); SEEK_HOLE from it Ok(4000000)
+align65536 after fsync: SEEK_DATA Ok(3997696)
+align65536 after 2 s: SEEK_DATA Ok(3997696)

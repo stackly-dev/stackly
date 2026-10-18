@@ -1,0 +1,26 @@
+# Spec 0010 spike: START_SUSPENDED, SIGCONT resume, SIGKILL discard
+# Lines of the spike run that belong to this row (tags suspend, orphan).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[suspend] PASS suspended child pbi_status is SSTOP: pbi_status 4 (SSTOP=4)
+[suspend] PASS suspended child kinfo p_stat is SSTOP: p_stat 4
+[suspend] PASS suspended child has run no user code: ri_user_time 0 ri_system_time 191
+[suspend] PASS suspended child wrote nothing after 400 ms: argv-serve.json exists: false
+[suspend] PASS suspended child does not listen: port 54734
+[suspend] PASS user time still 0 after 400 ms: Ok((0, 2701))
+[suspend] PASS SIGCONT resumes: child serves /ready 200: port 54734
+[suspend] PASS status leaves SSTOP after SIGCONT: pbi_status 2
+[suspend] PASS user time > 0 after resume: Ok((30550, 58767))
+[suspend] PASS discard: SIGKILL on suspended child -> NOTE_EXIT signaled(9): Some((17302, 2214592512, 9)) -> signaled(9)
+[suspend] PASS discard: waitpid reaps signaled(9): Some("signaled(9)")
+[suspend] PASS discard: child never ran (user time 0, no argv file, no output): user_time 0 argv exists false
+[orphan] NOTE daemon-a (running) pid 17320 exited Some("exited(0)"): daemon-a: spawned 17321 (running), exiting without reaping
+[orphan] NOTE identity recorded by daemon-a while suspended: {"start": "1792315326.054120", "pid": "17321", "status": "4", "lockdev": "16777229", "sid": "17321", "exe": "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "boot": "5E52ED28-4032-431E-9E64-B599BA083C49", "lockino": "43637055", "ppid": "17320"}
+[orphan] PASS orphan keeps serving after its parent died: 
+[orphan] PASS launchd reaps the orphan (bsdinfo -> ESRCH): Some("errno 3 (No such process (os error 3))")
+[orphan] NOTE daemon-a (suspended) pid 17379 exited Some("exited(0)"): daemon-a: spawned 17380 (suspended), exiting without reaping
+[orphan] PASS suspended orphan: still SSTOP after parent exit, ppid 1: status 4 ppid 1
+[orphan] PASS suspended orphan: no pending signal (no SIGHUP from orphaning): p_siglist 0x0
+[orphan] PASS suspended orphan: never ran (user time 0, no argv file): Ok((0, 998))
+[orphan] PASS continue_stopped from a new daemon (non-parent SIGCONT) resumes it: Ok(())
+[orphan] PASS resumed orphan stops on SIGTERM, NOTE_EXIT seen: Some((17380, 2147483648, 0))
