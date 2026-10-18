@@ -22,10 +22,16 @@ use stackly_storage::{APPLICATION_ID, MigrationSet};
 use crate::common::{Harness, ready, sha256_of};
 
 /// The SHA-256 of every frozen fixture, by schema version.
-pub const FIXTURE_SHA256: &[(u32, &str)] = &[(
-    1,
-    "41bcbde1e817013f74f2821108b2adecc247b0f484d8c7193803d5c28bfb0458",
-)];
+pub const FIXTURE_SHA256: &[(u32, &str)] = &[
+    (
+        1,
+        "41bcbde1e817013f74f2821108b2adecc247b0f484d8c7193803d5c28bfb0458",
+    ),
+    (
+        2,
+        "7e2c873bf24152f08273722e6ac64eab3d5b0c643f996a6a3c184e5e875e24dc",
+    ),
+];
 
 /// When the fixture rows were applied, for the `schema_migrations` rows.
 const APPLIED_AT: &str = "2026-01-01T00:00:00.000000000Z";

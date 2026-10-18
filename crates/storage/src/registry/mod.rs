@@ -6,6 +6,7 @@
 //! commit. No transaction stays open between two commands (REQ-048).
 
 mod column;
+mod journal;
 mod prune;
 mod read;
 mod write;
@@ -28,7 +29,7 @@ use stackly_platform::Clock;
 
 use crate::error::StorageError;
 pub(crate) use column::sql_error;
-use prune::{History, Limits, PRUNE_BATCH_ROWS};
+use prune::{History, Limits};
 use read::InstanceSelect;
 
 /// Capacity of the queue in front of the registry thread. A caller that
@@ -235,34 +236,33 @@ impl Registry for SqliteRegistry {
         self.read(move |tx| read::operations(tx, &query))
     }
 
-    // provisional: F7 (spec 0007 build step 3 adds the journal tables and
-    // these reads; until then they fail, and the journal write ops fail
-    // with `Integrity` like every other op this registry does not know).
     fn operation_journal(
         &self,
-        _id: OperationId,
+        id: OperationId,
     ) -> Result<Versioned<Option<JournalView>>, RegistryError> {
-        Err(no_journal_yet())
+        self.read(move |tx| journal::journal_view(tx, id))
     }
 
     fn operation_journals(
         &self,
-        _ids: &[OperationId],
+        ids: &[OperationId],
     ) -> Result<Versioned<Vec<OperationJournal>>, RegistryError> {
-        Err(no_journal_yet())
+        let ids = ids.to_vec();
+        self.read(move |tx| journal::journals(tx, &ids))
     }
 
     fn operation_by_idempotency_key(
         &self,
-        _key: &IdempotencyKey,
+        key: &IdempotencyKey,
     ) -> Result<Versioned<Option<(Operation, OperationJournal)>>, RegistryError> {
-        Err(no_journal_yet())
+        let key = key.clone();
+        self.read(move |tx| journal::by_idempotency_key(tx, &key))
     }
 
     fn unfinished_operations(
         &self,
     ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError> {
-        Err(no_journal_yet())
+        self.read(|tx| journal::unfinished(tx))
     }
 
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
@@ -290,7 +290,7 @@ impl Registry for SqliteRegistry {
                     History::ProcessObservations => &mut report.process_observations,
                 };
                 *count += u64::try_from(deleted).unwrap_or(u64::MAX);
-                if deleted < PRUNE_BATCH_ROWS {
+                if deleted < history.batch_rows() {
                     break;
                 }
             }
@@ -316,14 +316,6 @@ impl Drop for Inner {
         {
             tracing::error!("the registry thread panicked");
         }
-    }
-}
-
-/// The error of a journal read before the journal tables exist.
-// provisional: F7 (spec 0007 build step 3)
-fn no_journal_yet() -> RegistryError {
-    RegistryError::Io {
-        detail: "the SQLite registry has no operation journal tables yet".to_owned(),
     }
 }
 

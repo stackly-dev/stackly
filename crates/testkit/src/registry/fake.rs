@@ -44,10 +44,9 @@ pub struct WrittenAt {
 /// exactly 1, and every row stamp comes from one `clock.now()` per commit.
 /// Instances read back with readiness and health `unknown`, reason
 /// `daemon_restarted`, observed at `loaded_at`. Both pass
-/// [`registry_conformance`](crate::registry_conformance), and the fake
-/// passes [`registry_journal_conformance`](crate::registry_journal_conformance)
-/// for the operation journal tables of spec 0007, whose rows prune deletes
-/// with their operation.
+/// [`registry_conformance`](crate::registry_conformance), the operation
+/// journal tables of spec 0007 included, whose rows prune deletes with
+/// their operation.
 ///
 /// ```
 /// use std::sync::Arc;

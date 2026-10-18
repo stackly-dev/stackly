@@ -11,20 +11,33 @@ use crate::fingerprint::schema_fingerprint;
 use crate::time::format_timestamp;
 
 /// The migrations this build ships, in version order.
-const BUILTIN_MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "registry",
-    sql: include_str!("../migrations/0001_registry.sql"),
-}];
+const BUILTIN_MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "registry",
+        sql: include_str!("../migrations/0001_registry.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "operation_journal",
+        sql: include_str!("../migrations/0002_operation_journal.sql"),
+    },
+];
 
 /// The expected schema fingerprint after each built in version. They are
 /// constants, not computed at open, because a user's registry was built by
 /// an older bundled SQLite; `fingerprints_match_migrations` rebuilds every
 /// version from scratch to confirm them.
-const BUILTIN_FINGERPRINTS: &[(u32, &str)] = &[(
-    1,
-    "c7a475b672d7a678fc2274a71f56b5c6987c6d2f2e795ebbb3a9eebf3fd6ec8f",
-)];
+const BUILTIN_FINGERPRINTS: &[(u32, &str)] = &[
+    (
+        1,
+        "c7a475b672d7a678fc2274a71f56b5c6987c6d2f2e795ebbb3a9eebf3fd6ec8f",
+    ),
+    (
+        2,
+        "b2075db92cc9fea179ce9926b42b90d585030b0e0448aa21676feb00dca0f74a",
+    ),
+];
 
 /// One forward migration: its version, a `[a-z0-9_]` name, and its SQL.
 ///
@@ -249,7 +262,7 @@ mod tests {
                 migration.name
             );
         }
-        assert_eq!(set.latest(), 1);
+        assert_eq!(set.latest(), 2);
     }
 
     #[test]

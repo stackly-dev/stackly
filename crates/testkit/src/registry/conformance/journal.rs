@@ -2,7 +2,8 @@
 //! journals, steps, created items, and lock keys, the check order of the
 //! journal write ops and of `IdempotencyKeyTaken`, upserts that keep their
 //! children, the four journal reads, and prune deleting journal rows with
-//! their operation.
+//! their operation. Its prune deletes every finished operation older than
+//! 30 days in the registry.
 
 use std::time::Duration;
 

@@ -30,8 +30,11 @@ use crate::FakeClock;
 /// It covers the commit check order, compare and swap on revisions, the
 /// generation, instance names and short keys, the stored instance paths,
 /// runtime references, leases and dedicated owners, round trips of every
-/// aggregate and state code, operation pages, retention, and three races of
-/// 16 threads (same name, same artifact, same revision).
+/// aggregate and state code, operation pages, the operation journal tables
+/// of spec 0007 (round trips, the check order of the journal ops and of
+/// `IdempotencyKeyTaken`, upserts that keep their children, unique rules,
+/// the four journal reads, and prune with cascade), retention, and three
+/// races of 16 threads (same name, same artifact, same revision).
 ///
 /// # What the caller provides
 ///
@@ -85,51 +88,9 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     reads::runtime_references(&suite);
     reads::operation_pages(&suite);
     reads::seeding(&suite);
+    journal::journal(&suite);
     races::races(&suite);
     prune::prune(&suite);
-}
-
-/// Runs the scenarios of the operation journal tables (spec 0007, AC-2,
-/// AC-17) against any [`Registry`], and panics with the name of the first
-/// check that fails.
-///
-/// It covers round trips of journals, steps, created items, lock keys, and
-/// the recovery hint; the check order of the journal write ops; upserts
-/// that rewrite a row and keep its children; the unique rules of steps,
-/// created items, and lock keys; `IdempotencyKeyTaken`; the four journal
-/// reads; and prune deleting journal rows with their operation.
-///
-/// It runs apart from [`registry_conformance`] until the SQLite registry
-/// has the journal tables (spec 0007 build step 3). The caller provides
-/// what [`registry_conformance`] asks for. Its prune deletes every
-/// finished operation older than 30 days in the registry.
-///
-/// ```
-/// use std::sync::Arc;
-///
-/// use stackly_platform::Clock;
-/// use stackly_testkit::{FakeClock, FakeRegistry, registry_journal_conformance};
-///
-/// let clock = FakeClock::new();
-/// let registry = FakeRegistry::new(Arc::new(clock.clone()), clock.now());
-/// registry_journal_conformance(&registry, &registry, &clock);
-/// ```
-///
-/// # Panics
-///
-/// Panics with `registry_conformance check failed: <check>: <detail>` at
-/// the first check that fails.
-pub fn registry_journal_conformance(
-    registry: &dyn Registry,
-    seed: &dyn RegistrySeed,
-    clock: &FakeClock,
-) {
-    journal::journal(&Suite {
-        registry,
-        seed,
-        clock,
-        loaded_at: clock.now(),
-    });
 }
 
 /// What every scenario gets.
