@@ -192,7 +192,12 @@ fn lifecycle_events() -> Vec<(LifecycleEvent, Option<&'static str>)> {
         (LifecycleEvent::IdentityLost, None),
         (LifecycleEvent::Adopted, None),
         (LifecycleEvent::ConfirmedStopped, None),
-        (LifecycleEvent::Retain, None),
+        (
+            LifecycleEvent::Retain {
+                by: OperationId::generate(),
+            },
+            None,
+        ),
     ]
 }
 

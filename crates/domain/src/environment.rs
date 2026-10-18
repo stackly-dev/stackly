@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use crate::code::code_enum;
 use crate::error::{InvariantDetail, InvariantError};
 use crate::id::{EnvironmentId, InstanceId};
-use crate::value::{EnvironmentName, MemberAlias, Sha256Digest};
+use crate::value::{EnvironmentName, MemberAlias, ResourceRevision, Sha256Digest};
 
 code_enum! {
     /// Whether an environment owns a member instance's data.
@@ -56,17 +56,37 @@ impl EnvironmentMember {
     }
 }
 
+/// Every field of an [`Environment`] as the registry stores it, for
+/// [`Environment::restore`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredEnvironment {
+    /// The ID.
+    pub id: EnvironmentId,
+    /// The name.
+    pub name: EnvironmentName,
+    /// The digest of the environment manifest it came from, if any.
+    pub manifest_sha256: Option<Sha256Digest>,
+    /// The members, in order.
+    pub members: Vec<EnvironmentMember>,
+    /// The revision.
+    pub revision: ResourceRevision,
+}
+
 /// A named group of instances.
+///
+/// Every mutation raises [`Environment::revision`] by exactly 1; the
+/// mutators come with the environment features (44 and later).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Environment {
     id: EnvironmentId,
     name: EnvironmentName,
     manifest_sha256: Option<Sha256Digest>,
     members: Vec<EnvironmentMember>,
+    revision: ResourceRevision,
 }
 
 impl Environment {
-    /// Creates an environment.
+    /// Creates an environment at revision 1.
     ///
     /// # Errors
     ///
@@ -79,9 +99,25 @@ impl Environment {
         manifest_sha256: Option<Sha256Digest>,
         members: Vec<EnvironmentMember>,
     ) -> Result<Self, InvariantError> {
+        Self::restore(StoredEnvironment {
+            id,
+            name,
+            manifest_sha256,
+            members,
+            revision: ResourceRevision::INITIAL,
+        })
+    }
+
+    /// Rebuilds an environment the registry stored, with the checks of
+    /// [`Environment::new`]. Only the registry and test fakes call it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`InvariantError`]s of [`Environment::new`].
+    pub fn restore(stored: StoredEnvironment) -> Result<Self, InvariantError> {
         let mut aliases = BTreeSet::new();
         let mut instances = BTreeSet::new();
-        for member in &members {
+        for member in &stored.members {
             if !aliases.insert(&member.alias) {
                 return Err(InvariantDetail::DuplicateMemberAlias {
                     alias: member.alias.clone(),
@@ -96,10 +132,11 @@ impl Environment {
             }
         }
         Ok(Self {
-            id,
-            name,
-            manifest_sha256,
-            members,
+            id: stored.id,
+            name: stored.name,
+            manifest_sha256: stored.manifest_sha256,
+            members: stored.members,
+            revision: stored.revision,
         })
     }
 
@@ -125,6 +162,13 @@ impl Environment {
     #[must_use]
     pub fn members(&self) -> &[EnvironmentMember] {
         &self.members
+    }
+
+    /// Returns the revision: 1 when created. The registry compares it
+    /// before every update.
+    #[must_use]
+    pub const fn revision(&self) -> ResourceRevision {
+        self.revision
     }
 
     /// Returns the instances this environment owns: its `dedicated`
