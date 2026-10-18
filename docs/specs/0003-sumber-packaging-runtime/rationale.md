@@ -196,9 +196,100 @@ Update ini dibaca model lain (Sonnet 5.5, baca saja) sebelum diterima. Temuan ya
 
 Pemilik proyek meniadakan CI; pengembangan fokus di Mac ini dulu, dan cek, test native, serta run evidence dijalankan dengan tangan. Keputusan yang berubah:
 
-- Pipeline `stackly-runtimes` (runner hosted, tag terlindungi, release, attestation) dihapus. OQ-003 tetap (build maintainer diperlukan), tapi cara membangun PostgreSQL dan Valkey di Mac ini, termasuk deployment target 26.0 yang dulu mengikuti SDK runner hosted, menunggu `/architect`.
+- Pipeline `stackly-runtimes` (runner hosted, tag terlindungi, release, attestation) dihapus. OQ-003 tetap (build maintainer diperlukan), tapi cara membangun PostgreSQL dan Valkey di Mac ini, termasuk deployment target 26.0 yang dulu mengikuti SDK runner hosted, menunggu `/architect`. Diputuskan 2026-10-18 (lihat Update 2026-10-18 di bawah).
 - Watch mingguan (`runtime watch`, `runtime-watch.yml`, AC-14) dan wiring `native.yml` (AC-15) dihapus, jadi bump versi tanpa pengingat; `--cleanup` dan `--prune-cache` tetap perintah lokal.
 - Penolakan run `pull_request` di `runtime record` dan aturan 8 dihapus dari spec, walau kodenya masih ada.
+
+## Update 2026-10-18: cara membangun PostgreSQL dan Valkey di Mac ini
+
+### Konteks
+
+Setelah CI ditiadakan, OQ-003 tetap terjawab (build maintainer diperlukan untuk PostgreSQL dan Valkey), tapi tidak ada lagi tempat yang membangunnya. Build harus jalan dengan tangan di satu Mac pengembangan yang juga dipakai sehari hari, dan Mac itu penuh Homebrew: `/opt/homebrew/bin` ada di depan `PATH` dengan `pkg-config`, `cmake`, `python3`, dan library seperti `openssl@3`, `lz4`, dan `zstd`. Library Homebrew yang ikut tertaut adalah persis kegagalan yang ingin dicegah RISK-01 (basis: PRD bagian 20.2). Aturan 5 di `xtask/src/runtime/inventory.rs` masih mewajibkan `recipe` dan URL `attestation` https yang dulu datang dari pipeline CI, dan fixture test-nya merujuk repo `ojiepermana/stackly-runtimes` yang tidak ada. Artefak maintainer harus bisa diunduh lewat https, karena `pin`, `verify`, spike, dan nanti fitur 18 membaca `urls`. Langkah build plan lama juga menyebut "tambahkan tiga test native" tanpa menyebut implementasi `Recipe` PostgreSQL dan Valkey di `xtask/src/runtime/spike/providers.rs`.
+
+### Inventaris toolchain Mac ini (18 Oktober 2026)
+
+| Hal | Temuan |
+| --- | --- |
+| macOS, Xcode | macOS 27.0, Xcode 27.0 (27A266a), SDK 27.0, Apple clang 21.0.0 |
+| Python non Homebrew | hanya `/usr/bin/python3` 3.9.6 (bawaan Xcode); `uv`, `python3`, `cmake`, `pkg-config`, dan `pkgconf` di `PATH` semuanya dari Homebrew |
+| meson, ninja | tidak terpasang |
+| bison, flex, perl, make | `/usr/bin/bison` 2.3, `/usr/bin/flex` 2.6.4, `/usr/bin/perl` 5.34.1, `/usr/bin/make` GNU 3.81; tanpa autoconf atau automake |
+| ICU di SDK | `usr/include/unicode/` hanya 23 header (`U_ICU_VERSION` 78.1), tanpa `ucol.h`, `ucnv.h`, atau `uloc.h`; `libicucore.tbd` tanpa API publik |
+| libxml2 di SDK | header `usr/include/libxml2`, `libxml2.tbd`, `/usr/bin/xml2-config` 2.9.13; tidak ada file `.pc` di SDK |
+| libedit, zlib di SDK | `libedit.tbd`, header `editline/` dan `histedit.h`; `libz.tbd` dan `zlib.h`; tidak ada file `.pc` |
+| Jalur cari bawaan | `clang -v` mencari `/usr/local/include` lebih dulu dan `ld -v` mencari `/usr/local/lib` lebih dulu, walau SDK dipakai. Di Mac ini isinya hanya `include/node/` dan `lib/node_modules/` |
+| bsdtar | 3.5.3, mendukung `--no-mac-metadata`, `--uid`, `--gid`, `--uname`, `--gname` |
+| Repo | `ojiepermana/stackly` publik; `ojiepermana/stackly-runtimes` tidak ada |
+
+### Cek lanskap (18 Oktober 2026)
+
+| Hal | Temuan |
+| --- | --- |
+| meson | terbaru 1.12.1, butuh Python 3.10 ke atas; 1.11.2 rilis terakhir untuk Python 3.7 sampai 3.9 |
+| ninja (PyPI) | 1.13.2, Python 3.8 ke atas, wheel `macosx_10_9_universal2` |
+| pkgconf (PyPI) | terbaru 3.0.7.post0 butuh Python 3.10; 2.4.3.post2 rilis terakhir untuk Python 3.9, dengan wheel `macosx_11_0_arm64` |
+| PostgreSQL | 17.11 dan 18.6 (13 Agustus 2026), minor berikutnya 12 November 2026. Minimum: meson 0.54, bison 2.3, flex 2.5.35, perl 5.14. Commit "Remove distprep" ada di 17 dan 18, jadi tarball tidak membawa output bison, flex, atau perl. `meson.build` REL_18_STABLE mencari `libxml-2.0` hanya lewat pkg-config lalu CMake, dan libedit lewat pkg-config lalu `cc.find_library('libedit')` |
+| OpenSSL | 3.5.9 (29 September 2026), lini 3.5 didukung sampai 8 April 2030; 3.6.5 berakhir 1 November 2026; 4.0.3 ada |
+| ICU4C | stabil terbaru 78.3 (`icu4c-78.3-sources.tgz`, `SHASUM512.txt` dan `.asc`, tanpa `.sha256`); 79 masih RC. Configure ICU memakai Python untuk membangun data dari source |
+| lz4, zstd | lz4 1.10.0 dan zstd 1.5.7, masing masing dengan `.sha256` per tarball |
+| Valkey | 9.1.2 (1 September 2026); README masih `make`, tanpa CMake; `valkey-hashes` aktif dan memuat `valkey-9.1.2.tar.gz` |
+| GitHub Releases | batas 2 GiB per file, tanpa batas total; URL unduhan untuk tag yang memuat `/` bekerja dalam bentuk mentah maupun `%2F` (HEAD 302 ke CDN) |
+
+### Opsi dan pilihan kamu
+
+| Keputusan | Pilihan kamu | Runner up | Kenapa runner up kalah |
+| --- | --- | --- | --- |
+| Letak resep | repo publik terpisah `ojiepermana/stackly-runtimes` | `runtimes/recipes/` di repo ini (rekomendasi saya) | lihat catatan di bawah tabel |
+| Visibilitas repo resep | publik | privat | artefak publik akan menunjuk resep yang tidak bisa dibuka pengguna |
+| Hosting artefak | GitHub Releases repo `ojiepermana/stackly`, tag `runtime/<id>`, `--latest=false` | repo aset publik terpisah; lokal dulu sampai fitur 18 | repo aset menambah satu repo lagi; lokal dulu membuat `runtime verify` tidak bisa membuktikan URL, dan AC-1 butuh pengecualian |
+| Cara build | `build.sh` bash yang menjalankan ulang dirinya lewat `env -i` | wrapper `cargo xtask runtime build` | kode Rust tambahan untuk pekerjaan tangan yang jarang, padahal isolasi environment cukup dengan `env -i` |
+| Deployment target | 27.0 | 26.0 | 26.0 hanya mengikuti SDK runner hosted yang sudah dihapus, dan produk tidak mendukung macOS 26 |
+| Pengganti `attestation` | field dihapus, probe `manifest` di spike | URL halaman release; Sigstore `cosign attest-blob` | URL release hanya lokasi; cosign butuh alat baru, login OIDC, dan menulis ke log publik di setiap build |
+| Persetujuan lisensi | gerbang sebelum unggahan pertama, per provider (dirinci setelah cross check) | setujui sekarang | persetujuan sebaiknya berdasar isi `LICENSES/` artefak nyata, bukan daftar SPDX di spec |
+| Urutan terbit | `pin --file`, spike lokal `PASS`, baru unggah | unggah dulu, lalu `pin` dari URL | artefak rusak bisa terbit dan tetap publik sampai dihapus |
+| Tool build | venv `/usr/bin/python3` 3.9.6: meson 1.11.2, ninja 1.13.2, pkgconf 2.4.3.post2 | CPython standalone yang dipin; meson Homebrew | standalone menambah satu artefak toolchain untuk dirawat; Homebrew membuat build bergantung lagi pada versi yang berubah saat `brew upgrade` |
+
+Catatan untuk letak resep. Rekomendasi saya resep di repo ini, karena `runtime check` bisa memastikan file yang dirujuk `recipe` ada tanpa jaringan, dan tag release bisa menunjuk commit yang sama dengan resepnya. Pilihan kamu tetap bekerja, dengan dua harga yang perlu kamu terima dengan sadar: `runtime check` hanya bisa memeriksa bentuk `recipe` (pemilik, repo, commit 40 hex, path), dan tag `runtime/<id>` di repo `stackly` tidak menunjuk commit resep. Celah itu ditutup sebagian oleh probe `manifest`: artefak sendiri menyatakan commit resepnya, dan spike menolak artefak yang klaimnya berbeda dari entri. Keuntungannya juga nyata: skrip build pihak ketiga dan riwayatnya tidak bercampur dengan kode app, dan repo resep bisa dipakai tanpa membawa seluruh workspace Rust.
+
+### Keputusan turunan (rekomendasi saya, dengan runner up)
+
+- **Root build di `/private/tmp/stackly-build/<8 hex acak>/`**, di luar home. Path yang tertanam di binary (prefix staging, `__FILE__`) jadi tidak memuat nama user tanpa remap path source, yang dilarang AGENTS.md. Namanya acak, bukan id artefak, karena PostgreSQL memakai layout datar kalau prefix memuat `postgres` atau `pgsql`, dan id artefak memuat `postgresql`. Runner up: build di `out/` checkout dengan `-ffile-prefix-map`.
+- **Preflight `/usr/local`**, karena clang dan linker selalu mencari di sana lebih dulu walau SDK dipakai (inventaris di atas). Audit statis menangkap dylib dari `/usr/local/lib`, tapi tidak menangkap header yang menimpa header SDK atau dependency build. Aturannya umum: semua file header di tingkat puncak ditolak (misalnya `iconv.h` dari GNU libiconv, penyebab klasik error link), begitu juga folder header milik build, sedangkan folder lain seperti `node/` lolos karena hanya terjangkau lewat `#include <node/...>`. Runner up: daftar nama yang ditolak (versi awal, diganti setelah cross check karena tidak mungkin lengkap), atau hanya mengandalkan audit.
+- **File `.pc` buatan sendiri untuk libxml2, libedit, dan zlib SDK**, karena meson PostgreSQL tidak menemukan libxml2 tanpa pkg-config atau CMake, dan fallback libedit-nya mencari nama yang salah untuk SDK. Runner up: libxml2 dibangun dari source dan dibundel (dependency bundel kelima, dengan patch keamanannya sendiri), atau `-Dlibxml=disabled` (tipe dan fungsi XML hilang).
+- **bison, flex, perl, dan make dari `/usr/bin`**, karena semuanya memenuhi minimum PostgreSQL 17 dan 18. Runner up: bison terbaru dibangun dari source sekarang; ditunda sampai PostgreSQL menaikkan minimumnya (Follow-up).
+- **Hanya `/opt/homebrew` yang dicari di log konfigurasi**, bukan `/usr/local`, karena path SDK dan jalur cari bawaan clang yang sah ikut tertulis di log dan memuat `/usr/local`. Preflight dan audit menjaga `/usr/local`.
+- **Path home dicari di seluruh isi paket**, bukan hanya di log, karena paket diterbitkan publik. Nama user saja tidak dicari, karena muncul sah di `recipe` (`ojiepermana/stackly-runtimes@...`).
+- **Smoke bash dihapus, diganti spike lokal ditambah cek versi.** Smoke lama meniru langkah spike di bash, sehingga ada tiga tempat yang tahu cara menjalankan PostgreSQL. Cek `--version` dari salinan paket di path berisi spasi dan `Ü` sudah menangkap error relokasi (dyld gagal memuat library) sebelum `pin --file`. Runner up: smoke bash penuh.
+- **`pin --file` menyalin ke cache**, bukan perintah baru, karena cache sudah bernama digest dan spike membaca cache sebelum mengunduh. Hasilnya, spike lokal sebelum unggah memakai jalur kode yang sama dengan run evidence. Runner up: flag `--local-file` di `runtime spike`.
+- **Valkey dulu**, sesuai pendekatan Journey: artefak paling kecil tanpa dependency bundel membuktikan seluruh jalur (build, spike, terbit, bukti) sebelum OpenSSL dan ICU menambah risiko. Runner up: PostgreSQL 18 dulu karena paling penting bagi G0.
+- **Tag `runtime/<id>`**, karena tag dengan `/` bekerja di URL unduhan (cek lanskap) dan memisahkan rilis runtime dari tag app `v*`. Runner up: `runtime-<id>`.
+- **Paket dengan `--no-mac-metadata --uid 0 --gid 0 --uname root --gname wheel`**, supaya tarball tidak membawa entri `._<nama>` (follow-up fitur 18 tentang AppleDouble di `tar_gz`) atau nama user OS. Runner up: `COPYFILE_DISABLE=1` tanpa opsi pemilik.
+- **Repo resep berlisensi MIT OR Apache-2.0**, sama dengan repo ini. Runner up: lisensi tunggal MIT.
+- **`LANG=C` saat build**, supaya keluaran tool dan urutan sort tidak bergantung locale Mac. Python 3.9 tetap memakai UTF-8 di locale C (PEP 538).
+- **Log build tidak diunggah**, karena memuat path checkout di home; isi yang perlu dibaca orang lain (source, resep, toolchain, dependency) sudah ada di `STACKLY-ARTIFACT.json` dan catatan release.
+- **Recipe `Postgres` dan `Valkey` di `providers.rs` dinamai di spec**, karena build plan lama hanya menyebut test native, padahal tanpa recipe driver menulis `the spike has no steps for provider postgresql`. `stop` PostgreSQL memakai `server.signal("INT")` yang sudah ada (fast shutdown), dan port tetap dialokasikan walau `listen_addresses` kosong, karena nomor port menentukan nama socket.
+
+- **Isi `STACKLY-ARTIFACT.json` dengan `/usr/bin/jq -n`**, yang ada di macOS 27, supaya string di-escape dengan benar tanpa menulis JSON dengan `printf`. Runner up: Python venv.
+- **lz4 dan zstd tetap dylib bundel**, bukan ditautkan statis seperti saran cross check. Link statis membuang dua dylib dan relokasinya, tapi kode pihak ketiga lalu hilang dari audit statis dan dari baris `bundled`, sehingga aturan "inventaris sama dengan audit" (AC-7) tidak lagi melihatnya dan asal serta lisensinya hanya tercatat di manifest.
+
+### Cross check update
+
+Update ini dibaca model lain (Sonnet 5.5, baca saja) sebelum diterima. Klaim yang paling berat saya cek ulang ke kode (`plan.rs`, `worker.rs`, `cache.rs`, `checksum.rs`, `inventory.rs`, `/usr/bin/jq`) dan ke sumber upstream (`src/Makefile` Valkey 9.1.2, `meson_options.txt` dan `meson.build` PostgreSQL REL_18_STABLE). Semua rekomendasi diterapkan atas persetujuan kamu:
+
+- variabel yang menyeberangi `env -i` (`STACKLY_ORIGINAL_HOME`, `STACKLY_RECIPE`, `STACKLY_BUILD_ROOT`, `STACKLY_BUILD_ARGS`);
+- gerbang lisensi per provider, dua checkbox, sehingga Valkey tidak menunggu PostgreSQL dan gerbang PostgreSQL mencakup OpenSSL, ICU, lz4, dan zstd;
+- `libraries` dan `vendored` di manifest, pemetaan dylib ke baris `bundled`, `install_name` `@rpath/<file>`, perluasan `PlanArtifact` dan `PlanDependency`, dan probe `dependencies` serta `manifest` yang selalu dicatat sebelum `closure` gagal;
+- algoritma relokasi lengkap (symlink berversi menjadi satu file, `-id`, `-change` untuk semua rujukan ke root build, rpath per Mach-O), isi paket dari stage, dan `make install_sw` untuk OpenSSL;
+- opsi meson PostgreSQL: `--buildtype=release`, `uuid.pc` (meson `dependency('uuid')` tidak punya pencari sistem), opsi `auto` lain dimatikan, `libcurl`, `libnuma`, dan `liburing` khusus 18 dengan daftar opsi per versi mayor, dan cipher lama pgcrypto dicatat di luar build;
+- langkah 15 harus di-merge sebelum langkah 17;
+- SPDX dependency bundel, kode vendored Valkey di `LICENSES/`, dan sumber `license_url`;
+- commit resep harus sudah ada di remote sebelum unggah;
+- nama file `--url` sama dengan nama file lokal di `pin --file`, dan file disalin ke cache;
+- `runtime spike --no-quarantine` untuk spike lokal, supaya probe quarantine (dan dialog Gatekeeper-nya) tidak jalan di setiap run lokal digest baru;
+- aturan umum preflight `/usr/local`;
+- sumber hash `requirements.txt`, penulis JSON manifest, dan baris pertama saja untuk string toolchain.
+
+Perbaikan yang langsung diterapkan karena bukan keputusan: `make install USE_REDIS_SYMLINKS=no` (opsi itu ada di Makefile 9.1.2, dan `valkey-check-aof`, `valkey-check-rdb`, serta `valkey-sentinel` dipasang sebagai symlink ke server), cek `pg_config --sharedir` dan `--pkglibdir` dari salinan paket (cek `--version` saja hanya membuktikan dyld, bukan path relatif), kalimat tentang data ICU, dan catatan bahwa entri yang masih membawa `attestation` gagal sebagai TOML tidak valid. Temuan bahwa `-Drpath=false` perlu ternyata tidak berlaku: `meson.build` PostgreSQL tidak pernah menambah rpath di macOS dan memakai install name absolut, yang sekarang ditangani langkah relokasi 3. Saran link statis lz4 dan zstd ditolak (lihat Keputusan turunan).
 
 ## Landscape scan 2026-10-17
 
@@ -223,11 +314,14 @@ Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum ter
 - `AGENTS.md` root (aturan workspace, testkit).
 - `runtimes/inventory.toml` (entri ClickHouse `blocked`), `xtask/src/runtime/inventory.rs` (aturan 3), `xtask/src/runtime/spike/archive.rs` (ekstraksi), `xtask/src/runtime/pin.rs` (`min_os`), dan man page bsdtar di macOS 27 (`-P`, `--no-mac-metadata`).
 - Skill terpasang: `rust-best-practices`, `meson`, `signing-entitlements`.
+- Update 2026-10-18: `xtask/src/runtime/inventory.rs` (aturan 5 dan fixture `stackly-runtimes`), `xtask/src/runtime/spike/providers.rs` (trait `Recipe`, belum ada PostgreSQL dan Valkey), `xtask/src/runtime/spike/worker.rs` (urutan langkah dan `closure`), `xtask/src/runtime/cache.rs` (cache bernama digest), `xtask/src/runtime/pin.rs` (pencarian `--executable`), `xtask/tests/native_runtime.rs`, dan inventaris toolchain Mac ini (`clang -v`, `ld -v`, isi SDK).
 
 **Practices & standards**:
 
 - Pin artefak dengan digest kriptografis, URL hanya sebagai lokasi.
 - Relokasi Mach-O dengan `@rpath` dan `@loader_path`, lalu tanda tangan ulang setelah mengubah binary.
+- Build terisolasi: environment kosong (`env -i`) dan setiap input (source, wheel) dipin dengan digest.
+- Artefak yang sudah terbit tidak pernah diganti; versi baru berarti nomor build baru.
 
 **Links** (terverifikasi saat cek lanskap):
 
@@ -238,3 +332,21 @@ Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum ter
 - ClickHouse, rilis terbaru: https://api.github.com/repos/ClickHouse/ClickHouse/releases/latest
 - Valkey, rilis terbaru: https://api.github.com/repos/valkey-io/valkey/releases/latest
 - Traefik, rilis terbaru: https://api.github.com/repos/traefik/traefik/releases/latest
+
+Ditambahkan saat cek lanskap 18 Oktober 2026:
+
+- meson 1.12.1 dan 1.11.2 di PyPI: https://pypi.org/pypi/meson/1.12.1/json dan https://pypi.org/pypi/meson/1.11.2/json
+- ninja 1.13.2 di PyPI: https://pypi.org/pypi/ninja/1.13.2/json
+- pkgconf di PyPI: https://pypi.org/pypi/pkgconf/3.0.7.post0/json dan https://pypi.org/simple/pkgconf/
+- PostgreSQL 18.6 release notes: https://www.postgresql.org/docs/release/18.6/
+- PostgreSQL roadmap rilis minor: https://www.postgresql.org/developer/roadmap/
+- PostgreSQL 18 build requirements: https://www.postgresql.org/docs/18/install-requirements.html
+- PostgreSQL `meson.build` REL_18_STABLE: https://raw.githubusercontent.com/postgres/postgres/REL_18_STABLE/meson.build
+- Commit "Remove distprep": https://github.com/postgres/postgres/commit/721856ff24b3722ce8e894e5a32c9c063cd48455
+- OpenSSL source dan kebijakan rilis: https://openssl-library.org/source/ dan https://openssl-library.org/policies/releasestrat/
+- ICU 78.3: https://github.com/unicode-org/icu/releases/tag/release-78.3
+- lz4 1.10.0: https://github.com/lz4/lz4/releases/tag/v1.10.0
+- zstd 1.5.7: https://github.com/facebook/zstd/releases/tag/v1.5.7
+- Valkey 9.1.2 README: https://raw.githubusercontent.com/valkey-io/valkey/9.1.2/README.md
+- valkey-hashes: https://raw.githubusercontent.com/valkey-io/valkey-hashes/main/README
+- GitHub Releases: https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases
