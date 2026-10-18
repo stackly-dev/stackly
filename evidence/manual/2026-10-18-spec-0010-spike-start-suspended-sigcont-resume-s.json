@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a14e57-e391-7493-b054-5bce23757f37",
+  "covers": [
+    "AC-013",
+    "REQ-013"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0010 spike: START_SUSPENDED, SIGCONT resume, SIGKILL discard",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "a child spawned with POSIX_SPAWN_START_SUSPENDED runs no code until SIGCONT, also when the SIGCONT comes from a new daemon after the spawning daemon died, and SIGKILL plus waitpid discards a child that never ran (spec 0010 AC-2, AC-9, Adapter macOS row Tertahan dan lanjut)",
+  "actual": "Right after posix_spawn the child has pbi_status SSTOP (4), kinfo p_stat SSTOP, ri_user_time 0 (still 0 after 400 ms), wrote no argv-serve.json and does not listen. kill(SIGCONT) resumes it: /ready answers 200, pbi_status becomes SRUN (2), user time > 0, and the start time is unchanged by the suspension. Discard: SIGKILL on a suspended child gives NOTE_EXIT with status signaled(9) and waitpid reaps signaled(9); user time was 0, no argv file and empty spools, so it never ran; the lock it inherited is Free afterwards. Daemon death while suspended: a helper 'daemon' spawned a suspended child and exited without SIGCONT; the child stayed SSTOP with ppid 1, no pending signal (kinfo p_siglist 0, so no SIGHUP from orphaning, because SETSID puts it in another session), user time 0, still holding the lock; a SIGCONT from this non-parent process resumed it and it served /ready 200.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "Checked out d99e5ea (clean) in worktree f10-spike-a90e60 on this Mac (macOS 27.0 build 26A428, arm64, Apple Silicon, page size 16384).",
+    "cargo build -p stackly-fake-server --locked; the child in every scenario is target/debug/stackly-fake-server (or /bin/sh and /bin/sleep where a process group or a descendant is needed).",
+    "Built the throwaway spike outside the workspace: spike-main.rs.txt as src/main.rs and spike-Cargo.toml.txt as Cargo.toml (libc =0.2.190, the workspace's version, plus serde_json), cargo build --offline --release. Source, full run log, and the extra experiments are in the evidence folder of the first record of this set (title 'Spec 0010 spike: posix_spawn flags, fd map, argv, env, cwd').",
+    "Ran `spike0010 run target/debug/stackly-fake-server 60`. Test root under the darwin user temp folder (confstr _CS_DARWIN_USER_TEMP_DIR) at stackly-spike0010-<pid>/Test Root Ünï cödé, fake runtime copied to runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server and spawned by its canonical path, data and instance.lock under data/instances/<name>/, spools under run/i/<name>/. Every spawned pid was registered and killed or reaped at the end; the run's cleanup check found no leftover process, and the test root was removed.",
+    "Rows checked by the [suspend] lines of output.txt plus the [orphan] lines for the suspended orphan (subcommand daemon-a suspended)."
+  ],
+  "reviewer": "Claude Opus 5.5 (session f10-spike, for ojiepermana)",
+  "startedAt": "2026-10-18T09:29:05.169028Z",
+  "finishedAt": "2026-10-18T09:29:27Z",
+  "evidencePath": "evidence/manual/files/01a14e57-e391-7493-b054-5bce23757f37/",
+  "context": {
+    "sourceCommit": "d99e5eaa1fc8c556adfae425ac020b4529be74f7",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

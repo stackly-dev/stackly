@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a14e58-168f-74b1-b1d0-684ed13dcb20",
+  "covers": [
+    "AC-013",
+    "REQ-013"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0010 spike: inherited instance.lock flock survives the parent",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "open(O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC, 0600) plus flock(LOCK_EX|LOCK_NB) gives a lock that a child inherits on fd 3 and keeps after the daemon closes its fd and after the daemon exits, released only when every holder exits (spec 0010 AC-6, AC-9, Adapter macOS row Lock)",
+  "actual": "The lock file is a regular 0600 file owned by 502 with FD_CLOEXEC on the daemon's fd; a symlinked lock path fails with ELOOP; a second open description in the same process gets EWOULDBLOCK (probe while held reads Held). Child with the lock on fd 3: after the daemon closed its copy, probe_lock reads Held; after the child exits it reads Free. Orphan case: the daemon that spawned the child exited, and probe_lock from the spike reads Held while holds_file shows the inode; Free within 2 s of the orphan's exit. The suspended orphan holds it too. flock(LOCK_UN) on the daemon's copy released the lock while the child that inherited it was still alive, which is why spec 0010 releases with close only. A descendant (`sleep 30 & exit 0` with fd 3) keeps the lock after the main process exited and was reaped. Deleting instance.lock while it is held lets a new file at the same path be locked although the old holder lives, which is why spec 0010 also checks the last observation.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "Checked out d99e5ea (clean) in worktree f10-spike-a90e60 on this Mac (macOS 27.0 build 26A428, arm64, Apple Silicon, page size 16384).",
+    "cargo build -p stackly-fake-server --locked; the child in every scenario is target/debug/stackly-fake-server (or /bin/sh and /bin/sleep where a process group or a descendant is needed).",
+    "Built the throwaway spike outside the workspace: spike-main.rs.txt as src/main.rs and spike-Cargo.toml.txt as Cargo.toml (libc =0.2.190, the workspace's version, plus serde_json), cargo build --offline --release. Source, full run log, and the extra experiments are in the evidence folder of the first record of this set (title 'Spec 0010 spike: posix_spawn flags, fd map, argv, env, cwd').",
+    "Ran `spike0010 run target/debug/stackly-fake-server 60`. Test root under the darwin user temp folder (confstr _CS_DARWIN_USER_TEMP_DIR) at stackly-spike0010-<pid>/Test Root Ünï cödé, fake runtime copied to runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server and spawned by its canonical path, data and instance.lock under data/instances/<name>/, spools under run/i/<name>/. Every spawned pid was registered and killed or reaped at the end; the run's cleanup check found no leftover process, and the test root was removed.",
+    "Rows checked by the [lock] lines of output.txt."
+  ],
+  "reviewer": "Claude Opus 5.5 (session f10-spike, for ojiepermana)",
+  "startedAt": "2026-10-18T09:29:18.222542Z",
+  "finishedAt": "2026-10-18T09:29:27Z",
+  "evidencePath": "evidence/manual/files/01a14e58-168f-74b1-b1d0-684ed13dcb20/",
+  "context": {
+    "sourceCommit": "d99e5eaa1fc8c556adfae425ac020b4529be74f7",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

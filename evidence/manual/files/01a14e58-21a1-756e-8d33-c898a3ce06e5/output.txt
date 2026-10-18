@@ -1,0 +1,19 @@
+# Spec 0010 spike: spool with O_RDWR reader and page-size punch
+# Lines of the spike run that belong to this row (tags spool).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[spool] NOTE page size (sysconf _SC_PAGESIZE) 16384
+[spool] PASS page (16 KiB) alignment: allocation stays small and SEEK_DATA == first unreleased byte after every punch: align 16384: 4 MB appended, 40 punches; allocated 4096 B; SEEK_DATA Ok(3997696) (released 3997696), SEEK_HOLE from it Ok(4000000), bytes there [97, 97, 97, 10, 97, 97, 97, 97]; 0 of 40 SEEK_DATA answers were stale
+[spool] NOTE no-punch control, stdout spool, 10 s at 2000 lines/s: max allocation beyond EOF 61440 B; samples size:allocated 25029:28672 50529:53248 76329:77824 102729:167936 128229:167936 153429:167936 179129:233472 204829:233472 229829:233472 255829:299008 281529:299008 307029:364544 333029:364544 358429:364544 383429:430080 409429:430080 419229:430080 460629:495616 481829:495616 507829:561152 518629:561152 563429:626688 588629:626688 614029:626688 639529:692224 664929:692224 690529:692224 715829:757760 741229:757760 766429:823296 792229:823296 817329:823296 843429:888832 868429:888832 894229:954368 919129:954368 945029:954368 970429:1019904 994929:1019904 1020929:1085440
+[spool] NOTE [Page alignment 16384] t=15s allocated now 1253376 B (max 2039808 B)
+[spool] NOTE [Page alignment 16384] t=30s allocated now 368640 B (max 2105344 B)
+[spool] NOTE [Page alignment 16384] t=45s allocated now 1482752 B (max 2105344 B)
+[spool] NOTE [Page alignment 16384] t=60s allocated now 630784 B (max 2105344 B)
+[spool] NOTE [Page alignment 16384] load 60 s at 2000 lines/s: written [6016255, 6016100] B; stdout: 60129 log lines, 1 other lines, 0 bad, read 6012929 B, released 6012928 B, max allocated 1052672 B, max allocated beyond unreleased data 1044480 B; stderr: 60158 log lines, 0 other lines, 0 bad, read 6015800 B, released 6012928 B, max allocated 1052672 B, max allocated beyond unreleased data 1044480 B; fake exit Some("exited(0)")
+[spool] PASS [Page alignment 16384] punching while the child appends never failed: None
+[spool] PASS [Page alignment 16384] every log line intact and in sequence (100 bytes, seq +2 per stream): 
+[spool] PASS [Page alignment 16384] the fake really produced the load: 120288 lines vs 120000 expected
+[spool] FAIL [Page alignment 16384] allocated spool blocks stay under 2 MiB (both streams together): max allocated 2105344 B over 60 s
+[spool] PASS [Page alignment 16384] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(6012928) vs released 6012928
+[spool] PASS [Page alignment 16384] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(6012928) vs released 6012928
+[spool] PASS [Page alignment 16384] resume from first data, drop to first newline, next line is whole: first data 6012928, dropped 1 B, line "log line 0000120258 on stdout .........."

@@ -1,0 +1,10 @@
+# Spec 0010 spike: process group members with proc_listpids
+# Lines of the spike run that belong to this row (tags group).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[group] NOTE proc_listpgrppids returned 3 (a count of pids, not bytes)
+[group] PASS proc_listpids(PROC_PGRP_ONLY) lists leader + 2 children: Ok([17413, 17422, 17423])
+[group] PASS proc_listpgrppids agrees: Ok([17413, 17422, 17423])
+[group] PASS after the leader exits and is reaped, the leftover child is still listed by pgid: leader Some("exited(0)"), members Ok([17428])
+[group] NOTE leftover 17428: ppid 1 pgid 17426 (reparented to launchd)
+[group] PASS group empty after kill(-pgid, SIGKILL): Ok([])

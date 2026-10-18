@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a14e58-1c03-7197-a3cc-2fa6321bb762",
+  "covers": [
+    "AC-013",
+    "REQ-013"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0010 spike: spool as specified (O_RDONLY reader, f_bsize punch)",
+    "file": null,
+    "line": null
+  },
+  "status": "FAIL",
+  "expected": "a spool reader opened O_RDONLY|O_NOFOLLOW can fcntl(F_PUNCHHOLE) ranges aligned to f_bsize from fstatfs, keeping allocation under 2 MiB under the AC-12 load, and lseek(SEEK_DATA) then gives the first unreleased data (spec 0010 AC-12, Adapter macOS row Spool, exactly as written)",
+  "actual": "F_PUNCHHOLE on an O_RDONLY descriptor fails with EPERM; it works on O_RDWR. With f_bsize (4096 on this APFS volume) alignment the punch succeeds, but the block of a punched range that lies in the 16 KiB VM page the child is still appending to comes back as zero-filled allocated data: 4 MB appended with 40 punches left 233472 B allocated, SEEK_DATA pointed at 294912 (bytes there are zeros) instead of 3997696, and 37 of 40 SEEK_DATA answers were stale; fsync of writer or reader does not change it. Under the AC-12 load (fake at 2000 lines/s for 60 s, about 6 MB per stream, drained and punched every 500 ms through an O_RDWR reader) combined allocation reached 3272704 B and kept rising (t=15 s 2256896, t=60 s 3272704), SEEK_DATA after the run was 32768 while 6008832 bytes had been released, and resuming from SEEK_DATA read only zeros. The rest of the row works as written: create with O_WRONLY|O_CREAT|O_EXCL|O_APPEND|O_NOFOLLOW|O_CLOEXEC gives a 0600 file and EEXIST on a second create, O_NOFOLLOW refuses a symlink, SEEK_DATA is 0 on fresh data and ENXIO on an empty or fully punched file, punched ranges read back as zeros, st_size is unchanged, unaligned punches fail with EINVAL, the spool keeps growing after the spawning daemon died and a new daemon reads it from SEEK_DATA 0. The working variant is the next record (O_RDWR reader, page-size alignment).",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "Checked out d99e5ea (clean) in worktree f10-spike-a90e60 on this Mac (macOS 27.0 build 26A428, arm64, Apple Silicon, page size 16384).",
+    "cargo build -p stackly-fake-server --locked; the child in every scenario is target/debug/stackly-fake-server (or /bin/sh and /bin/sleep where a process group or a descendant is needed).",
+    "Built the throwaway spike outside the workspace: spike-main.rs.txt as src/main.rs and spike-Cargo.toml.txt as Cargo.toml (libc =0.2.190, the workspace's version, plus serde_json), cargo build --offline --release. Source, full run log, and the extra experiments are in the evidence folder of the first record of this set (title 'Spec 0010 spike: posix_spawn flags, fd map, argv, env, cwd').",
+    "Ran `spike0010 run target/debug/stackly-fake-server 60`. Test root under the darwin user temp folder (confstr _CS_DARWIN_USER_TEMP_DIR) at stackly-spike0010-<pid>/Test Root Ünï cödé, fake runtime copied to runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server and spawned by its canonical path, data and instance.lock under data/instances/<name>/, spools under run/i/<name>/. Every spawned pid was registered and killed or reaped at the end; the run's cleanup check found no leftover process, and the test root was removed.",
+    "Rows checked by the [spool] lines of output.txt: file rules in the darwin user temp folder, the 40-punch alignment experiment, and the 60 s load with 4096 alignment. seek-exp.log in the first record's folder repeats the experiment with fsync of the writer and of the reader."
+  ],
+  "reviewer": "Claude Opus 5.5 (session f10-spike, for ojiepermana)",
+  "startedAt": "2026-10-18T09:29:19.619011Z",
+  "finishedAt": "2026-10-18T09:29:27Z",
+  "evidencePath": "evidence/manual/files/01a14e58-1c03-7197-a3cc-2fa6321bb762/",
+  "context": {
+    "sourceCommit": "d99e5eaa1fc8c556adfae425ac020b4529be74f7",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

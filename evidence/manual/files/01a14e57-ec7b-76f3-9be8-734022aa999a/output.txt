@@ -1,0 +1,16 @@
+# Spec 0010 spike: proc_pidpath equals the canonical executable path
+# Lines of the spike run that belong to this row (tags exe).
+# Spike source, full run log, and the SEEK_DATA experiment: evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/
+
+[exe] PASS proc_pidpath of suspended child equals canonical path: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server") vs /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
+[exe] NOTE path as created was /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server (the /var -> /private/var symlink makes it differ)
+[exe] PASS non-child: proc_pidpath equals canonical path recorded at spawn: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[exe] PASS absent pid: proc_pidpath fails: Some("errno 3 (No such process (os error 3))")
+[exe] NOTE pid 1: proc_pidpath Ok("/sbin/launchd")
+[exe] NOTE darwin user temp /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/ canonicalizes to /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T
+[exe] PASS spawn via /var/... spelling: proc_pidpath returns the canonical /private/var/... path: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[exe] PASS spawn via a symlink: proc_pidpath returns the target, not the link: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[exe] NOTE via symlink argv[0] stays Some("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/paths/fake-link")
+[exe] PASS spawn via NFD spelling of an NFC path: proc_pidpath returns the stored (NFC) name: Ok(176) (nfd bytes 180, nfc bytes 176)
+[exe] NOTE executable renamed while process lives: proc_pidpath Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/paths/renamed-fake"); after unlink: Err("errno 2 (No such file or directory (os error 2))")
+[exe] PASS rename/unlink of the executable never yields the original recorded path by accident: 

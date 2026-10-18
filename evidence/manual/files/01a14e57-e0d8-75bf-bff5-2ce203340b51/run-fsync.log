@@ -1,0 +1,12 @@
+[spool] NOTE [PageFsync alignment 16384] t=15s allocated now 1220608 B (max 2039808 B)
+[spool] NOTE [PageFsync alignment 16384] t=30s allocated now 368640 B (max 2105344 B)
+[spool] NOTE [PageFsync alignment 16384] t=45s allocated now 1515520 B (max 2105344 B)
+[spool] NOTE [PageFsync alignment 16384] t=60s allocated now 598016 B (max 2105344 B)
+[spool] NOTE [PageFsync alignment 16384] load 60 s at 2000 lines/s: written [6013155, 6013100] B; stdout: 60124 log lines, 1 other lines, 0 bad, read 6012429 B, released 5996544 B, max allocated 1052672 B, max allocated beyond unreleased data 1040384 B; stderr: 60127 log lines, 0 other lines, 0 bad, read 6012700 B, released 5996544 B, max allocated 1052672 B, max allocated beyond unreleased data 1040384 B; fake exit Some("exited(0)")
+[spool] PASS [PageFsync alignment 16384] punching while the child appends never failed: None
+[spool] PASS [PageFsync alignment 16384] every log line intact and in sequence (100 bytes, seq +2 per stream): 
+[spool] PASS [PageFsync alignment 16384] the fake really produced the load: 120252 lines vs 120000 expected
+[spool] FAIL [PageFsync alignment 16384] allocated spool blocks stay under 2 MiB (both streams together): max allocated 2105344 B over 60 s
+[spool] PASS [PageFsync alignment 16384] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(5996544) vs released 5996544
+[spool] PASS [PageFsync alignment 16384] SEEK_DATA after the run == first unreleased block (first_data_offset): Ok(5996544) vs released 5996544
+[spool] PASS [PageFsync alignment 16384] resume from first data, drop to first newline, next line is whole: first data 5996544, dropped 85 B, line "log line 0000119932 on stdout .........."

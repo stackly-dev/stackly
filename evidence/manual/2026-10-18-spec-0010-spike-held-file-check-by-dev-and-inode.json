@@ -1,0 +1,64 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a14e57-fd09-7305-bbe1-ff6e3d236a9f",
+  "covers": [
+    "AC-013",
+    "REQ-013",
+    "AC-058"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0010 spike: held file check by dev and inode",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "proc_pidinfo(PROC_PIDLISTFDS) plus proc_pidfdinfo(PROC_PIDFDVNODEPATHINFO) on each vnode fd tells whether a process holds instance.lock, by device and inode, for a suspended child, a running child, and a non-child after its parent died (spec 0010 AC-1, AC-9, Adapter macOS row Fd yang dipegang)",
+  "actual": "holds_file(lock) = Yes for the suspended child, for the running child after the daemon closed its own fd, for the orphan after the daemon that spawned it exited (its fds were 0-3 vnodes plus sockets 4-6), and for the suspended orphan; the descendant check in the lock record also uses it. Another user's process (pid 1, root daemons): PROC_PIDLISTFDS returns EPERM, which maps to Unreadable. Absent pid: ESRCH. PROC_PIDLISTFDS with a null buffer returns the byte size to allocate; struct proc_fdinfo is 8 bytes. For step 3: libc 0.2.190 has no PROC_PIDFDVNODEPATHINFO (2), struct proc_fileinfo (24 bytes) or struct vnode_fdinfowithpath (1200 bytes, matched the SDK here), so the adapter declares them; vnode_info_path and vinfo_stat exist in libc.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "Checked out d99e5ea (clean) in worktree f10-spike-a90e60 on this Mac (macOS 27.0 build 26A428, arm64, Apple Silicon, page size 16384).",
+    "cargo build -p stackly-fake-server --locked; the child in every scenario is target/debug/stackly-fake-server (or /bin/sh and /bin/sleep where a process group or a descendant is needed).",
+    "Built the throwaway spike outside the workspace: spike-main.rs.txt as src/main.rs and spike-Cargo.toml.txt as Cargo.toml (libc =0.2.190, the workspace's version, plus serde_json), cargo build --offline --release. Source, full run log, and the extra experiments are in the evidence folder of the first record of this set (title 'Spec 0010 spike: posix_spawn flags, fd map, argv, env, cwd').",
+    "Ran `spike0010 run target/debug/stackly-fake-server 60`. Test root under the darwin user temp folder (confstr _CS_DARWIN_USER_TEMP_DIR) at stackly-spike0010-<pid>/Test Root Ünï cödé, fake runtime copied to runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server and spawned by its canonical path, data and instance.lock under data/instances/<name>/, spools under run/i/<name>/. Every spawned pid was registered and killed or reaped at the end; the run's cleanup check found no leftover process, and the test root was removed.",
+    "Rows checked by the [fds] lines of output.txt."
+  ],
+  "reviewer": "Claude Opus 5.5 (session f10-spike, for ojiepermana)",
+  "startedAt": "2026-10-18T09:29:11.68913Z",
+  "finishedAt": "2026-10-18T09:29:27Z",
+  "evidencePath": "evidence/manual/files/01a14e57-fd09-7305-bbe1-ff6e3d236a9f/",
+  "context": {
+    "sourceCommit": "d99e5eaa1fc8c556adfae425ac020b4529be74f7",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a14e58-0974-7134-bbe9-781d487e2d45",
+  "covers": [
+    "AC-013",
+    "REQ-013",
+    "AC-068"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0010 spike: kqueue EVFILT_PROC exit watch and reap",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "kqueue EVFILT_PROC NOTE_EXIT (with NOTE_EXITSTATUS for children) reports the exit of a child, a suspended child and a non-child, a registration on an exited child fails with ESRCH and waitpid(WNOHANG) then reaps it (spec 0010 AC-9, Adapter macOS row Exit)",
+  "actual": "Child: NOTE_EXIT|NOTE_EXITSTATUS registers on the suspended child; after SIGCONT and SIGTERM the event carries the wait status exited(0) in data, and waitpid(WNOHANG) reaps exited(0). Discarded suspended child: event data signaled(9). Non-child orphan: NOTE_EXIT registers and fires (data 0); NOTE_EXIT|NOTE_EXITSTATUS also registers for a non-child and fired with data 0 for a clean exit, so the adapter cannot tell a real status from 0 there and must report None, as spec 0010 says. The start time re-read after registration still matched. Exited-but-unreaped child (zombie): registration returns ESRCH, then waitpid(WNOHANG) reaps it with exited(0), which is the spec's ESRCH path. Absent pid: ESRCH. launchd reaps the orphan within 2 s of its exit.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "Checked out d99e5ea (clean) in worktree f10-spike-a90e60 on this Mac (macOS 27.0 build 26A428, arm64, Apple Silicon, page size 16384).",
+    "cargo build -p stackly-fake-server --locked; the child in every scenario is target/debug/stackly-fake-server (or /bin/sh and /bin/sleep where a process group or a descendant is needed).",
+    "Built the throwaway spike outside the workspace: spike-main.rs.txt as src/main.rs and spike-Cargo.toml.txt as Cargo.toml (libc =0.2.190, the workspace's version, plus serde_json), cargo build --offline --release. Source, full run log, and the extra experiments are in the evidence folder of the first record of this set (title 'Spec 0010 spike: posix_spawn flags, fd map, argv, env, cwd').",
+    "Ran `spike0010 run target/debug/stackly-fake-server 60`. Test root under the darwin user temp folder (confstr _CS_DARWIN_USER_TEMP_DIR) at stackly-spike0010-<pid>/Test Root Ünï cödé, fake runtime copied to runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server and spawned by its canonical path, data and instance.lock under data/instances/<name>/, spools under run/i/<name>/. Every spawned pid was registered and killed or reaped at the end; the run's cleanup check found no leftover process, and the test root was removed.",
+    "Rows checked by the [exit] lines of output.txt."
+  ],
+  "reviewer": "Claude Opus 5.5 (session f10-spike, for ojiepermana)",
+  "startedAt": "2026-10-18T09:29:14.868632Z",
+  "finishedAt": "2026-10-18T09:29:27Z",
+  "evidencePath": "evidence/manual/files/01a14e58-0974-7134-bbe9-781d487e2d45/",
+  "context": {
+    "sourceCommit": "d99e5eaa1fc8c556adfae425ac020b4529be74f7",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
