@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a14e6c-9d4a-753b-ab25-2c87ae25f235",
+  "covers": [
+    "NFR-009"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Fuzz the four provider targets for 10 minutes each on this Mac",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "cargo xtask fuzz run runs provider_manifest, provider_template, provider_interpolation, and provider_settings_schema for 600 seconds each with the pinned nightly and cargo-fuzz and finds no crash, hang, or out of memory.",
+  "actual": "no crash, hang, or out of memory in any target and fuzz/artifacts/ empty; provider_manifest: 615381 runs in 601 s (1023 exec/s), cov 13390, ft 33496, corpus 1882 inputs, peak RSS 397 MB; provider_template: 111976 runs in 601 s (186 exec/s), cov 12947, ft 34395, corpus 1407 inputs, peak RSS 423 MB; provider_interpolation: 1197806 runs in 601 s (1993 exec/s), cov 1394, ft 4759, corpus 748 inputs, peak RSS 602 MB; provider_settings_schema: 3228942 runs in 601 s (5372 exec/s), cov 8572, ft 26062, corpus 1801 inputs, peak RSS 497 MB",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 863022a with a clean tree, use the pinned fuzz toolchain nightly-2026-10-17 and cargo-fuzz 0.13.2 that feature 6 installed on this Mac; `cargo xtask fuzz build` builds the four provider targets with AddressSanitizer (default)",
+    "the committed seeds come from providers/fake, providers/nats, providers/traefik, and the core fixture fake-command (`cargo xtask fuzz seed`): provider_manifest 4, provider_template 6, provider_interpolation 31, provider_settings_schema 4; a 20 second smoke run of each came first, so fuzz/corpus/<target> already held its inputs",
+    "run `cargo xtask fuzz run <target> --time 600` for provider_manifest, provider_template, provider_interpolation, and provider_settings_schema side by side; xtask checks both pins and fuzz/Cargo.lock, then runs libFuzzer with -max_len 262144, 262144, 4096, and 131072 and -max_total_time=600 on fuzz/corpus/<target> plus fuzz/seeds/<target>; the runs went from 2026-10-18T09:51:48Z to 10:01:52Z",
+    "check that each command exits 0 with `ran for 600 s without a crash`, that fuzz/artifacts/ holds no input for any target, and read the libFuzzer final stats",
+    "keep the head and tail of each log in this record's files folder (the middle NEW, REDUCE, and pulse progress lines are cut)"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5)",
+  "startedAt": "2026-10-18T09:51:43.434313Z",
+  "finishedAt": "2026-10-18T10:02:48.740794Z",
+  "evidencePath": "evidence/manual/files/01a14e6c-9d4a-753b-ab25-2c87ae25f235/",
+  "context": {
+    "sourceCommit": "863022a5d0b26c616fe5f12bee1879afee4bf412",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

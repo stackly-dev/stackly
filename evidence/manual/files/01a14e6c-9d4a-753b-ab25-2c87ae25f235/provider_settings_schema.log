@@ -1,0 +1,91 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on shared package cache
+    Blocking waiting for file lock on build directory
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.29s
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.09s
+     Running `fuzz/target/aarch64-apple-darwin/release/provider_settings_schema -artifact_prefix=fuzz/artifacts/provider_settings_schema/ -max_len=131072 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_settings_schema fuzz/seeds/provider_settings_schema`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1488510092
+INFO: Loaded 1 modules   (230797 inline 8-bit counters): 230797 [0x1034cfe10, 0x10350839d), 
+INFO: Loaded 1 PC tables (230797 PCs): 230797 [0x1035083a0,0x10388dc70), 
+INFO:      703 files found in fuzz/corpus/provider_settings_schema
+INFO:        4 files found in fuzz/seeds/provider_settings_schema
+INFO: seed corpus: files: 707 min: 1b max: 2592b total: 555627b rss: 45Mb
+#709	INITED cov: 7027 ft: 16525 corp: 538/378Kb exec/s: 0 rss: 123Mb
+#716	REDUCE cov: 7027 ft: 16525 corp: 538/378Kb lim: 2592 exec/s: 0 rss: 123Mb L: 45/2592 MS: 2 CrossOver-EraseBytes-
+#739	REDUCE cov: 7027 ft: 16525 corp: 538/378Kb lim: 2592 exec/s: 0 rss: 123Mb L: 138/2592 MS: 3 CopyPart-ShuffleBytes-EraseBytes-
+#891	REDUCE cov: 7027 ft: 16525 corp: 538/378Kb lim: 2592 exec/s: 0 rss: 124Mb L: 241/2592 MS: 2 ShuffleBytes-EraseBytes-
+#942	REDUCE cov: 7027 ft: 16525 corp: 538/378Kb lim: 2592 exec/s: 0 rss: 124Mb L: 158/2592 MS: 1 EraseBytes-
+#983	REDUCE cov: 7027 ft: 16525 corp: 538/378Kb lim: 2592 exec/s: 0 rss: 125Mb L: 28/2592 MS: 1 EraseBytes-
+#999	NEW    cov: 7027 ft: 16527 corp: 539/378Kb lim: 2592 exec/s: 0 rss: 125Mb L: 19/2592 MS: 1 CopyPart-
+#1035	REDUCE cov: 7027 ft: 16527 corp: 539/378Kb lim: 2592 exec/s: 0 rss: 125Mb L: 14/2592 MS: 1 EraseBytes-
+#1062	REDUCE cov: 7027 ft: 16527 corp: 539/378Kb lim: 2592 exec/s: 0 rss: 125Mb L: 35/2592 MS: 2 ChangeByte-EraseBytes-
+#1083	NEW    cov: 7027 ft: 16528 corp: 540/378Kb lim: 2592 exec/s: 0 rss: 125Mb L: 32/2592 MS: 1 EraseBytes-
+#1534	REDUCE cov: 7027 ft: 16528 corp: 540/378Kb lim: 2592 exec/s: 0 rss: 128Mb L: 32/2592 MS: 1 EraseBytes-
+#1726	REDUCE cov: 7027 ft: 16528 corp: 540/378Kb lim: 2592 exec/s: 0 rss: 129Mb L: 265/2592 MS: 2 ChangeBinInt-EraseBytes-
+#1803	NEW    cov: 7027 ft: 16529 corp: 541/378Kb lim: 2592 exec/s: 1803 rss: 129Mb L: 53/2592 MS: 2 CrossOver-ChangeByte-
+#1817	REDUCE cov: 7027 ft: 16529 corp: 541/378Kb lim: 2592 exec/s: 1817 rss: 130Mb L: 150/2592 MS: 4 ChangeASCIIInt-CopyPart-CopyPart-EraseBytes-
+#2214	NEW    cov: 7027 ft: 16532 corp: 542/378Kb lim: 2592 exec/s: 2214 rss: 131Mb L: 49/2592 MS: 2 ShuffleBytes-EraseBytes-
+#2408	REDUCE cov: 7027 ft: 16532 corp: 542/378Kb lim: 2592 exec/s: 2408 rss: 132Mb L: 57/2592 MS: 4 CrossOver-InsertRepeatedBytes-CMP-EraseBytes- DE: "\376\377\377\360"-
+#2490	NEW    cov: 7028 ft: 16533 corp: 543/378Kb lim: 2592 exec/s: 2490 rss: 132Mb L: 50/2592 MS: 2 ChangeBit-CopyPart-
+#2571	REDUCE cov: 7028 ft: 16533 corp: 543/378Kb lim: 2592 exec/s: 2571 rss: 132Mb L: 27/2592 MS: 1 EraseBytes-
+#2922	REDUCE cov: 7028 ft: 16533 corp: 543/378Kb lim: 2592 exec/s: 2922 rss: 135Mb L: 1112/2592 MS: 1 EraseBytes-
+#3098	REDUCE cov: 7028 ft: 16533 corp: 543/378Kb lim: 2592 exec/s: 3098 rss: 136Mb L: 7/2592 MS: 1 EraseBytes-
+#3159	NEW    cov: 7028 ft: 16535 corp: 544/380Kb lim: 2592 exec/s: 3159 rss: 137Mb L: 1668/2592 MS: 1 ChangeBinInt-
+#3365	REDUCE cov: 7028 ft: 16535 corp: 544/380Kb lim: 2592 exec/s: 3365 rss: 137Mb L: 12/2592 MS: 1 EraseBytes-
+#3386	REDUCE cov: 7028 ft: 16535 corp: 544/380Kb lim: 2592 exec/s: 3386 rss: 137Mb L: 31/2592 MS: 1 EraseBytes-
+#3482	REDUCE cov: 7028 ft: 16535 corp: 544/380Kb lim: 2592 exec/s: 3482 rss: 137Mb L: 42/2592 MS: 1 EraseBytes-
+#3647	REDUCE cov: 7028 ft: 16535 corp: 544/380Kb lim: 2592 exec/s: 3647 rss: 137Mb L: 41/2592 MS: 3 ShuffleBytes-ChangeByte-EraseBytes-
+#3663	REDUCE cov: 7028 ft: 16535 corp: 544/380Kb lim: 2592 exec/s: 3663 rss: 137Mb L: 142/2592 MS: 1 EraseBytes-
+#4059	REDUCE cov: 7028 ft: 16535 corp: 544/380Kb lim: 2592 exec/s: 4059 rss: 137Mb L: 9/2592 MS: 1 EraseBytes-
+#4280	REDUCE cov: 7028 ft: 16535 corp: 544/380Kb lim: 2592 exec/s: 4280 rss: 137Mb L: 122/2592 MS: 1 EraseBytes-
+#4366	NEW    cov: 7028 ft: 16536 corp: 545/380Kb lim: 2592 exec/s: 4366 rss: 137Mb L: 25/2592 MS: 1 ChangeBit-
+#4670	REDUCE cov: 7028 ft: 16536 corp: 545/380Kb lim: 2592 exec/s: 4670 rss: 137Mb L: 112/2592 MS: 4 ChangeBit-ChangeBit-ChangeBinInt-EraseBytes-
+#4676	REDUCE cov: 7028 ft: 16536 corp: 545/380Kb lim: 2592 exec/s: 4676 rss: 137Mb L: 81/2592 MS: 1 EraseBytes-
+#5369	REDUCE cov: 7028 ft: 16536 corp: 545/380Kb lim: 2592 exec/s: 5369 rss: 137Mb L: 37/2592 MS: 3 CrossOver-ShuffleBytes-EraseBytes-
+#5396	NEW    cov: 7028 ft: 16537 corp: 546/380Kb lim: 2592 exec/s: 2698 rss: 137Mb L: 15/2592 MS: 2 ChangeBinInt-EraseBytes-
+#5592	REDUCE cov: 7028 ft: 16537 corp: 546/380Kb lim: 2592 exec/s: 2796 rss: 137Mb L: 34/2592 MS: 1 EraseBytes-
+#5643	NEW    cov: 7030 ft: 16540 corp: 547/381Kb lim: 2592 exec/s: 2821 rss: 137Mb L: 1918/2592 MS: 1 InsertRepeatedBytes-
+#5770	REDUCE cov: 7030 ft: 16540 corp: 547/381Kb lim: 2592 exec/s: 2885 rss: 137Mb L: 8/2592 MS: 2 ChangeByte-EraseBytes-
+#6252	REDUCE cov: 7030 ft: 16540 corp: 547/381Kb lim: 2592 exec/s: 3126 rss: 137Mb L: 13/2592 MS: 2 ChangeByte-EraseBytes-
+#6333	REDUCE cov: 7030 ft: 16540 corp: 547/381Kb lim: 2592 exec/s: 3166 rss: 137Mb L: 340/2592 MS: 1 EraseBytes-
+#6370	REDUCE cov: 7030 ft: 16540 corp: 547/381Kb lim: 2592 exec/s: 3185 rss: 137Mb L: 18/2592 MS: 2 ChangeByte-EraseBytes-
+#6432	REDUCE cov: 7030 ft: 16540 corp: 547/381Kb lim: 2592 exec/s: 3216 rss: 137Mb L: 66/2592 MS: 2 CMP-EraseBytes- DE: "\377\377\377\377\377\377\377\000"-
+#6443	REDUCE cov: 7030 ft: 16540 corp: 547/381Kb lim: 2592 exec/s: 3221 rss: 137Mb L: 11/2592 MS: 1 EraseBytes-
+#6540	REDUCE cov: 7030 ft: 16540 corp: 547/381Kb lim: 2592 exec/s: 3270 rss: 137Mb L: 927/2592 MS: 2 ChangeBit-EraseBytes-
+[... 6630 lines of NEW, REDUCE, and pulse progress cut by the recorder ...]
+"\015\000\000\000\000\000\000\000" # Uses: 3048
+"\000\021\000\002" # Uses: 3095
+"\377\377" # Uses: 3048
+"\012\000" # Uses: 2988
+"\001\000\021\000" # Uses: 2820
+"\000\021\000\000" # Uses: 2338
+"\377\377\377\377\377\377\377\377" # Uses: 2186
+"\377\377\377\377\377\377\377\225" # Uses: 2177
+"\006\000\000\000\000\000\000\000" # Uses: 1828
+"\377\020\000\001" # Uses: 1955
+" \000\000\000" # Uses: 1879
+"\001\000\000\000\000\000\0008" # Uses: 1864
+"\024\000\000\000\000\000\000\000" # Uses: 1767
+"}\000\000\000\000\000\000\000" # Uses: 1817
+"\001\000" # Uses: 1696
+"\000\000\000\377" # Uses: 1507
+"\371\377\377\377" # Uses: 1550
+"\001\017" # Uses: 850
+"\000\000\000\013" # Uses: 593
+"\377\377\377\363" # Uses: 342
+"\001\000\000z" # Uses: 87
+###### End of recommended dictionary. ######
+Done 3228942 runs in 601 second(s)
+stat::number_of_executed_units: 3228942
+stat::average_exec_per_sec:     5372
+stat::new_units_added:          6576
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              497
+fuzz run: provider_settings_schema ran for 600 s without a crash
+exit=0
