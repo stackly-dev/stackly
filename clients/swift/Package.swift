@@ -10,6 +10,9 @@ let package = Package(
     targets: [
         // No MainActor default isolation: socket IO runs off the main actor.
         .target(name: "StacklyClient"),
+        // Evidence records for Swift tests (spec 0002). Only test targets depend on it.
+        .target(name: "StacklyTestSupport"),
         .testTarget(name: "StacklyClientTests", dependencies: ["StacklyClient"]),
+        .testTarget(name: "StacklyTestSupportTests", dependencies: ["StacklyTestSupport"]),
     ]
 )

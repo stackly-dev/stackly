@@ -35,7 +35,7 @@ Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang forma
 - [ ] Build the evidence standard: `/develop coding standards & tooling`
   - [x] Rust evidence path end to end: `stackly-evidence`, `check-deps` rules, `cargo xtask evidence run` (REQ-051)
   - [x] `cargo xtask evidence check` and `evidence new`, shared examples in `schemas/evidence/`
-  - [ ] Swift path: `StacklyTestSupport` trait
+  - [x] Swift path: `StacklyTestSupport` trait
   - [x] Fixture credential leak scan
   - [x] Baseline recorded on this Mac (OQ-011)
 - [ ] Verify it: `/check verify coding standards & tooling`
