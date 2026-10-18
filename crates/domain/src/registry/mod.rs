@@ -23,11 +23,11 @@ use crate::environment::Environment;
 use crate::id::{EnvironmentId, InstanceId, InvalidId, OperationId, RuntimeId};
 use crate::instance::Instance;
 use crate::lease::Lease;
-use crate::operation::Operation;
+use crate::operation::{JournalView, Operation, OperationJournal};
 use crate::provider::ProviderRevisionKey;
 use crate::runtime::{Runtime, RuntimeReferences};
 use crate::text::serde_as_text;
-use crate::value::{InstanceName, Sha256Digest};
+use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
 
 pub use batch::{Committed, Generation, Versioned, WriteBatch, WriteOp};
 pub use error::{BatchError, RegistryError, ResourceRef};
@@ -61,9 +61,17 @@ pub use retention::{PruneReport, RetentionPolicy};
 /// existing ID), the revision (`RevisionConflict`), references
 /// (`MissingReference`), and last the unique rules (`DuplicateRuntime`,
 /// `NameTaken`, `ShortKeyTaken`, `PathTaken`, `DedicatedOwnerExists`,
-/// `ActiveLeaseExists`, `SoftwareMismatch`). The first error found is the
-/// one returned, and nothing of the batch applies. A successful commit
-/// raises the generation by exactly 1, whatever it holds.
+/// `ActiveLeaseExists`, `SoftwareMismatch`, `IdempotencyKeyTaken`). The
+/// first error found is the one returned, and nothing of the batch applies.
+/// A successful commit raises the generation by exactly 1, whatever it
+/// holds.
+///
+/// # Operation journals
+///
+/// Each operation has one journal row with its steps, created items, and
+/// lock keys (spec 0007), written in the same batch as the operation and
+/// deleted with it when prune removes it. The journal reads leave out an
+/// operation that has no journal row.
 pub trait Registry: Send + Sync {
     /// Returns a provider revision by its key.
     ///
@@ -199,6 +207,51 @@ pub trait Registry: Send + Sync {
     /// Returns `InvalidQuery` for a limit outside 1 to 500, or `Corrupt`,
     /// `Busy`, `Unavailable`, or `Io`.
     fn operations(&self, query: OperationQuery) -> Result<Versioned<OperationPage>, RegistryError>;
+
+    /// Returns the journal of an operation with its steps, created items,
+    /// and lock keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn operation_journal(
+        &self,
+        id: OperationId,
+    ) -> Result<Versioned<Option<JournalView>>, RegistryError>;
+
+    /// Returns the journal rows of `ids` in one read, without steps,
+    /// created items, or locks, in the order of `ids`; an ID without a
+    /// journal is left out. A list page uses it.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn operation_journals(
+        &self,
+        ids: &[OperationId],
+    ) -> Result<Versioned<Vec<OperationJournal>>, RegistryError>;
+
+    /// Returns the operation that holds an idempotency key, with its
+    /// journal row.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn operation_by_idempotency_key(
+        &self,
+        key: &IdempotencyKey,
+    ) -> Result<Versioned<Option<(Operation, OperationJournal)>>, RegistryError>;
+
+    /// Returns every operation in `queued`, `running`, `cancel_requested`,
+    /// or `needs_recovery`, with its journal, ordered by `created_at` and
+    /// then ID, oldest first. The engine reads it when the daemon starts.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn unfinished_operations(
+        &self,
+    ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError>;
 
     /// Applies every op of `batch` in one transaction, or none of them.
     ///

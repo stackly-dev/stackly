@@ -14,7 +14,7 @@ pub use builders::{
     EnvironmentBuilder, InstanceBuilder, LeaseBuilder, OperationBuilder, ProviderRevisionBuilder,
     RuntimeBuilder,
 };
-pub use conformance::registry_conformance;
+pub use conformance::{registry_conformance, registry_journal_conformance};
 pub use fake::{FakeRegistry, WrittenAt};
 pub use seed::{BackupSeed, RegistrySeed, SecretReferenceSeed};
 

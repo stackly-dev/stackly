@@ -94,6 +94,40 @@ pub enum ValueKind {
     OperationKind,
     /// An [`Ownership`](crate::Ownership).
     Ownership,
+    /// A [`MethodName`](crate::MethodName).
+    MethodName,
+    /// An [`ErrorCodeName`](crate::ErrorCodeName).
+    ErrorCodeName,
+    /// A [`CompensatorName`](crate::CompensatorName).
+    CompensatorName,
+    /// A [`ClientCode`](crate::ClientCode).
+    ClientCode,
+    /// A [`DetailKey`](crate::DetailKey).
+    DetailKey,
+    /// A [`CustomItemKey`](crate::CustomItemKey).
+    CustomItemKey,
+    /// A [`JournalPayload`](crate::JournalPayload).
+    JournalPayload,
+    /// A [`StepSeq`](crate::StepSeq).
+    StepSeq,
+    /// A [`CreatedSeq`](crate::CreatedSeq).
+    CreatedSeq,
+    /// A [`StepState`](crate::StepState).
+    StepState,
+    /// A [`CreatedState`](crate::CreatedState).
+    CreatedState,
+    /// A [`CreatedItem`](crate::CreatedItem).
+    CreatedItem,
+    /// A [`TriggerOrigin`](crate::TriggerOrigin).
+    TriggerOrigin,
+    /// A [`RecoveryCause`](crate::RecoveryCause).
+    RecoveryCause,
+    /// A [`RecoveryHint`](crate::RecoveryHint).
+    RecoveryHint,
+    /// A [`FailureError`](crate::FailureError).
+    FailureError,
+    /// A [`LockKey`](crate::LockKey).
+    LockKey,
 }
 
 impl ValueKind {
@@ -141,6 +175,23 @@ impl ValueKind {
             Self::OperationState => "operation state",
             Self::OperationKind => "operation kind",
             Self::Ownership => "ownership",
+            Self::MethodName => "method name",
+            Self::ErrorCodeName => "error code name",
+            Self::CompensatorName => "compensator name",
+            Self::ClientCode => "client code",
+            Self::DetailKey => "detail key",
+            Self::CustomItemKey => "custom item key",
+            Self::JournalPayload => "journal payload",
+            Self::StepSeq => "step sequence number",
+            Self::CreatedSeq => "created item sequence number",
+            Self::StepState => "step state",
+            Self::CreatedState => "created item state",
+            Self::CreatedItem => "created item",
+            Self::TriggerOrigin => "trigger origin",
+            Self::RecoveryCause => "recovery cause",
+            Self::RecoveryHint => "recovery hint",
+            Self::FailureError => "failure error",
+            Self::LockKey => "lock key",
         }
     }
 }
@@ -198,6 +249,10 @@ pub enum Machine {
     InstanceLifecycle,
     /// The state of an operation.
     Operation,
+    /// The state of one step in an operation journal.
+    JournalStep,
+    /// The state of one item an operation recorded as created.
+    CreatedRecord,
 }
 
 impl Machine {
@@ -208,6 +263,8 @@ impl Machine {
             Self::Runtime => "runtime",
             Self::InstanceLifecycle => "instance_lifecycle",
             Self::Operation => "operation",
+            Self::JournalStep => "journal_step",
+            Self::CreatedRecord => "created_record",
         }
     }
 
@@ -219,6 +276,8 @@ impl Machine {
             Self::Runtime => "runtime",
             Self::InstanceLifecycle => "instance lifecycle",
             Self::Operation => "operation",
+            Self::JournalStep => "journal step",
+            Self::CreatedRecord => "created record",
         }
     }
 }
@@ -636,6 +695,37 @@ pub enum ProgressError {
         /// The operation's state.
         state: OperationState,
     },
+}
+
+/// Error returned when an operation journal value would break a rule of
+/// spec 0007: a payload over its limit, a payload on an item that takes
+/// none, a step run twice that is not repeatable, or a step or created
+/// record event its state does not accept. The value does not change.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum JournalError {
+    /// A payload is longer than its field allows.
+    #[error("{field} is {len} bytes, more than its {max} byte limit")]
+    PayloadTooLarge {
+        /// The field, for example `input` or `checkpoint`.
+        field: &'static str,
+        /// The payload's length in bytes.
+        len: usize,
+        /// The longest payload the field takes.
+        max: usize,
+    },
+    /// Only a custom item carries a payload.
+    #[error("only a custom item carries a payload")]
+    PayloadNotAllowed,
+    /// The step is not repeatable, so it runs at most once.
+    #[error("step {seq} is not repeatable")]
+    NotRepeatable {
+        /// The step's sequence number.
+        seq: u16,
+    },
+    /// The step or record does not accept the event in its state.
+    #[error(transparent)]
+    Transition(#[from] TransitionError),
 }
 
 impl ProgressError {

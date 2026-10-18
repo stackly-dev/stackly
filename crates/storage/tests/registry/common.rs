@@ -328,6 +328,7 @@ pub fn stored_operation(operation: &Operation) -> StoredOperation {
         stage: operation.stage().cloned(),
         progress: operation.progress(),
         failure: operation.failure().cloned(),
+        recovery_hint: operation.recovery_hint(),
         created_at: operation.created_at(),
         updated_at: operation.updated_at(),
         revision: operation.revision(),

@@ -18,11 +18,11 @@ use std::thread::JoinHandle;
 use jiff::Timestamp;
 use rusqlite::{Connection, Transaction};
 use stackly_domain::{
-    ArtifactRecord, BatchError, Committed, Environment, EnvironmentId, Instance, InstanceFilter,
-    InstanceId, InstanceName, InstancePathEntry, Lease, LeaseFilter, Operation, OperationId,
-    OperationPage, OperationQuery, ProviderRevisionKey, ProviderRevisionRecord, PruneReport,
-    Registry, RegistryError, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, Sha256Digest,
-    Versioned, WriteBatch,
+    ArtifactRecord, BatchError, Committed, Environment, EnvironmentId, IdempotencyKey, Instance,
+    InstanceFilter, InstanceId, InstanceName, InstancePathEntry, JournalView, Lease, LeaseFilter,
+    Operation, OperationId, OperationJournal, OperationPage, OperationQuery, ProviderRevisionKey,
+    ProviderRevisionRecord, PruneReport, Registry, RegistryError, RetentionPolicy, Runtime,
+    RuntimeId, RuntimeReferences, Sha256Digest, Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
@@ -235,6 +235,36 @@ impl Registry for SqliteRegistry {
         self.read(move |tx| read::operations(tx, &query))
     }
 
+    // provisional: F7 (spec 0007 build step 3 adds the journal tables and
+    // these reads; until then they fail, and the journal write ops fail
+    // with `Integrity` like every other op this registry does not know).
+    fn operation_journal(
+        &self,
+        _id: OperationId,
+    ) -> Result<Versioned<Option<JournalView>>, RegistryError> {
+        Err(no_journal_yet())
+    }
+
+    fn operation_journals(
+        &self,
+        _ids: &[OperationId],
+    ) -> Result<Versioned<Vec<OperationJournal>>, RegistryError> {
+        Err(no_journal_yet())
+    }
+
+    fn operation_by_idempotency_key(
+        &self,
+        _key: &IdempotencyKey,
+    ) -> Result<Versioned<Option<(Operation, OperationJournal)>>, RegistryError> {
+        Err(no_journal_yet())
+    }
+
+    fn unfinished_operations(
+        &self,
+    ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError> {
+        Err(no_journal_yet())
+    }
+
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
         let now = self.inner.clock.now();
         self.call(move |conn| write::commit(conn, &batch, now))
@@ -291,6 +321,14 @@ impl Drop for Inner {
 
 /// The registry thread: one command at a time until shutdown, then
 /// `PRAGMA optimize` and close.
+/// The error of a journal read before the journal tables exist.
+// provisional: F7 (spec 0007 build step 3)
+fn no_journal_yet() -> RegistryError {
+    RegistryError::Io {
+        detail: "the SQLite registry has no operation journal tables yet".to_owned(),
+    }
+}
+
 fn serve(mut conn: Connection, receiver: &Receiver<Message>) {
     while let Ok(Message::Run(job)) = receiver.recv() {
         job(&mut conn);

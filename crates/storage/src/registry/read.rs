@@ -571,8 +571,8 @@ pub(super) fn leases(
 // Operations.
 
 const OPERATION_COLUMNS: &str = "id, kind, resource_kind, resource_id, idempotency_key, state, \
-     stage, progress_done, progress_total, failure_code, failure_retryable, started_at, \
-     revision, created_at, updated_at";
+     stage, progress_done, progress_total, failure_code, failure_retryable, recovery_hint, \
+     started_at, revision, created_at, updated_at";
 
 /// Final operation states, as SQL.
 pub(super) const FINAL_OPERATION_STATES: &str = "('succeeded', 'failed', 'cancelled')";
@@ -695,6 +695,7 @@ fn stored_operation(cells: Cells<'_, '_>) -> Result<Operation, RegistryError> {
         stage: cells.opt_parse("stage")?,
         progress,
         failure,
+        recovery_hint: cells.opt_parse("recovery_hint")?,
         created_at: cells.ts("created_at")?,
         updated_at: cells.ts("updated_at")?,
         revision: cells.revision()?,

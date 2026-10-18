@@ -225,7 +225,10 @@ fn operation_events() -> Vec<(OperationEvent, Option<&'static str>)> {
             OperationEvent::Resolve(Outcome::Succeeded),
             Some("succeeded"),
         ),
-        (OperationEvent::Resolve(Outcome::Failed), Some("failed")),
+        (
+            OperationEvent::Resolve(Outcome::Failed(OperationFailure::new(reason(), false))),
+            Some("failed"),
+        ),
         (
             OperationEvent::Resolve(Outcome::Cancelled),
             Some("cancelled"),

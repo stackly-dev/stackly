@@ -12,10 +12,11 @@ use stackly_domain::{
     LeaseId, LeaseState, LifecycleEvent, LineCompatibility, NewInstance, NewOperation, NewRuntime,
     Operation, OperationCursor, OperationEvent, OperationFailure, OperationId, OperationKind,
     OperationQuery, OperationResource, OperationState, Ownership, Progress, ProviderRevision,
-    ProviderRevisionKey, ProviderRevisionRecord, PruneReport, ReadinessState, ReasonCode, Registry,
-    RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime, RuntimeEvent,
-    RuntimeId, RuntimeReferences, RuntimeState, StartupPolicy, StoredEnvironment, StoredInstance,
-    StoredLease, StoredOperation, StoredRuntime, UnixEndpoint, Versioned, WriteBatch, WriteOp,
+    ProviderRevisionKey, ProviderRevisionRecord, PruneReport, ReadinessState, ReasonCode,
+    RecoveryHint, Registry, RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime,
+    RuntimeEvent, RuntimeId, RuntimeReferences, RuntimeState, StartupPolicy, StoredEnvironment,
+    StoredInstance, StoredLease, StoredOperation, StoredRuntime, UnixEndpoint, Versioned,
+    WriteBatch, WriteOp,
 };
 
 /// Returns `2026-01-01T00:00:00Z` plus `seconds`.
@@ -164,6 +165,7 @@ fn stored_operation(operation: &Operation) -> StoredOperation {
         stage: operation.stage().cloned(),
         progress: operation.progress(),
         failure: operation.failure().cloned(),
+        recovery_hint: operation.recovery_hint(),
         created_at: operation.created_at(),
         updated_at: operation.updated_at(),
         revision: operation.revision(),
@@ -220,14 +222,15 @@ fn runtime_mutations_raise_the_revision_by_exactly_one_and_refusals_do_not() {
 }
 
 #[test]
-fn operation_mutations_raise_the_revision_by_exactly_one_and_refusals_do_not() {
+fn operation_changes_move_updated_at_and_only_touch_raises_the_revision() {
     let mut operation = operation();
+    let created = operation.updated_at();
     assert_eq!(operation.revision(), ResourceRevision::INITIAL);
 
     operation
         .set_progress(Progress::Counted { done: 1, total: 2 }, at(1))
         .unwrap_err();
-    assert_eq!(operation.revision(), ResourceRevision::INITIAL);
+    assert_eq!(operation.updated_at(), created);
     operation.apply(OperationEvent::Start, at(2)).unwrap();
     operation
         .set_progress(Progress::Counted { done: 1, total: 2 }, at(3))
@@ -235,9 +238,17 @@ fn operation_mutations_raise_the_revision_by_exactly_one_and_refusals_do_not() {
     operation
         .set_stage("downloading".parse().unwrap(), at(4))
         .unwrap();
+    assert_eq!(
+        (operation.revision(), operation.updated_at()),
+        (ResourceRevision::INITIAL, at(4))
+    );
 
-    assert_eq!(operation.revision(), revision(4));
-    assert_eq!(operation.updated_at(), at(4));
+    operation.touch(at(5));
+
+    assert_eq!(
+        (operation.revision(), operation.updated_at()),
+        (revision(2), at(5))
+    );
 }
 
 #[test]
@@ -443,6 +454,15 @@ fn restore_rejects_runtimes_operations_and_leases_that_break_an_invariant() {
     assert_eq!(
         inconsistent_reason(&err),
         "a failed operation has no failure"
+    );
+    let err = Operation::restore(StoredOperation {
+        recovery_hint: Some(RecoveryHint::Resume),
+        ..base.clone()
+    })
+    .unwrap_err();
+    assert_eq!(
+        inconsistent_reason(&err),
+        "a recovery hint is set outside needs_recovery"
     );
     let err = Operation::restore(StoredOperation {
         progress: Progress::Counted { done: 6, total: 5 },

@@ -15,10 +15,10 @@ use stackly_domain::{
     IdempotencyKey, InstallMode, Instance, InstanceId, InstanceLifecycle, IpEndpoint, Lease,
     LeaseHolder, LeaseId, LeaseState, LineCompatibility, Operation, OperationFailure, OperationId,
     OperationKind, OperationResource, OperationState, Os, Ownership, Port, PortRequest, Progress,
-    ProviderName, ProviderRevision, ProviderRevisionKey, ProviderRevisionRecord, ResourceRevision,
-    RevisionLabel, Runtime, RuntimeId, RuntimeLine, RuntimeState, Sha256Digest, SoftwareName,
-    StageName, StartupPolicy, StoredEnvironment, StoredInstance, StoredLease, StoredOperation,
-    StoredRuntime, Target, Transport, UnixEndpoint,
+    ProviderName, ProviderRevision, ProviderRevisionKey, ProviderRevisionRecord, RecoveryHint,
+    ResourceRevision, RevisionLabel, Runtime, RuntimeId, RuntimeLine, RuntimeState, Sha256Digest,
+    SoftwareName, StageName, StartupPolicy, StoredEnvironment, StoredInstance, StoredLease,
+    StoredOperation, StoredRuntime, Target, Transport, UnixEndpoint,
 };
 use uuid::Uuid;
 
@@ -827,6 +827,7 @@ impl OperationBuilder {
                 stage: None,
                 progress: Progress::Indeterminate,
                 failure: None,
+                recovery_hint: None,
                 created_at: FIXTURE_TIME,
                 updated_at: FIXTURE_TIME,
                 revision: ResourceRevision::INITIAL,
@@ -900,6 +901,13 @@ impl OperationBuilder {
         self
     }
 
+    /// Sets the recovery hint, which needs the state `needs_recovery`.
+    #[must_use]
+    pub const fn recovery_hint(mut self, hint: RecoveryHint) -> Self {
+        self.stored.recovery_hint = Some(hint);
+        self
+    }
+
     /// Sets when it was created, and when it was updated unless that was
     /// set.
     #[must_use]
@@ -926,7 +934,8 @@ impl OperationBuilder {
     ///
     /// # Panics
     ///
-    /// Panics for counted progress past its total.
+    /// Panics for counted progress past its total, or a recovery hint
+    /// outside `needs_recovery`.
     #[must_use]
     pub fn build(self) -> Operation {
         let mut stored = self.stored;

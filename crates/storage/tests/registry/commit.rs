@@ -652,6 +652,7 @@ fn operations_insert_once_and_update_with_compare_and_swap() {
     started
         .apply(stackly_domain::OperationEvent::Start, harness.now())
         .unwrap();
+    started.touch(harness.now());
 
     let err = harness.reject(vec![WriteOp::InsertOperation(operation.clone())]);
     assert!(
