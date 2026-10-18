@@ -1,0 +1,282 @@
+//! Writes: a batch of ops applied in one transaction, the registry's
+//! generation, and what a commit returns.
+
+use std::fmt;
+
+use crate::environment::Environment;
+use crate::instance::Instance;
+use crate::lease::Lease;
+use crate::operation::Operation;
+use crate::registry::error::{RegistryError, ResourceRef};
+use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord};
+use crate::runtime::{InstallMode, Runtime};
+use crate::value::ResourceRevision;
+
+/// The registry's generation: 0 when it is created, raised by exactly 1 by
+/// every successful commit, whatever the commit holds. Every read returns
+/// the generation of the snapshot it read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Generation(u64);
+
+impl Generation {
+    /// The generation of a new registry.
+    pub const ZERO: Self = Self(0);
+
+    /// Wraps a stored generation.
+    #[must_use]
+    pub const fn new(generation: u64) -> Self {
+        Self(generation)
+    }
+
+    /// Returns the number.
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    /// Returns the generation after this one.
+    ///
+    /// # Panics
+    ///
+    /// Panics at `u64::MAX`, which one commit per nanosecond would take
+    /// more than 500 years to reach.
+    #[must_use]
+    pub const fn next(self) -> Self {
+        Self(
+            self.0
+                .checked_add(1)
+                .expect("a registry generation never reaches u64::MAX"),
+        )
+    }
+}
+
+impl fmt::Display for Generation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+/// A value read from the registry with the generation of the read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Versioned<T> {
+    /// What was read.
+    pub value: T,
+    /// The generation it was read at, in the same read transaction.
+    pub generation: Generation,
+}
+
+impl<T> Versioned<T> {
+    /// Pairs a value with the generation it was read at.
+    #[must_use]
+    pub const fn new(value: T, generation: Generation) -> Self {
+        Self { value, generation }
+    }
+
+    /// Transforms the value and keeps the generation.
+    #[must_use]
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Versioned<U> {
+        Versioned {
+            value: f(self.value),
+            generation: self.generation,
+        }
+    }
+}
+
+/// One write in a [`WriteBatch`].
+///
+/// An insert carries an aggregate at revision 1. An update carries the
+/// aggregate after the domain raised its revision, and `expected`, the
+/// revision the caller read: the update applies only while the stored
+/// revision still equals `expected`, and the aggregate must carry
+/// `expected + 1`. Owner features add variants through spec 0005.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum WriteOp {
+    /// Records a provider revision. Fails with `DuplicateResource` when its
+    /// key exists.
+    InsertProviderRevision(ProviderRevisionRecord),
+    /// Records an artifact. Fails with `DuplicateResource` when its digest
+    /// exists.
+    InsertArtifact(ArtifactRecord),
+    /// Records a runtime and its dependencies.
+    InsertRuntime(Runtime),
+    /// Rewrites a runtime and its dependencies.
+    UpdateRuntime {
+        /// The runtime after the change.
+        runtime: Runtime,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+    },
+    /// Records an instance, its endpoints, and its seven paths, which the
+    /// registry derives from the ID.
+    InsertInstance(Instance),
+    /// Rewrites an instance and its endpoints; its paths never change.
+    UpdateInstance {
+        /// The instance after the change.
+        instance: Instance,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+    },
+    /// Records an environment and its members.
+    InsertEnvironment(Environment),
+    /// Rewrites an environment and its members.
+    UpdateEnvironment {
+        /// The environment after the change.
+        environment: Environment,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+    },
+    /// Records a lease.
+    InsertLease(Lease),
+    /// Rewrites a lease. A lease has no revision; it changes in the same
+    /// batch as the instance update that needs it.
+    UpdateLease(Lease),
+    /// Records an operation.
+    InsertOperation(Operation),
+    /// Rewrites an operation.
+    UpdateOperation {
+        /// The operation after the change.
+        operation: Operation,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+    },
+}
+
+impl WriteOp {
+    /// Returns the resource the op writes.
+    #[must_use]
+    pub fn resource(&self) -> ResourceRef {
+        match self {
+            Self::InsertProviderRevision(record) => {
+                ResourceRef::ProviderRevision(Box::new(record.revision.key().clone()))
+            }
+            Self::InsertArtifact(record) => ResourceRef::Artifact(record.sha256),
+            Self::InsertRuntime(runtime) | Self::UpdateRuntime { runtime, .. } => {
+                ResourceRef::Runtime(runtime.id())
+            }
+            Self::InsertInstance(instance) | Self::UpdateInstance { instance, .. } => {
+                ResourceRef::Instance(instance.id())
+            }
+            Self::InsertEnvironment(environment) | Self::UpdateEnvironment { environment, .. } => {
+                ResourceRef::Environment(environment.id())
+            }
+            Self::InsertLease(lease) | Self::UpdateLease(lease) => ResourceRef::Lease(lease.id()),
+            Self::InsertOperation(operation) | Self::UpdateOperation { operation, .. } => {
+                ResourceRef::Operation(operation.id())
+            }
+        }
+    }
+
+    /// Returns the revision of the aggregate the op writes, for the ops on
+    /// an aggregate that has one: runtime, instance, environment, and
+    /// operation. A commit returns these.
+    #[must_use]
+    pub fn revision(&self) -> Option<ResourceRevision> {
+        match self {
+            Self::InsertRuntime(runtime) | Self::UpdateRuntime { runtime, .. } => {
+                Some(runtime.revision())
+            }
+            Self::InsertInstance(instance) | Self::UpdateInstance { instance, .. } => {
+                Some(instance.revision())
+            }
+            Self::InsertEnvironment(environment) | Self::UpdateEnvironment { environment, .. } => {
+                Some(environment.revision())
+            }
+            Self::InsertOperation(operation) | Self::UpdateOperation { operation, .. } => {
+                Some(operation.revision())
+            }
+            Self::InsertProviderRevision(_)
+            | Self::InsertArtifact(_)
+            | Self::InsertLease(_)
+            | Self::UpdateLease(_) => None,
+        }
+    }
+
+    /// Returns `expected` of an update on an aggregate with a revision.
+    #[must_use]
+    pub const fn expected(&self) -> Option<ResourceRevision> {
+        match self {
+            Self::UpdateRuntime { expected, .. }
+            | Self::UpdateInstance { expected, .. }
+            | Self::UpdateEnvironment { expected, .. }
+            | Self::UpdateOperation { expected, .. } => Some(*expected),
+            _ => None,
+        }
+    }
+
+    /// Checks the shape of the values, the first step of every op in a
+    /// commit, before anything is read: the aggregate's revision (1 for an
+    /// insert, `expected + 1` for an update), then every path to store
+    /// being UTF-8. Fakes and the SQLite registry both call it, so they
+    /// fail the same way.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistryError::InvalidRevision`] or
+    /// [`RegistryError::NotUtf8Path`].
+    pub fn check_shape(&self) -> Result<(), RegistryError> {
+        if let Some(actual) = self.revision() {
+            let expected = self
+                .expected()
+                .map_or(ResourceRevision::INITIAL, ResourceRevision::next);
+            if actual != expected {
+                return Err(RegistryError::InvalidRevision {
+                    resource: self.resource(),
+                    expected,
+                    actual,
+                });
+            }
+        }
+        if let Self::InsertRuntime(runtime) | Self::UpdateRuntime { runtime, .. } = self
+            && let InstallMode::External { root, .. } = runtime.install()
+            && root.to_str().is_none()
+        {
+            return Err(RegistryError::NotUtf8Path {
+                field: "external_root",
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Ops applied together in one transaction: all of them, or none.
+///
+/// With `expected_generation`, the batch applies only while the registry is
+/// still at that generation, which guards checks the caller ran on what it
+/// read (endpoint conflicts, for example). A caller retries the read and
+/// the commit at most five times on `GenerationConflict`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct WriteBatch {
+    /// The generation the caller read, if the batch depends on it.
+    pub expected_generation: Option<Generation>,
+    /// The ops, applied in order.
+    pub ops: Vec<WriteOp>,
+}
+
+impl WriteBatch {
+    /// A batch of `ops` that does not depend on the generation.
+    #[must_use]
+    pub const fn new(ops: Vec<WriteOp>) -> Self {
+        Self {
+            expected_generation: None,
+            ops,
+        }
+    }
+
+    /// Returns the batch, applying only at `generation`.
+    #[must_use]
+    pub const fn at_generation(mut self, generation: Generation) -> Self {
+        self.expected_generation = Some(generation);
+        self
+    }
+}
+
+/// What a successful commit returns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Committed {
+    /// The registry's generation after the commit.
+    pub generation: Generation,
+    /// The new revision of each aggregate an op created or changed, in op
+    /// order.
+    pub revisions: Vec<(ResourceRef, ResourceRevision)>,
+}

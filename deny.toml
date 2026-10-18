@@ -14,7 +14,15 @@ targets = [
 # graph, and on yanked versions. Add an ignore only with a reason and an owner.
 unmaintained = "all"
 yanked = "deny"
-ignore = []
+ignore = [
+    # Owner: feature 9 (provider engine). serde_yaml_ng, the YAML crate of
+    # spec 0001, runs on unsafe-libyaml 0.2.11, archived upstream in 2024.
+    # The advisory is informational (unmaintained), not a vulnerability. The
+    # user chose to keep serde_yaml_ng (2026-10-18): provider.yaml is capped
+    # at 256 KiB, nested aliases fail fast (billion laughs test in
+    # stackly-core), and the manifest parser is fuzzed (spec 0009 AC-16).
+    { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml under serde_yaml_ng is unmaintained, kept by user decision; owner feature 9" },
+]
 
 [licenses]
 # Stackly is `MIT OR Apache-2.0`; only permissive licenses may enter the graph.

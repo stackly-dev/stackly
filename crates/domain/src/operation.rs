@@ -5,9 +5,9 @@
 use jiff::Timestamp;
 
 use crate::code::code_enum;
-use crate::error::{Machine, ProgressError, TransitionError};
+use crate::error::{InvariantDetail, InvariantError, Machine, ProgressError, TransitionError};
 use crate::id::{EnvironmentId, InstanceId, OperationId, RuntimeId};
-use crate::value::{FailureCode, IdempotencyKey, StageName};
+use crate::value::{FailureCode, IdempotencyKey, ResourceRevision, StageName};
 
 code_enum! {
     /// The state of an operation (PRD section 18.2).
@@ -274,7 +274,39 @@ pub struct NewOperation {
     pub created_at: Timestamp,
 }
 
+/// Every field of an [`Operation`] as the registry stores it, for
+/// [`Operation::restore`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredOperation {
+    /// The ID.
+    pub id: OperationId,
+    /// The kind of work.
+    pub kind: OperationKind,
+    /// What it works on.
+    pub resource: OperationResource,
+    /// The client's idempotency key, if any.
+    pub idempotency_key: Option<IdempotencyKey>,
+    /// The state.
+    pub state: OperationState,
+    /// When it first started.
+    pub started_at: Option<Timestamp>,
+    /// The current stage.
+    pub stage: Option<StageName>,
+    /// The progress.
+    pub progress: Progress,
+    /// The failure of a `fail` event.
+    pub failure: Option<OperationFailure>,
+    /// When it was created.
+    pub created_at: Timestamp,
+    /// When it last changed.
+    pub updated_at: Timestamp,
+    /// The revision.
+    pub revision: ResourceRevision,
+}
+
 /// One operation and where it stands.
+///
+/// Every successful mutation raises [`Operation::revision`] by exactly 1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Operation {
     id: OperationId,
@@ -288,11 +320,12 @@ pub struct Operation {
     failure: Option<OperationFailure>,
     created_at: Timestamp,
     updated_at: Timestamp,
+    revision: ResourceRevision,
 }
 
 impl Operation {
     /// Creates a `queued` operation that never started, with indeterminate
-    /// progress.
+    /// progress, at revision 1.
     #[must_use]
     pub fn new(new: NewOperation) -> Self {
         Self {
@@ -307,7 +340,45 @@ impl Operation {
             failure: None,
             created_at: new.created_at,
             updated_at: new.created_at,
+            revision: ResourceRevision::INITIAL,
         }
+    }
+
+    /// Rebuilds an operation the registry stored. Only the registry and
+    /// test fakes call it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvariantError`] with
+    /// [`InvariantDetail::InconsistentRecord`] when a `failed` operation has
+    /// no failure, or counted progress is past its total.
+    pub fn restore(stored: StoredOperation) -> Result<Self, InvariantError> {
+        let inconsistent = |reason| InvariantDetail::InconsistentRecord {
+            resource: "operation",
+            reason,
+        };
+        if stored.state == OperationState::Failed && stored.failure.is_none() {
+            return Err(inconsistent("a failed operation has no failure").into());
+        }
+        if let Progress::Counted { done, total } = stored.progress
+            && done > total
+        {
+            return Err(inconsistent("progress is past its total").into());
+        }
+        Ok(Self {
+            id: stored.id,
+            kind: stored.kind,
+            resource: stored.resource,
+            idempotency_key: stored.idempotency_key,
+            state: stored.state,
+            started_at: stored.started_at,
+            stage: stored.stage,
+            progress: stored.progress,
+            failure: stored.failure,
+            created_at: stored.created_at,
+            updated_at: stored.updated_at,
+            revision: stored.revision,
+        })
     }
 
     /// Returns the ID.
@@ -376,8 +447,15 @@ impl Operation {
         self.updated_at
     }
 
-    /// Applies `event` at `at`. The first `start` records `started_at`, and
-    /// `fail` records the failure.
+    /// Returns the revision: 1 when created, raised by exactly 1 per
+    /// successful mutation. The registry compares it before every update.
+    #[must_use]
+    pub const fn revision(&self) -> ResourceRevision {
+        self.revision
+    }
+
+    /// Applies `event` at `at` and raises the revision. The first `start`
+    /// records `started_at`, and `fail` records the failure.
     ///
     /// # Errors
     ///
@@ -397,11 +475,11 @@ impl Operation {
             _ => {}
         }
         self.state = next;
-        self.updated_at = at;
+        self.touch(at);
         Ok(next)
     }
 
-    /// Reports progress at `at`.
+    /// Reports progress at `at` and raises the revision.
     ///
     /// # Errors
     ///
@@ -416,11 +494,12 @@ impl Operation {
             return Err(ProgressError::OutOfRange { done, total });
         }
         self.progress = progress;
-        self.updated_at = at;
+        self.touch(at);
         Ok(())
     }
 
-    /// Reports the stage the operation entered at `at`.
+    /// Reports the stage the operation entered at `at` and raises the
+    /// revision.
     ///
     /// # Errors
     ///
@@ -429,8 +508,14 @@ impl Operation {
     pub fn set_stage(&mut self, stage: StageName, at: Timestamp) -> Result<(), ProgressError> {
         self.check_reporting()?;
         self.stage = Some(stage);
-        self.updated_at = at;
+        self.touch(at);
         Ok(())
+    }
+
+    /// Records a mutation at `at`.
+    const fn touch(&mut self, at: Timestamp) {
+        self.updated_at = at;
+        self.revision = self.revision.next();
     }
 
     /// Progress and stage change only while the work runs or winds down.

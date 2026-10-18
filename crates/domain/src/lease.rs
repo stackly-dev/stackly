@@ -50,6 +50,24 @@ impl LeaseState {
     }
 }
 
+/// Every field of a [`Lease`] as the registry stores it, for
+/// [`Lease::restore`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StoredLease {
+    /// The ID.
+    pub id: LeaseId,
+    /// The instance it keeps wanted.
+    pub instance_id: InstanceId,
+    /// Who holds it.
+    pub holder: LeaseHolder,
+    /// The login session, if any.
+    pub session: Option<SessionId>,
+    /// The state.
+    pub state: LeaseState,
+    /// When it was acquired.
+    pub acquired_at: Timestamp,
+}
+
 /// A claim that an instance should run.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Lease {
@@ -78,22 +96,44 @@ impl Lease {
         session: Option<SessionId>,
         acquired_at: Timestamp,
     ) -> Result<Self, InvariantError> {
-        match (holder, &session) {
-            (LeaseHolder::Environment(_), Some(_)) => {
-                Err(InvariantDetail::EnvironmentLeaseWithSession { lease: id }.into())
+        check_session(id, holder, session.as_ref())?;
+        Ok(Self {
+            id,
+            instance_id,
+            holder,
+            session,
+            state: LeaseState::Active,
+            acquired_at,
+        })
+    }
+
+    /// Rebuilds a lease the registry stored. Only the registry and test
+    /// fakes call it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`InvariantError`]s of [`Lease::new`] for the session,
+    /// and one with [`InvariantDetail::InconsistentRecord`] when a lease
+    /// other than a startup lease is `suppressed`.
+    pub fn restore(stored: StoredLease) -> Result<Self, InvariantError> {
+        check_session(stored.id, stored.holder, stored.session.as_ref())?;
+        if matches!(stored.state, LeaseState::Suppressed { .. })
+            && stored.holder != LeaseHolder::Startup
+        {
+            return Err(InvariantDetail::InconsistentRecord {
+                resource: "lease",
+                reason: "only a startup lease can be suppressed",
             }
-            (LeaseHolder::Startup, None) => {
-                Err(InvariantDetail::StartupLeaseWithoutSession { lease: id }.into())
-            }
-            _ => Ok(Self {
-                id,
-                instance_id,
-                holder,
-                session,
-                state: LeaseState::Active,
-                acquired_at,
-            }),
+            .into());
         }
+        Ok(Self {
+            id: stored.id,
+            instance_id: stored.instance_id,
+            holder: stored.holder,
+            session: stored.session,
+            state: stored.state,
+            acquired_at: stored.acquired_at,
+        })
     }
 
     /// Returns the ID.
@@ -171,6 +211,24 @@ impl Lease {
         } else {
             Err(InvariantDetail::SuppressNeedsActiveStartupLease { lease: self.id }.into())
         }
+    }
+}
+
+/// An environment lease never has a session, and a startup lease always
+/// has one.
+fn check_session(
+    id: LeaseId,
+    holder: LeaseHolder,
+    session: Option<&SessionId>,
+) -> Result<(), InvariantError> {
+    match (holder, session) {
+        (LeaseHolder::Environment(_), Some(_)) => {
+            Err(InvariantDetail::EnvironmentLeaseWithSession { lease: id }.into())
+        }
+        (LeaseHolder::Startup, None) => {
+            Err(InvariantDetail::StartupLeaseWithoutSession { lease: id }.into())
+        }
+        _ => Ok(()),
     }
 }
 
