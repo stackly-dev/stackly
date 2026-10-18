@@ -2,6 +2,7 @@
 //! implementation passes, so the fake and the SQLite registry cannot drift
 //! apart unnoticed (spec 0005, AC-8 to AC-11, AC-14, AC-16).
 
+mod journal;
 mod prune;
 mod races;
 mod reads;
@@ -29,8 +30,11 @@ use crate::FakeClock;
 /// It covers the commit check order, compare and swap on revisions, the
 /// generation, instance names and short keys, the stored instance paths,
 /// runtime references, leases and dedicated owners, round trips of every
-/// aggregate and state code, operation pages, retention, and three races of
-/// 16 threads (same name, same artifact, same revision).
+/// aggregate and state code, operation pages, the operation journal tables
+/// of spec 0007 (round trips, the check order of the journal ops and of
+/// `IdempotencyKeyTaken`, upserts that keep their children, unique rules,
+/// the four journal reads, and prune with cascade), retention, and three
+/// races of 16 threads (same name, same artifact, same revision).
 ///
 /// # What the caller provides
 ///
@@ -84,6 +88,7 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     reads::runtime_references(&suite);
     reads::operation_pages(&suite);
     reads::seeding(&suite);
+    journal::journal(&suite);
     races::races(&suite);
     prune::prune(&suite);
 }

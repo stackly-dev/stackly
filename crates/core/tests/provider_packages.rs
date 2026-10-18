@@ -18,6 +18,7 @@ use stackly_core::provider::{
 use stackly_domain::{
     Capability, ExactVersion, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
 };
+use stackly_evidence::{Kind, evidence};
 use stackly_platform::{DirectoryLayout, RootSet};
 use stackly_testkit::{FakePlatform, TestRoot};
 
@@ -231,6 +232,11 @@ fn fake_settings() -> serde_json::Value {
 
 #[test]
 fn the_fake_package_reads_without_writes_and_validates() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "providers/fake copied into a test root reads through the Filesystem port without a write and validates",
+    );
     let package = validated(&fake_dir());
 
     let key = package.key();
@@ -251,6 +257,7 @@ fn the_fake_package_reads_without_writes_and_validates() {
         ]
     );
     assert_eq!(package.provider_revision().key(), key);
+    ev.pass();
 }
 
 #[test]
@@ -361,6 +368,11 @@ fn plans_show_secrets_only_as_their_field() {
 
 #[test]
 fn every_argument_is_one_argv_element_as_written() {
+    let ev = evidence!(
+        covers = ["REQ-031", "AC-031"],
+        kind = Kind::Fixture,
+        expected = "a settings value full of shell metacharacters stays one argv element exactly as written, and the child env holds only HOME, PATH, and TMPDIR",
+    );
     let package = validated(&fake_dir());
     let context = golden_context(&package, fake_settings());
 
@@ -372,6 +384,7 @@ fn every_argument_is_one_argv_element_as_written() {
     assert_eq!(run.spawn.program.relative, Path::new("stackly-fake-server"));
     let keys: Vec<&str> = run.spawn.env.iter().map(|(key, _)| key.as_str()).collect();
     assert_eq!(keys, ["HOME", "PATH", "TMPDIR"]);
+    ev.pass();
 }
 
 #[test]
@@ -462,6 +475,11 @@ fn preflight_reads_the_fake_data_marker() {
 
 #[test]
 fn the_nats_package_reads_without_writes_and_validates() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "providers/nats copied into a test root reads through the Filesystem port without a write and validates",
+    );
     let package = validated(&nats_dir());
 
     let key = package.key();
@@ -485,6 +503,7 @@ fn the_nats_package_reads_without_writes_and_validates() {
         package.data_marker_path(&golden_context(&package, serde_json::json!({})).paths),
         None
     );
+    ev.pass();
 }
 
 #[test]
@@ -580,6 +599,11 @@ fn traefik_settings(count: usize) -> serde_json::Value {
 
 #[test]
 fn the_traefik_package_reads_without_writes_and_validates() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "providers/traefik with its routes list copied into a test root reads through the Filesystem port without a write and validates",
+    );
     let package = validated(&traefik_dir());
 
     let key = package.key();
@@ -594,6 +618,7 @@ fn the_traefik_package_reads_without_writes_and_validates() {
             .collect::<Vec<_>>(),
         [Capability::Reload, Capability::MultiInstance]
     );
+    ev.pass();
 }
 
 #[test]

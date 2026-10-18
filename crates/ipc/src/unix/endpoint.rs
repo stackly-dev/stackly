@@ -12,9 +12,7 @@ use tokio::net::UnixStream;
 
 use super::connection::FramedConnection;
 use crate::IpcError;
-
-/// Permission bits for the group and for others.
-const GROUP_OR_OTHER: u32 = 0o077;
+use crate::trust::{PathFacts, PathKind, folder_reason, socket_reason};
 
 /// Whose socket a client accepts. In production both uids are the
 /// client's own; tests give another `peer_uid` to exercise
@@ -63,34 +61,33 @@ pub fn verify_path(path: &Path, owner_uid: u32) -> Result<(), IpcError> {
         reason,
     };
     let socket = lstat(path, path)?;
-    let file_type = socket.file_type();
-    if file_type.is_symlink() {
-        return Err(untrusted(UntrustedReason::Symlink));
-    }
-    if !file_type.is_socket() {
-        return Err(untrusted(UntrustedReason::NotASocket));
-    }
-    if socket.uid() != owner_uid {
-        return Err(untrusted(UntrustedReason::WrongOwner));
-    }
-    if socket.mode() & GROUP_OR_OTHER != 0 {
-        return Err(untrusted(UntrustedReason::GroupOrOtherAccess));
+    if let Some(reason) = socket_reason(facts(&socket), owner_uid) {
+        return Err(untrusted(reason));
     }
     let folder = match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent,
         _ => Path::new("."),
     };
     let folder = lstat(folder, path)?;
-    if folder.file_type().is_symlink() {
-        return Err(untrusted(UntrustedReason::Symlink));
-    }
-    if folder.uid() != owner_uid {
-        return Err(untrusted(UntrustedReason::ParentWrongOwner));
-    }
-    if folder.mode() & GROUP_OR_OTHER != 0 {
-        return Err(untrusted(UntrustedReason::ParentGroupOrOtherAccess));
+    if let Some(reason) = folder_reason(facts(&folder), owner_uid) {
+        return Err(untrusted(reason));
     }
     Ok(())
+}
+
+/// The facts the trust rules read from `lstat` metadata.
+fn facts(metadata: &Metadata) -> PathFacts {
+    let file_type = metadata.file_type();
+    let kind = if file_type.is_symlink() {
+        PathKind::Symlink
+    } else if file_type.is_socket() {
+        PathKind::Socket
+    } else if file_type.is_dir() {
+        PathKind::Directory
+    } else {
+        PathKind::Other
+    };
+    PathFacts::new(kind, metadata.uid(), metadata.mode())
 }
 
 /// Checks that the server process on `stream` runs as `peer_uid`.

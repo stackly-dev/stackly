@@ -17,59 +17,69 @@ use crate::common::{
 };
 use crate::fixture::fixture;
 
-const REBUILD: Migration = Migration {
-    version: 2,
-    name: "rebuild_provider_revisions",
-    sql: include_str!("../fixtures/migrations/0002_rebuild_provider_revisions.sql"),
-};
+/// The newest built in schema version. The test migrations here come
+/// after it, so the tests keep working when a new built in version lands.
+fn latest() -> u32 {
+    MigrationSet::builtin().latest()
+}
 
-const FAILS_MIDWAY: Migration = Migration {
-    version: 2,
-    name: "fails_midway",
-    sql: include_str!("../fixtures/migrations/0002_fails_midway.sql"),
-};
+/// A test migration that rebuilds `provider_revisions` the 12 step way.
+fn rebuild() -> Migration {
+    Migration {
+        version: latest() + 1,
+        name: "rebuild_provider_revisions",
+        sql: include_str!("../fixtures/migrations/0002_rebuild_provider_revisions.sql"),
+    }
+}
 
-/// Five additive test migrations, versions 2 to 6.
-const CHAIN: [Migration; 5] = [
+/// A test migration that fails after its first statement.
+fn fails_midway() -> Migration {
     Migration {
-        version: 2,
-        name: "add_note_2",
-        sql: "ALTER TABLE settings ADD COLUMN note_2 TEXT;",
-    },
-    Migration {
-        version: 3,
-        name: "add_note_3",
-        sql: "ALTER TABLE settings ADD COLUMN note_3 TEXT;",
-    },
-    Migration {
-        version: 4,
-        name: "add_note_4",
-        sql: "ALTER TABLE settings ADD COLUMN note_4 TEXT;",
-    },
-    Migration {
-        version: 5,
-        name: "add_note_5",
-        sql: "ALTER TABLE settings ADD COLUMN note_5 TEXT;",
-    },
-    Migration {
-        version: 6,
-        name: "add_note_6",
-        sql: "ALTER TABLE settings ADD COLUMN note_6 TEXT;",
-    },
+        version: latest() + 1,
+        name: "fails_midway",
+        sql: include_str!("../fixtures/migrations/0002_fails_midway.sql"),
+    }
+}
+
+/// The names and SQL of five additive test migrations.
+const CHAIN: [(&str, &str); 5] = [
+    ("add_note_1", "ALTER TABLE settings ADD COLUMN note_1 TEXT;"),
+    ("add_note_2", "ALTER TABLE settings ADD COLUMN note_2 TEXT;"),
+    ("add_note_3", "ALTER TABLE settings ADD COLUMN note_3 TEXT;"),
+    ("add_note_4", "ALTER TABLE settings ADD COLUMN note_4 TEXT;"),
+    ("add_note_5", "ALTER TABLE settings ADD COLUMN note_5 TEXT;"),
 ];
 
-/// The built in set plus a version 2 whose SQL fails after its first
+/// The first `count` additive test migrations, after the built in ones.
+fn chain(count: u32) -> Vec<Migration> {
+    CHAIN
+        .iter()
+        .zip(1..=count)
+        .map(|((name, sql), step)| Migration {
+            version: latest() + step,
+            name,
+            sql,
+        })
+        .collect()
+}
+
+/// The built in set plus a next version whose SQL fails after its first
 /// statement. Its fingerprint is never reached.
 fn failing_set() -> MigrationSet {
     let builtin = MigrationSet::builtin();
-    let v1 = builtin
-        .fingerprint(1)
-        .expect("test setup step succeeds")
-        .to_owned();
-    MigrationSet::new(
-        vec![builtin.migrations()[0], FAILS_MIDWAY],
-        vec![(1, v1), (2, "0".repeat(64))],
-    )
+    let mut migrations = builtin.migrations().to_vec();
+    let mut fingerprints: Vec<(u32, String)> = migrations
+        .iter()
+        .map(|migration| {
+            let fingerprint = builtin
+                .fingerprint(migration.version)
+                .expect("test setup step succeeds");
+            (migration.version, fingerprint.to_owned())
+        })
+        .collect();
+    migrations.push(fails_midway());
+    fingerprints.push((latest() + 1, "0".repeat(64)));
+    MigrationSet::new(migrations, fingerprints)
 }
 
 fn read_only(path: &std::path::Path) -> Connection {
@@ -92,24 +102,28 @@ fn state(harness: &Harness) -> State {
 }
 
 #[test]
-fn migrating_the_v1_fixture_takes_a_verified_snapshot_and_keeps_the_data() {
+fn migrating_the_latest_fixture_takes_a_verified_snapshot_and_keeps_the_data() {
     let harness = Harness::new();
-    harness.load_fixture(&fixture(1));
+    let base = latest();
+    harness.load_fixture(&fixture(base));
     let before = row_counts(&harness.connect());
-    let options = OpenOptions::new().with_migrations(extended_set(&[REBUILD]));
+    let options = OpenOptions::new().with_migrations(extended_set(&[rebuild()]));
 
     let (registry, summary) = ready(harness.open_with(&options));
     drop(registry);
 
-    assert_eq!(summary.migrated_from, Some(1));
-    assert_eq!(summary.schema_version, 2);
+    assert_eq!(summary.migrated_from, Some(base));
+    assert_eq!(summary.schema_version, base + 1);
     let snapshot = summary.snapshot.expect("a migration takes a snapshot");
     let name = snapshot.file_name().unwrap().to_string_lossy().into_owned();
-    assert_eq!(name, "v1-to-v2-20260101T000000Z.sqlite");
+    assert_eq!(
+        name,
+        format!("v{base}-to-v{}-20260101T000000Z.sqlite", base + 1)
+    );
     assert_eq!(harness.snapshots(), [name]);
     assert_eq!(mode_of(&snapshot), 0o600);
     let copy = read_only(&snapshot);
-    assert_eq!(user_version(&copy), 1);
+    assert_eq!(user_version(&copy), i64::from(base));
     let application_id: i64 = copy
         .pragma_query_value(None, "application_id", |row| row.get(0))
         .unwrap();
@@ -117,7 +131,7 @@ fn migrating_the_v1_fixture_takes_a_verified_snapshot_and_keeps_the_data() {
     assert_eq!(row_counts(&copy), before);
 
     let conn = harness.connect();
-    assert_eq!(user_version(&conn), 2);
+    assert_eq!(user_version(&conn), i64::from(base + 1));
     let mut after = row_counts(&conn);
     after.retain(|(table, _)| table != "schema_migrations");
     let mut expected = before.clone();
@@ -169,23 +183,27 @@ fn five_migrations_in_a_row_keep_the_three_newest_snapshots() {
     let harness = Harness::new();
     harness.create();
 
-    for version in 2..=6_u32 {
+    let base = latest();
+
+    for step in 1..=5_u32 {
         harness.fake.clock().advance(SignedDuration::from_mins(1));
-        let set = extended_set(&CHAIN[..(version as usize - 1)]);
+        let set = extended_set(&chain(step));
         let (registry, summary) =
             ready(harness.open_with(&OpenOptions::new().with_migrations(set)));
         drop(registry);
-        assert_eq!(summary.migrated_from, Some(version - 1));
+        assert_eq!(summary.migrated_from, Some(base + step - 1));
     }
 
-    assert_eq!(
-        harness.snapshots(),
-        [
-            "v3-to-v4-20260101T000300Z.sqlite",
-            "v4-to-v5-20260101T000400Z.sqlite",
-            "v5-to-v6-20260101T000500Z.sqlite",
-        ]
-    );
+    let expected: Vec<String> = (3..=5_u32)
+        .map(|step| {
+            format!(
+                "v{}-to-v{}-20260101T000{step}00Z.sqlite",
+                base + step - 1,
+                base + step
+            )
+        })
+        .collect();
+    assert_eq!(harness.snapshots(), expected);
 }
 
 #[test]
@@ -198,7 +216,8 @@ fn failed_migration_enters_recovery_without_touching_the_registry() {
                     reuses both",
     );
     let harness = Harness::new();
-    harness.load_fixture(&fixture(1));
+    let base = latest();
+    harness.load_fixture(&fixture(base));
     let before = state(&harness);
     let options = OpenOptions::new().with_migrations(failing_set());
 
@@ -211,25 +230,25 @@ fn failed_migration_enters_recovery_without_touching_the_registry() {
             failed_version,
             error,
         } => {
-            assert_eq!((*from, *to, *failed_version), (1, 2, 2));
+            assert_eq!((*from, *to, *failed_version), (base, base + 1, base + 1));
             assert!(error.contains("no such table"), "{error}");
         }
         other => panic!("expected migration_failed, got {other:?}"),
     }
     assert_eq!(state(&harness), before, "the registry is unchanged");
-    assert_eq!(report.db_schema_version, Some(1));
-    assert_eq!(report.app_schema_version, 2);
+    assert_eq!(report.db_schema_version, Some(base));
+    assert_eq!(report.app_schema_version, base + 1);
     let snapshot = report
         .snapshot
         .clone()
         .expect("the report names the snapshot");
-    assert_eq!(snapshot.schema_version, 1);
+    assert_eq!(snapshot.schema_version, base);
     assert_eq!(sha256_of(&snapshot.path), snapshot.sha256);
     assert_eq!(state_of(&snapshot.path), before);
     let json: serde_json::Value = serde_json::from_slice(&fs::read(&report.path).unwrap()).unwrap();
     assert_eq!(json["schema"], RECOVERY_REPORT_SCHEMA);
     assert_eq!(json["reason"]["code"], "migration_failed");
-    assert_eq!(json["reason"]["failedVersion"], 2);
+    assert_eq!(json["reason"]["failedVersion"], base + 1);
     assert_eq!(json["snapshot"]["sha256"], snapshot.sha256);
     let registry_file = &report.files[0];
     assert_eq!(registry_file.name, "stackly.sqlite");
@@ -269,12 +288,12 @@ fn state_of(path: &std::path::Path) -> State {
 #[test]
 fn a_snapshot_that_cannot_be_written_is_backup_failed_and_nothing_migrates() {
     let harness = Harness::new();
-    harness.load_fixture(&fixture(1));
+    harness.load_fixture(&fixture(latest()));
     let before = state(&harness);
     let snapshots = harness.layout.registry_snapshots_dir();
     fs::create_dir(&snapshots).unwrap();
     fs::set_permissions(&snapshots, fs::Permissions::from_mode(0o500)).unwrap();
-    let options = OpenOptions::new().with_migrations(extended_set(&[REBUILD]));
+    let options = OpenOptions::new().with_migrations(extended_set(&[rebuild()]));
 
     let report = recovery(harness.open_with(&options));
     fs::set_permissions(&snapshots, fs::Permissions::from_mode(0o700)).unwrap();

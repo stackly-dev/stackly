@@ -1,5 +1,6 @@
 //! `cargo xtask fuzz list|build|seed|run`: the cargo-fuzz project in
-//! `fuzz/` (spec 0006, *Fuzzing*).
+//! `fuzz/` (spec 0006, *Fuzzing*), with the IPC targets of spec 0006 and
+//! the provider targets of spec 0009.
 //!
 //! `fuzz/` is its own workspace and builds only with the dated nightly
 //! [`FUZZ_TOOLCHAIN`], so the stable toolchain of the main workspace never
@@ -42,6 +43,24 @@ const IPC_FIXTURES: &str = "protocols/fixtures/ipc";
 /// The first byte of every `ipc_frame_decode` seed. The harness reads its
 /// chunk sizes from that byte, so the vector bytes follow it unchanged.
 const FRAME_CHUNK_SEED: u8 = 0;
+/// The example packages and the core fixture package the provider targets
+/// take their seeds from (spec 0009, *Fuzz target*), as short name and
+/// folder.
+const PROVIDER_PACKAGES: [(&str, &str); 4] = [
+    ("fake", "providers/fake"),
+    ("nats", "providers/nats"),
+    ("traefik", "providers/traefik"),
+    (
+        "fake-command",
+        "crates/core/tests/fixtures/packages/fake-command",
+    ),
+];
+/// The longest `provider.yaml` or template input: the 256 KiB file limit.
+const PROVIDER_FILE_MAX_LEN: usize = 262_144;
+/// The longest settings schema input: the 128 KiB file limit.
+const SETTINGS_SCHEMA_MAX_LEN: usize = 131_072;
+/// The longest manifest field the interpolation target tries.
+const INTERPOLATION_MAX_LEN: usize = 4096;
 
 const USAGE: &str =
     "cargo xtask fuzz list | build [<target>] | seed | run <target> [--time <seconds>]";
@@ -72,6 +91,30 @@ const TARGETS: &[Target] = &[
         crate_dir: "crates/protocol",
         max_len: IPC_MAX_LEN,
         seeds: request_fixture_seeds,
+    },
+    Target {
+        name: "provider_manifest",
+        crate_dir: "crates/core",
+        max_len: PROVIDER_FILE_MAX_LEN,
+        seeds: provider_manifest_seeds,
+    },
+    Target {
+        name: "provider_template",
+        crate_dir: "crates/core",
+        max_len: PROVIDER_FILE_MAX_LEN,
+        seeds: provider_template_seeds,
+    },
+    Target {
+        name: "provider_interpolation",
+        crate_dir: "crates/core",
+        max_len: INTERPOLATION_MAX_LEN,
+        seeds: provider_interpolation_seeds,
+    },
+    Target {
+        name: "provider_settings_schema",
+        crate_dir: "crates/core",
+        max_len: SETTINGS_SCHEMA_MAX_LEN,
+        seeds: provider_settings_schema_seeds,
     },
 ];
 
@@ -396,6 +439,98 @@ fn request_fixture_seeds(root: &Path) -> Result<Vec<Seed>> {
         .collect()
 }
 
+/// `provider_manifest`: the `provider.yaml` of every example package.
+fn provider_manifest_seeds(root: &Path) -> Result<Vec<Seed>> {
+    PROVIDER_PACKAGES
+        .iter()
+        .map(|(name, dir)| {
+            Ok(Seed {
+                name: format!("{name}.provider.yaml"),
+                bytes: read(root, &format!("{dir}/provider.yaml"))?,
+            })
+        })
+        .collect()
+}
+
+/// `provider_template`: every template of the example packages after the
+/// selector byte of its setup: 0 for `json`, 1 for `yaml`, 2 for
+/// `natsConf`, and 3 for the traefik routes template, which the harness
+/// renders with a list.
+fn provider_template_seeds(root: &Path) -> Result<Vec<Seed>> {
+    let mut seeds = Vec::new();
+    for (name, dir) in PROVIDER_PACKAGES {
+        let templates = format!("{dir}/templates");
+        let mut files: Vec<String> = fs::read_dir(root.join(&templates))
+            .with_context(|| format!("cannot read {templates}"))?
+            .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
+            .collect::<Result<_>>()?;
+        files.sort();
+        for file in files {
+            let selector: u8 = if name == "traefik" && file == "routes.yaml.tmpl" {
+                3
+            } else if file.ends_with(".json.tmpl") {
+                0
+            } else if file.ends_with(".conf.tmpl") {
+                2
+            } else {
+                1
+            };
+            let mut bytes = vec![selector];
+            bytes.extend(read(root, &format!("{templates}/{file}"))?);
+            seeds.push(Seed {
+                name: format!("{name}.{file}"),
+                bytes,
+            });
+        }
+    }
+    Ok(seeds)
+}
+
+/// `provider_interpolation`: every quoted string holding `${` in the
+/// manifests and settings schemas of the example packages, once each, in
+/// the order they first appear.
+fn provider_interpolation_seeds(root: &Path) -> Result<Vec<Seed>> {
+    let mut texts: Vec<String> = Vec::new();
+    for (_, dir) in PROVIDER_PACKAGES {
+        for file in ["provider.yaml", "schemas/settings.schema.json"] {
+            let text = String::from_utf8(read(root, &format!("{dir}/{file}"))?)
+                .with_context(|| format!("{dir}/{file} is not UTF-8"))?;
+            for quoted in text.split('"').skip(1).step_by(2) {
+                if quoted.contains("${") && !texts.iter().any(|seen| seen == quoted) {
+                    texts.push(quoted.to_owned());
+                }
+            }
+        }
+    }
+    Ok(texts
+        .into_iter()
+        .enumerate()
+        .map(|(index, text)| Seed {
+            name: format!("field-{:02}", index + 1),
+            bytes: text.into_bytes(),
+        })
+        .collect())
+}
+
+/// `provider_settings_schema`: the settings schema of every example
+/// package.
+fn provider_settings_schema_seeds(root: &Path) -> Result<Vec<Seed>> {
+    PROVIDER_PACKAGES
+        .iter()
+        .map(|(name, dir)| {
+            Ok(Seed {
+                name: format!("{name}.settings.schema.json"),
+                bytes: read(root, &format!("{dir}/schemas/settings.schema.json"))?,
+            })
+        })
+        .collect()
+}
+
+/// Reads a repository file.
+fn read(root: &Path, path: &str) -> Result<Vec<u8>> {
+    fs::read(root.join(path)).with_context(|| format!("cannot read {path}"))
+}
+
 fn unhex(text: &str) -> Result<Vec<u8>> {
     if !text.len().is_multiple_of(2) {
         bail!("odd hex length");
@@ -509,6 +644,44 @@ mod tests {
                 .iter()
                 .all(|name| name.starts_with("request-") || name.starts_with("reject-"))
         );
+    }
+
+    #[test]
+    fn provider_seeds_come_from_every_example_package() {
+        let root = repo_root();
+        let manifests = provider_manifest_seeds(&root).unwrap();
+        let names: Vec<&str> = manifests.iter().map(|seed| seed.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "fake.provider.yaml",
+                "nats.provider.yaml",
+                "traefik.provider.yaml",
+                "fake-command.provider.yaml"
+            ]
+        );
+        let templates = provider_template_seeds(&root).unwrap();
+        let selector = |name: &str| {
+            templates
+                .iter()
+                .find(|seed| seed.name == name)
+                .map(|seed| seed.bytes[0])
+                .unwrap()
+        };
+        assert_eq!(selector("fake.fake.json.tmpl"), 0);
+        assert_eq!(selector("nats.nats.conf.tmpl"), 2);
+        assert_eq!(selector("traefik.traefik.yaml.tmpl"), 1);
+        assert_eq!(selector("traefik.routes.yaml.tmpl"), 3);
+        let fields = provider_interpolation_seeds(&root).unwrap();
+        let texts: Vec<&[u8]> = fields.iter().map(|seed| seed.bytes.as_slice()).collect();
+        assert!(texts.contains(&b"--data=${instance.data}".as_slice()));
+        assert!(texts.contains(&b"${instance.config}/dynamic".as_slice()));
+        assert!(
+            texts
+                .iter()
+                .all(|text| text.windows(2).any(|pair| pair == b"${"))
+        );
+        assert_eq!(provider_settings_schema_seeds(&root).unwrap().len(), 4);
     }
 
     #[test]

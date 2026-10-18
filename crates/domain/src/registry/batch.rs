@@ -4,9 +4,10 @@
 use std::fmt;
 
 use crate::environment::Environment;
+use crate::id::OperationId;
 use crate::instance::Instance;
 use crate::lease::Lease;
-use crate::operation::Operation;
+use crate::operation::{CreatedRecord, JournalStep, LockKey, Operation, OperationJournal};
 use crate::registry::error::{RegistryError, ResourceRef};
 use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord};
 use crate::runtime::{InstallMode, Runtime};
@@ -140,6 +141,45 @@ pub enum WriteOp {
         /// The revision the caller read.
         expected: ResourceRevision,
     },
+    /// Records the journal row of an operation (spec 0007). Fails with
+    /// `DuplicateResource` when the operation has one, and
+    /// `MissingReference` when the operation does not exist.
+    InsertJournal(OperationJournal),
+    /// Rewrites the journal row of an operation. Fails with `NotFound`
+    /// when it has none.
+    UpdateJournal(OperationJournal),
+    /// Records or rewrites one step of an operation, by its `seq`. Fails
+    /// with `MissingReference` when the operation does not exist.
+    UpsertStep {
+        /// The operation.
+        operation: OperationId,
+        /// The step.
+        step: JournalStep,
+    },
+    /// Records or rewrites one created item of an operation, by its `seq`.
+    /// Fails with `MissingReference` when the operation does not exist, or
+    /// a new record names a step the operation does not have.
+    UpsertCreated {
+        /// The operation.
+        operation: OperationId,
+        /// The record.
+        record: CreatedRecord,
+    },
+    /// Records the lock keys an operation needs. Fails with
+    /// `MissingReference` when the operation does not exist, and with
+    /// `NotUtf8Path` for an external root that is not UTF-8.
+    InsertLocks {
+        /// The operation.
+        operation: OperationId,
+        /// The keys.
+        keys: Vec<LockKey>,
+    },
+    /// Deletes every lock key of an operation, at its final commit. Fails
+    /// with `MissingReference` when the operation does not exist.
+    DeleteLocks {
+        /// The operation.
+        operation: OperationId,
+    },
 }
 
 impl WriteOp {
@@ -164,6 +204,29 @@ impl WriteOp {
             Self::InsertOperation(operation) | Self::UpdateOperation { operation, .. } => {
                 ResourceRef::Operation(operation.id())
             }
+            Self::InsertJournal(journal) | Self::UpdateJournal(journal) => {
+                ResourceRef::Operation(journal.operation_id())
+            }
+            Self::UpsertStep { operation, .. }
+            | Self::UpsertCreated { operation, .. }
+            | Self::InsertLocks { operation, .. }
+            | Self::DeleteLocks { operation } => ResourceRef::Operation(*operation),
+        }
+    }
+
+    /// Returns the operation whose journal rows the op writes, for the
+    /// journal ops.
+    #[must_use]
+    pub const fn journal_operation(&self) -> Option<OperationId> {
+        match self {
+            Self::InsertJournal(journal) | Self::UpdateJournal(journal) => {
+                Some(journal.operation_id())
+            }
+            Self::UpsertStep { operation, .. }
+            | Self::UpsertCreated { operation, .. }
+            | Self::InsertLocks { operation, .. }
+            | Self::DeleteLocks { operation } => Some(*operation),
+            _ => None,
         }
     }
 
@@ -188,7 +251,13 @@ impl WriteOp {
             Self::InsertProviderRevision(_)
             | Self::InsertArtifact(_)
             | Self::InsertLease(_)
-            | Self::UpdateLease(_) => None,
+            | Self::UpdateLease(_)
+            | Self::InsertJournal(_)
+            | Self::UpdateJournal(_)
+            | Self::UpsertStep { .. }
+            | Self::UpsertCreated { .. }
+            | Self::InsertLocks { .. }
+            | Self::DeleteLocks { .. } => None,
         }
     }
 
@@ -207,8 +276,8 @@ impl WriteOp {
     /// Checks the shape of the values, the first step of every op in a
     /// commit, before anything is read: the aggregate's revision (1 for an
     /// insert, `expected + 1` for an update), then every path to store
-    /// being UTF-8. Fakes and the SQLite registry both call it, so they
-    /// fail the same way.
+    /// being UTF-8, lock keys included. Fakes and the SQLite registry both
+    /// call it, so they fail the same way.
     ///
     /// # Errors
     ///
@@ -234,6 +303,11 @@ impl WriteOp {
             return Err(RegistryError::NotUtf8Path {
                 field: "external_root",
             });
+        }
+        if let Self::InsertLocks { keys, .. } = self
+            && keys.iter().any(|key| key.to_text().is_none())
+        {
+            return Err(RegistryError::NotUtf8Path { field: "lock_key" });
         }
         Ok(())
     }

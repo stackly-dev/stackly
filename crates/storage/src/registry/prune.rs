@@ -1,5 +1,7 @@
 //! Retention: deleting history beyond a [`RetentionPolicy`] (NFR-011),
-//! at most [`PRUNE_BATCH_ROWS`] rows per transaction.
+//! at most [`PRUNE_BATCH_ROWS`] rows per transaction, and at most
+//! [`OPERATION_PRUNE_BATCH_ROWS`] operations, whose journal rows go with
+//! them by cascade (spec 0007).
 //!
 //! Each batch recomputes which rows lie beyond the limits. The set is
 //! stable while batches delete it: a row past an age limit is older than
@@ -15,6 +17,10 @@ use super::read::FINAL_OPERATION_STATES;
 
 /// The most rows one prune transaction deletes.
 pub(super) const PRUNE_BATCH_ROWS: usize = 5_000;
+
+/// The most operations one prune transaction deletes. Each one cascades to
+/// its journal, steps, created items, and lock keys.
+pub(super) const OPERATION_PRUNE_BATCH_ROWS: usize = 500;
 
 /// One kind of history a prune deletes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +43,16 @@ impl History {
         Self::ReleasedLeases,
         Self::ProcessObservations,
     ];
+
+    /// The most rows of this kind one transaction deletes.
+    pub(super) const fn batch_rows(self) -> usize {
+        match self {
+            Self::Operations => OPERATION_PRUNE_BATCH_ROWS,
+            Self::AuditEvents | Self::ReleasedLeases | Self::ProcessObservations => {
+                PRUNE_BATCH_ROWS
+            }
+        }
+    }
 }
 
 /// A [`RetentionPolicy`] measured from one `now`, in the form the delete
@@ -76,8 +92,8 @@ fn cutoff(now: Timestamp, age: std::time::Duration) -> String {
         .map_or_else(String::new, ts)
 }
 
-/// Deletes up to [`PRUNE_BATCH_ROWS`] rows of `history` beyond `limits` in
-/// one transaction, and returns how many it deleted.
+/// Deletes up to [`History::batch_rows`] rows of `history` beyond `limits`
+/// in one transaction, and returns how many it deleted.
 pub(super) fn delete_batch(
     conn: &mut Connection,
     limits: &Limits,
@@ -86,7 +102,7 @@ pub(super) fn delete_batch(
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sql_error)?;
-    let batch = i64::try_from(PRUNE_BATCH_ROWS).unwrap_or(i64::MAX);
+    let batch = i64::try_from(history.batch_rows()).unwrap_or(i64::MAX);
     let deleted = match history {
         History::Operations => tx.execute(
             &format!(
@@ -143,5 +159,17 @@ mod tests {
         assert_eq!(cutoff(now, Duration::ZERO), ts(now));
         assert_eq!(cutoff(now, Duration::MAX), "");
         assert_eq!(cutoff(now, Duration::from_secs(400_000 * 365 * 86_400)), "");
+    }
+
+    #[test]
+    fn operations_prune_500_per_transaction_and_other_history_5000() {
+        assert_eq!(History::Operations.batch_rows(), 500);
+        for history in [
+            History::AuditEvents,
+            History::ReleasedLeases,
+            History::ProcessObservations,
+        ] {
+            assert_eq!(history.batch_rows(), 5_000);
+        }
     }
 }

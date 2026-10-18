@@ -17,6 +17,9 @@
 //! [`InstanceBuilder`], and the rest), and every `Registry` implementation
 //! runs [`registry_conformance`] (spec 0005).
 //!
+//! Tests of the daemon run the real `stacklyd` through [`SpawnedDaemon`],
+//! which never lets the process outlive the test (spec 0006).
+//!
 //! Tests that need a process to supervise run the dummy server from
 //! [`fake_server::binary`], which builds `stackly-fake-server` once per
 //! test process (spec 0009).
@@ -44,6 +47,8 @@ mod fifo;
 mod port;
 #[cfg(unix)]
 mod registry;
+#[cfg(unix)]
+mod spawned_daemon;
 mod test_root;
 
 #[cfg(unix)]
@@ -65,5 +70,7 @@ pub use registry::{
     ProviderRevisionBuilder, RegistrySeed, RuntimeBuilder, SecretReferenceSeed, WrittenAt,
     registry_conformance,
 };
+#[cfg(unix)]
+pub use spawned_daemon::{DAEMON_START_TIMEOUT, DAEMON_STOP_TIMEOUT, SpawnedDaemon};
 pub use stackly_evidence as evidence;
 pub use test_root::TestRoot;

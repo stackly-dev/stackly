@@ -15,8 +15,6 @@ pub(crate) const DATA_DIR: &str = "Library/Application Support/Stackly";
 pub(crate) const LOGS_DIR: &str = "Library/Logs/Stackly";
 /// Cache root, relative to the home directory.
 pub(crate) const CACHE_DIR: &str = "Library/Caches/Stackly";
-/// Runtime root, relative to the user's temporary directory.
-pub(crate) const RUNTIME_DIR: &str = "stackly";
 
 /// First buffer size for `getpwuid_r`; doubled on `ERANGE`.
 const PASSWD_BUF_START: usize = 1024;

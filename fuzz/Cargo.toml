@@ -18,6 +18,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+stackly-core = { path = "../crates/core" }
 stackly-protocol = { path = "../crates/protocol" }
 
 [[bin]]
@@ -30,6 +31,34 @@ bench = false
 [[bin]]
 name = "ipc_request_decode"
 path = "fuzz_targets/ipc_request_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "provider_manifest"
+path = "fuzz_targets/provider_manifest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "provider_template"
+path = "fuzz_targets/provider_template.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "provider_interpolation"
+path = "fuzz_targets/provider_interpolation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "provider_settings_schema"
+path = "fuzz_targets/provider_settings_schema.rs"
 test = false
 doc = false
 bench = false

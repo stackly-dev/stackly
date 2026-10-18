@@ -27,6 +27,17 @@ const SHORT_KEY_LEN: usize = 8;
 const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
 /// FNV-1a 64 bit prime.
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+/// Name of the default runtime root under the user's temporary directory.
+const DEFAULT_RUNTIME_DIR: &str = "stackly";
+
+/// Returns the default runtime root, `temp/stackly`, for the user's private
+/// temporary directory `temp`. A trailing `/` on `temp` gives the same
+/// path. The Swift client computes the same path from the same bytes
+/// (spec 0013, `protocols/fixtures/layout/socket-paths.json`).
+#[must_use]
+pub fn default_runtime_root(temp: &Path) -> PathBuf {
+    temp.join(DEFAULT_RUNTIME_DIR)
+}
 
 /// Resolves the per user roots Stackly owns.
 pub trait DirectoryResolver: Send + Sync {

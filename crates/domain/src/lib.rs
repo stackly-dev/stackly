@@ -40,8 +40,8 @@ pub use endpoint::{
 };
 pub use environment::{Environment, EnvironmentMember, Ownership, StoredEnvironment};
 pub use error::{
-    DomainError, InvariantDetail, InvariantError, Machine, ProgressError, TransitionError,
-    ValueError, ValueKind,
+    DomainError, InvariantDetail, InvariantError, JournalError, Machine, ProgressError,
+    TransitionError, ValueError, ValueKind,
 };
 pub use id::{
     BackupId, EnvironmentId, InstanceId, InvalidId, LeaseId, OperationId, RuntimeId, ShortKey,
@@ -63,8 +63,11 @@ pub use observation::{
     ReadinessState,
 };
 pub use operation::{
-    NewOperation, Operation, OperationEvent, OperationFailure, OperationKind, OperationResource,
-    OperationState, Outcome, Progress, StoredOperation,
+    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, JournalPayload,
+    JournalStep, JournalView, LockKey, NewJournal, NewOperation, NewStep, Operation,
+    OperationEvent, OperationFailure, OperationJournal, OperationKind, OperationResource,
+    OperationState, OperationTrigger, Outcome, Progress, RecoveryCause, RecoveryHint, StepSeq,
+    StepState, StoredCreatedRecord, StoredJournal, StoredOperation, StoredStep, TriggerOrigin,
 };
 pub use provider::{
     AcceptedRevisionChange, LineCompatibility, ProviderRevision, ProviderRevisionKey,
@@ -82,7 +85,8 @@ pub use runtime::{
 };
 pub use target::{Arch, Os, Target, native_support};
 pub use value::{
-    DisplayName, EndpointName, EnvironmentName, ExactVersion, FailureCode, IdempotencyKey,
-    InstanceName, MemberAlias, ObservationDetail, Port, ProviderName, ReasonCode, ResourceRevision,
+    ClientCode, CompensatorName, CustomItemKey, DetailKey, DisplayName, EndpointName,
+    EnvironmentName, ErrorCodeName, ExactVersion, FailureCode, IdempotencyKey, InstanceName,
+    MemberAlias, MethodName, ObservationDetail, Port, ProviderName, ReasonCode, ResourceRevision,
     RevisionLabel, RuntimeLine, SessionId, Sha256Digest, SocketName, SoftwareName, StageName,
 };

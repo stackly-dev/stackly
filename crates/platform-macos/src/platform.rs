@@ -3,10 +3,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use stackly_platform::{
-    FixedRoots, Platform, PlatformError, RootSet, SystemClock, validate_root_override,
+    FixedRoots, Platform, PlatformError, RootSet, SystemClock, default_runtime_root,
+    validate_root_override,
 };
 
-use crate::dirs::{CACHE_DIR, DATA_DIR, LOGS_DIR, RUNTIME_DIR, darwin_user_temp_dir, home_dir};
+use crate::dirs::{CACHE_DIR, DATA_DIR, LOGS_DIR, darwin_user_temp_dir, home_dir};
 use crate::fs::MacosFilesystem;
 use crate::identity::MacosIdentity;
 use crate::info::MacosPlatformInfo;
@@ -53,7 +54,7 @@ impl MacosPlatform {
                 default_data,
                 home.join(LOGS_DIR),
                 home.join(CACHE_DIR),
-                temp.join(RUNTIME_DIR),
+                default_runtime_root(&temp),
             )?,
             Some(root) => {
                 let root = validate_root_override(

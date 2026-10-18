@@ -7,6 +7,8 @@
 //! executor of spec 0010, from a validated plan.
 
 mod digest;
+#[doc(hidden)]
+pub mod fuzzing;
 mod interpolate;
 mod issue;
 #[cfg(feature = "json-schema")]

@@ -84,6 +84,15 @@
       "summary": "a handler panicked or an invariant broke"
     },
     {
+      "code": "ipc.call_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "method"
+      ],
+      "summary": "client side: the client stopped waiting for a reply, so the request may have run"
+    },
+    {
       "code": "ipc.connection_closed",
       "category": "unavailable",
       "retryable": false,
@@ -168,6 +177,13 @@
         "kind"
       ],
       "summary": "client side: another os error while checking the socket path or connecting"
+    },
+    {
+      "code": "ipc.not_connected",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [],
+      "summary": "client side: the client is not connected to the daemon, so it sent nothing"
     },
     {
       "code": "ipc.peer_rejected",

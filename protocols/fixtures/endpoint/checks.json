@@ -1,0 +1,502 @@
+{
+  "uid": 501,
+  "checks": [
+    {
+      "name": "private_socket_in_private_folder",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": null
+    },
+    {
+      "name": "private_socket_in_sticky_private_folder",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "1700"
+      },
+      "uid": 501,
+      "reason": null
+    },
+    {
+      "name": "socket_open_to_group",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0660"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "group_or_other_access"
+    },
+    {
+      "name": "socket_open_to_others",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0606"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "group_or_other_access"
+    },
+    {
+      "name": "socket_open_to_everyone",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0666"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "group_or_other_access"
+    },
+    {
+      "name": "symlink_at_socket_path",
+      "path": {
+        "type": "symlink",
+        "uid": 501,
+        "mode": "0755"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "symlink"
+    },
+    {
+      "name": "regular_file_at_socket_path",
+      "path": {
+        "type": "file",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "not_a_socket"
+    },
+    {
+      "name": "folder_at_socket_path",
+      "path": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "not_a_socket"
+    },
+    {
+      "name": "socket_of_another_user",
+      "path": {
+        "type": "socket",
+        "uid": 502,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "wrong_owner"
+    },
+    {
+      "name": "open_socket_of_another_user",
+      "path": {
+        "type": "socket",
+        "uid": 502,
+        "mode": "0666"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "wrong_owner"
+    },
+    {
+      "name": "symlink_of_another_user",
+      "path": {
+        "type": "symlink",
+        "uid": 502,
+        "mode": "0777"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "symlink"
+    },
+    {
+      "name": "folder_open_to_group",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0750"
+      },
+      "uid": 501,
+      "reason": "parent_group_or_other_access"
+    },
+    {
+      "name": "folder_open_to_others",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0705"
+      },
+      "uid": 501,
+      "reason": "parent_group_or_other_access"
+    },
+    {
+      "name": "folder_of_another_user",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 502,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "parent_wrong_owner"
+    },
+    {
+      "name": "open_folder_of_another_user",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 502,
+        "mode": "0777"
+      },
+      "uid": 501,
+      "reason": "parent_wrong_owner"
+    },
+    {
+      "name": "folder_is_a_symlink",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "symlink",
+        "uid": 501,
+        "mode": "0755"
+      },
+      "uid": 501,
+      "reason": "symlink"
+    },
+    {
+      "name": "folder_is_a_regular_file",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0600"
+      },
+      "parent": {
+        "type": "file",
+        "uid": 501,
+        "mode": "0700"
+      },
+      "uid": 501,
+      "reason": "parent_wrong_owner"
+    },
+    {
+      "name": "open_socket_in_open_folder",
+      "path": {
+        "type": "socket",
+        "uid": 501,
+        "mode": "0666"
+      },
+      "parent": {
+        "type": "dir",
+        "uid": 501,
+        "mode": "0755"
+      },
+      "uid": 501,
+      "reason": "group_or_other_access"
+    }
+  ],
+  "errno": [
+    {
+      "errno": "EPERM",
+      "number": 1,
+      "kind": "permission_denied"
+    },
+    {
+      "errno": "ENOENT",
+      "number": 2,
+      "kind": "not_found"
+    },
+    {
+      "errno": "EINTR",
+      "number": 4,
+      "kind": "interrupted"
+    },
+    {
+      "errno": "EIO",
+      "number": 5,
+      "kind": "input_output_error"
+    },
+    {
+      "errno": "E2BIG",
+      "number": 7,
+      "kind": "argument_list_too_long"
+    },
+    {
+      "errno": "EDEADLK",
+      "number": 11,
+      "kind": "deadlock"
+    },
+    {
+      "errno": "ENOMEM",
+      "number": 12,
+      "kind": "out_of_memory"
+    },
+    {
+      "errno": "EACCES",
+      "number": 13,
+      "kind": "permission_denied"
+    },
+    {
+      "errno": "EBUSY",
+      "number": 16,
+      "kind": "resource_busy"
+    },
+    {
+      "errno": "EEXIST",
+      "number": 17,
+      "kind": "already_exists"
+    },
+    {
+      "errno": "EXDEV",
+      "number": 18,
+      "kind": "crosses_devices"
+    },
+    {
+      "errno": "ENOTDIR",
+      "number": 20,
+      "kind": "not_a_directory"
+    },
+    {
+      "errno": "EISDIR",
+      "number": 21,
+      "kind": "is_a_directory"
+    },
+    {
+      "errno": "EINVAL",
+      "number": 22,
+      "kind": "invalid_input"
+    },
+    {
+      "errno": "ENFILE",
+      "number": 23,
+      "kind": "too_many_open_files"
+    },
+    {
+      "errno": "EMFILE",
+      "number": 24,
+      "kind": "too_many_open_files"
+    },
+    {
+      "errno": "ETXTBSY",
+      "number": 26,
+      "kind": "executable_file_busy"
+    },
+    {
+      "errno": "EFBIG",
+      "number": 27,
+      "kind": "file_too_large"
+    },
+    {
+      "errno": "ENOSPC",
+      "number": 28,
+      "kind": "storage_full"
+    },
+    {
+      "errno": "ESPIPE",
+      "number": 29,
+      "kind": "not_seekable"
+    },
+    {
+      "errno": "EROFS",
+      "number": 30,
+      "kind": "read_only_filesystem"
+    },
+    {
+      "errno": "EMLINK",
+      "number": 31,
+      "kind": "too_many_links"
+    },
+    {
+      "errno": "EPIPE",
+      "number": 32,
+      "kind": "broken_pipe"
+    },
+    {
+      "errno": "EAGAIN",
+      "number": 35,
+      "kind": "would_block"
+    },
+    {
+      "errno": "EINPROGRESS",
+      "number": 36,
+      "kind": "in_progress"
+    },
+    {
+      "errno": "EADDRINUSE",
+      "number": 48,
+      "kind": "addr_in_use"
+    },
+    {
+      "errno": "EADDRNOTAVAIL",
+      "number": 49,
+      "kind": "addr_not_available"
+    },
+    {
+      "errno": "ENETDOWN",
+      "number": 50,
+      "kind": "network_down"
+    },
+    {
+      "errno": "ENETUNREACH",
+      "number": 51,
+      "kind": "network_unreachable"
+    },
+    {
+      "errno": "ECONNABORTED",
+      "number": 53,
+      "kind": "connection_aborted"
+    },
+    {
+      "errno": "ECONNRESET",
+      "number": 54,
+      "kind": "connection_reset"
+    },
+    {
+      "errno": "ENOTCONN",
+      "number": 57,
+      "kind": "not_connected"
+    },
+    {
+      "errno": "ETIMEDOUT",
+      "number": 60,
+      "kind": "timed_out"
+    },
+    {
+      "errno": "ECONNREFUSED",
+      "number": 61,
+      "kind": "connection_refused"
+    },
+    {
+      "errno": "ELOOP",
+      "number": 62,
+      "kind": "filesystem_loop"
+    },
+    {
+      "errno": "ENAMETOOLONG",
+      "number": 63,
+      "kind": "invalid_filename"
+    },
+    {
+      "errno": "EHOSTUNREACH",
+      "number": 65,
+      "kind": "host_unreachable"
+    },
+    {
+      "errno": "ENOTEMPTY",
+      "number": 66,
+      "kind": "directory_not_empty"
+    },
+    {
+      "errno": "EDQUOT",
+      "number": 69,
+      "kind": "quota_exceeded"
+    },
+    {
+      "errno": "ESTALE",
+      "number": 70,
+      "kind": "stale_network_file_handle"
+    },
+    {
+      "errno": "ENOSYS",
+      "number": 78,
+      "kind": "unsupported"
+    },
+    {
+      "errno": "EOPNOTSUPP",
+      "number": 102,
+      "kind": "unsupported"
+    },
+    {
+      "errno": "EBADF",
+      "number": 9,
+      "kind": "uncategorized"
+    },
+    {
+      "errno": "ENOTSOCK",
+      "number": 38,
+      "kind": "uncategorized"
+    },
+    {
+      "errno": "ENOTSUP",
+      "number": 45,
+      "kind": "uncategorized"
+    }
+  ]
+}

@@ -6,6 +6,7 @@
 //! commit. No transaction stays open between two commands (REQ-048).
 
 mod column;
+mod journal;
 mod prune;
 mod read;
 mod write;
@@ -18,17 +19,17 @@ use std::thread::JoinHandle;
 use jiff::Timestamp;
 use rusqlite::{Connection, Transaction};
 use stackly_domain::{
-    ArtifactRecord, BatchError, Committed, Environment, EnvironmentId, Instance, InstanceFilter,
-    InstanceId, InstanceName, InstancePathEntry, Lease, LeaseFilter, Operation, OperationId,
-    OperationPage, OperationQuery, ProviderRevisionKey, ProviderRevisionRecord, PruneReport,
-    Registry, RegistryError, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, Sha256Digest,
-    Versioned, WriteBatch,
+    ArtifactRecord, BatchError, Committed, Environment, EnvironmentId, IdempotencyKey, Instance,
+    InstanceFilter, InstanceId, InstanceName, InstancePathEntry, JournalView, Lease, LeaseFilter,
+    Operation, OperationId, OperationJournal, OperationPage, OperationQuery, ProviderRevisionKey,
+    ProviderRevisionRecord, PruneReport, Registry, RegistryError, RetentionPolicy, Runtime,
+    RuntimeId, RuntimeReferences, Sha256Digest, Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
 use crate::error::StorageError;
 pub(crate) use column::sql_error;
-use prune::{History, Limits, PRUNE_BATCH_ROWS};
+use prune::{History, Limits};
 use read::InstanceSelect;
 
 /// Capacity of the queue in front of the registry thread. A caller that
@@ -235,6 +236,35 @@ impl Registry for SqliteRegistry {
         self.read(move |tx| read::operations(tx, &query))
     }
 
+    fn operation_journal(
+        &self,
+        id: OperationId,
+    ) -> Result<Versioned<Option<JournalView>>, RegistryError> {
+        self.read(move |tx| journal::journal_view(tx, id))
+    }
+
+    fn operation_journals(
+        &self,
+        ids: &[OperationId],
+    ) -> Result<Versioned<Vec<OperationJournal>>, RegistryError> {
+        let ids = ids.to_vec();
+        self.read(move |tx| journal::journals(tx, &ids))
+    }
+
+    fn operation_by_idempotency_key(
+        &self,
+        key: &IdempotencyKey,
+    ) -> Result<Versioned<Option<(Operation, OperationJournal)>>, RegistryError> {
+        let key = key.clone();
+        self.read(move |tx| journal::by_idempotency_key(tx, &key))
+    }
+
+    fn unfinished_operations(
+        &self,
+    ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError> {
+        self.read(|tx| journal::unfinished(tx))
+    }
+
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
         let now = self.inner.clock.now();
         self.call(move |conn| write::commit(conn, &batch, now))
@@ -260,7 +290,7 @@ impl Registry for SqliteRegistry {
                     History::ProcessObservations => &mut report.process_observations,
                 };
                 *count += u64::try_from(deleted).unwrap_or(u64::MAX);
-                if deleted < PRUNE_BATCH_ROWS {
+                if deleted < history.batch_rows() {
                     break;
                 }
             }

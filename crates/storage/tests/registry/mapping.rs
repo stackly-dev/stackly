@@ -13,9 +13,9 @@ use stackly_domain::{
     BatchError, DesiredState, Environment, EnvironmentId, EnvironmentMember, FailureCode,
     InstallMode, Instance, InstanceLifecycle, Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState,
     NewRuntime, Operation, OperationFailure, OperationId, OperationKind, OperationResource,
-    OperationState, Ownership, Progress, ReasonCode, Registry, RegistryError, ResourceRevision,
-    Runtime, RuntimeId, RuntimeState, StartupPolicy, StoredLease, StoredOperation, StoredRuntime,
-    WriteOp,
+    OperationState, Ownership, Progress, ReasonCode, RecoveryHint, Registry, RegistryError,
+    ResourceRevision, Runtime, RuntimeId, RuntimeState, StartupPolicy, StoredLease,
+    StoredOperation, StoredRuntime, WriteOp,
 };
 
 use crate::common::{Harness, restored, stored, stored_operation};
@@ -270,6 +270,8 @@ fn every_operation_state_kind_and_resource_round_trips() {
                 failure: failed.then(|| {
                     OperationFailure::new(FailureCode::from_static("disk_full"), index % 3 == 0)
                 }),
+                recovery_hint: (*state == OperationState::NeedsRecovery)
+                    .then_some(RecoveryHint::Abandon),
                 created_at: created,
                 updated_at: created.checked_add(SignedDuration::from_nanos(5)).unwrap(),
                 revision: ResourceRevision::INITIAL,
@@ -590,4 +592,63 @@ fn a_stored_row_that_breaks_a_domain_invariant_reads_as_corrupt() {
         ),
         "{err:?}"
     );
+}
+
+// covers: AC-13 (a thousand times read back exactly as written)
+#[test]
+fn a_thousand_random_times_read_back_to_the_nanosecond() {
+    let harness = Harness::new();
+    // A fixed linear congruential sequence keeps the test deterministic.
+    let mut state: u64 = 0x5eed_0005;
+    let mut next = move || {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        state >> 11
+    };
+    // Up to 9999-12-31T23:59:59, the last second the 30 character form holds.
+    let last_second: u64 = 253_402_300_799;
+    let mut random_time = || {
+        let seconds = i64::try_from(next() % last_second).unwrap();
+        let nanos = i32::try_from(next() % 1_000_000_000).unwrap();
+        Timestamp::new(seconds, nanos).unwrap()
+    };
+    let operations: Vec<Operation> = (0..1000)
+        .map(|_| {
+            let created = random_time();
+            let updated = random_time();
+            Operation::restore(StoredOperation {
+                started_at: Some(random_time()),
+                created_at: created,
+                updated_at: updated,
+                ..stored_operation(&harness.operation(OperationResource::Manager))
+            })
+            .unwrap()
+        })
+        .collect();
+
+    harness.commit(
+        operations
+            .iter()
+            .cloned()
+            .map(WriteOp::InsertOperation)
+            .collect(),
+    );
+
+    for operation in &operations {
+        let read = harness
+            .registry
+            .operation(operation.id())
+            .unwrap()
+            .value
+            .unwrap();
+        assert_eq!(
+            (read.created_at(), read.updated_at(), read.started_at()),
+            (
+                operation.created_at(),
+                operation.updated_at(),
+                operation.started_at()
+            ),
+        );
+    }
 }

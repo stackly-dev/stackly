@@ -1,10 +1,13 @@
 //! Retention on the SQLite registry (spec 0005 step 12, AC-14): age and
-//! row limits, rows that are never deleted, batches of 5,000 rows, and no
-//! change to the generation.
+//! row limits, rows that are never deleted, batches of 5,000 rows (500
+//! operations, whose journal rows go by cascade, spec 0007), and no change
+//! to the generation.
 
 use jiff::{SignedDuration, Timestamp};
 use rusqlite::Connection;
 use stackly_domain::{InstanceId, OperationId, PruneReport, Registry, RetentionPolicy, WriteOp};
+
+use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::Harness;
 
@@ -73,7 +76,16 @@ fn count(conn: &Connection, sql: &str) -> i64 {
 }
 
 #[test]
-fn prune_bounds_history_by_age_and_rows_and_keeps_unfinished_work() {
+fn prune_keeps_unfinished_operations_and_bounds_history() {
+    let ev = evidence!(
+        covers = ["NFR-011"],
+        kind = Kind::Fixture,
+        expected = "prune on the SQLite registry deletes finished operations and audit events \
+                    past the age or row limit, released leases past the age limit, and process \
+                    observations past the newest per instance, keeps unfinished and \
+                    needs_recovery operations and active leases, and leaves the generation as it \
+                    was",
+    );
     let harness = Harness::new();
     let base = harness.base();
     let instance = harness.instance(&base, "main");
@@ -168,6 +180,7 @@ fn prune_bounds_history_by_age_and_rows_and_keeps_unfinished_work() {
         generation
     );
     assert_eq!(harness.registry.prune(&policy, now).unwrap().total(), 0);
+    ev.pass();
 }
 
 #[test]
@@ -196,4 +209,69 @@ fn prune_deletes_large_histories_in_several_batches() {
         harness.registry.known_instance_ids().unwrap().generation,
         generation
     );
+}
+
+#[test]
+fn prune_deletes_operations_in_batches_with_their_journal_rows() {
+    let harness = Harness::new();
+    let now = harness.now();
+    let side = harness.side();
+    let old = days_before(now, 31);
+    side.execute_batch("BEGIN").unwrap();
+    for index in 0..1_201 {
+        let id = OperationId::generate().to_string();
+        side.execute(
+            "INSERT INTO operations (id, kind, resource_kind, state, revision, created_at, \
+             updated_at) VALUES (?1, 'update_manager', 'manager', 'succeeded', 1, ?2, ?2)",
+            (&id, &old),
+        )
+        .unwrap();
+        side.execute(
+            "INSERT INTO operation_journal (operation_id, trigger_origin, trigger_interactive, \
+             resumable, input) VALUES (?1, 'background', 0, 0, '{}')",
+            [&id],
+        )
+        .unwrap();
+        side.execute(
+            "INSERT INTO operation_steps (operation_id, seq, name, repeatable, reversible, \
+             state, attempts, started_at, finished_at) \
+             VALUES (?1, 1, 'swap', 0, 0, 'done', 1, ?2, ?2)",
+            (&id, &old),
+        )
+        .unwrap();
+        side.execute(
+            "INSERT INTO operation_created (operation_id, seq, step_seq, item_kind, item_ref, \
+             state, recorded_at, settled_at) \
+             VALUES (?1, 1, 1, 'custom', ?2, 'kept', ?3, ?3)",
+            (&id, format!("manager_binary:{index}"), &old),
+        )
+        .unwrap();
+        side.execute(
+            "INSERT INTO operation_locks (operation_id, lock_key) VALUES (?1, 'manager:self')",
+            [&id],
+        )
+        .unwrap();
+    }
+    side.execute_batch("COMMIT").unwrap();
+
+    let report = harness
+        .registry
+        .prune(&RetentionPolicy::DEFAULT, now)
+        .unwrap();
+
+    assert_eq!(report.operations, 1_201);
+    assert_eq!(report.total(), 1_201, "journal rows are not counted");
+    for table in [
+        "operations",
+        "operation_journal",
+        "operation_steps",
+        "operation_created",
+        "operation_locks",
+    ] {
+        assert_eq!(
+            count(&side, &format!("SELECT count(*) FROM {table}")),
+            0,
+            "{table} keeps no row of a pruned operation"
+        );
+    }
 }

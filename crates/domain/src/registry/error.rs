@@ -4,10 +4,11 @@
 use std::fmt;
 
 use crate::id::{EnvironmentId, InstanceId, LeaseId, OperationId, RuntimeId, ShortKey};
+use crate::operation::StepSeq;
 use crate::provider::ProviderRevisionKey;
 use crate::registry::batch::Generation;
 use crate::registry::path::{LogicalRoot, RelativePath};
-use crate::value::{InstanceName, ResourceRevision, Sha256Digest, SoftwareName};
+use crate::value::{IdempotencyKey, InstanceName, ResourceRevision, Sha256Digest, SoftwareName};
 
 /// One resource the registry holds, as errors and commit results name it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -27,6 +28,8 @@ pub enum ResourceRef {
     ProviderRevision(Box<ProviderRevisionKey>),
     /// A downloaded artifact, by its digest.
     Artifact(Sha256Digest),
+    /// One step of an operation's journal.
+    OperationStep(OperationId, StepSeq),
 }
 
 impl fmt::Display for ResourceRef {
@@ -45,6 +48,7 @@ impl fmt::Display for ResourceRef {
                 key.manifest_sha256()
             ),
             Self::Artifact(sha256) => write!(f, "artifact {sha256}"),
+            Self::OperationStep(id, seq) => write!(f, "step {seq} of operation {id}"),
         }
     }
 }
@@ -124,6 +128,15 @@ pub enum RegistryError {
         name: InstanceName,
         /// The instance that has it.
         existing: InstanceId,
+    },
+    /// Another operation holds the idempotency key. A key stays bound to
+    /// its operation while the operation's row exists (spec 0007).
+    #[error("idempotency key {key} is taken by operation {existing}")]
+    IdempotencyKeyTaken {
+        /// The key.
+        key: IdempotencyKey,
+        /// The operation that holds it.
+        existing: OperationId,
     },
     /// Another instance has the same short key.
     #[error("short key {key} is taken by instance {existing}")]

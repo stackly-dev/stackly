@@ -1,0 +1,1 @@
+--configFile=${instance.config}/traefik.yaml

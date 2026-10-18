@@ -14,6 +14,7 @@ stackly-domain.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 stackly-evidence.workspace = true
 
 [lints]
