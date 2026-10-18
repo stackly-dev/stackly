@@ -21,6 +21,8 @@ mod conformance;
 mod fake_fs;
 #[cfg(unix)]
 mod fake_platform;
+#[cfg(unix)]
+mod fifo;
 mod port;
 mod test_root;
 
@@ -30,6 +32,8 @@ pub use conformance::fs_conformance;
 pub use fake_fs::{FakeFilesystem, Fault, FsOp, Mutation};
 #[cfg(unix)]
 pub use fake_platform::{FakeClock, FakeIdentity, FakePlatform, FakePlatformInfo};
+#[cfg(unix)]
+pub use fifo::make_fifo;
 pub use port::allocate_port;
 pub use stackly_evidence as evidence;
 pub use test_root::TestRoot;
