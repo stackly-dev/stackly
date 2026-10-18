@@ -163,7 +163,7 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 - [ ] Review it (fresh model): `/check review provider engine & manifest schema`
 - [ ] Document it: `/document provider engine & manifest schema`
 
-### 10. Process supervisor · needs a decision · GA
+### 10. Process supervisor · in-progress · GA
 
 Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv eksplisit, mencatat identitas proses (bukan PID saja), menjalankan probe readiness, dan menghentikan proses secara graceful sesuai strategi provider. Spec ini juga pemilik tunggal rekonsiliasi dasar setelah daemon restart dan restart policy (backoff, jitter, retry budget, reset setelah periode sehat, timeout per provider).
 
@@ -171,7 +171,18 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
 
 **Trace:** REQ-011, REQ-012, REQ-013 (dasar), BR-010, AC-011, AC-012, AC-013 (fake provider), AC-058, AC-068, NFR-003, NFR-006, RISK-03, RISK-14, PRD bagian 19
 
-- [ ] Design it (spec): `/architect process supervisor`
+**Pointer:** spec [0010](../specs/0010-process-supervisor/index.md) · code in `crates/core/src/supervisor/`, `crates/platform/`, `crates/platform-macos/`, `crates/testkit/`, `crates/protocol/`, `crates/storage/`, `apps/daemon/`
+
+- [x] Design it (spec): `/architect process supervisor`
+- [ ] Build it: `/develop process supervisor`
+  - [ ] Process port and macOS adapter: spike on this Mac (suspended spawn, libproc identity, kqueue, flock inheritance, punch hole), domain `process` types, `ProcessSupervision` trait as the seventh platform port, `MacosProcessSupervision`, and `FakeProcessSupervision` (spec 0010 AC-1, AC-2, AC-5, AC-6, AC-15, AC-19; build steps 1 to 4; needs the spec 0004 update from spec 0010 Follow-up; after step 2, the adapter and the fake can run as two parallel sessions)
+  - [ ] Start to ready and safe stop on the fake provider: `classify`, restart policy math, `SupervisorConfig`, `PortProbe`, commit rules, probes `tcp`, `http`, and `exec`, `execute_init`, render before spawn, startup transaction with dry run and suspended spawn, stop, ports, readiness and health, `statusSeq`, and `execute_reload` (spec 0010 AC-2 to AC-8, AC-10, AC-13 to AC-15, AC-17 to AC-19, AC-22; build steps 5 to 8; needs spec 0009 milestone 1, spec 0011 `secret::delivery`, spec 0005 port and fake with its spec 0010 update, and the spec 0007 operation API; steps 5 and 6 can run as two parallel sessions)
+  - [ ] Crash, spool, and reconciliation: restart policy in the actor, spool reader with redaction and punch hole, reconciliation table, adoption, `unknown` recheck, and daemon shutdown without signals (spec 0010 AC-7 to AC-12, AC-17, AC-21, AC-22; build steps 9 to 11; the spool step can run as its own session)
+  - [ ] Daemon, IPC, and end to end proof: protocol DTOs, events, and error codes with fixtures and Swift contract tests, `stacklyd` start slot and shutdown step, `instance.create`, `start`, `stop`, `get`, and `list`, `install_fake`, daemon integration tests with evidence, `check-deps` rules, and the NFR-003 measurement (spec 0010 AC-3 to AC-12, AC-15 to AC-17, AC-20, AC-21, AC-23; build steps 12 to 15; needs the spec 0006 daemon server and the spec 0005 SQLite registry; protocol and `check-deps` can run as parallel sessions)
+- [ ] Verify it: `/check verify process supervisor`
+- [ ] Test it: `/test process supervisor`
+- [ ] Review it (fresh model): `/check review process supervisor`
+- [ ] Document it: `/document process supervisor`
 
 ### 11. Secret store & redaction · in-progress · GA
 
