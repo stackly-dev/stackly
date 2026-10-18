@@ -2,12 +2,14 @@
 //!
 //! `tests/fixtures/registry-v<N>.sql` is a text dump of a registry at
 //! version N holding the sample data in `tests/fixtures/seed/v<N>.sql`. It
-//! is written once, when version N is made, by the ignored test
+//! is written once, when version N is made, by the test
 //! `write_registry_fixture`, and never edited afterwards: its SHA-256 is
 //! recorded in [`FIXTURE_SHA256`], so a changed fixture fails the tests.
+//! The writer returns at once unless `STACKLY_WRITE_REGISTRY_FIXTURE=1` is
+//! set, because spec 0002 keeps `#[ignore]` for native tests only:
 //!
 //! ```text
-//! cargo test -p stackly-storage --test open fixture::write_registry_fixture -- --ignored
+//! STACKLY_WRITE_REGISTRY_FIXTURE=1 cargo test -p stackly-storage --test open fixture::write_registry_fixture
 //! ```
 
 use std::fmt::Write as _;
@@ -180,9 +182,14 @@ fn literal(value: ValueRef<'_>) -> String {
     }
 }
 
+/// Writes the frozen fixture of the newest schema version. Run it by hand
+/// once, when a new schema version is made; without
+/// `STACKLY_WRITE_REGISTRY_FIXTURE=1` it does nothing.
 #[test]
-#[ignore = "run by hand once, when a new schema version is made"]
 fn write_registry_fixture() {
+    if std::env::var("STACKLY_WRITE_REGISTRY_FIXTURE").as_deref() != Ok("1") {
+        return;
+    }
     let version = MigrationSet::builtin().latest();
     let path = fixture_path(version);
     assert!(
