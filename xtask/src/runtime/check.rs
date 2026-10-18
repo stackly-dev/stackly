@@ -1,4 +1,4 @@
-//! `cargo xtask runtime check`: rules 1 to 8 of spec 0003 (*Key
+//! `cargo xtask runtime check`: rules 1 to 9 of spec 0003 (*Key
 //! invariants*) on `runtimes/inventory.toml` and `evidence/runtime/`.
 //! Read only; runs on any OS, by hand on this Mac.
 
@@ -20,6 +20,7 @@ const SPIKE_RESULT: &str = "spike-result.json";
 pub fn run(root: &Path) -> Result<ExitCode> {
     let inventory = Inventory::load(root)?;
     let mut violations = inventory.violations(root);
+    violations.extend(inventory.required_line_violations());
     let evidence = read_evidence(&root.join(EVIDENCE_DIR))?;
     let runs = evidence.runs;
     violations.extend(evidence.violations);
@@ -561,5 +562,17 @@ mod tests {
             "{err}"
         );
         assert!(err.contains("unknown field `attestation`"), "{err}");
+    }
+
+    #[test]
+    fn an_inventory_without_the_required_lines_fails_rule_9() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("runtimes")).unwrap();
+        fs::write(
+            root.path().join(crate::runtime::inventory::INVENTORY_FILE),
+            "schema_version = 1\n",
+        )
+        .unwrap();
+        assert_eq!(run(root.path()).unwrap(), ExitCode::FAILURE);
     }
 }

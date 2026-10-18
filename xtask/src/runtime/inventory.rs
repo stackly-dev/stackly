@@ -1,5 +1,5 @@
 //! The runtime inventory `runtimes/inventory.toml` (spec 0003) and rules 1
-//! to 6 of `cargo xtask runtime check`.
+//! to 6 and 9 of `cargo xtask runtime check`.
 //!
 //! Every field is read as written, with enum values kept as strings, so a
 //! wrong value becomes one `<id>: <rule>` line instead of a TOML error.
@@ -31,6 +31,18 @@ const PROVIDERS: [&str; 6] = [
     "clickhouse",
     "valkey",
     "traefik",
+];
+/// The lines that must each have exactly one entry (rule 9). `None` takes
+/// any line of that provider.
+const REQUIRED_LINES: [(&str, Option<&str>); 8] = [
+    ("postgresql", Some("17")),
+    ("postgresql", Some("18")),
+    ("mysql", Some("8.4")),
+    ("mysql", Some("9.7")),
+    ("nats", Some("2.15")),
+    ("clickhouse", None),
+    ("valkey", Some("9.1")),
+    ("traefik", Some("3.7")),
 ];
 /// The prefixes a relocatable install name may use.
 const RELATIVE_INSTALL_PREFIXES: [&str; 3] = ["@rpath/", "@loader_path/", "@executable_path/"];
@@ -243,6 +255,37 @@ impl Inventory {
         self.artifacts
             .iter()
             .filter(|artifact| artifact.status.as_deref() == Some("available"))
+    }
+
+    /// Checks rule 9: every required line has exactly one entry, whatever
+    /// its status.
+    pub fn required_line_violations(&self) -> Vec<Violation> {
+        let mut out = Vec::new();
+        for (provider, line) in REQUIRED_LINES {
+            let entries = self
+                .artifacts
+                .iter()
+                .filter(|artifact| filled(&artifact.provider) == Some(provider))
+                .filter(|artifact| line.is_none_or(|line| filled(&artifact.line) == Some(line)))
+                .count();
+            if entries == 1 {
+                continue;
+            }
+            let what = match line {
+                Some(line) => format!("the required line {provider} {line}"),
+                None => format!("the required provider {provider} (any line)"),
+            };
+            let message = match entries {
+                0 => format!("{what} has no entry"),
+                n => format!("{what} has {n} entries, it needs exactly one"),
+            };
+            out.push(Violation {
+                subject: "inventory".to_owned(),
+                rule: 9,
+                message,
+            });
+        }
+        out
     }
 }
 
@@ -1410,5 +1453,99 @@ upstream_signature = { kind = "none" }
         );
         assert_eq!(normalize_fingerprint("A4A9"), None);
         assert_eq!(normalize_fingerprint(&"g".repeat(40)), None);
+    }
+
+    /// One minimal entry per required line; rule 9 reads only provider
+    /// and line.
+    const REQUIRED: &str = r#"
+schema_version = 1
+
+[[artifact]]
+provider = "postgresql"
+line = "17"
+
+[[artifact]]
+provider = "postgresql"
+line = "18"
+
+[[artifact]]
+provider = "mysql"
+line = "8.4"
+
+[[artifact]]
+provider = "mysql"
+line = "9.7"
+
+[[artifact]]
+provider = "nats"
+line = "2.15"
+
+[[artifact]]
+provider = "clickhouse"
+line = "26.8"
+
+[[artifact]]
+provider = "valkey"
+line = "9.1"
+
+[[artifact]]
+provider = "traefik"
+line = "3.7"
+"#;
+
+    /// The rule 9 lines of `text`.
+    fn required_lines(text: &str) -> Vec<String> {
+        Inventory::parse(text)
+            .unwrap()
+            .required_line_violations()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn rule_9_accepts_exactly_one_entry_per_required_line() {
+        assert_eq!(required_lines(REQUIRED), Vec::<String>::new());
+    }
+
+    #[test]
+    fn rule_9_names_a_required_line_without_an_entry() {
+        let text = edit(
+            REQUIRED,
+            "provider = \"valkey\"\nline = \"9.1\"",
+            "provider = \"valkey\"\nline = \"9.0\"",
+        );
+        assert_one(
+            &required_lines(&text),
+            "inventory: the required line valkey 9.1 has no entry (rule 9)",
+        );
+        assert_eq!(
+            required_lines("schema_version = 1\n").len(),
+            REQUIRED_LINES.len()
+        );
+    }
+
+    #[test]
+    fn rule_9_takes_any_clickhouse_line_but_only_one() {
+        let other_line = edit(REQUIRED, "line = \"26.8\"", "line = \"26.9\"");
+        assert_eq!(required_lines(&other_line), Vec::<String>::new());
+        let two_lines =
+            format!("{REQUIRED}\n[[artifact]]\nprovider = \"clickhouse\"\nline = \"26.9\"\n");
+        assert_one(
+            &required_lines(&two_lines),
+            "inventory: the required provider clickhouse (any line) has 2 entries, it needs exactly one (rule 9)",
+        );
+    }
+
+    #[test]
+    fn rule_9_counts_a_blocked_entry_and_ignores_lines_it_does_not_require() {
+        let blocked = edit(
+            REQUIRED,
+            "provider = \"postgresql\"\nline = \"17\"",
+            "provider = \"postgresql\"\nline = \"17\"\nstatus = \"blocked\"",
+        );
+        assert_eq!(required_lines(&blocked), Vec::<String>::new());
+        let extra = format!("{REQUIRED}\n[[artifact]]\nprovider = \"postgresql\"\nline = \"16\"\n");
+        assert_eq!(required_lines(&extra), Vec::<String>::new());
     }
 }
