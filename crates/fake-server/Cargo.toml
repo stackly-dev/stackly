@@ -1,0 +1,24 @@
+[package]
+name = "stackly-fake-server"
+description = "Dummy server behind the testing/fake provider. Only ever run by tests."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "stackly-fake-server"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+sha2.workspace = true
+signal-hook.workspace = true
+
+[dev-dependencies]
+stackly-testkit.workspace = true
+
+[lints]
+workspace = true

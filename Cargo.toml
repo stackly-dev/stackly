@@ -8,6 +8,7 @@ members = [
     "crates/platform-macos",
     "crates/testkit",
     "crates/evidence",
+    "crates/fake-server",
     "apps/daemon",
     "apps/cli",
     "xtask",
@@ -42,6 +43,7 @@ schemars = "1.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.11"
+signal-hook = "0.4"
 syn = { version = "3.0", features = ["full", "visit"] }
 tempfile = "3"
 thiserror = "2.0"
