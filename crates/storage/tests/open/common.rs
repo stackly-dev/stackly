@@ -106,6 +106,9 @@ impl Harness {
     /// Writes `sql`, a frozen fixture, into a new registry file.
     pub fn load_fixture(&self, sql: &str) {
         let conn = Connection::open(self.db()).expect("a new registry file can be created");
+        // A dump lists tables by name, not in foreign key order.
+        conn.pragma_update(None, "foreign_keys", false)
+            .expect("foreign keys can be turned off");
         conn.execute_batch(sql).expect("the fixture loads");
         conn.close().expect("the fixture connection closes");
         fs::set_permissions(self.db(), fs::Permissions::from_mode(0o600))

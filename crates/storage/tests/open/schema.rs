@@ -10,9 +10,12 @@ use crate::common::Harness;
 
 const TS: &str = "2026-01-02T03:04:05.123456789Z";
 
+/// One column: name, type, not null, and primary key position.
+type ColumnSpec = (&'static str, &'static str, bool, u8);
+
 /// Every table and its columns as `(name, type, not null, primary key
 /// position)`, in declaration order, from the spec's data model.
-const DATA_MODEL: &[(&str, &[(&str, &str, bool, u8)])] = &[
+const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
     (
         "registry_info",
         &[
@@ -376,7 +379,7 @@ type Column = (String, String, bool, u8, Option<String>);
 
 fn columns(conn: &Connection, table: &str) -> Vec<Column> {
     conn.prepare("SELECT name, type, \"notnull\", pk, dflt_value FROM pragma_table_info(?1)")
-        .unwrap()
+        .expect("test setup step succeeds")
         .query_map([table], |row| {
             Ok((
                 row.get(0)?,
@@ -386,17 +389,19 @@ fn columns(conn: &Connection, table: &str) -> Vec<Column> {
                 row.get(4)?,
             ))
         })
-        .unwrap()
+        .expect("test setup step succeeds")
         .collect::<rusqlite::Result<_>>()
-        .unwrap()
+        .expect("test setup step succeeds")
 }
 
 /// A write connection like the registry's: foreign keys on and an
 /// untrusted schema, so CHECKs and triggers run as they do in the daemon.
 fn writer(harness: &Harness) -> Connection {
     let conn = harness.connect();
-    conn.pragma_update(None, "foreign_keys", true).unwrap();
-    conn.pragma_update(None, "trusted_schema", false).unwrap();
+    conn.pragma_update(None, "foreign_keys", true)
+        .expect("test setup step succeeds");
+    conn.pragma_update(None, "trusted_schema", false)
+        .expect("test setup step succeeds");
     conn
 }
 
@@ -407,7 +412,7 @@ fn insert_provider_revision(conn: &Connection) {
          '2026.10.1', ?1, 'postgresql', '[\"start\"]', '{\"17\":[\"17\"]}', ?2)",
         (&"a".repeat(64), TS),
     )
-    .unwrap();
+    .expect("test setup step succeeds");
 }
 
 #[test]

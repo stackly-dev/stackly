@@ -865,3 +865,88 @@ fn classify(err: rusqlite::Error) -> Detection {
         _ => RecoveryReason::OpenFailed { detail },
     })
 }
+
+#[cfg(test)]
+#[cfg(unix)]
+mod tests {
+    use std::fs::DirBuilder;
+    use std::os::unix::fs::DirBuilderExt;
+
+    use stackly_testkit::{FakePlatform, TestRoot};
+
+    use super::*;
+    use crate::registry::CommandError;
+
+    fn open_ready(root: &TestRoot) -> SqliteRegistry {
+        let fake = FakePlatform::new(root);
+        let layout = DirectoryLayout::new(root.roots());
+        let mut builder = DirBuilder::new();
+        builder.mode(0o700).recursive(true);
+        builder.create(layout.registry_dir()).unwrap();
+        match open_registry(&fake.platform(), &layout, "0.1.0").unwrap() {
+            RegistryOpen::Ready { registry, .. } => registry,
+            RegistryOpen::Recovery(report) => panic!("unexpected recovery {report:#?}"),
+        }
+    }
+
+    #[test]
+    fn the_write_connection_runs_with_every_required_pragma() {
+        let root = TestRoot::new().unwrap();
+        let registry = open_ready(&root);
+
+        let pragmas = registry
+            .run(|conn| {
+                let text = |name: &str| -> rusqlite::Result<String> {
+                    conn.pragma_query_value(None, name, |row| row.get(0))
+                };
+                let int = |name: &str| read_int(conn, name);
+                (|| {
+                    Ok((
+                        text("journal_mode")?,
+                        [
+                            int("synchronous")?,
+                            int("fullfsync")?,
+                            int("checkpoint_fullfsync")?,
+                            int("foreign_keys")?,
+                            int("busy_timeout")?,
+                            int("trusted_schema")?,
+                            int("application_id")?,
+                        ],
+                    ))
+                })()
+                .map_err(|err: rusqlite::Error| CommandError::from_sqlite(&err))
+            })
+            .unwrap();
+
+        assert_eq!(pragmas.0, "wal");
+        assert_eq!(
+            pragmas.1,
+            [2, 1, 1, 1, 5000, 0, i64::from(APPLICATION_ID)],
+            "synchronous, fullfsync, checkpoint_fullfsync, foreign_keys, busy_timeout, \
+             trusted_schema, application_id"
+        );
+    }
+
+    #[test]
+    fn a_write_that_breaks_a_foreign_key_is_refused_as_integrity() {
+        let root = TestRoot::new().unwrap();
+        let registry = open_ready(&root);
+
+        let err = registry
+            .run(|conn| {
+                conn.execute(
+                    "INSERT INTO runtime_dependencies (runtime_id, dependency_runtime_id) VALUES \
+                     ('0199f000-0000-7000-8000-000000000020', \
+                     '0199f000-0000-7000-8000-000000000021')",
+                    [],
+                )
+                .map_err(|err| CommandError::from_sqlite(&err))
+            })
+            .unwrap_err();
+
+        assert!(
+            matches!(&err, CommandError::Integrity { detail } if detail.contains("FOREIGN KEY")),
+            "{err:?}"
+        );
+    }
+}

@@ -981,6 +981,7 @@ dependencies = [
  "stackly-platform",
  "stackly-platform-macos",
  "stackly-protocol",
+ "stackly-storage",
  "stackly-testkit",
  "tracing",
  "tracing-subscriber",

@@ -6,4 +6,7 @@
 
 mod common;
 mod create;
+mod detect;
+mod fixture;
+mod migrate;
 mod schema;

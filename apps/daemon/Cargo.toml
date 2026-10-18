@@ -13,6 +13,7 @@ clap.workspace = true
 stackly-core.workspace = true
 stackly-platform.workspace = true
 stackly-protocol.workspace = true
+stackly-storage.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
