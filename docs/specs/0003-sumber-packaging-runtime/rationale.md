@@ -372,6 +372,23 @@ Di gerbang lisensi Valkey, artefak `valkey-9.1.2-r1-macos-aarch64` sudah lulus s
 
 Setiap resep provider memuat daftar pemilik provider dan daftar file notice. Build memindai folder source provider dan gagal kalau ada file berheader copyright pihak lain yang belum didaftar, supaya patch berikutnya yang menambah file seperti itu tidak lolos diam diam. Daftar pemilik ditulis di resep, bukan di spec, karena nilainya bergantung pada isi source versi itu. Pindaian sengaja longgar: baris `Copyright` yang nama pemiliknya ada di baris berikutnya ikut dianggap pihak lain, sehingga kelebihan notice lebih mungkin daripada kekurangan.
 
+## Update 2026-10-19: release runtime sebagai prerelease
+
+### Konteks
+
+Saat `/check verify` langkah 12, halaman Releases `stackly-dev/stackly` memberi label Latest pada `runtime/valkey-9.1.2-r2-macos-aarch64`, walau release itu dibuat dengan `--latest=false`. Valkey adalah release pertama repo ini, dan `gh api repos/stackly-dev/stackly/releases/latest` juga menunjuknya. Dua release PostgreSQL yang dibuat sesudahnya tidak berlabel. Jadi `--latest=false` tidak cukup untuk menjaga label Latest bagi rilis app, yang memang tujuan flag itu di keputusan hosting 2026-10-18.
+
+### Opsi
+
+| Opsi | Pilihan | Kenapa |
+| --- | --- | --- |
+| Setiap release runtime dibuat dan disimpan sebagai prerelease (`--prerelease`), tiga release yang ada diubah dengan `gh release edit --prerelease` | dipilih kamu (rekomendasi saya) | GitHub tidak pernah memberi label Latest pada prerelease, jadi label itu dan `releases/latest` tetap untuk rilis app tanpa bergantung pada urutan release; URL unduhan, tag, dan aset tidak berubah |
+| Terima label Latest dari GitHub pada release pertama sampai rilis app ada | tidak (runner up) | tanpa tindakan, tapi halaman repo app menampilkan artefak runtime sebagai rilis terbaru, dan apa pun yang membaca `releases/latest` sebelum rilis app pertama mendapat artefak runtime |
+
+### Keputusan
+
+Release runtime selalu prerelease: `gh release create` di API surface mendapat `--prerelease` (tetap dengan `--latest=false`), AC-19 menyebut unggahan sebagai prerelease, dan verify langkah 12 memeriksa bahwa tidak ada release runtime berlabel Latest. Harganya badge `Pre-release` pada artefak yang sudah diuji, yang hanya label di halaman GitHub; `runtime verify`, test native, dan nanti fitur 18 membaca URL `releases/download/runtime/<id>/...` yang sama untuk prerelease. Tidak ada kode xtask yang berubah, karena unggahan bukan perintah xtask.
+
 ## Landscape scan 2026-10-17
 
 Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum terkonfirmasi" dikonfirmasi saat `runtime pin`.
