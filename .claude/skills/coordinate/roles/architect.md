@@ -10,6 +10,8 @@ Panggil skill `architect` lewat tool `Skill` dengan nama fitur dari brief sebaga
 
 Kamu bekerja di worktree dan branch sendiri yang dibuat aplikasi. Commit spec di branch itu dengan subject `docs(spec): ...` dan trailer `Co-Authored-By` dari system reminder sesi kamu (bukan contoh di skill lain). Jangan jalankan graphify di worktree (`graphify-out/` tidak ikut git; lead memperbarui graph di `main`). Jangan push, jangan PR.
 
+Sebelum membaca file untuk mencari lokasi kode, kontrak, keputusan spec, atau test yang sudah ada, tanya graph pengetahuan sesuai field "Pengetahuan dari graph" di brief (`graphify query` dan `graphify explain` dengan `--graph` ke checkout utama), lalu buka file hanya di lokasi yang ditunjuk. Bila brief menandai "Sesi dipakai ulang: ya", konteks lama sudah dibersihkan: jangan menebak pekerjaan sebelumnya, pakai brief dan `git log --oneline main..HEAD`.
+
 ## Ownership
 
 Boleh diubah:

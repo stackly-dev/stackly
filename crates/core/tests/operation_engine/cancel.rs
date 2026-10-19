@@ -14,7 +14,7 @@ use stackly_domain::{OperationKind, OperationState, Registry, WriteBatch, WriteO
 use stackly_testkit::EnvironmentBuilder;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::common::{Harness, manager_request, request, wait_state};
+use crate::common::{Harness, fast, manager_request, request, wait_state};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn cancel_answers_with_the_disposition_of_the_state_the_operation_is_in() {
@@ -104,7 +104,7 @@ async fn cancel_answers_with_the_disposition_of_the_state_the_operation_is_in() 
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_resumed_queued_operation_past_its_point_of_no_return_keeps_running_on_cancel() {
-    let harness = Harness::new().await;
+    let harness = Harness::with_limits(fast().with_slots(1, 64)).await;
     let env = EnvironmentBuilder::new().no_members();
     let id = env.id();
     harness
@@ -153,17 +153,30 @@ async fn a_resumed_queued_operation_past_its_point_of_no_return_keeps_running_on
         Some(stackly_domain::RecoveryHint::Resume)
     );
 
+    // The only running slot stays taken, so the resumed operation is still
+    // queued when the cancel lands.
+    let slot = HoldHandle::new();
+    harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new().step("drain").hold(&slot).boxed(),
+        ))
+        .await;
+    slot.started().await;
+
     let resumed = harness.engine.resume(failing, None).await.unwrap();
     let cancelled = harness.engine.cancel(failing).await.unwrap();
 
-    assert!(matches!(
-        resumed.operation.state(),
-        OperationState::Queued | OperationState::Running
-    ));
+    assert_eq!(resumed.operation.state(), OperationState::Queued);
     assert_eq!(
         cancelled.disposition,
         CancelDisposition::ContinuingPastPointOfNoReturn
     );
+    assert_eq!(
+        cancelled.view.operation.state(),
+        OperationState::CancelRequested
+    );
+    slot.release();
     let done = wait_state(&harness.engine, failing, OperationState::Succeeded).await;
     assert!(done.view.journal.cancel_requested_at().is_some());
 }

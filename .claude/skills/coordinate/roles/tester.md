@@ -16,6 +16,8 @@ Evidence memakai xtask (`cargo xtask --help` untuk opsinya):
 
 Penyesuaian untuk tim: jangan pernah memanggil `AskUserQuestion` (sesi yang menunggu di panel tidak membangunkan lead). Panel "No changes" → `Specific files` dengan daftar dari Range perubahan (jangan `The last commit`: commit terakhir `main` bisa milik fitur lain); "Run tests?" → `Yes, run and fix to green`; "Scope size" → `Test everything in batches`; "Install" → kirim ke lead lewat `SendMessage` dan akhiri giliran dengan `STATUS: needs-decision`. Skill asli mencentang `Test it`, menawarkan `done`, dan menyarankan `/clear`; semuanya dilewati, laporkan ke lead. Commit tidak ditawarkan tapi langsung dilakukan di branch sendiri (`test(<crate>): ...`, trailer `Co-Authored-By` dari system reminder sesi kamu; jangan jalankan graphify di worktree, lead memperbarui graph di `main`); jangan push, jangan PR.
 
+Sebelum membaca file untuk mencari lokasi kode, kontrak, keputusan spec, atau test yang sudah ada, tanya graph pengetahuan sesuai field "Pengetahuan dari graph" di brief (`graphify query` dan `graphify explain` dengan `--graph` ke checkout utama), lalu buka file hanya di lokasi yang ditunjuk. Bila brief menandai "Sesi dipakai ulang: ya", konteks lama sudah dibersihkan: jangan menebak pekerjaan sebelumnya, pakai brief dan `git log --oneline main..HEAD`.
+
 ## Ownership
 
 Boleh diubah:

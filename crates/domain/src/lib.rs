@@ -26,11 +26,13 @@ mod lease;
 mod manifest;
 mod observation;
 mod operation;
+mod process;
 mod provider;
 mod registry;
 mod rule;
 mod runtime;
 mod secret;
+mod supervisor;
 mod target;
 mod text;
 mod value;
@@ -70,6 +72,10 @@ pub use operation::{
     OperationResource, OperationState, OperationTrigger, Outcome, Progress, RecoveryCause,
     RecoveryHint, StepSeq, StepState, StoredCreatedRecord, StoredJournal, StoredOperation,
     StoredStep, TriggerOrigin,
+};
+pub use process::{
+    BootId, IdentityCheck, IdentityCheckName, IdentityEvidence, LockState, Pid, ProcessIdentity,
+    ProcessObservation, ProcessStart,
 };
 pub use provider::{
     AcceptedRevisionChange, LineCompatibility, ProviderRevision, ProviderRevisionKey,

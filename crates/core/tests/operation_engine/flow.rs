@@ -16,7 +16,7 @@ use stackly_platform::Clock;
 use stackly_testkit::EnvironmentBuilder;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::common::{Harness, manager_request, request, user, wait_state, wait_until};
+use crate::common::{Harness, manager_request, request, user, wait_event, wait_state, wait_until};
 
 fn revision(number: u64) -> ResourceRevision {
     ResourceRevision::new(number).expect("a test revision is at least 1")
@@ -57,7 +57,8 @@ async fn a_begun_operation_runs_its_steps_and_reports_every_change_in_revision_o
     let id = harness
         .begin(manager_request(OperationKind::UpdateManager, work.boxed()))
         .await;
-    let done = wait_state(&harness.engine, id, OperationState::Succeeded).await;
+    let events = wait_event(&harness.events, id, OperationState::Succeeded).await;
+    let done = harness.engine.get(id).await.unwrap().unwrap();
 
     let steps: Vec<(&str, StepState)> = done
         .steps
@@ -73,7 +74,6 @@ async fn a_begun_operation_runs_its_steps_and_reports_every_change_in_revision_o
         ]
     );
     assert!(done.view.journal.result().is_some());
-    let events = harness.events.of(id);
     assert_eq!(
         (events[0].kind, events[0].state),
         ("state_changed", OperationState::Queued)
