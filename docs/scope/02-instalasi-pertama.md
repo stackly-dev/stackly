@@ -131,7 +131,7 @@ Halaman Overview (ringkasan ready, stopped, failed, operasi aktif, peringatan ka
 
 - [ ] Design it (spec): `/architect overview & daftar instance`
 
-### 23. Provider NATS lewat manifest · needs a decision
+### 23. Provider NATS lewat manifest · in-progress
 
 NATS dasar sebagai provider nyata kedua, hanya lewat manifest, template, dan primitive dari fitur 9, ditambah probe `nats-readiness` sebagai satu perubahan core yang ditinjau: install, create satu instance, start, readiness lewat probe NATS, stop, dan form GUI dari settings schema. Ini membuktikan engine tidak hanya cocok untuk PostgreSQL (RISK-07) sebelum fitur lain menumpuk di atasnya.
 
@@ -139,4 +139,12 @@ NATS dasar sebagai provider nyata kedua, hanya lewat manifest, template, dan pri
 
 **Trace:** REQ-029, REQ-036 (dasar), AC-029 (provider nyata), RISK-07, PRD bagian 21.2, 22.2, dan 33.2
 
-- [ ] Design it (spec): `/architect provider NATS lewat manifest`
+**Pointer:** spec [0023](../specs/0023-provider-nats-manifest/index.md)
+
+- [x] Design it (spec): `/architect provider NATS lewat manifest`
+- [ ] Build it: `/develop provider NATS lewat manifest`
+  - [ ] Native probe kind and `nats-readiness` on fixtures: the step 0 spike that records real NATS 2.15.1 transcripts from the xtask cache, the `native` probe kind in raw, validate, plan, and JSON Schema with the closed `NativeProbeKind` registry, the NATS package readiness swap with goldens and fuzz seeds, the sans IO `Exchange` state machine, the `nats_readiness_protocol` fuzz target (10 minutes, plus a rerun of `provider_manifest` and `provider_interpolation`), the generic duplex testable driver with `ProbeOutcome`, and the readiness and health loop (spec 0023 AC-1 to AC-7; build steps 0 to 6; step 0 needs only the cached artifact; steps 1 and 2 need the spec 0009 `architect (update)` item carrying spec 0023's *Usulan update spec 0009*, after feature 9 closes (`01-foundation.md`); steps 3 and 4 need neither spec update and can start right after step 0; steps 5 and 6 need feature 10's "Start to ready and safe stop on the fake provider" milestone (`01-foundation.md`) and steps 1 and 3; after step 0, steps 1 and 3 can run as two parallel sessions, then step 2 after 1 and step 4 after 3)
+  - [ ] NATS 2.15.1 end to end through the daemon, evidence, and catalog: `nats_lifecycle_in_process` (Unicode data root, `statusSeq` order, `lsof`, `/varz`, log line, clean stop), `nats_compatibility` through `SpawnedDaemon` (honest readiness with `SIGSTOP`, foreign servers for identity, JetStream mode, and auth, an instance with JetStream off, adoption after `SIGKILL`), `compatibility.json` and `compat-record`, and the NATS catalog entry moved from `[[planned]]` to `[[provider]]` with the ledger in the evidence commit (spec 0023 AC-8 to AC-12; build steps 7 to 9; after milestone 1; needs feature 10 built through "Daemon, IPC, and end to end proof" and feature 11 done (`01-foundation.md`), spec 0018 milestone 2 ("Install pipeline in core", `install_cached_artifact`), feature 17 milestone "Catalog from repo to daemon", and `pin_package` plus the recording `LogSink` hook from spec 0019 step 6 (or built here first); step 9 also needs spec 0018 step 1 (NATS `runtime.versionCheck`, milestone "Catalog data, safe extractor, and fuzz") and step 13 (`compat-record`, milestone "Daemon, contract, and CLI"); one session, since steps 7 to 9 share the test file; native tests need the NATS artifact in the xtask cache, else `BLOCKED`)
+  - [ ] Same journey from CLI and GUI, and the RISK-07 check: the `nats_journey` CLI test (create with defaults and with JetStream off, start, get, stop), extra assertions in spec 0020's `create-form-nats.json` Swift render test, the GUI New Instance and Summary pass prepared for verify, and the RISK-07 ledger with added lines per commit and numstat (spec 0023 AC-13, AC-14; build steps 10 to 12; after milestone 2; needs the feature 20 build (create form, `instance.get_create_form`, the fixture, `stackly instance create`) and the feature 21 build; steps 10 and 11 can run as two parallel sessions)
+- [ ] Verify it: `/check verify provider NATS lewat manifest`
+- [ ] Test it: `/test provider NATS lewat manifest`
