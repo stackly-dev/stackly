@@ -3,7 +3,9 @@
 //! from spec 0002, the platform rules and source scan from spec 0004, the
 //! `stackly-storage` and `rusqlite` rules from spec 0005, the
 //! `stackly-ipc` and `stacklyd` rules and the socket scan from spec 0006,
-//! and the `stackly-fake-server` rules from spec 0009.
+//! the `stackly-fake-server` rules from spec 0009, and the secret rules
+//! from spec 0011: the `expose` scan and where `security-framework` and
+//! `rpassword` may be direct dependencies.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
 //! build). Transitive dependencies are left alone: portability is proven by
@@ -60,6 +62,13 @@ const IPC_DEV_DEPS: [&str; 2] = [TESTKIT, EVIDENCE];
 /// The daemon, a library plus bin whose library only its own `main.rs` and
 /// `apps/daemon/tests/` use.
 const DAEMON: &str = "stacklyd";
+/// The crates that talk to the Security framework, which only the macOS
+/// adapter may depend on (spec 0011).
+const SECURITY_FRAMEWORK: [&str; 2] = ["security-framework", "security-framework-sys"];
+/// The terminal password reader, which only the CLI may depend on
+/// (spec 0011).
+const RPASSWORD: &str = "rpassword";
+const CLI: &str = "stackly-cli";
 
 pub fn run(root: &Path) -> Result<()> {
     let (crates, violations) = find_violations(root)?;
@@ -71,7 +80,7 @@ pub fn run(root: &Path) -> Result<()> {
         eprintln!("  {violation}");
     }
     bail!(
-        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, and 0009",
+        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, 0009, and 0011",
         violations.len()
     )
 }
@@ -96,9 +105,7 @@ fn find_violations(root: &Path) -> Result<(usize, Vec<String>)> {
             check_unsafe_opt_out(package, &mut violations)?;
         }
         let rules = source_scan::Rules::for_crate(package.name.as_str());
-        if rules.any() {
-            violations.extend(source_scan::scan_package(root, package, rules)?);
-        }
+        violations.extend(source_scan::scan_package(root, package, rules)?);
     }
     Ok((packages.len(), violations))
 }
@@ -206,6 +213,12 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
     }
     if name == "rusqlite" && package != STORAGE {
         deny("only stackly-storage opens SQLite");
+    }
+    if SECURITY_FRAMEWORK.contains(&name) && package != MACOS_ADAPTER {
+        deny("only stackly-platform-macos talks to the Security framework (spec 0011)");
+    }
+    if name == RPASSWORD && package != CLI {
+        deny("only stackly-cli reads a secret from the terminal (spec 0011)");
     }
     if name == STORAGE && BINARIES.contains(&package) && package != "stacklyd" {
         deny("of the binaries, only stacklyd uses the registry");
@@ -863,5 +876,153 @@ mod tests {
             "{unsafe_opt_out:?}"
         );
         ev.pass();
+    }
+
+    const SECURITY_RULE: &str =
+        "only stackly-platform-macos talks to the Security framework (spec 0011)";
+    const RPASSWORD_RULE: &str = "only stackly-cli reads a secret from the terminal (spec 0011)";
+
+    #[test]
+    fn security_framework_and_rpassword_belong_to_one_crate_each() {
+        for name in SECURITY_FRAMEWORK {
+            assert!(violations(MACOS_ADAPTER, name, None).is_empty(), "{name}");
+            for package in ["stackly-core", "stackly-platform", "stacklyd", CLI, TESTKIT] {
+                for (kind, label) in [
+                    (None, "normal"),
+                    (Some("dev"), "dev"),
+                    (Some("build"), "build"),
+                ] {
+                    assert_eq!(
+                        violations(package, name, kind),
+                        [format!(
+                            "{package} has a {label} dependency on {name}: {SECURITY_RULE}"
+                        )]
+                    );
+                }
+            }
+        }
+        assert!(violations(CLI, RPASSWORD, None).is_empty());
+        for package in ["stackly-core", "stacklyd", MACOS_ADAPTER, "xtask"] {
+            for (kind, label) in [(None, "normal"), (Some("dev"), "dev")] {
+                assert_eq!(
+                    violations(package, RPASSWORD, kind),
+                    [format!(
+                        "{package} has a {label} dependency on rpassword: {RPASSWORD_RULE}"
+                    )]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_fixture_workspace_that_breaks_the_secret_rules_fails_with_file_and_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_file(
+            root,
+            "Cargo.toml",
+            "[workspace]\nresolver = \"3\"\n\
+             members = [\"crates/core\", \"crates/testkit\", \"crates/platform-macos\", \"apps/cli\", \"apps/daemon\"]\n\n\
+             [workspace.lints.rust]\nunsafe_code = \"deny\"\n",
+        );
+        write_crate(
+            root,
+            "crates/core",
+            "stackly-core",
+            "security-framework = \"3\"\n",
+            false,
+        );
+        write_file(
+            root,
+            "crates/core/src/lib.rs",
+            "//! Fixture.\nmod secret;\n\
+             pub fn leak(v: &V) {\n    tracing::info!(secret = v.expose(), \"started\");\n}\n",
+        );
+        write_file(
+            root,
+            "crates/core/src/secret/mod.rs",
+            "mod delivery;\nmod service;\n",
+        );
+        write_file(
+            root,
+            "crates/core/src/secret/delivery.rs",
+            "pub fn stdin(v: &V) -> &[u8] { v.expose().as_bytes() }\n",
+        );
+        write_file(
+            root,
+            "crates/core/src/secret/service.rs",
+            "\npub fn put(v: &V) -> usize { v.expose().len() }\n",
+        );
+        write_crate(root, "crates/testkit", TESTKIT, "", false);
+        write_file(
+            root,
+            "crates/testkit/src/lib.rs",
+            "//! Fixture.\nmod fake_secret;\n",
+        );
+        write_file(
+            root,
+            "crates/testkit/src/fake_secret.rs",
+            "pub fn stored(v: &V) -> String { v.expose().to_owned() }\n",
+        );
+        write_crate(
+            root,
+            "crates/platform-macos",
+            MACOS_ADAPTER,
+            "security-framework = \"3\"\nsecurity-framework-sys = \"2\"\n",
+            false,
+        );
+        write_crate(root, "apps/cli", CLI, "rpassword = \"7\"\n", true);
+        write_crate(root, "apps/daemon", DAEMON, "rpassword = \"7\"\n", true);
+
+        let (crates, mut found) = find_violations(root).unwrap();
+        found.sort();
+
+        assert_eq!(crates, 5);
+        assert_eq!(
+            found,
+            [
+                "stackly-core crates/core/src/lib.rs:4: secret expose outside the allowlist"
+                    .to_owned(),
+                "stackly-core crates/core/src/secret/service.rs:2: secret expose outside the allowlist"
+                    .to_owned(),
+                format!(
+                    "stackly-core has a normal dependency on security-framework: {SECURITY_RULE}"
+                ),
+                format!("stacklyd has a normal dependency on rpassword: {RPASSWORD_RULE}"),
+            ]
+        );
+    }
+
+    #[test]
+    fn every_allowed_expose_module_of_this_workspace_holds_a_call_site() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("xtask sits one directory below the repository root");
+        let metadata = MetadataCommand::new()
+            .manifest_path(root.join("Cargo.toml"))
+            .no_deps()
+            .exec()
+            .unwrap();
+        let packages = metadata.workspace_packages();
+
+        for (name, modules) in source_scan::EXPOSE_ALLOWED {
+            let package = packages
+                .iter()
+                .find(|package| package.name.as_str() == name)
+                .unwrap_or_else(|| panic!("{name} is not a workspace member"));
+            let nothing_allowed = source_scan::Rules {
+                library: false,
+                sockets: false,
+                expose_allowed: &[],
+            };
+            let calls = source_scan::scan_package(root, package, nothing_allowed).unwrap();
+            for module in modules {
+                let folder = format!("/src/{}", module.replace("::", "/"));
+                assert!(
+                    calls.iter().any(|call| call.contains(&folder)),
+                    "{name} {module} holds no expose call, so it should leave the allowlist: {calls:?}"
+                );
+            }
+        }
     }
 }
