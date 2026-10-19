@@ -30,6 +30,7 @@ mod provider;
 mod registry;
 mod rule;
 mod runtime;
+mod secret;
 mod target;
 mod text;
 mod value;
@@ -82,6 +83,10 @@ pub use rule::Rule;
 pub use runtime::{
     InstallMode, NewRuntime, RemovalBlocker, RemovalPlan, Runtime, RuntimeEvent, RuntimeReferences,
     RuntimeState, StoredRuntime, plan_runtime_removal,
+};
+pub use secret::{
+    InstanceBlocker, NeedsSecretItem, NeedsSecretReason, SecretOrigin, SecretOwner,
+    SecretOwnerKind, SecretPurpose, SecretRef, SecretRefError, SecretStatus,
 };
 pub use target::{Arch, Os, Target, native_support};
 pub use value::{

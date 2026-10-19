@@ -13,6 +13,7 @@ use crate::observation::{
 };
 use crate::operation::{Operation, OperationKind, OperationResource, OperationState};
 use crate::provider::{AcceptedRevisionChange, LineCompatibility, ProviderRevisionKey};
+use crate::secret::InstanceBlocker;
 use crate::value::{
     DisplayName, ExactVersion, FailureCode, InstanceName, ReasonCode, ResourceRevision,
     RuntimeLine, SoftwareName,
@@ -207,7 +208,7 @@ pub struct NewInstance {
 ///
 /// Lifecycle, desired state, readiness, and health are separate fields.
 /// Every mutation raises [`Instance::revision`] by exactly 1, except
-/// readiness and health observations.
+/// readiness, health, and blocker observations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Instance {
     id: InstanceId,
@@ -231,6 +232,7 @@ pub struct Instance {
     created_by: OperationId,
     retained_at: Option<Timestamp>,
     retained_by: Option<OperationId>,
+    blocker: Option<InstanceBlocker>,
 }
 
 /// Every stored field of an [`Instance`], for [`Instance::restore`].
@@ -304,6 +306,7 @@ impl Instance {
             created_by: new.created_by,
             retained_at: None,
             retained_by: None,
+            blocker: None,
         }
     }
 
@@ -366,6 +369,7 @@ impl Instance {
             created_by: stored.created_by,
             retained_at: stored.retained_at,
             retained_by: stored.retained_by,
+            blocker: None,
         })
     }
 
@@ -499,6 +503,14 @@ impl Instance {
         self.retained_by
     }
 
+    /// Returns why the instance is blocked right now, if it is. The
+    /// blocker lives only in the daemon's memory: a new or restored
+    /// instance has none.
+    #[must_use]
+    pub const fn blocker(&self) -> Option<&InstanceBlocker> {
+        self.blocker.as_ref()
+    }
+
     /// Applies a lifecycle event at `at`, with the aggregate rules on top
     /// of the pure machine:
     ///
@@ -610,6 +622,29 @@ impl Instance {
         }
         self.health = health;
         Ok(ObservationOutcome::Applied)
+    }
+
+    /// Stores a blocker observation, for example a needs secret blocker
+    /// after a failed resolve (spec 0011, AC-11). One observed before the
+    /// stored blocker is ignored. It never changes the lifecycle, the
+    /// desired state, or the revision.
+    pub fn observe_blocker(&mut self, blocker: InstanceBlocker) -> ObservationOutcome {
+        if self
+            .blocker
+            .as_ref()
+            .is_some_and(|stored| stored.observed_at() > blocker.observed_at())
+        {
+            return ObservationOutcome::Ignored(Ignored::Stale);
+        }
+        self.blocker = Some(blocker);
+        ObservationOutcome::Applied
+    }
+
+    /// Removes the blocker and returns it, for example once a resolve
+    /// succeeds or every needed secret is present again. It never changes
+    /// the lifecycle, the desired state, or the revision.
+    pub fn clear_blocker(&mut self) -> Option<InstanceBlocker> {
+        self.blocker.take()
     }
 
     /// Renames the instance. Only the name changes: the ID, and so every

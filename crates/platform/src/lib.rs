@@ -18,6 +18,7 @@ mod identity;
 mod info;
 mod layout;
 mod platform;
+mod private_dir;
 mod unsupported;
 
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
@@ -35,4 +36,5 @@ pub use layout::{
     default_runtime_root, instance_path_entries, validate_root_override,
 };
 pub use platform::Platform;
+pub use private_dir::{PrivateDirViolation, check_private_dir};
 pub use unsupported::UnsupportedPlatform;
