@@ -151,7 +151,8 @@ pub(crate) enum InitStepSpec {
     RenderConfig(String),
     MaterializeSecret {
         secret: SettingName,
-        destination: PathExpr,
+        /// The file name in the instance's `secrets` folder.
+        file_name: String,
     },
     RunExecutable {
         command: CommandSpec,

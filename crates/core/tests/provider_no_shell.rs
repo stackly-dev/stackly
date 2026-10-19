@@ -3,12 +3,15 @@
 //! through `std::process::Command` with exactly the plan's program, argv,
 //! env (after `env_clear`), cwd, and stdin. The server records the argv it
 //! got, which must equal the plan, and the shell metacharacters in `label`
-//! never run: no `pwned` file appears.
+//! never run: no `pwned` file appears. The run plan's config files are
+//! rendered before the spawn, as the executor of spec 0010 does.
 #![cfg(unix)]
 
+use std::ffi::OsStr;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -16,8 +19,8 @@ use std::time::{Duration, Instant};
 
 use sha2::{Digest, Sha256};
 use stackly_core::provider::{
-    InitStep, MarkerRead, NameCheck, PlanContext, PreflightOutcome, ResolvedEndpoint,
-    RuntimeContext, Stdin, ValidatedPackage, read_package,
+    EnvValue, InitStep, MarkerRead, NameCheck, PlanContext, PreflightOutcome, ResolvedEndpoint,
+    ResolvedSecrets, RuntimeContext, Stdin, ValidatedPackage, read_package,
 };
 use stackly_domain::{InstanceId, Port};
 use stackly_evidence::{Kind, evidence};
@@ -93,11 +96,17 @@ fn context(root: &TestRoot, package: &ValidatedPackage, binary: &Path, port: u16
         endpoints,
         settings: package
             .settings_schema()
-            .validate(
-                &serde_json::json!({ "label": NASTY_LABEL, "authToken": "fixture:authToken" }),
-            )
+            .validate(&serde_json::json!({
+                "label": NASTY_LABEL,
+                "authToken": format!("local:instance/{id}/auth-token"),
+            }))
             .unwrap_or_else(|err| panic!("{:#?}", err.issues)),
     }
+}
+
+/// The secrets of an action: the fixture token as `authToken`.
+fn secrets() -> ResolvedSecrets {
+    ResolvedSecrets::for_tests([("authToken".parse().expect("valid field"), TOKEN.to_vec())])
 }
 
 fn command(spec: &stackly_core::provider::Command) -> Command {
@@ -105,13 +114,19 @@ fn command(spec: &stackly_core::provider::Command) -> Command {
     command
         .args(&spec.args)
         .env_clear()
-        .envs(spec.env.iter().map(|(key, value)| (key, value)))
+        .envs(spec.env.iter().map(|(key, value)| {
+            let value = match value {
+                EnvValue::Text(text) => OsStr::new(text),
+                EnvValue::Secret(_) => OsStr::from_bytes(TOKEN),
+            };
+            (key, value)
+        }))
         .current_dir(&spec.cwd);
     command
 }
 
-/// Runs an init plan the way the executor of spec 0010 would, minus its
-/// checks.
+/// Runs initialize or render steps the way the executor of spec 0010
+/// would, minus its checks.
 fn run_init(init: &[InitStep]) {
     for step in init {
         match step {
@@ -127,7 +142,7 @@ fn run_init(init: &[InitStep]) {
             InitStep::WriteFile(write) => {
                 let bytes = write
                     .content
-                    .materialize(&|_| Ok(TOKEN.to_vec()))
+                    .materialize(&secrets())
                     .expect("content materializes");
                 fs::write(&write.path, bytes).expect("config file");
             }
@@ -258,6 +273,7 @@ fn the_fake_plans_run_without_a_shell_and_argv_matches_the_plan() {
     let mut started = None;
     for _ in 0..3 {
         let run = package.run_plan(&context).expect("the run plan builds");
+        run_init(&run.render);
         let mut server = Reap(
             command(&run.spawn)
                 .stdin(Stdio::null())

@@ -15,7 +15,8 @@ use stackly_platform::{DirectoryLayout, RootSet};
 use super::digest::manifest_sha256;
 use super::interpolate::{
     EndpointTransport, InstanceDir, Interp, PathExpr, PathPosition, Token, TypeEnv, ValuePosition,
-    check_executable, check_literal, check_path, check_socket_name, check_value,
+    check_executable, check_literal, check_path, check_secret_file_name, check_socket_name,
+    check_value,
 };
 use super::issue::{FileIssues, Issue, IssueCode, Issues, Location};
 use super::manifest::{
@@ -496,8 +497,12 @@ impl Checker<'_> {
                 )
             })
             .collect();
-        let start_command =
-            self.command(&CommandParts::of(&lifecycle.start), "lifecycle.start", &env);
+        let start_command = self.command(
+            &CommandParts::of(&lifecycle.start),
+            "lifecycle.start",
+            &env,
+            true,
+        );
         let stop = self.stop(raw, &env);
         let reload = self.reload(raw, &env, &config_files);
         let readiness = self.readiness(raw, &env, &timeouts, reload.as_ref());
@@ -994,7 +999,9 @@ impl Checker<'_> {
             }
             let destination = check_path(
                 &file.destination,
-                PathPosition::ConfigDestination,
+                PathPosition::ConfigDestination {
+                    sensitive: file.sensitive,
+                },
                 env,
                 &mut self.yaml(),
                 &format!("{path}.destination"),
@@ -1025,11 +1032,15 @@ impl Checker<'_> {
         }
     }
 
+    /// Checks a command. `secrets` is true for the commands that resolve
+    /// secrets (`lifecycle.start` and `runExecutable`), whose env values
+    /// may each be one whole `${secret.<field>}` token.
     fn command(
         &mut self,
         parts: &CommandParts<'_>,
         path: &str,
         env: &TypeEnv<'_>,
+        secrets: bool,
     ) -> Option<CommandSpec> {
         let start = self.count();
         let executable = check_executable(
@@ -1075,9 +1086,13 @@ impl Checker<'_> {
                     self.at(&at, IssueCode::InvalidName, problem);
                     continue;
                 }
-                if let Some(interp) =
-                    check_value(value, ValuePosition::EnvValue, env, &mut self.yaml(), &at)
-                {
+                if let Some(interp) = check_value(
+                    value,
+                    ValuePosition::EnvValue { secrets },
+                    env,
+                    &mut self.yaml(),
+                    &at,
+                ) {
                     self.record_refs(&interp, &at);
                     env_list.push((key.clone(), interp));
                 }
@@ -1223,10 +1238,9 @@ impl Checker<'_> {
                         None
                     }
                 };
-                let destination = match &step.destination {
-                    Some(text) => check_path(
+                let file_name = match &step.destination {
+                    Some(text) => check_secret_file_name(
                         text,
-                        PathPosition::SecretDestination,
                         env,
                         &mut self.yaml(),
                         &format!("{path}.destination"),
@@ -1238,7 +1252,7 @@ impl Checker<'_> {
                 };
                 Some(InitStepSpec::MaterializeSecret {
                     secret: secret?,
-                    destination: destination?,
+                    file_name: file_name?,
                 })
             }
             _ => {
@@ -1253,7 +1267,7 @@ impl Checker<'_> {
                     cwd: step.cwd.as_deref(),
                     env: step.env.as_ref(),
                 };
-                let command = self.command(&parts, path, env);
+                let command = self.command(&parts, path, env, true);
                 let stdin = step
                     .stdin
                     .as_ref()
@@ -1334,8 +1348,12 @@ impl Checker<'_> {
                     );
                     return None;
                 };
-                let command =
-                    self.command(&CommandParts::of(command), &format!("{path}.command"), env)?;
+                let command = self.command(
+                    &CommandParts::of(command),
+                    &format!("{path}.command"),
+                    env,
+                    false,
+                )?;
                 Some(StopSpec::Command { command, success })
             }
             _ => {
@@ -1431,7 +1449,12 @@ impl Checker<'_> {
                 );
                 match &reload.command {
                     Some(command) => self
-                        .command(&CommandParts::of(command), &format!("{path}.command"), env)
+                        .command(
+                            &CommandParts::of(command),
+                            &format!("{path}.command"),
+                            env,
+                            false,
+                        )
                         .map(|command| ReloadActionSpec::Run { command, success }),
                     None => {
                         self.at(
@@ -1610,8 +1633,12 @@ impl Checker<'_> {
                     );
                     return None;
                 };
-                let command =
-                    self.command(&CommandParts::of(command), &format!("{path}.command"), env)?;
+                let command = self.command(
+                    &CommandParts::of(command),
+                    &format!("{path}.command"),
+                    env,
+                    false,
+                )?;
                 Some(ProbeDef::Exec { command, success })
             }
             other => {
@@ -2073,7 +2100,7 @@ fn sample_renders(
             };
             let file = format!("templates/{}", spec.template);
             let outcome = template::render(checked, spec.format, &resolver, config)
-                .and_then(|content| content.materialize(&|_| Ok(b"x".to_vec())))
+                .and_then(|content| content.materialize_with(|_| Some(&b"x"[..])))
                 .and_then(|bytes| {
                     let text = String::from_utf8_lossy(&bytes);
                     if spec.format.output_parses(&text) {

@@ -42,6 +42,9 @@ const INTEGER_BOUND: i64 = 1 << 53;
 pub const SETTINGS_DOCUMENT_MAX_LEN: usize = 256 * 1024;
 /// The `file` of issues about a settings document.
 pub(crate) const SETTINGS_FILE: &str = "settings";
+/// The secret reference of validation renders, in the daemon's form for the
+/// sample instance (spec 0011).
+const SAMPLE_SECRET_REF: &str = "local:instance/0192f000-0000-7000-8000-000000000001/sample";
 
 /// When a settings change reaches the running process (VAL-012).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -546,9 +549,9 @@ impl SettingsSchema {
         for field in self.fields.values().filter(|field| field.managed.is_none()) {
             let value = if field.secret {
                 SettingValue::Secret(
-                    "sample"
+                    SAMPLE_SECRET_REF
                         .parse()
-                        .expect("`sample` is a valid secret reference"),
+                        .expect("the sample secret reference is a valid secret reference"),
                 )
             } else {
                 match &field.kind {
@@ -853,11 +856,59 @@ pub(crate) fn parse_schema(
             fields.insert(setting, field);
         }
     }
+    check_secret_purposes(&fields, issues);
     (issues_len(issues) == start).then(|| SettingsSchema {
         title: raw.title,
         description: raw.description,
         fields,
     })
+}
+
+/// Rejects two secret fields whose purposes are equal, since the daemon
+/// names each secret of an instance `local:instance/<id>/<purpose>`
+/// (spec 0011).
+fn check_secret_purposes(
+    fields: &BTreeMap<SettingName, SettingField>,
+    issues: &mut FileIssues<'_>,
+) {
+    let mut seen: BTreeMap<String, &SettingName> = BTreeMap::new();
+    for field in fields.values().filter(|field| field.is_secret()) {
+        let purpose = secret_purpose(field.name().as_str());
+        match seen.get(&purpose) {
+            Some(first) => issues.at(
+                format!("properties.{}", field.name()),
+                IssueCode::SecretPurposeCollision,
+                format!(
+                    "secret fields {first} and {} both have the purpose {purpose}, so their secret references would be the same",
+                    field.name()
+                ),
+            ),
+            None => {
+                seen.insert(purpose, field.name());
+            }
+        }
+    }
+}
+
+// provisional: F11 (replaced by the purpose derivation of the domain secret
+// module, spec 0011)
+/// Derives the purpose of a secret field as spec 0011 does: a `-` before
+/// every uppercase letter that follows a lowercase letter or a digit, then
+/// everything lowercase (`adminPassword` is `admin-password`, `tlsKeyPEM`
+/// is `tls-key-pem`).
+fn secret_purpose(field: &str) -> String {
+    let mut purpose = String::with_capacity(field.len() + 4);
+    let mut previous: Option<char> = None;
+    for c in field.chars() {
+        if c.is_ascii_uppercase()
+            && previous.is_some_and(|p| p.is_ascii_lowercase() || p.is_ascii_digit())
+        {
+            purpose.push('-');
+        }
+        purpose.push(c.to_ascii_lowercase());
+        previous = Some(c);
+    }
+    purpose
 }
 
 /// How many issues were reported so far, to tell whether a part was clean.
@@ -1448,4 +1499,24 @@ fn parse_item_field(
         kind,
         required,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secret_purposes_follow_the_spec_0011_derivation() {
+        for (field, purpose) in [
+            ("authToken", "auth-token"),
+            ("adminPassword", "admin-password"),
+            ("tlsKeyPEM", "tls-key-pem"),
+            ("token2Fa", "token2-fa"),
+            ("fooBar", "foo-bar"),
+            ("fooBAr", "foo-bar"),
+            ("password", "password"),
+        ] {
+            assert_eq!(secret_purpose(field), purpose, "{field}");
+        }
+    }
 }

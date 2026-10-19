@@ -4,17 +4,24 @@
 #![cfg(unix)]
 
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
-    InitStep, IssueCode, Location, NameCheck, PackageError, PackageFiles, PlanContext, PlanError,
-    ResolvedEndpoint, RuntimeContext, SettingClass, ValidatedPackage, read_package,
+    EnvValue, InitStep, IssueCode, Location, NameCheck, PackageError, PackageFiles, PlanContext,
+    PlanError, ResolvedEndpoint, ResolvedSecrets, RuntimeContext, SettingClass, ValidatedPackage,
+    read_package,
 };
 use stackly_domain::{EndpointName, InstanceId, Port};
 use stackly_evidence::{Kind, evidence};
 use stackly_platform::{DirectoryLayout, RootSet};
 use stackly_testkit::{FakePlatform, TestRoot, make_fifo};
+
+/// The secret reference of the plan contexts here, in the daemon's form for
+/// their instance (spec 0011).
+const SECRET_REF: &str = "local:instance/0192f000-0000-7000-8000-00000000000b/auth-token";
 
 fn fake_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake")
@@ -371,7 +378,7 @@ fn interpolation_rejects_shells_secrets_flags_escapes_and_unpermitted_folders() 
         Edit::fake().replace(
             yaml,
             "    cwd: \"${instance.data}\"",
-            "    cwd: \"${instance.data}\"\n    env:\n      TOKEN: \"${secret.authToken}\"",
+            "    cwd: \"${instance.data}\"\n    env:\n      TOKEN: \"--pass=${secret.authToken}\"",
         ),
         "lifecycle.start.env.TOKEN",
         IssueCode::SecretNotAllowedHere,
@@ -455,6 +462,247 @@ fn interpolation_rejects_shells_secrets_flags_escapes_and_unpermitted_folders() 
 }
 
 #[test]
+fn a_whole_secret_env_value_is_accepted_only_where_secrets_resolve() {
+    let ev = evidence!(
+        covers = ["REQ-031"],
+        kind = Kind::Fixture,
+        expected = "a secret as a whole env value is accepted in lifecycle.start and runExecutable and becomes EnvValue::Secret, and is rejected in an exec probe, a stop command, and a reload run",
+    );
+    let yaml = "provider.yaml";
+    let package = Edit::fake()
+        .replace(
+            yaml,
+            "    cwd: \"${instance.data}\"",
+            "    cwd: \"${instance.data}\"\n    env:\n      FAKE_TOKEN: \"${secret.authToken}\"",
+        )
+        .replace(
+            yaml,
+            "      stdin: { secret: authToken }",
+            "      stdin: { secret: authToken }\n      env:\n        FAKE_TOKEN: \"${secret.authToken}\"",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/T",
+    );
+    let token = |env: &[(String, EnvValue)]| {
+        env.iter()
+            .find(|(key, _)| key == "FAKE_TOKEN")
+            .map(|(_, value)| value.clone())
+    };
+
+    let run = package.run_plan(&context).expect("the run plan builds");
+    let init = package.init_plan(&context).expect("the init plan builds");
+
+    assert!(
+        matches!(token(&run.spawn.env), Some(EnvValue::Secret(secret)) if secret.reference.as_str() == SECRET_REF)
+    );
+    let init_run = init
+        .steps
+        .iter()
+        .find_map(|step| match step {
+            InitStep::Run(run) => Some(run),
+            _ => None,
+        })
+        .expect("fake runs init");
+    assert!(matches!(
+        token(&init_run.command.env),
+        Some(EnvValue::Secret(_))
+    ));
+
+    let env = "\n      env:\n        FAKE_TOKEN: \"${secret.authToken}\"";
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "      args: [version]\n  failureThreshold",
+            &format!("      args: [version]{env}\n  failureThreshold"),
+        ),
+        "health.probe.command.env.FAKE_TOKEN",
+        IssueCode::SecretNotAllowedHere,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "      args: [shutdown, \"--port=${endpoint.http.port}\"]",
+            &format!("      args: [shutdown, \"--port=${{endpoint.http.port}}\"]{env}"),
+        ),
+        "lifecycle.stop.command.env.FAKE_TOKEN",
+        IssueCode::SecretNotAllowedHere,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "      args: [version]\n    verify: none",
+            &format!("      args: [version]{env}\n    verify: none"),
+        ),
+        "lifecycle.reload.command.env.FAKE_TOKEN",
+        IssueCode::SecretNotAllowedHere,
+    );
+    ev.pass();
+}
+
+#[test]
+fn materialize_secret_takes_one_file_name_for_the_secrets_folder() {
+    let yaml = "provider.yaml";
+    let destination = "destination: token }";
+    for (text, code) in [
+        (
+            "destination: \"${instance.temp}/token\" }",
+            IssueCode::TokenNotAllowedHere,
+        ),
+        (
+            "destination: \"${instance.run}/token\" }",
+            IssueCode::TokenNotAllowedHere,
+        ),
+        ("destination: secrets/token }", IssueCode::InvalidName),
+        ("destination: \"..\" }", IssueCode::PathEscapesScope),
+    ] {
+        assert_manifest_issue(
+            Edit::fake_command().replace(yaml, destination, text),
+            "lifecycle.initialize[1].destination",
+            code,
+        );
+    }
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "managedFilesystem: [data, config, logs, temp, run]",
+            "managedFilesystem: [data, config, logs, temp]",
+        ),
+        "lifecycle.initialize[1].destination",
+        IssueCode::PathNotPermitted,
+    );
+}
+
+#[test]
+fn the_secrets_folder_token_is_accepted_only_in_its_positions() {
+    let yaml = "provider.yaml";
+    let schema = "schemas/settings.schema.json";
+    let template = "templates/fake.json.tmpl";
+    let name_line = "  \"instanceName\": {{ instance.name }},";
+    let secrets_line =
+        "  \"instanceName\": {{ instance.name }},\n  \"secrets\": {{ instance.secrets }},";
+    Edit::fake()
+        .replace(template, name_line, secrets_line)
+        .validate()
+        .unwrap_or_else(|err| panic!("a template may name the secrets folder: {:#?}", err.issues));
+    let without_run = Edit::fake()
+        .replace(template, name_line, secrets_line)
+        .replace(
+            yaml,
+            "managedFilesystem: [data, config, logs, temp, run]",
+            "managedFilesystem: [data, config, logs, temp]",
+        )
+        .issues();
+    assert!(
+        without_run
+            .iter()
+            .any(|(file, _, code)| file == template && *code == IssueCode::PathNotPermitted),
+        "{without_run:#?}"
+    );
+    assert_manifest_issue(
+        Edit::fake().replace(
+            yaml,
+            "    cwd: \"${instance.data}\"",
+            "    cwd: \"${instance.secrets}\"",
+        ),
+        "lifecycle.start.cwd",
+        IssueCode::TokenNotAllowedHere,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "files: [\"${instance.logs}/fake.log\"]",
+            "files: [\"${instance.secrets}/fake.log\"]",
+        ),
+        "logs.files[0]",
+        IssueCode::TokenNotAllowedHere,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "destination: \"${instance.config}/peers.yaml\"",
+            "destination: \"${instance.secrets}/peers.yaml\"",
+        ),
+        "configFiles.peers.destination",
+        IssueCode::TokenNotAllowedHere,
+    );
+    assert_issue(
+        &Edit::fake_command()
+            .replace(
+                schema,
+                "\"managed\": \"${instance.name}\"",
+                "\"managed\": \"${instance.secrets}\"",
+            )
+            .issues(),
+        "settings.schema.json",
+        "properties.serverName.x-stackly.managed",
+        IssueCode::TokenNotAllowedHere,
+    );
+    assert_manifest_issue(
+        Edit::fake()
+            .replace(
+                yaml,
+                "managedFilesystem: [data, config, logs, temp, run]",
+                "managedFilesystem: [data, config, logs, temp]",
+            )
+            .replace(
+                yaml,
+                "      - serve\n",
+                "      - serve\n      - \"--token-file=${instance.secrets}/token\"\n",
+            ),
+        "lifecycle.start.args[1]",
+        IssueCode::PathNotPermitted,
+    );
+
+    let package = Edit::fake()
+        .replace(
+            yaml,
+            "destination: \"${instance.config}/fake.json\"",
+            "destination: \"${instance.secrets}/fake.json\"",
+        )
+        .replace(
+            yaml,
+            "\"--config=${instance.config}/fake.json\"",
+            "\"--config=${instance.secrets}/fake.json\"",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/T",
+    );
+    let secrets = context.paths.run.join("secrets");
+    let file = secrets.join("fake.json");
+
+    let init = package.init_plan(&context).expect("the init plan builds");
+    let run = package.run_plan(&context).expect("the run plan builds");
+
+    let write_at = init
+        .steps
+        .iter()
+        .position(|step| matches!(step, InitStep::WriteFile(write) if write.path == file))
+        .expect("init writes the sensitive config into the secrets folder");
+    assert!(
+        matches!(&init.steps[write_at - 1], InitStep::EnsureDirectories(dirs) if dirs == std::slice::from_ref(&secrets)),
+        "{:#?}",
+        init.steps
+    );
+    assert!(
+        matches!(run.render.as_slice(), [InitStep::EnsureDirectories(dirs), InitStep::WriteFile(write)] if dirs == std::slice::from_ref(&secrets) && write.path == file),
+        "{:#?}",
+        run.render
+    );
+    assert_eq!(
+        run.spawn.args[1],
+        format!("--config={}", file.to_str().expect("UTF-8 path"))
+    );
+}
+
+#[test]
 fn a_doubled_dollar_is_a_literal_dollar_brace() {
     let package = Edit::fake()
         .replace(
@@ -466,7 +714,7 @@ fn a_doubled_dollar_is_a_literal_dollar_brace() {
         .unwrap_or_else(|err| panic!("{:#?}", err.issues));
     let context = context_for(
         &package,
-        serde_json::json!({ "authToken": "fixture:authToken" }),
+        serde_json::json!({ "authToken": SECRET_REF }),
         "/Volumes/T",
     );
 
@@ -620,6 +868,23 @@ fn the_settings_dialect_rejects_keywords_and_rules_outside_it() {
         "properties.peers.items.properties.inner.type",
         IssueCode::SettingsSchemaRule,
     );
+    assert_issue(
+        &Edit::fake()
+            .replace(
+                schema,
+                "    \"authToken\": {",
+                "    \"authTOken\": { \"type\": \"string\", \"title\": \"Other token\", \"maxLength\": 256, \"x-stackly\": { \"apply\": \"restart\", \"secret\": true } },\n    \"authToken\": {",
+            )
+            .replace(
+                schema,
+                "\"required\": [\"authToken\"]",
+                "\"required\": [\"authToken\", \"authTOken\"]",
+            )
+            .issues(),
+        file,
+        "properties.authToken",
+        IssueCode::SecretPurposeCollision,
+    );
     ev.pass();
 }
 
@@ -661,7 +926,7 @@ fn settings_values_are_checked_with_their_field_path() {
             .map(|issue| (issue.location.to_string(), issue.code))
             .collect()
     };
-    let token = "fixture:authToken";
+    let token = SECRET_REF;
 
     assert_eq!(
         codes(serde_json::json!({ "authToken": token, "extra": 1 })),
@@ -1203,7 +1468,7 @@ fn context_for(package: &ValidatedPackage, settings: serde_json::Value, base: &s
 #[test]
 fn plans_report_unresolved_and_lan_endpoints_and_long_arguments() {
     let package = Edit::fake().validate().expect("fake validates");
-    let settings = serde_json::json!({ "authToken": "fixture:authToken" });
+    let settings = serde_json::json!({ "authToken": SECRET_REF });
     let http: EndpointName = "http".parse().expect("valid name");
 
     let mut auto = context_for(&package, settings.clone(), "/Volumes/T");
@@ -1245,7 +1510,7 @@ fn plans_report_unresolved_and_lan_endpoints_and_long_arguments() {
     let label = "x".repeat(4089);
     let context = context_for(
         &long,
-        serde_json::json!({ "authToken": "t", "label": label }),
+        serde_json::json!({ "authToken": SECRET_REF, "label": label }),
         "/Volumes/T",
     );
     assert_eq!(
@@ -1266,7 +1531,7 @@ fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
         )
         .validate()
         .unwrap_or_else(|err| panic!("{:#?}", err.issues));
-    let settings = serde_json::json!({ "authToken": "fixture:authToken" });
+    let settings = serde_json::json!({ "authToken": SECRET_REF });
     let quoted = context_for(&package, settings.clone(), "/Volumes/a\"b");
 
     let err = package.init_plan(&quoted).unwrap_err();
@@ -1290,10 +1555,10 @@ fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
             _ => None,
         })
         .expect("the config is written");
-    let err = write
-        .content
-        .materialize(&|_| Ok(b"a$b".to_vec()))
-        .unwrap_err();
+    let token = |bytes: &[u8]| {
+        ResolvedSecrets::for_tests([("authToken".parse().expect("valid field"), bytes.to_vec())])
+    };
+    let err = write.content.materialize(&token(b"a$b")).unwrap_err();
     assert_eq!(
         err,
         PlanError::UnrepresentableValue {
@@ -1302,8 +1567,42 @@ fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
     );
     assert!(!err.to_string().contains("a$b"));
     assert_eq!(
-        write.content.materialize(&|_| Ok(b"ok".to_vec())).expect("plain secrets materialize"),
+        write.content.materialize(&token(b"ok")).expect("plain secrets materialize"),
         b"data: \"/Volumes/T/data/instances/0192f000-0000-7000-8000-00000000000b/data\"\ntoken: \"ok\"\n"
+    );
+    assert_eq!(
+        write
+            .content
+            .materialize(&ResolvedSecrets::for_tests([]))
+            .unwrap_err(),
+        PlanError::SecretUnavailable {
+            field: "authToken".parse().expect("valid field")
+        }
+    );
+}
+
+#[test]
+fn a_working_folder_that_is_not_utf8_fails_the_run_plan() {
+    let package = Edit::fake()
+        .replace(
+            "provider.yaml",
+            "      - \"--data=${instance.data}\"\n      - \"--port",
+            "      - \"--data=${instance.temp}\"\n      - \"--port",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let mut context = context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/T",
+    );
+    context.paths.data = PathBuf::from(OsStr::from_bytes(b"/Volumes/T/\xff/data"));
+
+    assert_eq!(
+        package.run_plan(&context).unwrap_err(),
+        PlanError::PathNotUtf8 {
+            position: "instance.data".into()
+        }
     );
 }
 

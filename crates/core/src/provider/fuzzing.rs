@@ -15,16 +15,19 @@ use std::sync::OnceLock;
 use stackly_domain::EndpointName;
 
 use super::interpolate::{
-    EndpointTransport, InstanceDir, PathPosition, Piece, RawPiece, Token, TypeEnv, ValuePosition,
-    check_executable, check_literal, check_path, check_socket_name, check_value, parse,
+    EndpointTransport, InstanceDir, PathBase, PathPosition, Piece, RawPiece, Token, TypeEnv,
+    ValuePosition, check_executable, check_literal, check_path, check_secret_file_name,
+    check_socket_name, check_value, parse,
 };
 use super::issue::{FileIssues, IssueCode, Issues, MAX_ISSUES};
 use super::names::{is_component, is_component_byte};
 use super::package::{MANIFEST_FILE, NameCheck, PackageFiles};
 use super::plan::{
-    ARGUMENT_MAX_LEN, CHILD_PATH, Command, InitStep, PlanContext, PlanError, Resolver,
+    ARGUMENT_MAX_LEN, CHILD_PATH, Command, EnvValue, InitStep, PlanContext, PlanError, ProbeSpec,
+    ReloadAction, Resolver, StopPlan,
 };
 use super::raw::{RawSettingsSchema, decode_json, parse_json};
+use super::secret::ResolvedSecrets;
 use super::settings::{SettingsSchema, parse_schema};
 use super::validate::{ValidatedPackage, sample_context};
 
@@ -80,6 +83,9 @@ const TRAEFIK_ROUTES: &str = "templates/routes.yaml.tmpl";
 /// Bytes every secret resolves to in a harness: a quote, a backslash, a
 /// dollar, a newline, and a space, so each escaper has work to do.
 const AWKWARD_SECRET: &[u8] = b"s\"e\\c$r\ne t";
+/// A secret reference in the daemon's form (spec 0011), for the documents
+/// of the settings harness.
+const SAMPLE_SECRET_REF: &str = "local:instance/0192f000-0000-7000-8000-000000000001/auth-token";
 
 /// Target `provider_manifest`: `data` as `provider.yaml` next to the fake
 /// package's settings schema, template, and `versions.json`.
@@ -131,9 +137,11 @@ pub fn template(data: &[u8]) {
 /// # Panics
 ///
 /// Panics when an accepted string breaks the rule of its position: a
-/// secret in a value, a flag from a free setting, an executable with text
-/// around it, a path component that escapes its folder, or a socket name
-/// longer than 15 bytes.
+/// secret in a value other than a whole env value of a command that
+/// resolves secrets, a flag from a free setting, an executable with text
+/// around it, a path component that escapes its folder, the secrets folder
+/// outside a sensitive destination, a secret file name that is not one
+/// component, or a socket name longer than 15 bytes.
 pub fn interpolation(data: &[u8]) {
     let Ok(text) = std::str::from_utf8(data) else {
         return;
@@ -162,19 +170,33 @@ pub fn interpolation(data: &[u8]) {
 
     for position in [
         ValuePosition::Arg,
-        ValuePosition::EnvValue,
+        ValuePosition::EnvValue { secrets: false },
+        ValuePosition::EnvValue { secrets: true },
         ValuePosition::Managed,
     ] {
         let Some(interp) = check_value(text, position, &env, &mut sink, "fuzz") else {
             continue;
         };
         assert!(parsed.is_ok(), "an accepted value parses");
-        assert!(
-            !interp
-                .tokens()
-                .any(|token| matches!(token, Token::Secret(_))),
-            "a secret was accepted in a value position"
-        );
+        let has_secret = interp
+            .tokens()
+            .any(|token| matches!(token, Token::Secret(_)));
+        if position == (ValuePosition::EnvValue { secrets: true }) {
+            assert!(
+                !has_secret || matches!(interp.pieces.as_slice(), [Piece::Token(Token::Secret(_))]),
+                "a secret env value is not one whole token"
+            );
+        } else {
+            assert!(!has_secret, "a secret was accepted in a value position");
+        }
+        if position == ValuePosition::Managed {
+            assert!(
+                !interp
+                    .tokens()
+                    .any(|token| matches!(token, Token::InstanceSecrets)),
+                "a managed expression names the secrets folder"
+            );
+        }
         if position == ValuePosition::Arg
             && let Some(Piece::Token(Token::Setting(name))) = interp.pieces.first()
         {
@@ -198,8 +220,8 @@ pub fn interpolation(data: &[u8]) {
     }
     for position in [
         PathPosition::Cwd,
-        PathPosition::ConfigDestination,
-        PathPosition::SecretDestination,
+        PathPosition::ConfigDestination { sensitive: false },
+        PathPosition::ConfigDestination { sensitive: true },
         PathPosition::LogFile,
     ] {
         let Some(expr) = check_path(text, position, &env, &mut sink, "fuzz") else {
@@ -211,16 +233,27 @@ pub fn interpolation(data: &[u8]) {
                 .all(|component| is_component(component)),
             "a path component breaks the charset or is . or .."
         );
+        assert!(
+            expr.base != PathBase::Secrets
+                || position == (PathPosition::ConfigDestination { sensitive: true }),
+            "the secrets folder starts a path that is not a sensitive destination"
+        );
         let base = expr.base.path(&context.paths);
         let full = expr
             .components
             .iter()
-            .fold(base.to_path_buf(), |path, component| path.join(component));
-        assert!(full.starts_with(base), "a path left its folder");
+            .fold(base.clone(), |path, component| path.join(component));
+        assert!(full.starts_with(&base), "a path left its folder");
         assert!(
             full.components()
                 .all(|component| !matches!(component, Component::ParentDir | Component::CurDir)),
             "a path holds . or .."
+        );
+    }
+    if let Some(name) = check_secret_file_name(text, &env, &mut sink, "fuzz") {
+        assert!(
+            is_component(&name),
+            "a secret file name is not one component"
         );
     }
     if let Some(interp) = check_socket_name(text, &env, &mut sink, "fuzz")
@@ -340,18 +373,42 @@ fn exercise(package: &ValidatedPackage) {
             }
         }
         if let Ok(plan) = package.run_plan(&context) {
+            check_steps(package, &context, &plan.render);
             check_command(&context, &plan.spawn);
+            for probe in [&plan.readiness.probe, &plan.health.probe] {
+                if let ProbeSpec::Exec(run) = probe {
+                    check_secretless_command(&context, &run.command);
+                }
+            }
+            if let StopPlan::Command { run, .. } = &plan.stop {
+                check_secretless_command(&context, &run.command);
+            }
             for path in &plan.log_files {
                 assert_inside(&context, path);
             }
         }
         if let Ok(plan) = package.reload_plan(&context) {
             check_steps(package, &context, &plan.steps);
+            if let ReloadAction::Run(run) = &plan.action {
+                check_secretless_command(&context, &run.command);
+            }
         }
     }
 }
 
+/// Every secret field of a package, resolved to [`AWKWARD_SECRET`].
+fn awkward_secrets(package: &ValidatedPackage) -> ResolvedSecrets {
+    ResolvedSecrets::for_tests(
+        package
+            .settings
+            .fields()
+            .filter(|field| field.is_secret())
+            .map(|field| (field.name().clone(), AWKWARD_SECRET.to_vec())),
+    )
+}
+
 fn check_steps(package: &ValidatedPackage, context: &PlanContext, steps: &[InitStep]) {
+    let secrets = awkward_secrets(package);
     for step in steps {
         match step {
             InitStep::EnsureDirectories(dirs) => {
@@ -367,7 +424,7 @@ fn check_steps(package: &ValidatedPackage, context: &PlanContext, steps: &[InitS
                     .get(&write.content.config_file)
                     .map(|spec| spec.format)
                     .expect("a written file belongs to a config file");
-                match write.content.materialize(&|_| Ok(AWKWARD_SECRET.to_vec())) {
+                match write.content.materialize(&secrets) {
                     Ok(bytes) => {
                         let text = String::from_utf8(bytes).expect("rendered output is UTF-8");
                         assert!(
@@ -386,7 +443,10 @@ fn check_steps(package: &ValidatedPackage, context: &PlanContext, steps: &[InitS
                     ),
                 }
             }
-            InitStep::MaterializeSecret { path, .. } => assert_inside(context, path),
+            InitStep::MaterializeSecret { file_name, .. } => assert!(
+                is_component(file_name),
+                "a materialized secret's file name is not one component"
+            ),
             InitStep::Run(run) => check_command(context, &run.command),
         }
     }
@@ -419,11 +479,22 @@ fn check_command(context: &PlanContext, command: &Command) {
         assert!(keys.contains(&base), "env lacks {base}");
     }
     assert!(
+        command.env.iter().any(|(key, value)| key == "PATH"
+            && matches!(value, EnvValue::Text(text) if text == CHILD_PATH)),
+        "PATH is not the base PATH"
+    );
+}
+
+/// Checks a command that never resolves secrets: an exec probe, a stop
+/// command, or a reload run.
+fn check_secretless_command(context: &PlanContext, command: &Command) {
+    check_command(context, command);
+    assert!(
         command
             .env
             .iter()
-            .any(|(key, value)| key == "PATH" && value == CHILD_PATH),
-        "PATH is not the base PATH"
+            .all(|(_, value)| matches!(value, EnvValue::Text(_))),
+        "a command that resolves no secret has a secret env value"
     );
 }
 
@@ -467,11 +538,14 @@ fn documents(schema: &SettingsSchema) -> Vec<serde_json::Value> {
             _ => serde_json::json!(-9_007_199_254_740_993_i64),
         };
         awkward.insert(field.name().to_string(), value);
-        texts.insert(field.name().to_string(), serde_json::json!("fixture:x"));
+        texts.insert(
+            field.name().to_string(),
+            serde_json::json!(SAMPLE_SECRET_REF),
+        );
     }
     vec![
         serde_json::json!({}),
-        serde_json::json!({ "authToken": "fixture:authToken" }),
+        serde_json::json!({ "authToken": SAMPLE_SECRET_REF }),
         schema.sample_values(false).to_json(),
         schema.sample_values(true).to_json(),
         serde_json::Value::Object(awkward),

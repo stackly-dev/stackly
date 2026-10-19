@@ -12,8 +12,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
-    InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError, PreflightOutcome,
-    ReloadAction, ResolvedEndpoint, RuntimeContext, Segment, ValidatedPackage, read_package,
+    EnvValue, InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError,
+    PreflightOutcome, ReloadAction, ResolvedEndpoint, ResolvedSecrets, RuntimeContext, Segment,
+    ValidatedPackage, read_package,
 };
 use stackly_domain::{
     Capability, ExactVersion, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
@@ -24,6 +25,9 @@ use stackly_testkit::{FakePlatform, TestRoot};
 
 /// The `label` of the golden fake context: every shell metacharacter.
 const NASTY_LABEL: &str = "$(touch pwned); rm -rf ~ `id` \"q\" 'q' | & > ü 空";
+/// The secret reference of the golden context, in the daemon's form for the
+/// golden instance (spec 0011).
+const GOLDEN_SECRET_REF: &str = "local:instance/0192f000-0000-7000-8000-00000000000a/auth-token";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -205,16 +209,33 @@ fn pretty(value: &impl serde::Serialize) -> String {
     text
 }
 
+/// Every secret field of a package resolved to the text `<secret:field>`.
+fn placeholder_secrets(package: &ValidatedPackage) -> ResolvedSecrets {
+    ResolvedSecrets::for_tests(
+        package
+            .settings_schema()
+            .fields()
+            .filter(|field| field.is_secret())
+            .map(|field| {
+                (
+                    field.name().clone(),
+                    format!("<secret:{}>", field.name()).into_bytes(),
+                )
+            }),
+    )
+}
+
 /// Every rendered config of a plan's steps, with each secret written as
 /// `<secret:field>` through its escaper.
-fn rendered(steps: &[InitStep]) -> Vec<(String, String)> {
+fn rendered(package: &ValidatedPackage, steps: &[InitStep]) -> Vec<(String, String)> {
+    let secrets = placeholder_secrets(package);
     steps
         .iter()
         .filter_map(|step| match step {
             InitStep::WriteFile(write) => {
                 let bytes = write
                     .content
-                    .materialize(&|secret| Ok(format!("<secret:{}>", secret.field).into_bytes()))
+                    .materialize(&secrets)
                     .expect("golden content materializes");
                 Some((
                     write.content.config_file.clone(),
@@ -227,7 +248,14 @@ fn rendered(steps: &[InitStep]) -> Vec<(String, String)> {
 }
 
 fn fake_settings() -> serde_json::Value {
-    serde_json::json!({ "label": NASTY_LABEL, "authToken": "fixture:authToken" })
+    serde_json::json!({ "label": NASTY_LABEL, "authToken": GOLDEN_SECRET_REF })
+}
+
+fn fake_command_settings() -> serde_json::Value {
+    serde_json::json!({
+        "authToken": GOLDEN_SECRET_REF,
+        "peers": [{ "name": "east", "port": 6222 }, { "name": "west" }],
+    })
 }
 
 #[test]
@@ -300,7 +328,7 @@ fn fake_plans_match_the_golden_files() {
     assert_golden("fake", "init.json", &pretty(&init));
     assert_golden("fake", "run.json", &pretty(&run));
     assert_golden("fake", "reload.json", &pretty(&reload));
-    for (config, text) in rendered(&init.steps) {
+    for (config, text) in rendered(&package, &init.steps) {
         assert_golden("fake", &format!("render-{config}.txt"), &text);
     }
 }
@@ -308,11 +336,7 @@ fn fake_plans_match_the_golden_files() {
 #[test]
 fn fake_command_plans_match_the_golden_files() {
     let package = validated(&fake_command_dir());
-    let settings = serde_json::json!({
-        "authToken": "fixture:authToken",
-        "peers": [{ "name": "east", "port": 6222 }, { "name": "west" }],
-    });
-    let context = golden_context(&package, settings);
+    let context = golden_context(&package, fake_command_settings());
 
     let init = package
         .init_plan(&context)
@@ -327,9 +351,113 @@ fn fake_command_plans_match_the_golden_files() {
     assert_golden("fake-command", "init.json", &pretty(&init));
     assert_golden("fake-command", "run.json", &pretty(&run));
     assert_golden("fake-command", "reload.json", &pretty(&reload));
-    for (config, text) in rendered(&init.steps) {
+    for (config, text) in rendered(&package, &init.steps) {
         assert_golden("fake-command", &format!("render-{config}.txt"), &text);
     }
+}
+
+#[test]
+fn materialize_secret_names_a_file_in_the_secrets_folder() {
+    let package = validated(&fake_command_dir());
+    let context = golden_context(&package, fake_command_settings());
+    let token = context.paths.run.join("secrets/token");
+
+    let init = package
+        .init_plan(&context)
+        .expect("the fake-command init plan builds");
+
+    let (secret, file_name) = init
+        .steps
+        .iter()
+        .find_map(|step| match step {
+            InitStep::MaterializeSecret { secret, file_name } => Some((secret, file_name)),
+            _ => None,
+        })
+        .expect("fake-command materializes its token");
+    assert_eq!(secret.field.as_str(), "authToken");
+    assert_eq!(file_name, "token");
+    assert_eq!(init.cleanup, [token.as_path()]);
+    let run = init
+        .steps
+        .iter()
+        .find_map(|step| match step {
+            InitStep::Run(run) => Some(run),
+            _ => None,
+        })
+        .expect("fake-command runs init");
+    assert!(
+        run.command.env.contains(&(
+            "FAKE_TOKEN_FILE".to_owned(),
+            EnvValue::Text(token.to_str().expect("UTF-8 path").to_owned())
+        )),
+        "{:?}",
+        run.command.env
+    );
+}
+
+#[test]
+fn a_whole_secret_env_value_of_the_start_command_stays_a_secret() {
+    let package = validated(&fake_command_dir());
+    let context = golden_context(&package, fake_command_settings());
+
+    let run = package
+        .run_plan(&context)
+        .expect("the fake-command run plan builds");
+
+    let (_, value) = run
+        .spawn
+        .env
+        .iter()
+        .find(|(key, _)| key == "FAKE_TOKEN")
+        .expect("the start command sets FAKE_TOKEN");
+    let EnvValue::Secret(secret) = value else {
+        panic!("FAKE_TOKEN should be a secret, got {value:?}");
+    };
+    assert_eq!(secret.field.as_str(), "authToken");
+    assert_eq!(secret.reference.as_str(), GOLDEN_SECRET_REF);
+    let json = serde_json::to_string(&run).expect("plans serialize");
+    let debug = format!("{run:?}");
+    assert!(json.contains("<secret:authToken>"), "{json}");
+    assert!(!json.contains(GOLDEN_SECRET_REF), "{json}");
+    assert!(!debug.contains(GOLDEN_SECRET_REF), "{debug}");
+}
+
+#[test]
+fn run_plans_render_every_config_file_before_the_spawn() {
+    let package = validated(&fake_command_dir());
+    let context = golden_context(&package, fake_command_settings());
+    let config = &context.paths.config;
+
+    let run = package
+        .run_plan(&context)
+        .expect("the fake-command run plan builds");
+
+    let [
+        InitStep::EnsureDirectories(dirs),
+        InitStep::WriteFile(peers),
+        InitStep::WriteFile(server),
+    ] = run.render.as_slice()
+    else {
+        panic!("one EnsureDirectories and two writes: {:#?}", run.render);
+    };
+    assert_eq!(dirs, &[config.clone(), config.join("conf")]);
+    assert_eq!(peers.path, config.join("peers.yaml"));
+    assert_eq!(server.path, config.join("conf/server.json"));
+    assert!(server.sensitive);
+    assert_eq!(
+        rendered(&package, &run.render),
+        rendered(
+            &package,
+            &package
+                .init_plan(&context)
+                .expect("the fake-command init plan builds")
+                .steps
+        )
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>(),
+        "the run plan renders the same files as initialize, sorted by name"
+    );
 }
 
 #[test]
@@ -344,8 +472,8 @@ fn plans_show_secrets_only_as_their_field() {
     let debug = format!("{init:?}");
 
     assert!(json.contains("<secret:authToken>"), "{json}");
-    assert!(!json.contains("fixture:authToken"), "{json}");
-    assert!(!debug.contains("fixture:authToken"), "{debug}");
+    assert!(!json.contains(GOLDEN_SECRET_REF), "{json}");
+    assert!(!debug.contains(GOLDEN_SECRET_REF), "{debug}");
     let secret = init
         .steps
         .iter()
@@ -363,7 +491,7 @@ fn plans_show_secrets_only_as_their_field() {
             _ => None,
         })
         .expect("the fake config holds the auth token");
-    assert_eq!(secret.reference.as_str(), "fixture:authToken");
+    assert_eq!(secret.reference.as_str(), GOLDEN_SECRET_REF);
 }
 
 #[test]
@@ -520,7 +648,7 @@ fn nats_plans_match_the_golden_files() {
 
     assert_golden("nats", "init.json", &pretty(&init));
     assert_golden("nats", "run.json", &pretty(&run));
-    let renders = rendered(&init.steps);
+    let renders = rendered(&package, &init.steps);
     assert_eq!(renders.len(), 1);
     for (config, text) in renders {
         assert_golden("nats", &format!("render-{config}.txt"), &text);
@@ -536,7 +664,7 @@ fn nats_without_jetstream_renders_no_jetstream_block() {
         .init_plan(&context)
         .expect("the nats init plan builds");
 
-    let (_, text) = rendered(&init.steps)
+    let (_, text) = rendered(&package, &init.steps)
         .into_iter()
         .next()
         .expect("nats renders nats.conf");
@@ -639,7 +767,7 @@ fn traefik_plans_with_three_routes_match_the_golden_files() {
     assert_golden("traefik", "init.json", &pretty(&init));
     assert_golden("traefik", "run.json", &pretty(&run));
     assert_golden("traefik", "reload.json", &pretty(&reload));
-    let renders = rendered(&init.steps);
+    let renders = rendered(&package, &init.steps);
     assert_eq!(renders.len(), 2);
     for (config, text) in renders {
         assert_golden("traefik", &format!("render-{config}.txt"), &text);
@@ -662,7 +790,7 @@ fn traefik_routes_render_for_zero_one_and_three_routes() {
             .reload_plan(&context)
             .expect("the traefik reload plan builds");
 
-        let renders = rendered(&reload.steps);
+        let renders = rendered(&package, &reload.steps);
         let [(config, text)] = renders.as_slice() else {
             panic!("a traefik reload renders only routes: {renders:?}");
         };

@@ -37,13 +37,13 @@ pub use package::{
     SETTINGS_SCHEMA_MAX_LEN, TEMPLATE_MAX_LEN, TEMPLATES_MAX, VERSIONS_MAX_LEN, read_package,
 };
 pub use plan::{
-    ARGUMENT_MAX_LEN, CHILD_PATH, Command, ExecutablePath, FileWrite, HealthPlan, InitPlan,
-    InitStep, PlanContext, PlanError, PlanSecret, ProbePlan, ProbeSpec, ProbeTarget, ReloadAction,
-    ReloadPlan, RenderedContent, ResolvedEndpoint, RunPlan, RunSpec, RuntimeContext,
-    SecretResolveError, Segment, Stdin, StopPlan,
+    ARGUMENT_MAX_LEN, CHILD_PATH, Command, EnvValue, ExecutablePath, FileWrite, HealthPlan,
+    InitPlan, InitStep, PlanContext, PlanError, PlanSecret, ProbePlan, ProbeSpec, ProbeTarget,
+    ReloadAction, ReloadPlan, RenderedContent, ResolvedEndpoint, RunPlan, RunSpec, RuntimeContext,
+    Segment, Stdin, StopPlan,
 };
 pub use preflight::{DATA_MARKER_MAX_LEN, MarkerRead, PreflightOutcome};
-pub use secret::{SecretRef, SecretRefError};
+pub use secret::{ResolvedSecrets, SecretRef, SecretRefError};
 pub use settings::{
     ApplyClass, ArrayRules, BooleanRules, FieldKind, IntegerRules, ItemField, Pattern,
     SETTINGS_DOCUMENT_MAX_LEN, ScalarKind, ScalarValue, SettingClass, SettingField, SettingValue,

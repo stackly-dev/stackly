@@ -1,4 +1,39 @@
 {
+  "render": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/fake.json",
+        "content": {
+          "configFile": "fakeConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "{\n  \"greeting\": \"hello from stackly\",\n  \"instanceName\": \"golden\",\n  \"authToken\": "
+            },
+            {
+              "type": "secret",
+              "content": {
+                "secret": "<secret:authToken>",
+                "format": "json"
+              }
+            },
+            {
+              "type": "text",
+              "content": "\n}\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    }
+  ],
   "spawn": {
     "program": {
       "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
@@ -21,15 +56,24 @@
     "env": [
       [
         "HOME",
-        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
       ],
       [
         "PATH",
-        "/usr/bin:/bin:/usr/sbin:/sbin"
+        {
+          "type": "text",
+          "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+        }
       ],
       [
         "TMPDIR",
-        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
       ]
     ]
   },

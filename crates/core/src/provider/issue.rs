@@ -70,8 +70,9 @@ issue_codes! {
     UnknownToken => "unknown_token",
     /// A token whose type the position does not accept.
     TokenNotAllowedHere => "token_not_allowed_here",
-    /// A `secret.*` token outside stdin, `materializeSecret`, and sensitive
-    /// templates.
+    /// A `secret.*` token outside stdin, `materializeSecret`, sensitive
+    /// templates, and a whole env value of `lifecycle.start` or
+    /// `runExecutable`.
     SecretNotAllowedHere => "secret_not_allowed_here",
     /// An executable that is not exactly one executable token.
     LiteralExecutable => "literal_executable",
@@ -128,6 +129,9 @@ issue_codes! {
     SettingsSchemaRule => "settings_schema_rule",
     /// A settings value that the settings schema rejects.
     SettingsValue => "settings_value",
+    /// Two secret fields whose derived purposes are equal, so their daemon
+    /// references (`local:instance/<id>/<purpose>`, spec 0011) would clash.
+    SecretPurposeCollision => "secret_purpose_collision",
     /// A `versions.json` that breaks a catalog rule.
     VersionsRule => "versions_rule",
     /// A `fixture` artifact outside the `testing` namespace.
@@ -321,7 +325,7 @@ mod tests {
                 "{text}"
             );
         }
-        assert_eq!(IssueCode::ALL.len(), 49);
+        assert_eq!(IssueCode::ALL.len(), 50);
     }
 
     #[test]
