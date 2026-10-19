@@ -37,6 +37,14 @@ struct Held {
     keys: HashMap<LockKey, LockHolder>,
 }
 
+impl Held {
+    fn release_operation(&mut self, id: OperationId) {
+        self.keys.retain(
+            |_, holder| !matches!(holder, LockHolder::Operation { id: owner, .. } if *owner == id),
+        );
+    }
+}
+
 /// The lock keys held by running operations, operations in
 /// `needs_recovery`, and internal holders. Cloning shares the table.
 ///
@@ -121,10 +129,26 @@ impl LockTable {
 
     /// Releases every key of an operation.
     pub(crate) fn release_operation(&self, id: OperationId) {
-        self.held().keys.retain(
-            |_, holder| !matches!(holder, LockHolder::Operation { id: owner, .. } if *owner == id),
-        );
+        self.held().release_operation(id);
         self.released.notify_one();
+    }
+
+    /// Runs `commit` with the table held and, when it succeeds, releases
+    /// every key of `id` before anyone else can read the table, so nobody
+    /// sees what `commit` wrote while those keys are still held. When it
+    /// fails, the keys stay held. Call it from a blocking thread: the
+    /// table stays held for the whole commit.
+    pub(crate) fn release_with<T, E>(
+        &self,
+        id: OperationId,
+        commit: impl FnOnce() -> Result<T, E>,
+    ) -> Result<T, E> {
+        let mut held = self.held();
+        let committed = commit()?;
+        held.release_operation(id);
+        drop(held);
+        self.released.notify_one();
+        Ok(committed)
     }
 
     fn release_keys(&self, keys: &[LockKey], name: &'static str) {
@@ -156,6 +180,9 @@ impl Drop for InternalLock {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
     use stackly_domain::InstanceId;
 
     use super::*;
@@ -200,6 +227,59 @@ mod tests {
         );
         locks.release_operation(first);
         assert_eq!(locks.holder(&b), None);
+    }
+
+    fn running(id: OperationId) -> LockHolder {
+        LockHolder::Operation {
+            id,
+            state: OperationState::Running,
+        }
+    }
+
+    #[test]
+    fn a_reader_that_sees_a_releasing_commit_never_finds_its_keys_held() {
+        let locks = table();
+        let key = LockKey::Instance(InstanceId::generate());
+        let id = OperationId::generate();
+        locks
+            .try_take(std::slice::from_ref(&key), running(id))
+            .unwrap();
+        let committed = Arc::new(AtomicBool::new(false));
+        let reader = {
+            let (locks, key, committed) = (locks.clone(), key.clone(), Arc::clone(&committed));
+            std::thread::spawn(move || {
+                while !committed.load(Ordering::SeqCst) {
+                    std::thread::yield_now();
+                }
+                locks.holder(&key)
+            })
+        };
+
+        locks
+            .release_with(id, || {
+                committed.store(true, Ordering::SeqCst);
+                // The reader now waits for the table, not for the release.
+                std::thread::sleep(Duration::from_millis(50));
+                Ok::<_, ()>(())
+            })
+            .unwrap();
+
+        assert_eq!(reader.join().unwrap(), None);
+    }
+
+    #[test]
+    fn a_failed_releasing_commit_keeps_every_key() {
+        let locks = table();
+        let key = LockKey::Manager;
+        let id = OperationId::generate();
+        locks
+            .try_take(std::slice::from_ref(&key), running(id))
+            .unwrap();
+
+        let failed = locks.release_with(id, || Err::<(), _>("no space"));
+
+        assert_eq!(failed, Err("no space"));
+        assert_eq!(locks.holder(&key), Some(running(id)));
     }
 
     #[test]
