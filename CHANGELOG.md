@@ -1,0 +1,33 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- `stacklyd`, the per user daemon, now serves the Stackly IPC protocol 1.2 over a private Unix socket. Messages are JSON behind a 4 byte length, at most 1 MiB, and every client starts with a handshake that names its protocol version and contract digest (see spec 0006).
+- Only one daemon runs per user. It holds a lock in `<data>/stacklyd.lock` before it touches the log, socket, or registry; a second `stacklyd` for the same root exits 3 and names the daemon that owns the lock (see spec 0006).
+- `stackly daemon status` shows the running daemon: status, pid, uid, version, protocol, server instance, start time, the four roots, and the socket path. `--json` prints `info`, `health`, and a `client` block with the contract drift flag. Any health exits 0; no daemon exits 6, an untrusted socket 4, another protocol major 5, a timeout 8, and a rejected `STACKLY_ROOT` 2 (see spec 0006).
+- Every error, from the daemon or the client, is one envelope from a single catalog: a stable `code`, a `category`, `retryable`, safe `details`, and optional `items`. The catalog is written to `protocols/error-codes.json` (see spec 0006).
+- Event subscriptions with cursors: `events.subscribe` with `since` replays missed events in order and then goes on live. A cursor from an earlier daemon run, or one older than the last 4096 events, starts with an explicit `events.gap` so the client takes a fresh snapshot (see spec 0006).
+- Recovery mode: when the registry needs recovery (for example a schema newer than the app), the daemon keeps serving with health `degraded` and the recovery report in `get_health`, never prunes, and answers any method not allowed there with `registry.recovery_mode`. A registry another process holds is tried again after 1, 2, and 4 seconds first (see specs 0005 and 0006).
+- The daemon log: JSON lines to stderr and to `<logs>/daemon/stacklyd.log`, rotated at 20 MiB with 5 files kept, never blocking the daemon, and counting any dropped lines in health. Each request line carries the request ID, method, client kind, `interactive`, duration, and outcome, never params or replies. `STACKLY_LOG` sets the filter (see spec 0006).
+- `stacklyd --print-roots` prints the resolved data, logs, cache, and runtime roots plus the socket path, then exits without creating anything (see spec 0006).
+- The `stackly-ipc` crate: the socket transport shared by the daemon and the CLI, with the endpoint checks below and a client that matches replies by request ID (see spec 0006).
+- Contract tooling: `cargo xtask codegen` writes the Swift types, `OpenEnums.swift`, `ContractInfo.swift`, the JSON Schemas, the error catalog, and the contract digest, and records each protocol version in `protocols/contract-versions.json`. It refuses a contract change that keeps the same version (see spec 0006).
+- Shared contract fixtures in `protocols/fixtures/`, read by both the Rust and the Swift tests, and `StacklyJSON` in the Swift client for millisecond timestamps (see spec 0006).
+- Fuzzing for the IPC codecs: `cargo xtask fuzz list`, `seed`, `build`, and `run` with a pinned nightly toolchain and cargo-fuzz version, and the targets `ipc_frame_decode` and `ipc_request_decode` (see spec 0006).
+
+### Changed
+
+- `stackly` now reads `STACKLY_ROOT` once at startup, with the same rules as the daemon (see spec 0006).
+- Open enums in the contract read a value from a newer daemon as `unrecognized` instead of failing, in Rust and in Swift (see spec 0006).
+
+### Security
+
+- The daemon checks the peer's uid right after accept and refuses a peer of another user, or one whose credentials cannot be read, with `ipc.peer_rejected` before it reads any request (see spec 0006).
+- Clients check the socket and its folder (type, owner, and mode, without following symlinks) and the daemon's uid before they send a byte, so a fake endpoint never receives a credential or a change (see spec 0006).
+- The daemon opens no TCP or UDP socket, and `cargo xtask check-deps` rejects any TCP or UDP socket in the daemon, CLI, and IPC code (see spec 0006).
