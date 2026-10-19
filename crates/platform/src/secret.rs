@@ -290,12 +290,13 @@ pub trait SecretStore: Send + Sync {
     fn store_key(&self, reference: &SecretRef) -> String;
 
     /// Tells whether an item exists, from its attributes alone and never
-    /// with a dialog.
+    /// with a dialog. A store that can look up attributes while it is
+    /// locked, such as the macOS Keychain, still answers then.
     ///
     /// # Errors
     ///
-    /// Returns [`SecretStoreError::Locked`] for a locked store,
-    /// [`SecretStoreError::NotSupported`] without a store, and
+    /// Returns [`SecretStoreError::Locked`] for a locked store that cannot
+    /// check, [`SecretStoreError::NotSupported`] without a store, and
     /// [`SecretStoreError::Backend`] for any other failure.
     fn probe(&self, reference: &SecretRef) -> Result<SecretPresence, SecretStoreError>;
 
@@ -303,10 +304,10 @@ pub trait SecretStore: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Returns [`SecretStoreError::NotFound`] when no item exists (unless
-    /// the store is locked, which is [`SecretStoreError::Locked`]),
-    /// [`SecretStoreError::AccessDenied`] when access is refused, and the
-    /// other variants as their names say.
+    /// Returns [`SecretStoreError::NotFound`] when no item exists (a
+    /// locked Keychain still knows that), [`SecretStoreError::Locked`]
+    /// when the store is locked, [`SecretStoreError::AccessDenied`] when
+    /// access is refused, and the other variants as their names say.
     fn read(
         &self,
         reference: &SecretRef,

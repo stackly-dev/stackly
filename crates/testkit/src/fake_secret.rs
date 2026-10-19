@@ -37,10 +37,12 @@ pub struct SecretCall {
 /// A secret store in memory that the test can lock, deny, switch off,
 /// hold, and fail, and that counts every call (spec 0011).
 ///
-/// It behaves like the Keychain adapter: a create on an existing item
-/// fails `AlreadyExists`, a replace or delete on a missing one fails
-/// `NotFound`, and [`state`](SecretStore::state) is the cache of what the
-/// last call saw (`Unknown` until the first one). Clones share the store.
+/// It behaves like the Keychain adapter, as the spike of spec 0011 build
+/// step 3 measured it: a create on an existing item fails `AlreadyExists`,
+/// a replace or delete on a missing one fails `NotFound`, a locked store
+/// still answers probes, deletes, and `NotFound`, and
+/// [`state`](SecretStore::state) is the lock state the last call saw
+/// (`Unknown` until the first one). Clones share the store.
 ///
 /// ```
 /// use stackly_domain::SecretRef;
@@ -135,8 +137,9 @@ impl FakeSecretStore {
             .map(|value| value.expose().to_owned())
     }
 
-    /// Locks the store: every fallible call fails `Locked` until
-    /// [`unlock`](Self::unlock).
+    /// Locks the store until [`unlock`](Self::unlock): a read of a stored
+    /// value and every write fail `Locked`, while a probe, a delete, and a
+    /// read of a missing item still work, like a locked Keychain.
     pub fn lock(&self) {
         self.lock_state().locked = true;
     }
@@ -146,11 +149,12 @@ impl FakeSecretStore {
         self.lock_state().locked = false;
     }
 
-    /// Makes the item behind `reference` distrust this process: a read,
-    /// write, or delete of it fails `AccessDenied`, with `by_user` true
-    /// under [`Interaction::AllowPrompt`] (the user denied the dialog) and
-    /// false under [`Interaction::Never`] (no dialog was allowed). A probe
-    /// reads attributes only, so it still works.
+    /// Makes the item behind `reference` distrust this process: a read of
+    /// it fails `AccessDenied`, with `by_user` true under
+    /// [`Interaction::AllowPrompt`] (the user denied the dialog) and false
+    /// under [`Interaction::Never`] (no dialog was allowed). A probe, a
+    /// write, and a delete still work, like a Keychain item whose ACL only
+    /// guards reading.
     pub fn deny(&self, reference: &SecretRef) {
         self.lock_state().denied.insert(reference.clone());
     }
@@ -206,7 +210,8 @@ impl FakeSecretStore {
 
     /// Counts the call, waits on a hold, applies the injected failure, the
     /// unsupported switch, the lock, and the denial, then runs `body` on
-    /// the items and records what the call observed.
+    /// the items and records the lock state, as the adapter reads it after
+    /// every call.
     fn call<T>(
         &self,
         op: SecretOp,
@@ -231,31 +236,26 @@ impl FakeSecretStore {
                     .unwrap_or_else(PoisonError::into_inner);
             }
         }
+        let stored = state.items.contains_key(reference);
         let result = if let Some(error) = state.fail_next.take() {
             Err(error)
         } else if state.unsupported {
             Err(SecretStoreError::NotSupported { os: Os::Macos })
-        } else if state.locked {
+        } else if state.locked && (op == SecretOp::Write || (op == SecretOp::Read && stored)) {
             Err(SecretStoreError::Locked)
-        } else if op != SecretOp::Probe && state.denied.contains(reference) {
+        } else if op == SecretOp::Read && state.denied.contains(reference) {
             Err(SecretStoreError::AccessDenied {
                 by_user: interaction == Some(Interaction::AllowPrompt),
             })
         } else {
             body(&mut state.items)
         };
-        match result {
-            Err(SecretStoreError::Locked) => state.observed = Some(StoreState::Locked),
-            Err(SecretStoreError::NotSupported { .. }) => {
-                state.observed = Some(StoreState::Unsupported);
-            }
-            Ok(_)
-            | Err(
-                SecretStoreError::NotFound
-                | SecretStoreError::AlreadyExists
-                | SecretStoreError::AccessDenied { .. },
-            ) => state.observed = Some(StoreState::Available),
-            Err(_) => {}
+        if !state.unsupported {
+            state.observed = Some(if state.locked {
+                StoreState::Locked
+            } else {
+                StoreState::Available
+            });
         }
         result
     }

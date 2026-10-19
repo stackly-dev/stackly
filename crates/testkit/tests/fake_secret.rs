@@ -84,14 +84,14 @@ fn write_modes_follow_the_keychain_rules() {
 }
 
 #[test]
-fn a_locked_store_fails_every_call_locked_and_caches_the_state() {
+fn a_locked_store_refuses_reads_and_writes_but_answers_probes_and_deletes() {
     let store = FakeSecretStore::new();
     let admin = reference("local:erp/admin");
+    let missing = reference("local:erp/missing");
     store.insert(&admin, VALUE);
     assert_eq!(store.state(), StoreState::Unknown);
 
     store.lock();
-    assert_eq!(store.probe(&admin), Err(SecretStoreError::Locked));
     assert_eq!(
         store.read(&admin, Interaction::AllowPrompt).unwrap_err(),
         SecretStoreError::Locked
@@ -101,19 +101,29 @@ fn a_locked_store_fails_every_call_locked_and_caches_the_state() {
         Err(SecretStoreError::Locked)
     );
     assert_eq!(
-        store.delete(&admin, Interaction::Never),
+        store.write(&missing, &value("x"), WriteMode::Create, Interaction::Never),
         Err(SecretStoreError::Locked)
     );
     assert_eq!(store.state(), StoreState::Locked);
+    assert_eq!(store.probe(&admin), Ok(SecretPresence::Present));
+    assert_eq!(store.probe(&missing), Ok(SecretPresence::Missing));
+    assert_eq!(
+        store.read(&missing, Interaction::Never).unwrap_err(),
+        SecretStoreError::NotFound
+    );
+    assert_eq!(store.state(), StoreState::Locked, "a probe keeps it locked");
     assert_eq!(store.stored_value(&admin).as_deref(), Some(VALUE));
 
+    store.delete(&admin, Interaction::Never).unwrap();
+    assert!(!store.contains(&admin));
+
     store.unlock();
-    assert_eq!(store.probe(&admin), Ok(SecretPresence::Present));
+    assert_eq!(store.probe(&admin), Ok(SecretPresence::Missing));
     assert_eq!(store.state(), StoreState::Available);
 }
 
 #[test]
-fn a_denied_item_fails_by_user_only_when_a_dialog_was_allowed() {
+fn a_denied_item_refuses_reads_by_user_only_when_a_dialog_was_allowed() {
     let store = FakeSecretStore::new();
     let admin = reference("local:erp/admin");
     store.insert(&admin, VALUE);
@@ -127,17 +137,24 @@ fn a_denied_item_fails_by_user_only_when_a_dialog_was_allowed() {
         store.read(&admin, Interaction::AllowPrompt).unwrap_err(),
         SecretStoreError::AccessDenied { by_user: true }
     );
-    assert_eq!(
-        store.delete(&admin, Interaction::Never),
-        Err(SecretStoreError::AccessDenied { by_user: false })
-    );
     assert_eq!(store.probe(&admin), Ok(SecretPresence::Present));
+    store
+        .write(
+            &admin,
+            &value("replaced"),
+            WriteMode::Replace,
+            Interaction::Never,
+        )
+        .unwrap();
 
     store.allow(&admin);
     assert_eq!(
         store.read(&admin, Interaction::Never).unwrap().expose(),
-        VALUE
+        "replaced"
     );
+    store.deny(&admin);
+    store.delete(&admin, Interaction::Never).unwrap();
+    assert!(!store.contains(&admin));
 }
 
 #[test]
@@ -285,9 +302,7 @@ fn fake_platform_installs_one_shared_fake_secret_store() {
         VALUE
     );
     fake.secrets().lock();
-    assert_eq!(
-        fake.platform().secrets().probe(&admin),
-        Err(SecretStoreError::Locked)
-    );
-    assert_eq!(fake.secrets().count(SecretOp::Read), 1);
+    let locked = fake.platform().secrets().read(&admin, Interaction::Never);
+    assert_eq!(locked.unwrap_err(), SecretStoreError::Locked);
+    assert_eq!(fake.secrets().count(SecretOp::Read), 2);
 }
