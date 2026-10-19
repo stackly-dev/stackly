@@ -20,6 +20,8 @@ struct DaemonModelTests {
         let retries = Mutex(0)
         let calls = Mutex<[(Call, String?)]>([])
         let result = Mutex<Result<Reply, ClientError>>(.success(.eventsUnsubscribe))
+        /// What the link reports as its status right now.
+        let current = Mutex<ConnectionState?>(nil)
 
         init() {
             (states, push) = AsyncStream.makeStream()
@@ -35,7 +37,8 @@ struct DaemonModelTests {
                     return try self.result.withLock { $0 }.get()
                 },
                 refresh: {},
-                stopNow: {})
+                stopNow: {},
+                currentState: { self.current.withLock { $0 } })
         }
     }
 
@@ -285,6 +288,26 @@ struct DaemonModelTests {
         await fixture.send(.caughtUp)
         try await waitUntil { model.presence == .connected(health: .ready) }
         #expect(model.presentation.banner == nil)
+        #expect(
+            fixture.announced == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
+    }
+
+    @Test func aSnapshotDoneBeforeTheConnectedStateArrivesCountsForThatConnection()
+        async throws
+    {
+        let fixture = Fixture()
+        let model = fixture.model!
+        try await fixture.push(Self.unreachable())
+        let daemon = Self.daemon(.ready)
+        // The link connected and the sync engine started a snapshot, but the states
+        // stream has not delivered the connection to the model yet.
+        fixture.link.current.withLock { $0 = .connected(daemon) }
+        await fixture.send(.resnapshot(.noCursor))
+        try await waitUntil { model.sync.completedRounds == 1 && model.sync.isSettled }
+        #expect(model.presence == .unreachable(lastKnownAt: nil))
+        try await fixture.push(.connected(daemon))
+        try await waitUntil { model.presence == .connected(health: .ready) }
+        #expect(model.mutationAvailability == .available)
         #expect(
             fixture.announced == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
     }
