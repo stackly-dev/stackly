@@ -17,6 +17,8 @@ Penyesuaian untuk tim:
 - Mode review: pertanyaan "model mana yang menulis kode ini" dijawab dari field "Model penulis kode" di brief, bukan ditanyakan ke user. Reviewer tetap model yang berbeda, sesuai tabel di `modes/review.md`. Step 2 skill asli menghasilkan diff kosong karena worktree kamu sama dengan `main`: pakai `MODE=branch`, `BASE=main`, `MERGE_BASE=<awal Range perubahan di brief>`, daftar file dari `git diff --name-only <range>`, dan subagent menjalankan `git diff <range>`; sebut rentang itu di file review. Bila subagent gagal dibuat: review inline hanya bila "Model reviewer" di brief berbeda dari semua "Model penulis kode"; bila sama, laporkan `blocked` dengan alasan "tidak ada model berbeda", jangan review inline.
 - Mode review hanya untuk sub sesi baru yang lead mulai setelah build selesai dan di-merge. Bila kamu menerima permintaan review lewat pesan padahal sudah menulis, memverifikasi, atau berkirim pesan tentang implementasi ini, tolak dan minta lead memulai sub sesi baru. Bekerja dari diff, spec, dan `AGENTS.md` saja; jangan minta penjelasan ke developer sebelum temuan ditulis.
 
+Sebelum membaca file untuk mencari lokasi kode, kontrak, keputusan spec, atau test yang sudah ada, tanya graph pengetahuan sesuai field "Pengetahuan dari graph" di brief (`graphify query` dan `graphify explain` dengan `--graph` ke checkout utama), lalu buka file hanya di lokasi yang ditunjuk. Bila brief menandai "Sesi dipakai ulang: ya", konteks lama sudah dibersihkan: jangan menebak pekerjaan sebelumnya, pakai brief dan `git log --oneline main..HEAD`.
+
 ## Ownership
 
 Boleh diubah:

@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `58e3bc2`
 - **Wave aktif:** `2`, mulai `2026-10-20`
-- **Diperbarui:** `2026-10-20 05:25`
+- **Diperbarui:** `2026-10-20 07:00`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -19,7 +19,7 @@
 | `arc-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `claude/arc-f19-spec-b5bcbf` | `opus` (cross check `fable`) | `merged` (perbaikan konsistensi `0e959d4` → `c7823d3`) |
 | `arc-f20-spec` | `architect` | 20. Create instance · Design it (spec), plus Kontrak untuk fitur 20 dari spec 0017 | `02-instalasi-pertama.md` | `docs/specs/0020-create-instance/` | `claude/distracted-babbage-61ce41` | `opus` | `aktif` |
 | `arc-f23-spec` | `architect` | 23. Provider NATS lewat manifest · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0023-provider-nats-manifest/` | `claude/eager-roentgen-3863a9` | `opus` | `aktif` |
-| `arc-f16-spec` | `architect` | 16. Onboarding · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0016-onboarding/` | `claude/practical-jang-d62a77` | `opus` | `aktif` |
+| `arc-f16-spec` | `architect` | 16. Onboarding · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0016-onboarding/` | `claude/practical-jang-d62a77` | `opus` (cross check `fable`) | `merged` |
 | `arc-f22-spec` | `architect` | 22. Overview & daftar instance · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0022-overview-daftar-instance/` | `claude/exciting-wescoff-e3d601` | `opus` | `aktif` |
 
 ## Keputusan
@@ -57,12 +57,17 @@
 | `2026-10-20` | Perbaikan konsistensi spec 0019 di-merge: `runtime.versionCheck` pindah ke milestone 2 (langkah 7) sebelum test native, versi subjek evidence dari `SHOW server_version`, `Stdin::Text` lewat `StdinSource::Bytes` tanpa varian port baru (Follow-up spec 0010), langkah 11 butuh spec 0018 langkah 13. Milestone 2 dan 3 F19 di scope diganti sesuai blok usulan baru. | `lead` |
 | `2026-10-20` | Perbaikan konsistensi spec 0018 di-merge (22 temuan): `HostFacts` di `stackly-platform` modul `info`; selector `sha256:` dibandingkan dengan artefak `Installable` dan tidak pernah diganti artefak host; aturan `versionCheck` per baris setelah trim (item 14 menang atas item 8, cocok dengan pola spec 0019); test native per lini hanya untuk paket yang ada (MySQL, ClickHouse, Valkey `BLOCKED` sampai fitur 40 sampai 43, perlu persetujuan user saat `Verify it` F18); usulan ke spec 0017 (`ProviderSummary.software`, `InstallingRuntime.provider`), 0010, 0002, 0004, dan 0006 (hint). Teks milestone 2 dan 5 F18 di scope diperbarui. | `lead` |
 | `2026-10-20` | Spec 0023 diterima dengan 14 gap dan 6 temuan soundness rekomendasi (cross check Sonnet 5.5): NATS tetap paket data saja, satu perubahan core yang ditinjau adalah jenis probe `native` dengan `nats-readiness` (mesin status protokol NATS tanpa IO, tanpa async-nats), AC-14 mengukur baris yang ditambah saja, RISK-07 dicatat lewat tabel plus `git diff --numstat`, hop `$JS.API.INFO` dipertahankan. Usulan ke spec 0009 (probe `native`, token di params, registry tertutup) digabung ke item `architect (update)` spec 0009; usulan ke spec 0010 (`ProbeOutcome`) diantrikan bersama usulan 0010 lain. | `lead` |
+| `2026-10-20` | Spec 0016 di-merge. Usulan ke spec 0015 (`BackgroundAgentModel.unavailableDetail`, `CommandLineToolModel`, `CommandLineTool.bundledTool`, `UserHome.current()`, `CommandLineToolPrompts`, penanda `// provisional: F32`) diteruskan ke `arc-f15-spec` sebagai `architect (update)` spec 0015; usulan ke spec 0013 (`MainWindowRoot`, min frame, `onboardingStore` di `ShellRuntime` dan `ShellBootstrap`, `CommandLineToolModel.refresh()` di `didBecomeActive()`, pengecualian UserDefaults) diantrikan setelah build F13 foundation masuk. Selisih mockup onboarding dicatat di `ui-macos.md`. | `lead` |
+| `2026-10-20` | Usulan spec 0016 untuk spec 0015 diterapkan oleh `arc-f15-spec` (`0e20daf` → merge di `main`): `unavailableDetail`, `CommandLineToolModel`, `bundledTool`, `UserHome.current()`, `CommandLineToolPrompts`, penanda `// provisional: F32`; teks milestone 3 F15 di scope menyebut model bersama itu. | `lead` |
+| `2026-10-20` | Spec 0022 diterima dengan G1 sampai G19 dan S1 sampai S8 rekomendasi (cross check Sonnet); `stopping` tetap `notReady` sesuai rekomendasi architect (saran cross check memindahkannya ditolak). Celah `ResourceStore` (`.patch` dengan revision sama dibuang, padahal `instance.health_changed` lewat `statusSeq`) diteruskan ke lead foundation untuk sesi F13 wiring; fallback di langkah 6 spec 0022. Usulan ke spec 0010 (`InstanceSummary.initialized`, `ownership`) diantrikan bersama usulan 0010 lain; `ProviderTile` ke pemilik spec 0017; selisih kolom Ownership dicatat di `ui-macos.md`. | `lead` |
+| `2026-10-20` | Lead foundation mengonfirmasi aturan patch `statusSeq` milik fitur 13: spec 0013 milestone 4 langkah 16 (menunggu spec 0010 langkah 12). Spec 0022 menghapus predikat fallback dan menulis prasyarat milestone 3 ke langkah itu. | `lead` |
 
 ## Blocker terbuka
 
 - F18 `Verify it` (nanti): test native install MySQL, ClickHouse, Valkey `BLOCKED` `no provider package (features 40 to 43)`; butuh persetujuan user untuk dicentang dengan BLOCKED itu, atau tunggu fitur 40 sampai 43 di `07-stack-enam-service.md`.
 - Baris usulan spec 0017 di spec 0018 (`ProviderSummary.software` sudah diterapkan di `dbedb8f` → `f293d99`; sisa baris itu adalah kerja build F18): dicentang lead lewat `/sync`.
 
+- `architect (update)` spec 0013 dari usulan spec 0016 (dan usulan F15/F17/F18 untuk 0013): setelah build F13 milestone 4 di `ui-macos.md` masuk; prasyarat milestone 1 F16.
 - `architect (update)` spec 0006: fungsi hint per area (`codes::<area>::hint`) dan baris `daemon.restart_unavailable` (spec 0015); setelah sesi contract 1.4 foundation selesai.
 - `architect (update)` spec 0010 dan 0011 (tambahan additive spec 0019: `runExecutable` `stdin.text`, format detail probe `exec`, `x-stackly.printableOnly` di `SecretService::put`): setelah build F10 dan F11 di `01-foundation.md` masuk `main`.
 - F17 milestone 1: `architect (update)` spec 0009 (`ValidatedPackage::versions() -> &VersionCatalog` dengan `VersionArtifact` dan `ArtifactStatus`, bagian *Usulan update spec lain* spec 0017). Dibuka setelah fitur 9 ditutup oleh sesi `f9-closeout`.
@@ -77,6 +82,7 @@
 - `19` · `Design it (spec): /architect provider PostgreSQL` · laporan `arc-f19-spec` (`ed8a8fc`, diterima lead) · `claude/arc-f19-spec-b5bcbf` → `f9bece6` · diff hanya `docs/specs/0019-*`, Requirements AC-1 sampai AC-15, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 19 design it`
 - `15` · `Design it (spec): /architect background agent & CLI install` · laporan `arc-f15-spec` STATUS done (`19498a4`) · `claude/arc-f15-spec-c53e6f` → `776f4bb` · diff hanya `docs/specs/0015-*` dan update additive port `background_agent` di `docs/specs/0004-*/index.md`, Requirements AC-1 sampai AC-22, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 15 design it`
 - `18` · `Design it (spec): /architect install runtime managed` · laporan `arc-f18-spec` STATUS done (`c877ea8`) · `claude/arc-f18-spec-634bf8` → `ede6d7b` · diff hanya `docs/specs/0018-*`, Requirements AC-1 sampai AC-21, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 18 design it`
+- `16` · `Design it (spec): /architect onboarding` · laporan `arc-f16-spec` STATUS done (`34b1b64`) · `claude/practical-jang-d62a77` → `2abb5b3` · diff hanya `docs/specs/0016-*`, Requirements AC-1 sampai AC-11, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 16 design it`
 
 ## Riwayat wave
 
