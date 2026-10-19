@@ -52,7 +52,7 @@ Catalog bawaan (official) yang menampilkan publisher, revision, kategori, OS/arc
 - [ ] Verify it: `/check verify catalog & provider detail`
 - [ ] Test it: `/test catalog & provider detail`
 
-### 18. Install runtime managed · needs a decision · GA
+### 18. Install runtime managed · in-progress · GA
 
 Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke staging, verifikasi digest dan signature, ekstrak aman, validasi binary dan dependency, lalu commit atomik. Termasuk halaman Runtimes untuk melihat hasilnya.
 
@@ -60,7 +60,19 @@ Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke st
 
 **Trace:** REQ-003, REQ-004, REQ-005, REQ-028, REQ-046 (cache kosong), VAL-003, VAL-010, VAL-011, PAGE-09, BR-025, AC-003, AC-004, AC-005, AC-049, AC-057, AC-059, AC-060, NFR-009, PRD bagian 27 dan 32.2
 
-- [ ] Design it (spec): `/architect install runtime managed`
+**Pointer:** spec [0018](../specs/0018-install-runtime-managed/index.md)
+
+- [x] Design it (spec): `/architect install runtime managed`
+- [ ] Build it: `/develop install runtime managed`
+  - [ ] Catalog data, safe extractor, and fuzz: inventory and `versions.json` fields (`stable`, `build`, `unpackedSize`, `entryCount`, `dependencies`), manifest `runtime.versionCheck`, `pin` with the core scanner, the `Filesystem` additions and `TreeWriter` with the macOS adapter, the Rust extractor for `tar_gz`, `zip`, and `binary`, the Mach-O parser and closure check, and fuzz targets `runtime_archive` and `runtime_macho` (spec 0018 AC-1, AC-7 to AC-10, AC-19, AC-21; build steps 1 to 5; needs /architect update spec 0009 (the "Usulan update spec 0009" section), after feature 9 closes, and the spec 0003 and 0004 update items; steps 1 and 2 can run as two parallel sessions, then the extractor (step 3) and the Mach-O reader (step 4) as two more parallel sessions; the fuzz targets (step 5) follow as their own session)
+  - [ ] Install pipeline in core: registry additions (migration, `ArtifactRecord` fields, `compatibility_records`), `Runtime::committed`, `Fetcher` port with the `ureq` adapter and resumable cache, `CodeSigning` port with the `codesign` adapter, `host_facts`, validation with signing policy, quarantine, and exec check, selector resolution, `support_status` and the spec 0017 gate changes (`&HostFacts`, `requires_newer_os`), commit with orphan reclaim, the `install_runtime` work and factory, and `install_cached_artifact` (spec 0018 AC-1 to AC-6, AC-10 to AC-15; build steps 6 to 9; needs milestone 1, feature 5 registry, feature 7 operation engine, and feature 10 milestone 1 `ProcessSupervision` port and adapter (`01-foundation.md`), feature 17 `core::catalog` (milestones 1 and 2 of spec 0017), and the spec 0005 and 0010 update items; steps 6, 7, and 8 can run as three parallel sessions, and step 6 never runs beside another session writing registry `WriteOp`s)
+  - [ ] Daemon, contract, and CLI: `runtime` protocol DTOs, methods, event, and error codes with fixtures and Swift contract tests, `stacklyd` handlers with the catalog gate and precheck, daemon integration tests (including `runtime_install_refuses_an_artifact_for_another_target` against the spec 0017 fixtures `official/linuxonly` and `official/intelonly`, for AC-002 and AC-005), `stackly runtime install`, `list`, and `inspect` with golden files, and the compatibility record generator with `cargo xtask runtime compat-record` (spec 0018 AC-1 to AC-3, AC-6, AC-10, AC-13 to AC-16, AC-18; build steps 10 to 13; needs milestone 2, feature 6 daemon server and feature 8 CLI framework (`01-foundation.md`); after step 10, steps 11, 12, and 13 can run as three parallel sessions)
+  - [ ] Runtimes page and the Get button: `StacklyClient` runtime methods, `RuntimeStore`, `RuntimesPage` with Installing, table, locked remove button, and inspector, `RuntimeGetAction` in the Catalog version matrix, "{n} installed" on the Catalog provider card, and the runtime status table in `apps/macos/design.md` (spec 0018 AC-17, AC-18; build steps 14 and 15; needs milestone 3, feature 12 and feature 13 milestone 4 (`ui-macos.md`), and the feature 17 Catalog page)
+  - [ ] Native proof: native install tests through the daemon for every available line from the xtask spike cache (no network; all eight archives are already cached on this Mac), no quarantine on installed files, no developer tools spawned, the `runtime spike --cleanup` extension, then `nats_installs_from_the_network` after your approval, and 10 minute fuzz runs with manual evidence (spec 0018 AC-5, AC-6, AC-12, AC-19, AC-20; build steps 16, 16a, and 17; needs milestone 3; step 16a needs your approval for the network run; the fuzz runs (step 17) can run as their own parallel session right after milestone 1)
+- [ ] Verify it: `/check verify install runtime managed`
+- [ ] Test it: `/test install runtime managed`
+- [ ] Review it (fresh model): `/check review install runtime managed`
+- [ ] Document it: `/document install runtime managed`
 
 ### 19. Provider PostgreSQL · in-progress
 
