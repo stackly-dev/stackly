@@ -405,6 +405,14 @@ mod tests {
         );
     }
 
+    // covers: AC-4, AC-10 (the native test reads BLOCKED from exit code 2)
+    #[test]
+    fn the_driver_exits_0_on_pass_1_on_fail_and_2_on_blocked() {
+        assert_eq!(SpikeStatus::Pass.exit_code(), 0);
+        assert_eq!(SpikeStatus::Fail.exit_code(), 1);
+        assert_eq!(SpikeStatus::Blocked.exit_code(), 2);
+    }
+
     #[test]
     fn a_whole_word_redaction_keeps_longer_words() {
         assert_eq!(

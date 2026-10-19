@@ -592,6 +592,92 @@ Load command 21
         );
     }
 
+    /// Runs a developer tool from `/usr/bin` and fails the test when it
+    /// does not exit 0.
+    #[cfg(target_os = "macos")]
+    fn tool(program: &str, args: &[&std::ffi::OsStr]) {
+        let output = Command::new(program).args(args).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{program} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // covers: AC-6 (Critical test scenarios, Library asing)
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_built_executable_pointed_at_homebrew_fails_the_static_audit_with_that_path() {
+        const HOMEBREW_FOO: &str = "/opt/homebrew/lib/libfoo.dylib";
+        assert!(
+            !Path::new(HOMEBREW_FOO).exists(),
+            "this test needs {HOMEBREW_FOO} to be absent"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        let root = dir.path().join("Stackly Spike Ü/artifact");
+        for folder in [&src, &root.join("bin"), &root.join("lib")] {
+            std::fs::create_dir_all(folder).unwrap();
+        }
+        std::fs::write(src.join("foo.c"), "int foo(void) { return 42; }\n").unwrap();
+        std::fs::write(
+            src.join("main.c"),
+            "int foo(void);\nint main(void) { return foo() == 42 ? 0 : 1; }\n",
+        )
+        .unwrap();
+        let dylib = root.join("lib/libfoo.dylib");
+        let exe = root.join("bin/tool");
+        tool(
+            "/usr/bin/cc",
+            &[
+                "-dynamiclib".as_ref(),
+                "-install_name".as_ref(),
+                "@rpath/libfoo.dylib".as_ref(),
+                "-o".as_ref(),
+                dylib.as_os_str(),
+                src.join("foo.c").as_os_str(),
+            ],
+        );
+        tool(
+            "/usr/bin/cc",
+            &[
+                "-o".as_ref(),
+                exe.as_os_str(),
+                src.join("main.c").as_os_str(),
+                dylib.as_os_str(),
+                "-Wl,-rpath,@executable_path/../lib".as_ref(),
+            ],
+        );
+
+        // As built, the library resolves inside the artifact.
+        let machos = scan(&root).unwrap();
+        assert_eq!(machos.len(), 2);
+        let built = static_audit(&root, &machos, true).unwrap();
+        assert!(built.foreign.is_empty(), "{:?}", built.foreign);
+        assert!(built.libraries.contains("lib/libfoo.dylib"));
+        assert_eq!(
+            built.non_system,
+            BTreeSet::from(["libfoo.dylib".to_owned()])
+        );
+
+        tool(
+            "/usr/bin/install_name_tool",
+            &[
+                "-change".as_ref(),
+                "@rpath/libfoo.dylib".as_ref(),
+                HOMEBREW_FOO.as_ref(),
+                exe.as_os_str(),
+            ],
+        );
+        let machos = scan(&root).unwrap();
+        let expected = [format!("{HOMEBREW_FOO} (loaded by bin/tool, not found)")];
+        for maintainer in [false, true] {
+            let audit = static_audit(&root, &machos, maintainer).unwrap();
+            assert_eq!(audit.foreign, expected, "maintainer {maintainer}");
+            assert!(!audit.libraries.contains("lib/libfoo.dylib"));
+        }
+    }
+
     #[test]
     fn lsof_txt_names_are_unescaped_and_other_fds_skipped() {
         let text = "p42\nfcwd\nn/x\nftxt\nn/tmp/Stackly Spike \\xc3\\x9c/bin/nats-server\nftxt\nn/usr/lib/dyld\nf3\nn/dev/null\n";

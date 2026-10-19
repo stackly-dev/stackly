@@ -244,6 +244,16 @@ gui/502/dev.stackly.xtask.runtime-spike = {
         assert_eq!(parse_print(&exited), JobState::Exited(Some("3".to_owned())));
     }
 
+    // covers: AC-4 (no GUI login session means BLOCKED, not FAIL)
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_user_without_a_gui_login_session_has_no_gui_domain() {
+        // `nobody` (uid -2) never logs in to the GUI.
+        let nobody = u32::MAX - 1;
+        assert_eq!(gui_domain(nobody), "gui/4294967294");
+        assert!(!has_gui_session(nobody).unwrap());
+    }
+
     #[test]
     fn the_plist_runs_the_worker_with_a_minimal_environment() {
         let agent = Agent {

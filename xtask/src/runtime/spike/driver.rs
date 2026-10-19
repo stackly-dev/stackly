@@ -435,3 +435,57 @@ fn word(from: &str, to: &str) -> Redaction {
         whole_word: true,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The SHA-256 of the three bytes `abc`.
+    const ABC_SHA256: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    /// Not https, so a download stops before curl runs.
+    const LOCAL_URL: &str = "http://127.0.0.1:9/abc.tar.gz";
+
+    /// A plan artifact pinned to the bytes `abc`.
+    fn abc_artifact() -> PlanArtifact {
+        serde_json::from_value(serde_json::json!({
+            "id": "nats-2.15.1-macos-aarch64",
+            "provider": "nats",
+            "line": "2.15",
+            "version": "2.15.1",
+            "origin": "upstream",
+            "format": "tar_gz",
+            "executables": ["nats-server"],
+            "signingPolicy": "keep_or_adhoc",
+            "sha256": ABC_SHA256,
+            "size": 3,
+            "urls": [LOCAL_URL],
+            "dependencies": []
+        }))
+        .unwrap()
+    }
+
+    // covers: AC-3
+    #[test]
+    fn a_cached_file_with_the_pinned_digest_and_size_is_used_without_a_download() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::at(dir.path().to_path_buf()).unwrap();
+        fs::write(cache.path(ABC_SHA256), "abc").unwrap();
+        assert_eq!(fetch(&cache, &abc_artifact()), Ok(cache.path(ABC_SHA256)));
+    }
+
+    // covers: AC-3 (Critical test scenarios, Digest salah: a broken cache entry is deleted and downloaded again)
+    #[test]
+    fn a_cached_file_with_one_byte_changed_or_one_byte_more_is_deleted_and_downloaded_again() {
+        for bytes in ["abd", "abcd"] {
+            let dir = tempfile::tempdir().unwrap();
+            let cache = Cache::at(dir.path().to_path_buf()).unwrap();
+            fs::write(cache.path(ABC_SHA256), bytes).unwrap();
+            // The download is the next step; its URL stops it before curl.
+            assert_eq!(
+                fetch(&cache, &abc_artifact()),
+                Err(format!("url must be an https:// URL, found `{LOCAL_URL}`"))
+            );
+            assert!(!cache.path(ABC_SHA256).exists(), "{bytes}");
+        }
+    }
+}
