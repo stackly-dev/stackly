@@ -21,6 +21,7 @@
 | `arc-f23-spec` | `architect` | 23. Provider NATS lewat manifest · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0023-provider-nats-manifest/` | `claude/eager-roentgen-3863a9` | `opus` (cross check `sonnet`) | `merged` |
 | `arc-f16-spec` | `architect` | 16. Onboarding · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0016-onboarding/` | `claude/practical-jang-d62a77` | `opus` (cross check `fable`) | `merged` |
 | `arc-f22-spec` | `architect` | 22. Overview & daftar instance · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0022-overview-daftar-instance/` | `claude/exciting-wescoff-e3d601` | `opus` (cross check `sonnet`) | `merged` |
+| `arc-f21-spec` (sesi `arc-f20-spec` dipakai ulang, konteks dipertahankan) | `architect` | 21. Start, readiness & connection · spec untuk `Build it` yang ada | `02-instalasi-pertama.md` | `docs/specs/0021-start-readiness-connection/` | `claude/distracted-babbage-61ce41` | `opus` | `aktif` |
 
 ## Keputusan
 
@@ -65,6 +66,7 @@
 | `2026-10-20` | Spec 0020 diterima dengan G1 sampai G12 dan S1 sampai S8 rekomendasi (cross check Sonnet): satu evaluator murni untuk `instance.get_create_form`, `instance.preflight`, dan precheck `instance.create`; create sepenuhnya bisa dikompensasi (tanpa titik tak bisa dibalik, `DeleteInstanceCreatedBy`, probe lock di kompensator `instance_tree`), event `instance.removed`, `BusyPolicy::Reject` untuk lock nama, probe port dengan `SO_REUSEADDR` lewat socket2, pin revision catalog saat create (K-1), baris `provider_sources` dipastikan saat daemon start (K-2). Perubahan ini menyentuh keputusan spec 0005, 0007, dan 0010 yang sedang dibangun program foundation, jadi semuanya tetap usulan di spec 0020 dan dibawa lead ke lead foundation sebelum build mereka selesai. | `lead` |
 | `2026-10-20` | Spec 0022 di-merge. Usulan ke spec lain diantrikan: 0010 (`ownership`, `initialized`), 0004 (`Filesystem::volume_space`), 0013 (`itemFailures`, penyaringan retained, `ShellNavigator`, `newInstanceAction`, `CapacityModel`), 0017 (`ProviderTile(mark:tile:size:)`). Selisih mockup Overview dan Instances dicatat di `ui-macos.md` dan baris Follow-up-nya dicentang. | `lead` |
 | `2026-10-20` | Spec 0020 di-merge. *Usulan update spec lain* spec 0020 (satu blok per spec target dengan teks lama dan baru: 0001 socket2, 0004, 0005 `DeleteInstanceCreatedBy`, 0007 baris resume dan probe lock `instance_tree`, 0009, 0010 langkah create, probe port, dan `Reject`, 0011) dibawa lead ke lead foundation bersama usulan spec fase 02 lain. Selisih mockup sheet New Instance dicatat di `ui-macos.md`. | `lead` |
+| `2026-10-20` | F21 architect dijalankan di sesi `arc-f20-spec` yang dipakai ulang tanpa `clear_session`, dengan judul diganti `arc-f21-spec · ...`: konteks F20 (purpose endpoint dari paket pinned, `socketPath` saat baca, `instance.removed`) langsung dipakai F21, dan aplikasi menolak sesi baru pada giliran yang dipicu pesan sesi. Penyimpangan dari aturan *Hemat token* (bersihkan konteks; hanya fitur yang sama) dicatat di sini. | `lead` |
 
 ## Blocker terbuka
 
