@@ -1,27 +1,32 @@
 //! [`FakeRegistry`]: the registry in memory, with the commit checks, the
 //! generation, and the typed errors of the SQLite registry.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
-    ArtifactRecord, BackupId, BatchError, Committed, CreatedRecord, CreatedSeq, Environment,
-    EnvironmentId, Generation, IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId,
-    InstanceName, InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder,
-    LeaseId, LeaseState, LockKey, Operation, OperationCursor, OperationId, OperationJournal,
-    OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
-    ProviderRevisionKey, ProviderRevisionRecord, PruneReport, Registry, RegistryError, ResourceRef,
-    ResourceRevision, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, Sha256Digest,
-    StepSeq, Versioned, WriteBatch, WriteOp,
+    ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
+    AuditPage, AuditQuery, AuditResult, BackupId, BatchError, Committed, CreatedRecord, CreatedSeq,
+    Environment, EnvironmentId, Generation, IdempotencyKey, InstallMode, Instance, InstanceFilter,
+    InstanceId, InstanceName, InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter,
+    LeaseHolder, LeaseId, LeaseState, LockKey, Operation, OperationCursor, OperationId,
+    OperationJournal, OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
+    PlatformStoreKey, ProviderRevisionKey, ProviderRevisionRecord, PruneReport, Registry,
+    RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime, RuntimeId,
+    RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
+    SecretReferenceView, SecretStatus, SecretUse, SecretUser, Sha256Digest, StepSeq, Versioned,
+    WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
-use uuid::Uuid;
 
-use super::seed::{BackupSeed, RegistrySeed, SecretReferenceSeed};
+use super::seed::{BackupSeed, RegistrySeed};
 use super::stored_instance;
+
+/// The action of a seeded audit row (spec 0005, "Fake dan conformance").
+pub(crate) const SEEDED_AUDIT_ACTION: AuditAction = AuditAction::from_static("test.seed");
 
 /// When the registry stamped a row with the commit time, for the columns
 /// that have no field in the domain (spec 0005, "Pemetaan aggregate").
@@ -347,6 +352,71 @@ impl Registry for FakeRegistry {
         })
     }
 
+    fn secret_reference(
+        &self,
+        reference: &SecretRef,
+    ) -> Result<Versioned<Option<SecretReferenceView>>, RegistryError> {
+        self.read(|state| {
+            Ok(state
+                .secret_references
+                .get(reference)
+                .map(|record| state.secret_view(record)))
+        })
+    }
+
+    fn secret_references(
+        &self,
+        filter: SecretReferenceFilter,
+    ) -> Result<Versioned<Vec<SecretReferenceView>>, RegistryError> {
+        self.read(|state| {
+            Ok(state
+                .secret_references
+                .values()
+                .filter(|record| filter.matches(record))
+                .map(|record| state.secret_view(record))
+                .collect())
+        })
+    }
+
+    fn secret_uses_by(&self, user: SecretUser) -> Result<Versioned<Vec<SecretUse>>, RegistryError> {
+        self.read(|state| {
+            let mut uses: Vec<SecretUse> = state
+                .secret_uses
+                .iter()
+                .filter(|used| used.user == user)
+                .cloned()
+                .collect();
+            uses.sort_by(|a, b| (&a.field, &a.reference).cmp(&(&b.field, &b.reference)));
+            Ok(uses)
+        })
+    }
+
+    fn audit_events(&self, query: AuditQuery) -> Result<Versioned<AuditPage>, RegistryError> {
+        query.validate()?;
+        self.read(|state| {
+            let mut matching: Vec<&AuditEventRecord> = state
+                .audit_events
+                .iter()
+                .filter(|record| {
+                    query
+                        .before
+                        .is_none_or(|before| AuditCursor::of(record) < before)
+                })
+                .collect();
+            matching.sort_by_key(|record| std::cmp::Reverse(AuditCursor::of(record)));
+            let limit = usize::from(query.limit);
+            let next = if matching.len() > limit {
+                matching
+                    .get(limit - 1)
+                    .map(|record| AuditCursor::of(record))
+            } else {
+                None
+            };
+            let items = matching.into_iter().take(limit).cloned().collect();
+            Ok(AuditPage { items, next })
+        })
+    }
+
     fn operations(&self, query: OperationQuery) -> Result<Versioned<OperationPage>, RegistryError> {
         query.validate()?;
         self.read(|state| {
@@ -449,10 +519,13 @@ impl RegistrySeed for FakeRegistry {
     fn seed_audit_events(&self, count: u32, at: Timestamp) {
         let mut state = self.state();
         for _ in 0..count {
-            state.audit_events.push(AuditRow {
-                id: Uuid::now_v7(),
-                occurred_at: at,
-            });
+            state.audit_events.push(AuditEventRecord::new(
+                AuditEventId::generate(),
+                AuditActor::Daemon,
+                SEEDED_AUDIT_ACTION,
+                AuditResult::Succeeded,
+                at,
+            ));
         }
     }
 
@@ -472,26 +545,6 @@ impl RegistrySeed for FakeRegistry {
             });
         }
     }
-
-    fn seed_secret_reference(&self, reference: SecretReferenceSeed) {
-        let mut state = self.state();
-        assert!(
-            !state.secret_references.contains_key(&reference.id)
-                && state
-                    .secret_references
-                    .values()
-                    .all(|other| other.store_key != reference.store_key),
-            "a seeded secret reference has a new ID and a new store key"
-        );
-        state.secret_references.insert(reference.id, reference);
-    }
-}
-
-/// One seeded audit event.
-#[derive(Debug, Clone, Copy)]
-struct AuditRow {
-    id: Uuid,
-    occurred_at: Timestamp,
 }
 
 /// One seeded process observation; `id` grows like SQLite's rowid.
@@ -519,10 +572,11 @@ struct State {
     created: BTreeMap<(OperationId, CreatedSeq), CreatedRecord>,
     locks: BTreeMap<(OperationId, String), LockKey>,
     backups: BTreeMap<BackupId, BackupSeed>,
-    audit_events: Vec<AuditRow>,
+    audit_events: Vec<AuditEventRecord>,
     observations: Vec<ObservationRow>,
     next_observation: u64,
-    secret_references: BTreeMap<Uuid, SecretReferenceSeed>,
+    secret_references: BTreeMap<SecretRef, SecretReferenceRecord>,
+    secret_uses: BTreeSet<SecretUse>,
     written: HashMap<ResourceRef, WrittenAt>,
 }
 
@@ -547,6 +601,7 @@ impl State {
             observations: Vec::new(),
             next_observation: 0,
             secret_references: BTreeMap::new(),
+            secret_uses: BTreeSet::new(),
             written: HashMap::new(),
         }
     }
@@ -588,6 +643,37 @@ impl State {
             WriteOp::DeleteLocks { operation } => {
                 self.expect_operation(operation)?;
                 self.locks.retain(|(owner, _), _| *owner != operation);
+                Ok(())
+            }
+            WriteOp::InsertSecretReference(record) | WriteOp::RestoreSecretReference(record) => {
+                self.insert_secret_reference(record)
+            }
+            WriteOp::UpdateSecretReference { record, expected } => {
+                self.update_secret_reference(record, expected)
+            }
+            WriteOp::ObserveSecretReference {
+                reference,
+                status,
+                status_observed_at,
+                platform_store_key,
+            } => self.observe_secret_reference(
+                &reference,
+                status,
+                status_observed_at,
+                platform_store_key,
+            ),
+            WriteOp::DeleteSecretReference {
+                reference,
+                expected,
+            } => self.delete_secret_reference(&reference, expected),
+            WriteOp::ReplaceSecretUses { user, uses } => self.replace_secret_uses(user, uses),
+            WriteOp::InsertAuditEvent(record) => {
+                if self.audit_events.iter().any(|other| other.id == record.id) {
+                    return Err(RegistryError::DuplicateResource {
+                        resource: ResourceRef::AuditEvent(record.id),
+                    });
+                }
+                self.audit_events.push(record);
                 Ok(())
             }
             other => panic!(
@@ -950,6 +1036,150 @@ impl State {
                     "operation_locks.operation_id, operation_locks.lock_key",
                 ));
             }
+        }
+        Ok(())
+    }
+
+    /// A secret reference row with its uses, in the stored order.
+    fn secret_view(&self, record: &SecretReferenceRecord) -> SecretReferenceView {
+        let used_by = self
+            .secret_uses
+            .iter()
+            .filter(|used| used.reference == record.reference)
+            .cloned()
+            .collect();
+        SecretReferenceView::new(record.clone(), used_by)
+    }
+
+    /// `InsertSecretReference` and `RestoreSecretReference`: a new ID and a
+    /// new reference.
+    fn insert_secret_reference(
+        &mut self,
+        record: SecretReferenceRecord,
+    ) -> Result<(), RegistryError> {
+        if self.secret_references.contains_key(&record.reference)
+            || self
+                .secret_references
+                .values()
+                .any(|other| other.id == record.id)
+        {
+            return Err(RegistryError::DuplicateResource {
+                resource: ResourceRef::SecretReference(record.reference),
+            });
+        }
+        self.secret_references
+            .insert(record.reference.clone(), record);
+        Ok(())
+    }
+
+    /// Fails with `NotFound`, or `RevisionConflict` when `expected` is
+    /// given and differs, and returns the stored row.
+    fn stored_secret_reference(
+        &mut self,
+        reference: &SecretRef,
+        expected: Option<ResourceRevision>,
+    ) -> Result<&mut SecretReferenceRecord, RegistryError> {
+        let resource = || ResourceRef::SecretReference(reference.clone());
+        let stored =
+            self.secret_references
+                .get_mut(reference)
+                .ok_or_else(|| RegistryError::NotFound {
+                    resource: resource(),
+                })?;
+        if let Some(expected) = expected
+            && stored.revision != expected
+        {
+            return Err(RegistryError::RevisionConflict {
+                resource: resource(),
+                expected,
+                actual: stored.revision,
+            });
+        }
+        Ok(stored)
+    }
+
+    fn update_secret_reference(
+        &mut self,
+        record: SecretReferenceRecord,
+        expected: ResourceRevision,
+    ) -> Result<(), RegistryError> {
+        let stored = self.stored_secret_reference(&record.reference, Some(expected))?;
+        stored.platform_store_key = record.platform_store_key;
+        stored.value_origin = record.value_origin;
+        stored.status = record.status;
+        stored.status_observed_at = record.status_observed_at;
+        stored.value_updated_at = record.value_updated_at;
+        stored.revision = record.revision;
+        stored.updated_at = record.updated_at;
+        Ok(())
+    }
+
+    fn observe_secret_reference(
+        &mut self,
+        reference: &SecretRef,
+        status: SecretStatus,
+        status_observed_at: Timestamp,
+        platform_store_key: PlatformStoreKey,
+    ) -> Result<(), RegistryError> {
+        let stored = self.stored_secret_reference(reference, None)?;
+        stored.status = status;
+        stored.status_observed_at = Some(status_observed_at);
+        stored.platform_store_key = platform_store_key;
+        Ok(())
+    }
+
+    fn delete_secret_reference(
+        &mut self,
+        reference: &SecretRef,
+        expected: ResourceRevision,
+    ) -> Result<(), RegistryError> {
+        self.stored_secret_reference(reference, Some(expected))?;
+        let used_by: Vec<SecretUse> = self
+            .secret_uses
+            .iter()
+            .filter(|used| &used.reference == reference)
+            .cloned()
+            .collect();
+        if !used_by.is_empty() {
+            return Err(RegistryError::ReferenceInUse {
+                reference: reference.clone(),
+                used_by,
+            });
+        }
+        self.secret_references.remove(reference);
+        Ok(())
+    }
+
+    fn replace_secret_uses(
+        &mut self,
+        user: SecretUser,
+        uses: BTreeMap<SecretFieldName, SecretRef>,
+    ) -> Result<(), RegistryError> {
+        let user_exists = match user {
+            SecretUser::Instance(id) => self.instances.contains_key(&id),
+            SecretUser::Environment(id) => self.environments.contains_key(&id),
+        };
+        if !user_exists {
+            return Err(RegistryError::MissingReference {
+                resource: WriteOp::ReplaceSecretUses {
+                    user,
+                    uses: BTreeMap::new(),
+                }
+                .resource(),
+            });
+        }
+        if let Some(missing) = uses
+            .values()
+            .find(|reference| !self.secret_references.contains_key(reference))
+        {
+            return Err(RegistryError::MissingReference {
+                resource: ResourceRef::SecretReference(missing.clone()),
+            });
+        }
+        self.secret_uses.retain(|used| used.user != user);
+        for (field, reference) in uses {
+            self.secret_uses
+                .insert(SecretUse::new(reference, user, field));
         }
         Ok(())
     }

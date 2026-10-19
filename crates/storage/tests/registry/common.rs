@@ -11,8 +11,8 @@ use std::time::Duration;
 use jiff::Timestamp;
 use rusqlite::Connection;
 use stackly_domain::{
-    ArtifactRecord, BatchError, Capability, CapabilitySet, Committed, DesiredState, Endpoint,
-    Instance, InstanceId, InstanceLifecycle, IpEndpoint, LineCompatibility, NewInstance,
+    ArtifactRecord, AuditEventId, BatchError, Capability, CapabilitySet, Committed, DesiredState,
+    Endpoint, Instance, InstanceId, InstanceLifecycle, IpEndpoint, LineCompatibility, NewInstance,
     NewOperation, NewRuntime, Operation, OperationId, OperationKind, OperationResource,
     PortRequest, ProviderRevision, ProviderRevisionKey, ProviderRevisionRecord, Registry,
     ResourceRevision, Runtime, Sha256Digest, StartupPolicy, StoredInstance, StoredOperation,
@@ -20,9 +20,7 @@ use stackly_domain::{
 };
 use stackly_platform::{Clock, DirectoryLayout};
 use stackly_storage::{OpenOptions, OpenSummary, RegistryOpen, SqliteRegistry};
-use stackly_testkit::{
-    BackupSeed, FakeClock, FakePlatform, RegistrySeed, SecretReferenceSeed, TestRoot,
-};
+use stackly_testkit::{BackupSeed, FakeClock, FakePlatform, RegistrySeed, TestRoot};
 
 /// The app version the registry is opened with.
 const APP_VERSION: &str = "0.1.0-test";
@@ -389,9 +387,9 @@ impl RegistrySeed for SideSeed {
         self.run("audit events", |conn| {
             for _ in 0..count {
                 conn.execute(
-                    "INSERT INTO audit_events (id, actor, action, result, occurred_at) \
-                     VALUES (?1, 'daemon', 'instance.start', 'succeeded', ?2)",
-                    (OperationId::generate().to_string(), format!("{at:.9}")),
+                    "INSERT INTO audit_events (id, actor, action, result, safe_details, \
+                     occurred_at) VALUES (?1, 'daemon', 'test.seed', 'succeeded', '{}', ?2)",
+                    (AuditEventId::generate().to_string(), format!("{at:.9}")),
                 )?;
             }
             Ok(())
@@ -409,23 +407,6 @@ impl RegistrySeed for SideSeed {
                 )?;
             }
             Ok(())
-        });
-    }
-
-    fn seed_secret_reference(&self, reference: SecretReferenceSeed) {
-        self.run("a secret reference", |conn| {
-            let at = format!("{:.9}", reference.created_at);
-            conn.execute(
-                "INSERT INTO secret_references (id, store_key, scope, purpose, status, revision, \
-                 created_at, updated_at) VALUES (?1, ?2, 'instance', ?3, 'present', 1, ?4, ?4)",
-                (
-                    reference.id.to_string(),
-                    &reference.store_key,
-                    &reference.purpose,
-                    at,
-                ),
-            )
-            .map(drop)
         });
     }
 }

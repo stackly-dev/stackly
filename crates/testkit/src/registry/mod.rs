@@ -16,7 +16,7 @@ pub use builders::{
 };
 pub use conformance::registry_conformance;
 pub use fake::{FakeRegistry, WrittenAt};
-pub use seed::{BackupSeed, RegistrySeed, SecretReferenceSeed};
+pub use seed::{BackupSeed, RegistrySeed};
 
 /// Returns every stored field of `instance`, to rebuild it the way the
 /// registry does when it reads one back.

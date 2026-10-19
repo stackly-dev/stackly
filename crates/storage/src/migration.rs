@@ -22,6 +22,11 @@ const BUILTIN_MIGRATIONS: &[Migration] = &[
         name: "operation_journal",
         sql: include_str!("../migrations/0002_operation_journal.sql"),
     },
+    Migration {
+        version: 3,
+        name: "secret_references",
+        sql: include_str!("../migrations/0003_secret_references.sql"),
+    },
 ];
 
 /// The expected schema fingerprint after each built in version. They are
@@ -36,6 +41,10 @@ const BUILTIN_FINGERPRINTS: &[(u32, &str)] = &[
     (
         2,
         "b2075db92cc9fea179ce9926b42b90d585030b0e0448aa21676feb00dca0f74a",
+    ),
+    (
+        3,
+        "c12e265313c19ed8a4654b5dfff6c01d0817934c662c4c399d303662f2107131",
     ),
 ];
 
@@ -262,7 +271,7 @@ mod tests {
                 migration.name
             );
         }
-        assert_eq!(set.latest(), 2);
+        assert_eq!(set.latest(), 3);
     }
 
     #[test]

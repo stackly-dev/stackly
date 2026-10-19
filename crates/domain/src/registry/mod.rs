@@ -12,6 +12,7 @@ mod path;
 mod query;
 mod record;
 mod retention;
+mod secret;
 
 use std::fmt;
 use std::str::FromStr;
@@ -26,6 +27,7 @@ use crate::lease::Lease;
 use crate::operation::{JournalView, Operation, OperationJournal};
 use crate::provider::ProviderRevisionKey;
 use crate::runtime::{Runtime, RuntimeReferences};
+use crate::secret::SecretRef;
 use crate::text::serde_as_text;
 use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
 
@@ -35,6 +37,11 @@ pub use path::{InstancePathEntry, InstancePathKind, LogicalRoot, RelativePath};
 pub use query::{InstanceFilter, LeaseFilter, OperationCursor, OperationPage, OperationQuery};
 pub use record::{ArtifactRecord, ProviderRevisionRecord};
 pub use retention::{PruneReport, RetentionPolicy};
+pub use secret::{
+    AuditAction, AuditActor, AuditCursor, AuditEventRecord, AuditPage, AuditQuery, AuditResource,
+    AuditResult, PlatformStoreKey, SafeDetails, SafeDetailsError, SecretFieldName,
+    SecretReferenceFilter, SecretReferenceRecord, SecretReferenceView, SecretUse, SecretUser,
+};
 
 /// The registry: every read returns the generation it read at, and every
 /// write is a [`WriteBatch`] applied in one transaction with compare and
@@ -72,6 +79,13 @@ pub use retention::{PruneReport, RetentionPolicy};
 /// lock keys (spec 0007), written in the same batch as the operation and
 /// deleted with it when prune removes it. The journal reads leave out an
 /// operation that has no journal row.
+///
+/// # Secrets and audit
+///
+/// A secret reference row names where a value lives, never the value, and
+/// its uses say which resource needs it for which field (spec 0011). A
+/// reference that is still used cannot be deleted
+/// ([`RegistryError::ReferenceInUse`]). Audit rows are append only.
 pub trait Registry: Send + Sync {
     /// Returns a provider revision by its key.
     ///
@@ -253,6 +267,44 @@ pub trait Registry: Send + Sync {
         &self,
     ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError>;
 
+    /// Returns a secret reference row with every use of it.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn secret_reference(
+        &self,
+        reference: &SecretRef,
+    ) -> Result<Versioned<Option<SecretReferenceView>>, RegistryError>;
+
+    /// Returns the secret reference rows `filter` selects, each with every
+    /// use of it, ordered by reference text. `secret.list` and the probe at
+    /// start use it.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn secret_references(
+        &self,
+        filter: SecretReferenceFilter,
+    ) -> Result<Versioned<Vec<SecretReferenceView>>, RegistryError>;
+
+    /// Returns every use by one resource, ordered by field. A resource
+    /// without uses, or one that does not exist, has none.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn secret_uses_by(&self, user: SecretUser) -> Result<Versioned<Vec<SecretUse>>, RegistryError>;
+
+    /// Returns one page of audit rows, newest `(occurred_at, id)` first.
+    ///
+    /// # Errors
+    ///
+    /// Returns `InvalidQuery` for a limit outside 1 to 500, or `Corrupt`,
+    /// `Busy`, `Unavailable`, or `Io`.
+    fn audit_events(&self, query: AuditQuery) -> Result<Versioned<AuditPage>, RegistryError>;
+
     /// Applies every op of `batch` in one transaction, or none of them.
     ///
     /// # Errors
@@ -282,6 +334,18 @@ uuid_id! {
     /// registry; it never changes afterwards, so a restored or copied
     /// registry can be told apart from a new one.
     RegistryId
+}
+
+uuid_id! {
+    /// Stable identifier of one secret reference row, always a UUID
+    /// version 7. The daemon creates it when `put` registers a reference.
+    SecretReferenceId
+}
+
+uuid_id! {
+    /// Stable identifier of one audit row, always a UUID version 7. The
+    /// writer of the row creates it.
+    AuditEventId
 }
 
 #[cfg(test)]

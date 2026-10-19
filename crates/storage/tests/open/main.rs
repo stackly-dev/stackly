@@ -11,3 +11,4 @@ mod fixture;
 mod journal;
 mod migrate;
 mod schema;
+mod secret;

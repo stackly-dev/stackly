@@ -6,8 +6,11 @@ use std::fmt;
 use crate::id::{EnvironmentId, InstanceId, LeaseId, OperationId, RuntimeId, ShortKey};
 use crate::operation::StepSeq;
 use crate::provider::ProviderRevisionKey;
+use crate::registry::AuditEventId;
 use crate::registry::batch::Generation;
 use crate::registry::path::{LogicalRoot, RelativePath};
+use crate::registry::secret::SecretUse;
+use crate::secret::SecretRef;
 use crate::value::{IdempotencyKey, InstanceName, ResourceRevision, Sha256Digest, SoftwareName};
 
 /// One resource the registry holds, as errors and commit results name it.
@@ -30,6 +33,11 @@ pub enum ResourceRef {
     Artifact(Sha256Digest),
     /// One step of an operation's journal.
     OperationStep(OperationId, StepSeq),
+    /// A secret reference row, by its reference text (spec 0011). On the
+    /// wire it is a resource of kind `secret` with the text as its ID.
+    SecretReference(SecretRef),
+    /// An audit row.
+    AuditEvent(AuditEventId),
 }
 
 impl fmt::Display for ResourceRef {
@@ -49,6 +57,8 @@ impl fmt::Display for ResourceRef {
             ),
             Self::Artifact(sha256) => write!(f, "artifact {sha256}"),
             Self::OperationStep(id, seq) => write!(f, "step {seq} of operation {id}"),
+            Self::SecretReference(reference) => write!(f, "secret reference {reference}"),
+            Self::AuditEvent(id) => write!(f, "audit event {id}"),
         }
     }
 }
@@ -128,6 +138,16 @@ pub enum RegistryError {
         name: InstanceName,
         /// The instance that has it.
         existing: InstanceId,
+    },
+    /// A secret reference still has uses, so it cannot be deleted (spec
+    /// 0011). `used_by` lists every one, environments before instances,
+    /// then by ID and field.
+    #[error("secret reference {reference} is still used by {} resource field(s)", used_by.len())]
+    ReferenceInUse {
+        /// The reference.
+        reference: SecretRef,
+        /// Every use of it.
+        used_by: Vec<SecretUse>,
     },
     /// Another operation holds the idempotency key. A key stays bound to
     /// its operation while the operation's row exists (spec 0007).
