@@ -205,8 +205,12 @@ pub(crate) async fn compensate(
             .await;
         if written.is_err() {
             let now = inner.now();
-            // Kept in memory; the final batch writes it.
-            let _ = record.created[index].settle(state, detail, now);
+            // Kept in memory; the next batch, at the latest the final one,
+            // writes it.
+            if record.created[index].settle(state, detail, now).is_ok() {
+                let seq = record.created[index].seq();
+                record.mark_unwritten_created(seq);
+            }
         }
     }
     let scratch = mode == Mode::All || record.journal.point_of_no_return_at().is_none();

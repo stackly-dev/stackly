@@ -377,7 +377,13 @@ async fn mark_open_step(
         .await;
     if written.is_err() {
         let now = inner.now();
+        let open = record.open_step().map(stackly_domain::JournalStep::seq);
         end_open_step(record, state, code, now);
+        // Kept in memory; the next batch, at the latest the final one,
+        // writes it.
+        if let Some(seq) = open {
+            record.mark_unwritten_step(seq);
+        }
     }
 }
 
