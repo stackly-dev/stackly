@@ -421,3 +421,16 @@ Dijalankan 2026-10-19 sebagai pembacaan read only oleh model lain (Fable 5.1), s
 | 15 | `printableOnly` bisa dibalik menjadi default untuk semua secret | catatan | dicatat di Follow-up update spec 0011 |
 
 Pemeriksaan validator oleh reviewer: semua aturan spec 0009 lolos kecuali tepat empat tambahan yang dideklarasikan (`format: plain`, `format: postgresqlConf`, `stdin.text`, `x-stackly.printableOnly`), sehingga langkah 4 Build plan memang harus menunggu langkah 1 sampai 3.
+
+## Konsistensi lintas spec 2026-10-20
+
+Pemeriksaan lead atas spec 0015, 0017, 0018, dan 0019 setelah keempatnya masuk `main` menemukan empat hal milik spec ini, masing masing dikonfirmasi reviewer kedua. Perbaikan yang direkomendasikan diterapkan sesuai aturan user.
+
+| No | Temuan | Perbaikan |
+| --- | --- | --- |
+| 1 | `runtime.versionCheck` (dulu langkah 11) masuk sesudah evidence provider (dulu langkah 10). Field itu ada di `provider.yaml` dan ikut `manifest_sha256`, sehingga evidence BR-025 terikat ke digest lama dan `support_status` spec 0018 tidak pernah memberi `supported` | `versionCheck` pindah ke milestone 2 sebagai langkah 7, sebelum test native, dengan prasyarat langkah 1 spec 0018; langkah evidence (sekarang 11) dan AC-14 mewajibkan evidence dari `provider.yaml` final dan run ulang setelah paket berubah |
+| 2 | Versi subject evidence diambil dari `ArtifactRecord`, padahal spec 0002 meminta versi yang dibaca dari binary yang berjalan | `version` dari `SHOW server_version` pada instance yang berjalan, `digest` dari `ArtifactRecord.sha256` (Value sourcing, AC-14) |
+| 3 | `Stdin::Text` tidak punya jalur ke `SpawnRequest`, karena port spec 0010 hanya punya `StdinSource::Null` dan `Bytes(SecretValue)` | executor init mengirim teks sebagai `StdinSource::Bytes(SecretValue::new(text))` tanpa varian port baru; detail probe disebut sebagai baris pertama dari buffer ekor stderr yang ditangkap; keduanya masuk Follow-up update spec 0010 |
+| 4 | Langkah evidence butuh `cargo xtask runtime compat-record`, yang baru dibangun langkah 13 spec 0018 (milestone 3), tetapi prasyarat tidak menyebutnya | prasyarat langkah 11 menyebut langkah 13 spec 0018 |
+
+Asumsi pada spec 0017 dan 0018 juga diperiksa terhadap teks di `main`: `runtime::fixture::install_cached_artifact` (langkah 9, milestone 2 spec 0018), `runtime_cache::cached_artifact`, bentuk `compatibility.json` dan aturan `compat-record` cocok; field TOML catalog adalah `published_at` dengan ledger `providers/catalog-revisions.json`, dan *Aturan masuk catalog* spec 0017 diikuti langkah 9. Aturan pencocokan pattern `versionCheck` (full match) sedang diperbaiki di spec 0018, jadi pattern PostgreSQL diberi `\n?` di akhir supaya cocok dengan keluaran satu baris `postgres --version` di bawah aturan mana pun.
