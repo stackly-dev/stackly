@@ -71,6 +71,9 @@ pub struct DaemonConfig {
     /// When set, the start slot waits until the value turns true, so a
     /// test can watch the daemon while it is `starting`.
     pub start_gate: Option<watch::Receiver<bool>>,
+    /// The uid a peer must have; `None`, the daemon's choice, means its own
+    /// uid. Tests set another uid to watch a refused peer (spec 0006 AC-2).
+    pub peer_uid: Option<u32>,
 }
 
 impl Default for DaemonConfig {
@@ -81,6 +84,7 @@ impl Default for DaemonConfig {
             registry_locked_retries: REGISTRY_LOCKED_RETRIES.to_vec(),
             registry_open: OpenOptions::new(),
             start_gate: None,
+            peer_uid: None,
         }
     }
 }
@@ -230,7 +234,8 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
 
     // Step 9.
     let socket = layout.daemon_socket();
-    let listener = Listener::bind(&socket, uid).map_err(StartError::Bind)?;
+    let listener =
+        Listener::bind(&socket, config.peer_uid.unwrap_or(uid)).map_err(StartError::Bind)?;
     tracing::info!(socket_path = %socket.display(), "stacklyd listens");
 
     // Step 10.

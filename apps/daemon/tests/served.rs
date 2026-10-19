@@ -390,3 +390,50 @@ fn the_daemon_binary_answers_with_its_own_socket_path_and_the_stackly_root() {
     assert_eq!(info.uid, Some(common::uid()));
     assert_eq!(daemon.stop().unwrap().code(), Some(0));
 }
+
+#[test]
+fn a_registry_that_cannot_be_opened_stops_stacklyd_with_exit_1() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let ev = evidence!(
+        covers = ["REQ-048"],
+        kind = Kind::Fixture,
+        expected = "when the start slot cannot open the registry, stacklyd logs why, runs its stop, removes its socket, and exits 1",
+    );
+    let root = TestRoot::new().unwrap();
+    let paths = daemon_paths(&root);
+    let first = start_daemon(&root);
+    assert_eq!(first.stop().unwrap().code(), Some(0));
+    let registry = paths.layout.registry_dir();
+    std::fs::set_permissions(&registry, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+    let daemon = stackly_testkit::SpawnedDaemon::spawn(
+        std::path::Path::new(common::STACKLYD),
+        root.path(),
+        &paths.socket,
+        &paths.runtime,
+        &[],
+    )
+    .unwrap();
+    let stderr = daemon.stderr_path().to_path_buf();
+    let status = daemon.wait_exit(Duration::from_secs(10));
+    std::fs::set_permissions(&registry, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+    assert_eq!(status.unwrap().code(), Some(1));
+    let lines = json_lines(&std::fs::read_to_string(stderr).unwrap());
+    let messages: Vec<&str> = lines
+        .iter()
+        .filter_map(|line| field(line, "message").as_str())
+        .collect();
+    let at = |message: &str| {
+        messages
+            .iter()
+            .position(|seen| *seen == message)
+            .unwrap_or_else(|| panic!("no line {message:?} in {messages:?}"))
+    };
+    let stopping = at("stacklyd stopping after a fatal error");
+    assert!(at("cannot open the registry") < stopping);
+    assert!(stopping < at("stacklyd stopped"));
+    assert!(!paths.socket.exists(), "the stop removes the socket");
+    ev.pass();
+}
