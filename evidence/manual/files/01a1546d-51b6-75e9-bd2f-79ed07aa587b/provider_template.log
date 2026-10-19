@@ -1,0 +1,43 @@
+   Compiling stackly-core v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/f9-closeout-c0a0a3/crates/core)
+   Compiling stackly-fuzz v0.0.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/f9-closeout-c0a0a3/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1m 16s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.09s
+     Running `fuzz/target/aarch64-apple-darwin/release/provider_template -artifact_prefix=fuzz/artifacts/provider_template/ -max_len=262144 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_template fuzz/seeds/provider_template`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3714337871
+INFO: Loaded 1 modules   (288982 inline 8-bit counters): 288982 [0x105b65700, 0x105babfd6), 
+INFO: Loaded 1 PC tables (288982 PCs): 288982 [0x105babfd8,0x106014d38), 
+INFO:        0 files found in fuzz/corpus/provider_template
+INFO:        6 files found in fuzz/seeds/provider_template
+INFO: seed corpus: files: 6 min: 121b max: 451b total: 1905b rss: 45Mb
+#8	INITED cov: 11301 ft: 22201 corp: 6/1905b exec/s: 0 rss: 66Mb
+	NEW_FUNC[1/2]: 0x0001047ff764 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueINtNtCsgysSR5XEJuO_5alloc3vec3VecNtNtNtCsiFFNB0KPPS5_12stackly_core8provider8template3LexEEB1e_+0x0 (provider_template:arm64+0x100057764)
+	NEW_FUNC[2/2]: 0x0001048b0de0 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueNtNtNtCsiFFNB0KPPS5_12stackly_core8provider8template3LexEBH_+0x0 (provider_template:arm64+0x100108de0)
+#9	NEW    cov: 11332 ft: 22320 corp: 7/2281b lim: 451 exec/s: 0 rss: 68Mb L: 376/451 MS: 1 CrossOver-
+	NEW_FUNC[1/1]: 0x0001047ad1b4 in _RINvMs0_NtNtCsiFFNB0KPPS5_12stackly_core8provider5issueNtB6_5Issue3newReB16_EBa_+0x0 (provider_template:arm64+0x1000051b4)
+#10	NEW    cov: 11340 ft: 22346 corp: 8/2402b lim: 451 exec/s: 0 rss: 69Mb L: 121/451 MS: 1 ChangeBinInt-
+#11	NEW    cov: 11351 ft: 25361 corp: 9/2617b lim: 451 exec/s: 0 rss: 70Mb L: 215/451 MS: 1 CrossOver-
+#12	NEW    cov: 11351 ft: 25362 corp: 10/2806b lim: 451 exec/s: 0 rss: 71Mb L: 189/451 MS: 1 InsertByte-
+	NEW_FUNC[1/7]: 0x000105659364 in _RINvMs0_NtCsccconMumvMc_10serde_json5errorNtB6_5Error12fix_positionNCNvMs3_NtB8_2deINtB1b_12DeserializerNtNtB8_4read7StrReadE12fix_position0ECsiFFNB0KPPS5_12stackly_core+0x0 (provider_template:arm64+0x100eb1364)
+	NEW_FUNC[2/7]: 0x00010487e288 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueNtNtCsccconMumvMc_10serde_json5error9ErrorCodeECsiFFNB0KPPS5_12stackly_core+0x0 (provider_template:arm64+0x1000d6288)
+#13	NEW    cov: 11391 ft: 26062 corp: 11/3009b lim: 451 exec/s: 0 rss: 71Mb L: 203/451 MS: 1 EraseBytes-
+#15	NEW    cov: 11391 ft: 26068 corp: 12/3186b lim: 451 exec/s: 0 rss: 72Mb L: 177/451 MS: 2 CopyPart-CMP- DE: "\020\000\000\000\000\000\000\000"-
+#16	NEW    cov: 11395 ft: 26101 corp: 13/3470b lim: 451 exec/s: 0 rss: 73Mb L: 284/451 MS: 1 ShuffleBytes-
+... (NEW, REDUCE, and pulse progress lines cut) ...
+"\001\000\000\000\000\000\000f" # Uses: 28
+"\017\000" # Uses: 17
+"\007\000\000\000\000\000\000\000" # Uses: 20
+"\000\000\000s" # Uses: 22
+"\377\377" # Uses: 16
+"\000\000\000\002" # Uses: 10
+"/\000\000\000" # Uses: 9
+"f\000\000\000\000\000\000\000" # Uses: 2
+###### End of recommended dictionary. ######
+Done 189312 runs in 601 second(s)
+stat::number_of_executed_units: 189312
+stat::average_exec_per_sec:     314
+stat::new_units_added:          3624
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              467
+fuzz run: provider_template ran for 600 s without a crash
+      680.59 real       560.54 user        11.77 sys

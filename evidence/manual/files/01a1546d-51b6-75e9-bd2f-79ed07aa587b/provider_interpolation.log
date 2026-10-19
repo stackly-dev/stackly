@@ -1,0 +1,43 @@
+   Compiling stackly-fuzz v0.0.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/f9-closeout-c0a0a3/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2.07s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
+     Running `fuzz/target/aarch64-apple-darwin/release/provider_interpolation -artifact_prefix=fuzz/artifacts/provider_interpolation/ -max_len=4096 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_interpolation fuzz/seeds/provider_interpolation`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 25329405
+INFO: Loaded 1 modules   (288982 inline 8-bit counters): 288982 [0x105949930, 0x105990206), 
+INFO: Loaded 1 PC tables (288982 PCs): 288982 [0x105990208,0x105df8f68), 
+INFO:        0 files found in fuzz/corpus/provider_interpolation
+INFO:       32 files found in fuzz/seeds/provider_interpolation
+INFO: seed corpus: files: 32 min: 16b max: 52b total: 957b rss: 56Mb
+#33	INITED cov: 1291 ft: 1827 corp: 27/775b exec/s: 0 rss: 57Mb
+#34	NEW    cov: 1295 ft: 1833 corp: 28/810b lim: 52 exec/s: 0 rss: 57Mb L: 35/52 MS: 1 ChangeBit-
+#35	NEW    cov: 1299 ft: 1837 corp: 29/831b lim: 52 exec/s: 0 rss: 57Mb L: 21/52 MS: 1 ChangeBit-
+#36	NEW    cov: 1300 ft: 1840 corp: 30/845b lim: 52 exec/s: 0 rss: 57Mb L: 14/52 MS: 1 EraseBytes-
+#37	NEW    cov: 1301 ft: 1841 corp: 31/876b lim: 52 exec/s: 0 rss: 57Mb L: 31/52 MS: 1 InsertByte-
+#43	NEW    cov: 1305 ft: 1853 corp: 32/892b lim: 52 exec/s: 0 rss: 57Mb L: 16/52 MS: 1 EraseBytes-
+#44	NEW    cov: 1306 ft: 1854 corp: 33/912b lim: 52 exec/s: 0 rss: 57Mb L: 20/52 MS: 1 InsertByte-
+#49	NEW    cov: 1326 ft: 1879 corp: 34/942b lim: 52 exec/s: 0 rss: 57Mb L: 30/52 MS: 5 CMP-ShuffleBytes-ChangeBit-EraseBytes-CMP- DE: "\001\000"-"\003\000\000\000\000\000\000\000"-
+#51	NEW    cov: 1326 ft: 1880 corp: 35/977b lim: 52 exec/s: 0 rss: 57Mb L: 35/52 MS: 2 ChangeBit-CopyPart-
+#52	NEW    cov: 1338 ft: 1897 corp: 36/1013b lim: 52 exec/s: 0 rss: 58Mb L: 36/52 MS: 1 PersAutoDict- DE: "\003\000\000\000\000\000\000\000"-
+#55	NEW    cov: 1341 ft: 1908 corp: 37/1055b lim: 52 exec/s: 0 rss: 58Mb L: 42/52 MS: 3 CopyPart-CrossOver-PersAutoDict- DE: "\003\000\000\000\000\000\000\000"-
+#61	NEW    cov: 1341 ft: 1910 corp: 38/1081b lim: 52 exec/s: 0 rss: 58Mb L: 26/52 MS: 1 ChangeByte-
+#67	NEW    cov: 1345 ft: 1914 corp: 39/1107b lim: 52 exec/s: 0 rss: 58Mb L: 26/52 MS: 1 ShuffleBytes-
+#73	NEW    cov: 1346 ft: 1915 corp: 40/1123b lim: 52 exec/s: 0 rss: 58Mb L: 16/52 MS: 1 ShuffleBytes-
+... (NEW, REDUCE, and pulse progress lines cut) ...
+"\012\000\000\000\000\000\000\000" # Uses: 1194
+"\000\014" # Uses: 1020
+"\000\000\000\000\000\000\000\017" # Uses: 1064
+"\001\000\000\000\000\000\000\001" # Uses: 1031
+"\000\000\000\000\000\000\000\022" # Uses: 603
+"\014\000" # Uses: 591
+"\001\000\000\000\000\000\000\"" # Uses: 181
+"\007\000" # Uses: 180
+###### End of recommended dictionary. ######
+Done 1740467 runs in 601 second(s)
+stat::number_of_executed_units: 1740467
+stat::average_exec_per_sec:     2895
+stat::new_units_added:          3565
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              656
+fuzz run: provider_interpolation ran for 600 s without a crash
+      606.00 real       442.15 user         5.76 sys

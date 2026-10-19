@@ -1,0 +1,64 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1546d-51b6-75e9-bd2f-79ed07aa587b",
+  "covers": [
+    "NFR-009"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Fuzz the four provider targets 10 minutes each on main after wave 2",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "cargo xtask fuzz run runs provider_manifest, provider_template, provider_interpolation, and provider_settings_schema for 600 seconds each, one at a time, with the pinned nightly and cargo-fuzz, and finds no crash, hang, or out of memory.",
+  "actual": "no crash, hang, or out of memory in any target and fuzz/artifacts/ empty; provider_manifest: 748121 runs in 601 s (1244 exec/s), 7798 new units, peak RSS 428 MB; provider_template: 189312 runs in 601 s (314 exec/s), 3624 new units, peak RSS 467 MB; provider_interpolation: 1740467 runs in 601 s (2895 exec/s), 3565 new units, peak RSS 656 MB; provider_settings_schema: 4909162 runs in 601 s (8168 exec/s), 11749 new units, peak RSS 566 MB",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 6b3da2c (main after wave 2: the spec 0009 reconciliation of AC-7, AC-8, and AC-11, the contract 1.3 wire codes, and the feature 11 ResolvedSecrets) with a clean tree, use the pinned fuzz toolchain nightly-2026-10-17 and cargo-fuzz 0.13.2; `cargo xtask fuzz build` builds the provider targets with AddressSanitizer (default)",
+    "start from the committed seeds only (fuzz/corpus empty in this worktree): provider_manifest 4, provider_template 6, provider_interpolation 32, provider_settings_schema 4",
+    "run `cargo xtask fuzz run <target> --time 600` for provider_manifest, provider_template, provider_interpolation, and provider_settings_schema one at a time, because the Mac is shared by other sessions; the runs went from 2026-10-19T13:43:58Z to 14:25:32Z",
+    "provider_template rebuilt stackly-core before its run, and provider_interpolation and provider_settings_schema relinked their binaries, because a verify drift probe had edited and restored crates/core/src/provider/raw.rs (only the mtime changed in the end; restored at 13:53:42Z, before the template run started at 13:54:01Z, and the edited attribute is json-schema only, which the fuzz build does not enable), so every target fuzzed the source of 6b3da2c",
+    "check that each command exits 0 with `ran for 600 s without a crash`, that fuzz/artifacts/ holds no input for any target, and read the libFuzzer final stats",
+    "keep the head and tail of each log in this record's files folder (the middle NEW, REDUCE, and pulse progress lines are cut)",
+    "the fresh model review afterwards found a YAML alias bomb with a large anchor that these runs did not reach (mutations rarely build an anchor chain); it is fixed in 2a25db1 and 4ee9bf6 with regression inputs in crates/core/tests/fuzz_regressions/, and a 60 second smoke run per target on 4ee9bf6 is recorded in docs/specs/0009-provider-engine-manifest-schema/verify.md"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5)",
+  "startedAt": "2026-10-19T13:38:57Z",
+  "finishedAt": "2026-10-19T14:25:32Z",
+  "evidencePath": "evidence/manual/files/01a1546d-51b6-75e9-bd2f-79ed07aa587b/",
+  "context": {
+    "sourceCommit": "6b3da2c70443504da2983ca09a0bb9b20dce4672",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
