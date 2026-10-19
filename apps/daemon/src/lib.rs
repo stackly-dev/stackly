@@ -4,9 +4,10 @@
 //! [`run`] is the whole daemon. [`lock`] keeps one daemon per data root,
 //! [`log_sink`] writes every log line without ever blocking the daemon,
 //! [`server`] binds the socket and serves [`connection`]s through the
-//! [`dispatch`] handlers, [`events`] is the event bus, [`state`] holds the
-//! health, and [`shutdown`] the stop order's pieces. No other crate
-//! depends on this library.
+//! [`dispatch`] handlers, whose operation methods live in [`ipc`],
+//! [`operations`] holds the operation engine, [`events`] is the event bus,
+//! [`state`] holds the health, and [`shutdown`] the stop order's pieces.
+//! No other crate depends on this library.
 
 #[cfg(unix)]
 pub mod connection;
@@ -15,11 +16,15 @@ pub mod dispatch;
 #[cfg(unix)]
 pub mod events;
 #[cfg(unix)]
+pub mod ipc;
+#[cfg(unix)]
 pub mod lock;
 #[cfg(unix)]
 pub mod log_sink;
 #[cfg(unix)]
 pub mod map;
+#[cfg(unix)]
+pub mod operations;
 #[cfg(unix)]
 pub mod server;
 #[cfg(unix)]

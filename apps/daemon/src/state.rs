@@ -19,6 +19,7 @@ use tokio::sync::watch;
 use crate::connection::Connections;
 use crate::events::EventBus;
 use crate::log_sink::LogSink;
+use crate::operations::Operations;
 use crate::shutdown::Drain;
 
 /// Where the daemon is in its life.
@@ -120,6 +121,7 @@ pub struct DaemonCore {
     counters: Counters,
     drain: Drain,
     connections: Connections,
+    operations: Operations,
     next_connection_id: AtomicU64,
     stop: watch::Sender<bool>,
     fatal: watch::Sender<Option<u8>>,
@@ -158,6 +160,7 @@ impl DaemonCore {
             counters: Counters::default(),
             drain: Drain::default(),
             connections: Connections::default(),
+            operations: Operations::default(),
             next_connection_id: AtomicU64::new(1),
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
@@ -222,6 +225,12 @@ impl DaemonCore {
     #[must_use]
     pub const fn connections(&self) -> &Connections {
         &self.connections
+    }
+
+    /// The operation engine and its health (spec 0007).
+    #[must_use]
+    pub const fn operations(&self) -> &Operations {
+        &self.operations
     }
 
     /// A new connection ID: a counter per run, from 1.
@@ -383,7 +392,7 @@ impl DaemonCore {
             subsystem_health(subsystem::EVENT_BUS, SubsystemStatus::Ok, None),
             self.log.health(now),
             registry,
-            subsystem_health(subsystem::OPERATIONS, SubsystemStatus::NotBuilt, None),
+            self.operations.health(),
             subsystem_health(subsystem::SUPERVISOR, SubsystemStatus::NotBuilt, None),
         ];
         let status = match self.phase() {
