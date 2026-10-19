@@ -5,7 +5,9 @@
 //! `stackly-ipc` and `stacklyd` rules and the socket scan from spec 0006,
 //! the `stackly-fake-server` rules from spec 0009, and the secret rules
 //! from spec 0011: the `expose` scan and where `security-framework` and
-//! `rpassword` may be direct dependencies.
+//! `rpassword` may be direct dependencies, and the CLI rules from spec
+//! 0008: no process spawning paths, crates, or print macros in
+//! `stackly-cli`, and no `codes::cli` outside the CLI and the protocol.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
 //! build). Transitive dependencies are left alone: portability is proven by
@@ -69,6 +71,17 @@ const SECURITY_FRAMEWORK: [&str; 2] = ["security-framework", "security-framework
 /// (spec 0011).
 const RPASSWORD: &str = "rpassword";
 const CLI: &str = "stackly-cli";
+/// Crates that run or open other programs, which `stackly-cli` never takes
+/// as a normal dependency (spec 0008, BR-011). Dev dependencies may.
+const CLI_SPAWN_DEPS: [&str; 7] = [
+    "libc",
+    "nix",
+    "duct",
+    "subprocess",
+    "xshell",
+    "open",
+    "opener",
+];
 
 pub fn run(root: &Path) -> Result<()> {
     let (crates, violations) = find_violations(root)?;
@@ -80,7 +93,7 @@ pub fn run(root: &Path) -> Result<()> {
         eprintln!("  {violation}");
     }
     bail!(
-        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, 0009, and 0011",
+        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, 0008, 0009, and 0011",
         violations.len()
     )
 }
@@ -219,6 +232,10 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
     }
     if name == RPASSWORD && package != CLI {
         deny("only stackly-cli reads a secret from the terminal (spec 0011)");
+    }
+    if package == CLI && dependency.kind == DependencyKind::Normal && CLI_SPAWN_DEPS.contains(&name)
+    {
+        deny(source_scan::SPAWN_RULE);
     }
     if name == STORAGE && BINARIES.contains(&package) && package != "stacklyd" {
         deny("of the binaries, only stacklyd uses the registry");
@@ -993,6 +1010,115 @@ mod tests {
         );
     }
 
+    const SPAWN_RULE: &str = "the cli never spawns processes (spec 0008, BR-011)";
+
+    #[test]
+    fn the_cli_never_takes_a_process_spawning_crate_as_a_normal_dependency() {
+        for name in CLI_SPAWN_DEPS {
+            assert_eq!(
+                violations(CLI, name, None),
+                [format!(
+                    "stackly-cli has a normal dependency on {name}: {SPAWN_RULE}"
+                )]
+            );
+            assert!(violations(CLI, name, Some("dev")).is_empty(), "{name}");
+            assert!(violations("stacklyd", name, None).is_empty(), "{name}");
+        }
+        for name in [
+            "anstream",
+            "anstyle",
+            "unicode-width",
+            "jiff",
+            "uuid",
+            "tokio",
+        ] {
+            assert!(violations(CLI, name, None).is_empty(), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_fixture_workspace_that_breaks_the_cli_rules_fails_with_file_and_line() {
+        let ev = stackly_evidence::evidence!(
+            covers = ["BR-011"],
+            kind = stackly_evidence::Kind::Fixture,
+            expected = "check-deps rejects every process spawning path, import, alias, glob, and crate in the cli, its print macros, and codes::cli outside the cli and the protocol, with file and line, while exit, ExitCode, id, clap::Command, a dev libc, and test code pass",
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_file(
+            root,
+            "Cargo.toml",
+            "[workspace]\nresolver = \"3\"\n\
+             members = [\"crates/protocol\", \"apps/daemon\", \"apps/cli\"]\n\n\
+             [workspace.lints.rust]\nunsafe_code = \"deny\"\n",
+        );
+        write_crate(root, "crates/protocol", PROTOCOL, "", false);
+        write_file(
+            root,
+            "crates/protocol/src/lib.rs",
+            "//! Fixture.\npub mod codes { pub mod cli { pub const USAGE: &str = \"cli.usage\"; } }\n\
+             pub const A: &str = codes::cli::USAGE;\n",
+        );
+        write_crate(root, "apps/daemon", DAEMON, "", true);
+        write_file(
+            root,
+            "apps/daemon/src/main.rs",
+            "//! Fixture.\nuse stackly_protocol::codes::cli;\nfn main() {\n    println!(\"{}\", cli::USAGE);\n}\n",
+        );
+        write_file(
+            root,
+            "apps/cli/Cargo.toml",
+            "[package]\nname = \"stackly-cli\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+             [dependencies]\nlibc = \"0.2\"\nduct = \"1\"\nclap = \"4\"\n\n\
+             [dev-dependencies]\nnix = \"0.30\"\n\n[lints]\nworkspace = true\n",
+        );
+        write_file(
+            root,
+            "apps/cli/src/main.rs",
+            "//! Fixture.\n\
+             use std::process::Command;\n\
+             use std::process as p;\n\
+             use std::process::*;\n\
+             use stackly_protocol::codes::cli;\n\
+             fn main() -> std::process::ExitCode {\n\
+             \x20   let _ = std::process::Command::new(\"x\");\n\
+             \x20   let _ = p::Command::new(\"x\");\n\
+             \x20   let _ = tokio::process::Command::new(\"x\");\n\
+             \x20   println!(\"{} {}\", cli::USAGE, std::process::id());\n\
+             \x20   let _ = clap::Command::new(\"stackly\");\n\
+             \x20   if false { std::process::exit(2) }\n\
+             \x20   std::process::ExitCode::SUCCESS\n\
+             }\n",
+        );
+        write_file(
+            root,
+            "apps/cli/tests/spawn.rs",
+            "//! Tests may spawn the binary.\n#[test]\nfn t() { let _ = std::process::Command::new(\"x\"); println!(\"x\"); }\n",
+        );
+
+        let (crates, mut found) = find_violations(root).unwrap();
+        found.sort();
+
+        assert_eq!(crates, 3);
+        let print = "the cli writes through its output module, never print macros, which panic on a broken pipe (spec 0008, AC-10)";
+        let codes = "only the cli and the protocol name codes::cli, so the daemon never sends a cli code (spec 0008, AC-14)";
+        assert_eq!(
+            found,
+            [
+                format!("stackly-cli apps/cli/src/main.rs:10: {print}"),
+                format!("stackly-cli apps/cli/src/main.rs:2: {SPAWN_RULE}"),
+                format!("stackly-cli apps/cli/src/main.rs:3: {SPAWN_RULE}"),
+                format!("stackly-cli apps/cli/src/main.rs:4: {SPAWN_RULE}"),
+                format!("stackly-cli apps/cli/src/main.rs:7: {SPAWN_RULE}"),
+                format!("stackly-cli apps/cli/src/main.rs:9: {SPAWN_RULE}"),
+                format!("stackly-cli has a normal dependency on duct: {SPAWN_RULE}"),
+                format!("stackly-cli has a normal dependency on libc: {SPAWN_RULE}"),
+                format!("stacklyd apps/daemon/src/main.rs:2: {codes}"),
+            ]
+        );
+        ev.pass();
+    }
+
     #[test]
     fn every_allowed_expose_module_of_this_workspace_holds_a_call_site() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1014,6 +1140,8 @@ mod tests {
                 library: false,
                 sockets: false,
                 expose_allowed: &[],
+                cli: false,
+                no_cli_codes: false,
             };
             let calls = source_scan::scan_package(root, package, nothing_allowed).unwrap();
             for module in modules {
