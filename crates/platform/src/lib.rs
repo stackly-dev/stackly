@@ -9,6 +9,10 @@
 //!
 //! Every trait is sync, object safe, and `Send + Sync`; async callers reach
 //! it through `spawn_blocking`.
+//!
+//! The secret store port ([`SecretStore`]) carries values only inside
+//! [`SecretValue`], which never prints itself and wipes its memory on drop
+//! (spec 0011).
 
 mod capability;
 mod clock;
@@ -19,6 +23,7 @@ mod info;
 mod layout;
 mod platform;
 mod private_dir;
+mod secret;
 mod unsupported;
 
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
@@ -37,4 +42,9 @@ pub use layout::{
 };
 pub use platform::Platform;
 pub use private_dir::{PrivateDirViolation, check_private_dir};
+pub use secret::{
+    Interaction, MAX_SECRET_LEN, SCRUB_ANYWHERE_LEN, SCRUB_MIN_LEN, SECRET_SERVICE, SecretBackend,
+    SecretPresence, SecretStore, SecretStoreError, SecretValue, SecretValueError, StoreState,
+    UnsupportedSecretStore, WriteMode,
+};
 pub use unsupported::UnsupportedPlatform;

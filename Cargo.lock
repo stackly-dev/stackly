@@ -1088,6 +1088,7 @@ dependencies = [
  "stackly-domain",
  "stackly-evidence",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
@@ -1603,6 +1604,12 @@ dependencies = [
  "toml",
  "uuid",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 
 [[package]]
 name = "zmij"

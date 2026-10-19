@@ -58,7 +58,12 @@ fn fake_platform_info_reports_macos_capabilities_and_takes_overrides() {
     let root = TestRoot::new().unwrap();
     let info = FakePlatformInfo::new()
         .with_target(Target::new(Os::Linux, Arch::X86_64))
-        .with_capability(PlatformCapability::SecretStore, CapabilityStatus::Supported);
+        .with_capability(
+            PlatformCapability::SecretStore,
+            CapabilityStatus::NotSupported {
+                reason: "switched off",
+            },
+        );
     let default = FakePlatform::new(&root).platform();
     let custom = FakePlatform::new(&root).with_info(info).platform();
 
@@ -69,6 +74,7 @@ fn fake_platform_info_reports_macos_capabilities_and_takes_overrides() {
         PlatformCapability::Filesystem,
         PlatformCapability::Clock,
         PlatformCapability::UserIdentity,
+        PlatformCapability::SecretStore,
     ] {
         assert!(caps.status(supported).is_supported(), "{supported}");
     }
@@ -79,12 +85,14 @@ fn fake_platform_info_reports_macos_capabilities_and_takes_overrides() {
         }
     );
     assert_eq!(custom.info().target().to_string(), "linux-x86_64");
-    assert!(
+    assert_eq!(
         custom
             .info()
             .capabilities()
-            .status(PlatformCapability::SecretStore)
-            .is_supported()
+            .status(PlatformCapability::SecretStore),
+        CapabilityStatus::NotSupported {
+            reason: "switched off"
+        }
     );
 }
 

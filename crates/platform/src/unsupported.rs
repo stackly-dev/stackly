@@ -11,12 +11,14 @@ use crate::identity::{UserId, UserIdentity};
 use crate::info::PlatformInfo;
 use crate::layout::{DirectoryResolver, RootSet};
 use crate::platform::Platform;
+use crate::secret::UnsupportedSecretStore;
 
 /// The platform for an OS that has no adapter yet, such as Windows today.
 ///
 /// Directories, filesystem, and user identity always answer
-/// [`PlatformError::NotSupported`]; the clock works. Every capability but
-/// the clock reports not supported, so the next port only has to swap the
+/// [`PlatformError::NotSupported`], and the secret store is an
+/// [`UnsupportedSecretStore`]; the clock works. Every capability but the
+/// clock reports not supported, so the next port only has to swap the
 /// adapter, never core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnsupportedPlatform {
@@ -39,6 +41,7 @@ impl UnsupportedPlatform {
             ports.clone(),
             ports,
         )
+        .with_secrets(Arc::new(UnsupportedSecretStore::new(target.os())))
     }
 
     fn not_supported(&self, capability: PlatformCapability) -> PlatformError {
@@ -109,10 +112,13 @@ impl PlatformInfo for UnsupportedPlatform {
 
 #[cfg(test)]
 mod tests {
-    use stackly_domain::Arch;
+    use stackly_domain::{Arch, SecretRef};
     use stackly_evidence::{Kind, evidence};
 
     use super::*;
+    use crate::secret::{
+        Interaction, SecretBackend, SecretStoreError, SecretValue, StoreState, WriteMode,
+    };
 
     const WINDOWS: Target = Target::new(Os::Windows, Arch::Aarch64);
 
@@ -170,6 +176,58 @@ mod tests {
             Identity
         ));
         ev.pass();
+    }
+
+    #[test]
+    fn the_secret_store_of_an_unsupported_platform_refuses_every_call() {
+        let platform = UnsupportedPlatform::new(WINDOWS);
+        let secrets = platform.secrets();
+        let reference = SecretRef::parse("local:erp/admin").unwrap();
+        let value = SecretValue::new("not-a-real-secret".to_owned()).unwrap();
+        let not_supported = SecretStoreError::NotSupported { os: Os::Windows };
+
+        assert_eq!(secrets.backend(), SecretBackend::Unsupported);
+        assert_eq!(secrets.state(), StoreState::Unsupported);
+        assert_eq!(secrets.probe(&reference), Err(not_supported));
+        assert_eq!(
+            secrets.read(&reference, Interaction::Never).unwrap_err(),
+            not_supported
+        );
+        assert_eq!(
+            secrets.write(&reference, &value, WriteMode::Create, Interaction::Never),
+            Err(not_supported)
+        );
+        assert_eq!(
+            secrets.delete(&reference, Interaction::Never),
+            Err(not_supported)
+        );
+    }
+
+    #[test]
+    fn a_new_platform_has_an_unsupported_secret_store_until_one_is_installed() {
+        let ports = Arc::new(UnsupportedPlatform { target: WINDOWS });
+        let reference = SecretRef::parse("local:erp/admin").unwrap();
+        let platform = Platform::new(
+            ports.clone(),
+            ports.clone(),
+            Arc::new(SystemClock),
+            ports.clone(),
+            ports,
+        );
+
+        assert_eq!(
+            platform.secrets().probe(&reference),
+            Err(SecretStoreError::NotSupported { os: Os::Windows })
+        );
+        let linux: Arc<dyn crate::secret::SecretStore> =
+            Arc::new(UnsupportedSecretStore::new(Os::Linux));
+        let platform = platform.with_secrets(Arc::clone(&linux));
+        assert_eq!(
+            platform.secrets().probe(&reference),
+            Err(SecretStoreError::NotSupported { os: Os::Linux })
+        );
+        assert!(Arc::ptr_eq(&platform.shared_secrets(), &linux));
+        assert!(format!("{platform:?}").contains("secrets: Unsupported"));
     }
 
     #[test]
