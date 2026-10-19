@@ -5,7 +5,7 @@
 use jiff::Timestamp;
 
 use crate::code::code_enum;
-use crate::endpoint::Endpoint;
+use crate::endpoint::{Endpoint, PortRequest};
 use crate::error::{DomainError, InvariantDetail, InvariantError, Machine, TransitionError};
 use crate::id::{InstanceId, OperationId, RuntimeId};
 use crate::observation::{
@@ -15,8 +15,8 @@ use crate::operation::{Operation, OperationKind, OperationResource, OperationSta
 use crate::provider::{AcceptedRevisionChange, LineCompatibility, ProviderRevisionKey};
 use crate::secret::InstanceBlocker;
 use crate::value::{
-    DisplayName, ExactVersion, FailureCode, InstanceName, ReasonCode, ResourceRevision,
-    RuntimeLine, SoftwareName,
+    DisplayName, EndpointName, ExactVersion, FailureCode, InstanceName, Port, ReasonCode,
+    ResourceRevision, RuntimeLine, SoftwareName,
 };
 
 code_enum! {
@@ -660,6 +660,48 @@ impl Instance {
         self.bump_revision();
     }
 
+    /// Records `port` as the bound port of the IP endpoint named `endpoint`:
+    /// the port given to the process spawned for it, committed in the
+    /// `spawned` batch and shown as final once readiness succeeds (spec
+    /// 0010, REQ-010). A fixed endpoint can only be bound to its own port.
+    /// Like [`set_desired`](Self::set_desired), it raises the revision by
+    /// exactly 1, also when the port is the same.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvariantError`] and leaves the instance unchanged when
+    /// no IP endpoint has that name ([`InvariantDetail::NoIpEndpoint`]),
+    /// or when `port` is not the port of a fixed endpoint (BR-005,
+    /// [`InvariantDetail::FixedPortSubstituted`]).
+    pub fn set_bound_port(
+        &mut self,
+        endpoint: &EndpointName,
+        port: Port,
+    ) -> Result<(), InvariantError> {
+        let ip = self
+            .endpoints
+            .iter_mut()
+            .find_map(|candidate| match candidate {
+                Endpoint::Ip(ip) if ip.name() == endpoint => Some(ip),
+                Endpoint::Ip(_) | Endpoint::Unix(_) => None,
+            })
+            .ok_or_else(|| InvariantDetail::NoIpEndpoint {
+                endpoint: endpoint.clone(),
+            })?;
+        if let PortRequest::Fixed(fixed) = ip.request()
+            && fixed != port
+        {
+            return Err(InvariantDetail::FixedPortSubstituted {
+                fixed,
+                requested: port,
+            }
+            .into());
+        }
+        ip.set_bound(port);
+        self.bump_revision();
+        Ok(())
+    }
+
     /// Moves the instance to another runtime of the same software, the only
     /// way its runtime changes (BR-001).
     ///
@@ -925,6 +967,74 @@ mod tests {
             InvariantDetail::RebindOtherSoftware { .. }
         ));
         assert_eq!(err.rule(), None);
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn set_bound_port_records_the_spawned_port_and_raises_the_revision() {
+        use crate::endpoint::{IpEndpoint, Transport, UnixEndpoint};
+        use crate::rule::Rule;
+
+        let port = |number| Port::new(number).unwrap();
+        let ip = |name: &str, request| {
+            Endpoint::Ip(IpEndpoint::new(
+                name.parse().unwrap(),
+                Transport::Tcp,
+                "127.0.0.1".parse().unwrap(),
+                request,
+                None,
+            ))
+        };
+        let mut instance = instance();
+        instance.endpoints = vec![
+            ip("main", PortRequest::Auto),
+            ip("admin", PortRequest::Fixed(port(5432))),
+            Endpoint::Unix(UnixEndpoint::new(
+                "socket".parse().unwrap(),
+                ".s.PGSQL.5432".parse().unwrap(),
+            )),
+        ];
+        let name = |text: &str| text.parse::<EndpointName>().unwrap();
+
+        instance.set_bound_port(&name("main"), port(6001)).unwrap();
+        instance.set_bound_port(&name("admin"), port(5432)).unwrap();
+        instance.set_bound_port(&name("main"), port(6001)).unwrap();
+
+        assert_eq!(instance.revision().get(), 4);
+        let bound: Vec<_> = instance
+            .endpoints()
+            .iter()
+            .map(|endpoint| match endpoint {
+                Endpoint::Ip(ip) => ip.bound(),
+                Endpoint::Unix(_) => None,
+            })
+            .collect();
+        assert_eq!(bound, [Some(port(6001)), Some(port(5432)), None]);
+
+        let before = instance.clone();
+        let err = instance
+            .set_bound_port(&name("admin"), port(5433))
+            .unwrap_err();
+        assert_eq!(
+            err.detail(),
+            &InvariantDetail::FixedPortSubstituted {
+                fixed: port(5432),
+                requested: port(5433)
+            }
+        );
+        assert_eq!(err.rule(), Some(Rule::Br005));
+        for missing in ["socket", "replica"] {
+            let err = instance
+                .set_bound_port(&name(missing), port(7000))
+                .unwrap_err();
+            assert_eq!(
+                err.detail(),
+                &InvariantDetail::NoIpEndpoint {
+                    endpoint: name(missing)
+                }
+            );
+            assert_eq!(err.rule(), None);
+        }
         assert_eq!(instance, before);
     }
 

@@ -406,6 +406,21 @@ Spec dibaca model lain (Sonnet 5.5, baca saja, tanpa membuka link) pada 2026-10-
 
 Catatan lead yang ikut diterapkan: langkah yang mendaftarkan job atau agent di Mac ini, mengubah Login Items, atau memakai akun macOS kedua ditandai **setelah persetujuan** dan tidak dijalankan tanpa pengawasan; perubahan teks spec 0006 dan 0008 ditulis sebagai *Usulan update untuk spec lain*, bukan edit langsung; dan update spec 0004 tetap additive.
 
+## Perubahan 2026-10-20
+
+**Konsistensi lintas spec (keputusan lead).** Langkah catalog di `cargo xtask build-app` dimiliki milestone 4 langkah 11 spec 0017; spec ini hanya menyediakan slot nya, supaya milestone 1 spec ini tidak menunggu spec 0017. Bagian catalog AC-1 dibuktikan di sana. Baris `daemon.restart_unavailable` untuk tabel kode area `daemon` spec 0006 ditambahkan ke *Usulan update untuk spec lain*.
+
+**Tambahan dari spec 0016 (onboarding).** Spec 0016 mengusulkan tambahan berikut di bagian *Usulan untuk spec lain* nya, dan semuanya diterapkan di sini secara additive tanpa mengubah ID AC:
+
+- `BackgroundAgentModel.unavailableDetail: String?`, satu sumber `{detail}` untuk banner `unavailable` lain dan kartu Background Agent onboarding.
+- `CommandLineToolModel` (`@MainActor @Observable`, dimiliki `ShellRuntime`, `refresh()` saat app aktif kembali), dipakai bersama `CommandLineToolSection` dan langkah Command Line onboarding.
+- `CommandLineTool.bundledTool: URL?`; nil hanya menonaktifkan Install dan Repair, Remove tetap bisa.
+- `UserHome.current()` di `StacklyUI/Agent/` sebagai satu helper home, dengan aturan batas komponen untuk `~`.
+- `CommandLineToolPrompts` dengan teks spec 0016, dipakai Diagnostics dan onboarding.
+- Penanda `CommandLineToolSection` menjadi `// provisional: F32` saja, karena layar onboarding sudah dirancang spec 0016.
+
+Alasannya sama dengan spec 0016: dua layar (Diagnostics dan onboarding) menampilkan state yang sama, jadi state, teks, dan helper nya cukup satu, dan aturan AC-11 (pendaftaran hanya lewat aksi pengguna) tetap dijaga oleh model milik spec ini.
+
 ## References
 
 **Project sources**:

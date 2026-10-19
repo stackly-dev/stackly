@@ -5,7 +5,9 @@ Lead mengisi semua field dan mengirimnya sebagai `prompt` saat memulai sub sesi.
 - **Nama sub sesi:** `<peran singkat>-f<fitur>-<item>` (pola di SKILL.md langkah 3) · **Judul:** `<name> · <fitur dan item>`
 - **Wave:** `<n>`
 - **Peran:** `architect` | `architect (update)` | `developer` | `checker (verify)` | `checker (review)` | `tester` | `debugger`
-- **Checkout utama:** `<path absolut hasil git rev-parse --show-toplevel di lead>`; role dan template dibaca dari sini bila tidak ada di worktree
+- **Checkout utama:** `<path absolut hasil git rev-parse --show-toplevel di lead>`; role dan template dibaca dari sini bila tidak ada di worktree, dan graph pengetahuan ada di `<checkout utama>/graphify-out/graph.json`
+- **Pengetahuan dari graph:** `<hasil graphify query dan explain yang lead sudah jalankan untuk item ini: node, src=, loc=; atau "jalankan sendiri">`; sebelum membaca file untuk mencari lokasi kode, kontrak, atau keputusan, jalankan `graphify query "<pertanyaan>" --budget 1500 --graph <checkout utama>/graphify-out/graph.json` lalu `graphify explain "<node>" --graph ...`, dan buka file hanya di lokasi yang ditunjuk
+- **Sesi dipakai ulang:** `ya` | `tidak`; bila `ya`, konteks sudah dibersihkan lead, worktree dan branch lanjut dari item sebelumnya: jalankan `git merge main` dulu, lalu kerjakan item ini seperti brief baru
 - **Fitur:** `<nomor>. <nama>` di `docs/scope/<file>.md` (file scope selalu disebut, karena item bisa berasal dari file scope lain)
 - **Milestone:** `<teks kotak persis seperti di SCOPE>` · **Langkah Build plan:** `<a> sampai <b>` atau `semua`
 - **ID AC:** `<AC-n milestone ini saja dari spec, plus ID PRD dari baris Trace bila relevan>`

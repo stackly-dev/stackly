@@ -19,7 +19,9 @@ use stackly_domain::{
 };
 use stackly_testkit::EnvironmentBuilder;
 
-use crate::common::{Harness, TestError, fast, manager_request, request, wait_state};
+use crate::common::{
+    Harness, TestError, fast, manager_request, request, wait_idle, wait_state, wait_until,
+};
 
 fn environment(harness: &Harness) -> EnvironmentId {
     let builder = EnvironmentBuilder::new().no_members();
@@ -120,6 +122,13 @@ async fn an_interrupted_operation_that_cannot_resume_is_compensated_or_needs_rec
             ScriptedWork::new().step("swap").boxed(),
         ))
         .await;
+    // The first engine stays alive beside the restarted one. Its dispatcher
+    // records the wait after `begin` returns; landing during recovery, that
+    // commit would beat the close of the waiter with a revision conflict.
+    wait_until(&harness.engine, waiter, |detail| {
+        detail.view.journal.waiting_on() == Some(late)
+    })
+    .await;
     let instances_before: Vec<_> = std::fs::read_dir(harness.layout.layout().instances_dir())
         .unwrap()
         .collect();
@@ -508,6 +517,9 @@ async fn recovery_deletes_only_the_scratch_folders_it_may() {
         ))
         .await;
     wait_state(&harness.engine, id, OperationState::Succeeded).await;
+    // The runner removes the scratch folder after the final commit; the
+    // folder made below must outlive it.
+    wait_idle(&harness.engine).await;
     let operations = harness.layout.layout().operations_dir();
     std::fs::create_dir(operations.join(id.to_string())).unwrap();
     std::fs::create_dir(operations.join("notes")).unwrap();

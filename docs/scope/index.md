@@ -22,7 +22,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | --- | --- | --- | --- |
 | [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 1 done, 3 in-progress, 8 planned |
 | [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 5 planned |
-| [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 4 in-progress, 5 planned |
+| [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 6 in-progress, 3 planned |
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 planned |
 | [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 planned |
 | [05-saat-instance-gagal.md](05-saat-instance-gagal.md) | Saat instance gagal (JOURNEY-05) | 33 sampai 35 | 3 planned |
@@ -53,14 +53,14 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 13 | App shell SwiftUI & Swift client | Foundation | planned |
 | 14 | Walking skeleton | Skeleton | planned |
 | 15 | Background agent & CLI install | Instalasi pertama | in-progress |
-| 16 | Onboarding | Instalasi pertama | planned |
+| 16 | Onboarding | Instalasi pertama | in-progress |
 | 17 | Catalog & provider detail | Instalasi pertama | in-progress |
 | 18 | Install runtime managed | Instalasi pertama | in-progress |
 | 19 | Provider PostgreSQL | Instalasi pertama | in-progress |
 | 20 | Create instance | Instalasi pertama | planned |
 | 21 | Start, readiness & connection | Instalasi pertama | planned |
 | 22 | Overview & daftar instance | Instalasi pertama | planned |
-| 23 | Provider NATS lewat manifest | Instalasi pertama | planned |
+| 23 | Provider NATS lewat manifest | Instalasi pertama | in-progress |
 | 24 | Instance kedua dari runtime yang sama | Multi versi & instance | planned |
 | 25 | PostgreSQL 17 & 18 berdampingan | Multi versi & instance | planned |
 | 26 | Stop, restart & reload | Kerja harian | planned |
