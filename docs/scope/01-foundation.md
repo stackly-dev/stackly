@@ -61,7 +61,7 @@ Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka di
   - [x] Maintainer recipes in the new `stackly-dev/runtimes` repo: `build.sh` with a clean environment, then Valkey 9.1, OpenSSL, ICU, lz4, zstd, and PostgreSQL 17 and 18 built on this Mac (spec 0003 AC-7, AC-12, AC-17; build steps 9 and 10)
   - [x] PostgreSQL 17 and 18 and Valkey published and proven: `pin --file`, local spike, license gate per provider, upload after your approval, `runtime verify`, entries and evidence, then rule 9 (spec 0003 AC-1, AC-2, AC-5, AC-7, AC-10, AC-19; build step 12)
   - [x] Cache pruning: `runtime spike --prune-cache`, run by hand on this Mac (spec 0003 AC-4; build step 13)
-- [ ] Verify it: `/check verify sumber & packaging runtime`
+- [x] Verify it: `/check verify sumber & packaging runtime`
 - [ ] Test it: `/test sumber & packaging runtime`
 
 ### 4. Domain core & platform abstraction · in-progress

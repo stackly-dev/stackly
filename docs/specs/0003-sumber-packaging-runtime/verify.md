@@ -1,4 +1,4 @@
-# Verify: Sumber & packaging runtime · spec 0003 · updated 2026-10-18
+# Verify: Sumber & packaging runtime · spec 0003 · updated 2026-10-19
 
 _Langkah ini diturunkan dari acceptance criteria spec 0003. `/check verify` menjalankannya; `/test` mengunci yang tahan lama._
 
@@ -19,8 +19,8 @@ Tidak ada layar; milestone ini hanya tooling `cargo xtask`.
 - [x] `pin --url http://...` → ditolak sebelum unduhan dengan `url must be an https:// URL` → AC-3
 - [x] Tambahkan sementara entri NATS hasil `pin` di atas, jalankan `cargo xtask runtime verify` → `nats-2.15.1-macos-aarch64: OK`; ganti satu huruf `sha256` → `FAIL digest mismatch: ...`; ubah `size` → `FAIL size mismatch: ...`; exit 1 untuk keduanya; kembalikan file → AC-1, AC-3
 - [x] Ubah satu byte file cache NATS, lalu jalankan `verify` lagi → peringatan `no longer matches its digest; deleting it`, file diunduh ulang, hasil tetap `OK` → AC-3 (cek ulang cache)
-- [ ] Di Linux, `pin` tidak mencetak `min_os` dan memberi catatan `min_os needs vtool`; cache berada di `$XDG_CACHE_HOME/stackly-xtask/runtime/` atau `~/.cache/stackly-xtask/runtime/` → value sourcing cache. Tanpa host Linux langkah ini dicatat `BLOCKED`; path cache Linux tetap dicek di Mac ini oleh unit test `the_cache_folder_follows_the_platform_convention` · verify 2026-10-18: BLOCKED, tidak ada host Linux; unit test `the_cache_folder_follows_the_platform_convention` lulus
-- [ ] Entri dengan `upstream_signature` berjenis `gpg` (pertama kali di MySQL, milestone 2): tanpa `gpg` di PATH hasilnya `SKIP gpg`; dengan `gpg`, signature dicek dengan kunci di `runtimes/keys/` dan fingerprint entri → AC-1 · verify 2026-10-18: tanpa `gpg` terbukti (`SKIP gpg` untuk MySQL 8.4 dan 9.7); jalur dengan `gpg` BLOCKED karena `gpg` tidak terpasang di Mac ini
+- [ ] Di Linux, `pin` tidak mencetak `min_os` dan memberi catatan `min_os needs vtool`; cache berada di `$XDG_CACHE_HOME/stackly-xtask/runtime/` atau `~/.cache/stackly-xtask/runtime/` → value sourcing cache. Tanpa host Linux langkah ini dicatat `BLOCKED`; path cache Linux tetap dicek di Mac ini oleh unit test `the_cache_folder_follows_the_platform_convention` · verify 2026-10-18: BLOCKED, tidak ada host Linux; unit test `the_cache_folder_follows_the_platform_convention` lulus · verify 2026-10-19: tetap BLOCKED, owner @ojiepermana. Engine Docker Linux aarch64 lokal tidak dipakai atas pilihan kamu (tanpa unduhan toolchain dan crate); kamu menerima unit test `the_cache_folder_follows_the_platform_convention` (lulus lagi 2026-10-19) sebagai cukup untuk path cache. Catatan `pin: min_os needs vtool; run pin on macOS to fill it` dicetak `read_min_os` di `pin.rs` di luar macOS, tanpa run Linux
+- [x] Entri dengan `upstream_signature` berjenis `gpg` (pertama kali di MySQL, milestone 2): tanpa `gpg` di PATH hasilnya `SKIP gpg`; dengan `gpg`, signature dicek dengan kunci di `runtimes/keys/` dan fingerprint entri → AC-1 · verify 2026-10-18: tanpa `gpg` terbukti (`SKIP gpg` untuk MySQL 8.4 dan 9.7); jalur dengan `gpg` BLOCKED karena `gpg` tidak terpasang di Mac ini · verify 2026-10-19: GnuPG 2.5.24 dipasang lewat `brew install gnupg` dengan persetujuan kamu; `cargo xtask runtime verify --id mysql-8.4.11-macos-aarch64` dan `--id mysql-9.7.2-macos-aarch64` → masing masing mengunduh `.asc` lalu `OK`, exit 0 (kunci `runtimes/keys/mysql-release-engineering.asc`, fingerprint `BCA43417C3B485DD128EC6D4B7B3B788A8D3785C`). Fingerprint MySQL 8.4 diganti sementara dengan 40 nol (tidak di-commit) → `FAIL gpg signature does not verify with key 0000000000000000000000000000000000000000`, exit 1; file dikembalikan
 
 ### Acceptance-criteria coverage
 
@@ -44,7 +44,7 @@ Tidak ada layar; milestone ini hanya tooling `cargo xtask`.
 - [x] Jalankan spike di background, `kill -9` driver setelah sekitar 6 detik (worker masih jalan), lalu `cargo xtask runtime spike --cleanup` → `2 process(es) stopped, agent removed, 1 folder(s) deleted`, exit 0; `launchctl print gui/$(id -u)/dev.stackly.xtask.runtime-spike` tidak menemukan service; `nats-server` milik Homebrew (kalau ada) tetap jalan → AC-4 · verify 2026-10-18: dengan MySQL 9.7 tercatat `1 process(es) stopped, agent removed, 1 folder(s) deleted`; worker ikut berhenti saat agent dicopot, dan sesudahnya tidak ada proses, agent, atau folder spike yang tersisa
 - [x] `--cleanup` atau `--prune-cache` saat spike lain berjalan → menunggu lock dan tidak mematikan proses spike; lewat 20 menit keluar dengan `spike in progress` → AC-4 · verify 2026-10-18: `--cleanup` menunggu 11 detik sampai spike MySQL 8.4 selesai (PASS); batas 20 menit dibuktikan unit test `a_held_lock_makes_a_bounded_wait_fail_with_spike_in_progress`
 - [x] Shell atau proses lain yang hanya menyebut kata `stackly-runtime-spike-` di command line-nya tidak pernah dimatikan oleh `--cleanup` (pola mencocokkan path root lengkap dan `/tmp/sk-<8 hex>`) → AC-4
-- [ ] Jalankan spike lewat SSH tanpa sesi login GUI → exit 2 dengan `no gui login session`, dan test native tercatat `BLOCKED` → AC-4, AC-10 · verify 2026-10-18: BLOCKED, kamu sedang login GUI sehingga `gui/<uid>` selalu ada; butuh logout dari sesi GUI untuk mengujinya
+- [ ] Jalankan spike lewat SSH tanpa sesi login GUI → exit 2 dengan `no gui login session`, dan test native tercatat `BLOCKED` → AC-4, AC-10 · verify 2026-10-18: BLOCKED, kamu sedang login GUI sehingga `gui/<uid>` selalu ada; butuh logout dari sesi GUI untuk mengujinya · verify 2026-10-19: tetap BLOCKED, owner @ojiepermana. Ini langkah manual berat (logout dari sesi GUI, lalu SSH dari mesin lain), jadi sesuai kebijakan kamu tidak dijalankan; kamu menerima `Verify it` dengan baris ini terbuka
 - [x] Di tree bersih: `cargo xtask evidence run --kind native -- cargo test -p xtask --test native_runtime -- --ignored` → NATS, Traefik, MySQL 8.4, MySQL 9.7 `PASS`, ClickHouse `BLOCKED` (alasan dari inventaris); spike berjalan satu per satu walau test paralel → AC-4, AC-10, AC-13 · verify 2026-10-18: run `01a14ebc-ed84-7260-bcfb-68c50e863955`, kedelapan test PASS (ClickHouse PASS sejak milestone 2b)
 - [x] `cargo xtask runtime record <report>` → folder baru `evidence/runtime/<runId>/` dengan record `PASS` dan `FAIL` saja, `spike-result.json` per record, dan `output.log` yang disanitasi; jalankan lagi → `already exists` → AC-10
 - [x] `runtime record` pada report dari tree kotor → `the run is dirty: ...`; pada report fixture → `the run is a fixture run, not native evidence`; pada report commit lain → `the run is from commit ..., not HEAD ...` → AC-10
@@ -59,7 +59,7 @@ Tidak ada layar; milestone ini hanya tooling `cargo xtask`.
 - [x] Path artefak di hasil memuat `$ROOT/Stackly Spike Ü/` → root ekstraksi dari `TMPDIR`
 - [x] `minOsMeasured` sama dengan `min_os` inventaris (NATS 13.0, Traefik 12.0, MySQL 14.0) → `vtool`
 - [x] Signature: binary Go `linker_signed`, MySQL `developer_id` → `codesign -dv`
-- [ ] Hasil spike lewat batas: worker berhenti sendiri setelah 12 menit dan driver mencatat `FAIL` setelah 15 menit di luar unduhan → batas waktu · verify 2026-10-18: BLOCKED, butuh provider yang menggantung lebih dari 12 menit; konstanta `WORKER_TIMEOUT` 12 menit dan `DRIVER_TIMEOUT` 15 menit ada di `spike/mod.rs`
+- [ ] Hasil spike lewat batas: worker berhenti sendiri setelah 12 menit dan driver mencatat `FAIL` setelah 15 menit di luar unduhan → batas waktu · verify 2026-10-18: BLOCKED, butuh provider yang menggantung lebih dari 12 menit; konstanta `WORKER_TIMEOUT` 12 menit dan `DRIVER_TIMEOUT` 15 menit ada di `spike/mod.rs` · verify 2026-10-19: tetap BLOCKED, owner @ojiepermana. Worker menolak jalan kalau parent-nya bukan launchd, dan kedua batas adalah konstanta tanpa seam untuk test, jadi tidak bisa dipendekkan. Kamu menerima konstanta itu bersama unit test `a_command_past_its_time_is_killed_with_its_group` (lulus 2026-10-19) sebagai cukup: driver menulis `WORKER_TIMEOUT` ke `plan.worker_timeout_secs` yang dipakai watchdog worker (`timed out after 12 minutes`), dan loop polling driver gagal dengan `the worker did not finish within 15 minutes` setelah `DRIVER_TIMEOUT`
 
 ### Acceptance-criteria coverage
 
@@ -155,6 +155,29 @@ Langkah dengan artefak nyata baru bisa dijalankan setelah sesi B membangun `out/
 - AC-12, AC-18: probe `manifest` dan cek isi archive di langkah `closure`.
 - AC-19: `pin --file` tanpa jaringan; urutan terbit dicek di langkah 12.
 
+## Milestone 3, langkah 9 dan 10: resep maintainer di `stackly-dev/runtimes` · 2026-10-19
+
+Langkah ini dijalankan di checkout lokal `~/Development/ojiepermana/stackly-runtimes` (commit `8d22ef98bab9f485d26578ceed2ed5b575f2a187`, sama dengan `origin/main`), bukan di repo ini. Log build tetap lokal di `out/` dan tidak dikutip utuh di sini, karena memuat path home.
+
+### UI / manual
+
+- [x] Tidak ada layar; langkah ini hanya `tests/check.sh`, `build.sh`, dan log build di repo `stackly-runtimes` → AC-17
+
+### Commands
+
+- [x] `bash tests/check.sh` di checkout `stackly-runtimes` → `75 passed, 0 failed`, exit 0: preflight `/usr/local` palsu, scan log `/opt/homebrew`, scan path home, audit Mach-O fixture, dan scan notice dengan kasus lulus dan gagal di Critical test scenarios; tree tetap bersih sesudahnya → AC-17, AC-12 · verify 2026-10-19: `75 passed, 0 failed`, exit 0, `git status --porcelain` kosong
+- [x] Buat sementara satu file untracked di checkout itu (jangan di-commit), jalankan `./build.sh valkey 9.1.2 3` → mencetak baris `git status --porcelain` lalu `error: stackly-runtimes has uncommitted changes`, exit 1, sebelum unduhan apa pun: `out/sources/` tetap tujuh file, tidak ada `out/*-r3-*`, dan tidak ada root build baru di `/private/tmp/stackly-build/`; hapus file itu, lalu `git status --porcelain` kosong lagi → AC-17 · verify 2026-10-19: sesuai, dengan persetujuan kamu untuk mengotori tree sebentar; file `verify-dirty-probe.txt` dihapus dan tree bersih lagi
+- [x] Blok `==> environment` di awal `out/<id>.log` ketiga build r2 (`valkey-9.1.2-r2`, `postgresql-18.6-r2`, `postgresql-17.11-r2`) → keluaran `/usr/bin/env` utuh (hanya `_=` yang dibuang `build.sh`) berisi tepat 13 variabel tabel Environment build: `DEVELOPER_DIR`, `HOME` (`<build>/home`), `LANG` (`C`), `LDFLAGS` (`-Wl,-headerpad_max_install_names`), `MACOSX_DEPLOYMENT_TARGET` (`27.0`), `PATH` (`<build>/venv/bin:/usr/bin:/bin:/usr/sbin:/sbin`), `PKG_CONFIG_LIBDIR` (`<build>/deps/lib/pkgconfig:<build>/sdk-pkgconfig`), `SDKROOT`, `STACKLY_BUILD_ARGS`, `STACKLY_BUILD_ROOT`, `STACKLY_ORIGINAL_HOME`, `STACKLY_RECIPE` (`stackly-dev/runtimes@8d22ef98bab9f485d26578ceed2ed5b575f2a187:recipes/<provider>.sh`), dan `TMPDIR` (`<build>/tmp`); tidak ada `DYLD_*`, `CPATH`, `LIBRARY_PATH`, `PKG_CONFIG_PATH`, `/opt/homebrew`, atau `/usr/local` → AC-17 · verify 2026-10-19: sesuai untuk ketiganya
+- [x] Header langkah `==>` di ketiga log r2 → urutan alur `build.sh`: environment, venv tool, toolchain, dependency OpenSSL 3.5.9, ICU 78.3, lz4 1.10.0, dan zstd 1.5.7 (PostgreSQL saja), source, scan notice, build, scan log konfigurasi untuk path Homebrew, folder paket, relokasi dan tanda tangan, audit, manifest, scan path home, pack, cek versi dari salinan paket, lalu `results` dengan `<id>.tar.gz: OK` → AC-17, AC-12 · verify 2026-10-19: sesuai untuk ketiganya
+- [x] Cek versi di log r2 → dari salinan di `<build>/check Stackly Ü/`: `bin/postgres`, `bin/initdb`, `bin/psql`, dan `bin/pg_dump` mencetak `18.6` dan `17.11`, dengan `pg_config --sharedir` dan `--pkglibdir` di bawah folder salinan itu; `bin/valkey-server` mencetak `v=9.1.2` dan `bin/valkey-cli` `9.1.2` → AC-17 (cek versi), build step 9 dan 10 · verify 2026-10-19: sesuai
+- [x] `shasum -a 256` setiap file di `out/sources/` → sama dengan nama filenya, dan setiap nama itu adalah sha256 yang dipin di `recipes/` → AC-17 (source dicocokkan dengan sha256 yang dipin) · verify 2026-10-19: tujuh file, ketujuhnya cocok
+
+### Acceptance-criteria coverage
+
+- AC-17: `tests/check.sh` (fungsi cek dengan folder sementara), tree kotor ditolak sebelum unduhan, environment build di log, alur langkah, cek versi dari path berisi spasi dan `Ü`, dan source yang cocok dengan sha256 yang dipin. Sisi gagal untuk `/opt/homebrew` di log, path home di paket, dan audit dibuktikan fixture `tests/check.sh`, bukan build nyata yang gagal.
+- AC-12: scan notice dan `LICENSES/` dicek di sisi build lewat `tests/check.sh`, dan di artefak nyata di langkah 12.
+- AC-7 (closure di sisi build): dependency PostgreSQL dibangun dari source di log; probe closure di langkah 12.
+
 ## Milestone 3, langkah 12: PostgreSQL 17 dan 18 serta Valkey terbit dan terbukti · 2026-10-18
 
 Artefak yang terbit: `valkey-9.1.2-r2-macos-aarch64`, `postgresql-18.6-r2-macos-aarch64`, dan `postgresql-17.11-r2-macos-aarch64`, dari commit resep `stackly-dev/runtimes@8d22ef98bab9f485d26578ceed2ed5b575f2a187`. Build r1 tidak pernah diunggah (gerbang lisensi Valkey menolaknya, lihat Notice pihak ketiga di spec).
@@ -162,7 +185,7 @@ Artefak yang terbit: `valkey-9.1.2-r2-macos-aarch64`, `postgresql-18.6-r2-macos-
 ### UI / manual
 
 - [x] Follow-up spec 0003: kedua checkbox gerbang lisensi (Valkey, PostgreSQL) dicentang dengan tanggal 2026-10-18, `@ojiepermana`, id dan sha256 artefak r2 → langkah 12.3, AC-12
-- [ ] Halaman release `https://github.com/stackly-dev/stackly/releases/tag/runtime/<id>` untuk ketiga id: judul sama dengan id, bukan release "Latest", dua aset (`<id>.tar.gz` dan `<id>.tar.gz.sha256`), catatan berisi source, `recipe`, toolchain, dependency atau komponen vendored, dan lisensi, tanpa path lokal → API surface, AC-19 · verify 2026-10-18: GAGAL untuk satu hal: GitHub memberi label `Latest` pada release Valkey (release pertama repo itu) walau dibuat dengan `--latest=false`; judul, aset, dan catatan ketiga release sesuai
+- [x] Halaman release `https://github.com/stackly-dev/stackly/releases/tag/runtime/<id>` untuk ketiga id: judul sama dengan id, berstatus prerelease dan bukan release "Latest" (amandemen spec 2026-10-19), dua aset (`<id>.tar.gz` dan `<id>.tar.gz.sha256`), catatan berisi source, `recipe`, toolchain, dependency atau komponen vendored, dan lisensi, tanpa path lokal → API surface, AC-19 · verify 2026-10-18: GAGAL untuk satu hal: GitHub memberi label `Latest` pada release Valkey (release pertama repo itu) walau dibuat dengan `--latest=false`; judul, aset, dan catatan ketiga release sesuai · verify 2026-10-19: spec 0003 diamandemen lewat `/architect` (release runtime selalu prerelease), lalu `gh release edit runtime/<id> --repo stackly-dev/stackly --prerelease` untuk ketiga id dengan persetujuan kamu, exit 0. Sesudahnya `gh release list` → ketiganya `Pre-release`; halaman release ketiganya memuat label `Pre-release` tanpa `Latest`, dan halaman Releases tanpa `Latest`; `gh api repos/stackly-dev/stackly/releases/latest` → 404; tag, judul, dan aset (nama, ukuran, digest) sama persis dengan sebelum edit; URL unduhan `<id>.tar.gz.sha256` tetap 200
 - [x] Tidak ada layar lain. Run native pertama untuk digest baru menjalankan probe quarantine dan dialog Gatekeeper bisa muncul; kalau muncul, tutup tanpa mengubah setelan → AC-9 · verify 2026-10-18: layar tidak diamati sesi ini; quarantine tercatat `timeout` (Valkey) dan `killed` (PostgreSQL)
 
 ### Commands
@@ -203,4 +226,5 @@ Artefak yang terbit: `valkey-9.1.2-r2-macos-aarch64`, `postgresql-18.6-r2-macos-
 - AC-12: `LICENSES/` dengan notice pihak ketiga, archive hanya file biasa dan folder.
 - AC-18: probe `manifest` PASS, dan commit `recipe` ada di repo publik.
 - AC-19: urutan `pin --file`, spike lokal, gerbang lisensi, commit resep di remote, persetujuan unggahan, unggah, `verify`, commit entri, lalu evidence.
-- AC-17: sisi build ada di repo `stackly-dev/runtimes` (`tests/check.sh`), bukan di sini.
+- AC-17: sisi build ada di repo `stackly-dev/runtimes`; diverifikasi di bagian Milestone 3, langkah 9 dan 10 di atas.
+- AC-19 (prerelease): ketiga release runtime berstatus prerelease sejak 2026-10-19, jadi tidak satu pun berlabel Latest.
