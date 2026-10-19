@@ -551,7 +551,7 @@ Sesi paralel: langkah 10 sampai 12 (Swift) bisa berjalan bersamaan dengan milest
 ## Follow-up
 
 - [ ] Terapkan *Usulan update untuk spec lain* (spec 0001, 0002, 0003, 0006, 0008, 0013) lewat pemilik masing masing saat langkah build terkait masuk.
-- [x] `docs/scope/ui-macos.md`: tambahkan selisih mockup yang sudah diketahui untuk onboarding: Command Line bukan `/usr/local/bin` dengan password, dan Background Agent tidak berjalan "only while the app is open" tanpa izin. Fitur 16 menyesuaikan teks nya. Diterapkan di `ui-macos.md` (2026-10-20).
+- [x] `docs/scope/ui-macos.md`: tambahkan selisih mockup yang sudah diketahui untuk onboarding: Command Line bukan `/usr/local/bin` dengan password, dan Background Agent tidak berjalan "only while the app is open" tanpa izin. Fitur 16 menyesuaikan teks nya. Diterapkan di `ui-macos.md` (2026-10-19).
 - [ ] Fitur 16: langkah Background Agent memakai `BackgroundAgentModel` dan aksi nya; langkah Command Line memakai `CommandLineTool`.
 - [ ] Fitur 31: setting autostart daemon dan aksi mematikan background service di atas `register` dan `unregister`, termasuk perilaku saat logout.
 - [ ] Fitur 32: baris background startup dan command line tool di Settings memakai model yang sama; `CommandLineToolSection` di Diagnostics dipindah atau dipertahankan.
