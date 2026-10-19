@@ -326,6 +326,7 @@ pub struct CatalogInfo { revision: Revision, published_at: Timestamp, loaded_at:
                          host: HostTarget, outdated: bool, invalid_count: Count }
 pub struct HostTarget { os: TargetOs, arch: TargetArch }
 pub struct ProviderSummary { provider: String, revision: Revision /* revision catalog */, display_name: String,
+                             software: Option<String> /* null untuk entri planned dan invalid; kunci join runtime fitur 18 */,
                              category: Option<ProviderCategory> /* null hanya untuk entri invalid yang metadata nya tidak terbaca */,
                              description: Option<String>, state: CatalogEntryState,
                              state_reason: Option<SupportReason>, state_note: Option<String>, provider_revision: Option<String>,
@@ -408,7 +409,7 @@ Folder `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/`: `CatalogStore
 | `CatalogEntryState.invalid` | Invalid | `critical` | paket gagal validasi |
 | `CatalogEntryState.unrecognized` | Unrecognized State | `caution` | sama dengan baris `SupportStatus.unrecognized` |
 
-Simbol lain mengikuti simbol tone spec 0012. Fitur 18 menambah "{n} installed" (`positive`) di kartu lewat join di client dengan store runtime miliknya.
+Simbol lain mengikuti simbol tone spec 0012. Fitur 18 menambah "{n} installed" (`positive`) di kartu lewat join di client dengan store runtime miliknya, dengan kunci `ProviderSummary.software == RuntimeSummary.software` (tidak tampil kalau 0 atau kalau `software` null), dan tanda provider di baris Installing halaman Runtimes dengan kunci `InstallingRuntime.provider == ProviderSummary.provider`. Kartu tidak butuh `catalog.get_provider` untuk hitungan itu.
 
 ### Nilai asing
 
@@ -451,6 +452,7 @@ Nilai `unrecognized` di enum terbuka lain ditampilkan sebagai teks netral, tidak
 | summary | `provider`, `displayName`, `category`, `description` | manifest (`metadata.id`, `displayName`, `category`, `description`); planned dari `catalog.toml`; invalid: ID dari index, nama tampil sama dengan ID, `category` dari `InvalidEntry.category`, `description` null |
 | summary | `revision` | revision catalog |
 | summary | `state`, `stateReason`, `stateNote` | *Aturan status* |
+| summary | `software` | `ValidatedPackage::software()` (null untuk planned dan invalid) |
 | summary | `providerRevision` | `metadata.revision` (null untuk planned dan invalid) |
 | summary | `publisher` | "Stackly" untuk namespace `official`; null untuk `testing` |
 | summary | `trust` | sama dengan `CatalogInfo.trust` |
@@ -569,7 +571,7 @@ Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap lebih dulu
 2. `core::catalog::index` (tipe `catalog.json`, digest isi) dan xtask `catalog` (`source.rs`, ledger, `build`, `check`, `--update`, `--amend`, `pub fn build` untuk spec 0015), `providers/catalog.toml` dan `providers/catalog-revisions.json` dengan isi awal, dan langkah `catalog check` di `.githooks/pre-commit`. Memenuhi **AC-1**.
 3. `core::catalog::load` dan `model`: lokasi, decode ketat, aturan index, batas, isolasi entri, penjaga namespace, urutan tampil, `outdated`, `Catalog::for_tests`; `stackly_core::catalog::testing::CatalogBuilder` dengan fixture `official/linuxonly`, `official/intelonly`, dan `official/blockedhost` (fitur `test-support`), dan file `catalog.json` kosong tetap di testkit sebagai default `SpawnedDaemon`. Memenuhi **AC-2**, **AC-3**, **AC-8**.
 4. `core::catalog::status` (aturan status dengan pengganti `// provisional: F18`) dan `core::catalog::install` (gate). Memenuhi **AC-6**, **AC-7**.
-5. Protokol: modul `catalog` (DTO, enum terbuka), dua varian `Call` dan `Reply` di tabel `methods!` dengan `recovery allowed`, `GetProviderParams::validate`, `codes::catalog` dengan pesan dan `codes::catalog::hint`, sha256 artefak di `CatalogArtifact`, fixture `protocols/fixtures/ipc/` dan `protocols/fixtures/catalog/`, kenaikan minor `ProtocolVersion::CURRENT`, dan `cargo xtask codegen`. Memenuhi **AC-13**.
+5. Protokol: modul `catalog` (DTO, enum terbuka), dua varian `Call` dan `Reply` di tabel `methods!` dengan `recovery allowed`, `GetProviderParams::validate`, `codes::catalog` dengan pesan dan `codes::catalog::hint`, sha256 artefak di `CatalogArtifact`, `software` di `ProviderSummary` (fixture dengan nilai dan dengan null untuk planned), fixture `protocols/fixtures/ipc/` dan `protocols/fixtures/catalog/`, kenaikan minor `ProtocolVersion::CURRENT`, dan `cargo xtask codegen`. Memenuhi **AC-13**.
 6. `stacklyd`: `StartConfig.catalog_dir` dan validasinya di sebelah `parse_log_filter`, lokasi bundle dari `DaemonDeps.bundle`, override `DaemonConfig.catalog` untuk test, hint lewat `ErrorBody::with_hint`, muat di slot start, subsystem `catalog`, handler kedua method, pemetaan DTO dan error di `map` dengan test per varian, dan test anggaran frame. Memenuhi **AC-2**, **AC-3**, **AC-4**, **AC-5**, **AC-7**, **AC-8**, **AC-13**.
 
 **Milestone 2: `stackly provider list` dan `inspect`** (needs fitur 8 build, kerangka CLI spec 0008)
