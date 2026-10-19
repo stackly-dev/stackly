@@ -434,3 +434,14 @@ Pemeriksaan lead atas spec 0015, 0017, 0018, dan 0019 setelah keempatnya masuk `
 | 4 | Langkah evidence butuh `cargo xtask runtime compat-record`, yang baru dibangun langkah 13 spec 0018 (milestone 3), tetapi prasyarat tidak menyebutnya | prasyarat langkah 11 menyebut langkah 13 spec 0018 |
 
 Asumsi pada spec 0017 dan 0018 juga diperiksa terhadap teks di `main`: `runtime::fixture::install_cached_artifact` (langkah 9, milestone 2 spec 0018), `runtime_cache::cached_artifact`, bentuk `compatibility.json` dan aturan `compat-record` cocok; field TOML catalog adalah `published_at` dengan ledger `providers/catalog-revisions.json`, dan *Aturan masuk catalog* spec 0017 diikuti langkah 9. Aturan pencocokan pattern `versionCheck` (full match) sedang diperbaiki di spec 0018, jadi pattern PostgreSQL diberi `\n?` di akhir supaya cocok dengan keluaran satu baris `postgres --version` di bawah aturan mana pun.
+
+## Update dari spec 0021 (2026-10-20)
+
+Diterapkan sesi `upd-0019-0022-0023` dari *Usulan update spec lain* spec 0021 (start, readiness, dan connection), atas persetujuan lead untuk user:
+
+- Manifest di *Paket* mendapat blok `connection` dengan entri `uri` (lewat endpoint `client`) dan `socket` (lewat folder socket). Bentuk dan aturan blok itu milik spec 0021 dan usulan spec 0009 nya; blok ini menjawab Follow-up "Fitur 21: bentuk connection string PostgreSQL dan tempatnya di manifest".
+- Baris *Value sourcing* untuk connection merujuk blok itu.
+- Prasyarat build plan: blok `connection` masuk paket sebelum evidence langkah 11, karena blok itu ikut `manifest_sha256` dan evidence BR-025 harus dibuat dari `provider.yaml` final.
+
+AC dan status spec ini tidak berubah.
+

@@ -99,6 +99,13 @@ resources:
   endpoints:
     client: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 5432 }
     socket: { transport: unix, purpose: client, socketName: ".s.PGSQL.${endpoint.client.port}" }
+connection:
+  - name: uri
+    title: Connection string
+    template: "postgresql://postgres:${secret.superuserPassword}@${endpoint.client.address}/postgres"
+  - name: socket
+    title: Unix socket
+    template: "postgresql://postgres:${secret.superuserPassword}@/postgres?host=${endpoint.socket.socketDir}&port=${endpoint.client.port}"
 configFiles:
   pgHba:
     template: templates/pg_hba.conf.tmpl
@@ -435,7 +442,7 @@ Tidak ada method IPC, command CLI, atau DTO baru selain kunci `details` di atas.
 | evidence | `digest` subject | `ArtifactRecord.sha256` |
 | evidence | `providerRevision` | `ValidatedPackage::key()` |
 | test native | file artefak | `stackly_testkit::runtime_cache::cached_artifact(sha256)` (spec 0018) |
-| connection (fitur 21) | user, database, password, endpoint | `postgres`, `postgres`, field `superuserPassword`, endpoint `client` atau `socket` (Follow-up) |
+| connection (fitur 21) | connection string | blok `connection` paket ini (entri `uri` lewat endpoint `client`, entri `socket` lewat folder socket), dirender daemon dan disusun client dengan `superuserPassword` (spec 0021) |
 
 ### Edge cases dan kegagalan
 
@@ -540,7 +547,7 @@ Urutan mengikuti pendekatan Journey proyek: satu jalur dibuat lengkap dulu, yait
 10. Test penolakan mayor dua arah dan penanda hilang atau berubah, plus unit test preflight dengan isi `PG_VERSION` asli. Memenuhi **AC-11**.
 11. Guard evidence `native` dengan `covers` ID PRD dan `compatibility.json` per artefak, lalu `cargo xtask runtime compat-record`. Evidence BR-025 dihasilkan dari `provider.yaml` final yang masuk catalog; perubahan paket sesudahnya mewajibkan run evidence ulang. Memenuhi **AC-14**.
 
-**Prasyarat**: langkah 1, 2, dan 4 butuh fitur 9 (spec 0009) sudah dibangun; langkah 3 butuh langkah 4 spec 0011 (`SecretService::put`). Milestone 2 butuh build fitur 10 selesai sampai milestone 4 (daemon, `instance.create`, `execute_reload`, `install_fake`), fitur 11 selesai, dan milestone 2 spec 0018 (`install_cached_artifact` di langkah 9 nya); langkah 7 butuh langkah 1 spec 0018 (loader field `runtime.versionCheck`), yang selalu sudah ada sebelum milestone 2 spec itu. Langkah 9 juga butuh build fitur 17 (`providers/catalog.toml` dan ledger nya). Langkah 11 juga butuh langkah 13 spec 0018 (milestone 3: `cargo xtask runtime compat-record` dan aturan `runtime check` 12).
+**Prasyarat**: langkah 1, 2, dan 4 butuh fitur 9 (spec 0009) sudah dibangun; langkah 3 butuh langkah 4 spec 0011 (`SecretService::put`). Milestone 2 butuh build fitur 10 selesai sampai milestone 4 (daemon, `instance.create`, `execute_reload`, `install_fake`), fitur 11 selesai, dan milestone 2 spec 0018 (`install_cached_artifact` di langkah 9 nya); langkah 7 butuh langkah 1 spec 0018 (loader field `runtime.versionCheck`), yang selalu sudah ada sebelum milestone 2 spec itu. Langkah 9 juga butuh build fitur 17 (`providers/catalog.toml` dan ledger nya). Langkah 11 juga butuh langkah 13 spec 0018 (milestone 3: `cargo xtask runtime compat-record` dan aturan `runtime check` 12). Blok `connection` spec 0021 masuk paket sebelum evidence: langkah 1 dan 2 spec 0021 (loader dan blok paket) selesai sebelum langkah 11, dan blok itu ikut `provider.yaml` final yang dipakai evidence.
 
 **Sesi paralel yang aman**: langkah 1, 2, dan 3 menyentuh file berbeda (template, plan dan raw, settings dan secret service), jadi bisa tiga sesi kalau masing masing hanya menambah satu varian enum di `raw.rs` lewat commit kecil terpisah; langkah 4 menunggu ketiganya karena memakai format dan field baru. Langkah 7 menyentuh paket dan golden, jadi selesai sebelum langkah 8 mulai. Di milestone 3, langkah 9 sampai 11 sebaiknya satu sesi karena menyentuh file test yang sama.
 
