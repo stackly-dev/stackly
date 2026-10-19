@@ -18,7 +18,8 @@
 //! runs [`registry_conformance`] (spec 0005).
 //!
 //! Tests of the daemon run the real `stacklyd` through [`SpawnedDaemon`],
-//! which never lets the process outlive the test (spec 0006).
+//! which never lets the process outlive the test, and tests of another
+//! crate find the binary through [`cargo_bin`] (spec 0006).
 //!
 //! Tests that need a process to supervise run the dummy server from
 //! [`fake_server::binary`], which builds `stackly-fake-server` once per
@@ -32,6 +33,7 @@
 //! handles Unix signals, so they exist only on Unix; [`TestRoot`] and
 //! [`allocate_port`] work everywhere.
 
+mod cargo_bin;
 #[cfg(unix)]
 mod conformance;
 #[cfg(target_os = "macos")]
@@ -51,6 +53,7 @@ mod registry;
 mod spawned_daemon;
 mod test_root;
 
+pub use cargo_bin::cargo_bin;
 #[cfg(unix)]
 pub use conformance::fs_conformance;
 #[cfg(target_os = "macos")]

@@ -3,10 +3,10 @@
 //! Steps 1 to 8 run here: read the configuration, start the log writer,
 //! resolve the roots (`--print-roots` stops there), prepare the layout,
 //! create the server instance ID, take the daemon lock, install the log
-//! file, and log the start line. The registry opens next (spec 0005), then
-//! the daemon waits for SIGTERM or SIGINT. Milestone 4 of spec 0006 binds
-//! the socket and serves clients between the start line and the wait, and
-//! moves the registry into the start slot.
+//! file, and log the start line. [`crate::server`] then binds the socket,
+//! serves, and runs the start slot (the registry, spec 0005) until SIGTERM,
+//! SIGINT, or a fatal error, and runs the stop order; the lock is released
+//! last.
 
 use std::ffi::{OsStr, OsString};
 use std::process::ExitCode;
@@ -98,20 +98,26 @@ pub fn run(config: StartConfig) -> ExitCode {
 mod imp {
     use std::io;
     use std::process::ExitCode;
+    use std::sync::Arc;
+    use std::time::Duration;
 
     use stackly_core::{daemon_info, prepare_layout};
-    use stackly_domain::{Registry, RetentionPolicy};
     use stackly_platform::{DirectoryLayout, Platform, UserId};
     use stackly_platform_macos::MacosPlatform;
+    use stackly_protocol::events::ShutdownReason;
     use stackly_protocol::{CONTRACT_DIGEST, ProtocolVersion, Timestamp};
-    use stackly_storage::{RegistryOpen, open_registry};
-    use tokio::signal::unix::{Signal, SignalKind, signal};
     use tracing_subscriber::EnvFilter;
     use uuid::Uuid;
 
     use super::{EXIT_LOCK_HELD, EXIT_START_FAILED, StartConfig, parse_log_filter};
     use crate::lock::{DaemonLock, LockError, LockOwner};
     use crate::log_sink::{LOG_CONTROL_TIMEOUT, LogSink, LogSinkConfig};
+    use crate::map::StartFacts;
+    use crate::server::{self, DaemonDeps};
+    use crate::shutdown::StopSignals;
+
+    /// How long blocking tasks get when the runtime shuts down.
+    const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(1);
 
     pub(super) fn run(config: StartConfig) -> ExitCode {
         // Step 1: the filter is checked before anything else, but reported
@@ -119,7 +125,7 @@ mod imp {
         let filter = parse_log_filter(config.log_filter.as_deref());
         // Step 2: the log writer, stderr only for now.
         let sink = match LogSink::start(Box::new(io::stderr()), LogSinkConfig::DAEMON) {
-            Ok(sink) => sink,
+            Ok(sink) => Arc::new(sink),
             Err(error) => {
                 // The one direct write: there is no writer thread to use.
                 eprintln!("stacklyd cannot start its log writer: {error}");
@@ -152,8 +158,8 @@ mod imp {
         ExitCode::from(code)
     }
 
-    /// Steps 3 to 8, then the registry, then the wait for a signal.
-    fn start(sink: &LogSink, config: StartConfig) -> u8 {
+    /// Steps 3 to 8, then the server until it stops.
+    fn start(sink: &Arc<LogSink>, config: StartConfig) -> u8 {
         let info = daemon_info();
         let has_override = config.root_override.is_some();
 
@@ -237,7 +243,7 @@ mod imp {
         );
 
         // Signals are caught from here on, so a stop request while the
-        // registry opens still stops the daemon cleanly.
+        // socket binds or the registry opens still stops the daemon cleanly.
         let runtime = match tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_name("stacklyd-rt")
@@ -263,69 +269,50 @@ mod imp {
             }
         };
 
-        let Some(registry) = open_registry_slot(&platform, layout, info.version) else {
-            release(lock);
-            return EXIT_START_FAILED;
-        };
-
-        let signal = runtime.block_on(signals.recv());
-        tracing::info!(signal, "stacklyd stopping");
-        // Joins the registry thread, which checkpoints and closes the file.
-        drop(registry);
+        let facts = StartFacts::new(server_instance_id, started_at, has_override, pid);
+        let deps = DaemonDeps::new(platform, prepared, facts, Arc::clone(sink));
+        let code = runtime.block_on(serve(deps, &mut signals));
+        // Blocking tasks (a registry close, a prune) get a moment to end.
+        runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
+        // Step 6 of the stop: the registry is closed, so the lock can go.
         release(lock);
-        tracing::info!("stacklyd stopped");
-        0
+        tracing::info!(exit_code = code, "stacklyd stopped");
+        code
     }
 
-    /// Opens the registry (spec 0005). `Some(None)` is recovery: the
-    /// registry stays untouched and the daemon stays up (spec 0006 AC-18
-    /// adds the recovery mode replies in milestone 4). `None` means the
-    /// daemon must stop.
-    fn open_registry_slot(
-        platform: &Platform,
-        layout: &DirectoryLayout,
-        version: &str,
-    ) -> Option<Option<stackly_storage::SqliteRegistry>> {
-        match open_registry(platform, layout, version) {
-            Ok(RegistryOpen::Ready { registry, summary }) => {
-                // provisional: F6 also prunes every 24 hours while it serves.
-                let pruned = match registry.prune(&RetentionPolicy::DEFAULT, platform.clock().now())
-                {
-                    Ok(pruned) => pruned,
-                    Err(error) => {
-                        tracing::error!(error = %error, "cannot prune the registry history");
-                        return None;
-                    }
-                };
-                tracing::info!(
-                    registry_state = "ready",
-                    pruned_rows = pruned.total(),
-                    schema_version = summary.schema_version,
-                    created = summary.created,
-                    migrated_from = summary.migrated_from,
-                    snapshot = summary
-                        .snapshot
-                        .as_ref()
-                        .map(|path| path.display().to_string()),
-                    sqlite_version = summary.sqlite_version,
-                    "registry ready",
-                );
-                Some(Some(registry))
-            }
-            Ok(RegistryOpen::Recovery(report)) => {
-                tracing::error!(
-                    registry_state = "recovery",
-                    reason = report.reason.code(),
-                    report = %report.path.display(),
-                    "the registry needs recovery; it was left untouched and stacklyd stays up",
-                );
-                Some(None)
-            }
+    /// Steps 9 to 12, then the wait for a signal or a fatal error, then the
+    /// stop order.
+    async fn serve(deps: DaemonDeps, signals: &mut StopSignals) -> u8 {
+        let handle = match server::start(deps).await {
+            Ok(handle) => handle,
             Err(error) => {
-                tracing::error!(error = %error, "cannot open the registry");
-                None
+                tracing::error!(
+                    error = %error,
+                    code = error.code(),
+                    "cannot start the daemon server",
+                );
+                return EXIT_START_FAILED;
             }
+        };
+        let (reason, code) = tokio::select! {
+            signal = signals.recv() => {
+                tracing::info!(signal, "stacklyd stopping");
+                (ShutdownReason::Signal, 0)
+            }
+            code = handle.fatal() => {
+                tracing::error!(exit_code = code, "stacklyd stopping after a fatal error");
+                (ShutdownReason::Requested, code)
+            }
+        };
+        let second = async {
+            let signal = signals.recv().await;
+            tracing::warn!(signal, "second signal");
+        };
+        let stopped = handle.shutdown(reason, second).await;
+        if stopped.forced {
+            tracing::warn!("the stop skipped the drain and the flush");
         }
+        code
     }
 
     /// Logs why the lock was not taken and returns the exit code.
@@ -362,30 +349,6 @@ mod imp {
         match platform.identity().current_user() {
             Ok(UserId::Unix(uid)) => Some(uid),
             _ => None,
-        }
-    }
-
-    /// The two signals that stop the daemon.
-    struct StopSignals {
-        term: Signal,
-        interrupt: Signal,
-    }
-
-    impl StopSignals {
-        /// Installs the handlers; needs a runtime context.
-        fn install() -> io::Result<Self> {
-            Ok(Self {
-                term: signal(SignalKind::terminate())?,
-                interrupt: signal(SignalKind::interrupt())?,
-            })
-        }
-
-        /// Waits for the first of the two and returns its name.
-        async fn recv(&mut self) -> &'static str {
-            tokio::select! {
-                _ = self.term.recv() => "SIGTERM",
-                _ = self.interrupt.recv() => "SIGINT",
-            }
         }
     }
 }

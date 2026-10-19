@@ -1,8 +1,8 @@
 //! Only one daemon runs per data root (spec 0006 AC-4). A second `stacklyd`
 //! for the same `STACKLY_ROOT` fails to take the lock, names the daemon
-//! that holds it on stderr, and exits 3, without changing the lock file or
-//! writing a single line to the first daemon's log file. Once the first
-//! daemon stopped, the next one takes the lock at once.
+//! that holds it on stderr, and exits 3, without changing the lock file,
+//! the socket, or the first daemon's log file. Once the first daemon
+//! stopped, the next one takes the lock at once.
 #![cfg(target_os = "macos")]
 
 mod common;
@@ -13,10 +13,16 @@ use std::time::Duration;
 
 use common::{STACKLYD, daemon_paths, field, json_lines, line_with, start_daemon};
 use serde_json::Value;
+use stackly_testkit::evidence::{Kind, evidence};
 use stackly_testkit::{SpawnedDaemon, TestRoot};
 
 #[test]
 fn a_second_daemon_for_the_same_root_exits_3_names_the_owner_and_changes_nothing() {
+    let ev = evidence!(
+        covers = ["BR-011"],
+        kind = Kind::Fixture,
+        expected = "a second stacklyd for the same root exits 3 naming the first daemon's pid and server instance, and the lock file, the socket inode, and the log file inode and contents stay the same",
+    );
     let root = TestRoot::new().unwrap();
     let paths = daemon_paths(&root);
     let mut first = start_daemon(&root);
@@ -27,6 +33,7 @@ fn a_second_daemon_for_the_same_root_exits_3_names_the_owner_and_changes_nothing
     let lock_before = std::fs::read(&lock).unwrap();
     let log_before = std::fs::read(&log).unwrap();
     let log_inode = std::fs::metadata(&log).unwrap().ino();
+    let socket_inode = std::fs::symlink_metadata(&paths.socket).unwrap().ino();
 
     let second = SpawnedDaemon::spawn(
         Path::new(STACKLYD),
@@ -70,6 +77,11 @@ fn a_second_daemon_for_the_same_root_exits_3_names_the_owner_and_changes_nothing
     );
 
     assert_eq!(std::fs::read(&lock).unwrap(), lock_before);
+    assert_eq!(
+        std::fs::symlink_metadata(&paths.socket).unwrap().ino(),
+        socket_inode,
+        "the second daemon touched the socket"
+    );
     assert_eq!(std::fs::metadata(&log).unwrap().ino(), log_inode);
     let log_after = std::fs::read(&log).unwrap();
     assert_eq!(
@@ -90,4 +102,5 @@ fn a_second_daemon_for_the_same_root_exits_3_names_the_owner_and_changes_nothing
     let owner: Value = serde_json::from_slice(&std::fs::read(&lock).unwrap()).unwrap();
     assert_eq!(owner["pid"], next.pid());
     assert_eq!(next.stop().unwrap().code(), Some(0));
+    ev.pass();
 }

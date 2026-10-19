@@ -24,10 +24,10 @@ const CAPABILITIES: PlatformCapabilities = PlatformCapabilities::none("")
         PlatformCapability::SecretStore,
         not_built("not built yet (feature 11)"),
     )
-    .with(
-        PlatformCapability::IpcEndpoint,
-        not_built("not built yet (feature 6)"),
-    )
+    // Feature 6 provides it without a platform trait: the transport lives
+    // in `stackly-ipc`, peer credentials come through tokio, and the daemon
+    // lock through std (spec 0006).
+    .with(PlatformCapability::IpcEndpoint, CapabilityStatus::Supported)
     .with(
         PlatformCapability::BackgroundAgent,
         not_built("not built yet (feature 15)"),
