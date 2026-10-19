@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15656-7cfb-76ae-b455-1ef58b574e69",
+  "covers": [
+    "NFR-009",
+    "VAL-017"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Fuzz ipc_server_frame_decode for 5 minutes on this Mac",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "cargo xtask fuzz run ipc_server_frame_decode runs the client side daemon frame decoder target for 300 seconds with the pinned nightly and cargo-fuzz and finds no crash.",
+  "actual": "no crash and fuzz/artifacts/ipc_server_frame_decode/ empty; 4077978 runs in 301 s (13548 exec/s), cov 8093, ft 19129, corpus 3258 inputs (2347 KB), peak RSS 611 MB",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit e4d7e8b with a clean tree, use the pinned fuzz toolchain nightly-2026-10-17 (rustc 1.101.0-nightly 5d8fec066 2026-10-16) and cargo-fuzz 0.13.2, already installed for the existing IPC targets",
+    "run `cargo xtask fuzz run ipc_server_frame_decode` with the default --time 300; xtask checks both pins and fuzz/Cargo.lock, then runs libFuzzer with -max_len=65536 -max_total_time=300 on fuzz/corpus/ipc_server_frame_decode plus the committed fuzz/seeds/ipc_server_frame_decode (46 seeds, every ServerFrame fixture), built by cargo-fuzz with AddressSanitizer; the command ran from 2026-10-19T22:35:56Z to 22:44:16Z, building first and then fuzzing for 301 s",
+    "check that the command exits 0 with `ran for 300 s without a crash`, that fuzz/artifacts/ipc_server_frame_decode/ holds no input, and read the libFuzzer final stats",
+    "keep the head and tail of the run log in this record's files folder"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5)",
+  "startedAt": "2026-10-19T22:44:31.098968Z",
+  "finishedAt": "2026-10-19T22:44:53.441267Z",
+  "evidencePath": "evidence/manual/files/01a15656-7cfb-76ae-b455-1ef58b574e69/",
+  "context": {
+    "sourceCommit": "e4d7e8b608f9bb8d50c8de4c97e0c3cb2107a6be",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
