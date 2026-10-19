@@ -13,14 +13,15 @@ use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
     EnvValue, InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError,
-    PreflightOutcome, ReloadAction, ResolvedEndpoint, ResolvedSecrets, RuntimeContext, Segment,
-    ValidatedPackage, read_package,
+    PreflightOutcome, ReloadAction, ResolvedEndpoint, RuntimeContext, Segment, ValidatedPackage,
+    read_package,
 };
+use stackly_core::secret::ResolvedSecrets;
 use stackly_domain::{
     Capability, ExactVersion, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
 };
 use stackly_evidence::{Kind, evidence};
-use stackly_platform::{DirectoryLayout, RootSet};
+use stackly_platform::{DirectoryLayout, RootSet, SecretValue};
 use stackly_testkit::{FakePlatform, TestRoot};
 
 /// The `label` of the golden fake context: every shell metacharacter.
@@ -217,10 +218,9 @@ fn placeholder_secrets(package: &ValidatedPackage) -> ResolvedSecrets {
             .fields()
             .filter(|field| field.is_secret())
             .map(|field| {
-                (
-                    field.name().clone(),
-                    format!("<secret:{}>", field.name()).into_bytes(),
-                )
+                let placeholder = SecretValue::new(format!("<secret:{}>", field.name()))
+                    .expect("a placeholder is a valid secret value");
+                (field.name().clone(), placeholder)
             }),
     )
 }

@@ -5,13 +5,14 @@ use std::time::{Duration, Instant};
 
 use stackly_core::operation::testing::{HoldHandle, ScriptedWork};
 use stackly_core::operation::{
-    BeginError, BoxFuture, EngineLimits, OperationContext, OperationOutcome, OperationWork,
-    StepSpec, WorkOutcome, WorkResult, codes,
+    BeginError, BoxFuture, EngineLimits, OperationContext, OperationError, OperationOutcome,
+    OperationWork, StepSpec, WorkError, WorkOutcome, WorkResult, codes,
 };
 use stackly_domain::{
-    CreatedState, JournalPayload, LockKey, OperationKind, OperationResource, OperationState,
-    RegistryError, RuntimeId, StepState,
+    CreatedState, DetailKey, ErrorCodeName, JournalPayload, LockKey, OperationKind,
+    OperationResource, OperationState, RegistryError, RuntimeId, StepState,
 };
+use stackly_platform::SecretValue;
 
 use crate::common::{Harness, manager_request, request, wait_state};
 
@@ -221,4 +222,69 @@ async fn a_failed_start_commit_frees_the_key_and_slot_and_retries_after_the_inte
         "the start ran again only after the retry interval"
     );
     assert_eq!(done.steps.len(), 1);
+}
+
+/// A fixture value, never a real secret.
+const LEAKED: &str = "stackly-fixture-credential-fedcba9876543210";
+
+/// An error whose message and detail carry a secret value, as a careless
+/// provider error might.
+#[derive(Debug, thiserror::Error)]
+#[error("login with {0} failed")]
+struct LeakyError(&'static str);
+
+impl OperationError for LeakyError {
+    fn code(&self) -> ErrorCodeName {
+        "supervisor.spawn_failed".parse().expect("a catalog code")
+    }
+
+    fn retryable(&self) -> bool {
+        false
+    }
+
+    fn details(&self) -> Vec<(DetailKey, String)> {
+        vec![(
+            "url".parse().expect("a detail key"),
+            format!("postgres://app:{}@127.0.0.1/db", self.0),
+        )]
+    }
+}
+
+/// Fails its one step with a [`LeakyError`].
+struct Leaky;
+
+impl OperationWork for Leaky {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("login".parse().expect("a step name")))
+                .await?;
+            Err(WorkError::Failed(Box::new(LeakyError(LEAKED))))
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_failure_is_stored_through_the_redactor_so_a_learned_value_never_lands() {
+    let harness = Harness::new().await;
+    harness
+        .redactor
+        .learn(&SecretValue::new(LEAKED.to_owned()).expect("a valid fixture value"));
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(Leaky),
+        ))
+        .await;
+    let failed = wait_state(&harness.engine, id, OperationState::Failed).await;
+
+    let error = failed
+        .view
+        .journal
+        .failure_error()
+        .expect("the failure error is journaled");
+    assert_eq!(error.code().as_str(), "supervisor.spawn_failed");
+    assert_eq!(error.message(), "login with **** failed");
+    assert_eq!(error.details()[0].1, "postgres://app:****@127.0.0.1/db");
+    assert!(!format!("{failed:?}").contains(LEAKED));
 }

@@ -45,7 +45,7 @@ pub use context::OperationContext;
 pub use limits::EngineLimits;
 pub use lock::{InternalLock, LockBusy, LockHolder, LockTable};
 pub use precheck::{NO_OP_STAGE, NoOpReply, Precheck, PrecheckOutcome, Rejection};
-pub use redact::{NoSecretsYet, Redact};
+pub use redact::Redact;
 pub use work::{
     BoxFuture, CreatedHandle, FinalBatch, Finalize, OperationError, OperationOutcome,
     OperationWork, PartialItem, PartialOutcome, RebuildError, StepSpec, StepStart, WorkError,
@@ -67,8 +67,8 @@ pub struct EngineDeps {
     pub layout: Arc<PreparedLayout>,
     /// Where the engine reports every visible change after its commit.
     pub events: Arc<dyn OperationEvents>,
-    /// Removes secret values from failure messages before they are stored.
-    /// Spec 0011's `Redactor` fills it; until then [`NoSecretsYet`].
+    /// Removes secret values from failure messages before they are stored:
+    /// the daemon's shared [`Redactor`](crate::secret::Redactor).
     pub redactor: Arc<dyn Redact>,
 }
 

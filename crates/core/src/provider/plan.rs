@@ -17,8 +17,9 @@ use std::time::Duration;
 use serde::{Serialize, Serializer};
 use stackly_domain::{
     Capability, EndpointName, ExactVersion, InstanceId, InstanceName, Port, Rule, RuntimeLine,
+    SecretRef,
 };
-use stackly_platform::InstancePaths;
+use stackly_platform::{InstancePaths, SecretValue};
 
 use super::interpolate::{
     EndpointTransport, ExecRef, InstanceDir, Interp, PathBase, PathExpr, Piece, SECRETS_DIR, Token,
@@ -27,10 +28,11 @@ use super::manifest::{
     CommandSpec, InitStepSpec, Manifest, ProbeDef, ReloadActionSpec, StopSignal, StopSpec,
 };
 use super::names::SettingName;
-use super::secret::{ResolvedSecrets, SecretRef};
 use super::settings::{ScalarValue, SettingValue, SettingsError, SettingsItem, SettingsValues};
 use super::template::{self, OUTPUT_MAX_LEN, TemplateFormat};
 use super::validate::ValidatedPackage;
+use crate::secret::ResolvedSecrets;
+use crate::secret::delivery::render_secret_placeholder;
 
 /// The `PATH` every child process gets. A POSIX constant; the Windows
 /// phase moves it into the platform.
@@ -536,38 +538,45 @@ impl PlanError {
 impl RenderedContent {
     /// Fills the secret segments from the secrets of the action and returns
     /// the final bytes, with the same escaper and the same 1 MiB limit as
-    /// the renderer.
+    /// the renderer. Each value is read through
+    /// [`render_secret_placeholder`] (spec 0011).
     ///
     /// # Errors
     ///
     /// Returns [`PlanError::SecretUnavailable`] when `secrets` lacks a
-    /// field, [`PlanError::UnrepresentableValue`] when a secret is not UTF-8
-    /// or the format cannot hold it, and [`PlanError::OutputTooLarge`] past
-    /// 1 MiB.
+    /// field, [`PlanError::UnrepresentableValue`] when the format cannot
+    /// hold a secret, and [`PlanError::OutputTooLarge`] past 1 MiB.
     pub fn materialize(&self, secrets: &ResolvedSecrets) -> Result<Vec<u8>, PlanError> {
         self.materialize_with(|secret| secrets.get(&secret.field))
     }
 
-    /// Fills the secret segments with the bytes `value` gives, as
-    /// [`materialize`](Self::materialize) does; validation renders with a
-    /// placeholder for every secret.
-    pub(crate) fn materialize_with<'s>(
+    /// Fills every secret segment with the placeholder `x`, as validation
+    /// renders a template to check that its output parses.
+    pub(crate) fn materialize_sample(&self) -> Result<Vec<u8>, PlanError> {
+        let sample = SecretValue::new("x".to_owned())
+            .expect("a one byte text without NUL is a valid secret value");
+        self.materialize_with(|_| Some(&sample))
+    }
+
+    /// Fills the secret segments with the values `value` gives, as
+    /// [`materialize`](Self::materialize) does.
+    fn materialize_with<'s>(
         &self,
-        value: impl Fn(&PlanSecret) -> Option<&'s [u8]>,
+        value: impl Fn(&PlanSecret) -> Option<&'s SecretValue>,
     ) -> Result<Vec<u8>, PlanError> {
         let mut out = Vec::new();
         for segment in &self.segments {
             match segment {
                 Segment::Text(text) => out.extend_from_slice(text.as_bytes()),
                 Segment::Secret { secret, format } => {
-                    let unrepresentable = || PlanError::UnrepresentableValue {
-                        field: format!("secret.{}", secret.field),
-                    };
-                    let bytes = value(secret).ok_or_else(|| PlanError::SecretUnavailable {
+                    let value = value(secret).ok_or_else(|| PlanError::SecretUnavailable {
                         field: secret.field.clone(),
                     })?;
-                    let text = std::str::from_utf8(bytes).map_err(|_| unrepresentable())?;
-                    let escaped = format.escape_text(text).ok_or_else(unrepresentable)?;
+                    let escaped = render_secret_placeholder(value, *format).ok_or_else(|| {
+                        PlanError::UnrepresentableValue {
+                            field: format!("secret.{}", secret.field),
+                        }
+                    })?;
                     out.extend_from_slice(escaped.as_bytes());
                 }
             }
@@ -926,7 +935,7 @@ impl<'a> Resolver<'a> {
             .and_then(|spec| Some((spec, package.templates.get(&spec.template)?)))
             .expect("a validated package resolves every config file it names to a template");
         let content = template::render(checked, spec.format, self, name)?;
-        let sample = content.materialize_with(|_| Some(&b"x"[..]))?;
+        let sample = content.materialize_sample()?;
         if !spec.format.output_parses(&String::from_utf8_lossy(&sample)) {
             return Err(PlanError::RenderedOutputInvalid {
                 config_file: name.to_owned(),

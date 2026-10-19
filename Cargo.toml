@@ -43,6 +43,7 @@ cargo_metadata = "0.23"
 clap = { version = "4.6", features = ["derive"] }
 core-foundation = "0.10"
 ctrlc = { version = "3.5", features = ["termination"] }
+getrandom = "0.4"
 jiff = { version = "0.2", features = ["serde"] }
 libc = "0.2"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }

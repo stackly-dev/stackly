@@ -7,11 +7,9 @@
 //! rendered before the spawn, as the executor of spec 0010 does.
 #![cfg(unix)]
 
-use std::ffi::OsStr;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -20,17 +18,19 @@ use std::time::{Duration, Instant};
 use sha2::{Digest, Sha256};
 use stackly_core::provider::{
     EnvValue, InitStep, MarkerRead, NameCheck, PlanContext, PreflightOutcome, ResolvedEndpoint,
-    ResolvedSecrets, RuntimeContext, Stdin, ValidatedPackage, read_package,
+    RuntimeContext, Stdin, ValidatedPackage, read_package,
 };
+use stackly_core::secret::ResolvedSecrets;
+use stackly_core::secret::delivery::{ensure_not_in_argv, env_pair, stdin_payload};
 use stackly_domain::{InstanceId, Port};
 use stackly_evidence::{Kind, evidence};
-use stackly_platform::DirectoryLayout;
+use stackly_platform::{DirectoryLayout, SecretValue};
 use stackly_testkit::{FakePlatform, TestRoot, allocate_port, fake_server};
 
 /// Every shell metacharacter, as the `label` setting.
 const NASTY_LABEL: &str = "$(touch pwned); rm -rf ~ `id` \"q\" 'q' | & > ü 空";
-/// The fixture secret's bytes.
-const TOKEN: &[u8] = b"fixture token, never a real one";
+/// The fixture secret.
+const TOKEN: &str = "fixture token, never a real one";
 
 /// Kills the server if the test ends early.
 struct Reap(Child);
@@ -106,28 +106,35 @@ fn context(root: &TestRoot, package: &ValidatedPackage, binary: &Path, port: u16
 
 /// The secrets of an action: the fixture token as `authToken`.
 fn secrets() -> ResolvedSecrets {
-    ResolvedSecrets::for_tests([("authToken".parse().expect("valid field"), TOKEN.to_vec())])
+    ResolvedSecrets::for_tests([(
+        "authToken".parse().expect("valid field"),
+        SecretValue::new(TOKEN.to_owned()).expect("the fixture token is a valid secret value"),
+    )])
 }
 
-fn command(spec: &stackly_core::provider::Command) -> Command {
+/// The process of a plan command, with its secrets delivered the way
+/// spec 0011 allows: never in argv, and through `env_pair` in the env.
+fn command(spec: &stackly_core::provider::Command, secrets: &ResolvedSecrets) -> Command {
+    ensure_not_in_argv(&spec.args, secrets).expect("no secret value is in argv");
     let mut command = Command::new(spec.program.absolute());
-    command
-        .args(&spec.args)
-        .env_clear()
-        .envs(spec.env.iter().map(|(key, value)| {
-            let value = match value {
-                EnvValue::Text(text) => OsStr::new(text),
-                EnvValue::Secret(_) => OsStr::from_bytes(TOKEN),
-            };
-            (key, value)
-        }))
-        .current_dir(&spec.cwd);
+    command.args(&spec.args).env_clear().current_dir(&spec.cwd);
+    for (key, value) in &spec.env {
+        match value {
+            EnvValue::Text(text) => command.env(key, text),
+            EnvValue::Secret(secret) => {
+                let value = secrets.get(&secret.field).expect("the secret resolves");
+                let (key, value) = env_pair(key, value);
+                command.env(key, value)
+            }
+        };
+    }
     command
 }
 
 /// Runs initialize or render steps the way the executor of spec 0010
 /// would, minus its checks.
 fn run_init(init: &[InitStep]) {
+    let secrets = secrets();
     for step in init {
         match step {
             InitStep::EnsureDirectories(dirs) => {
@@ -142,20 +149,23 @@ fn run_init(init: &[InitStep]) {
             InitStep::WriteFile(write) => {
                 let bytes = write
                     .content
-                    .materialize(&secrets())
+                    .materialize(&secrets)
                     .expect("content materializes");
                 fs::write(&write.path, bytes).expect("config file");
             }
             InitStep::Run(run) => {
-                let mut child = command(&run.command)
+                let mut child = command(&run.command, &secrets)
                     .stdin(Stdio::piped())
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .spawn()
                     .expect("init starts");
                 let mut stdin = child.stdin.take().expect("stdin is piped");
-                if let Stdin::Secret(_) = run.stdin {
-                    stdin.write_all(TOKEN).expect("stdin takes the token");
+                if let Stdin::Secret(secret) = &run.stdin {
+                    let value = secrets.get(&secret.field).expect("the secret resolves");
+                    stdin
+                        .write_all(stdin_payload(value))
+                        .expect("stdin takes the token");
                 }
                 drop(stdin);
                 let status = child.wait().expect("init exits");
@@ -275,7 +285,7 @@ fn the_fake_plans_run_without_a_shell_and_argv_matches_the_plan() {
         let run = package.run_plan(&context).expect("the run plan builds");
         run_init(&run.render);
         let mut server = Reap(
-            command(&run.spawn)
+            command(&run.spawn, &secrets())
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())

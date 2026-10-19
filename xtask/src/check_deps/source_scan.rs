@@ -1,5 +1,4 @@
-//! The source scan of `cargo xtask check-deps`. Two rule sets, each for its
-//! own list of crates:
+//! The source scan of `cargo xtask check-deps`. Three rule sets:
 //!
 //! - Library rules (spec 0004, "Peta modul dan dependency"): library crates
 //!   never read environment variables and never hardcode a machine path.
@@ -8,6 +7,11 @@
 //! - Socket rule (spec 0006, AC-5): the transport, the daemon, and the CLI
 //!   never name `TcpListener`, `TcpStream`, `TcpSocket`, or `UdpSocket`, as
 //!   a path or any other identifier, so no TCP or UDP socket is opened.
+//! - Expose rule (spec 0011, AC-15), for every crate: a secret value is read
+//!   only through `expose`, so a call to a method named `expose` (`.expose`,
+//!   or a path ending in `::expose`) is allowed only in the modules of
+//!   [`EXPOSE_ALLOWED`]. Attribute arguments are read for this rule too, so
+//!   a call inside `#[instrument(fields(...))]` counts.
 //!
 //! Each crate is read along its module tree, starting at its lib and bin
 //! targets, so `tests/` and a file only a `#[cfg(test)] mod` loads are never
@@ -48,6 +52,19 @@ pub const SOCKET_SCANNED: [&str; 3] = ["stackly-ipc", "stacklyd", "stackly-cli"]
 const SOCKET_NAMES: [&str; 4] = ["TcpListener", "TcpStream", "TcpSocket", "UdpSocket"];
 /// The socket rule's message.
 const SOCKET_RULE: &str = "no tcp or udp sockets (spec 0006)";
+/// The expose rule's message.
+const EXPOSE_RULE: &str = "secret expose outside the allowlist";
+/// The modules that may call `expose` on a secret value (spec 0011,
+/// *Penjaga di kode*), each with its submodules: exactly the call sites
+/// that exist. A crate of the spec's table adds its module here once it
+/// has a call site (`stackly-platform` and `stackly-protocol` `secret`,
+/// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input` and
+/// `commands::secret`).
+pub const EXPOSE_ALLOWED: [(&str, &[&str]); 3] = [
+    ("stackly-core", &["secret::redact", "secret::delivery"]),
+    ("stackly-platform-macos", &["secret"]),
+    ("stackly-testkit", &["fake_secret"]),
+];
 /// The `std::env` functions a library never calls.
 const ENV_READS: [&str; 6] = ["var", "var_os", "vars", "vars_os", "home_dir", "temp_dir"];
 /// Text a string literal in a library never holds.
@@ -59,13 +76,16 @@ const MACHINE_PATHS: [&str; 5] = [
     "/var/folders",
 ];
 
-/// Which rule sets apply to a crate.
+/// Which rule sets apply to a crate. The expose rule applies to every
+/// crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rules {
     /// The library rules: no environment reads, no machine paths.
     pub library: bool,
     /// The socket rule: no TCP or UDP socket names.
     pub sockets: bool,
+    /// The modules of this crate that may call `expose`, as `a::b` paths.
+    pub expose_allowed: &'static [&'static str],
 }
 
 impl Rules {
@@ -75,13 +95,11 @@ impl Rules {
         Self {
             library: SCANNED.contains(&name),
             sockets: SOCKET_SCANNED.contains(&name),
+            expose_allowed: EXPOSE_ALLOWED
+                .iter()
+                .find(|(crate_name, _)| *crate_name == name)
+                .map_or(&[], |(_, modules)| *modules),
         }
-    }
-
-    /// Whether any rule set applies.
-    #[must_use]
-    pub const fn any(self) -> bool {
-        self.library || self.sockets
     }
 }
 
@@ -104,13 +122,13 @@ pub fn scan_package(root: &Path, package: &Package, rules: Rules) -> Result<Vec<
 
 /// Scans one crate from its root source files.
 fn scan_crate(root: &Path, name: &str, entries: &[PathBuf], rules: Rules) -> Result<Vec<String>> {
-    let mut pending: Vec<(PathBuf, PathBuf)> = entries
+    let mut pending: Vec<(PathBuf, PathBuf, Vec<String>)> = entries
         .iter()
-        .map(|entry| (entry.clone(), parent(entry)))
+        .map(|entry| (entry.clone(), parent(entry), Vec::new()))
         .collect();
     let mut seen: Vec<PathBuf> = Vec::new();
     let mut violations = Vec::new();
-    while let Some((file, module_dir)) = pending.pop() {
+    while let Some((file, module_dir, module_path)) = pending.pop() {
         if seen.contains(&file) {
             continue;
         }
@@ -123,6 +141,7 @@ fn scan_crate(root: &Path, name: &str, entries: &[PathBuf], rules: Rules) -> Res
             rules,
             file_dir: parent(&file),
             module_dir,
+            module_path,
             inline: Vec::new(),
             findings: Vec::new(),
             modules: Vec::new(),
@@ -154,26 +173,28 @@ struct OutOfLine {
     name: String,
     /// The `#[path]` value, joined to the right folder already.
     path: Option<PathBuf>,
+    /// The module's path from the crate root, its own name last.
+    module_path: Vec<String>,
 }
 
 impl OutOfLine {
-    /// Returns the module's file and the folder its own child modules sit
-    /// in.
-    fn resolve(self) -> Result<(PathBuf, PathBuf)> {
+    /// Returns the module's file, the folder its own child modules sit in,
+    /// and its module path.
+    fn resolve(self) -> Result<(PathBuf, PathBuf, Vec<String>)> {
         if let Some(path) = self.path {
             // A file loaded through `#[path]` keeps its children beside it.
             let children = parent(&path);
-            return Ok((path, children));
+            return Ok((path, children, self.module_path));
         }
         let flat = self.dir.join(format!("{}.rs", self.name));
         if flat.is_file() {
             let children = self.dir.join(&self.name);
-            return Ok((flat, children));
+            return Ok((flat, children, self.module_path));
         }
         let nested = self.dir.join(&self.name).join("mod.rs");
         if nested.is_file() {
             let children = self.dir.join(&self.name);
-            return Ok((nested, children));
+            return Ok((nested, children, self.module_path));
         }
         anyhow::bail!(
             "cannot find the file of `mod {};` in {}",
@@ -189,6 +210,8 @@ struct Scan {
     file_dir: PathBuf,
     /// The folder the file's own child modules sit in.
     module_dir: PathBuf,
+    /// The file's module path from the crate root.
+    module_path: Vec<String>,
     /// Inline `mod name { ... }` blocks around the current node.
     inline: Vec<String>,
     findings: Vec<(usize, String)>,
@@ -254,6 +277,59 @@ impl Scan {
         }
     }
 
+    /// Reports a call to `expose` outside the allowed modules, once per
+    /// line.
+    fn expose_call(&mut self, span: proc_macro2::Span) {
+        let current: Vec<&str> = self
+            .module_path
+            .iter()
+            .chain(&self.inline)
+            .map(String::as_str)
+            .collect();
+        let allowed = self.rules.expose_allowed.iter().any(|module| {
+            let module: Vec<&str> = module.split("::").collect();
+            current.starts_with(&module)
+        });
+        let line = span.start().line;
+        if !allowed
+            && !self
+                .findings
+                .iter()
+                .any(|(seen, rule)| *seen == line && rule == EXPOSE_RULE)
+        {
+            self.findings.push((line, EXPOSE_RULE.to_owned()));
+        }
+    }
+
+    /// Reads tokens for `. expose` and `:: expose`, as a macro body or an
+    /// attribute holds them.
+    fn check_expose_tokens(&mut self, tokens: TokenStream) {
+        let tokens: Vec<TokenTree> = tokens.into_iter().collect();
+        for (index, token) in tokens.iter().enumerate() {
+            match token {
+                TokenTree::Group(group) => self.check_expose_tokens(group.stream()),
+                TokenTree::Ident(ident) if ident == "expose" && index > 0 => {
+                    let before = &tokens[..index];
+                    let method = matches!(
+                        before.last(),
+                        Some(TokenTree::Punct(dot)) if dot.as_char() == '.'
+                    );
+                    let path = matches!(
+                        before,
+                        [.., TokenTree::Punct(first), TokenTree::Punct(second)]
+                            if first.as_char() == ':'
+                                && first.spacing() == Spacing::Joint
+                                && second.as_char() == ':'
+                    );
+                    if method || path {
+                        self.expose_call(ident.span());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Reads a macro body token by token: string literals, identifiers,
     /// and `env :: <name>` sequences.
     fn check_tokens(&mut self, tokens: TokenStream) {
@@ -304,6 +380,16 @@ impl Scan {
         }
     }
 
+    /// The module path of a `mod name;` at the current node.
+    fn child_module_path(&self, name: &str) -> Vec<String> {
+        self.module_path
+            .iter()
+            .chain(&self.inline)
+            .cloned()
+            .chain([name.to_owned()])
+            .collect()
+    }
+
     /// The folder a `mod name;` at the current node resolves in.
     fn child_dir(&self) -> PathBuf {
         self.inline
@@ -348,15 +434,35 @@ impl<'ast> Visit<'ast> for Scan {
             };
             base.join(path)
         });
+        let module_path = self.child_module_path(&name);
         self.modules.push(OutOfLine {
             dir: self.child_dir(),
             name,
             path,
+            module_path,
         });
     }
 
-    fn visit_attribute(&mut self, _node: &'ast Attribute) {
-        // Attributes are metadata, and doc comments may name any path.
+    fn visit_attribute(&mut self, node: &'ast Attribute) {
+        // Attributes are metadata, and doc comments may name any path, so
+        // only the expose rule reads their arguments: `#[name(...)]`, and a
+        // macro as in `#[doc = concat!(...)]`.
+        match &node.meta {
+            Meta::List(list) => self.check_expose_tokens(list.tokens.clone()),
+            Meta::NameValue(name_value) => {
+                if let Expr::Macro(value) = &name_value.value {
+                    self.check_expose_tokens(value.mac.tokens.clone());
+                }
+            }
+            Meta::Path(_) => {}
+        }
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "expose" {
+            self.expose_call(node.method.span());
+        }
+        visit::visit_expr_method_call(self, node);
     }
 
     fn visit_path(&mut self, node: &'ast syn::Path) {
@@ -366,6 +472,11 @@ impl<'ast> Visit<'ast> for Scan {
             && is_env_read(name)
         {
             self.env_read(name.span(), &name.to_string());
+        }
+        if let [_, .., last] = segments.as_slice()
+            && *last == "expose"
+        {
+            self.expose_call(last.span());
         }
         visit::visit_path(self, node);
     }
@@ -385,6 +496,7 @@ impl<'ast> Visit<'ast> for Scan {
 
     fn visit_macro(&mut self, node: &'ast Macro) {
         self.check_tokens(node.tokens.clone());
+        self.check_expose_tokens(node.tokens.clone());
         visit::visit_macro(self, node);
     }
 }
@@ -776,9 +888,162 @@ mod tests {
             Rules {
                 library: false,
                 sockets: true,
+                expose_allowed: &[],
             }
         );
-        assert!(!Rules::for_crate("stackly-storage").any());
+        assert_eq!(
+            Rules::for_crate("stackly-storage"),
+            Rules {
+                library: false,
+                sockets: false,
+                expose_allowed: &[],
+            }
+        );
+    }
+
+    const EXPOSE: &str = "secret expose outside the allowlist";
+
+    #[test]
+    fn expose_calls_outside_the_allowlist_are_reported_with_file_and_line() {
+        let found = scan(&[
+            ("src/lib.rs", "mod secret;\nmod leak;\n"),
+            (
+                "src/secret/mod.rs",
+                "mod redact;\nmod delivery;\nmod generate;\n",
+            ),
+            (
+                "src/secret/redact.rs",
+                "pub fn a(v: &V) -> &str { v.expose() }\n",
+            ),
+            (
+                "src/secret/delivery/mod.rs",
+                "mod file;\npub fn b(v: &V) -> &str { v.expose() }\n",
+            ),
+            (
+                "src/secret/delivery/file.rs",
+                "pub fn c(v: &V) { let _ = format!(\"{}\", v.expose()); }\n",
+            ),
+            (
+                "src/secret/generate.rs",
+                "pub fn d(v: &V) -> usize { v.expose().len() }\n",
+            ),
+            (
+                "src/leak.rs",
+                "pub fn e(v: &V) { tracing::info!(value = v.expose(), \"x\"); }\n\
+                 pub fn f(v: &V) -> String { format!(\"{}\", v.expose()) }\n\
+                 pub fn g(v: &V) -> &str { V::expose(v) }\n\
+                 pub fn h(vs: &[V]) -> Vec<&str> { vs.iter().map(V::expose).collect() }\n\
+                 #[tracing::instrument(fields(secret = v.expose()))]\n\
+                 pub fn i(v: &V) {}\n\
+                 pub fn j(v: &V) -> &str { v . expose ( ) }\n\
+                 pub fn k(v: &V) -> &str { v.expose::<>() }\n\
+                 pub fn l(v: &V) { tracing::debug!(\"{}\", Self::expose(v)); }\n",
+            ),
+        ]);
+
+        let mut lines: Vec<&str> = found
+            .iter()
+            .map(|message| {
+                message
+                    .strip_suffix(&format!(": {EXPOSE}"))
+                    .unwrap_or(message)
+            })
+            .collect();
+        lines.sort_unstable();
+        assert_eq!(
+            lines,
+            [
+                "stackly-core src/leak.rs:1",
+                "stackly-core src/leak.rs:2",
+                "stackly-core src/leak.rs:3",
+                "stackly-core src/leak.rs:4",
+                "stackly-core src/leak.rs:5",
+                "stackly-core src/leak.rs:7",
+                "stackly-core src/leak.rs:8",
+                "stackly-core src/leak.rs:9",
+                "stackly-core src/secret/generate.rs:1",
+            ]
+        );
+    }
+
+    #[test]
+    fn expose_in_test_code_doc_comments_strings_and_a_definition_passes() {
+        let found = scan_as(
+            "stackly-storage",
+            &[(
+                "src/lib.rs",
+                "//! Read it with `value.expose()`.\n\
+                 /// Never call v.expose() here.\n\
+                 pub const NOTE: &str = \"v.expose()\";\n\
+                 pub struct V;\n\
+                 impl V { pub fn expose(&self) -> &str { \"\" } }\n\
+                 pub struct W { pub exposed: bool }\n\
+                 #[test]\n\
+                 fn t() { V.expose(); }\n\
+                 #[cfg(all(test, unix))]\n\
+                 mod tests { fn u() { tracing::info!(\"{}\", super::V.expose()); } }\n",
+            )],
+        );
+
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn an_allowed_module_covers_its_inline_and_nested_modules_only() {
+        let found = scan(&[(
+            "src/lib.rs",
+            "mod secret {\n\
+                 mod delivery { mod argv { fn a(v: &V) { v.expose(); } } }\n\
+                 mod service { fn b(v: &V) { v.expose(); } }\n\
+             }\n\
+             mod redact { fn c(v: &V) { v.expose(); } }\n",
+        )]);
+
+        assert_eq!(
+            found,
+            [
+                format!("stackly-core src/lib.rs:3: {EXPOSE}"),
+                format!("stackly-core src/lib.rs:5: {EXPOSE}"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_testkit_fake_secret_module_may_expose_and_no_other_crate_or_module_may() {
+        let files = [
+            ("src/lib.rs", "mod fake_secret;\nmod other;\n"),
+            (
+                "src/fake_secret.rs",
+                "pub fn a(v: &V) -> String { v.expose().to_owned() }\n",
+            ),
+            ("src/other.rs", "pub fn b(v: &V) -> &str { v.expose() }\n"),
+        ];
+
+        assert_eq!(
+            scan_as("stackly-testkit", &files),
+            [format!("stackly-testkit src/other.rs:1: {EXPOSE}")]
+        );
+        let mut storage = scan_as("stackly-storage", &files);
+        storage.sort();
+        assert_eq!(
+            storage,
+            [
+                format!("stackly-storage src/fake_secret.rs:1: {EXPOSE}"),
+                format!("stackly-storage src/other.rs:1: {EXPOSE}"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_expose_allowlist_is_the_call_sites_that_exist() {
+        assert_eq!(
+            EXPOSE_ALLOWED,
+            [
+                ("stackly-core", &["secret::redact", "secret::delivery"][..]),
+                ("stackly-platform-macos", &["secret"][..]),
+                ("stackly-testkit", &["fake_secret"][..]),
+            ]
+        );
     }
 
     #[test]

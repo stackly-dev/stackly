@@ -1046,6 +1046,7 @@ dependencies = [
 name = "stackly-core"
 version = "0.1.0"
 dependencies = [
+ "getrandom",
  "jiff",
  "regex",
  "schemars",
@@ -1054,6 +1055,7 @@ dependencies = [
  "serde_path_to_error",
  "serde_yaml_ng",
  "sha2",
+ "stackly-core",
  "stackly-domain",
  "stackly-evidence",
  "stackly-platform",
