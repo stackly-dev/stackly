@@ -454,7 +454,8 @@ Untuk port, scope dan BR-005 sudah memutuskan arah: konflik ditolak dan port beb
 
 ## Kesepakatan antarsesi
 
-Diisi setelah pertukaran dengan architect fitur 22 dan 23 di wave ini.
+- **arc-f22-spec** (spec 0022, 2026-10-20): fitur 22 memiliki empty state Instances dan tata letak toolbar Overview dan Instances; fitur 20 memiliki aksi dan sheet New Instance. Kaitnya nilai environment `newInstanceAction: NewInstanceAction?` yang dipasang fitur 20 di `AppShell`; selama ada, fitur 22 merender tombol toolbar dan aksi kedua empty state, semuanya `.mutationGated()`. Seleksi setelah create lewat `ShellNavigator.show(.instances(filter: .all, select: id))` dari spec 0022. Endpoint socket yang namanya bergantung pada port Automatic tampil "socket, created at start" di GUI dan `<name>=socket (pending)` di CLI selama `socketPath` null. Fitur 22 mengusulkan `InstanceSummary.initialized` untuk instance yang tidak pernah terinisialisasi; spec ini tidak mengusulkan field setara.
+- **arc-f23-spec** (spec 0023, 2026-10-20): NATS hanya butuh lima jenis field spec ini (text dengan `serverName` managed, boolean `jetstream`, tiga integer advanced dengan batas) dan tidak punya `socketName` bertoken port. Fitur 23 hanya mengubah probe readiness, jadi fixture `create-form-nats.json` tidak berubah karenanya; AC-13 spec 0023 memakai ulang fixture dan test render AC-21. NATS pindah ke `[[provider]]` di milestone 2 fitur 23, sebelum langkah create GUI fitur 23.
 
 ## Cross check
 
