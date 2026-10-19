@@ -81,6 +81,8 @@ public final class DaemonModel {
 
     /// The shell's stores.
     public let sync: ShellSync
+    /// The operations that have not ended, for the Operations badge and subtitle.
+    public let operations: OperationCenter
 
     @ObservationIgnored private let link: LinkHandle
     @ObservationIgnored private let signals: AsyncStream<SyncSignal>?
@@ -130,11 +132,22 @@ public final class DaemonModel {
         let first = ShellStatus.connecting(slow: false, since: launchedAt)
         statusBeforeConnect = first
         presentation = ShellPresentation(status: first)
+        operations = OperationCenter(
+            call: { call throws(ClientError) in try await link.call(call, nil, .standard) },
+            now: now)
+        sync.register(operations.store)
     }
 
     /// Whether mutations can run, from the presentation.
     public var mutationAvailability: MutationAvailability {
         presentation.mutationAvailability
+    }
+
+    /// The counts behind the sidebar badges, each `nil` until its store loaded a
+    /// snapshot. The instance count comes with the instance store (milestone 4,
+    /// step 16).
+    public var sidebarCounts: SidebarCounts {
+        SidebarCounts(instances: nil, runningOperations: operations.runningCount)
     }
 
     /// Starts the link, the signal loop, and the one second timer of the

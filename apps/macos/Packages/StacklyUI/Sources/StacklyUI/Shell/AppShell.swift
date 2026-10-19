@@ -140,7 +140,10 @@ public struct AppShell: View {
             UnbuiltScrollPage(section: .runtimes)
         case .operations:
             // provisional: F35
-            UnbuiltScrollPage(section: .operations)
+            UnbuiltScrollPage(
+                section: .operations,
+                subtitle: OperationCenter.subtitle(running: counts.runningOperations)
+            )
         case .diagnostics:
             DiagnosticsPage(
                 diagnostics: diagnostics,
@@ -152,15 +155,17 @@ public struct AppShell: View {
     }
 }
 
-/// An unbuilt page in a scroll view, with the section title in the toolbar.
+/// An unbuilt page in a scroll view, with the section title in the toolbar and, for
+/// Operations, the subtitle the operation center gives.
 private struct UnbuiltScrollPage: View {
     let section: SidebarSection
+    var subtitle: String?
 
     var body: some View {
         ScrollView {
             UnbuiltPage(section: section)
         }
-        .pageChrome(title: section.title)
+        .pageChrome(title: section.title, subtitle: subtitle)
     }
 }
 
