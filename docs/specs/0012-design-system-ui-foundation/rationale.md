@@ -444,6 +444,7 @@ Awalnya `NSColor` dengan dynamic provider. Setelah cross check, bentuknya menjad
 **Cons**:
 
 - Perilaku tombol default di macOS 27 perlu dicek; jalur `NSAlert` disiapkan sebagai cadangan.
+- Hasil cek langkah 17 (2026-10-18): gagal di macOS 27. Satu tombol hanya memegang satu key equivalent, jadi Cancel tidak bisa menerima Return dan Escape sekaligus. Modifier yang sama kini membangun `NSAlert` sendiri (lihat *Pembaruan 2026-10-18*).
 
 #### Option 2: native ditambah ketik nama
 
@@ -777,7 +778,7 @@ Awalnya `NSColor` dengan dynamic provider. Setelah cross check, bentuknya menjad
 | Opasitas tint | 16% badge, 12% banner | dalam rentang mockup (11% sampai 16%); nilai terburuk 16% yang dihitung | satu nilai 14% |
 | Durasi crossfade | 0,2 detik | sama dengan transisi mockup | animasi default SwiftUI |
 | Target klik | minimal 24 × 24 pt | WCAG 2.2 target size minimum (AA) | ukuran kontrol native saja |
-| Jalur cadangan konfirmasi | `NSAlert` di modifier yang sama | API untuk layar tetap; hanya implementasi yang berganti | menerima Return memicu aksi destruktif |
+| Jalur konfirmasi | `NSAlert` di modifier yang sama (dipakai sejak langkah 17) | `confirmationDialog` gagal cek Return dan Escape di macOS 27; API untuk layar tetap, hanya implementasi yang berganti | menerima Return memicu aksi destruktif |
 
 ## Bukti kontras
 
@@ -855,3 +856,13 @@ Cek di macOS 27.0 dan Xcode 27.0, di Design Gallery dengan event keyboard nyata 
 
 Ronde 2 rekonsiliasi (2026-10-18), dari Follow-up spec 0013 dan atas persetujuan engineer: lebar konten minimum 640 pt menjadi final, setter environment bernama `.mutationAvailability(_:)`, footer status daemon memakai `StatusLabel` `.row`, dan tone banner status daemon (informative untuk starting, connecting lambat, shutting down; critical untuk incompatible, untrusted, recovery, misconfigured).
 
+## Pembaruan 2026-10-18
+
+Diperbarui lewat `/architect` setelah build dan `/check verify` fitur 12, dengan persetujuan pengguna. Tiga perubahan:
+
+- **Konfirmasi di atas `NSAlert`.** Langkah 17 menjalankan cek keyboard di jendela Design Gallery app Debug (macOS 27.0 26A428, Xcode 27.0 27A266a) dengan tombol Return dan Escape sungguhan dan pohon aksesibilitas. `confirmationDialog` SwiftUI adalah sheet `NSAlert` di bawahnya, dan satu tombol hanya memegang satu key equivalent: Cancel destructive dengan `keyboardShortcut(.defaultAction)` menerima Return tapi Escape mati, dan tanpa shortcut itu Escape membatalkan tapi Return mati. Request yang diganti saat dialog terbuka juga tetap memakai judul lama. Jalur cadangan yang sudah ada di spec dipakai: `NSAlert` dengan Return di Cancel dan monitor Escape lokal. `/check verify` mengulang cek ini (Return dan Escape untuk kedua role, Tab lalu Space, dan jalur `runModal()` tanpa window) dan semuanya lulus. Pilihan ini membawa kode AppKit sendiri yang harus dicek ulang di setiap versi macOS baru; alternatifnya, menerima Return yang menjalankan aksi destruktif, ditolak karena melanggar invariant utama spec ini.
+- **AC-18 memakai lebar sempit 640 pt.** Langkah 4 membuktikan text style dan `@ScaledMetric` tidak membesar dengan `dynamicTypeSize` di macOS 27, jadi preview teks besar diganti preview lebar sempit, seperti yang sudah disiapkan spec ini sebagai cadangan. Spec 0013 kemudian menetapkan jendela minimum 900 pt dan sidebar paling lebar 260 pt, jadi konten tidak pernah lebih sempit dari 640 pt dan angka itu kini final. Pengguna memutuskan bahwa preview Narrow width memenuhi AC-18.
+- **Follow-up fitur 67 lewat `/scope`.** Done when fitur 67 masih menyebut label status, banner, empty state, dan dialog konfirmasi yang sudah dibangun spec ini. Penyelarasannya milik `/scope`, jadi dicatat sebagai Follow-up tersendiri.
+
+Cross check pembaruan ini dijalankan model lain (Sonnet 5.5) secara read only, dan pengguna menyetujui rekomendasinya. Teks Konfirmasi dilengkapi sesuai kode dan design.md (penundaan tampil sampai anchor punya window, detail monitor Escape, reset binding saat view hilang, label "Cancel"), AC-15 dan AC-17 menyebut bahwa Tab lalu Space butuh Keyboard navigation, dan `@ScaledMetric` dicatat tetap dipakai walau belum menskalakan di macOS 27. Tiga risiko jalur `runModal()` (popover yang punya window, app yang tidak aktif, modal bersarang saat request diganti) dicatat sebagai Follow-up fitur 32, karena belum ada pemanggil tanpa jendela dan kodenya tidak diubah sekarang.
+Cross check pembaruan ini dijalankan model lain (Sonnet 5.5) secara read only, dan pengguna menyetujui rekomendasinya. Teks Konfirmasi dilengkapi sesuai kode dan design.md (penundaan tampil sampai anchor punya window, detail monitor Escape, reset binding saat view hilang, label "Cancel"), AC-15 dan AC-17 menyebut bahwa Tab lalu Space butuh Keyboard navigation, dan `@ScaledMetric` dicatat tetap dipakai walau belum menskalakan di macOS 27. Tiga risiko jalur `runModal()` (popover yang punya window, app yang tidak aktif, modal bersarang saat request diganti) dicatat sebagai Follow-up fitur 32, karena belum ada pemanggil tanpa jendela dan kodenya tidak diubah sekarang.

@@ -53,13 +53,13 @@ Bahasa visual native macOS dari mockup UI dan pola state yang dipakai semua laya
 **Pointer:** spec [0012](../specs/0012-design-system-ui-foundation/index.md)
 
 - [x] Design it (spec): `/architect design system & UI foundation`
-- [ ] Build it: `/develop design system & UI foundation`
+- [x] Build it: `/develop design system & UI foundation`
   - [x] Tokens, shared helpers, contrast proof, and the `design.md` skeleton: `ColorToken`, `Tone`, `toneSurface`, `.cardSurface()`, typography and symbol helpers, `Spacing`, `Radius`, `ScaledSize`, `StacklyMotion`, the source rule test, and the Debug "Design Gallery" window (spec 0012 AC-1 to AC-3, AC-6, AC-7, AC-15 to AC-18)
   - [x] Status palette: UI status enums, `StatusAppearance`, `StatusLabel`, `ToneBadge`, and `SectionIcon` (spec 0012 AC-1, AC-4, AC-5, AC-7, AC-16 to AC-19; can run in parallel after milestone 1)
   - [x] State patterns: `ViewState.resolve`, `StateView`, placeholders, banners, `DelayedProgress`, `MutationAvailability`, and `.disabled(reason:)` (spec 0012 AC-1, AC-8 to AC-14, AC-16 to AC-18, AC-20; can run in parallel after milestone 1)
   - [x] Confirmation: the keyboard check on macOS 27, then `.stacklyConfirmation(item:)` and the confirmation rules (spec 0012 AC-1, AC-15, AC-17, AC-18; can run in parallel after milestone 1)
 - [ ] Verify it: `/check verify design system & UI foundation`
-- [ ] Test it: `/test design system & UI foundation`
+- [x] Test it: `/test design system & UI foundation`
 
 ### 13. App shell SwiftUI & Swift client · in-progress
 
