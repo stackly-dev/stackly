@@ -9,6 +9,7 @@ mod column;
 mod journal;
 mod prune;
 mod read;
+mod secret;
 mod write;
 
 use std::fmt;
@@ -19,11 +20,13 @@ use std::thread::JoinHandle;
 use jiff::Timestamp;
 use rusqlite::{Connection, Transaction};
 use stackly_domain::{
-    ArtifactRecord, BatchError, Committed, Environment, EnvironmentId, IdempotencyKey, Instance,
-    InstanceFilter, InstanceId, InstanceName, InstancePathEntry, JournalView, Lease, LeaseFilter,
-    Operation, OperationId, OperationJournal, OperationPage, OperationQuery, ProviderRevisionKey,
-    ProviderRevisionRecord, PruneReport, Registry, RegistryError, RetentionPolicy, Runtime,
-    RuntimeId, RuntimeReferences, Sha256Digest, Versioned, WriteBatch,
+    ArtifactRecord, AuditPage, AuditQuery, BatchError, Committed, Environment, EnvironmentId,
+    IdempotencyKey, Instance, InstanceFilter, InstanceId, InstanceName, InstancePathEntry,
+    JournalView, Lease, LeaseFilter, Operation, OperationId, OperationJournal, OperationPage,
+    OperationQuery, ProviderRevisionKey, ProviderRevisionRecord, PruneReport, Registry,
+    RegistryError, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretRef,
+    SecretReferenceFilter, SecretReferenceView, SecretUse, SecretUser, Sha256Digest, Versioned,
+    WriteBatch,
 };
 use stackly_platform::Clock;
 
@@ -263,6 +266,30 @@ impl Registry for SqliteRegistry {
         &self,
     ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError> {
         self.read(|tx| journal::unfinished(tx))
+    }
+
+    fn secret_reference(
+        &self,
+        reference: &SecretRef,
+    ) -> Result<Versioned<Option<SecretReferenceView>>, RegistryError> {
+        let reference = reference.clone();
+        self.read(move |tx| secret::reference(tx, &reference))
+    }
+
+    fn secret_references(
+        &self,
+        filter: SecretReferenceFilter,
+    ) -> Result<Versioned<Vec<SecretReferenceView>>, RegistryError> {
+        self.read(move |tx| secret::references(tx, filter))
+    }
+
+    fn secret_uses_by(&self, user: SecretUser) -> Result<Versioned<Vec<SecretUse>>, RegistryError> {
+        self.read(move |tx| secret::uses_by(tx, user))
+    }
+
+    fn audit_events(&self, query: AuditQuery) -> Result<Versioned<AuditPage>, RegistryError> {
+        query.validate()?;
+        self.read(move |tx| secret::audit_events(tx, &query))
     }
 
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {

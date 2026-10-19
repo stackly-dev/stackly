@@ -81,10 +81,14 @@ pub use provider::{
     AcceptedRevisionChange, LineCompatibility, ProviderRevision, ProviderRevisionKey,
 };
 pub use registry::{
-    ArtifactRecord, BatchError, Committed, Generation, InstanceFilter, InstancePathEntry,
-    InstancePathKind, LeaseFilter, LogicalRoot, OperationCursor, OperationPage, OperationQuery,
-    ProviderRevisionRecord, PruneReport, Registry, RegistryError, RegistryId, RelativePath,
-    ResourceRef, RetentionPolicy, Versioned, WriteBatch, WriteOp,
+    ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
+    AuditPage, AuditQuery, AuditResource, AuditResult, BatchError, Committed, Generation,
+    InstanceFilter, InstancePathEntry, InstancePathKind, LeaseFilter, LogicalRoot, OperationCursor,
+    OperationPage, OperationQuery, PlatformStoreKey, ProviderRevisionRecord, PruneReport, Registry,
+    RegistryError, RegistryId, RelativePath, ResourceRef, RetentionPolicy, SafeDetails,
+    SafeDetailsError, SecretFieldName, SecretReferenceFilter, SecretReferenceId,
+    SecretReferenceRecord, SecretReferenceView, SecretUse, SecretUser, Versioned, WriteBatch,
+    WriteOp,
 };
 pub use rule::Rule;
 pub use runtime::{

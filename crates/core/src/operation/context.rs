@@ -8,10 +8,10 @@ use std::sync::Arc;
 use stackly_domain::{
     Committed, CompensatorName, CreatedItem, CreatedRecord, CreatedSeq, CreatedState,
     CustomItemKey, EnvironmentId, InstanceId, JournalPayload, JournalStep, NewStep, OperationId,
-    OperationKind, OperationResource, OperationTrigger, Progress, ReasonCode, Registry, StageName,
-    StepSeq, StepState, WriteBatch,
+    OperationKind, OperationResource, OperationTrigger, Progress, ReasonCode, Registry, SecretRef,
+    StageName, StepSeq, StepState, WriteBatch,
 };
-use stackly_platform::{Platform, PlatformError};
+use stackly_platform::{Platform, PlatformError, SecretPresence};
 use tokio::sync::watch;
 use tokio::time::Instant;
 
@@ -21,6 +21,7 @@ use super::state::{OpHandle, StopSignal};
 use super::work::{CreatedHandle, FinalBatch, StepSpec, StepStart, WorkError};
 use super::{EngineError, Inner, lock};
 use crate::layout::PreparedLayout;
+use crate::secret::{ConflictReason, SecretError};
 
 /// The step a work runs now.
 #[derive(Debug, Clone, Copy)]
@@ -559,9 +560,79 @@ impl OperationContext {
         Ok((id, handle))
     }
 
-    // provisional: F11 (spec 0011 adds `record_secret_intent(SecretRef)`
-    // here, built on `intend` with `CreatedItem::SecretRef` after a probe
-    // of the secret store)
+    /// Records the intent to create a secret reference, before `put`
+    /// stores its value (spec 0007, spec 0011). The reference must be
+    /// `local:instance/<id>/<purpose>` of the operation's instance or of
+    /// one it made with [`new_instance_id`](Self::new_instance_id). Before
+    /// the record, a probe of the secret store must find no item; a record
+    /// the operation holds already is returned as it is. Compensation
+    /// deletes the reference through the `secret_ref` compensator.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkError::Engine`] outside a step, for a reference of
+    /// another instance, or when the commit fails, and [`WorkError::Failed`]
+    /// with `secret.conflict` when the store holds an item already, or with
+    /// the store's error when the probe fails. Neither failure records
+    /// anything.
+    pub async fn record_secret_intent(
+        &mut self,
+        reference: SecretRef,
+    ) -> Result<CreatedHandle, WorkError> {
+        self.healthy()?;
+        self.open_step("an item is recorded only inside a step")?;
+        let item = CreatedItem::SecretRef(reference.clone());
+        let owner = reference
+            .is_instance_reference()
+            .then(|| reference.segments().nth(1))
+            .flatten()
+            .and_then(|id| id.parse::<InstanceId>().ok());
+        let (recorded, claimed) = {
+            let record = self.handle.record.lock().await;
+            let recorded = record
+                .created
+                .iter()
+                .find(|created| created.item() == &item)
+                .map(CreatedRecord::seq);
+            let claimed = owner.is_some_and(|id| {
+                self.resource == OperationResource::Instance(id)
+                    || record
+                        .created
+                        .iter()
+                        .any(|created| created.item() == &CreatedItem::InstanceTree(id))
+            });
+            (recorded, claimed)
+        };
+        if let Some(seq) = recorded {
+            return Ok(CreatedHandle { seq });
+        }
+        if !claimed {
+            return Err(WorkError::Engine(EngineError::InvalidUse {
+                reason: "a secret intent names a reference of an instance the operation made",
+            }));
+        }
+        let platform = Arc::clone(&self.inner.deps.platform);
+        let probed = {
+            let reference = reference.clone();
+            tokio::task::spawn_blocking(move || platform.secrets().probe(&reference))
+                .await
+                .map_err(|_| {
+                    WorkError::Engine(EngineError::Internal {
+                        reason: "the secret store probe task stopped",
+                    })
+                })?
+        };
+        match probed {
+            Ok(SecretPresence::Missing) => self.intend(item, None).await,
+            Ok(SecretPresence::Present) => {
+                Err(WorkError::Failed(Box::new(SecretError::Conflict {
+                    reference,
+                    reason: ConflictReason::AlreadyExists,
+                })))
+            }
+            Err(error) => Err(WorkError::Failed(Box::new(SecretError::Store(error)))),
+        }
+    }
 
     /// Records the intent to create a custom item that `compensator`
     /// undoes, with what it needs to prove ownership.

@@ -184,13 +184,27 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
         "secret_references",
         &[
             ("id", "TEXT", true, 1),
-            ("store_key", "TEXT", true, 0),
-            ("scope", "TEXT", true, 0),
+            ("reference", "TEXT", true, 0),
+            ("platform_store_key", "TEXT", true, 0),
+            ("owner_kind", "TEXT", true, 0),
+            ("owner_id", "TEXT", false, 0),
             ("purpose", "TEXT", true, 0),
+            ("value_origin", "TEXT", false, 0),
             ("status", "TEXT", true, 0),
+            ("status_observed_at", "TEXT", false, 0),
+            ("value_updated_at", "TEXT", false, 0),
             ("revision", "INTEGER", true, 0),
             ("created_at", "TEXT", true, 0),
             ("updated_at", "TEXT", true, 0),
+        ],
+    ),
+    (
+        "secret_reference_uses",
+        &[
+            ("reference_id", "TEXT", true, 1),
+            ("resource_kind", "TEXT", true, 2),
+            ("resource_id", "TEXT", true, 3),
+            ("field", "TEXT", true, 4),
         ],
     ),
     (
@@ -402,7 +416,7 @@ const PRD_FIELD_MAP: &[(&str, &str, &[&str])] = &[
     ("instance_endpoints", "requested_mode", &["port_request"]),
     ("config_revisions", "values", &["config_values"]),
     ("config_revisions", "rendered_digest", &["rendered_sha256"]),
-    ("secret_references", "platform_store_key", &["store_key"]),
+    ("secret_references", "scope", &["owner_kind", "owner_id"]),
     ("environments", "manifest_digest", &["manifest_sha256"]),
     ("environments", "lock_digest", &["lock_sha256"]),
     ("environments", "last_operation", &["last_operation_id"]),
@@ -494,7 +508,7 @@ fn every_table_and_column_matches_the_data_model() {
         .unwrap();
     let expected: BTreeSet<String> = DATA_MODEL.iter().map(|(t, _)| (*t).to_owned()).collect();
     assert_eq!(tables, expected);
-    assert_eq!(tables.len(), 24);
+    assert_eq!(tables.len(), 25);
     for (table, expected_columns) in DATA_MODEL {
         let actual: Vec<_> = columns(&conn, table)
             .into_iter()
@@ -772,22 +786,29 @@ fn secret_references_hold_only_reference_columns_and_no_table_has_a_secret_value
     harness.create();
     let conn = harness.connect();
 
-    let names: Vec<String> = columns(&conn, "secret_references")
-        .into_iter()
-        .map(|c| c.0)
-        .collect();
+    let names =
+        |table: &str| -> Vec<String> { columns(&conn, table).into_iter().map(|c| c.0).collect() };
     assert_eq!(
-        names,
+        names("secret_references"),
         [
             "id",
-            "store_key",
-            "scope",
+            "reference",
+            "platform_store_key",
+            "owner_kind",
+            "owner_id",
             "purpose",
+            "value_origin",
             "status",
+            "status_observed_at",
+            "value_updated_at",
             "revision",
             "created_at",
             "updated_at"
         ]
+    );
+    assert_eq!(
+        names("secret_reference_uses"),
+        ["reference_id", "resource_kind", "resource_id", "field"]
     );
     for (table, columns) in DATA_MODEL {
         for (column, _, _, _) in *columns {
@@ -799,4 +820,111 @@ fn secret_references_hold_only_reference_columns_and_no_table_has_a_secret_value
             }
         }
     }
+}
+
+const REFERENCE_ID: &str = "0199f000-0000-7000-8000-000000000060";
+const OWNER_ID: &str = "0199f000-0000-7000-8000-000000000030";
+
+fn insert_reference(conn: &Connection, owner_kind: &str, owner_id: Option<&str>) {
+    conn.execute(
+        "INSERT INTO secret_references (id, reference, platform_store_key, owner_kind, owner_id, \
+         purpose, status, revision, created_at, updated_at) VALUES (?1, 'local:erp/admin', \
+         'fake:stackly-secret/erp/admin', ?2, ?3, 'admin', 'missing', 1, ?4, ?4)",
+        (REFERENCE_ID, owner_kind, owner_id, TS),
+    )
+    .map(drop)
+    .unwrap_or_else(|err| panic!("insert a {owner_kind} owned reference: {err}"));
+}
+
+#[test]
+fn a_secret_reference_owner_is_fixed_except_the_move_to_the_user() {
+    let ev = evidence!(
+        covers = ["BR-018"],
+        kind = Kind::Fixture,
+        expected = "the secret_references_owner_fixed trigger rejects an owner change other \
+                    than the move to the user, the owner check ties owner_id to the owner kind, \
+                    and a used reference cannot be deleted raw",
+    );
+    let harness = Harness::new();
+    harness.create();
+    let conn = writer(&harness);
+    for (kind, id) in [("user", Some(OWNER_ID)), ("instance", None)] {
+        let err = conn
+            .execute(
+                "INSERT INTO secret_references (id, reference, platform_store_key, owner_kind, \
+                 owner_id, purpose, status, revision, created_at, updated_at) VALUES \
+                 ('0199f000-0000-7000-8000-000000000061', 'local:erp/other', 'k', ?1, ?2, \
+                 'user', 'missing', 1, ?3, ?3)",
+                (kind, id, TS),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "{kind}: {err}"
+        );
+    }
+    insert_reference(&conn, "instance", Some(OWNER_ID));
+
+    for update in [
+        "UPDATE secret_references SET owner_kind = 'environment'",
+        "UPDATE secret_references SET owner_id = '0199f000-0000-7000-8000-000000000031'",
+        "UPDATE secret_references SET owner_kind = 'user'",
+    ] {
+        let err = conn.execute(update, []).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("the owner of a secret reference is fixed")
+                || err.to_string().contains("CHECK constraint failed"),
+            "{update}: {err}"
+        );
+    }
+    conn.execute(
+        "UPDATE secret_references SET status = 'present', revision = 2",
+        [],
+    )
+    .expect("the value columns may change");
+    conn.execute(
+        "UPDATE secret_references SET owner_kind = 'user', owner_id = NULL",
+        [],
+    )
+    .expect("the owner may move to the user");
+    let err = conn
+        .execute(
+            "UPDATE secret_references SET owner_kind = 'instance', owner_id = ?1",
+            [OWNER_ID],
+        )
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("the owner of a secret reference is fixed"),
+        "{err}"
+    );
+
+    conn.execute(
+        "INSERT INTO secret_reference_uses (reference_id, resource_kind, resource_id, field) \
+         VALUES (?1, 'instance', ?2, 'adminPassword')",
+        (REFERENCE_ID, OWNER_ID),
+    )
+    .unwrap();
+    for (kind, field) in [("runtime", "adminPassword"), ("instance", "Admin")] {
+        let err = conn
+            .execute(
+                "INSERT INTO secret_reference_uses (reference_id, resource_kind, resource_id, \
+                 field) VALUES (?1, ?2, ?3, ?4)",
+                (REFERENCE_ID, kind, OWNER_ID, field),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "{kind} {field}: {err}"
+        );
+    }
+    let err = conn
+        .execute("DELETE FROM secret_references", [])
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("FOREIGN KEY constraint failed"),
+        "{err}"
+    );
+    ev.pass();
 }

@@ -155,6 +155,20 @@ pub enum ValueKind {
     /// The text form of a
     /// [`ProviderRevisionKey`](crate::ProviderRevisionKey).
     ProviderRevisionKey,
+    /// A [`SecretFieldName`](crate::SecretFieldName).
+    SecretFieldName,
+    /// An [`AuditAction`](crate::AuditAction).
+    AuditAction,
+    /// A [`PlatformStoreKey`](crate::PlatformStoreKey).
+    PlatformStoreKey,
+    /// An [`AuditActor`](crate::AuditActor).
+    AuditActor,
+    /// An [`AuditResult`](crate::AuditResult).
+    AuditResult,
+    /// An [`AuditResource`](crate::AuditResource).
+    AuditResource,
+    /// A [`SecretUser`](crate::SecretUser).
+    SecretUser,
 }
 
 impl ValueKind {
@@ -232,6 +246,13 @@ impl ValueKind {
             Self::SecretOrigin => "secret origin",
             Self::NeedsSecretReason => "needs secret reason",
             Self::ProviderRevisionKey => "provider revision key",
+            Self::SecretFieldName => "secret field name",
+            Self::AuditAction => "audit action",
+            Self::PlatformStoreKey => "platform store key",
+            Self::AuditActor => "audit actor",
+            Self::AuditResult => "audit result",
+            Self::AuditResource => "audit resource",
+            Self::SecretUser => "secret user",
         }
     }
 }

@@ -6,6 +6,7 @@ mod journal;
 mod prune;
 mod races;
 mod reads;
+mod secrets;
 mod writes;
 
 use std::fmt::{Debug, Display};
@@ -33,8 +34,10 @@ use crate::FakeClock;
 /// aggregate and state code, operation pages, the operation journal tables
 /// of spec 0007 (round trips, the check order of the journal ops and of
 /// `IdempotencyKeyTaken`, upserts that keep their children, unique rules,
-/// the four journal reads, and prune with cascade), retention, and three
-/// races of 16 threads (same name, same artifact, same revision).
+/// the four journal reads, and prune with cascade), the secret reference,
+/// use, and audit ops and reads of feature 11 (spec 0005 "Tambahan fitur
+/// 11"), retention, and three races of 16 threads (same name, same
+/// artifact, same revision).
 ///
 /// # What the caller provides
 ///
@@ -87,7 +90,7 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     reads::stored_paths(&suite);
     reads::runtime_references(&suite);
     reads::operation_pages(&suite);
-    reads::seeding(&suite);
+    secrets::secrets(&suite);
     journal::journal(&suite);
     races::races(&suite);
     prune::prune(&suite);

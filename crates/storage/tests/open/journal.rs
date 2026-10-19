@@ -58,16 +58,22 @@ fn migrating_v1_keeps_the_newest_key_and_backfills_a_journal_per_operation() {
     let harness = Harness::new();
     harness.load_fixture(&fixture(1));
     insert_duplicates(&harness.connect());
+    // Migration 3 drops the version 1 secret_references rows on purpose
+    // (spec 0005 "Tambahan fitur 11"); every other table keeps its rows.
+    let kept = |table: &str| table != "schema_migrations" && !table.starts_with("secret_");
     let mut before = row_counts(&harness.connect());
-    before.retain(|(table, _)| table != "schema_migrations");
+    before.retain(|(table, _)| kept(table));
 
     let (registry, summary) = ready(harness.open());
 
     assert_eq!(summary.migrated_from, Some(1));
-    assert_eq!(summary.schema_version, 2);
+    assert_eq!(
+        summary.schema_version,
+        stackly_storage::MigrationSet::builtin().latest()
+    );
     let conn = harness.connect();
     let mut after = row_counts(&conn);
-    after.retain(|(table, _)| table != "schema_migrations" && !table.starts_with("operation_"));
+    after.retain(|(table, _)| kept(table) && !table.starts_with("operation_"));
     assert_eq!(after, before, "the version 1 data survives");
 
     let stored = keys(&conn);

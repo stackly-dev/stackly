@@ -1,7 +1,10 @@
 //! Writes: a batch of ops applied in one transaction, the registry's
 //! generation, and what a commit returns.
 
+use std::collections::BTreeMap;
 use std::fmt;
+
+use jiff::Timestamp;
 
 use crate::environment::Environment;
 use crate::id::OperationId;
@@ -10,8 +13,16 @@ use crate::lease::Lease;
 use crate::operation::{CreatedRecord, JournalStep, LockKey, Operation, OperationJournal};
 use crate::registry::error::{RegistryError, ResourceRef};
 use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord};
+use crate::registry::secret::{
+    AuditEventRecord, PlatformStoreKey, SecretFieldName, SecretReferenceRecord, SecretUser,
+};
 use crate::runtime::{InstallMode, Runtime};
+use crate::secret::{SecretRef, SecretStatus};
 use crate::value::ResourceRevision;
+
+/// The lowest revision a restored secret reference row carries: a row that
+/// was deleted had at least revision 1, and the restore raises it by 1.
+const RESTORED_MIN: ResourceRevision = ResourceRevision::INITIAL.next();
 
 /// The registry's generation: 0 when it is created, raised by exactly 1 by
 /// every successful commit, whatever the commit holds. Every read returns
@@ -180,6 +191,58 @@ pub enum WriteOp {
         /// The operation.
         operation: OperationId,
     },
+    /// Records a secret reference row at revision 1 (spec 0011). Fails with
+    /// `DuplicateResource` when its ID or reference exists. The owner is not
+    /// checked: create instance records the reference before the instance.
+    InsertSecretReference(SecretReferenceRecord),
+    /// Rewrites the value columns of the row with `record.reference`: the
+    /// store key, value origin, status, observation and value times,
+    /// revision, and `updated_at`. The ID, owner, purpose, and `created_at`
+    /// stay as stored. Fails with `NotFound` or `RevisionConflict`.
+    UpdateSecretReference {
+        /// The row after the change, at `expected + 1`.
+        record: SecretReferenceRecord,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+    },
+    /// Records what a probe of the store saw: the status, when, and the
+    /// store key, and nothing else. The revision and `updated_at` stay, and
+    /// the commit returns no revision for it. Fails with `NotFound`.
+    ObserveSecretReference {
+        /// The reference.
+        reference: SecretRef,
+        /// What the store showed.
+        status: SecretStatus,
+        /// When.
+        status_observed_at: Timestamp,
+        /// The store key the probe used.
+        platform_store_key: PlatformStoreKey,
+    },
+    /// Deletes a reference row. Fails with `NotFound`, `RevisionConflict`,
+    /// and then `ReferenceInUse` while any resource uses it.
+    DeleteSecretReference {
+        /// The reference.
+        reference: SecretRef,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+    },
+    /// Records again a row that was just deleted, after the store failed
+    /// to delete its item (spec 0011 *Hapus* step 4). Checked like
+    /// [`WriteOp::InsertSecretReference`], except that the revision is at
+    /// least 2.
+    RestoreSecretReference(SecretReferenceRecord),
+    /// Replaces every use by `user` with one use per entry; an empty map
+    /// deletes them all. Fails with `MissingReference` when the user or a
+    /// reference does not exist (an earlier op of the same batch counts).
+    ReplaceSecretUses {
+        /// The resource.
+        user: SecretUser,
+        /// The reference each field uses.
+        uses: BTreeMap<SecretFieldName, SecretRef>,
+    },
+    /// Records an audit row. Fails with `DuplicateResource` when its ID
+    /// exists; the resource is not checked, so history outlives it.
+    InsertAuditEvent(AuditEventRecord),
 }
 
 impl WriteOp {
@@ -211,6 +274,20 @@ impl WriteOp {
             | Self::UpsertCreated { operation, .. }
             | Self::InsertLocks { operation, .. }
             | Self::DeleteLocks { operation } => ResourceRef::Operation(*operation),
+            Self::InsertSecretReference(record)
+            | Self::UpdateSecretReference { record, .. }
+            | Self::RestoreSecretReference(record) => {
+                ResourceRef::SecretReference(record.reference.clone())
+            }
+            Self::ObserveSecretReference { reference, .. }
+            | Self::DeleteSecretReference { reference, .. } => {
+                ResourceRef::SecretReference(reference.clone())
+            }
+            Self::ReplaceSecretUses { user, .. } => match user {
+                SecretUser::Instance(id) => ResourceRef::Instance(*id),
+                SecretUser::Environment(id) => ResourceRef::Environment(*id),
+            },
+            Self::InsertAuditEvent(record) => ResourceRef::AuditEvent(record.id),
         }
     }
 
@@ -231,8 +308,8 @@ impl WriteOp {
     }
 
     /// Returns the revision of the aggregate the op writes, for the ops on
-    /// an aggregate that has one: runtime, instance, environment, and
-    /// operation. A commit returns these.
+    /// an aggregate that has one: runtime, instance, environment,
+    /// operation, and secret reference. A commit returns these.
     #[must_use]
     pub fn revision(&self) -> Option<ResourceRevision> {
         match self {
@@ -248,6 +325,9 @@ impl WriteOp {
             Self::InsertOperation(operation) | Self::UpdateOperation { operation, .. } => {
                 Some(operation.revision())
             }
+            Self::InsertSecretReference(record)
+            | Self::UpdateSecretReference { record, .. }
+            | Self::RestoreSecretReference(record) => Some(record.revision),
             Self::InsertProviderRevision(_)
             | Self::InsertArtifact(_)
             | Self::InsertLease(_)
@@ -257,7 +337,11 @@ impl WriteOp {
             | Self::UpsertStep { .. }
             | Self::UpsertCreated { .. }
             | Self::InsertLocks { .. }
-            | Self::DeleteLocks { .. } => None,
+            | Self::DeleteLocks { .. }
+            | Self::ObserveSecretReference { .. }
+            | Self::DeleteSecretReference { .. }
+            | Self::ReplaceSecretUses { .. }
+            | Self::InsertAuditEvent(_) => None,
         }
     }
 
@@ -268,23 +352,33 @@ impl WriteOp {
             Self::UpdateRuntime { expected, .. }
             | Self::UpdateInstance { expected, .. }
             | Self::UpdateEnvironment { expected, .. }
-            | Self::UpdateOperation { expected, .. } => Some(*expected),
+            | Self::UpdateOperation { expected, .. }
+            | Self::UpdateSecretReference { expected, .. } => Some(*expected),
             _ => None,
         }
     }
 
     /// Checks the shape of the values, the first step of every op in a
     /// commit, before anything is read: the aggregate's revision (1 for an
-    /// insert, `expected + 1` for an update), then every path to store
-    /// being UTF-8, lock keys included. Fakes and the SQLite registry both
-    /// call it, so they fail the same way.
+    /// insert, `expected + 1` for an update, at least 2 for a restored
+    /// secret reference), then every path to store being UTF-8, lock keys
+    /// included. Fakes and the SQLite registry both call it, so they fail
+    /// the same way.
     ///
     /// # Errors
     ///
     /// Returns [`RegistryError::InvalidRevision`] or
     /// [`RegistryError::NotUtf8Path`].
     pub fn check_shape(&self) -> Result<(), RegistryError> {
-        if let Some(actual) = self.revision() {
+        if let Self::RestoreSecretReference(record) = self {
+            if record.revision < RESTORED_MIN {
+                return Err(RegistryError::InvalidRevision {
+                    resource: self.resource(),
+                    expected: RESTORED_MIN,
+                    actual: record.revision,
+                });
+            }
+        } else if let Some(actual) = self.revision() {
             let expected = self
                 .expected()
                 .map_or(ResourceRevision::INITIAL, ResourceRevision::next);

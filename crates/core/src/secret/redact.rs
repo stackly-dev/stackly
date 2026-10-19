@@ -82,6 +82,23 @@ struct Known {
     first_bytes: [bool; 256],
 }
 
+/// Returns a second value equal to `value`, wiped from memory when it
+/// drops like the first. The redactor keeps such a copy of every value it
+/// learns, and the secret worker keeps one for a write it runs after its
+/// caller may have stopped waiting. These two copies and
+/// [`char_count`] are the only places outside matching and delivery that
+/// read a value.
+pub(crate) fn copy_value(value: &SecretValue) -> SecretValue {
+    SecretValue::new(value.expose().to_owned())
+        .expect("a secret value stays valid when it is copied")
+}
+
+/// Returns the number of Unicode characters of `value`, which the
+/// `minLength` and `maxLength` of a secret field count (spec 0009).
+pub(crate) fn char_count(value: &SecretValue) -> usize {
+    value.expose().chars().count()
+}
+
 impl Redactor {
     /// Returns a redactor that knows no value yet.
     #[must_use]
@@ -108,9 +125,7 @@ impl Redactor {
         if known.values.iter().any(|seen| seen.expose() == text) {
             return;
         }
-        let Ok(copy) = SecretValue::new(text.to_owned()) else {
-            return;
-        };
+        let copy = copy_value(value);
         if let Some(&first) = text.as_bytes().first() {
             known.first_bytes[usize::from(first)] = true;
         }

@@ -19,7 +19,7 @@ use stackly_platform::{DirectoryLayout, RootSet, instance_path_entries};
 use super::{Stack, Suite, domain, expect, expect_eq, fail, fresh_root, parse, shifted, suffix};
 use crate::registry::{
     BackupSeed, EnvironmentBuilder, LeaseBuilder, OperationBuilder, ProviderRevisionBuilder,
-    RuntimeBuilder, SecretReferenceSeed,
+    RuntimeBuilder,
 };
 
 /// Every aggregate and every state code reads back as written, except
@@ -800,19 +800,4 @@ pub(super) fn operation_pages(suite: &Suite<'_>) {
             ),
         }
     }
-}
-
-/// Seeding a secret reference works and leaves the generation; the row
-/// holds a reference, never a value (BR-018).
-pub(super) fn seeding(suite: &Suite<'_>) {
-    let before = suite.generation();
-    suite.seed.seed_secret_reference(SecretReferenceSeed::new(
-        format!("stackly/conformance/{}", OperationId::generate()),
-        suite.loaded_at,
-    ));
-    expect_eq(
-        "seeding a secret reference leaves the generation",
-        suite.generation(),
-        before,
-    );
 }

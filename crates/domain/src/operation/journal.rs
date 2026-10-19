@@ -15,6 +15,7 @@ use crate::error::{
 };
 use crate::id::{EnvironmentId, InstanceId, OperationId};
 use crate::operation::lock::LockKey;
+use crate::secret::SecretRef;
 use crate::value::{
     ClientCode, CompensatorName, CustomItemKey, DetailKey, ErrorCodeName, MethodName, ReasonCode,
     ResourceRevision, Sha256Digest, StageName,
@@ -886,8 +887,8 @@ impl JournalStep {
 /// path.
 ///
 /// Its stored form is a kind (`instance_tree`, `environment_tree`,
-/// `custom`) and a reference: the ID, or `<compensator>:<key>`. Feature 11
-/// adds `SecretRef` with its reference type, stored as `secret_ref`.
+/// `secret_ref`, `custom`) and a reference: the ID, the reference text, or
+/// `<compensator>:<key>`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum CreatedItem {
@@ -895,6 +896,9 @@ pub enum CreatedItem {
     InstanceTree(InstanceId),
     /// An environment's folder, by its ID.
     EnvironmentTree(EnvironmentId),
+    /// A secret reference and the store item behind it (spec 0011), which
+    /// the `secret_ref` compensator the daemon registers removes.
+    SecretRef(SecretRef),
     /// Anything a feature's own compensator undoes, by its key.
     Custom {
         /// The compensator that undoes it.
@@ -911,16 +915,19 @@ impl CreatedItem {
         match self {
             Self::InstanceTree(_) => "instance_tree",
             Self::EnvironmentTree(_) => "environment_tree",
+            Self::SecretRef(_) => "secret_ref",
             Self::Custom { .. } => "custom",
         }
     }
 
-    /// Returns the stored reference: the ID, or `<compensator>:<key>`.
+    /// Returns the stored reference: the ID, the reference text, or
+    /// `<compensator>:<key>`.
     #[must_use]
     pub fn item_ref(&self) -> String {
         match self {
             Self::InstanceTree(id) => id.to_string(),
             Self::EnvironmentTree(id) => id.to_string(),
+            Self::SecretRef(reference) => reference.to_string(),
             Self::Custom { compensator, key } => format!("{compensator}:{key}"),
         }
     }
@@ -942,6 +949,9 @@ impl CreatedItem {
             "instance_tree" => Ok(Self::InstanceTree(item_ref.parse().map_err(|_| invalid())?)),
             "environment_tree" => Ok(Self::EnvironmentTree(
                 item_ref.parse().map_err(|_| invalid())?,
+            )),
+            "secret_ref" => Ok(Self::SecretRef(
+                SecretRef::parse(item_ref).map_err(|_| invalid())?,
             )),
             "custom" => {
                 let (compensator, key) = item_ref.split_once(':').ok_or_else(invalid)?;
@@ -1492,6 +1502,10 @@ mod tests {
                 compensator: "supervisor_spawned_process".parse().unwrap(),
                 key: "pid:4242:start:1767225600".parse().unwrap(),
             },
+            CreatedItem::SecretRef(
+                SecretRef::parse("local:instance/0199f000-0000-7000-8000-000000000030/admin")
+                    .unwrap(),
+            ),
         ];
 
         for item in items {

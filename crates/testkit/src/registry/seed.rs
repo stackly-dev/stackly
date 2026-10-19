@@ -2,7 +2,6 @@
 
 use jiff::Timestamp;
 use stackly_domain::{BackupId, InstanceId, RuntimeId};
-use uuid::Uuid;
 
 /// Writes rows into registry tables that have no
 /// [`WriteOp`](stackly_domain::WriteOp) yet, so tests can set up what reads
@@ -20,16 +19,14 @@ pub trait RegistrySeed {
     fn seed_backup(&self, backup: BackupSeed);
 
     /// Writes `count` `audit_events` rows, each with a new ID and
-    /// `occurred_at` set to `at`.
+    /// `occurred_at` set to `at`: actor `daemon`, action `test.seed`, result
+    /// `succeeded`, and details `{}`, so the audit read gives the same rows
+    /// on every registry.
     fn seed_audit_events(&self, count: u32, at: Timestamp);
 
     /// Writes `count` `process_observations` rows for `instance`, each
     /// observed at `at`.
     fn seed_observations(&self, instance: InstanceId, count: u32, at: Timestamp);
-
-    /// Writes one `secret_references` row. It holds a reference, never a
-    /// secret value (BR-018).
-    fn seed_secret_reference(&self, reference: SecretReferenceSeed);
 }
 
 /// One `backups` row to seed (the table belongs to feature 49).
@@ -76,37 +73,5 @@ impl BackupSeed {
     pub const fn with_runtime(mut self, runtime: RuntimeId) -> Self {
         self.runtime_id = Some(runtime);
         self
-    }
-}
-
-/// One `secret_references` row to seed: a reference into the platform
-/// secret store, never the secret itself (spec 0011 owns the format).
-///
-/// A seeding implementation fills the remaining required columns with
-/// fixed valid values.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct SecretReferenceSeed {
-    /// The reference's ID, a UUID version 7.
-    pub id: Uuid,
-    /// The opaque key of the entry in the platform secret store.
-    pub store_key: String,
-    /// What the secret is for, a snake_case code.
-    pub purpose: String,
-    /// When the reference was created.
-    pub created_at: Timestamp,
-}
-
-impl SecretReferenceSeed {
-    /// A reference with a new ID to the store entry `store_key`, purpose
-    /// `password`, created at `created_at`.
-    #[must_use]
-    pub fn new(store_key: impl Into<String>, created_at: Timestamp) -> Self {
-        Self {
-            id: Uuid::now_v7(),
-            store_key: store_key.into(),
-            purpose: "password".to_owned(),
-            created_at,
-        }
     }
 }
