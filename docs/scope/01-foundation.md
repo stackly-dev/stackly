@@ -181,7 +181,7 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 - [x] Verify it: `/check verify provider engine & manifest schema`
 - [x] Test it: `/test provider engine & manifest schema`
 - [x] Review it (fresh model): `/check review provider engine & manifest schema`
-- [ ] Document it: `/document provider engine & manifest schema`
+- [x] Document it: `/document provider engine & manifest schema`
 
 ### 10. Process supervisor · in-progress · GA
 
