@@ -122,6 +122,13 @@ impl Fake {
         assert!(status.success(), "kill -s {name} failed with {status}");
     }
 
+    /// Closes the read end of every pipe left unread, so each later write
+    /// to it fails. Tests close a pipe this way once the server listens, so
+    /// a bind conflict at startup is still seen and retried.
+    fn close_unread(&mut self) {
+        self.unread = (None, None);
+    }
+
     /// Waits for the process to exit, then returns its status and output.
     fn finish(mut self) -> Finished {
         let started = Instant::now();
@@ -139,17 +146,27 @@ impl Fake {
             );
             thread::sleep(POLL);
         };
-        // A pipe that was closed or left unread has no collected output.
+        // A closed pipe has no output; a pipe left unread is read now that
+        // the process is gone, so a startup failure still shows its message.
         let join = |handle: Option<JoinHandle<String>>| {
             handle
                 .map(|handle| handle.join().expect("the output reader does not panic"))
                 .unwrap_or_default()
         };
-        self.unread = (None, None);
+        let drain = |pipe: Option<&mut dyn Read>| {
+            let mut text = String::new();
+            if let Some(pipe) = pipe {
+                let _ = pipe.read_to_string(&mut text);
+            }
+            text
+        };
+        let (mut held_stdout, mut held_stderr) = std::mem::take(&mut self.unread);
+        let held_stdout = drain(held_stdout.as_mut().map(|pipe| pipe as &mut dyn Read));
+        let held_stderr = drain(held_stderr.as_mut().map(|pipe| pipe as &mut dyn Read));
         Finished {
             status,
-            stdout: join(self.stdout.take()),
-            stderr: join(self.stderr.take()),
+            stdout: join(self.stdout.take()) + &held_stdout,
+            stderr: join(self.stderr.take()) + &held_stderr,
         }
     }
 }
@@ -699,11 +716,13 @@ fn sigterm_exits_zero_while_nothing_drains_a_full_stdout_and_stderr() {
 fn a_crash_exits_with_its_code_when_stderr_is_closed() {
     let mut setup = Setup::new();
 
-    let fake = setup.serve_piped(
-        &["--crash-after-ms=300", "--crash-exit-code=42"],
+    let mut fake = setup.serve_piped(
+        &["--crash-after-ms=1500", "--crash-exit-code=42"],
         Pipe::Collected,
-        Pipe::Closed,
+        Pipe::Unread,
     );
+
+    fake.close_unread();
     let finished = fake.finish();
 
     assert_eq!(finished.status.code(), Some(42), "{finished:?}");
@@ -712,7 +731,8 @@ fn a_crash_exits_with_its_code_when_stderr_is_closed() {
 #[test]
 fn notes_on_closed_streams_never_stop_the_signal_watcher() {
     let mut setup = Setup::new();
-    let mut fake = setup.serve_piped(&["--ignore-term=true"], Pipe::Closed, Pipe::Closed);
+    let mut fake = setup.serve_piped(&["--ignore-term=true"], Pipe::Unread, Pipe::Unread);
+    fake.close_unread();
 
     fake.signal("HUP");
     fake.signal("TERM");

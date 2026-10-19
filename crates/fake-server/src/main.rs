@@ -40,6 +40,7 @@ mod shutdown;
 
 use std::fmt;
 use std::fs;
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -89,7 +90,9 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => {
-            eprintln!("stackly-fake-server: {failure}");
+            // A closed stderr must not turn the documented exit code into a
+            // panic.
+            let _ = writeln!(io::stderr(), "stackly-fake-server: {failure}");
             ExitCode::from(failure.exit_code())
         }
     }
