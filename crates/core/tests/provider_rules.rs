@@ -241,6 +241,61 @@ fn unknown_security_fields_are_rejected_with_their_path() {
 }
 
 #[test]
+fn standard_yaml_tags_give_the_untagged_value_and_still_meet_the_typed_decode() {
+    let ev = evidence!(
+        covers = ["VAL-018"],
+        kind = Kind::Fixture,
+        expected = "standard !! and verbatim yaml tags give the same value as the untagged scalar and still pass the typed decode, so !!str on a port is rejected, while a local tag stays rejected",
+    );
+    let yaml = "provider.yaml";
+    let plain = Edit::fake().validate().expect("fake validates");
+    let port = |package: &ValidatedPackage| {
+        package
+            .endpoints()
+            .next()
+            .and_then(|endpoint| endpoint.default_port())
+            .map(Port::get)
+    };
+
+    for tagged in [
+        "displayName: !!str Fake Provider",
+        "displayName: !<tag:yaml.org,2002:str> Fake Provider",
+    ] {
+        let package = Edit::fake()
+            .replace(yaml, "displayName: Fake Provider", tagged)
+            .validate()
+            .unwrap_or_else(|err| panic!("{tagged}: {:#?}", err.issues));
+        assert_eq!(package.manifest().display_name(), "Fake Provider");
+        assert_eq!(
+            package.manifest().display_name(),
+            plain.manifest().display_name()
+        );
+    }
+    let int = Edit::fake()
+        .replace(yaml, "defaultPort: 18080", "defaultPort: !!int \"18080\"")
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    assert_eq!(port(&int), Some(18080));
+    assert_eq!(port(&int), port(&plain));
+
+    assert_manifest_issue(
+        Edit::fake().replace(yaml, "defaultPort: 18080", "defaultPort: !!str 18080"),
+        "resources.endpoints.http.defaultPort",
+        IssueCode::InvalidValue,
+    );
+    assert_manifest_issue(
+        Edit::fake().replace(
+            yaml,
+            "displayName: Fake Provider",
+            "displayName: !custom Fake Provider",
+        ),
+        "metadata.displayName",
+        IssueCode::InvalidValue,
+    );
+    ev.pass();
+}
+
+#[test]
 fn another_api_version_or_kind_stops_before_the_rest_is_read() {
     let ev = evidence!(
         covers = ["VAL-018"],
@@ -992,6 +1047,35 @@ fn patterns_always_match_the_whole_value() {
 }
 
 #[test]
+fn a_pattern_that_compiles_only_inside_the_whole_value_wrapper_is_rejected() {
+    // Wrapped as `\A(?:a)|(b)\z`, this would accept any text that starts
+    // with a or ends with b.
+    assert_issue(
+        &Edit::fake()
+            .replace(
+                "schemas/settings.schema.json",
+                "\"maxLength\": 256,\n      \"default\": \"fake\",",
+                "\"maxLength\": 256,\n      \"pattern\": \"a)|(b\",\n      \"default\": \"abc\",",
+            )
+            .issues(),
+        "settings.schema.json",
+        "properties.label.pattern",
+        IssueCode::SettingsSchemaRule,
+    );
+    // Wrapped, it compiles with exactly the one capture group a data
+    // marker needs.
+    assert_manifest_issue(
+        Edit::fake().replace(
+            "provider.yaml",
+            "pattern: \"([0-9]+\\\\.[0-9]+)\"",
+            "pattern: \"0)|([0-9]+\\\\.[0-9]+\"",
+        ),
+        "compatibility.dataMarker.pattern",
+        IssueCode::InvalidValue,
+    );
+}
+
+#[test]
 fn settings_fields_carry_their_val_012_classes() {
     let ev = evidence!(
         covers = ["VAL-012"],
@@ -1610,6 +1694,76 @@ fn a_working_folder_that_is_not_utf8_fails_the_run_plan() {
 }
 
 #[test]
+fn every_plan_fails_for_a_folder_it_uses_that_is_not_utf8() {
+    let package = Edit::fake_command()
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let settings = serde_json::json!({ "authToken": SECRET_REF });
+    // fake-command's initialize and start use all five folders (the run
+    // folder through its socket and `${instance.secrets}`); its reload
+    // renders a config and runs a command in the data folder.
+    let reload_uses = ["data", "config", "temp"];
+
+    for folder in ["data", "config", "logs", "temp", "run"] {
+        let mut context = context_for(&package, settings.clone(), "/Volumes/T");
+        let path = PathBuf::from(OsStr::from_bytes(
+            &[b"/Volumes/T/\xff/".as_slice(), folder.as_bytes()].concat(),
+        ));
+        let paths = &mut context.paths;
+        match folder {
+            "data" => paths.data = path,
+            "config" => paths.config = path,
+            "logs" => paths.logs = path,
+            "temp" => paths.temp = path,
+            _ => paths.run = path,
+        }
+        let expected = PlanError::PathNotUtf8 {
+            position: format!("instance.{folder}"),
+        };
+
+        assert_eq!(package.init_plan(&context).unwrap_err(), expected);
+        assert_eq!(package.run_plan(&context).unwrap_err(), expected);
+        if reload_uses.contains(&folder) {
+            assert_eq!(package.reload_plan(&context).unwrap_err(), expected);
+        } else {
+            assert!(
+                package.reload_plan(&context).is_ok(),
+                "the reload plan holds no path from {folder}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_package_without_config_files_renders_nothing_before_the_spawn() {
+    let yaml = "provider.yaml";
+    let package = Edit::fake()
+        .replace(
+            yaml,
+            "configFiles:\n  fakeConfig:\n    template: templates/fake.json.tmpl\n    format: json\n    destination: \"${instance.config}/fake.json\"\n    sensitive: true\n",
+            "",
+        )
+        .replace(yaml, "    - { primitive: renderConfig, file: fakeConfig }\n", "")
+        .replace(yaml, "render: [fakeConfig]", "render: []")
+        .remove("templates/fake.json.tmpl")
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/T",
+    );
+
+    let run = package.run_plan(&context).expect("the run plan builds");
+    let reload = package
+        .reload_plan(&context)
+        .expect("the reload plan builds");
+
+    assert!(run.render.is_empty(), "{:#?}", run.render);
+    assert!(reload.steps.is_empty(), "{:#?}", reload.steps);
+}
+
+#[test]
 fn issues_name_their_location_kind() {
     let issues = Edit::fake()
         .replace(
@@ -1663,6 +1817,57 @@ fn a_256_kib_manifest_of_nested_aliases_is_rejected_within_two_seconds() {
         "{issues:#?}"
     );
     ev.pass_with(&format!("rejected with yaml_syntax in {elapsed:?}"));
+}
+
+/// One large anchor behind six levels of nine way aliases: a 2 KiB text that
+/// expands to 531 million nodes after only about 600 thousand alias jumps,
+/// far below the repetition limit of `serde_yaml_ng`.
+fn large_anchor_alias_bomb() -> String {
+    let mut text = format!("x0: &x0 [{}]\n", vec!["a"; 1000].join(", "));
+    for level in 1..=6 {
+        let alias = format!("*x{}", level - 1);
+        let list = [alias.as_str(); 9].join(", ");
+        text.push_str(&format!("x{level}: &x{level} [{list}]\n"));
+    }
+    text
+}
+
+#[test]
+fn a_large_anchor_alias_bomb_is_rejected_in_the_manifest_and_in_template_output() {
+    let ev = evidence!(
+        covers = ["VAL-018"],
+        kind = Kind::Fixture,
+        expected = "a provider.yaml or a yaml template whose large anchor expands through a short alias chain is rejected within 2 seconds, without building the expanded document",
+    );
+    let bomb = large_anchor_alias_bomb();
+    let start = std::time::Instant::now();
+
+    let manifest = Edit::fake();
+    let manifest_text = format!("{}{bomb}", manifest.text("provider.yaml"));
+    let manifest_issues = manifest.set("provider.yaml", manifest_text).issues();
+    let template_issues = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: yaml")
+        .set(
+            "templates/fake.json.tmpl",
+            format!("greeting: {{{{ settings.greeting }}}}\n{bomb}"),
+        )
+        .issues();
+
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "{elapsed:?}");
+    assert_issue(
+        &manifest_issues,
+        "provider.yaml",
+        ".",
+        IssueCode::YamlSyntax,
+    );
+    assert!(
+        template_issues
+            .iter()
+            .any(|(_, _, code)| *code == IssueCode::RenderedOutputInvalid),
+        "{template_issues:#?}"
+    );
+    ev.pass_with(&format!("both rejected in {elapsed:?}"));
 }
 
 #[test]

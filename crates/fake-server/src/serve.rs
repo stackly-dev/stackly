@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -29,6 +29,8 @@ const DEFAULT_CRASH_EXIT_CODE: u8 = 70;
 const LOG_LINE_BYTES: usize = 100;
 /// Longest sleep between two checks of the log line schedule.
 const LOG_TICK: Duration = Duration::from_millis(50);
+/// Longest wait for the last line before the process exits anyway.
+const FAREWELL_WAIT: Duration = Duration::from_millis(200);
 const TEXT: &str = "text/plain; charset=utf-8";
 const JSON: &str = "application/json";
 
@@ -69,7 +71,8 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
         started: Instant::now(),
         ready_delay: options.ready_delay,
     });
-    println!("listening on {address}");
+    // Nothing reads stdout yet only when the caller closed it; serving goes on.
+    let _ = writeln!(io::stdout(), "listening on {address}");
 
     let watcher = Arc::clone(&server);
     let ignore_term = options.ignore_term;
@@ -89,7 +92,9 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
                 let server = Arc::clone(&server);
                 thread::spawn(move || server.handle(stream));
             }
-            Err(error) => eprintln!("accept failed: {error}"),
+            Err(error) => {
+                note(Stream::Stderr, format!("accept failed: {error}"));
+            }
         }
     }
     Ok(())
@@ -218,8 +223,7 @@ impl Server {
             ("POST", "/shutdown") => {
                 let _ = http::write_response(&mut stream, 200, TEXT, b"shutting down\n");
                 let _ = stream.shutdown(Shutdown::Write);
-                println!("shutdown requested, exiting");
-                std::process::exit(0);
+                exit_with(0, Stream::Stdout, "shutdown requested, exiting".to_owned());
             }
             _ => http::write_response(&mut stream, 404, TEXT, b"not found\n"),
         };
@@ -239,9 +243,14 @@ impl Server {
         match Config::read(&self.config_path) {
             Ok(config) => {
                 *self.config.lock().unwrap_or_else(PoisonError::into_inner) = config;
-                println!("reloaded config");
+                note(Stream::Stdout, "reloaded config".to_owned());
             }
-            Err(message) => eprintln!("cannot reload config, keeping the previous one: {message}"),
+            Err(message) => {
+                note(
+                    Stream::Stderr,
+                    format!("cannot reload config, keeping the previous one: {message}"),
+                );
+            }
         }
     }
 }
@@ -252,7 +261,9 @@ fn watch_signals(mut signals: Signals, server: &Server, ignore_term: bool) {
     for signal in signals.forever() {
         match signal {
             SIGHUP => server.reload(),
-            SIGTERM if ignore_term => println!("ignoring SIGTERM"),
+            SIGTERM if ignore_term => {
+                note(Stream::Stdout, "ignoring SIGTERM".to_owned());
+            }
             SIGTERM => exit_on("SIGTERM"),
             SIGINT => exit_on("SIGINT"),
             _ => {}
@@ -261,14 +272,48 @@ fn watch_signals(mut signals: Signals, server: &Server, ignore_term: bool) {
 }
 
 fn exit_on(signal: &str) -> ! {
-    println!("received {signal}, exiting");
-    std::process::exit(0);
+    exit_with(0, Stream::Stdout, format!("received {signal}, exiting"));
 }
 
 fn crash(after: Duration, code: u8) -> ! {
     thread::sleep(after);
-    eprintln!("crashing on purpose with exit code {code}");
-    std::process::exit(i32::from(code));
+    exit_with(
+        i32::from(code),
+        Stream::Stderr,
+        format!("crashing on purpose with exit code {code}"),
+    );
+}
+
+/// The stream a note goes to.
+#[derive(Debug, Clone, Copy)]
+enum Stream {
+    Stdout,
+    Stderr,
+}
+
+/// Writes one line to `stream` from a thread of its own and returns at
+/// once, so a stream that is closed, full, or held by the spam thread never
+/// stops the caller, such as the signal watcher. The receiver gets a
+/// message, or sees its sender dropped, once the write is done or failed.
+fn note(stream: Stream, line: String) -> mpsc::Receiver<()> {
+    let (done, finished) = mpsc::channel();
+    // Without a thread the line is simply not written.
+    let _ = thread::Builder::new().spawn(move || {
+        let _ = match stream {
+            Stream::Stdout => writeln!(io::stdout(), "{line}"),
+            Stream::Stderr => writeln!(io::stderr(), "{line}"),
+        };
+        let _ = done.send(());
+    });
+    finished
+}
+
+/// Writes `line` as a farewell and exits with `code`, waiting at most
+/// [`FAREWELL_WAIT`] for the write: the exit never depends on stdout or
+/// stderr.
+fn exit_with(code: i32, stream: Stream, line: String) -> ! {
+    let _ = note(stream, line).recv_timeout(FAREWELL_WAIT);
+    std::process::exit(code);
 }
 
 /// Writes `rate` lines a second, alternating stdout and stderr, until a

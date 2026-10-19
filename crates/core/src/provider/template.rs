@@ -80,7 +80,7 @@ impl TemplateFormat {
     /// Checks that rendered output is a valid document of this format.
     pub(crate) fn output_parses(self, text: &str) -> bool {
         match self {
-            Self::Yaml => serde_yaml_ng::from_str::<serde_yaml_ng::Value>(text).is_ok(),
+            Self::Yaml => super::raw::yaml_value(text).is_ok(),
             Self::Json => serde_json::from_str::<serde_json::Value>(text).is_ok(),
             Self::NatsConf => true,
         }

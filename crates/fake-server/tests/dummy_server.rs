@@ -7,7 +7,7 @@ use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus, Stdio};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -30,6 +30,19 @@ struct Fake {
     child: Child,
     stdout: Option<JoinHandle<String>>,
     stderr: Option<JoinHandle<String>>,
+    /// Pipes held open but never read, so they fill up.
+    unread: (Option<ChildStdout>, Option<ChildStderr>),
+}
+
+/// What happens to the read end of a stdout or stderr pipe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pipe {
+    /// Read to the end in the background.
+    Collected,
+    /// Closed right after the spawn, so every write fails.
+    Closed,
+    /// Held open and never read, so writes block once the pipe is full.
+    Unread,
 }
 
 /// How a finished process ended and what it wrote.
@@ -44,6 +57,18 @@ impl Fake {
     /// Starts the binary in `cwd`. With `stdin`, the bytes are written and
     /// stdin is closed; without, stdin is null.
     fn spawn(args: &[String], stdin: Option<&[u8]>, cwd: &Path) -> Self {
+        Self::spawn_piped(args, stdin, cwd, Pipe::Collected, Pipe::Collected)
+    }
+
+    /// Starts the binary like [`Fake::spawn`], with the given handling of
+    /// its stdout and stderr pipes.
+    fn spawn_piped(
+        args: &[String],
+        stdin: Option<&[u8]>,
+        cwd: &Path,
+        stdout: Pipe,
+        stderr: Pipe,
+    ) -> Self {
         let mut child = Command::new(BINARY)
             .args(args)
             .current_dir(cwd)
@@ -57,8 +82,18 @@ impl Fake {
             .stderr(Stdio::piped())
             .spawn()
             .expect("the dummy server binary starts");
-        let stdout = child.stdout.take().map(collect);
-        let stderr = child.stderr.take().map(collect);
+        let out = child.stdout.take();
+        let err = child.stderr.take();
+        let (stdout, held_stdout) = match stdout {
+            Pipe::Collected => (out.map(collect), None),
+            Pipe::Closed => (None, None),
+            Pipe::Unread => (None, out),
+        };
+        let (stderr, held_stderr) = match stderr {
+            Pipe::Collected => (err.map(collect), None),
+            Pipe::Closed => (None, None),
+            Pipe::Unread => (None, err),
+        };
         if let Some(bytes) = stdin {
             let mut pipe = child.stdin.take().expect("stdin was requested as a pipe");
             pipe.write_all(bytes)
@@ -68,6 +103,7 @@ impl Fake {
             child,
             stdout,
             stderr,
+            unread: (held_stdout, held_stderr),
         }
     }
 
@@ -84,6 +120,13 @@ impl Fake {
             .status()
             .expect("the kill tool runs");
         assert!(status.success(), "kill -s {name} failed with {status}");
+    }
+
+    /// Closes the read end of every pipe left unread, so each later write
+    /// to it fails. Tests close a pipe this way once the server listens, so
+    /// a bind conflict at startup is still seen and retried.
+    fn close_unread(&mut self) {
+        self.unread = (None, None);
     }
 
     /// Waits for the process to exit, then returns its status and output.
@@ -103,16 +146,27 @@ impl Fake {
             );
             thread::sleep(POLL);
         };
+        // A closed pipe has no output; a pipe left unread is read now that
+        // the process is gone, so a startup failure still shows its message.
         let join = |handle: Option<JoinHandle<String>>| {
             handle
-                .expect("output is collected once")
-                .join()
-                .expect("the output reader does not panic")
+                .map(|handle| handle.join().expect("the output reader does not panic"))
+                .unwrap_or_default()
         };
+        let drain = |pipe: Option<&mut dyn Read>| {
+            let mut text = String::new();
+            if let Some(pipe) = pipe {
+                let _ = pipe.read_to_string(&mut text);
+            }
+            text
+        };
+        let (mut held_stdout, mut held_stderr) = std::mem::take(&mut self.unread);
+        let held_stdout = drain(held_stdout.as_mut().map(|pipe| pipe as &mut dyn Read));
+        let held_stderr = drain(held_stderr.as_mut().map(|pipe| pipe as &mut dyn Read));
         Finished {
             status,
-            stdout: join(self.stdout.take()),
-            stderr: join(self.stderr.take()),
+            stdout: join(self.stdout.take()) + &held_stdout,
+            stderr: join(self.stderr.take()) + &held_stderr,
         }
     }
 }
@@ -179,8 +233,15 @@ impl Setup {
     /// process can take the allocated port before `serve` binds it, so a
     /// bind conflict retries on a fresh port.
     fn serve(&mut self, extra: &[&str]) -> Fake {
+        self.serve_piped(extra, Pipe::Collected, Pipe::Collected)
+    }
+
+    /// Starts `serve` like [`Setup::serve`], with the given handling of its
+    /// stdout and stderr pipes. A bind conflict is only seen and retried
+    /// when stderr is collected.
+    fn serve_piped(&mut self, extra: &[&str], stdout: Pipe, stderr: Pipe) -> Fake {
         for _ in 0..BIND_ATTEMPTS {
-            match self.try_serve(extra) {
+            match self.try_serve(extra, stdout, stderr) {
                 Ok(fake) => return fake,
                 Err(finished) if finished.stderr.contains("Address already in use") => {
                     self.port = allocate_port().expect("a loopback port is free");
@@ -191,8 +252,14 @@ impl Setup {
         panic!("serve met a taken port {BIND_ATTEMPTS} times");
     }
 
-    fn try_serve(&self, extra: &[&str]) -> Result<Fake, Finished> {
-        let mut fake = Fake::spawn(&self.serve_args(extra), None, self.root.path());
+    fn try_serve(&self, extra: &[&str], stdout: Pipe, stderr: Pipe) -> Result<Fake, Finished> {
+        let mut fake = Fake::spawn_piped(
+            &self.serve_args(extra),
+            None,
+            self.root.path(),
+            stdout,
+            stderr,
+        );
         let started = Instant::now();
         loop {
             if !fake.is_running() {
@@ -612,6 +679,69 @@ fn sigterm_and_sigint_exit_zero_cleanly() {
             "{signal}: {finished:?}"
         );
     }
+}
+
+#[test]
+fn sigterm_and_post_shutdown_exit_zero_when_stdout_is_closed() {
+    for stop in ["SIGTERM", "POST /shutdown"] {
+        let mut setup = Setup::new();
+        let fake = setup.serve_piped(&[], Pipe::Closed, Pipe::Collected);
+
+        if stop == "SIGTERM" {
+            fake.signal("TERM");
+        } else {
+            let _ = request(setup.port, "POST", "/shutdown");
+        }
+        let finished = fake.finish();
+
+        assert_eq!(finished.status.code(), Some(0), "{stop}: {finished:?}");
+    }
+}
+
+#[test]
+fn sigterm_exits_zero_while_nothing_drains_a_full_stdout_and_stderr() {
+    let mut setup = Setup::new();
+    let fake = setup.serve_piped(&["--log-lines-per-second=5000"], Pipe::Unread, Pipe::Unread);
+    // 2500 lines of 100 bytes a second on each stream fill a 64 KiB pipe
+    // well within this pause.
+    thread::sleep(Duration::from_millis(500));
+
+    fake.signal("TERM");
+    let finished = fake.finish();
+
+    assert_eq!(finished.status.code(), Some(0), "{finished:?}");
+}
+
+#[test]
+fn a_crash_exits_with_its_code_when_stderr_is_closed() {
+    let mut setup = Setup::new();
+
+    let mut fake = setup.serve_piped(
+        &["--crash-after-ms=1500", "--crash-exit-code=42"],
+        Pipe::Collected,
+        Pipe::Unread,
+    );
+
+    fake.close_unread();
+    let finished = fake.finish();
+
+    assert_eq!(finished.status.code(), Some(42), "{finished:?}");
+}
+
+#[test]
+fn notes_on_closed_streams_never_stop_the_signal_watcher() {
+    let mut setup = Setup::new();
+    let mut fake = setup.serve_piped(&["--ignore-term=true"], Pipe::Unread, Pipe::Unread);
+    fake.close_unread();
+
+    fake.signal("HUP");
+    fake.signal("TERM");
+    thread::sleep(Duration::from_millis(300));
+    assert!(fake.is_running(), "an ignored SIGTERM keeps the server up");
+    fake.signal("INT");
+    let finished = fake.finish();
+
+    assert_eq!(finished.status.code(), Some(0), "{finished:?}");
 }
 
 #[test]

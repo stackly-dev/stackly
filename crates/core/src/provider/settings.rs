@@ -97,9 +97,19 @@ pub struct Pattern {
 impl Pattern {
     /// Compiles `source` wrapped as `\A(?:source)\z` with a 64 KiB size
     /// limit, so it always matches the whole value in linear time.
+    ///
+    /// `source` must compile on its own first: an unbalanced `)` such as
+    /// `a)|(b` would otherwise close the wrapper's group early and turn a
+    /// whole value match into a prefix or suffix match.
     pub(crate) fn compile(source: &str) -> Result<Self, String> {
         if source.chars().count() > PATTERN_MAX {
             return Err(format!("pattern is longer than {PATTERN_MAX} characters"));
+        }
+        let alone = RegexBuilder::new(source)
+            .size_limit(PATTERN_SIZE_LIMIT)
+            .build();
+        if alone.is_err() {
+            return Err("pattern does not compile or exceeds the size limit".to_owned());
         }
         RegexBuilder::new(&format!(r"\A(?:{source})\z"))
             .size_limit(PATTERN_SIZE_LIMIT)

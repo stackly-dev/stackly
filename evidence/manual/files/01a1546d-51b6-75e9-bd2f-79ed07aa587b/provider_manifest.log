@@ -1,0 +1,43 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+     Running `fuzz/target/aarch64-apple-darwin/release/provider_manifest -artifact_prefix=fuzz/artifacts/provider_manifest/ -max_len=262144 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_manifest fuzz/seeds/provider_manifest`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3033745465
+INFO: Loaded 1 modules   (288982 inline 8-bit counters): 288982 [0x1060398e0, 0x1060801b6), 
+INFO: Loaded 1 PC tables (288982 PCs): 288982 [0x1060801b8,0x1064e8f18), 
+INFO:        0 files found in fuzz/corpus/provider_manifest
+INFO:        4 files found in fuzz/seeds/provider_manifest
+INFO: seed corpus: files: 4 min: 1358b max: 2895b total: 8122b rss: 50Mb
+#6	INITED cov: 9383 ft: 14764 corp: 4/8122b exec/s: 0 rss: 61Mb
+#7	NEW    cov: 9391 ft: 14859 corp: 5/9608b lim: 2895 exec/s: 0 rss: 61Mb L: 1486/2895 MS: 1 InsertRepeatedBytes-
+#8	NEW    cov: 9397 ft: 14887 corp: 6/11176b lim: 2895 exec/s: 0 rss: 62Mb L: 1568/2895 MS: 1 ShuffleBytes-
+	NEW_FUNC[1/18]: 0x000104c9fd14 in _RINvMsx_NtNtCs89ihjnFx7T6_4core3str7patternNtB6_14TwoWaySearcher9next_backNtB6_9MatchOnlyECsiFFNB0KPPS5_12stackly_core+0x0 (provider_manifest:arm64+0x100023d14)
+	NEW_FUNC[2/18]: 0x000104cc5bc8 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueINtNtCsgysSR5XEJuO_5alloc3vec3VecINtCs4i3442lpYOe_8indexmap6BucketNtNtCsks3hQDEpept_13serde_yaml_ng5value5ValueB1F_EEECsiFFNB0KPPS5_12stackly_core+0x0 (provider_manifest:arm64+0x100049bc8)
+#9	NEW    cov: 9588 ft: 15667 corp: 7/14071b lim: 2895 exec/s: 0 rss: 63Mb L: 2895/2895 MS: 1 CopyPart-
+#10	NEW    cov: 9588 ft: 15668 corp: 8/15429b lim: 2895 exec/s: 0 rss: 64Mb L: 1358/2895 MS: 1 ChangeASCIIInt-
+#11	NEW    cov: 9588 ft: 15670 corp: 9/17Kb lim: 2895 exec/s: 0 rss: 64Mb L: 2895/2895 MS: 1 CopyPart-
+#12	NEW    cov: 9589 ft: 15825 corp: 10/19Kb lim: 2895 exec/s: 0 rss: 64Mb L: 1358/2895 MS: 1 ChangeBit-
+#18	NEW    cov: 9592 ft: 15954 corp: 11/20Kb lim: 2895 exec/s: 0 rss: 65Mb L: 1358/2895 MS: 1 ChangeBinInt-
+#19	NEW    cov: 9598 ft: 15976 corp: 12/21Kb lim: 2895 exec/s: 0 rss: 65Mb L: 1358/2895 MS: 1 ChangeByte-
+	NEW_FUNC[1/1]: 0x00010566bff0 in _RNvMs0_NtCsRrHuBUdGxy_9hashbrown3rawNtB5_8ProbeSeq9move_next+0x0 (provider_manifest:arm64+0x1009efff0)
+#31	NEW    cov: 9601 ft: 15981 corp: 13/23Kb lim: 2895 exec/s: 0 rss: 66Mb L: 1358/2895 MS: 2 ChangeASCIIInt-ChangeByte-
+#32	NEW    cov: 9625 ft: 16043 corp: 14/24Kb lim: 2895 exec/s: 0 rss: 67Mb L: 1366/2895 MS: 1 CMP- DE: "\000\000\000\000\000\000\000\000"-
+#35	NEW    cov: 9626 ft: 16044 corp: 15/25Kb lim: 2895 exec/s: 0 rss: 67Mb L: 1359/2895 MS: 3 InsertByte-ChangeByte-ChangeBinInt-
+... (NEW, REDUCE, and pulse progress lines cut) ...
+"\005\000\000\000\000\000\000\000" # Uses: 217
+"\377\377\377\377\377\377\000Z" # Uses: 162
+"\377\020\000\000" # Uses: 125
+"\012\000\000\000" # Uses: 115
+"\037\000\000\000" # Uses: 60
+"\012\000" # Uses: 59
+"\000\000\000\000\000\000\000\023" # Uses: 46
+"\000\000\000\000\000\000\000\004" # Uses: 27
+###### End of recommended dictionary. ######
+Done 748121 runs in 601 second(s)
+stat::number_of_executed_units: 748121
+stat::average_exec_per_sec:     1244
+stat::new_units_added:          7798
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              428
+fuzz run: provider_manifest ran for 600 s without a crash
+      603.05 real       403.02 user         8.82 sys
