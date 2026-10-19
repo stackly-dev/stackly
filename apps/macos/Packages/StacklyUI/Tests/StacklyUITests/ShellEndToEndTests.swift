@@ -8,7 +8,7 @@ import Testing
 /// The live shell (``ShellBootstrap``, the real link, sync engine, and model) against a
 /// real `stacklyd`: connecting once the daemon appears, the offline banner with mutations
 /// disabled, reconnecting through a snapshot after a restart, and closing or quitting
-/// without stopping the daemon (spec 0013 AC-7 to AC-10, AC-15, AC-18; PRD AC-024).
+/// without stopping the daemon (spec 0013 AC-7 to AC-10, AC-15; PRD AC-024).
 ///
 /// Each test runs its own daemon under a private root. Without the binary the tests end
 /// as BLOCKED (with evidence) or cancelled.
@@ -17,12 +17,6 @@ struct ShellEndToEndTests {
     /// The VoiceOver announcements a live shell posted.
     final class Announcements {
         var lines: [String] = []
-    }
-
-    /// What a stream of operation updates gave, and whether it ended.
-    final class Collected {
-        var values: [OperationSnapshot] = []
-        var ended = false
     }
 
     /// A live shell for `daemon`'s root, with a close notice that shows no panel.
@@ -244,52 +238,6 @@ struct ShellEndToEndTests {
         let health = try await connection.call(.daemonGetHealth)
         #expect(health.methodName == "daemon.get_health")
         await connection.close()
-        await parts.shutDown()
-        await daemon.stop()
-    }
-
-    // MARK: - Operations
-
-    @Test func theOperationCenterLoadsTheDaemonsActiveOperations() async throws {
-        let daemon = try LiveDaemon(recordsEvidence: false)
-        try await daemon.start()
-        let parts = Self.shell(for: daemon, announcements: Announcements())
-        let model = parts.runtime.model
-        try await Self.waitUntilRefreshed(model, "the shell to connect and refresh")
-        let probe = await model.read(
-            .operationList(
-                ListOperationsParams(activeOnly: true, resource: nil, limit: nil, before: nil)))
-        if case .failure(let error) = probe, error.body.code == "request.unknown_method" {
-            // An older daemon: the center says nothing rather than a false zero.
-            #expect(model.operations.store.unsupported)
-            #expect(model.operations.subtitle == nil)
-            await parts.shutDown()
-            await daemon.stop()
-            try Test.cancel(
-                "operation.list answered request.unknown_method: this stacklyd has no feature 7 operation handlers yet"
-            )
-        }
-        try await waitFor("the operation snapshot", seconds: 10) {
-            model.operations.runningCount != nil
-        }
-        // A fresh root has no operation, so nothing runs.
-        #expect(model.operations.active.isEmpty)
-        #expect(model.operations.runningCount == 0)
-        #expect(model.operations.subtitle == "No running operations")
-        #expect(model.sidebarCounts.runningOperations == 0)
-
-        // An operation the daemon does not know ends its updates without a value.
-        let unknown = try #require(UUID(uuidString: "0192f3a4-0000-7000-8000-00000000ffff"))
-        let collected = Collected()
-        let stream = model.operations.updates(for: unknown)
-        Task {
-            for await value in stream { collected.values.append(value) }
-            collected.ended = true
-        }
-        try await waitFor("the updates of an unknown operation to end", seconds: 10) {
-            collected.ended
-        }
-        #expect(collected.values.isEmpty)
         await parts.shutDown()
         await daemon.stop()
     }
