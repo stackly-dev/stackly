@@ -8,10 +8,14 @@
 //! and the semantic pass rejects a field that does not belong to the chosen
 //! variant.
 
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use serde::de::{self, DeserializeOwned, MapAccess, SeqAccess, Visitor};
+use serde::de::{
+    self, DeserializeOwned, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess,
+    Visitor,
+};
 use serde::{Deserialize, Deserializer};
 
 use super::issue::{Issue, IssueCode, Location};
@@ -528,25 +532,201 @@ pub(crate) struct RawBlocked {
     pub(crate) since: String,
 }
 
-/// Parses YAML text into a value. Anchors and aliases stay within the
-/// recursion and repetition limits of `serde_yaml_ng`; tags and merge keys
-/// are rejected afterwards by [`check_yaml_value`].
+/// Parses YAML text into a value. Aliases may expand the document to at
+/// most [`yaml_node_budget`] nodes, and the rest stays within the recursion
+/// and repetition limits of `serde_yaml_ng`; tags and merge keys are
+/// rejected afterwards by [`check_yaml_value`].
 pub(crate) fn parse_yaml(file: &str, text: &str) -> Result<serde_yaml_ng::Value, Issue> {
-    serde_yaml_ng::from_str(text).map_err(|err| {
-        let location = err
-            .location()
-            .map_or(Location::File, |at| Location::Position {
-                line: at.line(),
-                column: at.column(),
-            });
-        let message = clean_message(&strip_position(&err.to_string()));
-        let code = if message.contains("duplicate entry") {
-            IssueCode::DuplicateKey
-        } else {
-            IssueCode::YamlSyntax
-        };
-        Issue::new(file, location, code, message)
+    yaml_value(text).map_err(|err| match err {
+        YamlError::TooLarge { budget } => Issue::new(
+            file,
+            Location::File,
+            IssueCode::YamlSyntax,
+            format!("aliases expand the document past {budget} nodes"),
+        ),
+        YamlError::Parse(err) => {
+            let location = err
+                .location()
+                .map_or(Location::File, |at| Location::Position {
+                    line: at.line(),
+                    column: at.column(),
+                });
+            let message = clean_message(&strip_position(&err.to_string()));
+            let code = if message.contains("duplicate entry") {
+                IssueCode::DuplicateKey
+            } else {
+                IssueCode::YamlSyntax
+            };
+            Issue::new(file, location, code, message)
+        }
     })
+}
+
+/// Nodes a YAML document may hold for each byte of its text, once its
+/// aliases expand. Without aliases a node takes at least one byte, so only
+/// alias expansion reaches the budget.
+const YAML_NODES_PER_BYTE: usize = 2;
+/// Nodes any YAML document may hold besides [`YAML_NODES_PER_BYTE`], so a
+/// short text may still use a few aliases.
+const YAML_NODES_EXTRA: usize = 1024;
+
+/// The most nodes a YAML text of `len` bytes may expand to.
+pub(crate) const fn yaml_node_budget(len: usize) -> usize {
+    len.saturating_mul(YAML_NODES_PER_BYTE)
+        .saturating_add(YAML_NODES_EXTRA)
+}
+
+/// Error of [`yaml_value`].
+#[derive(Debug)]
+pub(crate) enum YamlError {
+    /// Aliases expand the document past its node budget.
+    TooLarge {
+        /// The budget, in nodes.
+        budget: usize,
+    },
+    /// `serde_yaml_ng` refused the text.
+    Parse(serde_yaml_ng::Error),
+}
+
+/// Parses YAML text into a value, refusing a document whose aliases expand
+/// it past [`yaml_node_budget`] nodes.
+///
+/// `serde_yaml_ng` copies the anchored node for every alias and limits only
+/// the number of alias jumps, so one large anchor behind a short chain of
+/// aliases expands to millions of nodes (a billion laughs with a big
+/// anchor). A first pass therefore visits the document without storing it
+/// and stops at the budget; only a document within the budget is built.
+pub(crate) fn yaml_value(text: &str) -> Result<serde_yaml_ng::Value, YamlError> {
+    let budget = yaml_node_budget(text.len());
+    let counter = NodeCounter {
+        left: Cell::new(budget),
+        exceeded: Cell::new(false),
+    };
+    // Any other failure of the counting pass is reported by the parse below,
+    // with its position.
+    let _ = NodeBudget(&counter).deserialize(serde_yaml_ng::Deserializer::from_str(text));
+    if counter.exceeded.get() {
+        return Err(YamlError::TooLarge { budget });
+    }
+    serde_yaml_ng::from_str(text).map_err(YamlError::Parse)
+}
+
+/// The nodes a counting pass may still visit.
+struct NodeCounter {
+    left: Cell<usize>,
+    exceeded: Cell<bool>,
+}
+
+impl NodeCounter {
+    /// Counts one node, failing once the budget is spent.
+    fn tick<E: de::Error>(&self) -> Result<(), E> {
+        match self.left.get().checked_sub(1) {
+            Some(left) => {
+                self.left.set(left);
+                Ok(())
+            }
+            None => {
+                self.exceeded.set(true);
+                Err(E::custom("the yaml document exceeds its node budget"))
+            }
+        }
+    }
+}
+
+/// Visits one YAML node and everything under it, aliases expanded, storing
+/// nothing.
+#[derive(Clone, Copy)]
+struct NodeBudget<'a>(&'a NodeCounter);
+
+impl<'de> DeserializeSeed<'de> for NodeBudget<'_> {
+    type Value = ();
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+        deserializer.deserialize_any(self)
+    }
+}
+
+impl<'de> Visitor<'de> for NodeBudget<'_> {
+    type Value = ();
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("any YAML value")
+    }
+
+    fn visit_bool<E: de::Error>(self, _: bool) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_i64<E: de::Error>(self, _: i64) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_i128<E: de::Error>(self, _: i128) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_u64<E: de::Error>(self, _: u64) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_u128<E: de::Error>(self, _: u128) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_f64<E: de::Error>(self, _: f64) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_char<E: de::Error>(self, _: char) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_str<E: de::Error>(self, _: &str) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_bytes<E: de::Error>(self, _: &[u8]) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_none<E: de::Error>(self) -> Result<(), E> {
+        self.0.tick()
+    }
+
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+        self.0.tick()?;
+        deserializer.deserialize_any(self)
+    }
+
+    fn visit_newtype_struct<D: Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+        self.0.tick()?;
+        deserializer.deserialize_any(self)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
+        self.0.tick()?;
+        while seq.next_element_seed(self)?.is_some() {}
+        Ok(())
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+        self.0.tick()?;
+        while map.next_key_seed(self)?.is_some() {
+            map.next_value_seed(self)?;
+        }
+        Ok(())
+    }
+
+    /// A tagged node: the tag, then its content.
+    fn visit_enum<A: EnumAccess<'de>>(self, data: A) -> Result<(), A::Error> {
+        self.0.tick()?;
+        let ((), content) = data.variant_seed(self)?;
+        content.newtype_variant_seed(self)
+    }
 }
 
 /// Rejects YAML tags and merge keys anywhere in the value.
@@ -890,6 +1070,64 @@ mod tests {
             issue.message.contains("repetition limit"),
             "{}",
             issue.message
+        );
+    }
+
+    /// One large anchor behind a chain of nine way aliases: `width * 9^depth`
+    /// nodes after only about `9^depth` alias jumps.
+    fn large_anchor_bomb(width: usize, depth: usize) -> String {
+        let mut text = format!("x0: &x0 [{}]\n", vec!["a"; width].join(", "));
+        for level in 1..=depth {
+            let alias = format!("*x{}", level - 1);
+            let list = [alias.as_str(); 9].join(", ");
+            text.push_str(&format!("x{level}: &x{level} [{list}]\n"));
+        }
+        text
+    }
+
+    #[test]
+    fn a_large_anchor_behind_a_short_alias_chain_stops_at_the_node_budget() {
+        // 531 million nodes from a 2 KiB text, far below the repetition
+        // limit of serde_yaml_ng.
+        let text = large_anchor_bomb(1000, 6);
+        let start = std::time::Instant::now();
+
+        let issue = parse_yaml("provider.yaml", &text).unwrap_err();
+
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            start.elapsed()
+        );
+        assert_eq!(issue.code, IssueCode::YamlSyntax);
+        assert_eq!(issue.location, Location::File);
+        let budget = yaml_node_budget(text.len());
+        assert_eq!(
+            issue.message,
+            format!("aliases expand the document past {budget} nodes")
+        );
+        assert!(matches!(
+            yaml_value(&text),
+            Err(YamlError::TooLarge { budget: b }) if b == budget
+        ));
+    }
+
+    #[test]
+    fn documents_without_a_large_alias_expansion_stay_within_the_budget() {
+        let flat = format!("[{}]", vec!["a"; 20_000].join(","));
+        let empty_lists = format!("[{}]", vec!["[]"; 10_000].join(","));
+        let keys: Vec<String> = (0..5_000).map(|n| format!("k{n}")).collect();
+        let keys = format!("{{{}}}", keys.join(","));
+        let small_aliases = "base: &b [1, 2, 3]\nfirst: *b\nsecond: *b\nthird: *b\n";
+        let tagged = "a: !!str 1\nb: !!int \"2\"\nc: !custom [x]\n";
+
+        for text in [flat.as_str(), &empty_lists, &keys, small_aliases, tagged] {
+            assert!(yaml_value(text).is_ok(), "{}", &text[..text.len().min(40)]);
+        }
+        assert_eq!(
+            yaml("inner:\n  list: !custom [1]\n").unwrap_err().message,
+            "yaml tags are not allowed",
+            "a tag still reaches the tag check"
         );
     }
 

@@ -1,0 +1,89 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: testing/fake
+  software: fake
+  displayName: Fake Provider
+  revision: "0.1.0"
+  category: testing
+  description: Dummy server for Stackly tests. Never part of the app catalog.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+  dataMarker:
+    file: FAKE_VERSION
+    pattern: "([0-9]+\\.[0-9]+)"
+runtime:
+  executable: stackly-fake-server
+  executionMode: foreground
+capabilities:
+  reload: true
+  multiInstance: true
+  persistence: true
+  backup: [cold]
+resources:
+  endpoints:
+    http: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 18080 }
+configFiles:
+  fakeConfig:
+    template: templates/fake.json.tmpl
+    format: json
+    destination: "${instance.config}/fake.json"
+    sensitive: true
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+    - { primitive: renderConfig, file: fakeConfig }
+    - primitive: runExecutable
+      executable: "${runtime.executable}"
+      args:
+        - init
+        - "--data=${instance.data}"
+        - --token-stdin
+        - "--fail=${settings.failInit}"
+      stdin: { secret: authToken }
+  start:
+    executable: "${runtime.executable}"
+    args:
+      - serve
+      - "--config=${instance.config}/fake.json"
+      - "--data=${instance.data}"
+      - "--port=${endpoint.http.port}"
+      - "--host=${endpoint.http.host}"
+      - "--label=${settings.label}"
+      - "--ready-delay-ms=${settings.readyDelayMs}"
+      - "--crash-after-ms=${settings.crashAfterMs}"
+      - "--crash-exit-code=${settings.crashExitCode}"
+      - "--log-lines-per-second=${settings.logLinesPerSecond}"
+      - "--ignore-term=${settings.ignoreTerm}"
+    cwd: "${instance.data}"
+  stop: { strategy: gracefulProcess, signal: term }
+  reload:
+    render: [fakeConfig]
+    action: signal
+    signal: hup
+    verify: readiness
+readiness:
+  probe: { type: http, endpoint: http, path: /ready }
+  intervalMilliseconds: 100
+  attemptTimeoutMilliseconds: 1000
+health:
+  probe: { type: http, endpoint: http, path: /health }
+  intervalSeconds: 5
+timeouts:
+  initSeconds: 30
+  readinessSeconds: 30
+  stopSeconds: 10
+  reloadSeconds: 10
+backup:
+  cold: { paths: [data, config] }
+permissions:
+  managedFilesystem: [data, config, logs, temp, run]
+  executeRuntimeBinary: true
+x0: &x0 [a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a]
+x1: &x1 [*x0, *x0, *x0, *x0, *x0, *x0, *x0, *x0, *x0]
+x2: &x2 [*x1, *x1, *x1, *x1, *x1, *x1, *x1, *x1, *x1]
+x3: &x3 [*x2, *x2, *x2, *x2, *x2, *x2, *x2, *x2, *x2]
+x4: &x4 [*x3, *x3, *x3, *x3, *x3, *x3, *x3, *x3, *x3]
+x5: &x5 [*x4, *x4, *x4, *x4, *x4, *x4, *x4, *x4, *x4]
+x6: &x6 [*x5, *x5, *x5, *x5, *x5, *x5, *x5, *x5, *x5]

@@ -1047,6 +1047,35 @@ fn patterns_always_match_the_whole_value() {
 }
 
 #[test]
+fn a_pattern_that_compiles_only_inside_the_whole_value_wrapper_is_rejected() {
+    // Wrapped as `\A(?:a)|(b)\z`, this would accept any text that starts
+    // with a or ends with b.
+    assert_issue(
+        &Edit::fake()
+            .replace(
+                "schemas/settings.schema.json",
+                "\"maxLength\": 256,\n      \"default\": \"fake\",",
+                "\"maxLength\": 256,\n      \"pattern\": \"a)|(b\",\n      \"default\": \"abc\",",
+            )
+            .issues(),
+        "settings.schema.json",
+        "properties.label.pattern",
+        IssueCode::SettingsSchemaRule,
+    );
+    // Wrapped, it compiles with exactly the one capture group a data
+    // marker needs.
+    assert_manifest_issue(
+        Edit::fake().replace(
+            "provider.yaml",
+            "pattern: \"([0-9]+\\\\.[0-9]+)\"",
+            "pattern: \"0)|([0-9]+\\\\.[0-9]+\"",
+        ),
+        "compatibility.dataMarker.pattern",
+        IssueCode::InvalidValue,
+    );
+}
+
+#[test]
 fn settings_fields_carry_their_val_012_classes() {
     let ev = evidence!(
         covers = ["VAL-012"],
@@ -1788,6 +1817,57 @@ fn a_256_kib_manifest_of_nested_aliases_is_rejected_within_two_seconds() {
         "{issues:#?}"
     );
     ev.pass_with(&format!("rejected with yaml_syntax in {elapsed:?}"));
+}
+
+/// One large anchor behind six levels of nine way aliases: a 2 KiB text that
+/// expands to 531 million nodes after only about 600 thousand alias jumps,
+/// far below the repetition limit of `serde_yaml_ng`.
+fn large_anchor_alias_bomb() -> String {
+    let mut text = format!("x0: &x0 [{}]\n", vec!["a"; 1000].join(", "));
+    for level in 1..=6 {
+        let alias = format!("*x{}", level - 1);
+        let list = [alias.as_str(); 9].join(", ");
+        text.push_str(&format!("x{level}: &x{level} [{list}]\n"));
+    }
+    text
+}
+
+#[test]
+fn a_large_anchor_alias_bomb_is_rejected_in_the_manifest_and_in_template_output() {
+    let ev = evidence!(
+        covers = ["VAL-018"],
+        kind = Kind::Fixture,
+        expected = "a provider.yaml or a yaml template whose large anchor expands through a short alias chain is rejected within 2 seconds, without building the expanded document",
+    );
+    let bomb = large_anchor_alias_bomb();
+    let start = std::time::Instant::now();
+
+    let manifest = Edit::fake();
+    let manifest_text = format!("{}{bomb}", manifest.text("provider.yaml"));
+    let manifest_issues = manifest.set("provider.yaml", manifest_text).issues();
+    let template_issues = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: yaml")
+        .set(
+            "templates/fake.json.tmpl",
+            format!("greeting: {{{{ settings.greeting }}}}\n{bomb}"),
+        )
+        .issues();
+
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "{elapsed:?}");
+    assert_issue(
+        &manifest_issues,
+        "provider.yaml",
+        ".",
+        IssueCode::YamlSyntax,
+    );
+    assert!(
+        template_issues
+            .iter()
+            .any(|(_, _, code)| *code == IssueCode::RenderedOutputInvalid),
+        "{template_issues:#?}"
+    );
+    ev.pass_with(&format!("both rejected in {elapsed:?}"));
 }
 
 #[test]
