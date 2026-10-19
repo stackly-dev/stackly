@@ -15,6 +15,8 @@ nonisolated public struct DiagnosticsError: Hashable, Sendable {
     public var operation: String?
     /// `details.kind` of an `ipc.io_error`.
     public var kind: String?
+    /// `details.method` of an `ipc.call_timeout`, such as `daemon.handshake`.
+    public var method: String?
     /// The daemon's own hint (`ErrorBody.hint`), when it sent one.
     public var daemonHint: String?
 
@@ -26,6 +28,7 @@ nonisolated public struct DiagnosticsError: Hashable, Sendable {
         reason: String? = nil,
         operation: String? = nil,
         kind: String? = nil,
+        method: String? = nil,
         daemonHint: String? = nil
     ) {
         self.code = code
@@ -34,6 +37,7 @@ nonisolated public struct DiagnosticsError: Hashable, Sendable {
         self.reason = reason
         self.operation = operation
         self.kind = kind
+        self.method = method
         self.daemonHint = daemonHint
     }
 }

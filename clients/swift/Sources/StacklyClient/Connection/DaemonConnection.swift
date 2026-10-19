@@ -24,8 +24,8 @@ public actor DaemonConnection {
         /// Whether its frame was handed to the socket, so the daemon may have
         /// run it.
         var written: Bool
-        /// The code a time out fails it with: `ipc.call_timeout`, or
-        /// `ipc.handshake_timeout` for the handshake.
+        /// The body a time out fails it with: `ipc.call_timeout` for its
+        /// method, `daemon.handshake` included.
         let timeoutBody: ErrorBody
         let continuation: CheckedContinuation<Result<Reply, ClientError>, Never>
     }
@@ -83,8 +83,10 @@ public actor DaemonConnection {
     /// - Returns: The open connection and the daemon's handshake reply.
     /// - Throws: The errors of ``UnixSocket/connectVerified(_:policy:)``;
     ///   ``ClientError/rejected(_:)`` with the daemon's error, such as
-    ///   `protocol.major_mismatch`; `ipc.handshake_timeout`; or a closed
-    ///   connection.
+    ///   `protocol.major_mismatch`; `ipc.call_timeout` with the method
+    ///   `daemon.handshake` and the seconds of `options.timeout`, the same
+    ///   code as the CLI (`ipc.handshake_timeout` is only the daemon's); or a
+    ///   closed connection.
     public static func open(
         endpoint: SocketEndpoint,
         policy: ConnectPolicy,
@@ -98,6 +100,7 @@ public actor DaemonConnection {
         await connection.startReading()
         let accepted = try await connection.handshake(
             client: client,
+            limit: options.timeout,
             options: CallOptions(timeout: remaining, clock: options.clock)
         )
         return (connection, accepted)
@@ -182,8 +185,12 @@ public actor DaemonConnection {
 
     // MARK: - Handshake
 
+    /// Sends the handshake and waits for `HandshakeAccepted` within
+    /// `options.timeout`, the time connecting left. A time out names `limit`,
+    /// the limit for connect plus handshake together.
     private func handshake(
         client: ClientInfo,
+        limit: Duration,
         options: CallOptions
     ) async throws(ClientError) -> HandshakeAccepted {
         let requestId = UUID().uuidString.lowercased()
@@ -199,7 +206,7 @@ public actor DaemonConnection {
         let result = await send(
             request,
             method: call.methodName,
-            timeoutBody: ClientErrorCatalog.handshakeTimeout(),
+            timeoutBody: ClientErrorCatalog.callTimeout(method: call.methodName, limit: limit),
             options: options
         )
         let reply: Reply

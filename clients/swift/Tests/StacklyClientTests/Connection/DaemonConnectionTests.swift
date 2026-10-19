@@ -127,6 +127,29 @@ struct DaemonConnectionTests {
         await connection.close()
     }
 
+    @Test func anUnansweredHandshakeTimesOutAsACallTimeoutForTheHandshake() async throws {
+        let clock = ManualClock()
+        server.serve { session in
+            _ = try session.readRequest()
+            session.drainUntilClosed()
+        }
+        let endpoint = root.endpoint
+        let opening = Task {
+            try await DaemonConnection.open(
+                endpoint: endpoint, policy: .sameUser, client: Samples.client,
+                options: CallOptions(timeout: .seconds(5), clock: clock))
+        }
+        await clock.waitForSleepers(1)
+        clock.advance(by: .seconds(5))
+        let result = await opening.result
+        let timeout = ClientErrorCatalog.callTimeout(
+            method: "daemon.handshake", limit: .seconds(5))
+        #expect(timeout.code == "ipc.call_timeout")
+        #expect(timeout.detail("seconds") == "5")
+        #expect(throws: ClientError.outcomeUnknown(timeout)) { try result.get() }
+        await server.waitForFinishedConnections(1)
+    }
+
     @Test func aTimeoutFailsOnlyThatCallAsOutcomeUnknown() async throws {
         let clock = ManualClock()
         server.serve { session in

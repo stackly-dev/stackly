@@ -38,9 +38,6 @@ public enum ClientErrorCatalog {
         static let frameTooLarge = Entry(
             code: "ipc.frame_too_large", category: .invalidInput, retryable: false,
             details: ["length", "max"], message: "the daemon sent a frame above the size limit")
-        static let handshakeTimeout = Entry(
-            code: "ipc.handshake_timeout", category: .timeout, retryable: false,
-            details: [], message: "the daemon did not answer the handshake in time")
         static let notConnected = Entry(
             code: "ipc.not_connected", category: .unavailable, retryable: true,
             details: [], message: "the client is not connected to the daemon")
@@ -54,7 +51,7 @@ public enum ClientErrorCatalog {
     static let entries = [
         Spec.endpointMissing, Spec.endpointUntrusted, Spec.connectionRefused,
         Spec.connectionClosed, Spec.ioError, Spec.protocolViolation, Spec.frameEmpty,
-        Spec.frameTooLarge, Spec.handshakeTimeout, Spec.notConnected, Spec.callTimeout,
+        Spec.frameTooLarge, Spec.notConnected, Spec.callTimeout,
     ]
 
     /// `ipc.endpoint_missing` for the socket at `path`.
@@ -100,18 +97,15 @@ public enum ClientErrorCatalog {
         }
     }
 
-    /// `ipc.handshake_timeout`.
-    public static func handshakeTimeout() -> ErrorBody {
-        body(Spec.handshakeTimeout, [:])
-    }
-
     /// `ipc.not_connected`: the client is not connected and sent nothing.
     public static func notConnected() -> ErrorBody {
         body(Spec.notConnected, [:])
     }
 
     /// `ipc.call_timeout` for `method`: the client stopped waiting after
-    /// `limit`, written as whole seconds. A mutation names its
+    /// `limit`, written as whole seconds. Connect plus handshake uses the
+    /// method `daemon.handshake`; `ipc.handshake_timeout` is only the
+    /// daemon's code. A mutation names its
     /// `idempotencyKey`, so the caller can send the same request again
     /// safely; the request may already have run.
     public static func callTimeout(

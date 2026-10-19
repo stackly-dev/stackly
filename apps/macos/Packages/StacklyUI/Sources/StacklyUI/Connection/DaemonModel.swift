@@ -264,7 +264,7 @@ public final class DaemonModel {
         DiagnosticsError(
             code: body.code, category: body.category.rawValue, message: body.message,
             reason: body.detail("reason"), operation: body.detail("op"), kind: body.detail("kind"),
-            daemonHint: body.hint)
+            method: body.detail("method"), daemonHint: body.hint)
     }
 
     static func healthFacts(_ health: DaemonHealth) -> HealthFacts {

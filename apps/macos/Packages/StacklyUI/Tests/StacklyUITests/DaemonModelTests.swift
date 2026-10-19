@@ -361,6 +361,23 @@ struct DaemonModelTests {
         #expect(model.copyDiagnostics().contains("Status: stacklyd unavailable"))
     }
 
+    @Test func anUnansweredHandshakeIsUnreachableWithTheFiveSecondHint() async throws {
+        let fixture = Fixture()
+        let model = fixture.model!
+        let timeout = ClientErrorCatalog.callTimeout(method: "daemon.handshake", limit: .seconds(5))
+        try await fixture.push(
+            .unreachable(
+                timeout, since: Self.launch.addingTimeInterval(5),
+                nextAttempt: Self.launch.addingTimeInterval(5.5)))
+        #expect(model.presence == .unreachable(lastKnownAt: nil))
+        #expect(model.diagnostics.lastError?.method == "daemon.handshake")
+        let rows = model.diagnostics.rows(
+            calendar: Calendar(identifier: .gregorian), locale: Locale(identifier: "en_US"),
+            timeZone: .gmt)
+        let values = Dictionary(uniqueKeysWithValues: rows.map { ($0.label, $0.value) })
+        #expect(values["What to do"] == "stacklyd didn’t answer within 5 seconds.")
+    }
+
     @Test func aMisconfiguredAppNeverRetries() async throws {
         let fixture = Fixture()
         try await fixture.push(.misconfigured(.rootOverride(.empty)))
