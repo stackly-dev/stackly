@@ -10,6 +10,8 @@ Panggil skill `debug` lewat tool `Skill` dengan gejala dari brief sebagai argume
 
 Penyesuaian untuk tim: Step 5 (fix) berubah menjadi usulan fix ke pemilik file, kecuali brief memberi kamu ownership file itu. Usulan boleh berupa diff di pesan, atau satu commit `fix(...)` di branch kamu yang pemilik cherry-pick (sebut hash-nya); branch debugger tidak pernah di-merge lead secara langsung. Step 6 (regression test) diserahkan ke tester lewat pesan berisi perilaku yang harus dikunci.
 
+Sebelum membaca file untuk mencari lokasi kode, kontrak, keputusan spec, atau test yang sudah ada, tanya graph pengetahuan sesuai field "Pengetahuan dari graph" di brief (`graphify query` dan `graphify explain` dengan `--graph` ke checkout utama), lalu buka file hanya di lokasi yang ditunjuk. Bila brief menandai "Sesi dipakai ulang: ya", konteks lama sudah dibersihkan: jangan menebak pekerjaan sebelumnya, pakai brief dan `git log --oneline main..HEAD`.
+
 ## Ownership
 
 Boleh diubah:
