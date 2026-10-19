@@ -100,6 +100,15 @@ fn write_report(
 mod tests {
     use super::*;
     use crate::output::stderr::Captured;
+    use std::sync::{Mutex, MutexGuard, PoisonError};
+
+    /// The panic hook is process global, so tests that swap it run one at a
+    /// time; otherwise one test's panic can reach another test's hook.
+    static HOOK: Mutex<()> = Mutex::new(());
+
+    fn hook_lock() -> MutexGuard<'static, ()> {
+        HOOK.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 
     fn report_to(json: bool, verbose: bool, location: Option<&str>) -> (u8, String, String) {
         let mut stdout = Vec::new();
@@ -140,6 +149,7 @@ mod tests {
 
     #[test]
     fn the_hook_keeps_the_location_and_never_the_message() {
+        let _hook = hook_lock();
         let previous = std::panic::take_hook();
         install_hook();
         let caught = std::panic::catch_unwind(|| {
@@ -157,6 +167,7 @@ mod tests {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap();
+        let _hook = hook_lock();
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
         let (panicked, worked) = runtime.block_on(async {
