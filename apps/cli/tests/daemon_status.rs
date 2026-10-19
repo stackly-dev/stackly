@@ -11,11 +11,12 @@ use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
-use stackly_ipc::{Accepted, Client, ConnectPolicy, Listener};
+use stackly_ipc::{Accepted, Client, ConnectPolicy, FramedConnection, Listener};
 use stackly_platform::DirectoryLayout;
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::codes::protocol;
 use stackly_protocol::handshake::{ClientInfo, ClientKind};
+use stackly_protocol::limits::Limits;
 use stackly_protocol::{CONTRACT_DIGEST, ErrorBody, ProtocolVersion};
 use stackly_testkit::evidence::{Kind, evidence};
 use stackly_testkit::{SpawnedDaemon, TestRoot, cargo_bin};
@@ -426,4 +427,165 @@ fn a_rejected_root_override_exits_2_before_anything_else() {
         "{}",
         stderr(&output)
     );
+}
+
+/// Reads one request frame as JSON.
+async fn read_request(connection: &mut FramedConnection) -> Value {
+    let frame = connection
+        .read_frame(None)
+        .await
+        .expect("the CLI's request frame is valid")
+        .expect("the CLI sends a request");
+    serde_json::from_slice(&frame).expect("the CLI sends JSON")
+}
+
+/// A test daemon on `socket` that reads the handshake, accepts it only
+/// when `accept_handshake`, then reads one more request and never answers.
+/// It returns the method of the request left unanswered once the CLI hangs
+/// up.
+fn silent_daemon(
+    rt: &tokio::runtime::Runtime,
+    socket: &Path,
+    accept_handshake: bool,
+) -> tokio::task::JoinHandle<String> {
+    let listener = rt
+        .block_on(async { Listener::bind(socket, uid()) })
+        .expect("the test daemon binds the socket");
+    rt.spawn(async move {
+        let Ok(Accepted::Authorized { mut connection, .. }) = listener.accept().await else {
+            panic!("the CLI runs as this user");
+        };
+        let mut request = read_request(&mut connection).await;
+        if accept_handshake {
+            let instance = "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e";
+            let accepted = serde_json::json!({
+                "type": "response",
+                "content": {
+                    "requestId": request["requestId"],
+                    "reply": {
+                        "type": "daemon.handshake",
+                        "content": {
+                            "protocol": ProtocolVersion::CURRENT,
+                            "serverInstanceId": instance,
+                            "daemon": { "version": "0.1.0", "pid": std::process::id() },
+                            "contractDigest": CONTRACT_DIGEST,
+                            "contractDrift": false,
+                            "limits": Limits::CURRENT,
+                            "head": { "serverInstanceId": instance, "sequence": 0 }
+                        }
+                    }
+                }
+            });
+            connection
+                .write_frame(accepted.to_string().as_bytes())
+                .await
+                .expect("the CLI reads the handshake reply");
+            request = read_request(&mut connection).await;
+        }
+        let method = request["call"]["type"]
+            .as_str()
+            .expect("a request names its method")
+            .to_owned();
+        let after = connection
+            .read_frame(None)
+            .await
+            .expect("the CLI hangs up cleanly");
+        assert!(after.is_none(), "the CLI sends nothing more");
+        listener
+            .unlink_if_own()
+            .expect("the test daemon removes its socket");
+        method
+    })
+}
+
+/// The method, seconds, and idempotency key of the `ipc.call_timeout`
+/// error that `stackly daemon status --json` printed.
+fn call_timeout_of(output: &Output) -> (String, String, Option<String>) {
+    let error: Value =
+        serde_json::from_str(stderr(output).trim()).expect("--json prints the error as JSON");
+    assert_eq!(error["code"], "ipc.call_timeout", "{error}");
+    assert_eq!(error["category"], "timeout", "{error}");
+    let detail = |key: &str| {
+        error["details"]
+            .as_array()
+            .expect("details is a list")
+            .iter()
+            .find(|detail| detail["key"] == key)
+            .and_then(|detail| detail["value"].as_str().map(str::to_owned))
+    };
+    (
+        detail("method").expect("the error names the method"),
+        detail("seconds").expect("the error names the limit"),
+        detail("idempotencyKey"),
+    )
+}
+
+#[test]
+fn a_daemon_that_never_answers_the_handshake_times_out_after_5_seconds_and_exits_8() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "when connect plus handshake gets no answer in 5 seconds, stackly daemon status exits 8 with ipc.call_timeout naming daemon.handshake and 5 seconds",
+    );
+    let root = TestRoot::new().unwrap();
+    let paths = paths(&root);
+    let _runtime = HandMadeRuntime::new(&paths.runtime);
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let server = silent_daemon(&rt, &paths.socket, false);
+
+    let started = Instant::now();
+    let output = status(root.path().as_os_str(), true);
+
+    assert_eq!(output.status.code(), Some(8), "{output:?}");
+    assert!(started.elapsed() >= Duration::from_secs(5));
+    assert_eq!(
+        call_timeout_of(&output),
+        ("daemon.handshake".to_owned(), "5".to_owned(), None)
+    );
+    let method = rt
+        .block_on(async { tokio::time::timeout(Duration::from_secs(5), server).await })
+        .unwrap()
+        .unwrap();
+    assert_eq!(method, "daemon.handshake");
+    ev.pass();
+}
+
+#[test]
+fn a_call_the_daemon_never_answers_times_out_after_10_seconds_and_exits_8() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "when daemon.get_info gets no answer in 10 seconds, stackly daemon status exits 8 with ipc.call_timeout naming the method and 10 seconds, without an idempotency key",
+    );
+    let root = TestRoot::new().unwrap();
+    let paths = paths(&root);
+    let _runtime = HandMadeRuntime::new(&paths.runtime);
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let server = silent_daemon(&rt, &paths.socket, true);
+    let before = listing(root.path());
+
+    let started = Instant::now();
+    let output = status(root.path().as_os_str(), true);
+
+    assert_eq!(output.status.code(), Some(8), "{output:?}");
+    assert!(started.elapsed() >= Duration::from_secs(10));
+    assert_eq!(
+        call_timeout_of(&output),
+        ("daemon.get_info".to_owned(), "10".to_owned(), None)
+    );
+    let method = rt
+        .block_on(async { tokio::time::timeout(Duration::from_secs(5), server).await })
+        .unwrap()
+        .unwrap();
+    assert_eq!(method, "daemon.get_info");
+    assert_eq!(listing(root.path()), before, "the CLI created files");
+    ev.pass();
 }

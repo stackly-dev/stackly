@@ -9,6 +9,10 @@ The Swift side of the IPC contract: DTOs generated from `stackly-protocol`, plus
 | File | Owns |
 |---|---|
 | `Sources/StacklyClient/Generated/StacklyProtocol.swift` | Contract types written by `cargo xtask codegen`, committed |
+| `Sources/StacklyClient/Generated/OpenEnums.swift` | `init(from:)` for every enum with `case unrecognized`, mapping a value from a newer daemon to `.unrecognized`; written by codegen |
+| `Sources/StacklyClient/Generated/ContractInfo.swift` | The contract digest and `ProtocolVersion` the handshake sends; written by codegen |
+| `Sources/StacklyClient/Generated/ContractNames.swift` | Event kind and method names for the transport (spec 0013); written by codegen |
+| `Sources/StacklyClient/StacklyJSON.swift` | `StacklyJSON.decoder()` and `encoder()`: millisecond UTC timestamps (`yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`) for every contract read and write |
 | `../../protocols/fixtures/` | Shared JSON fixtures, one file per case, read by both Rust and Swift tests |
 | `../../typeshare.toml` | Generator settings, including the `Sendable` and `Equatable` decorators |
 
@@ -24,6 +28,8 @@ cargo xtask codegen                                      # regenerate after a pr
 
 - No `MainActor` default isolation in this package: socket IO runs off the main actor. Generated DTOs are `Sendable`, so they can cross to the UI.
 - Never edit `Generated/` by hand. Change the Rust type in `stackly-protocol`, then rerun codegen; `cargo xtask codegen --check` fails on drift.
+- Read and write contract JSON only through `StacklyJSON`; a plain `JSONDecoder` or `JSONEncoder` gets the wire timestamps wrong.
+- An enum with `case unrecognized` is open: handle `.unrecognized` wherever it shows, apart from any real `unknown` state. `ErrorCategory` is closed and rejects a value it does not know.
 - Fixture tests compare decoded values, not raw JSON text. Swift encodes UUIDs in uppercase while Rust writes lowercase, and every reader treats them as case insensitive.
 
 ## Gotchas
@@ -34,5 +40,7 @@ cargo xtask codegen                                      # regenerate after a pr
 ## Related specs
 
 - [0001 Stack dan arsitektur](../../docs/specs/0001-stack-arsitektur/index.md)
+- [0006 Protokol IPC dan daemon](../../docs/specs/0006-protokol-ipc-daemon/index.md)
+- [0013 App shell SwiftUI dan Swift client](../../docs/specs/0013-app-shell-swift-client/index.md)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

@@ -267,6 +267,49 @@ async fn a_registry_another_process_holds_is_tried_three_more_times_before_recov
     ev.pass();
 }
 
+#[tokio::test(start_paused = true)]
+async fn the_retries_at_a_held_registry_wait_one_two_then_four_seconds() {
+    let ev = evidence!(
+        covers = ["REQ-048"],
+        kind = Kind::Fixture,
+        expected = "with the default schedule, the start slot waits 1, 2, then 4 seconds between its tries at a held registry before recovery mode",
+    );
+    let site = Site::new();
+    let first = site.start().await;
+    first
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    let holder = RegistryHolder::lock(&site.prepared.layout().registry_db());
+
+    let logs = Logs::capture();
+    let mut config = DaemonConfig::default();
+    config.registry_open = OpenOptions::new().with_busy_timeout(Duration::from_millis(50));
+    let begun = tokio::time::Instant::now();
+    let daemon = site.start_configured(config).await;
+    let waited = begun.elapsed();
+
+    let waits: Vec<_> = logs
+        .with_message(LOCKED_RETRY)
+        .iter()
+        .map(|line| line["fields"]["retry_in_seconds"].as_u64())
+        .collect();
+    assert_eq!(waits, [Some(1), Some(2), Some(4)], "{:?}", logs.lines());
+    assert!(waited >= Duration::from_secs(7), "{waited:?}");
+    assert_eq!(
+        daemon
+            .health()
+            .recovery
+            .map(|recovery| recovery.reason)
+            .as_deref(),
+        Some("registry_locked")
+    );
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    holder.release();
+    ev.pass();
+}
+
 #[tokio::test]
 async fn a_registry_lock_released_during_the_retries_opens_ready_and_prunes_once() {
     let site = Site::new();
@@ -572,4 +615,202 @@ async fn handlers_receive_the_peer_and_the_client_of_their_connection() {
         .map(|line| line["fields"]["interactive"].clone())
         .collect();
     assert_eq!(handshake_requests.len(), 2, "{lines:?}");
+}
+
+/// Waits up to [`PATIENCE`] until `ready` holds.
+async fn eventually(what: &str, mut ready: impl FnMut() -> bool) {
+    let deadline = Instant::now() + PATIENCE;
+    while !ready() {
+        assert!(Instant::now() < deadline, "{what} did not happen in time");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+
+/// A folder made unreadable for one test, readable again on drop so the
+/// test root can still be removed after a failed assert.
+struct Unreadable(std::path::PathBuf);
+
+impl Unreadable {
+    fn new(dir: std::path::PathBuf) -> Self {
+        std::fs::create_dir_all(&dir).expect("the folder can be created");
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o000))
+            .expect("the folder's mode can be changed");
+        Self(dir)
+    }
+}
+
+impl Drop for Unreadable {
+    fn drop(&mut self) {
+        let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o700));
+    }
+}
+
+#[tokio::test]
+async fn the_registry_history_is_pruned_again_at_every_interval() {
+    let ev = evidence!(
+        covers = ["REQ-048"],
+        kind = Kind::Fixture,
+        expected = "after the prune at start, the prune task prunes the registry again at every prune interval",
+    );
+    let site = Site::new();
+    let logs = Logs::capture();
+    let mut config = DaemonConfig::default();
+    config.prune_interval = Duration::from_millis(20);
+
+    let daemon = site.start_configured(config).await;
+
+    eventually("two periodic prunes", || {
+        logs.with_message("registry history pruned").len() >= 2
+    })
+    .await;
+    let pruned = logs.with_message("registry history pruned");
+    assert!(pruned[0]["fields"]["pruned_rows"].is_number(), "{pruned:?}");
+    assert_eq!(logs.with_message("registry ready").len(), 1);
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    ev.pass();
+}
+
+#[tokio::test]
+async fn a_registry_that_cannot_be_opened_fails_the_daemon_with_exit_1() {
+    let ev = evidence!(
+        covers = ["REQ-048"],
+        kind = Kind::Fixture,
+        expected = "when the start slot cannot open the registry at all, the daemon reports the fatal exit code 1, health shows the registry unavailable, and the usual stop still runs",
+    );
+    let site = Site::new();
+    let unreadable = Unreadable::new(site.prepared.layout().registry_dir());
+    let logs = Logs::capture();
+
+    let daemon = site.start().await;
+    let code = tokio::time::timeout(PATIENCE, daemon.fatal())
+        .await
+        .expect("the start slot reports the failure");
+    drop(unreadable);
+
+    assert_eq!(code, 1);
+    assert_eq!(
+        status_of(&daemon.health(), subsystem::REGISTRY),
+        SubsystemStatus::Unavailable
+    );
+    assert_eq!(
+        logs.with_message("cannot open the registry").len(),
+        1,
+        "{:?}",
+        logs.lines()
+    );
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    assert!(!site.socket().exists(), "the stop removes the socket");
+    ev.pass();
+}
+
+#[tokio::test]
+async fn a_file_at_the_socket_path_makes_ipc_unavailable_until_the_path_is_free() {
+    let ev = evidence!(
+        covers = ["REQ-047", "NFR-004"],
+        kind = Kind::Fixture,
+        expected = "a regular file in place of the socket makes subsystem ipc unavailable and the daemon degraded at the next check, and once the file is gone the socket is bound again and clients connect",
+    );
+    let site = Site::new();
+    let mut config = DaemonConfig::default();
+    config.socket_check_interval = Duration::from_millis(50);
+    let daemon = site.start_configured(config).await;
+    std::fs::remove_file(site.socket()).unwrap();
+    std::fs::write(site.socket(), b"not a socket").unwrap();
+
+    eventually("ipc unavailable", || {
+        status_of(&daemon.health(), subsystem::IPC) == SubsystemStatus::Unavailable
+    })
+    .await;
+    let health = daemon.health();
+    assert_eq!(health.status, DaemonHealthStatus::Degraded);
+    assert_eq!(health.counters.socket_rebinds.get(), 0);
+    assert!(
+        std::fs::read(site.socket()).unwrap() == b"not a socket",
+        "the daemon never removes a file it did not make"
+    );
+
+    std::fs::remove_file(site.socket()).unwrap();
+    eventually("ipc ok again", || {
+        status_of(&daemon.health(), subsystem::IPC) == SubsystemStatus::Ok
+    })
+    .await;
+    let health = daemon.health();
+    assert_eq!(health.status, DaemonHealthStatus::Ready);
+    assert_eq!(health.counters.socket_rebinds.get(), 1);
+    let (client, _) = client(&site).await;
+    assert!(client.call(Call::DaemonGetInfo).await.is_ok());
+    drop(client);
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    ev.pass();
+}
+
+#[tokio::test]
+async fn a_socket_that_replaced_ours_is_replaced_back_at_the_next_check() {
+    let site = Site::new();
+    let logs = Logs::capture();
+    let mut config = DaemonConfig::default();
+    config.socket_check_interval = Duration::from_millis(50);
+    let daemon = site.start_configured(config).await;
+    std::fs::remove_file(site.socket()).unwrap();
+    let other = std::os::unix::net::UnixListener::bind(site.socket()).unwrap();
+    other.set_nonblocking(true).unwrap();
+
+    eventually("a rebind", || {
+        daemon.health().counters.socket_rebinds.get() == 1
+    })
+    .await;
+    let (client, _) = client(&site).await;
+    assert!(client.call(Call::DaemonGetInfo).await.is_ok());
+
+    assert!(other.accept().is_err(), "the other socket got the client");
+    let rebound = logs.with_message("socket_rebound: the socket was bound again");
+    assert_eq!(rebound.len(), 1, "{:?}", logs.lines());
+    assert_eq!(rebound[0]["fields"]["was"], "replaced");
+    drop(client);
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+}
+
+#[tokio::test]
+async fn a_peer_of_another_uid_is_refused_counted_and_logged_with_its_uid_and_pid() {
+    let ev = evidence!(
+        covers = ["REQ-047", "AC-047"],
+        kind = Kind::Fixture,
+        expected = "with peers expected to have another uid, the daemon refuses a real client with ipc.peer_rejected before any request, counts it in connectionsRejected, and logs the peer's uid and pid",
+    );
+    let site = Site::new();
+    let logs = Logs::capture();
+    let mut config = DaemonConfig::default();
+    config.peer_uid = Some(site.uid() + 1);
+    let daemon = site.start_configured(config).await;
+
+    let mut raw = Raw::connect(&site.socket()).await;
+    let frame = raw.recv().await.expect("the refusal arrives");
+
+    let error = error_of(&frame);
+    assert!(error.is(&ipc::PEER_REJECTED), "{frame}");
+    assert!(frame["content"]["requestId"].is_null(), "{frame}");
+    raw.expect_end().await;
+    eventually("the refusal is counted", || {
+        daemon.health().counters.connections_rejected.get() == 1
+    })
+    .await;
+    assert_eq!(daemon.health().counters.connections_open.get(), 0);
+    let refused = logs.with_message(
+        "a peer of another user, or one whose credentials cannot be read, was refused",
+    );
+    assert_eq!(refused.len(), 1, "{:?}", logs.lines());
+    assert_eq!(refused[0]["fields"]["peer_uid"], site.uid());
+    assert_eq!(refused[0]["fields"]["peer_pid"], std::process::id());
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    ev.pass();
 }

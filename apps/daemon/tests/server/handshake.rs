@@ -9,7 +9,7 @@ use stackly_protocol::codes::{ipc, protocol, request};
 use stackly_protocol::{CONTRACT_DIGEST, ProtocolVersion};
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::common::{Raw, Site, error_of, handshake, request};
+use crate::common::{PATIENCE, Raw, Site, error_of, handshake, request};
 
 #[tokio::test]
 async fn a_client_of_major_1_is_accepted_whatever_its_minor() {
@@ -198,4 +198,83 @@ async fn a_second_handshake_is_refused_and_the_connection_stays_up() {
 
     raw.send(&request("info", "daemon.get_info", None)).await;
     assert_eq!(raw.answer("info").await["type"], "response");
+}
+
+#[tokio::test]
+async fn every_refused_handshake_counts_once_in_connections_rejected() {
+    let ev = evidence!(
+        covers = ["NFR-004"],
+        kind = Kind::Fixture,
+        expected = "a first frame that is not a handshake and a handshake of another major each add one to counters.connectionsRejected, and an accepted handshake adds nothing",
+    );
+    let site = Site::new();
+    let daemon = site.start().await;
+    let rejected = || daemon.health().counters.connections_rejected.get();
+    let settles_at = |count: u64| async move {
+        let deadline = std::time::Instant::now() + PATIENCE;
+        while rejected() != count {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "connectionsRejected is {}, not {count}",
+                rejected()
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    };
+    assert_eq!(rejected(), 0);
+
+    let mut raw = Raw::connect(&site.socket()).await;
+    raw.send(&request("r1", "daemon.get_info", None)).await;
+    let frame = raw.recv().await.expect("the refusal arrives");
+    assert!(
+        error_of(&frame).is(&protocol::HANDSHAKE_REQUIRED),
+        "{frame}"
+    );
+    raw.expect_end().await;
+    settles_at(1).await;
+
+    let mut raw = Raw::connect(&site.socket()).await;
+    raw.send(&handshake("h2", 2, 0, CONTRACT_DIGEST)).await;
+    let frame = raw.recv().await.expect("the refusal arrives");
+    assert!(error_of(&frame).is(&protocol::MAJOR_MISMATCH), "{frame}");
+    raw.expect_end().await;
+    settles_at(2).await;
+
+    let _accepted = Raw::ready(&site.socket()).await;
+    assert_eq!(rejected(), 2);
+    ev.pass();
+}
+
+#[tokio::test]
+async fn a_major_given_in_another_json_shape_is_still_refused() {
+    let ev = evidence!(
+        covers = ["REQ-047", "AC-047"],
+        kind = Kind::Fixture,
+        expected = "a handshake whose protocol is the array [2, 0], which the early major reader skips, still gets protocol.major_mismatch once decoded",
+    );
+    let site = Site::new();
+    let _daemon = site.start().await;
+    let mut raw = Raw::connect(&site.socket()).await;
+
+    raw.send(&request(
+        "h-array",
+        "daemon.handshake",
+        Some(json!({
+            "protocol": [2, 0],
+            "client": { "kind": "cli", "version": "0.1.0", "pid": std::process::id() },
+            "contractDigest": CONTRACT_DIGEST,
+        })),
+    ))
+    .await;
+
+    let frame = raw.recv().await.expect("the refusal arrives");
+    let error = error_of(&frame);
+    assert!(error.is(&protocol::MAJOR_MISMATCH), "{frame}");
+    assert_eq!(frame["content"]["requestId"], "h-array");
+    assert_eq!(
+        error.detail("serverMajor"),
+        Some(ProtocolVersion::CURRENT.major.to_string().as_str())
+    );
+    raw.expect_end().await;
+    ev.pass();
 }

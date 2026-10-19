@@ -116,3 +116,91 @@ async fn an_unsubscribed_subscription_gets_no_more_events() {
         "no second event: {next}"
     );
 }
+
+/// Reads `count` events and returns their sequences.
+async fn sequences(raw: &mut Raw, count: usize) -> Vec<u64> {
+    let mut sequences = Vec::new();
+    for _ in 0..count {
+        let event = raw.recv().await.expect("an event arrives");
+        assert_eq!(event["type"], "event", "{event}");
+        sequences.push(
+            event["content"]["sequence"]
+                .as_u64()
+                .expect("an event carries its sequence"),
+        );
+    }
+    sequences
+}
+
+#[tokio::test]
+async fn a_reconnect_with_the_last_cursor_gets_the_missed_events_once_then_live_ones() {
+    let ev = evidence!(
+        covers = ["AC-071", "NFR-004"],
+        kind = Kind::Fixture,
+        expected = "a client that reconnects with the cursor of the last event it saw gets the events it missed once, in order, then live events, with no snapshot needed",
+    );
+    let site = Site::new();
+    let daemon = site.start().await;
+    let instance = daemon.info().server_instance_id.to_string();
+    let mut first = Raw::ready(&site.socket()).await;
+    subscribe(&mut first, "sub", json!({})).await;
+    daemon.bus().publish_daemon(shutting_down());
+    daemon.bus().publish_daemon(shutting_down());
+    let seen = sequences(&mut first, 2).await;
+    assert_eq!(seen, [1, 2]);
+    drop(first);
+
+    daemon.bus().publish_daemon(shutting_down());
+    daemon.bus().publish_daemon(shutting_down());
+    let mut second = Raw::ready(&site.socket()).await;
+    let subscribed = subscribe(
+        &mut second,
+        "sub",
+        json!({ "since": { "serverInstanceId": instance, "sequence": seen[1] } }),
+    )
+    .await;
+    assert_eq!(subscribed["head"]["sequence"], 4);
+    daemon.bus().publish_daemon(shutting_down());
+
+    assert_eq!(sequences(&mut second, 3).await, [3, 4, 5]);
+    second.send(&request("info", "daemon.get_info", None)).await;
+    let next = second.recv().await.expect("the reply arrives");
+    assert_eq!(next["content"]["requestId"], "info", "no duplicate: {next}");
+    ev.pass();
+}
+
+#[tokio::test]
+async fn a_cursor_older_than_the_ring_starts_with_a_cursor_expired_gap() {
+    let ev = evidence!(
+        covers = ["AC-071"],
+        kind = Kind::Fixture,
+        expected = "a cursor of this run that fell out of the 4096 event ring starts the subscription with events.gap reason cursor_expired at the head, so the client takes a snapshot",
+    );
+    let site = Site::new();
+    let daemon = site.start().await;
+    let instance = daemon.info().server_instance_id.to_string();
+    let published = u64::from(stackly_protocol::limits::EVENT_REPLAY_LEN) + 2;
+    for _ in 0..published {
+        daemon.bus().publish_daemon(shutting_down());
+    }
+    let mut raw = Raw::ready(&site.socket()).await;
+
+    let subscribed = subscribe(
+        &mut raw,
+        "sub",
+        json!({ "since": { "serverInstanceId": instance, "sequence": 1 } }),
+    )
+    .await;
+
+    assert_eq!(subscribed["head"]["sequence"], published);
+    let gap = raw.recv().await.expect("the gap arrives");
+    assert_eq!(gap["content"]["kind"]["type"], "events.gap", "{gap}");
+    assert_eq!(
+        gap["content"]["kind"]["content"]["reason"],
+        "cursor_expired"
+    );
+    daemon.bus().publish_daemon(shutting_down());
+    let live = raw.recv().await.expect("the live event arrives");
+    assert_eq!(live["content"]["sequence"], published + 1, "{live}");
+    ev.pass();
+}
