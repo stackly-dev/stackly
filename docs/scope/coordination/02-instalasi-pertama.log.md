@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `6b3da2c`
 - **Wave aktif:** `1`, mulai `2026-10-19`
-- **Diperbarui:** `2026-10-19 23:40`
+- **Diperbarui:** `2026-10-20 00:10`
 
 ## Sub sesi wave `1`
 
@@ -13,7 +13,7 @@
 | `architect-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `-` | `-` | `diarsipkan` (sama) |
 | `architect-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `-` | `-` | `diarsipkan` (sama) |
 | `architect-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `-` | `-` | `diarsipkan` (sama) |
-| `arc-f15-spec` | `architect` | 15. Background agent & CLI install · Design it (spec), plus update spec 0004 port `background_agent` | `02-instalasi-pertama.md` | `docs/specs/0015-background-agent-cli-install/`, `docs/specs/0004-domain-core-platform-abstraction/index.md` (port `background_agent` saja) | `claude/arc-f15-spec-c53e6f` | `opus` | `aktif` |
+| `arc-f15-spec` | `architect` | 15. Background agent & CLI install · Design it (spec), plus update spec 0004 port `background_agent` | `02-instalasi-pertama.md` | `docs/specs/0015-background-agent-cli-install/`, `docs/specs/0004-domain-core-platform-abstraction/index.md` (port `background_agent` saja) | `claude/arc-f15-spec-c53e6f` | `opus` (cross check `sonnet`) | `merged` |
 | `arc-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `claude/arc-f17-spec-5e714b` | `opus` (cross check `sonnet`) | `merged` |
 | `arc-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `claude/arc-f18-spec-634bf8` | `opus` | `aktif` |
 | `arc-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `claude/arc-f19-spec-b5bcbf` | `opus` (cross check `fable`) | `merged` |
@@ -40,6 +40,7 @@
 | `2026-10-19` | Aplikasi menolak `start_session` pada giliran yang dipicu pesan sesi lain; sub sesi berikutnya diajukan sebagai kartu (`own_initiative`) atau dimulai pada giliran user. Kartu `arc-f22-spec` diajukan (task `task_f4d8d6d9`). | `lead` |
 | `2026-10-19` | Spec 0018 diterima dengan 14 perbaikan rekomendasi cross check (Fable 5.1) plus perbaikan non keputusan, sesuai aturan user: antara lain tanpa field hasil baru di spec 0007 (ID runtime dari `result.resources[0]`), urutan error unduhan offline > untrusted > too_large > failed, preflight disk `5 × size + 64 MiB`, `runtime.io_failed` baru, hash ulang stream saat extract, aturan resume HTTP, dan batas memori AC-8 yang terukur. Field manifest baru `runtime.versionCheck` dan field `versions.json` tambahan adalah usulan update spec 0009 yang digabung dengan usulan F17 (`versions()`) menjadi satu item `architect (update)` setelah F9 ditutup. Unduhan upstream di luar cache butuh izin user saat build. | `lead` |
 | `2026-10-19` | Spec 0019 diterima dengan 8 jawaban gap rekomendasi (cross check Fable 5.1, satu blocker sudah diperbaiki: database probe lewat env `PGDATABASE`): log AC-13 diuji in process dengan `LogSink` perekam, `data.initializedLine` sebagai sumber `data_line`, format detail probe `exec` milik spec 0019, batas stop 10 detik, peer untuk role readiness (tanpa `trust` di mana pun), log di argv, `initSeconds` 180. Follow-up update spec 0009, 0010, 0011 menjadi item `architect (update)` lead: 0009 digabung dengan usulan F17 dan F18 setelah F9 ditutup; 0010 dan 0011 setelah build F10 dan F11 masuk. Bila spec 0018 di-merge dengan signature yang berbeda dari asumsi spec 0019, `architect (update)` spec 0019 sebelum milestone 2-nya. Baris Pointer ditempel tanpa `code in`. | `lead` |
+| `2026-10-19` | Spec 0015 di-merge. Konsekuensi yang dicatat: `CLI_SCHEMA_VERSION` naik ke 2 di langkah 6 spec 0015, jadi build F8 dan langkah itu berurutan; usulan perubahan teks spec 0001, 0002, 0003, 0006, 0008, dan 0013 ada di bagian "Usulan update untuk spec lain" spec 0015 dan diterapkan lewat item `architect (update)` setelah fitur pemiliknya ditutup; dua selisih mockup onboarding (Command Line bukan `/usr/local/bin` dengan password; tanpa daemon cadangan "only while the app is open") dicatat di `ui-macos.md` saat sync akhir wave dan teks F16 mengikutinya. | `lead` |
 
 ## Blocker terbuka
 
@@ -48,13 +49,14 @@
 - Usulan `/scope` dari arc-f17-spec: catat selisih mockup yang diketahui di `ui-macos.md` (Available netral bukan biru, Unverified sampai F18, kartu planned tanpa opacity, tanpa MariaDB atau RabbitMQ). Dikerjakan lead bersama sync akhir wave.
 
 - F21 `Build it`: butuh F18, F19, F20 dibangun, plus fondasi F7, F8, F10, F11, F14 (`01-foundation.md`) dan F13 milestone 4 (`ui-macos.md`). Dibuka oleh wave build setelah spec fase 02 dan fondasi selesai.
-- F15 build (nanti): signing identity development nyata (OQ-012, RISK-10). Dibuka oleh release owner atau user yang membuat akun Apple Developer.
+- F15 milestone 4 (`BLOCKED`): signing identity development nyata (OQ-012, RISK-10), owner release owner (Personal Team dari Apple ID gratis kemungkinan cukup); AC-19 juga butuh akun macOS kedua, owner user. Langkah 0 milestone 1 (spike ad hoc) dan milestone 2 (LaunchAgent native) butuh persetujuan user saat build.
 - Semua `Build it` fase 02: fondasi `01-foundation.md` (F7, F8, F10, F11 build, F14) masih dikerjakan program wave foundation.
 
 ## Dicentang pada wave ini
 
 - `17` · `Design it (spec): /architect catalog & provider detail` · laporan `arc-f17-spec` STATUS done (`cc38e14`) · `claude/arc-f17-spec-5e714b` → `78f3ec7` · diff hanya `docs/specs/0017-*`, Requirements AC-1 sampai AC-13, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 17 design it`
 - `19` · `Design it (spec): /architect provider PostgreSQL` · laporan `arc-f19-spec` (`ed8a8fc`, diterima lead) · `claude/arc-f19-spec-b5bcbf` → `f9bece6` · diff hanya `docs/specs/0019-*`, Requirements AC-1 sampai AC-15, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 19 design it`
+- `15` · `Design it (spec): /architect background agent & CLI install` · laporan `arc-f15-spec` STATUS done (`19498a4`) · `claude/arc-f15-spec-c53e6f` → `776f4bb` · diff hanya `docs/specs/0015-*` dan update additive port `background_agent` di `docs/specs/0004-*/index.md`, Requirements AC-1 sampai AC-22, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 15 design it`
 
 ## Riwayat wave
 
