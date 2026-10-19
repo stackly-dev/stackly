@@ -1,8 +1,8 @@
 # Log koordinasi: `02-instalasi-pertama`
 
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
-- **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `6b3da2c`
-- **Wave aktif:** `1`, mulai `2026-10-19`
+- **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `58e3bc2`
+- **Wave aktif:** `2`, mulai `2026-10-20`
 - **Diperbarui:** `2026-10-20 00:10`
 
 ## Sub sesi wave `1`
@@ -43,6 +43,8 @@
 | `2026-10-19` | Spec 0015 di-merge. Konsekuensi yang dicatat: `CLI_SCHEMA_VERSION` naik ke 2 di langkah 6 spec 0015, jadi build F8 dan langkah itu berurutan; usulan perubahan teks spec 0001, 0002, 0003, 0006, 0008, dan 0013 ada di bagian "Usulan update untuk spec lain" spec 0015 dan diterapkan lewat item `architect (update)` setelah fitur pemiliknya ditutup; dua selisih mockup onboarding (Command Line bukan `/usr/local/bin` dengan password; tanpa daemon cadangan "only while the app is open") dicatat di `ui-macos.md` saat sync akhir wave dan teks F16 mengikutinya. | `lead` |
 | `2026-10-20` | Spec 0018 di-merge. Item `architect (update)` yang diantrikan lead dari spec 0015, 0017, 0018, 0019: spec 0009 (satu item gabungan: `versions()` F17, `runtime.versionCheck` dan field `versions.json` F18, format template, `stdin.text`, `printableOnly` F19) setelah F9 ditutup; spec 0003 dan 0004 (F18 milestone 1); spec 0005 dan 0010 (F18 milestone 2, plus F19 untuk 0010); spec 0011 (F19); spec 0001, 0002, 0006, 0008, 0013 (usulan teks F15 dan F18). Tiap item dimulai saat fitur pemilik spec itu tidak lagi dibangun program foundation, paling lambat sebelum milestone yang membutuhkannya. | `lead` |
 | `2026-10-20` | Akhir wave 1: selisih mockup Catalog (spec 0017) dan onboarding (spec 0015) dicatat di "Selisih yang sudah diketahui" `ui-macos.md` sesuai rekomendasi architect, dan kedua baris Follow-up-nya dicentang. Sync akhir wave tidak mengubah `AGENTS.md` karena wave 1 hanya me-merge spec, tanpa kode. | `lead` |
+| `2026-10-20` | F21 `Build it` tidak punya Pointer dan Done when-nya menjangkau daemon, CLI, dan GUI serta nilai yang belum ada di spec mana pun (bentuk connection string, Follow-up spec 0009 dan 0019), jadi diperlakukan seperti kotak `(spec)`: architect `arc-f21-spec` dengan spec `0021-start-readiness-connection` setelah spec 0020 di-merge; lead menempel Pointer dan milestone di bawah `Build it` yang ada tanpa menambah `Design it`. Ini mengganti catatan "0021 dibiarkan kosong". | `lead` |
+| `2026-10-20` | Wave 2 diajukan sebagai empat kartu (`arc-f16-spec` task_11ce2373, `arc-f20-spec` task_0e05870d, `arc-f22-spec` task_f4d8d6d9, `arc-f23-spec` task_6bf8be98) karena giliran ini dipicu pesan sesi; user memulainya dengan klik atau dengan meminta lead. | `lead` |
 
 ## Blocker terbuka
 
@@ -63,4 +65,4 @@
 ## Riwayat wave
 
 - Wave `1` (`2026-10-19` sampai `2026-10-20`, hash awal `6b3da2c`): selesai. `Design it` F15, F17, F18, F19 dicentang dan keempat branch architect di-merge (`776f4bb`, `78f3ec7`, `ede6d7b`, `f9bece6`). Terbuka: `Build it` keempat fitur (menunggu fondasi dan item `architect (update)`), Design it F16, F20, F22, F23. Blocker: F15 milestone 4 (signing), update spec 0009 (F9 belum ditutup). Kotak di scope lain yang terbuka karena wave ini: tidak ada.
-- Wave `2` (`2026-10-20` sampai `-`, hash awal `<isi saat dimulai>`): architect F16, F20, F22, F23, diajukan sebagai kartu.
+- Wave `2` (`2026-10-20` sampai `-`, hash awal `58e3bc2`): architect F16, F20, F22, F23 diajukan sebagai kartu; F21 architect menyusul setelah spec 0020 di-merge.
