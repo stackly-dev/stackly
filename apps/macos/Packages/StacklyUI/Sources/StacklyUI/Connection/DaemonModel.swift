@@ -302,6 +302,9 @@ public final class DaemonModel {
             }
             lastDaemon = daemon
             inputs.stable = state
+            // The heartbeat brings the latest health, so recovery mode
+            // follows it in both directions.
+            inputs.recovery = daemon.health?.recovery != nil
         case .unreachable(let error, _, _), .untrusted(let error, _, _):
             lastError = error
             noteFailure(after: inputs.stable)
