@@ -10,7 +10,7 @@ use stackly_domain::{
     CreatedItem, CreatedRecord, CreatedState, EnvironmentId, InstanceId, OperationId, ReasonCode,
     Registry,
 };
-use stackly_platform::Platform;
+use stackly_platform::{Platform, PlatformError};
 
 use super::Inner;
 use super::state::{OpHandle, OpRecord};
@@ -99,6 +99,8 @@ const fn code(text: &'static str) -> ReasonCode {
 /// another operation.
 pub(crate) const CREATED_BY_OTHER_OPERATION: ReasonCode = code("created_by_other_operation");
 const REMOVE_FAILED: ReasonCode = code("remove_failed");
+/// The instance manifest exists but cannot be read, so ownership is unknown.
+const MANIFEST_UNREADABLE: ReasonCode = code("manifest_unreadable");
 const COMPENSATOR_MISSING: ReasonCode = code("compensator_missing");
 const UNKNOWN_ITEM: ReasonCode = code("unknown_item");
 const TASK_STOPPED: ReasonCode = code("task_stopped");
@@ -291,12 +293,23 @@ async fn instance_tree(
     tokio::task::spawn_blocking(move || {
         let layout = scope.layout.layout();
         let paths = layout.instance_paths(id);
-        if let Ok(manifest) = read_instance_manifest(&scope.platform, &paths)
-            && manifest.created_by_operation() != scope.operation
-        {
-            return Ok(CompensationResult::NotOwned {
-                reason: CREATED_BY_OTHER_OPERATION,
-            });
+        match read_instance_manifest(&scope.platform, &paths) {
+            Ok(manifest) if manifest.created_by_operation() != scope.operation => {
+                return Ok(CompensationResult::NotOwned {
+                    reason: CREATED_BY_OTHER_OPERATION,
+                });
+            }
+            // No manifest: the operation stopped before it wrote one, or the
+            // tree is already gone.
+            Ok(_) | Err(CoreError::Platform(PlatformError::NotFound { .. })) => {}
+            // A manifest that is there but cannot be read might name
+            // another owner, so nothing is removed.
+            Err(error) => {
+                return Err(CompensationError::new(
+                    MANIFEST_UNREADABLE,
+                    error.to_string(),
+                ));
+            }
         }
         let platform = &scope.platform;
         let prepared = &scope.layout;

@@ -499,13 +499,18 @@ impl OperationContext {
 
     /// Records the intent to create the folders of the new resource the
     /// request named (`creates_resource`), before the first write to disk.
+    /// A resource the registry already holds is never claimed, so its
+    /// folders are never compensated (BR-023).
     ///
     /// # Errors
     ///
     /// Returns [`WorkError::Engine`] outside a step, for a resource that is
-    /// not an instance or environment, or when the commit fails.
+    /// not an instance or environment or that the registry already holds,
+    /// or when the registry read or the commit fails.
     pub async fn claim_resource(&mut self) -> Result<CreatedHandle, WorkError> {
-        let item = match self.resource {
+        self.healthy()?;
+        let resource = self.resource;
+        let item = match resource {
             OperationResource::Instance(id) => CreatedItem::InstanceTree(id),
             OperationResource::Environment(id) => CreatedItem::EnvironmentTree(id),
             _ => {
@@ -514,6 +519,22 @@ impl OperationContext {
                 }));
             }
         };
+        let exists = self
+            .inner
+            .read(move |registry| {
+                Ok(match resource {
+                    OperationResource::Instance(id) => registry.instance(id)?.value.is_some(),
+                    OperationResource::Environment(id) => registry.environment(id)?.value.is_some(),
+                    _ => false,
+                })
+            })
+            .await
+            .map_err(WorkError::Engine)?;
+        if exists {
+            return Err(WorkError::Engine(EngineError::InvalidUse {
+                reason: "a resource the registry already holds is not the operation's to claim",
+            }));
+        }
         self.intend(item, None).await
     }
 
