@@ -327,6 +327,43 @@ area! {
     }
 }
 
+area! {
+    /// Codes the CLI makes itself (spec 0008, *Kode error area cli*). They
+    /// only ever appear in `stackly` output, never on the wire, so none is
+    /// retryable and the area stays out of the contract digest. A code about
+    /// an operation also carries `operationId` and the operation resource.
+    pub mod cli = "cli", owner "spec 0008" {
+        USAGE = "cli.usage", InvalidInput, retryable false,
+            details ["kind"], "the arguments do not parse, written as an envelope only with --json";
+        INVALID_ENVIRONMENT = "cli.invalid_environment", InvalidInput, retryable false,
+            details ["variable", "reason"], "an environment variable the cli reads holds a value it refuses";
+        PLATFORM_UNAVAILABLE = "cli.platform_unavailable", Unavailable, retryable false,
+            details ["reason"], "the platform roots or the socket path cannot be worked out";
+        INPUT_REQUIRED = "cli.input_required", InvalidInput, retryable false,
+            details ["input"], "a prompt is needed while the cli runs noninteractive";
+        CONFIRMATION_REQUIRED = "cli.confirmation_required", InvalidInput, retryable false,
+            details ["flag"], "a confirmation is needed while the cli runs noninteractive without the approval flag";
+        CONFIRMATION_DECLINED = "cli.confirmation_declined", Cancelled, retryable false,
+            details [], "the person at the terminal did not answer y or yes";
+        WAIT_TIMEOUT = "cli.wait_timeout", Timeout, retryable false,
+            details ["state", "timeoutSeconds"], "the wait timeout ran out before the operation reached a final state";
+        WAIT_DISCONNECTED = "cli.wait_disconnected", Unavailable, retryable false,
+            details ["state"], "the connection to the daemon did not come back within 30 seconds while waiting";
+        INTERRUPTED = "cli.interrupted", Cancelled, retryable false,
+            details ["state"], "ctrl+c stopped the wait while the operation keeps running, exit 130";
+        CANCEL_NOT_APPLIED = "cli.cancel_not_applied", Conflict, retryable false,
+            details ["state"], "the operation ended in another state than cancelled after a cancel";
+        OPERATION_FAILED = "cli.operation_failed", Failed, retryable false,
+            details [], "fallback for an operation that failed without an error in its summary";
+        OPERATION_CANCELLED = "cli.operation_cancelled", Cancelled, retryable false,
+            details [], "fallback for an operation that was cancelled, which carries no error";
+        OPERATION_NEEDS_RECOVERY = "cli.operation_needs_recovery", Failed, retryable false,
+            details [], "fallback for an operation that needs recovery without an error in its summary";
+        PANIC = "cli.panic", Internal, retryable false,
+            details [], "the cli panicked, and the panic message is never shown";
+    }
+}
+
 /// Every registered area. A spec that needs a new area adds it here.
 pub const AREAS: &[Area] = &[
     protocol::AREA,
@@ -340,6 +377,7 @@ pub const AREAS: &[Area] = &[
     manifest::AREA,
     provider::AREA,
     internal::AREA,
+    cli::AREA,
 ];
 
 /// Every code of every area, area by area.
@@ -737,7 +775,66 @@ mod tests {
                 ("manifest", "spec 0009"),
                 ("provider", "spec 0009"),
                 ("internal", "spec 0006"),
+                ("cli", "spec 0008"),
             ]
+        );
+    }
+
+    #[test]
+    fn cli_codes_match_the_spec_0008_table() {
+        let table: Vec<_> = cli::ALL
+            .iter()
+            .map(|spec| (spec.code, spec.category, spec.details))
+            .collect();
+        let expected: &[(&str, ErrorCategory, &[&str])] = &[
+            ("cli.usage", ErrorCategory::InvalidInput, &["kind"]),
+            (
+                "cli.invalid_environment",
+                ErrorCategory::InvalidInput,
+                &["variable", "reason"],
+            ),
+            (
+                "cli.platform_unavailable",
+                ErrorCategory::Unavailable,
+                &["reason"],
+            ),
+            (
+                "cli.input_required",
+                ErrorCategory::InvalidInput,
+                &["input"],
+            ),
+            (
+                "cli.confirmation_required",
+                ErrorCategory::InvalidInput,
+                &["flag"],
+            ),
+            ("cli.confirmation_declined", ErrorCategory::Cancelled, &[]),
+            (
+                "cli.wait_timeout",
+                ErrorCategory::Timeout,
+                &["state", "timeoutSeconds"],
+            ),
+            (
+                "cli.wait_disconnected",
+                ErrorCategory::Unavailable,
+                &["state"],
+            ),
+            ("cli.interrupted", ErrorCategory::Cancelled, &["state"]),
+            (
+                "cli.cancel_not_applied",
+                ErrorCategory::Conflict,
+                &["state"],
+            ),
+            ("cli.operation_failed", ErrorCategory::Failed, &[]),
+            ("cli.operation_cancelled", ErrorCategory::Cancelled, &[]),
+            ("cli.operation_needs_recovery", ErrorCategory::Failed, &[]),
+            ("cli.panic", ErrorCategory::Internal, &[]),
+        ];
+        assert_eq!(table, expected);
+        assert!(
+            cli::ALL
+                .iter()
+                .all(|spec| !spec.retryable && spec.items.is_none())
         );
     }
 
