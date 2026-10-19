@@ -3,13 +3,21 @@
 //! `clients/swift` read the same index.
 
 use std::collections::BTreeSet;
+use std::fmt::Debug;
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use stackly_protocol::codes;
 use stackly_protocol::events::{EventKind, GapReason, ShutdownReason};
 use stackly_protocol::json::{DecodedFrame, decode_request, decode_server_frame, handshake_major};
+use stackly_protocol::operation::{
+    CancelDisposition, CreatedState, OperationAccepted, OperationCursor, OperationKind,
+    OperationState, PartialOutcome, RecoveryAction, RecoveryCause, RecoveryHint, StepState,
+    TriggerOrigin,
+};
+use stackly_protocol::secret::SecretInput;
 use stackly_protocol::{
     Call, ErrorBody, ErrorFrame, Reply, Request, ResourceKind, ResourceRef, ServerFrame, Timestamp,
 };
@@ -171,6 +179,32 @@ fn check_server_frame(entry: &Entry, bytes: &[u8]) {
     }
 }
 
+/// A shared DTO that no method carries yet, such as `SecretInput`: its
+/// fixture decodes, encodes to the same JSON, and decodes again.
+fn check_dto<T>(entry: &Entry, bytes: &[u8])
+where
+    T: DeserializeOwned + Serialize + PartialEq + Debug,
+{
+    let decoded: T =
+        serde_json::from_slice(bytes).unwrap_or_else(|err| panic!("{}: {err}", entry.file));
+    match entry.expect.as_str() {
+        "roundtrip" => {
+            let encoded = serde_json::to_vec(&decoded).expect("a decoded value always encodes");
+            let again: T = serde_json::from_slice(&encoded).expect("an encoded value decodes");
+            assert_eq!(again, decoded, "{}", entry.file);
+            let fixture: Value = serde_json::from_slice(bytes).expect("a fixture is JSON");
+            let written: Value = serde_json::from_slice(&encoded).expect("encoded output is JSON");
+            assert_eq!(
+                written, fixture,
+                "{}: Rust writes another shape",
+                entry.file
+            );
+        }
+        "decode" => {}
+        other => panic!("{}: expect `{other}` does not apply to a DTO", entry.file),
+    }
+}
+
 fn as_decoded(frame: ServerFrame) -> DecodedFrame {
     match frame {
         ServerFrame::Response(response) => DecodedFrame::Response(response),
@@ -224,6 +258,8 @@ fn every_fixture_in_the_index_behaves_as_expected_in_rust() {
         match entry.type_name.as_str() {
             "Request" => check_request(&entry, &bytes),
             "ServerFrame" => check_server_frame(&entry, &bytes),
+            "SecretInput" => check_dto::<SecretInput>(&entry, &bytes),
+            "OperationAccepted" => check_dto::<OperationAccepted>(&entry, &bytes),
             other => panic!("{}: no decoder for type `{other}`", entry.file),
         }
         checked += 1;
@@ -450,8 +486,8 @@ fn error_items_decode_whatever_their_kind_and_keep_the_envelope() {
     let error = error_body("frame-error-with-items.json");
     assert_eq!(error.items().len(), 2);
     assert_eq!(error.items()[0].kind(), "issue");
-    assert_eq!(error.items()[1].field("path"), Some("metadata.name"));
-    assert_eq!(error.detail("omitted"), Some("1"));
+    assert_eq!(error.items()[1].field("location"), Some("3:7"));
+    assert_eq!(error.detail("issueCount"), Some("2"));
 
     let error = error_body("frame-error-unknown-item-kind.json");
     assert_eq!(error.code(), "secret.reference_unresolved");
@@ -490,4 +526,226 @@ fn event_kind(file: &str) -> EventKind {
         panic!("{file}: expected an event");
     };
     event.kind
+}
+
+fn dto<T: DeserializeOwned>(file: &str) -> T {
+    serde_json::from_slice(&read(file)).unwrap_or_else(|err| panic!("{file}: {err}"))
+}
+
+#[test]
+fn every_secret_input_source_has_a_fixture_and_a_value_is_read_as_secret_text() {
+    let SecretInput::Value(text) = dto("dto-secret-input-value.json") else {
+        panic!("expected a value input");
+    };
+    assert_eq!(text.expose(), "fixture-secret-0001");
+    assert_eq!(format!("{text:?}"), "SecretText(****)");
+    assert_eq!(
+        dto::<SecretInput>("dto-secret-input-generate.json"),
+        SecretInput::Generate
+    );
+    assert_eq!(
+        dto::<SecretInput>("dto-secret-input-copy-from.json"),
+        SecretInput::CopyFrom("local:erp/postgres/admin".to_owned())
+    );
+    let SecretInput::Bind(reference) = dto("dto-secret-input-bind.json") else {
+        panic!("expected a bind input");
+    };
+    assert!(stackly_protocol::secret::is_secret_reference(&reference));
+    for file in [
+        "dto-secret-input-value.json",
+        "dto-secret-input-generate.json",
+        "dto-secret-input-copy-from.json",
+        "dto-secret-input-bind.json",
+    ] {
+        use stackly_protocol::json::Validate as _;
+        assert!(dto::<SecretInput>(file).validate().is_empty(), "{file}");
+    }
+}
+
+#[test]
+fn an_operation_list_request_carries_a_cursor_the_daemon_wrote() {
+    let request = decode_request(&read("request-operation-list.json")).unwrap();
+    let Call::OperationList(params) = request.call else {
+        panic!("expected operation.list");
+    };
+    assert_eq!(params.limit_or_default(), 20);
+    let before = params.before.expect("the fixture pages backwards");
+    assert!(OperationCursor::parse(&before).is_some(), "{before}");
+
+    let request = decode_request(&read("request-operation-list-without-fields.json")).unwrap();
+    let Call::OperationList(params) = request.call else {
+        panic!("expected operation.list");
+    };
+    assert!(!params.active_only);
+    assert_eq!(params.limit_or_default(), 50);
+
+    let Reply::OperationList(page) = reply("frame-response-operation-list.json") else {
+        panic!("expected an operation.list reply");
+    };
+    let next = page.next.expect("the fixture has a next page");
+    let cursor = OperationCursor::parse(&next).expect("the next cursor is valid");
+    assert_eq!(cursor.id(), page.items[1].id);
+}
+
+#[test]
+fn a_limit_above_200_is_refused_on_the_limit_field() {
+    let rejection = decode_request(&read("reject-operation-list-limit.json")).unwrap_err();
+    assert_eq!(rejection.error.code(), "request.invalid_params");
+    let field = &rejection.error.fields()[0];
+    assert_eq!((field.path(), field.code()), ("limit", "out_of_range"));
+}
+
+#[test]
+fn both_operation_events_are_about_the_operation_at_its_revision() {
+    for file in [
+        "frame-event-operation-state-changed.json",
+        "frame-event-operation-progress.json",
+    ] {
+        let frame: ServerFrame = serde_json::from_slice(&read(file)).unwrap();
+        let ServerFrame::Event(event) = frame else {
+            panic!("{file}: expected an event");
+        };
+        let (EventKind::OperationStateChanged(summary) | EventKind::OperationProgress(summary)) =
+            &event.kind
+        else {
+            panic!("{file}: expected an operation event");
+        };
+        let resource = event
+            .resource
+            .as_ref()
+            .expect("an operation event names it");
+        assert_eq!(resource.kind, ResourceKind::Operation, "{file}");
+        assert_eq!(resource.id, summary.id.to_string(), "{file}");
+        assert_eq!(event.revision, Some(summary.revision), "{file}");
+    }
+}
+
+#[test]
+fn an_abandoned_operation_lists_its_leftovers_in_the_reply_and_the_result() {
+    let Reply::OperationAbandon(reply) = reply("frame-response-operation-abandon.json") else {
+        panic!("expected an operation.abandon reply");
+    };
+    assert_eq!(reply.operation.state, OperationState::Failed);
+    let failure = reply
+        .operation
+        .failure
+        .as_ref()
+        .expect("a failed operation");
+    assert_eq!(failure.reason, "abandoned");
+    assert!(failure.error.is(&codes::operation::ABANDONED));
+    assert_eq!(failure.error.operation_id(), Some(reply.operation.id));
+    let partial = &reply.operation.result.as_ref().expect("a result").partial;
+    assert!(
+        partial
+            .iter()
+            .any(|item| item.outcome == PartialOutcome::LeftOver)
+    );
+    assert_eq!(reply.leftovers[0].state, CreatedState::Created);
+}
+
+#[test]
+fn an_operation_that_needs_recovery_carries_its_hint_cause_and_actions() {
+    let Reply::OperationGet(detail) = reply("frame-response-operation-get.json") else {
+        panic!("expected an operation.get reply");
+    };
+    let recovery = detail.operation.recovery.as_ref().expect("needs recovery");
+    assert_eq!(detail.operation.state, OperationState::NeedsRecovery);
+    assert_eq!(
+        (recovery.hint, recovery.cause),
+        (RecoveryHint::Abandon, RecoveryCause::CompensationFailed)
+    );
+    assert_eq!(recovery.actions, [RecoveryAction::Abandon]);
+    assert_eq!(detail.operation.failure, None);
+    assert_eq!(detail.steps[1].state, StepState::Failed);
+    assert_eq!(detail.created[0].state, CreatedState::CompensationFailed);
+}
+
+#[test]
+fn foreign_values_of_the_operation_enums_decode_as_unrecognized() {
+    let Reply::OperationGet(detail) = reply("frame-response-operation-get-unknown-values.json")
+    else {
+        panic!("expected an operation.get reply");
+    };
+    let operation = &detail.operation;
+    assert_eq!(operation.kind, OperationKind::Unrecognized);
+    assert_eq!(operation.trigger.origin, TriggerOrigin::Unrecognized);
+    assert_eq!(
+        operation.trigger.client,
+        Some(stackly_protocol::handshake::ClientKind::Unrecognized)
+    );
+    let recovery = operation.recovery.as_ref().expect("needs recovery");
+    assert_eq!(recovery.hint, RecoveryHint::Unrecognized);
+    assert_eq!(recovery.cause, RecoveryCause::Unrecognized);
+    assert_eq!(
+        recovery.actions,
+        [RecoveryAction::Unrecognized, RecoveryAction::Abandon]
+    );
+    let partial = &operation.result.as_ref().expect("a result").partial;
+    assert_eq!(partial[0].outcome, PartialOutcome::Unrecognized);
+    assert_eq!(detail.steps[1].state, StepState::Unrecognized);
+    assert_eq!(detail.created[0].state, CreatedState::Unrecognized);
+
+    let Reply::OperationCancel(cancel) =
+        reply("frame-response-operation-cancel-unknown-disposition.json")
+    else {
+        panic!("expected an operation.cancel reply");
+    };
+    assert_eq!(cancel.disposition, CancelDisposition::Unrecognized);
+}
+
+#[test]
+fn an_operation_accepted_reply_names_the_operation_and_whether_it_replayed() {
+    let accepted: OperationAccepted = dto("dto-operation-accepted.json");
+    assert!(!accepted.replayed);
+    assert_eq!(accepted.operation.state, OperationState::Queued);
+    assert_eq!(accepted.operation.revision.get(), 1);
+}
+
+#[test]
+fn a_reused_idempotency_key_names_the_first_operation() {
+    let error = error_body("frame-error-idempotency-key-reused.json");
+    assert!(error.is(&codes::operation::IDEMPOTENCY_KEY_REUSED));
+    assert_eq!(
+        error.detail("operationId"),
+        Some("0192f3a4-0000-7000-8000-000000000001")
+    );
+}
+
+#[test]
+fn package_and_settings_errors_list_each_issue_with_its_file_location_code_and_message() {
+    let package = error_body("frame-error-with-items.json");
+    assert!(package.is(&codes::manifest::INVALID));
+    assert_eq!(package.detail("package"), Some("nats"));
+    let settings = error_body("frame-error-invalid-settings.json");
+    assert!(settings.is(&codes::provider::INVALID_SETTINGS));
+    for error in [&package, &settings] {
+        assert_eq!(
+            error.detail("issueCount"),
+            Some(error.items().len().to_string().as_str())
+        );
+        for item in error.items() {
+            let keys: Vec<_> = item.fields().iter().map(|field| field.key()).collect();
+            assert_eq!(keys, ["file", "location", "code", "message"], "{item:?}");
+        }
+    }
+    assert_eq!(settings.items()[0].field("file"), Some("settings"));
+}
+
+#[test]
+fn an_unsupported_capability_names_the_capability_and_rule_br_016() {
+    let error = error_body("frame-error-unsupported-capability.json");
+    assert!(error.is(&codes::provider::UNSUPPORTED_CAPABILITY));
+    assert_eq!(error.detail("capability"), Some("reload"));
+    assert_eq!(error.rule(), Some("BR-016"));
+}
+
+#[test]
+fn a_provider_resource_is_named_by_its_revision_key_text() {
+    let error = error_body("frame-error-provider-not-found.json");
+    let resource = error.resource().expect("the error names the provider");
+    assert_eq!(resource.kind, ResourceKind::Provider);
+    let (provider, rest) = resource.id.split_once('@').expect("<provider>@<rest>");
+    let (revision, digest) = rest.split_once('#').expect("<revision>#<digest>");
+    assert_eq!((provider, revision), ("official/nats", "2.12.1-1"));
+    assert_eq!(digest.len(), 64);
 }

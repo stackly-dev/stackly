@@ -1,0 +1,22 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000403",
+    "error": {
+      "code": "resource.not_found",
+      "category": "not_found",
+      "message": "the resource does not exist",
+      "retryable": false,
+      "resource": {
+        "kind": "provider",
+        "id": "official/nats@2.12.1-1#cb95f16d56a9ab7b938a03732ddf4ab691346124747fbb811ac6c09928f1fa6b"
+      },
+      "fields": [],
+      "hint": null,
+      "details": [],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

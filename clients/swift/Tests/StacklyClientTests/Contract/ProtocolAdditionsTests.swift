@@ -69,8 +69,8 @@ struct ProtocolAdditionsTests {
         let listed = try Self.error("frame-error-with-items.json")
         #expect(listed.items?.count == 2)
         #expect(listed.items?.first?.kind == "issue")
-        #expect(listed.items?.last?.fields?.first { $0.key == "path" }?.value == "metadata.name")
-        #expect(listed.detail("omitted") == "1")
+        #expect(listed.items?.last?.fields?.first { $0.key == "location" }?.value == "3:7")
+        #expect(listed.detail("issueCount") == "2")
 
         let foreign = try Self.error("frame-error-unknown-item-kind.json")
         #expect(foreign.code == "secret.reference_unresolved")

@@ -1,0 +1,109 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000301",
+    "reply": {
+      "type": "operation.get",
+      "content": {
+        "operation": {
+          "id": "0192f3a4-0000-7000-8000-000000000002",
+          "kind": "teleport_instance",
+          "resource": {
+            "kind": "instance",
+            "id": "0192f3a4-0000-7000-8000-0000000000b1"
+          },
+          "state": "needs_recovery",
+          "stage": "initdb",
+          "progress": {
+            "type": "indeterminate"
+          },
+          "waitingOn": null,
+          "cancelRequestedAt": null,
+          "pointOfNoReturnAt": null,
+          "failure": null,
+          "recovery": {
+            "hint": "ask_a_friend",
+            "cause": "cosmic_ray",
+            "error": {
+              "code": "operation.compensation_failed",
+              "category": "failed",
+              "message": "undoing the instance folder failed",
+              "retryable": false,
+              "resource": null,
+              "fields": [],
+              "hint": null,
+              "details": [
+                {
+                  "key": "item",
+                  "value": "0192f3a4-0000-7000-8000-0000000000b1"
+                },
+                {
+                  "key": "detail",
+                  "value": "io_error"
+                }
+              ],
+              "operationId": "0192f3a4-0000-7000-8000-000000000002",
+              "rule": null,
+              "items": []
+            },
+            "actions": [
+              "rewind",
+              "abandon"
+            ]
+          },
+          "result": {
+            "resources": [],
+            "partial": [
+              {
+                "item": "x",
+                "resource": null,
+                "outcome": "postponed",
+                "code": null
+              }
+            ]
+          },
+          "trigger": {
+            "origin": "scheduler",
+            "client": "agent"
+          },
+          "createdAt": "2026-10-19T08:00:00.000Z",
+          "startedAt": "2026-10-19T08:00:00.120Z",
+          "updatedAt": "2026-10-19T08:00:05.500Z",
+          "revision": 9
+        },
+        "steps": [
+          {
+            "seq": 1,
+            "name": "reserve",
+            "state": "done",
+            "repeatable": true,
+            "reversible": true,
+            "attempts": 1,
+            "startedAt": "2026-10-19T08:00:00.120Z",
+            "finishedAt": "2026-10-19T08:00:00.200Z",
+            "errorCode": null
+          },
+          {
+            "seq": 2,
+            "name": "initdb",
+            "state": "paused",
+            "repeatable": false,
+            "reversible": true,
+            "attempts": 1,
+            "startedAt": "2026-10-19T08:00:00.200Z",
+            "finishedAt": "2026-10-19T08:00:03.000Z",
+            "errorCode": "internal.unexpected"
+          }
+        ],
+        "created": [
+          {
+            "kind": "instance_tree",
+            "reference": "0192f3a4-0000-7000-8000-0000000000b1",
+            "state": "archived",
+            "detail": "io_error"
+          }
+        ]
+      }
+    }
+  }
+}

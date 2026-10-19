@@ -29,6 +29,18 @@
       "owner": "spec 0005"
     },
     {
+      "name": "operation",
+      "owner": "spec 0007"
+    },
+    {
+      "name": "manifest",
+      "owner": "spec 0009"
+    },
+    {
+      "name": "provider",
+      "owner": "spec 0009"
+    },
+    {
       "name": "internal",
       "owner": "spec 0006"
     }
@@ -255,6 +267,151 @@
       "summary": "daemon side: the client read nothing for 30 seconds, only ever logged"
     },
     {
+      "code": "manifest.invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "package",
+        "issueCount",
+        "omitted"
+      ],
+      "items": {
+        "kind": "issue",
+        "fields": [
+          "file",
+          "location",
+          "code",
+          "message"
+        ],
+        "max": 100
+      },
+      "summary": "a provider package cannot be read or breaks the manifest schema, and items lists each issue"
+    },
+    {
+      "code": "operation.abandoned",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "leftovers"
+      ],
+      "items": null,
+      "summary": "the final error of an abandoned operation"
+    },
+    {
+      "code": "operation.compensation_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "item",
+        "detail"
+      ],
+      "items": null,
+      "summary": "undoing an item the operation created failed"
+    },
+    {
+      "code": "operation.daemon_stopping",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the final error of an operation stopped because the daemon shut down"
+    },
+    {
+      "code": "operation.idempotency_key_required",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "method"
+      ],
+      "items": null,
+      "summary": "a method that starts an operation arrived without an idempotency key"
+    },
+    {
+      "code": "operation.idempotency_key_reused",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "operationId",
+        "method"
+      ],
+      "items": null,
+      "summary": "the idempotency key belongs to an operation another request started"
+    },
+    {
+      "code": "operation.interrupted",
+      "category": "failed",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the final error of an operation closed after the daemon stopped in the middle of it"
+    },
+    {
+      "code": "operation.journal_full",
+      "category": "internal",
+      "retryable": false,
+      "details": [
+        "kind",
+        "max"
+      ],
+      "items": null,
+      "summary": "an operation recorded more steps or created items than its journal holds"
+    },
+    {
+      "code": "operation.not_abandonable",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "operationId",
+        "state",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the operation cannot be abandoned"
+    },
+    {
+      "code": "operation.not_resumable",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "operationId",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the operation cannot be resumed"
+    },
+    {
+      "code": "operation.payload_too_large",
+      "category": "internal",
+      "retryable": false,
+      "details": [
+        "field",
+        "max"
+      ],
+      "items": null,
+      "summary": "a journal payload is above its limit, a bug in the caller"
+    },
+    {
+      "code": "operation.queue_full",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "max"
+      ],
+      "items": null,
+      "summary": "the operation queue is full"
+    },
+    {
+      "code": "operation.recovery_required",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "operationId",
+        "lockKey"
+      ],
+      "items": null,
+      "summary": "an operation that needs recovery holds a lock the request needs"
+    },
+    {
       "code": "protocol.handshake_repeated",
       "category": "invalid_input",
       "retryable": false,
@@ -282,6 +439,78 @@
       ],
       "items": null,
       "summary": "the client speaks another protocol major"
+    },
+    {
+      "code": "provider.endpoint_not_loopback",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "endpoint"
+      ],
+      "items": null,
+      "summary": "an endpoint of the instance is not on a loopback address"
+    },
+    {
+      "code": "provider.invalid_settings",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "issueCount",
+        "omitted"
+      ],
+      "items": {
+        "kind": "issue",
+        "fields": [
+          "file",
+          "location",
+          "code",
+          "message"
+        ],
+        "max": 100
+      },
+      "summary": "the settings do not match the provider's settings schema, and items lists each issue"
+    },
+    {
+      "code": "provider.plan_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "position",
+        "reason"
+      ],
+      "items": null,
+      "summary": "an argument or a path of the plan breaks a plan rule"
+    },
+    {
+      "code": "provider.render_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "configFile",
+        "reason"
+      ],
+      "items": null,
+      "summary": "a rendered config file does not parse or is too large"
+    },
+    {
+      "code": "provider.unrepresentable_value",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "field"
+      ],
+      "items": null,
+      "summary": "a value cannot be written in the format of the config file that uses it"
+    },
+    {
+      "code": "provider.unsupported_capability",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "capability"
+      ],
+      "items": null,
+      "summary": "the provider lacks the capability the action needs"
     },
     {
       "code": "registry.active_lease_exists",

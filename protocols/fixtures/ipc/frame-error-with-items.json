@@ -5,15 +5,19 @@
     "error": {
       "code": "manifest.invalid",
       "category": "invalid_input",
-      "message": "the manifest has 3 issues",
+      "message": "the provider package is invalid",
       "retryable": false,
       "resource": null,
       "fields": [],
       "hint": null,
       "details": [
         {
-          "key": "omitted",
-          "value": "1"
+          "key": "package",
+          "value": "nats"
+        },
+        {
+          "key": "issueCount",
+          "value": "2"
         }
       ],
       "operationId": null,
@@ -23,12 +27,20 @@
           "kind": "issue",
           "fields": [
             {
-              "key": "path",
-              "value": "spec.ports[0]"
+              "key": "file",
+              "value": "provider.yaml"
+            },
+            {
+              "key": "location",
+              "value": "lifecycle.start.args[1]"
             },
             {
               "key": "code",
-              "value": "required"
+              "value": "unknown_token"
+            },
+            {
+              "key": "message",
+              "value": "unknown token instance.nope"
             }
           ]
         },
@@ -36,12 +48,20 @@
           "kind": "issue",
           "fields": [
             {
-              "key": "path",
-              "value": "metadata.name"
+              "key": "file",
+              "value": "templates/nats.conf.tmpl"
+            },
+            {
+              "key": "location",
+              "value": "3:7"
             },
             {
               "key": "code",
-              "value": "too_long"
+              "value": "template_syntax"
+            },
+            {
+              "key": "message",
+              "value": "unclosed placeholder"
             }
           ]
         }

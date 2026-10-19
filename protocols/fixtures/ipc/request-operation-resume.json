@@ -1,0 +1,11 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000305",
+  "idempotencyKey": null,
+  "call": {
+    "type": "operation.resume",
+    "content": {
+      "operationId": "0192f3a4-0000-7000-8000-000000000002",
+      "expectedRevision": 9
+    }
+  }
+}

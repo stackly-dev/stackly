@@ -254,6 +254,72 @@ area! {
 }
 
 area! {
+    /// Operation engine codes (spec 0007, *Kode error*). Only
+    /// `operation.queue_full` is retryable. `interrupted`,
+    /// `daemon_stopping`, `abandoned`, and `compensation_failed` are only
+    /// ever the final error of an operation, in its `failure.error`.
+    pub mod operation = "operation", owner "spec 0007" {
+        IDEMPOTENCY_KEY_REQUIRED = "operation.idempotency_key_required", InvalidInput, retryable false,
+            details ["method"], "a method that starts an operation arrived without an idempotency key";
+        IDEMPOTENCY_KEY_REUSED = "operation.idempotency_key_reused", InvalidInput, retryable false,
+            details ["operationId", "method"], "the idempotency key belongs to an operation another request started";
+        QUEUE_FULL = "operation.queue_full", Unavailable, retryable true,
+            details ["max"], "the operation queue is full";
+        RECOVERY_REQUIRED = "operation.recovery_required", Conflict, retryable false,
+            details ["operationId", "lockKey"], "an operation that needs recovery holds a lock the request needs";
+        NOT_RESUMABLE = "operation.not_resumable", Conflict, retryable false,
+            details ["operationId", "reason"], "the operation cannot be resumed";
+        NOT_ABANDONABLE = "operation.not_abandonable", Conflict, retryable false,
+            details ["operationId", "state", "reason"], "the operation cannot be abandoned";
+        PAYLOAD_TOO_LARGE = "operation.payload_too_large", Internal, retryable false,
+            details ["field", "max"], "a journal payload is above its limit, a bug in the caller";
+        JOURNAL_FULL = "operation.journal_full", Internal, retryable false,
+            details ["kind", "max"], "an operation recorded more steps or created items than its journal holds";
+        INTERRUPTED = "operation.interrupted", Failed, retryable false,
+            details [], "the final error of an operation closed after the daemon stopped in the middle of it";
+        DAEMON_STOPPING = "operation.daemon_stopping", Unavailable, retryable false,
+            details [], "the final error of an operation stopped because the daemon shut down";
+        ABANDONED = "operation.abandoned", Failed, retryable false,
+            details ["leftovers"], "the final error of an abandoned operation";
+        COMPENSATION_FAILED = "operation.compensation_failed", Failed, retryable false,
+            details ["item", "detail"], "undoing an item the operation created failed";
+    }
+}
+
+area! {
+    /// Provider package codes (spec 0009, *Kode error di wire*). Each issue
+    /// is one `issue` item; an issue message never holds a settings text
+    /// value or a secret.
+    pub mod manifest = "manifest", owner "spec 0009" {
+        INVALID = "manifest.invalid", InvalidInput, retryable false,
+            details ["package", "issueCount", "omitted"],
+            items { kind "issue", fields ["file", "location", "code", "message"], max 100 },
+            "a provider package cannot be read or breaks the manifest schema, and items lists each issue";
+    }
+}
+
+area! {
+    /// Provider engine codes (spec 0009, *Kode error di wire*): settings
+    /// and the plans built from a validated package.
+    pub mod provider = "provider", owner "spec 0009" {
+        INVALID_SETTINGS = "provider.invalid_settings", InvalidInput, retryable false,
+            details ["issueCount", "omitted"],
+            items { kind "issue", fields ["file", "location", "code", "message"], max 100 },
+            "the settings do not match the provider's settings schema, and items lists each issue";
+        UNSUPPORTED_CAPABILITY = "provider.unsupported_capability", Unsupported, retryable false,
+            details ["capability"], "the provider lacks the capability the action needs";
+        ENDPOINT_NOT_LOOPBACK = "provider.endpoint_not_loopback", InvalidInput, retryable false,
+            details ["endpoint"], "an endpoint of the instance is not on a loopback address";
+        UNREPRESENTABLE_VALUE = "provider.unrepresentable_value", InvalidInput, retryable false,
+            details ["field"], "a value cannot be written in the format of the config file that uses it";
+        PLAN_INVALID = "provider.plan_invalid", InvalidInput, retryable false,
+            details ["position", "reason"], "an argument or a path of the plan breaks a plan rule";
+        RENDER_FAILED = "provider.render_failed", Failed, retryable false,
+            details ["configFile", "reason"], "a rendered config file does not parse or is too large";
+    }
+}
+
+area! {
     /// Codes for bugs and broken invariants.
     pub mod internal = "internal", owner "spec 0006" {
         UNEXPECTED = "internal.unexpected", Internal, retryable false,
@@ -270,6 +336,9 @@ pub const AREAS: &[Area] = &[
     resource::AREA,
     daemon::AREA,
     registry::AREA,
+    operation::AREA,
+    manifest::AREA,
+    provider::AREA,
     internal::AREA,
 ];
 
@@ -332,6 +401,132 @@ impl UntrustedReason {
             Self::ParentGroupOrOtherAccess => "parent_group_or_other_access",
             Self::PeerUidMismatch => "peer_uid_mismatch",
             Self::PeerCredentialsUnavailable => "peer_credentials_unavailable",
+        }
+    }
+}
+
+/// Why `operation.resume` refused, the fixed values of the `reason` detail
+/// of `operation.not_resumable` (spec 0007).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum NotResumableReason {
+    /// The operation is not in state `needs_recovery`.
+    WrongState,
+    /// The operation's kind never resumes.
+    KindNotResumable,
+    /// The step that failed or was interrupted cannot run again.
+    StepNotRepeatable,
+    /// No work factory is registered for the operation's kind.
+    NoFactory,
+    /// Undoing the operation already started or failed.
+    CompensationFailed,
+    /// The engine is undoing the operation on its own right now.
+    AutoCompensating,
+}
+
+impl NotResumableReason {
+    /// Every reason.
+    pub const ALL: [Self; 6] = [
+        Self::WrongState,
+        Self::KindNotResumable,
+        Self::StepNotRepeatable,
+        Self::NoFactory,
+        Self::CompensationFailed,
+        Self::AutoCompensating,
+    ];
+
+    /// The detail value, such as `wrong_state`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::WrongState => "wrong_state",
+            Self::KindNotResumable => "kind_not_resumable",
+            Self::StepNotRepeatable => "step_not_repeatable",
+            Self::NoFactory => "no_factory",
+            Self::CompensationFailed => "compensation_failed",
+            Self::AutoCompensating => "auto_compensating",
+        }
+    }
+}
+
+/// Why `operation.abandon` refused, the fixed values of the `reason`
+/// detail of `operation.not_abandonable` (spec 0007).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum NotAbandonableReason {
+    /// The operation is not in state `needs_recovery`.
+    WrongState,
+    /// The engine is undoing the operation on its own right now.
+    AutoCompensating,
+}
+
+impl NotAbandonableReason {
+    /// Every reason.
+    pub const ALL: [Self; 2] = [Self::WrongState, Self::AutoCompensating];
+
+    /// The detail value, such as `auto_compensating`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::WrongState => "wrong_state",
+            Self::AutoCompensating => "auto_compensating",
+        }
+    }
+}
+
+/// Why a plan broke a plan rule, the fixed values of the `reason` detail
+/// of `provider.plan_invalid` (spec 0009).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlanInvalidReason {
+    /// An argument is longer than 4096 bytes after rendering.
+    ArgumentTooLong,
+    /// A path from the context is not UTF-8.
+    PathNotUtf8,
+    /// A path from the context is not absolute, or holds `.` or `..`.
+    PathEscapesScope,
+}
+
+impl PlanInvalidReason {
+    /// Every reason.
+    pub const ALL: [Self; 3] = [
+        Self::ArgumentTooLong,
+        Self::PathNotUtf8,
+        Self::PathEscapesScope,
+    ];
+
+    /// The detail value, such as `argument_too_long`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ArgumentTooLong => "argument_too_long",
+            Self::PathNotUtf8 => "path_not_utf8",
+            Self::PathEscapesScope => "path_escapes_scope",
+        }
+    }
+}
+
+/// Why rendering a config file failed, the fixed values of the `reason`
+/// detail of `provider.render_failed` (spec 0009).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RenderFailedReason {
+    /// A rendered `yaml` or `json` file does not parse.
+    RenderedOutputInvalid,
+    /// A rendered file is larger than 1 MiB.
+    OutputTooLarge,
+}
+
+impl RenderFailedReason {
+    /// Every reason.
+    pub const ALL: [Self; 2] = [Self::RenderedOutputInvalid, Self::OutputTooLarge];
+
+    /// The detail value, such as `output_too_large`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RenderedOutputInvalid => "rendered_output_invalid",
+            Self::OutputTooLarge => "output_too_large",
         }
     }
 }
@@ -511,6 +706,7 @@ mod tests {
                 "resource.busy",
                 "daemon.starting",
                 "daemon.shutting_down",
+                "operation.queue_full",
             ]
         );
     }
@@ -537,6 +733,9 @@ mod tests {
                 ("resource", "spec 0006"),
                 ("daemon", "spec 0006"),
                 ("registry", "spec 0005"),
+                ("operation", "spec 0007"),
+                ("manifest", "spec 0009"),
+                ("provider", "spec 0009"),
                 ("internal", "spec 0006"),
             ]
         );
@@ -614,6 +813,171 @@ mod tests {
         ];
         assert_eq!(table, expected);
         assert!(registry::ALL.iter().all(|spec| !spec.retryable));
+    }
+
+    #[test]
+    fn operation_codes_match_the_spec_0007_table() {
+        let table: Vec<_> = operation::ALL
+            .iter()
+            .map(|spec| (spec.code, spec.category, spec.retryable, spec.details))
+            .collect();
+        let expected: &[(&str, ErrorCategory, bool, &[&str])] = &[
+            (
+                "operation.idempotency_key_required",
+                ErrorCategory::InvalidInput,
+                false,
+                &["method"],
+            ),
+            (
+                "operation.idempotency_key_reused",
+                ErrorCategory::InvalidInput,
+                false,
+                &["operationId", "method"],
+            ),
+            (
+                "operation.queue_full",
+                ErrorCategory::Unavailable,
+                true,
+                &["max"],
+            ),
+            (
+                "operation.recovery_required",
+                ErrorCategory::Conflict,
+                false,
+                &["operationId", "lockKey"],
+            ),
+            (
+                "operation.not_resumable",
+                ErrorCategory::Conflict,
+                false,
+                &["operationId", "reason"],
+            ),
+            (
+                "operation.not_abandonable",
+                ErrorCategory::Conflict,
+                false,
+                &["operationId", "state", "reason"],
+            ),
+            (
+                "operation.payload_too_large",
+                ErrorCategory::Internal,
+                false,
+                &["field", "max"],
+            ),
+            (
+                "operation.journal_full",
+                ErrorCategory::Internal,
+                false,
+                &["kind", "max"],
+            ),
+            ("operation.interrupted", ErrorCategory::Failed, false, &[]),
+            (
+                "operation.daemon_stopping",
+                ErrorCategory::Unavailable,
+                false,
+                &[],
+            ),
+            (
+                "operation.abandoned",
+                ErrorCategory::Failed,
+                false,
+                &["leftovers"],
+            ),
+            (
+                "operation.compensation_failed",
+                ErrorCategory::Failed,
+                false,
+                &["item", "detail"],
+            ),
+        ];
+        assert_eq!(table, expected);
+        assert!(operation::ALL.iter().all(|spec| spec.items.is_none()));
+    }
+
+    #[test]
+    fn manifest_and_provider_codes_match_the_spec_0009_table() {
+        let issue = Some(ItemSpec {
+            kind: "issue",
+            fields: &["file", "location", "code", "message"],
+            max: 100,
+        });
+        let table: Vec<_> = manifest::ALL
+            .iter()
+            .chain(provider::ALL)
+            .map(|spec| (spec.code, spec.category, spec.details, spec.items))
+            .collect();
+        let expected: &[(&str, ErrorCategory, &[&str], Option<ItemSpec>)] = &[
+            (
+                "manifest.invalid",
+                ErrorCategory::InvalidInput,
+                &["package", "issueCount", "omitted"],
+                issue,
+            ),
+            (
+                "provider.invalid_settings",
+                ErrorCategory::InvalidInput,
+                &["issueCount", "omitted"],
+                issue,
+            ),
+            (
+                "provider.unsupported_capability",
+                ErrorCategory::Unsupported,
+                &["capability"],
+                None,
+            ),
+            (
+                "provider.endpoint_not_loopback",
+                ErrorCategory::InvalidInput,
+                &["endpoint"],
+                None,
+            ),
+            (
+                "provider.unrepresentable_value",
+                ErrorCategory::InvalidInput,
+                &["field"],
+                None,
+            ),
+            (
+                "provider.plan_invalid",
+                ErrorCategory::InvalidInput,
+                &["position", "reason"],
+                None,
+            ),
+            (
+                "provider.render_failed",
+                ErrorCategory::Failed,
+                &["configFile", "reason"],
+                None,
+            ),
+        ];
+        assert_eq!(table, expected);
+        assert!(
+            manifest::ALL
+                .iter()
+                .chain(provider::ALL)
+                .all(|spec| !spec.retryable)
+        );
+    }
+
+    #[test]
+    fn operation_refusal_reasons_are_snake_case_and_distinct() {
+        let resume: HashSet<_> = NotResumableReason::ALL.iter().map(|r| r.as_str()).collect();
+        assert_eq!(resume.len(), NotResumableReason::ALL.len());
+        let abandon: HashSet<_> = NotAbandonableReason::ALL
+            .iter()
+            .map(|r| r.as_str())
+            .collect();
+        assert_eq!(abandon.len(), NotAbandonableReason::ALL.len());
+        assert!(resume.iter().chain(&abandon).all(|value| is_snake(value)));
+    }
+
+    #[test]
+    fn provider_reasons_are_snake_case_and_distinct() {
+        let plan: HashSet<_> = PlanInvalidReason::ALL.iter().map(|r| r.as_str()).collect();
+        assert_eq!(plan.len(), PlanInvalidReason::ALL.len());
+        let render: HashSet<_> = RenderFailedReason::ALL.iter().map(|r| r.as_str()).collect();
+        assert_eq!(render.len(), RenderFailedReason::ALL.len());
+        assert!(plan.iter().chain(&render).all(|value| is_snake(value)));
     }
 
     #[test]
