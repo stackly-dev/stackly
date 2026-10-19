@@ -16,18 +16,19 @@ Fakta yang membatasi: GUI tidak pernah menautkan Rust, jadi apa pun yang dihitun
 
 ### Keputusan 1: sumber connection string
 
-#### Option 1: blok `connection` di manifest dengan template interpolasi dan aturan encode per entri (dipilih)
+#### Option 1: blok `connection` di manifest berisi template URI, dirender lewat `PlanContext` dan resolver plan (dipilih, disederhanakan setelah cross check)
 
 **Pros**:
 
 - Provider baru mendapat tombol Copy dan `stackly instance connection` tanpa kode Rust atau Swift (REQ-029).
-- Memakai grammar dan validasi interpolasi spec 0009 yang sudah ada, jadi token yang salah ditolak saat paket dimuat.
+- Memakai grammar, validasi, `PlanContext`, dan resolver interpolasi spec 0009 yang sudah ada, jadi host, port, dan socket nya sama dengan plan dan token yang salah ditolak saat paket dimuat; render sentinel menolak template yang hasilnya bukan URI.
 - Satu paket bisa punya beberapa bentuk (PostgreSQL TCP dan socket, NATS client dan monitoring).
 
 **Cons**:
 
 - Field manifest baru mengubah `manifest_sha256` paket PostgreSQL dan NATS, jadi urutan dengan evidence BR-025 harus diatur.
-- Aturan encode URI harus didefinisikan dan dijaga di dua klien.
+- Aturan encode URI dijaga di tiga tempat (core, protokol untuk CLI, dan Swift) lewat satu fixture.
+- Draft pertama punya field `encoding` dan token `settings.*`; cross check menunjukkan tidak ada paket yang memakainya, jadi keduanya dibuang dan bisa ditambah kemudian secara additive.
 
 #### Option 2: kode per provider di daemon
 
@@ -117,7 +118,7 @@ Fakta yang membatasi: GUI tidak pernah menautkan Rust, jadi apa pun yang dihitun
 
 ### Keputusan 4: cara menghitung ukuran data
 
-#### Option 1: penelusuran blok teralokasi lewat port `Filesystem`, dengan batas entri, tenggat, dan cache (dipilih)
+#### Option 1: penelusuran blok teralokasi lewat port `Filesystem`, hanya saat diminta, dengan batas entri, tenggat, cache, dan batas scan bersamaan (dipilih, dipersempit setelah cross check)
 
 **Pros**:
 
@@ -125,7 +126,7 @@ Fakta yang membatasi: GUI tidak pernah menautkan Rust, jadi apa pun yang dihitun
 
 **Cons**:
 
-- Method port baru, dan folder sangat besar hanya mendapat "at least".
+- Method port baru, folder sangat besar hanya mendapat "at least", dan inspector serta `inspect` menampilkan "—" sampai ukuran pernah dihitung (draft pertama memulai scan di setiap pilihan baris inspector, yang bisa memulai puluhan scan saat pengguna menelusuri tabel).
 
 #### Option 2: menjalankan `du`
 
@@ -149,11 +150,11 @@ Fakta yang membatasi: GUI tidak pernah menautkan Rust, jadi apa pun yang dihitun
 
 ### Keputusan 5: baris Restarts
 
-#### Option 1: jumlah di jendela restart policy dari `InstanceSummary.restart` (dipilih)
+#### Option 1: jumlah di jendela restart policy dari `InstanceSummary.restart`, berlabel "Restart attempts" dan tersembunyi saat 0 (dipilih)
 
 **Pros**:
 
-- Nilai jujur yang sudah ada, tanpa migrasi; label menyebut jendelanya.
+- Nilai jujur yang sudah ada, tanpa migrasi; label menyebut jendelanya. Baris disembunyikan saat 0 karena riwayat dihapus setelah 60 detik ready dan saat daemon restart, sehingga "None" bisa menyesatkan.
 
 **Cons**:
 
@@ -237,7 +238,7 @@ Fakta yang membatasi: GUI tidak pernah menautkan Rust, jadi apa pun yang dihitun
 
 ### Keputusan 9: bukti offline
 
-#### Option 1: instrumentasi otomatis (catalog, `Fetcher`, `CodeSigning`) ditambah run native dengan jaringan mati setelah persetujuan (dipilih)
+#### Option 1: test di dalam proses (`stacklyd::server::start` dengan binary CLI asli) dengan instrumentasi catalog, `Fetcher`, dan `CodeSigning`, ditambah run native dengan jaringan mati setelah persetujuan (dipilih)
 
 **Pros**:
 
@@ -301,6 +302,28 @@ Fakta yang membatasi: GUI tidak pernah menautkan Rust, jadi apa pun yang dihitun
 
 - Alamat hilang dari clipboard setelah 90 detik tanpa alasan.
 
+### Keputusan 12: tampilan proses dan readiness
+
+#### Option 1: header memakai label status spec 0012, Summary menulis baris Process dan Readiness terpisah (dipilih setelah cross check)
+
+**Pros**:
+
+- Konsisten dengan label status di semua layar ("Starting…" dan "Not Ready" selama probe belum berhasil), dan tetap memenuhi scope "status process dan readiness tampil terpisah" lewat dua baris yang dibacakan VoiceOver sebagai dua elemen.
+
+**Cons**:
+
+- Dua tempat menampilkan status (header dan dua baris).
+
+#### Option 2: header menulis "Running" selama proses hidup (pilihan draft pertama)
+
+**Pros**:
+
+- Paling dekat dengan kata "process" di scope.
+
+**Cons**:
+
+- Bertentangan dengan tabel status spec 0012 yang sudah dibangun, sehingga label yang sama berarti dua hal di layar berbeda.
+
 ## Rationale
 
 Poros spec ini adalah AC-016 dan JOURNEY-01 sekaligus: pengguna harus bisa menyalin connection string lengkap, tetapi password tidak boleh keluar tanpa aksi eksplisit dan tidak boleh lewat jalur lain selain `secret.reveal`. Daemon yang merender bagian tersamar dan client yang menyusun dengan nilai reveal (Keputusan 2) adalah satu satunya bentuk yang memenuhi keduanya tanpa menambah jalur keluar nilai, dan `RevealableSecretText` spec 0011 memang dirancang untuk itu. Connection string di manifest (Keputusan 1) menjaga REQ-029: setiap provider berikutnya cukup menulis template.
@@ -315,4 +338,32 @@ Spec ini dikerjakan di sesi yang sama dengan spec 0020, jadi keputusan `socketPa
 
 ## Cross check
 
-Diisi setelah cross check model lain.
+Dijalankan 2026-10-20 oleh model lain (Sonnet, read only) atas draft `4e9de0c`, lalu semua rekomendasi diterima lead atas nama user dengan aturan tetap "opsi yang direkomendasikan yang diambil".
+
+| ID | Temuan | Keputusan yang diterapkan |
+| --- | --- | --- |
+| G1 | Header "Running" bertentangan dengan tabel status spec 0012; teks Readiness hanya tabel di spec 0022 | header memakai label spec 0012; baris Process dan Readiness terpisah dari `ProcessText` dan `ReadinessText` (Keputusan 12, AC-8) |
+| G2 | Paritas teks bertentangan dengan baris CLI spec 0022; fixture tanpa summary dan usage | paritas hanya untuk baris yang ditambah spec ini; fixture triple dengan `TZ=UTC` dan jam tetap (AC-7) |
+| G3 | "Dibuka setelah create" bertentangan dengan spec 0020; navigasi tanpa pemilik | dihapus dari AC-11; usulan spec 0022 untuk `NavigationStack`, `instanceRequest`, dan klik ulang sidebar |
+| G4 | `RevealableSecretText` hanya untuk satu reveal; `compose` tanpa tipe dan aturan nilai hilang | `compose` dengan peta reference dan `MissingValue`; Show menampilkan string tersusun; usulan spec 0011 `references:compose:` semua atau tidak sama sekali |
+| G5 | Alasan tidak tersedia bertumpuk dan tanpa urutan | urutan `retained`, `package_unavailable`, `port_not_assigned`; `socket_not_created` dibuang; `settings.*` dibuang |
+| G6 | Copy dan Show tanpa aturan saat belum siap atau secret hilang | caution "Not accepting connections yet."; nonaktif dengan alasan saat secret `missing` |
+| G7 | Data usage tanpa `refresh`, kode tanpa tabel, tenggat tanpa tipe, format byte kecil | `refresh` dan `cachedOnly`, tabel kode, `Duration`, `files` dibuang, aturan format byte bersama |
+| G8 | Tipe `target` teks, `line` tidak dipakai, nama tampil wajib padahal paket bisa rusak | `HostTarget`, `line` dibuang, `displayName` opsional dengan cadangan software |
+| G9 | Enum berdata tanpa jalur nilai asing; tiga field untuk satu state | `ConnectionPart` sebagai struct dengan `kind` terbuka; `ConnectionState` terbuka dengan test konsistensi |
+| G10 | Kode issue manifest tidak disebut | `connection_invalid` dan `connection_name_duplicate` di usulan spec 0009 |
+| G11 | Usulan paket dan urutan evidence tidak lengkap | usulan AC-4 spec 0023 dan baris prasyarat di build plan spec 0019 dan 0023 |
+| G12 | Sumber `running`, folder run, urutan, status tanpa baris tidak disebut | lifecycle, `instance_run_dir`, urut nama dan field, `unknown`, `dataPath` dari baris path registry |
+| G13 | Sentinel Swift dan CLI tanpa langkah; event dan balasan lama di client tidak jelas | sentinel di langkah 8 dan 10; muat ulang lewat revision dan `secret.changed`, balasan lama dibuang |
+| S1 | "checked {age}" menampilkan umur yang salah | dihapus dari Summary dan diusulkan dihapus dari inspector spec 0022 |
+| S2 | Scan ukuran data terlalu sering dan tanpa batas bersamaan | hanya saat diminta, `cachedOnly`, semaphore 2, TTL 10 detik untuk hasil tidak lengkap (Keputusan 4) |
+| S3 | Encode URI dan validasi template | UTF 8 dengan hex huruf besar, fixture lewat ketiga encoder, render sentinel dan parse URI, `encoding` dan `endpoint.host` dibuang |
+| S4 | `port_may_change` salah untuk `recovering` dan `unknown` | true kecuali lifecycle `running` |
+| S5 | Urutan `manifest_sha256` dan evidence bergantung pada koordinasi manusia | baris prasyarat di spec 0019 dan 0023 |
+| S6 | Bukti offline butuh server di dalam proses; definisi akses catalog | `stacklyd::server::start` dengan binary CLI asli; akses catalog berarti `CatalogState` daemon; GUI memakai tile abu tanpa catalog |
+| S7 | Label Restarts menyesatkan | "Restart attempts", tersembunyi saat 0 (Keputusan 5) |
+| S8 | Cache paket menyembunyikan perubahan folder pinned | cek stat `provider.yaml` setiap request |
+| S9 | VoiceOver membaca seluruh string sebagai password | bagian bukan secret dibacakan, "password hidden" di tempat `****`, pengumuman siap ditunda 2 detik |
+| S10 | Ada inti yang lebih sederhana | render di atas `PlanContext` dan resolver plan, tanpa settings (Keputusan 1) |
+| S11 | Kategori dan konflik flag CLI | `cli.connection_unavailable` menjadi `conflict`; `conflicts_with` clap; `--show-password` untuk entri tanpa secret; `inspect` membandingkan revision |
+| S12 | Pemicu muat ulang belum lengkap untuk config dan environment | dicatat sebagai milik fitur 29 dan 44 sampai 47 (Follow-up) |
