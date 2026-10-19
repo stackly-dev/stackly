@@ -16,7 +16,7 @@ use stackly_core::secret::Redactor;
 use stackly_domain::Registry;
 use stackly_platform::Platform;
 use stackly_protocol::ErrorBody;
-use stackly_protocol::codes::registry;
+use stackly_protocol::codes::{internal, registry};
 use stackly_protocol::daemon::{SubsystemHealth, SubsystemStatus, subsystem};
 use stackly_storage::SqliteRegistry;
 
@@ -132,9 +132,19 @@ impl Operations {
     /// # Errors
     ///
     /// Returns `daemon.starting` (subsystem `operations`) while the
-    /// registry opens, and `registry.unavailable` when this run has no
-    /// engine.
+    /// registry opens, `registry.unavailable` when this run has no engine,
+    /// and `internal.unexpected` when `recover` failed: the engine would
+    /// never be ready, so the retryable `daemon.starting` would mislead.
     pub fn writer(&self) -> Result<OperationEngine, Box<ErrorBody>> {
+        if matches!(&*self.lock(), Slot::Failed(_)) {
+            return Err(Box::new(
+                ErrorBody::new(
+                    &internal::UNEXPECTED,
+                    "the operations of the last run could not be recovered",
+                )
+                .with_hint("read the daemon log, then restart stacklyd"),
+            ));
+        }
         self.engine_or(subsystem::OPERATIONS)
     }
 
@@ -314,7 +324,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_failed_recovery_keeps_the_engine_for_reads_and_reports_unavailable() {
+    async fn a_failed_recovery_keeps_the_engine_for_reads_and_refuses_writes_for_good() {
         let site = opened();
         let operations = Operations::default();
         let _engine = created(&operations, &site);
@@ -323,12 +333,16 @@ mod tests {
         operations.recovered();
 
         let health = operations.health();
+        let write = operations.writer().unwrap_err();
         assert_eq!(health.status, SubsystemStatus::Unavailable);
         assert_eq!(
             health.detail.as_deref(),
             Some("the operations of the last run could not be recovered")
         );
         assert!(operations.reader().is_ok());
+        assert_eq!(write.code(), "internal.unexpected");
+        assert!(!write.retryable());
+        assert!(write.hint().is_some());
     }
 
     #[tokio::test]

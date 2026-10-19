@@ -629,9 +629,17 @@ async fn start_slot(
 
 /// The `operations` detail when the registry broke.
 const REGISTRY_FAILED: &str = "the registry stopped working";
+/// The waits before each new try when the operation engine cannot read
+/// the last run's operations.
+pub const OPERATION_RECOVER_RETRIES: [Duration; 3] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+];
 
 /// Creates the operation engine on the ready registry and recovers what
-/// the last run left unfinished. Returns the engine to start once the
+/// the last run left unfinished, trying again after each wait of
+/// [`OPERATION_RECOVER_RETRIES`]. Returns the engine to start once the
 /// daemon is ready, or `None` when recovery failed: a registry that
 /// stopped working is fatal, and any other failure leaves the engine
 /// serving reads only, with the `operations` subsystem unavailable.
@@ -646,20 +654,34 @@ async fn recover_operations(
     if let Some(starting) = handlers.test_starting_method() {
         starting.register(&engine);
     }
-    match engine.recover().await {
-        Ok(_) => {
-            core.operations().recovered();
-            Some(engine)
-        }
-        Err(EngineError::Registry(RegistryError::Unavailable)) => {
-            registry_failed(core);
-            core.operations().unavailable(REGISTRY_FAILED);
-            None
-        }
-        Err(error) => {
-            tracing::error!(error = %error, "cannot recover the operations of the last run");
-            core.operations().recovery_failed();
-            None
+    let mut waits = OPERATION_RECOVER_RETRIES.iter();
+    loop {
+        match engine.recover().await {
+            Ok(_) => {
+                core.operations().recovered();
+                return Some(engine);
+            }
+            Err(EngineError::Registry(RegistryError::Unavailable)) => {
+                registry_failed(core);
+                core.operations().unavailable(REGISTRY_FAILED);
+                return None;
+            }
+            Err(error) => {
+                // A failed read leaves the engine as it was, so it may try
+                // again.
+                if let Some(wait) = waits.next() {
+                    tracing::warn!(
+                        error = %error,
+                        retry_in_seconds = wait.as_secs(),
+                        "cannot recover the operations of the last run; trying again",
+                    );
+                    tokio::time::sleep(*wait).await;
+                    continue;
+                }
+                tracing::error!(error = %error, "cannot recover the operations of the last run");
+                core.operations().recovery_failed();
+                return None;
+            }
         }
     }
 }
