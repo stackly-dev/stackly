@@ -553,7 +553,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikann
 - [ ] Fitur 35: halaman Operations memakai `OperationTitle`, menerima pilihan operasi dari Overview, dan mengganti isi O1 (`// provisional: F35`) dengan rujukan ke halaman itu.
 - [ ] Fitur 28: pertimbangkan pertumbuhan data ("grew this week"), kapasitas dari metrics, dan root lain di volume terpisah.
 - [ ] Fitur 67: ganti `ActionFeedbackBanner` (`// provisional: F67`). Fitur 68: snapshot untuk state kedua halaman. Fitur 69: daftarkan perintah sort, inspector, dan ⌘F di peta perintah.
-- [ ] `ui-macos.md` (lewat `/scope`): catat selisih mockup Overview dan Instances: tabel Instances tanpa kolom Ownership (ownership di inspector dan CLI, karena isinya selalu "Manual" sampai fitur 44), kartu Running menghitung yang siap dengan keterangan not ready, kolom dan seksi Environment menunggu fitur 44, New Instance menunggu fitur 20, item disk tanpa pertumbuhan mingguan, dan item drift menunggu fitur 29.
+- [x] `ui-macos.md` (lewat `/scope`): catat selisih mockup Overview dan Instances: tabel Instances tanpa kolom Ownership (ownership di inspector dan CLI, karena isinya selalu "Manual" sampai fitur 44), kartu Running menghitung yang siap dengan keterangan not ready, kolom dan seksi Environment menunggu fitur 44, New Instance menunggu fitur 20, item disk tanpa pertumbuhan mingguan, dan item drift menunggu fitur 29. Diterapkan di `ui-macos.md` (2026-10-20).
 - [ ] `/sync` setelah build: folder `Overview/` dan isi `Instances/` di `apps/macos/AGENTS.md`, area `storage` di tabel area spec 0006, dan perintah `stackly instance list` dan `inspect` di root `AGENTS.md`.
 
 ## Rationale

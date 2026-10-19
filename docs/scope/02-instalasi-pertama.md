@@ -121,7 +121,7 @@ Menjalankan instance, menunggu readiness, dan menampilkan ringkasan instance: ID
 
 - [ ] Build it: `/develop start, readiness & connection`
 
-### 22. Overview & daftar instance · needs a decision
+### 22. Overview & daftar instance · in-progress
 
 Halaman Overview (ringkasan ready, stopped, failed, operasi aktif, peringatan kapasitas) dan Instances (cari, filter, urutkan; nama, provider, exact version, endpoint, lifecycle, readiness, ownership).
 
@@ -129,7 +129,16 @@ Halaman Overview (ringkasan ready, stopped, failed, operasi aktif, peringatan ka
 
 **Trace:** PAGE-02, PAGE-03, REQ-028, NFR-002, NFR-012, AC-027
 
-- [ ] Design it (spec): `/architect overview & daftar instance`
+**Pointer:** spec [0022](../specs/0022-overview-daftar-instance/index.md)
+
+- [x] Design it (spec): `/architect overview & daftar instance`
+- [ ] Build it: `/develop overview & daftar instance`
+  - [ ] Daemon contract: `Filesystem::volume_space` with the `statfs` adapter and fake, capacity levels in domain and core, the `storage` protocol module with `storage.get_capacity` (recovery allowed, single flight, 5 s timeout) and `storage.capacity_unavailable`, `InstanceSummary.ownership` and `initialized`, wire fixtures in `protocols/fixtures/ipc/` plus the shared test data `groups.json`, `list-mixed.json`, and `attention-operations.json`, the protocol minor bump (next free minor at merge), and daemon tests (spec 0022 AC-1, AC-4, AC-12; build steps 1 to 4; needs feature 10 build through spec 0010 steps 12 and 13 and feature 6 done (`01-foundation.md`), and the spec 0004 and 0010 update items unless steps 1 and 3 add them; steps 1 and 2 can run as a parallel session beside step 3)
+  - [ ] `stackly instance list` and `inspect`: shared status groups, name or UUID resolution, text and JSON output with counts, `cli.instance_not_found`, goldens from `list-mixed.json`, and a binary test against the real `stacklyd` (spec 0022 AC-1, AC-10, AC-11; build step 5; after milestone 1; needs feature 8 build (`01-foundation.md`), and after feature 14 only while feature 14 is changing `commands/instance`; can run in parallel with milestone 3)
+  - [ ] Overview and Instances pages: pure models (status groups, attention rules, search, sort, actions, operation titles, `CapacityModel`), `ResourceStore.itemFailures`, retained filtering, `ShellNavigator` and `newInstanceAction`, the Instances table with filter, search, sort, inspector, actions with the provisional feedback banner, and View menu commands, the Overview cards, Needs Attention, Instances and Operations sections, every page and section state, replacing `ProvisionalInstanceList` and `UnbuiltPage(.overview)`, and the Overview and Instances tables in `apps/macos/design.md` (spec 0022 AC-1 to AC-9, AC-13; build steps 6 to 8; after milestone 1; needs feature 13 milestone 4 step 16 of spec 0013 (the `statusSeq` patch rule, which waits on spec 0010 step 12) and the rest of that milestone plus feature 12 (`ui-macos.md`), and spec 0017 milestone 3 (`CatalogStore`, `ProviderTile`) of feature 17; can run in parallel with milestone 2)
+  - [ ] Runtimes card and evidence: the Runtimes card and install operation titles from `RuntimeStore`, the NFR-002 performance tests, and manual keyboard, VoiceOver, 640 pt, small disk image, and daemon stop evidence (spec 0022 AC-2, AC-5, AC-13, AC-14; build steps 9 and 10; step 9 after spec 0018 step 14 (`RuntimeStore`) of feature 18; step 10 after milestones 2 and 3)
+- [ ] Verify it: `/check verify overview & daftar instance`
+- [ ] Test it: `/test overview & daftar instance`
 
 ### 23. Provider NATS lewat manifest · in-progress
 
