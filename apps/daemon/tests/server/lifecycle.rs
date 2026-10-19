@@ -267,6 +267,49 @@ async fn a_registry_another_process_holds_is_tried_three_more_times_before_recov
     ev.pass();
 }
 
+#[tokio::test(start_paused = true)]
+async fn the_retries_at_a_held_registry_wait_one_two_then_four_seconds() {
+    let ev = evidence!(
+        covers = ["REQ-048"],
+        kind = Kind::Fixture,
+        expected = "with the default schedule, the start slot waits 1, 2, then 4 seconds between its tries at a held registry before recovery mode",
+    );
+    let site = Site::new();
+    let first = site.start().await;
+    first
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    let holder = RegistryHolder::lock(&site.prepared.layout().registry_db());
+
+    let logs = Logs::capture();
+    let mut config = DaemonConfig::default();
+    config.registry_open = OpenOptions::new().with_busy_timeout(Duration::from_millis(50));
+    let begun = tokio::time::Instant::now();
+    let daemon = site.start_configured(config).await;
+    let waited = begun.elapsed();
+
+    let waits: Vec<_> = logs
+        .with_message(LOCKED_RETRY)
+        .iter()
+        .map(|line| line["fields"]["retry_in_seconds"].as_u64())
+        .collect();
+    assert_eq!(waits, [Some(1), Some(2), Some(4)], "{:?}", logs.lines());
+    assert!(waited >= Duration::from_secs(7), "{waited:?}");
+    assert_eq!(
+        daemon
+            .health()
+            .recovery
+            .map(|recovery| recovery.reason)
+            .as_deref(),
+        Some("registry_locked")
+    );
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    holder.release();
+    ev.pass();
+}
+
 #[tokio::test]
 async fn a_registry_lock_released_during_the_retries_opens_ready_and_prunes_once() {
     let site = Site::new();
