@@ -2,19 +2,24 @@
 //! AC-11, AC-14).
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use stackly_core::operation::testing::{EffectCounter, HoldHandle, ScriptedFactory, ScriptedWork};
 use stackly_core::operation::{
-    BeginError, EngineError, NotAbandonableReason, NotResumableReason, RecoveryAction,
+    BeginError, BoxFuture, CancelDisposition, CompensationError, CompensationResult,
+    CompensationScope, Compensator, EngineError, NotAbandonableReason, NotResumableReason,
+    OperationContext, OperationOutcome, OperationWork, RecoveryAction, StepSpec, WorkError,
+    WorkOutcome, WorkResult,
 };
 use stackly_domain::{
-    EnvironmentId, LockKey, OperationKind, OperationResource, OperationState, RecoveryCause,
-    RecoveryHint, Registry, RuntimeId, StepState, WriteBatch, WriteOp,
+    CreatedRecord, CreatedState, EnvironmentId, LockKey, OperationKind, OperationResource,
+    OperationState, RecoveryCause, RecoveryHint, Registry, RuntimeId, StepState, WriteBatch,
+    WriteOp,
 };
 use stackly_testkit::EnvironmentBuilder;
 
-use crate::common::{Harness, fast, manager_request, request, wait_state};
+use crate::common::{Harness, TestError, fast, manager_request, request, wait_state};
 
 fn environment(harness: &Harness) -> EnvironmentId {
     let builder = EnvironmentBuilder::new().no_members();
@@ -513,4 +518,212 @@ async fn recovery_deletes_only_the_scratch_folders_it_may() {
     assert_eq!((report.scratch_removed, report.scratch_leftover), (1, 1));
     assert!(!operations.join(id.to_string()).exists());
     assert!(operations.join("notes").is_dir());
+}
+
+/// Makes an instance folder in a reversible step, then waits for `hold`
+/// without looking at cancels, as a work busy in a long call would, and
+/// only then reaches its checkpoint.
+struct SlowToStop {
+    hold: HoldHandle,
+}
+
+impl OperationWork for SlowToStop {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new(
+                "stage".parse().expect("stage is a stage name"),
+            ))
+            .await?;
+            let (id, created) = ctx.new_instance_id().await?;
+            let root = ctx.layout().layout().instance_paths(id).root;
+            std::fs::create_dir_all(&root).expect("the test instance folder can be made");
+            ctx.confirm_created(created).await?;
+            self.hold.mark_started();
+            self.hold.released().await;
+            ctx.check_cancel()?;
+            ctx.finish_step(None).await?;
+            Ok(WorkOutcome {
+                result: OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn shutdown_lets_a_cancel_requested_operation_finish_its_compensation_within_grace() {
+    let harness = Harness::new().await;
+    let hold = HoldHandle::new();
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(SlowToStop { hold: hold.clone() }),
+        ))
+        .await;
+    hold.started().await;
+    assert_eq!(
+        harness.engine.cancel(id).await.unwrap().disposition,
+        CancelDisposition::Requested
+    );
+    let release = hold.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        release.release();
+    });
+
+    let started = Instant::now();
+    let report = harness.engine.shutdown(Duration::from_secs(2)).await;
+
+    assert!(
+        started.elapsed() >= Duration::from_millis(100),
+        "shutdown waited for the compensation"
+    );
+    assert!(started.elapsed() < Duration::from_secs(3));
+    assert_eq!(
+        (report.parked, report.stopped, report.left_running),
+        (0, 0, 0)
+    );
+    let closed = harness.registry.operation(id).unwrap().value.unwrap();
+    assert_eq!(closed.state(), OperationState::Cancelled);
+    let journal = harness
+        .registry
+        .operation_journal(id)
+        .unwrap()
+        .value
+        .unwrap();
+    assert_eq!(journal.created[0].state(), CreatedState::Compensated);
+    assert!(
+        std::fs::read_dir(harness.layout.layout().instances_dir())
+            .unwrap()
+            .next()
+            .is_none(),
+        "the compensation removed the folder"
+    );
+}
+
+/// Records a custom item in a repeatable step that finishes, then fails
+/// after the step: no step is `failed`, so only the compensation that
+/// starts marks the operation as one that never resumes.
+struct FailsAfterItsStep;
+
+impl OperationWork for FailsAfterItsStep {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            let step = StepSpec::new("download".parse().expect("download is a stage name"));
+            ctx.begin_step(step.repeatable()).await?;
+            let created = ctx
+                .record_custom_intent(
+                    "test_stall"
+                        .parse()
+                        .expect("test_stall is a compensator name"),
+                    "partial".parse().expect("partial is an item key"),
+                    None,
+                )
+                .await?;
+            ctx.confirm_created(created).await?;
+            ctx.finish_step(None).await?;
+            Err(WorkError::Failed(TestError::boxed(
+                "runtime.extract_failed",
+                true,
+            )))
+        })
+    }
+}
+
+/// A compensator that never ends until its hold is released: the daemon
+/// dies in the middle of compensation.
+struct Stalls(HoldHandle);
+
+impl Compensator for Stalls {
+    fn compensate(
+        &self,
+        _scope: CompensationScope,
+        _record: &CreatedRecord,
+    ) -> BoxFuture<'static, Result<CompensationResult, CompensationError>> {
+        let hold = self.0.clone();
+        Box::pin(async move {
+            hold.mark_started();
+            hold.released().await;
+            Ok(CompensationResult::Compensated)
+        })
+    }
+}
+
+/// A compensator that counts what it undid.
+struct Counts(Arc<AtomicU32>);
+
+impl Compensator for Counts {
+    fn compensate(
+        &self,
+        _scope: CompensationScope,
+        _record: &CreatedRecord,
+    ) -> BoxFuture<'static, Result<CompensationResult, CompensationError>> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { Ok(CompensationResult::Compensated) })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_crash_in_the_middle_of_compensation_is_compensated_again_and_never_resumed() {
+    let harness = Harness::new().await;
+    let stall = HoldHandle::new();
+    harness.engine.register_compensator(
+        "test_stall".parse().unwrap(),
+        Arc::new(Stalls(stall.clone())),
+    );
+    let mut begin = request(
+        OperationKind::InstallRuntime,
+        OperationResource::Runtime(RuntimeId::generate()),
+        Box::new(FailsAfterItsStep),
+    );
+    begin.creates_resource = true;
+    let id = harness.begin(begin).await;
+    stall.started().await;
+
+    let (engine, _) = harness.restarted(fast());
+    let effects = EffectCounter::new();
+    engine.register_factory(
+        OperationKind::InstallRuntime,
+        Arc::new(ScriptedFactory::always(
+            ScriptedWork::new()
+                .step("download")
+                .repeatable()
+                .effects(&effects),
+        )),
+    );
+    let undone = Arc::new(AtomicU32::new(0));
+    engine.register_compensator(
+        "test_stall".parse().unwrap(),
+        Arc::new(Counts(Arc::clone(&undone))),
+    );
+    let report = engine.recover().await.unwrap();
+
+    assert_eq!((report.resumed, report.auto_compensating), (0, 1));
+    let interrupted = engine.get(id).await.unwrap().unwrap();
+    assert!(interrupted.view.journal.resumable());
+    assert!(interrupted.view.journal.compensation_started_at().is_some());
+    assert!(
+        interrupted
+            .steps
+            .iter()
+            .all(|step| step.state() == StepState::Done),
+        "no step failed; the started compensation alone keeps it from resuming"
+    );
+    assert_eq!(
+        interrupted.view.operation.recovery_hint(),
+        Some(RecoveryHint::AutoCompensate)
+    );
+    engine.start();
+    let closed = wait_state(&engine, id, OperationState::Failed).await;
+    assert_eq!(
+        closed
+            .view
+            .operation
+            .failure()
+            .map(|f| (f.code().as_str(), f.retryable())),
+        Some(("interrupted", true))
+    );
+    assert_eq!(closed.created[0].state(), CreatedState::Compensated);
+    assert_eq!(undone.load(Ordering::SeqCst), 1);
+    assert_eq!(effects.get(), 0, "the work never ran again");
 }

@@ -246,23 +246,50 @@ impl OperationKind {
 
     /// Returns whether an operation of this kind may resume after the
     /// daemon stopped while it ran (spec 0007, "Tabel resume per jenis
-    /// operasi"): installs, start, stop, restart, reload, environment up
-    /// and down, and backups. Every other kind is compensated when it stops
-    /// before its point of no return, and needs recovery after it.
+    /// operasi"): installs, environment up and down, and backups. Every
+    /// other kind never resumes; what happens to it instead follows its
+    /// [`interrupt_policy`](Self::interrupt_policy).
     #[must_use]
     pub const fn resumable(self) -> bool {
         matches!(
             self,
             Self::InstallRuntime
-                | Self::StartInstance
-                | Self::StopInstance
-                | Self::RestartInstance
-                | Self::ReloadInstance
                 | Self::EnvironmentUp
                 | Self::EnvironmentDown
                 | Self::BackupInstance
         )
     }
+
+    /// Returns what the engine does with an operation of this kind that
+    /// the daemon interrupted (spec 0007, "Tabel resume per jenis
+    /// operasi"): start, stop, restart, and reload of an instance close as
+    /// interrupted, because their process outlives the daemon and the
+    /// supervisor adopts it; every other kind is compensated before its
+    /// point of no return.
+    #[must_use]
+    pub const fn interrupt_policy(self) -> InterruptPolicy {
+        match self {
+            Self::StartInstance
+            | Self::StopInstance
+            | Self::RestartInstance
+            | Self::ReloadInstance => InterruptPolicy::CloseInterrupted,
+            _ => InterruptPolicy::Compensate,
+        }
+    }
+}
+
+/// What the engine does with an operation the daemon interrupted, by kind
+/// (spec 0007, "Tabel resume per jenis operasi").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InterruptPolicy {
+    /// Resume it when it can; otherwise compensate it before its point of
+    /// no return and leave it in `needs_recovery` after it.
+    Compensate,
+    /// Close it `failed` with reason `interrupted` (or `cancelled` when a
+    /// cancel was asked for), with no compensation and no resume. Past its
+    /// point of no return a failure of its work still ends `failed`, never
+    /// `needs_recovery`, and a cancel reaches it in any step.
+    CloseInterrupted,
 }
 
 code_enum! {
@@ -759,14 +786,36 @@ mod tests {
             resumable,
             [
                 "install_runtime",
-                "start_instance",
-                "stop_instance",
-                "restart_instance",
-                "reload_instance",
                 "backup_instance",
                 "environment_up",
                 "environment_down",
             ]
+        );
+    }
+
+    #[test]
+    fn only_the_four_instance_process_kinds_close_as_interrupted() {
+        let closing: Vec<&str> = OperationKind::ALL
+            .iter()
+            .filter(|kind| kind.interrupt_policy() == InterruptPolicy::CloseInterrupted)
+            .map(|kind| kind.as_code())
+            .collect();
+
+        assert_eq!(
+            closing,
+            [
+                "start_instance",
+                "stop_instance",
+                "restart_instance",
+                "reload_instance",
+            ]
+        );
+        assert!(
+            OperationKind::ALL
+                .iter()
+                .filter(|kind| kind.resumable())
+                .all(|kind| kind.interrupt_policy() == InterruptPolicy::Compensate),
+            "a kind that closes as interrupted never resumes"
         );
     }
 

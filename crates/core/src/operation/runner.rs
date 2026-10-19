@@ -4,6 +4,7 @@
 //! `needs_recovery`.
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use jiff::Timestamp;
 use stackly_domain::{
@@ -15,6 +16,7 @@ use tokio::time::Instant;
 
 use super::compensation::{self, Mode};
 use super::context::OperationContext;
+use super::recovery::signal_shutdown;
 use super::scheduler::{Job, QueueEntry, resource_revision};
 use super::state::{OpHandle, OpRecord, pair};
 use super::work::{FinalBatch, OperationOutcome, OperationWork, WorkError, WorkOutcome};
@@ -102,13 +104,21 @@ pub(crate) enum Close {
 pub(crate) async fn run(inner: &Arc<Inner>, entry: QueueEntry) {
     let id = entry.id;
     match inner.handle(id) {
-        Some(handle) => match entry.job {
-            Job::Work(work) => {
-                let parts = (entry.cursor, entry.keys);
-                run_work(inner, &handle, parts, work).await;
+        Some(handle) => {
+            handle.in_runner.store(true, Ordering::SeqCst);
+            // Shutdown may be counting the slots it waits for right now.
+            inner.idle.notify_waiters();
+            match entry.job {
+                Job::Work(work) => {
+                    let parts = (entry.cursor, entry.keys);
+                    run_work(inner, &handle, parts, work).await;
+                }
+                Job::Compensate => auto_compensate(inner, &handle).await,
             }
-            Job::Compensate => auto_compensate(inner, &handle).await,
-        },
+            // Cleared before the slot goes back, so shutdown never leaves
+            // out a slot that is already free.
+            handle.in_runner.store(false, Ordering::SeqCst);
+        }
         None => inner.locks.release_operation(id),
     }
     inner.finish_slot();
@@ -210,6 +220,11 @@ async fn run_work(
             return;
         }
     }
+    if inner.phase() == Phase::ShuttingDown {
+        // Shutdown began while this runner took its slot: the stop it
+        // signalled missed this operation.
+        signal_shutdown(handle);
+    }
     let ctx = OperationContext::new(
         Arc::clone(inner),
         Arc::clone(handle),
@@ -289,6 +304,26 @@ async fn settle(inner: &Arc<Inner>, handle: &Arc<OpHandle>, ended: Ended) {
     let mut record = handle.record.lock().await;
     match ended {
         Ended::Returned(Ok(outcome)) => succeed(inner, handle, &mut record, outcome).await,
+        Ended::Returned(Err(WorkError::Abandoned)) => {
+            // Shutdown left it as it is: `running` in the registry until
+            // the next start's `recover` closes it as interrupted.
+            tracing::info!(
+                operation_id = %handle.id,
+                kind = %handle.kind,
+                "operation left to the next start"
+            );
+        }
+        Ended::Returned(Err(WorkError::Cancelled))
+            if handle.close_interrupted
+                && record.journal.point_of_no_return_at().is_some()
+                && record.journal.cancel_requested_at().is_some() =>
+        {
+            // Past the point of no return a kind that closes as
+            // interrupted answered the cancel itself (spec 0010: stop the
+            // process); nothing is compensated.
+            mark_open_step(inner, handle, &mut record, StepState::Interrupted, None).await;
+            close_without_compensation(inner, handle, &mut record, &Close::Cancelled).await;
+        }
         Ended::Returned(Err(WorkError::Cancelled)) => {
             let close = if record.journal.cancel_requested_at().is_some() {
                 Close::Cancelled
@@ -371,7 +406,8 @@ async fn park(inner: &Inner, handle: &OpHandle, record: &mut OpRecord) {
 }
 
 /// A failed operation: compensated before its point of no return, else
-/// `needs_recovery`.
+/// `needs_recovery`, or `failed` with no compensation for a kind that
+/// closes as interrupted.
 pub(crate) async fn fail(inner: &Inner, handle: &OpHandle, record: &mut OpRecord, cause: Cause) {
     let error = cause.error(inner);
     mark_open_step(inner, handle, record, StepState::Failed, Some(error.code())).await;
@@ -392,6 +428,13 @@ pub(crate) async fn fail(inner: &Inner, handle: &OpHandle, record: &mut OpRecord
             }
         };
         compensate_then_close(inner, handle, record, close).await;
+    } else if handle.close_interrupted {
+        let close = Close::Failed {
+            reason: cause.reason(),
+            retryable: cause.retryable(),
+            error,
+        };
+        close_without_compensation(inner, handle, record, &close).await;
     } else {
         enter_needs_recovery(inner, handle, record, cause.recovery_cause(), error, false).await;
     }
@@ -405,7 +448,6 @@ pub(crate) async fn compensate_then_close(
     record: &mut OpRecord,
     close: Close,
 ) {
-    let id = handle.id;
     let claimed = handle.try_claim();
     let summary = compensation::compensate(inner, handle, record, Mode::All).await;
     if claimed {
@@ -428,8 +470,20 @@ pub(crate) async fn compensate_then_close(
         .await;
         return;
     }
+    close_without_compensation(inner, handle, record, &close).await;
+}
+
+/// Commits the final state `close` names and releases the operation's
+/// keys, with no compensation.
+async fn close_without_compensation(
+    inner: &Inner,
+    handle: &OpHandle,
+    record: &mut OpRecord,
+    close: &Close,
+) {
+    let id = handle.id;
     let closed = write_final(inner, handle, record, |next, now| {
-        match &close {
+        match close {
             Close::Cancelled => next
                 .operation
                 .apply(OperationEvent::Cancelled, now)

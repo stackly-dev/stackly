@@ -136,12 +136,16 @@ async fn sixteen_begins_with_one_key_create_one_operation_and_run_its_work_once(
         .iter()
         .filter(|outcome| matches!(outcome, BeginOutcome::Created(_)))
         .count();
-    let id = outcomes[0].view().operation.id();
+    let id = outcomes[0]
+        .view()
+        .expect("every begin names the operation")
+        .operation
+        .id();
     assert_eq!(created, 1);
     assert!(
         outcomes
             .iter()
-            .all(|outcome| outcome.view().operation.id() == id)
+            .all(|outcome| outcome.view().is_some_and(|view| view.operation.id() == id))
     );
     wait_state(&harness.engine, id, OperationState::Succeeded).await;
     assert_eq!(effects.get(), 1, "the work ran exactly once");
@@ -279,6 +283,60 @@ async fn operations_sharing_a_key_wait_in_order_and_others_run_in_parallel() {
     );
     drop(guard);
     wait_state(&harness.engine, held_back, OperationState::Succeeded).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_queued_waiter_fails_when_its_holder_enters_needs_recovery() {
+    let harness = Harness::new().await;
+    let (x, _) = environment(&harness);
+    let verifying = HoldHandle::new();
+    let holder = harness
+        .begin(on_environment(
+            x,
+            ScriptedWork::new()
+                .step("swap")
+                .irreversible()
+                .step("verify")
+                .hold(&verifying)
+                .fail("environment.verify_failed", false),
+        ))
+        .await;
+    verifying.started().await;
+    let waiter = harness
+        .begin(on_environment(x, ScriptedWork::new().step("drain")))
+        .await;
+    wait_until(&harness.engine, waiter, |detail| {
+        detail.view.journal.waiting_on() == Some(holder)
+    })
+    .await;
+
+    verifying.release();
+    let closed = wait_state(&harness.engine, waiter, OperationState::Failed).await;
+
+    assert_eq!(
+        closed
+            .view
+            .operation
+            .failure()
+            .map(|f| (f.code().as_str(), f.retryable())),
+        Some(("precondition_failed", false))
+    );
+    let error = closed.view.journal.failure_error().unwrap();
+    assert_eq!(error.code().as_str(), "operation.recovery_required");
+    assert!(
+        error
+            .details()
+            .iter()
+            .any(|(key, value)| key.as_str() == "operationId" && *value == holder.to_string())
+    );
+    assert_eq!(closed.view.journal.waiting_on(), None);
+    assert!(closed.steps.is_empty(), "the waiter never ran");
+    let stuck = harness.engine.get(holder).await.unwrap().unwrap();
+    assert_eq!(stuck.view.operation.state(), OperationState::NeedsRecovery);
+    assert!(matches!(
+        harness.engine.locks().holder(&LockKey::Environment(x)),
+        Some(LockHolder::Operation { id, state: OperationState::NeedsRecovery }) if id == holder
+    ));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

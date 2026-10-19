@@ -13,11 +13,12 @@ use stackly_domain::{
 use tokio::time::Instant;
 
 use super::limits::INPUT_MAX;
+use super::precheck::{NO_OP_STAGE, NoOpReply, Precheck, PrecheckOutcome, Rejection};
 use super::state::{OpHandle, OpRecord, pair};
 use super::work::OperationWork;
 use super::{
     BeginError, BeginOutcome, BeginRequest, BusyPolicy, CancelDisposition, CancelOutcome,
-    EngineError, Inner, LockHolder, Origin, Phase, codes, lock, runner,
+    EngineError, Inner, LockHolder, NoOpOutcome, Origin, Phase, codes, lock, runner,
 };
 
 /// What a queued entry runs once it starts.
@@ -166,16 +167,130 @@ async fn lookup(
         });
     }
     let handle = inner.handle(operation.id());
-    Ok(Some(BeginOutcome::Replayed(inner.view_of(
-        operation,
-        journal,
-        handle.as_deref(),
-    ))))
+    let view = inner.view_of(operation, journal, handle.as_deref());
+    if records_no_op(&view.operation) {
+        return Ok(Some(BeginOutcome::NoOp(NoOpOutcome {
+            recorded: Some(view),
+            replayed: true,
+        })));
+    }
+    Ok(Some(BeginOutcome::Replayed(view)))
+}
+
+/// Whether an operation records a no operation answer that wrote
+/// something: `succeeded` at the reserved stage, which no work sets.
+fn records_no_op(operation: &Operation) -> bool {
+    operation.state() == OperationState::Succeeded && operation.stage() == Some(&NO_OP_STAGE)
+}
+
+/// The rows of a new operation: its `queued` row and its journal.
+fn new_rows(
+    request: &BeginRequest,
+    id: OperationId,
+    now: jiff::Timestamp,
+) -> Result<(Operation, OperationJournal), BeginError> {
+    let (trigger, idempotency_key, request_id) = match &request.origin {
+        Origin::Request(origin) => (
+            OperationTrigger::user(Some(origin.client.clone()), origin.interactive),
+            Some(origin.key.clone()),
+            Some((origin.method.clone(), origin.fingerprint)),
+        ),
+        Origin::Background => (OperationTrigger::background(), None, None),
+    };
+    let operation = Operation::new(NewOperation {
+        id,
+        kind: request.kind,
+        resource: request.resource,
+        idempotency_key,
+        created_at: now,
+    });
+    let journal = OperationJournal::new(NewJournal {
+        operation_id: id,
+        request: request_id,
+        trigger,
+        resumable: request.kind.resumable(),
+        input: request.input.clone(),
+        expected_revision: request.expected_revision,
+    })
+    .map_err(|_| BeginError::PayloadTooLarge {
+        field: "input",
+        max: INPUT_MAX,
+    })?;
+    Ok((operation, journal))
+}
+
+/// Runs the feature's precheck on a blocking thread, since it may read the
+/// registry.
+async fn run_precheck(precheck: Box<dyn Precheck>) -> Result<PrecheckOutcome, BeginError> {
+    tokio::task::spawn_blocking(move || precheck.check())
+        .await
+        .map_err(|_| BeginError::InvalidRequest {
+            reason: "the precheck panicked",
+        })
+}
+
+/// Answers without running any work. An answer that writes something
+/// commits its writes with a `succeeded` operation that has no steps and
+/// stage [`NO_OP_STAGE`], so its idempotency key is bound and a replay gets
+/// the same answer.
+async fn answer_no_op(
+    inner: &Arc<Inner>,
+    request: BeginRequest,
+    reply: NoOpReply,
+) -> Result<BeginOutcome, BeginError> {
+    let Some(batch) = reply.batch else {
+        return Ok(BeginOutcome::NoOp(NoOpOutcome {
+            recorded: None,
+            replayed: false,
+        }));
+    };
+    let now = inner.now();
+    let (mut operation, journal) = new_rows(&request, OperationId::generate(), now)?;
+    operation
+        .apply(OperationEvent::Start, now)
+        .expect("a new queued operation always starts");
+    operation
+        .set_stage(NO_OP_STAGE, now)
+        .expect("a running operation takes a stage");
+    operation
+        .apply(OperationEvent::Succeed, now)
+        .expect("a running operation always succeeds");
+    let mut ops = vec![
+        WriteOp::InsertOperation(operation.clone()),
+        WriteOp::InsertJournal(journal.clone()),
+    ];
+    ops.extend(batch.ops);
+    let mut write = WriteBatch::new(ops);
+    write.expected_generation = batch.expected_generation;
+    if let Err(error) = inner.commit(write).await {
+        return match (&error, &request.origin) {
+            (
+                EngineError::Registry(RegistryError::IdempotencyKeyTaken { .. }),
+                Origin::Request(origin),
+            ) => lookup(inner, origin)
+                .await?
+                .ok_or_else(|| begin_registry_error(error)),
+            _ => Err(begin_registry_error(error)),
+        };
+    }
+    let view = inner.view_of(operation, journal, None);
+    tracing::info!(
+        operation_id = %view.operation.id(),
+        kind = %view.operation.kind(),
+        state = %view.operation.state(),
+        revision = %view.operation.revision(),
+        "operation answered without work"
+    );
+    inner.deps.events.state_changed(&view);
+    Ok(BeginOutcome::NoOp(NoOpOutcome {
+        recorded: Some(view),
+        replayed: false,
+    }))
 }
 
 pub(crate) async fn begin(
     inner: &Arc<Inner>,
-    request: BeginRequest,
+    mut request: BeginRequest,
 ) -> Result<BeginOutcome, BeginError> {
     match inner.phase() {
         Phase::Created | Phase::Recovering => return Err(BeginError::NotReady),
@@ -206,6 +321,15 @@ pub(crate) async fn begin(
     {
         return Ok(outcome);
     }
+    if let Some(precheck) = request.precheck.take() {
+        match run_precheck(precheck).await? {
+            PrecheckOutcome::Proceed => {}
+            PrecheckOutcome::Reject(error) => {
+                return Err(BeginError::Rejected(Rejection::new(error)));
+            }
+            PrecheckOutcome::NoOp(reply) => return answer_no_op(inner, request, reply).await,
+        }
+    }
     if !request.creates_resource {
         let current = resource_revision(inner, request.resource)
             .await
@@ -220,35 +344,8 @@ pub(crate) async fn begin(
     }
 
     let keys = keys_of(request.resource, &request.extra_locks);
-    let now = inner.now();
     let id = OperationId::generate();
-    let (trigger, idempotency_key, request_id) = match &request.origin {
-        Origin::Request(origin) => (
-            OperationTrigger::user(Some(origin.client.clone()), origin.interactive),
-            Some(origin.key.clone()),
-            Some((origin.method.clone(), origin.fingerprint)),
-        ),
-        Origin::Background => (OperationTrigger::background(), None, None),
-    };
-    let operation = Operation::new(NewOperation {
-        id,
-        kind: request.kind,
-        resource: request.resource,
-        idempotency_key,
-        created_at: now,
-    });
-    let journal = OperationJournal::new(NewJournal {
-        operation_id: id,
-        request: request_id,
-        trigger,
-        resumable: request.kind.resumable(),
-        input: request.input,
-        expected_revision: request.expected_revision,
-    })
-    .map_err(|_| BeginError::PayloadTooLarge {
-        field: "input",
-        max: INPUT_MAX,
-    })?;
+    let (operation, journal) = new_rows(&request, id, inner.now())?;
     {
         let mut sched = inner.sched();
         if let Some((operation, key)) = recovery_holder(inner, &keys) {
@@ -320,9 +417,11 @@ pub(crate) async fn begin(
     Ok(BeginOutcome::Created(inner.view(&record, Some(&handle))))
 }
 
-/// The disposition of a cancel on an operation that already had one.
-fn requested(record: &OpRecord) -> CancelDisposition {
-    if record.journal.point_of_no_return_at().is_some() {
+/// The disposition of a cancel on a running operation, or on one that
+/// already had a cancel. The cancel reaches the work of a kind that closes
+/// as interrupted in any step.
+fn requested(handle: &OpHandle, record: &OpRecord) -> CancelDisposition {
+    if record.journal.point_of_no_return_at().is_some() && !handle.close_interrupted {
         CancelDisposition::ContinuingPastPointOfNoReturn
     } else {
         CancelDisposition::Requested
@@ -361,7 +460,7 @@ pub(crate) async fn cancel(
             CancelDisposition::AlreadyFinal
         }
         OperationState::NeedsRecovery => CancelDisposition::RecoveryRequired,
-        OperationState::CancelRequested => requested(&record),
+        OperationState::CancelRequested => requested(&handle, &record),
         OperationState::Queued if record.operation.started_at().is_none() => {
             inner
                 .write(&handle, &mut record, |next, now| {
@@ -393,7 +492,7 @@ pub(crate) async fn cancel(
                 })
                 .await?;
             handle.signal(|stop| stop.cancel = true);
-            requested(&record)
+            requested(&handle, &record)
         }
     };
     Ok(CancelOutcome {

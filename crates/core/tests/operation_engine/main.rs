@@ -4,6 +4,7 @@
 #![cfg(unix)]
 
 mod cancel;
+mod close_interrupted;
 mod common;
 mod compensation;
 mod failures;

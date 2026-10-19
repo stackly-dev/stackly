@@ -13,6 +13,7 @@ mod compensation;
 mod context;
 pub mod limits;
 mod lock;
+mod precheck;
 mod recovery;
 mod redact;
 mod runner;
@@ -43,6 +44,7 @@ pub use compensation::{
 pub use context::OperationContext;
 pub use limits::EngineLimits;
 pub use lock::{InternalLock, LockBusy, LockHolder, LockTable};
+pub use precheck::{NO_OP_STAGE, NoOpReply, Precheck, PrecheckOutcome, Rejection};
 pub use redact::{NoSecretsYet, Redact};
 pub use work::{
     BoxFuture, CreatedHandle, FinalBatch, Finalize, OperationError, OperationOutcome,
@@ -141,6 +143,9 @@ pub struct BeginRequest {
     pub input: JournalPayload,
     /// The work.
     pub work: Box<dyn OperationWork>,
+    /// The feature's own check, run in the begin gate after the key lookup
+    /// and before the resource checks; `None` always proceeds.
+    pub precheck: Option<Box<dyn Precheck>>,
 }
 
 impl fmt::Debug for BeginRequest {
@@ -153,6 +158,7 @@ impl fmt::Debug for BeginRequest {
             .field("busy", &self.busy)
             .field("expected_revision", &self.expected_revision)
             .field("origin", &self.origin)
+            .field("precheck", &self.precheck.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -207,16 +213,32 @@ pub enum BeginOutcome {
     /// The idempotency key already named this operation, with the same
     /// request; nothing new ran.
     Replayed(OperationView),
+    /// The feature's [`Precheck`] answered without running any work.
+    NoOp(NoOpOutcome),
 }
 
 impl BeginOutcome {
-    /// Returns the operation, created or replayed.
+    /// Returns the operation, created or replayed, or the one that records
+    /// a no operation answer; `None` for a no operation answer that wrote
+    /// nothing.
     #[must_use]
-    pub const fn view(&self) -> &OperationView {
+    pub const fn view(&self) -> Option<&OperationView> {
         match self {
-            Self::Created(view) | Self::Replayed(view) => view,
+            Self::Created(view) | Self::Replayed(view) => Some(view),
+            Self::NoOp(outcome) => outcome.recorded.as_ref(),
         }
     }
+}
+
+/// A no operation answer of [`OperationEngine::begin`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoOpOutcome {
+    /// The `succeeded` operation, with no steps and stage [`NO_OP_STAGE`],
+    /// that committed the answer's writes and binds the idempotency key;
+    /// `None` when the answer wrote nothing.
+    pub recorded: Option<OperationView>,
+    /// Whether this answer replays an earlier request with the same key.
+    pub replayed: bool,
 }
 
 /// Why [`OperationEngine::begin`] refused, in its check order.
@@ -249,6 +271,9 @@ pub enum BeginError {
         /// The operation the key names.
         existing: OperationId,
     },
+    /// The feature's [`Precheck`] refused the request.
+    #[error("the request was refused: {0}")]
+    Rejected(Rejection),
     /// The resource does not exist.
     #[error("the resource does not exist")]
     ResourceNotFound,
@@ -505,6 +530,9 @@ pub struct RecoveryReport {
     /// Queued operations closed because a key they need is held by an
     /// operation in `needs_recovery`.
     pub closed_for_recovery: u32,
+    /// Interrupted operations of a kind that closes as interrupted, closed
+    /// `failed` or `cancelled` with no compensation.
+    pub closed_interrupted: u32,
     /// Scratch folders deleted.
     pub scratch_removed: u32,
     /// Scratch folders left alone.
@@ -521,6 +549,10 @@ pub struct ShutdownReport {
     pub stopped: u32,
     /// Operations still running when the grace ran out.
     pub left_running: u32,
+    /// Running operations of a kind that closes as interrupted, left as
+    /// they are for the next start's `recover`; shutdown never waits for
+    /// them.
+    pub abandoned: u32,
 }
 
 /// Where the engine stands in the daemon's life.
@@ -797,8 +829,9 @@ impl OperationEngine {
 
     /// Stops the engine within `grace` (spec 0007, "Shutdown"): no new
     /// operation starts, resumable ones park, the rest stop before their
-    /// point of no return or finish. It returns when every runner ended or
-    /// the grace ran out.
+    /// point of no return or finish, and those that close as interrupted
+    /// are left for the next start. It returns when every runner it waits
+    /// for ended or the grace ran out.
     pub async fn shutdown(&self, grace: Duration) -> ShutdownReport {
         recovery::shutdown(&self.inner, grace).await
     }

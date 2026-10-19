@@ -1,7 +1,7 @@
 # 0007. Operation engine
 
 **Date**: 2026-10-18
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

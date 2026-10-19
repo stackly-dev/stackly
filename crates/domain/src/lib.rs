@@ -63,11 +63,12 @@ pub use observation::{
     ReadinessState,
 };
 pub use operation::{
-    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, JournalPayload,
-    JournalStep, JournalView, LockKey, NewJournal, NewOperation, NewStep, Operation,
-    OperationEvent, OperationFailure, OperationJournal, OperationKind, OperationResource,
-    OperationState, OperationTrigger, Outcome, Progress, RecoveryCause, RecoveryHint, StepSeq,
-    StepState, StoredCreatedRecord, StoredJournal, StoredOperation, StoredStep, TriggerOrigin,
+    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, InterruptPolicy,
+    JournalPayload, JournalStep, JournalView, LockKey, NewJournal, NewOperation, NewStep,
+    Operation, OperationEvent, OperationFailure, OperationJournal, OperationKind,
+    OperationResource, OperationState, OperationTrigger, Outcome, Progress, RecoveryCause,
+    RecoveryHint, StepSeq, StepState, StoredCreatedRecord, StoredJournal, StoredOperation,
+    StoredStep, TriggerOrigin,
 };
 pub use provider::{
     AcceptedRevisionChange, LineCompatibility, ProviderRevision, ProviderRevisionKey,

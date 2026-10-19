@@ -298,6 +298,11 @@ pub enum WorkError {
     Cancelled,
     /// Shutdown parked an operation that can resume.
     Parked,
+    /// Shutdown left an operation that closes as interrupted
+    /// ([`InterruptPolicy::CloseInterrupted`](stackly_domain::InterruptPolicy))
+    /// to the next start: nothing more is written for it, and `recover`
+    /// closes it then.
+    Abandoned,
     /// A step failed.
     Failed(Box<dyn OperationError>),
     /// The engine itself failed, for example a journal write.
@@ -309,6 +314,7 @@ impl fmt::Debug for WorkError {
         match self {
             Self::Cancelled => f.write_str("Cancelled"),
             Self::Parked => f.write_str("Parked"),
+            Self::Abandoned => f.write_str("Abandoned"),
             Self::Failed(error) => write!(f, "Failed({}: {error})", error.code()),
             Self::Engine(error) => write!(f, "Engine({error:?})"),
         }

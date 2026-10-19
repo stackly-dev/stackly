@@ -8,10 +8,10 @@ use std::sync::{Arc, Mutex};
 
 use jiff::Timestamp;
 use stackly_domain::{
-    CreatedRecord, DetailKey, ErrorCodeName, FailureError, JournalStep, JournalView, LockKey,
-    Operation, OperationCursor, OperationId, OperationJournal, OperationKind, OperationQuery,
-    OperationState, Progress, RecoveryHint, Registry, RegistryError, StepState, WriteBatch,
-    WriteOp,
+    CreatedRecord, DetailKey, ErrorCodeName, FailureError, InterruptPolicy, JournalStep,
+    JournalView, LockKey, Operation, OperationCursor, OperationId, OperationJournal, OperationKind,
+    OperationQuery, OperationState, Progress, RecoveryHint, Registry, RegistryError, StepState,
+    WriteBatch, WriteOp,
 };
 use tokio::sync::{Mutex as AsyncMutex, watch};
 use tokio::time::Instant;
@@ -87,6 +87,9 @@ pub(crate) struct StopSignal {
     /// Shutdown stops an operation that cannot resume, before its point of
     /// no return.
     pub(crate) halt: bool,
+    /// Shutdown leaves an operation that closes as interrupted to the next
+    /// start: its work stops with nothing more written.
+    pub(crate) abandon: bool,
 }
 
 /// The progress a work reported and when progress was last committed.
@@ -103,6 +106,10 @@ pub(crate) struct OpHandle {
     pub(crate) kind: OperationKind,
     pub(crate) cursor: OperationCursor,
     pub(crate) resumable: bool,
+    /// Its kind closes as interrupted ([`InterruptPolicy::CloseInterrupted`]).
+    pub(crate) close_interrupted: bool,
+    /// A runner works on it now.
+    pub(crate) in_runner: AtomicBool,
     pub(crate) record: AsyncMutex<OpRecord>,
     pub(crate) stop: watch::Sender<StopSignal>,
     pub(crate) compensating: AtomicBool,
@@ -118,6 +125,9 @@ impl OpHandle {
             kind: record.operation.kind(),
             cursor: OperationCursor::of(&record.operation),
             resumable: record.journal.resumable(),
+            close_interrupted: record.operation.kind().interrupt_policy()
+                == InterruptPolicy::CloseInterrupted,
+            in_runner: AtomicBool::new(false),
             state: Mutex::new(record.operation.state()),
             record: AsyncMutex::new(record),
             stop,

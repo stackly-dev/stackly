@@ -2,6 +2,7 @@
 //! daemon dan pemulihan" and "Shutdown").
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use stackly_domain::{
@@ -117,12 +118,25 @@ pub(crate) async fn recover(inner: &Arc<Inner>) -> Result<RecoveryReport, Engine
     };
     let mut report = RecoveryReport::default();
     let mut interrupted = 0;
-    for (operation, view) in unfinished {
-        let record = OpRecord::from_view(operation, view);
-        let handle = OpHandle::new(record);
-        inner.ops().insert(handle.id, Arc::clone(&handle));
+    // Every handle first, so closing an operation can clear the waits of
+    // the newer operations queued behind it in the same batch.
+    let handles: Vec<Arc<OpHandle>> = unfinished
+        .into_iter()
+        .map(|(operation, view)| {
+            let handle = OpHandle::new(OpRecord::from_view(operation, view));
+            inner.ops().insert(handle.id, Arc::clone(&handle));
+            handle
+        })
+        .collect();
+    for handle in handles {
         let mut record = handle.record.lock().await;
         match record.operation.state() {
+            OperationState::Running | OperationState::CancelRequested
+                if handle.close_interrupted =>
+            {
+                interrupted += 1;
+                close_interrupted(inner, &handle, &mut record, &mut report).await;
+            }
             OperationState::Running => {
                 interrupted += 1;
                 recover_running(inner, &handle, &mut record, &mut report).await;
@@ -178,6 +192,7 @@ pub(crate) async fn recover(inner: &Arc<Inner>) -> Result<RecoveryReport, Engine
         queued = report.queued,
         rebuild_failed = report.rebuild_failed,
         closed_for_recovery = report.closed_for_recovery,
+        closed_interrupted = report.closed_interrupted,
         scratch_removed = report.scratch_removed,
         scratch_leftover = report.scratch_leftover,
         "operation recovery finished"
@@ -243,6 +258,82 @@ async fn recover_running(
     if entered {
         settle_needs_recovery(inner, handle, record, report);
     }
+}
+
+/// Closes an interrupted operation of a kind that closes as interrupted:
+/// its running step `interrupted`, then `failed` with reason `interrupted`
+/// (retryable, error `operation.interrupted`), or `cancelled` when a cancel
+/// was asked for, with no compensation. The same batch clears `waiting_on`
+/// of every operation queued behind it, and its keys never enter the lock
+/// table, so the supervisor's reconciliation finds them free.
+async fn close_interrupted(
+    inner: &Inner,
+    handle: &OpHandle,
+    record: &mut OpRecord,
+    report: &mut RecoveryReport,
+) {
+    let id = handle.id;
+    let others: Vec<Arc<OpHandle>> = inner
+        .ops()
+        .values()
+        .filter(|other| other.id != id)
+        .cloned()
+        .collect();
+    let mut waiters = Vec::new();
+    for other in &others {
+        let guard = other.record.lock().await;
+        let queued = matches!(
+            guard.operation.state(),
+            OperationState::Queued | OperationState::CancelRequested
+        );
+        if queued && guard.journal.waiting_on() == Some(id) {
+            waiters.push((other, guard));
+        }
+    }
+    let now = inner.now();
+    let mut cleared = Vec::new();
+    let mut writes = Vec::new();
+    for (_, guard) in &waiters {
+        let mut next = (**guard).clone();
+        next.journal.set_waiting_on(None);
+        next.operation.touch(now);
+        writes.push(WriteOp::UpdateOperation {
+            operation: next.operation.clone(),
+            expected: guard.operation.revision(),
+        });
+        writes.push(WriteOp::UpdateJournal(next.journal.clone()));
+        cleared.push(next);
+    }
+    let error = interrupted_error(inner);
+    let closed = write_final(inner, handle, record, |next, now| {
+        interrupt_steps(next, now);
+        next.operation
+            .apply(OperationEvent::Interrupted { resumable: false }, now)
+            .map_err(|_| refused())?;
+        let outcome = if next.journal.cancel_requested_at().is_some() {
+            Outcome::Cancelled
+        } else {
+            next.journal.set_failure_error(Some(error.clone()));
+            Outcome::Failed(OperationFailure::new(FailureCode::INTERRUPTED, true))
+        };
+        next.operation
+            .apply(OperationEvent::Resolve(outcome), now)
+            .map_err(|_| refused())?;
+        let mut ops = writes.clone();
+        ops.push(WriteOp::DeleteLocks { operation: id });
+        Ok(ops)
+    })
+    .await;
+    if !closed {
+        tracing::error!(operation_id = %id, "an interrupted operation could not be closed");
+        return;
+    }
+    for ((other, guard), next) in waiters.iter_mut().zip(cleared) {
+        let before = std::mem::replace(&mut **guard, next);
+        inner.report_change(other, &before, guard);
+    }
+    report.closed_interrupted += 1;
+    inner.forget(id);
 }
 
 /// Holds the keys of an operation that just entered `needs_recovery`, and
@@ -569,24 +660,61 @@ pub(crate) async fn abandon(
     Ok(AbandonOutcome { view, leftovers })
 }
 
+/// How shutdown stops one live operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShutdownStop {
+    Park,
+    Halt,
+    Abandon,
+}
+
+/// Signals the shutdown stop that applies to a live operation, if any:
+/// a kind that closes as interrupted is abandoned while it runs or winds
+/// down a cancel, and any other running operation parks when it can resume
+/// and halts when it cannot. An operation winding down a cancel finishes
+/// its compensation.
+pub(crate) fn signal_shutdown(handle: &OpHandle) -> Option<ShutdownStop> {
+    let stop = match handle.state() {
+        OperationState::Running | OperationState::CancelRequested if handle.close_interrupted => {
+            ShutdownStop::Abandon
+        }
+        OperationState::Running if handle.resumable => ShutdownStop::Park,
+        OperationState::Running => ShutdownStop::Halt,
+        _ => return None,
+    };
+    handle.signal(|signal| match stop {
+        ShutdownStop::Park => signal.park = true,
+        ShutdownStop::Halt => signal.halt = true,
+        ShutdownStop::Abandon => signal.abandon = true,
+    });
+    Some(stop)
+}
+
+/// The running slots shutdown waits for: every one but those of runners
+/// working on a kind that closes as interrupted. The slot count is read
+/// first, so a runner that ends meanwhile is counted, never missed.
+fn awaited_slots(inner: &Inner) -> u32 {
+    let running = inner.sched().running;
+    let abandoned = inner
+        .ops()
+        .values()
+        .filter(|handle| handle.close_interrupted && handle.in_runner.load(Ordering::SeqCst))
+        .count();
+    running.saturating_sub(u32::try_from(abandoned).unwrap_or(u32::MAX))
+}
+
 pub(crate) async fn shutdown(inner: &Arc<Inner>, grace: Duration) -> ShutdownReport {
     inner.set_phase(Phase::ShuttingDown);
     inner.sched().open = false;
     inner.wake.notify_one();
     let mut report = ShutdownReport::default();
-    let running: Vec<Arc<OpHandle>> = inner
-        .ops()
-        .values()
-        .filter(|handle| handle.state() == OperationState::Running)
-        .cloned()
-        .collect();
-    for handle in running {
-        if handle.resumable {
-            handle.signal(|stop| stop.park = true);
-            report.parked += 1;
-        } else {
-            handle.signal(|stop| stop.halt = true);
-            report.stopped += 1;
+    let live: Vec<Arc<OpHandle>> = inner.ops().values().cloned().collect();
+    for handle in live {
+        match signal_shutdown(&handle) {
+            Some(ShutdownStop::Park) => report.parked += 1,
+            Some(ShutdownStop::Halt) => report.stopped += 1,
+            Some(ShutdownStop::Abandon) => report.abandoned += 1,
+            None => {}
         }
     }
     let deadline = Instant::now() + grace;
@@ -594,7 +722,7 @@ pub(crate) async fn shutdown(inner: &Arc<Inner>, grace: Duration) -> ShutdownRep
         let idle = inner.idle.notified();
         tokio::pin!(idle);
         idle.as_mut().enable();
-        if inner.sched().running == 0 {
+        if awaited_slots(inner) == 0 {
             break;
         }
         tokio::select! {
@@ -602,10 +730,11 @@ pub(crate) async fn shutdown(inner: &Arc<Inner>, grace: Duration) -> ShutdownRep
             () = tokio::time::sleep_until(deadline) => break,
         }
     }
-    report.left_running = inner.sched().running;
+    report.left_running = awaited_slots(inner);
     tracing::info!(
         parked = report.parked,
         stopped = report.stopped,
+        abandoned = report.abandoned,
         left_running = report.left_running,
         "operation engine stopped"
     );
