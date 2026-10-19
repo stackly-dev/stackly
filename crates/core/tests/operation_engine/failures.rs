@@ -1,16 +1,19 @@
 //! Panics, works that end with items still intended, journal writes that
 //! fail, and payloads over their limit (spec 0007 AC-16).
 
+use std::time::{Duration, Instant};
+
 use stackly_core::operation::testing::{HoldHandle, ScriptedWork};
 use stackly_core::operation::{
-    BeginError, BoxFuture, OperationContext, OperationOutcome, OperationWork, StepSpec,
-    WorkOutcome, WorkResult, codes,
+    BeginError, BoxFuture, EngineLimits, OperationContext, OperationOutcome, OperationWork,
+    StepSpec, WorkOutcome, WorkResult, codes,
 };
 use stackly_domain::{
-    CreatedState, JournalPayload, OperationKind, OperationState, RegistryError, StepState,
+    CreatedState, JournalPayload, LockKey, OperationKind, OperationResource, OperationState,
+    RegistryError, RuntimeId, StepState,
 };
 
-use crate::common::{Harness, manager_request, wait_state};
+use crate::common::{Harness, manager_request, request, wait_state};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_panicking_work_is_compensated_and_failed_and_the_engine_keeps_running() {
@@ -167,4 +170,55 @@ fn every_engine_code_is_a_distinct_area_reason_code() {
         assert!(code.as_str().contains('.'));
     }
     assert_eq!(seen.len(), codes::ALL.len());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_failed_start_commit_frees_the_key_and_slot_and_retries_after_the_interval() {
+    let retry = Duration::from_millis(300);
+    let harness = Harness::idle(
+        EngineLimits::default()
+            .with_slots(1, 64)
+            .with_intervals(Duration::from_millis(100), retry),
+    );
+    harness.engine.recover().await.unwrap();
+    let unlucky = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new().step("swap").boxed(),
+        ))
+        .await;
+    let mut install = request(
+        OperationKind::InstallRuntime,
+        OperationResource::Runtime(RuntimeId::generate()),
+        ScriptedWork::new().step("download").boxed(),
+    );
+    install.creates_resource = true;
+    let other = harness.begin(install).await;
+
+    harness.registry.fail_next_commit(RegistryError::NoSpace);
+    let started = Instant::now();
+    harness.engine.start();
+    wait_state(&harness.engine, other, OperationState::Succeeded).await;
+
+    let waiting = harness.engine.get(unlucky).await.unwrap().unwrap();
+    assert_eq!(waiting.view.operation.state(), OperationState::Queued);
+    assert_eq!(waiting.view.operation.started_at(), None);
+    assert!(
+        started.elapsed() < retry,
+        "the other operation took the freed slot before the retry"
+    );
+    assert_eq!(harness.engine.locks().holder(&LockKey::Manager), None);
+    drop(
+        harness
+            .engine
+            .locks()
+            .try_lock_internal(&[LockKey::Manager], "probe")
+            .expect("the failed start released its key"),
+    );
+    let done = wait_state(&harness.engine, unlucky, OperationState::Succeeded).await;
+    assert!(
+        started.elapsed() >= retry,
+        "the start ran again only after the retry interval"
+    );
+    assert_eq!(done.steps.len(), 1);
 }
