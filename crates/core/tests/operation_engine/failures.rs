@@ -433,3 +433,94 @@ async fn a_step_ended_while_its_commit_failed_lands_and_resumes_after_a_restart(
         .collect();
     assert_eq!(attempts, [("fetch", 1), ("verify", 2)]);
 }
+
+/// Begins one step more than a journal holds.
+struct TooManySteps;
+
+impl OperationWork for TooManySteps {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            for n in 1..=257 {
+                ctx.begin_step(StepSpec::new(format!("s{n}").parse().expect("a step name")))
+                    .await?;
+                ctx.finish_step(None).await?;
+            }
+            Ok(WorkOutcome {
+                result: OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+/// Ends its step with a checkpoint over the limit.
+struct HugeCheckpoint;
+
+impl OperationWork for HugeCheckpoint {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("stage".parse().expect("a step name")))
+                .await?;
+            let checkpoint =
+                JournalPayload::new(format!(r#"{{"blob":"{}"}}"#, "x".repeat(5_000)), usize::MAX)
+                    .expect("a json object");
+            ctx.finish_step(Some(checkpoint)).await?;
+            Ok(WorkOutcome {
+                result: OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_journal_over_its_limits_fails_with_its_own_catalog_code() {
+    // Spec 0007 AC-16 and *Kode error*: journal_full with kind and max,
+    // payload_too_large with field and max, not internal.unexpected.
+    let harness = Harness::new().await;
+
+    let steps = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(TooManySteps),
+        ))
+        .await;
+    let full = wait_state(&harness.engine, steps, OperationState::Failed).await;
+    let checkpoint = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(HugeCheckpoint),
+        ))
+        .await;
+    let large = wait_state(&harness.engine, checkpoint, OperationState::Failed).await;
+
+    let error_of = |detail: &stackly_core::operation::OperationDetailView| {
+        let error = detail.view.journal.failure_error().expect("a stored error");
+        let details: Vec<(String, String)> = error
+            .details()
+            .iter()
+            .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
+            .collect();
+        (error.code().as_str().to_owned(), details)
+    };
+    assert_eq!(
+        error_of(&full),
+        (
+            "operation.journal_full".to_owned(),
+            vec![
+                ("kind".to_owned(), "steps".to_owned()),
+                ("max".to_owned(), "256".to_owned())
+            ]
+        )
+    );
+    assert_eq!(
+        error_of(&large),
+        (
+            "operation.payload_too_large".to_owned(),
+            vec![
+                ("field".to_owned(), "checkpoint".to_owned()),
+                ("max".to_owned(), "4096".to_owned())
+            ]
+        )
+    );
+}

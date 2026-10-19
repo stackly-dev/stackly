@@ -44,6 +44,31 @@ pub(crate) enum Cause {
 }
 
 impl Cause {
+    /// The cause of an engine error a work ran into: a journal over its
+    /// limits keeps its own catalog code and details (spec 0007, *Kode
+    /// error*); anything else is a bug, stored as `internal.unexpected`.
+    fn engine(error: &EngineError) -> Self {
+        let limit = |code: ErrorCodeName, first: (&'static str, String), max: String| Self::Step {
+            code,
+            message: error.to_string(),
+            details: vec![pair(first.0, first.1), pair("max", max)],
+            retryable: false,
+        };
+        match error {
+            EngineError::JournalFull { kind, max } => limit(
+                codes::JOURNAL_FULL,
+                ("kind", (*kind).to_owned()),
+                max.to_string(),
+            ),
+            EngineError::PayloadTooLarge { field, max } => limit(
+                codes::PAYLOAD_TOO_LARGE,
+                ("field", (*field).to_owned()),
+                max.to_string(),
+            ),
+            other => Self::Engine(other.to_string()),
+        }
+    }
+
     fn reason(&self) -> FailureCode {
         match self {
             Self::Panic => FailureCode::PANICKED,
@@ -352,7 +377,7 @@ async fn settle(inner: &Arc<Inner>, handle: &Arc<OpHandle>, ended: Ended) {
             fail(inner, handle, &mut record, cause).await;
         }
         Ended::Returned(Err(WorkError::Engine(error))) => {
-            fail(inner, handle, &mut record, Cause::Engine(error.to_string())).await;
+            fail(inner, handle, &mut record, Cause::engine(&error)).await;
         }
         Ended::Panicked => fail(inner, handle, &mut record, Cause::Panic).await,
     }
@@ -609,7 +634,7 @@ async fn succeed(inner: &Inner, handle: &OpHandle, record: &mut OpRecord, outcom
     let payload = match outcome.result.to_payload() {
         Ok(payload) => payload,
         Err(error) => {
-            fail(inner, handle, record, Cause::Engine(error.to_string())).await;
+            fail(inner, handle, record, Cause::engine(&error)).await;
             return;
         }
     };
