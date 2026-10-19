@@ -57,12 +57,13 @@ const EXPOSE_RULE: &str = "secret expose outside the allowlist";
 /// The modules that may call `expose` on a secret value (spec 0011,
 /// *Penjaga di kode*), each with its submodules: exactly the call sites
 /// that exist. A crate of the spec's table adds its module here once it
-/// has a call site (`stackly-platform` and `stackly-protocol` `secret`,
+/// has a call site (`stackly-platform` `secret`,
 /// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input` and
 /// `commands::secret`).
-pub const EXPOSE_ALLOWED: [(&str, &[&str]); 3] = [
+pub const EXPOSE_ALLOWED: [(&str, &[&str]); 4] = [
     ("stackly-core", &["secret::redact", "secret::delivery"]),
     ("stackly-platform-macos", &["secret"]),
+    ("stackly-protocol", &["secret"]),
     ("stackly-testkit", &["fake_secret"]),
 ];
 /// The `std::env` functions a library never calls.
@@ -1041,6 +1042,7 @@ mod tests {
             [
                 ("stackly-core", &["secret::redact", "secret::delivery"][..]),
                 ("stackly-platform-macos", &["secret"][..]),
+                ("stackly-protocol", &["secret"][..]),
                 ("stackly-testkit", &["fake_secret"][..]),
             ]
         );
