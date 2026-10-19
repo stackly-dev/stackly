@@ -3,11 +3,12 @@
 //! hand, wrapped handlers that hold or break one method, captured log
 //! lines, and a second process that holds the registry's write lock.
 
+use std::cell::RefCell;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, Once, PoisonError};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -298,23 +299,41 @@ pub async fn client_as(
     .expect("the client connects")
 }
 
-/// The JSON log lines of the current thread while it lives. The in process
-/// tests run on tokio's current thread runtime, so every task the server
-/// spawns logs here; blocking tasks on other threads do not.
-pub struct Logs {
-    buffer: Arc<Mutex<Vec<u8>>>,
-    _guard: tracing::subscriber::DefaultGuard,
+thread_local! {
+    /// Where the log lines of this thread go while a [`Logs`] lives on it.
+    static THREAD_LOGS: RefCell<Option<Arc<Mutex<Vec<u8>>>>> = const { RefCell::new(None) };
 }
 
-#[derive(Clone)]
-struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+/// Installs, once per test binary, the global subscriber whose writer sends
+/// each line to the [`Logs`] of the thread that logged it. One global
+/// subscriber, never replaced, keeps tracing's cached interest and maximum
+/// level stable while tests run at the same time.
+fn install_thread_logs() {
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        let subscriber = tracing_subscriber::fmt()
+            .json()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_writer(|| ThreadLogWriter)
+            .finish();
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("no other global subscriber is set in the server tests");
+    });
+}
 
-impl Write for LogBuffer {
+/// Writes to the [`Logs`] of the current thread, or nowhere.
+struct ThreadLogWriter;
+
+impl Write for ThreadLogWriter {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .extend_from_slice(bytes);
+        THREAD_LOGS.with(|logs| {
+            if let Some(buffer) = &*logs.borrow() {
+                buffer
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .extend_from_slice(bytes);
+            }
+        });
         Ok(bytes.len())
     }
 
@@ -323,20 +342,27 @@ impl Write for LogBuffer {
     }
 }
 
+/// The JSON log lines of the current thread while it lives. The in process
+/// tests run on tokio's current thread runtime, so every task the server
+/// spawns logs here; blocking tasks on other threads do not.
+pub struct Logs {
+    buffer: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Drop for Logs {
+    fn drop(&mut self) {
+        THREAD_LOGS.with(|logs| logs.borrow_mut().take());
+    }
+}
+
 impl Logs {
-    /// Captures every line at `debug` and above, as the daemon writes them.
+    /// Captures every line at `debug` and above that this thread logs, as
+    /// the daemon writes them.
     pub fn capture() -> Self {
+        install_thread_logs();
         let buffer = Arc::new(Mutex::new(Vec::new()));
-        let writer = LogBuffer(Arc::clone(&buffer));
-        let subscriber = tracing_subscriber::fmt()
-            .json()
-            .with_max_level(tracing::Level::DEBUG)
-            .with_writer(move || writer.clone())
-            .finish();
-        Self {
-            buffer,
-            _guard: tracing::subscriber::set_default(subscriber),
-        }
+        THREAD_LOGS.with(|logs| *logs.borrow_mut() = Some(Arc::clone(&buffer)));
+        Self { buffer }
     }
 
     /// Every line captured so far.

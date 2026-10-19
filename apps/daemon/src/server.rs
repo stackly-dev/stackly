@@ -435,6 +435,10 @@ async fn accept_loop(
                     }
                 }
                 Ok(Accepted::Rejected { uid, pid }) => {
+                    // A peer that left before its credentials could be read
+                    // lands here too: unreadable credentials are a refused
+                    // peer (spec 0006 AC-2, fail closed), so it counts in
+                    // `connectionsRejected` like any other.
                     backoff = ACCEPT_BACKOFF_MIN;
                     core.counters().accepted();
                     core.counters().rejected();
