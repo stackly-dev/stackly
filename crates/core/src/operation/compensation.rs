@@ -7,8 +7,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use stackly_domain::{
-    CreatedItem, CreatedRecord, CreatedState, EnvironmentId, InstanceId, OperationId, ReasonCode,
-    Registry,
+    CompensatorName, CreatedItem, CreatedRecord, CreatedState, EnvironmentId, InstanceId,
+    OperationId, ReasonCode, Registry,
 };
 use stackly_platform::Platform;
 
@@ -17,6 +17,7 @@ use super::state::{OpHandle, OpRecord};
 use super::work::BoxFuture;
 use crate::layout::PreparedLayout;
 use crate::ownership::remove_owned_tree;
+use crate::secret::SECRET_REF_COMPENSATOR;
 use crate::{CoreError, read_instance_manifest};
 
 /// The name the built in compensator of instance folders reports.
@@ -249,18 +250,31 @@ async fn undo(
     match record.item() {
         CreatedItem::InstanceTree(id) => instance_tree(scope, *id).await,
         CreatedItem::EnvironmentTree(id) => environment_tree(scope, *id).await,
-        CreatedItem::Custom { compensator, .. } => match inner.compensator(compensator) {
-            Some(custom) => custom.compensate(scope, record).await,
-            None => Err(CompensationError::new(
-                COMPENSATOR_MISSING,
-                format!("no compensator is registered as {compensator}"),
-            )),
-        },
-        // provisional: F11 (spec 0011's SecretRef items go to the
-        // `secret_ref` compensator the daemon registers)
+        CreatedItem::Custom { compensator, .. } => {
+            registered(inner, compensator, scope, record).await
+        }
+        CreatedItem::SecretRef(_) => {
+            registered(inner, &SECRET_REF_COMPENSATOR, scope, record).await
+        }
         _ => Err(CompensationError::new(
             UNKNOWN_ITEM,
             "the engine has no compensator for this kind of item",
+        )),
+    }
+}
+
+/// Undoes one record with the compensator registered as `name`.
+async fn registered(
+    inner: &Inner,
+    name: &CompensatorName,
+    scope: CompensationScope,
+    record: &CreatedRecord,
+) -> Result<CompensationResult, CompensationError> {
+    match inner.compensator(name) {
+        Some(compensator) => compensator.compensate(scope, record).await,
+        None => Err(CompensationError::new(
+            COMPENSATOR_MISSING,
+            format!("no compensator is registered as {name}"),
         )),
     }
 }
