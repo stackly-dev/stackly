@@ -7,7 +7,7 @@ use stackly_platform::{
     PlatformCapability, PlatformError, PlatformInfo, RootSet, UserId, UserIdentity,
 };
 
-use crate::{FakeFilesystem, FakeSecretStore, TestRoot};
+use crate::{FakeFilesystem, FakeProcessSupervision, FakeSecretStore, TestRoot};
 
 /// Where [`FakeClock`] starts: 2026-01-01T00:00:00Z.
 const FAKE_CLOCK_START: Timestamp = Timestamp::constant(1_767_225_600, 0);
@@ -95,8 +95,10 @@ impl UserIdentity for FakeIdentity {
     }
 }
 
-/// Platform facts the test controls: `macos-aarch64` with the same
-/// capability statuses as `MacosPlatform` by default.
+/// Platform facts the test controls: `macos-aarch64` with the capability
+/// statuses of `MacosPlatform` by default, except that process supervision
+/// is supported, because [`FakePlatform`] installs a working fake of it
+/// (`MacosPlatform` turns it on with spec 0010 build step 3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FakePlatformInfo {
     target: Target,
@@ -119,7 +121,7 @@ impl FakePlatformInfo {
                 )
                 .with(
                     PlatformCapability::ProcessSupervision,
-                    not_built("not built yet (feature 10)"),
+                    CapabilityStatus::Supported,
                 )
                 .with(PlatformCapability::SecretStore, CapabilityStatus::Supported)
                 .with(
@@ -181,8 +183,10 @@ impl PlatformInfo for FakePlatformInfo {
 ///
 /// The roots are the test root's [`roots`](TestRoot::roots), the filesystem
 /// is a [`FakeFilesystem`] confined to the test folders, the secret store
-/// is a [`FakeSecretStore`] in memory, and the clock, identity, and
-/// platform facts are fakes the test can drive through the handles.
+/// is a [`FakeSecretStore`] in memory, process supervision is a
+/// [`FakeProcessSupervision`] whose locks and spools stay in the test
+/// folders, and the clock, identity, and platform facts are fakes the test
+/// can drive through the handles.
 ///
 /// ```
 /// use stackly_testkit::{FakePlatform, TestRoot};
@@ -201,6 +205,7 @@ pub struct FakePlatform {
     identity: Arc<FakeIdentity>,
     info: Arc<FakePlatformInfo>,
     secrets: FakeSecretStore,
+    processes: FakeProcessSupervision,
 }
 
 impl FakePlatform {
@@ -214,6 +219,7 @@ impl FakePlatform {
             identity: Arc::new(FakeIdentity::new(root)),
             info: Arc::new(FakePlatformInfo::new()),
             secrets: FakeSecretStore::new(),
+            processes: FakeProcessSupervision::new(root),
         }
     }
 
@@ -244,6 +250,7 @@ impl FakePlatform {
             self.info.clone(),
         )
         .with_secrets(Arc::new(self.secrets.clone()))
+        .with_processes(Arc::new(self.processes.clone()))
     }
 
     /// Returns the fake filesystem, to inject faults or read its logs.
@@ -270,5 +277,13 @@ impl FakePlatform {
     #[must_use]
     pub fn secrets(&self) -> &FakeSecretStore {
         &self.secrets
+    }
+
+    /// Returns the fake process supervision, to start, change, and end its
+    /// processes, inject failures, and read its call log. Every platform
+    /// this fake hands out shares it.
+    #[must_use]
+    pub fn processes(&self) -> &FakeProcessSupervision {
+        &self.processes
     }
 }
