@@ -244,3 +244,37 @@ async fn every_refused_handshake_counts_once_in_connections_rejected() {
     assert_eq!(rejected(), 2);
     ev.pass();
 }
+
+#[tokio::test]
+async fn a_major_given_in_another_json_shape_is_still_refused() {
+    let ev = evidence!(
+        covers = ["REQ-047", "AC-047"],
+        kind = Kind::Fixture,
+        expected = "a handshake whose protocol is the array [2, 0], which the early major reader skips, still gets protocol.major_mismatch once decoded",
+    );
+    let site = Site::new();
+    let _daemon = site.start().await;
+    let mut raw = Raw::connect(&site.socket()).await;
+
+    raw.send(&request(
+        "h-array",
+        "daemon.handshake",
+        Some(json!({
+            "protocol": [2, 0],
+            "client": { "kind": "cli", "version": "0.1.0", "pid": std::process::id() },
+            "contractDigest": CONTRACT_DIGEST,
+        })),
+    ))
+    .await;
+
+    let frame = raw.recv().await.expect("the refusal arrives");
+    let error = error_of(&frame);
+    assert!(error.is(&protocol::MAJOR_MISMATCH), "{frame}");
+    assert_eq!(frame["content"]["requestId"], "h-array");
+    assert_eq!(
+        error.detail("serverMajor"),
+        Some(ProtocolVersion::CURRENT.major.to_string().as_str())
+    );
+    raw.expect_end().await;
+    ev.pass();
+}

@@ -493,19 +493,10 @@ async fn handshake(
         }
     };
 
-    let current = ProtocolVersion::CURRENT;
     if let Some(major) = json::handshake_major(&bytes)
-        && major != current.major
+        && major != ProtocolVersion::CURRENT.major
     {
-        let error = ErrorBody::new(
-            &protocol::MAJOR_MISMATCH,
-            format!(
-                "the daemon speaks protocol {}.{}",
-                current.major, current.minor
-            ),
-        )
-        .with_detail("serverMajor", current.major.to_string())
-        .with_detail("serverMinor", current.minor.to_string());
+        let error = major_mismatch();
         let request_id = json::request_id(&bytes);
         log_refusal(conn, request_id.as_deref(), &error);
         conn.refuse(request_id, error).await;
@@ -513,6 +504,18 @@ async fn handshake(
     }
 
     let (request_id, params) = match json::decode_request(&bytes) {
+        // `handshake_major` reads only the usual object shape, so the
+        // decoded major is checked again: both readers must agree.
+        Ok(Request {
+            request_id,
+            call: Call::DaemonHandshake(params),
+            ..
+        }) if params.protocol.major != ProtocolVersion::CURRENT.major => {
+            let error = major_mismatch();
+            log_refusal(conn, Some(&request_id), &error);
+            conn.refuse(Some(request_id), error).await;
+            return Handshake::Refused;
+        }
         Ok(Request {
             request_id,
             call: Call::DaemonHandshake(params),
@@ -656,6 +659,9 @@ async fn on_frame(
         }
     };
     let method = request.call.method();
+    // Counted before the stop check, so a stop either sees this request in
+    // the drain or this request sees the stop (spec 0006, *Berhenti*).
+    let guard = core.drain().enter();
     let refused = if matches!(request.call, Call::DaemonHandshake(_)) {
         Some(ErrorBody::new(
             &protocol::HANDSHAKE_REPEATED,
@@ -675,10 +681,12 @@ async fn on_frame(
         None
     };
     if let Some(error) = refused {
+        drop(guard);
         reply_error(conn, request.request_id, method, received, error).await;
         return;
     }
     let Ok(permit) = Arc::clone(&conn.permits).try_acquire_owned() else {
+        drop(guard);
         conn.release_id(&request.request_id);
         let error = ErrorBody::new(
             &request::TOO_MANY_IN_FLIGHT,
@@ -688,7 +696,6 @@ async fn on_frame(
         reply_error(conn, request.request_id, method, received, error).await;
         return;
     };
-    let guard = core.drain().enter();
     tokio::spawn(run_request(
         Arc::clone(conn),
         Arc::clone(core),
@@ -914,6 +921,20 @@ fn read_failure(error: &IpcError, core: &DaemonCore) -> Option<ErrorBody> {
         IpcError::FrameStalled | IpcError::HandshakeTimeout => Some(error.to_error_body()),
         _ => None,
     }
+}
+
+/// `protocol.major_mismatch` naming the daemon's version (spec 0006 AC-1).
+fn major_mismatch() -> ErrorBody {
+    let current = ProtocolVersion::CURRENT;
+    ErrorBody::new(
+        &protocol::MAJOR_MISMATCH,
+        format!(
+            "the daemon speaks protocol {}.{}",
+            current.major, current.minor
+        ),
+    )
+    .with_detail("serverMajor", current.major.to_string())
+    .with_detail("serverMinor", current.minor.to_string())
 }
 
 fn handshake_required(method: Option<&str>) -> ErrorBody {
