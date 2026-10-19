@@ -334,7 +334,7 @@ Diputuskan saat menulis spec, masing masing dengan pilihan yang direkomendasikan
 
 ## Pertukaran dengan sesi lain
 
-Belum ada.
+- **`arc-f20-spec` (2026-10-20)**: sesi itu mengabarkan kontrak form create spec 0020 (form dari paket lewat `instance.get_create_form`, lima kind field, preflight dengan dry run plan, revision catalog yang dipin saat create, dan fixture `create-form-nats.json`). Spec ini menjawab bahwa NATS tidak butuh kind lain atau `socketName` bertoken port, bahwa perubahan fitur 23 tidak mengubah fixture itu, dan bahwa AC-13 memakai fixture dan test render milik spec 0020 alih alih membuat fixture sendiri. Keputusan 7 tetap Option 1; pembuatnya saja yang pindah ke fitur 20.
 
 ## Cross check
 
