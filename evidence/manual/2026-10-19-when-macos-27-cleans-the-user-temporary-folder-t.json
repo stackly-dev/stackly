@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15414-3d59-7755-b753-823241a3b37f",
+  "covers": [
+    "REQ-047"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "When macOS 27 cleans the user temporary folder that holds the daemon runtime root",
+    "file": null,
+    "line": null
+  },
+  "status": "BLOCKED",
+  "expected": "observing a reboot and a multi day idle period on macOS 27 shows when the contents of confstr(_CS_DARWIN_USER_TEMP_DIR) are removed, and a running stacklyd recreates its runtime root and socket at the next socket check",
+  "actual": null,
+  "reason": "the observation needs a reboot of this Mac and a multi day idle period with the runtime root left in place, which the user's policy records as heavy manual steps; the daemon side is covered: removing the socket and the runtime root while stacklyd runs brings both back at the next socket check (apps/daemon/tests/server/lifecycle.rs, a_socket_and_runtime_root_removed_while_serving_come_back_at_the_next_check), and the daemon lock lives in the data root, not in the temporary folder (spec 0004)",
+  "owner": "ojiepermana (the user): run the steps below across a reboot and a few idle days, then record the result in spec 0004 (Follow-up for feature 6) through /architect and in a new record",
+  "subjects": [],
+  "steps": [
+    "run `getconf DARWIN_USER_TEMP_DIR` and start `stacklyd`; note the runtime root `<temp>/stackly` and its socket",
+    "stop stacklyd, leave `<temp>/stackly` in place with a marker file, and reboot this Mac; after login check whether the folder and the marker are still there",
+    "leave a second marker untouched for at least 4 days without a reboot and check again, since macOS removes old files in the user temporary folder after a few days",
+    "with stacklyd running, wait for the next cleanup and check the daemon log for `socket_rebound` and that `stackly daemon status` still works",
+    "write the dates and findings into a new record and into the spec 0004 Follow-up"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5)",
+  "startedAt": "2026-10-19T12:12:55.001238Z",
+  "finishedAt": "2026-10-19T12:13:15.550151Z",
+  "evidencePath": "evidence/manual/2026-10-19-when-macos-27-cleans-the-user-temporary-folder-t.json",
+  "context": {
+    "sourceCommit": "0d7e46d950fadc6c5cf2e62598937f2d1671ea88",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
