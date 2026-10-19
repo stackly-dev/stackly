@@ -17,6 +17,7 @@ serde_path_to_error.workspace = true
 thiserror.workspace = true
 typeshare.workspace = true
 uuid.workspace = true
+zeroize = { workspace = true, features = ["serde"] }
 
 [lints]
 workspace = true

@@ -14,6 +14,8 @@ struct IpcFixtureTests {
             try check(Request.self, fixture, data)
         case "ServerFrame":
             try check(ServerFrame.self, fixture, data)
+        case "SecretInput":
+            try check(SecretInput.self, fixture, data)
         default:
             Issue.record("no Swift decoder for type \(fixture.type)")
         }

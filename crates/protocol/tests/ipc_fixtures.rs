@@ -3,13 +3,16 @@
 //! `clients/swift` read the same index.
 
 use std::collections::BTreeSet;
+use std::fmt::Debug;
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use stackly_protocol::codes;
 use stackly_protocol::events::{EventKind, GapReason, ShutdownReason};
 use stackly_protocol::json::{DecodedFrame, decode_request, decode_server_frame, handshake_major};
+use stackly_protocol::secret::SecretInput;
 use stackly_protocol::{
     Call, ErrorBody, ErrorFrame, Reply, Request, ResourceKind, ResourceRef, ServerFrame, Timestamp,
 };
@@ -171,6 +174,32 @@ fn check_server_frame(entry: &Entry, bytes: &[u8]) {
     }
 }
 
+/// A shared DTO that no method carries yet, such as `SecretInput`: its
+/// fixture decodes, encodes to the same JSON, and decodes again.
+fn check_dto<T>(entry: &Entry, bytes: &[u8])
+where
+    T: DeserializeOwned + Serialize + PartialEq + Debug,
+{
+    let decoded: T =
+        serde_json::from_slice(bytes).unwrap_or_else(|err| panic!("{}: {err}", entry.file));
+    match entry.expect.as_str() {
+        "roundtrip" => {
+            let encoded = serde_json::to_vec(&decoded).expect("a decoded value always encodes");
+            let again: T = serde_json::from_slice(&encoded).expect("an encoded value decodes");
+            assert_eq!(again, decoded, "{}", entry.file);
+            let fixture: Value = serde_json::from_slice(bytes).expect("a fixture is JSON");
+            let written: Value = serde_json::from_slice(&encoded).expect("encoded output is JSON");
+            assert_eq!(
+                written, fixture,
+                "{}: Rust writes another shape",
+                entry.file
+            );
+        }
+        "decode" => {}
+        other => panic!("{}: expect `{other}` does not apply to a DTO", entry.file),
+    }
+}
+
 fn as_decoded(frame: ServerFrame) -> DecodedFrame {
     match frame {
         ServerFrame::Response(response) => DecodedFrame::Response(response),
@@ -224,6 +253,7 @@ fn every_fixture_in_the_index_behaves_as_expected_in_rust() {
         match entry.type_name.as_str() {
             "Request" => check_request(&entry, &bytes),
             "ServerFrame" => check_server_frame(&entry, &bytes),
+            "SecretInput" => check_dto::<SecretInput>(&entry, &bytes),
             other => panic!("{}: no decoder for type `{other}`", entry.file),
         }
         checked += 1;
@@ -490,4 +520,38 @@ fn event_kind(file: &str) -> EventKind {
         panic!("{file}: expected an event");
     };
     event.kind
+}
+
+fn dto<T: DeserializeOwned>(file: &str) -> T {
+    serde_json::from_slice(&read(file)).unwrap_or_else(|err| panic!("{file}: {err}"))
+}
+
+#[test]
+fn every_secret_input_source_has_a_fixture_and_a_value_is_read_as_secret_text() {
+    let SecretInput::Value(text) = dto("dto-secret-input-value.json") else {
+        panic!("expected a value input");
+    };
+    assert_eq!(text.expose(), "fixture-secret-0001");
+    assert_eq!(format!("{text:?}"), "SecretText(****)");
+    assert_eq!(
+        dto::<SecretInput>("dto-secret-input-generate.json"),
+        SecretInput::Generate
+    );
+    assert_eq!(
+        dto::<SecretInput>("dto-secret-input-copy-from.json"),
+        SecretInput::CopyFrom("local:erp/postgres/admin".to_owned())
+    );
+    let SecretInput::Bind(reference) = dto("dto-secret-input-bind.json") else {
+        panic!("expected a bind input");
+    };
+    assert!(stackly_protocol::secret::is_secret_reference(&reference));
+    for file in [
+        "dto-secret-input-value.json",
+        "dto-secret-input-generate.json",
+        "dto-secret-input-copy-from.json",
+        "dto-secret-input-bind.json",
+    ] {
+        use stackly_protocol::json::Validate as _;
+        assert!(dto::<SecretInput>(file).validate().is_empty(), "{file}");
+    }
 }

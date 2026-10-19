@@ -30,6 +30,7 @@ pub mod handshake;
 pub mod json;
 pub mod limits;
 pub mod message;
+pub mod secret;
 mod version;
 pub mod wire;
 

@@ -5,6 +5,15 @@
 
 import Foundation
 
+/// A secret value as the wire carries it: in a request that sets a value,
+/// and in the reply of `secret.reveal` (spec 0011 AC-14).
+/// 
+/// It encodes as a plain JSON string, its `Debug` prints
+/// `SecretText(****)`, and its memory is wiped when it drops. Decoding
+/// takes any string; the value rules are [`SecretText::field_code`], run
+/// by the params' [`Validate`].
+public typealias SecretText = String
+
 /// One platform capability (spec 0004) and its support.
 public struct PlatformCapabilityStatus: Codable, Sendable, Equatable {
 	/// The capability code, such as `ipc_endpoint`.
@@ -938,6 +947,79 @@ public struct UnsubscribeParams: Codable, Sendable, Equatable {
 
 	public init(subscriptionId: UInt32) {
 		self.subscriptionId = subscriptionId
+	}
+}
+
+/// Where a new secret value comes from (spec 0011 AC-5): shared by
+/// `secret.set` and by the requests that create an instance, bring an
+/// environment up, or restore.
+/// 
+/// A reference is the text form `local:<segment>/<segment>...`; it is not a
+/// secret and may appear anywhere.
+public enum SecretInput: Codable, Sendable, Equatable {
+	/// A value the person typed, pasted, or piped in.
+	case value(SecretText)
+	/// A new random value the daemon generates.
+	case generate
+	/// A copy of the value stored under another reference.
+	case copyFrom(String)
+	/// Use an existing reference without writing a value. Only for a new
+	/// resource; `secret.set` refuses it.
+	case bind(String)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case value,
+			generate,
+			copyFrom,
+			bind
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .value:
+				if let content = try? container.decode(SecretText.self, forKey: .content) {
+					self = .value(content)
+					return
+				}
+			case .generate:
+				self = .generate
+				return
+			case .copyFrom:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .copyFrom(content)
+					return
+				}
+			case .bind:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .bind(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(SecretInput.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SecretInput"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .value(let content):
+			try container.encode(CodingKeys.value, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .generate:
+			try container.encode(CodingKeys.generate, forKey: .type)
+		case .copyFrom(let content):
+			try container.encode(CodingKeys.copyFrom, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .bind(let content):
+			try container.encode(CodingKeys.bind, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
 	}
 }
 
