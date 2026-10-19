@@ -376,7 +376,8 @@ mod tests {
     use crate::runtime::spike::plan::PlanDependency;
     use serde_json::json;
 
-    const RECIPE: &str = "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh";
+    const RECIPE: &str =
+        "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh";
     const SOURCE_URL: &str = "https://ftp.postgresql.org/pub/source/v18.6/postgresql-18.6.tar.bz2";
     const OPENSSL_URL: &str =
         "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz";
@@ -563,9 +564,9 @@ mod tests {
             (
                 "/recipe",
                 json!(
-                    "ojiepermana/stackly-runtimes@1111111111111111111111111111111111111111:recipes/postgresql.sh"
+                    "stackly-dev/runtimes@1111111111111111111111111111111111111111:recipes/postgresql.sh"
                 ),
-                "recipe is \"ojiepermana/stackly-runtimes@1111",
+                "recipe is \"stackly-dev/runtimes@1111",
             ),
             (
                 "/deploymentTarget",

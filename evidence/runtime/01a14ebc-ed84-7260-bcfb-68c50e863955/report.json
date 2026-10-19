@@ -1,0 +1,649 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+    "sourceDirty": false,
+    "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "xtask",
+      "--test",
+      "native_runtime",
+      "--",
+      "--ignored"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-10-18T11:19:26.852166Z",
+  "finishedAt": "2026-10-18T11:20:55.936809Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 8,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 8,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 8
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14ebc-f063-74e0-82ef-93ef26ef3aca",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "clickhouse_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 52
+      },
+      "status": "PASS",
+      "expected": "clickhouse server runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "clickhouse 26.8.30.8 ready in 9397 ms, stopped in 525 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "clickhouse",
+          "version": "26.8.30.8",
+          "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:19:27.587069Z",
+      "finishedAt": "2026-10-18T11:20:19.103912Z",
+      "evidencePath": "artifacts/01a14ebc-f063-74e0-82ef-93ef26ef3aca/",
+      "context": {
+        "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+        "sourceDirty": false,
+        "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14ebc-f063-74e0-82ef-93f0ff829a0b",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "mysql_9_7_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 74
+      },
+      "status": "PASS",
+      "expected": "mysqld 9.7 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "mysql 9.7.2 ready in 664 ms, stopped in 1118 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:19:27.587106Z",
+      "finishedAt": "2026-10-18T11:19:44.251693Z",
+      "evidencePath": "artifacts/01a14ebc-f063-74e0-82ef-93f0ff829a0b/",
+      "context": {
+        "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+        "sourceDirty": false,
+        "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14ebc-f063-74e0-82ef-93f1c16a56ff",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "valkey_9_1_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 107
+      },
+      "status": "PASS",
+      "expected": "valkey-server 9.1 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "valkey 9.1.2 ready in 826 ms, stopped in 139 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "valkey",
+          "version": "9.1.2",
+          "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:19:27.587106Z",
+      "finishedAt": "2026-10-18T11:20:40.850331Z",
+      "evidencePath": "artifacts/01a14ebc-f063-74e0-82ef-93f1c16a56ff/",
+      "context": {
+        "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+        "sourceDirty": false,
+        "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14ebc-f063-74e0-82ef-93f284802bd2",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "postgresql_18_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 96
+      },
+      "status": "PASS",
+      "expected": "postgres 18 runs from its managed artifact under a LaunchAgent, passes the ICU, pgcrypto, lz4, and zstd probes, is ready within 120 s, and stops within 60 s",
+      "actual": "postgresql 18.6 ready in 477 ms, stopped in 176 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "postgresql",
+          "version": "18.6",
+          "digest": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:19:27.587072Z",
+      "finishedAt": "2026-10-18T11:19:59.042313Z",
+      "evidencePath": "artifacts/01a14ebc-f063-74e0-82ef-93f284802bd2/",
+      "context": {
+        "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+        "sourceDirty": false,
+        "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14ebc-f063-74e0-82ef-93f33b0d7fd2",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "traefik_3_7_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 41
+      },
+      "status": "PASS",
+      "expected": "traefik 3.7 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "traefik 3.7.15 ready in 1934 ms, stopped in 1588 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "traefik",
+          "version": "3.7.15",
+          "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:19:27.58707Z",
+      "finishedAt": "2026-10-18T11:20:24.79094Z",
+      "evidencePath": "artifacts/01a14ebc-f063-74e0-82ef-93f33b0d7fd2/",
+      "context": {
+        "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+        "sourceDirty": false,
+        "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14ebc-f063-74e0-82ef-93f4807c4123",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "nats_2_15_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 30
+      },
+      "status": "PASS",
+      "expected": "nats-server 2.15 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "nats 2.15.1 ready in 322 ms, stopped in 183 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "nats",
+          "version": "2.15.1",
+          "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:19:27.587072Z",
+      "finishedAt": "2026-10-18T11:20:01.28823Z",
+      "evidencePath": "artifacts/01a14ebc-f063-74e0-82ef-93f4807c4123/",
+      "context": {
+        "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+        "sourceDirty": false,
+        "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14ebc-f063-74e0-82ef-93f5507749f7",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "mysql_8_4_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 63
+      },
+      "status": "PASS",
+      "expected": "mysqld 8.4 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "mysql 8.4.11 ready in 712 ms, stopped in 1152 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:19:27.587069Z",
+      "finishedAt": "2026-10-18T11:20:55.912398Z",
+      "evidencePath": "artifacts/01a14ebc-f063-74e0-82ef-93f5507749f7/",
+      "context": {
+        "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+        "sourceDirty": false,
+        "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14ebc-f063-74e0-82ef-93f6e555c4a9",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "postgresql_17_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 85
+      },
+      "status": "PASS",
+      "expected": "postgres 17 runs from its managed artifact under a LaunchAgent, passes the ICU, pgcrypto, lz4, and zstd probes, is ready within 120 s, and stops within 60 s",
+      "actual": "postgresql 17.11 ready in 377 ms, stopped in 185 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "postgresql",
+          "version": "17.11",
+          "digest": "04b1eff117441c0b6f1cbefa42ded6cf5726d656e54881674defea04b515d6d3",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:19:27.587077Z",
+      "finishedAt": "2026-10-18T11:20:38.613241Z",
+      "evidencePath": "artifacts/01a14ebc-f063-74e0-82ef-93f6e555c4a9/",
+      "context": {
+        "sourceCommit": "945199ca6db9dee6ee39af3cc86e9b6e090d2fad",
+        "sourceDirty": false,
+        "runId": "01a14ebc-ed84-7260-bcfb-68c50e863955",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

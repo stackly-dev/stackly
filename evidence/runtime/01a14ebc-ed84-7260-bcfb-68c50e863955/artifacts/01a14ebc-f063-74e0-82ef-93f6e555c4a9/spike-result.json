@@ -1,0 +1,236 @@
+{
+  "archive": {
+    "files": 1895,
+    "setuid": [],
+    "specialFiles": [],
+    "symlinksEscaping": [],
+    "symlinksInternal": 0
+  },
+  "artifactId": "postgresql-17.11-r2-macos-aarch64",
+  "closureProbes": [
+    {
+      "detail": "10 non system libraries, as listed",
+      "name": "dependencies",
+      "status": "PASS"
+    },
+    {
+      "detail": "STACKLY-ARTIFACT.json matches the entry, 5 license texts, only regular files and folders",
+      "name": "manifest",
+      "status": "PASS"
+    },
+    {
+      "detail": "select datlocprovider from pg_database where datname = 'postgres' gave i",
+      "name": "icu",
+      "status": "PASS"
+    },
+    {
+      "detail": "create extension pgcrypto; select length(gen_random_bytes(16)) gave 16",
+      "name": "pgcrypto",
+      "status": "PASS"
+    },
+    {
+      "detail": "create table stackly_lz4 (value text compression lz4); insert into stackly_lz4 values (repeat('a', 10000)); select pg_column_compression(value) from stackly_lz4 gave lz4",
+      "name": "lz4",
+      "status": "PASS"
+    },
+    {
+      "detail": "pg_dump --compress=zstd wrote 716 bytes",
+      "name": "zstd",
+      "status": "PASS"
+    }
+  ],
+  "failure": null,
+  "launch": {
+    "controllingTty": false,
+    "domain": "gui/502",
+    "parentIsLaunchd": true
+  },
+  "libraries": {
+    "foreign": [],
+    "runtime": [
+      "/usr/lib/dyld",
+      "bin/postgres",
+      "lib/libcrypto.3.dylib",
+      "lib/libicudata.78.dylib",
+      "lib/libicui18n.78.dylib",
+      "lib/libicuuc.78.dylib",
+      "lib/liblz4.1.dylib",
+      "lib/libssl.3.dylib",
+      "lib/libzstd.1.dylib"
+    ],
+    "static": [
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/libc++.1.dylib",
+      "/usr/lib/libedit.3.dylib",
+      "/usr/lib/libxml2.2.dylib",
+      "/usr/lib/libz.1.dylib",
+      "lib/libcrypto.3.dylib",
+      "lib/libecpg.6.dylib",
+      "lib/libicudata.78.dylib",
+      "lib/libicui18n.78.dylib",
+      "lib/libicuuc.78.dylib",
+      "lib/liblz4.1.dylib",
+      "lib/libpgtypes.3.dylib",
+      "lib/libpq.5.dylib",
+      "lib/libssl.3.dylib",
+      "lib/libzstd.1.dylib"
+    ],
+    "warnings": []
+  },
+  "listeners": [],
+  "logTail": [
+    {
+      "process": "initdb",
+      "stderr": "",
+      "stdout": "The files belonging to this database system will be owned by user \"$USER\".\nThis user must also own the server process.\n\nUsing language tag \"und\" for ICU locale \"und\".\nThe database cluster will be initialized with this locale configuration:\n  locale provider:   icu\n  default collation: und\n  LC_COLLATE:  C\n  LC_CTYPE:    C\n  LC_MESSAGES: C\n  LC_MONETARY: C\n  LC_NUMERIC:  C\n  LC_TIME:     C\nThe default text search configuration will be set to \"english\".\n\nData page checksums are disabled.\n\ncreating directory $ROOT/Stackly Spike Ü/run/data ... ok\ncreating subdirectories ... ok\nselecting dynamic shared memory implementation ... posix\nselecting default \"max_connections\" ... 100\nselecting default \"shared_buffers\" ... 128MB\nselecting default time zone ... Asia/Jakarta\ncreating configuration files ... ok\nrunning bootstrap script ... ok\nperforming post-bootstrap initialization ... ok\nsyncing data to disk ... ok\n\nSuccess. You can now start the database server using:\n\n    '$ROOT/Stackly Spike Ü/postgresql-17.11-r2-macos-aarch64/postgresql-17.11-r2-macos-aarch64/bin/pg_ctl' -D '$ROOT/Stackly Spike Ü/run/data' -l logfile start\n\n"
+    },
+    {
+      "process": "server",
+      "stderr": "2026-10-18 18:20:36.093 WIB [49510] LOG:  starting PostgreSQL 17.11 on aarch64-darwin, compiled by clang-21.0.0, 64-bit\n2026-10-18 18:20:36.093 WIB [49510] LOG:  listening on Unix socket \"/tmp/sk-fb4be73b/.s.PGSQL.52765\"\n2026-10-18 18:20:36.107 WIB [49514] LOG:  database system was shut down at 2026-10-18 18:20:35 WIB\n2026-10-18 18:20:36.110 WIB [49510] LOG:  database system is ready to accept connections\n2026-10-18 18:20:37.652 WIB [49510] LOG:  received fast shutdown request\n2026-10-18 18:20:37.652 WIB [49510] LOG:  aborting any active transactions\n2026-10-18 18:20:37.653 WIB [49510] LOG:  background worker \"logical replication launcher\" (PID 49517) exited with exit code 1\n2026-10-18 18:20:37.653 WIB [49512] LOG:  shutting down\n2026-10-18 18:20:37.654 WIB [49512] LOG:  checkpoint starting: shutdown immediate\n2026-10-18 18:20:37.660 WIB [49512] LOG:  checkpoint complete: wrote 79 buffers (0.5%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.003 s, sync=0.003 s, total=0.007 s; sync files=40, longest=0.001 s, average=0.001 s; distance=427 kB, estimate=427 kB; lsn=0/1585630, redo lsn=0/1585630\n2026-10-18 18:20:37.662 WIB [49510] LOG:  database system is shut down\n",
+      "stdout": ""
+    }
+  ],
+  "minOsMeasured": "27.0",
+  "observedVersion": "17.11",
+  "quarantine": {
+    "detail": "already recorded in evidence/runtime/01a14eb2-ecac-77c2-9c09-d03c0f2d367d/artifacts/01a14eb2-eec5-74b4-b5b7-7103bfbf9f67/",
+    "outcome": "skipped"
+  },
+  "rawVersion": "17.11",
+  "schema": "stackly.runtime-spike-result/v1",
+  "sha256": "04b1eff117441c0b6f1cbefa42ded6cf5726d656e54881674defea04b515d6d3",
+  "signature": [
+    {
+      "adhocSignedAtInstall": false,
+      "authority": null,
+      "executable": "bin/postgres",
+      "kind": "adhoc",
+      "teamId": null
+    },
+    {
+      "adhocSignedAtInstall": false,
+      "authority": null,
+      "executable": "bin/initdb",
+      "kind": "adhoc",
+      "teamId": null
+    },
+    {
+      "adhocSignedAtInstall": false,
+      "authority": null,
+      "executable": "bin/psql",
+      "kind": "adhoc",
+      "teamId": null
+    },
+    {
+      "adhocSignedAtInstall": false,
+      "authority": null,
+      "executable": "bin/pg_dump",
+      "kind": "adhoc",
+      "teamId": null
+    }
+  ],
+  "status": "PASS",
+  "steps": [
+    {
+      "detail": "gui/502, parent launchd, no controlling terminal",
+      "durationMs": 0,
+      "name": "launch",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 302,
+      "name": "hash",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 591,
+      "name": "extract",
+      "status": "PASS"
+    },
+    {
+      "detail": "1895 files, 0 internal links",
+      "durationMs": 15,
+      "name": "archive report",
+      "status": "PASS"
+    },
+    {
+      "detail": "128 Mach-O file(s), 15 libraries",
+      "durationMs": 3517,
+      "name": "static audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "10 non system libraries, as listed; STACKLY-ARTIFACT.json matches the entry, 5 license texts, only regular files and folders",
+      "durationMs": 0,
+      "name": "closure",
+      "status": "PASS"
+    },
+    {
+      "detail": "kept the existing signatures",
+      "durationMs": 1481,
+      "name": "signing",
+      "status": "PASS"
+    },
+    {
+      "detail": "27.0",
+      "durationMs": 11,
+      "name": "min_os",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "recipe",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 4948,
+      "name": "init",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "start",
+      "status": "PASS"
+    },
+    {
+      "detail": "ready 377 ms after the start",
+      "durationMs": 377,
+      "name": "ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "17.11",
+      "durationMs": 138,
+      "name": "version",
+      "status": "PASS"
+    },
+    {
+      "detail": "4 probe(s)",
+      "durationMs": 1018,
+      "name": "probes",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 listener(s)",
+      "durationMs": 35,
+      "name": "runtime audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit 0 after 185 ms",
+      "durationMs": 185,
+      "name": "stop",
+      "status": "PASS"
+    }
+  ],
+  "stop": {
+    "durationMs": 185,
+    "exitCode": 0,
+    "signal": null
+  }
+}

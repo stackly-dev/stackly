@@ -1,0 +1,220 @@
+{
+  "archive": {
+    "files": 294,
+    "setuid": [],
+    "specialFiles": [],
+    "symlinksEscaping": [],
+    "symlinksInternal": 34
+  },
+  "artifactId": "mysql-9.7.2-macos-aarch64",
+  "closureProbes": [
+    {
+      "detail": "10 non system libraries, as listed",
+      "name": "dependencies",
+      "status": "PASS"
+    }
+  ],
+  "failure": null,
+  "launch": {
+    "controllingTty": false,
+    "domain": "gui/502",
+    "parentIsLaunchd": true
+  },
+  "libraries": {
+    "foreign": [],
+    "runtime": [
+      "/usr/lib/dyld",
+      "bin/mysqld",
+      "lib/libcrypto.3.dylib",
+      "lib/libprotobuf-lite.24.4.0.dylib",
+      "lib/libssl.3.dylib",
+      "lib/plugin/component_reference_cache.so"
+    ],
+    "static": [
+      "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+      "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+      "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+      "/System/Library/Frameworks/Kerberos.framework/Versions/A/Kerberos",
+      "/usr/lib/libSystem.B.dylib",
+      "/usr/lib/libc++.1.dylib",
+      "/usr/lib/libcurl.4.dylib",
+      "/usr/lib/libncurses.5.4.dylib",
+      "/usr/lib/libresolv.9.dylib",
+      "/usr/lib/libsasl2.2.dylib",
+      "lib/libcom_err.3.0.dylib",
+      "lib/libcrypto.3.dylib",
+      "lib/libfido2.1.15.0.dylib",
+      "lib/libgssapi_krb5.2.2.dylib",
+      "lib/libk5crypto.3.1.dylib",
+      "lib/libkrb5.3.3.dylib",
+      "lib/libkrb5support.1.1.dylib",
+      "lib/libprotobuf-lite.24.4.0.dylib",
+      "lib/libprotobuf.24.4.0.dylib",
+      "lib/libssl.3.dylib"
+    ],
+    "warnings": [
+      "bin/mysqld-debug: LC_RPATH /Volumes/hd2/pb2/build/sb_0-23142167-1783700601.78806/debug/library_output_directory is absolute outside the system",
+      "lib/plugin/debug/component_telemetry.so: LC_RPATH /Volumes/hd2/pb2/build/sb_0-23142167-1783700601.78806/debug/library_output_directory is absolute outside the system",
+      "lib/plugin/debug/group_replication.so: LC_RPATH /Volumes/hd2/pb2/build/sb_0-23142167-1783700601.78806/debug/library_output_directory is absolute outside the system"
+    ]
+  },
+  "listeners": [],
+  "logTail": [
+    {
+      "process": "init",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "process": "server",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "process": "init.err",
+      "stderr": "",
+      "stdout": "2026-10-18T11:19:39.677429Z 0 [System] [MY-015017] [Server] MySQL Server Initialization - start.\n2026-10-18T11:19:39.681509Z 0 [System] [MY-013169] [Server] $ROOT/Stackly Spike Ü/mysql-9.7.2-macos-aarch64/mysql-9.7.2-macos15-arm64/bin/mysqld (mysqld 9.7.2) initializing of server in progress as process 45071\n2026-10-18T11:19:39.683894Z 0 [Warning] [MY-010159] [Server] Setting lower_case_table_names=2 because file system for $ROOT/Stackly Spike Ü/run/data/ is case insensitive\n2026-10-18T11:19:39.688636Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.\n2026-10-18T11:19:39.849830Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.\n2026-10-18T11:19:40.399178Z 5 [Warning] [MY-010453] [Server] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.\n2026-10-18T11:19:40.769914Z 0 [System] [MY-013172] [Server] Received SHUTDOWN from user <via user signal>. Shutting down mysqld (Version: 9.7.2).\n2026-10-18T11:19:41.251893Z 0 [System] [MY-015018] [Server] MySQL Server Initialization - end.\n"
+    },
+    {
+      "process": "mysqld.err",
+      "stderr": "",
+      "stdout": "2026-10-18T11:19:41.419887Z 0 [System] [MY-015015] [Server] MySQL Server - start.\n2026-10-18T11:19:41.583870Z 0 [System] [MY-010116] [Server] $ROOT/Stackly Spike Ü/mysql-9.7.2-macos-aarch64/mysql-9.7.2-macos15-arm64/bin/mysqld (mysqld 9.7.2) starting as process 45208\n2026-10-18T11:19:41.583881Z 0 [System] [MY-015603] [Server] MySQL Server has access to 10 logical CPUs.\n2026-10-18T11:19:41.583892Z 0 [System] [MY-015603] [Server] MySQL Server has access to 34359738368 bytes of physical memory.\n2026-10-18T11:19:41.585478Z 0 [Warning] [MY-010159] [Server] Setting lower_case_table_names=2 because file system for $ROOT/Stackly Spike Ü/run/data/ is case insensitive\n2026-10-18T11:19:41.635250Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.\n2026-10-18T11:19:41.716866Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.\n2026-10-18T11:19:41.919303Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.\n2026-10-18T11:19:41.919357Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.\n2026-10-18T11:19:41.928912Z 0 [System] [MY-010931] [Server] $ROOT/Stackly Spike Ü/mysql-9.7.2-macos-aarch64/mysql-9.7.2-macos15-arm64/bin/mysqld: ready for connections. Version: '9.7.2'  socket: '/tmp/sk-c7b49e94/m.sock'  port: 0  MySQL Community Server - GPL.\n2026-10-18T11:19:42.376855Z 10 [System] [MY-013172] [Server] Received SHUTDOWN from user root. Shutting down mysqld (Version: 9.7.2).\n2026-10-18T11:19:42.376952Z 0 [System] [MY-013172] [Server] Received SHUTDOWN from user <via user signal>. Shutting down mysqld (Version: 9.7.2).\n2026-10-18T11:19:42.907846Z 0 [System] [MY-010910] [Server] $ROOT/Stackly Spike Ü/mysql-9.7.2-macos-aarch64/mysql-9.7.2-macos15-arm64/bin/mysqld: Shutdown complete (mysqld 9.7.2)  MySQL Community Server - GPL.\n2026-10-18T11:19:42.907884Z 0 [System] [MY-015016] [Server] MySQL Server - end.\n"
+    }
+  ],
+  "minOsMeasured": "14.0",
+  "observedVersion": "9.7.2",
+  "quarantine": {
+    "detail": "already recorded in evidence/runtime/01a1494b-d124-779a-80d5-81c5c29696c0/artifacts/01a1494b-d2bc-7322-bdcd-d424deaf6420/",
+    "outcome": "skipped"
+  },
+  "rawVersion": "9.7.2",
+  "schema": "stackly.runtime-spike-result/v1",
+  "sha256": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+  "signature": [
+    {
+      "adhocSignedAtInstall": false,
+      "authority": "Developer ID Application: Oracle America, Inc. (VB5E2TV963)",
+      "executable": "bin/mysqld",
+      "kind": "developer_id",
+      "teamId": "VB5E2TV963"
+    },
+    {
+      "adhocSignedAtInstall": false,
+      "authority": "Developer ID Application: Oracle America, Inc. (VB5E2TV963)",
+      "executable": "bin/mysql",
+      "kind": "developer_id",
+      "teamId": "VB5E2TV963"
+    },
+    {
+      "adhocSignedAtInstall": false,
+      "authority": "Developer ID Application: Oracle America, Inc. (VB5E2TV963)",
+      "executable": "bin/mysqladmin",
+      "kind": "developer_id",
+      "teamId": "VB5E2TV963"
+    }
+  ],
+  "status": "PASS",
+  "steps": [
+    {
+      "detail": "gui/502, parent launchd, no controlling terminal",
+      "durationMs": 0,
+      "name": "launch",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 1847,
+      "name": "hash",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 1327,
+      "name": "extract",
+      "status": "PASS"
+    },
+    {
+      "detail": "294 files, 34 internal links",
+      "durationMs": 2,
+      "name": "archive report",
+      "status": "PASS"
+    },
+    {
+      "detail": "108 Mach-O file(s), 20 libraries",
+      "durationMs": 2977,
+      "name": "static audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "10 non system libraries, as listed",
+      "durationMs": 0,
+      "name": "closure",
+      "status": "PASS"
+    },
+    {
+      "detail": "kept the existing signatures",
+      "durationMs": 2648,
+      "name": "signing",
+      "status": "PASS"
+    },
+    {
+      "detail": "14.0",
+      "durationMs": 33,
+      "name": "min_os",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 0,
+      "name": "recipe",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 2605,
+      "name": "init",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "durationMs": 2,
+      "name": "start",
+      "status": "PASS"
+    },
+    {
+      "detail": "ready 664 ms after the start",
+      "durationMs": 664,
+      "name": "ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "9.7.2",
+      "durationMs": 267,
+      "name": "version",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 probe(s)",
+      "durationMs": 0,
+      "name": "probes",
+      "status": "PASS"
+    },
+    {
+      "detail": "0 listener(s)",
+      "durationMs": 55,
+      "name": "runtime audit",
+      "status": "PASS"
+    },
+    {
+      "detail": "exit 0 after 1118 ms",
+      "durationMs": 1118,
+      "name": "stop",
+      "status": "PASS"
+    }
+  ],
+  "stop": {
+    "durationMs": 1118,
+    "exitCode": 0,
+    "signal": null
+  }
+}

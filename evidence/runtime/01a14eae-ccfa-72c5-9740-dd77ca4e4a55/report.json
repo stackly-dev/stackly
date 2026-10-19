@@ -1,0 +1,140 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a14eae-ccfa-72c5-9740-dd77ca4e4a55",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "31a5ae1b2cdae829734d1ce48b90ef00fc6451e3",
+    "sourceDirty": false,
+    "runId": "01a14eae-ccfa-72c5-9740-dd77ca4e4a55",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "xtask",
+      "--test",
+      "native_runtime",
+      "--",
+      "--ignored",
+      "valkey_9_1"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-10-18T11:04:01.018774Z",
+  "finishedAt": "2026-10-18T11:04:40.163783Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 1
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a14eae-e20c-77f9-a6cf-b945de794325",
+      "covers": [
+        "AC-078",
+        "REQ-005"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "xtask",
+        "target": "native_runtime",
+        "name": "valkey_9_1_runs_from_managed_artifact",
+        "file": "xtask/tests/native_runtime.rs",
+        "line": 107
+      },
+      "status": "PASS",
+      "expected": "valkey-server 9.1 runs from its managed artifact under a LaunchAgent, is ready within 120 s, and stops within 60 s",
+      "actual": "valkey 9.1.2 ready in 825 ms, stopped in 128 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "valkey",
+          "version": "9.1.2",
+          "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-18T11:04:06.41283Z",
+      "finishedAt": "2026-10-18T11:04:40.153624Z",
+      "evidencePath": "artifacts/01a14eae-e20c-77f9-a6cf-b945de794325/",
+      "context": {
+        "sourceCommit": "31a5ae1b2cdae829734d1ce48b90ef00fc6451e3",
+        "sourceDirty": false,
+        "runId": "01a14eae-ccfa-72c5-9740-dd77ca4e4a55",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "native_runtime",
+          "--",
+          "--ignored",
+          "valkey_9_1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": true
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

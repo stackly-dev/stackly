@@ -1,5 +1,5 @@
 //! The runtime inventory `runtimes/inventory.toml` (spec 0003) and rules 1
-//! to 6 of `cargo xtask runtime check`.
+//! to 6 and 9 of `cargo xtask runtime check`.
 //!
 //! Every field is read as written, with enum values kept as strings, so a
 //! wrong value becomes one `<id>: <rule>` line instead of a TOML error.
@@ -31,6 +31,18 @@ const PROVIDERS: [&str; 6] = [
     "clickhouse",
     "valkey",
     "traefik",
+];
+/// The lines that must each have exactly one entry (rule 9). `None` takes
+/// any line of that provider.
+const REQUIRED_LINES: [(&str, Option<&str>); 8] = [
+    ("postgresql", Some("17")),
+    ("postgresql", Some("18")),
+    ("mysql", Some("8.4")),
+    ("mysql", Some("9.7")),
+    ("nats", Some("2.15")),
+    ("clickhouse", None),
+    ("valkey", Some("9.1")),
+    ("traefik", Some("3.7")),
 ];
 /// The prefixes a relocatable install name may use.
 const RELATIVE_INSTALL_PREFIXES: [&str; 3] = ["@rpath/", "@loader_path/", "@executable_path/"];
@@ -243,6 +255,37 @@ impl Inventory {
         self.artifacts
             .iter()
             .filter(|artifact| artifact.status.as_deref() == Some("available"))
+    }
+
+    /// Checks rule 9: every required line has exactly one entry, whatever
+    /// its status.
+    pub fn required_line_violations(&self) -> Vec<Violation> {
+        let mut out = Vec::new();
+        for (provider, line) in REQUIRED_LINES {
+            let entries = self
+                .artifacts
+                .iter()
+                .filter(|artifact| filled(&artifact.provider) == Some(provider))
+                .filter(|artifact| line.is_none_or(|line| filled(&artifact.line) == Some(line)))
+                .count();
+            if entries == 1 {
+                continue;
+            }
+            let what = match line {
+                Some(line) => format!("the required line {provider} {line}"),
+                None => format!("the required provider {provider} (any line)"),
+            };
+            let message = match entries {
+                0 => format!("{what} has no entry"),
+                n => format!("{what} has {n} entries, it needs exactly one"),
+            };
+            out.push(Violation {
+                subject: "inventory".to_owned(),
+                rule: 9,
+                message,
+            });
+        }
+        out
     }
 }
 
@@ -800,13 +843,13 @@ status = "available"
 origin = "maintainer"
 distribution = "stackly_hosted"
 format = "tar_gz"
-urls = ["https://github.com/ojiepermana/stackly/releases/download/runtime/postgresql-18.6-r1-macos-aarch64/postgresql-18.6-r1-macos-aarch64.tar.gz"]
+urls = ["https://github.com/stackly-dev/stackly/releases/download/runtime/postgresql-18.6-r1-macos-aarch64/postgresql-18.6-r1-macos-aarch64.tar.gz"]
 sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 size = 52428800
 archive_root = "postgresql-18.6-r1-macos-aarch64"
 source_url = "https://ftp.postgresql.org/pub/source/v18.6/postgresql-18.6.tar.bz2"
 source_sha256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-recipe = "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh"
+recipe = "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh"
 signing_policy = "adhoc_pipeline"
 license = "PostgreSQL"
 license_url = "https://www.postgresql.org/about/licence/"
@@ -1187,7 +1230,7 @@ upstream_signature = { kind = "none" }
         assert_one(
             &check(&edit(
                 MAINTAINER,
-                "recipe = \"ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh\"\n",
+                "recipe = \"stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh\"\n",
                 "",
             )),
             "postgresql-18.6-r1-macos-aarch64: a maintainer artifact needs recipe (rule 5)",
@@ -1217,27 +1260,28 @@ upstream_signature = { kind = "none" }
 
     #[test]
     fn rule_5_needs_a_recipe_that_names_a_repository_commit_and_relative_path() {
-        const GOOD: &str = "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh";
+        const GOOD: &str =
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh";
         for recipe in [
             // no `@`
-            "ojiepermana/stackly-runtimes:recipes/postgresql.sh",
+            "stackly-dev/runtimes:recipes/postgresql.sh",
             // a short commit
-            "ojiepermana/stackly-runtimes@0123456789abcdef:recipes/postgresql.sh",
+            "stackly-dev/runtimes@0123456789abcdef:recipes/postgresql.sh",
             // an upper case commit
-            "ojiepermana/stackly-runtimes@0123456789ABCDEF0123456789abcdef01234567:recipes/postgresql.sh",
+            "stackly-dev/runtimes@0123456789ABCDEF0123456789abcdef01234567:recipes/postgresql.sh",
             // an absolute path
-            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:/recipes/postgresql.sh",
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:/recipes/postgresql.sh",
             // a path that climbs out
-            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/../../etc/passwd",
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/../../etc/passwd",
             // no owner, no repository, or no path
             "stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
-            "ojiepermana/@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
-            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:",
-            "ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567",
+            "stackly-dev/@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:",
+            "stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567",
             // characters the owner or repository pattern does not allow
             "ojie.permana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
-            "ojiepermana/stackly runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
-            "https://github.com/ojiepermana/stackly-runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "stackly-dev/stackly runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
+            "https://github.com/stackly-dev/runtimes@0123456789abcdef0123456789abcdef01234567:recipes/postgresql.sh",
         ] {
             assert_one(
                 &check(&edit(MAINTAINER, GOOD, recipe)),
@@ -1248,7 +1292,7 @@ upstream_signature = { kind = "none" }
         }
         assert!(is_recipe(GOOD));
         assert!(is_recipe(
-            "ojiepermana/stackly.runtimes_2@0123456789abcdef0123456789abcdef01234567:recipes/deps/openssl.sh"
+            "stackly-dev/stackly.runtimes_2@0123456789abcdef0123456789abcdef01234567:recipes/deps/openssl.sh"
         ));
     }
 
@@ -1257,7 +1301,7 @@ upstream_signature = { kind = "none" }
         let with_attestation = edit(
             MAINTAINER,
             "signing_policy = \"adhoc_pipeline\"",
-            "attestation = \"https://github.com/ojiepermana/stackly-runtimes/attestations/1\"\nsigning_policy = \"adhoc_pipeline\"",
+            "attestation = \"https://github.com/stackly-dev/runtimes/attestations/1\"\nsigning_policy = \"adhoc_pipeline\"",
         );
         let err = format!("{:#}", Inventory::parse(&with_attestation).err().unwrap());
         assert!(err.contains("unknown field `attestation`"), "{err}");
@@ -1409,5 +1453,99 @@ upstream_signature = { kind = "none" }
         );
         assert_eq!(normalize_fingerprint("A4A9"), None);
         assert_eq!(normalize_fingerprint(&"g".repeat(40)), None);
+    }
+
+    /// One minimal entry per required line; rule 9 reads only provider
+    /// and line.
+    const REQUIRED: &str = r#"
+schema_version = 1
+
+[[artifact]]
+provider = "postgresql"
+line = "17"
+
+[[artifact]]
+provider = "postgresql"
+line = "18"
+
+[[artifact]]
+provider = "mysql"
+line = "8.4"
+
+[[artifact]]
+provider = "mysql"
+line = "9.7"
+
+[[artifact]]
+provider = "nats"
+line = "2.15"
+
+[[artifact]]
+provider = "clickhouse"
+line = "26.8"
+
+[[artifact]]
+provider = "valkey"
+line = "9.1"
+
+[[artifact]]
+provider = "traefik"
+line = "3.7"
+"#;
+
+    /// The rule 9 lines of `text`.
+    fn required_lines(text: &str) -> Vec<String> {
+        Inventory::parse(text)
+            .unwrap()
+            .required_line_violations()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn rule_9_accepts_exactly_one_entry_per_required_line() {
+        assert_eq!(required_lines(REQUIRED), Vec::<String>::new());
+    }
+
+    #[test]
+    fn rule_9_names_a_required_line_without_an_entry() {
+        let text = edit(
+            REQUIRED,
+            "provider = \"valkey\"\nline = \"9.1\"",
+            "provider = \"valkey\"\nline = \"9.0\"",
+        );
+        assert_one(
+            &required_lines(&text),
+            "inventory: the required line valkey 9.1 has no entry (rule 9)",
+        );
+        assert_eq!(
+            required_lines("schema_version = 1\n").len(),
+            REQUIRED_LINES.len()
+        );
+    }
+
+    #[test]
+    fn rule_9_takes_any_clickhouse_line_but_only_one() {
+        let other_line = edit(REQUIRED, "line = \"26.8\"", "line = \"26.9\"");
+        assert_eq!(required_lines(&other_line), Vec::<String>::new());
+        let two_lines =
+            format!("{REQUIRED}\n[[artifact]]\nprovider = \"clickhouse\"\nline = \"26.9\"\n");
+        assert_one(
+            &required_lines(&two_lines),
+            "inventory: the required provider clickhouse (any line) has 2 entries, it needs exactly one (rule 9)",
+        );
+    }
+
+    #[test]
+    fn rule_9_counts_a_blocked_entry_and_ignores_lines_it_does_not_require() {
+        let blocked = edit(
+            REQUIRED,
+            "provider = \"postgresql\"\nline = \"17\"",
+            "provider = \"postgresql\"\nline = \"17\"\nstatus = \"blocked\"",
+        );
+        assert_eq!(required_lines(&blocked), Vec::<String>::new());
+        let extra = format!("{REQUIRED}\n[[artifact]]\nprovider = \"postgresql\"\nline = \"16\"\n");
+        assert_eq!(required_lines(&extra), Vec::<String>::new());
     }
 }

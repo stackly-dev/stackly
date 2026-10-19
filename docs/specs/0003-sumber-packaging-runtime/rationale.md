@@ -337,6 +337,41 @@ Update ini dibaca model lain (Sonnet 5.5, baca saja) sebelum diterima. Klaim yan
 
 Perbaikan yang langsung diterapkan karena bukan keputusan: `make install USE_REDIS_SYMLINKS=no` (opsi itu ada di Makefile 9.1.2, dan `valkey-check-aof`, `valkey-check-rdb`, serta `valkey-sentinel` dipasang sebagai symlink ke server), cek `pg_config --sharedir` dan `--pkglibdir` dari salinan paket (cek `--version` saja hanya membuktikan dyld, bukan path relatif), kalimat tentang data ICU, dan catatan bahwa entri yang masih membawa `attestation` gagal sebagai TOML tidak valid. Temuan bahwa `-Drpath=false` perlu ternyata tidak berlaku: `meson.build` PostgreSQL tidak pernah menambah rpath di macOS dan memakai install name absolut, yang sekarang ditangani langkah relokasi 3. Saran link statis lz4 dan zstd ditolak (lihat Keputusan turunan).
 
+## Update 2026-10-18: kedua repo pindah ke org `stackly-dev`
+
+Sebelum unggahan pertama, kedua repo GitHub pindah ke org `stackly-dev`. Repo resep sekarang `stackly-dev/runtimes` (sebelumnya direncanakan `ojiepermana/stackly-runtimes`), dan repo utama sekarang `stackly-dev/stackly` (sebelumnya `ojiepermana/stackly`). GitHub mengalihkan nama lama, tapi kamu memilih memakai nama baru di semua tempat sebelum artefak terbit, karena `recipe` di dalam artefak dan URL di inventory tidak bisa diubah lagi setelah dipin dan diunggah.
+
+Yang berubah di `index.md`: setiap penyebutan kedua repo (Summary, AC-17, Decision, tabel sumber, field `recipe`, tabel API, perintah `gh release create`, bagian repo resep, alur `build.sh`, Value sourcing, prasyarat, langkah 12 Milestone 3, Consequences, dan Follow-up). Contoh di `verify.md` dan fixture xtask (`inventory.rs`, `pin.rs`, `check.rs`, `spike/closure.rs`) ikut diganti. Yang sengaja tetap:
+
+- checkout lokal tetap `~/Development/ojiepermana/stackly-runtimes`, karena foldernya memang di sana;
+- pesan `stackly-runtimes has uncommitted changes` di AC-17, karena `build.sh` masih mencetaknya;
+- owner default `@ojiepermana` untuk entri `blocked`, karena itu handle orang, bukan repo;
+- bagian lain di rationale ini (inventaris, tabel opsi) tetap memakai nama lama, sebagai catatan keadaan saat keputusan dibuat.
+
+Ketiga artefak dibangun ulang dari commit resep `38930060759d2e7f5fed000a5f1d82aa9ada7664`, supaya `recipe` di `STACKLY-ARTIFACT.json` berbunyi `stackly-dev/runtimes@...`. Probe `manifest` membandingkan string itu dengan entri, jadi artefak yang dibangun dengan nama lama tidak lulus spike.
+
+Di luar spec ini, `repository` di `Cargo.toml` dan spec 0001 (`[workspace.package]`) serta URL remote `origin` checkout ini masih memakai `ojiepermana/stackly`. Itu keputusan spec 0001, jadi dicatat di Follow-up, bukan diubah di sini.
+
+## Update 2026-10-18: notice pihak ketiga dari header source
+
+### Konteks
+
+Di gerbang lisensi Valkey, artefak `valkey-9.1.2-r1-macos-aarch64` sudah lulus spike lokal, dan `LICENSES/`-nya memuat `COPYING` Valkey serta teks lisensi enam komponen vendored di `deps/`. Tapi folder `src/` Valkey 9.1.2 juga memuat kode dari penulis lain yang notice-nya hanya ada di header file, misalnya `ae_kqueue.c` (Harish Mallipeddi), `crc16.c` (Georges Menie), `crc64.c` dan `crcspeed.h` (Matt Stancliff), `crcspeed.c` dan `crccombine.c` (Mark Adler), `geohash*.c` (yinqiwen), lzf (Marc Lehmann), dan `mt19937-64`. PostgreSQL 18.6 punya pola yang sama di `src/` dan `contrib/`: Marko Kreen (pgcrypto, 25 file), Henry Spencer (regex, 12 file), Sun Microsystems (8), Philip Warner (pg_dump, 7), ISC (3), dan beberapa lainnya. Sebagian besar lisensi itu gaya BSD, yang meminta notice-nya ikut di distribusi binary, sementara GitHub Releases sudah distribusi publik.
+
+### Opsi
+
+| Opsi | Pilihan | Kenapa |
+| --- | --- | --- |
+| Setujui r1 sekarang, celah dicatat sebagai follow-up | tidak | artefak r1 tetap publik tanpa notice itu sampai build berikutnya |
+| Perbaiki dulu, ketiga artefak dibangun ulang sebagai r2 | dipilih kamu (rekomendasi saya) | satu putaran build untuk ketiganya, dan artefak publik pertama sudah membawa semua notice |
+| Valkey saja r2, PostgreSQL dibahas di gerbangnya nanti | tidak | kemungkinan butuh putaran build kedua untuk masalah yang sama |
+| Notice di `LICENSES/<provider>.txt` setelah teks lisensi utama | dipilih kamu (rekomendasi saya) | probe `manifest` tidak berubah, dan tidak ada aturan nama file baru |
+| Notice di file terpisah `LICENSES/<provider>-notices.txt` | tidak | teks lisensi utama tetap persis seperti upstream, tapi spec mendapat aturan nama file baru |
+
+### Keputusan
+
+Setiap resep provider memuat daftar pemilik provider dan daftar file notice. Build memindai folder source provider dan gagal kalau ada file berheader copyright pihak lain yang belum didaftar, supaya patch berikutnya yang menambah file seperti itu tidak lolos diam diam. Daftar pemilik ditulis di resep, bukan di spec, karena nilainya bergantung pada isi source versi itu. Pindaian sengaja longgar: baris `Copyright` yang nama pemiliknya ada di baris berikutnya ikut dianggap pihak lain, sehingga kelebihan notice lebih mungkin daripada kekurangan.
+
 ## Landscape scan 2026-10-17
 
 Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum terkonfirmasi" dikonfirmasi saat `runtime pin`.
