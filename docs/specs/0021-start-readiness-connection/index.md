@@ -529,6 +529,8 @@ Diterapkan di spec 0019 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
 
 #### Spec 0022 (overview dan daftar instance)
 
+Diterapkan di spec 0022 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
+
 1. *Navigasi*, `ShellDestination`. Ganti:
 
    ```text
