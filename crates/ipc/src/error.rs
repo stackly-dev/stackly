@@ -5,6 +5,11 @@ use stackly_protocol::ErrorBody;
 use stackly_protocol::codes::{UntrustedReason, ipc};
 use stackly_protocol::frame::FrameError;
 
+/// The `op` of an [`IpcError::Io`] that failed reading a connection.
+const READ_OP: &str = "read";
+/// The `op` of an [`IpcError::Io`] that failed writing a connection.
+const WRITE_OP: &str = "write";
+
 /// What went wrong in the transport. [`IpcError::to_error_body`] turns
 /// every variant into the catalog error the CLI and the GUI work with.
 #[derive(Debug, thiserror::Error)]
@@ -40,9 +45,11 @@ pub enum IpcError {
     /// a reply arrived: `ipc.connection_closed`.
     #[error("the connection closed before the frame or reply was complete")]
     ConnectionClosed,
-    /// Another OS error: `ipc.io_error`. `op` names the step, one of
-    /// `stat`, `connect`, `bind`, `chmod`, `rename`, `unlink`, `accept`,
-    /// `read`, or `write`.
+    /// Another OS error. `op` names the step, one of `stat`, `connect`,
+    /// `bind`, `chmod`, `rename`, `unlink`, `accept`, `read`, or `write`.
+    /// It maps to `ipc.io_error`, except `read` and `write`: they fail on a
+    /// connection that may already carry the request, so they map to
+    /// `ipc.connection_closed`, which is not retryable.
     #[error("{op} failed: {source}")]
     Io {
         /// The step that failed.
@@ -107,6 +114,13 @@ impl IpcError {
             Self::ConnectionClosed => ErrorBody::new(
                 &ipc::CONNECTION_CLOSED,
                 "the daemon closed the connection before replying",
+            ),
+            Self::Io {
+                op: op @ (READ_OP | WRITE_OP),
+                ..
+            } => ErrorBody::new(
+                &ipc::CONNECTION_CLOSED,
+                format!("{op} on the daemon connection failed, so the request may have run"),
             ),
             Self::Io { op, source } => {
                 ErrorBody::new(&ipc::IO_ERROR, format!("{op} failed with an os error"))
@@ -302,6 +316,32 @@ mod tests {
         assert_eq!(body.message(), "connect failed with an os error");
         assert_eq!(io_kind_name(io::ErrorKind::NotFound), "not_found");
         assert_eq!(io_kind_name(io::ErrorKind::Other), "other");
+    }
+
+    #[test]
+    fn read_and_write_failures_map_to_the_connection_closed_code() {
+        for op in ["read", "write"] {
+            let body = IpcError::Io {
+                op,
+                source: io::Error::from(io::ErrorKind::ConnectionReset),
+            }
+            .to_error_body();
+            assert_eq!(body.code(), "ipc.connection_closed", "{op}");
+            assert!(!body.retryable(), "{op}");
+            assert!(body.details().is_empty(), "{op}");
+            assert!(body.message().starts_with(op), "{}", body.message());
+        }
+        for op in [
+            "stat", "connect", "bind", "chmod", "rename", "unlink", "accept",
+        ] {
+            let body = IpcError::Io {
+                op,
+                source: io::Error::from(io::ErrorKind::PermissionDenied),
+            }
+            .to_error_body();
+            assert_eq!(body.code(), "ipc.io_error", "{op}");
+            assert_eq!(body.detail("op"), Some(op));
+        }
     }
 
     #[test]
