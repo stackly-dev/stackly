@@ -22,7 +22,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | --- | --- | --- | --- |
 | [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 1 done, 3 in-progress, 8 planned |
 | [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 5 planned |
-| [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 1 in-progress, 8 planned |
+| [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 2 in-progress, 7 planned |
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 planned |
 | [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 planned |
 | [05-saat-instance-gagal.md](05-saat-instance-gagal.md) | Saat instance gagal (JOURNEY-05) | 33 sampai 35 | 3 planned |
@@ -56,7 +56,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 16 | Onboarding | Instalasi pertama | planned |
 | 17 | Catalog & provider detail | Instalasi pertama | in-progress |
 | 18 | Install runtime managed | Instalasi pertama | planned |
-| 19 | Provider PostgreSQL | Instalasi pertama | planned |
+| 19 | Provider PostgreSQL | Instalasi pertama | in-progress |
 | 20 | Create instance | Instalasi pertama | planned |
 | 21 | Start, readiness & connection | Instalasi pertama | planned |
 | 22 | Overview & daftar instance | Instalasi pertama | planned |

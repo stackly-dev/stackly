@@ -53,7 +53,7 @@ Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke st
 
 - [ ] Design it (spec): `/architect install runtime managed`
 
-### 19. Provider PostgreSQL · needs a decision
+### 19. Provider PostgreSQL · in-progress
 
 Manifest dan adapter PostgreSQL resmi: `initdb` dari runtime yang cocok, auth lokal yang aman, locale dan encoding eksplisit, endpoint dan Unix socket per instance, readiness lewat query terautentikasi dengan role berhak minimum, dan shutdown terkontrol. Termasuk deteksi versi mayor data directory dan preflight kompatibilitas data dan runtime yang dipakai start, rebind, adoption, dan restore.
 
@@ -61,7 +61,15 @@ Manifest dan adapter PostgreSQL resmi: `initdb` dari runtime yang cocok, auth lo
 
 **Trace:** REQ-035 (dasar), BR-009, AC-035 (bagian penolakan), JOURNEY-01, PRD bagian 22.1
 
-- [ ] Design it (spec): `/architect provider PostgreSQL`
+**Pointer:** spec [0019](../specs/0019-provider-postgresql/index.md)
+
+- [x] Design it (spec): `/architect provider PostgreSQL`
+- [ ] Build it: `/develop provider PostgreSQL`
+  - [ ] Package and additive core changes on fixtures: `postgresqlConf` and `plain` template formats, `runExecutable` `stdin.text` in the plan, `x-stackly.printableOnly` checked by `SecretService::put` (minor protocol bump for the `reason` detail key), the `providers/postgresql` package with generated `versions.json`, `provider check`, golden render and plans, and fuzz seeds (spec 0019 AC-1 without the catalog part, AC-2 and AC-3 plan parts, AC-4 fixture part, AC-12 plan part; build steps 1 to 4; needs the feature 9 build in `01-foundation.md`, and step 3 needs spec 0011 step 4 (`SecretService::put`); steps 1, 2, and 3 can run as three parallel sessions, step 4 after them)
+  - [ ] PostgreSQL 18 end to end through the daemon: `Stdin::Text` in the init executor, the `exec` probe failure detail format, the `pin_package` fixture, an in process recording `LogSink` hook, and native tests for init, auth without trust, locale, endpoints and `ALTER SYSTEM`, honest readiness, fast stop, init failure, decoy `PATH`, reload, adoption, and the `postgres -C` round trip (spec 0019 AC-2 to AC-10, AC-12, AC-13; build steps 5 to 7; after milestone 1; needs feature 10 built through its milestone 4 and feature 11 done in `01-foundation.md`, and spec 0018 milestone 2 (`install_cached_artifact`); native tests need both PostgreSQL artifacts in the xtask runtime cache, else `BLOCKED`)
+  - [ ] PostgreSQL 17, major mismatch refusal, evidence, and catalog: the suite for 17 with the catalog entry moved from `[[planned]]` to `[[provider]]` in the same commit, refusal in both directions plus a missing or changed `PG_VERSION`, native evidence with `compatibility.json` per artifact, and `runtime.versionCheck` (spec 0019 AC-1 catalog part, AC-5 to AC-11, AC-13 to AC-15; build steps 8 to 11; after milestone 2; step 8 needs the feature 17 build (`providers/catalog.toml`), step 10 needs `cargo xtask runtime compat-record` from feature 18, step 11 needs the spec 0009 update from feature 18)
+- [ ] Verify it: `/check verify provider PostgreSQL`
+- [ ] Test it: `/test provider PostgreSQL`
 
 ### 20. Create instance · needs a decision · GA
 

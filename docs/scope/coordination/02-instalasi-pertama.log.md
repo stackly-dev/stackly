@@ -16,7 +16,7 @@
 | `arc-f15-spec` | `architect` | 15. Background agent & CLI install · Design it (spec), plus update spec 0004 port `background_agent` | `02-instalasi-pertama.md` | `docs/specs/0015-background-agent-cli-install/`, `docs/specs/0004-domain-core-platform-abstraction/index.md` (port `background_agent` saja) | `claude/arc-f15-spec-c53e6f` | `opus` | `aktif` |
 | `arc-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `claude/arc-f17-spec-5e714b` | `opus` (cross check `sonnet`) | `merged` |
 | `arc-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `claude/arc-f18-spec-634bf8` | `opus` | `aktif` |
-| `arc-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `claude/arc-f19-spec-b5bcbf` | `opus` | `aktif` |
+| `arc-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `claude/arc-f19-spec-b5bcbf` | `opus` (cross check `fable`) | `merged` |
 
 ## Keputusan
 
@@ -39,9 +39,11 @@
 | `2026-10-19` | Spec 0015 diterima dengan 17 perbaikan rekomendasi cross check (Sonnet), sesuai aturan user: antara lain kode error agent pindah ke area `cli` (tabel area spec 0006 dan AC-2 spec 0008 tetap), `CLI_SCHEMA_VERSION` naik ke 2 (konsekuensi untuk spec 0008), spike ad hoc manual sebagai langkah 0 milestone 1, AC-20 (Team ID identity nyata), AC-21 (hasil spike), AC-22 (`build-app --install`), dan AC-19 akun macOS kedua sebagai BLOCKED milik user. Langkah native yang mendaftarkan LaunchAgent atau mengubah Login Items butuh izin user saat build. | `lead` |
 | `2026-10-19` | Aplikasi menolak `start_session` pada giliran yang dipicu pesan sesi lain; sub sesi berikutnya diajukan sebagai kartu (`own_initiative`) atau dimulai pada giliran user. Kartu `arc-f22-spec` diajukan (task `task_f4d8d6d9`). | `lead` |
 | `2026-10-19` | Spec 0018 diterima dengan 14 perbaikan rekomendasi cross check (Fable 5.1) plus perbaikan non keputusan, sesuai aturan user: antara lain tanpa field hasil baru di spec 0007 (ID runtime dari `result.resources[0]`), urutan error unduhan offline > untrusted > too_large > failed, preflight disk `5 × size + 64 MiB`, `runtime.io_failed` baru, hash ulang stream saat extract, aturan resume HTTP, dan batas memori AC-8 yang terukur. Field manifest baru `runtime.versionCheck` dan field `versions.json` tambahan adalah usulan update spec 0009 yang digabung dengan usulan F17 (`versions()`) menjadi satu item `architect (update)` setelah F9 ditutup. Unduhan upstream di luar cache butuh izin user saat build. | `lead` |
+| `2026-10-19` | Spec 0019 diterima dengan 8 jawaban gap rekomendasi (cross check Fable 5.1, satu blocker sudah diperbaiki: database probe lewat env `PGDATABASE`): log AC-13 diuji in process dengan `LogSink` perekam, `data.initializedLine` sebagai sumber `data_line`, format detail probe `exec` milik spec 0019, batas stop 10 detik, peer untuk role readiness (tanpa `trust` di mana pun), log di argv, `initSeconds` 180. Follow-up update spec 0009, 0010, 0011 menjadi item `architect (update)` lead: 0009 digabung dengan usulan F17 dan F18 setelah F9 ditutup; 0010 dan 0011 setelah build F10 dan F11 masuk. Bila spec 0018 di-merge dengan signature yang berbeda dari asumsi spec 0019, `architect (update)` spec 0019 sebelum milestone 2-nya. Baris Pointer ditempel tanpa `code in`. | `lead` |
 
 ## Blocker terbuka
 
+- `architect (update)` spec 0010 dan 0011 (tambahan additive spec 0019: `runExecutable` `stdin.text`, format detail probe `exec`, `x-stackly.printableOnly` di `SecretService::put`): setelah build F10 dan F11 di `01-foundation.md` masuk `main`.
 - F17 milestone 1: `architect (update)` spec 0009 (`ValidatedPackage::versions() -> &VersionCatalog` dengan `VersionArtifact` dan `ArtifactStatus`, bagian *Usulan update spec lain* spec 0017). Dibuka setelah fitur 9 ditutup oleh sesi `f9-closeout`.
 - Usulan `/scope` dari arc-f17-spec: catat selisih mockup yang diketahui di `ui-macos.md` (Available netral bukan biru, Unverified sampai F18, kartu planned tanpa opacity, tanpa MariaDB atau RabbitMQ). Dikerjakan lead bersama sync akhir wave.
 
@@ -52,6 +54,7 @@
 ## Dicentang pada wave ini
 
 - `17` · `Design it (spec): /architect catalog & provider detail` · laporan `arc-f17-spec` STATUS done (`cc38e14`) · `claude/arc-f17-spec-5e714b` → `78f3ec7` · diff hanya `docs/specs/0017-*`, Requirements AC-1 sampai AC-13, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 17 design it`
+- `19` · `Design it (spec): /architect provider PostgreSQL` · laporan `arc-f19-spec` (`ed8a8fc`, diterima lead) · `claude/arc-f19-spec-b5bcbf` → `f9bece6` · diff hanya `docs/specs/0019-*`, Requirements AC-1 sampai AC-15, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 19 design it`
 
 ## Riwayat wave
 
