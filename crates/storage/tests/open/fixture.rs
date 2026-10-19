@@ -29,7 +29,7 @@ pub const FIXTURE_SHA256: &[(u32, &str)] = &[
     ),
     (
         2,
-        "7e2c873bf24152f08273722e6ac64eab3d5b0c643f996a6a3c184e5e875e24dc",
+        "a1f2db669fc24d93a200e74a10ac011f42e237ed17835ca77e482010bc934619",
     ),
 ];
 

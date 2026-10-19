@@ -94,6 +94,6 @@ CREATE INDEX operation_locks_key ON operation_locks (lock_key);
 
 INSERT INTO operation_journal (operation_id, trigger_origin, trigger_interactive, resumable, input)
 SELECT id, 'background', 0,
-    CASE WHEN kind IN ('install_runtime', 'start_instance', 'stop_instance', 'restart_instance', 'reload_instance', 'environment_up', 'environment_down', 'backup_instance') THEN 1 ELSE 0 END,
+    CASE WHEN kind IN ('install_runtime', 'environment_up', 'environment_down', 'backup_instance') THEN 1 ELSE 0 END,
     '{}'
 FROM operations;
