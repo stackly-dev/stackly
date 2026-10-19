@@ -13,6 +13,7 @@ mod instance_dir;
 mod inventory;
 mod layout;
 mod observation;
+pub mod operation;
 mod ownership;
 pub mod provider;
 #[cfg(all(test, unix))]

@@ -1005,6 +1005,7 @@ dependencies = [
 name = "stackly-core"
 version = "0.1.0"
 dependencies = [
+ "jiff",
  "regex",
  "schemars",
  "serde",
@@ -1017,6 +1018,8 @@ dependencies = [
  "stackly-platform",
  "stackly-testkit",
  "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
