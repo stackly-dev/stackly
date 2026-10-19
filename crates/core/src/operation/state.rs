@@ -215,21 +215,40 @@ impl Inner {
         &self,
         batch: WriteBatch,
     ) -> Result<stackly_domain::Committed, EngineError> {
+        self.commit_releasing(batch, None).await
+    }
+
+    /// [`Inner::commit`] that, with `release`, also releases that
+    /// operation's keys in the same critical section of the lock table
+    /// ([`LockTable::release_with`]): a reader that sees the commit in the
+    /// registry or in an event never finds those keys still held.
+    ///
+    /// [`LockTable::release_with`]: super::LockTable::release_with
+    async fn commit_releasing(
+        &self,
+        batch: WriteBatch,
+        release: Option<OperationId>,
+    ) -> Result<stackly_domain::Committed, EngineError> {
         let registry = Arc::clone(&self.deps.registry);
-        tokio::task::spawn_blocking(move || registry.commit(batch))
-            .await
-            .map_err(|_| EngineError::Internal {
-                reason: "a registry commit task stopped",
-            })?
-            .map_err(|err| EngineError::Registry(err.error))
+        let locks = self.locks.clone();
+        tokio::task::spawn_blocking(move || match release {
+            Some(id) => locks.release_with(id, || registry.commit(batch)),
+            None => registry.commit(batch),
+        })
+        .await
+        .map_err(|_| EngineError::Internal {
+            reason: "a registry commit task stopped",
+        })?
+        .map_err(|err| EngineError::Registry(err.error))
     }
 
     /// Commits a change of one operation: `change` edits a copy of its rows
     /// and returns more writes, the copy picks up the latest reported
     /// progress, the operation is touched once, and the batch holds the
     /// operation, its journal, its changed steps and created records, and
-    /// the extra writes. On success the copy replaces `record` and the
-    /// visible change is reported; on failure nothing changes.
+    /// the extra writes. A change to a final state releases the operation's
+    /// keys together with the commit. On success the copy replaces `record`
+    /// and the visible change is reported; on failure nothing changes.
     pub(crate) async fn write<F>(
         &self,
         handle: &OpHandle,
@@ -270,7 +289,10 @@ impl Inner {
         ops.extend(extra);
         let mut batch = WriteBatch::new(ops);
         batch.expected_generation = generation;
-        self.commit(batch).await?;
+        // A final operation holds no key (spec 0007, "Lock dan antrian"),
+        // and nobody may see it final while one is still held.
+        let release = next.operation.state().is_final().then_some(handle.id);
+        self.commit_releasing(batch, release).await?;
         if progressed {
             lock(&handle.progress).last_commit = Some(Instant::now());
         }
