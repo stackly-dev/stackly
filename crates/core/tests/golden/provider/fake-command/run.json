@@ -1,4 +1,56 @@
 {
+  "render": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/peers.yaml",
+        "content": {
+          "configFile": "peers",
+          "segments": [
+            {
+              "type": "text",
+              "content": "port: 14000\npeers:\n  - name: \"east\"\n    port: 6222\n    primary: true\n  - name: \"west\"\n    port: 4222\n    primary: false\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf/server.json",
+        "content": {
+          "configFile": "serverConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "{\"greeting\": \"hello from fake-command\", \"instanceName\": \"golden\", \"authToken\": "
+            },
+            {
+              "type": "secret",
+              "content": {
+                "secret": "<secret:authToken>",
+                "format": "yaml"
+              }
+            },
+            {
+              "type": "text",
+              "content": "}\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    }
+  ],
   "spawn": {
     "program": {
       "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
@@ -15,23 +67,45 @@
     "env": [
       [
         "FAKE_ADDRESS",
-        "127.0.0.1:14000"
+        {
+          "type": "text",
+          "content": "127.0.0.1:14000"
+        }
       ],
       [
         "FAKE_SOCKET",
-        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/fake.14000"
+        {
+          "type": "text",
+          "content": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/fake.14000"
+        }
+      ],
+      [
+        "FAKE_TOKEN",
+        {
+          "type": "secret",
+          "content": "<secret:authToken>"
+        }
       ],
       [
         "HOME",
-        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
       ],
       [
         "PATH",
-        "/usr/bin:/bin:/usr/sbin:/sbin"
+        {
+          "type": "text",
+          "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+        }
       ],
       [
         "TMPDIR",
-        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
       ]
     ]
   },
@@ -69,15 +143,24 @@
           "env": [
             [
               "HOME",
-              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
             ],
             [
               "PATH",
-              "/usr/bin:/bin:/usr/sbin:/sbin"
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
             ],
             [
               "TMPDIR",
-              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
             ]
           ]
         },
@@ -111,15 +194,24 @@
           "env": [
             [
               "HOME",
-              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
             ],
             [
               "PATH",
-              "/usr/bin:/bin:/usr/sbin:/sbin"
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
             ],
             [
               "TMPDIR",
-              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
             ]
           ]
         },

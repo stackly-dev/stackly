@@ -1,1 +1,1 @@
-${instance.run}/token
+${instance.secrets}/token

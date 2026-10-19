@@ -49,15 +49,24 @@
         "env": [
           [
             "HOME",
-            "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            {
+              "type": "text",
+              "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            }
           ],
           [
             "PATH",
-            "/usr/bin:/bin:/usr/sbin:/sbin"
+            {
+              "type": "text",
+              "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+            }
           ],
           [
             "TMPDIR",
-            "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            {
+              "type": "text",
+              "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+            }
           ]
         ]
       },

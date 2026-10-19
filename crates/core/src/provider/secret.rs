@@ -1,7 +1,11 @@
-//! The reference to a secret that settings hold instead of its value.
+//! The reference to a secret that settings hold instead of its value, and
+//! the resolved values of one action.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
+
+use super::names::SettingName;
 
 /// Longest reference, in bytes.
 const SECRET_REF_MAX: usize = 256;
@@ -51,6 +55,35 @@ impl FromStr for SecretRef {
     }
 }
 
+// provisional: F11 (replaced by the ResolvedSecrets of spec 0011)
+/// The secret values of one action, by secret field, as
+/// `SecretService::resolve_for_start` of spec 0011 returns them.
+/// [`RenderedContent::materialize`](super::RenderedContent::materialize)
+/// reads it. `Debug` shows only the field names, never a value.
+pub struct ResolvedSecrets(BTreeMap<SettingName, Vec<u8>>);
+
+impl ResolvedSecrets {
+    /// Holds the given value for each field. Only tests build one this way;
+    /// the daemon gets it from the secret store of spec 0011.
+    #[must_use]
+    pub fn for_tests(values: impl IntoIterator<Item = (SettingName, Vec<u8>)>) -> Self {
+        Self(values.into_iter().collect())
+    }
+
+    /// Returns the exact bytes of a field's secret.
+    pub(crate) fn get(&self, field: &SettingName) -> Option<&[u8]> {
+        self.0.get(field).map(Vec::as_slice)
+    }
+}
+
+impl fmt::Debug for ResolvedSecrets {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_set()
+            .entries(self.0.keys().map(SettingName::as_str))
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,5 +97,20 @@ mod tests {
         assert!("ü".parse::<SecretRef>().is_err());
         assert!("x".repeat(256).parse::<SecretRef>().is_ok());
         assert!("x".repeat(257).parse::<SecretRef>().is_err());
+        assert!(
+            "local:instance/0192f000-0000-7000-8000-00000000000a/auth-token"
+                .parse::<SecretRef>()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn resolved_secrets_show_only_their_fields() {
+        let field: SettingName = "authToken".parse().unwrap();
+        let secrets = ResolvedSecrets::for_tests([(field.clone(), b"hunter2".to_vec())]);
+
+        assert_eq!(secrets.get(&field), Some(&b"hunter2"[..]));
+        assert_eq!(secrets.get(&"other".parse().unwrap()), None);
+        assert_eq!(format!("{secrets:?}"), "{\"authToken\"}");
     }
 }

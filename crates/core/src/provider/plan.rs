@@ -20,12 +20,14 @@ use stackly_domain::{
 };
 use stackly_platform::InstancePaths;
 
-use super::interpolate::{EndpointTransport, ExecRef, InstanceDir, Interp, PathExpr, Piece, Token};
+use super::interpolate::{
+    EndpointTransport, ExecRef, InstanceDir, Interp, PathBase, PathExpr, Piece, SECRETS_DIR, Token,
+};
 use super::manifest::{
     CommandSpec, InitStepSpec, Manifest, ProbeDef, ReloadActionSpec, StopSignal, StopSpec,
 };
 use super::names::SettingName;
-use super::secret::SecretRef;
+use super::secret::{ResolvedSecrets, SecretRef};
 use super::settings::{ScalarValue, SettingValue, SettingsError, SettingsItem, SettingsValues};
 use super::template::{self, OUTPUT_MAX_LEN, TemplateFormat};
 use super::validate::ValidatedPackage;
@@ -121,7 +123,8 @@ pub struct InitPlan {
     #[serde(serialize_with = "serialize_duration")]
     pub deadline: Duration,
     /// Files to delete at the end of the action, whether it succeeded or
-    /// failed: every materialized secret.
+    /// failed: every materialized secret, in the instance's `secrets`
+    /// folder.
     pub cleanup: Vec<PathBuf>,
 }
 
@@ -140,13 +143,14 @@ pub enum InitStep {
     EnsureDirectories(Vec<PathBuf>),
     /// Write a rendered config file atomically with mode 0600.
     WriteFile(FileWrite),
-    /// Write the exact bytes of a secret to a 0600 file, deleted at the end
-    /// of the action.
+    /// Write the exact bytes of a secret to a 0600 file in the instance's
+    /// `secrets` folder (`<run>/secrets`, spec 0011), deleted at the end of
+    /// the action.
     MaterializeSecret {
         /// The secret.
         secret: PlanSecret,
-        /// The file.
-        path: PathBuf,
+        /// The file name inside the `secrets` folder.
+        file_name: String,
     },
     /// Run a command to completion.
     Run(RunSpec),
@@ -231,7 +235,19 @@ pub struct Command {
     pub cwd: PathBuf,
     /// The whole environment, sorted by key: `PATH`, `HOME`, `TMPDIR`,
     /// and the manifest's env. Nothing is inherited.
-    pub env: Vec<(String, String)>,
+    pub env: Vec<(String, EnvValue)>,
+}
+
+/// The value of one env variable. `Debug` and `Serialize` show a secret
+/// only as `<secret:field>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "type", content = "content", rename_all = "camelCase")]
+pub enum EnvValue {
+    /// Final text.
+    Text(String),
+    /// The exact bytes of a secret (only in `lifecycle.start` and
+    /// `runExecutable`).
+    Secret(PlanSecret),
 }
 
 /// A command run to completion.
@@ -265,6 +281,10 @@ pub enum Stdin {
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct RunPlan {
+    /// The config files, rendered before every spawn (spec 0010): one
+    /// `EnsureDirectories` with the folders their destinations need, then
+    /// one `WriteFile` per config file, sorted by name.
+    pub render: Vec<InitStep>,
     /// The main process: stdin null, stdout and stderr captured.
     pub spawn: Command,
     /// Readiness after spawn, with the `readinessSeconds` deadline.
@@ -429,26 +449,6 @@ pub enum ReloadAction {
     None,
 }
 
-/// Error returned when the resolver cannot give a secret's bytes.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("secret cannot be resolved")]
-#[non_exhaustive]
-pub struct SecretResolveError;
-
-impl SecretResolveError {
-    /// Creates the error.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for SecretResolveError {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Error returned when a plan cannot be built for a context. Messages never
 /// hold a settings text value or a secret.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -512,8 +512,9 @@ pub enum PlanError {
     /// The settings no longer match the schema.
     #[error("settings do not match the provider's schema: {0}")]
     Settings(SettingsError),
-    /// The resolver could not give a secret (only from
-    /// [`RenderedContent::materialize`]).
+    /// The resolved secrets lack a field (only from
+    /// [`RenderedContent::materialize`]); a caller bug, since the secret
+    /// store reports a missing secret before the action starts.
     #[error("secret {field} is unavailable")]
     SecretUnavailable {
         /// The secret field.
@@ -533,18 +534,26 @@ impl PlanError {
 }
 
 impl RenderedContent {
-    /// Resolves the secret segments through `resolve` and returns the final
-    /// bytes, with the same escaper and the same 1 MiB limit as the
-    /// renderer.
+    /// Fills the secret segments from the secrets of the action and returns
+    /// the final bytes, with the same escaper and the same 1 MiB limit as
+    /// the renderer.
     ///
     /// # Errors
     ///
-    /// Returns [`PlanError::SecretUnavailable`] when the resolver fails,
-    /// [`PlanError::UnrepresentableValue`] when a secret is not UTF-8 or the
-    /// format cannot hold it, and [`PlanError::OutputTooLarge`] past 1 MiB.
-    pub fn materialize(
+    /// Returns [`PlanError::SecretUnavailable`] when `secrets` lacks a
+    /// field, [`PlanError::UnrepresentableValue`] when a secret is not UTF-8
+    /// or the format cannot hold it, and [`PlanError::OutputTooLarge`] past
+    /// 1 MiB.
+    pub fn materialize(&self, secrets: &ResolvedSecrets) -> Result<Vec<u8>, PlanError> {
+        self.materialize_with(|secret| secrets.get(&secret.field))
+    }
+
+    /// Fills the secret segments with the bytes `value` gives, as
+    /// [`materialize`](Self::materialize) does; validation renders with a
+    /// placeholder for every secret.
+    pub(crate) fn materialize_with<'s>(
         &self,
-        resolve: &dyn Fn(&PlanSecret) -> Result<Vec<u8>, SecretResolveError>,
+        value: impl Fn(&PlanSecret) -> Option<&'s [u8]>,
     ) -> Result<Vec<u8>, PlanError> {
         let mut out = Vec::new();
         for segment in &self.segments {
@@ -554,11 +563,11 @@ impl RenderedContent {
                     let unrepresentable = || PlanError::UnrepresentableValue {
                         field: format!("secret.{}", secret.field),
                     };
-                    let bytes = resolve(secret).map_err(|_| PlanError::SecretUnavailable {
+                    let bytes = value(secret).ok_or_else(|| PlanError::SecretUnavailable {
                         field: secret.field.clone(),
                     })?;
-                    let text = String::from_utf8(bytes).map_err(|_| unrepresentable())?;
-                    let escaped = format.escape_text(&text).ok_or_else(unrepresentable)?;
+                    let text = std::str::from_utf8(bytes).map_err(|_| unrepresentable())?;
+                    let escaped = format.escape_text(text).ok_or_else(unrepresentable)?;
                     out.extend_from_slice(escaped.as_bytes());
                 }
             }
@@ -635,6 +644,11 @@ impl<'a> Resolver<'a> {
         Ok(path)
     }
 
+    /// The instance's `secrets` folder, `<run>/secrets` (spec 0011).
+    fn secrets_dir(&self) -> Result<PathBuf, PlanError> {
+        Ok(self.dir(InstanceDir::Run)?.join(SECRETS_DIR))
+    }
+
     fn runtime_root(&self) -> Result<&'a Path, PlanError> {
         let root = self.context.runtime.root.as_path();
         checked_path(root, "runtime.root")?;
@@ -701,6 +715,7 @@ impl<'a> Resolver<'a> {
                 self.context.instance_id.short_key().to_string(),
             )),
             Token::InstanceDir(dir) => text(self.dir(*dir)?),
+            Token::InstanceSecrets => text(&self.secrets_dir()?),
             Token::RuntimeRoot => text(self.runtime_root()?),
             Token::RuntimeExecutable => text(&self.executable(&ExecRef::Runtime)?.absolute()),
             Token::RuntimeAlias(alias) => {
@@ -778,9 +793,17 @@ impl<'a> Resolver<'a> {
         Ok(out)
     }
 
+    /// Returns the folder a path expression starts from.
+    fn base(&self, base: PathBase) -> Result<PathBuf, PlanError> {
+        match base {
+            PathBase::Dir(dir) => self.dir(dir).map(Path::to_path_buf),
+            PathBase::Secrets => self.secrets_dir(),
+        }
+    }
+
     /// Builds the path of a path expression.
     fn path(&self, expr: &PathExpr) -> Result<PathBuf, PlanError> {
-        let mut path = self.dir(expr.base)?.to_path_buf();
+        let mut path = self.base(expr.base)?;
         path.extend(&expr.components);
         Ok(path)
     }
@@ -799,15 +822,18 @@ impl<'a> Resolver<'a> {
         let cwd = self.path(&spec.cwd)?;
         let temp = path_text(self.dir(InstanceDir::Temp)?, "instance.temp")?;
         let mut env = BTreeMap::from([
-            ("PATH".to_owned(), CHILD_PATH.to_owned()),
-            ("HOME".to_owned(), temp.clone()),
-            ("TMPDIR".to_owned(), temp),
+            ("PATH".to_owned(), EnvValue::Text(CHILD_PATH.to_owned())),
+            ("HOME".to_owned(), EnvValue::Text(temp.clone())),
+            ("TMPDIR".to_owned(), EnvValue::Text(temp)),
         ]);
         for (key, value) in &spec.env {
-            env.insert(
-                key.clone(),
-                self.render(value, &format!("{}.env.{key}", spec.at))?,
-            );
+            // Validation allows a secret only as the whole value, and only
+            // in the commands that resolve secrets.
+            let value = match value.pieces.as_slice() {
+                [Piece::Token(Token::Secret(field))] => EnvValue::Secret(self.secret(field)?),
+                _ => EnvValue::Text(self.render(value, &format!("{}.env.{key}", spec.at))?),
+            };
+            env.insert(key.clone(), value);
         }
         Ok(Command {
             program,
@@ -870,8 +896,51 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    /// The steps that render one config file: its intermediate folder, if
-    /// any, then the write.
+    /// The folders a config file's destination needs, parent first: the
+    /// managed folder its token names when `with_managed` (the initialize
+    /// action creates those itself), the `secrets` folder, which no step
+    /// creates, and the intermediate folder of a two component destination.
+    fn destination_dirs(
+        &self,
+        destination: &PathExpr,
+        with_managed: bool,
+    ) -> Result<Vec<PathBuf>, PlanError> {
+        let base = self.base(destination.base)?;
+        let mut dirs = Vec::new();
+        if with_managed || destination.base == PathBase::Secrets {
+            dirs.push(base.clone());
+        }
+        if let [folder, _] = destination.components.as_slice() {
+            dirs.push(base.join(folder));
+        }
+        Ok(dirs)
+    }
+
+    /// Renders one config file, checking that `yaml` and `json` output
+    /// parses with a placeholder for each secret.
+    fn write_file(&self, package: &ValidatedPackage, name: &str) -> Result<FileWrite, PlanError> {
+        let (spec, checked) = self
+            .manifest
+            .config_files
+            .get(name)
+            .and_then(|spec| Some((spec, package.templates.get(&spec.template)?)))
+            .expect("a validated package resolves every config file it names to a template");
+        let content = template::render(checked, spec.format, self, name)?;
+        let sample = content.materialize_with(|_| Some(&b"x"[..]))?;
+        if !spec.format.output_parses(&String::from_utf8_lossy(&sample)) {
+            return Err(PlanError::RenderedOutputInvalid {
+                config_file: name.to_owned(),
+            });
+        }
+        Ok(FileWrite {
+            path: self.path(&spec.destination)?,
+            content,
+            sensitive: spec.sensitive,
+        })
+    }
+
+    /// The steps that render one config file during initialize or reload:
+    /// the folders the managed folders do not cover, if any, then the write.
     fn write_steps(
         &self,
         package: &ValidatedPackage,
@@ -881,28 +950,34 @@ impl<'a> Resolver<'a> {
         let Some(spec) = self.manifest.config_files.get(name) else {
             return Ok(());
         };
-        let path = self.path(&spec.destination)?;
-        if let [folder, _] = spec.destination.components.as_slice() {
-            steps.push(InitStep::EnsureDirectories(vec![
-                self.dir(spec.destination.base)?.join(folder),
-            ]));
+        let dirs = self.destination_dirs(&spec.destination, false)?;
+        if !dirs.is_empty() {
+            steps.push(InitStep::EnsureDirectories(dirs));
         }
-        let Some(checked) = package.templates.get(&spec.template) else {
-            return Ok(());
-        };
-        let content = template::render(checked, spec.format, self, name)?;
-        let sample = content.materialize(&|_| Ok(b"x".to_vec()))?;
-        if !spec.format.output_parses(&String::from_utf8_lossy(&sample)) {
-            return Err(PlanError::RenderedOutputInvalid {
-                config_file: name.to_owned(),
-            });
-        }
-        steps.push(InitStep::WriteFile(FileWrite {
-            path,
-            content,
-            sensitive: spec.sensitive,
-        }));
+        steps.push(InitStep::WriteFile(self.write_file(package, name)?));
         Ok(())
+    }
+
+    /// The steps that render every config file before a spawn: one
+    /// `EnsureDirectories` with every folder the destinations need, then
+    /// one write per config file, sorted by name.
+    fn render_steps(&self, package: &ValidatedPackage) -> Result<Vec<InitStep>, PlanError> {
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        let mut writes = Vec::new();
+        for (name, spec) in &self.manifest.config_files {
+            for dir in self.destination_dirs(&spec.destination, true)? {
+                if !dirs.contains(&dir) {
+                    dirs.push(dir);
+                }
+            }
+            writes.push(InitStep::WriteFile(self.write_file(package, name)?));
+        }
+        if writes.is_empty() {
+            return Ok(writes);
+        }
+        let mut steps = vec![InitStep::EnsureDirectories(dirs)];
+        steps.append(&mut writes);
+        Ok(steps)
     }
 }
 
@@ -917,19 +992,24 @@ fn missing_setting(field: &SettingName) -> PlanError {
     })
 }
 
-/// Checks that a context path is absolute with no `.` or `..`.
+/// Checks that a context path is absolute with no `.` or `..`, and UTF-8,
+/// since plans carry paths as text.
 fn checked_path(path: &Path, position: &str) -> Result<(), PlanError> {
     let normal = path.is_absolute()
         && !path
             .components()
             .any(|part| matches!(part, Component::CurDir | Component::ParentDir));
-    if normal {
-        Ok(())
-    } else {
-        Err(PlanError::PathEscapesScope {
+    if !normal {
+        return Err(PlanError::PathEscapesScope {
             position: position.to_owned(),
-        })
+        });
     }
+    if path.to_str().is_none() {
+        return Err(PlanError::PathNotUtf8 {
+            position: position.to_owned(),
+        });
+    }
+    Ok(())
 }
 
 fn path_text(path: &Path, position: &str) -> Result<String, PlanError> {
@@ -981,16 +1061,12 @@ impl ValidatedPackage {
                     steps.push(InitStep::EnsureDirectories(dirs));
                 }
                 InitStepSpec::RenderConfig(name) => resolver.write_steps(self, name, &mut steps)?,
-                InitStepSpec::MaterializeSecret {
-                    secret,
-                    destination,
-                } => {
-                    let path = resolver.path(destination)?;
+                InitStepSpec::MaterializeSecret { secret, file_name } => {
                     steps.push(InitStep::MaterializeSecret {
                         secret: resolver.secret(secret)?,
-                        path: path.clone(),
+                        file_name: file_name.clone(),
                     });
-                    cleanup.push(path);
+                    cleanup.push(resolver.secrets_dir()?.join(file_name));
                 }
                 InitStepSpec::RunExecutable {
                     command,
@@ -1016,8 +1092,9 @@ impl ValidatedPackage {
         })
     }
 
-    /// Builds the plan of the start action and the running process. Every
-    /// TCP and UDP endpoint must have its port.
+    /// Builds the plan of the start action and the running process, with
+    /// every config file rendered for the spawn. Every TCP and UDP endpoint
+    /// must have its port.
     ///
     /// # Errors
     ///
@@ -1057,6 +1134,7 @@ impl ValidatedPackage {
             .map(|path| resolver.path(path))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(RunPlan {
+            render: resolver.render_steps(self)?,
             spawn: resolver.command(&manifest.start)?,
             readiness: ProbePlan {
                 probe: resolver.probe(&readiness.probe, millis(readiness.attempt_ms))?,

@@ -169,13 +169,15 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 
 **Trace:** REQ-029, REQ-031, VAL-002, VAL-012, VAL-018, VAL-019, AC-029, AC-031, NFR-009, RISK-07, RISK-08, PRD bagian 21
 
-**Pointer:** spec [0009](../specs/0009-provider-engine-manifest-schema/index.md)
+**Pointer:** spec [0009](../specs/0009-provider-engine-manifest-schema/index.md) · code in `crates/core/src/provider/`, `crates/fake-server/`, `providers/`, `schemas/provider/`
 
 - [x] Design it (spec): `/architect provider engine & manifest schema`
-- [x] Build it: `/develop provider engine & manifest schema`
+- [ ] Build it: `/develop provider engine & manifest schema`
   - [x] Fake provider from package to plan: domain capability additions, `stackly-fake-server` and its testkit helper, `read_package` and strict decode, interpolation, settings dialect, template renderer, semantic validation, `InitPlan`, `RunPlan`, `ReloadPlan`, preflight, `providers/fake`, and the `fake-command` fixture (spec 0009 AC-1 to AC-12, AC-15, AC-18; build steps 0 to 8)
   - [x] NATS and Traefik packages with goldens, `versions.json` generated from the inventory, JSON Schema in `schemas/provider/`, and `cargo xtask provider check` (spec 0009 AC-13, AC-14, AC-17; build steps 9 to 13)
   - [x] Four fuzz targets run 10 minutes each on this Mac, the adversarial suite with evidence guards (including the billion laughs test), and spike markers moved to F36 (spec 0009 AC-1 to AC-10, AC-16, AC-18; build steps 14 to 16)
+  - [x] Reconcile the build with spec reconciliation rounds 1 and 2: the `${instance.secrets}` folder token and its positions, `materializeSecret` as one file name in that folder, a secret as a whole env value only in `lifecycle.start` and `runExecutable`, `secret_purpose_collision`, `EnvValue`, `MaterializeSecret { secret, file_name }`, `RunPlan.render`, `materialize(&ResolvedSecrets)` with a provisional `ResolvedSecrets` (F11), `PathNotUtf8` for every context folder, and the `fake-command` fixture, goldens, and fuzz seeds that follow (spec 0009 AC-7, AC-8, AC-11; build steps 6, 7, 8, and 15)
+  - [ ] Wire error codes: `codes::manifest` and `codes::provider` in `stackly-protocol`, `ItemSpec` with `kind` `issue`, the provider `ResourceRef` text form, and the `stacklyd::map` mapping with a test per variant (spec 0009 AC-19; build step 17; needs the protocol, wave 2)
 - [ ] Verify it: `/check verify provider engine & manifest schema`
 - [ ] Test it: `/test provider engine & manifest schema`
 - [ ] Review it (fresh model): `/check review provider engine & manifest schema`

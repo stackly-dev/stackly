@@ -1,7 +1,9 @@
 # Fixture package for the primitives the fake provider does not use:
-# materializeSecret, tcp and exec probes, the command stop strategy, the run
+# materializeSecret (referenced through ${instance.secrets}), a secret as a
+# whole env value, tcp and exec probes, the command stop strategy, the run
 # reload action, a unix endpoint, an executable alias, and a config file in a
-# subfolder. It runs the same stackly-fake-server binary.
+# subfolder. It runs the same stackly-fake-server binary, which ignores the
+# env it does not know.
 apiVersion: stackly/v1alpha1
 kind: Provider
 metadata:
@@ -38,12 +40,14 @@ configFiles:
 lifecycle:
   initialize:
     - { primitive: createManagedDirectories }
-    - { primitive: materializeSecret, secret: authToken, destination: "${instance.run}/token" }
+    - { primitive: materializeSecret, secret: authToken, destination: token }
     - { primitive: renderConfig, file: serverConfig }
     - { primitive: renderConfig, file: peers }
     - primitive: runExecutable
       executable: "${runtime.executable}"
       args: [init, "--data=${instance.data}"]
+      env:
+        FAKE_TOKEN_FILE: "${instance.secrets}/token"
       timeoutSeconds: 20
       successExitCodes: [0]
   start:
@@ -57,6 +61,7 @@ lifecycle:
     env:
       FAKE_SOCKET: "${endpoint.control.socket}"
       FAKE_ADDRESS: "${endpoint.http.address}"
+      FAKE_TOKEN: "${secret.authToken}"
   stop:
     strategy: command
     command:

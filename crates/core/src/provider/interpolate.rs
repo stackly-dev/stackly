@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use stackly_domain::EndpointName;
@@ -20,6 +20,8 @@ use super::settings::{FieldKind, ScalarKind, SettingsSchema};
 const SOCKET_NAME_MAX: usize = 15;
 /// Bytes a port token counts for in a socket name.
 const PORT_TOKEN_LEN: usize = 5;
+/// The folder under `run` that holds secret files (spec 0011).
+pub(crate) const SECRETS_DIR: &str = "secrets";
 
 /// A folder of an instance that the manifest can name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
@@ -101,6 +103,7 @@ pub(crate) enum Token {
     InstanceName,
     InstanceShortKey,
     InstanceDir(InstanceDir),
+    InstanceSecrets,
     RuntimeRoot,
     RuntimeExecutable,
     RuntimeAlias(String),
@@ -124,6 +127,7 @@ impl fmt::Display for Token {
             Self::InstanceName => f.write_str("instance.name"),
             Self::InstanceShortKey => f.write_str("instance.shortKey"),
             Self::InstanceDir(dir) => write!(f, "instance.{}", dir.as_code()),
+            Self::InstanceSecrets => f.write_str("instance.secrets"),
             Self::RuntimeRoot => f.write_str("runtime.root"),
             Self::RuntimeExecutable => f.write_str("runtime.executable"),
             Self::RuntimeAlias(alias) => write!(f, "runtime.executables.{alias}"),
@@ -185,11 +189,30 @@ pub(crate) enum ExecRef {
     Alias(String),
 }
 
+/// The folder token a path starts with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PathBase {
+    /// An instance folder, such as `${instance.config}`.
+    Dir(InstanceDir),
+    /// `${instance.secrets}`: the `secrets` folder in the run folder.
+    Secrets,
+}
+
+impl PathBase {
+    /// Returns the folder this base names for an instance.
+    pub(crate) fn path(self, paths: &InstancePaths) -> PathBuf {
+        match self {
+            Self::Dir(dir) => dir.path(paths).to_path_buf(),
+            Self::Secrets => paths.run.join(SECRETS_DIR),
+        }
+    }
+}
+
 /// A path under one instance folder: the folder token, then literal
 /// components.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PathExpr {
-    pub(crate) base: InstanceDir,
+    pub(crate) base: PathBase,
     pub(crate) components: Vec<String>,
 }
 
@@ -197,8 +220,11 @@ pub(crate) struct PathExpr {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PathPosition {
     Cwd,
-    ConfigDestination,
-    SecretDestination,
+    /// A `configFiles` destination; only a sensitive one may use
+    /// `${instance.secrets}`.
+    ConfigDestination {
+        sensitive: bool,
+    },
     LogFile,
 }
 
@@ -206,7 +232,12 @@ pub(crate) enum PathPosition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ValuePosition {
     Arg,
-    EnvValue,
+    /// An env value; `secrets` is true for the commands that resolve
+    /// secrets (`lifecycle.start` and `runExecutable`), where the whole
+    /// value may be one `${secret.<field>}` token.
+    EnvValue {
+        secrets: bool,
+    },
     Managed,
 }
 
@@ -293,6 +324,18 @@ pub(crate) fn resolve(
         ["instance", "id"] => Ok((Token::InstanceId, TokenType::Text)),
         ["instance", "name"] => Ok((Token::InstanceName, TokenType::Text)),
         ["instance", "shortKey"] => Ok((Token::InstanceShortKey, TokenType::Text)),
+        ["instance", "secrets"] => {
+            if env.managed_fs.contains(&InstanceDir::Run) {
+                Ok((Token::InstanceSecrets, TokenType::Folder))
+            } else {
+                Err((
+                    IssueCode::PathNotPermitted,
+                    format!(
+                        "{shown} lies in the run folder, which permissions.managedFilesystem does not list"
+                    ),
+                ))
+            }
+        }
         ["instance", dir] => match InstanceDir::from_code(dir) {
             Some(dir) => folder(dir, Token::InstanceDir(dir)),
             None => Err(unknown()),
@@ -447,16 +490,22 @@ pub(crate) fn check_value(
     path: &str,
 ) -> Option<Interp> {
     let pieces = resolve_all(text, env, issues, path)?;
+    let whole_token = pieces.len() == 1;
     let mut ok = true;
     for (piece, kind) in &pieces {
         let (Piece::Token(token), Some(kind)) = (piece, kind) else {
             continue;
         };
         let problem = match (position, kind) {
+            (ValuePosition::EnvValue { secrets: true }, TokenType::Secret) if whole_token => None,
+            (ValuePosition::EnvValue { secrets: true }, TokenType::Secret) => Some((
+                IssueCode::SecretNotAllowedHere,
+                format!("{token} in env must be the whole value, with no other text"),
+            )),
             (_, TokenType::Secret) => Some((
                 IssueCode::SecretNotAllowedHere,
                 format!(
-                    "{token} can only be used in stdin, materializeSecret, or a sensitive template"
+                    "{token} can only be used in stdin, materializeSecret, a sensitive template, or as a whole env value of lifecycle.start or runExecutable"
                 ),
             )),
             (_, TokenType::Array) => Some((
@@ -494,12 +543,14 @@ pub(crate) fn check_value(
 }
 
 /// Whether a managed expression may use the token: instance, runtime
-/// version and line, endpoint, and provider tokens only.
+/// version and line, endpoint, and provider tokens only, and not the
+/// secrets folder.
 fn managed_allows(token: &Token) -> bool {
     !matches!(
         token,
         Token::Setting(_)
             | Token::Secret(_)
+            | Token::InstanceSecrets
             | Token::RuntimeRoot
             | Token::RuntimeExecutable
             | Token::RuntimeAlias(_)
@@ -548,7 +599,8 @@ pub(crate) fn check_path(
     let pieces = resolve_all(text, env, issues, path)?;
     let mut pieces = pieces.into_iter();
     let base = match pieces.next() {
-        Some((Piece::Token(Token::InstanceDir(dir)), _)) => dir,
+        Some((Piece::Token(Token::InstanceDir(dir)), _)) => PathBase::Dir(dir),
+        Some((Piece::Token(Token::InstanceSecrets), _)) => PathBase::Secrets,
         Some((Piece::Token(token), _)) => {
             issues.at(
                 path,
@@ -566,17 +618,22 @@ pub(crate) fn check_path(
             return None;
         }
     };
-    let allowed: &[InstanceDir] = match position {
-        PathPosition::Cwd | PathPosition::ConfigDestination => &InstanceDir::ALL,
-        PathPosition::SecretDestination => &[InstanceDir::Run, InstanceDir::Temp],
-        PathPosition::LogFile => &[InstanceDir::Logs],
+    let refusal = match (position, base) {
+        (PathPosition::LogFile, PathBase::Dir(InstanceDir::Logs))
+        | (PathPosition::Cwd | PathPosition::ConfigDestination { .. }, PathBase::Dir(_))
+        | (PathPosition::ConfigDestination { sensitive: true }, PathBase::Secrets) => None,
+        (PathPosition::LogFile, PathBase::Dir(dir)) => {
+            Some(format!("instance.{} cannot start this path", dir.as_code()))
+        }
+        (PathPosition::ConfigDestination { sensitive: false }, PathBase::Secrets) => Some(
+            "instance.secrets holds only sensitive config files; set sensitive: true".to_owned(),
+        ),
+        (PathPosition::Cwd | PathPosition::LogFile, PathBase::Secrets) => {
+            Some("instance.secrets cannot start this path".to_owned())
+        }
     };
-    if !allowed.contains(&base) {
-        issues.at(
-            path,
-            IssueCode::TokenNotAllowedHere,
-            format!("instance.{} cannot start this path", base.as_code()),
-        );
+    if let Some(message) = refusal {
+        issues.at(path, IssueCode::TokenNotAllowedHere, message);
         return None;
     }
     let mut suffix = String::new();
@@ -622,17 +679,13 @@ pub(crate) fn check_path(
     }
     let count_ok = match position {
         PathPosition::Cwd => true,
-        PathPosition::ConfigDestination => (1..=2).contains(&components.len()),
-        PathPosition::SecretDestination => components.len() == 1,
+        PathPosition::ConfigDestination { .. } => (1..=2).contains(&components.len()),
         PathPosition::LogFile => !components.is_empty(),
     };
     if !count_ok {
         let rule = match position {
-            PathPosition::ConfigDestination => {
+            PathPosition::ConfigDestination { .. } => {
                 "a config destination needs one or two components after the folder token"
-            }
-            PathPosition::SecretDestination => {
-                "a secret destination needs exactly one file name after the folder token"
             }
             _ => "a log file needs a file name after ${instance.logs}",
         };
@@ -640,6 +693,56 @@ pub(crate) fn check_path(
         return None;
     }
     Some(PathExpr { base, components })
+}
+
+/// Checks a `materializeSecret` destination: exactly one literal file name,
+/// which the executor puts in `${instance.secrets}`. The step needs `run` in
+/// `permissions.managedFilesystem`.
+pub(crate) fn check_secret_file_name(
+    text: &str,
+    env: &TypeEnv<'_>,
+    issues: &mut FileIssues<'_>,
+    path: &str,
+) -> Option<String> {
+    let literal = match parse(text) {
+        Ok(pieces) => match pieces.as_slice() {
+            [RawPiece::Literal(literal)] => literal.clone(),
+            [] => String::new(),
+            _ => {
+                issues.at(
+                    path,
+                    IssueCode::TokenNotAllowedHere,
+                    "the destination is a file name only; the file always goes in ${instance.secrets}",
+                );
+                return None;
+            }
+        },
+        Err(message) => {
+            issues.at(path, IssueCode::UnknownToken, message);
+            return None;
+        }
+    };
+    if literal.split('/').any(|part| part == "..") {
+        issues.at(
+            path,
+            IssueCode::PathEscapesScope,
+            "the destination is a file name in ${instance.secrets}, without ..",
+        );
+        return None;
+    }
+    if !is_component(&literal) {
+        issues.at(path, IssueCode::InvalidName, COMPONENT_RULE);
+        return None;
+    }
+    if !env.managed_fs.contains(&InstanceDir::Run) {
+        issues.at(
+            path,
+            IssueCode::PathNotPermitted,
+            "materializeSecret writes into ${instance.secrets} in the run folder, which permissions.managedFilesystem does not list",
+        );
+        return None;
+    }
+    Some(literal)
 }
 
 /// Checks a `socketName`: literal socket characters and `${endpoint.<tcp>.port}`
@@ -788,12 +891,25 @@ mod tests {
     fn check<T>(
         f: impl FnOnce(&TypeEnv<'_>, &mut FileIssues<'_>) -> Option<T>,
     ) -> Result<T, Vec<Issue>> {
-        let (endpoints, aliases, managed_fs) = env_parts();
+        check_with_managed(&env_parts().2, f)
+    }
+
+    fn check_without_run<T>(
+        f: impl FnOnce(&TypeEnv<'_>, &mut FileIssues<'_>) -> Option<T>,
+    ) -> Result<T, Vec<Issue>> {
+        check_with_managed(&BTreeSet::from([InstanceDir::Data, InstanceDir::Config]), f)
+    }
+
+    fn check_with_managed<T>(
+        managed_fs: &BTreeSet<InstanceDir>,
+        f: impl FnOnce(&TypeEnv<'_>, &mut FileIssues<'_>) -> Option<T>,
+    ) -> Result<T, Vec<Issue>> {
+        let (endpoints, aliases, _) = env_parts();
         let env = TypeEnv {
             endpoints: &endpoints,
             aliases: &aliases,
             settings: None,
-            managed_fs: &managed_fs,
+            managed_fs,
         };
         let mut issues = Issues::new();
         let result = f(&env, &mut FileIssues::new("provider.yaml", &mut issues));
@@ -899,13 +1015,13 @@ mod tests {
         assert_eq!(
             check(|e, i| check_path(
                 "${instance.config}/dynamic//routes.yaml",
-                PathPosition::ConfigDestination,
+                PathPosition::ConfigDestination { sensitive: false },
                 e,
                 i,
                 "x"
             )),
             Ok(PathExpr {
-                base: InstanceDir::Config,
+                base: PathBase::Dir(InstanceDir::Config),
                 components: vec!["dynamic".into(), "routes.yaml".into()],
             })
         );
@@ -933,23 +1049,16 @@ mod tests {
         let deep = check(|e, i| {
             check_path(
                 "${instance.config}/a/b/c",
-                PathPosition::ConfigDestination,
+                PathPosition::ConfigDestination { sensitive: false },
                 e,
                 i,
                 "x",
             )
         })
         .unwrap_err();
-        let secret_dir = check(|e, i| {
-            check_path(
-                "${instance.data}/token",
-                PathPosition::SecretDestination,
-                e,
-                i,
-                "x",
-            )
-        })
-        .unwrap_err();
+        let log_dir =
+            check(|e, i| check_path("${instance.data}/x.log", PathPosition::LogFile, e, i, "x"))
+                .unwrap_err();
         let bad_component =
             check(|e, i| check_path("${instance.data}/a b", PathPosition::Cwd, e, i, "x"))
                 .unwrap_err();
@@ -959,8 +1068,177 @@ mod tests {
         assert_eq!(codes(&literal), [IssueCode::PathEscapesScope]);
         assert_eq!(codes(&glued), [IssueCode::InvalidValue]);
         assert_eq!(codes(&deep), [IssueCode::InvalidValue]);
-        assert_eq!(codes(&secret_dir), [IssueCode::TokenNotAllowedHere]);
+        assert_eq!(codes(&log_dir), [IssueCode::TokenNotAllowedHere]);
         assert_eq!(codes(&bad_component), [IssueCode::InvalidName]);
+    }
+
+    #[test]
+    fn the_secrets_folder_is_accepted_in_values_and_sensitive_destinations_only() {
+        for position in [
+            ValuePosition::Arg,
+            ValuePosition::EnvValue { secrets: false },
+            ValuePosition::EnvValue { secrets: true },
+        ] {
+            assert!(
+                check(|e, i| check_value(
+                    "--token-file=${instance.secrets}/token",
+                    position,
+                    e,
+                    i,
+                    "x"
+                ))
+                .is_ok(),
+                "{position:?}"
+            );
+        }
+        assert_eq!(
+            check(|e, i| check_path(
+                "${instance.secrets}/auth.conf",
+                PathPosition::ConfigDestination { sensitive: true },
+                e,
+                i,
+                "x"
+            )),
+            Ok(PathExpr {
+                base: PathBase::Secrets,
+                components: vec!["auth.conf".into()],
+            })
+        );
+        let managed =
+            check(|e, i| check_value("${instance.secrets}", ValuePosition::Managed, e, i, "x"))
+                .unwrap_err();
+        let plain = check(|e, i| {
+            check_path(
+                "${instance.secrets}/auth.conf",
+                PathPosition::ConfigDestination { sensitive: false },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+        let cwd = check(|e, i| check_path("${instance.secrets}", PathPosition::Cwd, e, i, "x"))
+            .unwrap_err();
+        let log = check(|e, i| {
+            check_path(
+                "${instance.secrets}/x.log",
+                PathPosition::LogFile,
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+
+        assert_eq!(codes(&managed), [IssueCode::TokenNotAllowedHere]);
+        assert_eq!(codes(&plain), [IssueCode::TokenNotAllowedHere]);
+        assert_eq!(codes(&cwd), [IssueCode::TokenNotAllowedHere]);
+        assert_eq!(codes(&log), [IssueCode::TokenNotAllowedHere]);
+    }
+
+    #[test]
+    fn the_secrets_folder_needs_run_in_managed_filesystem() {
+        let value = check_without_run(|e, i| {
+            check_value("${instance.secrets}/token", ValuePosition::Arg, e, i, "x")
+        })
+        .unwrap_err();
+        let destination = check_without_run(|e, i| {
+            check_path(
+                "${instance.secrets}/auth.conf",
+                PathPosition::ConfigDestination { sensitive: true },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+
+        assert_eq!(codes(&value), [IssueCode::PathNotPermitted]);
+        assert_eq!(codes(&destination), [IssueCode::PathNotPermitted]);
+    }
+
+    #[test]
+    fn a_secret_env_value_is_one_whole_token_where_secrets_resolve() {
+        let whole = check(|e, i| {
+            check_value(
+                "${secret.authToken}",
+                ValuePosition::EnvValue { secrets: true },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap();
+        let glued = check(|e, i| {
+            check_value(
+                "--pass=${secret.authToken}",
+                ValuePosition::EnvValue { secrets: true },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+        let two = check(|e, i| {
+            check_value(
+                "${secret.authToken}${secret.authToken}",
+                ValuePosition::EnvValue { secrets: true },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+        let probe = check(|e, i| {
+            check_value(
+                "${secret.authToken}",
+                ValuePosition::EnvValue { secrets: false },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+        let arg = check(|e, i| check_value("${secret.authToken}", ValuePosition::Arg, e, i, "x"))
+            .unwrap_err();
+
+        assert!(matches!(
+            whole.pieces.as_slice(),
+            [Piece::Token(Token::Secret(_))]
+        ));
+        assert_eq!(codes(&glued), [IssueCode::SecretNotAllowedHere]);
+        assert_eq!(codes(&two), [IssueCode::SecretNotAllowedHere; 2]);
+        assert_eq!(codes(&probe), [IssueCode::SecretNotAllowedHere]);
+        assert_eq!(codes(&arg), [IssueCode::SecretNotAllowedHere]);
+    }
+
+    #[test]
+    fn a_secret_file_name_is_one_literal_component() {
+        assert_eq!(
+            check(|e, i| check_secret_file_name("token", e, i, "x")),
+            Ok("token".to_owned())
+        );
+        let run =
+            check(|e, i| check_secret_file_name("${instance.run}/token", e, i, "x")).unwrap_err();
+        let temp =
+            check(|e, i| check_secret_file_name("${instance.temp}/token", e, i, "x")).unwrap_err();
+        let secrets = check(|e, i| check_secret_file_name("${instance.secrets}/token", e, i, "x"))
+            .unwrap_err();
+        let nested = check(|e, i| check_secret_file_name("a/token", e, i, "x")).unwrap_err();
+        let up = check(|e, i| check_secret_file_name("../token", e, i, "x")).unwrap_err();
+        let dot = check(|e, i| check_secret_file_name(".", e, i, "x")).unwrap_err();
+        let empty = check(|e, i| check_secret_file_name("", e, i, "x")).unwrap_err();
+        let no_run =
+            check_without_run(|e, i| check_secret_file_name("token", e, i, "x")).unwrap_err();
+
+        assert_eq!(codes(&run), [IssueCode::TokenNotAllowedHere]);
+        assert_eq!(codes(&temp), [IssueCode::TokenNotAllowedHere]);
+        assert_eq!(codes(&secrets), [IssueCode::TokenNotAllowedHere]);
+        assert_eq!(codes(&nested), [IssueCode::InvalidName]);
+        assert_eq!(codes(&up), [IssueCode::PathEscapesScope]);
+        assert_eq!(codes(&dot), [IssueCode::InvalidName]);
+        assert_eq!(codes(&empty), [IssueCode::InvalidName]);
+        assert_eq!(codes(&no_run), [IssueCode::PathNotPermitted]);
     }
 
     #[test]

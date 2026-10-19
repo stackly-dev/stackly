@@ -14,7 +14,7 @@
       "type": "materializeSecret",
       "content": {
         "secret": "<secret:authToken>",
-        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/token"
+        "fileName": "token"
       }
     },
     {
@@ -81,16 +81,32 @@
           "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
           "env": [
             [
+              "FAKE_TOKEN_FILE",
+              {
+                "type": "text",
+                "content": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/token"
+              }
+            ],
+            [
               "HOME",
-              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
             ],
             [
               "PATH",
-              "/usr/bin:/bin:/usr/sbin:/sbin"
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
             ],
             [
               "TMPDIR",
-              "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
             ]
           ]
         },
@@ -106,6 +122,6 @@
   ],
   "deadline": "60s",
   "cleanup": [
-    "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/token"
+    "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/token"
   ]
 }
