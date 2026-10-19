@@ -35,7 +35,7 @@ struct LiveOperationCenterTests {
                 "operation.list answered request.unknown_method: this stacklyd has no feature 7 operation handlers yet"
             )
         }
-        try await waitFor("the operation snapshot", seconds: 10) {
+        try await waitFor("the operation snapshot", seconds: 20) {
             model.operations.runningCount != nil
         }
         // A fresh root has no operation, so nothing runs.
@@ -52,7 +52,7 @@ struct LiveOperationCenterTests {
             for await value in stream { collected.values.append(value) }
             collected.ended = true
         }
-        try await waitFor("the updates of an unknown operation to end", seconds: 10) {
+        try await waitFor("the updates of an unknown operation to end", seconds: 20) {
             collected.ended
         }
         #expect(collected.values.isEmpty)

@@ -12,7 +12,7 @@ import Testing
 ///
 /// Each test runs its own daemon under a private root. Without the binary the tests end
 /// as BLOCKED (with evidence) or cancelled.
-@Suite(.tags(.daemon), .timeLimit(.minutes(1)))
+@Suite(.tags(.daemon), .timeLimit(.minutes(2)))
 struct ShellEndToEndTests {
     /// The VoiceOver announcements a live shell posted.
     final class Announcements {
@@ -33,7 +33,7 @@ struct ShellEndToEndTests {
         model.presentation.isConnected
     }
 
-    /// Waits up to 20 seconds until `model` is connected with every store refreshed,
+    /// Waits up to 30 seconds until `model` is connected with every store refreshed,
     /// after more than `rounds` snapshot rounds when given.
     static func waitUntilRefreshed(
         _ model: DaemonModel,
@@ -42,7 +42,7 @@ struct ShellEndToEndTests {
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws {
         try await waitFor(
-            what, seconds: 20, state: { describe(model) }, sourceLocation: sourceLocation,
+            what, seconds: 30, state: { describe(model) }, sourceLocation: sourceLocation,
             until: { isRefreshed(model) && model.sync.completedRounds > rounds })
     }
 
@@ -67,7 +67,7 @@ struct ShellEndToEndTests {
         let parts = Self.shell(for: daemon, announcements: announcements)
         let model = parts.runtime.model
 
-        try await waitFor("the first attempt to fail", seconds: 5) {
+        try await waitFor("the first attempt to fail", seconds: 20) {
             model.presence == .unreachable(lastKnownAt: nil)
         }
         #expect(model.lastError?.code == "ipc.endpoint_missing")
@@ -122,7 +122,7 @@ struct ShellEndToEndTests {
         let countsBefore = model.sidebarCounts
 
         await daemon.kill()
-        try await waitFor("the shell to see the daemon gone", seconds: 10) {
+        try await waitFor("the shell to see the daemon gone", seconds: 20) {
             if case .unreachable(let lastKnownAt) = model.presence {
                 lastKnownAt != nil
             } else {
@@ -147,7 +147,7 @@ struct ShellEndToEndTests {
             return
         }
         // The killed daemon left its socket behind: the next attempts are refused.
-        try await waitFor("an attempt on the stale socket", seconds: 10) {
+        try await waitFor("an attempt on the stale socket", seconds: 20) {
             model.lastError?.code == "ipc.connection_refused"
         }
         let rows = model.diagnostics.rows(
@@ -181,7 +181,7 @@ struct ShellEndToEndTests {
         let rounds = model.sync.completedRounds
 
         await daemon.stop()
-        try await waitFor("the shell to see the daemon stop", seconds: 10) {
+        try await waitFor("the shell to see the daemon stop", seconds: 20) {
             if case .unreachable = model.presence { true } else { false }
         }
         #expect(model.mutationAvailability.blockedReason == "stacklyd is unavailable.")

@@ -114,6 +114,9 @@ public struct AppShell: View {
             )
             // A new banner is a new view, so a new critical banner is announced again.
             .id(banner.title)
+            // The split view also measures the banner at a tiny width, where its text would
+            // wrap one character per line and push the columns out of the window.
+            .frame(minWidth: Self.contentMinWidth - 2 * Spacing.pageHorizontal)
             .padding(.horizontal, Spacing.pageHorizontal)
             .padding(.vertical, Spacing.s12)
             .background(StacklyColor.surfaceWindow)
