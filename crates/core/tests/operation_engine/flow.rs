@@ -731,3 +731,55 @@ async fn a_background_operation_records_no_key_method_or_fingerprint_and_a_reque
         stackly_domain::TriggerOrigin::User
     );
 }
+
+/// Reports progress twice inside one window, then ends at once.
+struct EndsRightAfterProgress;
+
+impl OperationWork for EndsRightAfterProgress {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("copy".parse().expect("a step name")))
+                .await?;
+            ctx.set_progress(Progress::Counted { done: 1, total: 10 });
+            ctx.set_progress(Progress::Counted {
+                done: 10,
+                total: 10,
+            });
+            Ok(WorkOutcome {
+                result: stackly_core::operation::OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_commit_that_ends_an_operation_carries_its_last_progress_and_nothing_follows_it() {
+    // Spec 0007 AC-13: the state change carries the last progress, and the
+    // revision of the last event stays the operation's revision.
+    let harness = Harness::new().await;
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(EndsRightAfterProgress),
+        ))
+        .await;
+    let done = wait_state(&harness.engine, id, OperationState::Succeeded).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let later = harness.engine.get(id).await.unwrap().unwrap();
+    let last_event = harness.events.of(id).last().cloned().unwrap();
+
+    assert_eq!(
+        done.view.operation.progress(),
+        Progress::Counted {
+            done: 10,
+            total: 10
+        }
+    );
+    assert_eq!(
+        later.view.operation.revision(),
+        done.view.operation.revision()
+    );
+    assert_eq!(last_event.revision, later.view.operation.revision());
+}

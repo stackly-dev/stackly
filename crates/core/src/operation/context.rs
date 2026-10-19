@@ -8,8 +8,8 @@ use std::sync::Arc;
 use stackly_domain::{
     Committed, CompensatorName, CreatedItem, CreatedRecord, CreatedSeq, CreatedState,
     CustomItemKey, EnvironmentId, InstanceId, JournalPayload, JournalStep, NewStep, OperationId,
-    OperationKind, OperationResource, OperationTrigger, Progress, ReasonCode, Registry, StageName,
-    StepSeq, StepState, WriteBatch,
+    OperationKind, OperationResource, OperationState, OperationTrigger, Progress, ReasonCode,
+    Registry, StageName, StepSeq, StepState, WriteBatch,
 };
 use stackly_platform::{Platform, PlatformError};
 use tokio::sync::watch;
@@ -699,11 +699,17 @@ enum StartKind {
     New(StepSeq),
 }
 
-/// Commits the latest reported progress, if it still differs.
+/// Commits the latest reported progress, if it still differs and the
+/// operation still takes progress; a commit for one that already moved on
+/// would raise its revision with nothing to report.
 pub(crate) async fn commit_progress(inner: &Inner, handle: &OpHandle) {
     let mut record = handle.record.lock().await;
+    let reporting = matches!(
+        record.operation.state(),
+        OperationState::Running | OperationState::CancelRequested
+    );
     let latest = lock(&handle.progress).latest;
-    if latest.is_none_or(|progress| progress == record.operation.progress()) {
+    if !reporting || latest.is_none_or(|progress| progress == record.operation.progress()) {
         return;
     }
     if let Err(error) = inner

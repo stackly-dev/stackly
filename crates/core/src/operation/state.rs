@@ -322,8 +322,10 @@ impl Inner {
     {
         let now = self.now();
         let mut next = record.clone();
-        let extra = change(&mut next, now)?;
+        // Folded before the change, while the state still takes progress,
+        // so a commit that ends the run carries the last value (AC-13).
         let progressed = self.fold_progress(handle, &mut next, now);
+        let extra = change(&mut next, now)?;
         next.operation.touch(now);
         let mut ops = vec![
             WriteOp::UpdateOperation {
