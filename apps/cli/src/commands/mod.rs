@@ -5,6 +5,7 @@
 //! `progress`.
 
 pub mod daemon;
+pub mod operation;
 
 use std::future::Future;
 

@@ -72,12 +72,6 @@ impl Cell {
         }
     }
 
-    /// The cell's text without styling.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.text
-    }
-
     fn width(&self) -> usize {
         self.text.width()
     }
@@ -114,16 +108,6 @@ impl HumanWriter {
     /// One line of the CLI's own text, written as it is.
     pub fn line(&mut self, text: &str) {
         self.buf.push_str(text);
-        self.buf.push('\n');
-    }
-
-    /// One line of the CLI's own text with the color of `tone`.
-    pub fn toned_line(&mut self, text: &str, tone: Tone) {
-        let cell = Cell {
-            text: text.to_owned(),
-            style: tone.style(),
-        };
-        self.push_cell(&cell, 0);
         self.buf.push('\n');
     }
 

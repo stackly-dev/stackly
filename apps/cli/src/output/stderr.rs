@@ -48,12 +48,6 @@ impl StderrSink {
         }
     }
 
-    /// Whether this sink colors its labels.
-    #[must_use]
-    pub const fn color(&self) -> bool {
-        self.color
-    }
-
     /// Clears the live progress line, if one is drawn.
     pub fn clear_live(&mut self) {
         if self.live {

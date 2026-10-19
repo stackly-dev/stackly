@@ -13,6 +13,13 @@ use crate::output::style::Tone;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmRole {
     /// A normal confirmation.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "spec 0011 step 8 confirms stored only secrets with it"
+        )
+    )]
     Standard,
     /// An action that removes or gives up something: the question is
     /// written with the critical tone.
@@ -46,6 +53,10 @@ pub enum OnNoninteractive {
     Fail,
     /// Go on unconfirmed, so the daemon answers with its own confirmation
     /// code (such as `secret.confirmation_required`, spec 0011).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "spec 0011 step 8 lets the daemon decide with it")
+    )]
     LetDaemonDecide,
 }
 

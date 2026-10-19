@@ -13,6 +13,7 @@ use jiff::tz::TimeZone;
 use stackly_protocol::ProtocolVersion;
 
 use crate::commands::daemon::DaemonCommand;
+use crate::commands::operation::OperationCommand;
 use crate::context::Context;
 use crate::env;
 use crate::exit::{EXIT_SUCCESS, EXIT_TABLE, EXIT_USAGE};
@@ -107,6 +108,9 @@ pub enum Command {
     /// Look at the Stackly daemon
     #[command(subcommand, arg_required_else_help = true)]
     Daemon(DaemonCommand),
+    /// List, inspect, cancel, resume, or abandon operations
+    #[command(subcommand, arg_required_else_help = true)]
+    Operation(OperationCommand),
 }
 
 impl Command {
@@ -114,6 +118,7 @@ impl Command {
     pub async fn run(self, cx: &mut Context) -> u8 {
         match self {
             Self::Daemon(command) => command.run(cx).await,
+            Self::Operation(command) => command.run(cx).await,
         }
     }
 }

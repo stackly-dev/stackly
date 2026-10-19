@@ -79,3 +79,98 @@ pub fn recovery_health() -> DaemonHealth {
     });
     health
 }
+
+/// The operation most operation tests use.
+pub const OPERATION: uuid::Uuid = uuid::Uuid::from_u128(0x0192_f3a0_7c1e_7b2a_9d4e_5f6a_7b8c_9d04);
+/// The instance that operation works on.
+pub const INSTANCE: uuid::Uuid = uuid::Uuid::from_u128(0x0192_f3a0_7c1e_7b2a_9d4e_5f6a_7b8c_9d05);
+
+/// A `start_instance` summary of `id` in `state` at `revision`.
+pub fn summary(
+    id: uuid::Uuid,
+    state: stackly_protocol::operation::OperationState,
+    revision: u64,
+) -> stackly_protocol::operation::OperationSummary {
+    use stackly_protocol::operation::{
+        OperationKind, OperationProgress, OperationSummary, OperationTriggerInfo, TriggerOrigin,
+    };
+    use stackly_protocol::{ResourceKind, ResourceRef, Revision};
+    OperationSummary {
+        id,
+        kind: OperationKind::StartInstance,
+        resource: Some(ResourceRef {
+            kind: ResourceKind::Instance,
+            id: INSTANCE.to_string(),
+        }),
+        state,
+        stage: None,
+        progress: OperationProgress::Indeterminate,
+        waiting_on: None,
+        cancel_requested_at: None,
+        point_of_no_return_at: None,
+        failure: None,
+        recovery: None,
+        result: None,
+        trigger: OperationTriggerInfo {
+            origin: TriggerOrigin::User,
+            client: Some(stackly_protocol::handshake::ClientKind::Cli),
+        },
+        created_at: STARTED_AT.parse().expect("a fixed time parses"),
+        started_at: None,
+        updated_at: STARTED_AT.parse().expect("a fixed time parses"),
+        revision: Revision::new(revision).expect("test revisions are small"),
+    }
+}
+
+/// `summary` as an `operation.get` detail without steps.
+pub fn detail(
+    summary: stackly_protocol::operation::OperationSummary,
+) -> stackly_protocol::operation::OperationDetail {
+    stackly_protocol::operation::OperationDetail {
+        operation: summary,
+        steps: Vec::new(),
+        created: Vec::new(),
+    }
+}
+
+/// The error a failed or recovering operation carries.
+pub fn operation_error() -> stackly_protocol::ErrorBody {
+    super::scripted::error(
+        "instance.start_failed",
+        "failed",
+        "the instance did not become ready",
+    )
+    .with_hint("check the instance log")
+}
+
+/// `summary` with the end state `state`, with or without its error.
+pub fn ended(
+    state: stackly_protocol::operation::OperationState,
+    with_error: bool,
+    revision: u64,
+) -> stackly_protocol::operation::OperationSummary {
+    use stackly_protocol::operation::{
+        OperationFailureInfo, OperationState, RecoveryAction, RecoveryCause, RecoveryHint,
+        RecoveryInfo,
+    };
+    let mut summary = summary(OPERATION, state, revision);
+    match state {
+        OperationState::Failed if with_error => {
+            summary.failure = Some(OperationFailureInfo {
+                reason: "step_failed".to_owned(),
+                retryable: false,
+                error: operation_error(),
+            });
+        }
+        OperationState::NeedsRecovery => {
+            summary.recovery = Some(RecoveryInfo {
+                hint: RecoveryHint::Resume,
+                cause: RecoveryCause::StepFailed,
+                error: with_error.then(operation_error),
+                actions: vec![RecoveryAction::Resume, RecoveryAction::Abandon],
+            });
+        }
+        _ => {}
+    }
+    summary
+}

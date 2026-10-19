@@ -139,6 +139,7 @@ impl CliFailure {
                 id,
             )
             .with_detail("state", state)
+            .with_hint(check_hint(id))
             .with_detail("timeoutSeconds", timeout.as_secs().to_string()),
         )
     }
@@ -155,7 +156,8 @@ impl CliFailure {
                 ),
                 id,
             )
-            .with_detail("state", state),
+            .with_detail("state", state)
+            .with_hint(check_hint(id)),
         )
     }
 
@@ -172,7 +174,8 @@ impl CliFailure {
                     ),
                     id,
                 )
-                .with_detail("state", state),
+                .with_detail("state", state)
+                .with_hint(check_hint(id)),
             ),
             request_id: None,
             exit_override: Some(EXIT_INTERRUPTED),
@@ -290,6 +293,11 @@ impl CliFailure {
     }
 }
 
+/// How to look at an operation the CLI stopped waiting for.
+fn check_hint(id: Uuid) -> String {
+    format!("check it with: stackly operation inspect {id}")
+}
+
 /// `body` with the operation it is about, as `operationId` and resource.
 fn operation(body: ErrorBody, id: Uuid) -> ErrorBody {
     body.with_operation_id(id).with_resource(ResourceRef {
@@ -381,6 +389,10 @@ mod tests {
         );
         assert_eq!(failure.body.detail("state"), Some("running"));
         assert_eq!(failure.body.detail("timeoutSeconds"), Some("90"));
+        assert_eq!(
+            failure.body.hint(),
+            Some(format!("check it with: stackly operation inspect {OPERATION}").as_str())
+        );
         assert_eq!(failure.exit_code(), 8);
     }
 

@@ -9,13 +9,10 @@
 //! error category alone, and `--json` writes one envelope line on stdout.
 //! Progress always goes to stderr.
 
-// provisional: spec 0008 milestone 2 (the operation commands use the
-// progress, confirm, table, and wait parts built here)
-#![allow(dead_code, reason = "milestone 2 of spec 0008 uses these parts")]
-
 use std::process::ExitCode;
 
 mod app;
+mod args;
 mod commands;
 mod confirm;
 mod context;
@@ -26,6 +23,7 @@ mod output;
 mod panic;
 mod progress;
 mod session;
+mod wait;
 
 fn main() -> ExitCode {
     panic::install_hook();

@@ -16,7 +16,8 @@ pub struct PtyRun {
     /// stdout, from its file, byte for byte.
     pub stdout: String,
     /// What the pty showed, which is stderr, with the `^D` echo of the
-    /// closed input and the pty's `\r\n` taken out.
+    /// closed input, the echo of the typed input, and the pty's `\r\n`
+    /// taken out.
     pub stderr: String,
     /// What the pty showed, exactly.
     pub raw_stderr: String,
@@ -72,23 +73,41 @@ pub fn run_in_pty(root: &Path, args: &[&str], options: &PtyOptions<'_>) -> PtyRu
     }
     let output = match options.input {
         Some(input) => {
-            use std::io::Write;
+            use std::io::{Read, Write};
             command.stdin(Stdio::piped());
             let mut child = command.spawn().expect("script runs");
-            child
-                .stdin
-                .take()
-                .expect("stdin is piped")
+            // `script` sends EOF to the pty as soon as its own stdin ends,
+            // so stdin stays open until the child is done.
+            let mut stdin = child.stdin.take().expect("stdin is piped");
+            stdin
                 .write_all(input.as_bytes())
                 .expect("the pty takes the input");
-            child.wait_with_output().expect("script ends")
+            let mut shown = Vec::new();
+            child
+                .stdout
+                .take()
+                .expect("stdout is piped")
+                .read_to_end(&mut shown)
+                .expect("the pty output can be read");
+            let status = child.wait().expect("script ends");
+            drop(stdin);
+            std::process::Output {
+                status,
+                stdout: shown,
+                stderr: Vec::new(),
+            }
         }
         None => command.stdin(Stdio::null()).output().expect("script runs"),
     };
     let raw_stderr = String::from_utf8_lossy(&output.stdout).into_owned();
+    let typed = options.input.map(|input| input.replace('\n', "\r\n"));
     let stderr = raw_stderr
         .strip_prefix("^D\u{8}\u{8}")
-        .unwrap_or(&raw_stderr)
+        .unwrap_or(&raw_stderr);
+    let stderr = typed
+        .as_deref()
+        .and_then(|typed| stderr.strip_prefix(typed))
+        .unwrap_or(stderr)
         .replace("\r\n", "\n");
     let code = std::fs::read_to_string(&status)
         .ok()

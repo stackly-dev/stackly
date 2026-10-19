@@ -1,0 +1,24 @@
+ID                  0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d04
+Kind                start_instance
+Resource            instance:0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d05
+State               failed
+Stage               wait_ready
+Progress            2/3
+Point of no return  2026-10-18 03:04:30 +00:00
+Trigger             user (cli)
+Created             2026-10-18 03:04:05 +00:00 (<age>)
+Started             2026-10-18 03:04:06 +00:00
+Updated             2026-10-18 03:05:00 +00:00
+Revision            7
+Reason              step_failed
+Error               instance.start_failed: the instance did not become ready
+Hint                check the instance log
+
+Steps:
+  SEQ  NAME           STATE   ATTEMPTS  STARTED                     FINISHED                    ERROR
+  1    render_config  done    1         2026-10-18 03:04:06 +00:00  2026-10-18 03:04:07 +00:00  -
+  2    wait_ready     failed  2         2026-10-18 03:04:07 +00:00  2026-10-18 03:05:00 +00:00  instance.start_failed
+
+Created:
+  KIND  REFERENCE          STATE  DETAIL
+  dir   data/instances/pg  kept   -
