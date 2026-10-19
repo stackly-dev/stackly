@@ -142,7 +142,7 @@ Mesin operasi async yang dipakai semua mutasi: journal, idempotency key, lock pe
 - [x] Verify it: `/check verify operation engine`
 - [x] Test it: `/test operation engine`
 - [x] Review it (fresh model): `/check review operation engine`
-- [ ] Document it: `/document operation engine`
+- [x] Document it: `/document operation engine`
 
 ### 8. CLI client & kontrak output · in-progress
 

@@ -21,6 +21,7 @@ From the repo root. All of these work on the feature 1 scaffold (spec 0001).
 git config core.hooksPath .githooks   # once per clone: turns on the pre commit hook
 cargo test -p <crate> [test_name_filter]
 cargo test -p stackly-cli --test daemon_status   # the CLI package is stackly-cli; its binary is stackly
+cargo test -p stacklyd --test operations   # operation engine over the socket; timing tests hold the spec bounds only under cargo xtask evidence run
 STACKLY_ROOT=$(mktemp -d) cargo run -q -p stacklyd -- --print-roots   # resolved roots and socket path, creates nothing
 STACKLY_LOG=debug cargo run -q -p stacklyd   # the daemon; STACKLY_LOG is a tracing filter, default info
 cargo run -q -p stackly-cli -- daemon status --json
@@ -49,6 +50,7 @@ Stored in `docs/specs/`. Format: `docs/specs/NNNN-slug/index.md`, with the reaso
 - Domain, platform, protocol, and core never touch macOS APIs and must pass `cargo check` for `aarch64-pc-windows-msvc`.
 - `stackly-ipc` (`crates/ipc`) is the socket transport for `stacklyd` and `stackly-cli`: among Stackly crates it depends only on `stackly-protocol` (dev: `stackly-testkit`, `stackly-evidence`) and holds no `unsafe`. No crate depends on the `stacklyd` library, and non test code in `crates/ipc`, `apps/daemon`, and `apps/cli` never names a TCP or UDP socket. `cargo xtask check-deps` enforces all three (spec 0006).
 - `stacklyd` is a library plus a thin `main.rs`. In process tests start the server through `stacklyd::server::start` with a shortened `DaemonConfig`; binary tests use `stackly_testkit::SpawnedDaemon`.
+- Every mutation runs as an operation of `stackly_core::operation::OperationEngine` (spec 0007). In `stacklyd`, `ipc::operation` maps the engine's views to the `operation` DTOs, and a method that starts an operation goes through `ipc::operation::start_operation` (key check, fingerprint, begin). The doc hidden `Handlers::test_starting_method` is a test only starting method until feature 10 adds the first contract one (`provisional: F10`).
 - Only the daemon writes the registry, starts processes, and creates IDs and paths. The CLI never runs provider binaries, and the GUI never links Rust.
 - Boundaries carry DTOs from `stackly-protocol`, never domain types; `stacklyd` does the mapping. The wire is camelCase JSON behind a 4 byte big endian length (1 MiB control frames, 64 KiB log batches, checked before allocating). Enums with data use `tag = "type"`, `content = "content"`. Generated files are never edited by hand, and the fixtures in `protocols/fixtures/` are the shared contract.
 - Wire rules for every DTO in `stackly-protocol`: counts, sequences, and revisions use the `u64` newtypes in `wire.rs` (capped at `MAX_SAFE_INTEGER`), never a plain `u64`; an open enum ends in an `Unrecognized` variant that newer values fall back to (Swift `.unrecognized` through `OpenEnums.swift`); no `BTreeMap`, which typeshare cannot map; optional fields take `#[serde(default)]`; and every params type implements `Validate` (spec 0006).
