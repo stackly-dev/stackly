@@ -144,3 +144,14 @@ Dijalankan 2026-10-20 dengan model lain (Sonnet), read only, terhadap draft `728
 - **Diterapkan, kelengkapan keputusan**: status tombol aksi (`inFlight` sejak klik, `pending` dibersihkan juga oleh resnapshot dengan `operation.get`, umur key `outcomeUnknown`); isi O1 menurut `recovery.hint` dan `auto_compensate` tanpa item; aturan subsystem daemon dihapus; signature `AttentionRules.items` dengan `runtimes`, `now`, `locale`, `timeZone`, dan `id` stabil; progress seksi sebelum sumber termuat; detail urut dan pencarian per field; format port, uptime, dan umur; signature `ProviderTile` sebagai usulan spec 0017; kasus tepi kapasitas (`total` 0, jepit, reply lama, pemilik `CapacityModel`, pemicu `completedRounds`); copy untuk nilai null dan nomor restart; detail CLI (baris jumlah, warna, details `name`, bentuk UUID); testability AC-14; prasyarat build dan cek manual.
 - **Diterapkan, soundness**: `ShellNavigator` tidak memegang `@SceneStorage` dan membaca permintaan lewat `onChange(initial: true)`; kolom tabel mengalah di lebar sempit; jalur keyboard aksi lewat inspector; ambang `low` 5 GB dan copy "about"; kapasitas hanya untuk volume root data dengan satu kode error; single flight dengan timeout 5 detik; `itemFailures` menyimpan revision; keterangan kartu memakai `.subheadline`.
 - **Ditolak**: saran memindah `stopping` ke kelompok `stopped`. Proses yang sedang berhenti masih hidup, jadi menghitungnya Stopped mengulang masalah "dihitung dari PID" dari arah sebaliknya; `stopping` tetap `notReady`.
+
+## Update dari spec 0021 (2026-10-20)
+
+Diterapkan sesi `upd-0019-0022-0023` dari *Usulan update spec lain* spec 0021 (start, readiness, dan connection), atas persetujuan lead untuk user:
+
+- *Navigasi*: `ShellDestination.instance(UUID)` untuk halaman detail fitur 21, `instanceRequest` yang diterapkan `InstancesPage` ke `NavigationStack` nya (juga saat Instances belum tampil), klik ulang Instances di sidebar yang kembali ke tabel, dan `openInstance` yang kini memanggil `.instance(id)` menggantikan penanda `// provisional: F21`.
+- *Halaman Instances*: placeholder "No Selection" menyebut klik ganda untuk membuka, baris Readiness inspector memakai `ReadinessText` spec 0021 tanpa umur pemeriksaan (spec 0010 tidak mengirim pembaruan `observed_at` saja, jadi umur itu bisa salah), dan catatan pemilik menyebut tambahan inspector dari fitur 21 (Open, Data, Connection).
+- AC-11: `stackly instance inspect --json` membungkus hasil sebagai `{ "instance": InstanceSummary }`, supaya fitur 21 cukup menambah key `detail` dan `dataUsage` dan flag `--size` tanpa perubahan breaking.
+
+ID AC dan status spec ini tidak berubah.
+

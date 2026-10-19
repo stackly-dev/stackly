@@ -483,6 +483,8 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawanya 
 
 #### Spec 0019 (provider PostgreSQL)
 
+Diterapkan di spec 0019 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
+
 1. *Paket*, manifest. Sisipkan sesudah:
 
    ```text
@@ -526,6 +528,8 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawanya 
    ```
 
 #### Spec 0022 (overview dan daftar instance)
+
+Diterapkan di spec 0022 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
 
 1. *Navigasi*, `ShellDestination`. Ganti:
 
@@ -612,6 +616,8 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawanya 
    ```
 
 #### Spec 0023 (provider NATS lewat manifest)
+
+Diterapkan di spec 0023 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
 
 1. *Paket NATS*. Ganti:
 
