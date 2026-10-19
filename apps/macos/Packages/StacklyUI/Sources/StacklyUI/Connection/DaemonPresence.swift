@@ -55,7 +55,7 @@ public enum DaemonPresence: Equatable, Sendable {
             case .stopping: return .stopping
             case .ready: return .connected(health: .ready)
             case .degraded: return .connected(health: .degraded)
-            case .unknown, nil: return .connected(health: .unknown)
+            case .unrecognized, nil: return .connected(health: .unknown)
             }
         case .unreachable:
             return .unreachable(lastKnownAt: inputs.lastKnownAt)

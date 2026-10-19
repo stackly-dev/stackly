@@ -320,6 +320,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         ErrorBody(
             code: "internal.unexpected", category: .internal,
             message: "the client could not keep up with the daemon's events", retryable: false,
-            resource: nil, fields: nil, hint: nil, details: nil, operationId: nil, rule: nil)
+            resource: nil, fields: nil, hint: nil, details: nil, operationId: nil, rule: nil,
+            items: nil)
     }
 }

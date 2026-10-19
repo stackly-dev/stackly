@@ -236,7 +236,7 @@ struct ResourceStoreTests {
     static func error(_ code: String) -> ErrorBody {
         ErrorBody(
             code: code, category: .unavailable, message: "m", retryable: true, resource: nil,
-            fields: nil, hint: nil, details: nil, operationId: nil, rule: nil)
+            fields: nil, hint: nil, details: nil, operationId: nil, rule: nil, items: nil)
     }
 }
 

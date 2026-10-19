@@ -15,7 +15,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use stackly_protocol::ProtocolVersion;
-use stackly_protocol::codes::{self, ErrorSpec};
+use stackly_protocol::codes::{self, ErrorSpec, ItemSpec};
+
+/// The area whose codes only ever appear in CLI output, never on the wire
+/// (spec 0008), so adding one never bumps the protocol minor.
+const CLI_AREA: &str = "cli";
 
 /// Schema keywords that only document; normalization drops them.
 const DOC_KEYWORDS: [&str; 3] = ["description", "title", "examples"];
@@ -108,7 +112,25 @@ struct CodeEntry {
     category: &'static str,
     retryable: bool,
     details: &'static [&'static str],
+    items: Option<ItemsEntry>,
     summary: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ItemsEntry {
+    kind: &'static str,
+    fields: &'static [&'static str],
+    max: u16,
+}
+
+impl From<&ItemSpec> for ItemsEntry {
+    fn from(items: &ItemSpec) -> Self {
+        Self {
+            kind: items.kind,
+            fields: items.fields,
+            max: items.max,
+        }
+    }
 }
 
 /// The contents of `protocols/error-codes.json`.
@@ -128,39 +150,94 @@ pub fn error_codes_file() -> ErrorCodesFile {
                 category: spec.category.as_str(),
                 retryable: spec.retryable,
                 details: spec.details,
+                items: spec.items.as_ref().map(ItemsEntry::from),
                 summary: spec.summary,
             })
             .collect(),
     }
 }
 
-/// The catalog as the digest sees it: code, category, `retryable`, and the
-/// sorted `details` keys, without the summary.
-fn normalized_catalog() -> Value {
-    let entries: Vec<Value> = sorted_catalog()
+/// One catalog entry as the digest sees it, so tests can feed entries the
+/// real catalog does not have.
+#[derive(Debug, Clone, Copy)]
+struct DigestEntry {
+    code: &'static str,
+    category: &'static str,
+    retryable: bool,
+    details: &'static [&'static str],
+    items: Option<(&'static str, &'static [&'static str], u16)>,
+}
+
+impl From<&ErrorSpec> for DigestEntry {
+    fn from(spec: &ErrorSpec) -> Self {
+        Self {
+            code: spec.code,
+            category: spec.category.as_str(),
+            retryable: spec.retryable,
+            details: spec.details,
+            items: spec
+                .items
+                .as_ref()
+                .map(|items| (items.kind, items.fields, items.max)),
+        }
+    }
+}
+
+/// Whether a code counts toward the digest: every area but `cli`.
+fn is_wire_code(code: &str) -> bool {
+    code.split_once('.')
+        .is_none_or(|(area, _)| area != CLI_AREA)
+}
+
+/// The catalog as the digest sees it: code, category, `retryable`, the
+/// sorted `details` keys, and the item kind, sorted field keys, and limit,
+/// without the summary, and without the `cli` area.
+fn normalized_catalog(entries: impl IntoIterator<Item = DigestEntry>) -> Value {
+    let mut entries: Vec<DigestEntry> = entries
         .into_iter()
-        .map(|spec| {
-            let mut details = spec.details.to_vec();
+        .filter(|entry| is_wire_code(entry.code))
+        .collect();
+    entries.sort_by_key(|entry| entry.code);
+    let entries: Vec<Value> = entries
+        .into_iter()
+        .map(|entry| {
+            let mut details = entry.details.to_vec();
             details.sort_unstable();
+            let items = entry.items.map(|(kind, fields, max)| {
+                let mut fields = fields.to_vec();
+                fields.sort_unstable();
+                json!({ "kind": kind, "fields": fields, "max": max })
+            });
             json!({
-                "code": spec.code,
-                "category": spec.category.as_str(),
-                "retryable": spec.retryable,
+                "code": entry.code,
+                "category": entry.category,
+                "retryable": entry.retryable,
                 "details": details,
+                "items": items,
             })
         })
         .collect();
     Value::Array(entries)
 }
 
+/// The real catalog, as [`DigestEntry`] values.
+fn catalog_entries() -> impl Iterator<Item = DigestEntry> {
+    codes::catalog().map(DigestEntry::from)
+}
+
 /// SHA-256, as lowercase hex, of the normalized schemas (keyed by file stem)
 /// and the normalized catalog, written as canonical JSON with sorted keys.
 pub fn contract_digest(schemas: &[(&str, Value)]) -> String {
+    digest_of(schemas, catalog_entries())
+}
+
+/// [`contract_digest`] over any catalog entries.
+fn digest_of(schemas: &[(&str, Value)], catalog: impl IntoIterator<Item = DigestEntry>) -> String {
     let schemas: BTreeMap<&str, Value> = schemas
         .iter()
         .map(|(stem, schema)| (*stem, normalize_schema(schema)))
         .collect();
-    let contract = json!({ "errorCodes": normalized_catalog(), "schemas": schemas });
+    let contract = json!({ "errorCodes": normalized_catalog(catalog), "schemas": schemas });
     let mut canonical = String::new();
     write_canonical(&contract, &mut canonical);
     let mut hex = String::with_capacity(64);
@@ -345,6 +422,63 @@ mod tests {
             base.bytes()
                 .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
         );
+    }
+
+    fn entry(code: &'static str) -> DigestEntry {
+        DigestEntry {
+            code,
+            category: "invalid_input",
+            retryable: false,
+            details: &["path"],
+            items: None,
+        }
+    }
+
+    #[test]
+    fn cli_codes_never_change_the_digest_but_wire_codes_do() {
+        let schemas = [("a", json!({ "type": "string" }))];
+        let wire = [entry("ipc.frame_empty"), entry("request.malformed")];
+        let base = digest_of(&schemas, wire);
+        let with_cli = digest_of(
+            &schemas,
+            [
+                entry("ipc.frame_empty"),
+                entry("cli.invalid_flag"),
+                entry("request.malformed"),
+                entry("cli.no_tty"),
+            ],
+        );
+        let with_wire = digest_of(
+            &schemas,
+            [
+                entry("ipc.frame_empty"),
+                entry("request.malformed"),
+                entry("events.gone"),
+            ],
+        );
+        assert_eq!(base, with_cli);
+        assert_ne!(base, with_wire);
+        assert!(!is_wire_code("cli.invalid_flag"));
+        assert!(
+            is_wire_code("client.x"),
+            "only the area named cli is left out"
+        );
+    }
+
+    #[test]
+    fn the_digest_sees_item_kinds_fields_and_limits_in_any_field_order() {
+        let schemas = [("a", json!({ "type": "string" }))];
+        let with_items = |fields: &'static [&'static str], max| DigestEntry {
+            items: Some(("issue", fields, max)),
+            ..entry("manifest.invalid")
+        };
+        let base = digest_of(&schemas, [with_items(&["path", "code"], 50)]);
+        let reordered = digest_of(&schemas, [with_items(&["code", "path"], 50)]);
+        let raised = digest_of(&schemas, [with_items(&["path", "code"], 60)]);
+        let none = digest_of(&schemas, [entry("manifest.invalid")]);
+        assert_eq!(base, reordered);
+        assert_ne!(base, raised);
+        assert_ne!(base, none);
     }
 
     #[test]

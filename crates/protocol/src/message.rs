@@ -8,7 +8,8 @@
 //!
 //! To add a method: add a variant to [`Call`] and to [`Reply`] with the same
 //! name and the same `#[serde(rename)]`, then add one line to the
-//! `methods!` table below. A variant missing from the table does not
+//! `methods!` table below, saying whether the daemon answers it while the
+//! registry is in recovery mode (spec 0006 AC-18). A variant missing from the table does not
 //! compile, and the tests check that each table name is the variant's serde
 //! tag. typeshare cannot see items a macro expands to, so the two enums stay
 //! written by hand.
@@ -93,16 +94,23 @@ pub enum Reply {
 }
 
 /// The method table: one line per method, `name => Variant` or
-/// `name => Variant(Params)`. It gives `Call::METHODS`, `Call::method`,
+/// `name => Variant(Params)`, then `recovery allowed` or `recovery refused`.
+/// It gives `Call::METHODS`, `Call::method`, `Call::allowed_in_recovery`,
 /// `Reply::method`, and the per method params decoder.
 macro_rules! methods {
+    (@recovery allowed) => {
+        true
+    };
+    (@recovery refused) => {
+        false
+    };
     (@decode $content:ident, $variant:ident) => {
         json::decode_unit($content).map(|()| Self::$variant)
     };
     (@decode $content:ident, $variant:ident, $params:ty) => {
         json::decode_params::<$params>($content).map(Self::$variant)
     };
-    ($($name:literal => $variant:ident $(($params:ty))?;)*) => {
+    ($($name:literal => $variant:ident $(($params:ty))?, recovery $recovery:ident;)*) => {
         impl Call {
             /// Every method this build knows, in table order.
             pub const METHODS: &[&str] = &[$($name),*];
@@ -112,6 +120,17 @@ macro_rules! methods {
             pub const fn method(&self) -> &'static str {
                 match self {
                     $(Self::$variant { .. } => $name,)*
+                }
+            }
+
+            /// Whether the daemon answers this method while the registry is
+            /// in recovery mode. Every other method gets
+            /// `registry.recovery_mode` before its handler runs (spec 0006
+            /// AC-18, spec 0005).
+            #[must_use]
+            pub const fn allowed_in_recovery(&self) -> bool {
+                match self {
+                    $(Self::$variant { .. } => methods!(@recovery $recovery),)*
                 }
             }
 
@@ -142,12 +161,12 @@ macro_rules! methods {
 }
 
 methods! {
-    "daemon.handshake" => DaemonHandshake(HandshakeParams);
-    "daemon.get_info" => DaemonGetInfo;
-    "daemon.get_health" => DaemonGetHealth;
-    "daemon.get_capabilities" => DaemonGetCapabilities;
-    "events.subscribe" => EventsSubscribe(SubscribeParams);
-    "events.unsubscribe" => EventsUnsubscribe(UnsubscribeParams);
+    "daemon.handshake" => DaemonHandshake(HandshakeParams), recovery allowed;
+    "daemon.get_info" => DaemonGetInfo, recovery allowed;
+    "daemon.get_health" => DaemonGetHealth, recovery allowed;
+    "daemon.get_capabilities" => DaemonGetCapabilities, recovery allowed;
+    "events.subscribe" => EventsSubscribe(SubscribeParams), recovery allowed;
+    "events.unsubscribe" => EventsUnsubscribe(UnsubscribeParams), recovery allowed;
 }
 
 impl Reply {
@@ -235,6 +254,23 @@ mod tests {
                 "{method}"
             );
         }
+    }
+
+    #[test]
+    fn every_method_of_spec_0006_is_allowed_in_recovery() {
+        let calls = [
+            Call::DaemonGetInfo,
+            Call::DaemonGetHealth,
+            Call::DaemonGetCapabilities,
+            Call::EventsSubscribe(SubscribeParams::default()),
+            Call::EventsUnsubscribe(UnsubscribeParams { subscription_id: 1 }),
+        ];
+        assert!(calls.iter().all(Call::allowed_in_recovery));
+        assert_eq!(
+            calls.len() + 1,
+            Call::METHODS.len(),
+            "a new method needs a line here"
+        );
     }
 
     #[test]

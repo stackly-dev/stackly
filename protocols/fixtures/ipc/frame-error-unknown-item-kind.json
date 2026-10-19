@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000004",
+    "error": {
+      "code": "secret.reference_unresolved",
+      "category": "failed",
+      "message": "2 references need a secret",
+      "retryable": false,
+      "items": [
+        {
+          "kind": "hologram",
+          "fields": [
+            {
+              "key": "beam",
+              "value": "blue"
+            }
+          ],
+          "shimmer": true
+        }
+      ]
+    }
+  }
+}

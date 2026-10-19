@@ -12,7 +12,8 @@
       "hint": null,
       "details": [],
       "operationId": null,
-      "rule": null
+      "rule": null,
+      "items": []
     }
   }
 }

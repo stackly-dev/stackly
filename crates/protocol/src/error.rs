@@ -11,13 +11,17 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 use uuid::Uuid;
 
-use crate::codes::{self, ErrorSpec};
+use crate::codes::{self, ErrorSpec, ItemSpec};
 use crate::json::FieldCode;
 use crate::wire::ResourceRef;
 
 /// Longest `message`, in characters; [`ErrorBody::new`] truncates longer
 /// ones on a character boundary.
 pub const MESSAGE_MAX: usize = 200;
+
+/// The `details` key that counts the items [`ErrorBody::with_items`]
+/// dropped above the catalog limit. Every code with `items` lists it.
+pub const OMITTED_DETAIL: &str = "omitted";
 
 /// What a client should do about an error. Closed: a new category is a new
 /// protocol major. Feature 8 derives CLI exit codes from it.
@@ -117,6 +121,10 @@ pub struct ErrorBody {
     /// The PRD rule ID behind the error, such as `BR-008`.
     #[serde(default)]
     rule: Option<String>,
+    /// A structured list that does not fit in `details`, with the item
+    /// `kind` and field keys from the code's catalog entry.
+    #[serde(default)]
+    items: Vec<ErrorItem>,
 }
 
 impl ErrorBody {
@@ -135,6 +143,7 @@ impl ErrorBody {
             details: Vec::new(),
             operation_id: None,
             rule: None,
+            items: Vec::new(),
         }
     }
 
@@ -193,6 +202,66 @@ impl ErrorBody {
     #[must_use]
     pub fn with_rule(mut self, rule: impl Into<String>) -> Self {
         self.rule = Some(rule.into());
+        self
+    }
+
+    /// Adds list items. Each item's `kind` and field keys must be the ones
+    /// the code's catalog entry allows, and the code must allow items at
+    /// all; debug builds assert both, release builds drop such items.
+    /// Items above the catalog limit are dropped, and how many is written
+    /// to the [`OMITTED_DETAIL`] detail.
+    #[must_use]
+    pub fn with_items(self, items: impl IntoIterator<Item = ErrorItem>) -> Self {
+        let spec = codes::lookup(&self.code).and_then(|spec| spec.items.as_ref());
+        debug_assert!(
+            spec.is_some(),
+            "the catalog entry of `{}` allows no items",
+            self.code
+        );
+        match spec {
+            Some(spec) => self.push_items(spec, items),
+            None => self,
+        }
+    }
+
+    /// [`with_items`](Self::with_items) against `spec`.
+    fn push_items(mut self, spec: &ItemSpec, items: impl IntoIterator<Item = ErrorItem>) -> Self {
+        let mut omitted: u64 = 0;
+        for item in items {
+            let allowed = item.kind == spec.kind
+                && item
+                    .fields
+                    .iter()
+                    .all(|field| spec.fields.contains(&field.key.as_str()));
+            debug_assert!(
+                allowed,
+                "item `{}` is not allowed by the catalog entry of `{}`",
+                item.kind, self.code
+            );
+            if !allowed {
+                continue;
+            }
+            if self.items.len() < usize::from(spec.max) {
+                self.items.push(item);
+            } else {
+                omitted += 1;
+            }
+        }
+        if omitted > 0 {
+            match self
+                .details
+                .iter_mut()
+                .find(|detail| detail.key == OMITTED_DETAIL)
+            {
+                Some(detail) => {
+                    let before: u64 = detail.value.parse().unwrap_or(0);
+                    detail.value = (before + omitted).to_string();
+                }
+                None => self
+                    .details
+                    .push(ErrorDetail::new(OMITTED_DETAIL, omitted.to_string())),
+            }
+        }
         self
     }
 
@@ -277,6 +346,12 @@ impl ErrorBody {
     pub fn rule(&self) -> Option<&str> {
         self.rule.as_deref()
     }
+
+    /// The list items, in the order they were added.
+    #[must_use]
+    pub fn items(&self) -> &[ErrorItem] {
+        &self.items
+    }
 }
 
 /// One params field that failed to decode or validate.
@@ -335,6 +410,16 @@ pub struct ErrorDetail {
 }
 
 impl ErrorDetail {
+    /// A detail. [`ErrorBody::with_detail`] checks the key against the
+    /// catalog; [`ErrorItem::with_field`] uses this for item fields.
+    #[must_use]
+    pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            value: value.into(),
+        }
+    }
+
     /// The key.
     #[must_use]
     pub fn key(&self) -> &str {
@@ -345,6 +430,62 @@ impl ErrorDetail {
     #[must_use]
     pub fn value(&self) -> &str {
         &self.value
+    }
+}
+
+/// One entry of a structured list on an error, such as one reference that
+/// needs a secret (spec 0011) or one manifest issue (spec 0009).
+///
+/// `kind` and the field keys are plain strings, so a client always decodes
+/// an error frame, even with an item kind it does not know yet.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorItem {
+    /// The item kind from the code's catalog entry, such as `issue`.
+    kind: String,
+    /// The item's facts, with keys from the code's catalog entry.
+    #[serde(default)]
+    fields: Vec<ErrorDetail>,
+}
+
+impl ErrorItem {
+    /// An item of `kind` without fields yet.
+    #[must_use]
+    pub fn new(kind: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            fields: Vec::new(),
+        }
+    }
+
+    /// Adds one field. [`ErrorBody::with_items`] checks the key against the
+    /// catalog.
+    #[must_use]
+    pub fn with_field(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.fields.push(ErrorDetail::new(key, value));
+        self
+    }
+
+    /// The item kind.
+    #[must_use]
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    /// The item's fields, in the order they were added.
+    #[must_use]
+    pub fn fields(&self) -> &[ErrorDetail] {
+        &self.fields
+    }
+
+    /// The value of the first field named `key`.
+    #[must_use]
+    pub fn field(&self, key: &str) -> Option<&str> {
+        self.fields
+            .iter()
+            .find(|field| field.key == key)
+            .map(|field| field.value.as_str())
     }
 }
 
@@ -436,6 +577,7 @@ mod tests {
                 "details": [],
                 "operationId": null,
                 "rule": null,
+                "items": [],
             })
         );
     }
@@ -447,8 +589,81 @@ mod tests {
         )
         .unwrap();
         assert!(error.fields().is_empty() && error.details().is_empty());
+        assert!(error.items().is_empty());
         assert_eq!(error.hint(), None);
         assert_eq!(error.spec(), None);
+    }
+
+    /// A catalog entry with items, which no spec 0006 code has.
+    const ISSUES: ItemSpec = ItemSpec {
+        kind: "issue",
+        fields: &["path", "code"],
+        max: 2,
+    };
+
+    fn issue(path: &str) -> ErrorItem {
+        ErrorItem::new("issue")
+            .with_field("path", path)
+            .with_field("code", "required")
+    }
+
+    #[test]
+    fn items_up_to_the_limit_are_kept_in_order() {
+        let error = ErrorBody::new(&request::MALFORMED, "m").push_items(&ISSUES, [issue("a")]);
+        let error = error.push_items(&ISSUES, [issue("b")]);
+
+        let paths: Vec<_> = error.items().iter().map(|i| i.field("path")).collect();
+        assert_eq!(paths, [Some("a"), Some("b")]);
+        assert_eq!(error.items()[0].kind(), "issue");
+        assert_eq!(error.detail(OMITTED_DETAIL), None);
+    }
+
+    #[test]
+    fn items_above_the_limit_are_dropped_and_counted_in_omitted() {
+        let error = ErrorBody::new(&request::MALFORMED, "m")
+            .push_items(&ISSUES, ["a", "b", "c", "d"].map(issue))
+            .push_items(&ISSUES, [issue("e")]);
+
+        assert_eq!(error.items().len(), 2);
+        assert_eq!(error.detail(OMITTED_DETAIL), Some("3"));
+    }
+
+    #[test]
+    #[should_panic(expected = "is not allowed by the catalog entry")]
+    #[cfg(debug_assertions)]
+    fn an_item_of_another_kind_panics_in_debug_builds() {
+        let _ = ErrorBody::new(&request::MALFORMED, "m")
+            .push_items(&ISSUES, [ErrorItem::new("reference")]);
+    }
+
+    #[test]
+    #[should_panic(expected = "is not allowed by the catalog entry")]
+    #[cfg(debug_assertions)]
+    fn an_item_field_outside_the_catalog_entry_panics_in_debug_builds() {
+        let _ = ErrorBody::new(&request::MALFORMED, "m")
+            .push_items(&ISSUES, [ErrorItem::new("issue").with_field("value", "x")]);
+    }
+
+    #[test]
+    #[should_panic(expected = "allows no items")]
+    #[cfg(debug_assertions)]
+    fn items_on_a_code_without_items_panic_in_debug_builds() {
+        let _ = ErrorBody::new(&request::MALFORMED, "m").with_items([issue("a")]);
+    }
+
+    #[test]
+    fn an_item_of_a_kind_this_build_does_not_know_still_decodes() {
+        let error: ErrorBody = serde_json::from_value(serde_json::json!({
+            "code": "secret.store_locked",
+            "category": "unavailable",
+            "message": "m",
+            "retryable": false,
+            "items": [{ "kind": "hologram", "fields": [{ "key": "x", "value": "1" }] }],
+        }))
+        .unwrap();
+        assert_eq!(error.items()[0].kind(), "hologram");
+        assert_eq!(error.items()[0].field("x"), Some("1"));
+        assert_eq!(error.code(), "secret.store_locked");
     }
 
     #[test]

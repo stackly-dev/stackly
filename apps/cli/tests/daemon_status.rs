@@ -8,13 +8,14 @@ use std::ffi::OsStr;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
-use stackly_ipc::{Accepted, ConnectPolicy, Listener, connect_verified};
+use stackly_ipc::{Accepted, Client, ConnectPolicy, Listener};
 use stackly_platform::DirectoryLayout;
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::codes::protocol;
+use stackly_protocol::handshake::{ClientInfo, ClientKind};
 use stackly_protocol::{CONTRACT_DIGEST, ErrorBody, ProtocolVersion};
 use stackly_testkit::evidence::{Kind, evidence};
 use stackly_testkit::{SpawnedDaemon, TestRoot, cargo_bin};
@@ -25,6 +26,7 @@ struct Paths {
     socket: PathBuf,
     runtime: PathBuf,
     registry_db: PathBuf,
+    log: PathBuf,
 }
 
 fn paths(root: &TestRoot) -> Paths {
@@ -35,6 +37,7 @@ fn paths(root: &TestRoot) -> Paths {
         socket: layout.daemon_socket(),
         runtime: layout.roots().runtime().to_path_buf(),
         registry_db: layout.registry_db(),
+        log: layout.daemon_log_dir().join("stacklyd.log"),
     }
 }
 
@@ -44,30 +47,68 @@ fn uid() -> u32 {
         .uid()
 }
 
-fn connects(socket: &Path) -> bool {
+/// Whether a client completes a handshake on `socket` right now. A whole
+/// handshake, not a bare connect: a client that leaves at once can be gone
+/// before the daemon reads its credentials, and the daemon then logs a
+/// refused peer after the test moved on.
+fn handshakes(socket: &Path) -> bool {
     let socket = socket.to_path_buf();
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("a runtime starts")
-            .block_on(connect_verified(&socket, ConnectPolicy::same_user(uid())))
-            .is_ok()
+            .block_on(async {
+                let client = ClientInfo {
+                    kind: ClientKind::Cli,
+                    version: "0.1.0".to_owned(),
+                    pid: Some(std::process::id()),
+                    interactive: Some(false),
+                };
+                let connect = Client::connect(&socket, ConnectPolicy::same_user(uid()), client);
+                tokio::time::timeout(Duration::from_secs(5), connect)
+                    .await
+                    .is_ok_and(|connected| connected.is_ok())
+            })
     })
     .join()
     .unwrap_or(false)
 }
 
+/// How many lines of the daemon log file say `connection closed`.
+fn closed_connections(log: &Path) -> usize {
+    std::fs::read_to_string(log)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|line| line["fields"]["message"] == "connection closed")
+        .count()
+}
+
+/// Starts `stacklyd` and waits until it is ready and quiet: the start slot
+/// ended, a probe handshake worked, and the daemon wrote the close of the
+/// probe connection to its log file.
 fn start_daemon(root: &TestRoot) -> SpawnedDaemon {
     let paths = paths(root);
-    SpawnedDaemon::start(
+    let closed_before = closed_connections(&paths.log);
+    let daemon = SpawnedDaemon::start(
         &cargo_bin("stacklyd", "stacklyd"),
         root.path(),
         &paths.socket,
         &paths.runtime,
-        |daemon| daemon.stderr().contains("registry_state") && connects(daemon.socket()),
+        |daemon| daemon.stderr().contains("registry_state") && handshakes(daemon.socket()),
     )
-    .expect("stacklyd starts")
+    .expect("stacklyd starts");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while closed_connections(&paths.log) <= closed_before {
+        assert!(
+            Instant::now() < deadline,
+            "stacklyd did not log the close of the ready probe: {}",
+            daemon.stderr()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    daemon
 }
 
 fn status(root: &OsStr, json: bool) -> Output {

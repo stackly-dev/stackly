@@ -7,7 +7,8 @@ use stackly_protocol::ProtocolVersion;
 use super::GENERATED_HEADER;
 
 /// Names of the enums in typeshare output that are open: `String` backed
-/// with a `case unknown`, in the order they appear.
+/// with a `case unrecognized`, in the order they appear. A `case unknown`
+/// is a real state, not the fallback (spec 0006).
 pub fn open_enum_names(swift: &str) -> Vec<String> {
     let mut names = Vec::new();
     let mut current: Option<&str> = None;
@@ -19,7 +20,7 @@ pub fn open_enum_names(swift: &str) -> Vec<String> {
             continue;
         }
         let Some(name) = current else { continue };
-        if line.trim() == "case unknown" {
+        if line.trim() == "case unrecognized" {
             names.push(name.to_owned());
             current = None;
         } else if line == "}" {
@@ -30,19 +31,20 @@ pub fn open_enum_names(swift: &str) -> Vec<String> {
 }
 
 /// `OpenEnums.swift`: for every open enum, a decoder that reads a value
-/// this build does not know as `.unknown` instead of failing.
+/// this build does not know as `.unrecognized` instead of failing.
 pub fn open_enums(swift: &str) -> String {
     let mut out = format!(
         "{GENERATED_HEADER}\n\
-         // Open enums read a value from a newer peer as `.unknown` instead of\n\
-         // failing to decode (spec 0006). The daemon never sends `unknown`.\n"
+         // Open enums read a value from a newer peer as `.unrecognized` instead\n\
+         // of failing to decode (spec 0006). The daemon never sends\n\
+         // `unrecognized`.\n"
     );
     for name in open_enum_names(swift) {
         out.push_str(&format!(
             "\nextension {name} {{\n\
              \tpublic init(from decoder: Decoder) throws {{\n\
              \t\tlet value = try decoder.singleValueContainer().decode(String.self)\n\
-             \t\tself = Self(rawValue: value) ?? .unknown\n\
+             \t\tself = Self(rawValue: value) ?? .unrecognized\n\
              \t}}\n\
              }}\n"
         ));
@@ -160,6 +162,11 @@ mod tests {
     const SAMPLE: &str = "\
 public enum ClientKind: String, Codable, Sendable, Equatable {
 \tcase cli
+\tcase unrecognized
+}
+
+public enum LifecycleState: String, Codable, Sendable, Equatable {
+\tcase running
 \tcase unknown
 }
 
@@ -172,23 +179,28 @@ public enum Call: Codable, Sendable, Equatable {
 \tcase unknown
 }
 
-public enum HealthStatus: String, Codable, Sendable, Equatable {
+public enum DaemonHealthStatus: String, Codable, Sendable, Equatable {
 \tcase ready
-\tcase unknown
+\tcase unrecognized
 }
 ";
 
     #[test]
-    fn only_string_enums_with_an_unknown_case_are_open() {
-        assert_eq!(open_enum_names(SAMPLE), ["ClientKind", "HealthStatus"]);
+    fn only_string_enums_with_an_unrecognized_case_are_open() {
+        assert_eq!(
+            open_enum_names(SAMPLE),
+            ["ClientKind", "DaemonHealthStatus"]
+        );
     }
 
     #[test]
-    fn each_open_enum_gets_a_decoder_that_falls_back_to_unknown() {
+    fn each_open_enum_gets_a_decoder_that_falls_back_to_unrecognized() {
         let swift = open_enums(SAMPLE);
         assert!(swift.starts_with(GENERATED_HEADER));
         assert!(swift.contains("extension ClientKind {"));
-        assert!(swift.contains("self = Self(rawValue: value) ?? .unknown"));
+        assert!(swift.contains("self = Self(rawValue: value) ?? .unrecognized"));
+        assert!(!swift.contains(".unknown"));
+        assert!(!swift.contains("extension LifecycleState"));
         assert!(!swift.contains("extension ErrorCategory"));
         assert!(!swift.contains("extension Call"));
     }

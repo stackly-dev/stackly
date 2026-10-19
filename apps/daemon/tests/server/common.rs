@@ -1,11 +1,14 @@
 //! Helpers for the in process server tests: a test root with the daemon
 //! lock held, a server started on it, raw frame IO for clients written by
-//! hand, and wrapped handlers that hold or break one method.
+//! hand, wrapped handlers that hold or break one method, captured log
+//! lines, and a second process that holds the registry's write lock.
 
-use std::io;
+use std::cell::RefCell;
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, Once, PoisonError};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -105,6 +108,15 @@ impl Site {
     /// Starts a server with `handlers` and waits for the start slot.
     pub async fn start_with(&self, handlers: impl Handlers) -> DaemonHandle {
         let handle = server::start(self.deps().with_handlers(handlers))
+            .await
+            .expect("the server starts");
+        handle.started().await;
+        handle
+    }
+
+    /// Starts a server with `config` and waits for the start slot.
+    pub async fn start_configured(&self, config: DaemonConfig) -> DaemonHandle {
+        let handle = server::start(self.deps().with_config(config))
             .await
             .expect("the server starts");
         handle.started().await;
@@ -260,19 +272,171 @@ pub fn error_of(frame: &Value) -> ErrorBody {
     body
 }
 
-/// A typed client of the test's uid.
+/// A typed client of the test's uid, as a `cli` client from before
+/// `interactive` existed: it does not send the flag.
 pub async fn client(site: &Site) -> (Client, HandshakeAccepted) {
+    client_as(site, ClientKind::Cli, None).await
+}
+
+/// A typed client of the test's uid with the given kind and
+/// `interactive` flag.
+pub async fn client_as(
+    site: &Site,
+    kind: ClientKind,
+    interactive: Option<bool>,
+) -> (Client, HandshakeAccepted) {
     Client::connect(
         &site.socket(),
         ConnectPolicy::same_user(site.uid()),
         ClientInfo {
-            kind: ClientKind::Cli,
+            kind,
             version: "0.1.0".to_owned(),
             pid: Some(std::process::id()),
+            interactive,
         },
     )
     .await
     .expect("the client connects")
+}
+
+thread_local! {
+    /// Where the log lines of this thread go while a [`Logs`] lives on it.
+    static THREAD_LOGS: RefCell<Option<Arc<Mutex<Vec<u8>>>>> = const { RefCell::new(None) };
+}
+
+/// Installs, once per test binary, the global subscriber whose writer sends
+/// each line to the [`Logs`] of the thread that logged it. One global
+/// subscriber, never replaced, keeps tracing's cached interest and maximum
+/// level stable while tests run at the same time.
+fn install_thread_logs() {
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        let subscriber = tracing_subscriber::fmt()
+            .json()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_writer(|| ThreadLogWriter)
+            .finish();
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("no other global subscriber is set in the server tests");
+    });
+}
+
+/// Writes to the [`Logs`] of the current thread, or nowhere.
+struct ThreadLogWriter;
+
+impl Write for ThreadLogWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        THREAD_LOGS.with(|logs| {
+            if let Some(buffer) = &*logs.borrow() {
+                buffer
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .extend_from_slice(bytes);
+            }
+        });
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// The JSON log lines of the current thread while it lives. The in process
+/// tests run on tokio's current thread runtime, so every task the server
+/// spawns logs here; blocking tasks on other threads do not.
+pub struct Logs {
+    buffer: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Drop for Logs {
+    fn drop(&mut self) {
+        THREAD_LOGS.with(|logs| logs.borrow_mut().take());
+    }
+}
+
+impl Logs {
+    /// Captures every line at `debug` and above that this thread logs, as
+    /// the daemon writes them.
+    pub fn capture() -> Self {
+        install_thread_logs();
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        THREAD_LOGS.with(|logs| *logs.borrow_mut() = Some(Arc::clone(&buffer)));
+        Self { buffer }
+    }
+
+    /// Every line captured so far.
+    pub fn lines(&self) -> Vec<Value> {
+        let bytes = self
+            .buffer
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        String::from_utf8_lossy(&bytes)
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("each log line is JSON"))
+            .collect()
+    }
+
+    /// The lines whose message is `message`.
+    pub fn with_message(&self, message: &str) -> Vec<Value> {
+        self.lines()
+            .into_iter()
+            .filter(|line| line["fields"]["message"] == message)
+            .collect()
+    }
+}
+
+/// Another process that holds the registry's write transaction open, the
+/// way a second SQLite tool would: `/usr/bin/sqlite3` with `BEGIN
+/// IMMEDIATE` pending. Dropping it ends the process and its transaction.
+pub struct RegistryHolder {
+    child: Child,
+    stdin: Option<ChildStdin>,
+}
+
+impl RegistryHolder {
+    /// Starts the holder on `db` and returns once its transaction began.
+    pub fn lock(db: &Path) -> Self {
+        let mut child = Command::new("/usr/bin/sqlite3")
+            .arg(db)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("the system sqlite3 starts");
+        let mut stdin = child.stdin.take().expect("the holder's stdin is piped");
+        stdin
+            .write_all(b"BEGIN IMMEDIATE;\nSELECT 'locked';\n")
+            .expect("the holder reads its commands");
+        stdin.flush().expect("the holder reads its commands");
+        let stdout = child.stdout.take().expect("the holder's stdout is piped");
+        let mut line = String::new();
+        BufReader::new(stdout)
+            .read_line(&mut line)
+            .expect("the holder answers");
+        assert_eq!(line.trim(), "locked", "the holder did not take the lock");
+        Self {
+            child,
+            stdin: Some(stdin),
+        }
+    }
+
+    /// Ends the transaction and the process.
+    pub fn release(mut self) {
+        if let Some(mut stdin) = self.stdin.take() {
+            let _ = stdin.write_all(b"ROLLBACK;\n.quit\n");
+        }
+        let _ = self.child.wait();
+    }
+}
+
+impl Drop for RegistryHolder {
+    fn drop(&mut self) {
+        drop(self.stdin.take());
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
 }
 
 /// A gate a held handler waits behind.

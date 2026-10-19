@@ -1,0 +1,51 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000003",
+    "error": {
+      "code": "manifest.invalid",
+      "category": "invalid_input",
+      "message": "the manifest has 3 issues",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "omitted",
+          "value": "1"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": [
+        {
+          "kind": "issue",
+          "fields": [
+            {
+              "key": "path",
+              "value": "spec.ports[0]"
+            },
+            {
+              "key": "code",
+              "value": "required"
+            }
+          ]
+        },
+        {
+          "kind": "issue",
+          "fields": [
+            {
+              "key": "path",
+              "value": "metadata.name"
+            },
+            {
+              "key": "code",
+              "value": "too_long"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

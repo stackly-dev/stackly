@@ -99,7 +99,11 @@ public actor DaemonLink {
         case .failure(let problem):
             target = .misconfigured(.rootOverride(problem))
         case .success(let endpoint) where Self.isValidClientVersion(clientVersion):
-            target = .ready(endpoint, ClientInfo(kind: .gui, version: clientVersion, pid: pid))
+            // The app can always show a dialog the person sees (spec 0006
+            // AC-19, spec 0013 AC-5).
+            target = .ready(
+                endpoint,
+                ClientInfo(kind: .gui, version: clientVersion, pid: pid, interactive: true))
         case .success:
             target = .misconfigured(.invalidClientVersion)
         }
@@ -408,7 +412,7 @@ extension ClientErrorCatalog {
         ErrorBody(
             code: "daemon.shutting_down", category: .unavailable,
             message: "the daemon is shutting down", retryable: true, resource: nil, fields: nil,
-            hint: nil, details: nil, operationId: nil, rule: nil)
+            hint: nil, details: nil, operationId: nil, rule: nil, items: nil)
     }
 }
 

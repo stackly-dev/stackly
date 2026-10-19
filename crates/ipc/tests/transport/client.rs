@@ -29,6 +29,7 @@ fn client_info() -> ClientInfo {
         kind: ClientKind::Cli,
         version: "0.1.0".to_owned(),
         pid: Some(std::process::id()),
+        interactive: None,
     }
 }
 

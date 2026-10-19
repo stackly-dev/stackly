@@ -1,0 +1,27 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000002",
+    "error": {
+      "code": "resource.busy",
+      "category": "conflict",
+      "message": "another operation holds the manager",
+      "retryable": true,
+      "resource": {
+        "kind": "manager",
+        "id": "self"
+      },
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "operationId",
+          "value": "0192f3a3-2222-7ddd-9eee-ffffffffffff"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

@@ -18,11 +18,12 @@ pub fn run(root_override: Option<OsString>, json: bool) -> ExitCode {
 #[cfg(target_os = "macos")]
 mod imp {
     use std::ffi::OsString;
+    use std::io::IsTerminal;
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
     use serde::Serialize;
-    use stackly_ipc::{Client, ConnectPolicy, IpcError};
+    use stackly_ipc::{Client, ConnectPolicy};
     use stackly_platform::{DirectoryLayout, UserId};
     use stackly_platform_macos::MacosPlatform;
     use stackly_protocol::codes::ipc;
@@ -37,6 +38,8 @@ mod imp {
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
     /// How long each call may take.
     const CALL_TIMEOUT: Duration = Duration::from_secs(10);
+    /// The method a connect plus handshake that runs out of time names.
+    const HANDSHAKE_METHOD: &str = "daemon.handshake";
     /// Exit code for a `STACKLY_ROOT` the daemon would refuse too.
     const EXIT_INVALID_INPUT: u8 = 2;
     /// Exit code when the CLI itself cannot run (no async runtime).
@@ -99,11 +102,18 @@ mod imp {
         Ok((DirectoryLayout::new(roots).daemon_socket(), uid))
     }
 
+    /// Whether the person at this CLI can answer a dialog: stdin and
+    /// stderr are both terminals (spec 0006, *Handshake*; spec 0011).
+    fn interactive() -> bool {
+        std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+    }
+
     async fn status(socket: &Path, uid: u32, json: bool) -> u8 {
         let client = ClientInfo {
             kind: ClientKind::Cli,
             version: env!("CARGO_PKG_VERSION").to_owned(),
             pid: Some(std::process::id()),
+            interactive: Some(interactive()),
         };
         let connected = timeout(
             CONNECT_TIMEOUT,
@@ -113,7 +123,13 @@ mod imp {
         let (client, accepted) = match connected {
             Ok(Ok(connected)) => connected,
             Ok(Err(error)) => return fail(&error.to_error_body(), json, socket),
-            Err(_) => return fail(&IpcError::HandshakeTimeout.to_error_body(), json, socket),
+            Err(_) => {
+                return fail(
+                    &call_timeout(HANDSHAKE_METHOD, CONNECT_TIMEOUT),
+                    json,
+                    socket,
+                );
+            }
         };
         let info = match call(&client, Call::DaemonGetInfo).await {
             Ok(Reply::DaemonGetInfo(info)) => info,
@@ -140,11 +156,17 @@ mod imp {
         let method = call.method();
         match timeout(CALL_TIMEOUT, client.call(call)).await {
             Ok(result) => result,
-            Err(_) => Err(Box::new(
-                ErrorBody::new(&ipc::CALL_TIMEOUT, "the daemon did not answer in time")
-                    .with_detail("method", method),
-            )),
+            Err(_) => Err(Box::new(call_timeout(method, CALL_TIMEOUT))),
         }
+    }
+
+    /// `ipc.call_timeout` for `method` after `limit`. Connecting plus the
+    /// handshake uses the method `daemon.handshake`; `ipc.handshake_timeout`
+    /// stays the daemon's own code. These reads send no idempotency key.
+    fn call_timeout(method: &str, limit: Duration) -> ErrorBody {
+        ErrorBody::new(&ipc::CALL_TIMEOUT, "the daemon did not answer in time")
+            .with_detail("method", method)
+            .with_detail("seconds", limit.as_secs().to_string())
     }
 
     fn violation() -> Box<ErrorBody> {

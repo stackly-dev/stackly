@@ -191,7 +191,7 @@ fn request_lines_carry_the_request_fields_and_never_the_params() {
     let ev = evidence!(
         covers = ["NFR-011"],
         kind = Kind::Fixture,
-        expected = "each request closes with a line holding connection_id, request_id, method, client_kind, duration_ms, and outcome, at debug on success and info on failure, in stderr and the log file, and no params value appears in the log",
+        expected = "each request closes with a line holding connection_id, request_id, method, client_kind, interactive, duration_ms, and outcome, at debug on success and info on failure, in stderr and the log file, and no params value appears in the log",
     );
     let root = TestRoot::new().unwrap();
     let daemon = start_daemon(&root);
@@ -237,6 +237,7 @@ fn request_lines_carry_the_request_fields_and_never_the_params() {
         assert_eq!(info["level"], "DEBUG");
         assert_eq!(field(info, "outcome"), "ok");
         assert_eq!(field(info, "client_kind"), "cli");
+        assert_eq!(field(info, "interactive"), false);
         assert!(field(info, "connection_id").as_u64().is_some());
         assert!(field(info, "duration_ms").as_u64().is_some());
         assert!(
@@ -251,6 +252,13 @@ fn request_lines_carry_the_request_fields_and_never_the_params() {
         assert_eq!(failed["level"], "INFO");
         assert_eq!(field(failed, "outcome"), "error");
         assert_eq!(field(failed, "code"), "events.unknown_subscription");
+        assert_eq!(field(failed, "interactive"), false);
+        let handshake = requests
+            .iter()
+            .find(|line| field(line, "method") == "daemon.handshake")
+            .expect("the handshake line");
+        assert_eq!(field(handshake, "client_kind"), "cli");
+        assert_eq!(field(handshake, "interactive"), false);
     }
     ev.pass();
 }

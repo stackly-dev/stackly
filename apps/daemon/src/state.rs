@@ -10,8 +10,8 @@ use stackly_core::PreparedLayout;
 use stackly_platform::Platform;
 use stackly_protocol::Count;
 use stackly_protocol::daemon::{
-    DaemonCounters, DaemonHealth, DaemonInfo, HealthStatus, SubsystemHealth, SubsystemStatus,
-    subsystem,
+    DaemonCounters, DaemonHealth, DaemonHealthStatus, DaemonInfo, RegistryRecovery,
+    SubsystemHealth, SubsystemStatus, subsystem,
 };
 use stackly_storage::SqliteRegistry;
 use tokio::sync::watch;
@@ -38,13 +38,16 @@ pub enum RegistryState {
     /// The start slot has not opened it yet.
     Opening,
     /// Open and current.
-    Ready,
+    Ready {
+        /// The registry's schema version, for `DaemonInfo.registrySchema`.
+        schema_version: u32,
+    },
     /// Left untouched; the daemon runs in recovery mode until a restart
-    /// after the registry was repaired. `reason` is the recovery reason
-    /// code.
+    /// after the registry was repaired.
     Recovery {
-        /// The recovery reason code, such as `schema_newer_than_app`.
-        reason: &'static str,
+        /// The recovery report, for `DaemonHealth.recovery` and for
+        /// `registry.recovery_mode`.
+        recovery: RegistryRecovery,
     },
     /// The registry stopped working; the daemon stops.
     Failed,
@@ -161,9 +164,21 @@ impl DaemonCore {
         }
     }
 
-    /// The reply of `daemon.get_info`.
+    /// The reply of `daemon.get_info`: the facts recorded at start, plus
+    /// the registry schema once the registry opened ready.
     #[must_use]
-    pub const fn info(&self) -> &DaemonInfo {
+    pub fn info(&self) -> DaemonInfo {
+        let mut info = self.info.clone();
+        info.registry_schema = match self.registry_state() {
+            RegistryState::Ready { schema_version } => Some(schema_version),
+            _ => None,
+        };
+        info
+    }
+
+    /// The facts recorded at start, which never change during a run.
+    #[must_use]
+    pub const fn start_info(&self) -> &DaemonInfo {
         &self.info
     }
 
@@ -248,7 +263,16 @@ impl DaemonCore {
     /// Whether the registry is in recovery mode.
     #[must_use]
     pub fn in_recovery(&self) -> bool {
-        matches!(self.registry_state(), RegistryState::Recovery { .. })
+        self.recovery().is_some()
+    }
+
+    /// The recovery report while the registry is in recovery mode.
+    #[must_use]
+    pub fn recovery(&self) -> Option<RegistryRecovery> {
+        match &*lock(&self.registry_state) {
+            RegistryState::Recovery { recovery } => Some(recovery.clone()),
+            _ => None,
+        }
     }
 
     /// Records the registry state, and the handle when it is ready.
@@ -333,8 +357,9 @@ impl DaemonCore {
                 subsystem_health(subsystem::IPC, SubsystemStatus::Unavailable, Some(detail))
             }
         };
-        let registry = match self.registry_state() {
-            RegistryState::Ready => {
+        let registry_state = self.registry_state();
+        let registry = match &registry_state {
+            RegistryState::Ready { .. } => {
                 subsystem_health(subsystem::REGISTRY, SubsystemStatus::Ok, None)
             }
             RegistryState::Opening => subsystem_health(
@@ -342,10 +367,10 @@ impl DaemonCore {
                 SubsystemStatus::Unavailable,
                 Some("the registry is opening".to_owned()),
             ),
-            RegistryState::Recovery { reason } => subsystem_health(
+            RegistryState::Recovery { recovery } => subsystem_health(
                 subsystem::REGISTRY,
                 SubsystemStatus::Unavailable,
-                Some(format!("the registry needs recovery ({reason})")),
+                Some(format!("the registry needs recovery ({})", recovery.reason)),
             ),
             RegistryState::Failed => subsystem_health(
                 subsystem::REGISTRY,
@@ -362,8 +387,8 @@ impl DaemonCore {
             subsystem_health(subsystem::SUPERVISOR, SubsystemStatus::NotBuilt, None),
         ];
         let status = match self.phase() {
-            Phase::Starting => HealthStatus::Starting,
-            Phase::Stopping => HealthStatus::Stopping,
+            Phase::Starting => DaemonHealthStatus::Starting,
+            Phase::Stopping => DaemonHealthStatus::Stopping,
             Phase::Ready => {
                 let lowered = subsystems.iter().any(|health| {
                     matches!(
@@ -372,9 +397,9 @@ impl DaemonCore {
                     )
                 });
                 if lowered {
-                    HealthStatus::Degraded
+                    DaemonHealthStatus::Degraded
                 } else {
-                    HealthStatus::Ready
+                    DaemonHealthStatus::Ready
                 }
             }
         };
@@ -391,6 +416,10 @@ impl DaemonCore {
                 events_dropped: self.bus.dropped(),
                 log_lines_dropped: self.log.dropped(),
                 socket_rebinds: Counters::get(&counters.socket_rebinds),
+            },
+            recovery: match registry_state {
+                RegistryState::Recovery { recovery } => Some(recovery),
+                _ => None,
             },
         }
     }

@@ -4,16 +4,18 @@
 //! real use case, so a test can wrap it to hold, slow, or break one method
 //! and keep the rest. The connection runs `daemon.handshake`,
 //! `events.subscribe`, and `events.unsubscribe` itself, because they act
-//! on the connection rather than on a use case.
+//! on the connection rather than on a use case. Whether a method is served
+//! in recovery mode is its `methods!` table line in `stackly-protocol`
+//! ([`Call::allowed_in_recovery`](stackly_protocol::Call::allowed_in_recovery)).
 
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Instant;
 
 use stackly_ipc::PeerCred;
+use stackly_protocol::ErrorBody;
 use stackly_protocol::daemon::{Capabilities, DaemonHealth, DaemonInfo};
 use stackly_protocol::handshake::ClientInfo;
-use stackly_protocol::{Call, ErrorBody};
 
 use crate::map;
 use crate::state::DaemonCore;
@@ -96,9 +98,10 @@ pub struct DefaultHandlers;
 
 impl Handlers for DefaultHandlers {}
 
-/// The real `daemon.get_info`: the facts recorded at start.
+/// The real `daemon.get_info`: the facts recorded at start, plus the
+/// registry schema once the registry opened ready.
 pub fn get_info(core: &DaemonCore) -> HandlerFuture<'_, DaemonInfo> {
-    Box::pin(async move { Ok(core.info().clone()) })
+    Box::pin(async move { Ok(core.info()) })
 }
 
 /// The real `daemon.get_health`: the state right now.
@@ -109,54 +112,4 @@ pub fn get_health(core: &DaemonCore) -> HandlerFuture<'_, DaemonHealth> {
 /// The real `daemon.get_capabilities`.
 pub fn get_capabilities(core: &DaemonCore) -> HandlerFuture<'_, Capabilities> {
     Box::pin(async move { Ok(map::capabilities(core.platform().info())) })
-}
-
-/// Whether a method is answered while the registry is in recovery mode
-/// (spec 0005, *Recovery mode*). Every method of spec 0006 is: none of them
-/// reads or writes the registry. A method that is not must not be added
-/// before its owner defines the recovery error code; the dispatcher treats
-/// one as a broken invariant.
-#[must_use]
-pub const fn allowed_in_recovery(call: &Call) -> bool {
-    match call {
-        Call::DaemonHandshake(_)
-        | Call::DaemonGetInfo
-        | Call::DaemonGetHealth
-        | Call::DaemonGetCapabilities
-        | Call::EventsSubscribe(_)
-        | Call::EventsUnsubscribe(_) => true,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use stackly_protocol::events::{SubscribeParams, UnsubscribeParams};
-    use stackly_protocol::handshake::{ClientKind, HandshakeParams};
-    use stackly_protocol::{CONTRACT_DIGEST, ProtocolVersion};
-
-    use super::*;
-
-    #[test]
-    fn every_method_of_spec_0006_is_allowed_in_recovery() {
-        let calls = [
-            Call::DaemonHandshake(HandshakeParams {
-                protocol: ProtocolVersion::CURRENT,
-                client: ClientInfo {
-                    kind: ClientKind::Cli,
-                    version: "0.1.0".to_owned(),
-                    pid: None,
-                },
-                contract_digest: CONTRACT_DIGEST.to_owned(),
-            }),
-            Call::DaemonGetInfo,
-            Call::DaemonGetHealth,
-            Call::DaemonGetCapabilities,
-            Call::EventsSubscribe(SubscribeParams::default()),
-            Call::EventsUnsubscribe(UnsubscribeParams { subscription_id: 1 }),
-        ];
-        let methods: Vec<_> = calls.iter().map(Call::method).collect();
-        assert_eq!(methods, Call::METHODS);
-
-        assert!(calls.iter().all(allowed_in_recovery));
-    }
 }

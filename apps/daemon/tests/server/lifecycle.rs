@@ -1,22 +1,50 @@
-//! The server's life (spec 0006 AC-11, AC-12, AC-18 in part): bind,
-//! `starting` during the start slot, recovery mode, the socket check, the
-//! stop order, and the context handlers receive.
+//! The server's life (spec 0006 AC-11, AC-12, AC-18, AC-19): bind,
+//! `starting` during the start slot, recovery mode and the retries before
+//! it, the socket check, the stop order, and the context handlers
+//! receive.
 
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use stackly_ipc::{ConnectPolicy, IpcError, connect_verified};
-use stackly_protocol::codes::{daemon, ipc};
-use stackly_protocol::daemon::{HealthStatus, SubsystemStatus, subsystem};
+use stackly_protocol::codes::{daemon, ipc, registry};
+use stackly_protocol::daemon::{DaemonHealthStatus, SubsystemStatus, subsystem};
 use stackly_protocol::events::ShutdownReason;
+use stackly_protocol::handshake::ClientKind;
 use stackly_protocol::{Call, Reply};
+use stackly_storage::OpenOptions;
 use stackly_testkit::evidence::{Kind, evidence};
+use stacklyd::connection::recovery_refusal;
 use stacklyd::dispatch::{HandlerFuture, Handlers, RequestContext, get_info};
 use stacklyd::server::{self, DaemonConfig, StartError};
 use stacklyd::state::DaemonCore;
 
-use crate::common::{Hold, HoldInfo, PATIENCE, Raw, Site, client, error_of, request};
+use crate::common::{
+    Hold, HoldInfo, Logs, PATIENCE, Raw, RegistryHolder, Site, client, client_as, error_of, request,
+};
+
+/// The line the start slot logs before each new try at a locked registry.
+const LOCKED_RETRY: &str = "another process holds the registry; trying again";
+
+/// A config whose registry open gives up on a held lock after 50 ms and
+/// waits `wait` between tries.
+fn locked_config(wait: Duration) -> DaemonConfig {
+    let mut config = DaemonConfig::default();
+    config.registry_open = OpenOptions::new().with_busy_timeout(Duration::from_millis(50));
+    config.registry_locked_retries = vec![wait; 3];
+    config
+}
+
+/// Writes a schema version newer than the app into the registry header, so
+/// the next open reports `schema_newer_than_app`.
+fn make_schema_newer(site: &Site) -> std::path::PathBuf {
+    let db = site.prepared.layout().registry_db();
+    let mut bytes = std::fs::read(&db).expect("the registry file can be read");
+    bytes[60..64].copy_from_slice(&999_u32.to_be_bytes());
+    std::fs::write(&db, &bytes).expect("the registry file can be written");
+    db
+}
 
 fn status_of(health: &stackly_protocol::daemon::DaemonHealth, name: &str) -> SubsystemStatus {
     health
@@ -36,7 +64,7 @@ async fn health_reports_starting_while_the_start_slot_is_held_then_ready() {
     let Reply::DaemonGetHealth(health) = client.call(Call::DaemonGetHealth).await.unwrap() else {
         panic!("not a health reply");
     };
-    assert_eq!(health.status, HealthStatus::Starting);
+    assert_eq!(health.status, DaemonHealthStatus::Starting);
     assert_eq!(
         status_of(&health, subsystem::REGISTRY),
         SubsystemStatus::Unavailable
@@ -50,9 +78,14 @@ async fn health_reports_starting_while_the_start_slot_is_held_then_ready() {
     daemon.started().await;
 
     let health = daemon.health();
-    assert_eq!(health.status, HealthStatus::Ready, "{health:?}");
+    assert_eq!(health.status, DaemonHealthStatus::Ready, "{health:?}");
     assert_eq!(status_of(&health, subsystem::REGISTRY), SubsystemStatus::Ok);
     assert_eq!(status_of(&health, subsystem::IPC), SubsystemStatus::Ok);
+    assert_eq!(health.recovery, None);
+    assert_eq!(
+        daemon.info().registry_schema,
+        Some(stackly_storage::MigrationSet::builtin().latest())
+    );
     assert_eq!(
         status_of(&health, subsystem::OPERATIONS),
         SubsystemStatus::NotBuilt
@@ -63,22 +96,47 @@ async fn health_reports_starting_while_the_start_slot_is_held_then_ready() {
 
 #[tokio::test]
 async fn a_registry_in_recovery_keeps_the_daemon_serving_with_a_degraded_health() {
+    let ev = evidence!(
+        covers = ["REQ-048"],
+        kind = Kind::Fixture,
+        expected = "a registry newer than the app leaves stacklyd serving in recovery mode with the report in get_health, the file untouched, and no prune",
+    );
     let site = Site::new();
     let first = site.start().await;
     first
         .shutdown(ShutdownReason::Requested, std::future::pending())
         .await;
-    let db = site.prepared.layout().registry_db();
-    let mut bytes = std::fs::read(&db).unwrap();
-    bytes[60..64].copy_from_slice(&999_u32.to_be_bytes());
-    std::fs::write(&db, &bytes).unwrap();
+    let db = make_schema_newer(&site);
     let before = std::fs::read(&db).unwrap();
 
+    let logs = Logs::capture();
     let daemon = site.start().await;
     let (client, _) = client(&site).await;
 
     let health = daemon.health();
-    assert_eq!(health.status, HealthStatus::Degraded);
+    assert_eq!(health.status, DaemonHealthStatus::Degraded);
+    let recovery = health
+        .recovery
+        .clone()
+        .expect("get_health carries the report");
+    assert_eq!(recovery.reason, "schema_newer_than_app");
+    assert_eq!(recovery.db_schema_version, Some(999));
+    assert!(recovery.app_schema_version >= 1);
+    assert!(
+        std::path::Path::new(&recovery.report_path).is_file(),
+        "{recovery:?}"
+    );
+    let Ok(stackly_protocol::Reply::DaemonGetHealth(served)) =
+        client.call(Call::DaemonGetHealth).await
+    else {
+        panic!("not a health reply");
+    };
+    assert_eq!(served.recovery, Some(recovery));
+    let Ok(stackly_protocol::Reply::DaemonGetInfo(info)) = client.call(Call::DaemonGetInfo).await
+    else {
+        panic!("not an info reply");
+    };
+    assert_eq!(info.registry_schema, None);
     let registry = health
         .subsystems
         .iter()
@@ -106,6 +164,145 @@ async fn a_registry_in_recovery_keeps_the_daemon_serving_with_a_degraded_health(
         before,
         "the registry file changed"
     );
+    let lines = logs.lines();
+    assert!(
+        lines
+            .iter()
+            .any(|line| line["fields"]["registry_state"] == "recovery"),
+        "{lines:?}"
+    );
+    assert!(
+        lines.iter().all(|line| {
+            line["fields"]["pruned_rows"].is_null()
+                && line["fields"]["message"] != "registry history pruned"
+        }),
+        "a prune ran in recovery mode: {lines:?}"
+    );
+    ev.pass();
+}
+
+#[tokio::test]
+async fn in_recovery_mode_a_method_refused_there_gets_recovery_mode_and_no_handler_runs() {
+    let site = Site::new();
+    let first = site.start().await;
+    first
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    make_schema_newer(&site);
+
+    let daemon = site.start().await;
+
+    let recovery = daemon
+        .health()
+        .recovery
+        .expect("the daemon is in recovery mode");
+    let error = recovery_refusal(daemon.core(), false).expect("a refused method is answered");
+    assert!(error.is(&registry::RECOVERY_MODE));
+    assert_eq!(error.detail("reason"), Some("schema_newer_than_app"));
+    assert_eq!(
+        error.detail("reportPath"),
+        Some(recovery.report_path.as_str())
+    );
+    assert!(error.hint().is_some());
+    assert_eq!(
+        error.category(),
+        stackly_protocol::ErrorCategory::Unavailable
+    );
+    assert!(!error.retryable());
+    assert!(recovery_refusal(daemon.core(), true).is_none());
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+}
+
+#[tokio::test]
+async fn outside_recovery_mode_no_method_is_refused_for_recovery() {
+    let site = Site::new();
+    let daemon = site.start().await;
+
+    assert!(recovery_refusal(daemon.core(), false).is_none());
+    assert!(recovery_refusal(daemon.core(), true).is_none());
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+}
+
+#[tokio::test]
+async fn a_registry_another_process_holds_is_tried_three_more_times_before_recovery() {
+    let ev = evidence!(
+        covers = ["REQ-048"],
+        kind = Kind::Fixture,
+        expected = "while another process holds the registry write lock, the start slot tries the open three more times, then enters recovery mode with reason registry_locked and prunes nothing",
+    );
+    let site = Site::new();
+    let first = site.start().await;
+    first
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    let holder = RegistryHolder::lock(&site.prepared.layout().registry_db());
+
+    let logs = Logs::capture();
+    let daemon = site
+        .start_configured(locked_config(Duration::from_millis(10)))
+        .await;
+
+    let retries = logs.with_message(LOCKED_RETRY);
+    assert_eq!(retries.len(), 3, "{:?}", logs.lines());
+    let health = daemon.health();
+    assert_eq!(health.status, DaemonHealthStatus::Degraded);
+    assert_eq!(
+        health.recovery.map(|recovery| recovery.reason).as_deref(),
+        Some("registry_locked")
+    );
+    assert!(
+        logs.lines()
+            .iter()
+            .all(|line| line["fields"]["pruned_rows"].is_null()),
+        "a prune ran in recovery mode"
+    );
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    holder.release();
+    ev.pass();
+}
+
+#[tokio::test]
+async fn a_registry_lock_released_during_the_retries_opens_ready_and_prunes_once() {
+    let site = Site::new();
+    let first = site.start().await;
+    first
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+    let holder = RegistryHolder::lock(&site.prepared.layout().registry_db());
+
+    let logs = Logs::capture();
+    let mut config = locked_config(Duration::from_millis(300));
+    let (gate, held) = tokio::sync::watch::channel(false);
+    config.start_gate = Some(held);
+    let daemon = server::start(site.deps().with_config(config))
+        .await
+        .expect("the server starts");
+    gate.send_replace(true);
+    let deadline = Instant::now() + PATIENCE;
+    while logs.with_message(LOCKED_RETRY).is_empty() {
+        assert!(Instant::now() < deadline, "the start slot never retried");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    holder.release();
+    daemon.started().await;
+
+    let health = daemon.health();
+    assert_eq!(health.status, DaemonHealthStatus::Ready, "{health:?}");
+    assert_eq!(health.recovery, None);
+    let retries = logs.with_message(LOCKED_RETRY).len();
+    assert!((1..=3).contains(&retries), "{retries} retries");
+    let ready = logs.with_message("registry ready");
+    assert_eq!(ready.len(), 1, "{:?}", logs.lines());
+    assert!(ready[0]["fields"]["pruned_rows"].is_number(), "{ready:?}");
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
 }
 
 #[tokio::test]
@@ -200,7 +397,7 @@ async fn a_socket_and_runtime_root_removed_while_serving_come_back_at_the_next_c
     assert_eq!(daemon.health().counters.socket_rebinds.get(), 1);
     let mode = std::fs::metadata(&runtime).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o700);
-    assert_eq!(daemon.health().status, HealthStatus::Ready);
+    assert_eq!(daemon.health().status, DaemonHealthStatus::Ready);
 }
 
 #[tokio::test]
@@ -309,18 +506,70 @@ impl Handlers for RecordContext {
 async fn handlers_receive_the_peer_and_the_client_of_their_connection() {
     let site = Site::new();
     let record = RecordContext::default();
+    let logs = Logs::capture();
     let _daemon = site.start_with(record.clone()).await;
-    let (client, _) = client(&site).await;
 
-    client.call(Call::DaemonGetInfo).await.unwrap();
-
+    // A client from before `interactive`: it never sends the flag.
+    let (older, _) = client(&site).await;
+    older.call(Call::DaemonGetInfo).await.unwrap();
     let context = record.0.lock().unwrap().clone().expect("the handler ran");
     assert_eq!(context.peer.uid, site.uid());
     assert_eq!(context.peer.pid, Some(std::process::id()));
-    assert_eq!(
-        context.client.kind,
-        stackly_protocol::handshake::ClientKind::Cli
-    );
+    assert_eq!(context.client.kind, ClientKind::Cli);
+    assert_eq!(context.client.interactive, None);
+    assert!(!context.client.is_interactive());
     assert!(context.connection_id >= 1);
     assert!(!context.request_id.is_empty());
+    let older_request = context.request_id.clone();
+
+    // The GUI always says it can show a dialog.
+    let (gui, _) = client_as(&site, ClientKind::Gui, Some(true)).await;
+    gui.call(Call::DaemonGetInfo).await.unwrap();
+    let context = record.0.lock().unwrap().clone().expect("the handler ran");
+    assert_eq!(context.client.kind, ClientKind::Gui);
+    assert!(context.client.is_interactive());
+    let gui_request = context.request_id.clone();
+
+    let lines = logs.with_message("request");
+    let line_of = |request_id: &str| {
+        lines
+            .iter()
+            .find(|line| {
+                line["fields"]["request_id"] == request_id
+                    && line["fields"]["method"] == "daemon.get_info"
+            })
+            .unwrap_or_else(|| panic!("no request line for {request_id}: {lines:?}"))
+            .clone()
+    };
+    let older_line = line_of(&older_request);
+    assert_eq!(older_line["fields"]["client_kind"], "cli");
+    assert_eq!(older_line["fields"]["interactive"], false);
+    let gui_line = line_of(&gui_request);
+    assert_eq!(gui_line["fields"]["client_kind"], "gui");
+    assert_eq!(gui_line["fields"]["interactive"], true);
+
+    let handshakes = logs.with_message("handshake accepted");
+    let flags: Vec<_> = handshakes
+        .iter()
+        .map(|line| {
+            (
+                line["fields"]["client_kind"].clone(),
+                line["fields"]["interactive"].clone(),
+            )
+        })
+        .collect();
+    assert!(
+        flags.contains(&(serde_json::json!("cli"), serde_json::json!(false))),
+        "{flags:?}"
+    );
+    assert!(
+        flags.contains(&(serde_json::json!("gui"), serde_json::json!(true))),
+        "{flags:?}"
+    );
+    let handshake_requests: Vec<_> = lines
+        .iter()
+        .filter(|line| line["fields"]["method"] == "daemon.handshake")
+        .map(|line| line["fields"]["interactive"].clone())
+        .collect();
+    assert_eq!(handshake_requests.len(), 2, "{lines:?}");
 }

@@ -1,5 +1,6 @@
 import Foundation
 import StacklyClient
+import Synchronization
 import Testing
 
 /// The link's status, waits, and heartbeat against a fake daemon, a manual
@@ -76,7 +77,7 @@ struct DaemonLinkTests {
                 ErrorDetail(key: "serverMajor", value: "2"),
                 ErrorDetail(key: "serverMinor", value: "3"),
             ],
-            operationId: nil, rule: nil)
+            operationId: nil, rule: nil, items: nil)
         server.serve { session in
             let request = try session.readRequest()
             try session.fail(request.requestId, with: mismatch)
@@ -123,6 +124,28 @@ struct DaemonLinkTests {
         _ = await states.next { if case .connected = $0 { true } else { false } }
         let after = await states.next { if case .unreachable = $0 { true } else { false } }
         #expect(Self.wait(after) == 0.5)
+        await link.stop()
+    }
+
+    @Test func theLinkHandshakesAsAnInteractiveGuiClient() async throws {
+        let server = try FakeDaemonServer(path: root.endpoint.socketPath)
+        let sent = Mutex<ClientInfo?>(nil)
+        server.serve { session in
+            let request = try session.acceptHandshake()
+            if case .daemonHandshake(let params) = request.call {
+                sent.withLock { $0 = params.client }
+            }
+            try session.answerInfoAndHealth()
+        }
+        let link = makeLink()
+        var states = StateWatcher(link)
+        await link.start()
+        _ = await states.next { if case .connected = $0 { true } else { false } }
+        let client = try #require(sent.withLock { $0 })
+        #expect(client.kind == .gui)
+        #expect(client.interactive == true)
+        #expect(client.version == "0.1.0")
+        #expect(client.pid == 42)
         await link.stop()
     }
 
@@ -192,7 +215,9 @@ struct DaemonLinkTests {
             Issue.record("expected unreachable")
             return
         }
-        #expect(error == ClientErrorCatalog.callTimeout(method: "daemon.get_health"))
+        #expect(
+            error
+                == ClientErrorCatalog.callTimeout(method: "daemon.get_health", limit: .seconds(10)))
         await link.stop()
     }
 

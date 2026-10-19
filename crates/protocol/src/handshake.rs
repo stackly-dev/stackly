@@ -60,7 +60,8 @@ pub fn is_contract_digest(text: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-/// Who a client is, for the daemon log.
+/// Who a client is: for the daemon log, and for handlers that pick how to
+/// interact with the person behind it (spec 0011).
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -73,10 +74,24 @@ pub struct ClientInfo {
     /// The client's process ID, when it shares it.
     #[serde(default)]
     pub pid: Option<u32>,
+    /// True when the client can show a dialog the person sees right now:
+    /// always for the GUI, for the CLI only when stdin and stderr are both
+    /// terminals. Absent means false, so an older client never triggers a
+    /// dialog.
+    #[serde(default)]
+    pub interactive: Option<bool>,
+}
+
+impl ClientInfo {
+    /// Whether the client said it can show a dialog; absent means false.
+    #[must_use]
+    pub fn is_interactive(&self) -> bool {
+        self.interactive.unwrap_or(false)
+    }
 }
 
 /// The kinds of client. Open: a newer client may send a value an older
-/// daemon reads as `unknown`.
+/// daemon reads as `unrecognized`.
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -87,7 +102,7 @@ pub enum ClientKind {
     Gui,
     /// A kind this build does not know. The daemon never sends it.
     #[serde(other)]
-    Unknown,
+    Unrecognized,
 }
 
 /// Reply of `daemon.handshake` when the majors match and the params are
@@ -148,6 +163,7 @@ mod tests {
                 kind: ClientKind::Cli,
                 version: version.to_owned(),
                 pid: Some(42),
+                interactive: None,
             },
             contract_digest: digest.to_owned(),
         }
@@ -201,9 +217,21 @@ mod tests {
     }
 
     #[test]
-    fn unknown_client_kinds_decode_as_unknown() {
+    fn an_absent_interactive_flag_means_not_interactive() {
+        let client: ClientInfo =
+            serde_json::from_str(r#"{"kind":"cli","version":"0.1.0","pid":null}"#).unwrap();
+        assert_eq!(client.interactive, None);
+        assert!(!client.is_interactive());
+
+        let client: ClientInfo =
+            serde_json::from_str(r#"{"kind":"gui","version":"0.1.0","interactive":true}"#).unwrap();
+        assert!(client.is_interactive());
+    }
+
+    #[test]
+    fn foreign_client_kinds_decode_as_unrecognized() {
         let kind: ClientKind = serde_json::from_str("\"watch_app\"").unwrap();
-        assert_eq!(kind, ClientKind::Unknown);
+        assert_eq!(kind, ClientKind::Unrecognized);
         assert_eq!(serde_json::to_string(&ClientKind::Gui).unwrap(), "\"gui\"");
     }
 }

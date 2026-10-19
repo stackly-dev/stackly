@@ -149,7 +149,7 @@ final class FakeSession: @unchecked Sendable {
     /// Accepts the handshake, then answers the link's `daemon.get_info` and
     /// `daemon.get_health`.
     func startAsDaemon(
-        health: HealthStatus = .ready,
+        health: DaemonHealthStatus = .ready,
         serverInstanceId: UUID = Samples.serverInstanceId
     ) throws {
         let request = try readRequest()
@@ -163,7 +163,7 @@ final class FakeSession: @unchecked Sendable {
     }
 
     /// Answers the next `daemon.get_info` and `daemon.get_health`.
-    func answerInfoAndHealth(health: HealthStatus = .ready) throws {
+    func answerInfoAndHealth(health: DaemonHealthStatus = .ready) throws {
         let info = try readRequest()
         try reply(to: info, with: .daemonGetInfo(Samples.info))
         let check = try readRequest()
@@ -278,19 +278,20 @@ enum Samples {
         roots: DaemonRoots(
             data: "/d/data", logs: "/d/logs", cache: "/d/cache", runtime: "/t/stackly",
             rootOverride: true),
-        socketPath: "/t/stackly/stacklyd.sock")
+        socketPath: "/t/stackly/stacklyd.sock", registrySchema: 2)
 
     /// A `daemon.get_health` reply with `status`.
-    static func health(_ status: HealthStatus) -> DaemonHealth {
+    static func health(_ status: DaemonHealthStatus) -> DaemonHealth {
         DaemonHealth(
             status: status, subsystems: [],
             counters: DaemonCounters(
                 connectionsOpen: 1, connectionsTotal: 1, connectionsRejected: 0, framesRejected: 0,
-                eventsPublished: 0, eventsDropped: 0, logLinesDropped: 0, socketRebinds: 0))
+                eventsPublished: 0, eventsDropped: 0, logLinesDropped: 0, socketRebinds: 0),
+            recovery: nil)
     }
 
     /// The client info tests send.
-    static let client = ClientInfo(kind: .gui, version: "0.1.0", pid: 42)
+    static let client = ClientInfo(kind: .gui, version: "0.1.0", pid: 42, interactive: true)
 
     /// A daemon error body.
     static func error(_ code: String, _ category: ErrorCategory, message: String = "refused")
@@ -298,7 +299,7 @@ enum Samples {
     {
         ErrorBody(
             code: code, category: category, message: message, retryable: false, resource: nil,
-            fields: nil, hint: nil, details: nil, operationId: nil, rule: nil)
+            fields: nil, hint: nil, details: nil, operationId: nil, rule: nil, items: nil)
     }
 
     /// A call with a unit reply, for tests that only need some call.

@@ -228,13 +228,29 @@ pub struct ResourceRef {
     /// What kind of resource this is.
     pub kind: ResourceKind,
     /// The canonical text of the resource key: a lowercase UUID for
-    /// runtimes, instances, environments, operations, and backups. Spec 0009
-    /// fixes the form for providers.
+    /// runtimes, instances, environments, operations, and backups,
+    /// [`ResourceRef::MANAGER_ID`] for the manager. Spec 0009 fixes the
+    /// form for providers.
     pub id: String,
 }
 
+impl ResourceRef {
+    /// The `id` of the one [`ResourceKind::Manager`] resource (spec 0007).
+    pub const MANAGER_ID: &str = "self";
+
+    /// The manager itself, `{ kind: manager, id: "self" }`: the resource of
+    /// an `update_manager` operation (spec 0007).
+    #[must_use]
+    pub fn manager() -> Self {
+        Self {
+            kind: ResourceKind::Manager,
+            id: Self::MANAGER_ID.to_owned(),
+        }
+    }
+}
+
 /// The kinds of resource Stackly tracks. Open: a newer daemon may add
-/// values, which older clients read as `unknown`.
+/// values, which older clients read as `unrecognized`.
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -251,9 +267,12 @@ pub enum ResourceKind {
     Provider,
     /// A backup of an instance.
     Backup,
+    /// Stackly itself, the target of an `update_manager` operation; its
+    /// `id` is always [`ResourceRef::MANAGER_ID`] (spec 0007).
+    Manager,
     /// A kind this build does not know. The daemon never sends it.
     #[serde(other)]
-    Unknown,
+    Unrecognized,
 }
 
 #[cfg(test)]
@@ -319,10 +338,16 @@ mod tests {
     }
 
     #[test]
-    fn unknown_resource_kinds_decode_as_unknown() {
+    fn foreign_resource_kinds_decode_as_unrecognized() {
         let kind: ResourceKind = serde_json::from_str("\"volume\"").unwrap();
-        assert_eq!(kind, ResourceKind::Unknown);
+        assert_eq!(kind, ResourceKind::Unrecognized);
         let known: ResourceKind = serde_json::from_str("\"instance\"").unwrap();
         assert_eq!(known, ResourceKind::Instance);
+    }
+
+    #[test]
+    fn the_manager_is_one_resource_with_the_id_self() {
+        let json = serde_json::to_value(ResourceRef::manager()).unwrap();
+        assert_eq!(json, serde_json::json!({ "kind": "manager", "id": "self" }));
     }
 }

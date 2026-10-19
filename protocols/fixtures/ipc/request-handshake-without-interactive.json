@@ -1,0 +1,19 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000001",
+  "idempotencyKey": null,
+  "call": {
+    "type": "daemon.handshake",
+    "content": {
+      "protocol": {
+        "major": 1,
+        "minor": 0
+      },
+      "client": {
+        "kind": "gui",
+        "version": "0.1.0",
+        "pid": 4242
+      },
+      "contractDigest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  }
+}
