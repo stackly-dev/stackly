@@ -118,10 +118,10 @@ Daemon per user dengan protokol berversi di atas encoding dan framing yang dikun
   - [x] Daemon library, lock, and log: `stacklyd` as library plus bin, `--print-roots`, single daemon lock, rotating log writer (spec 0006 AC-4, AC-12, AC-17; after milestone 1)
   - [x] Daemon server and `stackly daemon status` end to end: event bus, handshake, limits, socket watch, shutdown, CLI status, performance, and the manual two account check (spec 0006 AC-1, AC-2, AC-4, AC-5, AC-7, AC-9, AC-11, AC-12, AC-13, AC-15, AC-16, AC-18, AC-19; needs the three milestones above; the two account check and the temporary folder observation are recorded BLOCKED in `evidence/manual/` until this Mac has a second account and a reboot is observed)
   - [x] Framing fuzz targets on this Mac: `fuzz/` with a pinned nightly, `cargo xtask fuzz`, 5 minute runs with evidence (spec 0006 AC-14; after milestone 1)
-- [ ] Verify it: `/check verify protokol IPC & daemon`
-- [ ] Test it: `/test protokol IPC & daemon`
-- [ ] Review it (fresh model): `/check review protokol IPC & daemon`
-- [ ] Document it: `/document protokol IPC & daemon`
+- [x] Verify it: `/check verify protokol IPC & daemon`
+- [x] Test it: `/test protokol IPC & daemon`
+- [x] Review it (fresh model): `/check review protokol IPC & daemon`
+- [x] Document it: `/document protokol IPC & daemon`
 
 ### 7. Operation engine · in-progress · GA
 
