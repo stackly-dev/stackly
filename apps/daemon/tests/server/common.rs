@@ -1,11 +1,13 @@
 //! Helpers for the in process server tests: a test root with the daemon
 //! lock held, a server started on it, raw frame IO for clients written by
-//! hand, and wrapped handlers that hold or break one method.
+//! hand, wrapped handlers that hold or break one method, captured log
+//! lines, and a second process that holds the registry's write lock.
 
-use std::io;
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -105,6 +107,15 @@ impl Site {
     /// Starts a server with `handlers` and waits for the start slot.
     pub async fn start_with(&self, handlers: impl Handlers) -> DaemonHandle {
         let handle = server::start(self.deps().with_handlers(handlers))
+            .await
+            .expect("the server starts");
+        handle.started().await;
+        handle
+    }
+
+    /// Starts a server with `config` and waits for the start slot.
+    pub async fn start_configured(&self, config: DaemonConfig) -> DaemonHandle {
+        let handle = server::start(self.deps().with_config(config))
             .await
             .expect("the server starts");
         handle.started().await;
@@ -260,19 +271,146 @@ pub fn error_of(frame: &Value) -> ErrorBody {
     body
 }
 
-/// A typed client of the test's uid.
+/// A typed client of the test's uid, as a `cli` client from before
+/// `interactive` existed: it does not send the flag.
 pub async fn client(site: &Site) -> (Client, HandshakeAccepted) {
+    client_as(site, ClientKind::Cli, None).await
+}
+
+/// A typed client of the test's uid with the given kind and
+/// `interactive` flag.
+pub async fn client_as(
+    site: &Site,
+    kind: ClientKind,
+    interactive: Option<bool>,
+) -> (Client, HandshakeAccepted) {
     Client::connect(
         &site.socket(),
         ConnectPolicy::same_user(site.uid()),
         ClientInfo {
-            kind: ClientKind::Cli,
+            kind,
             version: "0.1.0".to_owned(),
             pid: Some(std::process::id()),
+            interactive,
         },
     )
     .await
     .expect("the client connects")
+}
+
+/// The JSON log lines of the current thread while it lives. The in process
+/// tests run on tokio's current thread runtime, so every task the server
+/// spawns logs here; blocking tasks on other threads do not.
+pub struct Logs {
+    buffer: Arc<Mutex<Vec<u8>>>,
+    _guard: tracing::subscriber::DefaultGuard,
+}
+
+#[derive(Clone)]
+struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+
+impl Write for LogBuffer {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Logs {
+    /// Captures every line at `debug` and above, as the daemon writes them.
+    pub fn capture() -> Self {
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let writer = LogBuffer(Arc::clone(&buffer));
+        let subscriber = tracing_subscriber::fmt()
+            .json()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_writer(move || writer.clone())
+            .finish();
+        Self {
+            buffer,
+            _guard: tracing::subscriber::set_default(subscriber),
+        }
+    }
+
+    /// Every line captured so far.
+    pub fn lines(&self) -> Vec<Value> {
+        let bytes = self
+            .buffer
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        String::from_utf8_lossy(&bytes)
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("each log line is JSON"))
+            .collect()
+    }
+
+    /// The lines whose message is `message`.
+    pub fn with_message(&self, message: &str) -> Vec<Value> {
+        self.lines()
+            .into_iter()
+            .filter(|line| line["fields"]["message"] == message)
+            .collect()
+    }
+}
+
+/// Another process that holds the registry's write transaction open, the
+/// way a second SQLite tool would: `/usr/bin/sqlite3` with `BEGIN
+/// IMMEDIATE` pending. Dropping it ends the process and its transaction.
+pub struct RegistryHolder {
+    child: Child,
+    stdin: Option<ChildStdin>,
+}
+
+impl RegistryHolder {
+    /// Starts the holder on `db` and returns once its transaction began.
+    pub fn lock(db: &Path) -> Self {
+        let mut child = Command::new("/usr/bin/sqlite3")
+            .arg(db)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("the system sqlite3 starts");
+        let mut stdin = child.stdin.take().expect("the holder's stdin is piped");
+        stdin
+            .write_all(b"BEGIN IMMEDIATE;\nSELECT 'locked';\n")
+            .expect("the holder reads its commands");
+        stdin.flush().expect("the holder reads its commands");
+        let stdout = child.stdout.take().expect("the holder's stdout is piped");
+        let mut line = String::new();
+        BufReader::new(stdout)
+            .read_line(&mut line)
+            .expect("the holder answers");
+        assert_eq!(line.trim(), "locked", "the holder did not take the lock");
+        Self {
+            child,
+            stdin: Some(stdin),
+        }
+    }
+
+    /// Ends the transaction and the process.
+    pub fn release(mut self) {
+        if let Some(mut stdin) = self.stdin.take() {
+            let _ = stdin.write_all(b"ROLLBACK;\n.quit\n");
+        }
+        let _ = self.child.wait();
+    }
+}
+
+impl Drop for RegistryHolder {
+    fn drop(&mut self) {
+        drop(self.stdin.take());
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
 }
 
 /// A gate a held handler waits behind.

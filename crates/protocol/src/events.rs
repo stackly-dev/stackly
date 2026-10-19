@@ -113,7 +113,7 @@ pub enum GapReason {
     ServerRestarted,
     /// A reason this build does not know. The daemon never sends it.
     #[serde(other)]
-    Unknown,
+    Unrecognized,
 }
 
 /// Content of `daemon.shutting_down`.
@@ -136,7 +136,7 @@ pub enum ShutdownReason {
     Requested,
     /// A reason this build does not know. The daemon never sends it.
     #[serde(other)]
-    Unknown,
+    Unrecognized,
 }
 
 /// A position in the event stream of one daemon run.
@@ -392,10 +392,10 @@ mod tests {
     }
 
     #[test]
-    fn unknown_gap_and_shutdown_reasons_decode_as_unknown() {
+    fn foreign_gap_and_shutdown_reasons_decode_as_unrecognized() {
         let gap: GapReason = serde_json::from_str("\"compacted\"").unwrap();
-        assert_eq!(gap, GapReason::Unknown);
+        assert_eq!(gap, GapReason::Unrecognized);
         let reason: ShutdownReason = serde_json::from_str("\"upgrade\"").unwrap();
-        assert_eq!(reason, ShutdownReason::Unknown);
+        assert_eq!(reason, ShutdownReason::Unrecognized);
     }
 }

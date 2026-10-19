@@ -38,17 +38,18 @@ public struct Capabilities: Codable, Sendable, Equatable {
 }
 
 /// The kinds of client. Open: a newer client may send a value an older
-/// daemon reads as `unknown`.
+/// daemon reads as `unrecognized`.
 public enum ClientKind: String, Codable, Sendable, Equatable {
 	/// The `stackly` CLI.
 	case cli
 	/// The SwiftUI app.
 	case gui
 	/// A kind this build does not know. The daemon never sends it.
-	case unknown
+	case unrecognized
 }
 
-/// Who a client is, for the daemon log.
+/// Who a client is: for the daemon log, and for handlers that pick how to
+/// interact with the person behind it (spec 0011).
 public struct ClientInfo: Codable, Sendable, Equatable {
 	/// The kind of client.
 	public let kind: ClientKind
@@ -57,11 +58,17 @@ public struct ClientInfo: Codable, Sendable, Equatable {
 	public let version: String
 	/// The client's process ID, when it shares it.
 	public let pid: UInt32?
+	/// True when the client can show a dialog the person sees right now:
+	/// always for the GUI, for the CLI only when stdin and stderr are both
+	/// terminals. Absent means false, so an older client never triggers a
+	/// dialog.
+	public let interactive: Bool?
 
-	public init(kind: ClientKind, version: String, pid: UInt32?) {
+	public init(kind: ClientKind, version: String, pid: UInt32?, interactive: Bool?) {
 		self.kind = kind
 		self.version = version
 		self.pid = pid
+		self.interactive = interactive
 	}
 }
 
@@ -96,8 +103,9 @@ public struct DaemonCounters: Codable, Sendable, Equatable {
 	}
 }
 
-/// The overall daemon status. Open: newer daemons may add values.
-public enum HealthStatus: String, Codable, Sendable, Equatable {
+/// The overall daemon status. Open: newer daemons may add values. Named
+/// apart from the health of an instance (spec 0004 and 0012).
+public enum DaemonHealthStatus: String, Codable, Sendable, Equatable {
 	/// The daemon is bound and running its start steps.
 	case starting
 	/// Every built subsystem is `ok`.
@@ -107,7 +115,7 @@ public enum HealthStatus: String, Codable, Sendable, Equatable {
 	/// The daemon is shutting down.
 	case stopping
 	/// A status this build does not know. The daemon never sends it.
-	case unknown
+	case unrecognized
 }
 
 /// The status of one subsystem. Open: newer daemons may add values.
@@ -121,7 +129,7 @@ public enum SubsystemStatus: String, Codable, Sendable, Equatable {
 	/// Not built yet in this release; it never lowers the overall status.
 	case notBuilt = "not_built"
 	/// A status this build does not know. The daemon never sends it.
-	case unknown
+	case unrecognized
 }
 
 /// The health of one subsystem.
@@ -140,19 +148,48 @@ public struct SubsystemHealth: Codable, Sendable, Equatable {
 	}
 }
 
+/// Why the registry is in recovery mode: the report `open_registry` wrote
+/// (spec 0005). The daemon leaves the registry untouched until a restart
+/// after it was repaired.
+public struct RegistryRecovery: Codable, Sendable, Equatable {
+	/// The recovery reason code of spec 0005, such as
+	/// `schema_newer_than_app`.
+	public let reason: String
+	/// The recovery report file, as resolved lossy UTF-8 text.
+	public let reportPath: String
+	/// When the problem was detected.
+	public let detectedAt: Date
+	/// The newest registry schema version this daemon knows.
+	public let appSchemaVersion: UInt32
+	/// The registry's schema version, or null when it could not be read.
+	public let dbSchemaVersion: UInt32?
+
+	public init(reason: String, reportPath: String, detectedAt: Date, appSchemaVersion: UInt32, dbSchemaVersion: UInt32?) {
+		self.reason = reason
+		self.reportPath = reportPath
+		self.detectedAt = detectedAt
+		self.appSchemaVersion = appSchemaVersion
+		self.dbSchemaVersion = dbSchemaVersion
+	}
+}
+
 /// Reply of `daemon.get_health`.
 public struct DaemonHealth: Codable, Sendable, Equatable {
 	/// The overall status.
-	public let status: HealthStatus
+	public let status: DaemonHealthStatus
 	/// Each subsystem, by its fixed name (see [`subsystem`]).
 	public let subsystems: [SubsystemHealth]?
 	/// Counters since daemon start.
 	public let counters: DaemonCounters
+	/// The recovery report while the registry is in recovery mode, else
+	/// null (spec 0005, spec 0006 AC-18).
+	public let recovery: RegistryRecovery?
 
-	public init(status: HealthStatus, subsystems: [SubsystemHealth]?, counters: DaemonCounters) {
+	public init(status: DaemonHealthStatus, subsystems: [SubsystemHealth]?, counters: DaemonCounters, recovery: RegistryRecovery?) {
 		self.status = status
 		self.subsystems = subsystems
 		self.counters = counters
+		self.recovery = recovery
 	}
 }
 
@@ -227,8 +264,12 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 	public let roots: DaemonRoots
 	/// The resolved path of the daemon socket.
 	public let socketPath: String
+	/// The registry's schema version once the registry opened ready, or
+	/// null while it opens, in recovery mode, or from an older daemon
+	/// (spec 0005).
+	public let registrySchema: UInt32?
 
-	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String) {
+	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?) {
 		self.version = version
 		self.protocol = `protocol`
 		self.contractDigest = contractDigest
@@ -238,6 +279,7 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 		self.startedAt = startedAt
 		self.roots = roots
 		self.socketPath = socketPath
+		self.registrySchema = registrySchema
 	}
 }
 
@@ -267,7 +309,7 @@ public enum ErrorCategory: String, Codable, Sendable, Equatable {
 }
 
 /// The kinds of resource Stackly tracks. Open: a newer daemon may add
-/// values, which older clients read as `unknown`.
+/// values, which older clients read as `unrecognized`.
 public enum ResourceKind: String, Codable, Sendable, Equatable {
 	/// An installed runtime version.
 	case runtime
@@ -281,8 +323,11 @@ public enum ResourceKind: String, Codable, Sendable, Equatable {
 	case provider
 	/// A backup of an instance.
 	case backup
+	/// Stackly itself, the target of an `update_manager` operation; its
+	/// `id` is always [`ResourceRef::MANAGER_ID`] (spec 0007).
+	case manager
 	/// A kind this build does not know. The daemon never sends it.
-	case unknown
+	case unrecognized
 }
 
 /// Names one resource, in errors and events.
@@ -290,8 +335,9 @@ public struct ResourceRef: Codable, Sendable, Equatable {
 	/// What kind of resource this is.
 	public let kind: ResourceKind
 	/// The canonical text of the resource key: a lowercase UUID for
-	/// runtimes, instances, environments, operations, and backups. Spec 0009
-	/// fixes the form for providers.
+	/// runtimes, instances, environments, operations, and backups,
+	/// [`ResourceRef::MANAGER_ID`] for the manager. Spec 0009 fixes the
+	/// form for providers.
 	public let id: String
 
 	public init(kind: ResourceKind, id: String) {
@@ -330,6 +376,23 @@ public struct ErrorDetail: Codable, Sendable, Equatable {
 	}
 }
 
+/// One entry of a structured list on an error, such as one reference that
+/// needs a secret (spec 0011) or one manifest issue (spec 0009).
+/// 
+/// `kind` and the field keys are plain strings, so a client always decodes
+/// an error frame, even with an item kind it does not know yet.
+public struct ErrorItem: Codable, Sendable, Equatable {
+	/// The item kind from the code's catalog entry, such as `issue`.
+	public let kind: String
+	/// The item's facts, with keys from the code's catalog entry.
+	public let fields: [ErrorDetail]?
+
+	public init(kind: String, fields: [ErrorDetail]?) {
+		self.kind = kind
+		self.fields = fields
+	}
+}
+
 /// The error envelope every daemon error and every client side IPC error
 /// uses (VAL-020).
 /// 
@@ -358,8 +421,11 @@ public struct ErrorBody: Codable, Sendable, Equatable {
 	public let operationId: UUID?
 	/// The PRD rule ID behind the error, such as `BR-008`.
 	public let rule: String?
+	/// A structured list that does not fit in `details`, with the item
+	/// `kind` and field keys from the code's catalog entry.
+	public let items: [ErrorItem]?
 
-	public init(code: String, category: ErrorCategory, message: String, retryable: Bool, resource: ResourceRef?, fields: [FieldError]?, hint: String?, details: [ErrorDetail]?, operationId: UUID?, rule: String?) {
+	public init(code: String, category: ErrorCategory, message: String, retryable: Bool, resource: ResourceRef?, fields: [FieldError]?, hint: String?, details: [ErrorDetail]?, operationId: UUID?, rule: String?, items: [ErrorItem]?) {
 		self.code = code
 		self.category = category
 		self.message = message
@@ -370,6 +436,7 @@ public struct ErrorBody: Codable, Sendable, Equatable {
 		self.details = details
 		self.operationId = operationId
 		self.rule = rule
+		self.items = items
 	}
 }
 
@@ -515,7 +582,7 @@ public enum GapReason: String, Codable, Sendable, Equatable {
 	/// The cursor belongs to another daemon run.
 	case serverRestarted = "server_restarted"
 	/// A reason this build does not know. The daemon never sends it.
-	case unknown
+	case unrecognized
 }
 
 /// Content of `events.gap`.
@@ -820,7 +887,7 @@ public enum ShutdownReason: String, Codable, Sendable, Equatable {
 	/// A client asked it to stop.
 	case requested
 	/// A reason this build does not know. The daemon never sends it.
-	case unknown
+	case unrecognized
 }
 
 /// Content of `daemon.shutting_down`.

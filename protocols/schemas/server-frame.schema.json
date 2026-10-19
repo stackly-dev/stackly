@@ -166,9 +166,21 @@
           "description": "Counters since daemon start.",
           "$ref": "#/$defs/DaemonCounters"
         },
+        "recovery": {
+          "description": "The recovery report while the registry is in recovery mode, else\nnull (spec 0005, spec 0006 AC-18).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RegistryRecovery"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "status": {
           "description": "The overall status.",
-          "$ref": "#/$defs/HealthStatus"
+          "$ref": "#/$defs/DaemonHealthStatus"
         },
         "subsystems": {
           "description": "Each subsystem, by its fixed name (see [`subsystem`]).",
@@ -182,6 +194,36 @@
       "required": [
         "status",
         "counters"
+      ]
+    },
+    "DaemonHealthStatus": {
+      "description": "The overall daemon status. Open: newer daemons may add values. Named\napart from the health of an instance (spec 0004 and 0012).",
+      "oneOf": [
+        {
+          "description": "The daemon is bound and running its start steps.",
+          "type": "string",
+          "const": "starting"
+        },
+        {
+          "description": "Every built subsystem is `ok`.",
+          "type": "string",
+          "const": "ready"
+        },
+        {
+          "description": "A built subsystem is `degraded` or `unavailable`.",
+          "type": "string",
+          "const": "degraded"
+        },
+        {
+          "description": "The daemon is shutting down.",
+          "type": "string",
+          "const": "stopping"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "DaemonIdentity": {
@@ -221,6 +263,16 @@
         "protocol": {
           "description": "The protocol version the daemon speaks.",
           "$ref": "#/$defs/ProtocolVersion"
+        },
+        "registrySchema": {
+          "description": "The registry's schema version once the registry opened ready, or\nnull while it opens, in recovery mode, or from an older daemon\n(spec 0005).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
         },
         "roots": {
           "description": "The four resolved roots.",
@@ -334,6 +386,14 @@
             "null"
           ],
           "default": null
+        },
+        "items": {
+          "description": "A structured list that does not fit in `details`, with the item\n`kind` and field keys from the code's catalog entry.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ErrorItem"
+          }
         },
         "message": {
           "description": "One safe English sentence: lowercase start, no trailing period, at\nmost 200 characters, never a secret.",
@@ -472,6 +532,27 @@
       },
       "required": [
         "error"
+      ]
+    },
+    "ErrorItem": {
+      "description": "One entry of a structured list on an error, such as one reference that\nneeds a secret (spec 0011) or one manifest issue (spec 0009).\n\n`kind` and the field keys are plain strings, so a client always decodes\nan error frame, even with an item kind it does not know yet.",
+      "type": "object",
+      "properties": {
+        "fields": {
+          "description": "The item's facts, with keys from the code's catalog entry.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ErrorDetail"
+          }
+        },
+        "kind": {
+          "description": "The item kind from the code's catalog entry, such as `issue`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
       ]
     },
     "Event": {
@@ -649,7 +730,7 @@
         {
           "description": "A reason this build does not know. The daemon never sends it.",
           "type": "string",
-          "const": "unknown"
+          "const": "unrecognized"
         }
       ]
     },
@@ -695,36 +776,6 @@
         "contractDrift",
         "limits",
         "head"
-      ]
-    },
-    "HealthStatus": {
-      "description": "The overall daemon status. Open: newer daemons may add values.",
-      "oneOf": [
-        {
-          "description": "The daemon is bound and running its start steps.",
-          "type": "string",
-          "const": "starting"
-        },
-        {
-          "description": "Every built subsystem is `ok`.",
-          "type": "string",
-          "const": "ready"
-        },
-        {
-          "description": "A built subsystem is `degraded` or `unavailable`.",
-          "type": "string",
-          "const": "degraded"
-        },
-        {
-          "description": "The daemon is shutting down.",
-          "type": "string",
-          "const": "stopping"
-        },
-        {
-          "description": "A status this build does not know. The daemon never sends it.",
-          "type": "string",
-          "const": "unknown"
-        }
       ]
     },
     "Limits": {
@@ -832,6 +883,47 @@
         "minor"
       ]
     },
+    "RegistryRecovery": {
+      "description": "Why the registry is in recovery mode: the report `open_registry` wrote\n(spec 0005). The daemon leaves the registry untouched until a restart\nafter it was repaired.",
+      "type": "object",
+      "properties": {
+        "appSchemaVersion": {
+          "description": "The newest registry schema version this daemon knows.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "dbSchemaVersion": {
+          "description": "The registry's schema version, or null when it could not be read.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "detectedAt": {
+          "description": "When the problem was detected.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "description": "The recovery reason code of spec 0005, such as\n`schema_newer_than_app`.",
+          "type": "string"
+        },
+        "reportPath": {
+          "description": "The recovery report file, as resolved lossy UTF-8 text.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "reportPath",
+        "detectedAt",
+        "appSchemaVersion"
+      ]
+    },
     "Reply": {
       "description": "One variant per method, with the same names and tags as [`Call`].",
       "oneOf": [
@@ -936,7 +1028,7 @@
       ]
     },
     "ResourceKind": {
-      "description": "The kinds of resource Stackly tracks. Open: a newer daemon may add\nvalues, which older clients read as `unknown`.",
+      "description": "The kinds of resource Stackly tracks. Open: a newer daemon may add\nvalues, which older clients read as `unrecognized`.",
       "oneOf": [
         {
           "description": "An installed runtime version.",
@@ -969,9 +1061,14 @@
           "const": "backup"
         },
         {
+          "description": "Stackly itself, the target of an `update_manager` operation; its\n`id` is always [`ResourceRef::MANAGER_ID`] (spec 0007).",
+          "type": "string",
+          "const": "manager"
+        },
+        {
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
-          "const": "unknown"
+          "const": "unrecognized"
         }
       ]
     },
@@ -980,7 +1077,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "description": "The canonical text of the resource key: a lowercase UUID for\nruntimes, instances, environments, operations, and backups. Spec 0009\nfixes the form for providers.",
+          "description": "The canonical text of the resource key: a lowercase UUID for\nruntimes, instances, environments, operations, and backups,\n[`ResourceRef::MANAGER_ID`] for the manager. Spec 0009 fixes the\nform for providers.",
           "type": "string"
         },
         "kind": {
@@ -1027,7 +1124,7 @@
         {
           "description": "A reason this build does not know. The daemon never sends it.",
           "type": "string",
-          "const": "unknown"
+          "const": "unrecognized"
         }
       ]
     },
@@ -1116,7 +1213,7 @@
         {
           "description": "A status this build does not know. The daemon never sends it.",
           "type": "string",
-          "const": "unknown"
+          "const": "unrecognized"
         }
       ]
     }

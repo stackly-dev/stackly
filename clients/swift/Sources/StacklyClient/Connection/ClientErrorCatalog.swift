@@ -46,7 +46,8 @@ public enum ClientErrorCatalog {
             details: [], message: "the client is not connected to the daemon")
         static let callTimeout = Entry(
             code: "ipc.call_timeout", category: .timeout, retryable: false,
-            details: ["method"], message: "the daemon did not answer in time")
+            details: ["method", "seconds", "idempotencyKey"],
+            message: "the daemon did not answer in time")
     }
 
     /// Every client side code, for the contract test.
@@ -109,9 +110,16 @@ public enum ClientErrorCatalog {
         body(Spec.notConnected, [:])
     }
 
-    /// `ipc.call_timeout` for `method`: the client stopped waiting.
-    public static func callTimeout(method: String) -> ErrorBody {
-        body(Spec.callTimeout, ["method": method])
+    /// `ipc.call_timeout` for `method`: the client stopped waiting after
+    /// `limit`, written as whole seconds. A mutation names its
+    /// `idempotencyKey`, so the caller can send the same request again
+    /// safely; the request may already have run.
+    public static func callTimeout(
+        method: String, limit: Duration, idempotencyKey: String? = nil
+    ) -> ErrorBody {
+        var details = ["method": method, "seconds": String(limit.components.seconds)]
+        details["idempotencyKey"] = idempotencyKey
+        return body(Spec.callTimeout, details)
     }
 
     /// The code of the body ``frame(_:)`` makes.
@@ -140,7 +148,8 @@ public enum ClientErrorCatalog {
             hint: nil,
             details: ordered.isEmpty ? nil : ordered,
             operationId: nil,
-            rule: nil
+            rule: nil,
+            items: nil
         )
     }
 }

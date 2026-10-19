@@ -68,7 +68,7 @@ struct ContractTests {
             #expect(entry.message.hasSuffix(".") == false, "\(entry.code)")
         }
         #expect(catalog["ipc.not_connected"]?.retryable == true)
-        #expect(catalog["ipc.call_timeout"]?.details == ["method"])
+        #expect(catalog["ipc.call_timeout"]?.details == ["method", "seconds", "idempotencyKey"])
     }
 
     @Test func builtBodiesUseOnlyTheirCatalogKeys() {
@@ -79,7 +79,9 @@ struct ContractTests {
             ClientErrorCatalog.connectionRefused(path: "/p"),
             ClientErrorCatalog.ioError(op: "stat", errno: EACCES),
             ClientErrorCatalog.frame(.tooLarge(length: 9, max: 4)),
-            ClientErrorCatalog.callTimeout(method: "daemon.get_info"),
+            ClientErrorCatalog.callTimeout(method: "daemon.get_info", limit: .seconds(10)),
+            ClientErrorCatalog.callTimeout(
+                method: "instance.start", limit: .milliseconds(10_500), idempotencyKey: "k-1"),
         ]
         let allowed = Dictionary(
             uniqueKeysWithValues: ClientErrorCatalog.entries.map { ($0.code, Set($0.details)) })
@@ -91,6 +93,13 @@ struct ContractTests {
             ClientErrorCatalog.ioError(op: "stat", errno: EACCES).detail("kind")
                 == "permission_denied")
         #expect(ClientErrorCatalog.frame(.tooLarge(length: 9, max: 4)).detail("length") == "9")
+        let timeout = ClientErrorCatalog.callTimeout(
+            method: "instance.start", limit: .milliseconds(10_500), idempotencyKey: "k-1")
+        #expect(timeout.details?.map(\.key) == ["method", "seconds", "idempotencyKey"])
+        #expect(timeout.detail("seconds") == "10")
+        #expect(timeout.detail("idempotencyKey") == "k-1")
+        let read = ClientErrorCatalog.callTimeout(method: "daemon.get_info", limit: .seconds(10))
+        #expect(read.detail("idempotencyKey") == nil)
     }
 
     @Test func handshakeFixtureLimitsMatchTheSwiftConstants() throws {
@@ -119,7 +128,7 @@ struct ContractTests {
         #expect(Reply.eventsUnsubscribe.methodName == "events.unsubscribe")
     }
 
-    @Test func protocolIsOnePointOneWithTheNewClientCodes() {
-        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 1, minor: 1))
+    @Test func protocolIsOnePointTwo() {
+        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 1, minor: 2))
     }
 }

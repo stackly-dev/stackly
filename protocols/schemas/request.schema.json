@@ -122,9 +122,17 @@
       ]
     },
     "ClientInfo": {
-      "description": "Who a client is, for the daemon log.",
+      "description": "Who a client is: for the daemon log, and for handlers that pick how to\ninteract with the person behind it (spec 0011).",
       "type": "object",
       "properties": {
+        "interactive": {
+          "description": "True when the client can show a dialog the person sees right now:\nalways for the GUI, for the CLI only when stdin and stderr are both\nterminals. Absent means false, so an older client never triggers a\ndialog.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
         "kind": {
           "description": "The kind of client.",
           "$ref": "#/$defs/ClientKind"
@@ -150,7 +158,7 @@
       ]
     },
     "ClientKind": {
-      "description": "The kinds of client. Open: a newer client may send a value an older\ndaemon reads as `unknown`.",
+      "description": "The kinds of client. Open: a newer client may send a value an older\ndaemon reads as `unrecognized`.",
       "oneOf": [
         {
           "description": "The `stackly` CLI.",
@@ -165,7 +173,7 @@
         {
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
-          "const": "unknown"
+          "const": "unrecognized"
         }
       ]
     },
@@ -237,7 +245,7 @@
       ]
     },
     "ResourceKind": {
-      "description": "The kinds of resource Stackly tracks. Open: a newer daemon may add\nvalues, which older clients read as `unknown`.",
+      "description": "The kinds of resource Stackly tracks. Open: a newer daemon may add\nvalues, which older clients read as `unrecognized`.",
       "oneOf": [
         {
           "description": "An installed runtime version.",
@@ -270,9 +278,14 @@
           "const": "backup"
         },
         {
+          "description": "Stackly itself, the target of an `update_manager` operation; its\n`id` is always [`ResourceRef::MANAGER_ID`] (spec 0007).",
+          "type": "string",
+          "const": "manager"
+        },
+        {
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
-          "const": "unknown"
+          "const": "unrecognized"
         }
       ]
     },
@@ -281,7 +294,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "description": "The canonical text of the resource key: a lowercase UUID for\nruntimes, instances, environments, operations, and backups. Spec 0009\nfixes the form for providers.",
+          "description": "The canonical text of the resource key: a lowercase UUID for\nruntimes, instances, environments, operations, and backups,\n[`ResourceRef::MANAGER_ID`] for the manager. Spec 0009 fixes the\nform for providers.",
           "type": "string"
         },
         "kind": {

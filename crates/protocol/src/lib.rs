@@ -14,8 +14,9 @@
 //! values, data enums tagged `type` and `content`, `#[serde(default)]` on
 //! every `Option` and `Vec` field, never `deny_unknown_fields`, `u64` only
 //! through [`Revision`], [`Sequence`], and [`Count`], time only through
-//! [`Timestamp`], and no `BTreeMap`. Open unit enums end with `Unknown`
-//! marked `#[serde(other)]`.
+//! [`Timestamp`], and no `BTreeMap`. Open unit enums end with
+//! `Unrecognized` marked `#[serde(other)]`, never `Unknown`, because
+//! `unknown` is a real state in some enums.
 
 pub mod codes;
 mod contract_digest;
@@ -33,7 +34,7 @@ mod version;
 pub mod wire;
 
 pub use contract_digest::CONTRACT_DIGEST;
-pub use error::{ErrorBody, ErrorCategory, ErrorDetail, FieldError};
+pub use error::{ErrorBody, ErrorCategory, ErrorDetail, ErrorItem, FieldError};
 pub use limits::Limits;
 pub use message::{Call, ErrorFrame, Reply, Request, Response, ServerFrame};
 pub use version::ProtocolVersion;

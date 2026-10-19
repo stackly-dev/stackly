@@ -147,7 +147,8 @@ struct DaemonConnectionTests {
         #expect(try await connection.call(Samples.unsubscribe(2)) == .eventsUnsubscribe)
         clock.advance(by: .seconds(10))
         let result = await slow.result
-        let timeout = ClientErrorCatalog.callTimeout(method: "events.unsubscribe")
+        let timeout = ClientErrorCatalog.callTimeout(
+            method: "events.unsubscribe", limit: .seconds(10))
         #expect(throws: ClientError.outcomeUnknown(timeout)) { try result.get() }
         try await Task.sleep(for: .milliseconds(400))
         #expect(try await connection.call(Samples.unsubscribe(3)) == .eventsUnsubscribe)
@@ -170,7 +171,8 @@ struct DaemonConnectionTests {
         let result = await second.result
         #expect(
             throws: ClientError.notSent(
-                ClientErrorCatalog.callTimeout(method: "events.unsubscribe"))
+                ClientErrorCatalog.callTimeout(
+                    method: "events.unsubscribe", limit: ContractLimits.callTimeout))
         ) {
             try result.get()
         }

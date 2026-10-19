@@ -11,7 +11,8 @@
       "client": {
         "kind": "cli",
         "version": "0.1.0",
-        "pid": 4242
+        "pid": 4242,
+        "interactive": true
       },
       "contractDigest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     }

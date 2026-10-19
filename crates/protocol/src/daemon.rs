@@ -33,6 +33,11 @@ pub struct DaemonInfo {
     pub roots: DaemonRoots,
     /// The resolved path of the daemon socket.
     pub socket_path: String,
+    /// The registry's schema version once the registry opened ready, or
+    /// null while it opens, in recovery mode, or from an older daemon
+    /// (spec 0005).
+    #[serde(default)]
+    pub registry_schema: Option<u32>,
 }
 
 /// The daemon's resolved (not canonical) roots, as lossy UTF-8 text.
@@ -58,19 +63,45 @@ pub struct DaemonRoots {
 #[serde(rename_all = "camelCase")]
 pub struct DaemonHealth {
     /// The overall status.
-    pub status: HealthStatus,
+    pub status: DaemonHealthStatus,
     /// Each subsystem, by its fixed name (see [`subsystem`]).
     #[serde(default)]
     pub subsystems: Vec<SubsystemHealth>,
     /// Counters since daemon start.
     pub counters: DaemonCounters,
+    /// The recovery report while the registry is in recovery mode, else
+    /// null (spec 0005, spec 0006 AC-18).
+    #[serde(default)]
+    pub recovery: Option<RegistryRecovery>,
 }
 
-/// The overall daemon status. Open: newer daemons may add values.
+/// Why the registry is in recovery mode: the report `open_registry` wrote
+/// (spec 0005). The daemon leaves the registry untouched until a restart
+/// after it was repaired.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryRecovery {
+    /// The recovery reason code of spec 0005, such as
+    /// `schema_newer_than_app`.
+    pub reason: String,
+    /// The recovery report file, as resolved lossy UTF-8 text.
+    pub report_path: String,
+    /// When the problem was detected.
+    pub detected_at: Timestamp,
+    /// The newest registry schema version this daemon knows.
+    pub app_schema_version: u32,
+    /// The registry's schema version, or null when it could not be read.
+    #[serde(default)]
+    pub db_schema_version: Option<u32>,
+}
+
+/// The overall daemon status. Open: newer daemons may add values. Named
+/// apart from the health of an instance (spec 0004 and 0012).
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum HealthStatus {
+pub enum DaemonHealthStatus {
     /// The daemon is bound and running its start steps.
     Starting,
     /// Every built subsystem is `ok`.
@@ -81,7 +112,7 @@ pub enum HealthStatus {
     Stopping,
     /// A status this build does not know. The daemon never sends it.
     #[serde(other)]
-    Unknown,
+    Unrecognized,
 }
 
 /// The health of one subsystem.
@@ -113,7 +144,7 @@ pub enum SubsystemStatus {
     NotBuilt,
     /// A status this build does not know. The daemon never sends it.
     #[serde(other)]
-    Unknown,
+    Unrecognized,
 }
 
 /// The fixed subsystem names. Features 5, 7, and 10 take over `registry`,
@@ -194,14 +225,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unknown_statuses_decode_as_unknown() {
-        let health: HealthStatus = serde_json::from_str("\"hibernating\"").unwrap();
-        assert_eq!(health, HealthStatus::Unknown);
+    fn foreign_statuses_decode_as_unrecognized() {
+        let health: DaemonHealthStatus = serde_json::from_str("\"hibernating\"").unwrap();
+        assert_eq!(health, DaemonHealthStatus::Unrecognized);
         let sub: SubsystemStatus = serde_json::from_str("\"paused\"").unwrap();
-        assert_eq!(sub, SubsystemStatus::Unknown);
+        assert_eq!(sub, SubsystemStatus::Unrecognized);
         assert_eq!(
             serde_json::to_string(&SubsystemStatus::NotBuilt).unwrap(),
             "\"not_built\""
+        );
+    }
+
+    #[test]
+    fn health_and_info_from_an_older_daemon_decode_without_the_new_fields() {
+        let health: DaemonHealth = serde_json::from_value(serde_json::json!({
+            "status": "ready",
+            "counters": DaemonCounters::default(),
+        }))
+        .unwrap();
+        assert_eq!(health.recovery, None);
+        assert!(health.subsystems.is_empty());
+    }
+
+    #[test]
+    fn recovery_encodes_in_camel_case_with_a_null_db_schema_version() {
+        let recovery = RegistryRecovery {
+            reason: "integrity_failed".to_owned(),
+            report_path: "/data/recovery/report.json".to_owned(),
+            detected_at: "2026-10-18T03:04:05Z".parse().unwrap(),
+            app_schema_version: 2,
+            db_schema_version: None,
+        };
+        let json = serde_json::to_value(&recovery).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "reason": "integrity_failed",
+                "reportPath": "/data/recovery/report.json",
+                "detectedAt": "2026-10-18T03:04:05.000Z",
+                "appSchemaVersion": 2,
+                "dbSchemaVersion": null,
+            })
         );
     }
 

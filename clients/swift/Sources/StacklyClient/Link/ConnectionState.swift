@@ -120,7 +120,7 @@ public struct Heartbeat: Equatable, Sendable {
     }
 
     /// The wait before the next heartbeat for a daemon with `status`.
-    public func interval(for status: HealthStatus?) -> Duration {
+    public func interval(for status: DaemonHealthStatus?) -> Duration {
         status == .starting ? startingInterval : interval
     }
 }

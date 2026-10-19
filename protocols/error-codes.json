@@ -25,6 +25,10 @@
       "owner": "spec 0006"
     },
     {
+      "name": "registry",
+      "owner": "spec 0005"
+    },
+    {
       "name": "internal",
       "owner": "spec 0006"
     }
@@ -40,6 +44,7 @@
         "version",
         "startedAt"
       ],
+      "items": null,
       "summary": "another daemon holds the lock, only ever printed to stderr"
     },
     {
@@ -47,6 +52,7 @@
       "category": "unavailable",
       "retryable": true,
       "details": [],
+      "items": null,
       "summary": "the request arrived while the daemon stops"
     },
     {
@@ -56,6 +62,7 @@
       "details": [
         "subsystem"
       ],
+      "items": null,
       "summary": "the method needs a subsystem that is not ready while the daemon starts"
     },
     {
@@ -65,6 +72,7 @@
       "details": [
         "max"
       ],
+      "items": null,
       "summary": "the connection already holds the most subscriptions it allows"
     },
     {
@@ -74,6 +82,7 @@
       "details": [
         "subscriptionId"
       ],
+      "items": null,
       "summary": "no subscription with this id exists on the connection"
     },
     {
@@ -81,6 +90,7 @@
       "category": "internal",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "a handler panicked or an invariant broke"
     },
     {
@@ -88,8 +98,11 @@
       "category": "timeout",
       "retryable": false,
       "details": [
-        "method"
+        "method",
+        "seconds",
+        "idempotencyKey"
       ],
+      "items": null,
       "summary": "client side: the client stopped waiting for a reply, so the request may have run"
     },
     {
@@ -97,6 +110,7 @@
       "category": "unavailable",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "client side: the daemon closed the connection before replying, so the request may have run"
     },
     {
@@ -106,6 +120,7 @@
       "details": [
         "path"
       ],
+      "items": null,
       "summary": "client side: connecting was refused, the socket is stale"
     },
     {
@@ -115,6 +130,7 @@
       "details": [
         "path"
       ],
+      "items": null,
       "summary": "client side: nothing exists at the socket path"
     },
     {
@@ -125,6 +141,7 @@
         "path",
         "kind"
       ],
+      "items": null,
       "summary": "daemon side: the socket path holds something that is not a socket"
     },
     {
@@ -135,6 +152,7 @@
         "path",
         "reason"
       ],
+      "items": null,
       "summary": "client side: the socket path or the server peer failed a trust check"
     },
     {
@@ -142,6 +160,7 @@
       "category": "invalid_input",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "a frame header announces a length of 0"
     },
     {
@@ -149,6 +168,7 @@
       "category": "timeout",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "a started frame was still incomplete after 30 seconds"
     },
     {
@@ -159,6 +179,7 @@
         "length",
         "max"
       ],
+      "items": null,
       "summary": "a frame header announces a length above the limit"
     },
     {
@@ -166,6 +187,7 @@
       "category": "timeout",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "the handshake frame was not complete within 5 seconds"
     },
     {
@@ -176,6 +198,7 @@
         "op",
         "kind"
       ],
+      "items": null,
       "summary": "client side: another os error while checking the socket path or connecting"
     },
     {
@@ -183,6 +206,7 @@
       "category": "unavailable",
       "retryable": true,
       "details": [],
+      "items": null,
       "summary": "client side: the client is not connected to the daemon, so it sent nothing"
     },
     {
@@ -190,6 +214,7 @@
       "category": "unauthorized",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "the peer runs as another user or its credentials cannot be read"
     },
     {
@@ -197,6 +222,7 @@
       "category": "internal",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "client side: a daemon frame cannot be decoded or its reply tag does not match the call"
     },
     {
@@ -207,6 +233,7 @@
         "method",
         "length"
       ],
+      "items": null,
       "summary": "daemon side: a reply is larger than a frame and is sent instead of it"
     },
     {
@@ -216,6 +243,7 @@
       "details": [
         "max"
       ],
+      "items": null,
       "summary": "the daemon already serves the most connections it allows"
     },
     {
@@ -223,6 +251,7 @@
       "category": "timeout",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "daemon side: the client read nothing for 30 seconds, only ever logged"
     },
     {
@@ -230,6 +259,7 @@
       "category": "invalid_input",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "a second handshake arrived on the same connection"
     },
     {
@@ -239,6 +269,7 @@
       "details": [
         "method"
       ],
+      "items": null,
       "summary": "the first request on a connection is valid but not a handshake"
     },
     {
@@ -249,13 +280,192 @@
         "serverMajor",
         "serverMinor"
       ],
+      "items": null,
       "summary": "the client speaks another protocol major"
+    },
+    {
+      "code": "registry.active_lease_exists",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "instance",
+        "environment"
+      ],
+      "items": null,
+      "summary": "the environment already holds an active lease on the instance"
+    },
+    {
+      "code": "registry.busy",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the registry stayed locked past its busy timeout"
+    },
+    {
+      "code": "registry.corrupt",
+      "category": "internal",
+      "retryable": false,
+      "details": [
+        "table",
+        "column"
+      ],
+      "items": null,
+      "summary": "a stored registry value cannot be read"
+    },
+    {
+      "code": "registry.dedicated_owner_exists",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "instance",
+        "environment"
+      ],
+      "items": null,
+      "summary": "another environment already owns the instance as a dedicated member"
+    },
+    {
+      "code": "registry.duplicate_resource",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "an insert names a resource that already exists"
+    },
+    {
+      "code": "registry.duplicate_runtime",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "existing"
+      ],
+      "items": null,
+      "summary": "a runtime for the same managed artifact or external folder exists"
+    },
+    {
+      "code": "registry.generation_conflict",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "expected",
+        "actual"
+      ],
+      "items": null,
+      "summary": "the registry changed since the caller read it, after the caller's own retries"
+    },
+    {
+      "code": "registry.integrity",
+      "category": "internal",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "a database constraint refused a write that an earlier check should have caught"
+    },
+    {
+      "code": "registry.io_error",
+      "category": "failed",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "another i/o failure while using the registry"
+    },
+    {
+      "code": "registry.missing_reference",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "a write refers to a resource that does not exist"
+    },
+    {
+      "code": "registry.name_taken",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "name",
+        "existing"
+      ],
+      "items": null,
+      "summary": "another instance has the instance name"
+    },
+    {
+      "code": "registry.no_space",
+      "category": "failed",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the disk holding the registry is full"
+    },
+    {
+      "code": "registry.path_not_utf8",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "field"
+      ],
+      "items": null,
+      "summary": "a path to store is not valid utf-8"
+    },
+    {
+      "code": "registry.path_taken",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "root",
+        "path",
+        "existing"
+      ],
+      "items": null,
+      "summary": "another instance stores the same path under the same root"
+    },
+    {
+      "code": "registry.recovery_mode",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "reason",
+        "reportPath"
+      ],
+      "items": null,
+      "summary": "the registry is in recovery mode, so the daemon only answers the methods allowed there"
+    },
+    {
+      "code": "registry.short_key_taken",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "key",
+        "existing"
+      ],
+      "items": null,
+      "summary": "another instance has the short key"
+    },
+    {
+      "code": "registry.software_mismatch",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "instance",
+        "runtime",
+        "providerRevision"
+      ],
+      "items": null,
+      "summary": "the instance software differs from its runtime or provider revision software"
+    },
+    {
+      "code": "registry.unavailable",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the registry cannot serve calls any more"
     },
     {
       "code": "request.duplicate_id",
       "category": "invalid_input",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "another request with this requestId is still running on the connection"
     },
     {
@@ -265,6 +475,7 @@
       "details": [
         "method"
       ],
+      "items": null,
       "summary": "the params fail to decode or to validate, and fields lists each one"
     },
     {
@@ -272,6 +483,7 @@
       "category": "invalid_input",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "the json is broken, the request shape is wrong, or requestId or idempotencyKey has a bad format"
     },
     {
@@ -281,6 +493,7 @@
       "details": [
         "max"
       ],
+      "items": null,
       "summary": "the json nests deeper than the limit"
     },
     {
@@ -290,6 +503,7 @@
       "details": [
         "max"
       ],
+      "items": null,
       "summary": "the connection already has the most requests in flight it allows"
     },
     {
@@ -299,6 +513,7 @@
       "details": [
         "method"
       ],
+      "items": null,
       "summary": "the daemon does not know the method"
     },
     {
@@ -308,6 +523,7 @@
       "details": [
         "operationId"
       ],
+      "items": null,
       "summary": "another operation holds the resource lock, reserved for the operation engine"
     },
     {
@@ -315,6 +531,7 @@
       "category": "not_found",
       "retryable": false,
       "details": [],
+      "items": null,
       "summary": "the resource does not exist, reserved for resource owners"
     },
     {
@@ -325,6 +542,7 @@
         "expected",
         "actual"
       ],
+      "items": null,
       "summary": "the resource revision is not the expected one, reserved for the registry compare and swap"
     }
   ]

@@ -46,6 +46,11 @@
       "expect": "decode"
     },
     {
+      "file": "request-handshake-without-interactive.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
       "file": "request-subscribe-uppercase-uuid.json",
       "type": "Request",
       "expect": "decode"
@@ -141,6 +146,11 @@
       "expect": "roundtrip"
     },
     {
+      "file": "frame-response-get-health-recovery.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
       "file": "frame-response-get-capabilities.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
@@ -162,6 +172,11 @@
     },
     {
       "file": "frame-error-empty.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-manager-resource.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
     },
@@ -196,6 +211,11 @@
       "expect": "decode"
     },
     {
+      "file": "frame-response-get-info-older-daemon.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
       "file": "frame-event-newer-minor.json",
       "type": "ServerFrame",
       "expect": "decode"
@@ -217,6 +237,16 @@
     },
     {
       "file": "frame-error-unknown-resource-kind.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-error-with-items.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-error-unknown-item-kind.json",
       "type": "ServerFrame",
       "expect": "decode"
     },

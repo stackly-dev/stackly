@@ -47,7 +47,8 @@
           "eventsDropped": 1500,
           "logLinesDropped": 0,
           "socketRebinds": 1
-        }
+        },
+        "recovery": null
       }
     }
   }

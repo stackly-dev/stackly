@@ -128,7 +128,8 @@ public actor DaemonConnection {
             throw .notSent(closeReason ?? ClientErrorCatalog.notConnected())
         }
         let requestId = UUID().uuidString.lowercased()
-        let timeoutBody = ClientErrorCatalog.callTimeout(method: method)
+        let timeoutBody = ClientErrorCatalog.callTimeout(
+            method: method, limit: options.timeout, idempotencyKey: idempotencyKey)
         let timer = startTimer(requestId, options: options)
         defer {
             timer.cancel()

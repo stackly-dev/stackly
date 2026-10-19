@@ -30,7 +30,8 @@
         }
       ],
       "operationId": "0192f3a3-2222-7ddd-9eee-ffffffffffff",
-      "rule": "BR-008"
+      "rule": "BR-008",
+      "items": []
     }
   }
 }

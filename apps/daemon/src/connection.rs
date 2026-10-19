@@ -31,8 +31,9 @@ use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore, mpsc, watch};
 use tokio::task::AbortHandle;
 use tokio::time::{Instant, timeout};
 
-use crate::dispatch::{HandlerFuture, Handlers, RequestContext, allowed_in_recovery};
+use crate::dispatch::{HandlerFuture, Handlers, RequestContext};
 use crate::events::BusSubscription;
+use crate::map;
 use crate::shutdown::DrainGuard;
 use crate::state::DaemonCore;
 
@@ -208,16 +209,24 @@ impl Conn {
 
     fn client(&self) -> ClientInfo {
         self.client.get().cloned().unwrap_or_else(|| ClientInfo {
-            kind: ClientKind::Unknown,
+            kind: ClientKind::Unrecognized,
             version: String::new(),
             pid: None,
+            interactive: None,
         })
     }
 
+    /// The client kind for log lines; `none` before the handshake.
     fn client_kind(&self) -> &'static str {
         self.client
             .get()
-            .map_or("unknown", |client| kind_name(client.kind))
+            .map_or("none", |client| kind_name(client.kind))
+    }
+
+    /// Whether the client said it can show a dialog, for log lines; false
+    /// before the handshake and when the client did not say.
+    fn interactive(&self) -> bool {
+        self.client.get().is_some_and(ClientInfo::is_interactive)
     }
 
     /// Queues one frame, waiting at most [`WRITE_TIMEOUT`].
@@ -412,6 +421,7 @@ pub async fn serve(
         connection_id = id,
         peer_pid = peer.pid,
         client_kind = conn.client_kind(),
+        interactive = conn.interactive(),
         "connection closed",
     );
 }
@@ -555,6 +565,7 @@ fn accept(conn: &Conn, core: &DaemonCore, params: &HandshakeParams) -> Handshake
         ProtocolVersion::CURRENT,
         CONTRACT_DIGEST,
     );
+    let interactive = params.client.is_interactive();
     if drift {
         tracing::warn!(
             connection_id = conn.id,
@@ -562,6 +573,7 @@ fn accept(conn: &Conn, core: &DaemonCore, params: &HandshakeParams) -> Handshake
             client_contract_digest = params.contract_digest.as_str(),
             client_kind = kind_name(params.client.kind),
             client_version = params.client.version.as_str(),
+            interactive,
             "contract_drift: the client has the same protocol version but another contract digest",
         );
     }
@@ -571,9 +583,10 @@ fn accept(conn: &Conn, core: &DaemonCore, params: &HandshakeParams) -> Handshake
         client_kind = kind_name(params.client.kind),
         client_version = params.client.version.as_str(),
         client_protocol_minor = params.protocol.minor,
+        interactive,
         "handshake accepted",
     );
-    let info = core.info();
+    let info = core.start_info();
     HandshakeAccepted {
         protocol: ProtocolVersion::CURRENT,
         server_instance_id: core.bus().server_instance_id(),
@@ -782,6 +795,19 @@ async fn run_request(
     drop(guard);
 }
 
+/// The answer to a method the daemon does not serve right now: while the
+/// registry is in recovery mode, every method whose table line says
+/// `recovery refused` gets `registry.recovery_mode` before its handler
+/// runs, so nothing reads or writes the registry (spec 0006 AC-18).
+#[must_use]
+pub fn recovery_refusal(core: &DaemonCore, allowed_in_recovery: bool) -> Option<Box<ErrorBody>> {
+    if allowed_in_recovery {
+        return None;
+    }
+    core.recovery()
+        .map(|recovery| Box::new(map::recovery_mode(&recovery)))
+}
+
 /// Runs one request: a single `match` over the call.
 async fn dispatch(
     conn: &Arc<Conn>,
@@ -790,8 +816,7 @@ async fn dispatch(
     context: RequestContext,
     call: Call,
 ) -> (Result<Reply, Box<ErrorBody>>, Option<BusSubscription>) {
-    if core.in_recovery() && !allowed_in_recovery(&call) {
-        let error = unexpected("a method without a recovery rule reached the dispatcher");
+    if let Some(error) = recovery_refusal(core, call.allowed_in_recovery()) {
         return (Err(error), None);
     }
     match call {
@@ -915,7 +940,7 @@ const fn kind_name(kind: ClientKind) -> &'static str {
     match kind {
         ClientKind::Cli => "cli",
         ClientKind::Gui => "gui",
-        ClientKind::Unknown => "unknown",
+        ClientKind::Unrecognized => "unrecognized",
     }
 }
 
@@ -942,12 +967,14 @@ fn log_request(
 ) {
     let duration_ms = u64::try_from(received.elapsed().as_millis()).unwrap_or(u64::MAX);
     let client_kind = conn.client_kind();
+    let interactive = conn.interactive();
     match error {
         None => tracing::debug!(
             connection_id = conn.id,
             request_id,
             method,
             client_kind,
+            interactive,
             duration_ms,
             outcome = "ok",
             "request",
@@ -957,6 +984,7 @@ fn log_request(
             request_id,
             method,
             client_kind,
+            interactive,
             duration_ms,
             outcome = "error",
             code = error.code(),
@@ -967,6 +995,7 @@ fn log_request(
             request_id,
             method,
             client_kind,
+            interactive,
             duration_ms,
             outcome = "error",
             code = error.code(),

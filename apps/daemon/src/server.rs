@@ -20,7 +20,7 @@ use stackly_protocol::ErrorBody;
 use stackly_protocol::codes::ipc;
 use stackly_protocol::daemon::{DaemonHealth, DaemonInfo};
 use stackly_protocol::events::{EventKind, ShutdownReason, ShuttingDown};
-use stackly_storage::{RecoveryReason, RegistryOpen, SqliteRegistry, StorageError, open_registry};
+use stackly_storage::{OpenOptions, RecoveryReason, RegistryOpen, SqliteRegistry, StorageError};
 use tokio::sync::{Semaphore, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior, timeout};
@@ -65,6 +65,9 @@ pub struct DaemonConfig {
     pub prune_interval: Duration,
     /// The waits between tries while the registry is locked.
     pub registry_locked_retries: Vec<Duration>,
+    /// How the start slot opens the registry; tests shorten the busy
+    /// timeout.
+    pub registry_open: OpenOptions,
     /// When set, the start slot waits until the value turns true, so a
     /// test can watch the daemon while it is `starting`.
     pub start_gate: Option<watch::Receiver<bool>>,
@@ -76,6 +79,7 @@ impl Default for DaemonConfig {
             socket_check_interval: SOCKET_CHECK_INTERVAL,
             prune_interval: REGISTRY_PRUNE_INTERVAL,
             registry_locked_retries: REGISTRY_LOCKED_RETRIES.to_vec(),
+            registry_open: OpenOptions::new(),
             start_gate: None,
         }
     }
@@ -273,9 +277,9 @@ impl DaemonHandle {
         self.core.health(std::time::Instant::now())
     }
 
-    /// The facts `daemon.get_info` reports.
+    /// The facts `daemon.get_info` reports right now.
     #[must_use]
-    pub fn info(&self) -> &DaemonInfo {
+    pub fn info(&self) -> DaemonInfo {
         self.core.info()
     }
 
@@ -512,7 +516,14 @@ async fn start_slot(
     if let Some(mut gate) = config.start_gate {
         let _ = gate.wait_for(|open| *open).await;
     }
-    match open_with_retries(&core, &version, &config.registry_locked_retries).await {
+    let opened = open_with_retries(
+        &core,
+        &version,
+        &config.registry_open,
+        &config.registry_locked_retries,
+    )
+    .await;
+    match opened {
         Some(Ok(RegistryOpen::Ready { registry, summary })) => {
             let pruned = prune_once(&core, &registry).await;
             if matches!(pruned, Err(RegistryError::Unavailable)) {
@@ -535,7 +546,12 @@ async fn start_slot(
                     sqlite_version = summary.sqlite_version,
                     "registry ready",
                 );
-                core.set_registry(RegistryState::Ready, Some(registry));
+                core.set_registry(
+                    RegistryState::Ready {
+                        schema_version: summary.schema_version,
+                    },
+                    Some(registry),
+                );
                 let prune = tokio::spawn(prune_loop(Arc::clone(&core), config.prune_interval));
                 *tasks.prune.lock().unwrap_or_else(PoisonError::into_inner) = Some(prune);
             }
@@ -549,7 +565,7 @@ async fn start_slot(
             );
             core.set_registry(
                 RegistryState::Recovery {
-                    reason: report.reason.code(),
+                    recovery: map::registry_recovery(&report),
                 },
                 None,
             );
@@ -575,6 +591,7 @@ async fn start_slot(
 async fn open_with_retries(
     core: &DaemonCore,
     version: &str,
+    options: &OpenOptions,
     retries: &[Duration],
 ) -> Option<Result<RegistryOpen, StorageError>> {
     let mut waits = retries.iter();
@@ -582,8 +599,9 @@ async fn open_with_retries(
         let platform = core.platform().clone();
         let layout = core.prepared().layout().clone();
         let version = version.to_owned();
+        let options = options.clone();
         let opened =
-            match tokio::task::spawn_blocking(move || open_registry(&platform, &layout, &version))
+            match tokio::task::spawn_blocking(move || options.open(&platform, &layout, &version))
                 .await
             {
                 Ok(opened) => opened,

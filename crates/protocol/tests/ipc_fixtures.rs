@@ -11,7 +11,7 @@ use stackly_protocol::codes;
 use stackly_protocol::events::{EventKind, GapReason, ShutdownReason};
 use stackly_protocol::json::{DecodedFrame, decode_request, decode_server_frame, handshake_major};
 use stackly_protocol::{
-    Call, ErrorBody, ErrorFrame, Request, ResourceKind, ServerFrame, Timestamp,
+    Call, ErrorBody, ErrorFrame, Reply, Request, ResourceKind, ResourceRef, ServerFrame, Timestamp,
 };
 
 #[derive(Debug, Deserialize)]
@@ -179,8 +179,10 @@ fn as_decoded(frame: ServerFrame) -> DecodedFrame {
     }
 }
 
-/// AC-8: the code is in the catalog, category and `retryable` match it, and
-/// every `details` key is one the catalog lists for the code.
+/// AC-8: the code is in the catalog, category and `retryable` match it,
+/// every `details` key is one the catalog lists for the code, and `items`
+/// is empty or holds only the kind and field keys the code allows, at most
+/// its limit.
 fn assert_catalog_conform(error: &ErrorBody, file: &str) {
     let spec = error
         .spec()
@@ -196,6 +198,22 @@ fn assert_catalog_conform(error: &ErrorBody, file: &str) {
         );
     }
     assert!(error.message().chars().count() <= 200, "{file}");
+    match spec.items {
+        None => assert!(
+            error.items().is_empty(),
+            "{file}: `{}` allows no items",
+            spec.code
+        ),
+        Some(items) => {
+            assert!(error.items().len() <= usize::from(items.max), "{file}");
+            for item in error.items() {
+                assert_eq!(item.kind(), items.kind, "{file}");
+                for field in item.fields() {
+                    assert!(items.fields.contains(&field.key()), "{file}: {field:?}");
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -312,14 +330,14 @@ fn content_before_type_decodes_like_the_usual_order() {
 }
 
 #[test]
-fn foreign_values_of_open_enums_decode_as_unknown() {
+fn foreign_values_of_open_enums_decode_as_unrecognized() {
     let request = decode_request(&read("request-handshake-newer-client.json")).unwrap();
     let Call::DaemonHandshake(params) = request.call else {
         panic!("expected a handshake");
     };
     assert_eq!(
         params.client.kind,
-        stackly_protocol::handshake::ClientKind::Unknown
+        stackly_protocol::handshake::ClientKind::Unrecognized
     );
 
     let frame: ServerFrame =
@@ -332,18 +350,18 @@ fn foreign_values_of_open_enums_decode_as_unknown() {
     };
     assert_eq!(
         health.status,
-        stackly_protocol::daemon::HealthStatus::Unknown
+        stackly_protocol::daemon::DaemonHealthStatus::Unrecognized
     );
     assert_eq!(
         health.subsystems[0].status,
-        stackly_protocol::daemon::SubsystemStatus::Unknown
+        stackly_protocol::daemon::SubsystemStatus::Unrecognized
     );
 
     let gap = event_kind("frame-event-gap-unknown-reason.json");
-    assert!(matches!(gap, EventKind::EventsGap(g) if g.reason == GapReason::Unknown));
+    assert!(matches!(gap, EventKind::EventsGap(g) if g.reason == GapReason::Unrecognized));
     let shutdown = event_kind("frame-event-shutdown-unknown-reason.json");
     assert!(
-        matches!(shutdown, EventKind::DaemonShuttingDown(s) if s.reason == ShutdownReason::Unknown)
+        matches!(shutdown, EventKind::DaemonShuttingDown(s) if s.reason == ShutdownReason::Unrecognized)
     );
 
     let frame: ServerFrame =
@@ -353,8 +371,94 @@ fn foreign_values_of_open_enums_decode_as_unknown() {
     };
     assert_eq!(
         error.error.resource().map(|r| r.kind),
-        Some(ResourceKind::Unknown)
+        Some(ResourceKind::Unrecognized)
     );
+}
+
+#[test]
+fn a_handshake_without_interactive_reads_as_not_interactive() {
+    let request = decode_request(&read("request-handshake-without-interactive.json")).unwrap();
+    let Call::DaemonHandshake(params) = request.call else {
+        panic!("expected a handshake");
+    };
+    assert_eq!(params.client.interactive, None);
+    assert!(!params.client.is_interactive());
+
+    let request = decode_request(&read("request-handshake.json")).unwrap();
+    let Call::DaemonHandshake(params) = request.call else {
+        panic!("expected a handshake");
+    };
+    assert!(params.client.is_interactive());
+}
+
+fn reply(file: &str) -> Reply {
+    let frame: ServerFrame =
+        serde_json::from_slice(&read(file)).expect("the fixture is a ServerFrame");
+    let ServerFrame::Response(response) = frame else {
+        panic!("{file}: expected a response");
+    };
+    response.reply
+}
+
+#[test]
+fn info_carries_the_registry_schema_and_an_older_daemon_reads_without_it() {
+    let Reply::DaemonGetInfo(info) = reply("frame-response-get-info.json") else {
+        panic!("expected an info reply");
+    };
+    assert_eq!(info.registry_schema, Some(1));
+    let Reply::DaemonGetInfo(older) = reply("frame-response-get-info-older-daemon.json") else {
+        panic!("expected an info reply");
+    };
+    assert_eq!(older.registry_schema, None);
+}
+
+#[test]
+fn health_in_recovery_mode_carries_the_report() {
+    let Reply::DaemonGetHealth(health) = reply("frame-response-get-health-recovery.json") else {
+        panic!("expected a health reply");
+    };
+    let recovery = health.recovery.expect("the fixture is in recovery mode");
+    assert_eq!(recovery.reason, "schema_newer_than_app");
+    assert_eq!(
+        (recovery.app_schema_version, recovery.db_schema_version),
+        (2, Some(999))
+    );
+    assert!(recovery.report_path.ends_with(".json"));
+    let Reply::DaemonGetHealth(ready) = reply("frame-response-get-health.json") else {
+        panic!("expected a health reply");
+    };
+    assert_eq!(ready.recovery, None);
+}
+
+fn error_body(file: &str) -> ErrorBody {
+    let frame: ServerFrame =
+        serde_json::from_slice(&read(file)).expect("the fixture is a ServerFrame");
+    let ServerFrame::Error(frame) = frame else {
+        panic!("{file}: expected an error frame");
+    };
+    frame.error
+}
+
+#[test]
+fn an_error_about_the_manager_names_the_resource_self() {
+    let error = error_body("frame-error-manager-resource.json");
+    assert_eq!(error.resource(), Some(&ResourceRef::manager()));
+}
+
+#[test]
+fn error_items_decode_whatever_their_kind_and_keep_the_envelope() {
+    let error = error_body("frame-error-with-items.json");
+    assert_eq!(error.items().len(), 2);
+    assert_eq!(error.items()[0].kind(), "issue");
+    assert_eq!(error.items()[1].field("path"), Some("metadata.name"));
+    assert_eq!(error.detail("omitted"), Some("1"));
+
+    let error = error_body("frame-error-unknown-item-kind.json");
+    assert_eq!(error.code(), "secret.reference_unresolved");
+    assert_eq!(error.category(), stackly_protocol::ErrorCategory::Failed);
+    assert_eq!(error.message(), "2 references need a secret");
+    assert_eq!(error.items()[0].kind(), "hologram");
+    assert_eq!(error.items()[0].field("beam"), Some("blue"));
 }
 
 #[test]

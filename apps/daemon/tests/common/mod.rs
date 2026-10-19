@@ -3,6 +3,7 @@
 
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use stackly_ipc::{Client, ConnectPolicy, connect_verified};
@@ -63,19 +64,71 @@ pub fn daemon_paths(root: &TestRoot) -> DaemonPaths {
     }
 }
 
-/// Starts `stacklyd` against `root` and waits until it logged the outcome
-/// of the registry open (the end of its start slot) and a verified
-/// connection to its socket works.
+/// The longest wait for the daemon to log the close of the ready probe.
+const PROBE_LOG_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The message of the line that ends a served connection.
+const CONNECTION_CLOSED: &str = "connection closed";
+
+/// Starts `stacklyd` against `root` and waits until it is ready and quiet:
+/// it logged the outcome of the registry open (the end of its start slot),
+/// a probe client completed a handshake, and the daemon wrote the close of
+/// that probe's connection to its log file.
+///
+/// The probe is a whole handshake, not a bare connect: a client that
+/// connects and leaves at once can be gone before the daemon reads its
+/// credentials, and the daemon then refuses it as a peer whose credentials
+/// cannot be read and logs that after this function returned. Waiting for
+/// the close line means no line of the probe lands after a test reads the
+/// log.
 pub fn start_daemon(root: &TestRoot) -> SpawnedDaemon {
     let paths = daemon_paths(root);
-    SpawnedDaemon::start(
+    let log = paths.layout.daemon_log_dir().join("stacklyd.log");
+    let closed_before = count_messages(&log, CONNECTION_CLOSED);
+    let daemon = SpawnedDaemon::start(
         Path::new(STACKLYD),
         root.path(),
         &paths.socket,
         &paths.runtime,
-        |daemon| logged(&daemon.stderr(), "registry_state") && connects(daemon.socket()),
+        |daemon| logged(&daemon.stderr(), "registry_state") && handshakes(daemon.socket()),
     )
-    .expect("stacklyd starts")
+    .expect("stacklyd starts");
+    let deadline = Instant::now() + PROBE_LOG_TIMEOUT;
+    while count_messages(&log, CONNECTION_CLOSED) <= closed_before {
+        assert!(
+            Instant::now() < deadline,
+            "stacklyd did not log the close of the ready probe: {}",
+            daemon.stderr()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    daemon
+}
+
+/// How many complete lines of the file at `path` carry `message`; 0 when
+/// the file does not exist yet.
+pub fn count_messages(path: &Path, message: &str) -> usize {
+    std::fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|line| field(line, "message") == message)
+        .count()
+}
+
+/// Whether a `cli` client completes a handshake on `socket` right now. It
+/// runs on a thread of its own, so any test (sync or async) can call it.
+pub fn handshakes(socket: &Path) -> bool {
+    let socket = socket.to_path_buf();
+    std::thread::spawn(move || {
+        runtime().block_on(async {
+            tokio::time::timeout(Duration::from_secs(5), client_of(&socket))
+                .await
+                .is_ok_and(|connected| connected.is_ok())
+        })
+    })
+    .join()
+    .unwrap_or(false)
 }
 
 /// The uid this test runs as.
@@ -107,8 +160,13 @@ pub fn runtime() -> tokio::runtime::Runtime {
         .expect("a test runtime starts")
 }
 
-/// A typed client of the test's uid, as a `cli` client.
+/// A typed client of the test's uid, as a `cli` client that cannot show
+/// a dialog.
 pub async fn client(socket: &Path) -> (Client, HandshakeAccepted) {
+    client_of(socket).await.expect("the client connects")
+}
+
+async fn client_of(socket: &Path) -> Result<(Client, HandshakeAccepted), stackly_ipc::IpcError> {
     Client::connect(
         socket,
         ConnectPolicy::same_user(uid()),
@@ -116,10 +174,10 @@ pub async fn client(socket: &Path) -> (Client, HandshakeAccepted) {
             kind: ClientKind::Cli,
             version: "0.1.0".to_owned(),
             pid: Some(std::process::id()),
+            interactive: Some(false),
         },
     )
     .await
-    .expect("the client connects")
 }
 
 /// Whether a complete line of `text` carries the field `name`.

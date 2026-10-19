@@ -80,7 +80,7 @@ struct DaemonModelTests {
         }
     }
 
-    static func daemon(_ status: StacklyClient.HealthStatus?, at seconds: TimeInterval = 10)
+    static func daemon(_ status: DaemonHealthStatus?, at seconds: TimeInterval = 10)
         -> ConnectedDaemon
     {
         let accepted = HandshakeAccepted(
@@ -105,7 +105,8 @@ struct DaemonModelTests {
                 counters: DaemonCounters(
                     connectionsOpen: 1, connectionsTotal: 1, connectionsRejected: 0,
                     framesRejected: 0, eventsPublished: 0, eventsDropped: 0, logLinesDropped: 0,
-                    socketRebinds: 0))
+                    socketRebinds: 0),
+                recovery: nil)
         }
         let info = DaemonInfo(
             version: "0.1.0", protocol: ProtocolVersion(major: 1, minor: 1),
@@ -113,7 +114,7 @@ struct DaemonModelTests {
             pid: 501, uid: 501, startedAt: launch,
             roots: DaemonRoots(
                 data: "/d", logs: "/l", cache: "/c", runtime: "/t/stackly", rootOverride: false),
-            socketPath: "/t/stackly/stacklyd.sock")
+            socketPath: "/t/stackly/stacklyd.sock", registrySchema: 2)
         return ConnectedDaemon(
             accepted: accepted, info: info, health: health,
             connectedAt: launch.addingTimeInterval(seconds))
@@ -144,7 +145,7 @@ struct DaemonModelTests {
                 == .connected(health: .degraded))
         #expect(
             DaemonPresence.derive(
-                Inputs(stable: .connected(Self.daemon(.unknown)), refreshed: true))
+                Inputs(stable: .connected(Self.daemon(.unrecognized)), refreshed: true))
                 == .connected(health: .unknown))
         #expect(
             DaemonPresence.derive(Inputs(stable: .connected(Self.daemon(nil)), refreshed: true))
@@ -397,6 +398,6 @@ enum Samples {
     static func error(_ code: String) -> ErrorBody {
         ErrorBody(
             code: code, category: .conflict, message: "m", retryable: false, resource: nil,
-            fields: nil, hint: nil, details: nil, operationId: nil, rule: nil)
+            fields: nil, hint: nil, details: nil, operationId: nil, rule: nil, items: nil)
     }
 }

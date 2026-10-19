@@ -1,8 +1,8 @@
 //! The error code catalog, one submodule per area (VAL-020).
 //!
 //! Every code on the wire is `<area>.<reason>` in snake case and lives here
-//! with its category, its `retryable` flag, and the `details` keys it may
-//! carry. Each spec owns its areas and adds codes only there, so specs
+//! with its category, its `retryable` flag, the `details` keys it may
+//! carry, and the `items` it may list. Each spec owns its areas and adds codes only there, so specs
 //! written in parallel never edit the same list. The spec that first needs a
 //! new area adds it to [`AREAS`] with the `area!` macro. `cargo xtask
 //! codegen` writes the catalog to `protocols/error-codes.json`.
@@ -23,8 +23,26 @@ pub struct ErrorSpec {
     pub retryable: bool,
     /// The camelCase `details` keys an error with this code may carry.
     pub details: &'static [&'static str],
+    /// The list items an error with this code may carry, or `None` when it
+    /// carries none.
+    pub items: Option<ItemSpec>,
     /// When the code is used, in one English sentence.
     pub summary: &'static str,
+}
+
+/// The list items one code allows: one item kind, its field keys, and how
+/// many items an error carries at most. A code with items always lists the
+/// `omitted` detail, which counts the items dropped above `max`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ItemSpec {
+    /// The snake_case item kind, such as `issue` (spec 0009) or
+    /// `reference` (spec 0011).
+    pub kind: &'static str,
+    /// The camelCase field keys an item may carry.
+    pub fields: &'static [&'static str],
+    /// The most items one error carries.
+    pub max: u16,
 }
 
 /// One registered area and its codes.
@@ -39,14 +57,22 @@ pub struct Area {
     pub codes: &'static [ErrorSpec],
 }
 
-/// Defines one area submodule: a constant per code and the `ALL` slice.
+/// Defines one area submodule: a constant per code and the `ALL` slice. A
+/// code that carries list items adds
+/// `items { kind "<kind>", fields [..], max <n> }` after its details.
 macro_rules! area {
+    (@items) => { None };
+    (@items $kind:literal, [$($field:literal),* $(,)?], $max:literal) => {
+        Some(super::ItemSpec { kind: $kind, fields: &[$($field),*], max: $max })
+    };
     (
         $(#[$meta:meta])*
         pub mod $module:ident = $area:literal, owner $owner:literal {
             $(
                 $konst:ident = $code:literal, $category:ident, retryable $retryable:literal,
-                details [$($key:literal),* $(,)?], $summary:literal;
+                details [$($key:literal),* $(,)?],
+                $(items { kind $item_kind:literal, fields [$($item_field:literal),* $(,)?], max $item_max:literal },)?
+                $summary:literal;
             )*
         }
     ) => {
@@ -64,6 +90,7 @@ macro_rules! area {
                     category: ErrorCategory::$category,
                     retryable: $retryable,
                     details: &[$($key),*],
+                    items: area!(@items $($item_kind, [$($item_field),*], $item_max)?),
                     summary: $summary,
                 };
             )*
@@ -125,7 +152,7 @@ area! {
         NOT_CONNECTED = "ipc.not_connected", Unavailable, retryable true,
             details [], "client side: the client is not connected to the daemon, so it sent nothing";
         CALL_TIMEOUT = "ipc.call_timeout", Timeout, retryable false,
-            details ["method"], "client side: the client stopped waiting for a reply, so the request may have run";
+            details ["method", "seconds", "idempotencyKey"], "client side: the client stopped waiting for a reply, so the request may have run";
     }
 }
 
@@ -182,6 +209,51 @@ area! {
 }
 
 area! {
+    /// Registry codes (spec 0005, *Kode error di wire*): one per
+    /// `RegistryError` variant that has no spec 0006 code, plus recovery
+    /// mode. None is retryable: a registry failure in the middle of a
+    /// request never promises the request had no effect.
+    pub mod registry = "registry", owner "spec 0005" {
+        MISSING_REFERENCE = "registry.missing_reference", Conflict, retryable false,
+            details [], "a write refers to a resource that does not exist";
+        DUPLICATE_RESOURCE = "registry.duplicate_resource", Conflict, retryable false,
+            details [], "an insert names a resource that already exists";
+        GENERATION_CONFLICT = "registry.generation_conflict", Conflict, retryable false,
+            details ["expected", "actual"], "the registry changed since the caller read it, after the caller's own retries";
+        NAME_TAKEN = "registry.name_taken", Conflict, retryable false,
+            details ["name", "existing"], "another instance has the instance name";
+        SHORT_KEY_TAKEN = "registry.short_key_taken", Conflict, retryable false,
+            details ["key", "existing"], "another instance has the short key";
+        PATH_TAKEN = "registry.path_taken", Conflict, retryable false,
+            details ["root", "path", "existing"], "another instance stores the same path under the same root";
+        DUPLICATE_RUNTIME = "registry.duplicate_runtime", Conflict, retryable false,
+            details ["existing"], "a runtime for the same managed artifact or external folder exists";
+        DEDICATED_OWNER_EXISTS = "registry.dedicated_owner_exists", Conflict, retryable false,
+            details ["instance", "environment"], "another environment already owns the instance as a dedicated member";
+        ACTIVE_LEASE_EXISTS = "registry.active_lease_exists", Conflict, retryable false,
+            details ["instance", "environment"], "the environment already holds an active lease on the instance";
+        SOFTWARE_MISMATCH = "registry.software_mismatch", InvalidInput, retryable false,
+            details ["instance", "runtime", "providerRevision"], "the instance software differs from its runtime or provider revision software";
+        PATH_NOT_UTF8 = "registry.path_not_utf8", InvalidInput, retryable false,
+            details ["field"], "a path to store is not valid utf-8";
+        BUSY = "registry.busy", Unavailable, retryable false,
+            details [], "the registry stayed locked past its busy timeout";
+        UNAVAILABLE = "registry.unavailable", Unavailable, retryable false,
+            details [], "the registry cannot serve calls any more";
+        NO_SPACE = "registry.no_space", Failed, retryable false,
+            details [], "the disk holding the registry is full";
+        IO_ERROR = "registry.io_error", Failed, retryable false,
+            details [], "another i/o failure while using the registry";
+        CORRUPT = "registry.corrupt", Internal, retryable false,
+            details ["table", "column"], "a stored registry value cannot be read";
+        INTEGRITY = "registry.integrity", Internal, retryable false,
+            details [], "a database constraint refused a write that an earlier check should have caught";
+        RECOVERY_MODE = "registry.recovery_mode", Unavailable, retryable false,
+            details ["reason", "reportPath"], "the registry is in recovery mode, so the daemon only answers the methods allowed there";
+    }
+}
+
+area! {
     /// Codes for bugs and broken invariants.
     pub mod internal = "internal", owner "spec 0006" {
         UNEXPECTED = "internal.unexpected", Internal, retryable false,
@@ -197,6 +269,7 @@ pub const AREAS: &[Area] = &[
     events::AREA,
     resource::AREA,
     daemon::AREA,
+    registry::AREA,
     internal::AREA,
 ];
 
@@ -348,6 +421,58 @@ mod tests {
     }
 
     #[test]
+    fn items_name_a_snake_case_kind_camel_case_fields_a_limit_and_omitted() {
+        for spec in catalog() {
+            let Some(items) = spec.items else { continue };
+            assert!(
+                is_snake(items.kind),
+                "`{}` item kind is not snake case",
+                spec.code
+            );
+            assert!(items.max >= 1, "`{}` allows no item", spec.code);
+            let mut keys = HashSet::new();
+            for field in items.fields {
+                assert!(
+                    is_camel(field),
+                    "`{}` item field `{field}` is not camelCase",
+                    spec.code
+                );
+                assert!(keys.insert(field), "`{}` lists `{field}` twice", spec.code);
+            }
+            assert!(
+                spec.details.contains(&crate::error::OMITTED_DETAIL),
+                "`{}` has items but no `omitted` detail",
+                spec.code
+            );
+        }
+    }
+
+    #[test]
+    fn the_area_macro_records_items_only_where_a_code_names_them() {
+        area! {
+            /// A test area.
+            pub mod sample = "sample", owner "test" {
+                PLAIN = "sample.plain", Failed, retryable false,
+                    details [], "a code without items";
+                LISTED = "sample.listed", Failed, retryable false,
+                    details ["omitted"],
+                    items { kind "issue", fields ["path", "code"], max 50 },
+                    "a code with items";
+            }
+        }
+        assert_eq!(sample::PLAIN.items, None);
+        assert_eq!(
+            sample::LISTED.items,
+            Some(ItemSpec {
+                kind: "issue",
+                fields: &["path", "code"],
+                max: 50
+            })
+        );
+        assert_eq!(sample::AREA.codes.len(), 2);
+    }
+
+    #[test]
     fn summaries_are_lowercase_sentences_without_a_trailing_period() {
         for spec in catalog() {
             assert!(
@@ -400,15 +525,95 @@ mod tests {
     }
 
     #[test]
-    fn spec_0006_owns_every_area_it_registers() {
-        let names: Vec<_> = AREAS.iter().map(|area| area.name).collect();
+    fn every_area_is_registered_with_its_owning_spec() {
+        let owners: Vec<_> = AREAS.iter().map(|area| (area.name, area.owner)).collect();
         assert_eq!(
-            names,
+            owners,
             [
-                "protocol", "ipc", "request", "events", "resource", "daemon", "internal"
+                ("protocol", "spec 0006"),
+                ("ipc", "spec 0006"),
+                ("request", "spec 0006"),
+                ("events", "spec 0006"),
+                ("resource", "spec 0006"),
+                ("daemon", "spec 0006"),
+                ("registry", "spec 0005"),
+                ("internal", "spec 0006"),
             ]
         );
-        assert!(AREAS.iter().all(|area| area.owner == "spec 0006"));
+    }
+
+    #[test]
+    fn registry_codes_match_the_spec_0005_wire_table() {
+        let table: Vec<_> = registry::ALL
+            .iter()
+            .map(|spec| (spec.code, spec.category, spec.details))
+            .collect();
+        let expected: &[(&str, ErrorCategory, &[&str])] = &[
+            ("registry.missing_reference", ErrorCategory::Conflict, &[]),
+            ("registry.duplicate_resource", ErrorCategory::Conflict, &[]),
+            (
+                "registry.generation_conflict",
+                ErrorCategory::Conflict,
+                &["expected", "actual"],
+            ),
+            (
+                "registry.name_taken",
+                ErrorCategory::Conflict,
+                &["name", "existing"],
+            ),
+            (
+                "registry.short_key_taken",
+                ErrorCategory::Conflict,
+                &["key", "existing"],
+            ),
+            (
+                "registry.path_taken",
+                ErrorCategory::Conflict,
+                &["root", "path", "existing"],
+            ),
+            (
+                "registry.duplicate_runtime",
+                ErrorCategory::Conflict,
+                &["existing"],
+            ),
+            (
+                "registry.dedicated_owner_exists",
+                ErrorCategory::Conflict,
+                &["instance", "environment"],
+            ),
+            (
+                "registry.active_lease_exists",
+                ErrorCategory::Conflict,
+                &["instance", "environment"],
+            ),
+            (
+                "registry.software_mismatch",
+                ErrorCategory::InvalidInput,
+                &["instance", "runtime", "providerRevision"],
+            ),
+            (
+                "registry.path_not_utf8",
+                ErrorCategory::InvalidInput,
+                &["field"],
+            ),
+            ("registry.busy", ErrorCategory::Unavailable, &[]),
+            ("registry.unavailable", ErrorCategory::Unavailable, &[]),
+            ("registry.no_space", ErrorCategory::Failed, &[]),
+            ("registry.io_error", ErrorCategory::Failed, &[]),
+            (
+                "registry.corrupt",
+                ErrorCategory::Internal,
+                &["table", "column"],
+            ),
+            ("registry.integrity", ErrorCategory::Internal, &[]),
+            (
+                "registry.recovery_mode",
+                ErrorCategory::Unavailable,
+                &["reason", "reportPath"],
+            ),
+        ];
+        assert_eq!(table, expected);
+        assert!(registry::ALL.iter().all(|spec| !spec.retryable));
     }
 
     #[test]

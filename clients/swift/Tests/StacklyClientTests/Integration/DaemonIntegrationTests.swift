@@ -20,7 +20,8 @@ struct DaemonIntegrationTests {
         ))
     func swiftSocketPathMatchesTheDaemonsAndTheHandshakeCompletes() async throws {
         let daemon = try await SpawnedDaemon()
-        let client = ClientInfo(kind: .gui, version: "0.1.0", pid: UInt32(getpid()))
+        let client = ClientInfo(
+            kind: .gui, version: "0.1.0", pid: UInt32(getpid()), interactive: true)
         let (connection, accepted) = try await DaemonConnection.open(
             endpoint: daemon.endpoint, policy: .sameUser, client: client)
         #expect(accepted.protocol.major == ContractInfo.protocolVersion.major)
