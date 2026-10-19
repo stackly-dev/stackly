@@ -56,6 +56,80 @@
     }
   ],
   "$defs": {
+    "AbandonReply": {
+      "description": "Reply of `operation.abandon`.",
+      "type": "object",
+      "properties": {
+        "leftovers": {
+          "description": "What the abandon did not undo; also in `operation.result.partial`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CreatedItemInfo"
+          }
+        },
+        "operation": {
+          "description": "The operation, now `failed` with reason `abandoned`.",
+          "$ref": "#/$defs/OperationSummary"
+        }
+      },
+      "required": [
+        "operation"
+      ]
+    },
+    "CancelDisposition": {
+      "description": "What a cancel did. Open.",
+      "oneOf": [
+        {
+          "description": "The operation had not started and is now `cancelled`.",
+          "type": "string",
+          "const": "cancelled_before_start"
+        },
+        {
+          "description": "The work stops at its next checkpoint, then undoes what it did.",
+          "type": "string",
+          "const": "requested"
+        },
+        {
+          "description": "The work already passed a step that cannot be undone, so it runs\nto its end.",
+          "type": "string",
+          "const": "continuing_past_point_of_no_return"
+        },
+        {
+          "description": "The operation had already ended; nothing changed.",
+          "type": "string",
+          "const": "already_final"
+        },
+        {
+          "description": "The operation needs recovery; resume or abandon it instead.",
+          "type": "string",
+          "const": "recovery_required"
+        },
+        {
+          "description": "A disposition this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "CancelReply": {
+      "description": "Reply of `operation.cancel`.",
+      "type": "object",
+      "properties": {
+        "disposition": {
+          "description": "What the cancel did.",
+          "$ref": "#/$defs/CancelDisposition"
+        },
+        "operation": {
+          "description": "The operation after the cancel.",
+          "$ref": "#/$defs/OperationSummary"
+        }
+      },
+      "required": [
+        "operation",
+        "disposition"
+      ]
+    },
     "Capabilities": {
       "description": "Reply of `daemon.get_capabilities`.",
       "type": "object",
@@ -85,6 +159,121 @@
           }
         }
       }
+    },
+    "ClientKind": {
+      "description": "The kinds of client. Open: a newer client may send a value an older\ndaemon reads as `unrecognized`.",
+      "oneOf": [
+        {
+          "description": "The `stackly` CLI.",
+          "type": "string",
+          "const": "cli"
+        },
+        {
+          "description": "The SwiftUI app.",
+          "type": "string",
+          "const": "gui"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "CountedProgress": {
+      "description": "Content of a `counted` progress.",
+      "type": "object",
+      "properties": {
+        "done": {
+          "description": "What is done, such as bytes downloaded.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "total": {
+          "description": "What there is in all.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "done",
+        "total"
+      ]
+    },
+    "CreatedItemInfo": {
+      "description": "One thing an operation created or claimed, which a cancel or an abandon\nmay undo. A custom item's payload is never sent.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "A reason code, such as `created_by_other_operation`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "kind": {
+          "description": "The item kind, such as `instance_tree` or `secret_ref`.",
+          "type": "string"
+        },
+        "reference": {
+          "description": "The item's reference: an ID, a secret reference, or\n`<compensator>:<key>`.",
+          "type": "string"
+        },
+        "state": {
+          "description": "Where the item stands.",
+          "$ref": "#/$defs/CreatedState"
+        }
+      },
+      "required": [
+        "kind",
+        "reference",
+        "state"
+      ]
+    },
+    "CreatedState": {
+      "description": "Where one created item stands. Open.",
+      "oneOf": [
+        {
+          "description": "The operation recorded that it is about to create the item.",
+          "type": "string",
+          "const": "intended"
+        },
+        {
+          "description": "The item exists and belongs to the operation.",
+          "type": "string",
+          "const": "created"
+        },
+        {
+          "description": "The item was undone.",
+          "type": "string",
+          "const": "compensated"
+        },
+        {
+          "description": "The item stays, as part of the operation's result.",
+          "type": "string",
+          "const": "kept"
+        },
+        {
+          "description": "Undoing the item failed.",
+          "type": "string",
+          "const": "compensation_failed"
+        },
+        {
+          "description": "The item turned out to belong to someone else and was left alone.",
+          "type": "string",
+          "const": "not_owned"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
     },
     "DaemonCounters": {
       "description": "Counters since daemon start.",
@@ -670,6 +859,40 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "An operation was created or changed state (spec 0007). The event's\nresource is the operation and its revision the operation's.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/OperationSummary"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.state_changed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "An operation changed without changing state: stage, progress,\n`waitingOn`, the point of no return, or a cancel (spec 0007).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/OperationSummary"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.progress"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -835,6 +1058,658 @@
         "eventReplayLen"
       ]
     },
+    "OperationDetail": {
+      "description": "Reply of `operation.get`.",
+      "type": "object",
+      "properties": {
+        "created": {
+          "description": "What it created or claimed, in order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CreatedItemInfo"
+          }
+        },
+        "operation": {
+          "description": "The operation.",
+          "$ref": "#/$defs/OperationSummary"
+        },
+        "steps": {
+          "description": "Its steps, in order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/OperationStepInfo"
+          }
+        }
+      },
+      "required": [
+        "operation"
+      ]
+    },
+    "OperationFailureInfo": {
+      "description": "Why an operation failed; only in state `failed`.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "description": "The error that ended the operation, with `operationId` set.",
+          "$ref": "#/$defs/ErrorBody"
+        },
+        "reason": {
+          "description": "The engine's reason code, such as `step_failed`, `interrupted`, or\n`abandoned`.",
+          "type": "string"
+        },
+        "retryable": {
+          "description": "True when a new operation with a new idempotency key may succeed.\nIt differs from `error.retryable`, which is about sending the same\nrequest again.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reason",
+        "retryable",
+        "error"
+      ]
+    },
+    "OperationKind": {
+      "description": "What an operation does: the kind codes of spec 0004. Open: a newer\ndaemon may add kinds, which older clients read as `unrecognized`.",
+      "oneOf": [
+        {
+          "description": "Install a managed runtime.",
+          "type": "string",
+          "const": "install_runtime"
+        },
+        {
+          "description": "Register a runtime in a folder the user owns.",
+          "type": "string",
+          "const": "register_external_runtime"
+        },
+        {
+          "description": "Remove a runtime.",
+          "type": "string",
+          "const": "remove_runtime"
+        },
+        {
+          "description": "Create an instance.",
+          "type": "string",
+          "const": "create_instance"
+        },
+        {
+          "description": "Start an instance.",
+          "type": "string",
+          "const": "start_instance"
+        },
+        {
+          "description": "Stop an instance.",
+          "type": "string",
+          "const": "stop_instance"
+        },
+        {
+          "description": "Restart an instance.",
+          "type": "string",
+          "const": "restart_instance"
+        },
+        {
+          "description": "Reload an instance's configuration.",
+          "type": "string",
+          "const": "reload_instance"
+        },
+        {
+          "description": "Rename an instance.",
+          "type": "string",
+          "const": "rename_instance"
+        },
+        {
+          "description": "Remove an instance and keep its data.",
+          "type": "string",
+          "const": "remove_instance"
+        },
+        {
+          "description": "Delete an instance and its data.",
+          "type": "string",
+          "const": "purge_instance"
+        },
+        {
+          "description": "Move an instance to another runtime.",
+          "type": "string",
+          "const": "rebind_runtime"
+        },
+        {
+          "description": "Move an instance to another provider revision.",
+          "type": "string",
+          "const": "update_provider_revision"
+        },
+        {
+          "description": "Back up an instance.",
+          "type": "string",
+          "const": "backup_instance"
+        },
+        {
+          "description": "Restore an instance.",
+          "type": "string",
+          "const": "restore_instance"
+        },
+        {
+          "description": "Bring an environment up.",
+          "type": "string",
+          "const": "environment_up"
+        },
+        {
+          "description": "Take an environment down.",
+          "type": "string",
+          "const": "environment_down"
+        },
+        {
+          "description": "Update Stackly itself; its resource is the manager.",
+          "type": "string",
+          "const": "update_manager"
+        },
+        {
+          "description": "Migrate an instance's data to another line.",
+          "type": "string",
+          "const": "migrate_data"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "OperationPage": {
+      "description": "Reply of `operation.list`: newest first, by creation time then ID.",
+      "type": "object",
+      "properties": {
+        "items": {
+          "description": "The operations on this page.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/OperationSummary"
+          }
+        },
+        "next": {
+          "description": "The cursor of the next page, to send back as `before`; null on the\nlast page.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    },
+    "OperationProgress": {
+      "description": "How far an operation got. Closed.",
+      "oneOf": [
+        {
+          "description": "The work does not know how much is left.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "indeterminate"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "The work counted what it did and what there is.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CountedProgress"
+            },
+            "type": {
+              "type": "string",
+              "const": "counted"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
+    "OperationResult": {
+      "description": "What an operation produced.",
+      "type": "object",
+      "properties": {
+        "partial": {
+          "description": "The items that did not all go to plan; a client shows the operation\nas partial when this is not empty.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PartialItem"
+          }
+        },
+        "resources": {
+          "description": "The resources the operation created or changed.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ResourceRef"
+          }
+        }
+      }
+    },
+    "OperationState": {
+      "description": "The state of an operation (PRD section 18.2). Closed: a new state is a\nnew protocol major.",
+      "oneOf": [
+        {
+          "description": "Waiting to run, either new or resumed.",
+          "type": "string",
+          "const": "queued"
+        },
+        {
+          "description": "Running.",
+          "type": "string",
+          "const": "running"
+        },
+        {
+          "description": "A cancel was asked for; the operation winds down.",
+          "type": "string",
+          "const": "cancel_requested"
+        },
+        {
+          "description": "Finished with success; final.",
+          "type": "string",
+          "const": "succeeded"
+        },
+        {
+          "description": "Finished with a failure; final.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Cancelled; final.",
+          "type": "string",
+          "const": "cancelled"
+        },
+        {
+          "description": "Stopped in a way it cannot recover from on its own; see `recovery`.",
+          "type": "string",
+          "const": "needs_recovery"
+        }
+      ]
+    },
+    "OperationStats": {
+      "description": "Reply of `operation.get_stats`.",
+      "type": "object",
+      "properties": {
+        "autoCompensatedAtStart": {
+          "description": "Operations the daemon undid on its own when it started.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "interruptedAtStart": {
+          "description": "Operations the daemon found interrupted when it started.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxQueued": {
+          "description": "The most operations that wait in the queue.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxRunning": {
+          "description": "The most operations that run at once.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "needsRecovery": {
+          "description": "Operations that need recovery now.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "queued": {
+          "description": "Operations queued now.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "rejectedQueueFull": {
+          "description": "Requests refused with `operation.queue_full` since the daemon\nstarted.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "resumedAtStart": {
+          "description": "Operations the daemon resumed on its own when it started.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "running": {
+          "description": "Operations running now.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "running",
+        "queued",
+        "needsRecovery",
+        "maxRunning",
+        "maxQueued",
+        "interruptedAtStart",
+        "resumedAtStart",
+        "autoCompensatedAtStart",
+        "rejectedQueueFull"
+      ]
+    },
+    "OperationStepInfo": {
+      "description": "One step of an operation's journal. The step's checkpoint is never\nsent.",
+      "type": "object",
+      "properties": {
+        "attempts": {
+          "description": "How many times the step started, at least 1.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "errorCode": {
+          "description": "The catalog code of the step's failure; only in state `failed`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "finishedAt": {
+          "description": "When the step ended; null while it runs.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "name": {
+          "description": "The step's name.",
+          "type": "string"
+        },
+        "repeatable": {
+          "description": "Whether the engine may run the step again after an interruption.",
+          "type": "boolean"
+        },
+        "reversible": {
+          "description": "Whether the engine can undo the step.",
+          "type": "boolean"
+        },
+        "seq": {
+          "description": "The step's position, from 1.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "startedAt": {
+          "description": "When the step last started.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "state": {
+          "description": "The step's state.",
+          "$ref": "#/$defs/StepState"
+        }
+      },
+      "required": [
+        "seq",
+        "name",
+        "state",
+        "repeatable",
+        "reversible",
+        "attempts",
+        "startedAt"
+      ]
+    },
+    "OperationSummary": {
+      "description": "One operation as every client sees it, in replies and in both\noperation events.",
+      "type": "object",
+      "properties": {
+        "cancelRequestedAt": {
+          "description": "When a cancel was asked for.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "createdAt": {
+          "description": "When the operation was created.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "failure": {
+          "description": "Why the operation failed; only in state `failed`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationFailureInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "description": "The operation ID, a lowercase UUID v7.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "description": "What the operation does.",
+          "$ref": "#/$defs/OperationKind"
+        },
+        "pointOfNoReturnAt": {
+          "description": "When the first step that cannot be undone started. From then on a\ncancel no longer stops the work.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "progress": {
+          "description": "How far the operation got.",
+          "$ref": "#/$defs/OperationProgress"
+        },
+        "recovery": {
+          "description": "What needs the person's action; only in state `needs_recovery`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecoveryInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resource": {
+          "description": "The resource the operation works on; null for `update_manager`\nbefore it names the manager.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "result": {
+          "description": "What the operation produced, once it ended or was abandoned.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "revision": {
+          "description": "The operation's revision; every committed change raises it.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "stage": {
+          "description": "What the operation is doing now, such as `downloading`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "startedAt": {
+          "description": "When the operation first started running.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "state": {
+          "description": "The state, one of the seven of PRD section 18.2.",
+          "$ref": "#/$defs/OperationState"
+        },
+        "trigger": {
+          "description": "Who started the operation.",
+          "$ref": "#/$defs/OperationTriggerInfo"
+        },
+        "updatedAt": {
+          "description": "When the operation last changed.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "waitingOn": {
+          "description": "The operation this one waits for while queued: the oldest one that\nholds or waits for one of its locks.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "state",
+        "progress",
+        "trigger",
+        "createdAt",
+        "updatedAt",
+        "revision"
+      ]
+    },
+    "OperationTriggerInfo": {
+      "description": "Who started an operation.",
+      "type": "object",
+      "properties": {
+        "client": {
+          "description": "The kind of client that sent the request; null for the daemon.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClientKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "origin": {
+          "description": "A request, or the daemon itself.",
+          "$ref": "#/$defs/TriggerOrigin"
+        }
+      },
+      "required": [
+        "origin"
+      ]
+    },
+    "PartialItem": {
+      "description": "One item of a partial result, such as one leftover of an abandon.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "A catalog code that explains the outcome, if any.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "item": {
+          "description": "What the item is, such as a created item's reference.",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "What happened to the item.",
+          "$ref": "#/$defs/PartialOutcome"
+        },
+        "resource": {
+          "description": "The resource the item belongs to, if any.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "item",
+        "outcome"
+      ]
+    },
+    "PartialOutcome": {
+      "description": "What happened to one item of a partial result. Open.",
+      "oneOf": [
+        {
+          "description": "Done, or cleaned up.",
+          "type": "string",
+          "const": "done"
+        },
+        {
+          "description": "Failed, or cleaning it up failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "Left alone on purpose, such as an item another operation owns.",
+          "type": "string",
+          "const": "skipped"
+        },
+        {
+          "description": "Still there; the person decides what to do with it.",
+          "type": "string",
+          "const": "left_over"
+        },
+        {
+          "description": "An outcome this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "PlatformCapabilityStatus": {
       "description": "One platform capability (spec 0004) and its support.",
       "type": "object",
@@ -881,6 +1756,124 @@
       "required": [
         "major",
         "minor"
+      ]
+    },
+    "RecoveryAction": {
+      "description": "A recovery method a client may call for an operation. Open.",
+      "oneOf": [
+        {
+          "description": "`operation.resume`.",
+          "type": "string",
+          "const": "resume"
+        },
+        {
+          "description": "`operation.abandon`.",
+          "type": "string",
+          "const": "abandon"
+        },
+        {
+          "description": "An action this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "RecoveryCause": {
+      "description": "Why an operation needs recovery. Open.",
+      "oneOf": [
+        {
+          "description": "The daemon stopped in the middle of the operation.",
+          "type": "string",
+          "const": "interrupted"
+        },
+        {
+          "description": "A step failed after the point of no return.",
+          "type": "string",
+          "const": "step_failed"
+        },
+        {
+          "description": "Undoing what the operation created failed.",
+          "type": "string",
+          "const": "compensation_failed"
+        },
+        {
+          "description": "The work panicked after the point of no return.",
+          "type": "string",
+          "const": "panicked"
+        },
+        {
+          "description": "A cause this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "RecoveryHint": {
+      "description": "What the engine suggests for an operation that needs recovery. Open.",
+      "oneOf": [
+        {
+          "description": "The engine undoes the work on its own after the daemon starts.",
+          "type": "string",
+          "const": "auto_compensate"
+        },
+        {
+          "description": "`operation.resume` continues the work.",
+          "type": "string",
+          "const": "resume"
+        },
+        {
+          "description": "`operation.abandon` cleans up what it can and closes the operation.",
+          "type": "string",
+          "const": "abandon"
+        },
+        {
+          "description": "The person has to look; nothing automatic is safe.",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "A hint this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "RecoveryInfo": {
+      "description": "What an operation in state `needs_recovery` needs.",
+      "type": "object",
+      "properties": {
+        "actions": {
+          "description": "The recovery methods a client may call now.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RecoveryAction"
+          }
+        },
+        "cause": {
+          "description": "Why the operation needs recovery.",
+          "$ref": "#/$defs/RecoveryCause"
+        },
+        "error": {
+          "description": "The error behind the cause, if one was recorded.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorBody"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "hint": {
+          "description": "What the engine suggests.",
+          "$ref": "#/$defs/RecoveryHint"
+        }
+      },
+      "required": [
+        "hint",
+        "cause"
       ]
     },
     "RegistryRecovery": {
@@ -1024,6 +2017,108 @@
           "required": [
             "type"
           ]
+        },
+        {
+          "description": "The operation with its steps and created items.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/OperationDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One page of operations.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/OperationPage"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation after the cancel, and what the cancel did.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CancelReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.cancel"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation, queued again.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/OperationSummary"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.resume"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The closed operation and what was left over.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/AbandonReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.abandon"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The engine's counters and limits.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/OperationStats"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.get_stats"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1141,6 +2236,36 @@
         "reason"
       ]
     },
+    "StepState": {
+      "description": "The state of one step. Open.",
+      "oneOf": [
+        {
+          "description": "Running.",
+          "type": "string",
+          "const": "running"
+        },
+        {
+          "description": "Finished.",
+          "type": "string",
+          "const": "done"
+        },
+        {
+          "description": "Failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "The daemon stopped while the step ran.",
+          "type": "string",
+          "const": "interrupted"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "Subscribed": {
       "description": "Reply of `events.subscribe`. It always precedes the subscription's first\nevent.",
       "type": "object",
@@ -1212,6 +2337,26 @@
         },
         {
           "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "TriggerOrigin": {
+      "description": "Where an operation came from. Open.",
+      "oneOf": [
+        {
+          "description": "A client request.",
+          "type": "string",
+          "const": "user"
+        },
+        {
+          "description": "The daemon, such as a restart policy.",
+          "type": "string",
+          "const": "background"
+        },
+        {
+          "description": "An origin this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
         }

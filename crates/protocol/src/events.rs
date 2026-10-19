@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::error::FieldError;
 use crate::json::{FieldCode, Validate};
+use crate::operation::OperationSummary;
 use crate::wire::{ResourceRef, Revision, Sequence, Timestamp};
 
 /// Most entries in `SubscribeParams.kinds`.
@@ -55,6 +56,14 @@ pub enum EventKind {
     /// The daemon is shutting down.
     #[serde(rename = "daemon.shutting_down")]
     DaemonShuttingDown(ShuttingDown),
+    /// An operation was created or changed state (spec 0007). The event's
+    /// resource is the operation and its revision the operation's.
+    #[serde(rename = "operation.state_changed")]
+    OperationStateChanged(Box<OperationSummary>),
+    /// An operation changed without changing state: stage, progress,
+    /// `waitingOn`, the point of no return, or a cancel (spec 0007).
+    #[serde(rename = "operation.progress")]
+    OperationProgress(Box<OperationSummary>),
 }
 
 /// Lists every event kind once, giving `EventKind::KINDS` and
@@ -80,6 +89,8 @@ macro_rules! event_kinds {
 event_kinds! {
     "events.gap" => EventsGap;
     "daemon.shutting_down" => DaemonShuttingDown;
+    "operation.state_changed" => OperationStateChanged;
+    "operation.progress" => OperationProgress;
 }
 
 impl EventKind {

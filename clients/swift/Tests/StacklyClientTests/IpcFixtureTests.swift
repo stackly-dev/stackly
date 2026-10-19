@@ -16,6 +16,8 @@ struct IpcFixtureTests {
             try check(ServerFrame.self, fixture, data)
         case "SecretInput":
             try check(SecretInput.self, fixture, data)
+        case "OperationAccepted":
+            try check(OperationAccepted.self, fixture, data)
         default:
             Issue.record("no Swift decoder for type \(fixture.type)")
         }
@@ -36,6 +38,13 @@ struct IpcFixtureTests {
         #expect(methods.contains(.daemonGetCapabilities))
         #expect(methods.contains { if case .eventsSubscribe = $0 { true } else { false } })
         #expect(methods.contains { if case .eventsUnsubscribe = $0 { true } else { false } })
+        #expect(methods.contains { if case .operationGet = $0 { true } else { false } })
+        #expect(methods.contains { if case .operationList = $0 { true } else { false } })
+        #expect(methods.contains { if case .operationCancel = $0 { true } else { false } })
+        #expect(methods.contains { if case .operationResume = $0 { true } else { false } })
+        #expect(methods.contains { if case .operationAbandon = $0 { true } else { false } })
+        #expect(methods.contains(.operationGetStats))
+        #expect(Set(methods.map(\.methodName)).count == 12)
     }
 
     private func check<Value: Codable & Equatable>(

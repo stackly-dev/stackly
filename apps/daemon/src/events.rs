@@ -376,7 +376,7 @@ mod tests {
     fn gap_reason(event: &Event) -> Option<GapReason> {
         match &event.kind {
             EventKind::EventsGap(gap) => Some(gap.reason),
-            EventKind::DaemonShuttingDown(_) => None,
+            _ => None,
         }
     }
 

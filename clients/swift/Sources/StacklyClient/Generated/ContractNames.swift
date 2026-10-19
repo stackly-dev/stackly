@@ -8,6 +8,8 @@ public enum ContractNames {
 	public static let eventKinds: Set<String> = [
 		"events.gap",
 		"daemon.shutting_down",
+		"operation.state_changed",
+		"operation.progress",
 	]
 }
 
@@ -21,6 +23,12 @@ extension Call {
 		case .daemonGetCapabilities: "daemon.get_capabilities"
 		case .eventsSubscribe: "events.subscribe"
 		case .eventsUnsubscribe: "events.unsubscribe"
+		case .operationGet: "operation.get"
+		case .operationList: "operation.list"
+		case .operationCancel: "operation.cancel"
+		case .operationResume: "operation.resume"
+		case .operationAbandon: "operation.abandon"
+		case .operationGetStats: "operation.get_stats"
 		}
 	}
 }
@@ -35,6 +43,12 @@ extension Reply {
 		case .daemonGetCapabilities: "daemon.get_capabilities"
 		case .eventsSubscribe: "events.subscribe"
 		case .eventsUnsubscribe: "events.unsubscribe"
+		case .operationGet: "operation.get"
+		case .operationList: "operation.list"
+		case .operationCancel: "operation.cancel"
+		case .operationResume: "operation.resume"
+		case .operationAbandon: "operation.abandon"
+		case .operationGetStats: "operation.get_stats"
 		}
 	}
 }
@@ -45,6 +59,8 @@ extension EventKind {
 		switch self {
 		case .eventsGap: "events.gap"
 		case .daemonShuttingDown: "daemon.shutting_down"
+		case .operationStateChanged: "operation.state_changed"
+		case .operationProgress: "operation.progress"
 		}
 	}
 }

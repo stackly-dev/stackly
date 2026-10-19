@@ -1,0 +1,72 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000302",
+    "reply": {
+      "type": "operation.list",
+      "content": {
+        "items": [
+          {
+            "id": "0192f3a4-0000-7000-8000-000000000001",
+            "kind": "install_runtime",
+            "resource": {
+              "kind": "runtime",
+              "id": "0192f3a4-0000-7000-8000-0000000000a1"
+            },
+            "state": "running",
+            "stage": "downloading",
+            "progress": {
+              "type": "counted",
+              "content": {
+                "done": 1048576,
+                "total": 8388608
+              }
+            },
+            "waitingOn": null,
+            "cancelRequestedAt": null,
+            "pointOfNoReturnAt": null,
+            "failure": null,
+            "recovery": null,
+            "result": null,
+            "trigger": {
+              "origin": "user",
+              "client": "cli"
+            },
+            "createdAt": "2026-10-19T08:00:00.000Z",
+            "startedAt": "2026-10-19T08:00:00.120Z",
+            "updatedAt": "2026-10-19T08:00:05.500Z",
+            "revision": 4
+          },
+          {
+            "id": "0192f3a4-0000-7000-8000-000000000003",
+            "kind": "start_instance",
+            "resource": {
+              "kind": "instance",
+              "id": "0192f3a4-0000-7000-8000-0000000000b1"
+            },
+            "state": "queued",
+            "stage": null,
+            "progress": {
+              "type": "indeterminate"
+            },
+            "waitingOn": "0192f3a4-0000-7000-8000-000000000002",
+            "cancelRequestedAt": null,
+            "pointOfNoReturnAt": null,
+            "failure": null,
+            "recovery": null,
+            "result": null,
+            "trigger": {
+              "origin": "background",
+              "client": null
+            },
+            "createdAt": "2026-10-19T07:59:59.123Z",
+            "startedAt": null,
+            "updatedAt": "2026-10-19T07:59:59.123Z",
+            "revision": 1
+          }
+        ],
+        "next": "2026-10-19T07:59:59.123456789Z_0192f3a4-0000-7000-8000-000000000003"
+      }
+    }
+  }
+}

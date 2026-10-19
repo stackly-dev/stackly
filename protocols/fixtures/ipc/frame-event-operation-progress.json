@@ -1,0 +1,47 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 118,
+    "at": "2026-10-19T08:00:06.501Z",
+    "resource": {
+      "kind": "operation",
+      "id": "0192f3a4-0000-7000-8000-000000000001"
+    },
+    "revision": 5,
+    "kind": {
+      "type": "operation.progress",
+      "content": {
+        "id": "0192f3a4-0000-7000-8000-000000000001",
+        "kind": "install_runtime",
+        "resource": {
+          "kind": "runtime",
+          "id": "0192f3a4-0000-7000-8000-0000000000a1"
+        },
+        "state": "running",
+        "stage": "downloading",
+        "progress": {
+          "type": "counted",
+          "content": {
+            "done": 1048576,
+            "total": 8388608
+          }
+        },
+        "waitingOn": null,
+        "cancelRequestedAt": null,
+        "pointOfNoReturnAt": null,
+        "failure": null,
+        "recovery": null,
+        "result": null,
+        "trigger": {
+          "origin": "user",
+          "client": "cli"
+        },
+        "createdAt": "2026-10-19T08:00:00.000Z",
+        "startedAt": "2026-10-19T08:00:00.120Z",
+        "updatedAt": "2026-10-19T08:00:06.500Z",
+        "revision": 5
+      }
+    }
+  }
+}

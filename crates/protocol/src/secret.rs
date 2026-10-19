@@ -105,8 +105,14 @@ impl fmt::Debug for SecretText {
 }
 
 impl Serialize for SecretText {
+    /// The value, or [`SECRET_MARKER`] while
+    /// [`fingerprint::redacting`](crate::fingerprint::redacting) is true.
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.expose())
+        if crate::fingerprint::redacting() {
+            serializer.serialize_str(SECRET_MARKER)
+        } else {
+            serializer.serialize_str(self.expose())
+        }
     }
 }
 

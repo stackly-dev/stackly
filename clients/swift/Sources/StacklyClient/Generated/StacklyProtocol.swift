@@ -14,6 +14,597 @@ import Foundation
 /// by the params' [`Validate`].
 public typealias SecretText = String
 
+/// Params of `operation.abandon`.
+public struct AbandonOperationParams: Codable, Sendable, Equatable {
+	/// The operation to abandon.
+	public let operationId: UUID
+	/// The revision the person saw when they confirmed; required, so an
+	/// abandon only applies to the state they looked at.
+	public let expectedRevision: UInt64
+
+	public init(operationId: UUID, expectedRevision: UInt64) {
+		self.operationId = operationId
+		self.expectedRevision = expectedRevision
+	}
+}
+
+/// What an operation does: the kind codes of spec 0004. Open: a newer
+/// daemon may add kinds, which older clients read as `unrecognized`.
+public enum OperationKind: String, Codable, Sendable, Equatable {
+	/// Install a managed runtime.
+	case installRuntime = "install_runtime"
+	/// Register a runtime in a folder the user owns.
+	case registerExternalRuntime = "register_external_runtime"
+	/// Remove a runtime.
+	case removeRuntime = "remove_runtime"
+	/// Create an instance.
+	case createInstance = "create_instance"
+	/// Start an instance.
+	case startInstance = "start_instance"
+	/// Stop an instance.
+	case stopInstance = "stop_instance"
+	/// Restart an instance.
+	case restartInstance = "restart_instance"
+	/// Reload an instance's configuration.
+	case reloadInstance = "reload_instance"
+	/// Rename an instance.
+	case renameInstance = "rename_instance"
+	/// Remove an instance and keep its data.
+	case removeInstance = "remove_instance"
+	/// Delete an instance and its data.
+	case purgeInstance = "purge_instance"
+	/// Move an instance to another runtime.
+	case rebindRuntime = "rebind_runtime"
+	/// Move an instance to another provider revision.
+	case updateProviderRevision = "update_provider_revision"
+	/// Back up an instance.
+	case backupInstance = "backup_instance"
+	/// Restore an instance.
+	case restoreInstance = "restore_instance"
+	/// Bring an environment up.
+	case environmentUp = "environment_up"
+	/// Take an environment down.
+	case environmentDown = "environment_down"
+	/// Update Stackly itself; its resource is the manager.
+	case updateManager = "update_manager"
+	/// Migrate an instance's data to another line.
+	case migrateData = "migrate_data"
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The kinds of resource Stackly tracks. Open: a newer daemon may add
+/// values, which older clients read as `unrecognized`.
+public enum ResourceKind: String, Codable, Sendable, Equatable {
+	/// An installed runtime version.
+	case runtime
+	/// A configured instance of a runtime.
+	case instance
+	/// A group of instances.
+	case environment
+	/// An asynchronous operation.
+	case operation
+	/// A provider package.
+	case provider
+	/// A backup of an instance.
+	case backup
+	/// Stackly itself, the target of an `update_manager` operation; its
+	/// `id` is always [`ResourceRef::MANAGER_ID`] (spec 0007).
+	case manager
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Names one resource, in errors and events.
+public struct ResourceRef: Codable, Sendable, Equatable {
+	/// What kind of resource this is.
+	public let kind: ResourceKind
+	/// The canonical text of the resource key: a lowercase UUID for
+	/// runtimes, instances, environments, operations, and backups,
+	/// [`ResourceRef::MANAGER_ID`] for the manager. Spec 0009 fixes the
+	/// form for providers.
+	public let id: String
+
+	public init(kind: ResourceKind, id: String) {
+		self.kind = kind
+		self.id = id
+	}
+}
+
+/// The state of an operation (PRD section 18.2). Closed: a new state is a
+/// new protocol major.
+public enum OperationState: String, Codable, Sendable, Equatable {
+	/// Waiting to run, either new or resumed.
+	case queued
+	/// Running.
+	case running
+	/// A cancel was asked for; the operation winds down.
+	case cancelRequested = "cancel_requested"
+	/// Finished with success; final.
+	case succeeded
+	/// Finished with a failure; final.
+	case failed
+	/// Cancelled; final.
+	case cancelled
+	/// Stopped in a way it cannot recover from on its own; see `recovery`.
+	case needsRecovery = "needs_recovery"
+}
+
+/// How far an operation got. Closed.
+public enum OperationProgress: Codable, Sendable, Equatable {
+	/// The work does not know how much is left.
+	case indeterminate
+	/// The work counted what it did and what there is.
+	case counted(CountedProgress)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case indeterminate,
+			counted
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .indeterminate:
+				self = .indeterminate
+				return
+			case .counted:
+				if let content = try? container.decode(CountedProgress.self, forKey: .content) {
+					self = .counted(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(OperationProgress.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for OperationProgress"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .indeterminate:
+			try container.encode(CodingKeys.indeterminate, forKey: .type)
+		case .counted(let content):
+			try container.encode(CodingKeys.counted, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// What a client should do about an error. Closed: a new category is a new
+/// protocol major. Feature 8 derives CLI exit codes from it.
+public enum ErrorCategory: String, Codable, Sendable, Equatable {
+	/// Fix the input; sending the same request again fails again.
+	case invalidInput = "invalid_input"
+	/// The resource does not exist; refresh the snapshot.
+	case notFound = "not_found"
+	/// State changed or the resource is in use; refresh, then decide.
+	case conflict
+	/// Identity, peer, or trust was refused; never retry on its own.
+	case unauthorized
+	/// The version, method, or capability is not supported.
+	case unsupported
+	/// The daemon or a dependency is not available yet; check `retryable`.
+	case unavailable
+	/// The work ran and failed.
+	case failed
+	/// A time limit passed; the outcome may be unknown, check the operation.
+	case timeout
+	/// The work was cancelled.
+	case cancelled
+	/// A bug or a broken invariant in Stackly.
+	case `internal`
+}
+
+/// One params field that failed to decode or validate.
+public struct FieldError: Codable, Sendable, Equatable {
+	/// Where the field sits, relative to the params, such as `name`,
+	/// `since.sequence`, or `kinds[3]`.
+	public let path: String
+	/// A code from the fixed set in [`FieldCode`].
+	public let code: String
+	/// The fixed text of the code; never the input value.
+	public let message: String
+
+	public init(path: String, code: String, message: String) {
+		self.path = path
+		self.code = code
+		self.message = message
+	}
+}
+
+/// One extra fact on an error, as a key and a string value.
+public struct ErrorDetail: Codable, Sendable, Equatable {
+	/// A camelCase key from the code's catalog entry.
+	public let key: String
+	/// The value, as text.
+	public let value: String
+
+	public init(key: String, value: String) {
+		self.key = key
+		self.value = value
+	}
+}
+
+/// One entry of a structured list on an error, such as one reference that
+/// needs a secret (spec 0011) or one manifest issue (spec 0009).
+/// 
+/// `kind` and the field keys are plain strings, so a client always decodes
+/// an error frame, even with an item kind it does not know yet.
+public struct ErrorItem: Codable, Sendable, Equatable {
+	/// The item kind from the code's catalog entry, such as `issue`.
+	public let kind: String
+	/// The item's facts, with keys from the code's catalog entry.
+	public let fields: [ErrorDetail]?
+
+	public init(kind: String, fields: [ErrorDetail]?) {
+		self.kind = kind
+		self.fields = fields
+	}
+}
+
+/// The error envelope every daemon error and every client side IPC error
+/// uses (VAL-020).
+/// 
+/// `code`, `category`, `message`, and `details` are frozen across majors, so
+/// peers of any major can always exchange `protocol.major_mismatch`.
+public struct ErrorBody: Codable, Sendable, Equatable {
+	/// A catalog code, `<area>.<reason>`.
+	public let code: String
+	/// The category the catalog gives the code.
+	public let category: ErrorCategory
+	/// One safe English sentence: lowercase start, no trailing period, at
+	/// most 200 characters, never a secret.
+	public let message: String
+	/// True only when the daemon guarantees the request had no effect, so
+	/// the exact same request may be sent again.
+	public let retryable: Bool
+	/// The resource concerned.
+	public let resource: ResourceRef?
+	/// The params fields that failed, for `request.invalid_params`.
+	public let fields: [FieldError]?
+	/// A safe recovery step, in English.
+	public let hint: String?
+	/// Extra facts, with keys only from the code's catalog entry.
+	public let details: [ErrorDetail]?
+	/// The operation that failed (spec 0007).
+	public let operationId: UUID?
+	/// The PRD rule ID behind the error, such as `BR-008`.
+	public let rule: String?
+	/// A structured list that does not fit in `details`, with the item
+	/// `kind` and field keys from the code's catalog entry.
+	public let items: [ErrorItem]?
+
+	public init(code: String, category: ErrorCategory, message: String, retryable: Bool, resource: ResourceRef?, fields: [FieldError]?, hint: String?, details: [ErrorDetail]?, operationId: UUID?, rule: String?, items: [ErrorItem]?) {
+		self.code = code
+		self.category = category
+		self.message = message
+		self.retryable = retryable
+		self.resource = resource
+		self.fields = fields
+		self.hint = hint
+		self.details = details
+		self.operationId = operationId
+		self.rule = rule
+		self.items = items
+	}
+}
+
+/// Why an operation failed; only in state `failed`.
+public struct OperationFailureInfo: Codable, Sendable, Equatable {
+	/// The engine's reason code, such as `step_failed`, `interrupted`, or
+	/// `abandoned`.
+	public let reason: String
+	/// True when a new operation with a new idempotency key may succeed.
+	/// It differs from `error.retryable`, which is about sending the same
+	/// request again.
+	public let retryable: Bool
+	/// The error that ended the operation, with `operationId` set.
+	public let error: ErrorBody
+
+	public init(reason: String, retryable: Bool, error: ErrorBody) {
+		self.reason = reason
+		self.retryable = retryable
+		self.error = error
+	}
+}
+
+/// What the engine suggests for an operation that needs recovery. Open.
+public enum RecoveryHint: String, Codable, Sendable, Equatable {
+	/// The engine undoes the work on its own after the daemon starts.
+	case autoCompensate = "auto_compensate"
+	/// `operation.resume` continues the work.
+	case resume
+	/// `operation.abandon` cleans up what it can and closes the operation.
+	case abandon
+	/// The person has to look; nothing automatic is safe.
+	case manual
+	/// A hint this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Why an operation needs recovery. Open.
+public enum RecoveryCause: String, Codable, Sendable, Equatable {
+	/// The daemon stopped in the middle of the operation.
+	case interrupted
+	/// A step failed after the point of no return.
+	case stepFailed = "step_failed"
+	/// Undoing what the operation created failed.
+	case compensationFailed = "compensation_failed"
+	/// The work panicked after the point of no return.
+	case panicked
+	/// A cause this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// A recovery method a client may call for an operation. Open.
+public enum RecoveryAction: String, Codable, Sendable, Equatable {
+	/// `operation.resume`.
+	case resume
+	/// `operation.abandon`.
+	case abandon
+	/// An action this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What an operation in state `needs_recovery` needs.
+public struct RecoveryInfo: Codable, Sendable, Equatable {
+	/// What the engine suggests.
+	public let hint: RecoveryHint
+	/// Why the operation needs recovery.
+	public let cause: RecoveryCause
+	/// The error behind the cause, if one was recorded.
+	public let error: ErrorBody?
+	/// The recovery methods a client may call now.
+	public let actions: [RecoveryAction]?
+
+	public init(hint: RecoveryHint, cause: RecoveryCause, error: ErrorBody?, actions: [RecoveryAction]?) {
+		self.hint = hint
+		self.cause = cause
+		self.error = error
+		self.actions = actions
+	}
+}
+
+/// What happened to one item of a partial result. Open.
+public enum PartialOutcome: String, Codable, Sendable, Equatable {
+	/// Done, or cleaned up.
+	case done
+	/// Failed, or cleaning it up failed.
+	case failed
+	/// Left alone on purpose, such as an item another operation owns.
+	case skipped
+	/// Still there; the person decides what to do with it.
+	case leftOver = "left_over"
+	/// An outcome this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One item of a partial result, such as one leftover of an abandon.
+public struct PartialItem: Codable, Sendable, Equatable {
+	/// What the item is, such as a created item's reference.
+	public let item: String
+	/// The resource the item belongs to, if any.
+	public let resource: ResourceRef?
+	/// What happened to the item.
+	public let outcome: PartialOutcome
+	/// A catalog code that explains the outcome, if any.
+	public let code: String?
+
+	public init(item: String, resource: ResourceRef?, outcome: PartialOutcome, code: String?) {
+		self.item = item
+		self.resource = resource
+		self.outcome = outcome
+		self.code = code
+	}
+}
+
+/// What an operation produced.
+public struct OperationResult: Codable, Sendable, Equatable {
+	/// The resources the operation created or changed.
+	public let resources: [ResourceRef]?
+	/// The items that did not all go to plan; a client shows the operation
+	/// as partial when this is not empty.
+	public let partial: [PartialItem]?
+
+	public init(resources: [ResourceRef]?, partial: [PartialItem]?) {
+		self.resources = resources
+		self.partial = partial
+	}
+}
+
+/// Where an operation came from. Open.
+public enum TriggerOrigin: String, Codable, Sendable, Equatable {
+	/// A client request.
+	case user
+	/// The daemon, such as a restart policy.
+	case background
+	/// An origin this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The kinds of client. Open: a newer client may send a value an older
+/// daemon reads as `unrecognized`.
+public enum ClientKind: String, Codable, Sendable, Equatable {
+	/// The `stackly` CLI.
+	case cli
+	/// The SwiftUI app.
+	case gui
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Who started an operation.
+public struct OperationTriggerInfo: Codable, Sendable, Equatable {
+	/// A request, or the daemon itself.
+	public let origin: TriggerOrigin
+	/// The kind of client that sent the request; null for the daemon.
+	public let client: ClientKind?
+
+	public init(origin: TriggerOrigin, client: ClientKind?) {
+		self.origin = origin
+		self.client = client
+	}
+}
+
+/// One operation as every client sees it, in replies and in both
+/// operation events.
+public struct OperationSummary: Codable, Sendable, Equatable {
+	/// The operation ID, a lowercase UUID v7.
+	public let id: UUID
+	/// What the operation does.
+	public let kind: OperationKind
+	/// The resource the operation works on; null for `update_manager`
+	/// before it names the manager.
+	public let resource: ResourceRef?
+	/// The state, one of the seven of PRD section 18.2.
+	public let state: OperationState
+	/// What the operation is doing now, such as `downloading`.
+	public let stage: String?
+	/// How far the operation got.
+	public let progress: OperationProgress
+	/// The operation this one waits for while queued: the oldest one that
+	/// holds or waits for one of its locks.
+	public let waitingOn: UUID?
+	/// When a cancel was asked for.
+	public let cancelRequestedAt: Date?
+	/// When the first step that cannot be undone started. From then on a
+	/// cancel no longer stops the work.
+	public let pointOfNoReturnAt: Date?
+	/// Why the operation failed; only in state `failed`.
+	public let failure: OperationFailureInfo?
+	/// What needs the person's action; only in state `needs_recovery`.
+	public let recovery: RecoveryInfo?
+	/// What the operation produced, once it ended or was abandoned.
+	public let result: OperationResult?
+	/// Who started the operation.
+	public let trigger: OperationTriggerInfo
+	/// When the operation was created.
+	public let createdAt: Date
+	/// When the operation first started running.
+	public let startedAt: Date?
+	/// When the operation last changed.
+	public let updatedAt: Date
+	/// The operation's revision; every committed change raises it.
+	public let revision: UInt64
+
+	public init(id: UUID, kind: OperationKind, resource: ResourceRef?, state: OperationState, stage: String?, progress: OperationProgress, waitingOn: UUID?, cancelRequestedAt: Date?, pointOfNoReturnAt: Date?, failure: OperationFailureInfo?, recovery: RecoveryInfo?, result: OperationResult?, trigger: OperationTriggerInfo, createdAt: Date, startedAt: Date?, updatedAt: Date, revision: UInt64) {
+		self.id = id
+		self.kind = kind
+		self.resource = resource
+		self.state = state
+		self.stage = stage
+		self.progress = progress
+		self.waitingOn = waitingOn
+		self.cancelRequestedAt = cancelRequestedAt
+		self.pointOfNoReturnAt = pointOfNoReturnAt
+		self.failure = failure
+		self.recovery = recovery
+		self.result = result
+		self.trigger = trigger
+		self.createdAt = createdAt
+		self.startedAt = startedAt
+		self.updatedAt = updatedAt
+		self.revision = revision
+	}
+}
+
+/// Where one created item stands. Open.
+public enum CreatedState: String, Codable, Sendable, Equatable {
+	/// The operation recorded that it is about to create the item.
+	case intended
+	/// The item exists and belongs to the operation.
+	case created
+	/// The item was undone.
+	case compensated
+	/// The item stays, as part of the operation's result.
+	case kept
+	/// Undoing the item failed.
+	case compensationFailed = "compensation_failed"
+	/// The item turned out to belong to someone else and was left alone.
+	case notOwned = "not_owned"
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One thing an operation created or claimed, which a cancel or an abandon
+/// may undo. A custom item's payload is never sent.
+public struct CreatedItemInfo: Codable, Sendable, Equatable {
+	/// The item kind, such as `instance_tree` or `secret_ref`.
+	public let kind: String
+	/// The item's reference: an ID, a secret reference, or
+	/// `<compensator>:<key>`.
+	public let reference: String
+	/// Where the item stands.
+	public let state: CreatedState
+	/// A reason code, such as `created_by_other_operation`.
+	public let detail: String?
+
+	public init(kind: String, reference: String, state: CreatedState, detail: String?) {
+		self.kind = kind
+		self.reference = reference
+		self.state = state
+		self.detail = detail
+	}
+}
+
+/// Reply of `operation.abandon`.
+public struct AbandonReply: Codable, Sendable, Equatable {
+	/// The operation, now `failed` with reason `abandoned`.
+	public let operation: OperationSummary
+	/// What the abandon did not undo; also in `operation.result.partial`.
+	public let leftovers: [CreatedItemInfo]?
+
+	public init(operation: OperationSummary, leftovers: [CreatedItemInfo]?) {
+		self.operation = operation
+		self.leftovers = leftovers
+	}
+}
+
+/// Params of `operation.cancel`.
+public struct CancelOperationParams: Codable, Sendable, Equatable {
+	/// The operation to cancel.
+	public let operationId: UUID
+
+	public init(operationId: UUID) {
+		self.operationId = operationId
+	}
+}
+
+/// What a cancel did. Open.
+public enum CancelDisposition: String, Codable, Sendable, Equatable {
+	/// The operation had not started and is now `cancelled`.
+	case cancelledBeforeStart = "cancelled_before_start"
+	/// The work stops at its next checkpoint, then undoes what it did.
+	case requested
+	/// The work already passed a step that cannot be undone, so it runs
+	/// to its end.
+	case continuingPastPointOfNoReturn = "continuing_past_point_of_no_return"
+	/// The operation had already ended; nothing changed.
+	case alreadyFinal = "already_final"
+	/// The operation needs recovery; resume or abandon it instead.
+	case recoveryRequired = "recovery_required"
+	/// A disposition this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Reply of `operation.cancel`.
+public struct CancelReply: Codable, Sendable, Equatable {
+	/// The operation after the cancel.
+	public let operation: OperationSummary
+	/// What the cancel did.
+	public let disposition: CancelDisposition
+
+	public init(operation: OperationSummary, disposition: CancelDisposition) {
+		self.operation = operation
+		self.disposition = disposition
+	}
+}
+
 /// One platform capability (spec 0004) and its support.
 public struct PlatformCapabilityStatus: Codable, Sendable, Equatable {
 	/// The capability code, such as `ipc_endpoint`.
@@ -46,17 +637,6 @@ public struct Capabilities: Codable, Sendable, Equatable {
 	}
 }
 
-/// The kinds of client. Open: a newer client may send a value an older
-/// daemon reads as `unrecognized`.
-public enum ClientKind: String, Codable, Sendable, Equatable {
-	/// The `stackly` CLI.
-	case cli
-	/// The SwiftUI app.
-	case gui
-	/// A kind this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
 /// Who a client is: for the daemon log, and for handlers that pick how to
 /// interact with the person behind it (spec 0011).
 public struct ClientInfo: Codable, Sendable, Equatable {
@@ -78,6 +658,19 @@ public struct ClientInfo: Codable, Sendable, Equatable {
 		self.version = version
 		self.pid = pid
 		self.interactive = interactive
+	}
+}
+
+/// Content of a `counted` progress.
+public struct CountedProgress: Codable, Sendable, Equatable {
+	/// What is done, such as bytes downloaded.
+	public let done: UInt64
+	/// What there is in all.
+	public let total: UInt64
+
+	public init(done: UInt64, total: UInt64) {
+		self.done = done
+		self.total = total
 	}
 }
 
@@ -292,163 +885,6 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 	}
 }
 
-/// What a client should do about an error. Closed: a new category is a new
-/// protocol major. Feature 8 derives CLI exit codes from it.
-public enum ErrorCategory: String, Codable, Sendable, Equatable {
-	/// Fix the input; sending the same request again fails again.
-	case invalidInput = "invalid_input"
-	/// The resource does not exist; refresh the snapshot.
-	case notFound = "not_found"
-	/// State changed or the resource is in use; refresh, then decide.
-	case conflict
-	/// Identity, peer, or trust was refused; never retry on its own.
-	case unauthorized
-	/// The version, method, or capability is not supported.
-	case unsupported
-	/// The daemon or a dependency is not available yet; check `retryable`.
-	case unavailable
-	/// The work ran and failed.
-	case failed
-	/// A time limit passed; the outcome may be unknown, check the operation.
-	case timeout
-	/// The work was cancelled.
-	case cancelled
-	/// A bug or a broken invariant in Stackly.
-	case `internal`
-}
-
-/// The kinds of resource Stackly tracks. Open: a newer daemon may add
-/// values, which older clients read as `unrecognized`.
-public enum ResourceKind: String, Codable, Sendable, Equatable {
-	/// An installed runtime version.
-	case runtime
-	/// A configured instance of a runtime.
-	case instance
-	/// A group of instances.
-	case environment
-	/// An asynchronous operation.
-	case operation
-	/// A provider package.
-	case provider
-	/// A backup of an instance.
-	case backup
-	/// Stackly itself, the target of an `update_manager` operation; its
-	/// `id` is always [`ResourceRef::MANAGER_ID`] (spec 0007).
-	case manager
-	/// A kind this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// Names one resource, in errors and events.
-public struct ResourceRef: Codable, Sendable, Equatable {
-	/// What kind of resource this is.
-	public let kind: ResourceKind
-	/// The canonical text of the resource key: a lowercase UUID for
-	/// runtimes, instances, environments, operations, and backups,
-	/// [`ResourceRef::MANAGER_ID`] for the manager. Spec 0009 fixes the
-	/// form for providers.
-	public let id: String
-
-	public init(kind: ResourceKind, id: String) {
-		self.kind = kind
-		self.id = id
-	}
-}
-
-/// One params field that failed to decode or validate.
-public struct FieldError: Codable, Sendable, Equatable {
-	/// Where the field sits, relative to the params, such as `name`,
-	/// `since.sequence`, or `kinds[3]`.
-	public let path: String
-	/// A code from the fixed set in [`FieldCode`].
-	public let code: String
-	/// The fixed text of the code; never the input value.
-	public let message: String
-
-	public init(path: String, code: String, message: String) {
-		self.path = path
-		self.code = code
-		self.message = message
-	}
-}
-
-/// One extra fact on an error, as a key and a string value.
-public struct ErrorDetail: Codable, Sendable, Equatable {
-	/// A camelCase key from the code's catalog entry.
-	public let key: String
-	/// The value, as text.
-	public let value: String
-
-	public init(key: String, value: String) {
-		self.key = key
-		self.value = value
-	}
-}
-
-/// One entry of a structured list on an error, such as one reference that
-/// needs a secret (spec 0011) or one manifest issue (spec 0009).
-/// 
-/// `kind` and the field keys are plain strings, so a client always decodes
-/// an error frame, even with an item kind it does not know yet.
-public struct ErrorItem: Codable, Sendable, Equatable {
-	/// The item kind from the code's catalog entry, such as `issue`.
-	public let kind: String
-	/// The item's facts, with keys from the code's catalog entry.
-	public let fields: [ErrorDetail]?
-
-	public init(kind: String, fields: [ErrorDetail]?) {
-		self.kind = kind
-		self.fields = fields
-	}
-}
-
-/// The error envelope every daemon error and every client side IPC error
-/// uses (VAL-020).
-/// 
-/// `code`, `category`, `message`, and `details` are frozen across majors, so
-/// peers of any major can always exchange `protocol.major_mismatch`.
-public struct ErrorBody: Codable, Sendable, Equatable {
-	/// A catalog code, `<area>.<reason>`.
-	public let code: String
-	/// The category the catalog gives the code.
-	public let category: ErrorCategory
-	/// One safe English sentence: lowercase start, no trailing period, at
-	/// most 200 characters, never a secret.
-	public let message: String
-	/// True only when the daemon guarantees the request had no effect, so
-	/// the exact same request may be sent again.
-	public let retryable: Bool
-	/// The resource concerned.
-	public let resource: ResourceRef?
-	/// The params fields that failed, for `request.invalid_params`.
-	public let fields: [FieldError]?
-	/// A safe recovery step, in English.
-	public let hint: String?
-	/// Extra facts, with keys only from the code's catalog entry.
-	public let details: [ErrorDetail]?
-	/// The operation that failed (spec 0007).
-	public let operationId: UUID?
-	/// The PRD rule ID behind the error, such as `BR-008`.
-	public let rule: String?
-	/// A structured list that does not fit in `details`, with the item
-	/// `kind` and field keys from the code's catalog entry.
-	public let items: [ErrorItem]?
-
-	public init(code: String, category: ErrorCategory, message: String, retryable: Bool, resource: ResourceRef?, fields: [FieldError]?, hint: String?, details: [ErrorDetail]?, operationId: UUID?, rule: String?, items: [ErrorItem]?) {
-		self.code = code
-		self.category = category
-		self.message = message
-		self.retryable = retryable
-		self.resource = resource
-		self.fields = fields
-		self.hint = hint
-		self.details = details
-		self.operationId = operationId
-		self.rule = rule
-		self.items = items
-	}
-}
-
 /// The error for one request.
 public struct ErrorFrame: Codable, Sendable, Equatable {
 	/// The request that failed, or null only when its `requestId` could not
@@ -471,10 +907,18 @@ public enum EventKind: Codable, Sendable, Equatable {
 	case eventsGap(Gap)
 	/// The daemon is shutting down.
 	case daemonShuttingDown(ShuttingDown)
+	/// An operation was created or changed state (spec 0007). The event's
+	/// resource is the operation and its revision the operation's.
+	case operationStateChanged(OperationSummary)
+	/// An operation changed without changing state: stage, progress,
+	/// `waitingOn`, the point of no return, or a cancel (spec 0007).
+	case operationProgress(OperationSummary)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case eventsGap = "events.gap",
-			daemonShuttingDown = "daemon.shutting_down"
+			daemonShuttingDown = "daemon.shutting_down",
+			operationStateChanged = "operation.state_changed",
+			operationProgress = "operation.progress"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -495,6 +939,16 @@ public enum EventKind: Codable, Sendable, Equatable {
 					self = .daemonShuttingDown(content)
 					return
 				}
+			case .operationStateChanged:
+				if let content = try? container.decode(OperationSummary.self, forKey: .content) {
+					self = .operationStateChanged(content)
+					return
+				}
+			case .operationProgress:
+				if let content = try? container.decode(OperationSummary.self, forKey: .content) {
+					self = .operationProgress(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(EventKind.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EventKind"))
@@ -508,6 +962,12 @@ public enum EventKind: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .daemonShuttingDown(let content):
 			try container.encode(CodingKeys.daemonShuttingDown, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationStateChanged(let content):
+			try container.encode(CodingKeys.operationStateChanged, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationProgress(let content):
+			try container.encode(CodingKeys.operationProgress, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -604,6 +1064,16 @@ public struct Gap: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `operation.get`.
+public struct GetOperationParams: Codable, Sendable, Equatable {
+	/// The operation to read.
+	public let operationId: UUID
+
+	public init(operationId: UUID) {
+		self.operationId = operationId
+	}
+}
+
 /// The limits a daemon enforces, as sent in `HandshakeAccepted`.
 public struct Limits: Codable, Sendable, Equatable {
 	/// Largest control frame payload, in bytes.
@@ -683,6 +1153,157 @@ public struct HandshakeParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `operation.list`.
+public struct ListOperationsParams: Codable, Sendable, Equatable {
+	/// Only operations that have not ended: `queued`, `running`,
+	/// `cancel_requested`, and `needs_recovery`. Absent means false.
+	public let activeOnly: Bool?
+	/// Only operations on this resource: a runtime, an instance, an
+	/// environment, or the manager (`{ kind: manager, id: "self" }`).
+	public let resource: ResourceRef?
+	/// Most operations on the page, 1 to 200; absent means 50.
+	public let limit: UInt32?
+	/// The `next` cursor of the previous page, sent back unchanged.
+	public let before: String?
+
+	public init(activeOnly: Bool?, resource: ResourceRef?, limit: UInt32?, before: String?) {
+		self.activeOnly = activeOnly
+		self.resource = resource
+		self.limit = limit
+		self.before = before
+	}
+}
+
+/// The reply, or the part of the reply, of every method that starts an
+/// operation (spec 0007, *Idempotency*). The method's own reply may wrap
+/// it.
+public struct OperationAccepted: Codable, Sendable, Equatable {
+	/// The operation, as created or as it stands now.
+	public let operation: OperationSummary
+	/// True when the idempotency key named an operation an earlier request
+	/// started, so nothing new ran.
+	public let replayed: Bool
+
+	public init(operation: OperationSummary, replayed: Bool) {
+		self.operation = operation
+		self.replayed = replayed
+	}
+}
+
+/// The state of one step. Open.
+public enum StepState: String, Codable, Sendable, Equatable {
+	/// Running.
+	case running
+	/// Finished.
+	case done
+	/// Failed.
+	case failed
+	/// The daemon stopped while the step ran.
+	case interrupted
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One step of an operation's journal. The step's checkpoint is never
+/// sent.
+public struct OperationStepInfo: Codable, Sendable, Equatable {
+	/// The step's position, from 1.
+	public let seq: UInt32
+	/// The step's name.
+	public let name: String
+	/// The step's state.
+	public let state: StepState
+	/// Whether the engine may run the step again after an interruption.
+	public let repeatable: Bool
+	/// Whether the engine can undo the step.
+	public let reversible: Bool
+	/// How many times the step started, at least 1.
+	public let attempts: UInt32
+	/// When the step last started.
+	public let startedAt: Date
+	/// When the step ended; null while it runs.
+	public let finishedAt: Date?
+	/// The catalog code of the step's failure; only in state `failed`.
+	public let errorCode: String?
+
+	public init(seq: UInt32, name: String, state: StepState, repeatable: Bool, reversible: Bool, attempts: UInt32, startedAt: Date, finishedAt: Date?, errorCode: String?) {
+		self.seq = seq
+		self.name = name
+		self.state = state
+		self.repeatable = repeatable
+		self.reversible = reversible
+		self.attempts = attempts
+		self.startedAt = startedAt
+		self.finishedAt = finishedAt
+		self.errorCode = errorCode
+	}
+}
+
+/// Reply of `operation.get`.
+public struct OperationDetail: Codable, Sendable, Equatable {
+	/// The operation.
+	public let operation: OperationSummary
+	/// Its steps, in order.
+	public let steps: [OperationStepInfo]?
+	/// What it created or claimed, in order.
+	public let created: [CreatedItemInfo]?
+
+	public init(operation: OperationSummary, steps: [OperationStepInfo]?, created: [CreatedItemInfo]?) {
+		self.operation = operation
+		self.steps = steps
+		self.created = created
+	}
+}
+
+/// Reply of `operation.list`: newest first, by creation time then ID.
+public struct OperationPage: Codable, Sendable, Equatable {
+	/// The operations on this page.
+	public let items: [OperationSummary]?
+	/// The cursor of the next page, to send back as `before`; null on the
+	/// last page.
+	public let next: String?
+
+	public init(items: [OperationSummary]?, next: String?) {
+		self.items = items
+		self.next = next
+	}
+}
+
+/// Reply of `operation.get_stats`.
+public struct OperationStats: Codable, Sendable, Equatable {
+	/// Operations running now.
+	public let running: UInt32
+	/// Operations queued now.
+	public let queued: UInt32
+	/// Operations that need recovery now.
+	public let needsRecovery: UInt32
+	/// The most operations that run at once.
+	public let maxRunning: UInt32
+	/// The most operations that wait in the queue.
+	public let maxQueued: UInt32
+	/// Operations the daemon found interrupted when it started.
+	public let interruptedAtStart: UInt32
+	/// Operations the daemon resumed on its own when it started.
+	public let resumedAtStart: UInt32
+	/// Operations the daemon undid on its own when it started.
+	public let autoCompensatedAtStart: UInt32
+	/// Requests refused with `operation.queue_full` since the daemon
+	/// started.
+	public let rejectedQueueFull: UInt64
+
+	public init(running: UInt32, queued: UInt32, needsRecovery: UInt32, maxRunning: UInt32, maxQueued: UInt32, interruptedAtStart: UInt32, resumedAtStart: UInt32, autoCompensatedAtStart: UInt32, rejectedQueueFull: UInt64) {
+		self.running = running
+		self.queued = queued
+		self.needsRecovery = needsRecovery
+		self.maxRunning = maxRunning
+		self.maxQueued = maxQueued
+		self.interruptedAtStart = interruptedAtStart
+		self.resumedAtStart = resumedAtStart
+		self.autoCompensatedAtStart = autoCompensatedAtStart
+		self.rejectedQueueFull = rejectedQueueFull
+	}
+}
+
 /// One variant per method, tagged by the method name. Methods without
 /// params are unit variants, written without `content`.
 public enum Call: Codable, Sendable, Equatable {
@@ -698,6 +1319,19 @@ public enum Call: Codable, Sendable, Equatable {
 	case eventsSubscribe(SubscribeParams)
 	/// Ends an event subscription.
 	case eventsUnsubscribe(UnsubscribeParams)
+	/// One operation with its steps and created items.
+	case operationGet(GetOperationParams)
+	/// One page of operations, newest first.
+	case operationList(ListOperationsParams)
+	/// Asks an operation to stop.
+	case operationCancel(CancelOperationParams)
+	/// Queues an operation that needs recovery again.
+	case operationResume(ResumeOperationParams)
+	/// Cleans up what it can of an operation that needs recovery, then
+	/// closes it.
+	case operationAbandon(AbandonOperationParams)
+	/// The engine's counters and limits.
+	case operationGetStats
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -705,7 +1339,13 @@ public enum Call: Codable, Sendable, Equatable {
 			daemonGetHealth = "daemon.get_health",
 			daemonGetCapabilities = "daemon.get_capabilities",
 			eventsSubscribe = "events.subscribe",
-			eventsUnsubscribe = "events.unsubscribe"
+			eventsUnsubscribe = "events.unsubscribe",
+			operationGet = "operation.get",
+			operationList = "operation.list",
+			operationCancel = "operation.cancel",
+			operationResume = "operation.resume",
+			operationAbandon = "operation.abandon",
+			operationGetStats = "operation.get_stats"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -740,6 +1380,34 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .eventsUnsubscribe(content)
 					return
 				}
+			case .operationGet:
+				if let content = try? container.decode(GetOperationParams.self, forKey: .content) {
+					self = .operationGet(content)
+					return
+				}
+			case .operationList:
+				if let content = try? container.decode(ListOperationsParams.self, forKey: .content) {
+					self = .operationList(content)
+					return
+				}
+			case .operationCancel:
+				if let content = try? container.decode(CancelOperationParams.self, forKey: .content) {
+					self = .operationCancel(content)
+					return
+				}
+			case .operationResume:
+				if let content = try? container.decode(ResumeOperationParams.self, forKey: .content) {
+					self = .operationResume(content)
+					return
+				}
+			case .operationAbandon:
+				if let content = try? container.decode(AbandonOperationParams.self, forKey: .content) {
+					self = .operationAbandon(content)
+					return
+				}
+			case .operationGetStats:
+				self = .operationGetStats
+				return
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -763,6 +1431,23 @@ public enum Call: Codable, Sendable, Equatable {
 		case .eventsUnsubscribe(let content):
 			try container.encode(CodingKeys.eventsUnsubscribe, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .operationGet(let content):
+			try container.encode(CodingKeys.operationGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationList(let content):
+			try container.encode(CodingKeys.operationList, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationCancel(let content):
+			try container.encode(CodingKeys.operationCancel, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationResume(let content):
+			try container.encode(CodingKeys.operationResume, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationAbandon(let content):
+			try container.encode(CodingKeys.operationAbandon, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationGetStats:
+			try container.encode(CodingKeys.operationGetStats, forKey: .type)
 		}
 	}
 }
@@ -800,6 +1485,18 @@ public enum Reply: Codable, Sendable, Equatable {
 	case eventsSubscribe(Subscribed)
 	/// The subscription ended.
 	case eventsUnsubscribe
+	/// The operation with its steps and created items.
+	case operationGet(OperationDetail)
+	/// One page of operations.
+	case operationList(OperationPage)
+	/// The operation after the cancel, and what the cancel did.
+	case operationCancel(CancelReply)
+	/// The operation, queued again.
+	case operationResume(OperationSummary)
+	/// The closed operation and what was left over.
+	case operationAbandon(AbandonReply)
+	/// The engine's counters and limits.
+	case operationGetStats(OperationStats)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -807,7 +1504,13 @@ public enum Reply: Codable, Sendable, Equatable {
 			daemonGetHealth = "daemon.get_health",
 			daemonGetCapabilities = "daemon.get_capabilities",
 			eventsSubscribe = "events.subscribe",
-			eventsUnsubscribe = "events.unsubscribe"
+			eventsUnsubscribe = "events.unsubscribe",
+			operationGet = "operation.get",
+			operationList = "operation.list",
+			operationCancel = "operation.cancel",
+			operationResume = "operation.resume",
+			operationAbandon = "operation.abandon",
+			operationGetStats = "operation.get_stats"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -846,6 +1549,36 @@ public enum Reply: Codable, Sendable, Equatable {
 			case .eventsUnsubscribe:
 				self = .eventsUnsubscribe
 				return
+			case .operationGet:
+				if let content = try? container.decode(OperationDetail.self, forKey: .content) {
+					self = .operationGet(content)
+					return
+				}
+			case .operationList:
+				if let content = try? container.decode(OperationPage.self, forKey: .content) {
+					self = .operationList(content)
+					return
+				}
+			case .operationCancel:
+				if let content = try? container.decode(CancelReply.self, forKey: .content) {
+					self = .operationCancel(content)
+					return
+				}
+			case .operationResume:
+				if let content = try? container.decode(OperationSummary.self, forKey: .content) {
+					self = .operationResume(content)
+					return
+				}
+			case .operationAbandon:
+				if let content = try? container.decode(AbandonReply.self, forKey: .content) {
+					self = .operationAbandon(content)
+					return
+				}
+			case .operationGetStats:
+				if let content = try? container.decode(OperationStats.self, forKey: .content) {
+					self = .operationGetStats(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -871,6 +1604,24 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .eventsUnsubscribe:
 			try container.encode(CodingKeys.eventsUnsubscribe, forKey: .type)
+		case .operationGet(let content):
+			try container.encode(CodingKeys.operationGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationList(let content):
+			try container.encode(CodingKeys.operationList, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationCancel(let content):
+			try container.encode(CodingKeys.operationCancel, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationResume(let content):
+			try container.encode(CodingKeys.operationResume, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationAbandon(let content):
+			try container.encode(CodingKeys.operationAbandon, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .operationGetStats(let content):
+			try container.encode(CodingKeys.operationGetStats, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -886,6 +1637,20 @@ public struct Response: Codable, Sendable, Equatable {
 	public init(requestId: String, reply: Reply) {
 		self.requestId = requestId
 		self.reply = reply
+	}
+}
+
+/// Params of `operation.resume`.
+public struct ResumeOperationParams: Codable, Sendable, Equatable {
+	/// The operation to resume.
+	public let operationId: UUID
+	/// The revision the client saw; a newer one gets
+	/// `resource.revision_mismatch`.
+	public let expectedRevision: UInt64?
+
+	public init(operationId: UUID, expectedRevision: UInt64?) {
+		self.operationId = operationId
+		self.expectedRevision = expectedRevision
 	}
 }
 

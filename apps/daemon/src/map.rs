@@ -7,7 +7,7 @@ use stackly_domain::{RegistryError, ResourceRef as DomainResource};
 use stackly_platform::{
     CapabilityStatus, DirectoryLayout, PlatformCapability, PlatformInfo, UserId,
 };
-use stackly_protocol::codes::{internal, registry, resource};
+use stackly_protocol::codes::{internal, operation, registry, resource};
 use stackly_protocol::daemon::{
     Capabilities, DaemonInfo, DaemonRoots, PlatformCapabilityStatus, RegistryRecovery,
 };
@@ -272,14 +272,18 @@ pub fn registry_error(error: &RegistryError) -> ErrorBody {
             &registry::INTEGRITY,
             "the registry refused a write it should have accepted or rejected earlier",
         ),
-        // `operation.idempotency_key_reused` belongs to spec 0007, whose
-        // `operation` area is not in the catalog yet. provisional: F7
-        RegistryError::IdempotencyKeyTaken { .. }
-        | RegistryError::InvalidRevision { .. }
-        | RegistryError::InvalidQuery { .. } => ErrorBody::new(
-            &internal::UNEXPECTED,
-            "a registry call broke an invariant inside the daemon",
-        ),
+        RegistryError::IdempotencyKeyTaken { existing, .. } => ErrorBody::new(
+            &operation::IDEMPOTENCY_KEY_REUSED,
+            "the idempotency key belongs to an operation another request started",
+        )
+        .with_detail("operationId", existing.to_string())
+        .with_hint("send the request again with a new idempotency key"),
+        RegistryError::InvalidRevision { .. } | RegistryError::InvalidQuery { .. } => {
+            ErrorBody::new(
+                &internal::UNEXPECTED,
+                "a registry call broke an invariant inside the daemon",
+            )
+        }
         _ => ErrorBody::new(
             &internal::UNEXPECTED,
             "a registry failure this build cannot name",
@@ -486,12 +490,17 @@ mod tests {
     }
 
     #[test]
-    fn idempotency_key_taken_maps_to_internal_unexpected_until_spec_0007_adds_its_code() {
+    fn idempotency_key_taken_maps_to_operation_idempotency_key_reused_with_the_first_operation() {
         let error = RegistryError::IdempotencyKeyTaken {
             key: "key-1".parse().unwrap(),
             existing: OperationId::from_uuid(uuid_of(OPERATION)).unwrap(),
         };
-        let body = maps_to(&error, "internal.unexpected", &[]);
+        let body = maps_to(
+            &error,
+            "operation.idempotency_key_reused",
+            &[("operationId", OPERATION)],
+        );
+        assert_eq!(body.category(), ErrorCategory::InvalidInput);
         assert!(!body.message().contains("key-1"));
     }
 

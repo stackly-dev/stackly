@@ -1,0 +1,13 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000308",
+  "idempotencyKey": null,
+  "call": {
+    "type": "operation.list",
+    "content": {
+      "activeOnly": false,
+      "resource": null,
+      "limit": 500,
+      "before": null
+    }
+  }
+}

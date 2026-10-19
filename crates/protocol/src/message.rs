@@ -24,6 +24,11 @@ use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
 use crate::json;
+use crate::operation::{
+    AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
+    ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
+    ResumeOperationParams,
+};
 
 /// The only frame a client sends.
 #[typeshare]
@@ -66,6 +71,25 @@ pub enum Call {
     /// Ends an event subscription.
     #[serde(rename = "events.unsubscribe")]
     EventsUnsubscribe(UnsubscribeParams),
+    /// One operation with its steps and created items.
+    #[serde(rename = "operation.get")]
+    OperationGet(GetOperationParams),
+    /// One page of operations, newest first.
+    #[serde(rename = "operation.list")]
+    OperationList(ListOperationsParams),
+    /// Asks an operation to stop.
+    #[serde(rename = "operation.cancel")]
+    OperationCancel(CancelOperationParams),
+    /// Queues an operation that needs recovery again.
+    #[serde(rename = "operation.resume")]
+    OperationResume(ResumeOperationParams),
+    /// Cleans up what it can of an operation that needs recovery, then
+    /// closes it.
+    #[serde(rename = "operation.abandon")]
+    OperationAbandon(AbandonOperationParams),
+    /// The engine's counters and limits.
+    #[serde(rename = "operation.get_stats")]
+    OperationGetStats,
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -91,6 +115,24 @@ pub enum Reply {
     /// The subscription ended.
     #[serde(rename = "events.unsubscribe")]
     EventsUnsubscribe,
+    /// The operation with its steps and created items.
+    #[serde(rename = "operation.get")]
+    OperationGet(Box<OperationDetail>),
+    /// One page of operations.
+    #[serde(rename = "operation.list")]
+    OperationList(OperationPage),
+    /// The operation after the cancel, and what the cancel did.
+    #[serde(rename = "operation.cancel")]
+    OperationCancel(Box<CancelReply>),
+    /// The operation, queued again.
+    #[serde(rename = "operation.resume")]
+    OperationResume(Box<OperationSummary>),
+    /// The closed operation and what was left over.
+    #[serde(rename = "operation.abandon")]
+    OperationAbandon(Box<AbandonReply>),
+    /// The engine's counters and limits.
+    #[serde(rename = "operation.get_stats")]
+    OperationGetStats(OperationStats),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -167,6 +209,12 @@ methods! {
     "daemon.get_capabilities" => DaemonGetCapabilities, recovery allowed;
     "events.subscribe" => EventsSubscribe(SubscribeParams), recovery allowed;
     "events.unsubscribe" => EventsUnsubscribe(UnsubscribeParams), recovery allowed;
+    "operation.get" => OperationGet(GetOperationParams), recovery refused;
+    "operation.list" => OperationList(ListOperationsParams), recovery refused;
+    "operation.cancel" => OperationCancel(CancelOperationParams), recovery refused;
+    "operation.resume" => OperationResume(ResumeOperationParams), recovery refused;
+    "operation.abandon" => OperationAbandon(AbandonOperationParams), recovery refused;
+    "operation.get_stats" => OperationGetStats, recovery refused;
 }
 
 impl Reply {
@@ -257,17 +305,33 @@ mod tests {
     }
 
     #[test]
-    fn every_method_of_spec_0006_is_allowed_in_recovery() {
-        let calls = [
+    fn every_method_of_spec_0006_is_allowed_in_recovery_and_no_operation_method_is() {
+        let allowed = [
             Call::DaemonGetInfo,
             Call::DaemonGetHealth,
             Call::DaemonGetCapabilities,
             Call::EventsSubscribe(SubscribeParams::default()),
             Call::EventsUnsubscribe(UnsubscribeParams { subscription_id: 1 }),
         ];
-        assert!(calls.iter().all(Call::allowed_in_recovery));
+        assert!(allowed.iter().all(Call::allowed_in_recovery));
+        let operation_id = uuid::Uuid::nil();
+        let refused = [
+            Call::OperationGet(GetOperationParams { operation_id }),
+            Call::OperationList(ListOperationsParams::default()),
+            Call::OperationCancel(CancelOperationParams { operation_id }),
+            Call::OperationResume(ResumeOperationParams {
+                operation_id,
+                expected_revision: None,
+            }),
+            Call::OperationAbandon(AbandonOperationParams {
+                operation_id,
+                expected_revision: crate::wire::Revision::ZERO,
+            }),
+            Call::OperationGetStats,
+        ];
+        assert!(!refused.iter().any(Call::allowed_in_recovery));
         assert_eq!(
-            calls.len() + 1,
+            allowed.len() + refused.len() + 1,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

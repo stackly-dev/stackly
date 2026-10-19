@@ -23,6 +23,7 @@ mod contract_digest;
 pub mod daemon;
 pub mod error;
 pub mod events;
+pub mod fingerprint;
 pub mod frame;
 #[doc(hidden)]
 pub mod fuzzing;
@@ -30,6 +31,7 @@ pub mod handshake;
 pub mod json;
 pub mod limits;
 pub mod message;
+pub mod operation;
 pub mod secret;
 mod version;
 pub mod wire;

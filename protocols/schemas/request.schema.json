@@ -26,6 +26,28 @@
     "call"
   ],
   "$defs": {
+    "AbandonOperationParams": {
+      "description": "Params of `operation.abandon`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "The revision the person saw when they confirmed; required, so an\nabandon only applies to the state they looked at.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "operationId": {
+          "description": "The operation to abandon.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedRevision"
+      ]
+    },
     "Call": {
       "description": "One variant per method, tagged by the method name. Methods without\nparams are unit variants, written without `content`.",
       "oneOf": [
@@ -118,7 +140,119 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "One operation with its steps and created items.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetOperationParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One page of operations, newest first.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ListOperationsParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Asks an operation to stop.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CancelOperationParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.cancel"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Queues an operation that needs recovery again.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ResumeOperationParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.resume"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Cleans up what it can of an operation that needs recovery, then\ncloses it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/AbandonOperationParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "operation.abandon"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The engine's counters and limits.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "operation.get_stats"
+            }
+          },
+          "required": [
+            "type"
+          ]
         }
+      ]
+    },
+    "CancelOperationParams": {
+      "description": "Params of `operation.cancel`.",
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "description": "The operation to cancel.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "operationId"
       ]
     },
     "ClientInfo": {
@@ -199,6 +333,20 @@
         "sequence"
       ]
     },
+    "GetOperationParams": {
+      "description": "Params of `operation.get`.",
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "description": "The operation to read.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "operationId"
+      ]
+    },
     "HandshakeParams": {
       "description": "Params of `daemon.handshake`.\n\n`protocol` is frozen across majors: a daemon of any major reads\n`protocol.major` before anything else, so a client of another major\nalways receives `protocol.major_mismatch`.",
       "type": "object",
@@ -221,6 +369,47 @@
         "client",
         "contractDigest"
       ]
+    },
+    "ListOperationsParams": {
+      "description": "Params of `operation.list`.",
+      "type": "object",
+      "properties": {
+        "activeOnly": {
+          "description": "Only operations that have not ended: `queued`, `running`,\n`cancel_requested`, and `needs_recovery`. Absent means false.",
+          "type": "boolean",
+          "default": false
+        },
+        "before": {
+          "description": "The `next` cursor of the previous page, sent back unchanged.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "limit": {
+          "description": "Most operations on the page, 1 to 200; absent means 50.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "resource": {
+          "description": "Only operations on this resource: a runtime, an instance, an\nenvironment, or the manager (`{ kind: manager, id: \"self\" }`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      }
     },
     "ProtocolVersion": {
       "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
@@ -305,6 +494,31 @@
       "required": [
         "kind",
         "id"
+      ]
+    },
+    "ResumeOperationParams": {
+      "description": "Params of `operation.resume`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "The revision the client saw; a newer one gets\n`resource.revision_mismatch`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "operationId": {
+          "description": "The operation to resume.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "operationId"
       ]
     },
     "SubscribeParams": {

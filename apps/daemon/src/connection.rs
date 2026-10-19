@@ -819,6 +819,7 @@ async fn dispatch(
     if let Some(error) = recovery_refusal(core, call.allowed_in_recovery()) {
         return (Err(error), None);
     }
+    let method = call.method();
     match call {
         Call::DaemonHandshake(_) => (
             Err(Box::new(ErrorBody::new(
@@ -860,7 +861,30 @@ async fn dispatch(
                 .map(|()| Reply::EventsUnsubscribe),
             None,
         ),
+        // provisional: F7 step 14 (the operation engine is not wired into
+        // stacklyd yet, so these methods are answered like a method this
+        // daemon does not serve)
+        Call::OperationGet(_)
+        | Call::OperationList(_)
+        | Call::OperationCancel(_)
+        | Call::OperationResume(_)
+        | Call::OperationAbandon(_)
+        | Call::OperationGetStats => (Err(not_served(method)), None),
     }
+}
+
+/// `request.unknown_method` for a method in the contract that this build
+/// of the daemon does not serve yet, so a client falls back as it would
+/// with an older daemon (spec 0006, *Kompatibilitas*). provisional: F7
+/// step 14
+fn not_served(method: &str) -> Box<ErrorBody> {
+    Box::new(
+        ErrorBody::new(
+            &request::UNKNOWN_METHOD,
+            "the daemon does not serve this method yet",
+        )
+        .with_detail("method", method),
+    )
 }
 
 /// Runs a handler in its own task, so a panic becomes

@@ -294,6 +294,110 @@
       "file": "dto-secret-input-bind.json",
       "type": "SecretInput",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-operation-get.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-operation-list.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-operation-cancel.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-operation-resume.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-operation-abandon.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-operation-get-stats.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-operation-list-without-fields.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "reject-operation-list-limit.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-operation-get.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-operation-list.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-operation-cancel.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-operation-resume.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-operation-abandon.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-operation-get-stats.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-operation-state-changed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-operation-progress.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-idempotency-key-reused.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-operation-get-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-operation-cancel-unknown-disposition.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "dto-operation-accepted.json",
+      "type": "OperationAccepted",
+      "expect": "roundtrip"
     }
   ]
 }
