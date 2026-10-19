@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `6b3da2c`
 - **Wave aktif:** `1`, mulai `2026-10-19`
-- **Diperbarui:** `2026-10-19 20:50`
+- **Diperbarui:** `2026-10-19 23:40`
 
 ## Sub sesi wave `1`
 
@@ -14,7 +14,7 @@
 | `architect-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `-` | `-` | `diarsipkan` (sama) |
 | `architect-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `-` | `-` | `diarsipkan` (sama) |
 | `arc-f15-spec` | `architect` | 15. Background agent & CLI install · Design it (spec), plus update spec 0004 port `background_agent` | `02-instalasi-pertama.md` | `docs/specs/0015-background-agent-cli-install/`, `docs/specs/0004-domain-core-platform-abstraction/index.md` (port `background_agent` saja) | `claude/arc-f15-spec-c53e6f` | `opus` | `aktif` |
-| `arc-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `claude/arc-f17-spec-5e714b` | `opus` | `aktif` |
+| `arc-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `claude/arc-f17-spec-5e714b` | `opus` (cross check `sonnet`) | `merged` |
 | `arc-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `claude/arc-f18-spec-634bf8` | `opus` | `aktif` |
 | `arc-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `claude/arc-f19-spec-b5bcbf` | `opus` | `aktif` |
 
@@ -33,10 +33,14 @@
 | `2026-10-19` | `graphify-out/` diabaikan git; `graphify update .` dijalankan sebelum commit merge kode, dan `/graphify . --update` untuk dokumen dikumpulkan di akhir wave, bukan tiap commit log. | `lead` |
 | `2026-10-19` | Baris Follow-up spec sumber (0002, 0003, 0006, 0008, 0009, 0010, 0011, 0013) yang dijawab spec baru dicentang lead lewat `/sync` di akhir wave, bukan oleh architect, karena beberapa architect menjawab baris di spec sumber yang sama. | `lead` |
 | `2026-10-19` | `arc-f15-spec` juga memiliki update spec 0004 untuk port `background_agent` (Follow-up 0004 "Fitur 15, 28, dan 31"), karena F4 selesai dan tidak ada sesi lain yang menyentuh spec 0004. Update additive ke spec 0009 (F18 `versions.json`, F23 probe native) ditulis di spec fitur masing masing sebagai usulan dan menjadi item `architect (update)` setelah F9 ditutup, karena sesi `f9-closeout` masih memegang spec 0009. | `lead` |
-| `2026-10-19` | Folder skill `.claude/skills/coordinate/` belum ter-commit di `main`; brief mengandalkan field "Checkout utama" untuk membaca role dan template. | `lead` |
+| `2026-10-19` | Folder skill `.claude/skills/coordinate/` belum ter-commit di `main`; brief mengandalkan field "Checkout utama" untuk membaca role dan template. Sejak `e2650f6` folder itu sudah ter-commit. | `lead` |
+| `2026-10-19` | Keempat architect wave 1 berhenti karena batas pemakaian; setelah reset, lead melanjutkan sesi yang sama lewat `SendMessage` (draft masih di worktree masing masing). | `lead` |
 | `2026-10-19` | Spec 0017 diterima dengan semua rekomendasi cross check (G1 sampai G11, S1 sampai S13), sesuai aturan user. Dampak lintas fitur: S8 memindahkan pin paket dan baris `provider_sources` (AC-13, AC-14, milestone 4 lama) ke fitur 20 lewat bagian "Kontrak untuk fitur 20" di spec 0017; S10 membuat keenam entri catalog `planned` di F17, dan build F19 dan F23 memindahkan PostgreSQL dan NATS ke provider di commit yang membuktikan lifecycle-nya; S11 menjadi Follow-up untuk F18 (`HostFacts` menggantikan batas `minOs` 27.0); prasyarat F17 milestone 1 adalah update spec 0009 (`versions()`) setelah F9 ditutup. | `lead` |
 
 ## Blocker terbuka
+
+- F17 milestone 1: `architect (update)` spec 0009 (`ValidatedPackage::versions() -> &VersionCatalog` dengan `VersionArtifact` dan `ArtifactStatus`, bagian *Usulan update spec lain* spec 0017). Dibuka setelah fitur 9 ditutup oleh sesi `f9-closeout`.
+- Usulan `/scope` dari arc-f17-spec: catat selisih mockup yang diketahui di `ui-macos.md` (Available netral bukan biru, Unverified sampai F18, kartu planned tanpa opacity, tanpa MariaDB atau RabbitMQ). Dikerjakan lead bersama sync akhir wave.
 
 - F21 `Build it`: butuh F18, F19, F20 dibangun, plus fondasi F7, F8, F10, F11, F14 (`01-foundation.md`) dan F13 milestone 4 (`ui-macos.md`). Dibuka oleh wave build setelah spec fase 02 dan fondasi selesai.
 - F15 build (nanti): signing identity development nyata (OQ-012, RISK-10). Dibuka oleh release owner atau user yang membuat akun Apple Developer.
@@ -44,7 +48,7 @@
 
 ## Dicentang pada wave ini
 
-- (belum ada)
+- `17` · `Design it (spec): /architect catalog & provider detail` · laporan `arc-f17-spec` STATUS done (`cc38e14`) · `claude/arc-f17-spec-5e714b` → `78f3ec7` · diff hanya `docs/specs/0017-*`, Requirements AC-1 sampai AC-13, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · commit `docs(scope): tick feature 17 design it`
 
 ## Riwayat wave
 
