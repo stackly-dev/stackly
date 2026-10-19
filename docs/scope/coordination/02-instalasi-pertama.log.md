@@ -13,6 +13,10 @@
 | `architect-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `-` | `-` | `diarsipkan` (sama) |
 | `architect-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `-` | `-` | `diarsipkan` (sama) |
 | `architect-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `-` | `-` | `diarsipkan` (sama) |
+| `arc-f15-spec` | `architect` | 15. Background agent & CLI install · Design it (spec), plus update spec 0004 port `background_agent` | `02-instalasi-pertama.md` | `docs/specs/0015-background-agent-cli-install/`, `docs/specs/0004-domain-core-platform-abstraction/index.md` (port `background_agent` saja) | `claude/arc-f15-spec-c53e6f` | `opus` | `aktif` |
+| `arc-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `claude/arc-f17-spec-5e714b` | `opus` | `aktif` |
+| `arc-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `claude/arc-f18-spec-634bf8` | `opus` | `aktif` |
+| `arc-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `claude/arc-f19-spec-b5bcbf` | `opus` | `aktif` |
 
 ## Keputusan
 
