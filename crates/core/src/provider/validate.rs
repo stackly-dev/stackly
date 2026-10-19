@@ -2100,7 +2100,7 @@ fn sample_renders(
             };
             let file = format!("templates/{}", spec.template);
             let outcome = template::render(checked, spec.format, &resolver, config)
-                .and_then(|content| content.materialize_with(|_| Some(&b"x"[..])))
+                .and_then(|content| content.materialize_sample())
                 .and_then(|bytes| {
                     let text = String::from_utf8_lossy(&bytes);
                     if spec.format.output_parses(&text) {

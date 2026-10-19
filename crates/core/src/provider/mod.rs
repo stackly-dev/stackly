@@ -19,7 +19,6 @@ mod package;
 mod plan;
 mod preflight;
 mod raw;
-mod secret;
 mod settings;
 mod template;
 mod timeouts;
@@ -31,6 +30,7 @@ pub use issue::{Issue, IssueCode, Location, MAX_ISSUES};
 #[cfg(feature = "json-schema")]
 pub use json_schema::json_schemas;
 pub use manifest::{Category, EndpointPurpose, EndpointSpec, Manifest, StopSignal};
+pub(crate) use names::{COMPONENT_RULE, is_component};
 pub use names::{InvalidSettingName, SettingName};
 pub use package::{
     MANIFEST_MAX_LEN, NameCheck, PACKAGE_MAX_LEN, PackageError, PackageFiles,
@@ -43,7 +43,6 @@ pub use plan::{
     Segment, Stdin, StopPlan,
 };
 pub use preflight::{DATA_MARKER_MAX_LEN, MarkerRead, PreflightOutcome};
-pub use secret::{ResolvedSecrets, SecretRef, SecretRefError};
 pub use settings::{
     ApplyClass, ArrayRules, BooleanRules, FieldKind, IntegerRules, ItemField, Pattern,
     SETTINGS_DOCUMENT_MAX_LEN, ScalarKind, ScalarValue, SettingClass, SettingField, SettingValue,

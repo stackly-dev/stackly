@@ -6,9 +6,10 @@ use std::time::Duration;
 use jiff::SignedDuration;
 use stackly_core::operation::testing::RecordingEvents;
 use stackly_core::operation::{
-    BeginOutcome, BeginRequest, BusyPolicy, EngineDeps, EngineLimits, NoSecretsYet,
-    OperationDetailView, OperationEngine, OperationError, OperationWork, Origin, RequestOrigin,
+    BeginOutcome, BeginRequest, BusyPolicy, EngineDeps, EngineLimits, OperationDetailView,
+    OperationEngine, OperationError, OperationWork, Origin, RequestOrigin,
 };
+use stackly_core::secret::Redactor;
 use stackly_core::{PreparedLayout, prepare_layout};
 use stackly_domain::{
     DetailKey, ErrorCodeName, InstanceId, JournalPayload, OperationId, OperationKind,
@@ -33,6 +34,9 @@ pub struct Harness {
     pub layout: Arc<PreparedLayout>,
     pub registry: Arc<FakeRegistry>,
     pub events: RecordingEvents,
+    /// The redactor the engine stores failures through, as the daemon
+    /// shares it.
+    pub redactor: Arc<Redactor>,
     pub engine: OperationEngine,
 }
 
@@ -65,7 +69,8 @@ impl Harness {
             fake.clock().now(),
         ));
         let events = RecordingEvents::new();
-        let engine = engine_on(&platform, &layout, &registry, &events, limits);
+        let redactor = Arc::new(Redactor::new());
+        let engine = engine_on(&platform, &layout, &registry, &events, &redactor, limits);
         Self {
             root,
             fake,
@@ -73,6 +78,7 @@ impl Harness {
             layout,
             registry,
             events,
+            redactor,
             engine,
         }
     }
@@ -87,6 +93,7 @@ impl Harness {
             &self.layout,
             &self.registry,
             &events,
+            &self.redactor,
             limits,
         );
         (engine, events)
@@ -112,6 +119,7 @@ fn engine_on(
     layout: &Arc<PreparedLayout>,
     registry: &Arc<FakeRegistry>,
     events: &RecordingEvents,
+    redactor: &Arc<Redactor>,
     limits: EngineLimits,
 ) -> OperationEngine {
     OperationEngine::new(
@@ -120,7 +128,7 @@ fn engine_on(
             platform: Arc::clone(platform),
             layout: Arc::clone(layout),
             events: Arc::new(events.clone()),
-            redactor: Arc::new(NoSecretsYet),
+            redactor: Arc::clone(redactor) as Arc<dyn stackly_core::operation::Redact>,
         },
         limits,
     )

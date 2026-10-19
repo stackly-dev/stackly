@@ -13,6 +13,7 @@ use std::path::{Component, Path};
 use std::sync::OnceLock;
 
 use stackly_domain::EndpointName;
+use stackly_platform::SecretValue;
 
 use super::interpolate::{
     EndpointTransport, InstanceDir, PathBase, PathPosition, Piece, RawPiece, Token, TypeEnv,
@@ -27,9 +28,9 @@ use super::plan::{
     ReloadAction, Resolver, StopPlan,
 };
 use super::raw::{RawSettingsSchema, decode_json, parse_json};
-use super::secret::ResolvedSecrets;
 use super::settings::{SettingsSchema, parse_schema};
 use super::validate::{ValidatedPackage, sample_context};
+use crate::secret::ResolvedSecrets;
 
 /// `providers/fake`, embedded.
 const FAKE: [(&str, &str); 4] = [
@@ -80,9 +81,9 @@ const TRAEFIK: [(&str, &str); 5] = [
 const FAKE_TEMPLATE: &str = "templates/fake.json.tmpl";
 /// The traefik template that loops over `settings.routes`.
 const TRAEFIK_ROUTES: &str = "templates/routes.yaml.tmpl";
-/// Bytes every secret resolves to in a harness: a quote, a backslash, a
-/// dollar, a newline, and a space, so each escaper has work to do.
-const AWKWARD_SECRET: &[u8] = b"s\"e\\c$r\ne t";
+/// The value every secret resolves to in a harness: a quote, a backslash,
+/// a dollar, a newline, and a space, so each escaper has work to do.
+const AWKWARD_SECRET: &str = "s\"e\\c$r\ne t";
 /// A secret reference in the daemon's form (spec 0011), for the documents
 /// of the settings harness.
 const SAMPLE_SECRET_REF: &str = "local:instance/0192f000-0000-7000-8000-000000000001/auth-token";
@@ -398,12 +399,17 @@ fn exercise(package: &ValidatedPackage) {
 
 /// Every secret field of a package, resolved to [`AWKWARD_SECRET`].
 fn awkward_secrets(package: &ValidatedPackage) -> ResolvedSecrets {
-    ResolvedSecrets::for_tests(
+    ResolvedSecrets::new(
         package
             .settings
             .fields()
             .filter(|field| field.is_secret())
-            .map(|field| (field.name().clone(), AWKWARD_SECRET.to_vec())),
+            .map(|field| {
+                let value = SecretValue::new(AWKWARD_SECRET.to_owned())
+                    .expect("the awkward secret is UTF-8 without NUL");
+                (field.name().clone(), value)
+            })
+            .collect(),
     )
 }
 

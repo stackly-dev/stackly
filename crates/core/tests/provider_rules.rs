@@ -11,12 +11,12 @@ use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
     EnvValue, InitStep, IssueCode, Location, NameCheck, PackageError, PackageFiles, PlanContext,
-    PlanError, ResolvedEndpoint, ResolvedSecrets, RuntimeContext, SettingClass, ValidatedPackage,
-    read_package,
+    PlanError, ResolvedEndpoint, RuntimeContext, SettingClass, ValidatedPackage, read_package,
 };
+use stackly_core::secret::ResolvedSecrets;
 use stackly_domain::{EndpointName, InstanceId, Port};
 use stackly_evidence::{Kind, evidence};
-use stackly_platform::{DirectoryLayout, RootSet};
+use stackly_platform::{DirectoryLayout, RootSet, SecretValue};
 use stackly_testkit::{FakePlatform, TestRoot, make_fifo};
 
 /// The secret reference of the plan contexts here, in the daemon's form for
@@ -981,7 +981,7 @@ fn patterns_always_match_the_whole_value() {
     let check = |name: &str| {
         package
             .settings_schema()
-            .validate(&serde_json::json!({ "authToken": "t", "peers": [{ "name": name }] }))
+            .validate(&serde_json::json!({ "authToken": SECRET_REF, "peers": [{ "name": name }] }))
             .is_ok()
     };
 
@@ -1555,10 +1555,13 @@ fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
             _ => None,
         })
         .expect("the config is written");
-    let token = |bytes: &[u8]| {
-        ResolvedSecrets::for_tests([("authToken".parse().expect("valid field"), bytes.to_vec())])
+    let token = |text: &str| {
+        ResolvedSecrets::for_tests([(
+            "authToken".parse().expect("valid field"),
+            SecretValue::new(text.to_owned()).expect("a valid secret value"),
+        )])
     };
-    let err = write.content.materialize(&token(b"a$b")).unwrap_err();
+    let err = write.content.materialize(&token("a$b")).unwrap_err();
     assert_eq!(
         err,
         PlanError::UnrepresentableValue {
@@ -1567,7 +1570,7 @@ fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
     );
     assert!(!err.to_string().contains("a$b"));
     assert_eq!(
-        write.content.materialize(&token(b"ok")).expect("plain secrets materialize"),
+        write.content.materialize(&token("ok")).expect("plain secrets materialize"),
         b"data: \"/Volumes/T/data/instances/0192f000-0000-7000-8000-00000000000b/data\"\ntoken: \"ok\"\n"
     );
     assert_eq!(

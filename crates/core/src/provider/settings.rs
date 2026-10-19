@@ -6,13 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use regex::{Regex, RegexBuilder};
+use stackly_domain::{SecretPurpose, SecretRef};
 
 use super::issue::{FileIssues, Issue, IssueCode, Location};
 use super::names::{NAME_RULE, SettingName, is_control};
 use super::raw::{
     RawItemField, RawItems, RawSettingField, RawSettingsSchema, RawXStackly, join_path,
 };
-use super::secret::SecretRef;
 
 /// The only `$schema` the dialect accepts.
 pub(crate) const SCHEMA_DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";
@@ -871,9 +871,13 @@ fn check_secret_purposes(
     fields: &BTreeMap<SettingName, SettingField>,
     issues: &mut FileIssues<'_>,
 ) {
-    let mut seen: BTreeMap<String, &SettingName> = BTreeMap::new();
+    let mut seen: BTreeMap<SecretPurpose, &SettingName> = BTreeMap::new();
     for field in fields.values().filter(|field| field.is_secret()) {
-        let purpose = secret_purpose(field.name().as_str());
+        // A setting name has at most 32 characters, so its purpose has at
+        // most 48 bytes and always derives.
+        let Ok(purpose) = SecretPurpose::from_field_name(field.name().as_str()) else {
+            continue;
+        };
         match seen.get(&purpose) {
             Some(first) => issues.at(
                 format!("properties.{}", field.name()),
@@ -888,27 +892,6 @@ fn check_secret_purposes(
             }
         }
     }
-}
-
-// provisional: F11 (replaced by the purpose derivation of the domain secret
-// module, spec 0011)
-/// Derives the purpose of a secret field as spec 0011 does: a `-` before
-/// every uppercase letter that follows a lowercase letter or a digit, then
-/// everything lowercase (`adminPassword` is `admin-password`, `tlsKeyPEM`
-/// is `tls-key-pem`).
-fn secret_purpose(field: &str) -> String {
-    let mut purpose = String::with_capacity(field.len() + 4);
-    let mut previous: Option<char> = None;
-    for c in field.chars() {
-        if c.is_ascii_uppercase()
-            && previous.is_some_and(|p| p.is_ascii_lowercase() || p.is_ascii_digit())
-        {
-            purpose.push('-');
-        }
-        purpose.push(c.to_ascii_lowercase());
-        previous = Some(c);
-    }
-    purpose
 }
 
 /// How many issues were reported so far, to tell whether a part was clean.
@@ -1499,24 +1482,4 @@ fn parse_item_field(
         kind,
         required,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn secret_purposes_follow_the_spec_0011_derivation() {
-        for (field, purpose) in [
-            ("authToken", "auth-token"),
-            ("adminPassword", "admin-password"),
-            ("tlsKeyPEM", "tls-key-pem"),
-            ("token2Fa", "token2-fa"),
-            ("fooBar", "foo-bar"),
-            ("fooBAr", "foo-bar"),
-            ("password", "password"),
-        ] {
-            assert_eq!(secret_purpose(field), purpose, "{field}");
-        }
-    }
 }

@@ -16,6 +16,7 @@ mod observation;
 pub mod operation;
 mod ownership;
 pub mod provider;
+pub mod secret;
 #[cfg(all(test, unix))]
 mod test_support;
 

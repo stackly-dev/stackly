@@ -832,8 +832,24 @@ pub(crate) fn check_literal(text: &str, issues: &mut FileIssues<'_>, path: &str)
 
 #[cfg(test)]
 mod tests {
+    use stackly_domain::InstanceId;
+    use stackly_platform::DirectoryLayout;
+    use stackly_testkit::TestRoot;
+
     use super::*;
     use crate::provider::issue::{Issue, Issues, Location};
+
+    #[test]
+    fn the_secrets_token_names_the_secrets_folder_of_the_layout() {
+        let root = TestRoot::new().unwrap();
+        let layout = DirectoryLayout::new(root.roots());
+        let id = InstanceId::generate();
+
+        assert_eq!(
+            PathBase::Secrets.path(&layout.instance_paths(id)),
+            layout.instance_secrets_dir(id.short_key())
+        );
+    }
 
     fn literal(text: &str) -> RawPiece {
         RawPiece::Literal(text.to_owned())
