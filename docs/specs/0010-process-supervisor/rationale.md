@@ -12,6 +12,8 @@ Risiko yang paling mahal di sini adalah kehilangan data dan salah bunuh. Dua sup
 
 Spec lain sudah mengunci banyak bagian di sekitarnya. Spec 0004 menetapkan lifecycle instance dan aturan readiness serta health, termasuk `effective` untuk kesegaran dan bahwa stop yang melewati timeout tetap `stopping`. Spec 0005 menyediakan tabel `process_observations` yang bukan sumber kebenaran tunggal dan tidak pernah mengotorisasi kill. Spec 0006 menyediakan envelope error, event dengan cursor, dan slot start untuk rekonsiliasi. Spec 0009 memberi plan yang sudah tervalidasi (argv array, env tertutup, timeout per fase) dan menyerahkan semua efek samping serta apa yang terjadi saat setiap timeout lewat ke spec ini. Spec 0011 menetapkan cara secret sampai ke provider dan bahwa log instance disamarkan sebelum disimpan. Yang belum diputuskan: nasib proses saat daemon mati, ke mana output proses mengalir, bagaimana identitas dan asosiasi data dibuktikan di macOS, angka dan perilaku restart policy, perilaku saat setiap timeout lewat, dan permukaan IPC instance.
 
+Pembaruan 2026-10-18: spike milestone 1 langkah 1 di Mac ini membuktikan hampir setiap baris tabel *Adapter macOS*, tetapi membantah dua baris seperti tertulis (Spool, dan fakta proses milik user lain) dan membuat angka 2 MiB di AC-12 tidak jelas. Seperti aturan spec ini untuk baris yang gagal, ketiganya kembali ke `/architect` sebelum langkah 3 selesai dan diputuskan di Keputusan 19, 20, dan 21. Bukti lengkapnya ada di *Spike milestone 1 langkah 1* di akhir file ini.
+
 ## Options considered
 
 ### Keputusan 1: nasib proses instance saat daemon crash atau restart
@@ -70,7 +72,7 @@ File append di runtime root yang ditulis proses langsung; daemon membaca, menyam
 
 **Cons**:
 
-- Butuh `F_PUNCHHOLE` dan `SEEK_DATA` yang harus dibuktikan di APFS, dan offset baca setelah restart bisa mengulang paling banyak satu blok.
+- Butuh `F_PUNCHHOLE` dan `SEEK_DATA` yang harus dibuktikan di APFS, dan offset baca setelah restart bisa mengulang paling banyak satu satuan punch ditambah satu batch baca. Spike kemudian menunjukkan bahwa pembaca butuh fd baca tulis dan satuan punch selebar halaman VM (Keputusan 19).
 
 #### Option 2: File langsung di `logs/instances/<id>/`
 
@@ -582,6 +584,116 @@ Proses utama dibuat tertahan, identitas ditangkap dan dicommit, lalu `SIGCONT`; 
 
 - Daemon yang mati sebelum ready kehilangan port proses yang masih hidup; butuh pembacaan socket listen lewat libproc atau `unknown`.
 
+### Keputusan 19: cara pembaca spool membebaskan ruang
+
+Diputuskan setelah spike. Baris Spool semula meminta pembaca `O_RDONLY` dan punch yang diratakan ke `f_bsize`. Di macOS 27, `F_PUNCHHOLE` pada fd `O_RDONLY` ditolak `EPERM`. Dengan fd baca tulis, punch selebar `f_bsize` (4 KiB) berhasil, tetapi blok yang di punch di dalam halaman VM 16 KiB yang masih ditulis child kembali teralokasi berisi nol: alokasi dua spool terus naik sampai 3272704 B setelah 60 detik, dan `SEEK_DATA` menunjuk ke byte nol (37 dari 40 jawaban basi), sehingga resume setelah daemon restart membaca nol.
+
+#### Option 1: Fd baca tulis, satuan punch `max(halaman VM, f_bsize)`
+
+Pembaca membuka spool `O_RDWR|O_NOFOLLOW|O_CLOEXEC` dan hanya mem punch satuan penuh, dengan satuan sebesar halaman VM (`sysconf(_SC_PAGESIZE)`, 16 KiB di Mac ini) atau `f_bsize` kalau lebih besar.
+
+**Pros**:
+
+- Terbukti spike: puncak alokasi per spool tidak naik dari detik 15 sampai 60 (1052672 B; nilai sesaat naik turun di bawahnya), `SEEK_DATA` tepat setelah setiap punch (0 dari 40 basi), semua baris utuh dan berurutan, dan resume dari `SEEK_DATA` memberi baris utuh.
+- Satuan mengikuti mesin dan selalu kelipatan `f_bsize` (keduanya pangkat dua), jadi punch tidak pernah `EINVAL`.
+- Bagian satuan yang terulang setelah daemon restart paling banyak 16 KiB (ditambah satu batch baca, sama untuk satuan apa pun).
+
+**Cons**:
+
+- Pembaca memegang fd yang bisa menulis. Dijaga dengan `SpoolReader` tanpa method tulis atau truncate, dan open tanpa `O_CREAT`, `O_TRUNC`, atau `O_APPEND`.
+
+#### Option 2: Fd baca tulis, satuan tetap 64 KiB
+
+**Pros**:
+
+- Juga terbukti spike, dan punya margin kalau ukuran halaman berubah.
+
+**Cons**:
+
+- Bagian satuan yang terulang setelah restart sampai 64 KiB, sedikit lebih banyak ruang tertahan, dan angka tetap yang harus ditinjau ulang kalau mesin berubah. Option 1 sudah mengikuti ukuran halaman dengan sendirinya.
+
+#### Option 3: Tanpa punch (truncate atau rotasi)
+
+**Pros**:
+
+- Pembaca tetap `O_RDONLY`.
+
+**Cons**:
+
+- Truncate saat child menulis append bisa membuang baris (Keputusan kecil "Punch hole, bukan truncate"), dan rotasi tidak mungkin karena child memegang fd nya sendiri dan tidak bisa diarahkan ke file baru.
+
+### Keputusan 20: arti batas 2 MiB di AC-12
+
+Diputuskan setelah spike. Dengan Keputusan 19, puncak alokasi setiap spool sekitar 1 MiB (1052672 B) walau masing masing menerima sekitar 6 MB, tetapi dua spool bersama mencapai 2105344 B, 8 KiB di atas 2 MiB (2064384 B di run sebelumnya). Sampai sekitar 1 MiB per spool yang sedang ditulis tetap teralokasi walau isinya sudah di punch; fsync setelah setiap punch tidak mengubahnya, dan puncaknya tidak tumbuh selama run. Penyebabnya belum dibuktikan (kontrol tanpa punch hanya berjalan 10 detik), dan angka ini diukur di satu laju selama 60 detik. Kalimat AC-12 semula ("blok yang dialokasikan spool tetap di bawah 2 MiB") bisa dibaca per spool atau untuk dua spool bersama.
+
+#### Option 1: Per spool, di bawah 2 MiB di setiap sampel
+
+**Pros**:
+
+- Margin dua kali dari nilai terukur, jadi tidak rawan flaky.
+- Menangkap satu stream yang membengkak sendiri, dan satuannya sama dengan file yang dibebaskan pembaca.
+
+**Cons**:
+
+- Total per instance (sekitar 2 MiB untuk dua spool) tidak tertulis langsung sebagai satu angka.
+
+#### Option 2: Dua spool bersama, di bawah 4 MiB
+
+**Pros**:
+
+- Tetap satu angka per instance, dengan margin yang sama.
+
+**Cons**:
+
+- Bisa menyembunyikan satu stream yang tumbuh sementara stream lain diam.
+
+#### Option 3: Dua spool bersama, di bawah 3 MiB
+
+**Pros**:
+
+- Batas lebih ketat.
+
+**Cons**:
+
+- Margin hanya sekitar 1,4 kali dari nilai terukur, rawan gagal kalau APFS menahan satu chunk lagi.
+
+### Keputusan 21: fakta proses milik user lain
+
+Diputuskan setelah spike. `PROC_PIDTBSDINFO` dan `PROC_PIDLISTFDS` ditolak `EPERM` untuk 168 dari 168 proses milik user lain (root dan user `_`), termasuk PID 1. Dengan baris adapter semula, `inspect` untuk PID tercatat yang kini dipakai proses user lain gagal `PermissionDenied`, dan aturan "error apa pun menghasilkan `Unproven`" membuat instance `unknown` dengan `identityUnproven` sampai proses asing itu keluar, padahal AC-10 meminta `Gone(pid_reused)` kalau lock bebas. Di sisi lain, `sysctl KERN_PROC_PID` memberi `kinfo_proc` dengan uid dan waktu start untuk 168 dari 168 proses itu, sama dengan `PROC_PIDTBSDINFO` untuk proses sendiri, dan `proc_pidpath` serta `getsid` juga bekerja untuk mereka.
+
+#### Option 1: Fallback ke `kinfo_proc` hanya saat `EPERM`
+
+**Pros**:
+
+- AC-10 tetap seperti tertulis, dan PID yang dipakai ulang oleh user lain tidak membuat `unknown` yang lengket.
+- Jalur utama untuk proses sendiri, termasuk adopsi, tetap memakai `proc_bsdinfo` yang ada di libc; fallback hanya perlu membuktikan bahwa proses itu bukan milik kita.
+- Kesalahan layout di fallback paling buruk menghasilkan `Gone` saat lock bebas atau `Unproven`, tidak pernah sinyal: pemeriksaan ulang sebelum `kill(2)` tetap menolak uid yang berbeda, dan lock yang bebas adalah bukti terkuat yang ada bahwa data tidak dipakai (celahnya, provider yang menutup fd 3, sudah dinyatakan di Consequences spec).
+
+**Cons**:
+
+- Dua jalur baca dan satu struct 648 byte yang dideklarasikan sendiri; butuh assert layout dan test yang membandingkan setiap field dengan `PROC_PIDTBSDINFO`.
+- Proses kita sendiri yang menjalankan binary setuid terlihat milik user lain; kalau ia juga menutup fd 3, hasilnya bisa `Gone` yang salah, dengan sweep secret dan respawn. Karena itu fallback menolak memberi fakta asing (hasilnya `Unproven`) kalau uid real atau saved set uid proses itu sama dengan user kita.
+
+#### Option 2: `kinfo_proc` untuk semua PID
+
+**Pros**:
+
+- Satu jalur baca untuk semua proses.
+
+**Cons**:
+
+- Setiap pemeriksaan identitas, termasuk adopsi, bergantung pada struct yang dideklarasikan sendiri, dan jalur `PROC_PIDTBSDINFO` yang sudah terbukti dibuang.
+
+#### Option 3: Terima `Unproven`
+
+**Pros**:
+
+- Tidak ada kode baru di adapter.
+
+**Cons**:
+
+- AC-10 harus diubah, dan instance menjadi `unknown` sampai proses asing itu keluar, yang untuk daemon sistem bisa berarti sampai reboot. Pengguna harus bertindak di luar Stackly padahal bukti bahwa proses itu bukan milik kita tersedia.
+
 ## Rationale
 
 Kekuatan yang paling menentukan adalah keselamatan data dan larangan salah bunuh. Karena PRD sudah menerima bahwa proses bisa selamat dari crash daemon, kode adopsi dan `unknown` wajib ada apa pun pilihannya; maka pilihan yang tersisa adalah apakah proses yang selamat itu dipertahankan atau dikorbankan. Mempertahankannya (Keputusan 1) memberi nilai terbesar bagi pengguna dengan biaya yang memang sudah harus dibayar, dan membuka update daemon tanpa downtime. Keputusan itu langsung menyingkirkan pipe (Keputusan 2), karena runtime Go mati saat pipe putus; spool di runtime root adalah satu satunya bentuk yang tetap hidup tanpa daemon sekaligus memenuhi aturan spec 0011 bahwa log disamarkan sebelum disimpan.
@@ -593,6 +705,8 @@ Keputusan timeout (3, 4, 11) mengikuti satu prinsip: proses utama hanya pernah m
 Method IPC minimal (12) diambil di sini karena urutan scope: fitur 14 menutup Foundation dan tidak boleh menunggu fase berikutnya. Dua konflik spec (13, 14) diselesaikan ke arah yang menjaga aturan spec pemiliknya (revision tetap berarti mutasi, file secret tetap di bawah kendali spec 0011), dengan perubahan kecil di spec 0006 dan 0009 sebagai Follow-up.
 
 Spawn tertahan (17) dan port Auto yang tersimpan sejak spawn (18) menutup dua celah yang ditemukan cross check dengan cara yang sama: registry selalu tahu tentang proses sebelum proses itu menjalankan kode atau memakai port, sehingga daemon yang mati di titik mana pun meninggalkan state yang bisa direkonsiliasi tanpa menebak.
+
+Tiga keputusan setelah spike (19, 20, 21) mengikuti bukti di Mac ini, bukan bunyi tabel semula. Untuk spool (19), hanya fd baca tulis dengan satuan punch selebar halaman VM yang menjaga puncak alokasi tidak tumbuh dan `SEEK_DATA` tepat, dan satuan yang mengikuti mesin lebih tahan lama daripada angka tetap. Batas AC-12 (20) diukur per spool karena sisa sampai sekitar 1 MiB muncul per file yang sedang ditulis (penyebabnya belum dibuktikan), sehingga batas per file punya margin dua kali dan tetap menangkap stream yang membengkak sendiri. Untuk proses user lain (21), fallback `kinfo_proc` dipilih karena ia mengubah `unknown` yang lengket menjadi jawaban yang terbukti tanpa melemahkan keselamatan: hasil fallback hanya bisa membuat sebuah proses terbukti bukan milik kita, dan hanya kalau uid efektif, real, dan saved nya semuanya bukan milik kita; lock tetap menjadi bukti terkuat bahwa data sedang dipakai. Supaya bukti yang sudah jelas tidak dirusak error yang tidak relevan, bukti dikumpulkan berurutan: fakta proses hanya dibaca di boot yang sama, dan `holds_file` hanya kalau enam pemeriksaan lain lolos.
 
 ## Keputusan kecil
 
@@ -608,7 +722,7 @@ Diputuskan saat menulis spec, masing masing dengan pilihan, alasan, dan alternat
 - **User tidak disimpan**, karena setiap catatan ditulis daemon user itu sendiri; pemeriksaan membandingkan uid proses dengan user berjalan. Alternatif: kolom uid baru (butuh migrasi tanpa nilai tambah).
 - **Pembaca spool berbasis tick 500 ms**, karena cukup murah untuk 10 instance dan sederhana. Alternatif: `EVFILT_VNODE` di watcher (lebih hemat, lebih rumit).
 - **Punch hole, bukan truncate**, karena truncate saat proses menulis append bisa membuang baris. Alternatif: copytruncate (sederhana, kehilangan baris).
-- **Resume dengan `SEEK_DATA` tanpa file state**, karena duplikasi paling banyak satu blok dan ditandai `resumed`. Alternatif: file offset di folder run (tulis berkala, tanpa fsync, lebih banyak state).
+- **Resume dengan `SEEK_DATA` tanpa file state**, karena duplikasi paling banyak satu satuan punch (16 KiB di Mac ini) ditambah satu batch baca, dan ditandai `resumed`. Alternatif: file offset di folder run (tulis berkala, tanpa fsync, lebih banyak state).
 - **Rekonsiliasi hanya mengklasifikasi di slot start, start dijalankan setelah daemon `ready`**, supaya slot start tidak menunggu deadline readiness puluhan detik. Alternatif: start di dalam slot (daemon lama tidak siap).
 - **Pemeriksaan ulang `unknown` tanpa start otomatis**, karena keluar dari `unknown` biasanya hasil tindakan pengguna di luar Stackly. Alternatif: start kalau desired `running` (bisa mengejutkan setelah pengguna mematikan proses liar).
 - **`SIGTERM` daemon tidak menyentuh instance**, mengikuti Keputusan 1; restart terencana yang menghentikan instance milik fitur 30. Alternatif: stop semua instance saat daemon berhenti (mematikan database pada setiap update).
@@ -631,6 +745,13 @@ Diputuskan saat menulis spec, masing masing dengan pilihan, alasan, dan alternat
 - **UTF-8 lossy dan redaksi atas baris logis utuh sebelum dipotong**, karena potongan di tengah nilai secret atau kunci `password=` membuat `Redactor` tidak bisa mencocokkannya. Alternatif: redaksi per potongan (bocor di batas potongan).
 - **Fd sumber diduplikasi ke nomor 10 ke atas sebelum `adddup2`, lock dilepas dengan `close`, dan satu mutex per PID untuk sinyal dan reap**, supaya pemetaan fd tidak bertabrakan saat stdio daemon tertutup, lock yang diwariskan tidak ikut terlepas, dan sinyal tidak pernah sampai ke PID yang sudah di reap. Alternatif: tidak ada yang sama amannya.
 - **Stale dihitung dengan jam dinding di setiap tick probe**, karena timer monotonik berhenti saat Mac tidur sementara `effective` memakai jam dinding. Alternatif: timer stale terpisah (terlambat setelah wake).
+- **Simbol yang tidak ada di libc 0.2.190 dideklarasikan lokal di `process::sys`** (`POSIX_SPAWN_SETSID`, `PROC_PIDFDVNODEPATHINFO`, `proc_fileinfo`, `vnode_fdinfowithpath`, `PROC_PGRP_ONLY`, dan `kinfo_proc` Apple), dengan `#[repr(C)]` utuh dan `const` assert ukuran serta offset, karena enam simbol tidak sepadan dengan dependency baru dan assert membuat layout yang salah gagal saat compile. Alternatif: crate binding pihak ketiga (dependency baru yang harus lolos `cargo deny`, dengan API jauh lebih luas dari yang dipakai).
+- **Bukti dikumpulkan berurutan lewat `gather_evidence`** (`inspect` hanya di boot yang sama, `holds_file` hanya kalau enam pemeriksaan lain lolos, sisanya `NotChecked`), karena bukti yang tidak dibaca tidak menentukan klasifikasi, dan error membaca bukti yang tidak relevan tidak boleh mengubah `Gone` menjadi `Unproven`. Alternatif dari cross check: selalu dibaca, lalu `classify` mengabaikan hasilnya saat pemeriksaan lain gagal (lebih sedikit tipe, tetapi aturan "error apa pun menjadi `Unproven`" mendapat pengecualian dan daftar fd proses asing tetap dibaca).
+- **Error `proc_pidpath` dan `getsid` selain `ESRCH` menjadi `Io`**, karena executable yang di unlink dari proses yang masih hidup bukan bukti bahwa proses itu bukan milik kita. Alternatif: dianggap executable berbeda (proses kita yang runtime nya terhapus bisa menjadi `Gone` dan dijalankan ulang kalau lock nya bebas).
+- **Fallback menolak fakta asing kalau uid real atau saved set uid sama dengan user kita**, supaya proses kita yang menjalankan binary setuid tetap `Unproven`, bukan `Gone`. Alternatif: hanya membandingkan uid efektif (lebih sederhana, membuka `Gone` yang salah).
+- **Satuan punch dihitung dari mesin, bukan konstanta**, mengikuti Keputusan 19, dengan fake yang satuannya bisa disetel supaya test tetap deterministik. Alternatif dari cross check: konstanta `SPOOL_PUNCH_UNIT` 16 KiB yang dicek saat open terhadap `max(halaman VM, f_bsize)` (sama di Apple Silicon, tetapi harus diubah kalau mesin berubah).
+- **`release_below` dengan watermark dan offset ujung baris yang diterima sink**, karena offset baca bisa melewati baris yang masih ditahan, dan watermark membuat panggilan berulang murah dan aman. Alternatif: punch dari 0 setiap kali (punch ulang range yang sudah kosong).
+- **Fallback `kinfo_proc` hanya saat `EPERM`**, bukan untuk error lain, karena `ESRCH` sudah berarti PID tidak ada, dan error lain tetap harus menjadi `Unproven`. Alternatif: fallback untuk setiap error (menyembunyikan error yang seharusnya terlihat di bukti).
 
 ## Cross check
 
@@ -652,6 +773,50 @@ Draft dibaca ulang oleh Sonnet 5.5 sebagai kritik read only (2026-10-18). Hasiln
 
 Residual risk yang dinyatakan alih alih diperbaiki: spool tumbuh tanpa batas selama daemon mati, proses tertahan dari daemon yang mati di jendela spawn menjadi `unknown`, dan secret yang terpotong batas `LOG_LINE_HARD_MAX`.
 
+<<<<<<< HEAD
+Pembaruan setelah spike (Keputusan 19 sampai 21) dibaca ulang oleh Sonnet 5.5 sebagai kritik read only (2026-10-18). Hasilnya: desain aman dan gagal ke arah tertutup (tidak ada jalur dari fallback ke sinyal), dengan delapan celah kelengkapan dan satu catatan keselamatan. Pengguna menyetujui semua perbaikan yang direkomendasikan:
+
+- Urutan pengumpulan bukti lewat `gather_evidence` dan `identity_checks`, tipe input `classify`, `NotChecked` di bukti dan wire, sumber `uid`, dan pengaman start yang menolak saat bukti error.
+- Pemetaan error `inspect` (`proc_pidpath` dan `getsid` selain `ESRCH` menjadi `Io`), `stopped` dan zombie di kedua jalur, dan aturan `Gone(exited)` lawan `Gone(pid_reused)`.
+- Layout `kinfo_proc`: lebar field, offset yang diukur langkah 3, seam `inspect_kinfo`, dan test PID yang sudah di reap.
+- Aturan `release_below` (watermark, offset ujung baris yang diterima sink, no op, clamp, error punch sebagai warning), satuan dihitung setiap `open_spool`, `punch_unit()`, dan fake yang membulatkan dengan cara sama.
+- Resume: `first_data_offset()` berupa `Option`, dan baris pertama tidak dibuang saat mulai dari offset 0.
+- Cara mengukur AC-12 (`st_blocks` kali 512, sampel paling lama 500 ms, offset yang dibebaskan), dan `release_below` saat drain di akhir proses.
+- Test PID 1 lewat catatan panggilan fake untuk `inspect` dan `holds_file`, plus prasyarat `EPERM` di test adapter.
+- Pengaman keselamatan: fallback menolak fakta asing kalau uid real atau saved sama dengan user kita.
+- Kalimat yang berlebihan diperbaiki: batas duplikasi setelah restart (satu satuan ditambah satu batch baca), angka spool "sampai sekitar 1 MiB" dengan penyebab yang belum dibuktikan, dan klaim bahwa lock bebas membuktikan data tidak dipakai.
+
+## Spike milestone 1 langkah 1 (2026-10-18)
+
+Spike sekali pakai di luar workspace (libc 0.2.190 seperti workspace) dijalankan di Mac ini: macOS 27.0 build 26A428, Apple M1 Max, APFS dengan `f_bsize` 4096 dan `f_iosize` 1048576, halaman VM 16384. Child di setiap skenario adalah `stackly-fake-server` dari commit `d99e5ea`, dijalankan dari path canonical di dalam root runtime tiruan di bawah folder `Test Root Ünï cödé`. Lima belas record manual ada di `evidence/manual/2026-10-18-spec-0010-spike-*.json`; source spike, log lengkap, dan eksperimen tambahan ada di folder record pertama, `evidence/manual/files/01a14e57-e0d8-75bf-bff5-2ce203340b51/`.
+
+| Baris *Adapter macOS* | Hasil | Catatan |
+| --- | --- | --- |
+| Spawn | PASS | fd child tertahan tepat 0 sampai 3; argv, env, dan cwd sama persis; mask sinyal kosong; duplikasi ke fd 10 ke atas wajib; `ENOENT` dan `EACCES` tanpa child |
+| Tertahan dan lanjut | PASS | tidak ada kode yang jalan sebelum `SIGCONT`, juga dari daemon baru setelah daemon lama mati; `SIGKILL` lalu `waitpid` membuang child yang belum pernah jalan |
+| Waktu start, user, group, parent (user sendiri) | PASS | child, yatim (ppid 1), dan tertahan; zombie menjawab `ESRCH` |
+| Baris yang sama, proses user lain | FAIL, diputuskan di Keputusan 21 | `EPERM` untuk 168 dari 168; `kinfo_proc` terbaca untuk 168 dari 168 |
+| Executable | PASS | `proc_pidpath` memberi path canonical; executable yang di rename memberi path baru, yang di unlink `ENOENT` |
+| Session | PASS | `getsid` bekerja lintas session dan sama dengan PID |
+| Boot | PASS | `kern.bootsessionuuid` UUID huruf besar yang stabil; spec menyimpannya huruf kecil |
+| Boot setelah reboot | BLOCKED | butuh reboot Mac ini |
+| Fd yang dipegang | PASS | `Yes` untuk child tertahan, berjalan, dan yatim; `EPERM` untuk user lain menjadi `Unreadable` |
+| Anggota group | PASS | `proc_listpids(PROC_PGRP_ONLY)` termasuk sisa setelah leader di reap |
+| Exit | PASS | `NOTE_EXIT` untuk child, child tertahan, dan bukan child; data `NOTE_EXITSTATUS` untuk bukan child tidak bisa dipercaya |
+| Sinyal dan reap | PASS | `SIGTERM` lintas session; zombie memegang PID sampai di reap; TERM lalu KILL ke group pembantu menghentikan semua turunan |
+| Lock | PASS | lock di fd 3 bertahan setelah daemon menutup fd dan keluar; `LOCK_UN` di salinan daemon ikut melepas lock child (bukti aturan "hanya `close`"); file lock yang dihapus membuat file baru bisa di lock (bukti pengaman observasi) |
+| Spool seperti tertulis | FAIL, diputuskan di Keputusan 19 dan 20 | `EPERM` di `O_RDONLY`; satuan 4 KiB membuat alokasi tumbuh dan `SEEK_DATA` basi |
+| Spool dengan pembaca `O_RDWR` dan satuan halaman | PASS | lihat angka di bawah |
+
+Angka spool di bawah beban AC-12 (fake 2000 baris per detik selama 60 detik, dibaca dan di punch setiap 500 ms):
+
+| Varian | Ditulis per stream | Alokasi paling tinggi per spool | Dua spool bersama | `SEEK_DATA` setelah run |
+| --- | --- | --- | --- | --- |
+| Satuan `f_bsize` 4 KiB | sekitar 6,0 MB | 1638400 B | 3272704 B, terus naik dari 2256896 B di detik 15 | 32768, basi (6008832 B sudah dibebaskan) |
+| Satuan halaman 16 KiB | sekitar 6,0 MB | 1052672 B, puncaknya tidak naik setelah detik 15 | 2105344 B (2064384 B di run sebelumnya) | 6012928, tepat |
+| Satuan halaman, fsync setelah setiap punch | sekitar 6,0 MB | 1052672 B | 2105344 B | tepat |
+| Tanpa punch (kontrol, 10 detik) | sekitar 1 MB | paling banyak 61440 B di atas EOF | | |
+=======
 ## Perubahan 2026-10-18 (rekonsiliasi lintas spec, ronde 2)
 
 Pengecekan silang dengan spec 0007, 0008, dan 0013 dan keputusan engineer di pass rekonsiliasi:
@@ -666,3 +831,4 @@ Pengecekan silang dengan spec 0007, 0008, dan 0013 dan keputusan engineer di pas
 | Spec 0013 butuh versi runtime, halaman yang dibatasi ukuran, dan kabar instance yang di retain | `runtimeVersion` di summary, halaman di bawah 900 KiB dengan cursor opaque, dan `instance.state_changed` dengan lifecycle `retained` | batas frame spec 0006 dan daftar GUI yang selalu benar |
 
 Cross check model lain atas ronde 2 menambah, atas persetujuan engineer: start sistem dari rekonsiliasi dikirim setelah `start()` dengan `BusyPolicy::Queue`, jawaban `alreadyInState` lewat `precheck` spec 0007 (mengikat key kalau menulis desired state), field status di `instance.state_changed` ikut `statusSeq`, dan sweep `secrets/` menghitung lifecycle `starting`, `running`, `recovering`, `stopping`, dan `unknown` sebagai berjalan.
+>>>>>>> main
