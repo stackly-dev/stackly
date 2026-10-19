@@ -101,7 +101,7 @@ Manifest dan adapter PostgreSQL resmi: `initdb` dari runtime yang cocok, auth lo
 - [ ] Verify it: `/check verify provider PostgreSQL`
 - [ ] Test it: `/test provider PostgreSQL`
 
-### 20. Create instance · needs a decision · GA
+### 20. Create instance · in-progress · GA
 
 Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, auth, persistence, storage, dan autostart, dengan preflight dan error per field. Field settings, endpoint, auth, dan storage dirender dari settings schema dan resources manifest provider (kelas field VAL-012), tidak dikodekan khusus untuk PostgreSQL. Inisialisasi hanya terjadi di direktori baru milik operasi itu.
 
@@ -109,7 +109,18 @@ Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, a
 
 **Trace:** REQ-008, REQ-010, REQ-029 (bagian form), PAGE-04, BR-002, BR-004, BR-005, BR-008, VAL-001, VAL-004 sampai VAL-008, VAL-012, AC-008, AC-027, AC-029 (bagian form UI), AC-055, AC-056, NFR-009, NFR-012
 
-- [ ] Design it (spec): `/architect create instance`
+**Pointer:** spec [0020](../specs/0020-create-instance/index.md)
+
+- [x] Design it (spec): `/architect create instance`
+- [ ] Build it: `/develop create instance`
+  - [ ] Evaluation, pin, and the create operation in core on fakes: domain and platform additions (endpoint validation in `Instance::new`, `ProviderSourceId`, `Filesystem::volume_facts`), registry ops (`ProviderSourceRecord`, `InsertProviderSource`, `provider_source_by_location`, `source_id`, `DeleteInstanceCreatedBy`), the `instance_tree` lock probe and the `not_created` detail, `SettingsSchema` declaration order and `SettingsIssueKind`, catalog pin and source (K-1, K-2), `instance::create` gather, evaluate, and `build_form` with `PortProbe::try_bind`, port suggestions, and the fuzz harness, and `CreateInstanceWork` with the `instance_registration` compensator (spec 0020 AC-2 to AC-15, AC-23 harness; build steps 1 to 7; needs `/architect` update of specs 0001, 0004, 0005, 0007, 0009, 0010, and 0011; needs features 9, 10 milestone 2, and 11 step 4 in `01-foundation.md`, feature 17 milestone 1, and feature 18 step 2; after step 1, steps 2, 3, 4, and 5 can run as parallel sessions, and step 2 never runs beside another `WriteOp` writer)
+  - [ ] Contract, daemon, and CLI: the protocol DTOs, two methods, the `instance.removed` event, codes with static hints, `equivalent_command` and fixtures; `stacklyd` `ensure_source`, handlers with gather outside the begin gate and `BusyPolicy::Reject`, `socketPath` at read time; `stackly instance create` with `--dry-run` and `--start`; the AC-028 parity matrix; the `check-deps` rule (spec 0020 AC-1, AC-10 to AC-19, AC-24, AC-26; build steps 8 to 11; after milestone 1; needs features 6, 8, 10 milestone 4, 11 step 8, and 14 in `01-foundation.md`, feature 17 step 6, feature 18 milestone 3, and feature 19 milestone 1 for the PostgreSQL fixture; after step 8, steps 9 and 10 can run as two parallel sessions, step 11 as a third)
+  - [ ] New Instance sheet: `StacklyClient` methods and `instance.removed` in `InstanceStore`, `CreateInstanceModel`, `SchemaFormModel`, `NewInstanceSheet` with progress and cancel, and the entry points (`newInstanceAction`, Catalog detail button, ⌘N), with manual keyboard and VoiceOver evidence (spec 0020 AC-17, AC-20 to AC-22; build steps 12 to 14; after step 8; needs features 12 and 13 milestone 4 in `ui-macos.md`, feature 11 step 10, feature 17 milestone 3, and feature 18 milestone 4; uses feature 22 `newInstanceAction` and `ShellNavigator` and features 67 and 69 if built; can run in parallel with steps 9 to 11)
+  - [ ] PostgreSQL proof on this Mac: native create of 18 and 17 from CLI and GUI, real listeners on 127.0.0.1, 0.0.0.0, `[::]`, and `[::1]`, plus TIME_WAIT and UDP, the port race before start, `socketPath` after start, a 10 minute fuzz run, and performance (spec 0020 AC-4, AC-12, AC-16, AC-22 to AC-25; build steps 15 and 16; after milestones 2 and 3; needs feature 19 milestone 2 and feature 18 milestone 2; `BLOCKED` without the PostgreSQL artifacts in the xtask cache; the fuzz run can be its own session after step 6)
+- [ ] Verify it: `/check verify create instance`
+- [ ] Test it: `/test create instance`
+- [ ] Review it (fresh model): `/check review create instance`
+- [ ] Document it: `/document create instance`
 
 ### 21. Start, readiness & connection
 
