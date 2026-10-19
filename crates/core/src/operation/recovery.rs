@@ -525,6 +525,11 @@ pub(crate) async fn resume(
         stored_state(inner, id).await?;
         return Err(not_resumable(NotResumableReason::WrongState));
     };
+    // A running compensation holds the writer until it ends; answer now
+    // instead of waiting for it (AC-11).
+    if handle.is_compensating() && handle.state() == OperationState::NeedsRecovery {
+        return Err(not_resumable(NotResumableReason::AutoCompensating));
+    }
     let mut record = handle.record.lock().await;
     if record.operation.state() != OperationState::NeedsRecovery {
         return Err(not_resumable(NotResumableReason::WrongState));
@@ -558,7 +563,9 @@ pub(crate) async fn resume(
         } else if !stopped_repeatable {
             NotResumableReason::StepNotRepeatable
         } else {
-            NotResumableReason::WrongState
+            // Left `manual` because its work could not be rebuilt, the same
+            // answer a failed rebuild gets below.
+            NotResumableReason::NoFactory
         };
         return Err(not_resumable(reason));
     }
@@ -595,6 +602,15 @@ pub(crate) async fn abandon(
             reason: NotAbandonableReason::WrongState,
         });
     };
+    // A running compensation holds the writer until it ends; answer now
+    // instead of waiting for it (AC-11).
+    if handle.is_compensating() && handle.state() == OperationState::NeedsRecovery {
+        return Err(EngineError::NotAbandonable {
+            operation: id,
+            state: OperationState::NeedsRecovery,
+            reason: NotAbandonableReason::AutoCompensating,
+        });
+    }
     let mut record = handle.record.lock().await;
     let state = record.operation.state();
     if state != OperationState::NeedsRecovery {

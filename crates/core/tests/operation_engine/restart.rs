@@ -727,3 +727,200 @@ async fn a_crash_in_the_middle_of_compensation_is_compensated_again_and_never_re
     assert_eq!(undone.load(Ordering::SeqCst), 1);
     assert_eq!(effects.get(), 0, "the work never ran again");
 }
+
+/// Always fails to undo its item.
+struct NeverUndoes;
+
+impl Compensator for NeverUndoes {
+    fn compensate(
+        &self,
+        _scope: CompensationScope,
+        _record: &CreatedRecord,
+    ) -> BoxFuture<'static, Result<CompensationResult, CompensationError>> {
+        Box::pin(async {
+            Err(CompensationError::new(
+                "marker_busy".parse().expect("a reason code"),
+                "the marker is busy",
+            ))
+        })
+    }
+}
+
+/// Records one custom item for [`NeverUndoes`], then fails before its
+/// point of no return.
+struct LeavesAnItem;
+
+impl OperationWork for LeavesAnItem {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("download".parse().expect("a step name")).repeatable())
+                .await?;
+            let item = ctx
+                .record_custom_intent(
+                    "never_undoes".parse().expect("a compensator name"),
+                    "partial".parse().expect("an item key"),
+                    None,
+                )
+                .await?;
+            ctx.confirm_created(item).await?;
+            Err(WorkError::Failed(TestError::boxed(
+                "runtime.checksum_mismatch",
+                true,
+            )))
+        })
+    }
+}
+
+async fn resume_reason(harness: &Harness, id: stackly_domain::OperationId) -> NotResumableReason {
+    match harness.engine.resume(id, None).await {
+        Err(EngineError::NotResumable { reason, .. }) => reason,
+        other => panic!("expected a refused resume, got {other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn resume_names_why_it_refuses_a_step_a_factory_or_a_failed_compensation() {
+    // Spec 0007 AC-11: operation.not_resumable carries its reason.
+    let harness = Harness::new().await;
+    harness
+        .engine
+        .register_compensator("never_undoes".parse().unwrap(), Arc::new(NeverUndoes));
+    harness.engine.register_factory(
+        OperationKind::InstallRuntime,
+        Arc::new(ScriptedFactory::always(ScriptedWork::new().step("fetch"))),
+    );
+    let once = harness
+        .begin(install(
+            ScriptedWork::new()
+                .step("fetch")
+                .irreversible()
+                .fail("runtime.checksum_mismatch", true),
+        ))
+        .await;
+    let no_factory = harness
+        .begin({
+            let mut begin = request(
+                OperationKind::BackupInstance,
+                OperationResource::Runtime(RuntimeId::generate()),
+                ScriptedWork::new()
+                    .step("copy")
+                    .repeatable()
+                    .irreversible()
+                    .fail("runtime.checksum_mismatch", true)
+                    .boxed(),
+            );
+            begin.creates_resource = true;
+            begin
+        })
+        .await;
+    let compensation = harness
+        .begin({
+            let mut begin = request(
+                OperationKind::InstallRuntime,
+                OperationResource::Runtime(RuntimeId::generate()),
+                Box::new(LeavesAnItem),
+            );
+            begin.creates_resource = true;
+            begin
+        })
+        .await;
+    for id in [once, no_factory, compensation] {
+        wait_state(&harness.engine, id, OperationState::NeedsRecovery).await;
+    }
+
+    assert_eq!(
+        resume_reason(&harness, once).await,
+        NotResumableReason::StepNotRepeatable
+    );
+    assert_eq!(
+        resume_reason(&harness, no_factory).await,
+        NotResumableReason::NoFactory
+    );
+    assert_eq!(
+        resume_reason(&harness, compensation).await,
+        NotResumableReason::CompensationFailed
+    );
+}
+
+/// Records a custom item for the stalling compensator in a reversible
+/// step, then waits there.
+struct ItemThenHold(HoldHandle);
+
+impl OperationWork for ItemThenHold {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("stage".parse().expect("a step name")))
+                .await?;
+            let item = ctx
+                .record_custom_intent(
+                    "test_stall".parse().expect("a compensator name"),
+                    "staged".parse().expect("an item key"),
+                    None,
+                )
+                .await?;
+            ctx.confirm_created(item).await?;
+            self.0.mark_started();
+            self.0.released().await;
+            ctx.finish_step(None).await?;
+            Ok(WorkOutcome {
+                result: OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn while_automatic_compensation_runs_resume_and_abandon_refuse_with_auto_compensating() {
+    // Spec 0007 AC-11: abandon during automatic compensation gets
+    // not_abandonable with auto_compensating, and so does resume.
+    let harness = Harness::new().await;
+    let held = HoldHandle::new();
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(ItemThenHold(held.clone())),
+        ))
+        .await;
+    held.started().await;
+
+    let (engine, _) = harness.restarted(fast());
+    let stall = HoldHandle::new();
+    engine.register_compensator(
+        "test_stall".parse().unwrap(),
+        Arc::new(Stalls(stall.clone())),
+    );
+    engine.recover().await.unwrap();
+    engine.start();
+    stall.started().await;
+    let running = engine.get(id).await.unwrap().unwrap();
+    let resumed = engine.resume(id, None).await;
+    let abandoned = engine.abandon(id, running.view.operation.revision()).await;
+    stall.release();
+    let closed = wait_state(&engine, id, OperationState::Failed).await;
+
+    assert_eq!(
+        running.view.operation.recovery_hint(),
+        Some(RecoveryHint::AutoCompensate)
+    );
+    assert!(running.view.auto_compensating);
+    assert!(running.view.recovery_actions.is_empty());
+    assert!(matches!(
+        resumed,
+        Err(EngineError::NotResumable {
+            reason: NotResumableReason::AutoCompensating,
+            ..
+        })
+    ));
+    assert!(matches!(
+        abandoned,
+        Err(EngineError::NotAbandonable {
+            reason: NotAbandonableReason::AutoCompensating,
+            ..
+        })
+    ));
+    assert_eq!(
+        closed.view.operation.failure().map(|f| f.code().as_str()),
+        Some("interrupted")
+    );
+}
