@@ -773,7 +773,6 @@ Draft dibaca ulang oleh Sonnet 5.5 sebagai kritik read only (2026-10-18). Hasiln
 
 Residual risk yang dinyatakan alih alih diperbaiki: spool tumbuh tanpa batas selama daemon mati, proses tertahan dari daemon yang mati di jendela spawn menjadi `unknown`, dan secret yang terpotong batas `LOG_LINE_HARD_MAX`.
 
-<<<<<<< HEAD
 Pembaruan setelah spike (Keputusan 19 sampai 21) dibaca ulang oleh Sonnet 5.5 sebagai kritik read only (2026-10-18). Hasilnya: desain aman dan gagal ke arah tertutup (tidak ada jalur dari fallback ke sinyal), dengan delapan celah kelengkapan dan satu catatan keselamatan. Pengguna menyetujui semua perbaikan yang direkomendasikan:
 
 - Urutan pengumpulan bukti lewat `gather_evidence` dan `identity_checks`, tipe input `classify`, `NotChecked` di bukti dan wire, sumber `uid`, dan pengaman start yang menolak saat bukti error.
@@ -816,7 +815,7 @@ Angka spool di bawah beban AC-12 (fake 2000 baris per detik selama 60 detik, dib
 | Satuan halaman 16 KiB | sekitar 6,0 MB | 1052672 B, puncaknya tidak naik setelah detik 15 | 2105344 B (2064384 B di run sebelumnya) | 6012928, tepat |
 | Satuan halaman, fsync setelah setiap punch | sekitar 6,0 MB | 1052672 B | 2105344 B | tepat |
 | Tanpa punch (kontrol, 10 detik) | sekitar 1 MB | paling banyak 61440 B di atas EOF | | |
-=======
+
 ## Perubahan 2026-10-18 (rekonsiliasi lintas spec, ronde 2)
 
 Pengecekan silang dengan spec 0007, 0008, dan 0013 dan keputusan engineer di pass rekonsiliasi:
@@ -831,4 +830,14 @@ Pengecekan silang dengan spec 0007, 0008, dan 0013 dan keputusan engineer di pas
 | Spec 0013 butuh versi runtime, halaman yang dibatasi ukuran, dan kabar instance yang di retain | `runtimeVersion` di summary, halaman di bawah 900 KiB dengan cursor opaque, dan `instance.state_changed` dengan lifecycle `retained` | batas frame spec 0006 dan daftar GUI yang selalu benar |
 
 Cross check model lain atas ronde 2 menambah, atas persetujuan engineer: start sistem dari rekonsiliasi dikirim setelah `start()` dengan `BusyPolicy::Queue`, jawaban `alreadyInState` lewat `precheck` spec 0007 (mengikat key kalau menulis desired state), field status di `instance.state_changed` ikut `statusSeq`, dan sweep `secrets/` menghitung lifecycle `starting`, `running`, `recovering`, `stopping`, dan `unknown` sebagai berjalan.
->>>>>>> main
+
+## Perubahan 2026-10-19 (prasyarat wave 2)
+
+Update `/architect` yang membuka build langkah 2 dan seterusnya. Keputusan engineer (semua mengikuti rekomendasi):
+
+- **Penanda konflik git** dari merge `548e784` (dibawa lagi oleh `ff7023c`) di AC-10 sampai AC-12, *Rekonsiliasi*, Follow-up spec 0004, dan bagian akhir file ini dibersihkan dengan diff tiga arah terhadap merge base `08ef2ec`. Kedua sisi mengubah kalimat yang berbeda, jadi tidak ada yang bertentangan dan keduanya dipertahankan. Dari spike: AC-10 (fallback `kinfo_proc`, `notChecked`), AC-12 (cara sampling), `gather_evidence` di rekonsiliasi dan pemeriksaan ulang, serta rincian spike di Follow-up. Dari ronde 2: AC-11 dan langkah 3 *Rekonsiliasi* (`recover` dengan `CloseInterrupted` milik spec 0007), himpunan berjalan yang lebih luas untuk sweep, teks `SIGTERM`, dan centang Follow-up.
+- **`IdentityCheck`** bernilai `Passed`, `Failed`, dan `NotChecked`, dengan wire `passed`, `failed`, dan `notChecked`, dicatat di spec 0004. Runner up: `Option<bool>` (wire tidak cocok dengan `notChecked` dan fixture AC-16).
+- **Langkah 2a** baru membangun op registry yang dirancang spec 0005 untuk fitur ini (*Tambahan fitur 10* di sana), karena sebelumnya tidak ada build step yang memilikinya. Ia diletakkan setelah langkah 2, karena `RecordProcessObservation` membawa `ProcessObservation` domain. Nomornya `2a`, bukan penomoran ulang, supaya rujukan yang sudah ada tetap benar (*Hasil spike* menyebut langkah 3, scope menyebut rentang langkah, dan sesi wave 1 sedang membacanya). Runner up: menomori ulang 3 sampai 15 menjadi 4 sampai 16.
+- **Config revision awal**: `config_values` disimpan sebagai `ConfigValuesJson` (teks JSON object kanonik yang dibuat dan dibaca core), dan `InsertConfigRevision` tidak menaikkan revision instance. Alasannya di rationale spec 0005.
+- **Sesi paralel**: langkah 2a, 3, dan 4 bisa menjadi tiga sesi setelah langkah 2. Langkah 2a dan langkah 0 spec 0011 menyentuh file registry yang sama, jadi keduanya berjalan berurutan, bukan sebagai dua sesi penulis bersamaan. Langkah 2 boleh berjalan bersamaan dengan langkah 0 spec 0011.
+- **Cross check** (Sonnet 5.5, baca saja) atas update ini menemukan celah yang diperbaiki atas persetujuan engineer: bentuk `ProcessObservation` (`instance`, `identity`, `observed_at` dari jam supervisor) dan observasi terakhir menurut `id`, bukan waktu; milestone 2 butuh langkah 4 spec 0011 (`resolve_for_start` dan `put`), bukan hanya `secret::delivery`; langkah 2 butuh langkah 1 spec 0011 yang membuat `InstanceBlocker`; sumber setiap field config revision awal; daftar conformance langkah 2a; dan catatan bahwa konflik revision di *Commit* baru menangkap perubahan config setelah fitur 29.

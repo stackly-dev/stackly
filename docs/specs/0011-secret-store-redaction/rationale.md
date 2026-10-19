@@ -782,3 +782,13 @@ Cross check model lain atas update ini menambah, atas persetujuan engineer: AC-2
 
 Ronde 2 rekonsiliasi (2026-10-18), atas persetujuan engineer: semua penghapusan lewat `remove_owned_tree` spec 0007 (AC-20 ditulis ulang; fitur ini tidak lagi membangun `remove_file` dan `remove_empty_dir`), instance `unknown` dihitung berjalan saat sweep dan `learn_running`, dan blocker satu slot dengan prioritas spec 0010.
 
+## Perubahan 2026-10-19 (prasyarat wave 2)
+
+Update `/architect` yang membuka langkah 0 dan langkah 4 tanpa menunggu server daemon. Keputusan engineer (semua mengikuti rekomendasi):
+
+- **Langkah 0 menjadi build step.** Desainnya selesai lewat update spec 0005 hari ini (*Tambahan fitur 11* di sana), jadi yang tersisa adalah kode: migrasi secret, record, op, baca, fake, conformance, dan SQLite. Langkah ini butuh tipe domain `secret` dari langkah 1, tetapi nomornya tetap 0 supaya rujukan yang ada tidak berubah. Runner up: langkah 0 hanya dokumen yang kini selesai, dan langkah 4 ikut membangun bagian registry (langkah 4 menjadi jauh lebih besar dan melintasi domain, testkit, dan storage).
+- **Skema fisik secret** dibetulkan lewat migrasi baru, bukan dengan mengubah migrasi 0001. Migrasi 0001 yang sudah dibangun masih memakai kolom `secret_references` lama tanpa `secret_reference_uses`. Alasan dan runner up ada di rationale spec 0005.
+- **Pemulihan setelah delete gagal** memakai op khusus `RestoreSecretReference` dengan revision paling kecil 2, supaya insert biasa tetap mewajibkan revision 1.
+- **Pemetaan AC**: AC-20 juga dipenuhi langkah 4 (`remove_secret_material` dan sweep lewat `remove_owned_tree` ada di `secret::delivery`), di samping langkah 1, dan AC-21 dipenuhi langkah 5 (katalog `codes::secret` dan pemetaan error di `stacklyd`). Sebelumnya AC-21 tidak dipegang langkah mana pun.
+- **Ketergantungan**: hanya langkah 5 dan 7 yang butuh server daemon fitur 6. Langkah 0 sampai 4 dan langkah 6 cukup dengan fitur 4 dan 5 serta milestone 2 spec 0007.
+- **Cross check** (Sonnet 5.5, baca saja) atas update ini menemukan celah yang diperbaiki atas persetujuan engineer: kunci `safe_details` audit dan batasnya (`SafeDetails` spec 0005), `resource` audit untuk reference yang tidak terdaftar, `put` dengan `PutTarget::New` yang hanya membuat baris reference sementara pemakaian ditulis batch pendaftaran pemanggil, delete yang memakai `ReferenceInUse`, dan `probe_all` sebagai satu batch, bukan satu commit per reference.
