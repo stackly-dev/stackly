@@ -85,5 +85,5 @@ _Hasil `/check verify` 2026-10-19 (cabang `claude/f7-daemon-closeout-7fb5d1` di 
 ## Ringkasan AC
 
 - AC-1 sampai AC-20 · semua terpenuhi dengan bukti di atas
-- Catatan untuk `/test`: bagian AC-3 "operasi latar tidak membawa key" baru dibuktikan lewat probe sementara; kunci dengan test permanen di `crates/core/tests/operation_engine`
+- Bagian AC-3 "operasi latar tidak membawa key" dibuktikan lewat probe sementara saat verify, lalu dikunci `/test` di `flow::a_background_operation_records_no_key_method_or_fingerprint_and_a_request_records_all_three`
 - Kompensator `secret_ref` tetap provisional sampai spec 0011 langkah 5 (bukan acceptance criterion spec ini; tercatat di `apps/daemon/src/operations.rs`)

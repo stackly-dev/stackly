@@ -206,3 +206,158 @@ impl Operations {
         self.slot.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use stackly_core::prepare_layout;
+    use stackly_platform_macos::MacosPlatform;
+    use stackly_storage::{OpenOptions, RegistryOpen};
+    use stackly_testkit::TestRoot;
+    use uuid::Uuid;
+
+    use super::*;
+
+    /// A ready registry in its own test root, and a bus for the engine.
+    struct Opened {
+        _root: TestRoot,
+        platform: Platform,
+        prepared: PreparedLayout,
+        registry: SqliteRegistry,
+        bus: Arc<EventBus>,
+    }
+
+    fn opened() -> Opened {
+        let root = TestRoot::new().expect("a test root can be created");
+        let platform = MacosPlatform::with_roots(root.roots());
+        let prepared = prepare_layout(&platform).expect("a fresh test root prepares");
+        let RegistryOpen::Ready { registry, .. } = OpenOptions::new()
+            .open(&platform, prepared.layout(), "0.1.0")
+            .expect("a fresh registry opens")
+        else {
+            panic!("a fresh registry opens ready");
+        };
+        let bus = Arc::new(EventBus::new(Uuid::now_v7(), platform.shared_clock()));
+        Opened {
+            _root: root,
+            platform,
+            prepared,
+            registry,
+            bus,
+        }
+    }
+
+    fn created(operations: &Operations, site: &Opened) -> OperationEngine {
+        operations.create(
+            site.registry.clone(),
+            &site.platform,
+            &site.prepared,
+            &site.bus,
+        )
+    }
+
+    #[test]
+    fn before_the_registry_opens_reads_wait_for_it_and_the_rest_for_operations() {
+        let operations = Operations::default();
+
+        let health = operations.health();
+        let read = operations.reader().unwrap_err();
+        let write = operations.writer().unwrap_err();
+
+        assert_eq!(health.name, "operations");
+        assert_eq!(health.status, SubsystemStatus::Unavailable);
+        assert_eq!(health.detail.as_deref(), Some("waiting for the registry"));
+        assert_eq!(read.code(), "daemon.starting");
+        assert_eq!(read.detail("subsystem"), Some("registry"));
+        assert_eq!(write.detail("subsystem"), Some("operations"));
+        assert!(operations.engine().is_none());
+    }
+
+    #[test]
+    fn a_run_without_an_engine_reports_why_and_answers_registry_unavailable() {
+        let operations = Operations::default();
+
+        operations.unavailable("registry in recovery");
+
+        let health = operations.health();
+        assert_eq!(health.status, SubsystemStatus::Unavailable);
+        assert_eq!(health.detail.as_deref(), Some("registry in recovery"));
+        assert_eq!(
+            operations.reader().unwrap_err().code(),
+            "registry.unavailable"
+        );
+        assert_eq!(
+            operations.writer().unwrap_err().code(),
+            "registry.unavailable"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_engine_serves_while_it_recovers_and_reports_ok_once_recovered() {
+        let site = opened();
+        let operations = Operations::default();
+        let engine = created(&operations, &site);
+
+        let recovering = operations.health();
+        let served = (operations.reader().is_ok(), operations.writer().is_ok());
+        engine.recover().await.unwrap();
+        operations.recovered();
+        let ready = operations.health();
+
+        assert_eq!(recovering.status, SubsystemStatus::Unavailable);
+        assert_eq!(
+            recovering.detail.as_deref(),
+            Some("recovering the operations of the last run")
+        );
+        assert_eq!(served, (true, true));
+        assert_eq!(ready.status, SubsystemStatus::Ok);
+        assert_eq!(ready.detail, None);
+    }
+
+    #[tokio::test]
+    async fn a_failed_recovery_keeps_the_engine_for_reads_and_reports_unavailable() {
+        let site = opened();
+        let operations = Operations::default();
+        let _engine = created(&operations, &site);
+
+        operations.recovery_failed();
+        operations.recovered();
+
+        let health = operations.health();
+        assert_eq!(health.status, SubsystemStatus::Unavailable);
+        assert_eq!(
+            health.detail.as_deref(),
+            Some("the operations of the last run could not be recovered")
+        );
+        assert!(operations.reader().is_ok());
+    }
+
+    #[tokio::test]
+    async fn the_stop_shuts_the_engine_down_then_lets_go_of_it() {
+        let site = opened();
+        let operations = Operations::default();
+        let engine = created(&operations, &site);
+        engine.recover().await.unwrap();
+        operations.recovered();
+        engine.start();
+
+        let report = operations.shutdown().await;
+        operations.close();
+
+        let report = report.expect("an engine was there to stop");
+        assert_eq!(
+            (
+                report.parked,
+                report.stopped,
+                report.left_running,
+                report.abandoned
+            ),
+            (0, 0, 0, 0)
+        );
+        assert!(operations.engine().is_none());
+        assert_eq!(
+            operations.health().detail.as_deref(),
+            Some("the daemon stopped")
+        );
+        assert!(Operations::default().shutdown().await.is_none());
+    }
+}

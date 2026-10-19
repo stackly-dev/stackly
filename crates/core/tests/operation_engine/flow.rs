@@ -682,3 +682,52 @@ async fn finalize_runs_again_after_a_generation_conflict_and_a_stale_revision_fa
         Some("resource.revision_mismatch")
     );
 }
+
+#[tokio::test]
+async fn a_background_operation_records_no_key_method_or_fingerprint_and_a_request_records_all_three()
+ {
+    // Spec 0007 AC-3: an operation the daemon starts itself carries no
+    // idempotency key; one a client starts carries its key, its method, and
+    // its fingerprint.
+    let harness = Harness::new().await;
+    let background = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new().boxed(),
+        ))
+        .await;
+    let mut from_client =
+        manager_request(OperationKind::UpdateManager, ScriptedWork::new().boxed());
+    from_client.origin = user("cli-run-7", 0x5a);
+    let requested = harness.begin(from_client).await;
+
+    let background = harness.engine.get(background).await.unwrap().unwrap().view;
+    let requested = harness.engine.get(requested).await.unwrap().unwrap().view;
+
+    assert_eq!(background.operation.idempotency_key(), None);
+    assert_eq!(background.journal.method(), None);
+    assert_eq!(background.journal.fingerprint(), None);
+    assert_eq!(
+        background.journal.trigger().origin(),
+        stackly_domain::TriggerOrigin::Background
+    );
+    assert_eq!(
+        requested
+            .operation
+            .idempotency_key()
+            .map(|key| key.as_str().to_owned()),
+        Some("cli-run-7".to_owned())
+    );
+    assert_eq!(
+        requested
+            .journal
+            .method()
+            .map(|method| method.as_str().to_owned()),
+        Some("manager.update".to_owned())
+    );
+    assert!(requested.journal.fingerprint().is_some());
+    assert_eq!(
+        requested.journal.trigger().origin(),
+        stackly_domain::TriggerOrigin::User
+    );
+}

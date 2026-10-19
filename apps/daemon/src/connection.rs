@@ -1319,3 +1319,63 @@ fn log_request(
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const METHOD: &str = "test.start_operation";
+
+    fn frame(value: &serde_json::Value) -> Option<StartingFrame> {
+        starting_frame(&serde_json::to_vec(value).unwrap(), METHOD)
+    }
+
+    #[test]
+    fn a_request_for_another_method_or_broken_json_is_left_to_the_contract_decode() {
+        let other = serde_json::json!({ "requestId": "r", "call": { "type": "daemon.get_info" } });
+
+        assert!(frame(&other).is_none());
+        assert!(starting_frame(b"{broken", METHOD).is_none());
+        assert!(starting_frame(b"[]", METHOD).is_none());
+    }
+
+    #[test]
+    fn a_request_for_the_starting_method_keeps_its_id_key_and_params() {
+        let request = serde_json::json!({
+            "requestId": "r-1",
+            "idempotencyKey": "k-1",
+            "call": { "type": METHOD, "content": { "script": "quick" } },
+        });
+
+        let read = frame(&request).unwrap();
+
+        assert_eq!(read.request_id, "r-1");
+        assert_eq!(read.idempotency_key.as_deref(), Some("k-1"));
+        assert_eq!(read.params, Some(serde_json::json!({ "script": "quick" })));
+    }
+
+    #[test]
+    fn a_missing_key_or_params_stay_absent() {
+        let request = serde_json::json!({ "requestId": "r-2", "call": { "type": METHOD } });
+
+        let read = frame(&request).unwrap();
+
+        assert_eq!(read.idempotency_key, None);
+        assert_eq!(read.params, None);
+    }
+
+    #[test]
+    fn an_id_or_key_that_is_not_a_string_comes_back_empty_so_it_is_malformed() {
+        let request = serde_json::json!({
+            "requestId": 7,
+            "idempotencyKey": 9,
+            "call": { "type": METHOD },
+        });
+
+        let read = frame(&request).unwrap();
+
+        assert!(!json::is_request_id(&read.request_id));
+        assert_eq!(read.idempotency_key.as_deref(), Some(""));
+        assert!(!json::is_idempotency_key(""));
+    }
+}

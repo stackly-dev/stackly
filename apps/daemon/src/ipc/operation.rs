@@ -605,3 +605,395 @@ fn unexpected(message: &str) -> Box<ErrorBody> {
 fn boxed(body: ErrorBody) -> Box<ErrorBody> {
     Box::new(body)
 }
+
+#[cfg(test)]
+mod tests {
+    use stackly_core::operation::{NotAbandonableReason, NotResumableReason, Rejection};
+    use stackly_domain::{
+        DetailKey, ErrorCodeName, LockKey, OperationState as DomainState, RegistryError,
+    };
+
+    use super::*;
+
+    /// A body that the catalog fully explains: a known code, its category
+    /// and `retryable`, and details only from its entry.
+    fn checked(body: &ErrorBody) -> &ErrorBody {
+        let spec = body.spec().expect("the code is in the catalog");
+        assert_eq!(body.category(), spec.category, "{}", body.code());
+        assert_eq!(body.retryable(), spec.retryable, "{}", body.code());
+        for detail in body.details() {
+            assert!(
+                spec.details.contains(&detail.key()),
+                "{} carries {}",
+                body.code(),
+                detail.key()
+            );
+        }
+        body
+    }
+
+    fn revision(number: u64) -> ResourceRevision {
+        ResourceRevision::new(number).unwrap()
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("instance pg-main is already running")]
+    struct Refused {
+        code: &'static str,
+    }
+
+    impl stackly_core::operation::OperationError for Refused {
+        fn code(&self) -> ErrorCodeName {
+            self.code.parse().unwrap()
+        }
+
+        fn retryable(&self) -> bool {
+            false
+        }
+
+        fn details(&self) -> Vec<(DetailKey, String)> {
+            vec![
+                ("operationId".parse().unwrap(), "x".to_owned()),
+                ("notInCatalog".parse().unwrap(), "y".to_owned()),
+            ]
+        }
+
+        fn rule(&self) -> Option<&'static str> {
+            Some("BR-008")
+        }
+    }
+
+    #[test]
+    fn every_begin_refusal_becomes_its_catalog_error() {
+        let id = OperationId::generate();
+        let cases = [
+            (BeginError::NotReady, "daemon.starting"),
+            (BeginError::ShuttingDown, "daemon.shutting_down"),
+            (
+                BeginError::InvalidRequest { reason: "bug" },
+                "internal.unexpected",
+            ),
+            (
+                BeginError::PayloadTooLarge {
+                    field: "input",
+                    max: 16_384,
+                },
+                "operation.payload_too_large",
+            ),
+            (
+                BeginError::KeyReused { existing: id },
+                "operation.idempotency_key_reused",
+            ),
+            (BeginError::ResourceNotFound, "resource.not_found"),
+            (
+                BeginError::RevisionMismatch {
+                    expected: revision(2),
+                    actual: revision(3),
+                },
+                "resource.revision_mismatch",
+            ),
+            (
+                BeginError::RecoveryRequired {
+                    operation: id,
+                    key: LockKey::Manager,
+                },
+                "operation.recovery_required",
+            ),
+            (
+                BeginError::Busy {
+                    holder: LockHolder::Operation {
+                        id,
+                        state: DomainState::Running,
+                    },
+                },
+                "resource.busy",
+            ),
+            (
+                BeginError::Busy {
+                    holder: LockHolder::Internal("supervisor"),
+                },
+                "resource.busy",
+            ),
+            (BeginError::QueueFull { max: 64 }, "operation.queue_full"),
+            (
+                BeginError::Registry(RegistryError::NoSpace),
+                "registry.no_space",
+            ),
+        ];
+
+        for (error, code) in cases {
+            let body = begin_error(&error, "instance.start");
+            assert_eq!(checked(&body).code(), code, "{error:?}");
+        }
+    }
+
+    #[test]
+    fn a_reused_key_names_the_first_operation_and_the_method() {
+        let id = OperationId::generate();
+
+        let body = begin_error(&BeginError::KeyReused { existing: id }, "instance.start");
+
+        assert_eq!(body.detail("operationId"), Some(id.to_string().as_str()));
+        assert_eq!(body.detail("method"), Some("instance.start"));
+        assert!(body.hint().is_some());
+    }
+
+    #[test]
+    fn a_busy_resource_names_its_holder_unless_the_holder_is_internal() {
+        let id = OperationId::generate();
+        let by_operation = begin_error(
+            &BeginError::Busy {
+                holder: LockHolder::Operation {
+                    id,
+                    state: DomainState::Running,
+                },
+            },
+            "instance.stop",
+        );
+        let by_internal = begin_error(
+            &BeginError::Busy {
+                holder: LockHolder::Internal("supervisor"),
+            },
+            "instance.stop",
+        );
+
+        assert_eq!(
+            by_operation.detail("operationId"),
+            Some(id.to_string().as_str())
+        );
+        assert!(by_operation.retryable());
+        assert_eq!(by_internal.detail("operationId"), None);
+    }
+
+    #[test]
+    fn recovery_required_names_the_operation_and_the_lock_key() {
+        let id = OperationId::generate();
+
+        let body = begin_error(
+            &BeginError::RecoveryRequired {
+                operation: id,
+                key: LockKey::Manager,
+            },
+            "manager.update",
+        );
+
+        assert_eq!(body.detail("operationId"), Some(id.to_string().as_str()));
+        assert_eq!(body.detail("lockKey"), Some("manager:self"));
+        assert_eq!(body.operation_id(), Some(id.as_uuid()));
+    }
+
+    #[test]
+    fn begin_while_the_engine_recovers_is_daemon_starting_for_operations() {
+        let body = begin_error(&BeginError::NotReady, "instance.start");
+
+        assert_eq!(body.detail("subsystem"), Some("operations"));
+        assert!(body.retryable());
+    }
+
+    #[test]
+    fn a_precheck_refusal_keeps_its_code_rule_and_only_the_details_its_entry_lists() {
+        let refused = Rejection::new(Box::new(Refused {
+            code: "resource.busy",
+        }));
+
+        let body = begin_error(&BeginError::Rejected(refused), "instance.start");
+
+        assert_eq!(checked(&body).code(), "resource.busy");
+        assert_eq!(body.message(), "instance pg-main is already running");
+        assert_eq!(body.rule(), Some("BR-008"));
+        assert_eq!(body.detail("operationId"), Some("x"));
+        assert_eq!(body.detail("notInCatalog"), None);
+    }
+
+    #[test]
+    fn a_precheck_refusal_with_a_code_outside_the_catalog_is_internal_unexpected() {
+        let refused = Rejection::new(Box::new(Refused {
+            code: "feature.not_built",
+        }));
+
+        let body = begin_error(&BeginError::Rejected(refused), "instance.start");
+
+        assert_eq!(body.code(), "internal.unexpected");
+        assert!(!body.message().contains("pg-main"));
+    }
+
+    #[test]
+    fn every_engine_error_becomes_its_catalog_error() {
+        let id = OperationId::generate();
+        let cases = [
+            (EngineError::NotReady, "daemon.starting"),
+            (EngineError::ShuttingDown, "daemon.shutting_down"),
+            (EngineError::NotFound(id), "resource.not_found"),
+            (
+                EngineError::RevisionMismatch {
+                    expected: revision(4),
+                    actual: revision(5),
+                },
+                "resource.revision_mismatch",
+            ),
+            (
+                EngineError::NotResumable {
+                    operation: id,
+                    reason: NotResumableReason::NoFactory,
+                },
+                "operation.not_resumable",
+            ),
+            (
+                EngineError::NotAbandonable {
+                    operation: id,
+                    state: DomainState::Running,
+                    reason: NotAbandonableReason::WrongState,
+                },
+                "operation.not_abandonable",
+            ),
+            (
+                EngineError::JournalFull {
+                    kind: "steps",
+                    max: 256,
+                },
+                "operation.journal_full",
+            ),
+            (
+                EngineError::PayloadTooLarge {
+                    field: "checkpoint",
+                    max: 4096,
+                },
+                "operation.payload_too_large",
+            ),
+            (
+                EngineError::InvalidUse { reason: "bug" },
+                "internal.unexpected",
+            ),
+            (
+                EngineError::Internal { reason: "bug" },
+                "internal.unexpected",
+            ),
+            (EngineError::Registry(RegistryError::Busy), "registry.busy"),
+        ];
+
+        for (error, code) in cases {
+            assert_eq!(checked(&engine_error(&error)).code(), code, "{error:?}");
+        }
+    }
+
+    #[test]
+    fn a_refused_resume_or_abandon_names_the_operation_and_the_reason() {
+        let id = OperationId::generate();
+        let resume = engine_error(&EngineError::NotResumable {
+            operation: id,
+            reason: NotResumableReason::StepNotRepeatable,
+        });
+        let abandon = engine_error(&EngineError::NotAbandonable {
+            operation: id,
+            state: DomainState::NeedsRecovery,
+            reason: NotAbandonableReason::AutoCompensating,
+        });
+
+        assert_eq!(resume.detail("reason"), Some("step_not_repeatable"));
+        assert_eq!(resume.operation_id(), Some(id.as_uuid()));
+        assert_eq!(abandon.detail("state"), Some("needs_recovery"));
+        assert_eq!(abandon.detail("reason"), Some("auto_compensating"));
+        assert_eq!(abandon.operation_id(), Some(id.as_uuid()));
+    }
+
+    #[test]
+    fn an_unknown_operation_is_not_found_with_the_operation_as_its_resource() {
+        let id = OperationId::generate();
+
+        let body = engine_error(&EngineError::NotFound(id));
+
+        assert_eq!(
+            body.resource(),
+            Some(&ResourceRef {
+                kind: ResourceKind::Operation,
+                id: id.to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn a_uuid_that_is_not_v7_names_no_operation() {
+        let v4: Uuid = "6f1c5c1e-3f7a-4b8e-9c2d-1a2b3c4d5e6f".parse().unwrap();
+
+        let error = operation_id(v4).unwrap_err();
+
+        assert_eq!(error.code(), "resource.not_found");
+    }
+
+    #[test]
+    fn an_expected_revision_of_zero_is_out_of_range() {
+        let error = expected_revision(Revision::new(0).unwrap(), "expectedRevision").unwrap_err();
+
+        assert_eq!(checked(&error).code(), "request.invalid_params");
+        assert_eq!(error.fields()[0].path(), "expectedRevision");
+        assert_eq!(error.fields()[0].code(), "out_of_range");
+        assert_eq!(
+            expected_revision(Revision::new(7).unwrap(), "expectedRevision").unwrap(),
+            revision(7)
+        );
+    }
+
+    #[test]
+    fn the_list_query_reads_the_manager_only_as_self_and_resource_ids_as_uuids() {
+        let manager = query(&ListOperationsParams {
+            resource: Some(ResourceRef::manager()),
+            ..ListOperationsParams::default()
+        })
+        .unwrap();
+        let other_manager = query(&ListOperationsParams {
+            resource: Some(ResourceRef {
+                kind: ResourceKind::Manager,
+                id: "other".to_owned(),
+            }),
+            ..ListOperationsParams::default()
+        })
+        .unwrap_err();
+        let bad_runtime = query(&ListOperationsParams {
+            resource: Some(ResourceRef {
+                kind: ResourceKind::Runtime,
+                id: "not-a-uuid".to_owned(),
+            }),
+            ..ListOperationsParams::default()
+        })
+        .unwrap_err();
+
+        assert_eq!(manager.resource, Some(OperationResource::Manager));
+        assert_eq!(manager.limit, 50);
+        assert!(!manager.active_only);
+        for error in [other_manager, bad_runtime] {
+            assert_eq!(checked(&error).code(), "request.invalid_params");
+            assert_eq!(error.fields()[0].path(), "resource.id");
+        }
+    }
+
+    #[test]
+    fn a_list_cursor_keeps_the_registry_nanoseconds_both_ways() {
+        let id = OperationId::generate();
+        let text = format!("2026-10-19T08:00:00.123456789Z_{id}");
+
+        let read = query(&ListOperationsParams {
+            before: Some(text.clone()),
+            limit: Some(200),
+            active_only: true,
+            ..ListOperationsParams::default()
+        })
+        .unwrap();
+        let before = read.before.unwrap();
+
+        assert_eq!(before.id, id);
+        assert_eq!(before.created_at.subsec_nanosecond(), 123_456_789);
+        assert_eq!(wire_cursor(before).to_string(), text);
+        assert_eq!(read.limit, 200);
+        assert!(read.active_only);
+    }
+
+    #[test]
+    fn each_client_kind_records_its_own_client_code() {
+        assert_eq!(client_code(ClientKind::Cli).as_str(), "cli");
+        assert_eq!(client_code(ClientKind::Gui).as_str(), "gui");
+        assert_eq!(
+            client_code(ClientKind::Unrecognized).as_str(),
+            "unrecognized"
+        );
+    }
+}
