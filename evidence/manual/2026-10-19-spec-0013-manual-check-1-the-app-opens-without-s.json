@@ -1,0 +1,57 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15484-7436-7681-8d8f-9b421a05f7c3",
+  "covers": [
+    "AC-024",
+    "REQ-024"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 manual check 1: the app opens without stacklyd",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "With no stacklyd for its STACKLY_ROOT, the Debug app opens its window, the footer says stacklyd unavailable, the banner says Can’t connect to stacklyd. with no time, no instance shows with any status (the provisional list comes with step 16), and the banner and footer do not flicker across several retries.",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-19T14:15:29.078024Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-19-spec-0013-manual-check-1-the-app-opens-without-s.json",
+  "context": {
+    "sourceCommit": "f233dcfddd9419c35ab3594031dbab3af351b153",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
