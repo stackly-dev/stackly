@@ -235,7 +235,7 @@ Seperti mockup: toggle menyala secara default dan CLI dipasang saat Get Started,
 
 #### Option 1: hanya tampilkan yang ada di build itu, fitur pemilik menambah barisnya (dipilih)
 
-Welcome tanpa "Environments as files" sampai fitur 44, diganti "No account needed" (PAGE-01); contoh perintah awal hanya `stackly daemon status` dan `stackly provider list`, yang sudah ada saat fitur ini dibangun.
+Welcome tanpa "Environments as files" sampai fitur 44, diganti "No account needed" (PAGE-01); baris "Verified runtimes" dan kalimat digest di Catalog Trust baru tampil saat install runtime lewat daemon (milestone 3 spec 0018) ada; contoh perintah awal hanya `stackly daemon status` dan `stackly provider list`, yang menjadi prasyarat milestone 2.
 
 **Pros**:
 
@@ -350,3 +350,14 @@ Keputusan utama spec ini adalah bahwa onboarding hanya membaca. Scope meminta on
 Keputusan kedua adalah kejujuran copy. AC-061, BR-012, BR-020, dan REQ-032 semuanya berkata hal yang sama: Stackly memisahkan instance secara logis, tetapi semua proses berjalan sebagai user yang sama tanpa sandbox, dan trust adalah label asal. Mockup melanggar ini di dua tempat ("never touching each other’s data", "Signed manifests") dan menjanjikan fitur yang belum ada di tiga tempat. Karena onboarding adalah layar pertama, spec ini memilih teks yang benar di build itu dan menjaganya dengan test copy dan pindaian frasa terlarang, lalu menyerahkan baris tambahan ke fitur yang membawa kemampuannya.
 
 Bentuk tampilan mengikuti mockup sejauh tidak bertentangan dengan dua hal di atas: onboarding di jendela utama, lima langkah, footer dengan titik, Back, dan tombol utama berlabel Continue, Not Now, atau Get Started, dan text style dari spec 0012. Selisih yang tersisa (ikon app, judul Catalog Trust, baris Welcome, perilaku toggle) dicatat sebagai usulan selisih mockup untuk `ui-macos.md`, supaya pembaca mockup tahu mana yang sudah diputuskan lain.
+
+## Cross check
+
+Cross check `Another model` (Fable 5.1, baca saja) pada draft 2026-10-20 menemukan satu blocker, 19 gap kelengkapan keputusan, dan 7 nit. Nit wording langsung diperbaiki (`76a45cf`). Lead menyetujui semua 20 rekomendasi atas nama user pada hari yang sama, dan semuanya diterapkan di spec ini:
+
+- Blocker: di bawah `STACKLY_ROOT`, secret ada di keychain file `R/data/keychain/` (spec 0011 AC-2), jadi Storage memakai subjudul dan nilai Secrets varian override.
+- Kartu Background Agent: `{detail}` dari `BackgroundAgentModel.unavailableDetail` (usulan ke spec 0015), `since` dari `ShellPresentation.status`, Start stacklyd hanya untuk `ipc.endpoint_missing` dan `ipc.connection_refused`, baris untuk presence lain dan `connecting`, `TimelineView` untuk ambang 15 detik, dan pengumuman state tetap milik `BackgroundAgentModel`.
+- Command Line: `CommandLineToolModel` bersama Diagnostics (usulan ke spec 0015), status menentukan baris dan CLI yang hilang dari bundle hanya menonaktifkan Install dan Repair.
+- Catalog Trust: label "Catalog" sebelum ada `CatalogInfo`, toggle hanya saat `info` ada, baris `info` menang atas error refresh, dan label untuk sumber `unrecognized`.
+- Fitur yang belum ada: "Verified runtimes" dan kalimat digest menunggu milestone 3 spec 0018; milestone 2 butuh langkah build 7 spec 0017.
+- Lainnya: `OnboardingFooter.primaryLabel`, injeksi `onboardingStore` lewat `ShellRuntime` dan `ShellBootstrap` (usulan ke spec 0013), frame minimum di `MainWindowRoot`, tile Welcome netral, warna dan area klik titik langkah, `UserHome.current()` dengan batas komponen path, `@AccessibilityFocusState` dan catatan Keyboard navigation, dan Escape yang tidak ditahan aksi yang sedang berjalan.
