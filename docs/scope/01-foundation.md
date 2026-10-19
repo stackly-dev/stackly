@@ -141,7 +141,7 @@ Mesin operasi async yang dipakai semua mutasi: journal, idempotency key, lock pe
   - [x] Kontrak wire dan daemon: DTO, event, kode, sidik jari, fixture dan test Swift, lalu wiring engine di `stacklyd`, enam method, subsystem `operations`, hook shutdown, dan test integrasi daemon (spec 0007 AC-1, AC-3, AC-5, AC-6, AC-10, AC-11, AC-13, AC-14, AC-16, AC-18 to AC-20; build steps 13 to 15; langkah 13 bisa paralel dengan milestone engine setelah spec 0006 milestone 1, langkah 14 dan 15 butuh spec 0006 milestone 4)
 - [x] Verify it: `/check verify operation engine`
 - [x] Test it: `/test operation engine`
-- [ ] Review it (fresh model): `/check review operation engine`
+- [x] Review it (fresh model): `/check review operation engine`
 - [ ] Document it: `/document operation engine`
 
 ### 8. CLI client & kontrak output · in-progress
