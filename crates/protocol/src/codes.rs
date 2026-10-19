@@ -287,6 +287,39 @@ area! {
 }
 
 area! {
+    /// Provider package codes (spec 0009, *Kode error di wire*). Each issue
+    /// is one `issue` item; an issue message never holds a settings text
+    /// value or a secret.
+    pub mod manifest = "manifest", owner "spec 0009" {
+        INVALID = "manifest.invalid", InvalidInput, retryable false,
+            details ["package", "issueCount", "omitted"],
+            items { kind "issue", fields ["file", "location", "code", "message"], max 100 },
+            "a provider package cannot be read or breaks the manifest schema, and items lists each issue";
+    }
+}
+
+area! {
+    /// Provider engine codes (spec 0009, *Kode error di wire*): settings
+    /// and the plans built from a validated package.
+    pub mod provider = "provider", owner "spec 0009" {
+        INVALID_SETTINGS = "provider.invalid_settings", InvalidInput, retryable false,
+            details ["issueCount", "omitted"],
+            items { kind "issue", fields ["file", "location", "code", "message"], max 100 },
+            "the settings do not match the provider's settings schema, and items lists each issue";
+        UNSUPPORTED_CAPABILITY = "provider.unsupported_capability", Unsupported, retryable false,
+            details ["capability"], "the provider lacks the capability the action needs";
+        ENDPOINT_NOT_LOOPBACK = "provider.endpoint_not_loopback", InvalidInput, retryable false,
+            details ["endpoint"], "an endpoint of the instance is not on a loopback address";
+        UNREPRESENTABLE_VALUE = "provider.unrepresentable_value", InvalidInput, retryable false,
+            details ["field"], "a value cannot be written in the format of the config file that uses it";
+        PLAN_INVALID = "provider.plan_invalid", InvalidInput, retryable false,
+            details ["position", "reason"], "an argument or a path of the plan breaks a plan rule";
+        RENDER_FAILED = "provider.render_failed", Failed, retryable false,
+            details ["configFile", "reason"], "a rendered config file does not parse or is too large";
+    }
+}
+
+area! {
     /// Codes for bugs and broken invariants.
     pub mod internal = "internal", owner "spec 0006" {
         UNEXPECTED = "internal.unexpected", Internal, retryable false,
@@ -304,6 +337,8 @@ pub const AREAS: &[Area] = &[
     daemon::AREA,
     registry::AREA,
     operation::AREA,
+    manifest::AREA,
+    provider::AREA,
     internal::AREA,
 ];
 
@@ -435,6 +470,63 @@ impl NotAbandonableReason {
         match self {
             Self::WrongState => "wrong_state",
             Self::AutoCompensating => "auto_compensating",
+        }
+    }
+}
+
+/// Why a plan broke a plan rule, the fixed values of the `reason` detail
+/// of `provider.plan_invalid` (spec 0009).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlanInvalidReason {
+    /// An argument is longer than 4096 bytes after rendering.
+    ArgumentTooLong,
+    /// A path from the context is not UTF-8.
+    PathNotUtf8,
+    /// A path from the context is not absolute, or holds `.` or `..`.
+    PathEscapesScope,
+}
+
+impl PlanInvalidReason {
+    /// Every reason.
+    pub const ALL: [Self; 3] = [
+        Self::ArgumentTooLong,
+        Self::PathNotUtf8,
+        Self::PathEscapesScope,
+    ];
+
+    /// The detail value, such as `argument_too_long`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ArgumentTooLong => "argument_too_long",
+            Self::PathNotUtf8 => "path_not_utf8",
+            Self::PathEscapesScope => "path_escapes_scope",
+        }
+    }
+}
+
+/// Why rendering a config file failed, the fixed values of the `reason`
+/// detail of `provider.render_failed` (spec 0009).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RenderFailedReason {
+    /// A rendered `yaml` or `json` file does not parse.
+    RenderedOutputInvalid,
+    /// A rendered file is larger than 1 MiB.
+    OutputTooLarge,
+}
+
+impl RenderFailedReason {
+    /// Every reason.
+    pub const ALL: [Self; 2] = [Self::RenderedOutputInvalid, Self::OutputTooLarge];
+
+    /// The detail value, such as `output_too_large`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RenderedOutputInvalid => "rendered_output_invalid",
+            Self::OutputTooLarge => "output_too_large",
         }
     }
 }
@@ -642,6 +734,8 @@ mod tests {
                 ("daemon", "spec 0006"),
                 ("registry", "spec 0005"),
                 ("operation", "spec 0007"),
+                ("manifest", "spec 0009"),
+                ("provider", "spec 0009"),
                 ("internal", "spec 0006"),
             ]
         );
@@ -801,6 +895,71 @@ mod tests {
     }
 
     #[test]
+    fn manifest_and_provider_codes_match_the_spec_0009_table() {
+        let issue = Some(ItemSpec {
+            kind: "issue",
+            fields: &["file", "location", "code", "message"],
+            max: 100,
+        });
+        let table: Vec<_> = manifest::ALL
+            .iter()
+            .chain(provider::ALL)
+            .map(|spec| (spec.code, spec.category, spec.details, spec.items))
+            .collect();
+        let expected: &[(&str, ErrorCategory, &[&str], Option<ItemSpec>)] = &[
+            (
+                "manifest.invalid",
+                ErrorCategory::InvalidInput,
+                &["package", "issueCount", "omitted"],
+                issue,
+            ),
+            (
+                "provider.invalid_settings",
+                ErrorCategory::InvalidInput,
+                &["issueCount", "omitted"],
+                issue,
+            ),
+            (
+                "provider.unsupported_capability",
+                ErrorCategory::Unsupported,
+                &["capability"],
+                None,
+            ),
+            (
+                "provider.endpoint_not_loopback",
+                ErrorCategory::InvalidInput,
+                &["endpoint"],
+                None,
+            ),
+            (
+                "provider.unrepresentable_value",
+                ErrorCategory::InvalidInput,
+                &["field"],
+                None,
+            ),
+            (
+                "provider.plan_invalid",
+                ErrorCategory::InvalidInput,
+                &["position", "reason"],
+                None,
+            ),
+            (
+                "provider.render_failed",
+                ErrorCategory::Failed,
+                &["configFile", "reason"],
+                None,
+            ),
+        ];
+        assert_eq!(table, expected);
+        assert!(
+            manifest::ALL
+                .iter()
+                .chain(provider::ALL)
+                .all(|spec| !spec.retryable)
+        );
+    }
+
+    #[test]
     fn operation_refusal_reasons_are_snake_case_and_distinct() {
         let resume: HashSet<_> = NotResumableReason::ALL.iter().map(|r| r.as_str()).collect();
         assert_eq!(resume.len(), NotResumableReason::ALL.len());
@@ -810,6 +969,15 @@ mod tests {
             .collect();
         assert_eq!(abandon.len(), NotAbandonableReason::ALL.len());
         assert!(resume.iter().chain(&abandon).all(|value| is_snake(value)));
+    }
+
+    #[test]
+    fn provider_reasons_are_snake_case_and_distinct() {
+        let plan: HashSet<_> = PlanInvalidReason::ALL.iter().map(|r| r.as_str()).collect();
+        assert_eq!(plan.len(), PlanInvalidReason::ALL.len());
+        let render: HashSet<_> = RenderFailedReason::ALL.iter().map(|r| r.as_str()).collect();
+        assert_eq!(render.len(), RenderFailedReason::ALL.len());
+        assert!(plan.iter().chain(&render).all(|value| is_snake(value)));
     }
 
     #[test]

@@ -1,0 +1,46 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000401",
+    "error": {
+      "code": "provider.invalid_settings",
+      "category": "invalid_input",
+      "message": "the settings do not match the provider's settings schema",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "issueCount",
+          "value": "1"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": [
+        {
+          "kind": "issue",
+          "fields": [
+            {
+              "key": "file",
+              "value": "settings"
+            },
+            {
+              "key": "location",
+              "value": "greeting"
+            },
+            {
+              "key": "code",
+              "value": "settings_value"
+            },
+            {
+              "key": "message",
+              "value": "longer than 256 characters"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

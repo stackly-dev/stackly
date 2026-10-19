@@ -140,6 +140,9 @@ pub enum ValueKind {
     SecretOrigin,
     /// A [`NeedsSecretReason`](crate::NeedsSecretReason).
     NeedsSecretReason,
+    /// The text form of a
+    /// [`ProviderRevisionKey`](crate::ProviderRevisionKey).
+    ProviderRevisionKey,
 }
 
 impl ValueKind {
@@ -210,6 +213,7 @@ impl ValueKind {
             Self::SecretStatus => "secret status",
             Self::SecretOrigin => "secret origin",
             Self::NeedsSecretReason => "needs secret reason",
+            Self::ProviderRevisionKey => "provider revision key",
         }
     }
 }

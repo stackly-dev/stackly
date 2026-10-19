@@ -2,10 +2,13 @@
 //! line compatibility, and accepted revision changes (BR-009, BR-017).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
 use crate::capability::CapabilitySet;
+use crate::error::{ValueError, ValueKind};
 use crate::value::{ProviderName, RevisionLabel, RuntimeLine, Sha256Digest, SoftwareName};
 
 /// Names one immutable provider revision: the provider, its revision label,
@@ -15,6 +18,22 @@ use crate::value::{ProviderName, RevisionLabel, RuntimeLine, Sha256Digest, Softw
 /// changes only through an accepted revision change (BR-001, BR-017). In
 /// JSON the provider is the `name` field:
 /// `{ "name": "official/postgresql", "revision": "…", "manifestSha256": "…" }`.
+///
+/// Its text form, the `id` of a provider `ResourceRef` on the wire (spec
+/// 0009), is `<namespace>/<name>@<revision>#<manifest_sha256>`. It is never
+/// ambiguous, because neither a provider name nor a revision label holds
+/// `@` or `#`, and it reads back to the same key:
+///
+/// ```
+/// use stackly_domain::ProviderRevisionKey;
+///
+/// let text = format!("official/nats@2.12.1-1#{}", "ab".repeat(32));
+/// let key: ProviderRevisionKey = text.parse()?;
+/// assert_eq!(key.provider().as_str(), "official/nats");
+/// assert_eq!(key.revision().as_str(), "2.12.1-1");
+/// assert_eq!(key.to_string(), text);
+/// # Ok::<(), stackly_domain::ValueError>(())
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderRevisionKey {
@@ -55,6 +74,38 @@ impl ProviderRevisionKey {
     #[must_use]
     pub const fn manifest_sha256(&self) -> &Sha256Digest {
         &self.manifest_sha256
+    }
+}
+
+impl fmt::Display for ProviderRevisionKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}@{}#{}",
+            self.provider, self.revision, self.manifest_sha256
+        )
+    }
+}
+
+impl FromStr for ProviderRevisionKey {
+    type Err = ValueError;
+
+    /// Reads `<namespace>/<name>@<revision>#<manifest_sha256>`. A part that
+    /// breaks its own rules gives that part's error.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let invalid = || {
+            ValueError::new(
+                ValueKind::ProviderRevisionKey,
+                "must be <namespace>/<name>@<revision>#<manifest sha256>",
+            )
+        };
+        let (provider, rest) = s.split_once('@').ok_or_else(invalid)?;
+        let (revision, digest) = rest.split_once('#').ok_or_else(invalid)?;
+        Ok(Self::new(
+            provider.parse()?,
+            revision.parse()?,
+            digest.parse()?,
+        ))
     }
 }
 
@@ -282,6 +333,47 @@ mod tests {
             ["17", "8.0"]
         );
         assert_eq!(LineCompatibility::from_map(map), compat);
+    }
+
+    #[test]
+    fn revision_key_text_reads_back_to_the_same_key() {
+        let key = ProviderRevisionKey::new(
+            "official/nats".parse().unwrap(),
+            "2.12.1-1".parse().unwrap(),
+            DIGEST.parse().unwrap(),
+        );
+        let text = key.to_string();
+        assert_eq!(text, format!("official/nats@2.12.1-1#{DIGEST}"));
+        assert_eq!(text.parse::<ProviderRevisionKey>().unwrap(), key);
+        let upper = format!("official/nats@2.12.1-1#{}", DIGEST.to_uppercase());
+        assert_eq!(upper.parse::<ProviderRevisionKey>().unwrap(), key);
+    }
+
+    #[test]
+    fn revision_key_text_without_its_separators_or_with_a_bad_part_is_refused() {
+        let kind = |text: &str| text.parse::<ProviderRevisionKey>().unwrap_err().kind();
+        assert_eq!(kind("official/nats"), ValueKind::ProviderRevisionKey);
+        assert_eq!(
+            kind("official/nats@2.12.1-1"),
+            ValueKind::ProviderRevisionKey
+        );
+        assert_eq!(
+            kind(&format!("official/nats#{DIGEST}")),
+            ValueKind::ProviderRevisionKey
+        );
+        assert_eq!(
+            kind(&format!("nats@2.12.1-1#{DIGEST}")),
+            ValueKind::ProviderName
+        );
+        assert_eq!(
+            kind(&format!("official/nats@..#{DIGEST}")),
+            ValueKind::RevisionLabel
+        );
+        assert_eq!(kind("official/nats@2.12.1-1#abc"), ValueKind::Sha256Digest);
+        assert_eq!(
+            kind(&format!("official/nats@2.12.1-1#{DIGEST}#{DIGEST}")),
+            ValueKind::Sha256Digest
+        );
     }
 
     #[test]

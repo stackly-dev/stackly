@@ -486,8 +486,8 @@ fn error_items_decode_whatever_their_kind_and_keep_the_envelope() {
     let error = error_body("frame-error-with-items.json");
     assert_eq!(error.items().len(), 2);
     assert_eq!(error.items()[0].kind(), "issue");
-    assert_eq!(error.items()[1].field("path"), Some("metadata.name"));
-    assert_eq!(error.detail("omitted"), Some("1"));
+    assert_eq!(error.items()[1].field("location"), Some("3:7"));
+    assert_eq!(error.detail("issueCount"), Some("2"));
 
     let error = error_body("frame-error-unknown-item-kind.json");
     assert_eq!(error.code(), "secret.reference_unresolved");
@@ -709,4 +709,43 @@ fn a_reused_idempotency_key_names_the_first_operation() {
         error.detail("operationId"),
         Some("0192f3a4-0000-7000-8000-000000000001")
     );
+}
+
+#[test]
+fn package_and_settings_errors_list_each_issue_with_its_file_location_code_and_message() {
+    let package = error_body("frame-error-with-items.json");
+    assert!(package.is(&codes::manifest::INVALID));
+    assert_eq!(package.detail("package"), Some("nats"));
+    let settings = error_body("frame-error-invalid-settings.json");
+    assert!(settings.is(&codes::provider::INVALID_SETTINGS));
+    for error in [&package, &settings] {
+        assert_eq!(
+            error.detail("issueCount"),
+            Some(error.items().len().to_string().as_str())
+        );
+        for item in error.items() {
+            let keys: Vec<_> = item.fields().iter().map(|field| field.key()).collect();
+            assert_eq!(keys, ["file", "location", "code", "message"], "{item:?}");
+        }
+    }
+    assert_eq!(settings.items()[0].field("file"), Some("settings"));
+}
+
+#[test]
+fn an_unsupported_capability_names_the_capability_and_rule_br_016() {
+    let error = error_body("frame-error-unsupported-capability.json");
+    assert!(error.is(&codes::provider::UNSUPPORTED_CAPABILITY));
+    assert_eq!(error.detail("capability"), Some("reload"));
+    assert_eq!(error.rule(), Some("BR-016"));
+}
+
+#[test]
+fn a_provider_resource_is_named_by_its_revision_key_text() {
+    let error = error_body("frame-error-provider-not-found.json");
+    let resource = error.resource().expect("the error names the provider");
+    assert_eq!(resource.kind, ResourceKind::Provider);
+    let (provider, rest) = resource.id.split_once('@').expect("<provider>@<rest>");
+    let (revision, digest) = rest.split_once('#').expect("<revision>#<digest>");
+    assert_eq!((provider, revision), ("official/nats", "2.12.1-1"));
+    assert_eq!(digest.len(), 64);
 }

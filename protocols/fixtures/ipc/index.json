@@ -243,7 +243,7 @@
     {
       "file": "frame-error-with-items.json",
       "type": "ServerFrame",
-      "expect": "decode"
+      "expect": "roundtrip"
     },
     {
       "file": "frame-error-unknown-item-kind.json",
@@ -397,6 +397,21 @@
     {
       "file": "dto-operation-accepted.json",
       "type": "OperationAccepted",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-invalid-settings.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-unsupported-capability.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-provider-not-found.json",
+      "type": "ServerFrame",
       "expect": "roundtrip"
     }
   ]

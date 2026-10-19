@@ -4,4 +4,4 @@
 /// and the error catalog, without documentation text. Sent in the handshake
 /// so peers with the same version but another contract see `contractDrift`.
 pub const CONTRACT_DIGEST: &str =
-    "509b3f304d64cbfd9f7204fda49ed39ee9bc40245f5b84000e2b90eeb8157f50";
+    "ef52db4fc1eb98337d6ccc0bca38202725c85deeaa98108c9762f6863f6b8ce5";

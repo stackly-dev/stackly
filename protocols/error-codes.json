@@ -33,6 +33,14 @@
       "owner": "spec 0007"
     },
     {
+      "name": "manifest",
+      "owner": "spec 0009"
+    },
+    {
+      "name": "provider",
+      "owner": "spec 0009"
+    },
+    {
       "name": "internal",
       "owner": "spec 0006"
     }
@@ -259,6 +267,27 @@
       "summary": "daemon side: the client read nothing for 30 seconds, only ever logged"
     },
     {
+      "code": "manifest.invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "package",
+        "issueCount",
+        "omitted"
+      ],
+      "items": {
+        "kind": "issue",
+        "fields": [
+          "file",
+          "location",
+          "code",
+          "message"
+        ],
+        "max": 100
+      },
+      "summary": "a provider package cannot be read or breaks the manifest schema, and items lists each issue"
+    },
+    {
       "code": "operation.abandoned",
       "category": "failed",
       "retryable": false,
@@ -410,6 +439,78 @@
       ],
       "items": null,
       "summary": "the client speaks another protocol major"
+    },
+    {
+      "code": "provider.endpoint_not_loopback",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "endpoint"
+      ],
+      "items": null,
+      "summary": "an endpoint of the instance is not on a loopback address"
+    },
+    {
+      "code": "provider.invalid_settings",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "issueCount",
+        "omitted"
+      ],
+      "items": {
+        "kind": "issue",
+        "fields": [
+          "file",
+          "location",
+          "code",
+          "message"
+        ],
+        "max": 100
+      },
+      "summary": "the settings do not match the provider's settings schema, and items lists each issue"
+    },
+    {
+      "code": "provider.plan_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "position",
+        "reason"
+      ],
+      "items": null,
+      "summary": "an argument or a path of the plan breaks a plan rule"
+    },
+    {
+      "code": "provider.render_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "configFile",
+        "reason"
+      ],
+      "items": null,
+      "summary": "a rendered config file does not parse or is too large"
+    },
+    {
+      "code": "provider.unrepresentable_value",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "field"
+      ],
+      "items": null,
+      "summary": "a value cannot be written in the format of the config file that uses it"
+    },
+    {
+      "code": "provider.unsupported_capability",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "capability"
+      ],
+      "items": null,
+      "summary": "the provider lacks the capability the action needs"
     },
     {
       "code": "registry.active_lease_exists",
