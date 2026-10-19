@@ -352,3 +352,13 @@ Sonnet 5.5 membaca draf pertama secara read only pada 2026-10-20 (tanpa menjalan
 - **Kesehatan desain**: test timing lewat `tokio::io::duplex` (S1); langkah `$JS.API.INFO` dipertahankan dengan fakta startup dicatat di langkah 0 (S2); `lame_duck` hanya di fixture (S3); state machine dan fuzz di `provider::probe` supaya tidak menunggu fitur 10 (S4); baris 4 RISK-07 dan `git diff --numstat` (S5); `multi_instance_not_covered` di `knownLimitations` (S6).
 
 Setelah cross check, cabang ini di merge dengan `main` yang membawa perbaikan konsistensi spec 0015, 0017, 0018, dan 0019, dan setiap nama yang dipakai spec ini dicek ulang: signature `install_cached_artifact` (sekarang dengan `&PreparedLayout` dan record yang di commit sendiri), aturan `runtime.versionCheck` per baris, `compat-record` yang hanya menyalin record BR-025, versi evidence dari binary yang berjalan, `pin_package` dan kait `LogSink` di langkah 6 spec 0019, `CatalogBuilder` di `stackly_core::catalog::testing`, serta `published_at` dan ledger `providers/catalog-revisions.json`.
+
+## Update dari spec 0021 (2026-10-20)
+
+Diterapkan sesi `upd-0019-0022-0023` dari *Usulan update spec lain* spec 0021 (start, readiness, dan connection), atas persetujuan lead untuk user:
+
+- *Paket NATS* dan AC-4: paket mendapat blok `connection` dengan entri `uri` (`nats://` lewat endpoint `client`, tanpa credential sampai fitur 39) dan `monitoring` (`http://` lewat endpoint `monitoring`), ditulis di commit yang sama dengan blok `readiness`, supaya `manifest_sha256` hanya berubah sekali sebelum evidence BR-025. Blok ini menjawab Follow-up "Fitur 21: connection string NATS dan URL monitoring".
+- Prasyarat build plan: langkah 2 butuh loader blok `connection` (langkah 1 spec 0021), dan evidence langkah 9 dibuat dari `provider.yaml` yang sudah memuat blok itu.
+
+ID AC dan status spec ini tidak berubah.
+

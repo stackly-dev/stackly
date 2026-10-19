@@ -617,6 +617,8 @@ Diterapkan di spec 0022 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
 
 #### Spec 0023 (provider NATS lewat manifest)
 
+Diterapkan di spec 0023 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
+
 1. *Paket NATS*. Ganti:
 
    ```text
