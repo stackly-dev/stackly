@@ -2,10 +2,11 @@
 //! `protocols/contract-versions.json` (spec 0006, *Versi dan
 //! kompatibilitas*).
 //!
-//! The digest hashes every protocol schema and the catalog after dropping
-//! documentation text, so a doc comment never changes it. A changed digest
-//! needs a new `ProtocolVersion::CURRENT`; `--amend` rewrites the digest of a
-//! version that is not on main yet.
+//! The digest hashes every protocol schema, the catalog, and the contract
+//! limits after dropping documentation text and the order of lists whose
+//! order means nothing, so a doc comment or a reordered field never changes
+//! it. A changed digest needs a new `ProtocolVersion::CURRENT`; `--amend`
+//! rewrites the digest of a version that is not on main yet.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -16,6 +17,7 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use stackly_protocol::ProtocolVersion;
 use stackly_protocol::codes::{self, ErrorSpec, ItemSpec};
+use stackly_protocol::limits::CONTRACT_LIMITS;
 
 /// The area whose codes only ever appear in CLI output, never on the wire
 /// (spec 0008), so adding one never bumps the protocol minor.
@@ -31,6 +33,15 @@ const SCHEMA_MAP_KEYWORDS: [&str; 5] = [
     "definitions",
     "dependentSchemas",
 ];
+/// Keywords whose value is a list whose order means nothing: names, values,
+/// or types. Normalization sorts them.
+const SET_KEYWORDS: [&str; 3] = ["required", "enum", "type"];
+/// Keywords whose value is a list of schemas whose order means nothing:
+/// exactly one `oneOf` branch matches and every `allOf` branch must, so
+/// normalization sorts them too. `anyOf` keeps its order, because serde
+/// tries untagged variants in order, and so does `prefixItems`, whose
+/// order is the tuple's.
+const SCHEMA_SET_KEYWORDS: [&str; 2] = ["oneOf", "allOf"];
 /// Keywords whose value is a schema or a list of schemas.
 const SCHEMA_KEYWORDS: [&str; 15] = [
     "allOf",
@@ -50,7 +61,8 @@ const SCHEMA_KEYWORDS: [&str; 15] = [
     "propertyNames",
 ];
 
-/// `schema` without documentation keywords, at every schema position. A
+/// `schema` without documentation keywords, at every schema position, with
+/// every list in [`SET_KEYWORDS`] and [`SCHEMA_SET_KEYWORDS`] sorted. A
 /// property that happens to be named `title` or `description` stays.
 pub fn normalize_schema(schema: &Value) -> Value {
     match schema {
@@ -71,6 +83,10 @@ pub fn normalize_schema(schema: &Value) -> Value {
                         ),
                         other => other.clone(),
                     }
+                } else if SET_KEYWORDS.contains(&key_str) {
+                    sorted(value.clone())
+                } else if SCHEMA_SET_KEYWORDS.contains(&key_str) {
+                    sorted(normalize_schema(value))
                 } else if SCHEMA_KEYWORDS.contains(&key_str) {
                     normalize_schema(value)
                 } else {
@@ -82,6 +98,25 @@ pub fn normalize_schema(schema: &Value) -> Value {
         }
         Value::Array(items) => Value::Array(items.iter().map(normalize_schema).collect()),
         other => other.clone(),
+    }
+}
+
+/// `value` with its items sorted by their canonical text when it is a list.
+fn sorted(value: Value) -> Value {
+    match value {
+        Value::Array(items) => {
+            let mut keyed: Vec<(String, Value)> = items
+                .into_iter()
+                .map(|item| {
+                    let mut text = String::new();
+                    write_canonical(&item, &mut text);
+                    (text, item)
+                })
+                .collect();
+            keyed.sort_by(|a, b| a.0.cmp(&b.0));
+            Value::Array(keyed.into_iter().map(|(_, item)| item).collect())
+        }
+        other => other,
     }
 }
 
@@ -225,19 +260,40 @@ fn catalog_entries() -> impl Iterator<Item = DigestEntry> {
     codes::catalog().map(DigestEntry::from)
 }
 
-/// SHA-256, as lowercase hex, of the normalized schemas (keyed by file stem)
-/// and the normalized catalog, written as canonical JSON with sorted keys.
-pub fn contract_digest(schemas: &[(&str, Value)]) -> String {
-    digest_of(schemas, catalog_entries())
+/// The contract limits as the digest sees them: one object from each
+/// camelCase name to its value, so the order of the list never matters.
+fn normalized_limits(limits: &[(&str, u64)]) -> Value {
+    Value::Object(
+        limits
+            .iter()
+            .map(|(name, value)| ((*name).to_owned(), Value::from(*value)))
+            .collect(),
+    )
 }
 
-/// [`contract_digest`] over any catalog entries.
-fn digest_of(schemas: &[(&str, Value)], catalog: impl IntoIterator<Item = DigestEntry>) -> String {
+/// SHA-256, as lowercase hex, of the normalized schemas (keyed by file
+/// stem), the normalized catalog, and the contract limits from
+/// `stackly_protocol::limits::CONTRACT_LIMITS`, written as canonical JSON
+/// with sorted keys.
+pub fn contract_digest(schemas: &[(&str, Value)]) -> String {
+    digest_of(schemas, catalog_entries(), CONTRACT_LIMITS)
+}
+
+/// [`contract_digest`] over any catalog entries and limits.
+fn digest_of(
+    schemas: &[(&str, Value)],
+    catalog: impl IntoIterator<Item = DigestEntry>,
+    limits: &[(&str, u64)],
+) -> String {
     let schemas: BTreeMap<&str, Value> = schemas
         .iter()
         .map(|(stem, schema)| (*stem, normalize_schema(schema)))
         .collect();
-    let contract = json!({ "errorCodes": normalized_catalog(catalog), "schemas": schemas });
+    let contract = json!({
+        "errorCodes": normalized_catalog(catalog),
+        "limits": normalized_limits(limits),
+        "schemas": schemas,
+    });
     let mut canonical = String::new();
     write_canonical(&contract, &mut canonical);
     let mut hex = String::with_capacity(64);
@@ -424,6 +480,80 @@ mod tests {
         );
     }
 
+    /// A small limits list for the tests that feed their own entries.
+    const LIMITS: &[(&str, u64)] = &[("controlFrameMax", 1_048_576), ("maxJsonDepth", 32)];
+
+    #[test]
+    fn the_digest_sees_every_limit_value_but_not_the_list_order() {
+        let schemas = [("a", json!({ "type": "string" }))];
+        let base = digest_of(&schemas, [], LIMITS);
+        let reordered = digest_of(
+            &schemas,
+            [],
+            &[("maxJsonDepth", 32), ("controlFrameMax", 1_048_576)],
+        );
+        let lowered = digest_of(
+            &schemas,
+            [],
+            &[("controlFrameMax", 1_048_576), ("maxJsonDepth", 16)],
+        );
+        let added = digest_of(
+            &schemas,
+            [],
+            &[
+                ("controlFrameMax", 1_048_576),
+                ("maxJsonDepth", 32),
+                ("fieldErrorsMax", 32),
+            ],
+        );
+        assert_eq!(base, reordered);
+        assert_ne!(base, lowered);
+        assert_ne!(base, added);
+    }
+
+    #[test]
+    fn the_real_digest_covers_the_protocol_contract_limits() {
+        let schemas = [("a", json!({ "type": "string" }))];
+        assert_eq!(
+            contract_digest(&schemas),
+            digest_of(&schemas, catalog_entries(), CONTRACT_LIMITS)
+        );
+        assert_ne!(
+            contract_digest(&schemas),
+            digest_of(&schemas, catalog_entries(), LIMITS)
+        );
+        assert!(
+            CONTRACT_LIMITS
+                .iter()
+                .any(|(name, _)| *name == "subscribeKindsMax")
+        );
+    }
+
+    #[test]
+    fn normalization_sorts_unordered_lists_but_keeps_ordered_ones() {
+        let schema = |required: [&str; 2], one_of: [&str; 2], any_of: [&str; 2]| {
+            json!({
+                "type": ["object", "null"],
+                "required": required,
+                "properties": { "kind": { "enum": one_of } },
+                "oneOf": [{ "const": one_of[0] }, { "const": one_of[1] }],
+                "allOf": [{ "const": one_of[0] }, { "const": one_of[1] }],
+                "anyOf": [{ "const": any_of[0] }, { "const": any_of[1] }],
+                "prefixItems": [{ "const": any_of[0] }, { "const": any_of[1] }],
+            })
+        };
+        let base = normalize_schema(&schema(["a", "b"], ["x", "y"], ["p", "q"]));
+        let reordered = normalize_schema(&schema(["b", "a"], ["y", "x"], ["p", "q"]));
+        let any_reordered = normalize_schema(&schema(["a", "b"], ["x", "y"], ["q", "p"]));
+        assert_eq!(base, reordered);
+        assert_ne!(base, any_reordered);
+        assert_eq!(base["required"], json!(["a", "b"]));
+        assert_eq!(base["properties"]["kind"]["enum"], json!(["x", "y"]));
+        let mut types = schema(["a", "b"], ["x", "y"], ["p", "q"]);
+        types["type"] = json!(["null", "object"]);
+        assert_eq!(normalize_schema(&types), base);
+    }
+
     fn entry(code: &'static str) -> DigestEntry {
         DigestEntry {
             code,
@@ -438,7 +568,7 @@ mod tests {
     fn cli_codes_never_change_the_digest_but_wire_codes_do() {
         let schemas = [("a", json!({ "type": "string" }))];
         let wire = [entry("ipc.frame_empty"), entry("request.malformed")];
-        let base = digest_of(&schemas, wire);
+        let base = digest_of(&schemas, wire, LIMITS);
         let with_cli = digest_of(
             &schemas,
             [
@@ -447,6 +577,7 @@ mod tests {
                 entry("request.malformed"),
                 entry("cli.no_tty"),
             ],
+            LIMITS,
         );
         let with_wire = digest_of(
             &schemas,
@@ -455,6 +586,7 @@ mod tests {
                 entry("request.malformed"),
                 entry("events.gone"),
             ],
+            LIMITS,
         );
         assert_eq!(base, with_cli);
         assert_ne!(base, with_wire);
@@ -472,10 +604,10 @@ mod tests {
             items: Some(("issue", fields, max)),
             ..entry("manifest.invalid")
         };
-        let base = digest_of(&schemas, [with_items(&["path", "code"], 50)]);
-        let reordered = digest_of(&schemas, [with_items(&["code", "path"], 50)]);
-        let raised = digest_of(&schemas, [with_items(&["path", "code"], 60)]);
-        let none = digest_of(&schemas, [entry("manifest.invalid")]);
+        let base = digest_of(&schemas, [with_items(&["path", "code"], 50)], LIMITS);
+        let reordered = digest_of(&schemas, [with_items(&["code", "path"], 50)], LIMITS);
+        let raised = digest_of(&schemas, [with_items(&["path", "code"], 60)], LIMITS);
+        let none = digest_of(&schemas, [entry("manifest.invalid")], LIMITS);
         assert_eq!(base, reordered);
         assert_ne!(base, raised);
         assert_ne!(base, none);

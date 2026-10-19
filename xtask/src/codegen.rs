@@ -176,9 +176,10 @@ fn generate_contract() -> Result<(Vec<Generated>, String)> {
 fn digest_rs(digest: &str) -> String {
     format!(
         "{GENERATED_HEADER}\n\
-         /// SHA-256 of the normalized contract: every schema in `protocols/schemas/`\n\
-         /// and the error catalog, without documentation text. Sent in the handshake\n\
-         /// so peers with the same version but another contract see `contractDrift`.\n\
+         /// SHA-256 of the normalized contract: every schema in `protocols/schemas/`,\n\
+         /// the error catalog, and the contract limits, without documentation text.\n\
+         /// Sent in the handshake so peers with the same version but another\n\
+         /// contract see `contractDrift`.\n\
          pub const CONTRACT_DIGEST: &str =\n    \"{digest}\";\n"
     )
 }

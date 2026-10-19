@@ -37,11 +37,11 @@ pub const SECRET_MARKER: &str = "[secret]";
 /// The scheme every secret reference starts with.
 const REFERENCE_SCHEME: &str = "local:";
 /// The fewest segments after the scheme.
-const SEGMENTS_MIN: usize = 2;
+pub(crate) const SEGMENTS_MIN: usize = 2;
 /// The most segments after the scheme.
-const SEGMENTS_MAX: usize = 8;
+pub(crate) const SEGMENTS_MAX: usize = 8;
 /// The longest segment, in bytes.
-const SEGMENT_MAX: usize = 64;
+pub(crate) const SEGMENT_MAX: usize = 64;
 
 /// A secret value as the wire carries it: in a request that sets a value,
 /// and in the reply of `secret.reveal` (spec 0011 AC-14).

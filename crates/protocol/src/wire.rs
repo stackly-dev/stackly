@@ -141,12 +141,19 @@ impl Timestamp {
     /// The Unix epoch, `1970-01-01T00:00:00.000Z`.
     pub const UNIX_EPOCH: Self = Self(jiff::Timestamp::UNIX_EPOCH);
 
-    /// `instant` truncated toward zero to the millisecond.
+    /// `instant` truncated toward zero to the millisecond. Every instant
+    /// jiff holds works, `jiff::Timestamp::MIN` and `MAX` included.
     #[must_use]
     pub fn from_jiff(instant: jiff::Timestamp) -> Self {
+        // Cutting only the nanoseconds keeps the seconds jiff already holds,
+        // and jiff gives the nanoseconds the sign of the seconds, so the
+        // result lies between the epoch and `instant`. Going through
+        // `as_millisecond` instead fails near `MAX`, whose millisecond
+        // count is outside what `from_millisecond` accepts.
+        let nanosecond = instant.subsec_nanosecond() / 1_000_000 * 1_000_000;
         Self(
-            jiff::Timestamp::from_millisecond(instant.as_millisecond())
-                .expect("an instant truncated to the millisecond stays in jiff's range"),
+            jiff::Timestamp::new(instant.as_second(), nanosecond)
+                .expect("an instant cut toward the epoch stays in jiff's range"),
         )
     }
 
@@ -335,6 +342,53 @@ mod tests {
         let second: Timestamp = text.parse().unwrap();
         assert_eq!(first, second);
         assert_eq!(second.to_string(), text);
+    }
+
+    #[test]
+    fn instants_up_to_jiff_max_truncate_without_panicking() {
+        let max = Timestamp::from_jiff(jiff::Timestamp::MAX);
+        assert_eq!(max.to_string(), "9999-12-30T22:00:00.999Z");
+        let edge: Timestamp = "9999-12-30T22:00:00.001Z".parse().unwrap();
+        assert_eq!(edge.to_string(), "9999-12-30T22:00:00.001Z");
+        let fine: Timestamp = "9999-12-30T22:00:00.999999999Z".parse().unwrap();
+        assert_eq!(fine, max);
+        assert_eq!(fine.to_string().parse::<Timestamp>(), Ok(max));
+        assert_eq!(max.as_millisecond(), 253_402_207_200_999);
+    }
+
+    #[test]
+    fn instants_down_to_jiff_min_truncate_toward_the_epoch() {
+        let min = Timestamp::from_jiff(jiff::Timestamp::MIN);
+        assert_eq!(min.as_jiff(), jiff::Timestamp::MIN);
+        assert_eq!(min.to_string().parse::<Timestamp>(), Ok(min));
+        let before_epoch = jiff::Timestamp::new(-1, -999_999_999).unwrap();
+        let cut = Timestamp::from_jiff(before_epoch);
+        assert_eq!(cut.as_millisecond(), -1_999);
+        assert_eq!(cut.to_string(), "1969-12-31T23:59:58.001Z");
+        let just_before = jiff::Timestamp::new(0, -1).unwrap();
+        assert_eq!(Timestamp::from_jiff(just_before), Timestamp::UNIX_EPOCH);
+    }
+
+    #[test]
+    fn every_nanosecond_step_near_the_edges_truncates_to_a_millisecond() {
+        for second in [
+            jiff::Timestamp::MAX.as_second(),
+            jiff::Timestamp::MIN.as_second() + 1,
+            -1,
+            0,
+        ] {
+            for nanosecond in [-999_999_999, -1_000_001, -1, 0, 1, 999_999, 999_999_999] {
+                let Ok(instant) = jiff::Timestamp::new(second, nanosecond) else {
+                    continue;
+                };
+                let cut = Timestamp::from_jiff(instant).as_jiff();
+                assert_eq!(cut.subsec_nanosecond() % 1_000_000, 0, "{instant}");
+                assert!(
+                    (cut.as_nanosecond() - instant.as_nanosecond()).abs() < 1_000_000,
+                    "{instant}"
+                );
+            }
+        }
     }
 
     #[test]

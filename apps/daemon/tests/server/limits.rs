@@ -5,6 +5,7 @@
 use serde_json::json;
 use stackly_protocol::codes::{events, internal, ipc, request};
 use stackly_protocol::daemon::Capabilities;
+use stackly_protocol::limits::{CONTROL_FRAME_MAX, FIELD_ERRORS_MAX};
 use stackly_testkit::evidence::{Kind, evidence};
 use stacklyd::dispatch::{HandlerFuture, Handlers, RequestContext};
 use stacklyd::state::DaemonCore;
@@ -55,6 +56,42 @@ async fn every_payload_error_is_answered_and_the_connection_stays_up() {
         assert_eq!(frame["content"]["requestId"].as_str(), request_id, "{code}");
         assert!(!frame.to_string().contains("secret-sentinel"), "{frame}");
     }
+
+    raw.send(&request("info", "daemon.get_info", None)).await;
+    assert_eq!(raw.answer("info").await["type"], "response");
+    ev.pass();
+}
+
+#[tokio::test]
+async fn a_huge_bad_kinds_list_and_positional_requests_are_answered_and_the_connection_stays_up() {
+    let ev = evidence!(
+        covers = ["VAL-017", "NFR-004", "VAL-020"],
+        kind = Kind::Fixture,
+        expected = "a subscribe request just under 1 MiB with 349000 bad kinds gets request.invalid_params with 32 fields and details.omitted, positional arrays get request.malformed or request.invalid_params, and the connection still serves",
+    );
+    let site = Site::new();
+    let _daemon = site.start().await;
+    let mut raw = Raw::ready(&site.socket()).await;
+    let kinds = vec![r#""""#; 349_000].join(",");
+    let huge = format!(
+        r#"{{"requestId":"huge","call":{{"type":"events.subscribe","content":{{"kinds":[{kinds}]}}}}}}"#
+    );
+    assert!(huge.len() < CONTROL_FRAME_MAX as usize, "{}", huge.len());
+
+    raw.send(huge.as_bytes()).await;
+    let error = error_of(&raw.answer("huge").await);
+    assert!(error.is(&request::INVALID_PARAMS));
+    assert_eq!(error.fields().len(), FIELD_ERRORS_MAX);
+    assert_eq!(error.detail("omitted"), Some("1"));
+
+    raw.send(br#"["positional",null,{"type":"daemon.get_info"}]"#)
+        .await;
+    let frame = raw.recv().await.expect("the error arrives");
+    assert!(error_of(&frame).is(&request::MALFORMED));
+    assert!(frame["content"]["requestId"].is_null(), "{frame}");
+    raw.send(br#"{"requestId":"params","call":{"type":"events.unsubscribe","content":[3]}}"#)
+        .await;
+    assert!(error_of(&raw.answer("params").await).is(&request::INVALID_PARAMS));
 
     raw.send(&request("info", "daemon.get_info", None)).await;
     assert_eq!(raw.answer("info").await["type"], "response");

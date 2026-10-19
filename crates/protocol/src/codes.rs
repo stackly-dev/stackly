@@ -128,9 +128,9 @@ area! {
         CONNECTION_REFUSED = "ipc.connection_refused", Unavailable, retryable true,
             details ["path"], "client side: connecting was refused, the socket is stale";
         CONNECTION_CLOSED = "ipc.connection_closed", Unavailable, retryable false,
-            details [], "client side: the daemon closed the connection before replying, so the request may have run";
+            details [], "client side: the daemon closed the connection, or reading or writing it failed, before the reply arrived, so the request may have run";
         IO_ERROR = "ipc.io_error", Unavailable, retryable true,
-            details ["op", "kind"], "client side: another os error while checking the socket path or connecting";
+            details ["op", "kind"], "another os error before any request was sent: checking the socket path or connecting (client side), or binding, securing, or accepting on the socket (daemon side)";
         PROTOCOL_VIOLATION = "ipc.protocol_violation", Internal, retryable false,
             details [], "client side: a daemon frame cannot be decoded or its reply tag does not match the call";
         ENDPOINT_OCCUPIED = "ipc.endpoint_occupied", Conflict, retryable false,
@@ -160,13 +160,13 @@ area! {
     /// Request decoding and request bookkeeping codes.
     pub mod request = "request", owner "spec 0006" {
         MALFORMED = "request.malformed", InvalidInput, retryable false,
-            details [], "the json is broken, the request shape is wrong, or requestId or idempotencyKey has a bad format";
+            details ["omitted"], "the json is broken, the request or its call is not a json object, or requestId or idempotencyKey has a bad format";
         TOO_DEEP = "request.too_deep", InvalidInput, retryable false,
             details ["max"], "the json nests deeper than the limit";
         UNKNOWN_METHOD = "request.unknown_method", Unsupported, retryable false,
             details ["method"], "the daemon does not know the method";
         INVALID_PARAMS = "request.invalid_params", InvalidInput, retryable false,
-            details ["method"], "the params fail to decode or to validate, and fields lists each one";
+            details ["method", "omitted"], "the params are not a json object or fail to decode or to validate; fields lists the first 32 failures and omitted counts the rest";
         DUPLICATE_ID = "request.duplicate_id", InvalidInput, retryable false,
             details [], "another request with this requestId is still running on the connection";
         TOO_MANY_IN_FLIGHT = "request.too_many_in_flight", Unavailable, retryable true,
