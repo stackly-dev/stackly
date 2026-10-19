@@ -66,7 +66,7 @@ Plist di `Contents/Library/LaunchAgents/`, didaftarkan dengan `SMAppService.agen
 
 **Pros**:
 - Contoh Apple untuk `BundleProgram` memakai `Contents/MacOS`.
-- Untuk executable di `Contents/MacOS`, bundle utama proses kemungkinan besar adalah app itu sendiri, yang dibutuhkan `SMAppService` saat dipanggil CLI (belum terkonfirmasi sumber resmi; dibuktikan test native milestone 4, dengan jalur gagal `agent.not_bundled`).
+- Untuk executable di `Contents/MacOS`, bundle utama proses kemungkinan besar adalah app itu sendiri, yang dibutuhkan `SMAppService` saat dipanggil CLI (belum terkonfirmasi sumber resmi; dibuktikan test native milestone 4, dengan jalur gagal `cli.agent_not_bundled`).
 - Signing nested code paling sederhana.
 
 **Cons**:
@@ -89,7 +89,7 @@ Plist di `Contents/Library/LaunchAgents/`, didaftarkan dengan `SMAppService.agen
 
 #### Option 1: stop dan restart lewat IPC, `KeepAlive` yang hanya menyalakan ulang exit gagal, start lewat daftar ulang `SMAppService` (rekomendasi)
 
-`daemon.shutdown stop` keluar 0 dan launchd membiarkannya mati; `restart` keluar 75 dan launchd menyalakannya lagi; start untuk job yang terdaftar tetapi tidak jalan memanggil `unregister` lalu `register`, sehingga `RunAtLoad` menyalakannya.
+`daemon.shutdown stop` keluar 0 dan launchd membiarkannya mati; `restart` keluar 75 dan launchd menyalakannya lagi; start untuk job yang terdaftar tetapi tidak jalan memanggil `relaunch` di port, yang di macOS berarti `unregister` lalu `register`, sehingga `RunAtLoad` menyalakannya. Karena mekanismenya di belakang port, adapter bisa diganti kalau spike menunjukkan daftar ulang meminta persetujuan baru.
 
 **Pros**:
 - Tidak ada proses yang dijalankan CLI atau GUI; aturan spec 0001, 0008, dan 0013 utuh.
@@ -136,7 +136,7 @@ Plist di `Contents/Library/LaunchAgents/`, didaftarkan dengan `SMAppService.agen
 
 **Cons**:
 - Dependency `objc2` dan blok `unsafe` baru.
-- `SMAppService` dari CLI (terutama lewat symlink) belum terkonfirmasi; jalur gagalnya `agent.not_bundled` dengan path yang benar.
+- `SMAppService` dari CLI (terutama lewat symlink) belum terkonfirmasi; jalur gagalnya `cli.agent_not_bundled` dengan path yang benar.
 
 #### Option 2: hanya GUI; CLI membuka app lewat URL
 
@@ -307,7 +307,7 @@ Plist di `Contents/Library/LaunchAgents/`, didaftarkan dengan `SMAppService.agen
 
 ### Keputusan 12: completion dan man page
 
-#### Option 1: `stackly completion` ke stdout, `stackly manpage` tersembunyi yang dipakai `build-app`, halaman di bundle dan di-link oleh instalasi CLI (rekomendasi)
+#### Option 1: `stackly completion` ke stdout, `stackly manpage` tersembunyi yang dipakai `build-app`, halaman di bundle dan ditautkan oleh instalasi CLI (rekomendasi)
 
 **Pros**:
 - CLI tetap bin saja (spec 0008) dan tidak menulis file.
@@ -348,6 +348,10 @@ Rekomendasi saya, diambil tanpa ditanyakan karena tidak mengubah arah fitur; run
 - **`MARKETING_VERSION` dari versi workspace** supaya versi app, daemon, dan CLI tidak pernah berbeda di satu build (runner up: diatur tangan di Xcode).
 - **Konteks launchd** dari `XPC_SERVICE_NAME` yang sama dengan label plus parent PID 1, bukan salah satunya, karena proses Terminal mewarisi `XPC_SERVICE_NAME` milik app Terminal (runner up: parent PID 1 saja).
 - **Launch record** ditulis setelah lock dan sebelum bind socket, gagal tidak fatal (runner up: setelah daemon `ready`, yang melewatkan crash saat start).
+- **Kode error agent di area `cli`** (`cli.agent_*`), bukan area baru, supaya tabel area spec 0006 dan aturan spec 0008 "CLI hanya membuat error di area `cli`" tidak berubah; GUI memakai enum Swift `AgentActionError` karena ia tidak menampilkan kode (runner up: area `agent` baru yang dipakai CLI dan GUI).
+- **`stop` menunggu EOF di koneksi yang mengirim `daemon.shutdown`**, karena daemon menutup koneksi tepat sebelum melepas lock; CLI tidak perlu membuka lock file daemon (runner up: membuka lock file read only dan mencoba `flock` shared).
+- **Tunggu 15 detik sebelum `relaunch`** kalau launch record menunjukkan launch kurang dari 15 detik yang lalu, supaya daemon yang sedang start atau menunggu `ThrottleInterval` tidak dihentikan (runner up: selalu `relaunch` langsung).
+- **Runtime tokio CLI dimatikan dengan `shutdown_timeout(Duration::ZERO)`**, karena panggilan OS yang macet di `spawn_blocking` tidak bisa dibatalkan (runner up: memanggil port di thread terpisah yang di detach).
 - **CLI tidak pernah membuka System Settings**; hanya GUI yang membukanya, dan hanya setelah klik (runner up: flag `--open-settings`).
 - **`daemon uninstall` tidak dibuat di fitur ini**; mematikan background service milik fitur 31 dan uninstall milik fitur 62 (runner up: `stackly daemon uninstall` sebagai cermin `install`).
 - **Agent Skill dan MCP**: pencarian ditunda dan dicatat di Follow-up, karena sub sesi ini tidak boleh memasang skill di repo; tool baru fitur ini hanya crate kecil (`objc2*`, `clap_complete`, `clap_mangen`) dan skill `signing-entitlements` sudah terpasang (runner up: cari sekarang lewat lead).
@@ -376,7 +380,31 @@ Setiap baris berkeyakinan rendah yang dipakai desain punya AC native (AC-15 samp
 
 ## Cross check
 
-Diisi setelah cross check `Another model` selesai.
+Spec dibaca model lain (Sonnet 5.5, baca saja, tanpa membuka link) pada 2026-10-19. Putusan: desain koheren dan aturan proyek tetap utuh (tidak ada proses yang dijalankan CLI atau GUI, urutan berhenti spec 0006, aturan stabilitas spec 0008), dengan 13 gap kelengkapan dan beberapa catatan soundness. Semua usulan perbaikan diterima lead atas nama user sesuai aturan program (opsi yang direkomendasikan diambil) dan diterapkan:
+
+| No | Temuan | Perbaikan yang diterapkan |
+| --- | --- | --- |
+| 1 | `stop` selesai sebelum lock dilepas, jadi `start` langsung sesudahnya bentrok | `stop` menunggu EOF di koneksi shutdown lalu socket hilang (AC-10) |
+| 2 | `daemon.shutting_down` untuk request kedua menjadi exit 6 | dianggap "sudah sedang berhenti" (AC-10) |
+| 3 | kode `NSError` `SMAppService` tidak dipetakan | tabel *Hasil pendaftaran*, kode `cli.agent_invalid_signature` |
+| 4 | AC-17 mengandaikan `register` selalu `requires_approval` | AC-17 bercabang A (langsung `enabled`) atau B |
+| 5 | langkah pemulihan tidak ada di `daemon status` | `AgentReport.recovery`, baris `Next`, satu tabel *Langkah pemulihan CLI* |
+| 6 | hasil `--json` saat gagal tidak terdefinisi | hasil parsial dengan `info` null untuk `install`, `start`, `stop`, `restart` |
+| 7 | timeout Start di GUI tanpa kode | `AgentActionError` di GUI; kode agent CLI pindah ke area `cli`, tanpa area baru |
+| 8 | plumbing exit 75 tidak bernama | `StartConfig`, `DaemonDeps.launch` dan `bundle`, `DaemonHandle::stop_requested()` |
+| 9 | debug dylib Xcode di `Contents/MacOS`, path cargo, sisa staging | `ENABLE_DEBUG_DYLIB=NO`, artefak dari `--message-format=json`, hapus `.stage-*` |
+| 10 | LaunchAgent test tidak membuktikan key plist produksi | plist test diturunkan dari golden file dan dibandingkan |
+| 11 | perintah pembersihan agent test ambigu | langkah tambahan di `runtime spike --cleanup` lewat `launchctl list`, tanpa lock spike |
+| 12 | bundle `NSBundle` bisa berbeda dari bundle CLI (symlink) | `Registration.bundle`; CLI menurunkannya ke `not_bundled` |
+| 13 | area `agent` bentrok dengan spec 0006 dan 0008 | dihapus (lihat nomor 7) |
+| S1 | fakta OS paling berisiko diuji paling akhir | spike AC-21 sebagai langkah 0; start di belakang `relaunch` |
+| S2 | `start` bisa menghentikan daemon yang sedang start | tunggu 15 detik kalau launch record baru |
+| S3 | panggilan OS macet menahan keluarnya CLI | `shutdown_timeout(Duration::ZERO)`; GUI membuang hasil terlambat |
+| S5 | AC yang mencampur bagian bisa jalan dan `BLOCKED` | AC-2 ad hoc saja, AC-20 Team ID, AC-21 spike, AC-19 dengan reason dan owner akun kedua, AC-22 untuk `--install` |
+| S6 | teks `disabled` bisa salah setelah reinstall | teks banner netral |
+| S7 | `--install` tidak punya AC; nama milestone bentrok | AC-22; prasyarat fitur 13 ditulis dengan nama milestone nya |
+
+Catatan lead yang ikut diterapkan: langkah yang mendaftarkan job atau agent di Mac ini, mengubah Login Items, atau memakai akun macOS kedua ditandai **setelah persetujuan** dan tidak dijalankan tanpa pengawasan; perubahan teks spec 0006 dan 0008 ditulis sebagai *Usulan update untuk spec lain*, bukan edit langsung; dan update spec 0004 tetap additive.
 
 ## References
 
