@@ -338,6 +338,54 @@ struct DaemonModelTests {
         #expect(model.mutationAvailability == .available)
     }
 
+    /// The health of `frame-response-get-health-recovery.json`: degraded, with
+    /// the registry in recovery mode.
+    static func recoveryHealth() throws -> DaemonHealth? {
+        let data = try Data(
+            contentsOf: SourceTree.url(
+                of: "protocols/fixtures/ipc/frame-response-get-health-recovery.json"))
+        let frame = try StacklyJSON.decoder().decode(ServerFrame.self, from: data)
+        guard case .response(let response) = frame,
+            case .daemonGetHealth(let health) = response.reply
+        else {
+            Issue.record("the fixture is not a daemon.get_health reply")
+            return nil
+        }
+        return health
+    }
+
+    @Test func registryRecoveryInTheHealthBlocksMutationsAndFollowsTheHeartbeat() async throws {
+        let fixture = Fixture()
+        let model = fixture.model!
+        let health = try #require(try Self.recoveryHealth())
+        #expect(health.recovery?.reason == "schema_newer_than_app")
+        var recovering = Self.daemon(.degraded)
+        recovering.health = health
+        let connectedAt = recovering.connectedAt
+        try await fixture.push(.connected(recovering))
+        #expect(model.presence == .refreshing)
+        await fixture.send(.resnapshot(.noCursor))
+        try await waitUntil { model.presence == .recovery }
+        #expect(model.presentation.footer.label == "stacklyd in recovery")
+        #expect(model.presentation.banner?.title == "Stackly’s registry needs recovery.")
+        #expect(
+            model.mutationAvailability
+                == .blocked(reason: "Stackly’s registry needs recovery.", since: connectedAt))
+        let rows = model.diagnostics.rows(
+            calendar: Calendar(identifier: .gregorian), locale: Locale(identifier: "en_US"),
+            timeZone: .gmt)
+        let values = Dictionary(uniqueKeysWithValues: rows.map { ($0.label, $0.value) })
+        #expect(values["What to do"] == "See the recovery report in stacklyd’s log folder.")
+
+        // A heartbeat without recovery clears it, and one with it brings it back.
+        try await fixture.push(.connected(Self.daemon(.ready)))
+        #expect(model.presence == .connected(health: .ready))
+        #expect(model.mutationAvailability == .available)
+        try await fixture.push(.connected(recovering))
+        #expect(model.presence == .recovery)
+        #expect(model.mutationAvailability.blockedReason == "Stackly’s registry needs recovery.")
+    }
+
     // MARK: - Diagnostics
 
     @Test func diagnosticsKeepTheLastKnownDaemonAfterALoss() async throws {
