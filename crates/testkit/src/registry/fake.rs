@@ -8,13 +8,14 @@ use std::time::Duration;
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
-    ArtifactRecord, BackupId, BatchError, Committed, Environment, EnvironmentId, Generation,
-    InstallMode, Instance, InstanceFilter, InstanceId, InstanceName, InstancePathEntry, Lease,
-    LeaseFilter, LeaseHolder, LeaseId, LeaseState, Operation, OperationCursor, OperationId,
-    OperationPage, OperationQuery, OperationResource, Ownership, ProviderRevisionKey,
-    ProviderRevisionRecord, PruneReport, Registry, RegistryError, ResourceRef, ResourceRevision,
-    RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, Sha256Digest, Versioned, WriteBatch,
-    WriteOp,
+    ArtifactRecord, BackupId, BatchError, Committed, CreatedRecord, CreatedSeq, Environment,
+    EnvironmentId, Generation, IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId,
+    InstanceName, InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder,
+    LeaseId, LeaseState, LockKey, Operation, OperationCursor, OperationId, OperationJournal,
+    OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
+    ProviderRevisionKey, ProviderRevisionRecord, PruneReport, Registry, RegistryError, ResourceRef,
+    ResourceRevision, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, Sha256Digest,
+    StepSeq, Versioned, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
 use uuid::Uuid;
@@ -43,7 +44,9 @@ pub struct WrittenAt {
 /// exactly 1, and every row stamp comes from one `clock.now()` per commit.
 /// Instances read back with readiness and health `unknown`, reason
 /// `daemon_restarted`, observed at `loaded_at`. Both pass
-/// [`registry_conformance`](crate::registry_conformance).
+/// [`registry_conformance`](crate::registry_conformance), the operation
+/// journal tables of spec 0007 included, whose rows prune deletes with
+/// their operation.
 ///
 /// ```
 /// use std::sync::Arc;
@@ -284,6 +287,66 @@ impl Registry for FakeRegistry {
         self.read(|state| Ok(state.operations.get(&id).cloned()))
     }
 
+    fn operation_journal(
+        &self,
+        id: OperationId,
+    ) -> Result<Versioned<Option<JournalView>>, RegistryError> {
+        self.read(|state| Ok(state.journal_view(id)))
+    }
+
+    fn operation_journals(
+        &self,
+        ids: &[OperationId],
+    ) -> Result<Versioned<Vec<OperationJournal>>, RegistryError> {
+        self.read(|state| {
+            Ok(ids
+                .iter()
+                .filter_map(|id| state.journals.get(id).cloned())
+                .collect())
+        })
+    }
+
+    fn operation_by_idempotency_key(
+        &self,
+        key: &IdempotencyKey,
+    ) -> Result<Versioned<Option<(Operation, OperationJournal)>>, RegistryError> {
+        self.read(|state| {
+            Ok(state
+                .operations
+                .values()
+                .find(|operation| operation.idempotency_key() == Some(key))
+                .and_then(|operation| {
+                    let journal = state.journals.get(&operation.id())?;
+                    Some((operation.clone(), journal.clone()))
+                }))
+        })
+    }
+
+    fn unfinished_operations(
+        &self,
+    ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError> {
+        self.read(|state| {
+            let mut unfinished: Vec<(Operation, JournalView)> = state
+                .operations
+                .values()
+                .filter(|operation| {
+                    matches!(
+                        operation.state(),
+                        OperationState::Queued
+                            | OperationState::Running
+                            | OperationState::CancelRequested
+                            | OperationState::NeedsRecovery
+                    )
+                })
+                .filter_map(|operation| {
+                    Some((operation.clone(), state.journal_view(operation.id())?))
+                })
+                .collect();
+            unfinished.sort_by_key(|(operation, _)| (operation.created_at(), operation.id()));
+            Ok(unfinished)
+        })
+    }
+
     fn operations(&self, query: OperationQuery) -> Result<Versioned<OperationPage>, RegistryError> {
         query.validate()?;
         self.read(|state| {
@@ -451,6 +514,10 @@ struct State {
     environments: BTreeMap<EnvironmentId, Environment>,
     leases: BTreeMap<LeaseId, Lease>,
     operations: BTreeMap<OperationId, Operation>,
+    journals: BTreeMap<OperationId, OperationJournal>,
+    steps: BTreeMap<(OperationId, StepSeq), JournalStep>,
+    created: BTreeMap<(OperationId, CreatedSeq), CreatedRecord>,
+    locks: BTreeMap<(OperationId, String), LockKey>,
     backups: BTreeMap<BackupId, BackupSeed>,
     audit_events: Vec<AuditRow>,
     observations: Vec<ObservationRow>,
@@ -471,6 +538,10 @@ impl State {
             environments: BTreeMap::new(),
             leases: BTreeMap::new(),
             operations: BTreeMap::new(),
+            journals: BTreeMap::new(),
+            steps: BTreeMap::new(),
+            created: BTreeMap::new(),
+            locks: BTreeMap::new(),
             backups: BTreeMap::new(),
             audit_events: Vec::new(),
             observations: Vec::new(),
@@ -509,6 +580,16 @@ impl State {
                 operation,
                 expected,
             } => self.write_operation(operation, Some(expected)),
+            WriteOp::InsertJournal(journal) => self.write_journal(journal, false),
+            WriteOp::UpdateJournal(journal) => self.write_journal(journal, true),
+            WriteOp::UpsertStep { operation, step } => self.upsert_step(operation, step),
+            WriteOp::UpsertCreated { operation, record } => self.upsert_created(operation, record),
+            WriteOp::InsertLocks { operation, keys } => self.insert_locks(operation, keys),
+            WriteOp::DeleteLocks { operation } => {
+                self.expect_operation(operation)?;
+                self.locks.retain(|(owner, _), _| *owner != operation);
+                Ok(())
+            }
             other => panic!(
                 "FakeRegistry has no case for the op on {}; add one with the spec 0005 change \
                  that added it",
@@ -772,8 +853,129 @@ impl State {
             expected,
             &ResourceRef::Operation(id),
         )?;
+        if let Some(key) = operation.idempotency_key()
+            && let Some(existing) = self
+                .operations
+                .values()
+                .find(|other| other.id() != id && other.idempotency_key() == Some(key))
+        {
+            return Err(RegistryError::IdempotencyKeyTaken {
+                key: key.clone(),
+                existing: existing.id(),
+            });
+        }
         self.operations.insert(id, operation);
         Ok(())
+    }
+
+    /// Fails with `MissingReference` unless the operation exists.
+    fn expect_operation(&self, id: OperationId) -> Result<(), RegistryError> {
+        if self.operations.contains_key(&id) {
+            Ok(())
+        } else {
+            Err(RegistryError::MissingReference {
+                resource: ResourceRef::Operation(id),
+            })
+        }
+    }
+
+    fn write_journal(
+        &mut self,
+        journal: OperationJournal,
+        update: bool,
+    ) -> Result<(), RegistryError> {
+        let id = journal.operation_id();
+        let resource = ResourceRef::Operation(id);
+        match (self.journals.contains_key(&id), update) {
+            (true, false) => return Err(RegistryError::DuplicateResource { resource }),
+            (false, true) => return Err(RegistryError::NotFound { resource }),
+            _ => {}
+        }
+        self.expect_operation(id)?;
+        self.journals.insert(id, journal);
+        Ok(())
+    }
+
+    fn upsert_step(
+        &mut self,
+        operation: OperationId,
+        step: JournalStep,
+    ) -> Result<(), RegistryError> {
+        self.expect_operation(operation)?;
+        if self.steps.iter().any(|((owner, seq), other)| {
+            *owner == operation && *seq != step.seq() && other.name() == step.name()
+        }) {
+            return Err(unique_failed(
+                "operation_steps.operation_id, operation_steps.name",
+            ));
+        }
+        self.steps.insert((operation, step.seq()), step);
+        Ok(())
+    }
+
+    fn upsert_created(
+        &mut self,
+        operation: OperationId,
+        record: CreatedRecord,
+    ) -> Result<(), RegistryError> {
+        self.expect_operation(operation)?;
+        if !self.steps.contains_key(&(operation, record.step_seq())) {
+            return Err(RegistryError::MissingReference {
+                resource: ResourceRef::OperationStep(operation, record.step_seq()),
+            });
+        }
+        if self.created.iter().any(|((owner, seq), other)| {
+            *owner == operation && *seq != record.seq() && other.item() == record.item()
+        }) {
+            return Err(unique_failed(
+                "operation_created.operation_id, operation_created.item_kind, \
+                 operation_created.item_ref",
+            ));
+        }
+        self.created.insert((operation, record.seq()), record);
+        Ok(())
+    }
+
+    fn insert_locks(
+        &mut self,
+        operation: OperationId,
+        keys: Vec<LockKey>,
+    ) -> Result<(), RegistryError> {
+        self.expect_operation(operation)?;
+        for key in keys {
+            // check_shape already refused a key without a text form.
+            let text = key.to_string();
+            if self.locks.insert((operation, text), key).is_some() {
+                return Err(unique_failed(
+                    "operation_locks.operation_id, operation_locks.lock_key",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// The journal of an operation with its rows, or `None` without one.
+    fn journal_view(&self, id: OperationId) -> Option<JournalView> {
+        let journal = self.journals.get(&id)?.clone();
+        let steps = self
+            .steps
+            .range((id, StepSeq::FIRST)..)
+            .take_while(|((owner, _), _)| *owner == id)
+            .map(|(_, step)| step.clone())
+            .collect();
+        let created = self
+            .created
+            .range((id, CreatedSeq::FIRST)..)
+            .take_while(|((owner, _), _)| *owner == id)
+            .map(|(_, record)| record.clone())
+            .collect();
+        let locks = self
+            .locks
+            .iter()
+            .filter(|((owner, _), _)| *owner == id)
+            .map(|(_, key)| key.clone())
+            .collect();
+        Some(JournalView::new(journal, steps, created, locks))
     }
 
     /// Records the commit time for a row; an update keeps its first
@@ -809,7 +1011,12 @@ impl State {
         );
         for id in &doomed {
             self.operations.remove(id);
+            self.journals.remove(id);
         }
+        // The journal rows go with their operation, as the cascade does.
+        self.steps.retain(|(owner, _), _| !doomed.contains(owner));
+        self.created.retain(|(owner, _), _| !doomed.contains(owner));
+        self.locks.retain(|(owner, _), _| !doomed.contains(owner));
         count(doomed.len())
     }
 
@@ -880,6 +1087,14 @@ fn check_existing(
             })
         }
         _ => Ok(()),
+    }
+}
+
+/// The error SQLite gives for a unique constraint a check before it
+/// missed.
+fn unique_failed(columns: &str) -> RegistryError {
+    RegistryError::Integrity {
+        detail: format!("UNIQUE constraint failed: {columns}"),
     }
 }
 

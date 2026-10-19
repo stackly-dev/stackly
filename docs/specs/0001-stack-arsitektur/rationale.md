@@ -132,6 +132,21 @@ Dijalankan sekali lewat subagent researcher (5 pencarian, 8 halaman). Ringkasann
 
 CI ditiadakan atas keputusan pemilik proyek, dan pengembangan fokus di Mac ini dulu (macOS 27, Apple Silicon). Yang berubah: baris CI di tabel stack dan di Pilihan per lapisan dihapus, begitu juga Mac self hosted dan runner `macos-26`. Cek portabilitas kini hanya `cargo check --target aarch64-pc-windows-msvc` di Mac ini, tanpa cek native di Linux. `cargo xtask check-deps` dan `cargo xtask codegen --check` dijalankan manual, dan naik versi toolchain cukup lulus semua cek di Mac ini.
 
+### Perubahan 2026-10-18
+
+Rekonsiliasi dengan spec yang diterima sesudah scaffold. Keputusan di spec ini tidak berubah; yang diperbarui adalah peta dan aturan yang diturunkan spec lain:
+
+- *Peta crate*: crate baru `stackly-storage` (spec 0005), `stackly-ipc` dan `stacklyd` sebagai library plus bin (spec 0006), `stackly-fake-server` (spec 0009), `stackly-evidence` (spec 0002, sebelumnya hanya disebut di aturan), dan dependency baru tiap crate dari spec 0004, 0005, 0006, 0009, dan 0011. `stackly-storage` tidak lagi boleh bergantung pada core, karena port registry diputuskan ada di `stackly-domain` (spec 0005, dikonfirmasi engineer).
+- *Aturan arah dependency*: aturan `check-deps` dari spec 0004, 0005, 0006, 0009, dan 0011 dicatat di satu tempat; pengecualian `unsafe` untuk `stackly-storage` dihapus karena storage tidak memakainya.
+- *Proposed stack*: baris registry (WAL, `synchronous=FULL`, `fullfsync`, satu thread), manifest provider, secret, transport IPC, fuzzing, dan sink log.
+- *Susunan repo*, *Alur kontrak*, dan *Konfigurasi workspace* mengikuti spec 0006 dan 0009, termasuk fallback enum terbuka `unrecognized` yang diputuskan saat pengecekan silang spec 0006 dengan state `unknown` di spec 0004.
+- *Batas keputusan* mendapat kolom yang menunjuk spec yang sudah memutuskan setiap baris.
+- Baris YAML mencatat advisory RUSTSEC-2024-0449 (`unsafe-libyaml` tidak dirawat, ditarik serde_yaml_ng) yang diterima engineer dengan pemilik fitur 9; crate YAML tidak berubah.
+
+### Perubahan 2026-10-18, ronde 2
+
+Rekonsiliasi dengan spec 0007, 0008, 0010, dan 0013: baris *Batas keputusan* fitur 7, 8, 10, dan 13 menunjuk spec pemiliknya; core mendapat tokio, tracing, dan fitur `fixture`; protocol mendapat `sha2`; CLI mendapat `anstream`, `anstyle`, `unicode-width`, dan dependency lain spec 0008; aturan `check-deps` untuk proses di core dan daemon, `SIGKILL`, dan larangan spawn serta print di CLI; arah dependency Swift, product `StacklyTestSupport`, scene shell, larangan spawn dan jaringan di GUI; folder fixture `layout/` dan `endpoint/` serta `ContractNames.swift`.
+
 ## References
 
 **Project sources**:

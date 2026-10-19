@@ -256,6 +256,8 @@ fn postgres_18_reaches_ready_from_a_managed_runtime() {
 
 `StacklyTestSupport` adalah target library baru di package `StacklyClient` (`clients/swift`), yang hanya dipakai target test. Ia menulis format JSON yang sama dengan `Codable` tulisan tangan, dan test-nya mendecode `schemas/evidence/examples/` lewat path relatif dari `#filePath`, seperti fixture kontrak.
 
+Sejak fitur 13 (spec 0013), `StacklyTestSupport` adalah product package `clients/swift`, sehingga test `StacklyUI` juga memakai trait `.evidence`. Integration test Swift yang butuh `stacklyd` membaca path binary dari variabel `STACKLY_DAEMON_BIN`; kalau variabel itu tidak di set atau binary nya tidak ada, test memanggil `Evidence.blocked(reason:owner:)` dengan reason yang menyebut variabel itu dan owner fitur pemilik test, jadi test tercatat `BLOCKED`, bukan `FAIL`. Test tanpa evidence memakai pola yang sama lewat `Test.cancel`.
+
 ```swift
 import StacklyTestSupport
 import Testing
@@ -417,7 +419,7 @@ Aturan pindaian `evidence check`:
 
 - `cargo xtask codegen --check` dan `cargo deny check` tidak menulis evidence.
 - Test tanpa PRD ID tidak menulis record.
-- UI test XCUITest (XCTest) belum punya helper. Fitur pertama yang menambah XCUITest (fitur 13 atau 68) menambah padanan XCTest lewat `/architect` update spec ini. Sampai saat itu, review GUI memakai record manual.
+- UI test XCUITest (XCTest) belum punya helper. Fitur pertama yang menambah XCUITest adalah fitur 68 (spec 0013 memakai Swift Testing dan record manual untuk shell); fitur itu menambah padanan XCTest lewat `/architect` update spec ini. Sampai saat itu, review GUI memakai record manual.
 - Fuzz target dan benchmark baru menulis record setelah fitur 63 dan 64 memutuskan field tambahannya (sebagai field opsional `v1`, atau `v2`).
 
 ## Consequences
@@ -456,7 +458,7 @@ Aturan pindaian `evidence check`:
 - [ ] Fitur 65: tandai `NOT_RUN` untuk AC yang tidak punya record sama sekali; terima bukti rilis hanya dari commit yang ada di `main` atau tag release candidate; simpan evidence rilis; dan cek bahwa record manual final tidak diedit, dibandingkan dengan riwayat git.
 - [x] Test native pertama yang menjalankan provider asli (fitur 3): hentikan proses sisa run sebelumnya sebelum run native. Dipegang spec 0003 AC-4 lewat `cargo xtask runtime spike --cleanup` (milestone 2 spec itu), yang dijalankan sebelum dan sesudah run native (lihat Menjalankan test di Mac ini).
 - [ ] `--cleanup` hanya membersihkan proses dan LaunchAgent milik spike runtime. Fitur pertama yang menambah test native yang menjalankan provider di luar spike (misalnya fitur 18 lewat daemon dan supervisor) menambah pembersihan untuk proses sisanya.
-- [ ] Helper evidence untuk XCTest saat XCUITest pertama datang (fitur 13 atau 68), lewat `/architect` update spec ini.
+- [ ] Helper evidence untuk XCTest saat XCUITest pertama datang (fitur 68), lewat `/architect` update spec ini.
 - [ ] Fitur 11: sisi Swift dari `FixtureCredential`, dan test redaction yang memakai prefix yang sama.
 - [ ] Fitur 63 dan 64: field tambahan untuk hasil fuzz dan angka benchmark; fitur 64 juga menenangkan Mac (tanpa build lain) sebelum mengukur.
 - [ ] Setelah build, `/sync` mencatat perintah `cargo xtask evidence ...`, aturan `#[ignore]` khusus native, pola guard, dan crate `stackly-evidence` di root `AGENTS.md`, serta `StacklyTestSupport` di `clients/swift/AGENTS.md`.

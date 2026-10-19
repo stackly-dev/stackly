@@ -8,7 +8,7 @@
 //! `--no-quarantine` is for the local run before a maintainer upload
 //! (AC-19); native tests never pass it. `--cleanup` and `--prune-cache`
 //! take the same lock as the driver.
-// provisional: F9 (the provider manifest takes over the per provider steps)
+// provisional: F36 (the feature 36 harness builds the spike steps from the provider packages)
 
 mod archive;
 mod audit;

@@ -1,0 +1,91 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.23s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.06s
+     Running `fuzz/target/aarch64-apple-darwin/release/provider_manifest -artifact_prefix=fuzz/artifacts/provider_manifest/ -max_len=262144 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_manifest fuzz/seeds/provider_manifest`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1488445034
+INFO: Loaded 1 modules   (230797 inline 8-bit counters): 230797 [0x10525fdc0, 0x10529834d), 
+INFO: Loaded 1 PC tables (230797 PCs): 230797 [0x105298350,0x10561dc20), 
+INFO:      522 files found in fuzz/corpus/provider_manifest
+INFO:        4 files found in fuzz/seeds/provider_manifest
+INFO: seed corpus: files: 526 min: 1b max: 2693b total: 685881b rss: 49Mb
+#528	INITED cov: 10957 ft: 25681 corp: 393/477Kb exec/s: 0 rss: 176Mb
+	NEW_FUNC[1/1]: 0x000104ab2620 in _RNvNtCskeSoRauXsg2_14unsafe_libyaml7scanner27yaml_parser_fetch_directive+0x0 (provider_manifest:arm64+0x100882620)
+#555	NEW    cov: 10974 ft: 25698 corp: 394/479Kb lim: 2693 exec/s: 555 rss: 180Mb L: 1766/2693 MS: 2 ChangeASCIIInt-ChangeByte-
+#593	REDUCE cov: 10974 ft: 25698 corp: 394/479Kb lim: 2693 exec/s: 593 rss: 183Mb L: 390/2693 MS: 3 ChangeBit-InsertRepeatedBytes-EraseBytes-
+#715	REDUCE cov: 10974 ft: 25698 corp: 394/479Kb lim: 2693 exec/s: 715 rss: 198Mb L: 919/2693 MS: 2 ShuffleBytes-EraseBytes-
+#719	REDUCE cov: 10974 ft: 25698 corp: 394/479Kb lim: 2693 exec/s: 719 rss: 199Mb L: 953/2693 MS: 4 ChangeByte-ChangeASCIIInt-InsertByte-EraseBytes-
+#835	REDUCE cov: 10974 ft: 25698 corp: 394/479Kb lim: 2693 exec/s: 835 rss: 199Mb L: 1000/2693 MS: 1 EraseBytes-
+#944	REDUCE cov: 10974 ft: 25698 corp: 394/479Kb lim: 2693 exec/s: 944 rss: 209Mb L: 310/2693 MS: 4 ChangeByte-ShuffleBytes-ChangeASCIIInt-EraseBytes-
+#1000	REDUCE cov: 10974 ft: 25698 corp: 394/478Kb lim: 2693 exec/s: 1000 rss: 210Mb L: 1271/2693 MS: 1 EraseBytes-
+#1008	NEW    cov: 10974 ft: 25699 corp: 395/480Kb lim: 2693 exec/s: 1008 rss: 211Mb L: 1569/2693 MS: 3 ChangeBinInt-ChangeBinInt-CrossOver-
+#1020	REDUCE cov: 10974 ft: 25699 corp: 395/480Kb lim: 2693 exec/s: 1020 rss: 212Mb L: 1111/2693 MS: 2 InsertByte-CrossOver-
+#1136	REDUCE cov: 10974 ft: 25699 corp: 395/479Kb lim: 2693 exec/s: 1136 rss: 224Mb L: 224/2693 MS: 1 EraseBytes-
+#1187	NEW    cov: 10975 ft: 25700 corp: 396/481Kb lim: 2693 exec/s: 1187 rss: 229Mb L: 1147/2693 MS: 1 EraseBytes-
+#1294	REDUCE cov: 10975 ft: 25700 corp: 396/480Kb lim: 2693 exec/s: 647 rss: 239Mb L: 1227/2693 MS: 1 EraseBytes-
+#1308	REDUCE cov: 10975 ft: 25700 corp: 396/480Kb lim: 2693 exec/s: 654 rss: 241Mb L: 913/2693 MS: 4 InsertByte-ChangeASCIIInt-CopyPart-EraseBytes-
+#1347	REDUCE cov: 10975 ft: 25700 corp: 396/480Kb lim: 2693 exec/s: 673 rss: 246Mb L: 538/2693 MS: 4 ChangeBit-ShuffleBytes-InsertByte-EraseBytes-
+#1365	NEW    cov: 10975 ft: 25702 corp: 397/480Kb lim: 2693 exec/s: 682 rss: 246Mb L: 49/2693 MS: 3 ChangeBinInt-ChangeByte-EraseBytes-
+#1387	NEW    cov: 10975 ft: 25708 corp: 398/482Kb lim: 2693 exec/s: 693 rss: 246Mb L: 1800/2693 MS: 2 CopyPart-InsertRepeatedBytes-
+#1398	NEW    cov: 10975 ft: 25709 corp: 399/482Kb lim: 2693 exec/s: 699 rss: 246Mb L: 702/2693 MS: 1 ChangeBit-
+#1424	NEW    cov: 10975 ft: 25710 corp: 400/483Kb lim: 2693 exec/s: 712 rss: 246Mb L: 73/2693 MS: 1 EraseBytes-
+#1531	REDUCE cov: 10975 ft: 25710 corp: 400/482Kb lim: 2693 exec/s: 765 rss: 246Mb L: 231/2693 MS: 2 ChangeByte-EraseBytes-
+#1578	REDUCE cov: 10975 ft: 25710 corp: 400/482Kb lim: 2693 exec/s: 789 rss: 250Mb L: 1144/2693 MS: 2 InsertRepeatedBytes-EraseBytes-
+#1624	NEW    cov: 10978 ft: 25713 corp: 401/484Kb lim: 2693 exec/s: 812 rss: 253Mb L: 2303/2693 MS: 1 ShuffleBytes-
+#1650	REDUCE cov: 10978 ft: 25713 corp: 401/484Kb lim: 2693 exec/s: 825 rss: 253Mb L: 665/2693 MS: 1 EraseBytes-
+	NEW_FUNC[1/1]: 0x00010427d544 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueINtNtCsgysSR5XEJuO_5alloc3vec3VecTNtNtCsesurp0VpSQY_14stackly_domain5value12EndpointNameNtNtNtCsjPOpPMqn9gN_12stackly_core8provider11interpolate17EndpointTransportEEEB27_+0x0 (provider_manifest:arm64+0x10004d544)
+#1671	NEW    cov: 11011 ft: 25748 corp: 402/485Kb lim: 2693 exec/s: 835 rss: 253Mb L: 1359/2693 MS: 1 ChangeBinInt-
+#1777	REDUCE cov: 11011 ft: 25748 corp: 402/485Kb lim: 2693 exec/s: 888 rss: 255Mb L: 610/2693 MS: 1 EraseBytes-
+#1779	REDUCE cov: 11011 ft: 25748 corp: 402/485Kb lim: 2693 exec/s: 889 rss: 255Mb L: 288/2693 MS: 2 ChangeBinInt-EraseBytes-
+#1890	NEW    cov: 11011 ft: 25749 corp: 403/488Kb lim: 2693 exec/s: 945 rss: 255Mb L: 2533/2693 MS: 1 ChangeByte-
+#1896	NEW    cov: 11011 ft: 25750 corp: 404/490Kb lim: 2693 exec/s: 948 rss: 255Mb L: 2441/2693 MS: 1 CrossOver-
+#1922	NEW    cov: 11011 ft: 25751 corp: 405/491Kb lim: 2693 exec/s: 961 rss: 255Mb L: 566/2693 MS: 1 CopyPart-
+#1963	NEW    cov: 11011 ft: 25753 corp: 406/493Kb lim: 2693 exec/s: 654 rss: 255Mb L: 2693/2693 MS: 1 ShuffleBytes-
+#2026	NEW    cov: 11011 ft: 25755 corp: 407/493Kb lim: 2693 exec/s: 675 rss: 255Mb L: 2/2693 MS: 3 ChangeBinInt-EraseBytes-InsertByte-
+#2048	pulse  cov: 11011 ft: 25755 corp: 407/493Kb lim: 2693 exec/s: 682 rss: 255Mb
+#2147	REDUCE cov: 11011 ft: 25755 corp: 407/493Kb lim: 2693 exec/s: 715 rss: 255Mb L: 261/2693 MS: 1 EraseBytes-
+#2183	NEW    cov: 11013 ft: 25758 corp: 408/495Kb lim: 2693 exec/s: 727 rss: 255Mb L: 2408/2693 MS: 1 ChangeBinInt-
+#2229	NEW    cov: 11017 ft: 25762 corp: 409/498Kb lim: 2693 exec/s: 743 rss: 255Mb L: 2374/2693 MS: 1 ChangeASCIIInt-
+#2290	REDUCE cov: 11017 ft: 25762 corp: 409/497Kb lim: 2693 exec/s: 763 rss: 255Mb L: 1091/2693 MS: 1 EraseBytes-
+#2296	NEW    cov: 11018 ft: 25776 corp: 410/499Kb lim: 2693 exec/s: 765 rss: 255Mb L: 2303/2693 MS: 1 InsertByte-
+#2297	REDUCE cov: 11018 ft: 25776 corp: 410/499Kb lim: 2693 exec/s: 765 rss: 255Mb L: 1289/2693 MS: 1 EraseBytes-
+#2334	NEW    cov: 11019 ft: 25777 corp: 411/502Kb lim: 2693 exec/s: 778 rss: 255Mb L: 2338/2693 MS: 2 ChangeASCIIInt-InsertByte-
+#2352	REDUCE cov: 11019 ft: 25777 corp: 411/501Kb lim: 2693 exec/s: 784 rss: 255Mb L: 957/2693 MS: 3 ChangeBit-InsertByte-EraseBytes-
+#2446	NEW    cov: 11019 ft: 25778 corp: 412/503Kb lim: 2693 exec/s: 815 rss: 255Mb L: 2004/2693 MS: 4 ChangeBit-CopyPart-ShuffleBytes-CopyPart-
+#2482	REDUCE cov: 11019 ft: 25778 corp: 412/503Kb lim: 2693 exec/s: 827 rss: 255Mb L: 1038/2693 MS: 1 EraseBytes-
+#2598	NEW    cov: 11024 ft: 25783 corp: 413/505Kb lim: 2693 exec/s: 866 rss: 255Mb L: 2379/2693 MS: 1 InsertRepeatedBytes-
+#2620	REDUCE cov: 11024 ft: 25783 corp: 413/505Kb lim: 2693 exec/s: 873 rss: 255Mb L: 741/2693 MS: 2 ChangeByte-EraseBytes-
+#2647	REDUCE cov: 11024 ft: 25783 corp: 413/503Kb lim: 2693 exec/s: 882 rss: 255Mb L: 1405/2693 MS: 2 ChangeBinInt-CrossOver-
+[... 5580 lines of NEW, REDUCE, and pulse progress cut by the recorder ...]
+"!\000" # Uses: 865
+"}\000\000\000" # Uses: 844
+"\000\012" # Uses: 786
+"s\000" # Uses: 821
+"+\000\000\000" # Uses: 698
+"z\000\000\000" # Uses: 601
+"\000\000\000\205" # Uses: 596
+"\377\377\377\011" # Uses: 622
+"\374\377\377\377" # Uses: 534
+"R\000\000\000\000\000\000\000" # Uses: 474
+"\015\000\000\000\000\000\000\000" # Uses: 480
+"I\000\000\000\000\000\000\000" # Uses: 436
+"\377\377\020\000" # Uses: 370
+"\001\000\000s" # Uses: 351
+"g\000\000\000" # Uses: 267
+"\377\377\377\377\377\377\377w" # Uses: 273
+"\012\000\000\000\000\000\000\000" # Uses: 180
+"r\000\000\000" # Uses: 155
+"d\000\000\000" # Uses: 159
+"\000\000\000\000\000\000\000\006" # Uses: 20
+"\001\000\000\000\000\000\000\013" # Uses: 6
+###### End of recommended dictionary. ######
+Done 615381 runs in 601 second(s)
+stat::number_of_executed_units: 615381
+stat::average_exec_per_sec:     1023
+stat::new_units_added:          5537
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              397
+fuzz run: provider_manifest ran for 600 s without a crash
+exit=0

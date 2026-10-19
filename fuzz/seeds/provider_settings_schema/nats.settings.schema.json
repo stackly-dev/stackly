@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NATS settings",
+  "description": "Server identity, JetStream, and message limits of one NATS server.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "serverName": {
+      "type": "string",
+      "title": "Server name",
+      "description": "The NATS server_name, always the instance name.",
+      "maxLength": 63,
+      "x-stackly": { "managed": "${instance.name}" }
+    },
+    "jetstream": {
+      "type": "boolean",
+      "title": "JetStream",
+      "description": "Persist streams and key value buckets in the instance's data folder.",
+      "default": true,
+      "x-stackly": { "apply": "restart" }
+    },
+    "jetstreamMaxMemoryBytes": {
+      "type": "integer",
+      "title": "JetStream memory limit (bytes)",
+      "description": "Most memory JetStream memory streams may use.",
+      "minimum": 1048576,
+      "maximum": 1099511627776,
+      "default": 1073741824,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "jetstreamMaxFileBytes": {
+      "type": "integer",
+      "title": "JetStream file limit (bytes)",
+      "description": "Most disk space JetStream file streams may use in the data folder.",
+      "minimum": 1048576,
+      "maximum": 1099511627776,
+      "default": 10737418240,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "maxPayloadBytes": {
+      "type": "integer",
+      "title": "Largest message (bytes)",
+      "description": "Largest message payload a client may publish.",
+      "minimum": 1024,
+      "maximum": 67108864,
+      "default": 1048576,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    }
+  }
+}

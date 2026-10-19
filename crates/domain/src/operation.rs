@@ -1,8 +1,19 @@
 //! Operations: the seven state machine of PRD section 18.2, the kinds of
-//! work, and progress (BR-006). The engine with its journal, locks, and
-//! idempotency comes with feature 7.
+//! work, and progress (BR-006), with the journal and lock keys the engine
+//! of feature 7 keeps for each operation (spec 0007).
+
+mod journal;
+mod lock;
 
 use jiff::Timestamp;
+
+pub use journal::{
+    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, JournalPayload,
+    JournalStep, JournalView, NewJournal, NewStep, OperationJournal, OperationTrigger,
+    RecoveryCause, StepSeq, StepState, StoredCreatedRecord, StoredJournal, StoredStep,
+    TriggerOrigin,
+};
+pub use lock::LockKey;
 
 use crate::code::code_enum;
 use crate::error::{InvariantDetail, InvariantError, Machine, ProgressError, TransitionError};
@@ -83,13 +94,14 @@ impl OperationState {
     }
 }
 
-/// How an operation in `needs_recovery` was settled by hand.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// How an operation in `needs_recovery` was settled, by hand or by the
+/// engine's automatic compensation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Outcome {
     /// It is settled as succeeded.
     Succeeded,
-    /// It is settled as failed.
-    Failed,
+    /// It is settled as failed, with why; `apply` records the failure.
+    Failed(OperationFailure),
     /// It is settled as cancelled.
     Cancelled,
 }
@@ -97,10 +109,10 @@ pub enum Outcome {
 impl Outcome {
     /// Returns the final operation state this outcome names.
     #[must_use]
-    pub const fn state(self) -> OperationState {
+    pub const fn state(&self) -> OperationState {
         match self {
             Self::Succeeded => OperationState::Succeeded,
-            Self::Failed => OperationState::Failed,
+            Self::Failed(_) => OperationState::Failed,
             Self::Cancelled => OperationState::Cancelled,
         }
     }
@@ -151,7 +163,8 @@ pub enum OperationEvent {
         /// Whether the operation declares it can resume (feature 7).
         resumable: bool,
     },
-    /// Undoing finished steps failed.
+    /// Undoing finished steps failed, or is impossible because an
+    /// irreversible step already ran.
     CompensationFailed,
     /// The engine resumes an operation that can resume (feature 7).
     Resume,
@@ -230,6 +243,40 @@ impl OperationKind {
     pub const fn deletes_data(self) -> bool {
         matches!(self, Self::PurgeInstance)
     }
+
+    /// Returns whether an operation of this kind may resume after the
+    /// daemon stopped while it ran (spec 0007, "Tabel resume per jenis
+    /// operasi"): installs, start, stop, restart, reload, environment up
+    /// and down, and backups. Every other kind is compensated when it stops
+    /// before its point of no return, and needs recovery after it.
+    #[must_use]
+    pub const fn resumable(self) -> bool {
+        matches!(
+            self,
+            Self::InstallRuntime
+                | Self::StartInstance
+                | Self::StopInstance
+                | Self::RestartInstance
+                | Self::ReloadInstance
+                | Self::EnvironmentUp
+                | Self::EnvironmentDown
+                | Self::BackupInstance
+        )
+    }
+}
+
+code_enum! {
+    /// What the user can do about an operation in `needs_recovery`.
+    pub enum RecoveryHint: RecoveryHint {
+        /// The engine compensates it on its own once the daemon is ready.
+        AutoCompensate => "auto_compensate",
+        /// It can resume from its last step.
+        Resume => "resume",
+        /// Only abandoning it, after undoing what can be undone, is left.
+        Abandon => "abandon",
+        /// It needs a look by hand.
+        Manual => "manual",
+    }
 }
 
 /// What an operation works on.
@@ -296,6 +343,8 @@ pub struct StoredOperation {
     pub progress: Progress,
     /// The failure of a `fail` event.
     pub failure: Option<OperationFailure>,
+    /// What can be done about it in `needs_recovery`.
+    pub recovery_hint: Option<RecoveryHint>,
     /// When it was created.
     pub created_at: Timestamp,
     /// When it last changed.
@@ -306,7 +355,10 @@ pub struct StoredOperation {
 
 /// One operation and where it stands.
 ///
-/// Every successful mutation raises [`Operation::revision`] by exactly 1.
+/// Its changes (`apply`, `set_stage`, `set_progress`, `set_recovery_hint`)
+/// move `updated_at` but not the revision: [`Operation::touch`] raises the
+/// revision by exactly 1, once per registry batch that touches the
+/// operation or its journal rows (spec 0007).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Operation {
     id: OperationId,
@@ -318,6 +370,7 @@ pub struct Operation {
     stage: Option<StageName>,
     progress: Progress,
     failure: Option<OperationFailure>,
+    recovery_hint: Option<RecoveryHint>,
     created_at: Timestamp,
     updated_at: Timestamp,
     revision: ResourceRevision,
@@ -338,6 +391,7 @@ impl Operation {
             stage: None,
             progress: Progress::Indeterminate,
             failure: None,
+            recovery_hint: None,
             created_at: new.created_at,
             updated_at: new.created_at,
             revision: ResourceRevision::INITIAL,
@@ -351,7 +405,8 @@ impl Operation {
     ///
     /// Returns an [`InvariantError`] with
     /// [`InvariantDetail::InconsistentRecord`] when a `failed` operation has
-    /// no failure, or counted progress is past its total.
+    /// no failure, a recovery hint is set outside `needs_recovery`, or
+    /// counted progress is past its total.
     pub fn restore(stored: StoredOperation) -> Result<Self, InvariantError> {
         let inconsistent = |reason| InvariantDetail::InconsistentRecord {
             resource: "operation",
@@ -359,6 +414,9 @@ impl Operation {
         };
         if stored.state == OperationState::Failed && stored.failure.is_none() {
             return Err(inconsistent("a failed operation has no failure").into());
+        }
+        if stored.recovery_hint.is_some() && stored.state != OperationState::NeedsRecovery {
+            return Err(inconsistent("a recovery hint is set outside needs_recovery").into());
         }
         if let Progress::Counted { done, total } = stored.progress
             && done > total
@@ -375,6 +433,7 @@ impl Operation {
             stage: stored.stage,
             progress: stored.progress,
             failure: stored.failure,
+            recovery_hint: stored.recovery_hint,
             created_at: stored.created_at,
             updated_at: stored.updated_at,
             revision: stored.revision,
@@ -435,6 +494,12 @@ impl Operation {
         self.failure.as_ref()
     }
 
+    /// Returns what can be done about it, while it is in `needs_recovery`.
+    #[must_use]
+    pub const fn recovery_hint(&self) -> Option<RecoveryHint> {
+        self.recovery_hint
+    }
+
     /// Returns when it was created.
     #[must_use]
     pub const fn created_at(&self) -> Timestamp {
@@ -447,15 +512,25 @@ impl Operation {
         self.updated_at
     }
 
-    /// Returns the revision: 1 when created, raised by exactly 1 per
-    /// successful mutation. The registry compares it before every update.
+    /// Returns the revision: 1 when created, raised by exactly 1 by each
+    /// [`Operation::touch`]. The registry compares it before every update.
     #[must_use]
     pub const fn revision(&self) -> ResourceRevision {
         self.revision
     }
 
-    /// Applies `event` at `at` and raises the revision. The first `start`
-    /// records `started_at`, and `fail` records the failure.
+    /// Raises the revision by 1 and records `at` as the last change. The
+    /// engine calls it once before it builds each registry batch that
+    /// touches the operation or its journal rows.
+    pub const fn touch(&mut self, at: Timestamp) {
+        self.updated_at = at;
+        self.revision = self.revision.next();
+    }
+
+    /// Applies `event` at `at`. The first `start` records `started_at`,
+    /// `fail` and `resolve(failed)` record the failure, and leaving
+    /// `needs_recovery` clears the recovery hint. It moves `updated_at`,
+    /// not the revision.
     ///
     /// # Errors
     ///
@@ -471,15 +546,44 @@ impl Operation {
             OperationEvent::Start => {
                 self.started_at.get_or_insert(at);
             }
-            OperationEvent::Fail(failure) => self.failure = Some(failure),
+            OperationEvent::Fail(failure) | OperationEvent::Resolve(Outcome::Failed(failure)) => {
+                self.failure = Some(failure)
+            }
             _ => {}
         }
+        if next != OperationState::NeedsRecovery {
+            self.recovery_hint = None;
+        }
         self.state = next;
-        self.touch(at);
+        self.updated_at = at;
         Ok(next)
     }
 
-    /// Reports progress at `at` and raises the revision.
+    /// Records at `at` what can be done about the operation while it is in
+    /// `needs_recovery`. It moves `updated_at`, not the revision.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`TransitionError`] outside `needs_recovery`; the
+    /// operation does not change.
+    pub fn set_recovery_hint(
+        &mut self,
+        hint: RecoveryHint,
+        at: Timestamp,
+    ) -> Result<(), TransitionError> {
+        if self.state != OperationState::NeedsRecovery {
+            return Err(TransitionError::new(
+                Machine::Operation,
+                self.state.as_code(),
+                "set_recovery_hint",
+            ));
+        }
+        self.recovery_hint = Some(hint);
+        self.updated_at = at;
+        Ok(())
+    }
+
+    /// Reports progress at `at`. It moves `updated_at`, not the revision.
     ///
     /// # Errors
     ///
@@ -494,12 +598,12 @@ impl Operation {
             return Err(ProgressError::OutOfRange { done, total });
         }
         self.progress = progress;
-        self.touch(at);
+        self.updated_at = at;
         Ok(())
     }
 
-    /// Reports the stage the operation entered at `at` and raises the
-    /// revision.
+    /// Reports the stage the operation entered at `at`. It moves
+    /// `updated_at`, not the revision.
     ///
     /// # Errors
     ///
@@ -508,14 +612,8 @@ impl Operation {
     pub fn set_stage(&mut self, stage: StageName, at: Timestamp) -> Result<(), ProgressError> {
         self.check_reporting()?;
         self.stage = Some(stage);
-        self.touch(at);
-        Ok(())
-    }
-
-    /// Records a mutation at `at`.
-    const fn touch(&mut self, at: Timestamp) {
         self.updated_at = at;
-        self.revision = self.revision.next();
+        Ok(())
     }
 
     /// Progress and stage change only while the work runs or winds down.
@@ -599,6 +697,77 @@ mod tests {
 
         assert_eq!(op.failure(), Some(&failure));
         assert!(op.state().is_final());
+    }
+
+    #[test]
+    fn a_recovery_hint_lives_only_in_needs_recovery() {
+        let mut op = operation();
+        assert!(
+            op.set_recovery_hint(RecoveryHint::Manual, at("2026-01-01T00:00:01Z"))
+                .is_err()
+        );
+        op.apply(OperationEvent::Start, at("2026-01-01T00:00:01Z"))
+            .unwrap();
+        op.apply(
+            OperationEvent::CompensationFailed,
+            at("2026-01-01T00:00:02Z"),
+        )
+        .unwrap();
+        op.set_recovery_hint(RecoveryHint::Abandon, at("2026-01-01T00:00:03Z"))
+            .unwrap();
+        assert_eq!(op.recovery_hint(), Some(RecoveryHint::Abandon));
+
+        op.apply(OperationEvent::Resume, at("2026-01-01T00:00:04Z"))
+            .unwrap();
+
+        assert_eq!(op.recovery_hint(), None);
+        assert_eq!(op.revision(), ResourceRevision::INITIAL);
+    }
+
+    #[test]
+    fn resolving_as_failed_records_the_failure() {
+        let mut op = operation();
+        op.apply(OperationEvent::Start, at("2026-01-01T00:00:01Z"))
+            .unwrap();
+        op.apply(
+            OperationEvent::Interrupted { resumable: false },
+            at("2026-01-01T00:00:02Z"),
+        )
+        .unwrap();
+        let failure = OperationFailure::new(FailureCode::INTERRUPTED, true);
+
+        let state = op
+            .apply(
+                OperationEvent::Resolve(Outcome::Failed(failure.clone())),
+                at("2026-01-01T00:00:03Z"),
+            )
+            .unwrap();
+
+        assert_eq!(state, OperationState::Failed);
+        assert_eq!(op.failure(), Some(&failure));
+    }
+
+    #[test]
+    fn only_the_kinds_in_the_resume_table_are_resumable() {
+        let resumable: Vec<&str> = OperationKind::ALL
+            .iter()
+            .filter(|kind| kind.resumable())
+            .map(|kind| kind.as_code())
+            .collect();
+
+        assert_eq!(
+            resumable,
+            [
+                "install_runtime",
+                "start_instance",
+                "stop_instance",
+                "restart_instance",
+                "reload_instance",
+                "backup_instance",
+                "environment_up",
+                "environment_down",
+            ]
+        );
     }
 
     #[test]

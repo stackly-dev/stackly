@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fake command settings",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "greeting": {
+      "type": "string",
+      "title": "Greeting",
+      "maxLength": 256,
+      "default": "hello from fake-command",
+      "x-stackly": { "apply": "reload" }
+    },
+    "mode": {
+      "type": "string",
+      "title": "Mode",
+      "enum": ["quiet", "loud"],
+      "default": "quiet",
+      "x-stackly": { "apply": "restart" }
+    },
+    "serverName": {
+      "type": "string",
+      "title": "Server name",
+      "maxLength": 64,
+      "x-stackly": { "managed": "${instance.name}" }
+    },
+    "listenPort": {
+      "type": "integer",
+      "title": "Listen port",
+      "minimum": 1,
+      "maximum": 65535,
+      "x-stackly": { "managed": "${endpoint.http.port}" }
+    },
+    "peers": {
+      "type": "array",
+      "title": "Peers",
+      "maxItems": 8,
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "title": "Name", "maxLength": 32, "pattern": "[a-z][a-z0-9-]*" },
+          "port": { "type": "integer", "title": "Port", "minimum": 1, "maximum": 65535, "default": 4222 }
+        },
+        "required": ["name"]
+      },
+      "x-stackly": { "apply": "restart", "key": "name", "visibility": "advanced" }
+    },
+    "authToken": {
+      "type": "string",
+      "title": "Auth token",
+      "maxLength": 256,
+      "x-stackly": { "apply": "immutableAfterInit", "secret": true }
+    }
+  },
+  "required": ["authToken"]
+}

@@ -263,3 +263,8 @@ Tiga sesi build fitur 2 mengambil beberapa pilihan kecil yang tidak disebut spec
 - Pesan pindaian Rust menyebut file dan fungsi, bukan nomor baris. Nomor baris butuh fitur `span-locations` di `proc-macro2`; nama fungsi sudah cukup untuk menemukan test-nya. Opsi yang ditolak: menambah fitur itu hanya untuk pesan error.
 - Gate native Swift memanggil `Test.cancel` di `prepare(for:)`, sehingga Swift Testing melaporkan test itu skipped dengan alasannya. Memanggilnya di dalam `provideScope` sebelum body jalan membuat test hilang dari output `swift test`, jadi kata "cancelled" hanya berlaku untuk `Evidence.blocked` di dalam body.
 - Pindaian Swift melewati baris komentar `//`, supaya contoh `.evidence(` dan `kind: .native` di doc comment `StacklyTestSupport` tidak dianggap kode.
+
+## Perubahan 2026-10-18 (rekonsiliasi dengan spec 0013)
+
+XCUITest pertama kini milik fitur 68, karena spec 0013 membuktikan shell dengan Swift Testing dan record manual. `StacklyTestSupport` menjadi product package `clients/swift` supaya test `StacklyUI` bisa memakai `.evidence`, dan integration test Swift yang butuh `stacklyd` memakai `STACKLY_DAEMON_BIN` dengan pola `BLOCKED` saat binary tidak ada. Tidak ada keputusan spec ini yang berubah.
+

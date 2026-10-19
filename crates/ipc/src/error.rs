@@ -111,7 +111,7 @@ impl IpcError {
             Self::Io { op, source } => {
                 ErrorBody::new(&ipc::IO_ERROR, format!("{op} failed with an os error"))
                     .with_detail("op", *op)
-                    .with_detail("kind", kind_name(source.kind()))
+                    .with_detail("kind", io_kind_name(source.kind()))
             }
             Self::EndpointOccupied { path, kind } => ErrorBody::new(
                 &ipc::ENDPOINT_OCCUPIED,
@@ -169,8 +169,11 @@ fn path_text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// `ErrorKind` in snake case, such as `permission_denied`.
-fn kind_name(kind: io::ErrorKind) -> String {
+/// `ErrorKind` in snake case, such as `permission_denied`: the
+/// `details.kind` of `ipc.io_error`. The Swift client maps errno to the same
+/// names (spec 0013, `protocols/fixtures/endpoint/checks.json`).
+#[must_use]
+pub fn io_kind_name(kind: io::ErrorKind) -> String {
     let camel = format!("{kind:?}");
     let mut snake = String::with_capacity(camel.len() + 4);
     for (index, c) in camel.chars().enumerate() {
@@ -297,8 +300,8 @@ mod tests {
         assert_eq!(body.detail("op"), Some("connect"));
         assert_eq!(body.detail("kind"), Some("permission_denied"));
         assert_eq!(body.message(), "connect failed with an os error");
-        assert_eq!(kind_name(io::ErrorKind::NotFound), "not_found");
-        assert_eq!(kind_name(io::ErrorKind::Other), "other");
+        assert_eq!(io_kind_name(io::ErrorKind::NotFound), "not_found");
+        assert_eq!(io_kind_name(io::ErrorKind::Other), "other");
     }
 
     #[test]

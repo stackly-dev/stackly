@@ -1,7 +1,7 @@
 //! How the spike starts, checks, and stops each provider (spec 0003,
 //! Langkah spike per provider). PostgreSQL and Valkey run from maintainer
 //! artifacts built on this Mac.
-// provisional: F9 (the provider manifest takes over this lifecycle)
+// provisional: F36 (the feature 36 harness builds this lifecycle from the provider packages)
 
 use std::fs;
 use std::path::{Path, PathBuf};

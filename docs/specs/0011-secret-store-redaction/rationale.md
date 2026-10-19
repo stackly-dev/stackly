@@ -678,7 +678,7 @@ Keputusan berikut diambil saat menulis spec, masing masing dengan alternatif ter
 - **Root override memakai keychain file sendiri**: dengan `STACKLY_ROOT=R`, daemon memakai `R/data/keychain/stackly.keychain-db` dengan password di file 0600, jadi root development dan suite sentinel tidak pernah menyentuh login Keychain, dan jalur kode yang sama dipakai integration test adapter. Alternatif: namespace service per root di login Keychain (rancangan awal), yang tetap menulis ke login Keychain saat test.
 - **`SecretWorker` di core, ditambah mutex di adapter**: logika antrean dan batas tunggu portabel dan bisa diuji dengan `FakeSecretStore`, sedangkan mutex adapter menjaga saklar interaksi global walau adapter dipanggil di luar worker. Alternatif: worker di dalam adapter, yang hanya bisa diuji di macOS dengan Keychain nyata.
 - **Interaksi Security framework mati sebagai default proses**: panggilan yang tersasar tidak pernah memunculkan dialog; hanya `AllowPrompt` yang menyalakannya sebentar. Alternatif: mematikan per panggilan `Never`, yang membiarkan panggilan lain memunculkan dialog.
-- **`state()` dari cache**: `secret.list` dan `daemon.status` tidak pernah tertahan di belakang dialog. Alternatif: membaca status kunci setiap kali, yang harus antre di worker.
+- **`state()` dari cache**: `secret.list` dan `DaemonInfo.secretStore` tidak pernah tertahan di belakang dialog. Alternatif: membaca status kunci setiap kali, yang harus antre di worker.
 - **Job kedaluwarsa dilewati, tulisan yang lewat batas menjadi `OutcomeUnknown`**: pemanggil tahu persis apakah tulisannya pernah dijalankan. Alternatif: satu `Busy` untuk semuanya, yang membuat hasil tulisan ambigu.
 - **Replace membaca nilai lama dan menulisnya balik kalau transaksi registry gagal**: credential yang cocok dengan database tidak hilang karena SQLite sibuk. Alternatif: menyimpan nilai lama sebagai item Keychain kedua, yang menggandakan secret yang tersimpan.
 - **Delete menghapus registry dulu, baru Keychain**: foreign key menangkap pemakaian yang baru ditambahkan, dan crash hanya meninggalkan item yatim yang tidak dipakai siapa pun. Alternatif: Keychain dulu, yang bisa meninggalkan reference terpakai tanpa nilai.
@@ -717,3 +717,24 @@ Draft spec dibaca ulang oleh model lain (Sonnet 5.5) secara read only pada 2026-
 - **Soundness**: pemetaan `OSStatus` sebagai fungsi murni yang dikonfirmasi spike dan record manual, interaksi default mati dengan mutex di adapter (aturan "konstruktor hanya lewat worker" dihapus karena `stackly-platform-macos` tidak boleh bergantung pada core), pindaian `expose` lewat token stream termasuk makro dengan `stackly-testkit` di allowlist, pengecualian frame `SecretInput` di AC-16, patokan keychain eksplisit, `learn` sebelum tulisan pertama, lock per reference untuk probe, urutan delete registry dulu, dan penjelasan bahwa ACL Keychain tidak melindungi akses lewat daemon.
 
 Hasil spike `kSecUseAuthenticationUI` dan kode `OSStatus` nyata di langkah 3 Build plan dicatat di bagian ini lewat `/architect` update spec.
+
+## Perubahan 2026-10-18 (rekonsiliasi lintas spec)
+
+Pengecekan silang Assumed lines antara spec 0005, 0006, 0009, 0011, dan 0012 menemukan selisih yang keputusannya milik spec ini. Engineer menyetujui semua perbaikan berikut sebelum fitur 11 mulai dibangun.
+
+| Selisih | Perbaikan | Alasan | Runner up |
+| --- | --- | --- | --- |
+| Kode `needs_secret` tanpa area, area `secret_store` tidak terdaftar, dan kode belum punya kategori | `secret.needs_secret` dan `secret.store_*`, tabel *Kode error di wire* dengan kategori, `details`, dan `data` | pola kode spec 0006 mewajibkan `<area>.<alasan>` di area terdaftar, dan exit code CLI berasal dari kategori | mendaftarkan area `secret_store` |
+| Revision basi dijawab `secret.conflict` | `resource.revision_mismatch` (spec 0006) | client memperlakukan semua konflik CAS dengan satu resep | kode sendiri di area `secret` |
+| Daftar reference di detail needs secret tidak muat di `details` string | `ErrorBody.items` (spec 0006) dengan `kind` `reference`, `use`, dan `effect`, paling banyak 100 item dan sisanya di `details.omitted` | daftar tetap terstruktur untuk CLI dan `SecretEntrySheet`, dan item berbasis string selalu terbaca di Swift | enum `ErrorData` terbuka (ditolak cross check: tidak bisa didecode aman) |
+| `daemon.status` tidak ada | field opsional `DaemonInfo.secretStore` | `daemon.get_info` sudah memuat info daemon lain | subsystem `secret_store` di `DaemonHealth` |
+| `generate` selalu 32 karakter, padahal secret field spec 0009 punya `minLength` dan `maxLength` | panjang dijepit ke batas field, dan `Value` atau `CopyFrom` di luar batas gagal `secret.invalid_value` | nilai bangkitan yang melanggar schema provider akan ditolak provider saat init | batas field diabaikan |
+| `shortValueNotScrubbed` camelCase dan `expectedRevision` bertipe `u64` | `short_value_not_scrubbed` dan `Revision` | aturan wire spec 0006 (nilai enum snake_case, `u64` lewat newtype) | |
+| Redaksi pesan error belum pasti jalan sebelum pemotongan 200 karakter, dan detail readiness di reply DTO belum diredaksi | redaksi sebelum `ErrorBody::new` memotong pesan; detail observasi lewat `Redactor` saat dicatat | potongan nilai bisa lolos lapis 2; reply DTO adalah jalur keluar yang sama pentingnya dengan event | redaksi hanya di event |
+| Asumsi token tersamar dari spec 0012 dan mekanisme pengiriman yang dideklarasikan per field di spec 0009 | `SecureField` native dan token teks yang ada; mekanisme mengikuti posisi token di manifest | spec 0012 tidak me restyle kontrol native, dan posisi token sudah menentukan mekanisme | token baru di spec 0012 |
+| Port keenam lewat argumen baru di `Platform::new` | `Platform::with_secrets` dengan default `UnsupportedSecretStore` (spec 0004 keputusan 18) | konstruktor tidak patah saat fitur lain menambah port | argumen keenam |
+
+Cross check model lain atas update ini menambah, atas persetujuan engineer: AC-20 (operasi hapus dibangun fitur ini sebagai satu satunya pembangun, `remove_file` untuk entri apa pun yang bukan folder termasuk socket), AC-21 (katalog kode), langkah 0 (update spec 0005 untuk method baca, `ResourceRef`, dan `WriteOp` secret dan audit sebelum langkah core), `ResolvedSecrets::for_tests` di balik fitur `test-support`, lokasi `password_file`, nilai `actor` audit, dan sumber waktu observasi blocker.
+
+Ronde 2 rekonsiliasi (2026-10-18), atas persetujuan engineer: semua penghapusan lewat `remove_owned_tree` spec 0007 (AC-20 ditulis ulang; fitur ini tidak lagi membangun `remove_file` dan `remove_empty_dir`), instance `unknown` dihitung berjalan saat sweep dan `learn_running`, dan blocker satu slot dengan prioritas spec 0010.
+
