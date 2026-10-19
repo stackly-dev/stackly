@@ -1,0 +1,4 @@
+abandoned operation 0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d04 (state failed)
+Leftovers:
+  KIND  REFERENCE                   STATE  DETAIL
+  dir   data/instances/pg\u{1b}[2J  kept   not empty

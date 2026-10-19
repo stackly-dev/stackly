@@ -6,7 +6,7 @@ mod connection;
 mod endpoint;
 mod listener;
 
-pub use client::{Client, EventStream};
+pub use client::{CallOptions, Client, EventStream};
 pub use connection::{FrameReader, FrameWriter, FramedConnection};
 pub use endpoint::{ConnectPolicy, connect_verified, verify_path, verify_peer};
 pub use listener::{Accepted, BindState, Listener, PeerCred, PeerCredSource, TokioPeerCred};

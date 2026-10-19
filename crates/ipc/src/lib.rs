@@ -25,7 +25,7 @@ pub use error::{IpcError, io_kind_name};
 pub use trust::{PathFacts, PathKind, evaluate_path, folder_reason, socket_reason};
 #[cfg(unix)]
 pub use unix::{
-    Accepted, BindState, Client, ConnectPolicy, EventStream, FrameReader, FrameWriter,
+    Accepted, BindState, CallOptions, Client, ConnectPolicy, EventStream, FrameReader, FrameWriter,
     FramedConnection, Listener, PeerCred, PeerCredSource, TokioPeerCred, connect_verified,
     verify_path, verify_peer,
 };

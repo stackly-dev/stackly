@@ -13,21 +13,28 @@ name = "stackly"
 path = "src/main.rs"
 
 [dependencies]
-clap.workspace = true
+anstream.workspace = true
+anstyle.workspace = true
+clap = { workspace = true, features = ["string"] }
+jiff.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 stackly-ipc.workspace = true
 stackly-platform.workspace = true
 stackly-protocol.workspace = true
-tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "signal", "sync", "time"] }
+unicode-width.workspace = true
+uuid.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 stackly-platform-macos.workspace = true
 
 [dev-dependencies]
+regex.workspace = true
 serde_json.workspace = true
+stackly-evidence.workspace = true
 stackly-testkit.workspace = true
-tokio = { workspace = true, features = ["io-util", "net", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["io-util", "net", "rt-multi-thread", "test-util"] }
 
 [lints]
 workspace = true

@@ -1,4 +1,4 @@
-//! The source scan of `cargo xtask check-deps`. Three rule sets:
+//! The source scan of `cargo xtask check-deps`. Five rule sets:
 //!
 //! - Library rules (spec 0004, "Peta modul dan dependency"): library crates
 //!   never read environment variables and never hardcode a machine path.
@@ -12,6 +12,14 @@
 //!   or a path ending in `::expose`) is allowed only in the modules of
 //!   [`EXPOSE_ALLOWED`]. Attribute arguments are read for this rule too, so
 //!   a call inside `#[instrument(fields(...))]` counts.
+//! - CLI rules (spec 0008, AC-11 and BR-011), for `stackly-cli` only: no
+//!   `std::process` item other than `exit`, `ExitCode`, and `id` (a `use`
+//!   of the module itself, renamed or not, and a glob count too), no
+//!   `tokio::process`, no `std::os::unix::process`, and no `print!`,
+//!   `println!`, `eprint!`, or `eprintln!`, which panic on a broken pipe.
+//! - CLI code rule (spec 0008, AC-14), for every crate but `stackly-cli`
+//!   and `stackly-protocol`: no path names `codes::cli`, so the daemon never
+//!   sends a code of the `cli` area.
 //!
 //! Each crate is read along its module tree, starting at its lib and bin
 //! targets, so `tests/` and a file only a `#[cfg(test)] mod` loads are never
@@ -54,6 +62,20 @@ const SOCKET_NAMES: [&str; 4] = ["TcpListener", "TcpStream", "TcpSocket", "UdpSo
 const SOCKET_RULE: &str = "no tcp or udp sockets (spec 0006)";
 /// The expose rule's message.
 const EXPOSE_RULE: &str = "secret expose outside the allowlist";
+/// The crate the CLI rules scan.
+const CLI_CRATE: &str = "stackly-cli";
+/// The crates that may name `codes::cli`.
+const CLI_CODES_ALLOWED: [&str; 2] = [CLI_CRATE, "stackly-protocol"];
+/// The CLI spawn rule's message.
+pub const SPAWN_RULE: &str = "the cli never spawns processes (spec 0008, BR-011)";
+/// The `std::process` items the CLI may name.
+const PROCESS_ALLOWED: [&str; 3] = ["exit", "ExitCode", "id"];
+/// The print macros the CLI never calls.
+const PRINT_MACROS: [&str; 4] = ["print", "println", "eprint", "eprintln"];
+/// The CLI print rule's message.
+const PRINT_RULE: &str = "the cli writes through its output module, never print macros, which panic on a broken pipe (spec 0008, AC-10)";
+/// The CLI code rule's message.
+const CLI_CODES_RULE: &str = "only the cli and the protocol name codes::cli, so the daemon never sends a cli code (spec 0008, AC-14)";
 /// The modules that may call `expose` on a secret value (spec 0011,
 /// *Penjaga di kode*), each with its submodules: exactly the call sites
 /// that exist. A crate of the spec's table adds its module here once it
@@ -87,6 +109,10 @@ pub struct Rules {
     pub sockets: bool,
     /// The modules of this crate that may call `expose`, as `a::b` paths.
     pub expose_allowed: &'static [&'static str],
+    /// The CLI rules: no process spawning paths, no print macros.
+    pub cli: bool,
+    /// The CLI code rule: no path naming `codes::cli`.
+    pub no_cli_codes: bool,
 }
 
 impl Rules {
@@ -100,6 +126,8 @@ impl Rules {
                 .iter()
                 .find(|(crate_name, _)| *crate_name == name)
                 .map_or(&[], |(_, modules)| *modules),
+            cli: name == CLI_CRATE,
+            no_cli_codes: !CLI_CODES_ALLOWED.contains(&name),
         }
     }
 }
@@ -381,6 +409,119 @@ impl Scan {
         }
     }
 
+    /// Reports `rule` at `span`, once per line.
+    fn report_once(&mut self, span: proc_macro2::Span, rule: &str) {
+        let line = span.start().line;
+        if !self
+            .findings
+            .iter()
+            .any(|(seen, found)| *seen == line && found == rule)
+        {
+            self.findings.push((line, rule.to_owned()));
+        }
+    }
+
+    /// Checks one path, as its segment names, against the CLI rules.
+    fn check_segments(&mut self, span: proc_macro2::Span, segments: &[String]) {
+        if self.rules.cli && spawns(segments) {
+            self.report_once(span, SPAWN_RULE);
+        }
+        if self.rules.no_cli_codes && names_cli_codes(segments) {
+            self.report_once(span, CLI_CODES_RULE);
+        }
+    }
+
+    /// Reports a print macro call by its name.
+    fn check_macro_name(&mut self, ident: &proc_macro2::Ident) {
+        if self.rules.cli && PRINT_MACROS.iter().any(|name| ident == name) {
+            self.report_once(ident.span(), PRINT_RULE);
+        }
+    }
+
+    /// Reads a macro body for paths (`a :: b :: c` runs of identifiers)
+    /// and print macro calls (`println !`), for the CLI rules.
+    fn check_token_paths(&mut self, tokens: TokenStream) {
+        if !self.rules.cli && !self.rules.no_cli_codes {
+            return;
+        }
+        let tokens: Vec<TokenTree> = tokens.into_iter().collect();
+        let mut index = 0;
+        while index < tokens.len() {
+            match &tokens[index] {
+                TokenTree::Group(group) => self.check_token_paths(group.stream()),
+                TokenTree::Ident(first) => {
+                    let mut segments = vec![first.to_string()];
+                    let mut next = index + 1;
+                    while let [
+                        TokenTree::Punct(colon),
+                        TokenTree::Punct(second),
+                        TokenTree::Ident(ident),
+                        ..,
+                    ] = &tokens[next..]
+                        && colon.as_char() == ':'
+                        && colon.spacing() == Spacing::Joint
+                        && second.as_char() == ':'
+                    {
+                        segments.push(ident.to_string());
+                        next += 3;
+                    }
+                    if let Some(TokenTree::Punct(bang)) = tokens.get(next)
+                        && bang.as_char() == '!'
+                        && let Some(TokenTree::Ident(name)) = tokens.get(next - 1)
+                    {
+                        self.check_macro_name(name);
+                    }
+                    self.check_segments(first.span(), &segments);
+                    index = next;
+                    continue;
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+    }
+
+    /// Checks every path a `use` tree imports against the CLI rules.
+    fn check_cli_use(&mut self, tree: &UseTree, prefix: &mut Vec<String>) {
+        match tree {
+            UseTree::Path(path) => {
+                prefix.push(path.ident.to_string());
+                self.check_cli_use(&path.tree, prefix);
+                prefix.pop();
+            }
+            UseTree::Group(group) => {
+                for item in &group.items {
+                    self.check_cli_use(item, prefix);
+                }
+            }
+            UseTree::Name(name) => {
+                let full = imported(prefix, &name.ident);
+                self.check_use_target(name.ident.span(), &full);
+            }
+            UseTree::Rename(rename) => {
+                let full = imported(prefix, &rename.ident);
+                self.check_use_target(rename.ident.span(), &full);
+            }
+            UseTree::Glob(glob) => {
+                let mut full = prefix.clone();
+                full.push("*".to_owned());
+                self.check_use_target(glob.span(), &full);
+            }
+        }
+    }
+
+    /// Checks one imported path. Importing the `std::process` module itself
+    /// or its glob would let a later path bypass the item check, so both
+    /// count as spawning.
+    fn check_use_target(&mut self, span: proc_macro2::Span, full: &[String]) {
+        if self.rules.cli && (spawns(full) || imports_process_module(full)) {
+            self.report_once(span, SPAWN_RULE);
+        }
+        if self.rules.no_cli_codes && names_cli_codes(full) {
+            self.report_once(span, CLI_CODES_RULE);
+        }
+    }
+
     /// The module path of a `mod name;` at the current node.
     fn child_module_path(&self, name: &str) -> Vec<String> {
         self.module_path
@@ -479,11 +620,16 @@ impl<'ast> Visit<'ast> for Scan {
         {
             self.expose_call(last.span());
         }
+        if let Some(first) = segments.first() {
+            let names: Vec<String> = segments.iter().map(ToString::to_string).collect();
+            self.check_segments(first.span(), &names);
+        }
         visit::visit_path(self, node);
     }
 
     fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
         self.check_use(&node.tree, None);
+        self.check_cli_use(&node.tree, &mut Vec::new());
         visit::visit_item_use(self, node);
     }
 
@@ -496,14 +642,60 @@ impl<'ast> Visit<'ast> for Scan {
     }
 
     fn visit_macro(&mut self, node: &'ast Macro) {
+        if let Some(name) = node.path.segments.last() {
+            self.check_macro_name(&name.ident);
+        }
         self.check_tokens(node.tokens.clone());
         self.check_expose_tokens(node.tokens.clone());
+        self.check_token_paths(node.tokens.clone());
         visit::visit_macro(self, node);
     }
 }
 
 fn is_env_read(ident: &syn::Ident) -> bool {
     ENV_READS.iter().any(|read| ident == read)
+}
+
+/// The path a `use` leaf imports: `self` stands for its parent module.
+fn imported(prefix: &[String], leaf: &syn::Ident) -> Vec<String> {
+    let mut full = prefix.to_vec();
+    if leaf != "self" {
+        full.push(leaf.to_string());
+    }
+    full
+}
+
+/// True when `segments` reach a process spawning API: a `std::process`
+/// item other than [`PROCESS_ALLOWED`], or anything under `tokio::process`
+/// or `std::os::unix::process`.
+fn spawns(segments: &[String]) -> bool {
+    segments.windows(2).enumerate().any(|(index, pair)| {
+        let [first, second] = pair else { return false };
+        if second != "process" {
+            return false;
+        }
+        match first.as_str() {
+            "std" => segments
+                .get(index + 2)
+                .is_some_and(|item| !PROCESS_ALLOWED.contains(&item.as_str())),
+            "tokio" | "unix" => true,
+            _ => false,
+        }
+    })
+}
+
+/// True when an imported path is the `std::process` module itself or its
+/// glob, such as `use std::process as p;` or `use std::process::*;`.
+fn imports_process_module(full: &[String]) -> bool {
+    matches!(full, [.., std, process] if std == "std" && process == "process")
+        || matches!(full, [.., std, process, glob] if std == "std" && process == "process" && glob == "*")
+}
+
+/// True when `segments` name the `cli` area module of the error catalog.
+fn names_cli_codes(segments: &[String]) -> bool {
+    segments
+        .windows(2)
+        .any(|pair| pair[0] == "codes" && pair[1] == "cli")
 }
 
 /// The attributes of the item kinds that can carry `#[cfg(test)]`.
@@ -890,6 +1082,8 @@ mod tests {
                 library: false,
                 sockets: true,
                 expose_allowed: &[],
+                cli: false,
+                no_cli_codes: true,
             }
         );
         assert_eq!(
@@ -898,8 +1092,151 @@ mod tests {
                 library: false,
                 sockets: false,
                 expose_allowed: &[],
+                cli: false,
+                no_cli_codes: true,
             }
         );
+    }
+
+    const PRINT: &str = "the cli writes through its output module, never print macros, which panic on a broken pipe (spec 0008, AC-10)";
+    const CLI_CODES: &str = "only the cli and the protocol name codes::cli, so the daemon never sends a cli code (spec 0008, AC-14)";
+
+    /// The line numbers of the findings with `rule`, in order.
+    fn lines_of(found: &[String], rule: &str) -> Vec<usize> {
+        found
+            .iter()
+            .filter(|message| message.ends_with(rule))
+            .map(|message| {
+                let (_, rest) = message.split_once(".rs:").unwrap();
+                rest.split(':').next().unwrap().parse().unwrap()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_cli_rules_scan_only_the_cli_and_the_code_rule_spares_the_cli_and_the_protocol() {
+        let cli = Rules::for_crate("stackly-cli");
+        assert!(cli.cli && !cli.no_cli_codes && cli.sockets);
+        let protocol = Rules::for_crate("stackly-protocol");
+        assert!(!protocol.cli && !protocol.no_cli_codes);
+        for name in [
+            "stacklyd",
+            "stackly-ipc",
+            "stackly-testkit",
+            "stackly-core",
+            "xtask",
+        ] {
+            let rules = Rules::for_crate(name);
+            assert!(!rules.cli && rules.no_cli_codes, "{name}");
+        }
+    }
+
+    #[test]
+    fn every_process_spawning_path_in_the_cli_is_reported_with_its_line() {
+        let found = scan_as(
+            "stackly-cli",
+            &[(
+                "src/lib.rs",
+                "use std::process::Command;\n\
+                 pub fn a() { let _ = std::process::Command::new(\"x\"); }\n\
+                 use std::process as p;\n\
+                 pub fn b() { let _ = p::Command::new(\"x\"); }\n\
+                 use std::process::*;\n\
+                 pub fn c() { let _ = tokio::process::Command::new(\"x\"); }\n\
+                 use std::os::unix::process::CommandExt;\n\
+                 use std::{io, process};\n\
+                 use std::process::{self, exit};\n\
+                 pub fn d() -> String { format!(\"{:?}\", std::process::Stdio::null()) }\n\
+                 use tokio::{process::Child, sync};\n\
+                 pub fn e() { let _ = ::std::process::Output::default; }\n",
+            )],
+        );
+
+        assert_eq!(
+            lines_of(&found, SPAWN_RULE),
+            [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12],
+            "{found:?}"
+        );
+        assert_eq!(found.len(), 11, "{found:?}");
+        assert!(found[0].starts_with("stackly-cli src/lib.rs:1: "));
+    }
+
+    #[test]
+    fn exit_exit_code_id_clap_command_and_test_code_pass_the_spawn_rule() {
+        let found = scan_as(
+            "stackly-cli",
+            &[(
+                "src/lib.rs",
+                "//! Never `std::process::Command`, and never println!.\n\
+                 use std::process::{ExitCode, exit, id as pid};\n\
+                 pub fn a() -> std::process::ExitCode { std::process::ExitCode::SUCCESS }\n\
+                 pub fn b() -> u32 { std::process::id() }\n\
+                 pub fn c() -> ! { std::process::exit(2) }\n\
+                 pub fn d() -> clap::Command { clap::Command::new(\"stackly\") }\n\
+                 pub const NOTE: &str = \"std::process::Command\";\n\
+                 pub fn e() { let _ = format!(\"{}\", std::process::id()); }\n\
+                 pub fn f(out: &mut impl std::io::Write) { let _ = writeln!(out, \"x\"); }\n\
+                 #[cfg(test)]\n\
+                 mod tests {\n\
+                     #[test]\n\
+                     fn t() { std::process::Command::new(\"x\"); println!(\"x\"); }\n\
+                 }\n",
+            )],
+        );
+
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn print_macros_in_the_cli_are_reported_also_inside_other_macros() {
+        let found = scan_as(
+            "stackly-cli",
+            &[(
+                "src/lib.rs",
+                "pub fn a() { println!(\"x\"); }\n\
+                 pub fn b() { eprintln!(\"x\"); }\n\
+                 pub fn c() { print!(\"x\"); }\n\
+                 pub fn d() { std::eprint!(\"x\"); }\n\
+                 pub fn e(v: Option<u8>) { let _ = v.map(|_| { tokio::select! { () = f() => println!(\"x\") } }); }\n\
+                 macro_rules! say { () => { println!(\"x\") }; }\n",
+            )],
+        );
+
+        assert_eq!(lines_of(&found, PRINT), [1, 2, 3, 4, 5, 6], "{found:?}");
+        assert_eq!(found.len(), 6, "{found:?}");
+        let daemon = scan_as(
+            "stacklyd",
+            &[("src/lib.rs", "pub fn a() { println!(\"x\"); }\n")],
+        );
+        assert!(daemon.is_empty(), "{daemon:?}");
+    }
+
+    #[test]
+    fn codes_cli_outside_the_cli_and_the_protocol_is_reported() {
+        let files = [(
+            "src/lib.rs",
+            "use stackly_protocol::codes::cli;\n\
+             use stackly_protocol::codes::{self, ipc, cli as c};\n\
+             pub fn a() -> &'static str { stackly_protocol::codes::cli::USAGE.code }\n\
+             pub fn b() -> String { format!(\"{}\", codes::cli::PANIC.code) }\n\
+             pub fn c() -> &'static str { codes::ipc::CALL_TIMEOUT.code }\n\
+             pub const NOTE: &str = \"codes::cli\";\n\
+             #[cfg(test)]\n\
+             mod tests { fn t() { let _ = codes::cli::USAGE; } }\n",
+        )];
+
+        for name in ["stacklyd", "stackly-testkit", "stackly-ipc"] {
+            let found = scan_as(name, &files);
+            assert_eq!(
+                lines_of(&found, CLI_CODES),
+                [1, 2, 3, 4],
+                "{name}: {found:?}"
+            );
+            assert_eq!(found.len(), 4, "{name}: {found:?}");
+        }
+        assert!(scan_as("stackly-protocol", &files).is_empty());
+        let cli = scan_as("stackly-cli", &files);
+        assert!(cli.is_empty(), "{cli:?}");
     }
 
     const EXPOSE: &str = "secret expose outside the allowlist";

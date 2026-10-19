@@ -13,13 +13,16 @@ use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use stackly_protocol::codes::ipc;
+use stackly_protocol::codes::{ipc, request};
 use stackly_protocol::events::{SubscribeParams, Subscribed};
 use stackly_protocol::handshake::{ClientInfo, HandshakeAccepted, HandshakeParams};
-use stackly_protocol::json::{DecodedFrame, decode_server_frame};
+use stackly_protocol::json::{
+    DecodedFrame, FieldCode, decode_server_frame, is_idempotency_key, is_request_id,
+};
 use stackly_protocol::limits::EVENT_BUFFER_LEN;
 use stackly_protocol::{
-    CONTRACT_DIGEST, Call, ErrorBody, ErrorFrame, ProtocolVersion, Reply, Request, Response,
+    CONTRACT_DIGEST, Call, ErrorBody, ErrorFrame, FieldError, ProtocolVersion, Reply, Request,
+    Response,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -89,13 +92,19 @@ impl Shared {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Adds a waiting call, unless the connection already ended. Both
-    /// happen under one lock with [`Self::close`], so no waiter is left
-    /// behind unanswered.
+    /// Adds a waiting call, unless the connection already ended or another
+    /// call still waits under the same `requestId`. Both happen under one
+    /// lock with [`Self::close`], so no waiter is left behind unanswered.
     fn register(&self, request_id: String, waiter: Waiter) -> Result<(), Box<ErrorBody>> {
         let mut state = self.lock();
         if let Some(closed) = &state.closed {
             return Err(closed.call_error());
+        }
+        if state.pending.contains_key(&request_id) {
+            return Err(Box::new(ErrorBody::new(
+                &request::DUPLICATE_ID,
+                "another call with this request id is still waiting on the connection",
+            )));
         }
         state.pending.insert(request_id, waiter);
         Ok(())
@@ -186,6 +195,66 @@ impl Shared {
             Some(Closed::Error(error)) => Some(error.clone()),
             _ => None,
         }
+    }
+}
+
+/// Per call choices for [`Client::call_detailed`] and
+/// [`Client::subscribe_detailed`]. The default sends a fresh lowercase
+/// UUID v7 `requestId` and no idempotency key, like [`Client::call`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CallOptions {
+    /// The `requestId` to send, so the caller knows it before and without a
+    /// reply. It must follow the spec 0006 format (1 to 64 bytes of
+    /// `[A-Za-z0-9._:-]`); `None` makes a UUID v7.
+    pub request_id: Option<String>,
+    /// The `idempotencyKey` to send (1 to 128 bytes of printable ASCII
+    /// without spaces), for a method that starts an operation.
+    pub idempotency_key: Option<String>,
+}
+
+impl CallOptions {
+    /// These options, sending `request_id`.
+    #[must_use]
+    pub fn with_request_id(mut self, request_id: impl Into<String>) -> Self {
+        self.request_id = Some(request_id.into());
+        self
+    }
+
+    /// These options, sending `idempotency_key`.
+    #[must_use]
+    pub fn with_idempotency_key(mut self, idempotency_key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(idempotency_key.into());
+        self
+    }
+
+    /// The `requestId` to send and the request's idempotency key, after
+    /// checking both formats.
+    fn into_parts(self) -> Result<(String, Option<String>), Box<ErrorBody>> {
+        let mut fields = Vec::new();
+        if let Some(id) = &self.request_id
+            && !is_request_id(id)
+        {
+            fields.push(FieldError::new("requestId", FieldCode::InvalidFormat));
+        }
+        if let Some(key) = &self.idempotency_key
+            && !is_idempotency_key(key)
+        {
+            fields.push(FieldError::new("idempotencyKey", FieldCode::InvalidFormat));
+        }
+        if !fields.is_empty() {
+            return Err(Box::new(
+                ErrorBody::new(
+                    &request::MALFORMED,
+                    "the request id or idempotency key has a bad format, so nothing was sent",
+                )
+                .with_fields(fields),
+            ));
+        }
+        let request_id = self
+            .request_id
+            .unwrap_or_else(|| Uuid::now_v7().to_string());
+        Ok((request_id, self.idempotency_key))
     }
 }
 
@@ -285,7 +354,26 @@ impl Client {
     /// that ended it. The error is boxed, like every `Result` carrying an
     /// [`ErrorBody`].
     pub async fn call(&self, call: Call) -> Result<Reply, Box<ErrorBody>> {
-        self.request(call).await.map(|answer| answer.reply)
+        self.call_detailed(call, CallOptions::default()).await
+    }
+
+    /// [`Self::call`] with the caller's [`CallOptions`]: its own
+    /// `requestId`, known before the request is sent and kept even when no
+    /// reply ever comes, and an idempotency key. Nothing on the wire
+    /// changes.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Self::call`]; `request.malformed` with `fields` when
+    /// the request id or the idempotency key breaks its format, and
+    /// `request.duplicate_id` when another call with the same request id
+    /// still waits on this connection, both before anything is sent.
+    pub async fn call_detailed(
+        &self,
+        call: Call,
+        options: CallOptions,
+    ) -> Result<Reply, Box<ErrorBody>> {
+        self.request(call, options).await.map(|answer| answer.reply)
     }
 
     /// Starts an event subscription.
@@ -303,7 +391,23 @@ impl Client {
         &self,
         params: SubscribeParams,
     ) -> Result<(Subscribed, EventStream), Box<ErrorBody>> {
-        match self.request(Call::EventsSubscribe(params)).await? {
+        self.subscribe_detailed(params, CallOptions::default())
+            .await
+    }
+
+    /// [`Self::subscribe`] with the caller's [`CallOptions`], like
+    /// [`Self::call_detailed`].
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Self::subscribe`] and the option checks of
+    /// [`Self::call_detailed`].
+    pub async fn subscribe_detailed(
+        &self,
+        params: SubscribeParams,
+        options: CallOptions,
+    ) -> Result<(Subscribed, EventStream), Box<ErrorBody>> {
+        match self.request(Call::EventsSubscribe(params), options).await? {
             Answer {
                 reply: Reply::EventsSubscribe(subscribed),
                 events: Some(events),
@@ -321,8 +425,8 @@ impl Client {
         }
     }
 
-    async fn request(&self, call: Call) -> Answered {
-        let request_id = Uuid::now_v7().to_string();
+    async fn request(&self, call: Call, options: CallOptions) -> Answered {
+        let (request_id, idempotency_key) = options.into_parts()?;
         let (sender, receiver) = oneshot::channel();
         let waiter = Waiter {
             method: call.method(),
@@ -335,7 +439,7 @@ impl Client {
         };
         let request = Request {
             request_id: request_id.clone(),
-            idempotency_key: None,
+            idempotency_key,
             call,
         };
         let payload = serde_json::to_vec(&request)

@@ -43,9 +43,145 @@
     {
       "name": "internal",
       "owner": "spec 0006"
+    },
+    {
+      "name": "cli",
+      "owner": "spec 0008"
     }
   ],
   "codes": [
+    {
+      "code": "cli.cancel_not_applied",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "state"
+      ],
+      "items": null,
+      "summary": "the operation ended in another state than cancelled after a cancel"
+    },
+    {
+      "code": "cli.confirmation_declined",
+      "category": "cancelled",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the person at the terminal did not answer y or yes"
+    },
+    {
+      "code": "cli.confirmation_required",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "flag"
+      ],
+      "items": null,
+      "summary": "a confirmation is needed while the cli runs noninteractive without the approval flag"
+    },
+    {
+      "code": "cli.input_required",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "input"
+      ],
+      "items": null,
+      "summary": "a prompt is needed while the cli runs noninteractive"
+    },
+    {
+      "code": "cli.interrupted",
+      "category": "cancelled",
+      "retryable": false,
+      "details": [
+        "state"
+      ],
+      "items": null,
+      "summary": "ctrl+c stopped the wait while the operation keeps running, exit 130"
+    },
+    {
+      "code": "cli.invalid_environment",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "variable",
+        "reason"
+      ],
+      "items": null,
+      "summary": "an environment variable the cli reads holds a value it refuses"
+    },
+    {
+      "code": "cli.operation_cancelled",
+      "category": "cancelled",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "fallback for an operation that was cancelled, which carries no error"
+    },
+    {
+      "code": "cli.operation_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "fallback for an operation that failed without an error in its summary"
+    },
+    {
+      "code": "cli.operation_needs_recovery",
+      "category": "failed",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "fallback for an operation that needs recovery without an error in its summary"
+    },
+    {
+      "code": "cli.panic",
+      "category": "internal",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the cli panicked, and the panic message is never shown"
+    },
+    {
+      "code": "cli.platform_unavailable",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the platform roots or the socket path cannot be worked out"
+    },
+    {
+      "code": "cli.usage",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "kind"
+      ],
+      "items": null,
+      "summary": "the arguments do not parse, written as an envelope only with --json"
+    },
+    {
+      "code": "cli.wait_disconnected",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "state"
+      ],
+      "items": null,
+      "summary": "the connection to the daemon did not come back within 30 seconds while waiting"
+    },
+    {
+      "code": "cli.wait_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "state",
+        "timeoutSeconds"
+      ],
+      "items": null,
+      "summary": "the wait timeout ran out before the operation reached a final state"
+    },
     {
       "code": "daemon.lock_held",
       "category": "conflict",

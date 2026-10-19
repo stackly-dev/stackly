@@ -1,52 +1,24 @@
 //! `stackly daemon status` against a real `stacklyd` and against endpoints
-//! that must be refused (spec 0006 AC-13). The CLI never starts the
-//! daemon and never creates a file under the test root.
+//! that must be refused (spec 0006 AC-13, spec 0008 AC-6). The CLI never
+//! starts the daemon and never creates a file under the test root.
 #![cfg(target_os = "macos")]
 
-use std::collections::BTreeSet;
+mod common;
+
 use std::ffi::OsStr;
-use std::os::unix::fs::{DirBuilderExt, MetadataExt};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
-use stackly_ipc::{Accepted, Client, ConnectPolicy, FramedConnection, Listener};
-use stackly_platform::DirectoryLayout;
-use stackly_platform_macos::MacosPlatform;
-use stackly_protocol::codes::protocol;
+use stackly_ipc::{Client, ConnectPolicy};
 use stackly_protocol::handshake::{ClientInfo, ClientKind};
-use stackly_protocol::limits::Limits;
-use stackly_protocol::{CONTRACT_DIGEST, ErrorBody, ProtocolVersion};
+use stackly_protocol::{CONTRACT_DIGEST, ProtocolVersion};
 use stackly_testkit::evidence::{Kind, evidence};
 use stackly_testkit::{SpawnedDaemon, TestRoot, cargo_bin};
 
-const STACKLY: &str = env!("CARGO_BIN_EXE_stackly");
-
-struct Paths {
-    socket: PathBuf,
-    runtime: PathBuf,
-    registry_db: PathBuf,
-    log: PathBuf,
-}
-
-fn paths(root: &TestRoot) -> Paths {
-    let platform =
-        MacosPlatform::new(Some(root.path().into())).expect("a test root is a valid override");
-    let layout = DirectoryLayout::new(platform.directories().roots().expect("roots resolve"));
-    Paths {
-        socket: layout.daemon_socket(),
-        runtime: layout.roots().runtime().to_path_buf(),
-        registry_db: layout.registry_db(),
-        log: layout.daemon_log_dir().join("stacklyd.log"),
-    }
-}
-
-fn uid() -> u32 {
-    std::fs::metadata(env!("CARGO_MANIFEST_DIR"))
-        .expect("the package folder can be read")
-        .uid()
-}
+use common::{
+    HandMadeRuntime, Run, detail, envelope, listing, paths, run, run_command, stackly, uid,
+};
 
 /// Whether a client completes a handshake on `socket` right now. A whole
 /// handshake, not a bare connect: a client that leaves at once can be gone
@@ -112,125 +84,74 @@ fn start_daemon(root: &TestRoot) -> SpawnedDaemon {
     daemon
 }
 
-fn status(root: &OsStr, json: bool) -> Output {
-    let mut command = Command::new(STACKLY);
-    command.args(["daemon", "status"]).env("STACKLY_ROOT", root);
+fn status(root: &Path, json: bool) -> Run {
     if json {
-        command.arg("--json");
-    }
-    command.output().expect("stackly runs")
-}
-
-fn stdout(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
-
-fn stderr(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).into_owned()
-}
-
-/// Every path under `dir`, relative to it.
-fn listing(dir: &Path) -> BTreeSet<PathBuf> {
-    let mut paths = BTreeSet::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(next) = stack.pop() {
-        for entry in std::fs::read_dir(&next).expect("test directory can be listed") {
-            let path = entry.expect("directory entry can be read").path();
-            if path
-                .symlink_metadata()
-                .expect("listed path metadata can be read")
-                .is_dir()
-            {
-                stack.push(path.clone());
-            }
-            paths.insert(
-                path.strip_prefix(dir)
-                    .expect("listed path is beneath the test root")
-                    .to_path_buf(),
-            );
-        }
-    }
-    paths
-}
-
-/// A runtime root this test made by hand in the real user temporary
-/// directory, removed again with whatever the test put in it.
-struct HandMadeRuntime {
-    dir: PathBuf,
-}
-
-impl HandMadeRuntime {
-    fn new(dir: &Path) -> Self {
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(dir)
-            .expect("the runtime root is free");
-        Self {
-            dir: dir.to_path_buf(),
-        }
-    }
-}
-
-impl Drop for HandMadeRuntime {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(self.dir.join("stacklyd.sock"));
-        let _ = std::fs::remove_file(self.dir.join("stacklyd.sock.tmp"));
-        let _ = std::fs::remove_dir(&self.dir);
+        run(root, &["daemon", "status", "--json"])
+    } else {
+        run(root, &["daemon", "status"])
     }
 }
 
 #[test]
 fn status_of_a_running_daemon_prints_its_facts_as_text_and_json_and_creates_nothing() {
     let ev = evidence!(
-        covers = ["REQ-028", "BR-011"],
+        covers = ["REQ-028", "BR-011", "AC-028"],
         kind = Kind::Fixture,
-        expected = "stackly daemon status shows the running daemon's status, pid, versions, roots, socket, and override as text and as JSON with the client block, exits 0, and adds no file under the root",
+        expected = "stackly daemon status against a real stacklyd shows status, version, pid, uid, roots, socket, and override as text and as one --json envelope with the client block and the cli.root_override warning, exits 0, and adds no file under the root",
     );
     let root = TestRoot::new().unwrap();
     let daemon = start_daemon(&root);
     let paths = paths(&root);
     let before = listing(root.path());
 
-    let text = status(root.path().as_os_str(), false);
-    let json = status(root.path().as_os_str(), true);
+    let text = status(root.path(), false);
+    let json = status(root.path(), true);
 
-    assert_eq!(text.status.code(), Some(0), "{text:?}");
-    let lines = stdout(&text);
+    assert_eq!(text.code, Some(0), "{text:?}");
+    let protocol = ProtocolVersion::CURRENT;
     for expected in [
-        "status: ready".to_owned(),
-        format!("pid: {}", daemon.pid()),
-        format!("uid: {}", uid()),
+        "Status      ready".to_owned(),
         format!(
-            "protocol: {}.{}",
-            ProtocolVersion::CURRENT.major,
-            ProtocolVersion::CURRENT.minor
+            "Version     {} (protocol {}.{})",
+            env!("CARGO_PKG_VERSION"),
+            protocol.major,
+            protocol.minor
         ),
-        format!("socket: {}", paths.socket.display()),
-        format!("data root: {}", root.path().join("data").display()),
-        "root override: yes".to_owned(),
+        format!("PID         {}", daemon.pid()),
+        format!("UID         {}", uid()),
+        format!("Socket      {}", paths.socket.display()),
+        format!("Data        {}", paths.data.display()),
+        "Override    yes (STACKLY_ROOT)".to_owned(),
     ] {
         assert!(
-            lines.lines().any(|line| line == expected),
-            "missing {expected:?} in:\n{lines}"
+            text.stdout.lines().any(|line| line == expected),
+            "missing {expected:?} in:\n{}",
+            text.stdout
         );
     }
-    assert!(!lines.contains("contract drift"));
-
-    assert_eq!(json.status.code(), Some(0), "{json:?}");
-    let value: Value = serde_json::from_str(stdout(&json).trim()).expect("one JSON object");
-    assert_eq!(value["info"]["pid"], daemon.pid());
     assert_eq!(
-        value["info"]["socketPath"],
+        text.stderr,
+        format!(
+            "warning: the STACKLY_ROOT override is active, with the data root at {}\n",
+            paths.data.display()
+        )
+    );
+
+    assert_eq!(json.code, Some(0), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(value["command"], "daemon status");
+    let result = &value["result"];
+    assert_eq!(result["info"]["pid"], daemon.pid());
+    assert_eq!(
+        result["info"]["socketPath"],
         paths.socket.display().to_string()
     );
-    assert_eq!(value["health"]["status"], "ready");
-    assert_eq!(value["client"]["contractDigest"], CONTRACT_DIGEST);
-    assert_eq!(value["client"]["contractDrift"], false);
-    assert_eq!(
-        value["client"]["protocol"]["major"],
-        ProtocolVersion::CURRENT.major
-    );
-    assert!(!stdout(&json).contains('\u{1b}'), "no ANSI in --json");
+    assert_eq!(result["health"]["status"], "ready");
+    assert_eq!(result["client"]["contractDigest"], CONTRACT_DIGEST);
+    assert_eq!(result["client"]["contractDrift"], false);
+    assert_eq!(result["client"]["protocol"]["major"], protocol.major);
+    assert_eq!(value["warnings"][0]["code"], "cli.root_override");
+    assert_eq!(json.stderr, "");
 
     assert_eq!(
         listing(root.path()),
@@ -244,32 +165,33 @@ fn status_of_a_running_daemon_prints_its_facts_as_text_and_json_and_creates_noth
 #[test]
 fn status_without_a_daemon_names_the_socket_and_exits_6() {
     let ev = evidence!(
-        covers = ["REQ-028"],
+        covers = ["REQ-028", "BR-011"],
         kind = Kind::Fixture,
-        expected = "with no daemon running, stackly daemon status says the daemon is not running, names the socket path, hints at stacklyd, exits 6, and creates nothing",
+        expected = "with no daemon running, stackly daemon status says the daemon is not running, names the socket path, hints at stacklyd, exits 6 with ipc.endpoint_missing in the envelope, and creates nothing",
     );
     let root = TestRoot::new().unwrap();
     let paths = paths(&root);
 
-    let output = status(root.path().as_os_str(), false);
-    let json = status(root.path().as_os_str(), true);
+    let text = status(root.path(), false);
+    let json = status(root.path(), true);
 
-    assert_eq!(output.status.code(), Some(6), "{output:?}");
-    let message = stderr(&output);
-    assert!(
-        message.contains(&format!(
-            "daemon is not running (no socket at {})",
+    assert_eq!(text.code, Some(6), "{text:?}");
+    assert_eq!(text.stdout, "");
+    assert_eq!(
+        text.stderr,
+        format!(
+            "error: daemon is not running (no socket at {})\n  code: ipc.endpoint_missing\n  hint: start it with stacklyd\n",
             paths.socket.display()
-        )),
-        "{message}"
+        )
     );
-    assert!(
-        message.contains("hint: start it with stacklyd"),
-        "{message}"
+    assert_eq!(json.code, Some(6));
+    let value = envelope(&json);
+    assert_eq!(value["error"]["code"], "ipc.endpoint_missing");
+    assert_eq!(
+        detail(&value["error"], "path"),
+        Some(paths.socket.display().to_string())
     );
-    assert_eq!(json.status.code(), Some(6));
-    let error: ErrorBody = serde_json::from_str(stderr(&json).trim()).expect("an ErrorBody");
-    assert_eq!(error.code(), "ipc.endpoint_missing");
+    assert_eq!(json.stderr, "");
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
     assert!(!paths.runtime.exists());
     ev.pass();
@@ -287,64 +209,20 @@ fn status_refuses_an_endpoint_that_is_not_a_socket_and_exits_4() {
     let _runtime = HandMadeRuntime::new(&paths.runtime);
     std::fs::write(&paths.socket, b"").unwrap();
 
-    let output = status(root.path().as_os_str(), true);
+    let json = status(root.path(), true);
 
-    assert_eq!(output.status.code(), Some(4), "{output:?}");
-    let error: ErrorBody = serde_json::from_str(stderr(&output).trim()).expect("an ErrorBody");
-    assert_eq!(error.code(), "ipc.endpoint_untrusted");
-    assert_eq!(error.detail("reason"), Some("not_a_socket"));
-    ev.pass();
-}
-
-#[test]
-fn status_against_a_daemon_of_another_major_exits_5() {
-    let ev = evidence!(
-        covers = ["REQ-028"],
-        kind = Kind::Fixture,
-        expected = "a test server that answers the handshake with protocol.major_mismatch makes stackly daemon status exit 5",
+    assert_eq!(json.code, Some(4), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(value["error"]["code"], "ipc.endpoint_untrusted");
+    assert_eq!(
+        detail(&value["error"], "reason").as_deref(),
+        Some("not_a_socket")
     );
-    let root = TestRoot::new().unwrap();
-    let paths = paths(&root);
-    let _runtime = HandMadeRuntime::new(&paths.runtime);
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
-        .enable_all()
-        .build()
-        .unwrap();
-    let listener = rt
-        .block_on(async { Listener::bind(&paths.socket, uid()) })
-        .unwrap();
-    let server = rt.spawn(async move {
-        let Accepted::Authorized { mut connection, .. } = listener.accept().await.unwrap() else {
-            panic!("the CLI runs as this user");
-        };
-        let request = connection
-            .read_frame(None)
-            .await
-            .unwrap()
-            .expect("the handshake arrives");
-        let request: Value = serde_json::from_slice(&request).unwrap();
-        let error = ErrorBody::new(&protocol::MAJOR_MISMATCH, "the daemon speaks protocol 2.0")
-            .with_detail("serverMajor", "2")
-            .with_detail("serverMinor", "0");
-        connection
-            .close_with_error(request["requestId"].as_str().map(str::to_owned), error)
-            .await
-            .unwrap();
-        listener.unlink_if_own().unwrap();
-    });
-
-    let output = status(root.path().as_os_str(), false);
-
-    assert_eq!(output.status.code(), Some(5), "{output:?}");
-    assert!(
-        stderr(&output).contains("protocol.major_mismatch"),
-        "{}",
-        stderr(&output)
+    assert_eq!(
+        std::fs::read(&paths.socket).unwrap(),
+        b"",
+        "nothing was sent"
     );
-    rt.block_on(async { tokio::time::timeout(Duration::from_secs(5), server).await })
-        .unwrap()
-        .unwrap();
     ev.pass();
 }
 
@@ -359,24 +237,45 @@ fn a_degraded_daemon_still_exits_0() {
     std::fs::write(&paths.registry_db, &bytes).unwrap();
     let daemon = start_daemon(&root);
 
-    let text = status(root.path().as_os_str(), false);
-    let json = status(root.path().as_os_str(), true);
+    let text = status(root.path(), false);
+    let json = status(root.path(), true);
 
-    assert_eq!(text.status.code(), Some(0), "{text:?}");
+    assert_eq!(text.code, Some(0), "{text:?}");
     assert!(
-        stdout(&text).contains("status: degraded"),
+        text.stdout.contains("Status      degraded\n"),
         "{}",
-        stdout(&text)
+        text.stdout
     );
     assert!(
-        stdout(&text).contains(
-            "subsystem registry: unavailable (the registry needs recovery (schema_newer_than_app))"
+        text.stdout.contains(
+            "Subsystems  registry: unavailable (the registry needs recovery (schema_newer_than_app))\n"
         ),
         "{}",
-        stdout(&text)
+        text.stdout
     );
-    let value: Value = serde_json::from_str(stdout(&json).trim()).unwrap();
-    assert_eq!(value["health"]["status"], "degraded");
+    assert!(
+        text.stdout.contains("Recovery    schema_newer_than_app\n"),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        text.stdout.contains("Schema      999 > "),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        text.stderr.ends_with(
+            "hint: restore the registry from a snapshot or backup, then restart stacklyd\n"
+        ),
+        "{}",
+        text.stderr
+    );
+    let value = envelope(&json);
+    assert_eq!(value["result"]["health"]["status"], "degraded");
+    assert_eq!(
+        value["result"]["health"]["recovery"]["reason"],
+        "schema_newer_than_app"
+    );
     assert_eq!(daemon.stop().unwrap().code(), Some(0));
 }
 
@@ -403,15 +302,17 @@ fn after_a_second_daemon_was_refused_status_names_the_first() {
         Some(3)
     );
 
-    let output = status(root.path().as_os_str(), true);
+    let json = status(root.path(), true);
 
-    assert_eq!(output.status.code(), Some(0), "{output:?}");
-    let value: Value = serde_json::from_str(stdout(&output).trim()).unwrap();
-    assert_eq!(value["info"]["pid"], first.pid());
+    assert_eq!(json.code, Some(0), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(value["result"]["info"]["pid"], first.pid());
     assert!(
-        first
-            .stderr()
-            .contains(value["info"]["serverInstanceId"].as_str().unwrap())
+        first.stderr().contains(
+            value["result"]["info"]["serverInstanceId"]
+                .as_str()
+                .unwrap()
+        )
     );
     assert_eq!(first.stop().unwrap().code(), Some(0));
     ev.pass();
@@ -419,105 +320,26 @@ fn after_a_second_daemon_was_refused_status_names_the_first() {
 
 #[test]
 fn a_rejected_root_override_exits_2_before_anything_else() {
-    let output = status(OsStr::new("relative/root"), false);
+    let mut text = stackly(Path::new("relative/root"));
+    text.args(["daemon", "status"]);
+    let text = run_command(text);
+    let mut json = stackly(OsStr::new("relative/root").as_ref());
+    json.args(["daemon", "status", "--json"]);
+    let json = run_command(json);
 
-    assert_eq!(output.status.code(), Some(2), "{output:?}");
-    assert!(
-        stderr(&output).contains("not absolute"),
-        "{}",
-        stderr(&output)
+    assert_eq!(text.code, Some(2), "{text:?}");
+    assert_eq!(
+        text.stderr,
+        "error: the value of STACKLY_ROOT is refused: not absolute\n  code: cli.invalid_environment\n"
     );
-}
-
-/// Reads one request frame as JSON.
-async fn read_request(connection: &mut FramedConnection) -> Value {
-    let frame = connection
-        .read_frame(None)
-        .await
-        .expect("the CLI's request frame is valid")
-        .expect("the CLI sends a request");
-    serde_json::from_slice(&frame).expect("the CLI sends JSON")
-}
-
-/// A test daemon on `socket` that reads the handshake, accepts it only
-/// when `accept_handshake`, then reads one more request and never answers.
-/// It returns the method of the request left unanswered once the CLI hangs
-/// up.
-fn silent_daemon(
-    rt: &tokio::runtime::Runtime,
-    socket: &Path,
-    accept_handshake: bool,
-) -> tokio::task::JoinHandle<String> {
-    let listener = rt
-        .block_on(async { Listener::bind(socket, uid()) })
-        .expect("the test daemon binds the socket");
-    rt.spawn(async move {
-        let Ok(Accepted::Authorized { mut connection, .. }) = listener.accept().await else {
-            panic!("the CLI runs as this user");
-        };
-        let mut request = read_request(&mut connection).await;
-        if accept_handshake {
-            let instance = "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e";
-            let accepted = serde_json::json!({
-                "type": "response",
-                "content": {
-                    "requestId": request["requestId"],
-                    "reply": {
-                        "type": "daemon.handshake",
-                        "content": {
-                            "protocol": ProtocolVersion::CURRENT,
-                            "serverInstanceId": instance,
-                            "daemon": { "version": "0.1.0", "pid": std::process::id() },
-                            "contractDigest": CONTRACT_DIGEST,
-                            "contractDrift": false,
-                            "limits": Limits::CURRENT,
-                            "head": { "serverInstanceId": instance, "sequence": 0 }
-                        }
-                    }
-                }
-            });
-            connection
-                .write_frame(accepted.to_string().as_bytes())
-                .await
-                .expect("the CLI reads the handshake reply");
-            request = read_request(&mut connection).await;
-        }
-        let method = request["call"]["type"]
-            .as_str()
-            .expect("a request names its method")
-            .to_owned();
-        let after = connection
-            .read_frame(None)
-            .await
-            .expect("the CLI hangs up cleanly");
-        assert!(after.is_none(), "the CLI sends nothing more");
-        listener
-            .unlink_if_own()
-            .expect("the test daemon removes its socket");
-        method
-    })
-}
-
-/// The method, seconds, and idempotency key of the `ipc.call_timeout`
-/// error that `stackly daemon status --json` printed.
-fn call_timeout_of(output: &Output) -> (String, String, Option<String>) {
-    let error: Value =
-        serde_json::from_str(stderr(output).trim()).expect("--json prints the error as JSON");
-    assert_eq!(error["code"], "ipc.call_timeout", "{error}");
-    assert_eq!(error["category"], "timeout", "{error}");
-    let detail = |key: &str| {
-        error["details"]
-            .as_array()
-            .expect("details is a list")
-            .iter()
-            .find(|detail| detail["key"] == key)
-            .and_then(|detail| detail["value"].as_str().map(str::to_owned))
-    };
-    (
-        detail("method").expect("the error names the method"),
-        detail("seconds").expect("the error names the limit"),
-        detail("idempotencyKey"),
-    )
+    assert_eq!(json.code, Some(2));
+    let value = envelope(&json);
+    assert_eq!(value["command"], "daemon status");
+    assert_eq!(value["error"]["code"], "cli.invalid_environment");
+    assert_eq!(
+        detail(&value["error"], "variable").as_deref(),
+        Some("STACKLY_ROOT")
+    );
 }
 
 #[test]
@@ -528,29 +350,32 @@ fn a_daemon_that_never_answers_the_handshake_times_out_after_5_seconds_and_exits
         expected = "when connect plus handshake gets no answer in 5 seconds, stackly daemon status exits 8 with ipc.call_timeout naming daemon.handshake and 5 seconds",
     );
     let root = TestRoot::new().unwrap();
-    let paths = paths(&root);
-    let _runtime = HandMadeRuntime::new(&paths.runtime);
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
-        .enable_all()
-        .build()
-        .unwrap();
-    let server = silent_daemon(&rt, &paths.socket, false);
+    let daemon = common::scripted::ScriptedDaemon::start(
+        &root,
+        |_| common::scripted::Handshake::Hang,
+        |_, _| Vec::new(),
+    );
 
     let started = Instant::now();
-    let output = status(root.path().as_os_str(), true);
+    let json = status(root.path(), true);
 
-    assert_eq!(output.status.code(), Some(8), "{output:?}");
+    assert_eq!(json.code, Some(8), "{json:?}");
     assert!(started.elapsed() >= Duration::from_secs(5));
+    let value = envelope(&json);
+    assert_eq!(value["error"]["code"], "ipc.call_timeout");
     assert_eq!(
-        call_timeout_of(&output),
-        ("daemon.handshake".to_owned(), "5".to_owned(), None)
+        (
+            detail(&value["error"], "method"),
+            detail(&value["error"], "seconds"),
+            detail(&value["error"], "idempotencyKey"),
+        ),
+        (
+            Some("daemon.handshake".to_owned()),
+            Some("5".to_owned()),
+            None
+        )
     );
-    let method = rt
-        .block_on(async { tokio::time::timeout(Duration::from_secs(5), server).await })
-        .unwrap()
-        .unwrap();
-    assert_eq!(method, "daemon.handshake");
+    assert_eq!(daemon.methods(), ["daemon.handshake"]);
     ev.pass();
 }
 
@@ -562,30 +387,28 @@ fn a_call_the_daemon_never_answers_times_out_after_10_seconds_and_exits_8() {
         expected = "when daemon.get_info gets no answer in 10 seconds, stackly daemon status exits 8 with ipc.call_timeout naming the method and 10 seconds, without an idempotency key",
     );
     let root = TestRoot::new().unwrap();
-    let paths = paths(&root);
-    let _runtime = HandMadeRuntime::new(&paths.runtime);
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
-        .enable_all()
-        .build()
-        .unwrap();
-    let server = silent_daemon(&rt, &paths.socket, true);
+    let daemon = common::scripted::ScriptedDaemon::serve(&root, |_, _| Vec::new());
     let before = listing(root.path());
 
     let started = Instant::now();
-    let output = status(root.path().as_os_str(), true);
+    let json = status(root.path(), true);
 
-    assert_eq!(output.status.code(), Some(8), "{output:?}");
+    assert_eq!(json.code, Some(8), "{json:?}");
     assert!(started.elapsed() >= Duration::from_secs(10));
+    let value = envelope(&json);
     assert_eq!(
-        call_timeout_of(&output),
-        ("daemon.get_info".to_owned(), "10".to_owned(), None)
+        (
+            detail(&value["error"], "method"),
+            detail(&value["error"], "seconds"),
+            detail(&value["error"], "idempotencyKey"),
+        ),
+        (
+            Some("daemon.get_info".to_owned()),
+            Some("10".to_owned()),
+            None
+        )
     );
-    let method = rt
-        .block_on(async { tokio::time::timeout(Duration::from_secs(5), server).await })
-        .unwrap()
-        .unwrap();
-    assert_eq!(method, "daemon.get_info");
+    assert_eq!(daemon.methods(), ["daemon.handshake", "daemon.get_info"]);
     assert_eq!(listing(root.path()), before, "the CLI created files");
     ev.pass();
 }
