@@ -129,6 +129,8 @@ pub(crate) enum Close {
 /// runner logs, the work's own included, carries the `operation` span with
 /// `operation_id` and `kind` (spec 0007 AC-19).
 pub(crate) async fn run(inner: &Arc<Inner>, entry: QueueEntry) {
+    // Gives the slot back however the run ends, a panic in it included.
+    let _slot = SlotGuard(inner);
     let id = entry.id;
     match inner.handle(id) {
         Some(handle) => {
@@ -137,7 +139,15 @@ pub(crate) async fn run(inner: &Arc<Inner>, entry: QueueEntry) {
         }
         None => inner.locks.release_operation(id),
     }
-    inner.finish_slot();
+}
+
+/// Gives a running slot back when it drops.
+struct SlotGuard<'a>(&'a Inner);
+
+impl Drop for SlotGuard<'_> {
+    fn drop(&mut self) {
+        self.0.finish_slot();
+    }
 }
 
 async fn run_entry(inner: &Arc<Inner>, handle: &Arc<OpHandle>, entry: QueueEntry) {

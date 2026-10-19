@@ -197,7 +197,13 @@ pub(crate) async fn recover(inner: &Arc<Inner>) -> Result<RecoveryReport, Engine
         scratch_leftover = report.scratch_leftover,
         "operation recovery finished"
     );
-    inner.set_phase(Phase::Ready);
+    {
+        // A shutdown that began while recovery ran keeps its phase.
+        let mut phase = lock(&inner.phase);
+        if *phase == Phase::Recovering {
+            *phase = Phase::Ready;
+        }
+    }
     Ok(report)
 }
 

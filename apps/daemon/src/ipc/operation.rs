@@ -236,6 +236,7 @@ impl std::fmt::Debug for TestStart {
 
 /// What a method that starts an operation asks [`start_operation`] for.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct StartRequest<'a> {
     /// The wire method.
     pub method: &'static str,
@@ -246,8 +247,25 @@ pub struct StartRequest<'a> {
     pub fingerprint: [u8; 32],
 }
 
+impl<'a> StartRequest<'a> {
+    /// Bundles a request of `method` with its key and fingerprint.
+    #[must_use]
+    pub const fn new(
+        method: &'static str,
+        idempotency_key: Option<&'a str>,
+        fingerprint: [u8; 32],
+    ) -> Self {
+        Self {
+            method,
+            idempotency_key,
+            fingerprint,
+        }
+    }
+}
+
 /// What [`start_operation`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StartOutcome {
     /// An operation was created, or replayed from the idempotency key; a
     /// recorded no operation answer is replayed the same way.

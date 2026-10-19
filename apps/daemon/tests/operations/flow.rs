@@ -291,11 +291,7 @@ async fn a_request_task_cancelled_right_after_begin_leaves_the_operation_running
         );
         let prepared = method.prepare(Some(&json!({ "script": "held" }))).unwrap();
         let key = key();
-        let start = StartRequest {
-            method: "test.start_operation",
-            idempotency_key: Some(&key),
-            fingerprint: prepared.fingerprint,
-        };
+        let start = StartRequest::new("test.start_operation", Some(&key), prepared.fingerprint);
         let outcome = start_operation(&core, &context, start, prepared.build).await;
         // Never reached: the task is aborted while it waits or right after.
         tokio::time::sleep(Duration::from_secs(3600)).await;

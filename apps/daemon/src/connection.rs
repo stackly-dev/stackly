@@ -1123,11 +1123,11 @@ async fn run_starting(
             let core = Arc::clone(&core);
             let task = tokio::spawn(async move {
                 let prepared = starting.prepare(frame.params.as_ref())?;
-                let start = StartRequest {
+                let start = StartRequest::new(
                     method,
-                    idempotency_key: frame.idempotency_key.as_deref(),
-                    fingerprint: prepared.fingerprint,
-                };
+                    frame.idempotency_key.as_deref(),
+                    prepared.fingerprint,
+                );
                 start_operation(&core, &context, start, prepared.build).await
             });
             task.await.unwrap_or_else(|failure| {
