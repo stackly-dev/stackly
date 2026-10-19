@@ -1,0 +1,20 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000307",
+    "reply": {
+      "type": "operation.get_stats",
+      "content": {
+        "running": 1,
+        "queued": 2,
+        "needsRecovery": 1,
+        "maxRunning": 8,
+        "maxQueued": 64,
+        "interruptedAtStart": 3,
+        "resumedAtStart": 1,
+        "autoCompensatedAtStart": 1,
+        "rejectedQueueFull": 0
+      }
+    }
+  }
+}

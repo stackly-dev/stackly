@@ -123,7 +123,7 @@
       "retryable": false,
       "details": [],
       "items": null,
-      "summary": "client side: the daemon closed the connection before replying, so the request may have run"
+      "summary": "client side: the daemon closed the connection, or reading or writing it failed, before the reply arrived, so the request may have run"
     },
     {
       "code": "ipc.connection_refused",
@@ -211,7 +211,7 @@
         "kind"
       ],
       "items": null,
-      "summary": "client side: another os error while checking the socket path or connecting"
+      "summary": "another os error before any request was sent: checking the socket path or connecting (client side), or binding, securing, or accepting on the socket (daemon side)"
     },
     {
       "code": "ipc.not_connected",
@@ -702,18 +702,21 @@
       "category": "invalid_input",
       "retryable": false,
       "details": [
-        "method"
+        "method",
+        "omitted"
       ],
       "items": null,
-      "summary": "the params fail to decode or to validate, and fields lists each one"
+      "summary": "the params are not a json object or fail to decode or to validate; fields lists the first 32 failures and omitted counts the rest"
     },
     {
       "code": "request.malformed",
       "category": "invalid_input",
       "retryable": false,
-      "details": [],
+      "details": [
+        "omitted"
+      ],
       "items": null,
-      "summary": "the json is broken, the request shape is wrong, or requestId or idempotencyKey has a bad format"
+      "summary": "the json is broken, the request or its call is not a json object, or requestId or idempotencyKey has a bad format"
     },
     {
       "code": "request.too_deep",

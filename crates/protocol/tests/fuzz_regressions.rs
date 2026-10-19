@@ -16,9 +16,10 @@ use stackly_protocol::fuzzing;
 type Harness = fn(&[u8]);
 
 /// Every fuzz target of this crate and its harness.
-const TARGETS: [(&str, Harness); 2] = [
+const TARGETS: [(&str, Harness); 3] = [
     ("ipc_frame_decode", fuzzing::frame_decode),
     ("ipc_request_decode", fuzzing::request_decode),
+    ("ipc_server_frame_decode", fuzzing::server_frame_decode),
 ];
 
 fn regressions_dir() -> PathBuf {

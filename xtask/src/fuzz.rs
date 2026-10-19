@@ -93,6 +93,12 @@ const TARGETS: &[Target] = &[
         seeds: request_fixture_seeds,
     },
     Target {
+        name: "ipc_server_frame_decode",
+        crate_dir: "crates/protocol",
+        max_len: IPC_MAX_LEN,
+        seeds: server_frame_fixture_seeds,
+    },
+    Target {
         name: "provider_manifest",
         crate_dir: "crates/core",
         max_len: PROVIDER_FILE_MAX_LEN,
@@ -408,6 +414,18 @@ fn framing_vector_seeds(root: &Path) -> Result<Vec<Seed>> {
 /// `ipc_request_decode`: every fixture of type `Request` listed in
 /// `protocols/fixtures/ipc/index.json`, rejected ones included.
 fn request_fixture_seeds(root: &Path) -> Result<Vec<Seed>> {
+    ipc_fixture_seeds(root, "Request")
+}
+
+/// `ipc_server_frame_decode`: every fixture of type `ServerFrame` listed in
+/// `protocols/fixtures/ipc/index.json`, rejected and skipped ones included.
+fn server_frame_fixture_seeds(root: &Path) -> Result<Vec<Seed>> {
+    ipc_fixture_seeds(root, "ServerFrame")
+}
+
+/// Every fixture of `type_name` listed in `protocols/fixtures/ipc/index.json`,
+/// whatever it expects.
+fn ipc_fixture_seeds(root: &Path, type_name: &str) -> Result<Vec<Seed>> {
     #[derive(Deserialize)]
     struct Index {
         fixtures: Vec<Fixture>,
@@ -426,7 +444,7 @@ fn request_fixture_seeds(root: &Path) -> Result<Vec<Seed>> {
     index
         .fixtures
         .into_iter()
-        .filter(|fixture| fixture.kind == "Request")
+        .filter(|fixture| fixture.kind == type_name)
         .map(|fixture| {
             let path = format!("{IPC_FIXTURES}/{}", fixture.file);
             let bytes =
@@ -647,6 +665,24 @@ mod tests {
     }
 
     #[test]
+    fn server_frame_seeds_include_every_expectation_and_skip_other_types() {
+        let seeds = server_frame_fixture_seeds(&repo_root()).unwrap();
+        let names: Vec<&str> = seeds.iter().map(|seed| seed.name.as_str()).collect();
+        assert!(names.contains(&"frame-response-get-info.json"));
+        assert!(names.contains(&"frame-event-unknown-kind.json"));
+        assert!(names.contains(&"frame-positional.json"));
+        assert!(names.iter().all(|name| name.starts_with("frame-")));
+        for seed in &seeds {
+            let fixture = read(&repo_root(), &format!("{IPC_FIXTURES}/{}", seed.name)).unwrap();
+            assert_eq!(
+                seed.bytes, fixture,
+                "{} is the fixture unchanged",
+                seed.name
+            );
+        }
+    }
+
+    #[test]
     fn provider_seeds_come_from_every_example_package() {
         let root = repo_root();
         let manifests = provider_manifest_seeds(&root).unwrap();
@@ -698,7 +734,7 @@ mod tests {
     fn an_unknown_target_lists_the_known_ones() {
         let err = target("ipc_nothing").err().unwrap().to_string();
         assert!(
-            err.contains("ipc_frame_decode, ipc_request_decode"),
+            err.contains("ipc_frame_decode, ipc_request_decode, ipc_server_frame_decode"),
             "{err}"
         );
         assert!(run(&repo_root(), &["run", "ipc_nothing"]).is_err());

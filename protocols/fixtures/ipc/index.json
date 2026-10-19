@@ -413,6 +413,49 @@
       "file": "frame-error-provider-not-found.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
+    },
+    {
+      "file": "reject-subscribe-kinds-over-limit.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-error-invalid-params-capped.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-positional-request.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.malformed"
+    },
+    {
+      "file": "reject-positional-params.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params"
+    },
+    {
+      "file": "frame-positional.json",
+      "type": "ServerFrame",
+      "expect": "reject",
+      "code": "ipc.protocol_violation"
+    },
+    {
+      "file": "frame-error-positional-content.json",
+      "type": "ServerFrame",
+      "expect": "reject",
+      "code": "ipc.protocol_violation"
+    },
+    {
+      "file": "frame-event-at-latest-time.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
     }
   ]
 }

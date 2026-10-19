@@ -541,7 +541,7 @@
       ]
     },
     "ErrorBody": {
-      "description": "The error envelope every daemon error and every client side IPC error\nuses (VAL-020).\n\n`code`, `category`, `message`, and `details` are frozen across majors, so\npeers of any major can always exchange `protocol.major_mismatch`.",
+      "description": "The error envelope every daemon error and every client side IPC error\nuses (VAL-020).\n\n`code`, `category`, `message`, `retryable`, and `details` are frozen\nacross majors, so peers of any major can always exchange\n`protocol.major_mismatch`.",
       "type": "object",
       "properties": {
         "category": {
@@ -897,7 +897,7 @@
       ]
     },
     "FieldError": {
-      "description": "One params field that failed to decode or validate.",
+      "description": "One params field that failed to decode or validate. An error carries at\nmost 32 of them (`FIELD_ERRORS_MAX`) and counts the rest in its\n`omitted` detail.",
       "type": "object",
       "properties": {
         "code": {
@@ -909,7 +909,7 @@
           "type": "string"
         },
         "path": {
-          "description": "Where the field sits, relative to the params, such as `name`,\n`since.sequence`, or `kinds[3]`.",
+          "description": "Where the field sits, relative to the params, such as `name`,\n`since.sequence`, or `kinds[3]`. At most 256 characters.",
           "type": "string"
         }
       },

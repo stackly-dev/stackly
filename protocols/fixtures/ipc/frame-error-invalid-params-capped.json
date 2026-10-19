@@ -1,0 +1,189 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000001",
+    "error": {
+      "code": "request.invalid_params",
+      "category": "invalid_input",
+      "message": "params do not match the method",
+      "retryable": false,
+      "resource": null,
+      "fields": [
+        {
+          "path": "kinds",
+          "code": "too_many",
+          "message": "list has too many entries"
+        },
+        {
+          "path": "kinds[0]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[1]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[2]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[3]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[4]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[5]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[6]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[7]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[8]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[9]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[10]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[11]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[12]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[13]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[14]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[15]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[16]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[17]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[18]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[19]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[20]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[21]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[22]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[23]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[24]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[25]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[26]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[27]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[28]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[29]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        },
+        {
+          "path": "kinds[30]",
+          "code": "invalid_format",
+          "message": "value does not have the expected format"
+        }
+      ],
+      "hint": null,
+      "details": [
+        {
+          "key": "method",
+          "value": "events.subscribe"
+        },
+        {
+          "key": "omitted",
+          "value": "1"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

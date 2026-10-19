@@ -749,3 +749,50 @@ fn a_provider_resource_is_named_by_its_revision_key_text() {
     assert_eq!((provider, revision), ("official/nats", "2.12.1-1"));
     assert_eq!(digest.len(), 64);
 }
+
+#[test]
+fn a_kinds_list_over_the_limit_gives_exactly_the_capped_error_frame() {
+    let rejection = decode_request(&read("reject-subscribe-kinds-over-limit.json")).unwrap_err();
+    let sent = ServerFrame::Error(rejection.into_frame());
+    let fixture: ServerFrame =
+        serde_json::from_slice(&read("frame-error-invalid-params-capped.json")).unwrap();
+    assert_eq!(sent, fixture);
+    let ServerFrame::Error(frame) = fixture else {
+        panic!("expected an error frame");
+    };
+    assert_eq!(
+        frame.error.fields().len(),
+        stackly_protocol::limits::FIELD_ERRORS_MAX
+    );
+    assert_eq!(frame.error.detail("omitted"), Some("1"));
+}
+
+#[test]
+fn positional_arrays_are_refused_where_an_object_belongs() {
+    let request = decode_request(&read("reject-positional-request.json")).unwrap_err();
+    assert_eq!(request.error.message(), "request is not a json object");
+    let params = decode_request(&read("reject-positional-params.json")).unwrap_err();
+    assert_eq!(
+        params.request_id.as_deref(),
+        Some("0192f3a1-0000-7000-8000-000000000001")
+    );
+    assert_eq!(params.error.fields()[0].path(), ".");
+    for file in [
+        "frame-positional.json",
+        "frame-error-positional-content.json",
+    ] {
+        let error = decode_server_frame(&read(file)).unwrap_err();
+        assert!(error.is(&codes::ipc::PROTOCOL_VIOLATION), "{file}");
+    }
+}
+
+#[test]
+fn the_latest_time_jiff_holds_reads_and_writes_back_unchanged() {
+    let frame: ServerFrame =
+        serde_json::from_slice(&read("frame-event-at-latest-time.json")).unwrap();
+    let ServerFrame::Event(event) = frame else {
+        panic!("expected an event");
+    };
+    assert_eq!(event.at, Timestamp::from_jiff(jiff::Timestamp::MAX));
+    assert_eq!(event.at.to_string(), "9999-12-30T22:00:00.999Z");
+}

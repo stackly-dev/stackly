@@ -21,6 +21,8 @@ use crate::wire::{Count, ResourceKind, ResourceRef, Revision, Timestamp};
 
 /// The page size of `operation.list` when the params name none.
 pub const OPERATION_LIST_LIMIT_DEFAULT: u32 = 50;
+/// The smallest `ListOperationsParams.limit`.
+pub const OPERATION_LIST_LIMIT_MIN: u32 = 1;
 /// The largest page size `operation.list` accepts.
 pub const OPERATION_LIST_LIMIT_MAX: u32 = 200;
 /// The longest `before` cursor `operation.list` accepts, in bytes.
@@ -537,10 +539,9 @@ impl ListOperationsParams {
 impl Validate for ListOperationsParams {
     fn validate(&self) -> Vec<FieldError> {
         let mut fields = Vec::new();
-        if self
-            .limit
-            .is_some_and(|limit| !(1..=OPERATION_LIST_LIMIT_MAX).contains(&limit))
-        {
+        if self.limit.is_some_and(|limit| {
+            !(OPERATION_LIST_LIMIT_MIN..=OPERATION_LIST_LIMIT_MAX).contains(&limit)
+        }) {
             fields.push(FieldError::new("limit", FieldCode::OutOfRange));
         }
         if let Some(before) = &self.before {

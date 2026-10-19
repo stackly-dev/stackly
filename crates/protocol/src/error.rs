@@ -13,14 +13,17 @@ use uuid::Uuid;
 
 use crate::codes::{self, ErrorSpec, ItemSpec};
 use crate::json::FieldCode;
+use crate::limits::{FIELD_ERRORS_MAX, FIELD_PATH_MAX};
 use crate::wire::ResourceRef;
 
 /// Longest `message`, in characters; [`ErrorBody::new`] truncates longer
 /// ones on a character boundary.
 pub const MESSAGE_MAX: usize = 200;
 
-/// The `details` key that counts the items [`ErrorBody::with_items`]
-/// dropped above the catalog limit. Every code with `items` lists it.
+/// The `details` key that counts the list entries an error dropped: the
+/// items [`ErrorBody::with_items`] dropped above the catalog limit, or the
+/// fields [`ErrorBody::with_fields`] dropped above [`FIELD_ERRORS_MAX`].
+/// Every code with `items` lists it, and so does every code with `fields`.
 pub const OMITTED_DETAIL: &str = "omitted";
 
 /// What a client should do about an error. Closed: a new category is a new
@@ -87,8 +90,9 @@ impl ErrorCategory {
 /// The error envelope every daemon error and every client side IPC error
 /// uses (VAL-020).
 ///
-/// `code`, `category`, `message`, and `details` are frozen across majors, so
-/// peers of any major can always exchange `protocol.major_mismatch`.
+/// `code`, `category`, `message`, `retryable`, and `details` are frozen
+/// across majors, so peers of any major can always exchange
+/// `protocol.major_mismatch`.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -154,17 +158,38 @@ impl ErrorBody {
         self
     }
 
-    /// Adds one failed params field.
+    /// Adds one failed params field, like [`with_fields`](Self::with_fields).
     #[must_use]
-    pub fn with_field(mut self, field: FieldError) -> Self {
-        self.fields.push(field);
-        self
+    pub fn with_field(self, field: FieldError) -> Self {
+        self.with_fields([field])
     }
 
-    /// Adds failed params fields.
+    /// Adds failed params fields. Fields above [`FIELD_ERRORS_MAX`] are
+    /// dropped, and how many is written to the [`OMITTED_DETAIL`] detail,
+    /// so an error frame stays small whatever the input. A code that
+    /// carries fields must list that detail in its catalog entry and allow
+    /// no items, because both lists would share the one count; debug builds
+    /// assert both whenever a field is added.
     #[must_use]
     pub fn with_fields(mut self, fields: impl IntoIterator<Item = FieldError>) -> Self {
-        self.fields.extend(fields);
+        let mut omitted: u64 = 0;
+        for field in fields {
+            debug_assert!(
+                codes::lookup(&self.code).is_some_and(|spec| {
+                    spec.items.is_none() && spec.details.contains(&OMITTED_DETAIL)
+                }),
+                "the catalog entry of `{}` must list `omitted` and allow no items to carry fields",
+                self.code
+            );
+            if self.fields.len() < FIELD_ERRORS_MAX {
+                self.fields.push(field);
+            } else {
+                omitted += 1;
+            }
+        }
+        if omitted > 0 {
+            self.add_omitted(omitted);
+        }
         self
     }
 
@@ -248,21 +273,34 @@ impl ErrorBody {
             }
         }
         if omitted > 0 {
-            match self
-                .details
-                .iter_mut()
-                .find(|detail| detail.key == OMITTED_DETAIL)
-            {
-                Some(detail) => {
-                    let before: u64 = detail.value.parse().unwrap_or(0);
-                    detail.value = (before + omitted).to_string();
-                }
-                None => self
-                    .details
-                    .push(ErrorDetail::new(OMITTED_DETAIL, omitted.to_string())),
-            }
+            self.add_omitted(omitted);
         }
         self
+    }
+
+    /// Adds `omitted` to the [`OMITTED_DETAIL`] detail, creating it at the
+    /// first drop. Debug builds assert that the catalog entry lists it.
+    fn add_omitted(&mut self, omitted: u64) {
+        match self
+            .details
+            .iter_mut()
+            .find(|detail| detail.key == OMITTED_DETAIL)
+        {
+            Some(detail) => {
+                let before: u64 = detail.value.parse().unwrap_or(0);
+                detail.value = (before + omitted).to_string();
+            }
+            None => {
+                debug_assert!(
+                    codes::lookup(&self.code)
+                        .is_some_and(|spec| spec.details.contains(&OMITTED_DETAIL)),
+                    "the catalog entry of `{}` does not list the `omitted` detail",
+                    self.code
+                );
+                self.details
+                    .push(ErrorDetail::new(OMITTED_DETAIL, omitted.to_string()));
+            }
+        }
     }
 
     /// The catalog code, `<area>.<reason>`.
@@ -354,13 +392,15 @@ impl ErrorBody {
     }
 }
 
-/// One params field that failed to decode or validate.
+/// One params field that failed to decode or validate. An error carries at
+/// most 32 of them (`FIELD_ERRORS_MAX`) and counts the rest in its
+/// `omitted` detail.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FieldError {
     /// Where the field sits, relative to the params, such as `name`,
-    /// `since.sequence`, or `kinds[3]`.
+    /// `since.sequence`, or `kinds[3]`. At most 256 characters.
     path: String,
     /// A code from the fixed set in [`FieldCode`].
     code: String,
@@ -370,10 +410,12 @@ pub struct FieldError {
 
 impl FieldError {
     /// A failed field at `path` with the fixed code and text of `code`.
+    /// `path` is cut to [`FIELD_PATH_MAX`] characters, so a long map key
+    /// in the input never makes the error large.
     #[must_use]
     pub fn new(path: impl Into<String>, code: FieldCode) -> Self {
         Self {
-            path: path.into(),
+            path: truncate(path.into(), FIELD_PATH_MAX),
             code: code.as_str().to_owned(),
             message: code.message().to_owned(),
         }
@@ -538,7 +580,8 @@ mod tests {
             .with_detail("actual", "4")
             .with_hint("refresh the instance, then try again")
             .with_operation_id(operation)
-            .with_rule("BR-008")
+            .with_rule("BR-008");
+        let invalid = ErrorBody::new(&request::INVALID_PARAMS, "params do not match the method")
             .with_field(FieldError::new("name", FieldCode::TooLong));
         assert_eq!(error.detail("expected"), Some("3"));
         assert_eq!(error.detail("actual"), Some("4"));
@@ -546,7 +589,7 @@ mod tests {
         assert_eq!(error.hint(), Some("refresh the instance, then try again"));
         assert_eq!(error.operation_id(), Some(operation));
         assert_eq!(error.rule(), Some("BR-008"));
-        assert_eq!(error.fields()[0].code(), "too_long");
+        assert_eq!(invalid.fields()[0].code(), "too_long");
         assert_eq!(
             error.resource().map(|r| r.kind),
             Some(ResourceKind::Instance)
@@ -664,6 +707,52 @@ mod tests {
         assert_eq!(error.items()[0].kind(), "hologram");
         assert_eq!(error.items()[0].field("x"), Some("1"));
         assert_eq!(error.code(), "secret.store_locked");
+    }
+
+    #[test]
+    fn fields_above_the_cap_are_dropped_and_counted_in_omitted() {
+        let field = |index: usize| FieldError::new(format!("kinds[{index}]"), FieldCode::TooLong);
+        let error = ErrorBody::new(&request::INVALID_PARAMS, "m")
+            .with_fields((0..FIELD_ERRORS_MAX + 5).map(field))
+            .with_field(field(99))
+            .with_fields([field(100), field(101)]);
+        assert_eq!(error.fields().len(), FIELD_ERRORS_MAX);
+        assert_eq!(error.fields()[0].path(), "kinds[0]");
+        assert_eq!(error.fields()[FIELD_ERRORS_MAX - 1].path(), "kinds[31]");
+        assert_eq!(error.detail(OMITTED_DETAIL), Some("8"));
+    }
+
+    #[test]
+    fn fields_up_to_the_cap_add_no_omitted_detail() {
+        let error = ErrorBody::new(&request::INVALID_PARAMS, "m").with_fields(
+            (0..FIELD_ERRORS_MAX).map(|i| FieldError::new(format!("a[{i}]"), FieldCode::Required)),
+        );
+        assert_eq!(error.fields().len(), FIELD_ERRORS_MAX);
+        assert_eq!(error.detail(OMITTED_DETAIL), None);
+    }
+
+    #[test]
+    fn every_code_that_carries_fields_lists_the_omitted_detail() {
+        for spec in [&request::INVALID_PARAMS, &request::MALFORMED] {
+            assert!(spec.details.contains(&OMITTED_DETAIL), "{}", spec.code);
+            assert!(spec.items.is_none(), "{}", spec.code);
+        }
+    }
+
+    #[test]
+    fn a_field_path_is_cut_to_256_characters() {
+        let field = FieldError::new(format!("settings.{}", "ü".repeat(400)), FieldCode::TooLong);
+        assert_eq!(field.path().chars().count(), FIELD_PATH_MAX);
+        assert!(field.path().starts_with("settings.üü"));
+        assert_eq!(FieldError::new("name", FieldCode::TooLong).path(), "name");
+    }
+
+    #[test]
+    #[should_panic(expected = "must list `omitted` and allow no items")]
+    #[cfg(debug_assertions)]
+    fn a_field_on_a_code_without_the_omitted_detail_panics_in_debug_builds() {
+        let _ = ErrorBody::new(&request::UNKNOWN_METHOD, "m")
+            .with_field(FieldError::new("a", FieldCode::Required));
     }
 
     #[test]

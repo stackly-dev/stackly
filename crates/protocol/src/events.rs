@@ -209,12 +209,15 @@ impl SubscribeParams {
 }
 
 impl Validate for SubscribeParams {
+    /// `kinds` holds at most [`SUBSCRIBE_KINDS_MAX`] entries, and each is a
+    /// kind filter. Only the first [`SUBSCRIBE_KINDS_MAX`] entries are
+    /// checked, so a list far over the limit costs no more than a full one.
     fn validate(&self) -> Vec<FieldError> {
         let mut fields = Vec::new();
         if self.kinds.len() > SUBSCRIBE_KINDS_MAX {
             fields.push(FieldError::new("kinds", FieldCode::TooMany));
         }
-        for (index, kind) in self.kinds.iter().enumerate() {
+        for (index, kind) in self.kinds.iter().enumerate().take(SUBSCRIBE_KINDS_MAX) {
             if !is_kind_filter(kind) {
                 fields.push(FieldError::new(
                     format!("kinds[{index}]"),

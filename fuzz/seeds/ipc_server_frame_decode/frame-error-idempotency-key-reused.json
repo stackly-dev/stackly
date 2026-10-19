@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000309",
+    "error": {
+      "code": "operation.idempotency_key_reused",
+      "category": "invalid_input",
+      "message": "the idempotency key belongs to an operation another request started",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "send the request again with a new idempotency key",
+      "details": [
+        {
+          "key": "operationId",
+          "value": "0192f3a4-0000-7000-8000-000000000001"
+        },
+        {
+          "key": "method",
+          "value": "runtime.install"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

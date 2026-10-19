@@ -1,0 +1,30 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000001",
+    "reply": {
+      "type": "daemon.get_info",
+      "content": {
+        "version": "0.1.0",
+        "protocol": {
+          "major": 1,
+          "minor": 0
+        },
+        "contractDigest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "serverInstanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e",
+        "pid": 501,
+        "uid": 501,
+        "startedAt": "2026-10-18T03:04:05.123Z",
+        "roots": {
+          "data": "/Users/dév/Library/Application Support/Stackly",
+          "logs": "/Users/dév/日本語 root/Logs/Stackly",
+          "cache": "/Users/dév/Library/Caches/Stackly",
+          "runtime": "/var/folders/xy/T/stackly-1a2b3c4d",
+          "rootOverride": true
+        },
+        "socketPath": "/var/folders/xy/T/stackly-1a2b3c4d/stacklyd.sock",
+        "registrySchema": 1
+      }
+    }
+  }
+}

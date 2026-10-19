@@ -1,0 +1,121 @@
+   Compiling stackly-protocol v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/contract-1-4-b6151e/crates/protocol)
+   Compiling stackly-core v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/contract-1-4-b6151e/crates/core)
+   Compiling stackly-fuzz v0.0.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/contract-1-4-b6151e/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 3m 17s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.13s
+     Running `fuzz/target/aarch64-apple-darwin/release/ipc_server_frame_decode -artifact_prefix=fuzz/artifacts/ipc_server_frame_decode/ -max_len=65536 -max_total_time=300 -print_final_stats=1 fuzz/corpus/ipc_server_frame_decode fuzz/seeds/ipc_server_frame_decode`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 789526432
+INFO: Loaded 1 modules   (156250 inline 8-bit counters): 156250 [0x103792010, 0x1037b826a), 
+INFO: Loaded 1 PC tables (156250 PCs): 156250 [0x1037b8270,0x103a1a810), 
+INFO:        0 files found in fuzz/corpus/ipc_server_frame_decode
+INFO:       46 files found in fuzz/seeds/ipc_server_frame_decode
+INFO: seed corpus: files: 46 min: 98b max: 5390b total: 42931b rss: 46Mb
+#47	INITED cov: 4489 ft: 7572 corp: 46/41Kb exec/s: 0 rss: 51Mb
+	NEW_FUNC[1/6]: 0x00010356d060 in _RINvMs0_NtCsccconMumvMc_10serde_json5errorNtB6_5Error12fix_positionNCNvMs3_NtB8_2deINtB1b_12DeserializerNtNtB8_4read9SliceReadE12fix_position0ECsdnwCobPbBRz_16stackly_protocol+0x0 (ipc_server_frame_decode:arm64+0x1007fd060)
+	NEW_FUNC[2/6]: 0x000102def8f4 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueNtNtCsgysSR5XEJuO_5alloc6string6StringECsdnwCobPbBRz_16stackly_protocol+0x0 (ipc_server_frame_decode:arm64+0x10007f8f4)
+#48	NEW    cov: 4529 ft: 7635 corp: 47/42Kb lim: 5390 exec/s: 0 rss: 53Mb L: 216/5390 MS: 1 InsertByte-
+	NEW_FUNC[1/2]: 0x0001035748b8 in _RNvMs3_NtCsccconMumvMc_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE10peek_errorCsdnwCobPbBRz_16stackly_protocol+0x0 (ipc_server_frame_decode:arm64+0x1008048b8)
+	NEW_FUNC[2/2]: 0x0001034e1d84 in _RNvXs5_NtCsccconMumvMc_10serde_json4readNtB5_9SliceReadNtB5_4Read13peek_position+0x0 (ipc_server_frame_decode:arm64+0x100771d84)
+#49	NEW    cov: 4548 ft: 7671 corp: 48/42Kb lim: 5390 exec/s: 0 rss: 53Mb L: 336/5390 MS: 1 InsertByte-
+#50	NEW    cov: 4552 ft: 7691 corp: 49/42Kb lim: 5390 exec/s: 0 rss: 53Mb L: 548/5390 MS: 1 CrossOver-
+	NEW_FUNC[1/1]: 0x0001035a5250 in _RINvNtCsccconMumvMc_10serde_json4read5errorNtB2_9SliceReaduEB4_+0x0 (ipc_server_frame_decode:arm64+0x100835250)
+#53	NEW    cov: 4571 ft: 7725 corp: 50/43Kb lim: 5390 exec/s: 0 rss: 53Mb L: 948/5390 MS: 3 InsertByte-ChangeASCIIInt-ChangeBit-
+#54	NEW    cov: 4572 ft: 7742 corp: 51/44Kb lim: 5390 exec/s: 0 rss: 53Mb L: 337/5390 MS: 1 InsertByte-
+	NEW_FUNC[1/2]: 0x000102dc0f10 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueINtNtB4_6result6ResultINtNtB4_6option6OptionhENtNtCsccconMumvMc_10serde_json5error5ErrorEECsdnwCobPbBRz_16stackly_protocol+0x0 (ipc_server_frame_decode:arm64+0x100050f10)
+	NEW_FUNC[2/2]: 0x0001030aed3c in _RNCNvNtCsdnwCobPbBRz_16stackly_protocol4json19decode_server_frames1_0B5_+0x0 (ipc_server_frame_decode:arm64+0x10033ed3c)
+#55	NEW    cov: 4626 ft: 7956 corp: 52/45Kb lim: 5390 exec/s: 0 rss: 53Mb L: 1565/5390 MS: 1 ChangeBit-
+#56	NEW    cov: 4632 ft: 7993 corp: 53/46Kb lim: 5390 exec/s: 0 rss: 53Mb L: 288/5390 MS: 1 InsertByte-
+#58	NEW    cov: 4632 ft: 7996 corp: 54/46Kb lim: 5390 exec/s: 0 rss: 53Mb L: 796/5390 MS: 2 ShuffleBytes-ShuffleBytes-
+#60	NEW    cov: 4632 ft: 8006 corp: 55/48Kb lim: 5390 exec/s: 0 rss: 53Mb L: 1388/5390 MS: 2 ChangeBinInt-CopyPart-
+#67	NEW    cov: 4634 ft: 8020 corp: 56/50Kb lim: 5390 exec/s: 0 rss: 54Mb L: 2504/5390 MS: 2 ShuffleBytes-ChangeBinInt-
+#69	NEW    cov: 4635 ft: 8029 corp: 57/50Kb lim: 5390 exec/s: 0 rss: 54Mb L: 119/5390 MS: 2 ShuffleBytes-InsertRepeatedBytes-
+#71	NEW    cov: 4635 ft: 8030 corp: 58/51Kb lim: 5390 exec/s: 0 rss: 54Mb L: 972/5390 MS: 2 ShuffleBytes-CMP- DE: "\377\377\377\377\377\377\377\377"-
+#72	NEW    cov: 4635 ft: 8034 corp: 59/52Kb lim: 5390 exec/s: 0 rss: 54Mb L: 353/5390 MS: 1 CopyPart-
+#74	NEW    cov: 4635 ft: 8036 corp: 60/52Kb lim: 5390 exec/s: 0 rss: 54Mb L: 425/5390 MS: 2 ShuffleBytes-EraseBytes-
+#75	NEW    cov: 4635 ft: 8045 corp: 61/53Kb lim: 5390 exec/s: 0 rss: 54Mb L: 1388/5390 MS: 1 ChangeBit-
+#77	NEW    cov: 4644 ft: 8065 corp: 62/53Kb lim: 5390 exec/s: 0 rss: 54Mb L: 139/5390 MS: 2 ChangeByte-PersAutoDict- DE: "\377\377\377\377\377\377\377\377"-
+#78	NEW    cov: 4651 ft: 8103 corp: 63/56Kb lim: 5390 exec/s: 0 rss: 54Mb L: 3113/5390 MS: 1 InsertByte-
+#79	NEW    cov: 4651 ft: 8111 corp: 64/57Kb lim: 5390 exec/s: 0 rss: 54Mb L: 399/5390 MS: 1 InsertRepeatedBytes-
+#80	NEW    cov: 4653 ft: 8113 corp: 65/58Kb lim: 5390 exec/s: 0 rss: 54Mb L: 796/5390 MS: 1 ChangeBit-
+#81	NEW    cov: 4654 ft: 8115 corp: 66/59Kb lim: 5390 exec/s: 0 rss: 54Mb L: 1365/5390 MS: 1 CopyPart-
+#83	NEW    cov: 4654 ft: 8116 corp: 67/60Kb lim: 5390 exec/s: 0 rss: 54Mb L: 832/5390 MS: 2 InsertRepeatedBytes-ShuffleBytes-
+#84	NEW    cov: 4654 ft: 8117 corp: 68/61Kb lim: 5390 exec/s: 0 rss: 54Mb L: 1657/5390 MS: 1 InsertRepeatedBytes-
+#86	NEW    cov: 4655 ft: 8118 corp: 69/62Kb lim: 5390 exec/s: 0 rss: 54Mb L: 373/5390 MS: 2 InsertByte-InsertRepeatedBytes-
+#87	NEW    cov: 4656 ft: 8119 corp: 70/64Kb lim: 5390 exec/s: 0 rss: 54Mb L: 2556/5390 MS: 1 InsertRepeatedBytes-
+#88	NEW    cov: 4657 ft: 8122 corp: 71/65Kb lim: 5390 exec/s: 0 rss: 54Mb L: 1006/5390 MS: 1 ShuffleBytes-
+#94	NEW    cov: 4659 ft: 8127 corp: 72/65Kb lim: 5390 exec/s: 0 rss: 54Mb L: 127/5390 MS: 1 CopyPart-
+#96	NEW    cov: 4660 ft: 8129 corp: 73/68Kb lim: 5390 exec/s: 0 rss: 54Mb L: 2190/5390 MS: 2 CMP-CMP- DE: "\000\000\000\000\000\000\000?"-"\001\000\000o"-
+#97	NEW    cov: 4660 ft: 8130 corp: 74/69Kb lim: 5390 exec/s: 0 rss: 54Mb L: 1207/5390 MS: 1 CMP- DE: "\376\377\377\377"-
+#103	NEW    cov: 4660 ft: 8132 corp: 75/71Kb lim: 5390 exec/s: 0 rss: 54Mb L: 2190/5390 MS: 1 CMP- DE: "h\000\000\000"-
+#104	NEW    cov: 4661 ft: 8134 corp: 76/72Kb lim: 5390 exec/s: 0 rss: 54Mb L: 1207/5390 MS: 1 CrossOver-
+#105	NEW    cov: 4662 ft: 8144 corp: 77/72Kb lim: 5390 exec/s: 0 rss: 54Mb L: 451/5390 MS: 1 InsertRepeatedBytes-
+#106	NEW    cov: 4662 ft: 8145 corp: 78/73Kb lim: 5390 exec/s: 0 rss: 54Mb L: 452/5390 MS: 1 InsertByte-
+#112	NEW    cov: 4662 ft: 8149 corp: 79/76Kb lim: 5390 exec/s: 0 rss: 54Mb L: 3208/5390 MS: 1 InsertRepeatedBytes-
+#113	NEW    cov: 4662 ft: 8150 corp: 80/78Kb lim: 5390 exec/s: 0 rss: 54Mb L: 1566/5390 MS: 1 InsertByte-
+#114	NEW    cov: 4662 ft: 8152 corp: 81/83Kb lim: 5390 exec/s: 0 rss: 55Mb L: 5390/5390 MS: 1 CopyPart-
+#116	NEW    cov: 4662 ft: 8153 corp: 82/83Kb lim: 5390 exec/s: 0 rss: 55Mb L: 425/5390 MS: 2 CrossOver-PersAutoDict- DE: "\001\000\000o"-
+#118	NEW    cov: 4662 ft: 8164 corp: 83/84Kb lim: 5390 exec/s: 0 rss: 55Mb L: 1006/5390 MS: 2 CopyPart-ChangeBinInt-
+#121	NEW    cov: 4663 ft: 8165 corp: 84/86Kb lim: 5390 exec/s: 0 rss: 55Mb L: 1810/5390 MS: 3 ChangeASCIIInt-ChangeBit-CopyPart-
+#122	NEW    cov: 4663 ft: 8166 corp: 85/87Kb lim: 5390 exec/s: 0 rss: 55Mb L: 624/5390 MS: 1 InsertRepeatedBytes-
+[... 14903 lines of libFuzzer progress cut; head and tail kept ...]
+"\001\000\000\000\000\000\000\252" # Uses: 1201
+"\000\000\000\000\000\000\000V" # Uses: 1166
+"\377\377\377\377\377\377\005g" # Uses: 1073
+"\000\000\000\000\000\000\002\232" # Uses: 1081
+"\001\000\000\000\000\000\000?" # Uses: 1111
+"\377\377\377`" # Uses: 1094
+"\377\377\377\377\377\377\377\023" # Uses: 1017
+"\001\000\000n" # Uses: 976
+"\000\000\000\000\000\000\000\010" # Uses: 990
+"\307\003\000\000\000\000\000\000" # Uses: 1021
+"]\003\000\000\000\000\000\000" # Uses: 1102
+"\000\000\000\000\000\000\000\334" # Uses: 992
+"\000\000\000y" # Uses: 946
+"\000\000\000\000\000\000\002\323" # Uses: 879
+"\000\000\000\000\000\000\0004" # Uses: 932
+"\001\000\000\007" # Uses: 852
+"\006\000" # Uses: 934
+"\025\000\000\000\000\000\000\000" # Uses: 897
+"\377\377\377\377\377\377\000s" # Uses: 860
+"\366\000\000\000\000\000\000\000" # Uses: 879
+"\021\000\000\000\000\000\000\000" # Uses: 837
+"\001\000\000\000\000\000\0024" # Uses: 810
+"T\002\000\000\000\000\000\000" # Uses: 791
+"\001\000\000\000\000\000\001\234" # Uses: 748
+"\001\000\000\000\000\000\000\"" # Uses: 795
+"\377\377\377\377\377\377\377\236" # Uses: 804
+"\377\377\377\011" # Uses: 790
+"\377\377\377\377\377\377\377>" # Uses: 708
+"m\002\000\000\000\000\000\000" # Uses: 667
+"\004\001\000\000\000\000\000\000" # Uses: 671
+"\001\000\000\000\000\000\000$" # Uses: 649
+"\377\377\377\377\377\377\002\211" # Uses: 682
+"\377\377\377\377\377\377\377<" # Uses: 665
+"\001\000\000\000\000\000\000'" # Uses: 632
+"h\000\000\000\000\000\000\000" # Uses: 654
+"<\000\000\000\000\000\000\000" # Uses: 499
+"\001\000\000\002" # Uses: 540
+"\000\000\000\000\000\000\000\342" # Uses: 523
+"\000\000\000\000\000\000\000(" # Uses: 471
+"7\000\000\000\000\000\000\000" # Uses: 394
+"\001\000\000\000\000\000\000\006" # Uses: 416
+"\377\377\377\377\377\377\377\241" # Uses: 350
+"\377\377\377g" # Uses: 384
+"\\\001\000\000\000\000\000\000" # Uses: 334
+"\377\377\377t" # Uses: 313
+"y\000\000\000\000\000\000\000" # Uses: 250
+"\377\377\377\377\377\377\377#" # Uses: 215
+"p\000\000\000" # Uses: 228
+"\377\377\377\377\377\377\377\017" # Uses: 213
+"\257R%\375.`\000\000" # Uses: 103
+"6\000\000\000\000\000\000\000" # Uses: 2
+###### End of recommended dictionary. ######
+Done 4077978 runs in 301 second(s)
+stat::number_of_executed_units: 4077978
+stat::average_exec_per_sec:     13548
+stat::new_units_added:          14672
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              611
+fuzz run: ipc_server_frame_decode ran for 300 s without a crash
+exit 0

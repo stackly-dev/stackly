@@ -1,0 +1,55 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000001",
+    "reply": {
+      "type": "daemon.get_health",
+      "content": {
+        "status": "degraded",
+        "subsystems": [
+          {
+            "name": "ipc",
+            "status": "ok",
+            "detail": null
+          },
+          {
+            "name": "event_bus",
+            "status": "ok",
+            "detail": null
+          },
+          {
+            "name": "log_sink",
+            "status": "degraded",
+            "detail": "12 log lines dropped in the last minute"
+          },
+          {
+            "name": "registry",
+            "status": "not_built",
+            "detail": null
+          },
+          {
+            "name": "operations",
+            "status": "not_built",
+            "detail": null
+          },
+          {
+            "name": "supervisor",
+            "status": "unavailable",
+            "detail": "socket missing, retrying"
+          }
+        ],
+        "counters": {
+          "connectionsOpen": 1,
+          "connectionsTotal": 12,
+          "connectionsRejected": 2,
+          "framesRejected": 3,
+          "eventsPublished": 40,
+          "eventsDropped": 1500,
+          "logLinesDropped": 0,
+          "socketRebinds": 1
+        },
+        "recovery": null
+      }
+    }
+  }
+}

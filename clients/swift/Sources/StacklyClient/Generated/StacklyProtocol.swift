@@ -200,10 +200,12 @@ public enum ErrorCategory: String, Codable, Sendable, Equatable {
 	case `internal`
 }
 
-/// One params field that failed to decode or validate.
+/// One params field that failed to decode or validate. An error carries at
+/// most 32 of them (`FIELD_ERRORS_MAX`) and counts the rest in its
+/// `omitted` detail.
 public struct FieldError: Codable, Sendable, Equatable {
 	/// Where the field sits, relative to the params, such as `name`,
-	/// `since.sequence`, or `kinds[3]`.
+	/// `since.sequence`, or `kinds[3]`. At most 256 characters.
 	public let path: String
 	/// A code from the fixed set in [`FieldCode`].
 	public let code: String
@@ -250,8 +252,9 @@ public struct ErrorItem: Codable, Sendable, Equatable {
 /// The error envelope every daemon error and every client side IPC error
 /// uses (VAL-020).
 /// 
-/// `code`, `category`, `message`, and `details` are frozen across majors, so
-/// peers of any major can always exchange `protocol.major_mismatch`.
+/// `code`, `category`, `message`, `retryable`, and `details` are frozen
+/// across majors, so peers of any major can always exchange
+/// `protocol.major_mismatch`.
 public struct ErrorBody: Codable, Sendable, Equatable {
 	/// A catalog code, `<area>.<reason>`.
 	public let code: String
