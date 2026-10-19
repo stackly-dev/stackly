@@ -34,6 +34,7 @@
 | `2026-10-19` | Baris Follow-up spec sumber (0002, 0003, 0006, 0008, 0009, 0010, 0011, 0013) yang dijawab spec baru dicentang lead lewat `/sync` di akhir wave, bukan oleh architect, karena beberapa architect menjawab baris di spec sumber yang sama. | `lead` |
 | `2026-10-19` | `arc-f15-spec` juga memiliki update spec 0004 untuk port `background_agent` (Follow-up 0004 "Fitur 15, 28, dan 31"), karena F4 selesai dan tidak ada sesi lain yang menyentuh spec 0004. Update additive ke spec 0009 (F18 `versions.json`, F23 probe native) ditulis di spec fitur masing masing sebagai usulan dan menjadi item `architect (update)` setelah F9 ditutup, karena sesi `f9-closeout` masih memegang spec 0009. | `lead` |
 | `2026-10-19` | Folder skill `.claude/skills/coordinate/` belum ter-commit di `main`; brief mengandalkan field "Checkout utama" untuk membaca role dan template. | `lead` |
+| `2026-10-19` | Spec 0017 diterima dengan semua rekomendasi cross check (G1 sampai G11, S1 sampai S13), sesuai aturan user. Dampak lintas fitur: S8 memindahkan pin paket dan baris `provider_sources` (AC-13, AC-14, milestone 4 lama) ke fitur 20 lewat bagian "Kontrak untuk fitur 20" di spec 0017; S10 membuat keenam entri catalog `planned` di F17, dan build F19 dan F23 memindahkan PostgreSQL dan NATS ke provider di commit yang membuktikan lifecycle-nya; S11 menjadi Follow-up untuk F18 (`HostFacts` menggantikan batas `minOs` 27.0); prasyarat F17 milestone 1 adalah update spec 0009 (`versions()`) setelah F9 ditutup. | `lead` |
 
 ## Blocker terbuka
 
