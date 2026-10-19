@@ -30,14 +30,14 @@ Opsi 1 dipilih karena spec 0012 dan 0013 sudah menetapkan bahwa tampilan status 
 
 ### Keputusan 3: sumber Needs Attention
 
-- **Opsi 1 (dipilih): fungsi murni di client atas store yang sudah disinkronkan (`InstanceStore`, `OperationCenter`, `CapacityModel`, `DaemonHealth`).** Pro: tidak ada method atau event baru untuk perhatian, daftar diperbarui seketika lewat event yang sudah ada, dan fitur lain menambah aturan cukup dengan baris tabel baru. Kontra: aturan tinggal di Swift saja, jadi CLI tidak punya padanan Needs Attention.
+- **Opsi 1 (dipilih): fungsi murni di client atas store yang sudah disinkronkan (`InstanceStore`, `OperationCenter`, `RuntimeStore`, `CapacityModel`).** Pro: tidak ada method atau event baru untuk perhatian, daftar diperbarui seketika lewat event yang sudah ada, dan fitur lain menambah aturan cukup dengan baris tabel baru. Kontra: aturan tinggal di Swift saja, jadi CLI tidak punya padanan Needs Attention. Status subsystem daemon sengaja tidak menjadi item (cross check): footer dan Diagnostics sudah menampilkannya, dan subsystem yang degraded hanya mengulang item operasi dan instance.
 - **Opsi 2: method daemon `overview.get_attention`.** Pro: satu aturan untuk GUI dan CLI. Kontra: harus dipanggil ulang atau punya event sendiri, menduplikasi data yang sudah ada di store, dan copy UI (bahasa Inggris, lokal app) akan berpindah ke daemon.
 
 Opsi 1 dipilih. CLI sudah menampilkan semua bahan mentahnya (`list` dan `inspect`), dan Done when hanya meminta paritas untuk `list` dan `inspect`.
 
 ### Keputusan 4: sumber peringatan kapasitas
 
-- **Opsi 1 (dipilih): method baru `storage.get_capacity` yang membaca `statfs` untuk root data, logs, dan cache, dengan level dihitung daemon.** Pro: sumber terdefinisi yang diminta Done when, tersedia sekarang tanpa fitur 28, aturan ambang di satu tempat (pola spec 0017: status dihitung daemon), aman di recovery mode, dan murah (satu syscall per root). Kontra: method dan area baru, dan GUI harus polling karena tidak ada event.
+- **Opsi 1 (dipilih): method baru `storage.get_capacity` yang membaca `statfs` untuk volume root data, dengan level dihitung daemon.** Pro: sumber terdefinisi yang diminta Done when, tersedia sekarang tanpa fitur 28, aturan ambang di satu tempat (pola spec 0017: status dihitung daemon), aman di recovery mode, dan murah (satu syscall). Kontra: method, area, dan kode error baru, dan GUI harus polling karena tidak ada event. Draft awal mengukur root data, logs, dan cache dan mengelompokkannya per volume; cross check menunjukkan ketiganya selalu di volume yang sama di produksi dan di bawah `STACKLY_ROOT`, jadi bentuknya disederhanakan ke satu volume dengan satu kode error, dan root lain bisa ditambah secara additive. Pembacaan dibatasi single flight dengan timeout 5 detik supaya mount yang menggantung tidak menumpuk thread.
 - **Opsi 2: field kapasitas di `DaemonHealth` yang sudah di heartbeat setiap 15 detik.** Pro: tanpa polling tambahan. Kontra: mengubah DTO milik spec 0006 untuk sesuatu yang bukan kesehatan daemon, dan `statfs` berjalan setiap heartbeat walau Overview tidak tampil.
 - **Opsi 3: tampil unavailable sampai fitur 28.** Pro: tanpa kerja. Kontra: pengguna tidak diperingatkan sebelum database gagal menulis, padahal sumbernya mudah.
 
@@ -45,14 +45,14 @@ Opsi 1 dipilih. Polling 60 detik hanya saat Overview tampil cukup untuk perubaha
 
 ### Keputusan 5: ambang kapasitas
 
-- **Opsi 1 (dipilih): `critical` di bawah 2 GB tersedia, `low` di bawah 10 GB atau terpakai 90 persen, `filling` terpakai 80 persen.** Pro: `filling` sama dengan contoh mockup (82 persen sebagai info), batas absolut melindungi disk besar yang persentasenya tampak aman tetapi sisa sedikit, dan batas 2 GB berada di atas cadangan 64 MiB yang dipakai install runtime spec 0018. Kontra: angka dipilih tanpa data pemakaian nyata.
+- **Opsi 1 (dipilih): `critical` di bawah 2 GB tersedia, `low` di bawah 5 GB atau terpakai 90 persen, `filling` terpakai 80 persen.** Pro: `filling` sama dengan contoh mockup (82 persen sebagai info), batas absolut melindungi disk besar yang persentasenya tampak aman tetapi sisa sedikit, dan batas 2 GB berada di atas cadangan 64 MiB yang dipakai install runtime spec 0018. Kontra: angka dipilih tanpa data pemakaian nyata. Draft awal memakai 10 GB untuk `low`; karena `f_bavail` di APFS tidak menghitung ruang purgeable, angka itu bisa memperingatkan Mac yang sehat, jadi diturunkan ke 5 GB dan copy memakai "about".
 - **Opsi 2: satu ambang persentase saja.** Pro: sederhana. Kontra: disk 4 TB pada 95 persen masih punya 200 GB, sedangkan disk 256 GB pada 85 persen hanya 38 GB.
 
 Konstanta ada di domain supaya mudah disetel ulang lewat update spec.
 
 ### Keputusan 6: ownership di daftar instance
 
-- **Opsi 1 (dipilih): field wire `InstanceSummary.ownership`, enum terbuka bertag dengan `manual`, diisi daemon sampai fitur 44 menambah keanggotaan environment.** Pro: arti mockup ("Manual", "Dedicated · lease", "Shared · lease") terpenuhi, JSON CLI membawa field yang sama, dan fitur 44 cukup menambah varian dan mengganti derivasi. Kontra: field dengan satu nilai untuk sementara, dan namanya mirip kolom registry `instances.ownership` yang artinya asal data.
+- **Opsi 1 (dipilih): field wire `InstanceSummary.ownership`, enum terbuka tanpa data (`manual`, `unrecognized`) dengan `#[serde(default)]` bernilai `manual`, diisi daemon sampai fitur 44 menambah keanggotaan environment.** Pro: arti mockup ("Manual", "Dedicated · lease", "Shared · lease") terpenuhi, JSON CLI membawa field yang sama, field opsional sesuai aturan minor spec 0006 sehingga daemon lama tetap terbaca, dan fitur 44 cukup menambah nilai enum dan field saudara untuk environment pemilik. Kontra: field dengan satu nilai untuk sementara, dan namanya mirip kolom registry `instances.ownership` yang artinya asal data. Draft awal memakai enum bertag dengan data; cross check menunjukkan spec 0006 hanya mengizinkan enum terbuka tanpa data.
 - **Opsi 2: teks "Manual" tetap di GUI tanpa field wire.** Pro: tanpa perubahan protokol. Kontra: nilai yang tidak berasal dari daemon, CLI tidak bisa menampilkannya di JSON, dan fitur 44 harus menambah field juga.
 - **Opsi 3: kirim kolom registry `instances.ownership` (`created`).** Pro: sudah ada di registry. Kontra: artinya asal data, bukan kepemilikan environment yang dimaksud mockup dan PAGE-03 bersama "environment reference".
 
@@ -80,7 +80,7 @@ Opsi 1 dipilih; doc comment dan *Kepemilikan* membedakan dua arti itu secara eks
 
 ### Keputusan 11: halaman di `stackly instance list`
 
-- **Opsi 1 (dipilih): ambil semua halaman.** Pro: jumlah dan `--status` dihitung atas semua instance, sama dengan GUI yang juga memuat semua halaman; jumlah instance terbatas (baseline 100). Kontra: berbeda dengan pola `operation list` spec 0008.
+- **Opsi 1 (dipilih): ambil semua halaman.** Pro: jumlah dan `--status` dihitung atas semua instance, sama dengan GUI yang juga memuat semua halaman; jumlah instance terbatas (baseline 100); `stackly runtime list` spec 0018 memakai pola yang sama untuk resource yang juga terbatas. Kontra: berbeda dengan pola `operation list` spec 0008.
 - **Opsi 2: `--limit` dan `--before` seperti `operation list`.** Pro: konsisten dengan spec 0008. Kontra: jumlah dan filter per halaman menyesatkan, dan riwayat operasi yang tidak terbatas adalah alasan pola itu, bukan instance.
 
 ### Keputusan 12: `inspect` dan nama instance di CLI
@@ -96,7 +96,7 @@ Opsi 1 dipilih; doc comment dan *Kepemilikan* membedakan dua arti itu secara eks
 
 ### Keputusan 14: arti partial
 
-- **Opsi 1 (dipilih): di halaman, partial berarti ada refetch item yang gagal (`ResourceStore.itemFailures`); di Overview, setiap seksi juga gagal sendiri sendiri.** Pro: sesuai pola partial spec 0012 (item yang belum berhasil beserta alasannya dan aksi Retry), dan memenuhi "error di satu instance tidak membuat seluruh layar kosong". Kontra: menambah state per item di `ResourceStore` milik spec 0013.
+- **Opsi 1 (dipilih): di halaman, partial berarti ada refetch item yang gagal (`ResourceStore.itemFailures`, berisi error dan revision supaya Retry tahu revision yang diminta, dan baris itu memakai detail "Refresh failed"); di Overview, setiap seksi juga gagal sendiri sendiri.** Pro: sesuai pola partial spec 0012 (item yang belum berhasil beserta alasannya dan aksi Retry), dan memenuhi "error di satu instance tidak membuat seluruh layar kosong". Kontra: menambah state per item di `ResourceStore` milik spec 0013.
 - **Opsi 2: decode lossy per item di halaman `instance.list`.** Pro: menangani item yang tidak bisa dibaca. Kontra: dengan enum tertutup dan aturan versi protokol, item yang gagal decode berarti bug, bukan keadaan yang wajar; butuh decoder tulisan tangan di atas tipe hasil generate.
 
 ### Keputusan 15: navigasi antar halaman
@@ -131,8 +131,16 @@ Titik sambung untuk fitur berikutnya (20, 21, 26, 29, 33, 35, 44, 67, 69) dituli
 - `I10` (tidak bisa diadopsi lagi) bertone neutral, karena instance tetap berjalan normal sampai daemon restart.
 - Seksi Operations dan judul operasi tidak menampilkan persen untuk jenis selain install, karena hanya spec 0018 yang mendefinisikan persen keseluruhan.
 - Copy Name dan Copy ID di menu konteks tidak digate, karena tidak mengubah data.
-- Inspector tampil secara default, sama dengan state awal mockup.
+- Inspector tampil secara default, sama dengan state awal mockup; kolom Version dan Endpoints mengalah di bawah 760 pt supaya Name dan Status tetap terlihat di 640 pt.
+- Dalam satu tone, item disk diurutkan sebelum operasi dan instance, supaya disk critical tidak tersembunyi di balik banyak instance gagal.
+- `InstanceSummary.initialized` ditambahkan karena instance `failed` yang belum pernah terinisialisasi ditolak `supervisor.not_initialized` saat start; tanpa field itu tombol Retry akan selalu gagal (masukan arc-f20-spec). Fitur 20 tidak mengusulkan field yang setara.
+- Key `outcomeUnknown` hanya dipakai ulang selama `revision` summary belum berubah dan paling lama 5 menit, supaya klik yang jauh kemudian tidak memutar ulang reply lama tanpa efek.
 
 ## Cross check
 
-Belum dijalankan.
+Dijalankan 2026-10-20 dengan model lain (Sonnet), read only, terhadap draft `728b5c0`, termasuk membaca kode `StacklyUI` yang sudah dibangun. Hasilnya 2 blocker, 16 gap, dan 7 catatan minor; semua rekomendasi disetujui lead atas nama user dan diterapkan, kecuali satu saran yang ditolak atas rekomendasi architect.
+
+- **Diterapkan, kontrak**: `ResourceStore` yang sudah dibangun membuang `.patch` dengan revision sama, padahal `instance.health_changed` diterapkan lewat `statusSeq` (spec 0013); lead foundation menetapkan aturan itu milik spec 0013 milestone 4 langkah 16, jadi milestone 3 spec ini menunggu langkah itu tanpa jalur cadangan. `ownership` menjadi enum terbuka tanpa data dengan default (aturan spec 0006). `initialized` ditambahkan (masukan arc-f20-spec). Instance retained disaring di `InstanceStore` dari semua jalur. Fixture wire pindah ke `protocols/fixtures/ipc/` dengan `index.json`.
+- **Diterapkan, kelengkapan keputusan**: status tombol aksi (`inFlight` sejak klik, `pending` dibersihkan juga oleh resnapshot dengan `operation.get`, umur key `outcomeUnknown`); isi O1 menurut `recovery.hint` dan `auto_compensate` tanpa item; aturan subsystem daemon dihapus; signature `AttentionRules.items` dengan `runtimes`, `now`, `locale`, `timeZone`, dan `id` stabil; progress seksi sebelum sumber termuat; detail urut dan pencarian per field; format port, uptime, dan umur; signature `ProviderTile` sebagai usulan spec 0017; kasus tepi kapasitas (`total` 0, jepit, reply lama, pemilik `CapacityModel`, pemicu `completedRounds`); copy untuk nilai null dan nomor restart; detail CLI (baris jumlah, warna, details `name`, bentuk UUID); testability AC-14; prasyarat build dan cek manual.
+- **Diterapkan, soundness**: `ShellNavigator` tidak memegang `@SceneStorage` dan membaca permintaan lewat `onChange(initial: true)`; kolom tabel mengalah di lebar sempit; jalur keyboard aksi lewat inspector; ambang `low` 5 GB dan copy "about"; kapasitas hanya untuk volume root data dengan satu kode error; single flight dengan timeout 5 detik; `itemFailures` menyimpan revision; keterangan kartu memakai `.subheadline`.
+- **Ditolak**: saran memindah `stopping` ke kelompok `stopped`. Proses yang sedang berhenti masih hidup, jadi menghitungnya Stopped mengulang masalah "dihitung dari PID" dari arah sebaliknya; `stopping` tetap `notReady`.
