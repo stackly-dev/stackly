@@ -27,6 +27,11 @@
 //! [`fake_server::binary`], which builds `stackly-fake-server` once per
 //! test process (spec 0009).
 //!
+//! Tests of the process supervisor run against [`FakeProcessSupervision`],
+//! the process port of [`FakePlatform`]: made up processes the test starts,
+//! changes, and ends, real lock and spool files in the test root, a call
+//! log, and injectable errors (spec 0010).
+//!
 //! On macOS, [`DiskImage`] attaches a small disk image inside a test root,
 //! so [`fs_cross_device_conformance`] can check that a removal never
 //! crosses onto another device (spec 0007).
@@ -44,6 +49,8 @@ mod disk_image;
 mod fake_fs;
 #[cfg(unix)]
 mod fake_platform;
+#[cfg(unix)]
+mod fake_process;
 mod fake_secret;
 #[cfg(unix)]
 pub mod fake_server;
@@ -67,6 +74,10 @@ pub use disk_image::DiskImage;
 pub use fake_fs::{FakeFilesystem, Fault, FsOp, Mutation};
 #[cfg(unix)]
 pub use fake_platform::{FakeClock, FakeIdentity, FakePlatform, FakePlatformInfo};
+#[cfg(unix)]
+pub use fake_process::{
+    FakeProcessState, FakeProcessSupervision, FakeSpawn, ProcessCall, ProcessOp,
+};
 pub use fake_secret::{FakeSecretStore, SecretCall, SecretHold, SecretOp};
 #[cfg(unix)]
 pub use fifo::make_fifo;

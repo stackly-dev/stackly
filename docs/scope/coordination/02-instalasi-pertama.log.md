@@ -2,10 +2,10 @@
 
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `58e3bc2`
-- **Wave aktif:** `2`, mulai `2026-10-19`
-- **Diperbarui:** `2026-10-19 23:55`
+- **Wave aktif:** `2`, mulai `2026-10-20`
+- **Diperbarui:** `2026-10-20 05:25`
 
-## Sub sesi wave `1`
+## Sub sesi wave `1` dan `2`
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -13,10 +13,14 @@
 | `architect-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `-` | `-` | `diarsipkan` (sama) |
 | `architect-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `-` | `-` | `diarsipkan` (sama) |
 | `architect-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `-` | `-` | `diarsipkan` (sama) |
-| `arc-f15-spec` | `architect` | 15. Background agent & CLI install · Design it (spec), plus update spec 0004 port `background_agent` | `02-instalasi-pertama.md` | `docs/specs/0015-background-agent-cli-install/`, `docs/specs/0004-domain-core-platform-abstraction/index.md` (port `background_agent` saja) | `claude/arc-f15-spec-c53e6f` | `opus` (cross check `sonnet`) | `merged` |
-| `arc-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `claude/arc-f17-spec-5e714b` | `opus` (cross check `sonnet`) | `merged` |
-| `arc-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `claude/arc-f18-spec-634bf8` | `opus` (cross check `fable`) | `merged` |
-| `arc-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `claude/arc-f19-spec-b5bcbf` | `opus` (cross check `fable`) | `merged` |
+| `arc-f15-spec` | `architect` | 15. Background agent & CLI install · Design it (spec), plus update spec 0004 port `background_agent` | `02-instalasi-pertama.md` | `docs/specs/0015-background-agent-cli-install/`, `docs/specs/0004-domain-core-platform-abstraction/index.md` (port `background_agent` saja) | `claude/arc-f15-spec-c53e6f` | `opus` (cross check `sonnet`) | `merged`; `aktif` lagi untuk perbaikan konsistensi |
+| `arc-f17-spec` | `architect` | 17. Catalog & provider detail · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0017-catalog-provider-detail/` | `claude/arc-f17-spec-5e714b` | `opus` (cross check `sonnet`) | `merged`; `aktif` lagi untuk perbaikan konsistensi |
+| `arc-f18-spec` | `architect` | 18. Install runtime managed · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0018-install-runtime-managed/` | `claude/arc-f18-spec-634bf8` | `opus` (cross check `fable`) | `merged`; `aktif` lagi untuk perbaikan konsistensi |
+| `arc-f19-spec` | `architect` | 19. Provider PostgreSQL · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0019-provider-postgresql/` | `claude/arc-f19-spec-b5bcbf` | `opus` (cross check `fable`) | `merged`; `aktif` lagi untuk perbaikan konsistensi |
+| `arc-f20-spec` | `architect` | 20. Create instance · Design it (spec), plus Kontrak untuk fitur 20 dari spec 0017 | `02-instalasi-pertama.md` | `docs/specs/0020-create-instance/` | `claude/distracted-babbage-61ce41` | `opus` | `aktif` |
+| `arc-f23-spec` | `architect` | 23. Provider NATS lewat manifest · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0023-provider-nats-manifest/` | `claude/eager-roentgen-3863a9` | `opus` | `aktif` |
+| `arc-f16-spec` | `architect` | 16. Onboarding · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0016-onboarding/` | `claude/practical-jang-d62a77` | `opus` | `aktif` |
+| `arc-f22-spec` | `architect` | 22. Overview & daftar instance · Design it (spec) | `02-instalasi-pertama.md` | `docs/specs/0022-overview-daftar-instance/` | `claude/exciting-wescoff-e3d601` | `opus` | `aktif` |
 
 ## Keputusan
 
@@ -45,9 +49,13 @@
 | `2026-10-19` | Akhir wave 1: selisih mockup Catalog (spec 0017) dan onboarding (spec 0015) dicatat di "Selisih yang sudah diketahui" `ui-macos.md` sesuai rekomendasi architect, dan kedua baris Follow-up-nya dicentang. Sync akhir wave tidak mengubah `AGENTS.md` karena wave 1 hanya me-merge spec, tanpa kode. | `lead` |
 | `2026-10-19` | F21 `Build it` tidak punya Pointer dan Done when-nya menjangkau daemon, CLI, dan GUI serta nilai yang belum ada di spec mana pun (bentuk connection string, Follow-up spec 0009 dan 0019), jadi diperlakukan seperti kotak `(spec)`: architect `arc-f21-spec` dengan spec `0021-start-readiness-connection` setelah spec 0020 di-merge; lead menempel Pointer dan milestone di bawah `Build it` yang ada tanpa menambah `Design it`. Ini mengganti catatan "0021 dibiarkan kosong". | `lead` |
 | `2026-10-19` | Wave 2 diajukan sebagai empat kartu (`arc-f16-spec` task_11ce2373, `arc-f20-spec` task_0e05870d, `arc-f22-spec` task_f4d8d6d9, `arc-f23-spec` task_6bf8be98) karena giliran ini dipicu pesan sesi; user memulainya dengan klik atau dengan meminta lead. | `lead` |
+| `2026-10-20` | User meminta empat architect wave 2 dimulai dan koordinasi dilanjutkan sampai scope selesai; keempat kartu dimulai dari giliran user. Branch dinamai aplikasi (`claude/<nama acak>`), bukan `branch_name` brief, karena kartu tidak membawa `branch_name`. | `user` |
+| `2026-10-20` | Workflow konsistensi lintas spec (5 pencari plus 5 verifikator skeptis, `wf_a4e9f2c7-a51`) atas spec 0015, 0017, 0018, 0019: 35 temuan terkonfirmasi (9 major), 7 dibantah. Perbaikan dikirim sebagai `architect (update)` ke sesi architect asal masing masing (0018: 22, 0017: 6, 0019: 4, 0015: 2). Keputusan lead: langkah catalog di `cargo xtask build-app` milik spec 0017 milestone 4 (0015 hanya slot) supaya milestone 1 F15 tidak menunggu F17; hint error satu bentuk untuk semua area, `codes::<area>::hint(code, details)` yang dipasang stacklyd lewat `with_hint`, sebagai usulan update spec 0006 (diantrikan setelah sesi contract 1.4 foundation selesai); `CatalogBuilder` pindah ke `stackly_core::catalog::testing`. | `lead` |
+| `2026-10-20` | Spec 0016 diterima dengan 20 jawaban gap rekomendasi (cross check Fable 5.1, satu blocker AC-6: di bawah `STACKLY_ROOT` secret ada di keychain file, bukan Login Keychain, jadi teks override berbeda). Onboarding read only di jendela utama, satu satunya tulisan `onboarding.finished` di UserDefaults, dibuka lagi dari menu Help. Usulan ke spec 0015 (`unavailableDetail`, `CommandLineToolModel`, `UserHome.current()`) diteruskan ke pemilik 0015; usulan ke 0013 diantrikan setelah build F13 foundation masuk. Selisih mockup onboarding yang disengaja dicatat di `ui-macos.md` saat sync akhir wave. | `lead` |
 
 ## Blocker terbuka
 
+- `architect (update)` spec 0006: fungsi hint per area (`codes::<area>::hint`) dan baris `daemon.restart_unavailable` (spec 0015); setelah sesi contract 1.4 foundation selesai.
 - `architect (update)` spec 0010 dan 0011 (tambahan additive spec 0019: `runExecutable` `stdin.text`, format detail probe `exec`, `x-stackly.printableOnly` di `SecretService::put`): setelah build F10 dan F11 di `01-foundation.md` masuk `main`.
 - F17 milestone 1: `architect (update)` spec 0009 (`ValidatedPackage::versions() -> &VersionCatalog` dengan `VersionArtifact` dan `ArtifactStatus`, bagian *Usulan update spec lain* spec 0017). Dibuka setelah fitur 9 ditutup oleh sesi `f9-closeout`.
 
@@ -65,4 +73,4 @@
 ## Riwayat wave
 
 - Wave `1` (`2026-10-19` sampai `2026-10-19`, hash awal `6b3da2c`): selesai. Graph diperbarui di akhir wave (`/graphify . --update`, 13 dokumen, 17038 node, 799 community). `Design it` F15, F17, F18, F19 dicentang dan keempat branch architect di-merge (`776f4bb`, `78f3ec7`, `ede6d7b`, `f9bece6`). Terbuka: `Build it` keempat fitur (menunggu fondasi dan item `architect (update)`), Design it F16, F20, F22, F23. Blocker: F15 milestone 4 (signing), update spec 0009 (F9 belum ditutup). Kotak di scope lain yang terbuka karena wave ini: tidak ada.
-- Wave `2` (`2026-10-19` sampai `-`, hash awal `58e3bc2`): architect F16, F20, F22, F23 diajukan sebagai kartu; F21 architect menyusul setelah spec 0020 di-merge.
+- Wave `2` (`2026-10-20` sampai `-`, hash awal `58e3bc2`): architect F16, F20, F22, F23 diajukan sebagai kartu; F21 architect menyusul setelah spec 0020 di-merge.
