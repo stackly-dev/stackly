@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use jiff::SignedDuration;
-use stackly_core::operation::testing::RecordingEvents;
+use stackly_core::operation::testing::{RecordedEvent, RecordingEvents};
 use stackly_core::operation::{
     BeginOutcome, BeginRequest, BusyPolicy, EngineDeps, EngineLimits, OperationDetailView,
     OperationEngine, OperationError, OperationWork, Origin, RequestOrigin,
@@ -202,6 +202,47 @@ pub async fn wait_state(
     state: OperationState,
 ) -> OperationDetailView {
     wait_until(engine, id, |detail| detail.view.operation.state() == state).await
+}
+
+/// Waits until the recorder saw the operation's `state_changed` event to
+/// `state`, for at most ten seconds, and returns the operation's events.
+/// The engine reports a change only after its commit, so a `get` can show
+/// the new state before the event is out.
+pub async fn wait_event(
+    events: &RecordingEvents,
+    id: OperationId,
+    state: OperationState,
+) -> Vec<RecordedEvent> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let seen = events.of(id);
+        if seen
+            .iter()
+            .any(|event| event.kind == "state_changed" && event.state == state)
+        {
+            return seen;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "operation {id} reported no change to {state} in time: {seen:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+
+/// Waits until no runner holds a running slot, for at most ten seconds. A
+/// runner keeps its slot until it has done everything after the final
+/// commit too, such as removing the scratch folder.
+pub async fn wait_idle(engine: &OperationEngine) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    while engine.stats().running > 0 {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "a runner still holds its slot: {:?}",
+            engine.stats()
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
 }
 
 /// Stores an instance, with its provider revision and runtime, and returns
