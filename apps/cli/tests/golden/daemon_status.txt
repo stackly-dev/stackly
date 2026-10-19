@@ -1,0 +1,14 @@
+Status      degraded
+Version     0.1.0 (protocol <major>.<minor>)
+PID         4242
+UID         501
+Started     2026-10-18 03:04:05 +00:00 (<age>)
+Server ID   0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e
+Subsystems  operations: degraded (queue is slow)
+            supervisor: not_built (arrives with feature 10)
+Data        /stackly/data
+Logs        /stackly/logs
+Cache       /stackly/cache
+Runtime     /stackly/run
+Socket      /stackly/run/stacklyd.sock
+Override    no
