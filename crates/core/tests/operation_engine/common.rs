@@ -7,14 +7,17 @@ use jiff::SignedDuration;
 use stackly_core::operation::testing::RecordingEvents;
 use stackly_core::operation::{
     BeginOutcome, BeginRequest, BusyPolicy, EngineDeps, EngineLimits, NoSecretsYet,
-    OperationDetailView, OperationEngine, OperationWork, Origin, RequestOrigin,
+    OperationDetailView, OperationEngine, OperationError, OperationWork, Origin, RequestOrigin,
 };
 use stackly_core::{PreparedLayout, prepare_layout};
 use stackly_domain::{
-    JournalPayload, OperationId, OperationKind, OperationResource, OperationState,
+    DetailKey, ErrorCodeName, InstanceId, JournalPayload, OperationId, OperationKind,
+    OperationResource, OperationState, Registry, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, Platform};
-use stackly_testkit::{FakePlatform, FakeRegistry, TestRoot};
+use stackly_testkit::{
+    FakePlatform, FakeRegistry, InstanceBuilder, ProviderRevisionBuilder, RuntimeBuilder, TestRoot,
+};
 
 /// Limits with short intervals, so retries and progress windows take
 /// milliseconds.
@@ -139,6 +142,7 @@ pub fn request(
         origin: Origin::Background,
         input: JournalPayload::empty(),
         work,
+        precheck: None,
     }
 }
 
@@ -190,4 +194,60 @@ pub async fn wait_state(
     state: OperationState,
 ) -> OperationDetailView {
     wait_until(engine, id, |detail| detail.view.operation.state() == state).await
+}
+
+/// Stores an instance, with its provider revision and runtime, and returns
+/// its ID.
+pub fn instance(harness: &Harness) -> InstanceId {
+    let provider = ProviderRevisionBuilder::new();
+    let runtime = RuntimeBuilder::new();
+    let built = runtime.clone().build();
+    let instance = InstanceBuilder::new(&built, &provider.key()).build();
+    let id = instance.id();
+    harness
+        .registry
+        .commit(WriteBatch::new(vec![
+            WriteOp::InsertProviderRevision(provider.record()),
+            WriteOp::InsertArtifact(runtime.artifact()),
+            WriteOp::InsertRuntime(built),
+            WriteOp::InsertInstance(instance),
+        ]))
+        .expect("a test instance can be stored");
+    id
+}
+
+/// A feature error with a fixed catalog code, for works and prechecks.
+#[derive(Debug, thiserror::Error)]
+#[error("test failure {code}")]
+pub struct TestError {
+    code: ErrorCodeName,
+    retryable: bool,
+}
+
+impl TestError {
+    /// A boxed error with `code`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `code` is not an error code name.
+    pub fn boxed(code: &str, retryable: bool) -> Box<dyn OperationError> {
+        Box::new(Self {
+            code: code.parse().expect("a test error has an error code"),
+            retryable,
+        })
+    }
+}
+
+impl OperationError for TestError {
+    fn code(&self) -> ErrorCodeName {
+        self.code.clone()
+    }
+
+    fn retryable(&self) -> bool {
+        self.retryable
+    }
+
+    fn details(&self) -> Vec<(DetailKey, String)> {
+        Vec::new()
+    }
 }

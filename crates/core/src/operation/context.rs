@@ -16,6 +16,7 @@ use tokio::sync::watch;
 use tokio::time::Instant;
 
 use super::limits::{CHECKPOINT_MAX, CUSTOM_PAYLOAD_MAX, MAX_CREATED, MAX_STEPS};
+use super::precheck::NO_OP_STAGE;
 use super::state::{OpHandle, StopSignal};
 use super::work::{CreatedHandle, FinalBatch, StepSpec, StepStart, WorkError};
 use super::{EngineError, Inner, lock};
@@ -42,6 +43,7 @@ pub struct OperationContext {
     trigger: OperationTrigger,
     input: JournalPayload,
     resumable: bool,
+    close_interrupted: bool,
     open: Option<OpenStep>,
     poisoned: Option<EngineError>,
 }
@@ -68,6 +70,7 @@ impl OperationContext {
         Self {
             id: handle.id,
             kind: handle.kind,
+            close_interrupted: handle.close_interrupted,
             inner,
             handle,
             stop,
@@ -144,9 +147,14 @@ impl OperationContext {
     }
 
     /// Whether shutdown or a cancel stops the operation at a step boundary.
+    /// A kind that closes as interrupted takes a cancel in any step, since
+    /// its point of no return only withholds compensation.
     fn stop_at_boundary(&self, past: bool) -> Option<WorkError> {
         let signal = *self.stop.borrow();
-        if signal.cancel && !past {
+        if signal.abandon {
+            return Some(WorkError::Abandoned);
+        }
+        if signal.cancel && (!past || self.close_interrupted) {
             return Some(WorkError::Cancelled);
         }
         if signal.park && self.resumable {
@@ -158,10 +166,20 @@ impl OperationContext {
         None
     }
 
-    /// Whether a stop applies inside the open step.
+    /// Whether a stop applies inside the open step. A kind that closes as
+    /// interrupted takes a cancel or a shutdown abandon in any step.
     fn stop_inside_step(&self) -> Option<WorkError> {
-        let open = self.open?;
         let signal = *self.stop.borrow();
+        if self.close_interrupted {
+            return if signal.abandon {
+                Some(WorkError::Abandoned)
+            } else if signal.cancel {
+                Some(WorkError::Cancelled)
+            } else {
+                None
+            };
+        }
+        let open = self.open?;
         if (signal.cancel || (signal.halt && !self.resumable)) && open.reversible {
             return Some(WorkError::Cancelled);
         }
@@ -172,8 +190,11 @@ impl OperationContext {
     }
 
     /// Begins a step. It first honours a cancel (before the point of no
-    /// return), a shutdown park (for an operation that can resume), and a
-    /// shutdown stop (for one that cannot, before the point of no return).
+    /// return, or in any step of a kind that closes as interrupted), a
+    /// shutdown park (for an operation that can resume), a shutdown stop
+    /// (for one that cannot, before the point of no return), and a shutdown
+    /// abandon (for a kind that closes as interrupted, with nothing
+    /// written).
     /// A step that already finished before a restart returns
     /// [`StepStart::AlreadyDone`] with its checkpoint, a repeatable step
     /// that stopped runs again, and a step with `reversible: false`
@@ -182,11 +203,14 @@ impl OperationContext {
     ///
     /// # Errors
     ///
-    /// Returns [`WorkError::Cancelled`] or [`WorkError::Parked`] when the
-    /// operation stops here, and [`WorkError::Engine`] when the step cannot
-    /// be recorded.
+    /// Returns [`WorkError::Cancelled`], [`WorkError::Parked`], or
+    /// [`WorkError::Abandoned`] when the operation stops here, and
+    /// [`WorkError::Engine`] when the step cannot be recorded.
     pub async fn begin_step(&mut self, spec: StepSpec) -> Result<StepStart, WorkError> {
         self.healthy()?;
+        if self.stop.borrow().abandon {
+            return Err(WorkError::Abandoned);
+        }
         if self.open.is_some() {
             self.finish_step(None).await?;
         }
@@ -326,13 +350,16 @@ impl OperationContext {
     }
 
     /// Returns an error when the operation must stop at this safe point:
-    /// a cancel or shutdown stop inside a reversible step, or a shutdown
-    /// park inside a repeatable step of an operation that can resume.
+    /// a cancel or shutdown stop inside a reversible step, a shutdown park
+    /// inside a repeatable step of an operation that can resume, or, for a
+    /// kind that closes as interrupted, a cancel or shutdown abandon
+    /// anywhere.
     ///
     /// # Errors
     ///
-    /// Returns [`WorkError::Cancelled`], [`WorkError::Parked`], or the
-    /// [`WorkError::Engine`] of an earlier failed write.
+    /// Returns [`WorkError::Cancelled`], [`WorkError::Parked`],
+    /// [`WorkError::Abandoned`], or the [`WorkError::Engine`] of an earlier
+    /// failed write.
     pub fn check_cancel(&self) -> Result<(), WorkError> {
         self.healthy()?;
         match self.stop_inside_step() {
@@ -360,9 +387,15 @@ impl OperationContext {
     ///
     /// # Errors
     ///
-    /// Returns [`WorkError::Engine`] when the commit fails.
+    /// Returns [`WorkError::Engine`] for the reserved [`NO_OP_STAGE`] or
+    /// when the commit fails.
     pub async fn set_stage(&mut self, stage: StageName) -> Result<(), WorkError> {
         self.healthy()?;
+        if stage == NO_OP_STAGE {
+            return Err(WorkError::Engine(EngineError::InvalidUse {
+                reason: "the no_op stage is reserved for no operation answers",
+            }));
+        }
         let handle = Arc::clone(&self.handle);
         let mut record = handle.record.lock().await;
         let written = self
