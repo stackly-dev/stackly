@@ -5,8 +5,8 @@
 
 use std::time::Duration;
 
-use stackly_ipc::{Client, ConnectPolicy, IpcError, Listener};
-use stackly_protocol::codes::{events, ipc, protocol};
+use stackly_ipc::{CallOptions, Client, ConnectPolicy, IpcError, Listener};
+use stackly_protocol::codes::{events, ipc, protocol, request};
 use stackly_protocol::events::{
     Event, EventCursor, EventKind, ShutdownReason, ShuttingDown, SubscribeParams, Subscribed,
     UnsubscribeParams,
@@ -447,4 +447,119 @@ async fn a_request_above_the_frame_limit_is_refused_before_sending() {
         "nothing of the refused request reached the daemon"
     );
     drop(daemon.await.unwrap());
+}
+
+#[tokio::test]
+async fn call_detailed_sends_the_callers_request_id_and_idempotency_key() {
+    let site = Site::new();
+    let listener = site.listen();
+    let daemon = tokio::spawn(async move {
+        let mut connection = accept_and_handshake(&listener).await;
+        let call = read_request(&mut connection).await;
+        respond(&mut connection, &call.request_id, Reply::EventsUnsubscribe).await;
+        let subscribe = read_request(&mut connection).await;
+        let head = EventCursor {
+            server_instance_id: SERVER_INSTANCE,
+            sequence: Sequence::ZERO,
+        };
+        respond(
+            &mut connection,
+            &subscribe.request_id,
+            Reply::EventsSubscribe(Subscribed {
+                subscription_id: 1,
+                head,
+            }),
+        )
+        .await;
+        (call, subscribe, connection)
+    });
+    let client = connect(&site).await;
+
+    let reply = client
+        .call_detailed(
+            unsubscribe(1),
+            CallOptions::default()
+                .with_request_id("cli-0192f3a0")
+                .with_idempotency_key("key-1"),
+        )
+        .await
+        .unwrap();
+    let (subscribed, _stream) = client
+        .subscribe_detailed(
+            SubscribeParams::default(),
+            CallOptions::default().with_request_id("cli-sub-1"),
+        )
+        .await
+        .unwrap();
+    let (call, subscribe, _connection) = daemon.await.unwrap();
+
+    assert_eq!(reply, Reply::EventsUnsubscribe);
+    assert_eq!(call.request_id, "cli-0192f3a0");
+    assert_eq!(call.idempotency_key.as_deref(), Some("key-1"));
+    assert_eq!(subscribe.request_id, "cli-sub-1");
+    assert_eq!(subscribe.idempotency_key, None);
+    assert_eq!(subscribed.subscription_id, 1);
+}
+
+#[tokio::test]
+async fn a_bad_request_id_or_key_is_refused_before_sending_and_a_waiting_id_cannot_be_reused() {
+    let site = Site::new();
+    let listener = site.listen();
+    let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+    let daemon = tokio::spawn(async move {
+        let mut connection = accept_and_handshake(&listener).await;
+        let first = read_request(&mut connection).await;
+        release_rx.await.unwrap();
+        respond(&mut connection, &first.request_id, Reply::EventsUnsubscribe).await;
+        let next = read_request(&mut connection).await;
+        respond(&mut connection, &next.request_id, Reply::EventsUnsubscribe).await;
+        (first, next, connection)
+    });
+    let client = connect(&site).await;
+
+    for (options, field) in [
+        (
+            CallOptions::default().with_request_id("has space"),
+            "requestId",
+        ),
+        (CallOptions::default().with_request_id(""), "requestId"),
+        (
+            CallOptions::default().with_idempotency_key("bad key"),
+            "idempotencyKey",
+        ),
+    ] {
+        let error = client
+            .call_detailed(unsubscribe(1), options)
+            .await
+            .unwrap_err();
+        assert!(error.is(&request::MALFORMED), "{error:?}");
+        assert_eq!(error.fields()[0].path(), field);
+    }
+    let waiting = client.call_detailed(
+        unsubscribe(1),
+        CallOptions::default().with_request_id("same-id"),
+    );
+    let duplicate = async {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let error = client
+            .call_detailed(
+                unsubscribe(2),
+                CallOptions::default().with_request_id("same-id"),
+            )
+            .await
+            .unwrap_err();
+        release_tx.send(()).unwrap();
+        error
+    };
+    let (first, duplicate) = tokio::join!(waiting, duplicate);
+
+    assert_eq!(first.unwrap(), Reply::EventsUnsubscribe);
+    assert!(duplicate.is(&request::DUPLICATE_ID), "{duplicate:?}");
+    assert_eq!(
+        client.call(unsubscribe(3)).await.unwrap(),
+        Reply::EventsUnsubscribe
+    );
+    let (first, next, _connection) = daemon.await.unwrap();
+    assert_eq!(first.request_id, "same-id");
+    assert_ne!(next.request_id, "same-id", "the refused calls sent nothing");
 }
