@@ -1193,6 +1193,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "sha2",
  "stackly-core",
  "stackly-domain",
  "stackly-ipc",
