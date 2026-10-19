@@ -297,7 +297,10 @@ impl Handlers for RecordContext {
         core: &'a DaemonCore,
         context: &'a RequestContext,
     ) -> HandlerFuture<'a, stackly_protocol::daemon::DaemonInfo> {
-        *self.0.lock().unwrap() = Some(context.clone());
+        *self
+            .0
+            .lock()
+            .expect("recorded request context lock is not poisoned") = Some(context.clone());
         get_info(core)
     }
 }

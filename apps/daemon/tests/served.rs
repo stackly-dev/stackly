@@ -258,10 +258,12 @@ fn request_lines_carry_the_request_fields_and_never_the_params() {
 /// Every stderr file the daemons of `root` wrote, joined.
 fn daemon_stderr(root: &TestRoot) -> String {
     let mut text = String::new();
-    for entry in std::fs::read_dir(root.path()).unwrap() {
-        let path = entry.unwrap().path();
+    for entry in std::fs::read_dir(root.path()).expect("test root can be listed") {
+        let path = entry
+            .expect("daemon log directory entry can be read")
+            .path();
         if path.extension().is_some_and(|ext| ext == "stderr") {
-            text.push_str(&std::fs::read_to_string(path).unwrap());
+            text.push_str(&std::fs::read_to_string(path).expect("daemon stderr file can be read"));
         }
     }
     text

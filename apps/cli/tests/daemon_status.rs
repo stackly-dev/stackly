@@ -92,12 +92,20 @@ fn listing(dir: &Path) -> BTreeSet<PathBuf> {
     let mut paths = BTreeSet::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(next) = stack.pop() {
-        for entry in std::fs::read_dir(&next).unwrap() {
-            let path = entry.unwrap().path();
-            if path.symlink_metadata().unwrap().is_dir() {
+        for entry in std::fs::read_dir(&next).expect("test directory can be listed") {
+            let path = entry.expect("directory entry can be read").path();
+            if path
+                .symlink_metadata()
+                .expect("listed path metadata can be read")
+                .is_dir()
+            {
                 stack.push(path.clone());
             }
-            paths.insert(path.strip_prefix(dir).unwrap().to_path_buf());
+            paths.insert(
+                path.strip_prefix(dir)
+                    .expect("listed path is beneath the test root")
+                    .to_path_buf(),
+            );
         }
     }
     paths
