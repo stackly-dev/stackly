@@ -75,13 +75,14 @@ fn fake_platform_info_reports_macos_capabilities_and_takes_overrides() {
         PlatformCapability::Clock,
         PlatformCapability::UserIdentity,
         PlatformCapability::SecretStore,
+        PlatformCapability::ProcessSupervision,
     ] {
         assert!(caps.status(supported).is_supported(), "{supported}");
     }
     assert_eq!(
-        caps.status(PlatformCapability::ProcessSupervision),
+        caps.status(PlatformCapability::IpcEndpoint),
         CapabilityStatus::NotSupported {
-            reason: "not built yet (feature 10)"
+            reason: "not built yet (feature 6)"
         }
     );
     assert_eq!(custom.info().target().to_string(), "linux-x86_64");
