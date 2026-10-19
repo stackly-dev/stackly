@@ -20,10 +20,7 @@ const CAPABILITIES: PlatformCapabilities = PlatformCapabilities::none("")
         PlatformCapability::ProcessSupervision,
         not_built("not built yet (feature 10)"),
     )
-    .with(
-        PlatformCapability::SecretStore,
-        not_built("not built yet (feature 11)"),
-    )
+    .with(PlatformCapability::SecretStore, CapabilityStatus::Supported)
     // Feature 6 provides it without a platform trait: the transport lives
     // in `stackly-ipc`, peer credentials come through tokio, and the daemon
     // lock through std (spec 0006).

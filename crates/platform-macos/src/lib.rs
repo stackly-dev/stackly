@@ -4,6 +4,10 @@
 //! and the private temporary directory (or from `STACKLY_ROOT`, which the
 //! binary passes in) and assembles a [`stackly_platform::Platform`].
 //!
+//! [`MacosSecretStore`] keeps secret values in the login Keychain, or in a
+//! file keychain of its own for a root override and tests (spec 0011); the
+//! daemon installs it with `Platform::with_secrets`.
+//!
 //! This is the only crate where `unsafe` code may live. Every `unsafe` block
 //! needs a `// SAFETY:` comment, and `cargo xtask check-deps` rejects this
 //! opt out anywhere else.
@@ -14,8 +18,10 @@ mod fs;
 mod identity;
 mod info;
 mod platform;
+mod secret;
 
 pub use fs::MacosFilesystem;
 pub use identity::MacosIdentity;
 pub use info::MacosPlatformInfo;
 pub use platform::MacosPlatform;
+pub use secret::{KeychainSetupError, KeychainTarget, MacosSecretStore, map_status};

@@ -68,7 +68,7 @@ Aturan arah dependency spec 0001 dan 0004 tetap berlaku. Spec ini menambah:
 | `stackly-platform` | `zeroize` | `secret` (trait `SecretStore`, `SecretValue`, `Interaction`, `WriteMode`, `SecretPresence`, `StoreState`, `SecretBackend`, `SecretStoreError`, `UnsupportedSecretStore`) |
 | `stackly-protocol` | `zeroize` (fitur `serde`) | `secret` (`SecretText`, `SecretInput`, dan DTO di *Permukaan API*) |
 | `stackly-core` | `getrandom`, `regex`, `sha2` | `secret::{service, worker, generate, redact, delivery}` |
-| `stackly-platform-macos` | `security-framework`, plus `core-foundation` hanya untuk trait `TCFType` (mengambil pointer keychain untuk `SecKeychainGetStatus`) | `secret` (`MacosSecretStore`, `KeychainTarget`, `KeychainSetupError`, `map_status`) |
+| `stackly-platform-macos` | `security-framework`, plus `core-foundation` hanya untuk tipe `CFData` (nilai item) dan trait `TCFType` (pointer keychain untuk `SecKeychainGetStatus`) | `secret` (`MacosSecretStore`, `KeychainTarget`, `KeychainSetupError`, `map_status`) |
 | `stackly-testkit` | tidak ada | `fake_secret` (`FakeSecretStore`) |
 | `stacklyd` | tidak ada | `ipc::secret`, `log::redacting_writer` |
 | `stackly-cli` | `rpassword` | `secret_input`, `commands::secret` |
@@ -534,7 +534,7 @@ Sesi paralel: langkah 8 (CLI, Rust) dan langkah 9 sampai 10 (Swift) bisa dikerja
 
 **Neutral**:
 
-- Dependency baru: `zeroize` (platform, protocol), `getrandom`, `regex`, dan `sha2` (core), `security-framework` dan `core-foundation` (`stackly-platform-macos`, yang kedua hanya untuk trait `TCFType`), dan `rpassword` (`stackly-cli`).
+- Dependency baru: `zeroize` (platform, protocol), `getrandom`, `regex`, dan `sha2` (core), `security-framework` dan `core-foundation` (`stackly-platform-macos`, yang kedua hanya untuk `CFData` dan trait `TCFType`), dan `rpassword` (`stackly-cli`).
 - `Platform` mendapat port keenam lewat `with_secrets` (konstruktor tetap, spec 0004), dan `PlatformCapability::SecretStore` menjadi supported di macOS.
 - Penghapusan file secret memakai `remove_owned_tree` spec 0007, dan `DirectoryLayout` mendapat folder `secrets/` per instance di runtime root.
 - Domain mendapat observasi blocker di samping readiness dan health.

@@ -182,6 +182,7 @@ fn the_built_capabilities_are_supported_and_the_rest_name_their_feature() {
             | PlatformCapability::Filesystem
             | PlatformCapability::Clock
             | PlatformCapability::UserIdentity
+            | PlatformCapability::SecretStore
             | PlatformCapability::IpcEndpoint => {
                 assert_eq!(status, CapabilityStatus::Supported, "{capability}");
             }
