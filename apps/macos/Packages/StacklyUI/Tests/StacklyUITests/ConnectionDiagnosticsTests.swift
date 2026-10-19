@@ -19,7 +19,6 @@ struct ConnectionDiagnosticsTests {
             "ipc.connection_refused",
             "A stale socket is left from a stopped stacklyd. Start stacklyd, then click Reconnect."
         ),
-        ("ipc.handshake_timeout", "stacklyd didn’t answer within 5 seconds."),
         ("ipc.call_timeout", "stacklyd stopped answering."),
         ("ipc.connection_closed", "stacklyd closed the connection."),
         ("daemon.shutting_down", "stacklyd is shutting down."),
@@ -36,6 +35,31 @@ struct ConnectionDiagnosticsTests {
             let error = DiagnosticsError(code: code, category: "unavailable", message: "m")
             #expect(ConnectionHint.text(status: status, error: error) == hint, "\(code)")
         }
+    }
+
+    @Test func aHandshakeCallTimeoutSaysFiveSecondsAndTheDaemonOnlyCodeHasNoHint() {
+        let status = ShellStatus.unreachable(lastKnownAt: nil, since: Self.now)
+        let handshake = DiagnosticsError(
+            code: "ipc.call_timeout",
+            category: "timeout",
+            message: "the daemon did not answer in time",
+            method: "daemon.handshake"
+        )
+        let call = DiagnosticsError(
+            code: "ipc.call_timeout",
+            category: "timeout",
+            message: "the daemon did not answer in time",
+            method: "daemon.get_health"
+        )
+        let daemonOnly = DiagnosticsError(
+            code: "ipc.handshake_timeout", category: "timeout", message: "m")
+
+        #expect(
+            ConnectionHint.text(status: status, error: handshake)
+                == "stacklyd didn’t answer within 5 seconds."
+        )
+        #expect(ConnectionHint.text(status: status, error: call) == "stacklyd stopped answering.")
+        #expect(ConnectionHint.text(status: status, error: daemonOnly) == nil)
     }
 
     @Test func ioErrorHintNamesTheOperationAndKind() {

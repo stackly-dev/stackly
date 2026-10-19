@@ -74,7 +74,7 @@ nonisolated public enum ConnectionHint {
             untrustedHint(.peerRejected)
         case "protocol.major_mismatch":
             "Install matching versions of Stackly and stacklyd."
-        case "ipc.handshake_timeout":
+        case "ipc.call_timeout" where error.method == "daemon.handshake":
             "stacklyd didn’t answer within 5 seconds."
         case "ipc.call_timeout":
             "stacklyd stopped answering."

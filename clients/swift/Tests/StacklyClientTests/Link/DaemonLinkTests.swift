@@ -94,6 +94,27 @@ struct DaemonLinkTests {
         await link.stop()
     }
 
+    @Test func anUnansweredHandshakeIsUnreachableWithACallTimeout() async throws {
+        let server = try FakeDaemonServer(path: root.endpoint.socketPath)
+        server.serve { session in
+            _ = try session.readRequest()
+            session.drainUntilClosed()
+        }
+        let link = makeLink()
+        var states = StateWatcher(link)
+        await link.start()
+        await clock.waitForSleepers(1)
+        clock.advance(by: ContractLimits.handshakeTimeout)
+        let state = await states.next { if case .unreachable = $0 { true } else { false } }
+        let timeout = ClientErrorCatalog.callTimeout(
+            method: "daemon.handshake", limit: .seconds(5))
+        #expect(
+            state
+                == .unreachable(
+                    timeout, since: Self.now, nextAttempt: Self.now.addingTimeInterval(0.5)))
+        await link.stop()
+    }
+
     @Test func anUntrustedSocketWaitsThirtySeconds() async throws {
         let server = try FakeDaemonServer(path: root.endpoint.socketPath, mode: 0o666)
         defer { withExtendedLifetime(server) {} }
