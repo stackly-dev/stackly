@@ -122,7 +122,7 @@ Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, a
 - [ ] Review it (fresh model): `/check review create instance`
 - [ ] Document it: `/document create instance`
 
-### 21. Start, readiness & connection
+### 21. Start, readiness & connection · in-progress
 
 Menjalankan instance, menunggu readiness, dan menampilkan ringkasan instance: ID, versi dan digest, path dan ukuran data, endpoint, connection string yang dimasking, serta tombol copy. Inilah titik akhir JOURNEY-01.
 
@@ -130,7 +130,15 @@ Menjalankan instance, menunggu readiness, dan menampilkan ringkasan instance: ID
 
 **Trace:** REQ-012, REQ-046 (offline), PAGE-05, BR-010, AC-012, AC-027, AC-046, NFR-012, JOURNEY-01
 
+**Pointer:** spec [0021](../specs/0021-start-readiness-connection/index.md)
+
 - [ ] Build it: `/develop start, readiness & connection`
+  - [ ] Connection and data size in core: manifest `connection` block with validation and `IssueCode`s, blocks in the PostgreSQL, NATS, and fake packages, `render` on `PlanContext`, `compose` plus the shared fixture, `Filesystem::tree_usage`, and `instance::detail::build` (spec 0021 AC-1 to AC-5; build steps 1 to 5; needs `/architect` update of specs 0004, 0009, 0011, 0019, 0022, and 0023; needs feature 9 build, feature 19 milestone 1, and feature 23 step 2 for the package blocks; steps 1 and 4 can run as two parallel sessions)
+  - [ ] Contract, daemon, CLI, and offline proof: DTOs, `instance.get_detail` and `instance.get_data_usage`, codes, fixtures, the `stacklyd` handlers and caches, the in process offline and sentinel tests, `stackly instance connection`, and the `inspect` extension with parity goldens (spec 0021 AC-4 to AC-8, AC-10, AC-17 to AC-19; build steps 6 to 8; after milestone 1; needs features 6, 8, 10 milestone 4, 11 steps 5 and 8, and 14 in `01-foundation.md`, feature 22 milestone 2, and spec 0020 milestone 2; after step 6, steps 7 and 8 can run as two parallel sessions)
+  - [ ] Detail page and Summary tab: `StacklyClient` methods, `ConnectionComposer`, `DetailFormat`, `InstanceDetailModel`, `InstanceDetailPage` with navigation, toolbar, cards, banners, and states, the inspector additions, and manual keyboard and VoiceOver evidence (spec 0021 AC-3, AC-7 to AC-9, AC-11 to AC-16, AC-18; build steps 9 to 11; after step 6; needs features 12 and 13 milestone 4 in `ui-macos.md`, feature 11 step 10, and feature 22 milestone 3; uses features 67 and 69 if built; can run in parallel with steps 7 and 8)
+  - [ ] PostgreSQL and NATS proof on this Mac, and offline: start from CLI and GUI to ready, then the composed URIs connect (`psql` `SELECT 1` over TCP and socket; NATS INFO), then a network off run after your approval (spec 0021 AC-10, AC-20; build steps 12 and 13; after milestones 2 and 3; needs feature 19 milestone 2, feature 23 milestone 2, feature 18 milestone 2, and spec 0020 milestones 2 and 3; `BLOCKED` without artifacts; step 13 `BLOCKED` until your approval)
+- [ ] Verify it: `/check verify start, readiness & connection`
+- [ ] Test it: `/test start, readiness & connection`
 
 ### 22. Overview & daftar instance · in-progress
 
