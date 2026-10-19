@@ -903,6 +903,21 @@ async fn the_request_line_of_a_starting_method_and_of_a_cancel_carries_the_opera
             .iter()
             .all(|line| line["fields"]["kind"] == "update_manager")
     );
+    let in_runner: Vec<_> = changes
+        .iter()
+        .filter(|line| {
+            matches!(
+                line["fields"]["state"].as_str(),
+                Some("running" | "cancelled")
+            )
+        })
+        .collect();
+    assert_eq!(in_runner.len(), 2, "{changes:?}");
+    for line in in_runner {
+        assert_eq!(line["span"]["name"], "operation", "{line}");
+        assert_eq!(line["span"]["operation_id"], id_text.as_str(), "{line}");
+        assert_eq!(line["span"]["kind"], "update_manager", "{line}");
+    }
     let in_task: Vec<_> = lines
         .iter()
         .filter(|line| {

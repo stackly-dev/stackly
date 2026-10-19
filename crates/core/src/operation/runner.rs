@@ -125,28 +125,35 @@ pub(crate) enum Close {
     },
 }
 
-/// Runs a started queue entry, then gives its slot back.
+/// Runs a started queue entry, then gives its slot back. Every line the
+/// runner logs, the work's own included, carries the `operation` span with
+/// `operation_id` and `kind` (spec 0007 AC-19).
 pub(crate) async fn run(inner: &Arc<Inner>, entry: QueueEntry) {
     let id = entry.id;
     match inner.handle(id) {
         Some(handle) => {
-            handle.in_runner.store(true, Ordering::SeqCst);
-            // Shutdown may be counting the slots it waits for right now.
-            inner.idle.notify_waiters();
-            match entry.job {
-                Job::Work(work) => {
-                    let parts = (entry.cursor, entry.keys);
-                    run_work(inner, &handle, parts, work).await;
-                }
-                Job::Compensate => auto_compensate(inner, &handle).await,
-            }
-            // Cleared before the slot goes back, so shutdown never leaves
-            // out a slot that is already free.
-            handle.in_runner.store(false, Ordering::SeqCst);
+            let span = tracing::info_span!("operation", operation_id = %id, kind = %handle.kind);
+            tracing::Instrument::instrument(run_entry(inner, &handle, entry), span).await;
         }
         None => inner.locks.release_operation(id),
     }
     inner.finish_slot();
+}
+
+async fn run_entry(inner: &Arc<Inner>, handle: &Arc<OpHandle>, entry: QueueEntry) {
+    handle.in_runner.store(true, Ordering::SeqCst);
+    // Shutdown may be counting the slots it waits for right now.
+    inner.idle.notify_waiters();
+    match entry.job {
+        Job::Work(work) => {
+            let parts = (entry.cursor, entry.keys);
+            run_work(inner, handle, parts, work).await;
+        }
+        Job::Compensate => auto_compensate(inner, handle).await,
+    }
+    // Cleared before the slot goes back, so shutdown never leaves out a
+    // slot that is already free.
+    handle.in_runner.store(false, Ordering::SeqCst);
 }
 
 /// Puts a work back in the queue, to start after the retry interval.
@@ -259,7 +266,7 @@ async fn run_work(
         record.journal.resumable(),
     );
     drop(record);
-    let span = tracing::info_span!("operation", operation_id = %id, kind = %handle.kind);
+    let span = tracing::Span::current();
     let ended = match tokio::spawn(tracing::Instrument::instrument(work.run(ctx), span)).await {
         Ok(result) => Ended::Returned(result),
         Err(_) => Ended::Panicked,
