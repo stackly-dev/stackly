@@ -159,9 +159,9 @@ Plan membawa `name` dan `Vec<(String, Value)>`.
 
 ### Keputusan 4: cara menulis kode protokol
 
-#### Option 1: State machine tanpa IO buatan sendiri dengan pembungkus tokio tipis
+#### Option 1: State machine tanpa IO buatan sendiri dengan driver tokio generik
 
-`protocol::Exchange` menerima byte dan mengembalikan byte untuk ditulis atau hasil akhir; pembungkus async hanya memindahkan byte dan menjaga deadline.
+`provider::probe::nats::Exchange` menerima byte dan mengembalikan byte untuk ditulis atau hasil akhir; driver generik di `supervisor::probe::native` hanya memindahkan byte antara stream dan state machine dan menjaga deadline.
 
 **Pros**:
 
@@ -330,6 +330,14 @@ Diputuskan saat menulis spec, masing masing dengan pilihan yang direkomendasikan
 - **Test native di `apps/daemon/tests/nats.rs` dan test journey di `apps/cli/tests/nats_journey.rs`**, mengikuti pola `postgresql.rs` spec 0019; runner diuji terhadap server asing di file daemon yang sama karena binary nya sudah terpasang di sana.
 - **`pin_package` dipakai bersama dengan spec 0019**, dibuat oleh fitur mana pun yang dibangun lebih dulu dengan signature spec 0019.
 - **`SIGSTOP` untuk membuktikan readiness jujur**, karena kernel tetap menyelesaikan connect TCP lewat backlog sementara server tidak menjawab apa pun; ini persis kasus "port terbuka bukan berarti ready". Runner up: lame duck lewat `SIGUSR2`, yang menutup listener sehingga connect gagal dan tidak membedakan probe ini dari probe `tcp`.
+- **`nats-readiness` di blok `readiness`, health mewarisinya**, berbeda dengan contoh PRD 21.2 yang menaruhnya di `health` (`type: providerProbe`): di v1alpha1 readiness wajib dan health tanpa probe memakai probe readiness, jadi satu deklarasi melayani keduanya dengan satu percobaan per 10 detik. Runner up: deklarasi terpisah di `health`.
+- **State machine di `provider::probe::nats`, driver di `supervisor::probe::native`**, supaya state machine dan fuzz nya bisa dibangun tanpa menunggu supervisor fitur 10 (cross check S4), dan supaya kode supervisor hanya menambah satu cabang `match` yang menyebut NATS.
+- **Driver menerima stream dari fungsi connect**, supaya test timing memakai `tokio::io::duplex` di bawah waktu tokio yang dijeda; socket asli dengan waktu dijeda bisa melompati deadline saat runtime menunggu IO loopback (cross check S1).
+- **Langkah `$JS.API.INFO` dipertahankan** (keputusan lead 2026-10-20 atas S2): tiga fakta startup NATS yang membuatnya mungkin berlebihan belum terbukti, langkahnya murah, dan ia tetap benar kalau JetStream lambat pulih atau dimatikan saat berjalan. Langkah 0 mencatat faktanya tanpa membuka ulang keputusan ini. Runner up: INFO dan PING saja, dengan cek API JetStream ditunda ke fitur 39.
+- **`lame_duck` hanya diuji di fixture**: NATS yang masuk lame duck menutup listener, jadi koneksi baru gagal connect dan tidak pernah melihat `ldm`; kodenya tetap ada untuk server yang mengirimnya.
+- **Satu test `nats_compatibility` yang berurutan** menulis `compatibility.json`, karena beberapa fungsi `#[test]` tidak bisa mengisi satu file evidence, dan check hanya boleh tercatat setelah assertion nya lulus. Test ini memakai `SpawnedDaemon` dengan interval default, jadi tidak butuh seam interval di `DaemonConfig`; hanya AC-8 yang memakai daemon in process karena butuh `LogSink` perekam.
+- **Versi evidence dari `/varz` server yang berjalan**, mengikuti aturan spec 0002 dan perbaikan spec 0019 (versi dari binary yang berjalan, bukan dari record artefak).
+- **AC-14 memeriksa baris yang ditambah per commit**, bukan seluruh file, karena `validate.rs` sudah memuat `natsConf` dari spec 0009 dan file itu tetap harus disentuh untuk jenis `native`.
 - **Tidak ada pencarian Agent Skill atau MCP**: fitur ini tidak memilih tool atau framework baru.
 
 ## Pertukaran dengan sesi lain
@@ -338,4 +346,9 @@ Diputuskan saat menulis spec, masing masing dengan pilihan yang direkomendasikan
 
 ## Cross check
 
-Belum dijalankan.
+Sonnet 5.5 membaca draf pertama secara read only pada 2026-10-20 (tanpa menjalankan binary dan tanpa mengambil link). Lead menyetujui semua perbaikan yang direkomendasikan atas nama user, dengan S2 memakai pilihan "langkah `$JS.API.INFO` dipertahankan". Semuanya sudah masuk ke spec:
+
+- **Kelengkapan keputusan**: allowlist AC-14 yang tidak bisa dipenuhi (nama NATS dipindah ke `provider::probe`, AC-14 memeriksa baris yang ditambah per commit dengan commit dasar yang dicatat); seam test yang belum bernama (kait `LogSink`, `pin_package`, `SpawnedDaemon` untuk adopsi, baris 4 RISK-07); `ProbeOutcome` dan reason sukses `probe_ok`; angka health di AC-9 dipindah ke AC-6; argv server asing (nama `golden` untuk server auth, `-a 127.0.0.1`, `-sd` di `TestRoot`, port dari `allocate_port`, tanpa monitoring); urutan evidence, `compat-record`, dan commit catalog, satu test yang menulis `compatibility.json`, dan langkah 1 spec 0018 sebagai prasyarat; root data Unicode lewat `RootSet::under_override`; status exit diganti PID hilang, `lastFailure` null, dan `leftoverProcesses` kosong; urutan readiness lewat `statusSeq`; INFO dengan tipe salah, bukan object, atau byte sesudahnya menjadi `protocol_error`; teks timeout per fase, reset dan EOF, aturan potong 61 ditambah `...`, dan target Unix; encoding input fuzz dan run ulang dua fuzz target lama; `covers` REQ-012 dan REQ-013 serta guard `SIGCONT`; dan catatan penempatan probe dibanding PRD 21.2.
+- **Kesehatan desain**: test timing lewat `tokio::io::duplex` (S1); langkah `$JS.API.INFO` dipertahankan dengan fakta startup dicatat di langkah 0 (S2); `lame_duck` hanya di fixture (S3); state machine dan fuzz di `provider::probe` supaya tidak menunggu fitur 10 (S4); baris 4 RISK-07 dan `git diff --numstat` (S5); `multi_instance_not_covered` di `knownLimitations` (S6).
+
+Setelah cross check, cabang ini di merge dengan `main` yang membawa perbaikan konsistensi spec 0015, 0017, 0018, dan 0019, dan setiap nama yang dipakai spec ini dicek ulang: signature `install_cached_artifact` (sekarang dengan `&PreparedLayout` dan record yang di commit sendiri), aturan `runtime.versionCheck` per baris, `compat-record` yang hanya menyalin record BR-025, versi evidence dari binary yang berjalan, `pin_package` dan kait `LogSink` di langkah 6 spec 0019, `CatalogBuilder` di `stackly_core::catalog::testing`, serta `published_at` dan ledger `providers/catalog-revisions.json`.
