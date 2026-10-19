@@ -1,0 +1,741 @@
+# 0021. Start, readiness, dan connection
+
+**Date**: 2026-10-20
+**Status**: Proposed
+
+## Summary
+
+Spec ini menutup JOURNEY-01: setelah instance dibuat, pengguna menjalankannya, melihat proses dan readiness sebagai dua status terpisah, lalu menyalin connection string. Connection string dideklarasikan provider di manifest (blok `connection` baru berisi template URI), dirender daemon dari paket yang di pin dan port efektif lewat mesin interpolasi yang sama dengan plan, lalu dikirim ke GUI dan CLI dalam bentuk tersamar; password asli hanya diambil lewat `secret.reveal` saat pengguna menekan Show Password atau Copy, atau memberi `--show-password`. Halaman detail instance dengan tab Summary (endpoint, proses, readiness, connection, secret reference, dependents, dan detail) dan `stackly instance connection` membaca data yang sama dari method baru `instance.get_detail`, ditambah `instance.get_data_usage` untuk ukuran folder data yang dihitung hanya saat diminta. Start, status, dan connection hanya memakai registry, paket pinned, dan runtime terpasang, jadi semuanya tetap bekerja tanpa jaringan dan tanpa catalog.
+
+## Requirements
+
+**User stories**:
+
+- Sebagai pengguna yang baru membuat PostgreSQL, saya ingin menekan Start, melihat instance berjalan lalu siap, dan menyalin connection string ke aplikasi saya, supaya JOURNEY-01 selesai tanpa membuka terminal.
+- Sebagai pengguna, saya ingin proses yang hidup tetapi belum siap tidak pernah tampil sebagai siap, supaya saya tidak menghubungkan aplikasi ke database yang belum menerima koneksi.
+- Sebagai pengguna, saya ingin password tidak pernah tampil atau tersalin tanpa saya minta, supaya layar dan clipboard saya tidak membocorkannya.
+- Sebagai pengguna tanpa internet, saya ingin instance yang runtime nya sudah terpasang tetap bisa start, menampilkan status, dan memberi connection, supaya kerja lokal saya tidak bergantung pada jaringan.
+- Sebagai penulis script, saya ingin `stackly instance connection <instance> --format uri` yang tersamar secara default dan `stackly instance inspect` yang berisi data yang sama dengan tab Summary.
+- Sebagai penulis provider, saya ingin connection string dideklarasikan di manifest, supaya provider baru tidak butuh kode Rust atau Swift untuk tombol Copy.
+
+**Acceptance criteria** (ID lokal spec ini; ID PRD selalu tiga digit, misalnya AC-012):
+
+- **AC-1** (blok `connection` di manifest): manifest `stackly/v1alpha1` menerima blok opsional `connection`, daftar 1 sampai 8 entri `{ name, title, template }` seperti *Blok connection di manifest*; setiap template adalah URI. Loader menolak dengan path field dan kode issue: `name` di luar pola `^[a-z][a-z0-9_]{0,31}$`, `title` kosong, lebih dari 64 karakter, atau berkarakter kontrol, dan `template` kosong atau di atas 512 byte dengan `connection_invalid`; `name` ganda dengan `connection_name_duplicate`; token di luar baris matriks posisi `connection.template` (termasuk `endpoint.<n>.host` dan `settings.*`) dengan `token_not_allowed_here`; endpoint atau secret yang tidak ada dengan `unknown_endpoint` dan `unknown_secret`; dan template yang hasil render nya dengan nilai sentinel (port 15432, host `127.0.0.1` dan `::1`, folder run `/tmp/stackly sentinel/run`, secret `sentinel value`) gagal diparse sebagai URI absolut RFC 3986 dengan `connection_invalid` reason `not_a_uri`. Blok ini ikut `manifest_sha256`. Paket `providers/postgresql`, `providers/nats`, dan `providers/fake` membawa blok di *Connection PostgreSQL, NATS, dan fake*, dan `cargo xtask provider check` serta golden render lolos.
+- **AC-2** (render connection): `instance::connection::render(package, ctx)` memakai `PlanContext` dan resolver interpolasi spec 0009 yang sama dengan plan, lalu mengembalikan satu `RenderedConnection` per entri manifest dalam urutan manifest. Status entri dipilih dengan urutan `retained` (instance retained), lalu `package_unavailable` (paket pinned tidak terbaca atau digest beda), lalu `port_not_assigned` (entri merujuk port atau socket endpoint yang belum punya port efektif), selain itu tersedia. Entri tersedia membawa `parts` (teks yang sudah di encode dan bagian secret yang hanya membawa field dan reference) dan `masked` (gabungan teks dengan setiap bagian secret diganti `****`, selalu empat bintang). Nilai setiap token di percent encode sebagai byte UTF 8 dengan hex huruf besar, kecuali karakter unreserved RFC 3986 (`A-Z a-z 0-9 - . _ ~`), kecuali `endpoint.<n>.port` dan `endpoint.<n>.address` (IPv6 dalam kurung siku) yang disisipkan apa adanya; teks literal template tidak pernah di encode. `port_may_change` bernilai true jika dan hanya jika entri merujuk endpoint `Auto` dan lifecycle instance bukan `running`. Render tidak pernah membaca Keychain atau filesystem selain paket pinned di cache.
+- **AC-3** (komposisi): fungsi murni `compose(parts, values)` dengan `values` berupa peta reference ke nilai secret ada dua kali dengan perilaku sama, `stackly_protocol::instance::connection::compose` (Rust, dipakai CLI) dan `ConnectionComposer.compose(parts:values:)` (Swift, `StacklyUI`): teks apa adanya, nilai secret di percent encode dengan aturan AC-2, dan reference yang tidak ada di `values` menghasilkan error `MissingValue { reference }`, tidak pernah string kosong. Keduanya menghasilkan string yang sama persis untuk setiap kasus fixture `protocols/fixtures/instance/connection-compose.json` (password dengan spasi, `@`, `:`, `/`, `%`, `?`, `#`, `'`, `"`, `\`, emoji, dan huruf beraksen; entri dengan dua secret; nilai yang hilang), dan bagian teks fixture yang sama (nilai `instance.name` dan folder socket berspasi dan Unicode) dijalankan juga lewat `render` core dan menghasilkan teks yang sama. Nilai secret tidak pernah ada di DTO `InstanceDetail`.
+- **AC-4** (`instance.get_detail`): `instance.get_detail { instanceId }` (`recovery refused`, hanya membaca) membalas `InstanceDetail` seperti *Method IPC* dengan setiap field bersumber dari tabel *Value sourcing*: provider dan runtime dari registry dan paket pinned (nama tampil dari `metadata.displayName` paket pinned, null kalau paket tidak terbaca, tidak pernah dari catalog), target runtime sebagai `HostTarget`, path data absolut dari baris path `data` registry yang diselesaikan lewat `RootSet::resolve`, `startup`, satu baris secret per pemakaian secret instance urut field (judul dari schema paket pinned atau nama field, status dari cache spec 0011 atau `unknown` kalau belum ada), dependents dari environment dan lease registry urut nama lalu ID, dan connection dari AC-2. Paket pinned yang tidak terbaca tidak menggagalkan method. ID yang tidak ada menghasilkan `resource.not_found`. Method ini tidak menulis apa pun, tidak spawn, dan tidak pernah membaca nilai secret. Setiap request memeriksa ulang `provider.yaml` di folder pinned (inode, ukuran, mtime) sebelum memakai cache paket, dan perbedaan memicu baca ulang dengan cek digest.
+- **AC-5** (`instance.get_data_usage`): `instance.get_data_usage { instanceId, refresh, cachedOnly }` (`recovery refused`) membalas `DataUsageReply { usage: DataUsage | null }` dengan `DataUsage { bytes, complete, scannedAt }` untuk folder data instance itu dari `Filesystem::tree_usage` (usulan spec 0004): jumlah blok teralokasi (`st_blocks` kali 512) setiap entri, hard link dihitung sekali, tanpa mengikuti symlink, tanpa menyeberang device, berhenti di `DATA_USAGE_MAX_ENTRIES` entri atau setelah `DATA_USAGE_DEADLINE` dengan `complete: false`. Hasil lengkap di cache per instance selama `DATA_USAGE_CACHE_TTL` dan hasil tidak lengkap selama `DATA_USAGE_PARTIAL_TTL`; `refresh: true` melewati cache; `cachedOnly: true` tidak pernah memulai scan dan membalas `usage: null` kalau cache kosong; permintaan bersamaan untuk instance yang sama memakai satu scan; paling banyak `DATA_USAGE_CONCURRENCY` scan berjalan bersamaan untuk semua instance. Folder yang hilang, bukan folder privat milik user, atau tidak terbaca menghasilkan `instance.data_usage_unavailable` (tabel *Kode error*). Test memakai pohon dengan symlink keluar root, hard link, file sparse, folder di volume lain (image disk sementara di macOS), dan 250 000 entri.
+- **AC-6** (`stackly instance connection`): `stackly instance connection <instance> [--format <name> | --all] [--show-password]` menerima nama atau UUID lewat resolver spec 0022, memanggil `instance.get_detail`, dan tanpa `--format` memilih entri pertama. Stdout default berisi tepat string `masked` diikuti newline, tanpa password. `--format` yang tidak ada gagal `cli.connection_not_found` (exit 10); entri yang tidak tersedia gagal `cli.connection_unavailable` (exit 3); provider tanpa blok `connection` gagal `cli.connection_not_found` dengan `available` kosong. `--all` menulis satu baris per entri dan tidak bisa digabung dengan `--format` atau `--show-password` (penolakan clap, exit 2). `--show-password` memanggil `secret.reveal { reference, purpose: show }` sekali per reference berbeda dengan batas waktu `Interactive` spec 0008, menyusun string lengkap lewat `compose`, dan hanya itu yang mencetak password; untuk entri tanpa secret, ia mencetak string yang sama tanpa reveal. `--json` memberi `result` `{ "instance": { "id", "name" }, "connection": ConnectionString, "value": string | null }`, atau `{ "instance", "connections": [ConnectionString] }` untuk `--all`, dengan `value` terisi hanya dengan `--show-password`. Setiap reveal tercatat audit `secret.reveal` spec 0011.
+- **AC-7** (paritas inspect dan Summary): `stackly instance inspect` (spec 0022) juga memanggil `instance.get_detail` dan `instance.get_data_usage` dengan `cachedOnly: true` (`--size` memakai `refresh: true`), menambah baris di *CLI*, dan dengan `--json` memberi `result` `{ "instance": InstanceSummary, "detail": InstanceDetail, "dataUsage": DataUsage | null }` (usulan spec 0022). Kalau `detail.revision` berbeda dengan `revision` summary, perintah mengambil ulang keduanya sekali. Golden CLI dan test view model Swift membaca fixture triple (summary, detail, data usage) `protocols/fixtures/instance/detail-postgresql.json`, `detail-nats.json`, dan `detail-unavailable.json` dengan `TZ=UTC` dan jam tetap, dan menghasilkan teks yang sama untuk setiap baris yang ditambah spec ini di tabel *Format bersama* (Digest, Data, Data size, Autostart, Dependents, Secrets, Connection, dan alasan tidak tersedia); baris yang sudah ada di spec 0022 tetap memakai teks spec 0022 di masing masing permukaan.
+- **AC-8** (AC-012, REQ-012, BR-010): instance fake yang prosesnya `running` tetapi probe readiness nya belum berhasil (setting `readyDelayMs` di atas durasi test) tampil di header halaman detail dengan label `StatusLabel` spec 0012 ("Starting…" dengan "Waiting for probe", atau "Not Ready"), dan di kartu Endpoints sebagai dua baris terpisah: Process "Running (PID {pid})" dan Readiness "Waiting for probe" atau "Not ready" dengan detail probe, tidak pernah "Ready"; `stackly instance inspect` menulis `Lifecycle running` dan `Readiness not_ready (<reason>)`. Setelah probe berhasil, header menjadi "Running" dan baris Readiness "Ready" tanpa memuat ulang halaman. Test GUI (view model dengan fixture urutan event) dan test CLI terhadap daemon nyata memasang guard evidence `covers = ["AC-012", "REQ-012", "BR-010"]`.
+- **AC-9** (start dan stop dari halaman detail): toolbar halaman detail memakai aksi utama `InstanceActionModel` spec 0022 (Start, Stop, Retry, tombol sibuk, atau nonaktif dengan alasan) dengan simbol dan label; Start mengirim `instance.start`, status berjalan dari "Starting…" sampai "Running" dengan Readiness "Ready" lewat event spec 0010, dan connection yang tadinya `port_not_assigned` menjadi tersedia setelah detail dimuat ulang. Perintah setara CLI tetap `stackly instance start <instance> --wait` dan `stackly instance stop <instance> --wait` (fitur 14).
+- **AC-10** (offline, REQ-046, AC-046): test integration menjalankan `stacklyd::server::start` di dalam proses dengan catalog `NotConfigured`, `Fetcher` tiruan dan `CodeSigning` tiruan yang menggagalkan test pada panggilan apa pun, dan penghitung akses `CatalogState` di `stacklyd`, lalu memakai binary `stackly` asli ke socket server itu; urutan `instance.start` sampai `ready`, `instance.get`, `instance.get_detail`, `instance.get_data_usage`, `stackly instance connection`, dan `stackly instance inspect` untuk instance fake dengan runtime dan paket pinned yang sudah ada berhasil, dengan nol akses `CatalogState`, nol panggilan `Fetcher`, dan nol panggilan `CodeSigning::assess`. Bukti native dengan jaringan Mac ini dimatikan (Wi-Fi dan Ethernet) untuk PostgreSQL lewat GUI dan CLI dicatat sebagai evidence `native` setelah persetujuan user, dan `BLOCKED` sampai disetujui.
+- **AC-11** (navigasi halaman detail): `ShellDestination.instance(UUID)` (usulan spec 0022) membuka halaman detail lewat `instanceRequest` yang diterapkan `InstancesPage` ke `NavigationStack` nya, juga saat halaman Instances belum tampil, dan `ShellNavigator.openInstance(_:)` memakainya, menggantikan perilaku `// provisional: F21` spec 0022. Klik ganda atau Return pada baris Instances, tombol Open di inspector Instances, dan baris instance di Overview membuka halaman ini. Tombol kembali sistem kembali ke Instances dengan pilihan baris tetap, dan klik ulang Instances di sidebar saat halaman detail terbuka kembali ke tabel. Instance yang tidak ada di `InstanceStore` dan tidak ditemukan `instance.get` menampilkan "Instance Not Found" dengan Back to Instances.
+- **AC-12** (header dan toolbar): halaman memakai `.pageChrome(title: name, subtitle: "{nama tampil provider} {versi} · {label status}")`; toolbar berisi tombol aksi utama dan menu More dengan "Copy Connection String" (entri pertama; nonaktif dengan alasan kalau tidak ada entri atau entri itu tidak tersedia). Restart, Reload, Duplicate, dan Remove tidak tampil sampai fitur 26, 24, dan 54 membangunnya. Picker tab hanya menampilkan tab yang sudah dibangun dan tersembunyi selama Summary satu satunya tab.
+- **AC-13** (tab Summary, PAGE-05): tab Summary mengikuti mockup dan *Tab Summary*: kartu Endpoints (satu baris per endpoint dengan alamat atau keterangan, tombol Copy hanya untuk alamat yang diketahui, lalu baris Process dan Readiness terpisah), kartu Connection (setiap entri dengan string tersamar, Show Password dan Copy untuk entri ber secret, Copy saja untuk entri tanpa secret, keterangan alasan untuk entri tidak tersedia, catatan `portMayChange`, caution "Not accepting connections yet." selama `running` tanpa readiness `ready`, lalu satu baris Secret per reference dengan statusnya), kartu Dependents, dan kartu Details (Instance ID, Runtime, Version, Digest, Provider, Data, Data size, Uptime, Restart attempts kalau lebih dari 0, Autostart). Copy endpoint menulis teks alamat ke pasteboard biasa hanya saat tombolnya ditekan; Show Password memanggil `secret.reveal { purpose: show }` untuk setiap reference entri dan menampilkan string tersusun sampai aturan sembunyi spec 0011 berlaku; Copy memanggil `secret.reveal { purpose: copy }`, menyusun lewat `ConnectionComposer`, dan menulis lewat `ConcealedPasteboard`. Show Password dan Copy nonaktif dengan alasan saat salah satu reference entri berstatus `missing`. Tanpa aksi pengguna, tidak ada reveal dan tidak ada tulisan pasteboard.
+- **AC-14** (banner dan state): Summary menampilkan banner masalah dari aturan I1 sampai I4 spec 0022 (failed dengan cuplikan `lastFailure.excerpt` dan Retry, `unknown`, blocker), dan blocker `needsSecret` menawarkan "Enter Secret…" yang membuka `SecretEntrySheet` spec 0011 dengan item blocker itu. Detail yang sedang dimuat menampilkan `DelayedProgress` di baris yang bergantung pada detail sementara baris dari `InstanceSummary` sudah tampil; detail yang gagal dimuat menampilkan `StateBanner` caution "Couldn’t load instance details." dengan Retry tanpa mengosongkan halaman; daemon yang tidak terjangkau mempertahankan data terakhir dengan banner stale shell dan aksi tergate. Detail dimuat ulang saat `revision` summary instance itu berubah (jeda `DETAIL_RELOAD_DEBOUNCE`) dan saat event `secret.changed` menyebut salah satu reference nya, dan balasan dengan `revision` yang lebih lama dari detail yang dipegang dibuang.
+- **AC-15** (inspector Instances): inspector spec 0022 mendapat tombol Open di samping aksi utama, baris Data (ukuran dari `instance.get_data_usage` dengan `cachedOnly: true` atau "—", path di baris kedua), dan baris Connection (entri pertama tersamar dengan Show Password dan Copy lewat komponen yang sama), dan placeholder "No Selection" berpesan "Select an instance to see its details. Double-click a row to open it.".
+- **AC-16** (AC-027, NFR-012): alur Start sampai Copy connection bisa diselesaikan dengan keyboard (urutan fokus di *Aksesibilitas*) dan VoiceOver (Process dan Readiness dibacakan sebagai dua elemen, string tersamar dibacakan dengan bagian bukan secret apa adanya dan "password hidden" di tempat `****`, setiap tombol Copy berlabel apa yang disalin, hasil copy diumumkan, dan pengumuman siap ditunda 2 detik supaya readiness yang bolak balik tidak berulang diumumkan); tidak ada informasi yang hanya ada lewat warna atau hover; teks membungkus tanpa terpotong di lebar konten 640 pt dengan Dynamic Type; kontras WCAG AA di light, dark, dan Increase Contrast; dibuktikan evidence manual keyboard dan VoiceOver di Mac ini.
+- **AC-17** (kontrak): method `instance.get_detail` dan `instance.get_data_usage` (keduanya `recovery refused`), DTO di *Method IPC*, enum terbuka baru (diakhiri `Unrecognized`), kode `instance.data_usage_unavailable` (hint statis lewat `codes::instance::hint`), dan kode `cli.connection_not_found` serta `cli.connection_unavailable` ada di `stackly-protocol` dengan fixture `protocols/fixtures/` untuk setiap varian `Call` dan `Reply`, setiap kode, nilai asing setiap enum terbuka (termasuk `ConnectionPartKind` dan `ConnectionState` asing), terbaca di Rust dan Swift, dengan kenaikan minor `ProtocolVersion::CURRENT` di commit yang sama dan `cargo xtask codegen --check` bersih. Test kontrak memeriksa konsistensi `ConnectionString`: `available` jika dan hanya jika `masked` terisi, `parts` tidak kosong, dan `reason` kosong.
+- **AC-18** (keamanan, AC-016): suite sentinel memakai fixture credential sebagai password instance fake dan memastikan prefix nya tidak ada di balasan `instance.get_detail`, event, log daemon, output default dan `--json` `stackly instance connection` dan `inspect` tanpa `--show-password`, dan state model `@Observable` yang hidup lama di Swift (`InstanceDetailModel`, `InstanceStore`); nilai hanya muncul di respons `secret.reveal`, di stdout `--show-password`, di `RevealableSecretText` yang sedang ditampilkan, dan di `ConcealedPasteboard` setelah Copy.
+- **AC-19** (kinerja): dengan 10 instance terdaftar di Mac ini, `instance.get_detail` dijawab dalam 100 ms pada persentil 95 saat cache paket sudah hangat dan dalam 300 ms saat dingin, dan `instance.get_data_usage` yang memulai scan selesai dalam `DATA_USAGE_DEADLINE` ditambah 100 ms.
+- **AC-20** (PostgreSQL dan NATS nyata): di Mac ini, instance PostgreSQL 18 dan NATS yang dibuat lewat fitur 20 di start dari GUI dan dari CLI sampai `ready`; string `uri` PostgreSQL yang disusun dengan password hasil `secret.reveal` berhasil menjalankan `SELECT 1` lewat `psql` milik runtime (TCP), string `socket` juga berhasil, dan string `uri` NATS menerima baris `INFO` server; tab Summary dan `stackly instance connection` menunjukkan string tersamar yang sama. Tanpa artefak di cache runtime xtask hasilnya `BLOCKED` dengan alasan dan owner.
+
+## Decision
+
+**Chosen option**: opsi yang direkomendasikan di setiap keputusan di [rationale.md](rationale.md), ditambah semua perbaikan cross check yang disetujui lead atas nama user (2026-10-20): connection string dideklarasikan di blok `connection` manifest sebagai template URI, divalidasi dengan render sentinel saat paket dimuat, dan dirender daemon lewat `PlanContext` dan resolver interpolasi plan; string lengkap disusun client dari bagian tersamar dan nilai `secret.reveal`, dengan satu fixture komposisi untuk core, CLI, dan Swift; data halaman detail dari method baru `instance.get_detail`, dan ukuran folder data dari `instance.get_data_usage` yang hanya scan saat diminta, dengan cache dan batas scan bersamaan; header memakai label status spec 0012 dan Summary menulis Process dan Readiness sebagai dua baris; semua entri connection ditampilkan; `stackly instance connection` memilih entri di client dari detail; `stackly instance inspect --json` dibungkus `{ instance, detail, dataUsage }`; tab yang belum dibangun tidak ditampilkan; dan bukti offline lewat test di dalam proses ditambah run native dengan jaringan mati setelah persetujuan user.
+
+Daemon menghitung semua nilai yang tampil; GUI dan CLI hanya memformat dengan aturan bersama dan meminta nilai secret lewat `secret.reveal` saat pengguna memintanya.
+
+**Implementation skills**: `rust-best-practices` (`apollographql/skills`, `.claude/skills/rust-best-practices/`) · `rust-async-patterns` (`wshobson/agents`, `.claude/skills/rust-async-patterns/`) · `swiftui-expert-skill` (`avdlee/swiftui-agent-skill`, `.claude/skills/swiftui-expert-skill/`) · `swift-concurrency` (`avdlee/swift-concurrency-agent-skill`, `.claude/skills/swift-concurrency/`) · `swift-testing-pro` (`twostraws/swift-testing-agent-skill`, `.claude/skills/swift-testing-pro/`)
+
+Kalau isi skill bertentangan dengan spec ini, spec yang menang. Contohnya: tidak ada `unwrap()` di luar test, kontrol native SwiftUI menggantikan tiruan HTML di mockup, dan nilai secret tidak pernah disimpan di model `@Observable` yang hidup lama.
+
+## Feature design
+
+### Trace PRD
+
+| ID PRD | Dipenuhi oleh |
+| --- | --- |
+| REQ-012 (readiness berbeda dari process state) | AC-8, AC-9, AC-13 |
+| REQ-046 (offline) | AC-10 |
+| PAGE-05 (Instance Summary) | AC-11 sampai AC-15; restart dan dependency impact penuh di fitur 26 dan 44 sampai 47 |
+| BR-010 (ready butuh probe yang relevan dan segar) | AC-8 |
+| AC-012 | AC-8 |
+| AC-027 | AC-16, AC-20 |
+| AC-046 | AC-10 |
+| NFR-012 | AC-16 |
+| JOURNEY-01 (copy connection) | AC-9, AC-13, AC-20 |
+| REQ-016 dan AC-016 (masking, reveal eksplisit) | AC-2, AC-6, AC-13, AC-18 |
+| REQ-028 (CLI setara GUI) | AC-6, AC-7 |
+| REQ-029 (provider tanpa patch core dan GUI) | AC-1 |
+
+### Batas dengan spec lain
+
+| Bagian | Pemilik |
+| --- | --- |
+| `instance.start`, `instance.stop`, `instance.get`, `InstanceSummary`, readiness, event instance, `socketPath` dari template paket pinned | spec 0010 (dengan usulan `socketPath` dari spec 0020) |
+| Manifest, interpolasi, `PlanContext`, matriks posisi, kode issue, `provider check` | spec 0009 (blok `connection` lewat usulan) |
+| `Filesystem`, `RootSet::resolve`, `instance_run_dir` | spec 0004 (`tree_usage` lewat usulan) |
+| `secret.reveal`, `RevealableSecretText`, `ConcealedPasteboard`, `SecretEntrySheet`, status reference, audit | spec 0011 (`RevealableSecretText` untuk banyak reference lewat usulan) |
+| Label status (`StatusLabel`, `StatusAppearance.instance`) | spec 0012 (dipakai apa adanya) |
+| Halaman Instances, inspector, `InstanceActionModel`, `ShellNavigator`, aturan I1 sampai I4, `UptimeText`, resolver CLI, `stackly instance list` dan `inspect` | spec 0022 (destinasi `.instance`, `instanceRequest`, `NavigationStack`, inspector, dan bentuk JSON inspect lewat usulan) |
+| Paket PostgreSQL dan NATS | spec 0019 dan 0023 (blok `connection` dan urutan evidence lewat usulan) |
+| `stackly instance start` dan `stop` dengan `--wait` | fitur 14 (spec 0008 dan 0010) |
+| Create, `instance.removed` | spec 0020 |
+| Tab Configuration, Logs, Metrics, Backups, Activity; Restart dan Reload; Duplicate; Remove | fitur 29, 27, 28, 49, 35; 26; 24; 54 |
+| Banner crash loop yang lebih kaya | fitur 33 (spec ini memakai aturan I1 spec 0022 dengan Retry) |
+| Jumlah restart sejak dibuat dan latensi probe | fitur 28 |
+| Dependents dari environment, dan pemicu muat ulang detail untuk perubahan config dan environment | fitur 29 dan 44 sampai 47 (spec ini sudah membaca registry, yang kosong di fase 02) |
+| Komponen dasar dan peta perintah | fitur 67 dan 69 |
+
+### Alur
+
+1. Pengguna membuka halaman detail (klik ganda baris, Open di inspector, atau Overview).
+2. `InstanceDetailModel` memakai `InstanceSummary` dari `InstanceStore` untuk header, endpoint, proses, dan readiness, lalu memanggil `instance.get_detail` dan `instance.get_data_usage`.
+3. Start lewat `InstanceActionModel` mengirim `instance.start`; event `instance.state_changed` dan `instance.health_changed` spec 0010 memperbarui status dan readiness, dan perubahan `revision` memicu muat ulang detail sehingga connection yang menunggu port menjadi tersedia.
+4. Copy pada connection ber secret memanggil `secret.reveal { purpose: copy }` untuk setiap reference nya, menyusun string lewat `ConnectionComposer`, dan menulis `ConcealedPasteboard`.
+5. CLI: `stackly instance start <instance> --wait`, lalu `stackly instance connection <instance>` (tersamar) atau dengan `--show-password`.
+
+### Blok connection di manifest
+
+Field baru di manifest `stackly/v1alpha1` (usulan spec 0009), opsional:
+
+```yaml
+connection:
+  - name: uri                      # ^[a-z][a-z0-9_]{0,31}$, unik; entri pertama adalah entri utama
+    title: Connection string       # 1 sampai 64 karakter, tanpa karakter kontrol; label di GUI
+    template: "postgresql://postgres:${secret.superuserPassword}@${endpoint.client.address}/postgres"
+```
+
+- 1 sampai 8 entri. Paket tanpa blok ini valid; GUI menulis "This provider doesn’t describe a connection string. Use the endpoints above." dan CLI gagal `cli.connection_not_found`.
+- `template` 1 sampai 512 byte dengan grammar interpolasi spec 0009, dan hasil render nya selalu URI. Token yang diterima di posisi baru `connection.template`: `endpoint.<n>.address`, `endpoint.<n>.port`, `endpoint.<n>.socket`, `endpoint.<n>.socketDir`, `instance.name`, `instance.id`, `secret.<field>` (field secret), `provider.id`, `provider.revision`, dan `runtime.version`. `endpoint.<n>.host` dan `settings.*` ditolak.
+- Aturan encode di AC-2. Teks literal template tidak pernah di encode; penulis paket menulis teks yang sudah sah untuk URI, dan render sentinel saat paket dimuat menolak template yang hasilnya bukan URI absolut.
+
+### Connection PostgreSQL, NATS, dan fake
+
+PostgreSQL (`providers/postgresql/provider.yaml`, usulan spec 0019):
+
+```yaml
+connection:
+  - name: uri
+    title: Connection string
+    template: "postgresql://postgres:${secret.superuserPassword}@${endpoint.client.address}/postgres"
+  - name: socket
+    title: Unix socket
+    template: "postgresql://postgres:${secret.superuserPassword}@/postgres?host=${endpoint.socket.socketDir}&port=${endpoint.client.port}"
+```
+
+NATS (`providers/nats/provider.yaml`, usulan spec 0023), tanpa credential sampai fitur 39:
+
+```yaml
+connection:
+  - name: uri
+    title: Client URL
+    template: "nats://${endpoint.client.address}"
+  - name: monitoring
+    title: Monitoring URL
+    template: "http://${endpoint.monitoring.address}"
+```
+
+- Fake provider (`testing/fake`) mendapat `uri` `http://stackly:${secret.authToken}@${endpoint.http.address}/` untuk test komposisi dan sentinel.
+- Menambah blok ini mengubah `manifest_sha256`, jadi paket PostgreSQL dan NATS menulisnya sebelum evidence BR-025 nya dibuat (usulan prasyarat spec 0019 dan 0023) dan catalog menaikkan revision di commit yang sama (aturan spec 0017). Instance yang di pin ke paket lama tetap tanpa connection sampai update provider revision fitur 59.
+
+### Render di daemon
+
+Modul baru `stackly-core::instance::connection`:
+
+```rust
+pub fn render(package: &ValidatedPackage, ctx: &PlanContext, instance: &Instance,
+              secret_refs: &[(SecretFieldName, SecretRef)]) -> Vec<RenderedConnection>;
+pub struct RenderedConnection { pub name: String, pub title: String, pub state: ConnectionState, pub port_may_change: bool }
+pub enum ConnectionState { Available { masked: String, parts: Vec<ConnectionPart> }, Unavailable(ConnectionUnavailable) }
+pub enum ConnectionPart { Text(String), Secret { field: SecretFieldName, reference: SecretRef } }
+pub enum ConnectionUnavailable { Retained, PackageUnavailable, PortNotAssigned }
+```
+
+- `PlanContext` (spec 0009) dibangun `stacklyd` dengan cara yang sama dengan dry run plan start: `instance_paths(id)`, folder run dari `instance_run_dir(short_key)` (fungsi murni, tanpa membuat folder), runtime dari record runtime, dan setiap endpoint dengan port efektif spec 0004 (`bound` kalau ada, selain itu port `Fixed`, selain itu tanpa port). Settings tidak dibutuhkan karena template tidak boleh merujuk settings, jadi config revision tidak dibaca.
+- Token yang tidak bisa diselesaikan karena endpoint tanpa port efektif membuat entri `PortNotAssigned`. Host, port, dan socket dihitung resolver yang sama dengan plan, jadi selalu sama dengan yang di bind proses.
+- `secret_refs` dari `secret_uses_by(Instance(id))` (spec 0005); render tidak pernah memanggil `SecretStore`.
+- `ConnectionPart::Text` berisi teks yang sudah di encode; dua teks berurutan digabung.
+
+### Method IPC
+
+Semua method lewat handshake dan peer user yang sama (spec 0006).
+
+| Method | Recovery | Input | Output | Error utama |
+| --- | --- | --- | --- | --- |
+| `instance.get_detail` | refused | `GetInstanceDetailParams { instanceId: Uuid }` | `InstanceDetail` | `resource.not_found` |
+| `instance.get_data_usage` | refused | `GetDataUsageParams { instanceId: Uuid, refresh: bool, cachedOnly: bool }` | `DataUsageReply` | `resource.not_found`, `instance.data_usage_unavailable` |
+
+DTO baru di modul `instance` `stackly-protocol`:
+
+```rust
+pub struct GetInstanceDetailParams { pub instance_id: Uuid }
+pub struct InstanceDetail {
+    pub instance_id: Uuid,
+    pub revision: Revision,                         // revision instance yang dipakai membangun detail ini
+    pub provider: DetailProvider,
+    pub runtime: DetailRuntime,
+    pub data_path: String,                          // path absolut folder data
+    pub startup: StartupPolicyKind,
+    pub secrets: Vec<DetailSecret>,                 // urut field
+    pub dependents: Vec<DetailDependent>,           // urut nama, lalu ID
+    pub connections: Vec<ConnectionString>,         // urut manifest
+}
+pub struct DetailProvider { pub name: String, pub revision: String, pub manifest_sha256: String,
+                            #[serde(default)] pub display_name: Option<String> }
+pub struct DetailRuntime { pub id: Uuid, pub version: String, pub target: HostTarget,         // HostTarget spec 0017
+                           pub install_mode: InstallModeKind, #[serde(default)] pub artifact_sha256: Option<String> }
+pub enum StartupPolicyKind { Manual, AtLogin, Unrecognized }
+pub struct DetailSecret { pub field: String, pub title: String, pub reference: String, pub status: SecretRefStatus }
+pub struct DetailDependent { pub environment_id: Uuid, pub name: String, pub ownership: DependentOwnership, pub lease_active: bool }
+pub enum DependentOwnership { Dedicated, Shared, Unrecognized }
+pub struct ConnectionString {
+    pub name: String, pub title: String, pub state: ConnectionState,
+    #[serde(default)] pub reason: Option<ConnectionUnavailableReason>,   // terisi jika dan hanya jika unavailable
+    #[serde(default)] pub masked: Option<String>,                        // terisi jika dan hanya jika available
+    pub parts: Vec<ConnectionPart>,                                      // tidak kosong jika dan hanya jika available
+    pub port_may_change: bool,
+}
+pub enum ConnectionState { Available, Unavailable, Unrecognized }
+pub enum ConnectionUnavailableReason { PortNotAssigned, PackageUnavailable, Retained, Unrecognized }
+pub struct ConnectionPart { pub kind: ConnectionPartKind, #[serde(default)] pub text: Option<String>,
+                            #[serde(default)] pub secret: Option<ConnectionSecretPart> }
+pub enum ConnectionPartKind { Text, Secret, Unrecognized }
+pub struct ConnectionSecretPart { pub field: String, pub reference: String }
+pub struct GetDataUsageParams { pub instance_id: Uuid, #[serde(default)] pub refresh: bool, #[serde(default)] pub cached_only: bool }
+pub struct DataUsageReply { #[serde(default)] pub usage: Option<DataUsage> }
+pub struct DataUsage { pub bytes: Count, pub complete: bool, pub scanned_at: Timestamp }
+```
+
+- `SecretRefStatus` adalah enum status reference terbuka milik spec 0011 (`present`, `missing`, `unknown`, `unrecognized`); kalau build spec 0011 memberi nama lain, nama itu yang dipakai. `InstallModeKind` dari spec 0018 dan `HostTarget` dari spec 0017.
+- Client memperlakukan `ConnectionState::Unrecognized` dan entri yang memuat `ConnectionPartKind::Unrecognized` sebagai tidak tersedia dengan teks "Update Stackly to copy this connection string.".
+- `stacklyd` menyimpan cache paket pinned per `ProviderRevisionKey` (LRU `PINNED_PACKAGE_CACHE` entri), dipakai bersama `socketPath` spec 0020, dengan pemeriksaan ulang stat `provider.yaml` setiap request (AC-4).
+
+### Ukuran data
+
+- `Filesystem::tree_usage(root, UsageLimits { max_entries: u64, deadline: Duration }) -> Result<TreeUsage { bytes, complete }, PlatformError>` (usulan spec 0004): penelusuran iteratif berbasis file descriptor di adapter macOS (`openat` dengan `O_NOFOLLOW`, `fstatat` dengan `AT_SYMLINK_NOFOLLOW`), `bytes` jumlah `st_blocks * 512` setiap entri termasuk folder, hard link dihitung sekali per (device, inode), entri di device lain dilewati, symlink dihitung sebagai dirinya sendiri, dan berhenti dengan `complete: false` di batas entri atau saat tenggat (diukur dengan jam monotonik sejak panggilan) lewat. `FakeFilesystem` memakai penelusuran portabel dengan semantik yang sama; test tenggat berjalan di adapter macOS, test batas entri di keduanya.
+- `stacklyd` memeriksa folder data lebih dulu (folder, bukan symlink, milik user, privat), menjalankan scan di `spawn_blocking` di bawah semaphore `DATA_USAGE_CONCURRENCY`, menyimpan hasil per instance (lengkap `DATA_USAGE_CACHE_TTL`, tidak lengkap `DATA_USAGE_PARTIAL_TTL`), dan menggabungkan permintaan bersamaan untuk instance yang sama ke satu scan.
+- Scan hanya dimulai oleh halaman detail yang terbuka, tombol Recalculate, dan `stackly instance inspect --size`; inspector dan `inspect` tanpa `--size` memakai `cachedOnly: true`.
+
+### Tab Summary
+
+Folder baru `StacklyUI/InstanceDetail/`: `InstanceDetailPage`, `InstanceDetailModel`, `SummaryTab`, `EndpointsCard`, `ConnectionCard`, `DependentsCard`, `DetailsCard`, `InstanceDetailBanner`, `ConnectionComposer`, `DetailFormat`, `ProcessText`, `ReadinessText`, dan `InstanceTab`. `StacklyClient` mendapat `getInstanceDetail` dan `getDataUsage` dari tipe hasil generate.
+
+- **Latar dan tata letak**: `surfaceWindow`, `ScrollView`, kartu `.cardSurface()`. Saat lebar konten minimal 760 pt, dua kolom (kiri Endpoints, Connection, Dependents; kanan Details); di bawahnya satu kolom dengan urutan yang sama.
+- **Banner**: di atas kartu, aturan I1 sampai I4 spec 0022 dengan copy `InstanceFailureCopy` spec 0022; I1 membawa blok cuplikan `lastFailure.excerpt` dan tombol Retry (aksi utama); blocker `needsSecret` menampilkan "Needs a secret to start" dengan reference yang bermasalah dan tombol "Enter Secret…" yang membuka `SecretEntrySheet`.
+- **Endpoints**: judul "Endpoints"; per endpoint DTO, nama di kiri dan nilai monospace di kanan menurut *Format bersama*; tombol Copy (simbol `doc.on.doc`) hanya saat nilai adalah alamat atau path yang diketahui. Lalu dua baris terpisah: "Process" dengan `ProcessText` dan "Readiness" dengan `ReadinessText`.
+- **Connection**: judul "Connection"; per `ConnectionString`: `title` sebagai label kecil, lalu
+  - tersedia dengan bagian secret: `RevealableSecretText(references:compose:)` (usulan spec 0011) dengan nilai tersamar, Show Password atau Hide Password, dan Copy, memakai `ConnectionComposer.compose`; nonaktif dengan alasan "{reference} has no stored value yet." saat salah satu reference `missing`;
+  - tersedia tanpa bagian secret: teks monospace bisa dipilih dan tombol Copy (pasteboard biasa);
+  - tidak tersedia: teks alasan dari *Copy*;
+  - `portMayChange`: catatan "The port can change the next time the instance starts.";
+  - lifecycle `running` dengan readiness bukan `ready`: caution "Not accepting connections yet.".
+  Lalu satu baris "Secret" per `DetailSecret`: reference monospace, dan untuk status `missing` atau `unknown` keterangan "Missing; starting asks for it." atau "Status unknown".
+- **Dependents**: judul "Dependents"; "Nothing depends on this instance." kalau kosong, selain itu satu baris per environment "{name} · {Dedicated | Shared}" ditambah " · lease active".
+- **Details**: judul "Details"; `LabeledContent` dengan nilai `textSecondary` bisa dipilih, baris dan format di *Format bersama*: Instance ID (dengan Copy), Runtime, Version, Digest, Provider, Data, Data size (dengan tombol `arrow.clockwise` berlabel "Recalculate data size" yang memanggil `refresh: true`, dan keterangan "scanned {RelativeAge}"), Uptime, Restart attempts (hanya kalau lebih dari 0 atau `exhausted`), Autostart.
+- `InstanceDetailModel` (`@Observable`, main actor) memegang detail, data usage, state muat, dan error, tanpa nilai secret; memuat detail saat halaman tampil, saat `revision` summary berubah (jeda `DETAIL_RELOAD_DEBOUNCE`), dan saat event `secret.changed` dari stream event shell menyebut salah satu reference nya, dan membuang balasan yang `revision` nya lebih lama dari detail yang dipegang; data usage dimuat saat halaman tampil dan saat Recalculate. Uptime diperbarui lewat `TimelineView(.periodic(from:by: 1))` hanya di baris itu.
+
+### Format bersama
+
+`ProcessText` dan `ReadinessText` adalah fungsi murni atas `InstanceSummary` (usulan spec 0022: inspector memakainya juga). Baris yang ditambah spec ini diuji paritas GUI dan CLI (AC-7).
+
+| Baris | Sumber | Teks |
+| --- | --- | --- |
+| Endpoint IP | `InstanceSummary.endpoints[]` | "{host}:{port}" (IPv6 "[{host}]:{port}"), atau "{host}, port assigned at start" kalau `port` null |
+| Endpoint Unix | sama | `socketPath`, atau "socket, created at start" kalau null |
+| Process | `lifecycle`, `process` | `running` "Running (PID {pid})" ditambah ", adopted" kalau `adopted`; `recovering` "Restarting"; `starting` "Starting"; `stopping` "Stopping"; `stopped` "Stopped"; `failed` "Failed"; `unknown` "Unknown"; `initializing` "Initializing"; `uninitialized` "Not initialized" |
+| Readiness | `readiness`, `lifecycle` | hanya saat `running` atau `recovering`: `ready` "Ready"; `not_ready` reason `awaiting_probe` "Waiting for probe"; `not_ready` lain "Not ready" ditambah ": {detail}"; `unknown` "Unknown" ditambah " ({reason})"; selain itu "—" (CLI `-`) |
+| Version | `detail.provider.displayName` (cadangan `software`), `detail.runtime.version`, `detail.runtime.target` | "{nama} {version} · {arch}" dengan `aarch64` "arm64" dan `x86_64` "x86_64" |
+| Runtime | `detail.runtime.id` | UUID |
+| Digest | `detail.runtime.artifactSha256`, `installMode` | "sha256:" ditambah 12 hex pertama (GUI: lengkap di `.help` dan label VoiceOver; CLI `inspect`: lengkap); external "External runtime" |
+| Provider | `detail.provider` | GUI Details "{name} {revision}"; CLI tetap baris spec 0022 |
+| Data | `detail.dataPath` | GUI: path dengan home disingkat `~` dan dipotong di tengah; CLI: path lengkap |
+| Data size | `DataUsage` | "{ukuran}", "at least {ukuran}" kalau tidak lengkap, "Calculating…" selama dimuat, "—" kalau `usage` null, "Unavailable" kalau error; ukuran: di bawah 1 000 byte "{n} bytes", selain itu kB, MB, GB, atau TB desimal (1 000) dengan satu angka desimal, misalnya "1.2 GB" |
+| Uptime | `InstanceSummary.process.startedAt` | `UptimeText` spec 0022, atau "—" tanpa proses |
+| Restart attempts | `InstanceSummary.restart` | "{attempts} in the last {menit} min" kalau lebih dari 0, "Stopped restarting" kalau `exhausted`, selain itu baris tidak tampil |
+| Autostart | `detail.startup` | `manual` "Off", `at_login` "At login", asing "Unknown" |
+| Dependents | `detail.dependents` | "Nothing depends on this instance." atau "{name} · {Dedicated \| Shared}" ditambah " · lease active"; CLI `none` atau `<name> (<ownership>, lease active)` |
+| Secrets | `detail.secrets` | "{reference}" ditambah status; CLI `<field>: <reference> (<status>)` |
+| Connection | `ConnectionString` | `masked`, atau teks alasan dari *Copy* (CLI `unavailable (<reason>)`) |
+
+### Halaman detail dan navigasi
+
+- `ShellDestination.instance(UUID)` (usulan spec 0022) mengisi `ShellNavigator.instanceRequest` dan memilih bagian Instances; `InstancesPage` menerapkannya lewat `.onChange(of: navigator.instanceRequest, initial: true)` ke `NavigationStack` nya (path `[InstanceRoute]`), lalu mengosongkan request itu, sehingga permintaan tetap diterapkan saat Instances belum tampil. `openInstance(_:)` memanggil `.instance(id)`. Tombol kembali sistem kembali ke tabel dengan pilihan baris tetap; klik ulang Instances di sidebar mengosongkan path.
+- Header `.pageChrome(title:subtitle:)`: judul `name`; subjudul nama tampil provider (dari detail, atau `software` sebelum detail termuat), `runtimeVersion`, dan label `StatusLabel` spec 0012 (`StatusAppearance.instance(lifecycle:readiness:health:)`).
+- Toolbar: tombol aksi utama `InstanceActionModel` (simbol `play.fill`, `stop.fill`, atau `arrow.clockwise` untuk Retry, ditambah label teks) lalu menu More (`ellipsis.circle`, label "More") dengan "Copy Connection String" (entri pertama, perilaku Copy yang sama, nonaktif dengan alasan "No connection string available." atau alasan entri). Item yang mengubah state memakai `.mutationGated()`; Copy tidak.
+- `InstanceTab` hanya berisi `.summary` di fitur ini; picker tab tampil saat ada lebih dari satu tab.
+- State halaman: instance tidak ada di `InstanceStore` → satu `instance.get`; `resource.not_found` → `StatePlaceholder` "Instance Not Found", "It may have been removed.", tombol Back to Instances; instance yang menjadi retained (event spec 0010) atau dihapus (`instance.removed` spec 0020) saat halaman terbuka menampilkan placeholder yang sama dengan pesan "This instance was removed.".
+
+### CLI
+
+**`stackly instance connection`**:
+
+```text
+stackly instance connection <instance> [--format <name> | --all] [--show-password] [--json]
+```
+
+- Resolver nama atau UUID spec 0022 (`resolve.rs`), lalu `instance.get_detail`.
+- Teks: tanpa `--all`, stdout tepat `masked` diikuti newline; kalau `portMayChange`, stderr menulis `note: the port can change the next time the instance starts`. `--all`: satu baris per entri `<name>  <masked>` atau `<name>  unavailable (<reason>)`, dengan lebar kolom nama tetap.
+- `--all` memakai `conflicts_with` clap terhadap `--format` dan `--show-password` (exit 2, envelope `cli.usage` spec 0008).
+- `--show-password`: reveal per reference berbeda (`purpose: show`), lalu stdout tepat string lengkap; reveal yang gagal menghentikan perintah dengan error `secret.*` itu tanpa mencetak apa pun ke stdout; entri tanpa secret mencetak string nya tanpa reveal.
+- Kode area `cli` baru (spec 0008, aturan pemakai pertama) di tabel *Kode error*.
+
+**`stackly instance inspect`** (perluasan spec 0022): sesudah `instance.get`, perintah memanggil `instance.get_detail` dan `instance.get_data_usage` (`cachedOnly: true`, atau `refresh: true` dengan flag baru `--size`; kegagalan data usage tidak menggagalkan perintah), dan mengambil ulang keduanya sekali kalau `detail.revision` berbeda dengan `revision` summary. Blok `kv` mendapat baris sesudah `Version`: `Digest` (lengkap), `Data` (path lengkap), `Data size`, `Autostart`; sesudah `Logs`: `Dependents` dan `Secrets` (satu baris per secret). Lalu tabel `CONNECTION`, `VALUE` dengan nilai tersamar atau `unavailable (<reason>)`. `--json`: `{ "instance": InstanceSummary, "detail": InstanceDetail, "dataUsage": DataUsage | null }`.
+
+### Kode error
+
+Semua `retryable` false. Hint statis lewat `codes::<area>::hint(code, details)` yang dipasang `stacklyd` lewat `ErrorBody::with_hint` (CLI memasangnya sendiri untuk kode `cli`).
+
+| Kode | Kategori | Kapan | Kunci `details` | Pesan | Hint statis |
+| --- | --- | --- | --- | --- | --- |
+| `instance.data_usage_unavailable` | `unavailable` | folder data hilang, bukan folder privat milik user, atau tidak terbaca | `reason` (`missing`, `not_private`, `io`) | `the data folder size can't be measured` | per `reason`: `missing` "run stackly doctor; the data folder is missing"; `not_private` "run stackly doctor; the data folder permissions changed"; `io` "try again" |
+| `cli.connection_not_found` | `not_found` | `--format` tidak ada, atau provider tanpa blok `connection` | `format`, `available` | `no connection named <format>` atau `this provider describes no connection strings` | "list them with stackly instance connection <instance> --all" |
+| `cli.connection_unavailable` | `conflict` | entri terpilih tidak tersedia | `format`, `reason` | `the <format> connection is not available yet` | per `reason`: `port_not_assigned` "start the instance to assign its port"; `package_unavailable` "run stackly doctor"; `retained` "the instance was removed"; asing "update Stackly" |
+
+Kode issue manifest baru `connection_invalid` (detail `reason`: `name`, `title`, `template_length`, `not_a_uri`) dan `connection_name_duplicate` masuk katalog `IssueCode` spec 0009 (usulan).
+
+### Aksesibilitas
+
+- Urutan fokus halaman detail: tombol kembali, aksi utama, More, banner dan tombolnya, kartu Endpoints (setiap tombol Copy), kartu Connection (Show Password, Copy per entri), kartu Details (Copy ID, Recalculate data size).
+- Label VoiceOver: header dibacakan "{name}, {provider} {versi}, Status: {label}" (aturan `StatusLabel` spec 0012); baris "Process: {teks}" dan "Readiness: {teks}" dua elemen terpisah; tombol Copy endpoint "Copy {nama endpoint} address"; string tersamar dibacakan dengan bagian bukan secret apa adanya dan "password hidden" di tempat setiap `****`, ditambah reference; tombol Copy connection "Copy {title}"; tombol Recalculate "Recalculate data size". Hasil copy diumumkan "{title} copied." atau "Address copied.", dan "{name} is ready." diumumkan sekali setelah readiness `ready` bertahan 2 detik.
+- Status proses dan readiness selalu dua teks terpisah di Summary; warna tone hanya tambahan.
+- Teks membungkus di lebar konten 640 pt; nilai monospace yang panjang (connection, path) membungkus per karakter tanpa dipotong, dan tetap bisa dipilih.
+
+### Copy
+
+| Konteks | Teks |
+| --- | --- |
+| Connection `port_not_assigned` | "Start the instance to assign its port." |
+| Connection `package_unavailable` | "Stackly can’t read this provider’s package. Run stackly doctor." |
+| Connection `retained` | "This instance was removed." |
+| Connection state atau bagian asing | "Update Stackly to copy this connection string." |
+| Provider tanpa blok connection | "This provider doesn’t describe a connection string. Use the endpoints above." |
+| Port bisa berubah | "The port can change the next time the instance starts." |
+| Belum siap | "Not accepting connections yet." |
+| Secret tanpa nilai | "{reference} has no stored value yet." |
+| Detail gagal dimuat | "Couldn’t load instance details." |
+| Instance tidak ada | "Instance Not Found" / "It may have been removed." |
+| Copy berhasil | "{title} copied." / "Address copied." / "ID copied." |
+| Reveal gagal | pesan `secret.*` dari daemon |
+| Needs secret | "Needs a secret to start" / tombol "Enter Secret…" |
+
+### Konstanta
+
+| Konstanta | Nilai | Tempat |
+| --- | --- | --- |
+| `CONNECTION_ENTRIES_MAX` | 8 | `core::provider` |
+| `CONNECTION_TEMPLATE_MAX` | 512 byte | `core::provider` |
+| `DATA_USAGE_MAX_ENTRIES` | 200 000 | `stacklyd` |
+| `DATA_USAGE_DEADLINE` | 2 detik | `stacklyd` |
+| `DATA_USAGE_CACHE_TTL` | 60 detik | `stacklyd` |
+| `DATA_USAGE_PARTIAL_TTL` | 10 detik | `stacklyd` |
+| `DATA_USAGE_CONCURRENCY` | 2 | `stacklyd` |
+| `PINNED_PACKAGE_CACHE` | 32 entri | `stacklyd` |
+| `DETAIL_RELOAD_DEBOUNCE` | 250 ms | `InstanceDetailModel` |
+| `READY_ANNOUNCE_DELAY` | 2 detik | `InstanceDetailModel` |
+
+### Value sourcing
+
+| Aksi | Nilai | Sumber |
+| --- | --- | --- |
+| detail | `provider.name`, `revision`, `manifestSha256` | `Instance.provider_revision` (registry) |
+| detail | `provider.displayName` | `metadata.displayName` paket pinned di `provider_revision_dir(key)` (cache paket); null kalau tidak terbaca |
+| detail | `runtime.*` | `Registry::runtime(instance.runtime_id)`; `target` sebagai `HostTarget`; `artifactSha256` dari `InstallMode::Managed` |
+| detail | `dataPath` | baris `instance_paths` kind `data` di registry, diselesaikan `RootSet::resolve` |
+| detail | `startup` | `Instance.startup` |
+| detail | `secrets[]` | `secret_uses_by(Instance(id))` urut field, status dari cache `secret_references` (spec 0011, `unknown` tanpa baris), judul dari `title` field schema paket pinned (cadangan: nama field) |
+| detail | `dependents[]` | `Registry::environments()` yang punya member instance itu (ownership dari member), `lease_active` dari `Registry::leases(id, Unreleased)` berholder environment itu, urut nama lalu ID |
+| detail | `connections[]` | blok `connection` paket pinned, `render` (AC-2) dengan `PlanContext` (layout, `instance_run_dir`, runtime, port efektif) dan reference dari `secret_uses_by` |
+| detail | `revision` | `Instance.revision` saat dibaca |
+| data usage | `bytes`, `complete` | `Filesystem::tree_usage(dataPath, limits)` |
+| data usage | `scannedAt` | `Clock::now()` saat scan selesai |
+| Summary | label status header | `StatusAppearance.instance(lifecycle:readiness:health:)` spec 0012 dari `InstanceSummary` |
+| Summary | Process, Readiness, endpoint, restart, blocker, `lastFailure` | `InstanceSummary` dari `InstanceStore` (spec 0010, 0013) lewat `ProcessText` dan `ReadinessText` |
+| Summary | uptime | `InstanceSummary.process.startedAt` dan jam lokal (`UptimeText`) |
+| Summary | nilai secret untuk Show dan Copy | `secret.reveal { reference, purpose }` (spec 0011), satu per reference berbeda |
+| Summary | string lengkap | `ConnectionComposer.compose(parts, values)` |
+| Summary | tile dan mark | `CatalogStore` kalau termuat, selain itu tile `gray` dengan mark default spec 0017 |
+| Summary | "Not accepting connections yet." | `lifecycle` `running` dan readiness bukan `ready` |
+| CLI connection | entri terpilih | `--format` atau entri pertama `detail.connections` |
+| CLI connection | string lengkap | `secret.reveal` dan `stackly_protocol::instance::connection::compose` |
+| offline test | akses catalog, fetch, assess | penghitung akses `CatalogState` di `stacklyd`, `Fetcher` tiruan, `CodeSigning` tiruan |
+
+### Key invariants
+
+- Process state dan readiness selalu tampil sebagai dua baris terpisah di Summary dan dua field di CLI; tidak ada teks yang menyebut instance siap tanpa readiness `ready` dari probe yang segar (BR-010).
+- Daemon tidak pernah mengirim nilai secret di `InstanceDetail`, event, atau error; string tersamar memakai empat bintang tetap.
+- Tidak ada reveal, tulisan pasteboard, atau cetak password tanpa aksi eksplisit pengguna, dan komposisi tidak pernah mengganti nilai yang hilang dengan string kosong.
+- Start, status, detail, data usage, dan connection tidak pernah membaca `CatalogState` daemon, memanggil jaringan, atau menilai signature (REQ-046).
+- Connection dirender dengan `PlanContext` dan resolver yang sama dengan plan, sehingga host, port, dan socket nya selalu sama dengan yang di bind proses.
+
+### Security model
+
+- Semua method lewat socket privat milik user yang sama (spec 0006); `instance.get_detail` mengirim path absolut folder data hanya ke pemiliknya (pola `RuntimeDetail.path` spec 0018).
+- Nilai secret hanya keluar lewat `secret.reveal`, yang diaudit per purpose (spec 0011 AC-9); CLI hanya mencetaknya dengan `--show-password`, GUI hanya menampilkannya di `RevealableSecretText` yang tersembunyi lagi setelah 30 detik dan hanya menyalinnya lewat `ConcealedPasteboard` (host saja, transient, dikosongkan setelah 90 detik).
+- Template connection divalidasi saat paket dimuat (token, panjang, dan render sentinel sebagai URI); setiap nilai token di percent encode, sehingga nilai pengguna tidak bisa mengubah struktur URI.
+- Scan ukuran data tidak mengikuti symlink, tidak menyeberang device, dibatasi entri, waktu, dan jumlah scan bersamaan, dan hanya dimulai atas permintaan.
+- Daemon tidak mencatat isi detail ke log.
+
+### Configuration required
+
+Tidak ada variabel environment, setting, atau credential baru.
+
+### Critical test scenarios
+
+- Manifest: blok `connection` valid untuk PostgreSQL, NATS, dan fake; setiap aturan penolakan AC-1 dengan kode issue dan path nya, termasuk template yang bukan URI. Memverifikasi **AC-1**.
+- Render (unit test): IPv4 dan IPv6, port `Fixed`, `Auto` dengan dan tanpa `bound`, `running` dan `stopped` (`port_may_change`), socket dengan folder run berspasi dan Unicode, entri tanpa secret, paket rusak, instance retained, dan urutan alasan. Memverifikasi **AC-2**.
+- Komposisi: setiap kasus `connection-compose.json` di core, protokol, dan Swift, termasuk nilai yang hilang. Memverifikasi **AC-3**.
+- Detail: instance fake dengan secret `authToken`, dua environment fixture (dedicated dengan lease aktif, shared tanpa lease), paket pinned yang dirusak lalu diperbaiki (cache dibaca ulang), penghitung `SecretStore` nol. Memverifikasi **AC-4**.
+- Data usage: pohon dengan symlink keluar, hard link, file sparse, volume lain, 250 000 entri (`complete: false`, TTL 10 detik), folder hilang dan bukan privat, `refresh`, `cachedOnly` tanpa cache, dua permintaan bersamaan (satu scan), tiga instance bersamaan (paling banyak dua scan). Memverifikasi **AC-5**.
+- CLI connection: default tersamar, `--format socket`, format tidak ada, entri tidak tersedia (exit 3), provider tanpa blok, `--all`, konflik clap, `--show-password` dengan audit dan untuk entri tanpa secret, golden teks dan JSON. Memverifikasi **AC-6**.
+- Paritas: golden `inspect` dan test Swift dari tiga fixture triple, termasuk ambil ulang saat revision beda. Memverifikasi **AC-7**.
+- AC-012: fake dengan `readyDelayMs` panjang, lalu probe berhasil. Memverifikasi **AC-8**.
+- Start dari halaman detail: view model dengan service tiruan dan urutan event, connection `port_not_assigned` menjadi tersedia. Memverifikasi **AC-9**.
+- Offline: server di dalam proses tanpa catalog, `Fetcher` dan `CodeSigning` tiruan yang gagal saat dipanggil, binary CLI asli, penghitung akses catalog nol. Memverifikasi **AC-10**.
+- GUI: navigasi (klik ganda, Return, Open, Overview, permintaan saat Instances belum tampil, kembali, klik ulang sidebar, tidak ditemukan, dihapus saat terbuka), toolbar dan More, kartu Summary dari fixture, Copy endpoint (pasteboard biasa) dan Copy connection (concealed, setelah reveal semua reference), Show Password dan sembunyi otomatis, secret `missing` menonaktifkan, caution belum siap, banner I1 sampai I4 dan needs secret, state detail gagal, balasan lama dibuang, dan offline, inspector Open, Data, Connection. Memverifikasi **AC-11** sampai **AC-15**.
+- Aksesibilitas: evidence manual keyboard dan VoiceOver untuk alur Start sampai Copy. Memverifikasi **AC-16**.
+- Kontrak: fixture setiap DTO, kode, nilai asing, dan konsistensi `ConnectionString`. Memverifikasi **AC-17**.
+- Sentinel: prefix fixture credential tidak ada di detail, event, log, output CLI default dan `--json`, dan state model Swift. Memverifikasi **AC-18**.
+- Kinerja: 10 instance, cache dingin dan hangat. Memverifikasi **AC-19**.
+- Native: PostgreSQL 18 dan NATS lewat GUI dan CLI, `psql` dan `INFO`, lalu jaringan mati setelah persetujuan. Memverifikasi **AC-10**, **AC-20**.
+
+### Jawaban untuk follow up spec lain
+
+| Spec dan baris Follow-up | Jawaban di spec ini |
+| --- | --- |
+| 0009: `Endpoint` domain membawa `purpose` atau dibaca dari paket (fitur 20 dan 21) | dibaca dari paket pinned (keputusan spec 0020 dipertahankan); connection tidak memakai purpose, melainkan blok `connection` yang menyebut endpoint nya sendiri |
+| 0011: connection URI tersamar secara default dan `RevealableSecretText` untuk Show Password dan Copy | AC-2, AC-13; `RevealableSecretText(references:compose:)` lewat usulan spec 0011 |
+| 0019: bentuk connection string PostgreSQL dan tempatnya di manifest | blok `connection` (AC-1) dan entri `uri` serta `socket` di *Connection PostgreSQL, NATS, dan fake* |
+| 0020: purpose endpoint dan template socket dari paket pinned; socket path hanya saat `socketPath` tidak null | render memakai `PlanContext` dari paket pinned dan port efektif; entri socket `port_not_assigned` selama port rujukannya belum ada (AC-2) |
+| 0022: ganti `openInstance` dengan halaman detail, Open di inspector, "Double-click a row to open it.", baris Data dan Connection di inspector | AC-11, AC-15, usulan spec 0022 |
+| 0023: connection string NATS dari endpoint `client`, tanpa credential, dan URL monitoring | entri `uri` dan `monitoring` di *Connection PostgreSQL, NATS, dan fake* |
+| 0013: pemilik halaman detail instance | AC-11 sampai AC-14 |
+| 0004: BR-001 dan BR-010 | BR-001 tidak berubah (detail membaca runtime dan revision exact); BR-010 di AC-8 |
+| 0010: start, readiness, `instance.get`, event | dipakai apa adanya (AC-8, AC-9) |
+| 0012: tata letak kartu Summary | `surfaceWindow` dan `.cardSurface()` (*Tab Summary*), label status header tanpa perubahan |
+
+### Usulan update spec lain
+
+Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawanya ke pemilik masing masing sebelum milestone yang membutuhkannya. Satu blok per spec target, setiap blok berdiri sendiri. Teks lama dikutip persis dari spec target di `main` (2026-10-20). "Ganti" berarti teks baru menggantikan teks lama; "Sisipkan sesudah" berarti teks lama tetap dan teks baru ditambahkan tepat sesudahnya.
+
+#### Spec 0004 (domain core dan abstraksi platform)
+
+1. *Port platform*, trait `Filesystem`. Sisipkan sesudah baris berikut (dan sesudah baris `volume_facts` usulan spec 0020 kalau sudah masuk):
+
+   ```text
+       fn remove_tree(&self, root: &Path, relative: &Path) -> Result<RemoveReport, PlatformError>;
+   ```
+
+   baris:
+
+   ```text
+       // ditambah fitur 21 (spec 0021):
+       fn tree_usage(&self, root: &Path, limits: UsageLimits) -> Result<TreeUsage, PlatformError>;
+   ```
+
+   dan sesudah butir `remove_tree` di bawah blok kode, butir baru:
+
+   ```text
+   - `tree_usage(root, UsageLimits { max_entries: u64, deadline: Duration })` *(ditambah fitur 21, spec 0021)* mengembalikan `TreeUsage { bytes, complete }`: jumlah `st_blocks * 512` setiap entri di bawah `root` termasuk folder, hard link dihitung sekali per (device, inode), tanpa mengikuti symlink, tanpa menyeberang device, dan `complete: false` saat batas entri tercapai atau tenggat (jam monotonik sejak panggilan) lewat. Adapter macOS berbasis file descriptor (`openat` dengan `O_NOFOLLOW`, `fstatat` dengan `AT_SYMLINK_NOFOLLOW`); `FakeFilesystem` memakai penelusuran portabel dengan semantik yang sama; `fs_conformance` memeriksa symlink keluar, hard link, dan batas entri.
+   ```
+
+#### Spec 0009 (provider engine dan manifest schema)
+
+1. *Manifest `stackly/v1alpha1`*, tabel field. Sisipkan sesudah:
+
+   ```text
+   | `permissions.additionalExecutables` | peta alias ke path relatif | tidak | paling banyak 16, path ada di `executables` artefak |
+   ```
+
+   baris:
+
+   ```text
+   | `connection` | daftar `{ name, title, template }` | tidak | 1 sampai 8 entri; `name` `^[a-z][a-z0-9_]{0,31}$` dan unik, `title` 1 sampai 64 karakter tanpa karakter kontrol, `template` 1 sampai 512 byte di posisi `connection.template` yang hasil render nya dengan nilai sentinel wajib URI absolut RFC 3986; entri pertama adalah connection utama; kode issue `connection_invalid` (detail `reason`: `name`, `title`, `template_length`, `not_a_uri`) dan `connection_name_duplicate`, token salah memakai `token_not_allowed_here`, `unknown_endpoint`, dan `unknown_secret` (spec 0021) |
+   ```
+
+2. *Interpolasi terkontrol*, matriks posisi. Sisipkan sesudah:
+
+   ```text
+   | `{{ }}` di template | ya | ya | ya (sebagai teks) | ya (sebagai teks) | tidak | hanya di config `sensitive` | |
+   ```
+
+   baris:
+
+   ```text
+   | `connection.template` | hanya `endpoint.<n>.address`, `endpoint.<n>.port`, `instance.name`, `instance.id`, `provider.id`, `provider.revision`, `runtime.version` | tidak | hanya `endpoint.<n>.socket` dan `endpoint.<n>.socketDir` | tidak | tidak | ya, `secret.<field>` | `endpoint.<n>.host` dan `settings.*` ditolak; nilai token selain `endpoint.<n>.address` dan `endpoint.<n>.port` di percent encode sebagai byte UTF 8 dengan hex huruf besar kecuali karakter unreserved RFC 3986; teks literal tidak di encode (spec 0021) |
+   ```
+
+#### Spec 0011 (secret store dan redaction)
+
+1. *Reveal dan copy*, butir GUI. Ganti:
+
+   ```text
+   Show memanggil `revealSecret(purpose: .show)` dan menampilkan nilai sampai salah satu dari ini terjadi lebih dulu: 30 detik berlalu, pengguna menekan Hide, view hilang, atau app tidak aktif. Copy memanggil `revealSecret(purpose: .copy)`, menyusun teks lengkap lewat closure pemanggil (misalnya URI dengan password asli), lalu menulis pasteboard lewat `ConcealedPasteboard`.
+   ```
+
+   dengan:
+
+   ```text
+   Komponen menerima `references: [String]` (satu atau lebih reference berbeda) dan closure `compose: ([String: RevealedSecret]) throws -> String`. Show memanggil `revealSecret(purpose: .show)` untuk setiap reference dan menampilkan teks tersusun sampai salah satu dari ini terjadi lebih dulu: 30 detik berlalu, pengguna menekan Hide, view hilang, atau app tidak aktif. Copy memanggil `revealSecret(purpose: .copy)` untuk setiap reference, menyusun teks lengkap lewat closure pemanggil (misalnya URI dengan password asli), lalu menulis pasteboard lewat `ConcealedPasteboard`. Reveal berlaku semua atau tidak sama sekali: satu reveal yang gagal membatalkan aksi tanpa menampilkan atau menyalin apa pun, dan nilai yang sudah diterima dibuang (spec 0021).
+   ```
+
+#### Spec 0019 (provider PostgreSQL)
+
+1. *Paket*, manifest. Sisipkan sesudah:
+
+   ```text
+       socket: { transport: unix, purpose: client, socketName: ".s.PGSQL.${endpoint.client.port}" }
+   ```
+
+   blok tingkat atas:
+
+   ```text
+   connection:
+     - name: uri
+       title: Connection string
+       template: "postgresql://postgres:${secret.superuserPassword}@${endpoint.client.address}/postgres"
+     - name: socket
+       title: Unix socket
+       template: "postgresql://postgres:${secret.superuserPassword}@/postgres?host=${endpoint.socket.socketDir}&port=${endpoint.client.port}"
+   ```
+
+2. *Value sourcing*. Ganti:
+
+   ```text
+   | connection (fitur 21) | user, database, password, endpoint | `postgres`, `postgres`, field `superuserPassword`, endpoint `client` atau `socket` (Follow-up) |
+   ```
+
+   dengan:
+
+   ```text
+   | connection (fitur 21) | connection string | blok `connection` paket ini (entri `uri` lewat endpoint `client`, entri `socket` lewat folder socket), dirender daemon dan disusun client dengan `superuserPassword` (spec 0021) |
+   ```
+
+3. *Build plan*, prasyarat. Ganti:
+
+   ```text
+   Langkah 11 juga butuh langkah 13 spec 0018 (milestone 3: `cargo xtask runtime compat-record` dan aturan `runtime check` 12).
+   ```
+
+   dengan:
+
+   ```text
+   Langkah 11 juga butuh langkah 13 spec 0018 (milestone 3: `cargo xtask runtime compat-record` dan aturan `runtime check` 12). Blok `connection` spec 0021 masuk paket sebelum evidence: langkah 1 dan 2 spec 0021 (loader dan blok paket) selesai sebelum langkah 11, dan blok itu ikut `provider.yaml` final yang dipakai evidence.
+   ```
+
+#### Spec 0022 (overview dan daftar instance)
+
+1. *Navigasi*, `ShellDestination`. Ganti:
+
+   ```text
+   - `ShellDestination`: `.overview`, `.instances(filter: InstanceFilter = .all, select: UUID? = nil)`, `.catalog`, `.runtimes`, `.operations`, `.diagnostics`.
+   ```
+
+   dengan:
+
+   ```text
+   - `ShellDestination`: `.overview`, `.instances(filter: InstanceFilter = .all, select: UUID? = nil)`, `.instance(UUID)` (halaman detail fitur 21, spec 0021), `.catalog`, `.runtimes`, `.operations`, `.diagnostics`.
+   ```
+
+2. *Navigasi*, permintaan halaman detail. Sisipkan sesudah:
+
+   ```text
+   - `.instances` mengisi `instancesRequest` (filter dan pilihan). `InstancesPage` membacanya lewat `.onChange(of: navigator.instancesRequest, initial: true)`, jadi permintaan tetap diterapkan saat Instances sudah tampil: filter dipasang, pencarian dikosongkan, dan kalau `select` ada, baris itu dipilih dan inspector ditampilkan; lalu `instancesRequest` dikosongkan.
+   ```
+
+   butir:
+
+   ```text
+   - `.instance(id)` memilih bagian Instances dan mengisi `instanceRequest`. `InstancesPage` memegang `NavigationStack` dengan path `[InstanceRoute]` dan membaca request itu lewat `.onChange(of: navigator.instanceRequest, initial: true)`: path diisi `[InstanceRoute(id)]`, baris itu dipilih, lalu `instanceRequest` dikosongkan, jadi permintaan berlaku juga saat Instances belum tampil. Klik ulang Instances di sidebar saat path tidak kosong mengosongkan path (spec 0021).
+   ```
+
+3. *Navigasi*, `openInstance`. Ganti:
+
+   ```text
+   - `openInstance(_ id:)` sama dengan `.instances(filter: .all, select: id)` (`// provisional: F21`, diganti halaman detail fitur 21).
+   ```
+
+   dengan:
+
+   ```text
+   - `openInstance(_ id:)` sama dengan `.instance(id)` (spec 0021).
+   ```
+
+4. *Halaman Instances*, inspector tanpa pilihan. Ganti:
+
+   ```text
+   5. Tanpa pilihan: `StatePlaceholder` ukuran `.section` "No Selection", "Select an instance to see its details.".
+   ```
+
+   dengan:
+
+   ```text
+   5. Tanpa pilihan: `StatePlaceholder` ukuran `.section` "No Selection", "Select an instance to see its details. Double-click a row to open it." (spec 0021).
+   ```
+
+5. *Halaman Instances*, baris Readiness inspector. Ganti:
+
+   ```text
+   | Readiness | "Ready", "Waiting for probe", "Not ready", atau "Unknown", ditambah `detail` dan "checked {RelativeAge}" dari `observedAt` |
+   ```
+
+   dengan:
+
+   ```text
+   | Readiness | `ReadinessText` spec 0021 ("Ready", "Waiting for probe", "Not ready" ditambah detail, "Unknown" ditambah reason, atau "—" saat tidak running), tanpa umur pemeriksaan karena spec 0010 tidak mengirim pembaruan `observed_at` saja |
+   ```
+
+6. *Halaman Instances*, catatan pemilik. Ganti:
+
+   ```text
+   - Data path, ukuran data, connection string, dan Open milik fitur 21.
+   ```
+
+   dengan:
+
+   ```text
+   - Fitur 21 (spec 0021) menambah tombol Open di samping aksi utama, baris Data (ukuran dari `instance.get_data_usage` dengan `cachedOnly: true` atau "—", path di baris kedua) sesudah Version, dan baris Connection (entri pertama tersamar dengan Show Password dan Copy) sesudah Endpoints.
+   ```
+
+7. *Requirements*, AC-11. Ganti:
+
+   ```text
+   dengan `--json` memberi `InstanceSummary`.
+   ```
+
+   dengan:
+
+   ```text
+   dengan `--json` memberi `result` `{ "instance": InstanceSummary }`; fitur 21 menambah key `detail` dan `dataUsage` dan flag `--size` (spec 0021).
+   ```
+
+#### Spec 0023 (provider NATS lewat manifest)
+
+1. *Paket NATS*. Ganti:
+
+   ```text
+   Satu satunya perubahan fitur ini di `providers/nats/provider.yaml` adalah blok `readiness`:
+   ```
+
+   dengan:
+
+   ```text
+   Perubahan fitur ini di `providers/nats/provider.yaml` adalah blok `readiness` di bawah, dan blok `connection` dari spec 0021 (entri `uri` `nats://${endpoint.client.address}` berjudul "Client URL" dan entri `monitoring` `http://${endpoint.monitoring.address}` berjudul "Monitoring URL", tanpa credential sampai fitur 39), yang ditulis di commit yang sama supaya `manifest_sha256` hanya berubah sekali sebelum evidence BR-025:
+   ```
+
+2. *Requirements*, AC-4. Ganti:
+
+   ```text
+   - **AC-4**: Paket `providers/nats` memakai probe readiness di *Paket NATS* dan README yang diperbarui; selain itu isi paket tidak berubah oleh fitur ini
+   ```
+
+   dengan:
+
+   ```text
+   - **AC-4**: Paket `providers/nats` memakai probe readiness dan blok `connection` di *Paket NATS* dan README yang diperbarui; selain itu isi paket tidak berubah oleh fitur ini
+   ```
+
+3. *Build plan*, prasyarat. Sisipkan sesudah:
+
+   ```text
+   - Milestone 2 butuh build fitur 10 sampai milestone "Daemon, IPC, and end to end proof", fitur 11 selesai, milestone 2 spec 0018 (`install_cached_artifact`, langkah 9), dan milestone 1 spec 0017 (`providers/catalog.toml`, ledger, `CatalogBuilder`). Langkah 9 juga butuh langkah 1 spec 0018 (`runtime.versionCheck` NATS sudah di paket sebelum evidence) dan langkah 13 spec 0018 (`compat-record`, milestone 3).
+   ```
+
+   butir:
+
+   ```text
+   - Langkah 2 butuh langkah 1 spec 0021 (loader blok `connection`), dan langkah 9 butuh blok `connection` sudah di paket, supaya evidence dibuat dari `provider.yaml` final (spec 0021).
+   ```
+
+Tidak ada update untuk spec 0006, 0008, 0010, 0012, dan 0013: method dan kode baru masuk area pemiliknya lewat aturan pemakai pertama, `socketPath` sudah diusulkan spec 0020, dan label status spec 0012 dipakai apa adanya.
+
+### Selisih mockup yang disengaja
+
+Untuk dicatat lead di `ui-macos.md`:
+
+- Readiness menampilkan state dan detail probe sebagai baris sendiri di bawah baris Process, tanpa latensi ("SELECT 1 · 8 ms") dan tanpa umur pemeriksaan; latensi milik fitur 28.
+- Header memakai label status spec 0012 ("Starting…" atau "Not Ready" selama probe belum berhasil), bukan "Running".
+- Restart attempts di Details adalah jumlah di jendela restart policy dan hanya tampil kalau lebih dari 0, bukan "Restarts" sejak dibuat; jumlah sejak dibuat milik fitur 28.
+- Runtime menampilkan UUID runtime, bukan ID buatan mockup (`rt-pg-17.6`); Instance ID menampilkan UUID, bukan `inst_...`.
+- Secret reference memakai bentuk spec 0011 (`local:instance/<id>/superuser-password`), bukan `keychain:...`.
+- Kartu Connection menampilkan semua entri provider (PostgreSQL: Connection string dan Unix socket; NATS: Client URL dan Monitoring URL), bukan satu string, dan menulis "Not accepting connections yet." selama belum siap.
+- Tab Configuration, Logs, Metrics, Backups, dan Activity serta tombol Restart, Reload, Duplicate, dan Remove tidak tampil sampai fitur pemiliknya dibangun.
+- Banner gagal tidak menampilkan "Use Port …" atau Show Logs sampai fitur 29 dan 27; Retry saja.
+- Autostart menulis "Off" atau "At login", bukan "With environment".
+
+## Build plan
+
+Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap adalah "pengguna menjalankan instance, melihat ready, lalu menyalin connection", lebih dulu di core (manifest, render, ukuran data), lalu lewat daemon dan CLI dengan bukti offline, lalu di GUI, lalu dibuktikan dengan PostgreSQL dan NATS nyata di Mac ini.
+
+**Milestone 1: Connection dan ukuran data di core** (needs `/architect` update spec 0004, 0009, 0011, 0019, 0022, dan 0023 dari *Usulan update spec lain*; fitur 9 build; fitur 19 milestone 1 (paket PostgreSQL) dan fitur 23 langkah 2 (perubahan paket NATS) untuk blok paket)
+
+1. Blok `connection` di `core::provider` (raw, validasi dengan kode issue, posisi matriks, render sentinel dan parse URI, JSON Schema `schemas/provider/`, `provider check`), dengan test penolakan. Memenuhi **AC-1**.
+2. Blok `connection` di paket PostgreSQL, NATS, dan fake, dengan golden render dan kenaikan revision catalog sesuai aturan spec 0017. Memenuhi **AC-1**.
+3. `core::instance::connection::render` di atas `PlanContext` dengan test tabel, `stackly_protocol::instance::connection::compose`, dan fixture `connection-compose.json` yang dijalankan lewat keduanya. Memenuhi **AC-2**, **AC-3**.
+4. `Filesystem::tree_usage` di `MacosFilesystem` dan `FakeFilesystem` dengan `fs_conformance` dan test volume lain di macOS. Memenuhi **AC-5**.
+5. `core::instance::detail::build` (fungsi murni dari snapshot registry, paket pinned, dan layout) dengan test. Memenuhi **AC-4**.
+
+Sesi paralel: langkah 1 dan 4 bisa menjadi dua sesi (provider dan platform); langkah 2 dan 3 setelah langkah 1; langkah 5 setelah langkah 3.
+
+**Milestone 2: Kontrak, daemon, CLI, dan bukti offline** (after milestone 1; needs fitur 6, fitur 8 build, fitur 10 milestone 4, fitur 11 langkah 5 (`secret.reveal` lewat daemon) dan langkah 8 (CLI secret), dan fitur 14 di `01-foundation.md`; fitur 22 milestone 2 (`resolve.rs`, `inspect`) dan usulan spec 0022 nomor 7; spec 0020 milestone 2 untuk `socketPath`)
+
+6. Protokol: DTO, dua method di tabel `methods!` (`recovery refused`), enum terbuka, kode `instance.data_usage_unavailable` dan kode `cli` baru dengan hint statis, fixture termasuk fixture triple `detail-*.json`, kenaikan minor, `cargo xtask codegen`, dan test kontrak Swift dengan konsistensi `ConnectionString`. Memenuhi **AC-17**.
+7. `stacklyd`: handler kedua method, cache paket pinned dengan cek stat, cache, penggabungan, dan semaphore scan data usage, penghitung akses `CatalogState` untuk test, dan integration test di dalam proses (detail, data usage, offline dengan binary CLI asli, AC-012 bagian daemon, sentinel bagian daemon). Memenuhi **AC-4**, **AC-5**, **AC-8**, **AC-10**, **AC-18**, **AC-19**.
+8. CLI: `stackly instance connection` dan perluasan `inspect` (`--size`, ambil ulang saat revision beda) dengan golden, test paritas, dan sentinel bagian CLI. Memenuhi **AC-6**, **AC-7**, **AC-8**, **AC-18**.
+
+Sesi paralel: setelah langkah 6 masuk, langkah 7 dan 8 bisa menjadi dua sesi (daemon dan CLI), dengan test CLI terhadap daemon nyata menunggu langkah 7 di merge.
+
+**Milestone 3: Halaman detail dan tab Summary** (after langkah 6; needs fitur 12 dan fitur 13 milestone 4 (`ui-macos.md`), fitur 11 langkah 10 (`RevealableSecretText` dengan usulan spec 0011, `ConcealedPasteboard`, `SecretEntrySheet`), fitur 22 milestone 3 (Instances, inspector, `InstanceActionModel`, `ShellNavigator`) dan usulan spec 0022 nomor 1 sampai 6; memakai komponen fitur 67 dan peta perintah fitur 69 kalau sudah ada)
+
+9. `StacklyClient` method baru, `ConnectionComposer` dengan fixture komposisi, `DetailFormat`, `ProcessText`, dan `ReadinessText` dengan fixture detail, dan `InstanceDetailModel` dengan service tiruan. Memenuhi **AC-3**, **AC-7**, **AC-9**, **AC-14**.
+10. `InstanceDetailPage`, navigasi `.instance(id)` lewat `instanceRequest`, header, toolbar, kartu Summary, banner, state, tambahan inspector, dan sentinel bagian Swift, dengan test dan preview. Memenuhi **AC-8**, **AC-11** sampai **AC-15**, **AC-18**.
+11. Evidence manual keyboard dan VoiceOver untuk alur Start sampai Copy dengan daemon development. Memenuhi **AC-16**.
+
+Sesi paralel: milestone 3 bisa berjalan bersamaan dengan langkah 7 dan 8 karena hanya bergantung pada fixture langkah 6.
+
+**Milestone 4: PostgreSQL dan NATS nyata, dan offline di Mac ini** (after milestone 2 dan 3; needs fitur 19 milestone 2, fitur 23 milestone 2, fitur 18 milestone 2 (`install_cached_artifact`), dan spec 0020 milestone 2 dan 3 (create lewat daemon dan GUI); artefak di cache runtime xtask, selain itu `BLOCKED`)
+
+12. Test native: PostgreSQL 18 dan NATS di start dari CLI dan GUI sampai `ready`, `psql` milik runtime menjalankan `SELECT 1` dengan string `uri` dan `socket` hasil komposisi, dan klien TCP menerima `INFO` NATS lewat string `uri`. Memenuhi **AC-20**.
+13. Run offline dengan jaringan Mac ini dimatikan setelah persetujuan user (start, status, Summary, `connection`, `inspect`), dicatat evidence `native`; `BLOCKED` sampai disetujui. Memenuhi **AC-10**.
+
+## Consequences
+
+**Positive**:
+
+- JOURNEY-01 selesai dari GUI dan CLI dengan password yang tidak pernah tampil atau tersalin tanpa diminta.
+- Provider berikutnya (Valkey, MySQL, ClickHouse, Traefik) cukup menulis blok `connection` di manifest untuk mendapat tombol Copy dan `stackly instance connection`.
+- Connection dirender dengan `PlanContext` dan resolver yang sama dengan plan, jadi tidak pernah menunjuk host, port, atau socket yang salah.
+- Semua jalur lokal terbukti tidak menyentuh catalog atau jaringan.
+
+**Negative / tradeoffs**:
+
+- Blok `connection` mengubah `manifest_sha256` paket PostgreSQL dan NATS, jadi blok itu harus masuk sebelum evidence BR-025 kedua provider; instance yang di pin ke paket lama tidak punya connection sampai fitur 59.
+- Encoder URI ada tiga kali (core, protokol untuk CLI, dan Swift); fixture bersama menjaganya sama, tetapi setiap perubahan aturan encode menyentuh tiga tempat.
+- Template connection hanya bisa memakai endpoint, identitas instance, provider, runtime, dan secret; nilai settings (misalnya nama database yang bisa diganti) butuh update spec ini kalau provider membutuhkannya.
+- Ukuran data hanya dihitung saat diminta, jadi inspector menampilkan "—" sampai halaman detail atau `--size` pernah menghitungnya.
+- `stackly instance inspect --json` berubah bentuk menjadi object pembungkus, jadi usulan spec 0022 harus masuk sebelum fitur 22 dibangun supaya tidak menjadi perubahan breaking.
+- Bukti offline native butuh jaringan Mac ini dimatikan, langkah manual yang menunggu persetujuan user.
+- Restarts sejak dibuat dan latensi probe tidak ada sampai fitur 28, dan detail belum dimuat ulang untuk perubahan config atau environment sampai fitur 29 dan 44 menambah pemicunya.
+
+**Neutral**:
+
+- Dua method baru, satu kode wire, dua kode `cli`, dua kode issue manifest, satu field manifest, satu method `Filesystem`, dan kenaikan minor protokol.
+- Folder Swift baru `InstanceDetail/`, modul core `instance::connection` dan `instance::detail`.
+
+## Follow-up
+
+- [ ] Lead: bawa *Usulan update spec lain* ke pemiliknya: spec 0004, 0009, dan 0011 lewat program foundation, spec 0019, 0022, dan 0023 lewat sesi architect fase 02, sebelum milestone 1 dan 2; blok `connection` paket masuk sebelum evidence BR-025 fitur 19 dan 23.
+- [ ] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`.
+- [ ] Fitur 24, 26, 27, 28, 29, 35, 49, dan 54: tambah tab dan tombol masing masing ke halaman detail lewat `InstanceTab` dan toolbar spec ini.
+- [ ] Fitur 28: jumlah restart sejak dibuat dan latensi probe di baris Readiness dan Restart attempts.
+- [ ] Fitur 29 dan 44 sampai 47: muat ulang detail saat config revision, environment, atau lease berubah (perubahan itu tidak menaikkan `revision` instance), dan isi Dependents dari environment nyata.
+- [ ] Fitur 33: banner crash loop yang lebih kaya di atas banner I1 spec ini.
+- [ ] Fitur 39: credential NATS di template `uri` NATS.
+- [ ] Fitur 59: instance yang di pin ke paket tanpa blok `connection` mendapat connection setelah update provider revision.
+- [ ] `/sync` setelah build: catat `instance.get_detail`, `instance.get_data_usage`, blok `connection` manifest, `stackly instance connection`, dan folder `InstanceDetail/` di `AGENTS.md` root dan `apps/macos/AGENTS.md`.
+
+## Rationale
+
+Konteks, opsi yang dibandingkan di setiap keputusan, alasan, dan hasil cross check ada di [rationale.md](rationale.md).
