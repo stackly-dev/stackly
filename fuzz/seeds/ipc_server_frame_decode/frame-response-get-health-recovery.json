@@ -1,0 +1,61 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000001",
+    "reply": {
+      "type": "daemon.get_health",
+      "content": {
+        "status": "degraded",
+        "subsystems": [
+          {
+            "name": "ipc",
+            "status": "ok",
+            "detail": null
+          },
+          {
+            "name": "event_bus",
+            "status": "ok",
+            "detail": null
+          },
+          {
+            "name": "log_sink",
+            "status": "ok",
+            "detail": null
+          },
+          {
+            "name": "registry",
+            "status": "unavailable",
+            "detail": "the registry needs recovery (schema_newer_than_app)"
+          },
+          {
+            "name": "operations",
+            "status": "not_built",
+            "detail": null
+          },
+          {
+            "name": "supervisor",
+            "status": "not_built",
+            "detail": null
+          }
+        ],
+        "counters": {
+          "connectionsOpen": 1,
+          "connectionsTotal": 12,
+          "connectionsRejected": 2,
+          "framesRejected": 3,
+          "eventsPublished": 40,
+          "eventsDropped": 1500,
+          "logLinesDropped": 0,
+          "socketRebinds": 1
+        },
+        "recovery": {
+          "reason": "schema_newer_than_app",
+          "reportPath": "/Users/dév/Library/Application Support/Stackly/recovery/2026-10-18T03-04-05Z.json",
+          "detectedAt": "2026-10-18T03:04:05.123Z",
+          "appSchemaVersion": 2,
+          "dbSchemaVersion": 999
+        }
+      }
+    }
+  }
+}

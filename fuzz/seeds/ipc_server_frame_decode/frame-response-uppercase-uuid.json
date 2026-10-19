@@ -1,0 +1,16 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000001",
+    "reply": {
+      "type": "events.subscribe",
+      "content": {
+        "subscriptionId": 2,
+        "head": {
+          "serverInstanceId": "0192F3A0-7C1E-7B2A-9D4E-5F6A7B8C9D0E",
+          "sequence": 7
+        }
+      }
+    }
+  }
+}

@@ -3,9 +3,11 @@
 //! same functions. Each one panics when an invariant breaks, which is what
 //! the fuzzer reports as a crash.
 
+use crate::codes::ipc;
 use crate::frame::{FrameDecoder, FrameError, HEADER_LEN};
-use crate::json::{decode_request, handshake_major, request_id};
-use crate::limits::CONTROL_FRAME_MAX;
+use crate::json::{DecodedFrame, decode_request, decode_server_frame, handshake_major, request_id};
+use crate::limits::{CONTROL_FRAME_MAX, FIELD_ERRORS_MAX};
+use crate::message::ServerFrame;
 
 /// Largest chunk the frame harness pushes at once.
 const FRAME_CHUNK_MAX: usize = 4096;
@@ -61,12 +63,15 @@ pub fn frame_decode(data: &[u8]) {
 }
 
 /// Target `ipc_request_decode`: feeds random bytes to
-/// [`decode_request`] and the lenient readers. Nothing panics, and every
-/// accepted request encodes and decodes again to the same value.
+/// [`decode_request`] and the lenient readers. Nothing panics, every
+/// accepted request encodes and decodes again to the same value, and every
+/// rejection is a catalog error whose frame fits in a control frame.
 ///
 /// # Panics
 ///
-/// Panics when an accepted request does not survive the round trip.
+/// Panics when an accepted request does not survive the round trip, or a
+/// rejection uses a code outside the catalog, carries more than
+/// [`FIELD_ERRORS_MAX`] fields, or encodes above [`CONTROL_FRAME_MAX`].
 pub fn request_decode(data: &[u8]) {
     let _ = request_id(data);
     let _ = handshake_major(data);
@@ -81,8 +86,50 @@ pub fn request_decode(data: &[u8]) {
                 rejection.error.spec().is_some(),
                 "every rejection uses a catalog code"
             );
+            assert!(rejection.error.fields().len() <= FIELD_ERRORS_MAX);
+            let frame = serde_json::to_vec(&ServerFrame::Error(rejection.into_frame()))
+                .expect("an error frame always encodes");
+            assert!(
+                frame.len() <= CONTROL_FRAME_MAX as usize,
+                "an error frame of {} bytes",
+                frame.len()
+            );
         }
     }
+}
+
+/// Target `ipc_server_frame_decode`: feeds random bytes to
+/// [`decode_server_frame`], the reader of every Rust client. Nothing
+/// panics, every refused frame is `ipc.protocol_violation`, and every
+/// decoded response, error, or event encodes and decodes again to the same
+/// value.
+///
+/// # Panics
+///
+/// Panics when one of those invariants breaks.
+pub fn server_frame_decode(data: &[u8]) {
+    let frame = match decode_server_frame(data) {
+        Ok(DecodedFrame::Response(response)) => ServerFrame::Response(response),
+        Ok(DecodedFrame::Error(error)) => ServerFrame::Error(error),
+        Ok(DecodedFrame::Event(event)) => ServerFrame::Event(event),
+        Ok(DecodedFrame::SkippedEvent { .. }) => return,
+        Err(error) => {
+            assert!(
+                error.is(&ipc::PROTOCOL_VIOLATION),
+                "a refused daemon frame is {}",
+                error.code()
+            );
+            return;
+        }
+    };
+    let encoded = serde_json::to_vec(&frame).expect("a decoded daemon frame always encodes");
+    let again = decode_server_frame(&encoded).expect("an encoded daemon frame decodes again");
+    let expected = match frame {
+        ServerFrame::Response(response) => DecodedFrame::Response(response),
+        ServerFrame::Error(error) => DecodedFrame::Error(error),
+        ServerFrame::Event(event) => DecodedFrame::Event(event),
+    };
+    assert_eq!(again, expected);
 }
 
 #[cfg(test)]
@@ -95,6 +142,8 @@ mod tests {
         frame_decode(&[3]);
         request_decode(&[]);
         request_decode(b"{}");
+        server_frame_decode(&[]);
+        server_frame_decode(b"{}");
     }
 
     #[test]
@@ -124,11 +173,39 @@ mod tests {
     }
 
     #[test]
-    fn both_harnesses_hold_on_a_fixed_random_corpus() {
+    fn every_harness_holds_on_a_fixed_random_corpus() {
         for input in corpus(0x5eed, 2000, 256) {
             frame_decode(&input);
             request_decode(&input);
+            server_frame_decode(&input);
         }
+    }
+
+    #[test]
+    fn the_server_frame_harness_holds_on_byte_flips_of_valid_frames() {
+        let frames: [&[u8]; 3] = [
+            br#"{"type":"event","content":{"subscriptionId":2,"sequence":9,"at":"9999-12-30T22:00:00.999Z","resource":{"kind":"instance","id":"a"},"revision":3,"kind":{"type":"events.gap","content":{"reason":"overflow"}}}}"#,
+            br#"{"type":"error","content":{"requestId":"r-1","error":{"code":"request.invalid_params","category":"invalid_input","message":"m","retryable":false,"fields":[{"path":"kinds[0]","code":"invalid_format","message":"x"}],"details":[{"key":"omitted","value":"2"}]}}}"#,
+            br#"{"type":"response","content":{"requestId":"r-1","reply":{"type":"events.subscribe","content":{"subscriptionId":1,"head":{"serverInstanceId":"0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e","sequence":0}}}}}"#,
+        ];
+        for valid in frames {
+            server_frame_decode(valid);
+            for (index, flip) in corpus(0xf7a3, valid.len() * 4, 2).into_iter().enumerate() {
+                let mut input = valid.to_vec();
+                let at = index % input.len();
+                input[at] ^= flip.first().copied().unwrap_or(1).max(1);
+                server_frame_decode(&input);
+            }
+        }
+    }
+
+    #[test]
+    fn the_request_harness_bounds_the_error_frame_of_a_long_bad_kinds_list() {
+        let kinds = vec![r#""""#; 20_000].join(",");
+        let payload = format!(
+            r#"{{"requestId":"a","call":{{"type":"events.subscribe","content":{{"kinds":[{kinds}]}}}}}}"#
+        );
+        request_decode(payload.as_bytes());
     }
 
     #[test]

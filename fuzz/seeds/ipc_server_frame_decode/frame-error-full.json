@@ -1,0 +1,37 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000001",
+    "error": {
+      "code": "resource.revision_mismatch",
+      "category": "conflict",
+      "message": "the instance changed since it was read",
+      "retryable": false,
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a2-1111-7aaa-8bbb-cccccccccccc"
+      },
+      "fields": [
+        {
+          "path": "since.sequence",
+          "code": "out_of_range",
+          "message": "value is out of range"
+        }
+      ],
+      "hint": "refresh the instance, then try again",
+      "details": [
+        {
+          "key": "expected",
+          "value": "3"
+        },
+        {
+          "key": "actual",
+          "value": "4"
+        }
+      ],
+      "operationId": "0192f3a3-2222-7ddd-9eee-ffffffffffff",
+      "rule": "BR-008",
+      "items": []
+    }
+  }
+}

@@ -36,6 +36,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "ipc_server_frame_decode"
+path = "fuzz_targets/ipc_server_frame_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "provider_manifest"
 path = "fuzz_targets/provider_manifest.rs"
 test = false
