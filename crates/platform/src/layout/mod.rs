@@ -11,6 +11,8 @@ use stackly_domain::{
     ProviderRevisionKey, RelativePath, Sha256Digest, ShortKey, SoftwareName, Target,
 };
 
+use crate::process::OutputStream;
+
 pub use root_override::{ROOT_OVERRIDE_ENV, validate_root_override};
 pub use roots::{
     DirectoryResolver, FixedRoots, RUNTIME_ROOT_MAX, RootKind, RootSet, SOCKET_NAME_MAX,
@@ -40,6 +42,9 @@ const KEYCHAIN_DIR: &str = "keychain";
 /// Folder inside an instance's run folder that holds its secret files
 /// (spec 0011).
 const INSTANCE_SECRETS_DIR: &str = "secrets";
+/// The lock file at the root of every instance folder, which the main
+/// process inherits at fd 3 (spec 0010).
+const INSTANCE_LOCK_FILE: &str = "instance.lock";
 
 /// Derives every Stackly path from a [`RootSet`], without any I/O.
 ///
@@ -55,7 +60,8 @@ const INSTANCE_SECRETS_DIR: &str = "secrets";
 ///        retained/<id>/, keychain/
 /// <logs>/daemon/, instances/<id>/
 /// <cache>/downloads/
-/// <runtime>/stacklyd.sock, i/<short key>/, i/<short key>/secrets/
+/// <runtime>/stacklyd.sock, i/<short key>/,
+///           i/<short key>/{stdout,stderr}.spool, i/<short key>/secrets/
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirectoryLayout {
@@ -272,7 +278,8 @@ impl DirectoryLayout {
     }
 
     /// Returns one instance's run folder, `<runtime>/i/<short key>/`, for
-    /// its sockets and PID file. With a socket name of at most
+    /// its sockets, output spools, and secret files. With a socket name of
+    /// at most
     /// [`SOCKET_NAME_MAX`] bytes the socket path fits [`SOCKET_PATH_MAX`].
     #[must_use]
     pub fn instance_run_dir(&self, key: ShortKey) -> PathBuf {
@@ -287,10 +294,20 @@ impl DirectoryLayout {
         self.instance_run_dir(key).join(INSTANCE_SECRETS_DIR)
     }
 
+    /// Returns the spool of one output stream of an instance's main
+    /// process, `<runtime>/i/<short key>/stdout.spool` or `stderr.spool`
+    /// (spec 0010). Raw output stays under the runtime root, never in the
+    /// data root or the durable logs.
+    #[must_use]
+    pub fn instance_spool(&self, key: ShortKey, stream: OutputStream) -> PathBuf {
+        self.instance_run_dir(key).join(stream.spool_file_name())
+    }
+
     fn paths_under(&self, parent: &Path, id: InstanceId) -> InstancePaths {
         let root = parent.join(id.to_string());
         InstancePaths {
             manifest: root.join(INSTANCE_MANIFEST_FILE),
+            lock: root.join(INSTANCE_LOCK_FILE),
             data: root.join(INSTANCE_DATA_DIR),
             config: root.join(INSTANCE_CONFIG_DIR),
             config_history: root.join(INSTANCE_CONFIG_HISTORY_DIR),
@@ -350,6 +367,10 @@ pub struct InstancePaths {
     pub root: PathBuf,
     /// The `instance-manifest.json` file.
     pub manifest: PathBuf,
+    /// The `instance.lock` file: the lock on the instance's data, which the
+    /// main process inherits and which moves with the folder when it is
+    /// retained (spec 0010).
+    pub lock: PathBuf,
     /// The software's data directory.
     pub data: PathBuf,
     /// The rendered configuration.
@@ -394,12 +415,32 @@ mod tests {
 
         assert_eq!(paths.root, roots.data().join("instances").join(ID));
         assert_eq!(paths.manifest, paths.root.join("instance-manifest.json"));
+        assert_eq!(paths.lock, paths.root.join("instance.lock"));
         assert_eq!(paths.data, paths.root.join("data"));
         assert_eq!(paths.config, paths.root.join("config"));
         assert_eq!(paths.config_history, paths.root.join("config-history"));
         assert_eq!(paths.temp, paths.root.join("temp"));
         assert_eq!(paths.logs, roots.logs().join("instances").join(ID));
         assert_eq!(paths.run, roots.runtime().join("i").join("718293a4"));
+    }
+
+    #[test]
+    fn spools_live_in_the_run_folder_and_the_lock_moves_with_a_retained_folder() {
+        let layout = layout();
+        let id: InstanceId = ID.parse().unwrap();
+        let run = layout.instance_paths(id).run;
+
+        assert_eq!(
+            layout.instance_spool(id.short_key(), OutputStream::Stdout),
+            run.join("stdout.spool")
+        );
+        assert_eq!(
+            layout.instance_spool(id.short_key(), OutputStream::Stderr),
+            run.join("stderr.spool")
+        );
+        let retained = layout.retained_instance_paths(id);
+        assert_eq!(retained.lock, retained.root.join("instance.lock"));
+        assert!(retained.lock.starts_with(layout.retained_dir()));
     }
 
     #[test]

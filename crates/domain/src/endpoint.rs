@@ -37,8 +37,9 @@ pub struct IpEndpoint {
 }
 
 impl IpEndpoint {
-    /// Creates an IP endpoint. `bound` is the port actually bound, set only
-    /// after the bind and readiness succeeded (feature 10).
+    /// Creates an IP endpoint. `bound` is the port given to the process that
+    /// uses the endpoint, set when that process is spawned and shown as
+    /// final once readiness succeeded (feature 10, REQ-010).
     #[must_use]
     pub const fn new(
         name: EndpointName,
@@ -84,6 +85,11 @@ impl IpEndpoint {
     #[must_use]
     pub const fn bound(&self) -> Option<Port> {
         self.bound
+    }
+
+    /// Records the port given to the process that uses this endpoint.
+    pub(crate) const fn set_bound(&mut self, port: Port) {
+        self.bound = Some(port);
     }
 
     /// Returns the effective port: the bound port when there is one, else

@@ -8,7 +8,7 @@ use crate::operation::OperationState;
 use crate::provider::ProviderRevisionKey;
 use crate::rule::Rule;
 use crate::runtime::RemovalBlocker;
-use crate::value::{MemberAlias, Port, ProviderName, RuntimeLine, SoftwareName};
+use crate::value::{EndpointName, MemberAlias, Port, ProviderName, RuntimeLine, SoftwareName};
 
 /// The kind of value type a [`ValueError`] is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -58,6 +58,18 @@ pub enum ValueKind {
     IdempotencyKey,
     /// A [`SessionId`](crate::SessionId).
     SessionId,
+    /// A [`Pid`](crate::Pid).
+    Pid,
+    /// A [`ProcessStart`](crate::ProcessStart).
+    ProcessStart,
+    /// A [`BootId`](crate::BootId).
+    BootId,
+    /// A [`LockState`](crate::LockState).
+    LockState,
+    /// An [`IdentityCheck`](crate::IdentityCheck).
+    IdentityCheck,
+    /// An [`IdentityCheckName`](crate::IdentityCheckName).
+    IdentityCheckName,
     /// A [`ReasonCode`](crate::ReasonCode).
     ReasonCode,
     /// A [`FailureCode`](crate::FailureCode).
@@ -172,6 +184,12 @@ impl ValueKind {
             Self::EndpointName => "endpoint name",
             Self::IdempotencyKey => "idempotency key",
             Self::SessionId => "session ID",
+            Self::Pid => "process ID",
+            Self::ProcessStart => "process start time",
+            Self::BootId => "boot ID",
+            Self::LockState => "lock state",
+            Self::IdentityCheck => "identity check",
+            Self::IdentityCheckName => "identity check name",
             Self::ReasonCode => "reason code",
             Self::FailureCode => "failure code",
             Self::StageName => "stage name",
@@ -397,6 +415,19 @@ pub enum InvariantDetail {
         /// The candidate the caller found, if any.
         candidate: Option<Port>,
     },
+    /// A fixed port endpoint was to be bound to another port, and no other
+    /// port is ever substituted (BR-005).
+    FixedPortSubstituted {
+        /// The fixed port.
+        fixed: Port,
+        /// The port it was to be bound to.
+        requested: Port,
+    },
+    /// The instance has no IP endpoint of that name. Not a BR.
+    NoIpEndpoint {
+        /// The name that was asked for.
+        endpoint: EndpointName,
+    },
     /// References still need the runtime (BR-007).
     RemovalBlocked {
         /// Every reference that blocks the removal.
@@ -514,7 +545,9 @@ impl InvariantDetail {
     pub const fn rule(&self) -> Option<Rule> {
         match self {
             Self::DataRootOverlap { .. } => Some(Rule::Br002),
-            Self::FixedPortConflict { .. } | Self::AutoPortUnavailable { .. } => Some(Rule::Br005),
+            Self::FixedPortConflict { .. }
+            | Self::AutoPortUnavailable { .. }
+            | Self::FixedPortSubstituted { .. } => Some(Rule::Br005),
             Self::RemovalBlocked { .. } => Some(Rule::Br007),
             Self::DataNotInitialized { .. } => Some(Rule::Br008),
             Self::IncompatibleRuntimeLine { .. } => Some(Rule::Br009),
@@ -524,6 +557,7 @@ impl InvariantDetail {
             Self::RevisionChangeNotFromCurrent { .. }
             | Self::RevisionChangeOtherProvider { .. } => Some(Rule::Br017),
             Self::HealthWithoutProcess { .. }
+            | Self::NoIpEndpoint { .. }
             | Self::RebindRequiresStopped { .. }
             | Self::RebindOtherSoftware { .. }
             | Self::DuplicateMemberAlias { .. }
@@ -559,6 +593,13 @@ impl fmt::Display for InvariantDetail {
             Self::AutoPortUnavailable {
                 candidate: Some(port),
             } => write!(f, "candidate port {port} conflicts with another endpoint"),
+            Self::FixedPortSubstituted { fixed, requested } => write!(
+                f,
+                "fixed port {fixed} cannot be bound as port {requested}, and no other port is used"
+            ),
+            Self::NoIpEndpoint { endpoint } => {
+                write!(f, "the instance has no ip endpoint named {endpoint}")
+            }
             Self::RemovalBlocked { blockers } => {
                 write!(
                     f,
