@@ -716,7 +716,51 @@ Draft spec dibaca ulang oleh model lain (Sonnet 5.5) secara read only pada 2026-
 - **CLI dan GUI**: konfirmasi TTY tiga kali, definisi interaktif, `SecretEntrySheet` dengan `create` lalu tawaran replace, `RevealedSecret` di Swift, status `deleted` di event, dan pasteboard dikosongkan saat app ditutup.
 - **Soundness**: pemetaan `OSStatus` sebagai fungsi murni yang dikonfirmasi spike dan record manual, interaksi default mati dengan mutex di adapter (aturan "konstruktor hanya lewat worker" dihapus karena `stackly-platform-macos` tidak boleh bergantung pada core), pindaian `expose` lewat token stream termasuk makro dengan `stackly-testkit` di allowlist, pengecualian frame `SecretInput` di AC-16, patokan keychain eksplisit, `learn` sebelum tulisan pertama, lock per reference untuk probe, urutan delete registry dulu, dan penjelasan bahwa ACL Keychain tidak melindungi akses lewat daemon.
 
-Hasil spike `kSecUseAuthenticationUI` dan kode `OSStatus` nyata di langkah 3 Build plan dicatat di bagian ini lewat `/architect` update spec.
+Hasil spike `kSecUseAuthenticationUI` dan kode `OSStatus` nyata di langkah 3 Build plan dicatat di bawah ini.
+
+### Spike langkah 3 (2026-10-19)
+
+Lingkungan: macOS 27.0 (26A428), Apple Silicon, sesi login GUI aktif. Program spike sekali pakai (tidak masuk repo) memakai `security-framework` 3.7.0 seperti adapter: keychain file dibuat lewat `SecKeychainCreate`, item generic password dengan service `stackly-secret`, dan setiap query dipatok lewat `kSecMatchSearchList` atau `kSecUseKeychain`. Item dengan ACL asing dibuat lewat `security add-generic-password -T /usr/bin/true`. Binary spike tidak ditandatangani (ad hoc dari linker), seperti build development `stacklyd`. Search list user (`security list-keychains -d user`) sama sebelum dan sesudah semua percobaan. Ini mendukung **AC-2** dan **AC-3**.
+
+Dengan interaksi mati (`SecKeychainSetUserInteractionAllowed(false)`), semua panggilan selesai di bawah 11 milidetik tanpa dialog:
+
+| Keadaan | Panggilan | `OSStatus` |
+| --- | --- | --- |
+| item ada, keychain tidak terkunci | probe (atribut), read (data) | 0 |
+| item tidak ada, terkunci atau tidak | probe, read | -25300 `errSecItemNotFound` |
+| item dengan ACL asing, tidak terkunci | probe | 0 |
+| item dengan ACL asing, tidak terkunci | read | -25293 `errSecAuthFailed` |
+| item dengan ACL asing, tidak terkunci | update data (`SecItemUpdate`) | 0, berhasil |
+| item ganda | add | -25299 `errSecDuplicateItem` |
+| keychain terkunci | probe (atribut) | 0, atribut tetap terbaca |
+| keychain terkunci | read, add, update | -25293 `errSecAuthFailed` |
+| keychain terkunci | delete (termasuk item dengan ACL asing) | 0, terhapus tanpa membuka kunci |
+
+Dengan interaksi menyala dan `kSecUseAuthenticationUI` bernilai fail di setiap query, read item dengan ACL asing serta read, add, dan update di keychain terkunci tetap tertahan dialog sampai dihentikan watchdog 8 detik; hanya probe yang tetap 0. Jadi atribut itu tidak dihormati untuk keychain file.
+
+Dengan interaksi menyala tanpa atribut itu (bentuk `AllowPrompt`), engineer menekan tombol di dialog:
+
+| Dialog | Tombol | `OSStatus` |
+| --- | --- | --- |
+| dialog akses item dengan ACL asing, keychain tidak terkunci | Deny | -128 `errSecUserCanceled` |
+| dialog akses yang sama, setelah password salah diketik | Cancel | -128 |
+| dialog akses dan buka kunci, keychain terkunci | Cancel | -128 |
+| dialog buka kunci untuk item milik sendiri, keychain terkunci | Cancel | -128 |
+
+Catatan lain: `SecKeychainGetStatus` bekerja untuk keychain file (7 saat tidak terkunci, 2 saat terkunci) dalam kurang dari satu mikrodetik, tetapi `security-framework` maupun `security-framework-sys` tidak mendeklarasikannya. Setelah password salah diketik di dialog, `security unlock-keychain` dengan password yang benar pun ditolak untuk sementara. `errSecInteractionNotAllowed` (-25308) tidak pernah muncul.
+
+Selisih dengan rancangan awal dan perbaikannya, yang engineer setujui pada 2026-10-19 lewat `/architect` update di sesi build:
+
+| Selisih | Perbaikan | Alasan | Runner up |
+| --- | --- | --- | --- |
+| ACL asing dengan `Never` menjawab `errSecAuthFailed`, yang di tabel lama berarti `AccessDenied { by_user: true }` | `map_status(code, keychain_locked, interaction)`: `errSecAuthFailed` di keychain tidak terkunci menjadi `by_user: false` dengan `Never` dan `by_user: true` dengan `AllowPrompt` | tanpa dialog, penolakan tidak mungkin datang dari pengguna; dengan dialog, resolve harus berhenti meminta | `by_user: false` untuk semua `errSecAuthFailed`, yang membuat resolve terus memunculkan dialog setelah pengguna gagal |
+| AC-3 meminta `NotFound` di keychain terkunci dilaporkan `Locked`, dan test langkah 3 meminta probe di keychain terkunci menjawab `Locked` | `NotFound` tetap `NotFound`, probe di keychain terkunci menjawab `Present` atau `Missing` | pencarian atribut berjalan saat terkunci, jadi `missing` itu benar; menjawab `Locked` membuang informasi yang benar | tetap memaksa `Locked` dengan membaca status kunci dulu |
+| Cache `state()` dari hasil panggilan menjadi `Available` setelah probe berhasil walau keychain terkunci | `state()` dari `SecKeychainGetStatus` setelah setiap panggilan, dan sekali di konstruktor | murah, tanpa dialog, dan selalu sesuai keadaan kunci | cache dari hasil panggilan seperti rancangan awal |
+| `kSecUseAuthenticationUI` fail tidak dihormati | `Never` hanya memakai saklar global proses; atribut itu tidak dipakai | dialog tetap muncul dengan atribut itu | memakai atribut itu di samping saklar (tanpa manfaat, butuh FFI tambahan) |
+| Status kunci tidak punya wrapper | satu blok `extern "C"` untuk `SecKeychainGetStatus` dan satu blok `unsafe`, plus `core-foundation` sebagai dependency langsung hanya untuk `CFData` (nilai item di `ItemAddValue` dan `ItemUpdateValue`) dan trait `TCFType` | sudah diizinkan rancangan awal; `core-foundation` sudah ada di graph lewat `security-framework` | `security-framework-sys`, yang juga tidak mendeklarasikan fungsi itu |
+| Delete di keychain terkunci berhasil, padahal AC-10 memakai "terkunci" sebagai contoh delete yang gagal | contoh AC-10 dan test delete memakai error backend (`FakeSecretStore::fail_next`); `FakeSecretStore` yang dikunci tetap mengizinkan probe, delete, dan `NotFound` seperti Keychain | fake harus meniru adapter supaya test core tidak membuktikan perilaku yang tidak ada | fake yang menolak semua panggilan saat dikunci |
+| Konstruktor belum punya jenis error, dan password keychain file belum punya sumber acak | `KeychainSetupError` dengan fail fast di `stacklyd`; password dari `SecRandomCopyBytes`; target `File` dibuka kuncinya sekali di konstruktor | root development dan test lebih jelas gagal saat start daripada berjalan dengan store terkunci diam diam; `SecRandomCopyBytes` sudah ada di `security-framework` | membuka kunci ulang di setiap panggilan, yang membuat test keychain terkunci tidak mungkin |
+| ACL item ternyata tidak menahan penggantian nilai dan penghapusan | dicatat sebagai residual risk di Security model | batas keamanannya tetap satu akun user (BR-012) | |
 
 ## Perubahan 2026-10-18 (rekonsiliasi lintas spec)
 

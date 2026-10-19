@@ -1,11 +1,13 @@
 //! The `Instance` aggregate rules of spec 0004 AC-16: how an instance is
-//! born, the init guard, rebind limits, and the revision counter.
+//! born, the init guard, rebind limits, and the revision counter, plus the
+//! needs secret blocker observation of spec 0011 AC-11.
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
-    DesiredState, FailureCode, Health, HealthState, Instance, InstanceId, InstanceLifecycle,
-    InvariantDetail, LifecycleEvent, LineCompatibility, NewInstance, OperationId,
-    ProviderRevisionKey, Readiness, ReadinessState, ReasonCode, ResourceRevision, Rule, RuntimeId,
+    DesiredState, FailureCode, Health, HealthState, Ignored, Instance, InstanceBlocker, InstanceId,
+    InstanceLifecycle, InvariantDetail, LifecycleEvent, LineCompatibility, NeedsSecretItem,
+    NeedsSecretReason, NewInstance, ObservationOutcome, OperationId, ProviderRevisionKey,
+    Readiness, ReadinessState, ReasonCode, ResourceRevision, Rule, RuntimeId, SecretRef,
     StartupPolicy,
 };
 
@@ -144,4 +146,51 @@ fn observations_keep_the_revision_and_every_other_mutation_adds_exactly_one() {
     assert_eq!(instance.revision(), revision.next());
     instance.set_desired(DesiredState::Running);
     assert_eq!(instance.revision().get(), revision.get() + 2);
+}
+
+fn needs_secret(seconds: i64, reason: NeedsSecretReason) -> InstanceBlocker {
+    let reference = SecretRef::parse("local:erp/postgres/admin").expect("a valid reference");
+    InstanceBlocker::needs_secret([NeedsSecretItem::new(reference, reason, true)], at(seconds))
+}
+
+#[test]
+fn a_needs_secret_blocker_changes_no_lifecycle_desired_state_or_revision() {
+    let mut instance = instance();
+    apply(
+        &mut instance,
+        vec![LifecycleEvent::InitBegin, LifecycleEvent::InitSucceeded],
+    );
+    let revision = instance.revision();
+    assert_eq!(instance.blocker(), None);
+
+    let blocker = needs_secret(10, NeedsSecretReason::StoreLocked);
+    let outcome = instance.observe_blocker(blocker.clone());
+
+    assert_eq!(outcome, ObservationOutcome::Applied);
+    assert_eq!(instance.blocker(), Some(&blocker));
+    assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(instance.desired(), DesiredState::Stopped);
+    assert_eq!(instance.revision(), revision);
+
+    assert_eq!(instance.clear_blocker(), Some(blocker));
+    assert_eq!(instance.blocker(), None);
+    assert_eq!(instance.revision(), revision);
+}
+
+#[test]
+fn an_older_blocker_observation_is_ignored_and_a_newer_one_replaces_it() {
+    let mut instance = instance();
+    let newer = needs_secret(20, NeedsSecretReason::Missing);
+    instance.observe_blocker(newer.clone());
+
+    let stale = instance.observe_blocker(needs_secret(10, NeedsSecretReason::StoreLocked));
+    assert_eq!(stale, ObservationOutcome::Ignored(Ignored::Stale));
+    assert_eq!(instance.blocker(), Some(&newer));
+
+    let latest = needs_secret(30, NeedsSecretReason::AccessDenied);
+    assert_eq!(
+        instance.observe_blocker(latest.clone()),
+        ObservationOutcome::Applied
+    );
+    assert_eq!(instance.blocker(), Some(&latest));
 }

@@ -34,6 +34,12 @@ const INSTANCE_CONFIG_HISTORY_DIR: &str = "config-history";
 const INSTANCE_TEMP_DIR: &str = "temp";
 /// Folder under the data root that holds the registry.
 const REGISTRY_DIR: &str = "registry";
+/// Folder under the data root that holds the file keychain of a root
+/// override (spec 0011).
+const KEYCHAIN_DIR: &str = "keychain";
+/// Folder inside an instance's run folder that holds its secret files
+/// (spec 0011).
+const INSTANCE_SECRETS_DIR: &str = "secrets";
 
 /// Derives every Stackly path from a [`RootSet`], without any I/O.
 ///
@@ -46,10 +52,10 @@ const REGISTRY_DIR: &str = "registry";
 ///        providers/<namespace>/<name>/<revision>/<manifest sha256>/,
 ///        runtimes/<software>/<version>/<os>-<arch>/<artifact sha256>/,
 ///        instances/<id>/, environments/<id>/, operations/, backups/,
-///        retained/<id>/
+///        retained/<id>/, keychain/
 /// <logs>/daemon/, instances/<id>/
 /// <cache>/downloads/
-/// <runtime>/stacklyd.sock, i/<short key>/
+/// <runtime>/stacklyd.sock, i/<short key>/, i/<short key>/secrets/
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirectoryLayout {
@@ -130,6 +136,14 @@ impl DirectoryLayout {
     #[must_use]
     pub fn registry_recovery_dir(&self) -> PathBuf {
         self.registry_dir().join("recovery")
+    }
+
+    /// Returns the folder that holds the file keychain of a root override,
+    /// `keychain/` (spec 0011). The Keychain adapter creates it only when
+    /// `STACKLY_ROOT` is set; it is not a standard folder.
+    #[must_use]
+    pub fn keychain_dir(&self) -> PathBuf {
+        self.roots.data().join(KEYCHAIN_DIR)
     }
 
     /// Returns the folder that holds provider revisions.
@@ -263,6 +277,14 @@ impl DirectoryLayout {
     #[must_use]
     pub fn instance_run_dir(&self, key: ShortKey) -> PathBuf {
         self.instance_runs_dir().join(key.to_string())
+    }
+
+    /// Returns the folder that holds one instance's secret files,
+    /// `<runtime>/i/<short key>/secrets/` (spec 0011). It lives under the
+    /// runtime root, so no backup ever copies it.
+    #[must_use]
+    pub fn instance_secrets_dir(&self, key: ShortKey) -> PathBuf {
+        self.instance_run_dir(key).join(INSTANCE_SECRETS_DIR)
     }
 
     fn paths_under(&self, parent: &Path, id: InstanceId) -> InstancePaths {
@@ -448,6 +470,20 @@ mod tests {
             layout.registry_recovery_dir(),
             layout.registry_dir().join("recovery")
         );
+    }
+
+    #[test]
+    fn the_keychain_folder_is_under_data_and_secret_files_under_the_run_folder() {
+        let layout = layout();
+        let id: InstanceId = ID.parse().unwrap();
+        let roots = layout.roots();
+
+        assert_eq!(layout.keychain_dir(), roots.data().join("keychain"));
+        assert_eq!(
+            layout.instance_secrets_dir(id.short_key()),
+            roots.runtime().join("i").join("718293a4").join("secrets")
+        );
+        assert!(!layout.standard_dirs().contains(&layout.keychain_dir()));
     }
 
     #[test]

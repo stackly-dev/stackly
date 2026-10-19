@@ -6,11 +6,17 @@ use crate::fs::Filesystem;
 use crate::identity::UserIdentity;
 use crate::info::PlatformInfo;
 use crate::layout::DirectoryResolver;
+use crate::secret::{SecretStore, UnsupportedSecretStore};
 
 /// Every platform port, bundled so a use case takes one argument.
 ///
 /// The daemon assembles it once at start from an adapter, and tests from the
 /// fakes in `stackly-testkit`. Cloning is cheap: each port is shared.
+///
+/// [`Platform::new`] takes the five ports of feature 4. A port added later
+/// comes in through its own `with_<port>` builder and defaults to an
+/// implementation that answers not supported, so the constructor never
+/// changes (spec 0004, decision 18).
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct Platform {
@@ -19,10 +25,13 @@ pub struct Platform {
     clock: Arc<dyn Clock>,
     identity: Arc<dyn UserIdentity>,
     info: Arc<dyn PlatformInfo>,
+    secrets: Arc<dyn SecretStore>,
 }
 
 impl Platform {
-    /// Bundles the five ports.
+    /// Bundles the five ports. The secret store starts as an
+    /// [`UnsupportedSecretStore`] for the OS `info` reports; install one
+    /// with [`with_secrets`](Self::with_secrets).
     #[must_use]
     pub fn new(
         directories: Arc<dyn DirectoryResolver>,
@@ -31,13 +40,22 @@ impl Platform {
         identity: Arc<dyn UserIdentity>,
         info: Arc<dyn PlatformInfo>,
     ) -> Self {
+        let secrets = Arc::new(UnsupportedSecretStore::new(info.target().os()));
         Self {
             directories,
             fs,
             clock,
             identity,
             info,
+            secrets,
         }
+    }
+
+    /// Returns a copy with `secrets` as the secret store (spec 0011).
+    #[must_use]
+    pub fn with_secrets(mut self, secrets: Arc<dyn SecretStore>) -> Self {
+        self.secrets = secrets;
+        self
     }
 
     /// Returns the directory resolver.
@@ -76,12 +94,26 @@ impl Platform {
     pub fn info(&self) -> &dyn PlatformInfo {
         &*self.info
     }
+
+    /// Returns the secret store.
+    #[must_use]
+    pub fn secrets(&self) -> &dyn SecretStore {
+        &*self.secrets
+    }
+
+    /// Returns a shared handle to the secret store, for a component that
+    /// wraps it, such as the worker that serializes every store call.
+    #[must_use]
+    pub fn shared_secrets(&self) -> Arc<dyn SecretStore> {
+        Arc::clone(&self.secrets)
+    }
 }
 
 impl fmt::Debug for Platform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Platform")
             .field("target", &self.info.target())
+            .field("secrets", &self.secrets.backend())
             .finish_non_exhaustive()
     }
 }

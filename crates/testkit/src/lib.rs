@@ -7,7 +7,9 @@
 //! [`allocate_port`], so they never touch the real per user folders, never
 //! share state, and can run in parallel. Use cases run against
 //! [`FakePlatform`], whose [`FakeFilesystem`] works on the real disk but
-//! fails any call that leaves the test root.
+//! fails any call that leaves the test root, and whose [`FakeSecretStore`]
+//! keeps secrets in memory and can be locked, denied, held, or failed
+//! (spec 0011).
 //!
 //! Tests that prove a PRD ID write evidence through [`evidence`], the
 //! re-exported `stackly-evidence` crate (spec 0002).
@@ -42,6 +44,7 @@ mod disk_image;
 mod fake_fs;
 #[cfg(unix)]
 mod fake_platform;
+mod fake_secret;
 #[cfg(unix)]
 pub mod fake_server;
 #[cfg(unix)]
@@ -64,6 +67,7 @@ pub use disk_image::DiskImage;
 pub use fake_fs::{FakeFilesystem, Fault, FsOp, Mutation};
 #[cfg(unix)]
 pub use fake_platform::{FakeClock, FakeIdentity, FakePlatform, FakePlatformInfo};
+pub use fake_secret::{FakeSecretStore, SecretCall, SecretHold, SecretOp};
 #[cfg(unix)]
 pub use fifo::make_fifo;
 pub use port::allocate_port;

@@ -7,7 +7,7 @@ use stackly_platform::{
     PlatformCapability, PlatformError, PlatformInfo, RootSet, UserId, UserIdentity,
 };
 
-use crate::{FakeFilesystem, TestRoot};
+use crate::{FakeFilesystem, FakeSecretStore, TestRoot};
 
 /// Where [`FakeClock`] starts: 2026-01-01T00:00:00Z.
 const FAKE_CLOCK_START: Timestamp = Timestamp::constant(1_767_225_600, 0);
@@ -121,10 +121,7 @@ impl FakePlatformInfo {
                     PlatformCapability::ProcessSupervision,
                     not_built("not built yet (feature 10)"),
                 )
-                .with(
-                    PlatformCapability::SecretStore,
-                    not_built("not built yet (feature 11)"),
-                )
+                .with(PlatformCapability::SecretStore, CapabilityStatus::Supported)
                 .with(
                     PlatformCapability::IpcEndpoint,
                     not_built("not built yet (feature 6)"),
@@ -183,9 +180,9 @@ impl PlatformInfo for FakePlatformInfo {
 /// Every fake port wired together for one [`TestRoot`].
 ///
 /// The roots are the test root's [`roots`](TestRoot::roots), the filesystem
-/// is a [`FakeFilesystem`] confined to the test folders, and the clock,
-/// identity, and platform facts are fakes the test can drive through the
-/// handles.
+/// is a [`FakeFilesystem`] confined to the test folders, the secret store
+/// is a [`FakeSecretStore`] in memory, and the clock, identity, and
+/// platform facts are fakes the test can drive through the handles.
 ///
 /// ```
 /// use stackly_testkit::{FakePlatform, TestRoot};
@@ -203,6 +200,7 @@ pub struct FakePlatform {
     clock: Arc<FakeClock>,
     identity: Arc<FakeIdentity>,
     info: Arc<FakePlatformInfo>,
+    secrets: FakeSecretStore,
 }
 
 impl FakePlatform {
@@ -215,6 +213,7 @@ impl FakePlatform {
             clock: Arc::new(FakeClock::new()),
             identity: Arc::new(FakeIdentity::new(root)),
             info: Arc::new(FakePlatformInfo::new()),
+            secrets: FakeSecretStore::new(),
         }
     }
 
@@ -244,6 +243,7 @@ impl FakePlatform {
             self.identity.clone(),
             self.info.clone(),
         )
+        .with_secrets(Arc::new(self.secrets.clone()))
     }
 
     /// Returns the fake filesystem, to inject faults or read its logs.
@@ -262,5 +262,13 @@ impl FakePlatform {
     #[must_use]
     pub fn identity(&self) -> &FakeIdentity {
         &self.identity
+    }
+
+    /// Returns the fake secret store, to seed, lock, deny, hold, or fail
+    /// it and to read its call log. Every platform this fake hands out
+    /// shares it.
+    #[must_use]
+    pub fn secrets(&self) -> &FakeSecretStore {
+        &self.secrets
     }
 }

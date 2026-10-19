@@ -128,6 +128,18 @@ pub enum ValueKind {
     FailureError,
     /// A [`LockKey`](crate::LockKey).
     LockKey,
+    /// A [`SecretPurpose`](crate::SecretPurpose).
+    SecretPurpose,
+    /// A [`SecretOwnerKind`](crate::SecretOwnerKind).
+    SecretOwnerKind,
+    /// A [`SecretOwner`](crate::SecretOwner).
+    SecretOwner,
+    /// A [`SecretStatus`](crate::SecretStatus).
+    SecretStatus,
+    /// A [`SecretOrigin`](crate::SecretOrigin).
+    SecretOrigin,
+    /// A [`NeedsSecretReason`](crate::NeedsSecretReason).
+    NeedsSecretReason,
 }
 
 impl ValueKind {
@@ -192,6 +204,12 @@ impl ValueKind {
             Self::RecoveryHint => "recovery hint",
             Self::FailureError => "failure error",
             Self::LockKey => "lock key",
+            Self::SecretPurpose => "secret purpose",
+            Self::SecretOwnerKind => "secret owner kind",
+            Self::SecretOwner => "secret owner",
+            Self::SecretStatus => "secret status",
+            Self::SecretOrigin => "secret origin",
+            Self::NeedsSecretReason => "needs secret reason",
         }
     }
 }

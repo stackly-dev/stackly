@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use stackly_domain::ShortKey;
 use stackly_platform::{
-    DirectoryLayout, FileInfo, FileKind, Filesystem, Platform, PlatformError, RootKind, UserId,
+    DirectoryLayout, Filesystem, Platform, PlatformError, RootKind, UserId, check_private_dir,
 };
 
 use crate::error::CoreError;
@@ -130,9 +130,22 @@ fn ensure_runtime_dirs(
     Ok(())
 }
 
-/// Creates the folder when nothing is there, then checks that it is a
-/// private folder of `user`.
-fn ensure_private_dir(fs: &dyn Filesystem, path: &Path, user: &UserId) -> Result<(), CoreError> {
+/// Creates the folder with mode 0700 when nothing is there (but never
+/// its parent), then checks that it is a private folder of `user` with
+/// [`check_private_dir`]: a directory, not a symlink, owned by `user`, with
+/// no group or other access. A folder that fails the check is rejected,
+/// never repaired, and running it again changes nothing.
+///
+/// # Errors
+///
+/// Returns [`CoreError::RootNotPrivate`] when the folder fails the check,
+/// and [`CoreError::Platform`] when a port fails, for example because the
+/// parent does not exist.
+pub fn ensure_private_dir(
+    fs: &dyn Filesystem,
+    path: &Path,
+    user: &UserId,
+) -> Result<(), CoreError> {
     let info = match fs.symlink_metadata(path)? {
         Some(info) => info,
         None => {
@@ -147,22 +160,9 @@ fn ensure_private_dir(fs: &dyn Filesystem, path: &Path, user: &UserId) -> Result
                 })?
         }
     };
-    check_private(path, &info, user)
-}
-
-fn check_private(path: &Path, info: &FileInfo, user: &UserId) -> Result<(), CoreError> {
-    let reason = match info.kind {
-        FileKind::Symlink => "a symlink",
-        FileKind::File | FileKind::Other => "not a directory",
-        FileKind::Dir if info.owner.as_ref() != Some(user) => "owned by another user",
-        FileKind::Dir if info.mode.is_none_or(|mode| mode & 0o077 != 0) => {
-            "group or others have access"
-        }
-        FileKind::Dir => return Ok(()),
-    };
-    Err(CoreError::RootNotPrivate {
+    check_private_dir(&info, user).map_err(|violation| CoreError::RootNotPrivate {
         path: path.to_path_buf(),
-        reason,
+        reason: violation.reason(),
     })
 }
 
@@ -606,5 +606,34 @@ mod tests {
                 reason: "group or others have access",
             })
         );
+    }
+
+    #[test]
+    fn ensure_private_dir_creates_the_secret_folders_private_and_rejects_open_ones() {
+        let root = TestRoot::new().unwrap();
+        let fake = FakePlatform::new(&root);
+        let platform = fake.platform();
+        let prepared = prepare_layout(&platform).unwrap();
+        let user = platform.identity().current_user().unwrap();
+        let layout = prepared.layout();
+        let key = InstanceId::generate().short_key();
+        ensure_instance_run_dir(&platform, &prepared, key).unwrap();
+
+        for dir in [layout.keychain_dir(), layout.instance_secrets_dir(key)] {
+            ensure_private_dir(platform.fs(), &dir, &user).unwrap();
+            assert_eq!(mode(&dir), 0o700, "{}", dir.display());
+            ensure_private_dir(platform.fs(), &dir, &user).unwrap();
+
+            std::fs::set_permissions(&dir, Permissions::from_mode(0o750)).unwrap();
+            let result = ensure_private_dir(platform.fs(), &dir, &user);
+            assert_eq!(
+                result,
+                Err(CoreError::RootNotPrivate {
+                    path: dir.clone(),
+                    reason: "group or others have access",
+                })
+            );
+            assert_eq!(mode(&dir), 0o750, "never repaired");
+        }
     }
 }
