@@ -629,7 +629,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikann
 - [ ] Fitur 37: namespace lain, kind sumber `local`, publisher dan trust untuk paket lokal, default tile, tombol Import Provider, event `catalog.changed`, dan cara entri lokal bergabung ke read model.
 - [ ] Fitur 15: `cargo xtask build-app` memanggil `xtask::catalog::build` dengan `--out <bundle>/Contents/Resources/catalog` sebelum signing (sudah disepakati dengan spec 0015).
 - [ ] Fitur 16 (onboarding, langkah Catalog Trust): pakai `CatalogInfo.source`, `trust`, dan `publishedAt` dari spec ini.
-- [ ] `ui-macos.md` (lewat `/scope`): catat selisih mockup yang diketahui untuk Catalog: Available netral bukan biru, Unverified bukan Tested sampai fitur 18, kartu planned tanpa opacity, dan MariaDB serta RabbitMQ tidak tampil.
+- [x] `ui-macos.md` (lewat `/scope`): catat selisih mockup yang diketahui untuk Catalog: Available netral bukan biru, Unverified bukan Tested sampai fitur 18, kartu planned tanpa opacity, dan MariaDB serta RabbitMQ tidak tampil. Diterapkan di `ui-macos.md` (2026-10-20).
 - [ ] `/sync` setelah build: catat `cargo xtask catalog build`, `catalog check`, ledger, dan `STACKLY_CATALOG_DIR` di root `AGENTS.md`, serta folder `Catalog/` di `apps/macos/AGENTS.md`.
 
 ## Rationale
