@@ -619,3 +619,31 @@ Catatan build fitur 5 milestone 1 dan keputusan engineer sesudahnya (2026-10-18)
 
 Ronde 2 rekonsiliasi (2026-10-18): tambahan port, migrasi journal, `IdempotencyKeyTaken`, aturan `touch`, potongan prune 500 operasi (spec 0007), dan op serta baca observasi proses dan config revision awal (spec 0010) dicatat sebagai titik perluasan di *Port registry*; laporan recovery kini dikirim sebagai `DaemonHealth.recovery` (spec 0006).
 
+## Perubahan 2026-10-19 (prasyarat fitur 10 dan 11)
+
+Update `/architect` yang membuka build fitur 10 dan 11. Rancangan spec 0005 menyebut op untuk observasi proses dan config revision, juga untuk secret dan audit, tetapi belum memberi nama lengkap, cek, dan bentuk record nya. Akibatnya pembangun harus menebak, dan tidak ada build step yang memilikinya. Sekarang semuanya ada di *Tambahan fitur 10* dan *Tambahan fitur 11* di [index.md](index.md). Keputusan engineer (semua mengikuti rekomendasi):
+
+| Selisih | Keputusan | Alasan | Runner up |
+| --- | --- | --- | --- |
+| Migrasi 0001 yang sudah dibangun (2026-10-18 pukul 11.37) mendahului perubahan spec ini yang memindahkan kolom spec 0011 ke 0001 (pukul 12.26). Akibatnya `secret_references` masih memakai `store_key`, `scope`, `purpose`, dan `status`, `secret_reference_uses` tidak ada, dan verify fitur 5 meloloskan AC-12 atas kolom lama | migrasi secret baru dengan versi bebas berikutnya: `DROP TABLE` lalu buat ulang `secret_references` dengan kolom spec 0011, lalu buat `secret_reference_uses`, tanpa menyalin baris. AC-1 dan AC-12 ditulis ulang supaya jujur tentang asal kolomnya | belum ada kode produksi yang menulis tabel itu. Migrasi 0001, fixture v1 dan v2, `FIXTURE_SHA256`, dan sidik jari tetap. Registry yang sudah dibuat di Mac ini juga tidak masuk recovery karena sidik jari berubah | mengubah 0001 di tempat, seperti rencana 2026-10-18 |
+| Spec 0011 menghapus baris lalu membuatnya ulang dengan revision lama ditambah 1 kalau penghapusan Keychain gagal, padahal insert mewajibkan revision 1 | op khusus `RestoreSecretReference` dengan revision paling kecil 2 | aturan "insert berarti revision 1" tetap menangkap bug yang memasukkan baris baru dengan revision basi | `InsertSecretReference` menerima revision berapa pun |
+| `config_values` butuh tipe di domain, padahal `SettingsValues` ada di core dan domain tidak punya `serde_json` | `ConfigValuesJson`: teks JSON object kanonik yang dibuat dan dibaca core | domain tetap bebas dari dialek settings spec 0009, dan CHECK kolom tetap menjadi penjaga terakhir | model nilai settings bertipe di domain |
+| Apakah `InsertConfigRevision` menaikkan revision instance | tidak | `config_revision_id` bukan bagian aggregate `Instance`, dan saat create ia masuk batch yang sama dengan `InsertInstance` (revision 1); fitur 29 memutuskan untuk revision berikutnya | setiap tulisan ke baris `instances` menaikkan revision, sehingga create harus menulis revision 2 |
+
+Keputusan kecil yang diambil bersama tabel di atas, masing masing dengan alternatif terdekat:
+
+- **`ResourceRef::SecretReference` memakai teks reference**, karena reference adalah identitas yang dipakai wire (`secret.changed`), kolom unik, dan pesan error. Alternatif: `SecretReferenceId` (harus dicari dulu sebelum bisa melapor).
+- **Probe lewat op sendiri, `ObserveSecretReference`**, karena spec 0011 melarang probe menaikkan revision, sedangkan update biasa wajib menaikkannya. Alternatif: `UpdateSecretReference` dengan pengecualian revision (melemahkan CAS).
+- **`ReplaceSecretUses` mengganti seluruh pemakaian satu resource dengan peta per field**, karena pemakaian selalu mencerminkan config revision aktif, dan peta membuat field ganda mustahil. Alternatif: op tambah dan hapus per baris (pemanggil harus menghitung selisih).
+- **Pemilik reference tidak dicek saat insert**, karena `owner_id` polimorfik dan create instance menulis reference sebelum `InsertInstance`; kompensasi spec 0007 menghapus reference buatan operasi yang gagal. Alternatif: cek pemilik (memaksa urutan create yang berbeda dengan spec 0010).
+- **`ReferenceInUse` membawa daftar pemakaian dan dipetakan ke `secret.conflict` milik spec 0011**, supaya daemon bisa menjawab `usedBy` tanpa baca kedua yang bisa basi. Alternatif: `Integrity` dari foreign key (tanpa daftar, dan bertentangan dengan aturan "constraint SQL hanya penjaga terakhir").
+- **`audit_events` dibaca per halaman seperti operasi**, karena fitur 35 nanti memakai bentuk yang sama, dan test spec 0011 cukup membaca halaman pertama. Alternatif: tanpa method baca sampai fitur 35 (test harus membuka SQLite langsung).
+
+Cross check model lain (Sonnet 5.5, baca saja) atas update ini menemukan 12 celah kelengkapan dan beberapa catatan soundness, yang semuanya diperbaiki atas persetujuan engineer:
+
+- Bentuk `ProcessObservation`, observasi terakhir menurut `id` (jam yang mundur tidak memilih baris lama), dan seed observasi serta audit yang menulis baris berformat valid supaya fake dan SQLite sama.
+- Baris *Pemetaan aggregate* untuk `config_revision_id`, penolakan `InsertConfigRevision` dengan `previous` kosong saat sudah ada revision aktif, sumber field `ConfigRevisionRecord` (di spec 0010), dan uji JSON rusak yang hanya di SQLite.
+- `SafeDetails` (peta dengan batas 20 entri dan 512 byte), sehingga kunci ganda tidak mungkin, dan kuncinya milik spec pemanggil.
+- Daftar pekerjaan migrasi secret (daftar migrasi dan sidik jari, fixture v3, seed v3, test versi schema, test trigger pemilik), daftar conformance langkah 2a, `omitted` dan batas 100 di `ReferenceInUse`, pemetaan `ResourceKind`, `PlatformStoreKey`, `SecretOwnerKind`, urutan `used_by` menurut teks kolom, `record.id` yang diabaikan saat update, dan dua entri `Committed.revisions` untuk dua `UpdateInstance`.
+
+Catatan soundness yang tidak diubah: gabungan langkah 2a dan langkah 0 spec 0011 menjadi satu langkah registry (lebih sederhana, tetapi menyatukan dua fitur di satu sesi); dan AC-12 yang lebih kuat dengan kontrol positif (dicatat untuk `/test` fitur 11).

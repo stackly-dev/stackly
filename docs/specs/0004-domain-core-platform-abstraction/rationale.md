@@ -666,6 +666,13 @@ Rekonsiliasi dengan spec 0007, 0008, 0010, dan 0013, dengan keputusan engineer (
 - **File secret**: `materializeSecret.destination` cukup nama file dengan token `${instance.secrets}` (spec 0010, diterapkan di spec 0009).
 - **Titik perluasan baru**: modul `operation::journal`, `LockKey`, `RecoveryHint`, `Operation::touch`, `OperationKind::resumable()`, `Outcome::Failed` (fitur 7); port `ProcessSupervision` lewat `with_processes`, modul domain `process`, blocker `DataInUse` dan `IdentityUnproven`, `set_bound_port`, `InstancePaths.lock`, `instance_spool` (fitur 10); `STACKLY_NO_INPUT` (fitur 8); `default_runtime_root` dan `STACKLY_ROOT` di app (fitur 13).
 
+### Perubahan 2026-10-19
+
+Update `/architect` untuk membuka blok fitur 10 dan 11 di wave 2, dengan keputusan engineer (semua mengikuti rekomendasi):
+
+- **`IdentityCheck`**: enum tertutup `Passed`, `Failed`, dan `NotChecked`, dengan nilai wire `passed`, `failed`, dan `notChecked`. Detail ini lahir dari spike spec 0010 (`gather_evidence` tidak menjalankan pemeriksaan yang tidak relevan) dan belum tercatat di sini walau Follow-up spec 0010 sudah dicentang. Runner up: `Option<bool>`, yang membuat wire tidak cocok dengan teks `notChecked` dan fixture AC-16 spec 0010.
+- **Titik perluasan registry**: tambahan port `Registry` untuk observasi proses dan config revision awal (fitur 10) serta secret dan audit (fitur 11) dicatat di tabel *Titik perluasan dari fitur lain*, beserta ID `ConfigRevisionId`, `SecretReferenceId`, dan `AuditEventId`. Bentuk rincinya milik spec 0005.
+
 ## References
 
 **Project sources**:
