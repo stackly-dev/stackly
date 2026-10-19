@@ -60,7 +60,7 @@
 ## Blocker terbuka
 
 - F18 `Verify it` (nanti): test native install MySQL, ClickHouse, Valkey `BLOCKED` `no provider package (features 40 to 43)`; butuh persetujuan user untuk dicentang dengan BLOCKED itu, atau tunggu fitur 40 sampai 43 di `07-stack-enam-service.md`.
-- `architect (update)` spec 0017 dari usulan spec 0018 (`ProviderSummary.software`, `InstallingRuntime.provider`): diteruskan ke `arc-f17-spec` saat slot bebas.
+- Baris usulan spec 0017 di spec 0018 (`ProviderSummary.software` sudah diterapkan di `dbedb8f` → `f293d99`; sisa baris itu adalah kerja build F18): dicentang lead lewat `/sync`.
 
 - `architect (update)` spec 0006: fungsi hint per area (`codes::<area>::hint`) dan baris `daemon.restart_unavailable` (spec 0015); setelah sesi contract 1.4 foundation selesai.
 - `architect (update)` spec 0010 dan 0011 (tambahan additive spec 0019: `runExecutable` `stdin.text`, format detail probe `exec`, `x-stackly.printableOnly` di `SecretService::put`): setelah build F10 dan F11 di `01-foundation.md` masuk `main`.
