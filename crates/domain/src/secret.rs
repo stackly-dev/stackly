@@ -16,6 +16,7 @@ use uuid::Uuid;
 use crate::code::code_enum;
 use crate::error::{ValueError, ValueKind};
 use crate::id::{EnvironmentId, InstanceId};
+use crate::process::IdentityEvidence;
 use crate::text::serde_as_text;
 
 /// The longest secret reference, in bytes, the `local:` prefix included.
@@ -483,9 +484,9 @@ impl NeedsSecretItem {
 /// like readiness and health, that never changes the lifecycle, the
 /// desired state, or the revision, and lives only in the daemon's memory.
 ///
-/// An instance holds at most one blocker. Feature 10 adds the
-/// `identityUnproven` and `dataInUse` blockers, which win over
-/// [`InstanceBlocker::NeedsSecret`].
+/// An instance holds at most one blocker. When several apply, the
+/// supervisor shows `identityUnproven`, then `dataInUse`, then
+/// `needsSecret` (spec 0010, *Status dan event*).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InstanceBlocker {
@@ -494,6 +495,24 @@ pub enum InstanceBlocker {
         /// Every reference that could not be read, ordered by its text.
         references: Vec<NeedsSecretItem>,
         /// When the failed resolve happened.
+        observed_at: Timestamp,
+    },
+    /// A process Stackly cannot prove is the instance's own holds the
+    /// instance lock, so nothing may start on the data (spec 0010).
+    DataInUse {
+        /// What gathering evidence found; checks that did not run are
+        /// `not_checked`.
+        evidence: IdentityEvidence,
+        /// When the evidence was gathered.
+        observed_at: Timestamp,
+    },
+    /// A process matches the recorded identity but does not hold the
+    /// instance lock, or gathering the evidence failed, so the supervisor
+    /// neither adopts nor signals it (spec 0010).
+    IdentityUnproven {
+        /// What gathering evidence found, with the error if one stopped it.
+        evidence: IdentityEvidence,
+        /// When the evidence was gathered.
         observed_at: Timestamp,
     },
 }
@@ -515,11 +534,31 @@ impl InstanceBlocker {
         }
     }
 
+    /// Builds a data in use blocker from the gathered evidence.
+    #[must_use]
+    pub const fn data_in_use(evidence: IdentityEvidence, observed_at: Timestamp) -> Self {
+        Self::DataInUse {
+            evidence,
+            observed_at,
+        }
+    }
+
+    /// Builds an identity unproven blocker from the gathered evidence.
+    #[must_use]
+    pub const fn identity_unproven(evidence: IdentityEvidence, observed_at: Timestamp) -> Self {
+        Self::IdentityUnproven {
+            evidence,
+            observed_at,
+        }
+    }
+
     /// Returns the stable snake_case code, for example `needs_secret`.
     #[must_use]
     pub const fn as_code(&self) -> &'static str {
         match self {
             Self::NeedsSecret { .. } => "needs_secret",
+            Self::DataInUse { .. } => "data_in_use",
+            Self::IdentityUnproven { .. } => "identity_unproven",
         }
     }
 
@@ -527,7 +566,21 @@ impl InstanceBlocker {
     #[must_use]
     pub const fn observed_at(&self) -> Timestamp {
         match self {
-            Self::NeedsSecret { observed_at, .. } => *observed_at,
+            Self::NeedsSecret { observed_at, .. }
+            | Self::DataInUse { observed_at, .. }
+            | Self::IdentityUnproven { observed_at, .. } => *observed_at,
+        }
+    }
+
+    /// Returns the identity evidence of a `data_in_use` or
+    /// `identity_unproven` blocker, and `None` for the others.
+    #[must_use]
+    pub const fn evidence(&self) -> Option<&IdentityEvidence> {
+        match self {
+            Self::DataInUse { evidence, .. } | Self::IdentityUnproven { evidence, .. } => {
+                Some(evidence)
+            }
+            Self::NeedsSecret { .. } => None,
         }
     }
 }
@@ -840,7 +893,10 @@ mod tests {
         let InstanceBlocker::NeedsSecret {
             references,
             observed_at,
-        } = &blocker;
+        } = &blocker
+        else {
+            panic!("needs_secret builds a NeedsSecret blocker: {blocker:?}");
+        };
         let summary: Vec<_> = references
             .iter()
             .map(|item| (item.reference.as_str(), item.reason))
@@ -855,5 +911,28 @@ mod tests {
         assert_eq!(*observed_at, at);
         assert_eq!(blocker.observed_at(), at);
         assert_eq!(blocker.as_code(), "needs_secret");
+        assert_eq!(blocker.evidence(), None);
+    }
+
+    #[test]
+    fn identity_blockers_carry_their_evidence_and_observation_time() {
+        use crate::process::{IdentityCheck, IdentityCheckName, LockState, Pid};
+
+        let at: Timestamp = "2026-10-19T08:00:00Z".parse().unwrap();
+        let evidence = IdentityEvidence::new()
+            .with_check(IdentityCheckName::BootMatches, IdentityCheck::Failed)
+            .with_pid(Pid::new(4242).unwrap())
+            .with_lock(LockState::Held);
+
+        let data_in_use = InstanceBlocker::data_in_use(evidence.clone(), at);
+        let unproven = InstanceBlocker::identity_unproven(evidence.clone(), at);
+
+        assert_eq!(data_in_use.as_code(), "data_in_use");
+        assert_eq!(unproven.as_code(), "identity_unproven");
+        for blocker in [&data_in_use, &unproven] {
+            assert_eq!(blocker.observed_at(), at);
+            assert_eq!(blocker.evidence(), Some(&evidence));
+        }
+        assert_ne!(data_in_use, unproven);
     }
 }

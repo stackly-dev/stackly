@@ -6,6 +6,7 @@ use crate::fs::Filesystem;
 use crate::identity::UserIdentity;
 use crate::info::PlatformInfo;
 use crate::layout::DirectoryResolver;
+use crate::process::{ProcessSupervision, UnsupportedProcessSupervision};
 use crate::secret::{SecretStore, UnsupportedSecretStore};
 
 /// Every platform port, bundled so a use case takes one argument.
@@ -26,12 +27,15 @@ pub struct Platform {
     identity: Arc<dyn UserIdentity>,
     info: Arc<dyn PlatformInfo>,
     secrets: Arc<dyn SecretStore>,
+    processes: Arc<dyn ProcessSupervision>,
 }
 
 impl Platform {
     /// Bundles the five ports. The secret store starts as an
-    /// [`UnsupportedSecretStore`] for the OS `info` reports; install one
-    /// with [`with_secrets`](Self::with_secrets).
+    /// [`UnsupportedSecretStore`] and process supervision as an
+    /// [`UnsupportedProcessSupervision`] for the OS `info` reports; install
+    /// real ones with [`with_secrets`](Self::with_secrets) and
+    /// [`with_processes`](Self::with_processes).
     #[must_use]
     pub fn new(
         directories: Arc<dyn DirectoryResolver>,
@@ -40,7 +44,9 @@ impl Platform {
         identity: Arc<dyn UserIdentity>,
         info: Arc<dyn PlatformInfo>,
     ) -> Self {
-        let secrets = Arc::new(UnsupportedSecretStore::new(info.target().os()));
+        let os = info.target().os();
+        let secrets = Arc::new(UnsupportedSecretStore::new(os));
+        let processes = Arc::new(UnsupportedProcessSupervision::new(os));
         Self {
             directories,
             fs,
@@ -48,6 +54,7 @@ impl Platform {
             identity,
             info,
             secrets,
+            processes,
         }
     }
 
@@ -55,6 +62,14 @@ impl Platform {
     #[must_use]
     pub fn with_secrets(mut self, secrets: Arc<dyn SecretStore>) -> Self {
         self.secrets = secrets;
+        self
+    }
+
+    /// Returns a copy with `processes` as the process supervision port, the
+    /// seventh port (spec 0010).
+    #[must_use]
+    pub fn with_processes(mut self, processes: Arc<dyn ProcessSupervision>) -> Self {
+        self.processes = processes;
         self
     }
 
@@ -106,6 +121,12 @@ impl Platform {
     #[must_use]
     pub fn shared_secrets(&self) -> Arc<dyn SecretStore> {
         Arc::clone(&self.secrets)
+    }
+
+    /// Returns the process supervision port.
+    #[must_use]
+    pub fn processes(&self) -> &dyn ProcessSupervision {
+        &*self.processes
     }
 }
 

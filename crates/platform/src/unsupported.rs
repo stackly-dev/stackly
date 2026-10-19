@@ -11,13 +11,15 @@ use crate::identity::{UserId, UserIdentity};
 use crate::info::PlatformInfo;
 use crate::layout::{DirectoryResolver, RootSet};
 use crate::platform::Platform;
+use crate::process::UnsupportedProcessSupervision;
 use crate::secret::UnsupportedSecretStore;
 
 /// The platform for an OS that has no adapter yet, such as Windows today.
 ///
 /// Directories, filesystem, and user identity always answer
-/// [`PlatformError::NotSupported`], and the secret store is an
-/// [`UnsupportedSecretStore`]; the clock works. Every capability but the
+/// [`PlatformError::NotSupported`], the secret store is an
+/// [`UnsupportedSecretStore`], and process supervision an
+/// [`UnsupportedProcessSupervision`]; the clock works. Every capability but the
 /// clock reports not supported, so the next port only has to swap the
 /// adapter, never core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +44,7 @@ impl UnsupportedPlatform {
             ports,
         )
         .with_secrets(Arc::new(UnsupportedSecretStore::new(target.os())))
+        .with_processes(Arc::new(UnsupportedProcessSupervision::new(target.os())))
     }
 
     fn not_supported(&self, capability: PlatformCapability) -> PlatformError {
@@ -228,6 +231,135 @@ mod tests {
         );
         assert!(Arc::ptr_eq(&platform.shared_secrets(), &linux));
         assert!(format!("{platform:?}").contains("secrets: Unsupported"));
+    }
+
+    #[test]
+    fn the_process_supervision_of_an_unsupported_platform_refuses_every_call() {
+        use stackly_domain::{BootId, Pid, ProcessIdentity, ProcessStart};
+
+        use crate::fs::FileIdentity;
+        use crate::process::{
+            ChildRole, ExitListener, ExitNotice, HelperHandle, OutputTarget, ProcessError,
+            ProcessFacts, ProviderSignal, SignalTarget, SpawnRequest, StdinSource, SuspendedChild,
+        };
+
+        struct Ignore;
+        impl ExitListener for Ignore {
+            fn exited(&self, _notice: ExitNotice) {}
+        }
+
+        let ev = evidence!(
+            covers = ["AC-050"],
+            kind = Kind::Fixture,
+            expected = "the windows platform's process supervision port answers NotSupported naming process_supervision and windows from every one of its sixteen methods",
+        );
+        let platform = UnsupportedPlatform::new(WINDOWS);
+        let processes = platform.processes();
+        let not_supported = || ProcessError::NotSupported {
+            capability: PlatformCapability::ProcessSupervision,
+            os: Os::Windows,
+        };
+        let pid = Pid::new(4242).unwrap();
+        let start = ProcessStart::new(1_700_000_000, 0).unwrap();
+        let path = Path::new("C:\\stackly\\instance.lock");
+        let child = || {
+            SuspendedChild::new(ProcessFacts {
+                pid,
+                parent: None,
+                group: pid,
+                session: pid,
+                uid: UserId::Windows("S-1-5-21".to_owned()),
+                start,
+                executable: PathBuf::from("C:\\stackly\\server.exe"),
+                stopped: true,
+            })
+        };
+        let request = |role| SpawnRequest {
+            program: Path::new("server.exe"),
+            args: &[],
+            env: &[],
+            cwd: Path::new("C:\\stackly"),
+            stdin: StdinSource::Null,
+            output: OutputTarget::Capture,
+            lock: None,
+            role,
+        };
+        let target = SignalTarget::new(ProcessIdentity {
+            pid,
+            start,
+            executable: PathBuf::from("C:\\stackly\\server.exe"),
+            session: pid,
+            boot: "6f9619ff-8b86-d011-b42d-00c04fc964ff"
+                .parse::<BootId>()
+                .unwrap(),
+        });
+        let file = FileIdentity {
+            device: 1,
+            inode: 2,
+        };
+
+        assert_eq!(
+            processes.spawn_main(request(ChildRole::Main)),
+            Err(not_supported())
+        );
+        assert_eq!(processes.resume(child()), Err(not_supported()));
+        assert_eq!(processes.discard(child()), Err(not_supported()));
+        assert_eq!(
+            processes.spawn_helper(request(ChildRole::Probe)),
+            Err(not_supported())
+        );
+        assert_eq!(processes.inspect(pid), Err(not_supported()));
+        assert_eq!(processes.holds_file(pid, file), Err(not_supported()));
+        assert_eq!(
+            processes.signal(&target, ProviderSignal::Term),
+            Err(not_supported())
+        );
+        assert_eq!(processes.continue_stopped(&target), Err(not_supported()));
+        assert_eq!(
+            processes.terminate_helper_group(&HelperHandle::new(pid, ChildRole::Probe), true),
+            Err(not_supported())
+        );
+        assert_eq!(processes.group_members(pid), Err(not_supported()));
+        assert_eq!(processes.boot_id(), Err(not_supported()));
+        assert_eq!(
+            processes.watch_exit(pid, Arc::new(Ignore)),
+            Err(not_supported())
+        );
+        assert!(matches!(processes.lock_instance(path), Err(e) if e == not_supported()));
+        assert_eq!(processes.probe_lock(path), Err(not_supported()));
+        assert!(matches!(processes.create_spool(path), Err(e) if e == not_supported()));
+        assert!(matches!(processes.open_spool(path), Err(e) if e == not_supported()));
+        assert_eq!(
+            not_supported().to_string(),
+            "process_supervision is not supported on windows"
+        );
+        ev.pass();
+    }
+
+    #[test]
+    fn a_new_platform_has_unsupported_process_supervision_until_one_is_installed() {
+        use stackly_domain::Pid;
+
+        use crate::process::{ProcessError, UnsupportedProcessSupervision};
+
+        let ports = Arc::new(UnsupportedPlatform { target: WINDOWS });
+        let pid = Pid::new(1).unwrap();
+        let platform = Platform::new(
+            ports.clone(),
+            ports.clone(),
+            Arc::new(SystemClock),
+            ports.clone(),
+            ports,
+        );
+        let refused = |os| ProcessError::NotSupported {
+            capability: PlatformCapability::ProcessSupervision,
+            os,
+        };
+
+        assert_eq!(platform.processes().inspect(pid), Err(refused(Os::Windows)));
+        let platform =
+            platform.with_processes(Arc::new(UnsupportedProcessSupervision::new(Os::Linux)));
+        assert_eq!(platform.processes().inspect(pid), Err(refused(Os::Linux)));
     }
 
     #[test]
