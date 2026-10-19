@@ -602,13 +602,15 @@ pub(crate) fn yaml_value(text: &str) -> Result<serde_yaml_ng::Value, YamlError> 
         left: Cell::new(budget),
         exceeded: Cell::new(false),
     };
-    // Any other failure of the counting pass is reported by the parse below,
-    // with its position.
-    let _ = NodeBudget(&counter).deserialize(serde_yaml_ng::Deserializer::from_str(text));
-    if counter.exceeded.get() {
-        return Err(YamlError::TooLarge { budget });
+    match NodeBudget(&counter).deserialize(serde_yaml_ng::Deserializer::from_str(text)) {
+        Ok(()) => serde_yaml_ng::from_str(text).map_err(YamlError::Parse),
+        Err(_) if counter.exceeded.get() => Err(YamlError::TooLarge { budget }),
+        // The counting visitor accepts every kind of value, so any other
+        // failure is one of the deserializer itself (syntax, recursion,
+        // repetition), which the real parse would meet the same way: report
+        // it rather than parse a hostile document twice.
+        Err(err) => Err(YamlError::Parse(err)),
     }
-    serde_yaml_ng::from_str(text).map_err(YamlError::Parse)
 }
 
 /// The nodes a counting pass may still visit.
