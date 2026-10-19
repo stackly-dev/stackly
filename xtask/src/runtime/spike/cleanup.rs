@@ -272,6 +272,116 @@ mod tests {
         );
     }
 
+    /// Every name in `dir` with its bytes, or `None` for a folder.
+    fn snapshot(dir: &Path) -> Vec<(String, Option<Vec<u8>>)> {
+        let mut found: Vec<(String, Option<Vec<u8>>)> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let bytes = entry
+                    .file_type()
+                    .unwrap()
+                    .is_file()
+                    .then(|| fs::read(entry.path()).unwrap());
+                (name, bytes)
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    // covers: AC-4 (Critical test scenarios, Cache: `--cleanup` never touches the cache)
+    #[test]
+    fn the_sweep_deletes_spike_folders_and_leaves_cache_files_and_the_lock_alone() {
+        let temp = tempfile::tempdir().unwrap();
+        let uid = uid();
+        // The cache shares the folder with the leftovers, the worst case.
+        let cache = temp.path();
+        let pinned = "a".repeat(64);
+        let stale = "b".repeat(64);
+        fs::write(cache.join(&pinned), "pinned artifact bytes").unwrap();
+        fs::create_dir(cache.join(&stale)).unwrap();
+        fs::write(cache.join(&stale).join("inner"), "x").unwrap();
+        fs::write(cache.join(".download-x"), "partial").unwrap();
+        let lock = super::super::lock::SpikeLock::acquire(cache).unwrap();
+        let before = snapshot(cache);
+        let root = cache.join(format!("{ROOT_PREFIX}019a0000-0000-7000-8000-000000000001"));
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join(OWNER_MARKER), format!("{uid}\n")).unwrap();
+        let socket_dir = cache.join("sk-0123abcd");
+        fs::create_dir(&socket_dir).unwrap();
+
+        // What `sweep` deletes, with the lock held as `--cleanup` holds it.
+        let doomed: Vec<PathBuf> = owned_roots(cache, uid)
+            .unwrap()
+            .into_iter()
+            .chain(owned_socket_dirs(cache, uid).unwrap())
+            .collect();
+        assert_eq!(doomed, [root, socket_dir]);
+        for folder in &doomed {
+            remove_dir(folder).unwrap();
+        }
+        drop(lock);
+
+        assert_eq!(snapshot(cache), before);
+        assert!(before.iter().any(|(name, _)| name == "spike.lock"));
+    }
+
+    /// A shell that waits on its standard input and carries `arg` on its
+    /// command line; killed and reaped when dropped.
+    #[cfg(target_os = "macos")]
+    struct Waiting(std::process::Child);
+
+    #[cfg(target_os = "macos")]
+    impl Waiting {
+        fn start(arg: &str) -> Self {
+            use std::io::BufRead;
+            let mut child = Command::new("/bin/sh")
+                .args(["-c", "echo ready; read line", "sh", arg])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap();
+            let mut ready = String::new();
+            io::BufReader::new(child.stdout.take().unwrap())
+                .read_line(&mut ready)
+                .unwrap();
+            assert_eq!(ready, "ready\n");
+            Self(child)
+        }
+
+        fn pid(&self) -> u32 {
+            self.0.id()
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    impl Drop for Waiting {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    // covers: AC-4 (Critical test scenarios, Cache: the sweep never stops a download into the cache)
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_sweep_finds_spike_processes_but_never_a_download_into_the_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        let spike = Waiting::start(&format!(
+            "{}/{ROOT_PREFIX}019a0000-0000-7000-8000-000000000001/plan.json",
+            temp.path().display()
+        ));
+        let download = Waiting::start(&format!(
+            "/Users/dev/Library/Caches/dev.stackly.xtask/runtime/.download-{}",
+            "c".repeat(6)
+        ));
+        let found = matching_pids(launchd::uid().unwrap(), &leftover_pattern(temp.path())).unwrap();
+        assert!(found.contains(&spike.pid()), "{found:?}");
+        assert!(!found.contains(&download.pid()), "{found:?}");
+    }
+
     #[test]
     fn prune_keeps_pinned_digests_the_lock_and_partial_downloads() {
         let cache = tempfile::tempdir().unwrap();

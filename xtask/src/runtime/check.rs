@@ -547,6 +547,253 @@ mod tests {
         assert_eq!(lines(dir.path()), Vec::<String>::new());
     }
 
+    const NATS_ID: &str = "nats-2.15.1-macos-aarch64";
+    /// A record that finished a day after [`RECORD_ID`].
+    const LATER_ID: &str = "019a0000-0000-7000-8000-000000000003";
+
+    /// An inventory with one NATS entry of `status`, pinned to the digest
+    /// [`record`] carries.
+    fn nats(status: &str) -> Inventory {
+        Inventory::parse(&format!(
+            "schema_version = 1\n\n[[artifact]]\nid = \"{NATS_ID}\"\nversion = \"2.15.1\"\nstatus = \"{status}\"\nsha256 = \"{}\"\n",
+            "a".repeat(64)
+        ))
+        .unwrap()
+    }
+
+    /// The rule 8 lines for `inventory` against decoded `reports`.
+    fn rule_8(inventory: &Inventory, reports: Vec<Value>) -> Vec<String> {
+        let reports: Vec<RunReport> = reports
+            .into_iter()
+            .map(|report| serde_json::from_value(report).unwrap())
+            .collect();
+        latest_record_violations(inventory, &reports)
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    /// [`record`] with `status`, as [`LATER_ID`], finished on 18 October.
+    fn later_record(status: &str) -> Value {
+        let mut later = record(status);
+        later["id"] = json!(LATER_ID);
+        later["startedAt"] = json!("2026-10-18T08:00:00Z");
+        later["finishedAt"] = json!("2026-10-18T08:00:03Z");
+        later["evidencePath"] = json!(format!("artifacts/{LATER_ID}/"));
+        later
+    }
+
+    /// [`report`] of `records` as a second run.
+    fn later_report(records: Vec<Value>) -> Value {
+        let mut later = report(records);
+        let run_id = "019a0000-0000-7000-8000-000000000010";
+        later["runId"] = json!(run_id);
+        later["context"]["runId"] = json!(run_id);
+        later
+    }
+
+    fn rule_8_line(message: &str) -> String {
+        format!("{NATS_ID}: {message} (rule 8)")
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_accepts_a_clean_native_pass_from_macos_27_on_arm64_with_the_inventory_version() {
+        let found = rule_8(&nats("available"), vec![report(vec![record("PASS")])]);
+        assert_eq!(found, Vec::<String>::new());
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_refuses_an_available_artifact_with_no_record_for_its_sha256() {
+        let sha256 = "a".repeat(64);
+        let expected = [rule_8_line(&format!(
+            "no native record in evidence/runtime/ for sha256 {sha256}; run the native test and `cargo xtask runtime record`"
+        ))];
+        assert_eq!(rule_8(&nats("available"), Vec::new()), expected);
+
+        let mut other_digest = record("PASS");
+        other_digest["subjects"][0]["digest"] = json!("b".repeat(64));
+        assert_eq!(
+            rule_8(&nats("available"), vec![report(vec![other_digest])]),
+            expected
+        );
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_judges_the_latest_record_so_an_older_pass_does_not_save_a_later_fail() {
+        // The later run comes first, so file order cannot decide.
+        let found = rule_8(
+            &nats("available"),
+            vec![
+                later_report(vec![later_record("FAIL")]),
+                report(vec![record("PASS")]),
+            ],
+        );
+        assert_eq!(
+            found,
+            [rule_8_line(&format!(
+                "the latest record {LATER_ID} for this sha256 is FAIL, not PASS"
+            ))]
+        );
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_accepts_a_later_pass_after_an_older_fail() {
+        let found = rule_8(
+            &nats("available"),
+            vec![
+                later_report(vec![later_record("PASS")]),
+                report(vec![record("FAIL")]),
+            ],
+        );
+        assert_eq!(found, Vec::<String>::new());
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_refuses_a_latest_record_that_is_not_native() {
+        let mut fixture = record("PASS");
+        fixture["kind"] = json!("fixture");
+        assert_eq!(
+            rule_8(&nats("available"), vec![report(vec![fixture])]),
+            [rule_8_line(&format!(
+                "the latest record {RECORD_ID} is not native"
+            ))]
+        );
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_refuses_a_latest_record_from_a_dirty_source() {
+        let mut dirty = report(vec![record("PASS")]);
+        dirty["context"]["sourceDirty"] = json!(true);
+        assert_eq!(
+            rule_8(&nats("available"), vec![dirty]),
+            [rule_8_line(&format!(
+                "the latest record {RECORD_ID} comes from a dirty tree"
+            ))]
+        );
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_reads_the_context_of_the_record_before_the_context_of_its_report() {
+        let clean = report(vec![record("PASS")]);
+        let mut pass = record("PASS");
+        let mut own_context = clean["context"].clone();
+        own_context["sourceDirty"] = json!(true);
+        pass["context"] = own_context;
+        assert_eq!(
+            rule_8(&nats("available"), vec![report(vec![pass])]),
+            [rule_8_line(&format!(
+                "the latest record {RECORD_ID} comes from a dirty tree"
+            ))]
+        );
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_needs_a_macos_major_version_of_27() {
+        for (os_version, refused_as) in [
+            (json!("27.0"), None),
+            (json!("27.1.2"), None),
+            (json!("26.4"), Some("26.4")),
+            (json!("270.0"), Some("270.0")),
+            (Value::Null, Some("unknown")),
+        ] {
+            let mut run = report(vec![record("PASS")]);
+            run["context"]["host"]["osVersion"] = os_version;
+            let expected: Vec<String> = refused_as
+                .map(|shown| {
+                    rule_8_line(&format!(
+                        "the latest record {RECORD_ID} ran on macOS {shown}, not 27"
+                    ))
+                })
+                .into_iter()
+                .collect();
+            assert_eq!(rule_8(&nats("available"), vec![run]), expected);
+        }
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_needs_arm64_or_aarch64() {
+        for arch in ["arm64", "aarch64"] {
+            let mut run = report(vec![record("PASS")]);
+            run["context"]["host"]["arch"] = json!(arch);
+            assert_eq!(rule_8(&nats("available"), vec![run]), Vec::<String>::new());
+        }
+        let mut intel = report(vec![record("PASS")]);
+        intel["context"]["host"]["arch"] = json!("x86_64");
+        assert_eq!(
+            rule_8(&nats("available"), vec![intel]),
+            [rule_8_line(&format!(
+                "the latest record {RECORD_ID} ran on x86_64, not arm64"
+            ))]
+        );
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_refuses_a_subject_version_that_differs_from_the_inventory() {
+        let mut older = record("PASS");
+        older["subjects"][0]["version"] = json!("2.15.0");
+        assert_eq!(
+            rule_8(&nats("available"), vec![report(vec![older])]),
+            [rule_8_line(&format!(
+                "the latest record {RECORD_ID} reports version 2.15.0, the inventory says 2.15.1"
+            ))]
+        );
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_compares_only_the_subject_that_carries_the_digest() {
+        let mut two = record("PASS");
+        two["subjects"] = json!([
+            { "provider": "nats", "version": "2.15.1", "digest": "a".repeat(64), "source": "managed" },
+            { "provider": "valkey", "version": "9.1.2", "digest": "b".repeat(64), "source": "managed" }
+        ]);
+        assert_eq!(
+            rule_8(&nats("available"), vec![report(vec![two])]),
+            Vec::<String>::new()
+        );
+    }
+
+    // covers: AC-2 (rule 8)
+    #[test]
+    fn rule_8_reports_every_broken_condition_of_the_latest_record() {
+        let mut fail = record("FAIL");
+        fail["kind"] = json!("fixture");
+        let mut dirty = report(vec![fail]);
+        dirty["context"]["sourceDirty"] = json!(true);
+        assert_eq!(
+            rule_8(&nats("available"), vec![dirty]),
+            [
+                rule_8_line(&format!(
+                    "the latest record {RECORD_ID} for this sha256 is FAIL, not PASS"
+                )),
+                rule_8_line(&format!("the latest record {RECORD_ID} is not native")),
+                rule_8_line(&format!(
+                    "the latest record {RECORD_ID} comes from a dirty tree"
+                )),
+            ]
+        );
+    }
+
+    // covers: AC-2 (rule 8), AC-13
+    #[test]
+    fn rule_8_ignores_a_blocked_entry() {
+        assert_eq!(rule_8(&nats("blocked"), Vec::new()), Vec::<String>::new());
+        assert_eq!(
+            rule_8(&nats("blocked"), vec![report(vec![record("FAIL")])]),
+            Vec::<String>::new()
+        );
+    }
+
     #[test]
     fn an_entry_that_still_carries_attestation_fails_as_an_invalid_inventory() {
         let root = tempfile::tempdir().unwrap();
