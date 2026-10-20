@@ -36,6 +36,10 @@ json-schema = ["dep:schemars"]
 # `ResolvedSecrets::for_tests` (spec 0011), for dev dependencies and
 # integration tests only. Never on in a release build.
 test-support = []
+# The fake runtime and fake provider package installers (spec 0010 K5, spec
+# 0014). Only a dev dependency turns it on; `cargo xtask check-deps`
+# rejects every other way.
+fixture = []
 
 [dev-dependencies]
 stackly-core = { workspace = true, features = ["test-support"] }

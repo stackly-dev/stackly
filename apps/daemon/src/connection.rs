@@ -643,8 +643,8 @@ async fn on_frame(
     handlers: &Arc<dyn Handlers>,
 ) {
     let received = Instant::now();
-    // provisional: F10 (no contract method starts an operation yet; only a
-    // test registers this one)
+    // The test only starting method: the scripted work
+    // the engine tests need, which no contract method offers.
     if let Some(starting) = handlers.test_starting_method()
         && let Some(frame) = starting_frame(bytes, starting.method())
     {
@@ -772,11 +772,14 @@ async fn run_request(
     received: Instant,
 ) {
     let Request {
-        request_id, call, ..
+        request_id,
+        idempotency_key,
+        call,
     } = request;
     let method = call.method();
     let operation_id = named_operation(&call);
-    let context = RequestContext::new(conn.id, request_id.clone(), conn.peer, conn.client());
+    let context = RequestContext::new(conn.id, request_id.clone(), conn.peer, conn.client())
+        .with_idempotency_key(idempotency_key);
     let (result, subscription) = dispatch(&conn, &core, &handlers, context, call).await;
     // Every error and every operation summary passes the run's redactor
     // before it is encoded (spec 0011 AC-14); only `secret.reveal` sends a
@@ -1015,26 +1018,47 @@ async fn dispatch(
             .map(Reply::SecretDelete),
             None,
         ),
-        // provisional: F10 step 13 (the instance handlers of `ipc::instance`)
-        Call::InstanceCreate(_)
-        | Call::InstanceStart(_)
-        | Call::InstanceStop(_)
-        | Call::InstanceGet(_)
-        | Call::InstanceList(_) => (Err(not_served(call.method())), None),
+        Call::InstanceCreate(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.create_instance(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceCreate(Box::new(reply))),
+            None,
+        ),
+        Call::InstanceStart(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.start_instance(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceStart(Box::new(reply))),
+            None,
+        ),
+        Call::InstanceStop(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.stop_instance(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceStop(Box::new(reply))),
+            None,
+        ),
+        Call::InstanceGet(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_instance(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceGet(Box::new(reply))),
+            None,
+        ),
+        Call::InstanceList(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.list_instances(c, x, p)
+            })
+            .await
+            .map(|page| Reply::InstanceList(Box::new(page))),
+            None,
+        ),
     }
-}
-
-/// The error for a method the protocol knows and this build of the daemon
-/// does not serve yet, so a client falls back as it would with an older
-/// daemon (spec 0006, *Kompatibilitas*). provisional: F10 step 13
-fn not_served(method: &str) -> Box<ErrorBody> {
-    Box::new(
-        ErrorBody::new(
-            &request::UNKNOWN_METHOD,
-            "the daemon does not serve this method yet",
-        )
-        .with_detail("method", method),
-    )
 }
 
 /// The operation a request names in its params, for its log line.
@@ -1107,7 +1131,7 @@ async fn guarded_with<P: Send + 'static, T: Send + 'static>(
     }
 }
 
-/// A request for the test's starting method. provisional: F10
+/// A request for the test's starting method.
 struct StartingFrame {
     request_id: String,
     idempotency_key: Option<String>,
@@ -1118,7 +1142,7 @@ struct StartingFrame {
 /// `None` when it names another method, so the contract decode handles it.
 /// A request whose `requestId` or `idempotencyKey` breaks the protocol's
 /// format still comes back, with the bad part left out, so it gets
-/// `request.malformed` there. provisional: F10
+/// `request.malformed` there.
 fn starting_frame(bytes: &[u8], method: &str) -> Option<StartingFrame> {
     let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
     if value["call"]["type"].as_str() != Some(method) {
@@ -1135,7 +1159,7 @@ fn starting_frame(bytes: &[u8], method: &str) -> Option<StartingFrame> {
 }
 
 /// Admits and runs a request for the test's starting method like a
-/// contract request. provisional: F10
+/// contract request.
 async fn on_starting(
     frame: StartingFrame,
     starting: Arc<dyn TestStartingMethod>,
@@ -1187,7 +1211,7 @@ async fn on_starting(
 /// mode like every method that writes, then [`start_operation`] on its own
 /// task, and a raw response frame whose reply `type` is the method and
 /// whose `content` is the [`OperationAccepted`](stackly_protocol::operation::OperationAccepted)
-/// (null when nothing was started). provisional: F10
+/// (null when nothing was started).
 async fn run_starting(
     conn: Arc<Conn>,
     core: Arc<DaemonCore>,

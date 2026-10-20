@@ -115,7 +115,7 @@ Langkah 5 sampai 8 di Build plan: logika murni (`classify`, restart policy, `Sup
 
 ## Milestone 4: Daemon, IPC, and end to end proof
 
-Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-deps` (sesi `dev-f10-m4-s15`) dan langkah 12, kontrak protokol 1.8 (sesi `dev-f10-m4-s12`). Pengukuran NFR-003 dari langkah 15 (AC-20) menunggu langkah 13 dan 14, jadi belum ada barisnya di sini.
+Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-deps` (sesi `dev-f10-m4-s15`) dan langkah 12, kontrak protokol 1.8 (sesi `dev-f10-m4-s12`). Langkah 13, 14, dan pengukuran NFR-003 dari langkah 15 (AC-20) ditambah oleh sesi `dev-f10-m4-s1314`.
 
 ### Langkah 15, aturan `check-deps`
 
@@ -134,7 +134,7 @@ Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-dep
 #### Acceptance-criteria coverage
 
 - AC-15 · bagian aturan: `SIGKILL` hanya di `process::kill` dan tidak ada process API di core dan daemon ditegakkan `check-deps` (sebelum langkah ini hanya diklaim di Milestone 1, kode aturannya baru ada di sini); TERM lalu KILL pada group pembantu dibuktikan Milestone 1 dan 2
-- AC-20 · belum: pengukuran NFR-003 (10 instance fake idle selama 5 menit) menunggu langkah 13 dan 14
+- AC-20 · pengukuran NFR-003 ada di bagian *Langkah 15, pengukuran NFR-003* di bawah
 - Spec 0014 AC-3 · bagian aturan `check-deps` lengkap untuk keempat butir rumusan; bagian `cargo tree` dan build rilis menunggu spec 0014
 
 ### Langkah 12, kontrak protokol 1.8
@@ -162,3 +162,66 @@ Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-dep
 - AC-16 · bagian protokol dan decode Swift: method, event, DTO, dan kode error ada dengan fixture yang lolos test kontrak Rust dan Swift, termasuk `ownership`, `initialized`, `provider.revision` opsional, `instance.removed`, dan `supervisor.endpoint_unavailable` (K2, K4); `Validate` params create memanggil `SecretInput::field_errors` per entri `secrets` (K15)
 - AC-16 · belum: resep `statusSeq` di client menunggu `InstanceStore` spec 0013 langkah 16 (K16); handler `ipc::instance`, pemetaan DTO, dan event nyata menunggu langkah 13 (sampai itu `stacklyd` menjawab kelima method `request.unknown_method`, `provisional: F10 step 13`)
 - `instance.removed` · DTO dan fixture saja; daemon tidak pernah mengirimnya sebelum fitur 20 (K4)
+
+### Langkah 13, daemon dan method instance
+
+#### UI / manual
+
+- [ ] Buka `apps/daemon/src/server.rs` (`start_slot`) → urutan di slot start: secret service, `Supervision::build`, engine dibuat dan `attach_operations`, `recover`, `reconcile` (antara `recover` dan `ready`), `mark_ready`, `engine.start()`, `start_reconciled()`; recovery mode registry mengisi subsystem `supervisor` `unavailable` dengan detail `registry in recovery` → AC-11
+- [ ] Buka `apps/daemon/src/server.rs` (`stop_gracefully`, `shutdown`) → `Supervision::shutdown` dipanggil sesudah engine melepas operasinya dan sekali lagi di jalur paksa; tidak ada sinyal ke instance dan tidak ada commit lifecycle → AC-21
+- [ ] Buka `apps/daemon/src/ipc/instance/mod.rs` → `start` dan `stop` memberi `precheck` ke engine (penolakan state, `alreadyInState`, dan desired yang berbeda sebagai satu commit `NoOp`), `ipc::instance` tidak pernah memanggil `.expose()` (konversi secret create lewat `ipc::secret::create_input`, K15) → AC-23
+- [ ] Buka `apps/daemon/src/ipc/instance/create.rs` → create sementara: `replay_operation` lebih dulu (K12), validasi di `spawn_blocking`, `begin` dengan `creates_resource`, `LockKey::InstanceName`, `BusyPolicy::Reject`, tahap `validate`, `secrets`, `layout`, `register` (`irreversible`), `init`, dan `classify_create_failure` (K14) → AC-3
+- [ ] Buka `crates/core/src/supervisor/fixture.rs` → fitur `fixture` (mati secara default, hanya dev dependency): `pin_package`, `install_fake_runtime`, dan `install_fake` yang menerima path binary dan paket, karena core tidak boleh bergantung pada testkit → AC-3
+- [ ] Catatan keputusan: `Handlers::test_starting_method` (`test.start_operation`) tetap ada, tidak di balik fitur, karena test integrasi adalah crate terpisah dan `check-deps` melarang `stacklyd` menjadikan dirinya dev dependency; test engine di `apps/daemon/tests/operations/` butuh `ScriptedWork` yang tidak bisa ditiru method instance, dan perilaku instance dicakup test baru di `apps/daemon/tests/supervisor/`
+
+#### Commands
+
+- [ ] `cargo test -p stacklyd --test supervisor lifecycle create` → 4 test lulus dengan daemon in process, runtime fake dan paket fake dari `install_fake`, dan proses dummy server nyata: create → `stopped` dan terinisialisasi dengan `token.sha256` sama dengan SHA-256 token, tahap create `validate, secrets, layout, register, init`, start dijawab di bawah 500 ms dan tahap start sebelas langkah berurutan, empat state terpisah, port `Auto` final setelah ready, stop, penolakan create per kode (`instance.name_taken`, `provider_not_found`, `runtime_not_found`, `settings_invalid` dengan `fields`, `endpoint_invalid`, `request.invalid_params` untuk `provider.revision` kosong), replay key yang sama (`replayed` true, bukan `name_taken`), `init` yang gagal menjadi `needs_recovery` dengan instance `failed`, start ditolak `supervisor.not_initialized`, dan abandon → AC-3, AC-16, AC-23
+- [ ] `cargo test -p stacklyd --test server` → 64 test lulus; empat test (`events` dan `handshake`) menghitung event dari head karena slot start kini mengirim dua event `daemon.reconciling` → AC-11
+- [ ] `cargo test -p stacklyd` (semua test crate) dan `cargo test -p stackly-core -p stackly-testkit` → lulus
+- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → semuanya lulus
+
+#### Acceptance-criteria coverage
+
+- AC-3 · create dan start fake lewat daemon, tahap operasi terlihat, `instance.start` di bawah 500 ms
+- AC-11 · rekonsiliasi terpasang di slot start dengan `daemon.reconciling` di awal dan akhir; test per sel tabel ada di core (milestone 3) dan test daemon di langkah 14
+- AC-16 · handler, pemetaan DTO, dan event `instance.state_changed`, `instance.health_changed`, dan `daemon.reconciling` nyata (event diperiksa di langkah 14)
+- AC-21 · `Supervision::shutdown` terpasang; perilaku SIGTERM dibuktikan di langkah 14
+- AC-23 · penolakan sinkron dan `alreadyInState` lewat `precheck` engine, termasuk instance yang init nya gagal (`supervisor.not_initialized`)
+- Celah yang diketahui: `lastFailure.at`, `exitCode`, dan `signal` selalu null karena `InstanceStatus` belum membawa nilainya; `endpoints[].socketPath` null sampai langkah 9 spec 0020; kode `instance.name_invalid` belum ada di katalog protokol, jadi nama yang salah menjadi `request.invalid_params` di field `name`; endpoint `unix` mendapat nama socket pengisi `<nama>.sock`; `runtimeVersion` memakai `data_version` instance, sama dengan versi runtime sampai migrasi data (fitur 55); engine tidak punya `WorkFactory` untuk start, stop, dan create, jadi operasi antrean yang belum jalan saat daemon berhenti ditutup `failed`
+
+### Langkah 14, test daemon dengan evidence
+
+#### UI / manual
+
+- [ ] Buka `apps/daemon/tests/supervisor/` → satu file per kelompok skenario (`lifecycle`, `create`, `actions`, `process`, `restart`, `logs`, `budget`) dan `support.rs`; setiap test memakai `TestRoot` sendiri, dan test yang membunuh daemon memakai binary `stacklyd` lewat `SpawnedDaemon` → AC-9
+- [ ] Buka `evidence/` setelah `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test supervisor` → satu record `fixture` per test dengan `covers` REQ-011, REQ-012, REQ-013, REQ-016, BR-010, AC-010, AC-011, AC-012, AC-013, AC-029, AC-055, AC-067, AC-068, NFR-006 → AC-3 sampai AC-12
+
+#### Commands
+
+- [ ] `cargo test -p stacklyd --test supervisor` → test lulus (`measure_` hanya mengukur dengan `STACKLY_MEASURE=1`): `actions` (jawaban method tanpa operasi, satu proses untuk sepuluh start dari dua client dan lock yang dipegang menghasilkan `supervisor.data_in_use` tanpa spawn, port `Fixed` yang dipakai pihak luar menghasilkan `supervisor.endpoint_in_use` dan `supervisor.endpoint_conflict` untuk create kedua, `secret.needs_secret` dengan blocker lalu start berhasil setelah nilai kembali), `process` (stop yang diabaikan proses menghasilkan `supervisor.stop_timeout`, lifecycle `stopping`, proses tidak dibunuh, stop kedua selesai `stopped`; crash loop berakhir `failed` `crash_loop` `exhausted`; readiness `not_ready` dengan `bound` false lalu cancel menghentikan proses dan operasi `cancelled`; deadline readiness habis menghasilkan `supervisor.readiness_timeout` dengan proses tetap hidup lalu `ready`; urutan event dan `statusSeq` hanya naik), `restart` (SIGKILL ke daemon lalu proses yang sama diadopsi dengan PID, waktu start, dan port sama, tanpa file data hilang; SIGTERM saat start berjalan menutup operasi `interrupted` dan mengadopsi; proses yang hilang di boot yang sama dijalankan lagi; PID yang kini milik program lain tidak disinyal; lock yang dipegang pihak lain menghasilkan `unknown` dengan blocker `dataInUse` dan start serta stop ditolak), `logs` (25 detik `logLinesPerSecond` 2000: sink perekam menerima lebih dari 40000 baris utuh dan blok teralokasi setiap spool di bawah 2 MiB) → AC-3 sampai AC-12, AC-17, AC-21, AC-23
+- [ ] `cargo xtask evidence check` → lulus
+
+#### Acceptance-criteria coverage
+
+- AC-4 · empat state terpisah dan `not_ready` saat delay readiness; pemeriksaan ulang setiap 10 detik, `not_ready` setelah dua kegagalan, dan `stale` tetap di test core
+- AC-5 · stop timeout tanpa sinyal lain, proses tetap diawasi, dan penyelesaian lewat handler exit yang sama; anak proses yang tertinggal dan `remove_secret_material` tetap di test core
+- AC-6, AC-7, AC-8, AC-9, AC-10, AC-17, AC-21, AC-23 · seperti disebut di atas; AC-8 cancel hanya diuji saat proses hidup (dua titik lain di core)
+- AC-10 · PID dipakai ulang dan lock dipegang lewat daemon; `kinfo_proc` untuk PID 1 ada di test adapter langkah 3
+- AC-12 · bagian daemon: spool, `LogSink` perekam lewat `DaemonConfig.extra_log_sinks` (K5), dan batas blok dalam 25 detik, bukan 60; `first_data_offset()` setelah run dan resume ada di core
+- AC-13 · init nyata fake (hash token, inisialisasi gagal menjadi `needs_recovery`); timeout langkah init ada di core
+- AC-22 · tidak diuji lewat daemon (registry yang menolak commit tidak bisa diinjeksi di daemon); ada di core
+
+### Langkah 15, pengukuran NFR-003
+
+#### UI / manual
+
+- [ ] Buka record `evidence/manual/*-nfr-003-*.json` → `covers` NFR-003, `kind` `fixture`, nilai terukur (RSS maksimum, CPU rata rata, jumlah sampel) dan perintah yang menjalankannya → AC-20
+
+#### Commands
+
+- [ ] `STACKLY_MEASURE=1 cargo test -p stacklyd --test supervisor measure_ -- --nocapture` → mencetak `NFR-003 supervisor: instances=10 seconds=300 ... rss_max_kib=<n> cpu_percent=<x>` dan lulus bila RSS di bawah 150 MiB dan CPU rata rata di bawah 1 persen satu core; `STACKLY_BUDGET_SECONDS`, `STACKLY_BUDGET_INSTANCES`, dan `STACKLY_BUDGET_PROFILE` memperpendek run atau menyimpan `sample` → AC-20
+
+#### Acceptance-criteria coverage
+
+- AC-20 · lihat record. Putaran pertama (poll spool setiap 500 ms) mengukur RSS 59 MiB tetapi CPU 1,13 persen, di atas batas; pembaca spool bangun 40 kali per detik untuk 10 instance, jadi `pump_loop` kini menggandakan jedanya sampai 4 kali `SPOOL_DRAIN_INTERVAL` selama spool kosong dan kembali ke 500 ms begitu ada byte. Latensi baris pertama sesudah diam paling lama 2 detik. Perubahan ini ada di `crates/core/src/supervisor/drain.rs`

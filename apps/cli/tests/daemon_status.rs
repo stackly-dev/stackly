@@ -43,23 +43,34 @@ fn status_of_a_running_daemon_prints_its_facts_as_text_and_json_and_creates_noth
 
     assert_eq!(text.code, Some(0), "{text:?}");
     let protocol = ProtocolVersion::CURRENT;
-    for expected in [
-        "Status      ready".to_owned(),
-        format!(
-            "Version     {} (protocol {}.{})",
-            env!("CARGO_PKG_VERSION"),
-            protocol.major,
-            protocol.minor
+    // The key column is as wide as the longest key shown, which depends on
+    // the subsystem rows, so keys and values are compared apart.
+    let rows: Vec<(&str, &str)> = text
+        .stdout
+        .lines()
+        .filter_map(|line| line.split_once("  "))
+        .map(|(key, value)| (key.trim_end(), value.trim_start()))
+        .collect();
+    for (key, value) in [
+        ("Status", "ready".to_owned()),
+        (
+            "Version",
+            format!(
+                "{} (protocol {}.{})",
+                env!("CARGO_PKG_VERSION"),
+                protocol.major,
+                protocol.minor
+            ),
         ),
-        format!("PID         {}", daemon.pid()),
-        format!("UID         {}", uid()),
-        format!("Socket      {}", paths.socket.display()),
-        format!("Data        {}", paths.data.display()),
-        "Override    yes (STACKLY_ROOT)".to_owned(),
+        ("PID", daemon.pid().to_string()),
+        ("UID", uid().to_string()),
+        ("Socket", paths.socket.display().to_string()),
+        ("Data", paths.data.display().to_string()),
+        ("Override", "yes (STACKLY_ROOT)".to_owned()),
     ] {
         assert!(
-            text.stdout.lines().any(|line| line == expected),
-            "missing {expected:?} in:\n{}",
+            rows.contains(&(key, value.as_str())),
+            "missing {key:?} = {value:?} in:\n{}",
             text.stdout
         );
     }

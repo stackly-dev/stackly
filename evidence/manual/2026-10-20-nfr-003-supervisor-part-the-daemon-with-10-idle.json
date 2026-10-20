@@ -1,0 +1,61 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1585f-5384-7489-a49c-f32ba49488e7",
+  "covers": [
+    "NFR-003"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "NFR-003 supervisor part: the daemon with 10 idle fake instances for 5 minutes",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "with 10 fake instances running and ready, readiness and health probes on, and no log spam, the stacklyd binary holds at most 150 MiB RSS and uses at most 1 percent of one logical core on average over 5 minutes",
+  "actual": "Over 301 seconds (60 samples every 5 s after a 20 s settle) the stacklyd binary with 10 running, ready fake instances held at most 59552 KiB (58.2 MiB) RSS and used 0.714 percent of one logical core on average (cpu time from ps divided by wall time). The first run, before the spool reader backed off while a spool is empty, measured 60368 KiB and 1.133 percent, above the CPU budget; with 0, 1, and 10 instances over 60 s the daemon used 0.000, 0.233, and 1.327 percent, and a 5 s spool interval halved the 10 instance number, so pump_loop now doubles its wait up to 4 times SPOOL_DRAIN_INTERVAL while both spools stay empty. Numbers are of the daemon process only, not of the fake servers. The fake provider is not a real database, so this is fixture evidence.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "On this Mac (Apple M1 Max, macOS 27.0) at the commit named in context, run: STACKLY_MEASURE=1 cargo test -p stacklyd --test supervisor measure_ -- --nocapture",
+    "The test seeds a TestRoot with the fake runtime and package (install_fake), starts the stacklyd binary with STACKLY_ROOT, creates and starts 10 fake instances (readiness and health probes on, no log lines), waits 20 s, then samples rss and cpu time with ps every 5 s for 300 s.",
+    "Read the printed line: NFR-003 supervisor: instances=10 seconds=301 samples=60 rss_max_kib=59552 cpu_percent=0.714",
+    "Compare with the budget of spec 0010 AC-20: RSS at most 150 MiB (153600 KiB) and CPU at most 1 percent of one logical core."
+  ],
+  "reviewer": "Claude Sonnet 5.5 (session dev-f10-m4-s1314, for ojiepermana)",
+  "startedAt": "2026-10-20T08:13:24.740341Z",
+  "finishedAt": "2026-10-20T08:13:34Z",
+  "evidencePath": "evidence/manual/2026-10-20-nfr-003-supervisor-part-the-daemon-with-10-idle.json",
+  "context": {
+    "sourceCommit": "7ea7b032b1a6907512597a7bb50e41922a92d74a",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

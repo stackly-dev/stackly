@@ -1286,6 +1286,7 @@ name = "stacklyd"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "jiff",
  "libc",
  "serde",
  "serde_json",

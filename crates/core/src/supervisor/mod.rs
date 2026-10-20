@@ -48,6 +48,8 @@ mod drain;
 mod error;
 mod evidence;
 mod exit;
+#[cfg(feature = "fixture")]
+pub mod fixture;
 mod helper;
 mod http;
 mod init;

@@ -26,6 +26,7 @@ use crate::log_sink::LogSink;
 use crate::operations::Operations;
 use crate::secrets::Secrets;
 use crate::shutdown::Drain;
+use crate::supervisor::Supervision;
 
 /// Where the daemon is in its life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +129,7 @@ pub struct DaemonCore {
     drain: Drain,
     connections: Connections,
     operations: Operations,
+    supervision: Supervision,
     redactor: Arc<Redactor>,
     secrets: Secrets,
     next_connection_id: AtomicU64,
@@ -174,6 +176,7 @@ impl DaemonCore {
             drain: Drain::default(),
             connections: Connections::default(),
             operations: Operations::default(),
+            supervision: Supervision::default(),
             redactor,
             secrets: Secrets::new(secret_target),
             next_connection_id: AtomicU64::new(1),
@@ -247,6 +250,12 @@ impl DaemonCore {
     #[must_use]
     pub const fn operations(&self) -> &Operations {
         &self.operations
+    }
+
+    /// The process supervisor and its health (spec 0010).
+    #[must_use]
+    pub const fn supervision(&self) -> &Supervision {
+        &self.supervision
     }
 
     /// The run's one redactor, shared by the log writer, the error bodies,
@@ -434,7 +443,7 @@ impl DaemonCore {
             self.log.health(now),
             registry,
             self.operations.health(),
-            subsystem_health(subsystem::SUPERVISOR, SubsystemStatus::NotBuilt, None),
+            self.supervision.health(),
             catalog::health(self.catalog.get().map(AsRef::as_ref)),
         ];
         let status = match self.phase() {

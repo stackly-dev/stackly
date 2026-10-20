@@ -11,7 +11,6 @@ use std::sync::{Arc, Mutex, PoisonError};
 use stackly_domain::InstanceId;
 use stackly_platform::{OutputStream, ProcessError};
 use tokio::sync::watch;
-use tokio::time::MissedTickBehavior;
 
 use super::persist::blocking;
 use super::{DrainContext, DrainOutcome, SpoolDrain, Supervisor, SupervisorDeps};
@@ -149,14 +148,15 @@ fn open_all(deps: &SupervisorDeps, id: InstanceId, opening: Opening) -> (Vec<Spo
     (drains, unavailable)
 }
 
-/// Pumps both spools once. `More` wins over `Busy`, so a busy stream does
-/// not slow the other one.
+/// Pumps both spools once and tells whether it read any byte. `More` wins
+/// over `Busy`, so a busy stream does not slow the other one.
 fn pump_once(
     deps: &SupervisorDeps,
     id: InstanceId,
     drains: &Mutex<Vec<SpoolDrain>>,
-) -> Result<DrainOutcome, ProcessError> {
+) -> Result<(DrainOutcome, bool), ProcessError> {
     let mut drains = drains.lock().unwrap_or_else(PoisonError::into_inner);
+    let before: u64 = drains.iter().map(SpoolDrain::read_offset).sum();
     let ctx = context(deps, id);
     let mut outcome = DrainOutcome::CaughtUp;
     let mut failure = None;
@@ -170,7 +170,8 @@ fn pump_once(
             Err(error) => failure = failure.or(Some(error)),
         }
     }
-    failure.map_or(Ok(outcome), Err)
+    let read = drains.iter().map(SpoolDrain::read_offset).sum::<u64>() != before;
+    failure.map_or(Ok((outcome, read)), Err)
 }
 
 async fn pump_loop(
@@ -179,20 +180,28 @@ async fn pump_loop(
     drains: Arc<Mutex<Vec<SpoolDrain>>>,
     mut stop: watch::Receiver<bool>,
 ) {
-    let mut tick = tokio::time::interval(deps.config.spool_drain_interval);
-    tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    // The wait is the drain interval while the process writes, and doubles
+    // up to IDLE_BACKOFF_MAX times that while the spools stay empty, so ten
+    // idle instances do not wake the daemon forty times a second (NFR-003).
+    let base = deps.config.spool_drain_interval;
+    let mut wait = base;
     let mut warned = false;
     loop {
         tokio::select! {
             biased;
             _ = stop.wait_for(|stopped| *stopped) => return,
-            _ = tick.tick() => {}
+            () = tokio::time::sleep(wait) => {}
         }
+        let mut moved = false;
         loop {
             let (deps, drains) = (deps.clone(), Arc::clone(&drains));
             match blocking(move || pump_once(&deps, id, &drains)).await {
-                Ok(Ok(DrainOutcome::More)) => {}
-                Ok(Ok(_)) => break,
+                Ok(Ok((outcome, read))) => {
+                    moved |= read;
+                    if outcome != DrainOutcome::More {
+                        break;
+                    }
+                }
                 Ok(Err(error)) => {
                     if !warned {
                         warned = true;
@@ -206,5 +215,13 @@ async fn pump_loop(
                 }
             }
         }
+        wait = if moved {
+            base
+        } else {
+            (wait * 2).min(base * IDLE_BACKOFF_MAX)
+        };
     }
 }
+
+/// How many times the drain interval an idle spool is left alone at most.
+const IDLE_BACKOFF_MAX: u32 = 4;

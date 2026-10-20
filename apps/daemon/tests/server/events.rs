@@ -30,6 +30,8 @@ async fn subscribed_comes_before_any_event_of_the_subscription() {
     );
     let site = Site::new();
     let daemon = site.start().await;
+    // The start slot published the two `daemon.reconciling` events.
+    let base = daemon.bus().head().sequence.get();
     for _ in 0..3 {
         daemon.bus().publish_daemon(shutting_down());
     }
@@ -37,7 +39,7 @@ async fn subscribed_comes_before_any_event_of_the_subscription() {
     let since = json!({
         "since": {
             "serverInstanceId": daemon.info().server_instance_id.to_string(),
-            "sequence": 1
+            "sequence": base + 1
         }
     });
 
@@ -46,7 +48,10 @@ async fn subscribed_comes_before_any_event_of_the_subscription() {
 
     let first = raw.recv().await.expect("the reply arrives");
     assert_eq!(first["type"], "response", "{first}");
-    assert_eq!(first["content"]["reply"]["content"]["head"]["sequence"], 3);
+    assert_eq!(
+        first["content"]["reply"]["content"]["head"]["sequence"],
+        base + 3
+    );
     daemon.bus().publish_daemon(shutting_down());
     let mut sequences = Vec::new();
     for _ in 0..3 {
@@ -55,7 +60,7 @@ async fn subscribed_comes_before_any_event_of_the_subscription() {
         assert_eq!(event["content"]["subscriptionId"], 1);
         sequences.push(event["content"]["sequence"].as_u64().unwrap());
     }
-    assert_eq!(sequences, [2, 3, 4]);
+    assert_eq!(sequences, [base + 2, base + 3, base + 4]);
     ev.pass();
 }
 
@@ -142,12 +147,13 @@ async fn a_reconnect_with_the_last_cursor_gets_the_missed_events_once_then_live_
     let site = Site::new();
     let daemon = site.start().await;
     let instance = daemon.info().server_instance_id.to_string();
+    let base = daemon.bus().head().sequence.get();
     let mut first = Raw::ready(&site.socket()).await;
     subscribe(&mut first, "sub", json!({})).await;
     daemon.bus().publish_daemon(shutting_down());
     daemon.bus().publish_daemon(shutting_down());
     let seen = sequences(&mut first, 2).await;
-    assert_eq!(seen, [1, 2]);
+    assert_eq!(seen, [base + 1, base + 2]);
     drop(first);
 
     daemon.bus().publish_daemon(shutting_down());
@@ -159,10 +165,13 @@ async fn a_reconnect_with_the_last_cursor_gets_the_missed_events_once_then_live_
         json!({ "since": { "serverInstanceId": instance, "sequence": seen[1] } }),
     )
     .await;
-    assert_eq!(subscribed["head"]["sequence"], 4);
+    assert_eq!(subscribed["head"]["sequence"], base + 4);
     daemon.bus().publish_daemon(shutting_down());
 
-    assert_eq!(sequences(&mut second, 3).await, [3, 4, 5]);
+    assert_eq!(
+        sequences(&mut second, 3).await,
+        [base + 3, base + 4, base + 5]
+    );
     second.send(&request("info", "daemon.get_info", None)).await;
     let next = second.recv().await.expect("the reply arrives");
     assert_eq!(next["content"]["requestId"], "info", "no duplicate: {next}");
@@ -179,6 +188,7 @@ async fn a_cursor_older_than_the_ring_starts_with_a_cursor_expired_gap() {
     let site = Site::new();
     let daemon = site.start().await;
     let instance = daemon.info().server_instance_id.to_string();
+    let base = daemon.bus().head().sequence.get();
     let published = u64::from(stackly_protocol::limits::EVENT_REPLAY_LEN) + 2;
     for _ in 0..published {
         daemon.bus().publish_daemon(shutting_down());
@@ -192,7 +202,7 @@ async fn a_cursor_older_than_the_ring_starts_with_a_cursor_expired_gap() {
     )
     .await;
 
-    assert_eq!(subscribed["head"]["sequence"], published);
+    assert_eq!(subscribed["head"]["sequence"], base + published);
     let gap = raw.recv().await.expect("the gap arrives");
     assert_eq!(gap["content"]["kind"]["type"], "events.gap", "{gap}");
     assert_eq!(
@@ -201,6 +211,6 @@ async fn a_cursor_older_than_the_ring_starts_with_a_cursor_expired_gap() {
     );
     daemon.bus().publish_daemon(shutting_down());
     let live = raw.recv().await.expect("the live event arrives");
-    assert_eq!(live["content"]["sequence"], published + 1, "{live}");
+    assert_eq!(live["content"]["sequence"], base + published + 1, "{live}");
     ev.pass();
 }
