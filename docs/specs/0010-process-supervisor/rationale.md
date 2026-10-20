@@ -917,3 +917,7 @@ Update `/architect` sesi `arc-foundation-update`. Teks saja: kode di `main` suda
 | `Next::Settled` di start | *Startup transaction* dan tabel *Kode error*: operasi start yang commit exit nya berakhir `stopped` gagal `supervisor.instance_stopping`, bukan `internal.unexpected` | review fitur 10 Nit putaran 1, tertutup di putaran 2 |
 
 **Sengaja tidak diterapkan di update ini:** temuan review fitur 10 lain yang menyebut `/architect` (kode kegagalan untuk keluarga tahap verify pada respawn, dan aturan `Skip::ToNewline` saat resume spool) tetap Minor yang dicatat lead untuk Follow-up, karena belum ada keputusan yang diambil untuk keduanya.
+
+## Penyelarasan *Stop* langkah 2 dan 6 (2026-10-21)
+
+Langkah 2 dan 6 *Stop* di `index.md` diganti persis dengan kalimat final di bagian *Usulan kalimat final spec 0010 Stop* review fitur 10 (`docs/reviews/2026-10-20-f10-process-supervisor.md`, *Konfirmasi fix race stop putaran 2*). Kalimat itu mencatat dua aturan yang sudah dibangun di `0ec6bc1` dan `174b676` dan dikonfirmasi review: `journal_stop` memutuskan dari aggregate segar (`stopping` tetap, `starting`, `running`, atau `recovering` mendapat `stop_begin`, `stopped`, `failed`, atau `uninitialized` menjadi `AlreadyStopped`), dan slot proses yang kosong di tahap `lock` dirutekan dari lifecycle segar. Tidak ada keputusan baru; cross check dilewati atas izin lead karena teksnya sudah direview.
