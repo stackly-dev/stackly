@@ -1,0 +1,11 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000707",
+  "idempotencyKey": null,
+  "call": {
+    "type": "instance.list",
+    "content": {
+      "limit": 50,
+      "before": "orders-db_0192f3a5-0000-7000-8000-000000000001"
+    }
+  }
+}

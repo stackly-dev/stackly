@@ -22,7 +22,7 @@ impl ProtocolVersion {
     /// The commit that changes the normalized contract digest bumps this in
     /// the same commit; `cargo xtask codegen` records each version's digest
     /// in `protocols/contract-versions.json` (spec 0006).
-    pub const CURRENT: Self = Self { major: 1, minor: 7 };
+    pub const CURRENT: Self = Self { major: 1, minor: 8 };
 
     /// Whether a peer speaking `other` can talk to this one: the majors match.
     #[must_use]
@@ -36,10 +36,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn current_version_is_one_point_seven() {
+    fn current_version_is_one_point_eight() {
         assert_eq!(
             ProtocolVersion::CURRENT,
-            ProtocolVersion { major: 1, minor: 7 }
+            ProtocolVersion { major: 1, minor: 8 }
         );
     }
 

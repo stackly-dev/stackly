@@ -34,7 +34,7 @@ pub const OPERATION_PAGE_BYTES_MAX: usize = 900 * 1024;
 /// Every method whose reply carries an [`OperationAccepted`] and that
 /// needs an `idempotencyKey` (spec 0007, *Idempotency*). The feature that
 /// owns such a method adds it here when it adds the method.
-pub const STARTING_METHODS: &[&str] = &[];
+pub const STARTING_METHODS: &[&str] = &["instance.create", "instance.start", "instance.stop"];
 
 /// Whether `method` starts an operation, so a request without an
 /// `idempotencyKey` gets `operation.idempotency_key_required`.

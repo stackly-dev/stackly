@@ -172,7 +172,56 @@ extension SecretStoreTarget {
 	}
 }
 
+extension ReconcilePhase {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension EndpointTransport {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension EndpointPortMode {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
 extension GapReason {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension IdentityCheckName {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension IdentityCheckResult {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension InstanceLockState {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension InstanceOwnership {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
 		self = Self(rawValue: value) ?? .unrecognized

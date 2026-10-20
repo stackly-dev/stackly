@@ -1,0 +1,20 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 128,
+    "at": "2026-10-20T08:59:00.000Z",
+    "resource": null,
+    "revision": null,
+    "kind": {
+      "type": "daemon.reconciling",
+      "content": {
+        "phase": "started",
+        "instances": 0,
+        "adopted": 0,
+        "unknown": 0,
+        "restarting": 0
+      }
+    }
+  }
+}

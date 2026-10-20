@@ -1,0 +1,58 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000720",
+    "error": {
+      "code": "supervisor.identity_unproven",
+      "category": "conflict",
+      "message": "the process of instance orders-db cannot be proven to be its own",
+      "retryable": false,
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000001"
+      },
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "pid",
+          "value": "4242"
+        },
+        {
+          "key": "omitted",
+          "value": "0"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": [
+        {
+          "kind": "check",
+          "fields": [
+            {
+              "key": "name",
+              "value": "boot_matches"
+            },
+            {
+              "key": "result",
+              "value": "passed"
+            }
+          ]
+        },
+        {
+          "kind": "check",
+          "fields": [
+            {
+              "key": "name",
+              "value": "holds_lock"
+            },
+            {
+              "key": "result",
+              "value": "failed"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000701",
+  "idempotencyKey": "create-orders-db-0001",
+  "call": {
+    "type": "instance.create",
+    "content": {
+      "name": "orders-db",
+      "displayName": "Orders database",
+      "provider": {
+        "name": "official/postgresql",
+        "revision": "2026.10.1"
+      },
+      "runtimeId": "0192f3a5-0000-7000-8000-0000000000a1",
+      "endpoints": [
+        {
+          "name": "postgres",
+          "port": {
+            "type": "fixed",
+            "content": 5432
+          }
+        },
+        {
+          "name": "admin",
+          "port": {
+            "type": "auto"
+          }
+        }
+      ],
+      "settings": {
+        "maxConnections": 50,
+        "logStatements": "ddl"
+      },
+      "secrets": [
+        {
+          "field": "adminPassword",
+          "input": {
+            "type": "generate"
+          }
+        },
+        {
+          "field": "replicaPassword",
+          "input": {
+            "type": "value",
+            "content": "fixture-secret-0001"
+          }
+        }
+      ]
+    }
+  }
+}

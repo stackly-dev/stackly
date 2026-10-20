@@ -11,7 +11,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use stackly_protocol::codes;
 use stackly_protocol::events::{EventKind, GapReason, ShutdownReason};
-use stackly_protocol::json::{DecodedFrame, decode_request, decode_server_frame, handshake_major};
+use stackly_protocol::instance::{
+    DaemonReconciling, EndpointPortMode, EndpointTransport, IdentityCheckName, IdentityCheckResult,
+    InstanceBlocker, InstanceHealthChanged, InstanceLifecycle, InstanceLockState,
+    InstanceOwnership, InstanceSummary, ReconcilePhase, SettingsDocument,
+};
+use stackly_protocol::json::{
+    DecodedFrame, Validate, decode_request, decode_server_frame, handshake_major,
+};
 use stackly_protocol::operation::{
     CancelDisposition, CreatedState, OperationAccepted, OperationCursor, OperationKind,
     OperationState, PartialOutcome, RecoveryAction, RecoveryCause, RecoveryHint, StepState,
@@ -265,6 +272,9 @@ fn every_fixture_in_the_index_behaves_as_expected_in_rust() {
             "SecretInput" => check_dto::<SecretInput>(&entry, &bytes),
             "NeedsSecretBlocker" => check_dto::<NeedsSecretBlocker>(&entry, &bytes),
             "OperationAccepted" => check_dto::<OperationAccepted>(&entry, &bytes),
+            "InstanceSummary" => check_dto::<InstanceSummary>(&entry, &bytes),
+            "InstanceBlocker" => check_dto::<InstanceBlocker>(&entry, &bytes),
+            "SettingsDocument" => check_dto::<SettingsDocument>(&entry, &bytes),
             other => panic!("{}: no decoder for type `{other}`", entry.file),
         }
         checked += 1;
@@ -1010,4 +1020,289 @@ fn every_secret_error_fixture_carries_the_items_and_details_its_code_lists() {
     assert_eq!(invalid.detail("reason"), Some("length"));
     assert!(invalid.items().is_empty());
     assert_eq!(invalid.fields().len(), 1);
+}
+
+fn summary(file: &str) -> InstanceSummary {
+    match reply(file) {
+        Reply::InstanceGet(summary) => *summary,
+        other => panic!("{file}: expected an instance.get reply, got {other:?}"),
+    }
+}
+
+fn health_event(file: &str) -> (Option<stackly_protocol::Revision>, InstanceHealthChanged) {
+    let frame: ServerFrame =
+        serde_json::from_slice(&read(file)).expect("the fixture is a ServerFrame");
+    let ServerFrame::Event(event) = frame else {
+        panic!("{file}: expected an event");
+    };
+    let EventKind::InstanceHealthChanged(changed) = event.kind else {
+        panic!("{file}: expected instance.health_changed");
+    };
+    (event.revision, *changed)
+}
+
+#[test]
+fn an_instance_snapshot_carries_the_status_fields_of_the_spec_table() {
+    let running = summary("frame-response-instance-get.json");
+    assert_eq!(running.lifecycle, InstanceLifecycle::Running);
+    assert_eq!(running.status_seq.get(), 4);
+    assert_eq!(running.ownership, InstanceOwnership::Manual);
+    assert!(running.is_initialized());
+    let process = running
+        .process
+        .as_ref()
+        .expect("a running instance has a process");
+    assert_eq!(
+        (process.pid, process.adopted, process.adoptable),
+        (4242, false, Some(true))
+    );
+    let [postgres, admin, socket] = running.endpoints.as_slice() else {
+        panic!("expected three endpoints");
+    };
+    assert_eq!(
+        (postgres.port, postgres.port_mode),
+        (Some(5432), EndpointPortMode::Fixed)
+    );
+    assert_eq!(
+        (admin.port, admin.port_mode, admin.bound),
+        (Some(49211), EndpointPortMode::Auto, true)
+    );
+    assert_eq!(socket.transport, EndpointTransport::Unix);
+    assert_eq!(socket.port, None);
+    assert!(socket.socket_path.is_some());
+
+    let failed = summary("frame-response-instance-get-failed.json");
+    let failure = failed
+        .last_failure
+        .as_ref()
+        .expect("a failed instance has a failure");
+    assert_eq!(failure.code, "crash_loop");
+    assert_eq!(failure.excerpt.len(), 2);
+    assert!(failed.restart.exhausted);
+    assert_eq!(failed.leftover_processes, [4243, 4244]);
+    assert_eq!(failed.display_name, None);
+}
+
+#[test]
+fn a_summary_without_ownership_and_initialized_reads_as_manual_and_initialized() {
+    let older = summary("frame-response-instance-get-without-ownership.json");
+    assert_eq!(older.ownership, InstanceOwnership::Manual);
+    assert!(older.is_initialized());
+    assert_eq!(older.initialized, None);
+
+    let fresh = summary("frame-response-instance-get-uninitialized.json");
+    assert!(!fresh.is_initialized());
+    assert_eq!(fresh.lifecycle, InstanceLifecycle::Uninitialized);
+}
+
+#[test]
+fn foreign_values_of_the_instance_enums_decode_as_unrecognized() {
+    let found = summary("frame-response-instance-get-unknown-values.json");
+    assert_eq!(found.ownership, InstanceOwnership::Unrecognized);
+    assert_eq!(
+        found.endpoints[0].transport,
+        EndpointTransport::Unrecognized
+    );
+    assert_eq!(found.endpoints[0].port_mode, EndpointPortMode::Unrecognized);
+    let Some(InstanceBlocker::IdentityUnproven(blocker)) = found.blocker else {
+        panic!("expected an identity unproven blocker");
+    };
+    assert_eq!(
+        blocker.evidence.checks[0].name,
+        IdentityCheckName::Unrecognized
+    );
+    assert_eq!(
+        blocker.evidence.checks[0].result,
+        IdentityCheckResult::Unrecognized
+    );
+    assert_eq!(blocker.evidence.lock, Some(InstanceLockState::Unrecognized));
+
+    let frame: ServerFrame =
+        serde_json::from_slice(&read("frame-event-daemon-reconciling-unknown-phase.json")).unwrap();
+    let ServerFrame::Event(event) = frame else {
+        panic!("expected an event");
+    };
+    let EventKind::DaemonReconciling(DaemonReconciling { phase, .. }) = event.kind else {
+        panic!("expected daemon.reconciling");
+    };
+    assert_eq!(phase, ReconcilePhase::Unrecognized);
+}
+
+#[test]
+fn the_three_blockers_carry_their_evidence_and_not_checked_is_spelled_in_camel_case() {
+    let unproven = summary("frame-response-instance-get-identity-unproven.json");
+    let Some(InstanceBlocker::IdentityUnproven(blocker)) = unproven.blocker else {
+        panic!("expected an identity unproven blocker");
+    };
+    assert_eq!(blocker.evidence.checks.len(), 7);
+    assert_eq!(blocker.evidence.lock, Some(InstanceLockState::Held));
+
+    let in_use = summary("frame-response-instance-get-data-in-use.json");
+    let Some(InstanceBlocker::DataInUse(blocker)) = in_use.blocker else {
+        panic!("expected a data in use blocker");
+    };
+    assert!(blocker.evidence.stopped);
+    assert!(
+        blocker.evidence.checks[2..]
+            .iter()
+            .all(|check| check.result == IdentityCheckResult::NotChecked)
+    );
+    let text = String::from_utf8(read("frame-response-instance-get-data-in-use.json")).unwrap();
+    assert!(text.contains("\"notChecked\""));
+
+    let needs = summary("frame-response-instance-get-needs-secret.json");
+    let Some(InstanceBlocker::NeedsSecret(blocker)) = needs.blocker else {
+        panic!("expected a needs secret blocker");
+    };
+    assert_eq!(blocker.references.len(), 1);
+}
+
+#[test]
+fn a_health_event_carries_a_status_seq_a_client_compares_instead_of_the_revision() {
+    let snapshot = summary("frame-response-instance-get.json");
+    let (revision, newer) = health_event("frame-event-instance-health-changed.json");
+    assert_eq!(newer.instance_id, snapshot.id);
+    assert_eq!(revision, Some(snapshot.revision));
+    assert!(newer.status_seq > snapshot.status_seq);
+
+    let (lower, newest) = health_event("frame-event-instance-health-changed-lower-revision.json");
+    assert!(
+        lower < Some(snapshot.revision),
+        "the revision alone would drop this event"
+    );
+    assert!(
+        newest.status_seq > newer.status_seq,
+        "the counter still orders it after the first"
+    );
+    assert!(matches!(
+        newest.blocker,
+        Some(InstanceBlocker::IdentityUnproven(_))
+    ));
+}
+
+#[test]
+fn instance_events_name_the_instance_and_a_daemon_event_names_nothing() {
+    let frame: ServerFrame =
+        serde_json::from_slice(&read("frame-event-instance-state-changed.json")).unwrap();
+    let ServerFrame::Event(event) = frame else {
+        panic!("expected an event");
+    };
+    let EventKind::InstanceStateChanged(changed) = &event.kind else {
+        panic!("expected instance.state_changed");
+    };
+    let resource = event.resource.as_ref().expect("an instance event names it");
+    assert_eq!(resource.kind, ResourceKind::Instance);
+    assert_eq!(resource.id, changed.instance.id.to_string());
+    assert_eq!(event.revision, Some(changed.instance.revision));
+
+    let frame: ServerFrame =
+        serde_json::from_slice(&read("frame-event-instance-removed.json")).unwrap();
+    let ServerFrame::Event(event) = frame else {
+        panic!("expected an event");
+    };
+    let EventKind::InstanceRemoved(removed) = &event.kind else {
+        panic!("expected instance.removed");
+    };
+    assert_eq!(
+        event.resource.as_ref().map(|resource| resource.id.clone()),
+        Some(removed.instance_id.to_string())
+    );
+
+    for file in [
+        "frame-event-daemon-reconciling-started.json",
+        "frame-event-daemon-reconciling-finished.json",
+    ] {
+        let frame: ServerFrame = serde_json::from_slice(&read(file)).unwrap();
+        let ServerFrame::Event(event) = frame else {
+            panic!("{file}: expected an event");
+        };
+        assert_eq!((event.resource, event.revision), (None, None), "{file}");
+        assert!(
+            matches!(event.kind, EventKind::DaemonReconciling(_)),
+            "{file}"
+        );
+    }
+}
+
+#[test]
+fn start_and_stop_answer_with_an_operation_or_with_already_in_state() {
+    let Reply::InstanceStart(already) = reply("frame-response-instance-start-already-running.json")
+    else {
+        panic!("expected an instance.start reply");
+    };
+    assert!(already.already_in_state);
+    assert_eq!(already.accepted, None);
+
+    let Reply::InstanceStop(stopping) = reply("frame-response-instance-stop.json") else {
+        panic!("expected an instance.stop reply");
+    };
+    let accepted = stopping
+        .accepted
+        .expect("a stop that changes something starts an operation");
+    assert!(!stopping.already_in_state);
+    assert_eq!(accepted.operation.kind, OperationKind::StopInstance);
+}
+
+#[test]
+fn instance_create_params_decode_with_defaults_and_validate_each_secret_entry() {
+    let request = decode_request(&read("request-instance-create-without-fields.json")).unwrap();
+    let Call::InstanceCreate(params) = request.call else {
+        panic!("expected instance.create");
+    };
+    assert_eq!(params.provider.revision, None);
+    assert!(params.endpoints.is_empty() && params.secrets.is_empty());
+    assert_eq!(params.display_name, None);
+    assert!(params.validate().is_empty());
+
+    for (file, path) in [
+        (
+            "reject-instance-create-empty-secret-value.json",
+            "secrets[1].input.content",
+        ),
+        (
+            "reject-instance-create-empty-revision.json",
+            "provider.revision",
+        ),
+        ("reject-instance-list-limit.json", "limit"),
+        ("reject-instance-create-settings-array.json", "settings"),
+        ("reject-instance-create-settings-scalar.json", "settings"),
+        (
+            "reject-instance-create-settings-big-integer.json",
+            "settings",
+        ),
+    ] {
+        let rejection = decode_request(&read(file)).unwrap_err();
+        assert_eq!(rejection.error.code(), "request.invalid_params", "{file}");
+        assert_eq!(rejection.error.fields()[0].path(), path, "{file}");
+    }
+}
+
+#[test]
+fn the_instance_methods_that_change_things_need_an_idempotency_key() {
+    for method in ["instance.create", "instance.start", "instance.stop"] {
+        assert!(
+            stackly_protocol::operation::starts_operation(method),
+            "{method}"
+        );
+    }
+    for method in ["instance.get", "instance.list"] {
+        assert!(
+            !stackly_protocol::operation::starts_operation(method),
+            "{method}"
+        );
+    }
+}
+
+#[test]
+fn supervisor_errors_list_their_checks_environments_and_port_fields() {
+    let unproven = error_body("frame-error-supervisor-identity-unproven.json");
+    assert!(unproven.is(&codes::supervisor::IDENTITY_UNPROVEN));
+    assert_eq!(unproven.items()[1].field("name"), Some("holds_lock"));
+    let unavailable = error_body("frame-error-supervisor-endpoint-unavailable.json");
+    assert!(unavailable.is(&codes::supervisor::ENDPOINT_UNAVAILABLE));
+    assert!(unavailable.retryable());
+    assert_eq!(unavailable.fields().len(), 1);
+    assert!(unavailable.items().is_empty());
+    let override_required = error_body("frame-error-supervisor-stop-requires-override.json");
+    assert_eq!(override_required.items()[0].kind(), "environment");
 }

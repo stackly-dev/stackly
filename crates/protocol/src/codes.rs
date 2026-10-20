@@ -439,6 +439,107 @@ area! {
 }
 
 area! {
+    /// Supervisor codes (spec 0010, *Kode error*): why an instance cannot
+    /// start, stop, or run. Every code is `retryable false` except the two
+    /// that say a retry may help. `supervisor.endpoint_in_use`,
+    /// `supervisor.endpoint_conflict`, and `supervisor.endpoint_unavailable`
+    /// may carry `fields` and never `items`; every other list is `items`.
+    pub mod supervisor = "supervisor", owner "spec 0010" {
+        NOT_INITIALIZED = "supervisor.not_initialized", Conflict, retryable false,
+            details ["lifecycle"], "a start before the data folder was initialized";
+        INSTANCE_INITIALIZING = "supervisor.instance_initializing", Conflict, retryable false,
+            details [], "a stop while the data folder is being initialized";
+        INSTANCE_STOPPING = "supervisor.instance_stopping", Conflict, retryable false,
+            details [], "a start while the instance is stopping";
+        INSTANCE_RETAINED = "supervisor.instance_retained", Conflict, retryable false,
+            details [], "an action on a retained instance";
+        IDENTITY_UNPROVEN = "supervisor.identity_unproven", Conflict, retryable false,
+            details ["pid", "omitted"],
+            items { kind "check", fields ["name", "result"], max 7 },
+            "a start or stop on an instance whose process cannot be proven to be its own";
+        DATA_IN_USE = "supervisor.data_in_use", Conflict, retryable false,
+            details ["lockPath", "pid"], "the instance lock is held, or the last observed process still runs";
+        ENDPOINT_IN_USE = "supervisor.endpoint_in_use", Conflict, retryable false,
+            details ["endpoint", "address", "port", "omitted"], "another process holds the port of an endpoint";
+        ENDPOINT_UNAVAILABLE = "supervisor.endpoint_unavailable", Unavailable, retryable true,
+            details ["endpoint", "address", "port", "reason", "omitted"],
+            "the os refused the trial bind of a fixed port, or the address is not available";
+        ENDPOINT_CONFLICT = "supervisor.endpoint_conflict", Conflict, retryable false,
+            details ["endpoint", "port", "otherInstance", "omitted"], "the effective port belongs to another instance";
+        AUTO_PORT_UNAVAILABLE = "supervisor.auto_port_unavailable", Unavailable, retryable true,
+            details ["endpoint"], "no free candidate port for an automatic endpoint";
+        RUNTIME_UNAVAILABLE = "supervisor.runtime_unavailable", Conflict, retryable false,
+            details ["runtimeId", "state"], "the runtime or one it depends on is not installed";
+        PACKAGE_UNAVAILABLE = "supervisor.package_unavailable", Failed, retryable false,
+            details ["provider", "reason"], "the pinned package is missing, invalid, or has another digest";
+        CONFIG_INVALID = "supervisor.config_invalid", Failed, retryable false,
+            details ["field", "reason"], "the settings or endpoints no longer fit the plan of the package";
+        EXECUTABLE_INVALID = "supervisor.executable_invalid", Failed, retryable false,
+            details ["reason"], "the executable is not a canonical regular file inside its runtime";
+        DATA_UNAVAILABLE = "supervisor.data_unavailable", Failed, retryable false,
+            details ["path", "reason"], "the instance folder is missing, not the user's, or not private";
+        DATA_INCOMPATIBLE = "supervisor.data_incompatible", Conflict, retryable false,
+            details ["outcome", "data", "runtime"], "the data and the runtime are not compatible";
+        READINESS_TIMEOUT = "supervisor.readiness_timeout", Timeout, retryable false,
+            details ["deadlineSeconds"], "the readiness deadline passed and the process keeps running";
+        RETRY_BUDGET_EXHAUSTED = "supervisor.retry_budget_exhausted", Failed, retryable false,
+            details ["attempts", "lastExitCode", "lastSignal"], "the restart budget ran out during a start";
+        STOP_TIMEOUT = "supervisor.stop_timeout", Timeout, retryable false,
+            details ["timeoutSeconds"], "the stop budget ran out";
+        STOP_REQUIRES_OVERRIDE = "supervisor.stop_requires_override", Conflict, retryable false,
+            details ["omitted"],
+            items { kind "environment", fields ["environmentId"], max 100 },
+            "an active environment lease needs an override to stop the instance";
+        STOP_COMMAND_FAILED = "supervisor.stop_command_failed", Failed, retryable false,
+            details ["exitCode"], "the stop command exited with a code it does not accept";
+        RELOAD_FAILED = "supervisor.reload_failed", Failed, retryable false,
+            details ["reason"], "the reload action or its verification failed";
+        CAPABILITY_UNSUPPORTED = "supervisor.capability_unsupported", Unsupported, retryable false,
+            details ["capability"], "the provider lacks the capability for an action on an existing instance";
+        INIT_FAILED = "supervisor.init_failed", Failed, retryable false,
+            details ["reason", "step", "exitCode"], "the init plan ended failed";
+    }
+}
+
+area! {
+    /// Process codes (spec 0010, *Kode error*): what went wrong with one
+    /// operating system process.
+    pub mod process = "process", owner "spec 0010" {
+        SPAWN_FAILED = "process.spawn_failed", Failed, retryable false,
+            details ["kind"], "the os could not spawn the process";
+        IDENTITY_CAPTURE_FAILED = "process.identity_capture_failed", Failed, retryable false,
+            details [], "the identity of the suspended child could not be captured or recorded";
+        SIGNAL_REFUSED = "process.signal_refused", Conflict, retryable false,
+            details ["pid"], "the identity changed at the check right before a signal";
+        UNSUPPORTED = "process.unsupported", Unsupported, retryable false,
+            details ["os"], "this platform has no process supervision";
+    }
+}
+
+area! {
+    /// Instance codes (spec 0010, *Kode error*): the synchronous refusals
+    /// of `instance.create`. Spec 0020 adds the codes of its own evaluator
+    /// to this area. `instance.settings_invalid` and
+    /// `instance.endpoint_invalid` may carry `fields` and never `items`.
+    pub mod instance = "instance", owner "spec 0010" {
+        NAME_TAKEN = "instance.name_taken", Conflict, retryable false,
+            details ["existing"], "another instance has the name";
+        PROVIDER_NOT_FOUND = "instance.provider_not_found", NotFound, retryable false,
+            details ["provider", "revision"], "no pinned package or provider revision with that name";
+        PROVIDER_AMBIGUOUS = "instance.provider_ambiguous", Conflict, retryable false,
+            details ["provider", "revision"], "more than one package digest matches the provider and revision";
+        RUNTIME_NOT_FOUND = "instance.runtime_not_found", NotFound, retryable false,
+            details ["runtimeId"], "no runtime with that id";
+        RUNTIME_MISMATCH = "instance.runtime_mismatch", Conflict, retryable false,
+            details ["runtimeSoftware", "providerSoftware"], "the runtime software differs from the provider software";
+        SETTINGS_INVALID = "instance.settings_invalid", InvalidInput, retryable false,
+            details ["omitted"], "the settings break the schema of the package; fields lists each issue";
+        ENDPOINT_INVALID = "instance.endpoint_invalid", InvalidInput, retryable false,
+            details ["endpoint", "omitted"], "an endpoint is not in the manifest, has a port outside 1 to 65535, or asks for a port on a unix endpoint";
+    }
+}
+
+area! {
     /// Codes for bugs and broken invariants.
     pub mod internal = "internal", owner "spec 0006" {
         UNEXPECTED = "internal.unexpected", Internal, retryable false,
@@ -497,6 +598,9 @@ pub const AREAS: &[Area] = &[
     provider::AREA,
     catalog::AREA,
     secret::AREA,
+    supervisor::AREA,
+    process::AREA,
+    instance::AREA,
     internal::AREA,
     cli::AREA,
 ];
@@ -866,6 +970,8 @@ mod tests {
                 "daemon.starting",
                 "daemon.shutting_down",
                 "operation.queue_full",
+                "supervisor.endpoint_unavailable",
+                "supervisor.auto_port_unavailable",
             ]
         );
     }
@@ -897,6 +1003,9 @@ mod tests {
                 ("provider", "spec 0009"),
                 ("catalog", "spec 0017"),
                 ("secret", "spec 0011"),
+                ("supervisor", "spec 0010"),
+                ("process", "spec 0010"),
+                ("instance", "spec 0010"),
                 ("internal", "spec 0006"),
                 ("cli", "spec 0008"),
             ]

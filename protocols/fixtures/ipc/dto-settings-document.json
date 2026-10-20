@@ -1,0 +1,11 @@
+{
+  "maxConnections": 50,
+  "logStatements": "ddl",
+  "nested": {
+    "list": [
+      1,
+      2,
+      3
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000702",
+  "idempotencyKey": "create-cache-0001",
+  "call": {
+    "type": "instance.create",
+    "content": {
+      "name": "cache",
+      "provider": {
+        "name": "official/valkey"
+      },
+      "runtimeId": "0192f3a5-0000-7000-8000-0000000000a1",
+      "settings": {}
+    }
+  }
+}

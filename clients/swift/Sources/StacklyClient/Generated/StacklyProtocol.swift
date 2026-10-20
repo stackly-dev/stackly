@@ -1025,6 +1025,194 @@ public struct CountedProgress: Codable, Sendable, Equatable {
 	}
 }
 
+/// The provider an instance is created from.
+public struct ProviderSelector: Codable, Sendable, Equatable {
+	/// The provider ID, such as `official/nats`.
+	public let name: String
+	/// The revision to pin. Absent means the revision of the loaded
+	/// catalog. The first daemon builds refuse an absent revision with
+	/// `request.invalid_params` at `provider.revision`.
+	public let revision: String?
+
+	public init(name: String, revision: String?) {
+		self.name = name
+		self.revision = revision
+	}
+}
+
+/// How an IP endpoint asks for its port. Tagged `type` and `content`:
+/// `{ "type": "fixed", "content": 5432 }` or `{ "type": "auto" }`.
+public enum PortRequest: Codable, Sendable, Equatable {
+	/// Exactly this port, never a substitute.
+	case fixed(UInt16)
+	/// Any free port, picked when the process starts.
+	case auto
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case fixed,
+			auto
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .fixed:
+				if let content = try? container.decode(UInt16.self, forKey: .content) {
+					self = .fixed(content)
+					return
+				}
+			case .auto:
+				self = .auto
+				return
+			}
+		}
+		throw DecodingError.typeMismatch(PortRequest.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for PortRequest"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .fixed(let content):
+			try container.encode(CodingKeys.fixed, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .auto:
+			try container.encode(CodingKeys.auto, forKey: .type)
+		}
+	}
+}
+
+/// The port request of one manifest endpoint.
+public struct EndpointRequest: Codable, Sendable, Equatable {
+	/// The endpoint name from the manifest.
+	public let name: String
+	/// The port it asks for.
+	public let port: PortRequest
+
+	public init(name: String, port: PortRequest) {
+		self.name = name
+		self.port = port
+	}
+}
+
+/// Where a new secret value comes from (spec 0011 AC-5): shared by
+/// `secret.set` and by the requests that create an instance, bring an
+/// environment up, or restore.
+/// 
+/// A reference is the text form `local:<segment>/<segment>...`; it is not a
+/// secret and may appear anywhere.
+public enum SecretInput: Codable, Sendable, Equatable {
+	/// A value the person typed, pasted, or piped in.
+	case value(SecretText)
+	/// A new random value the daemon generates.
+	case generate
+	/// A copy of the value stored under another reference.
+	case copyFrom(String)
+	/// Use an existing reference without writing a value. Only for a new
+	/// resource; `secret.set` refuses it.
+	case bind(String)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case value,
+			generate,
+			copyFrom,
+			bind
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .value:
+				if let content = try? container.decode(SecretText.self, forKey: .content) {
+					self = .value(content)
+					return
+				}
+			case .generate:
+				self = .generate
+				return
+			case .copyFrom:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .copyFrom(content)
+					return
+				}
+			case .bind:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .bind(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(SecretInput.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SecretInput"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .value(let content):
+			try container.encode(CodingKeys.value, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .generate:
+			try container.encode(CodingKeys.generate, forKey: .type)
+		case .copyFrom(let content):
+			try container.encode(CodingKeys.copyFrom, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .bind(let content):
+			try container.encode(CodingKeys.bind, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// Where the value of one secret field comes from.
+public struct SecretFieldInput: Codable, Sendable, Equatable {
+	/// The settings field the secret fills.
+	public let field: String
+	/// Where its value comes from.
+	public let input: SecretInput
+
+	public init(field: String, input: SecretInput) {
+		self.field = field
+		self.input = input
+	}
+}
+
+/// Params of `instance.create`.
+public struct CreateInstanceParams: Codable, Sendable, Equatable {
+	/// The unique instance name.
+	public let name: String
+	/// The name to show.
+	public let displayName: String?
+	/// The provider to create it from.
+	public let provider: ProviderSelector
+	/// The installed runtime to run it on.
+	public let runtimeId: UUID
+	/// One request per manifest endpoint that asks for a port.
+	public let endpoints: [EndpointRequest]?
+	/// The settings, without secret values.
+	public let settings: JSONObject
+	/// The secret fields and where their values come from.
+	public let secrets: [SecretFieldInput]?
+
+	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretFieldInput]?) {
+		self.name = name
+		self.displayName = displayName
+		self.provider = provider
+		self.runtimeId = runtimeId
+		self.endpoints = endpoints
+		self.settings = settings
+		self.secrets = secrets
+	}
+}
+
 /// Counters since daemon start.
 public struct DaemonCounters: Codable, Sendable, Equatable {
 	/// Connections open now.
@@ -1294,6 +1482,39 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 	}
 }
 
+/// The phase of the reconciliation. Open.
+public enum ReconcilePhase: String, Codable, Sendable, Equatable {
+	/// Reconciliation began.
+	case started
+	/// Reconciliation ended.
+	case finished
+	/// A phase this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Content of `daemon.reconciling`, a daemon event published at the start
+/// and at the end of the reconciliation.
+public struct DaemonReconciling: Codable, Sendable, Equatable {
+	/// Started or finished.
+	public let phase: ReconcilePhase
+	/// Instances looked at.
+	public let instances: UInt64
+	/// Processes adopted.
+	public let adopted: UInt64
+	/// Instances left `unknown`.
+	public let unknown: UInt64
+	/// Instances that restart.
+	public let restarting: UInt64
+
+	public init(phase: ReconcilePhase, instances: UInt64, adopted: UInt64, unknown: UInt64, restarting: UInt64) {
+		self.phase = phase
+		self.instances = instances
+		self.adopted = adopted
+		self.unknown = unknown
+		self.restarting = restarting
+	}
+}
+
 /// Params of `secret.delete`.
 public struct DeleteSecretParams: Codable, Sendable, Equatable {
 	/// The reference.
@@ -1314,6 +1535,58 @@ public struct DeleteSecretReply: Codable, Sendable, Equatable {
 
 	public init(reference: String) {
 		self.reference = reference
+	}
+}
+
+/// The transport of an endpoint. Open.
+public enum EndpointTransport: String, Codable, Sendable, Equatable {
+	/// TCP.
+	case tcp
+	/// UDP.
+	case udp
+	/// A Unix domain socket.
+	case unix
+	/// A transport this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// How an IP endpoint asked for its port. Open.
+public enum EndpointPortMode: String, Codable, Sendable, Equatable {
+	/// Exactly the requested port.
+	case fixed
+	/// Any free port, given when the process starts.
+	case auto
+	/// A mode this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One endpoint of an instance.
+public struct EndpointStatus: Codable, Sendable, Equatable {
+	/// The endpoint name from the manifest.
+	public let name: String
+	/// The transport.
+	public let transport: EndpointTransport
+	/// The host of an IP endpoint.
+	public let host: String?
+	/// The effective port: the bound one if there is one, else the `Fixed`
+	/// port; null for an `Auto` endpoint without a bound port.
+	public let port: UInt16?
+	/// How the port was asked for.
+	public let portMode: EndpointPortMode
+	/// True only after readiness succeeded for the current process.
+	public let bound: Bool
+	/// The socket path of a `unix` endpoint, null while its port is not
+	/// known.
+	public let socketPath: String?
+
+	public init(name: String, transport: EndpointTransport, host: String?, port: UInt16?, portMode: EndpointPortMode, bound: Bool, socketPath: String?) {
+		self.name = name
+		self.transport = transport
+		self.host = host
+		self.port = port
+		self.portMode = portMode
+		self.bound = bound
+		self.socketPath = socketPath
 	}
 }
 
@@ -1349,13 +1622,32 @@ public enum EventKind: Codable, Sendable, Equatable {
 	/// restored, or deleted (spec 0011). The event's resource is
 	/// `{kind: secret, id: <reference>}`.
 	case secretChanged(SecretChanged)
+	/// An instance changed in a way that raised its revision: created,
+	/// lifecycle, desired state, or an `Auto` port (spec 0010). The event's
+	/// resource is the instance and its revision the instance's.
+	case instanceStateChanged(InstanceStateChanged)
+	/// The status of an instance changed (spec 0010). Clients apply it by
+	/// `statusSeq`, never by revision. The event's resource is the
+	/// instance.
+	case instanceHealthChanged(InstanceHealthChanged)
+	/// An instance row was deleted (spec 0010). The event's revision is
+	/// the last revision plus one. Never sent before feature 20.
+	case instanceRemoved(InstanceRemoved)
+	/// The supervisor started or finished reconciling instances with the
+	/// processes found after a daemon start (spec 0010). A daemon event:
+	/// no resource, no revision.
+	case daemonReconciling(DaemonReconciling)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case eventsGap = "events.gap",
 			daemonShuttingDown = "daemon.shutting_down",
 			operationStateChanged = "operation.state_changed",
 			operationProgress = "operation.progress",
-			secretChanged = "secret.changed"
+			secretChanged = "secret.changed",
+			instanceStateChanged = "instance.state_changed",
+			instanceHealthChanged = "instance.health_changed",
+			instanceRemoved = "instance.removed",
+			daemonReconciling = "daemon.reconciling"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -1391,6 +1683,26 @@ public enum EventKind: Codable, Sendable, Equatable {
 					self = .secretChanged(content)
 					return
 				}
+			case .instanceStateChanged:
+				if let content = try? container.decode(InstanceStateChanged.self, forKey: .content) {
+					self = .instanceStateChanged(content)
+					return
+				}
+			case .instanceHealthChanged:
+				if let content = try? container.decode(InstanceHealthChanged.self, forKey: .content) {
+					self = .instanceHealthChanged(content)
+					return
+				}
+			case .instanceRemoved:
+				if let content = try? container.decode(InstanceRemoved.self, forKey: .content) {
+					self = .instanceRemoved(content)
+					return
+				}
+			case .daemonReconciling:
+				if let content = try? container.decode(DaemonReconciling.self, forKey: .content) {
+					self = .daemonReconciling(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(EventKind.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EventKind"))
@@ -1413,6 +1725,18 @@ public enum EventKind: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .secretChanged(let content):
 			try container.encode(CodingKeys.secretChanged, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceStateChanged(let content):
+			try container.encode(CodingKeys.instanceStateChanged, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceHealthChanged(let content):
+			try container.encode(CodingKeys.instanceHealthChanged, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceRemoved(let content):
+			try container.encode(CodingKeys.instanceRemoved, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .daemonReconciling(let content):
+			try container.encode(CodingKeys.daemonReconciling, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -1506,6 +1830,16 @@ public struct Gap: Codable, Sendable, Equatable {
 
 	public init(reason: GapReason) {
 		self.reason = reason
+	}
+}
+
+/// Params of `instance.get`.
+public struct GetInstanceParams: Codable, Sendable, Equatable {
+	/// The instance to read, retained ones included.
+	public let instanceId: UUID
+
+	public init(instanceId: UUID) {
+		self.instanceId = instanceId
 	}
 }
 
@@ -1608,6 +1942,555 @@ public struct HandshakeParams: Codable, Sendable, Equatable {
 		self.protocol = `protocol`
 		self.client = client
 		self.contractDigest = contractDigest
+	}
+}
+
+/// The seven checks that prove a process belongs to an instance. Open.
+public enum IdentityCheckName: String, Codable, Sendable, Equatable {
+	/// The boot ID now equals the recorded one.
+	case bootMatches = "boot_matches"
+	/// A live process has the recorded PID.
+	case pidExists = "pid_exists"
+	/// Its start time equals the recorded one.
+	case startMatches = "start_matches"
+	/// Its executable is the recorded canonical path.
+	case executableMatches = "executable_matches"
+	/// It runs as the user running now.
+	case userMatches = "user_matches"
+	/// Its session ID equals the recorded one.
+	case sessionMatches = "session_matches"
+	/// It holds the instance lock file open.
+	case holdsLock = "holds_lock"
+	/// A check this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The result of one identity check. Open. `not_checked` is spelled
+/// `notChecked` on the wire.
+public enum IdentityCheckResult: String, Codable, Sendable, Equatable {
+	/// The check ran and passed.
+	case passed
+	/// The check ran and failed.
+	case failed
+	/// The check did not run, because an earlier one already decided the
+	/// outcome or an input was missing.
+	case notChecked
+	/// A result this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The result of one identity check, by name.
+public struct IdentityCheckEntry: Codable, Sendable, Equatable {
+	/// Which check.
+	public let name: IdentityCheckName
+	/// What it found.
+	public let result: IdentityCheckResult
+
+	public init(name: IdentityCheckName, result: IdentityCheckResult) {
+		self.name = name
+		self.result = result
+	}
+}
+
+/// Whether the instance lock is held, as a probe saw it. Open.
+public enum InstanceLockState: String, Codable, Sendable, Equatable {
+	/// Nobody holds the lock.
+	case free
+	/// A process holds the lock.
+	case held
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What gathering evidence found about a process, in the order the checks
+/// run. Checks that did not run are `notChecked`.
+public struct IdentityEvidence: Codable, Sendable, Equatable {
+	/// One entry per check.
+	public let checks: [IdentityCheckEntry]?
+	/// The PID of the recorded observation.
+	public let pid: UInt32?
+	/// The state of the instance lock.
+	public let lock: InstanceLockState?
+	/// True when the process is still suspended: its daemon died after
+	/// spawning it and before resuming it.
+	public let stopped: Bool
+	/// Redacted text of the error that stopped the gathering.
+	public let error: String?
+
+	public init(checks: [IdentityCheckEntry]?, pid: UInt32?, lock: InstanceLockState?, stopped: Bool, error: String?) {
+		self.checks = checks
+		self.pid = pid
+		self.lock = lock
+		self.stopped = stopped
+		self.error = error
+	}
+}
+
+/// The content of the `dataInUse` and `identityUnproven` blockers.
+public struct IdentityBlocker: Codable, Sendable, Equatable {
+	/// What the checks found.
+	public let evidence: IdentityEvidence
+	/// When the evidence was gathered.
+	public let observedAt: Date
+
+	public init(evidence: IdentityEvidence, observedAt: Date) {
+		self.evidence = evidence
+		self.observedAt = observedAt
+	}
+}
+
+/// The reply, or the part of the reply, of every method that starts an
+/// operation (spec 0007, *Idempotency*). The method's own reply may wrap
+/// it.
+public struct OperationAccepted: Codable, Sendable, Equatable {
+	/// The operation, as created or as it stands now.
+	public let operation: OperationSummary
+	/// True when the idempotency key named an operation an earlier request
+	/// started, so nothing new ran.
+	public let replayed: Bool
+
+	public init(operation: OperationSummary, replayed: Bool) {
+		self.operation = operation
+		self.replayed = replayed
+	}
+}
+
+/// The reply of `instance.start` and `instance.stop`.
+/// 
+/// An action that changes something starts an operation and returns it in
+/// `accepted`. An instance already in the asked state answers
+/// `alreadyInState` with no operation and no bound idempotency key.
+public struct InstanceActionAccepted: Codable, Sendable, Equatable {
+	/// The operation, as created or as it stands now; null when nothing
+	/// ran.
+	public let accepted: OperationAccepted?
+	/// True when the instance was already in the asked state.
+	public let alreadyInState: Bool
+
+	public init(accepted: OperationAccepted?, alreadyInState: Bool) {
+		self.accepted = accepted
+		self.alreadyInState = alreadyInState
+	}
+}
+
+/// Health of an instance as read now. Closed.
+public enum InstanceHealthState: String, Codable, Sendable, Equatable {
+	/// Nothing is known, or the last observation is too old.
+	case unknown
+	/// Everything works.
+	case healthy
+	/// It works with problems.
+	case degraded
+	/// It does not work.
+	case unhealthy
+}
+
+/// Health as read now (`effective` at the time of the snapshot).
+public struct InstanceHealth: Codable, Sendable, Equatable {
+	/// The state.
+	public let state: InstanceHealthState
+	/// A snake case code saying why.
+	public let reason: String
+	/// Redacted text with more about the reason.
+	public let detail: String?
+	/// When the observation was made.
+	public let observedAt: Date
+
+	public init(state: InstanceHealthState, reason: String, detail: String?, observedAt: Date) {
+		self.state = state
+		self.reason = reason
+		self.detail = detail
+		self.observedAt = observedAt
+	}
+}
+
+/// Readiness of an instance as read now. Closed.
+public enum InstanceReadinessState: String, Codable, Sendable, Equatable {
+	/// Nothing is known, or the last observation is too old.
+	case unknown
+	/// The process runs but does not accept work yet.
+	case notReady = "not_ready"
+	/// The instance accepts work.
+	case ready
+}
+
+/// Readiness as read now (`effective` at the time of the snapshot).
+public struct InstanceReadiness: Codable, Sendable, Equatable {
+	/// The state.
+	public let state: InstanceReadinessState
+	/// A snake case code saying why, such as `probe_ok` or
+	/// `daemon_restarted`.
+	public let reason: String
+	/// Redacted text with more about the reason.
+	public let detail: String?
+	/// When the observation was made.
+	public let observedAt: Date
+
+	public init(state: InstanceReadinessState, reason: String, detail: String?, observedAt: Date) {
+		self.state = state
+		self.reason = reason
+		self.detail = detail
+		self.observedAt = observedAt
+	}
+}
+
+/// Why an instance cannot start or be trusted, one value with the priority
+/// `identityUnproven`, then `dataInUse`, then `needsSecret`. A blocker this
+/// build does not know makes the snapshot fail to decode, so a new blocker
+/// is a protocol major.
+public enum InstanceBlocker: Codable, Sendable, Equatable {
+	/// A process matches the recorded identity but does not hold the
+	/// instance lock, or gathering the evidence failed.
+	case identityUnproven(IdentityBlocker)
+	/// A process Stackly cannot prove is the instance's own holds the
+	/// instance lock.
+	case dataInUse(IdentityBlocker)
+	/// A secret the instance needs cannot be read (spec 0011).
+	case needsSecret(NeedsSecretBlocker)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case identityUnproven,
+			dataInUse,
+			needsSecret
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .identityUnproven:
+				if let content = try? container.decode(IdentityBlocker.self, forKey: .content) {
+					self = .identityUnproven(content)
+					return
+				}
+			case .dataInUse:
+				if let content = try? container.decode(IdentityBlocker.self, forKey: .content) {
+					self = .dataInUse(content)
+					return
+				}
+			case .needsSecret:
+				if let content = try? container.decode(NeedsSecretBlocker.self, forKey: .content) {
+					self = .needsSecret(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(InstanceBlocker.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for InstanceBlocker"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .identityUnproven(let content):
+			try container.encode(CodingKeys.identityUnproven, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .dataInUse(let content):
+			try container.encode(CodingKeys.dataInUse, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .needsSecret(let content):
+			try container.encode(CodingKeys.needsSecret, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// The restart policy's state.
+public struct InstanceRestart: Codable, Sendable, Equatable {
+	/// Crashes in the sliding window.
+	public let attempts: UInt32
+	/// The respawns the window allows.
+	public let budget: UInt32
+	/// The window, in seconds.
+	public let windowSeconds: UInt32
+	/// When the next respawn happens, while one waits.
+	public let nextAttemptAt: Date?
+	/// True after the budget ran out.
+	public let exhausted: Bool
+
+	public init(attempts: UInt32, budget: UInt32, windowSeconds: UInt32, nextAttemptAt: Date?, exhausted: Bool) {
+		self.attempts = attempts
+		self.budget = budget
+		self.windowSeconds = windowSeconds
+		self.nextAttemptAt = nextAttemptAt
+		self.exhausted = exhausted
+	}
+}
+
+/// The process of an instance.
+public struct InstanceProcess: Codable, Sendable, Equatable {
+	/// The process ID.
+	public let pid: UInt32
+	/// When the process started.
+	public let startedAt: Date
+	/// True for a process the daemon found running after its own restart.
+	public let adopted: Bool
+	/// Whether a daemon restart can adopt the process; null until
+	/// readiness succeeded once.
+	public let adoptable: Bool?
+
+	public init(pid: UInt32, startedAt: Date, adopted: Bool, adoptable: Bool?) {
+		self.pid = pid
+		self.startedAt = startedAt
+		self.adopted = adopted
+		self.adoptable = adoptable
+	}
+}
+
+/// Content of `instance.health_changed`: the status fields of an instance
+/// after the effective readiness, health, blocker, restart status,
+/// process, or log availability changed. A client applies it when
+/// `statusSeq` is greater than the one it holds for the instance, whatever
+/// the event's revision says.
+public struct InstanceHealthChanged: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// The status counter after this change.
+	public let statusSeq: UInt64
+	/// Readiness.
+	public let readiness: InstanceReadiness
+	/// Health.
+	public let health: InstanceHealth
+	/// Why the instance is blocked, if it is.
+	public let blocker: InstanceBlocker?
+	/// The restart policy.
+	public let restart: InstanceRestart
+	/// The process, if one runs.
+	public let process: InstanceProcess?
+	/// True when the output of the running process cannot be read.
+	public let logsUnavailable: Bool
+
+	public init(instanceId: UUID, statusSeq: UInt64, readiness: InstanceReadiness, health: InstanceHealth, blocker: InstanceBlocker?, restart: InstanceRestart, process: InstanceProcess?, logsUnavailable: Bool) {
+		self.instanceId = instanceId
+		self.statusSeq = statusSeq
+		self.readiness = readiness
+		self.health = health
+		self.blocker = blocker
+		self.restart = restart
+		self.process = process
+		self.logsUnavailable = logsUnavailable
+	}
+}
+
+/// How the last start, init, or run failed.
+public struct InstanceLastFailure: Codable, Sendable, Equatable {
+	/// The failure code, such as `process_exited` or `crash_loop`.
+	public let code: String
+	/// When it happened; null after a daemon restart.
+	public let at: Date?
+	/// The exit code, if the process exited.
+	public let exitCode: Int32?
+	/// The signal number, if a signal ended the process.
+	public let signal: Int32?
+	/// At most ten redacted lines from the end of the process output,
+	/// stderr first, each at most 256 characters.
+	public let excerpt: [String]?
+
+	public init(code: String, at: Date?, exitCode: Int32?, signal: Int32?, excerpt: [String]?) {
+		self.code = code
+		self.at = at
+		self.exitCode = exitCode
+		self.signal = signal
+		self.excerpt = excerpt
+	}
+}
+
+/// The package an instance runs, pinned when it was created.
+public struct ProviderPin: Codable, Sendable, Equatable {
+	/// The provider ID, such as `official/nats`.
+	public let name: String
+	/// The revision of the pinned package.
+	public let revision: String
+	/// SHA-256 of the pinned package, in lowercase hex.
+	public let manifestSha256: String
+
+	public init(name: String, revision: String, manifestSha256: String) {
+		self.name = name
+		self.revision = revision
+		self.manifestSha256 = manifestSha256
+	}
+}
+
+/// The lifecycle of an instance (PRD section 19.1). Closed: `unknown` is a
+/// real state and the set is fixed, so a new value is a protocol major.
+public enum InstanceLifecycle: String, Codable, Sendable, Equatable {
+	/// Created; the data folder is not initialized yet.
+	case uninitialized
+	/// The data folder is being initialized.
+	case initializing
+	/// Not running.
+	case stopped
+	/// The process is starting.
+	case starting
+	/// The process runs.
+	case running
+	/// The process is stopping.
+	case stopping
+	/// Initialization, a start, or the process failed.
+	case failed
+	/// The process crashed and is being restarted.
+	case recovering
+	/// The identity of the process is lost; it is never signalled.
+	case unknown
+	/// Removed with its data kept.
+	case retained
+}
+
+/// Whether the person wants an instance running. Closed.
+public enum InstanceDesired: String, Codable, Sendable, Equatable {
+	/// The person wants it running.
+	case running
+	/// The person wants it stopped.
+	case stopped
+}
+
+/// How an instance came to be managed here. Open. Not the registry column
+/// `instances.ownership` (where the data came from: `created`, later
+/// `restored` and `adopted`, spec 0005), and not the `Ownership` of an
+/// environment in the domain (`Dedicated` or `Shared`): this says whether
+/// a person runs the instance by hand or an environment owns it. `stacklyd`
+/// sends `manual` until feature 44 adds environment membership.
+public enum InstanceOwnership: String, Codable, Sendable, Equatable {
+	/// A person starts and stops it.
+	case manual
+	/// A value this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One instance, as `instance.get`, `instance.list`, and
+/// `instance.state_changed` show it.
+public struct InstanceSummary: Codable, Sendable, Equatable {
+	/// The instance ID, a lowercase UUID.
+	public let id: UUID
+	/// The unique instance name.
+	public let name: String
+	/// The name to show, if the person gave one.
+	public let displayName: String?
+	/// The revision of the registry row.
+	public let revision: UInt64
+	/// The software, such as `postgresql`.
+	public let software: String
+	/// The pinned package.
+	public let provider: ProviderPin
+	/// The runtime the instance runs on.
+	public let runtimeId: UUID
+	/// The exact version of that runtime.
+	public let runtimeVersion: String
+	/// The lifecycle.
+	public let lifecycle: InstanceLifecycle
+	/// What the person wants.
+	public let desired: InstanceDesired
+	/// Readiness.
+	public let readiness: InstanceReadiness
+	/// Health.
+	public let health: InstanceHealth
+	/// Counts the changes of the status fields per instance and per daemon
+	/// run, from 1; it starts again from 1 after a daemon restart.
+	public let statusSeq: UInt64
+	/// The process, if one runs.
+	public let process: InstanceProcess?
+	/// The last failure, if there was one.
+	public let lastFailure: InstanceLastFailure?
+	/// The restart policy.
+	public let restart: InstanceRestart
+	/// Why the instance is blocked, if it is.
+	public let blocker: InstanceBlocker?
+	/// Every endpoint.
+	public let endpoints: [EndpointStatus]?
+	/// PIDs of group members left after the last stop; reported, never
+	/// signalled.
+	public let leftoverProcesses: [UInt32]?
+	/// True when the output of the running process cannot be read.
+	public let logsUnavailable: Bool
+	/// Who runs the instance. Absent in older daemons; read as `manual`.
+	public let ownership: InstanceOwnership?
+	/// Whether the data folder was initialized (`data_initialized_at` is
+	/// set). Absent in older daemons, which means true; read it through
+	/// [`InstanceSummary::is_initialized`]. It is an `Option` so the Swift
+	/// type is optional too: typeshare reads only a plain
+	/// `#[serde(default)]` as optional, and this default is true.
+	public let initialized: Bool?
+
+	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?) {
+		self.id = id
+		self.name = name
+		self.displayName = displayName
+		self.revision = revision
+		self.software = software
+		self.provider = provider
+		self.runtimeId = runtimeId
+		self.runtimeVersion = runtimeVersion
+		self.lifecycle = lifecycle
+		self.desired = desired
+		self.readiness = readiness
+		self.health = health
+		self.statusSeq = statusSeq
+		self.process = process
+		self.lastFailure = lastFailure
+		self.restart = restart
+		self.blocker = blocker
+		self.endpoints = endpoints
+		self.leftoverProcesses = leftoverProcesses
+		self.logsUnavailable = logsUnavailable
+		self.ownership = ownership
+		self.initialized = initialized
+	}
+}
+
+/// Reply of `instance.list`: ordered by name, then ID, without retained
+/// instances.
+public struct InstancePage: Codable, Sendable, Equatable {
+	/// The instances on this page.
+	public let items: [InstanceSummary]?
+	/// The cursor of the next page, to send back as `before`; null on the
+	/// last page. A page stops before its JSON passes
+	/// [`INSTANCE_PAGE_BYTES_MAX`].
+	public let next: String?
+
+	public init(items: [InstanceSummary]?, next: String?) {
+		self.items = items
+		self.next = next
+	}
+}
+
+/// Content of `instance.removed`: the instance row was deleted. The event's
+/// revision is the last revision plus one, and a client drops the instance
+/// from its list. No daemon sends it before feature 20.
+public struct InstanceRemoved: Codable, Sendable, Equatable {
+	/// The instance that is gone.
+	public let instanceId: UUID
+
+	public init(instanceId: UUID) {
+		self.instanceId = instanceId
+	}
+}
+
+/// Content of `instance.state_changed`: the instance after a batch that
+/// raised its revision (create, lifecycle, desired state, an `Auto` port).
+/// The event's resource is the instance and its revision the instance's.
+/// A retained instance is announced with lifecycle `retained`.
+public struct InstanceStateChanged: Codable, Sendable, Equatable {
+	/// The instance now.
+	public let instance: InstanceSummary
+
+	public init(instance: InstanceSummary) {
+		self.instance = instance
+	}
+}
+
+/// Params of `instance.list`.
+public struct ListInstancesParams: Codable, Sendable, Equatable {
+	/// Most instances on the page, 1 to 200; absent means 100.
+	public let limit: UInt32?
+	/// The `next` cursor of the previous page, sent back unchanged.
+	public let before: String?
+
+	public init(limit: UInt32?, before: String?) {
+		self.limit = limit
+		self.before = before
 	}
 }
 
@@ -1933,22 +2816,6 @@ public struct NeedsSecretBlocker: Codable, Sendable, Equatable {
 	}
 }
 
-/// The reply, or the part of the reply, of every method that starts an
-/// operation (spec 0007, *Idempotency*). The method's own reply may wrap
-/// it.
-public struct OperationAccepted: Codable, Sendable, Equatable {
-	/// The operation, as created or as it stands now.
-	public let operation: OperationSummary
-	/// True when the idempotency key named an operation an earlier request
-	/// started, so nothing new ran.
-	public let replayed: Bool
-
-	public init(operation: OperationSummary, replayed: Bool) {
-		self.operation = operation
-		self.replayed = replayed
-	}
-}
-
 /// The state of one step. Open.
 public enum StepState: String, Codable, Sendable, Equatable {
 	/// Running.
@@ -2156,6 +3023,16 @@ public enum Call: Codable, Sendable, Equatable {
 	case secretReveal(RevealSecretParams)
 	/// Deletes a reference and the value behind it.
 	case secretDelete(DeleteSecretParams)
+	/// Creates an instance and starts the operation that initializes it.
+	case instanceCreate(CreateInstanceParams)
+	/// Starts an instance.
+	case instanceStart(StartInstanceParams)
+	/// Stops an instance.
+	case instanceStop(StopInstanceParams)
+	/// One instance with its status.
+	case instanceGet(GetInstanceParams)
+	/// One page of instances, retained ones left out.
+	case instanceList(ListInstancesParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -2176,7 +3053,12 @@ public enum Call: Codable, Sendable, Equatable {
 			secretStatus = "secret.status",
 			secretSet = "secret.set",
 			secretReveal = "secret.reveal",
-			secretDelete = "secret.delete"
+			secretDelete = "secret.delete",
+			instanceCreate = "instance.create",
+			instanceStart = "instance.start",
+			instanceStop = "instance.stop",
+			instanceGet = "instance.get",
+			instanceList = "instance.list"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -2272,6 +3154,31 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .secretDelete(content)
 					return
 				}
+			case .instanceCreate:
+				if let content = try? container.decode(CreateInstanceParams.self, forKey: .content) {
+					self = .instanceCreate(content)
+					return
+				}
+			case .instanceStart:
+				if let content = try? container.decode(StartInstanceParams.self, forKey: .content) {
+					self = .instanceStart(content)
+					return
+				}
+			case .instanceStop:
+				if let content = try? container.decode(StopInstanceParams.self, forKey: .content) {
+					self = .instanceStop(content)
+					return
+				}
+			case .instanceGet:
+				if let content = try? container.decode(GetInstanceParams.self, forKey: .content) {
+					self = .instanceGet(content)
+					return
+				}
+			case .instanceList:
+				if let content = try? container.decode(ListInstancesParams.self, forKey: .content) {
+					self = .instanceList(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -2331,6 +3238,21 @@ public enum Call: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .secretDelete(let content):
 			try container.encode(CodingKeys.secretDelete, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceCreate(let content):
+			try container.encode(CodingKeys.instanceCreate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceStart(let content):
+			try container.encode(CodingKeys.instanceStart, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceStop(let content):
+			try container.encode(CodingKeys.instanceStop, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGet(let content):
+			try container.encode(CodingKeys.instanceGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceList(let content):
+			try container.encode(CodingKeys.instanceList, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -2395,6 +3317,16 @@ public enum Reply: Codable, Sendable, Equatable {
 	case secretReveal(RevealSecretReply)
 	/// The reference that was deleted.
 	case secretDelete(DeleteSecretReply)
+	/// The operation that creates the instance.
+	case instanceCreate(InstanceActionAccepted)
+	/// The operation that starts the instance, or that it already runs.
+	case instanceStart(InstanceActionAccepted)
+	/// The operation that stops the instance, or that it already stopped.
+	case instanceStop(InstanceActionAccepted)
+	/// The instance.
+	case instanceGet(InstanceSummary)
+	/// One page of instances.
+	case instanceList(InstancePage)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -2415,7 +3347,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			secretStatus = "secret.status",
 			secretSet = "secret.set",
 			secretReveal = "secret.reveal",
-			secretDelete = "secret.delete"
+			secretDelete = "secret.delete",
+			instanceCreate = "instance.create",
+			instanceStart = "instance.start",
+			instanceStop = "instance.stop",
+			instanceGet = "instance.get",
+			instanceList = "instance.list"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -2519,6 +3456,31 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .secretDelete(content)
 					return
 				}
+			case .instanceCreate:
+				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
+					self = .instanceCreate(content)
+					return
+				}
+			case .instanceStart:
+				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
+					self = .instanceStart(content)
+					return
+				}
+			case .instanceStop:
+				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
+					self = .instanceStop(content)
+					return
+				}
+			case .instanceGet:
+				if let content = try? container.decode(InstanceSummary.self, forKey: .content) {
+					self = .instanceGet(content)
+					return
+				}
+			case .instanceList:
+				if let content = try? container.decode(InstancePage.self, forKey: .content) {
+					self = .instanceList(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -2582,6 +3544,21 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .secretDelete(let content):
 			try container.encode(CodingKeys.secretDelete, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceCreate(let content):
+			try container.encode(CodingKeys.instanceCreate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceStart(let content):
+			try container.encode(CodingKeys.instanceStart, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceStop(let content):
+			try container.encode(CodingKeys.instanceStop, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGet(let content):
+			try container.encode(CodingKeys.instanceGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceList(let content):
+			try container.encode(CodingKeys.instanceList, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -2735,79 +3712,6 @@ public struct SecretStatusReply: Codable, Sendable, Equatable {
 	}
 }
 
-/// Where a new secret value comes from (spec 0011 AC-5): shared by
-/// `secret.set` and by the requests that create an instance, bring an
-/// environment up, or restore.
-/// 
-/// A reference is the text form `local:<segment>/<segment>...`; it is not a
-/// secret and may appear anywhere.
-public enum SecretInput: Codable, Sendable, Equatable {
-	/// A value the person typed, pasted, or piped in.
-	case value(SecretText)
-	/// A new random value the daemon generates.
-	case generate
-	/// A copy of the value stored under another reference.
-	case copyFrom(String)
-	/// Use an existing reference without writing a value. Only for a new
-	/// resource; `secret.set` refuses it.
-	case bind(String)
-
-	enum CodingKeys: String, CodingKey, Codable {
-		case value,
-			generate,
-			copyFrom,
-			bind
-	}
-
-	private enum ContainerCodingKeys: String, CodingKey {
-		case type, content
-	}
-
-	public init(from decoder: Decoder) throws {
-		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
-		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
-			switch type {
-			case .value:
-				if let content = try? container.decode(SecretText.self, forKey: .content) {
-					self = .value(content)
-					return
-				}
-			case .generate:
-				self = .generate
-				return
-			case .copyFrom:
-				if let content = try? container.decode(String.self, forKey: .content) {
-					self = .copyFrom(content)
-					return
-				}
-			case .bind:
-				if let content = try? container.decode(String.self, forKey: .content) {
-					self = .bind(content)
-					return
-				}
-			}
-		}
-		throw DecodingError.typeMismatch(SecretInput.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SecretInput"))
-	}
-
-	public func encode(to encoder: Encoder) throws {
-		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
-		switch self {
-		case .value(let content):
-			try container.encode(CodingKeys.value, forKey: .type)
-			try container.encode(content, forKey: .content)
-		case .generate:
-			try container.encode(CodingKeys.generate, forKey: .type)
-		case .copyFrom(let content):
-			try container.encode(CodingKeys.copyFrom, forKey: .type)
-			try container.encode(content, forKey: .content)
-		case .bind(let content):
-			try container.encode(CodingKeys.bind, forKey: .type)
-			try container.encode(content, forKey: .content)
-		}
-	}
-}
-
 /// How `secret.set` treats a value that exists already: `create` fails on
 /// an existing item, `replace` on a missing one, and `upsert` takes either
 /// (spec 0011 AC-5).
@@ -2886,6 +3790,37 @@ public struct ShuttingDown: Codable, Sendable, Equatable {
 
 	public init(reason: ShutdownReason) {
 		self.reason = reason
+	}
+}
+
+/// Params of `instance.start`.
+public struct StartInstanceParams: Codable, Sendable, Equatable {
+	/// The instance to start.
+	public let instanceId: UUID
+	/// Refuse with `resource.revision_mismatch` unless the instance is at
+	/// this revision.
+	public let expectedRevision: UInt64?
+
+	public init(instanceId: UUID, expectedRevision: UInt64?) {
+		self.instanceId = instanceId
+		self.expectedRevision = expectedRevision
+	}
+}
+
+/// Params of `instance.stop`.
+public struct StopInstanceParams: Codable, Sendable, Equatable {
+	/// The instance to stop.
+	public let instanceId: UUID
+	/// Refuse with `resource.revision_mismatch` unless the instance is at
+	/// this revision.
+	public let expectedRevision: UInt64?
+	/// Stop even when an active environment lease holds the instance.
+	public let overrideLeases: Bool
+
+	public init(instanceId: UUID, expectedRevision: UInt64?, overrideLeases: Bool) {
+		self.instanceId = instanceId
+		self.expectedRevision = expectedRevision
+		self.overrideLeases = overrideLeases
 	}
 }
 

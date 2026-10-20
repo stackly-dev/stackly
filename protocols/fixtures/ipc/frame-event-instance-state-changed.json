@@ -1,0 +1,95 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 130,
+    "at": "2026-10-20T09:00:00.000Z",
+    "resource": {
+      "kind": "instance",
+      "id": "0192f3a5-0000-7000-8000-000000000001"
+    },
+    "revision": 7,
+    "kind": {
+      "type": "instance.state_changed",
+      "content": {
+        "instance": {
+          "id": "0192f3a5-0000-7000-8000-000000000001",
+          "name": "orders-db",
+          "displayName": "Orders database",
+          "revision": 7,
+          "software": "postgresql",
+          "provider": {
+            "name": "official/postgresql",
+            "revision": "2026.10.1",
+            "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed"
+          },
+          "runtimeId": "0192f3a5-0000-7000-8000-0000000000a1",
+          "runtimeVersion": "17.2.0",
+          "lifecycle": "running",
+          "desired": "running",
+          "readiness": {
+            "state": "ready",
+            "reason": "probe_ok",
+            "detail": null,
+            "observedAt": "2026-10-20T09:00:05.000Z"
+          },
+          "health": {
+            "state": "healthy",
+            "reason": "probe_ok",
+            "detail": null,
+            "observedAt": "2026-10-20T09:00:05.000Z"
+          },
+          "statusSeq": 4,
+          "process": {
+            "pid": 4242,
+            "startedAt": "2026-10-20T09:00:02.000Z",
+            "adopted": false,
+            "adoptable": true
+          },
+          "lastFailure": null,
+          "restart": {
+            "attempts": 0,
+            "budget": 5,
+            "windowSeconds": 60,
+            "nextAttemptAt": null,
+            "exhausted": false
+          },
+          "blocker": null,
+          "endpoints": [
+            {
+              "name": "postgres",
+              "transport": "tcp",
+              "host": "127.0.0.1",
+              "port": 5432,
+              "portMode": "fixed",
+              "bound": true,
+              "socketPath": null
+            },
+            {
+              "name": "admin",
+              "transport": "tcp",
+              "host": "127.0.0.1",
+              "port": 49211,
+              "portMode": "auto",
+              "bound": true,
+              "socketPath": null
+            },
+            {
+              "name": "socket",
+              "transport": "unix",
+              "host": null,
+              "port": null,
+              "portMode": "fixed",
+              "bound": false,
+              "socketPath": "/Users/fixture/Library/Application Support/Stackly/instances/0192f3a5/run/.s.PGSQL.5432"
+            }
+          ],
+          "leftoverProcesses": [],
+          "logsUnavailable": false,
+          "ownership": "manual",
+          "initialized": true
+        }
+      }
+    }
+  }
+}

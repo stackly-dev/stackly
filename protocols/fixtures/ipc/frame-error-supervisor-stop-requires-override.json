@@ -1,0 +1,37 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000722",
+    "error": {
+      "code": "supervisor.stop_requires_override",
+      "category": "conflict",
+      "message": "an environment lease holds instance orders-db",
+      "retryable": false,
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000001"
+      },
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "omitted",
+          "value": "0"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": [
+        {
+          "kind": "environment",
+          "fields": [
+            {
+              "key": "environmentId",
+              "value": "0192f3a6-0000-7000-8000-000000000001"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -353,6 +353,91 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Creates an instance and starts the operation that initializes it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CreateInstanceParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.create"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Starts an instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/StartInstanceParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.start"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Stops an instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/StopInstanceParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.stop"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One instance with its status.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetInstanceParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One page of instances, retained ones left out.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ListInstancesParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -426,6 +511,60 @@
         }
       ]
     },
+    "CreateInstanceParams": {
+      "description": "Params of `instance.create`.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "The name to show.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "endpoints": {
+          "description": "One request per manifest endpoint that asks for a port.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EndpointRequest"
+          }
+        },
+        "name": {
+          "description": "The unique instance name.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "The provider to create it from.",
+          "$ref": "#/$defs/ProviderSelector"
+        },
+        "runtimeId": {
+          "description": "The installed runtime to run it on.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "secrets": {
+          "description": "The secret fields and where their values come from.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretFieldInput"
+          }
+        },
+        "settings": {
+          "description": "The settings, without secret values.",
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "name",
+        "provider",
+        "runtimeId",
+        "settings"
+      ]
+    },
     "DeleteSecretParams": {
       "description": "Params of `secret.delete`.",
       "type": "object",
@@ -450,6 +589,24 @@
         "reference"
       ]
     },
+    "EndpointRequest": {
+      "description": "The port request of one manifest endpoint.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The endpoint name from the manifest.",
+          "type": "string"
+        },
+        "port": {
+          "description": "The port it asks for.",
+          "$ref": "#/$defs/PortRequest"
+        }
+      },
+      "required": [
+        "name",
+        "port"
+      ]
+    },
     "EventCursor": {
       "description": "A position in the event stream of one daemon run.",
       "type": "object",
@@ -470,6 +627,20 @@
       "required": [
         "serverInstanceId",
         "sequence"
+      ]
+    },
+    "GetInstanceParams": {
+      "description": "Params of `instance.get`.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance to read, retained ones included.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
       ]
     },
     "GetOperationParams": {
@@ -521,6 +692,30 @@
         "client",
         "contractDigest"
       ]
+    },
+    "ListInstancesParams": {
+      "description": "Params of `instance.list`.",
+      "type": "object",
+      "properties": {
+        "before": {
+          "description": "The `next` cursor of the previous page, sent back unchanged.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "limit": {
+          "description": "Most instances on the page, 1 to 200; absent means 100.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        }
+      }
     },
     "ListOperationsParams": {
       "description": "Params of `operation.list`.",
@@ -593,6 +788,44 @@
         }
       }
     },
+    "PortRequest": {
+      "description": "How an IP endpoint asks for its port. Tagged `type` and `content`:\n`{ \"type\": \"fixed\", \"content\": 5432 }` or `{ \"type\": \"auto\" }`.",
+      "oneOf": [
+        {
+          "description": "Exactly this port, never a substitute.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "fixed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Any free port, picked when the process starts.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "auto"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
     "ProtocolVersion": {
       "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
       "type": "object",
@@ -613,6 +846,27 @@
       "required": [
         "major",
         "minor"
+      ]
+    },
+    "ProviderSelector": {
+      "description": "The provider an instance is created from.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The provider ID, such as `official/nats`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision to pin. Absent means the revision of the loaded\ncatalog. The first daemon builds refuse an absent revision with\n`request.invalid_params` at `provider.revision`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name"
       ]
     },
     "ResourceKind": {
@@ -744,6 +998,24 @@
       "required": [
         "reference",
         "purpose"
+      ]
+    },
+    "SecretFieldInput": {
+      "description": "Where the value of one secret field comes from.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field the secret fills.",
+          "type": "string"
+        },
+        "input": {
+          "description": "Where its value comes from.",
+          "$ref": "#/$defs/SecretInput"
+        }
+      },
+      "required": [
+        "field",
+        "input"
       ]
     },
     "SecretInput": {
@@ -941,6 +1213,61 @@
         "reference",
         "input",
         "mode"
+      ]
+    },
+    "StartInstanceParams": {
+      "description": "Params of `instance.start`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the instance is at\nthis revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceId": {
+          "description": "The instance to start.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
+      ]
+    },
+    "StopInstanceParams": {
+      "description": "Params of `instance.stop`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the instance is at\nthis revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceId": {
+          "description": "The instance to stop.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "overrideLeases": {
+          "description": "Stop even when an active environment lease holds the instance.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "instanceId",
+        "overrideLeases"
       ]
     },
     "SubscribeParams": {

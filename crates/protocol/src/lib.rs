@@ -29,6 +29,7 @@ pub mod frame;
 #[doc(hidden)]
 pub mod fuzzing;
 pub mod handshake;
+pub mod instance;
 pub mod json;
 pub mod limits;
 pub mod message;

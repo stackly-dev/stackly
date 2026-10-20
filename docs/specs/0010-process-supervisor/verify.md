@@ -115,7 +115,7 @@ Langkah 5 sampai 8 di Build plan: logika murni (`classify`, restart policy, `Sup
 
 ## Milestone 4: Daemon, IPC, and end to end proof
 
-Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-deps` (sesi `dev-f10-m4-s15`). Pengukuran NFR-003 dari langkah 15 (AC-20) menunggu langkah 13 dan 14, jadi belum ada barisnya di sini.
+Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-deps` (sesi `dev-f10-m4-s15`) dan langkah 12, kontrak protokol 1.8 (sesi `dev-f10-m4-s12`). Pengukuran NFR-003 dari langkah 15 (AC-20) menunggu langkah 13 dan 14, jadi belum ada barisnya di sini.
 
 ### Langkah 15, aturan `check-deps`
 
@@ -136,3 +136,29 @@ Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-dep
 - AC-15 · bagian aturan: `SIGKILL` hanya di `process::kill` dan tidak ada process API di core dan daemon ditegakkan `check-deps` (sebelum langkah ini hanya diklaim di Milestone 1, kode aturannya baru ada di sini); TERM lalu KILL pada group pembantu dibuktikan Milestone 1 dan 2
 - AC-20 · belum: pengukuran NFR-003 (10 instance fake idle selama 5 menit) menunggu langkah 13 dan 14
 - Spec 0014 AC-3 · bagian aturan `check-deps` lengkap untuk keempat butir rumusan; bagian `cargo tree` dan build rilis menunggu spec 0014
+
+### Langkah 12, kontrak protokol 1.8
+
+#### UI / manual
+
+- [ ] Buka `crates/protocol/src/instance.rs` → `InstanceSummary` memuat semua baris tabel *Status dan event*; `lifecycle`, `desired`, `readiness.state`, dan `health.state` enum tertutup (tanpa `Unrecognized`); `ownership` dan `initialized` ber `#[serde(default)]` (`initialized` bertipe `Option<bool>` supaya Swift ikut opsional, dibaca true lewat `is_initialized()`); `statusSeq` bertipe `Sequence`; `blocker` satu nilai bertag `type` dan `content` → AC-16
+- [ ] Buka `protocols/fixtures/ipc/index.json` → ada fixture roundtrip untuk lima method `instance.*` (request dan reply), tiga event `instance.*`, `daemon.reconciling` (started dan finished), snapshot yang `running`, `failed`, `uninitialized`, dan tiga blocker, plus fixture decode: summary tanpa `ownership` dan `initialized` (daemon lama), nilai asing enum terbuka, dan fase `daemon.reconciling` asing → AC-16
+- [ ] Buka `protocols/fixtures/ipc/frame-event-instance-health-changed-lower-revision.json` → `statusSeq` lebih besar dari event sebelumnya sementara `revision` lebih kecil dari snapshot: bahan resep client yang dijalankan `InstanceStore` spec 0013 langkah 16, bukan paket ini → AC-16
+- [ ] Buka `protocols/error-codes.json` → area `supervisor` (24 kode), `process` (4), dan `instance` (7) ada dengan pemilik spec 0010; `supervisor.endpoint_unavailable` dan `supervisor.auto_port_unavailable` `retryable`; `supervisor.identity_unproven` dan `supervisor.stop_requires_override` membawa `items`, dan `omitted` terdaftar di tiap kode yang boleh membawa `fields` atau `items` → AC-16
+- [ ] Buka `typeshare.toml` dan `clients/swift/Sources/StacklyClient/Wire/JSONObject.swift` → `SettingsDocument` dipetakan ke `JSONObject`, tipe JSON object tulisan tangan untuk `settings` di `instance.create` (izin lead): angka bulat di atas 2^53 - 1 ditolak di Swift dan di `Validate` Rust (`settings`, `out_of_range`), array atau skalar ditolak saat decode → AC-16
+
+#### Commands
+
+- [ ] `cargo test -p stackly-protocol` → lulus, termasuk `instance::tests`, `codes::tests` (tabel retryable dan pemilik area), `limits::tests` (batas baru ada di `CONTRACT_LIMITS`), dan `ipc_fixtures` (setiap method, reply, dan event kind punya fixture roundtrip; setiap fixture error cocok dengan katalog) → AC-16
+- [ ] `cargo test -p stacklyd --test supervisor_codes` → lulus: daftar `stackly_core::supervisor::codes::ALL` dan area `supervisor` serta `process` di katalog protokol memuat nama yang sama, dua arah → AC-16
+- [ ] `cargo xtask codegen --check` → `19 generated files are up to date`; `protocols/contract-versions.json` mencatat 1.8 → AC-16
+- [ ] `swift test --package-path clients/swift` → lulus, termasuk `InstanceContractTests` (decode snapshot, blocker, event, create, dan error) dan `IpcFixtureTests` (24 method punya fixture roundtrip) → AC-16
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → lulus tanpa perubahan di `Sources` → AC-16
+- [ ] `cargo xtask fuzz seed` lalu `git status --short fuzz` → hanya seed baru untuk fixture `instance` → AC-16
+- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → semuanya lulus
+
+#### Acceptance-criteria coverage
+
+- AC-16 · bagian protokol dan decode Swift: method, event, DTO, dan kode error ada dengan fixture yang lolos test kontrak Rust dan Swift, termasuk `ownership`, `initialized`, `provider.revision` opsional, `instance.removed`, dan `supervisor.endpoint_unavailable` (K2, K4); `Validate` params create memanggil `SecretInput::field_errors` per entri `secrets` (K15)
+- AC-16 · belum: resep `statusSeq` di client menunggu `InstanceStore` spec 0013 langkah 16 (K16); handler `ipc::instance`, pemetaan DTO, dan event nyata menunggu langkah 13 (sampai itu `stacklyd` menjawab kelima method `request.unknown_method`, `provisional: F10 step 13`)
+- `instance.removed` · DTO dan fixture saja; daemon tidak pernah mengirimnya sebelum fitur 20 (K4)

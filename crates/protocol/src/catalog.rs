@@ -32,23 +32,29 @@ pub struct GetProviderParams {
 
 impl Validate for GetProviderParams {
     fn validate(&self) -> Vec<FieldError> {
-        let provider = self.provider.as_bytes();
-        let code = if provider.is_empty() {
-            Some(FieldCode::TooShort)
-        } else if provider.len() > PROVIDER_ID_MAX {
-            Some(FieldCode::TooLong)
-        } else if !provider
-            .iter()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'/' | b'-'))
-            || provider.iter().filter(|&&b| b == b'/').count() > 1
-        {
-            Some(FieldCode::InvalidFormat)
-        } else {
-            None
-        };
-        code.map(|code| FieldError::new("provider", code))
+        provider_id_code(&self.provider)
+            .map(|code| FieldError::new("provider", code))
             .into_iter()
             .collect()
+    }
+}
+
+/// Why `provider` is not a provider ID, or `None` when it is one: 1 to
+/// [`PROVIDER_ID_MAX`] bytes of `[a-z0-9/-]` with at most one `/`.
+pub(crate) fn provider_id_code(provider: &str) -> Option<FieldCode> {
+    let provider = provider.as_bytes();
+    if provider.is_empty() {
+        Some(FieldCode::TooShort)
+    } else if provider.len() > PROVIDER_ID_MAX {
+        Some(FieldCode::TooLong)
+    } else if !provider
+        .iter()
+        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'/' | b'-'))
+        || provider.iter().filter(|&&b| b == b'/').count() > 1
+    {
+        Some(FieldCode::InvalidFormat)
+    } else {
+        None
     }
 }
 
