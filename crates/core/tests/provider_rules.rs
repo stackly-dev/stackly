@@ -470,7 +470,7 @@ fn interpolation_rejects_shells_secrets_flags_escapes_and_unpermitted_folders() 
         Edit::fake()
             .replace(
                 yaml,
-                "destination: \"${instance.config}/fake.json\"",
+                "destination: \"${instance.secrets}/fake.json\"",
                 "destination: \"${instance.logs}/x\"",
             )
             .replace(
@@ -749,8 +749,26 @@ fn the_secrets_folder_token_is_accepted_only_in_its_positions() {
         .replace(template, name_line, secrets_line)
         .validate()
         .unwrap_or_else(|err| panic!("a template may name the secrets folder: {:#?}", err.issues));
+    // A sensitive config of `fake` cannot stay in the model without `run`
+    // (its destination is in the secrets folder), so the template position
+    // is checked on a plain copy of it in the config folder.
     let without_run = Edit::fake()
-        .replace(template, name_line, secrets_line)
+        .replace(
+            yaml,
+            "destination: \"${instance.secrets}/fake.json\"",
+            "destination: \"${instance.config}/fake.json\"",
+        )
+        .replace(yaml, "    sensitive: true\n", "")
+        .replace(
+            yaml,
+            "\"--config=${instance.secrets}/fake.json\"",
+            "\"--config=${instance.config}/fake.json\"",
+        )
+        .replace(
+            template,
+            "  \"authToken\": {{ secret.authToken }}",
+            "  \"secrets\": {{ instance.secrets }}",
+        )
         .replace(
             yaml,
             "managedFilesystem: [data, config, logs, temp, run]",
@@ -818,17 +836,33 @@ fn the_secrets_folder_token_is_accepted_only_in_its_positions() {
         IssueCode::PathNotPermitted,
     );
 
+    for folder in ["config", "data"] {
+        let issues = Edit::fake()
+            .replace(
+                yaml,
+                "destination: \"${instance.secrets}/fake.json\"",
+                &format!("destination: \"${{instance.{folder}}}/fake.json\""),
+            )
+            .issues();
+
+        let at_destination: Vec<_> = issues
+            .iter()
+            .filter(|(file, location, _)| {
+                file == yaml && location == "configFiles.fakeConfig.destination"
+            })
+            .collect();
+        assert_eq!(
+            at_destination.len(),
+            1,
+            "one issue for a sensitive config in {folder}: {issues:#?}"
+        );
+        assert_eq!(at_destination[0].2, IssueCode::TokenNotAllowedHere);
+        for location in ["lifecycle.initialize[1].file", "lifecycle.reload.render[0]"] {
+            assert_issue(&issues, yaml, location, IssueCode::UnknownConfigFile);
+        }
+    }
+
     let package = Edit::fake()
-        .replace(
-            yaml,
-            "destination: \"${instance.config}/fake.json\"",
-            "destination: \"${instance.secrets}/fake.json\"",
-        )
-        .replace(
-            yaml,
-            "\"--config=${instance.config}/fake.json\"",
-            "\"--config=${instance.secrets}/fake.json\"",
-        )
         .validate()
         .unwrap_or_else(|err| panic!("{:#?}", err.issues));
     let context = context_for(
@@ -1904,8 +1938,9 @@ fn every_plan_fails_for_a_folder_it_uses_that_is_not_utf8() {
     let settings = serde_json::json!({ "authToken": SECRET_REF });
     // fake-command's initialize and start use all five folders (the run
     // folder through its socket and `${instance.secrets}`); its reload
-    // renders a config and runs a command in the data folder.
-    let reload_uses = ["data", "config", "temp"];
+    // renders the sensitive config into the secrets folder of the run
+    // folder and runs a command in the data folder.
+    let reload_uses = ["data", "temp", "run"];
 
     for folder in ["data", "config", "logs", "temp", "run"] {
         let mut context = context_for(&package, settings.clone(), "/Volumes/T");
@@ -1943,7 +1978,7 @@ fn a_package_without_config_files_renders_nothing_before_the_spawn() {
     let package = Edit::fake()
         .replace(
             yaml,
-            "configFiles:\n  fakeConfig:\n    template: templates/fake.json.tmpl\n    format: json\n    destination: \"${instance.config}/fake.json\"\n    sensitive: true\n",
+            "configFiles:\n  fakeConfig:\n    template: templates/fake.json.tmpl\n    format: json\n    destination: \"${instance.secrets}/fake.json\"\n    sensitive: true\n",
             "",
         )
         .replace(yaml, "    - { primitive: renderConfig, file: fakeConfig }\n", "")
