@@ -8,13 +8,13 @@ pub mod dto;
 use std::sync::Arc;
 
 use stackly_core::operation::{
-    BeginError, BeginOutcome, BeginRequest, EngineError, LockHolder, OperationEvents,
-    OperationView, Origin, RequestOrigin,
+    BeginError, BeginOutcome, BeginRequest, EngineError, LockHolder, NoOpOutcome, OperationEngine,
+    OperationEvents, OperationView, Origin, RequestOrigin,
 };
 use stackly_core::secret::Redactor;
 use stackly_domain::{
-    ClientCode, IdempotencyKey, MethodName, OperationCursor, OperationId, OperationQuery,
-    OperationResource, ResourceRevision, Sha256Digest,
+    ClientCode, IdempotencyKey, JournalPayload, MethodName, OperationCursor, OperationId,
+    OperationQuery, OperationResource, ResourceRevision, Sha256Digest,
 };
 use stackly_protocol::codes::{daemon, internal, operation, request, resource};
 use stackly_protocol::daemon::subsystem;
@@ -310,6 +310,131 @@ pub async fn start_operation(
     start: StartRequest<'_>,
     build: impl FnOnce(Origin) -> BeginRequest,
 ) -> Result<StartOutcome, Box<ErrorBody>> {
+    let (engine, origin) = request_parts(core, context, &start)?;
+    let outcome = engine
+        .begin(build(Origin::Request(origin)))
+        .await
+        .map_err(|error| boxed(begin_error(&error, start.method)))?;
+    Ok(match outcome {
+        BeginOutcome::Created(view) => accepted(&view, false),
+        BeginOutcome::Replayed(view) => accepted(&view, true),
+        BeginOutcome::NoOp(no_op) => match no_op.recorded {
+            Some(view) => accepted(&view, no_op.replayed),
+            None => StartOutcome::NothingToDo,
+        },
+    })
+}
+
+/// What [`replay_operation`] found: the operation a repeated request
+/// names, and the input it recorded.
+#[non_exhaustive]
+#[derive(Clone, PartialEq, Eq)]
+pub struct Replay {
+    /// The reply [`start_operation`] gives for the same request, with
+    /// `replayed` true. An answer without an operation that was recorded
+    /// is told by its stage, [`NO_OP_STAGE`](stackly_core::operation::NO_OP_STAGE).
+    pub accepted: OperationAccepted,
+    /// The input of the journal of that operation, or of the first
+    /// request for a recorded answer without an operation: what the
+    /// handler needs to build its own reply without doing the work again.
+    pub input: JournalPayload,
+}
+
+impl Replay {
+    fn new(view: &OperationView) -> Self {
+        Self {
+            accepted: OperationAccepted {
+                operation: dto::summary(view),
+                replayed: true,
+            },
+            input: view.journal.input().clone(),
+        }
+    }
+
+    /// The operation's ID, for the `operation_id` of the request log line.
+    #[must_use]
+    pub fn operation_id(&self) -> Uuid {
+        self.accepted.operation.id
+    }
+}
+
+impl std::fmt::Debug for Replay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Replay")
+            .field("accepted", &self.accepted)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Finds what [`start_operation`] would replay for the same request,
+/// before the handler does expensive work or reads state that changed
+/// since the first request (spec 0007, *Idempotency*, `replay`). It shares
+/// the key checks, the origin, the engine access, and the error map with
+/// [`start_operation`], so a request gets the same answer through both.
+/// `None` means no operation holds the key; the handler then builds its
+/// request and calls [`start_operation`], which stays authoritative.
+///
+/// # Errors
+///
+/// Returns the error body of the refusal, as [`start_operation`] does for
+/// the key checks and the engine access, and [`begin_error`] for a
+/// [`BeginError`] of `replay`: `daemon.starting`, `daemon.shutting_down`,
+/// `operation.idempotency_key_reused`, or a registry error.
+pub async fn replay_operation(
+    core: &DaemonCore,
+    context: &RequestContext,
+    start: StartRequest<'_>,
+) -> Result<Option<Replay>, Box<ErrorBody>> {
+    let (engine, origin) = request_parts(core, context, &start)?;
+    let found = engine
+        .replay(&origin)
+        .await
+        .map_err(|error| boxed(begin_error(&error, start.method)))?;
+    replay_result(found)
+}
+
+/// The pure mapping of what the engine's `replay` found.
+fn replay_result(found: Option<BeginOutcome>) -> Result<Option<Replay>, Box<ErrorBody>> {
+    match found {
+        None => Ok(None),
+        Some(BeginOutcome::Replayed(view)) => Ok(Some(Replay::new(&view))),
+        Some(BeginOutcome::NoOp(NoOpOutcome {
+            recorded: Some(view),
+            ..
+        })) => Ok(Some(Replay::new(&view))),
+        Some(BeginOutcome::Created(_)) => {
+            tracing::error!("the engine replayed a created operation");
+            Err(unexpected("the operation engine answered a replay wrongly"))
+        }
+        Some(BeginOutcome::NoOp(_)) => {
+            tracing::error!("the engine replayed an answer without a recorded operation");
+            Err(unexpected("the operation engine answered a replay wrongly"))
+        }
+    }
+}
+
+/// The checks and parts both [`start_operation`] and [`replay_operation`]
+/// begin with: the key checks, then the engine and the request's origin.
+fn request_parts(
+    core: &DaemonCore,
+    context: &RequestContext,
+    start: &StartRequest<'_>,
+) -> Result<(OperationEngine, RequestOrigin), Box<ErrorBody>> {
+    let (key, method) = request_key(start)?;
+    let engine = core.operations().writer()?;
+    let origin = RequestOrigin {
+        method,
+        key,
+        fingerprint: Sha256Digest::from_bytes(start.fingerprint),
+        client: client_code(context.client.kind),
+        interactive: context.client.is_interactive(),
+    };
+    Ok((engine, origin))
+}
+
+/// The key checks that come before anything is read: the key is required,
+/// then it must parse, and the method must be a valid name.
+fn request_key(start: &StartRequest<'_>) -> Result<(IdempotencyKey, MethodName), Box<ErrorBody>> {
     let Some(key) = start.idempotency_key else {
         return Err(boxed(
             ErrorBody::new(
@@ -333,26 +458,7 @@ pub async fn start_operation(
         );
         unexpected("a method that starts an operation has no valid name")
     })?;
-    let engine = core.operations().writer()?;
-    let origin = Origin::Request(RequestOrigin {
-        method,
-        key,
-        fingerprint: Sha256Digest::from_bytes(start.fingerprint),
-        client: client_code(context.client.kind),
-        interactive: context.client.is_interactive(),
-    });
-    let outcome = engine
-        .begin(build(origin))
-        .await
-        .map_err(|error| boxed(begin_error(&error, start.method)))?;
-    Ok(match outcome {
-        BeginOutcome::Created(view) => accepted(&view, false),
-        BeginOutcome::Replayed(view) => accepted(&view, true),
-        BeginOutcome::NoOp(no_op) => match no_op.recorded {
-            Some(view) => accepted(&view, no_op.replayed),
-            None => StartOutcome::NothingToDo,
-        },
-    })
+    Ok((key, method))
 }
 
 fn accepted(view: &OperationView, replayed: bool) -> StartOutcome {
@@ -489,16 +595,14 @@ fn rejected(error: &dyn stackly_core::operation::OperationError) -> ErrorBody {
             "the request was refused for a reason this daemon cannot name",
         );
     };
-    let mut body = ErrorBody::new(spec, error.to_string());
-    for (key, value) in error.details() {
-        if spec.details.contains(&key.as_str()) {
-            body = body.with_detail(key.as_str(), value);
-        }
-    }
-    match error.rule() {
-        Some(rule) => body.with_rule(rule),
-        None => body,
-    }
+    dto::catalog_body(
+        spec,
+        &error.to_string(),
+        &error.details(),
+        &error.items(),
+        error.rule(),
+        None,
+    )
 }
 
 /// `daemon.starting` naming the subsystem the method waits for.
@@ -680,8 +784,8 @@ mod tests {
             ]
         }
 
-        fn rule(&self) -> Option<&'static str> {
-            Some("BR-008")
+        fn rule(&self) -> Option<stackly_domain::Rule> {
+            Some(stackly_domain::Rule::Br008)
         }
     }
 
@@ -825,6 +929,155 @@ mod tests {
         assert_eq!(body.rule(), Some("BR-008"));
         assert_eq!(body.detail("operationId"), Some("x"));
         assert_eq!(body.detail("notInCatalog"), None);
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("the settings are not valid")]
+    struct Listed;
+
+    impl stackly_core::operation::OperationError for Listed {
+        fn code(&self) -> ErrorCodeName {
+            "provider.invalid_settings".parse().unwrap()
+        }
+
+        fn retryable(&self) -> bool {
+            false
+        }
+
+        fn details(&self) -> Vec<(DetailKey, String)> {
+            vec![("issueCount".parse().unwrap(), "1".to_owned())]
+        }
+
+        fn items(&self) -> Vec<stackly_domain::FailureItem> {
+            vec![
+                stackly_domain::FailureItem::new(
+                    "issue".parse().unwrap(),
+                    vec![("location".parse().unwrap(), "/port".to_owned())],
+                )
+                .unwrap(),
+            ]
+        }
+
+        fn rule(&self) -> Option<stackly_domain::Rule> {
+            Some(stackly_domain::Rule::Br002)
+        }
+    }
+
+    #[test]
+    fn a_precheck_refusal_keeps_its_items_and_rule_through_the_stored_error_mapping() {
+        let refused = Rejection::new(Box::new(Listed));
+
+        let body = begin_error(&BeginError::Rejected(refused), "environment.create");
+
+        assert_eq!(checked(&body).code(), "provider.invalid_settings");
+        assert_eq!(body.rule(), Some("BR-002"));
+        assert_eq!(body.detail("issueCount"), Some("1"));
+        assert_eq!(body.items().len(), 1);
+        assert_eq!(body.items()[0].field("location"), Some("/port"));
+        assert_eq!(body.operation_id(), None, "a refusal has no operation");
+    }
+
+    fn start(key: Option<&str>) -> StartRequest<'_> {
+        StartRequest::new("instance.start", key, [7; 32])
+    }
+
+    #[test]
+    fn a_request_without_a_key_is_refused_before_anything_is_read() {
+        let body = request_key(&start(None)).unwrap_err();
+
+        assert_eq!(checked(&body).code(), "operation.idempotency_key_required");
+        assert_eq!(body.detail("method"), Some("instance.start"));
+        assert!(body.hint().is_some());
+    }
+
+    #[test]
+    fn a_key_with_a_bad_format_is_a_malformed_request_naming_the_field() {
+        let body = request_key(&start(Some("has spaces"))).unwrap_err();
+
+        assert_eq!(checked(&body).code(), "request.malformed");
+        assert_eq!(body.fields().len(), 1);
+        assert_eq!(body.fields()[0].path(), "idempotencyKey");
+    }
+
+    #[test]
+    fn a_good_key_and_method_pass_the_shared_checks() {
+        let (key, method) = request_key(&start(Some("cli-install-1"))).unwrap();
+
+        assert_eq!(key.as_str(), "cli-install-1");
+        assert_eq!(method.as_str(), "instance.start");
+    }
+
+    fn view(stage: Option<&str>, input: &str) -> OperationView {
+        let mut builder = stackly_testkit::OperationBuilder::new().state(DomainState::Succeeded);
+        if let Some(stage) = stage {
+            builder = builder.stage(stage);
+        }
+        let operation = builder.build();
+        let journal = stackly_domain::OperationJournal::new(stackly_domain::NewJournal {
+            operation_id: operation.id(),
+            request: None,
+            trigger: stackly_domain::OperationTrigger::background(),
+            resumable: false,
+            input: JournalPayload::new(input.to_owned(), 16_384).unwrap(),
+            expected_revision: None,
+        })
+        .unwrap();
+        OperationView {
+            operation,
+            journal,
+            recovery_actions: Vec::new(),
+            auto_compensating: false,
+        }
+    }
+
+    #[test]
+    fn a_replayed_operation_is_accepted_with_replayed_true_and_its_journal_input() {
+        let found = view(None, r#"{"version":"17.6"}"#);
+
+        let replay = replay_result(Some(BeginOutcome::Replayed(found.clone())))
+            .unwrap()
+            .expect("a hit");
+
+        assert!(replay.accepted.replayed);
+        assert_eq!(replay.accepted.operation.id, found.operation.id().as_uuid());
+        assert_eq!(replay.operation_id(), found.operation.id().as_uuid());
+        assert_eq!(replay.input.as_str(), r#"{"version":"17.6"}"#);
+        assert!(
+            !format!("{replay:?}").contains("17.6"),
+            "Debug hides the input"
+        );
+    }
+
+    #[test]
+    fn a_recorded_no_op_answer_is_a_replay_told_by_its_stage() {
+        let found = view(Some("no_op"), r#"{"name":"first"}"#);
+
+        let replay = replay_result(Some(BeginOutcome::NoOp(NoOpOutcome {
+            recorded: Some(found),
+            replayed: true,
+        })))
+        .unwrap()
+        .expect("a hit");
+
+        assert!(replay.accepted.replayed);
+        assert_eq!(replay.accepted.operation.stage.as_deref(), Some("no_op"));
+        assert_eq!(replay.input.as_str(), r#"{"name":"first"}"#);
+    }
+
+    #[test]
+    fn a_miss_is_none_and_the_outcomes_replay_never_returns_are_internal_unexpected() {
+        assert_eq!(replay_result(None).unwrap(), None);
+
+        for impossible in [
+            BeginOutcome::Created(view(None, "{}")),
+            BeginOutcome::NoOp(NoOpOutcome {
+                recorded: None,
+                replayed: false,
+            }),
+        ] {
+            let body = replay_result(Some(impossible)).unwrap_err();
+            assert_eq!(checked(&body).code(), "internal.unexpected");
+        }
     }
 
     #[test]

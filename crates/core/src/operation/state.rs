@@ -8,17 +8,18 @@ use std::sync::{Arc, Mutex};
 
 use jiff::Timestamp;
 use stackly_domain::{
-    CreatedRecord, CreatedSeq, DetailKey, ErrorCodeName, FailureError, InterruptPolicy,
-    JournalStep, JournalView, LockKey, Operation, OperationCursor, OperationId, OperationJournal,
-    OperationKind, OperationQuery, OperationState, Progress, RecoveryHint, Registry, RegistryError,
-    StepSeq, StepState, WriteBatch, WriteOp,
+    CreatedRecord, CreatedSeq, DetailKey, ErrorCodeName, FailureError, FailureItem,
+    InterruptPolicy, JournalStep, JournalView, LockKey, Operation, OperationCursor, OperationId,
+    OperationJournal, OperationKind, OperationQuery, OperationState, Progress, RecoveryHint,
+    Registry, RegistryError, Rule, StepSeq, StepState, WriteBatch, WriteOp,
 };
 use tokio::sync::{Mutex as AsyncMutex, watch};
 use tokio::time::Instant;
 
+use super::limits::FAILURE_ITEMS_MAX_BYTES;
 use super::{
     EngineError, EngineStats, Inner, OperationDetailView, OperationListPage, OperationView,
-    RecoveryAction, lock,
+    RecoveryAction, failure, lock,
 };
 
 /// The rows of one operation as the engine last committed them, plus the
@@ -465,29 +466,53 @@ impl Inner {
     }
 
     /// A failure error with its message and detail values redacted and
-    /// trimmed to their limits.
+    /// trimmed to their limits, and no items or rule.
     pub(crate) fn failure_error(
         &self,
         code: ErrorCodeName,
         message: &str,
         details: Vec<(DetailKey, String)>,
     ) -> FailureError {
+        self.failure_error_with(code, message, details, Vec::new(), None)
+    }
+
+    /// Like [`Inner::failure_error`], with the items and rule an
+    /// [`OperationError`](super::OperationError) carried. The field values
+    /// of the items are redacted and trimmed; items above the count and
+    /// byte limits are dropped from the back and added to the `omitted`
+    /// detail.
+    pub(crate) fn failure_error_with(
+        &self,
+        code: ErrorCodeName,
+        message: &str,
+        details: Vec<(DetailKey, String)>,
+        items: Vec<FailureItem>,
+        rule: Option<Rule>,
+    ) -> FailureError {
         let redactor = &self.deps.redactor;
         let mut text = truncate_chars(&redactor.redact(message), FailureError::MESSAGE_MAX);
         if text.is_empty() {
             "the operation failed".clone_into(&mut text);
         }
-        let details = details
+        let mut details: Vec<(DetailKey, String)> = details
             .into_iter()
             .map(|(key, value)| {
                 let value = redactor.redact(&value);
                 (key, truncate_bytes(&value, FailureError::DETAIL_VALUE_MAX))
             })
             .collect();
-        FailureError::new(code.clone(), text, details).unwrap_or_else(|_| {
-            FailureError::new(code, "the operation failed", Vec::new())
-                .expect("a fixed short message with no details is a valid failure error")
-        })
+        let fitted = failure::fit(items, redactor.as_ref(), FAILURE_ITEMS_MAX_BYTES);
+        failure::add_omitted(&mut details, fitted.omitted);
+        let error = FailureError::new(code.clone(), text, details)
+            .and_then(|error| error.with_items(fitted.items))
+            .unwrap_or_else(|_| {
+                FailureError::new(code, "the operation failed", Vec::new())
+                    .expect("a fixed short message with no details is a valid failure error")
+            });
+        match rule {
+            Some(rule) => error.with_rule(rule),
+            None => error,
+        }
     }
 }
 
@@ -495,7 +520,7 @@ fn truncate_chars(text: &str, max: usize) -> String {
     text.chars().take(max).collect()
 }
 
-fn truncate_bytes(text: &str, max: usize) -> String {
+pub(super) fn truncate_bytes(text: &str, max: usize) -> String {
     if text.len() <= max {
         return text.to_owned();
     }

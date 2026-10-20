@@ -8,8 +8,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use stackly_domain::{
-    CreatedRecord, DetailKey, ErrorCodeName, JournalView, Operation, OperationId, OperationState,
-    Progress, ResourceRevision, StageName,
+    CreatedRecord, DetailKey, ErrorCodeName, FailureItem, JournalView, Operation, OperationId,
+    OperationState, Progress, ResourceRevision, Rule, StageName,
 };
 use tokio::sync::watch;
 
@@ -99,6 +99,9 @@ enum Behavior {
     Fail {
         code: ErrorCodeName,
         retryable: bool,
+        details: Vec<(DetailKey, String)>,
+        items: Vec<FailureItem>,
+        rule: Option<Rule>,
     },
     Panic,
 }
@@ -119,6 +122,9 @@ struct ScriptedStep {
 pub struct ScriptedError {
     code: ErrorCodeName,
     retryable: bool,
+    details: Vec<(DetailKey, String)>,
+    items: Vec<FailureItem>,
+    rule: Option<Rule>,
 }
 
 impl OperationError for ScriptedError {
@@ -131,7 +137,15 @@ impl OperationError for ScriptedError {
     }
 
     fn details(&self) -> Vec<(DetailKey, String)> {
-        Vec::new()
+        self.details.clone()
+    }
+
+    fn items(&self) -> Vec<FailureItem> {
+        self.items.clone()
+    }
+
+    fn rule(&self) -> Option<Rule> {
+        self.rule
     }
 }
 
@@ -202,7 +216,41 @@ impl ScriptedWork {
     #[must_use]
     pub fn fail(mut self, code: &str, retryable: bool) -> Self {
         let code = code.parse().expect("a scripted failure has an error code");
-        self.last().behavior = Behavior::Fail { code, retryable };
+        self.last().behavior = Behavior::Fail {
+            code,
+            retryable,
+            details: Vec::new(),
+            items: Vec::new(),
+            rule: None,
+        };
+        self
+    }
+
+    /// Gives the failure of the last step, which [`ScriptedWork::fail`]
+    /// set, the `details`, `items`, and `rule` its error carries.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the last step does not fail.
+    #[must_use]
+    pub fn failing_with(
+        mut self,
+        details: Vec<(DetailKey, String)>,
+        items: Vec<FailureItem>,
+        rule: Option<Rule>,
+    ) -> Self {
+        let Behavior::Fail {
+            details: own_details,
+            items: own_items,
+            rule: own_rule,
+            ..
+        } = &mut self.last().behavior
+        else {
+            panic!("failing_with follows fail");
+        };
+        *own_details = details;
+        *own_items = items;
+        *own_rule = rule;
         self
     }
 
@@ -303,10 +351,19 @@ async fn run_step(ctx: &mut OperationContext, step: ScriptedStep) -> Result<(), 
     }
     match step.behavior {
         Behavior::Succeed => {}
-        Behavior::Fail { code, retryable } => {
+        Behavior::Fail {
+            code,
+            retryable,
+            details,
+            items,
+            rule,
+        } => {
             return Err(WorkError::Failed(Box::new(ScriptedError {
                 code,
                 retryable,
+                details,
+                items,
+                rule,
             })));
         }
         Behavior::Panic => panic!("the scripted step panics on purpose"),

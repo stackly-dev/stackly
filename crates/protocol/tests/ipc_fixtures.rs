@@ -666,6 +666,39 @@ fn an_operation_that_needs_recovery_carries_its_hint_cause_and_actions() {
 }
 
 #[test]
+fn a_failed_operation_carries_its_error_items_rule_and_omitted_count() {
+    let Reply::OperationGet(detail) = reply("frame-response-operation-get-failed-items.json")
+    else {
+        panic!("expected an operation.get reply");
+    };
+    let failure = detail
+        .operation
+        .failure
+        .as_ref()
+        .expect("a failed operation");
+    let error = &failure.error;
+
+    assert_eq!(detail.operation.state, OperationState::Failed);
+    assert_eq!(error.code(), "provider.invalid_settings");
+    assert_eq!(error.rule(), Some("BR-002"));
+    assert_eq!(error.operation_id(), Some(detail.operation.id));
+    assert_eq!(error.detail("omitted"), Some("2"));
+    assert_eq!(error.items().len(), 2);
+    assert_eq!(error.items()[0].kind(), "issue");
+    assert_eq!(error.items()[0].field("location"), Some("greeting"));
+    assert_eq!(error.items()[1].field("reason"), Some("out of range"));
+    let spec = stackly_protocol::codes::lookup(error.code()).expect("a catalog code");
+    let item = spec.items.as_ref().expect("the code allows items");
+    assert!(error.items().iter().all(|found| {
+        found.kind() == item.kind
+            && found
+                .fields()
+                .iter()
+                .all(|field| item.fields.contains(&field.key()))
+    }));
+}
+
+#[test]
 fn foreign_values_of_the_operation_enums_decode_as_unrecognized() {
     let Reply::OperationGet(detail) = reply("frame-response-operation-get-unknown-values.json")
     else {

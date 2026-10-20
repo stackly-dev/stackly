@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde_json::json;
 use stackly_core::operation::testing::{HoldHandle, ScriptedWork};
 use stackly_core::operation::{OperationOutcome, PartialItem, PartialOutcome};
-use stackly_domain::OperationKind;
+use stackly_domain::{FailureItem, OperationKind, Rule};
 use stackly_ipc::PeerCred;
 use stackly_protocol::codes::{operation, request, resource};
 use stackly_protocol::daemon::{SubsystemStatus, subsystem};
@@ -614,6 +614,178 @@ async fn a_work_that_panics_fails_with_a_catalog_error_naming_the_operation() {
         client.call(Call::DaemonGetInfo).await,
         Ok(Reply::DaemonGetInfo(_))
     ));
+    stop(daemon).await;
+}
+
+fn issue(location: &str, reason: &str) -> FailureItem {
+    FailureItem::new(
+        "issue".parse().expect("an item kind"),
+        vec![
+            (
+                "location".parse().expect("a field key"),
+                location.to_owned(),
+            ),
+            ("reason".parse().expect("a field key"), reason.to_owned()),
+        ],
+    )
+    .expect("a valid item")
+}
+
+#[tokio::test]
+async fn a_failed_operation_carries_its_items_rule_and_omitted_count_on_get_event_and_after_a_restart()
+ {
+    let site = Site::new();
+    let scripts = Scripts::new();
+    scripts.add(
+        "invalid",
+        Script::new(
+            OperationKind::UpdateManager,
+            ScriptedWork::new()
+                .step("check")
+                .fail("provider.invalid_settings", false)
+                .failing_with(
+                    vec![("issueCount".parse().unwrap(), "2".to_owned())],
+                    vec![issue("/port", "too large"), issue("/name", "empty")],
+                    Some(Rule::Br002),
+                ),
+        ),
+    );
+    scripts.add(
+        "many",
+        Script::new(
+            OperationKind::UpdateManager,
+            ScriptedWork::new()
+                .step("check")
+                .fail("provider.invalid_settings", false)
+                .failing_with(
+                    vec![("issueCount".parse().unwrap(), "101".to_owned())],
+                    (0..101).map(|n| issue(&format!("/f{n}"), "bad")).collect(),
+                    None,
+                ),
+        ),
+    );
+    let daemon = site.start(&scripts).await;
+    let client = client(&site).await;
+    let (_, mut events) = client
+        .subscribe(SubscribeParams {
+            kinds: vec!["operation.".to_owned()],
+            ..SubscribeParams::default()
+        })
+        .await
+        .unwrap();
+    let mut raw = Raw::ready(&site.socket()).await;
+
+    let id = accepted(
+        &raw.start(Some(&key()), json!({ "script": "invalid" }))
+            .await,
+    )
+    .operation
+    .id;
+    let many = accepted(&raw.start(Some(&key()), json!({ "script": "many" })).await)
+        .operation
+        .id;
+    let failed = wait_state(&client, id, OperationState::Failed).await;
+    let crowded = wait_state(&client, many, OperationState::Failed).await;
+
+    let error = failed.operation.failure.expect("a failure").error;
+    checked(&error);
+    assert_eq!(error.code(), "provider.invalid_settings");
+    assert_eq!(error.rule(), Some("BR-002"));
+    assert_eq!(error.detail("issueCount"), Some("2"));
+    assert_eq!(error.detail("omitted"), None);
+    assert_eq!(error.items().len(), 2);
+    assert_eq!(error.items()[0].field("location"), Some("/port"));
+    assert_eq!(error.items()[1].field("reason"), Some("empty"));
+    let crowded_error = crowded.operation.failure.expect("a failure").error;
+    assert_eq!(crowded_error.items().len(), 100);
+    assert_eq!(crowded_error.detail("omitted"), Some("1"));
+    assert_eq!(crowded_error.rule(), None);
+
+    let mut from_event = None;
+    while from_event.is_none() {
+        let frame = tokio::time::timeout(PATIENCE, events.next())
+            .await
+            .expect("events arrive in time")
+            .unwrap()
+            .expect("the stream stays open");
+        let DecodedFrame::Event(event) = frame else {
+            continue;
+        };
+        if let EventKind::OperationStateChanged(summary) = event.kind
+            && summary.id == id
+            && summary.state == OperationState::Failed
+        {
+            from_event = summary.failure.map(|failure| failure.error);
+        }
+    }
+    assert_eq!(
+        from_event,
+        Some(error.clone()),
+        "the event carries the same error"
+    );
+
+    drop(events);
+    drop(client);
+    drop(raw);
+    stop(daemon).await;
+    let daemon = site.start(&scripts).await;
+    let client = self::client(&site).await;
+    let after = get(&client, id).await.operation.failure.expect("a failure");
+    assert_eq!(after.error, error, "the same error after a restart");
+    let crowded_after = get(&client, many)
+        .await
+        .operation
+        .failure
+        .expect("a failure");
+    assert_eq!(crowded_after.error, crowded_error);
+    stop(daemon).await;
+}
+
+#[tokio::test]
+async fn items_past_the_stored_size_limit_are_cut_by_the_engine_before_sqlite_checks_them() {
+    let site = Site::new();
+    let scripts = Scripts::new();
+    let wide = |n: usize| {
+        FailureItem::new(
+            "issue".parse().unwrap(),
+            ["file", "location", "code", "message", "reason"]
+                .iter()
+                .map(|key| (key.parse().unwrap(), format!("{n:03}{}", "x".repeat(509))))
+                .collect(),
+        )
+        .unwrap()
+    };
+    scripts.add(
+        "heavy",
+        Script::new(
+            OperationKind::UpdateManager,
+            ScriptedWork::new()
+                .step("check")
+                .fail("provider.invalid_settings", false)
+                .failing_with(Vec::new(), (0..100).map(wide).collect(), None),
+        ),
+    );
+    let daemon = site.start(&scripts).await;
+    let client = client(&site).await;
+    let mut raw = Raw::ready(&site.socket()).await;
+
+    let id = accepted(&raw.start(Some(&key()), json!({ "script": "heavy" })).await)
+        .operation
+        .id;
+    let failed = wait_state(&client, id, OperationState::Failed).await;
+
+    let error = failed.operation.failure.expect("a failure").error;
+    assert_eq!(error.code(), "provider.invalid_settings");
+    let kept = error.items().len();
+    assert!((1..100).contains(&kept), "kept {kept}");
+    assert_eq!(
+        error.detail("omitted"),
+        Some((100 - kept).to_string().as_str())
+    );
+    assert_eq!(
+        error.items()[kept - 1].field("file").map(|v| &v[..3]),
+        Some(format!("{:03}", kept - 1).as_str())
+    );
     stop(daemon).await;
 }
 

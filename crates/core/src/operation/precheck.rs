@@ -6,7 +6,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use stackly_domain::{DetailKey, ErrorCodeName, StageName};
+use stackly_domain::{DetailKey, ErrorCodeName, FailureItem, Rule, StageName};
 
 use super::work::{FinalBatch, OperationError};
 
@@ -76,9 +76,19 @@ impl NoOpReply {
     }
 }
 
+type RejectionParts = (
+    ErrorCodeName,
+    String,
+    bool,
+    Vec<(DetailKey, String)>,
+    Vec<FailureItem>,
+    Option<Rule>,
+);
+
 /// The error a [`Precheck`] refused a request with, shared so
 /// [`BeginError`](super::BeginError) stays cheap to clone. Two rejections
-/// are equal when their code, message, retryability, and details are.
+/// are equal when their code, message, retryability, details, items, and
+/// rule are.
 #[derive(Clone)]
 pub struct Rejection(Arc<dyn OperationError>);
 
@@ -101,12 +111,14 @@ impl Rejection {
         self.0.code()
     }
 
-    fn parts(&self) -> (ErrorCodeName, String, bool, Vec<(DetailKey, String)>) {
+    fn parts(&self) -> RejectionParts {
         (
             self.0.code(),
             self.0.to_string(),
             self.0.retryable(),
             self.0.details(),
+            self.0.items(),
+            self.0.rule(),
         )
     }
 }

@@ -19,7 +19,9 @@ use stackly_domain::{
 };
 use stackly_testkit::EnvironmentBuilder;
 
-use crate::common::{Harness, TestError, fast, instance, request, user, wait_state, wait_until};
+use crate::common::{
+    Harness, TestError, counted, fast, instance, request, user, wait_state, wait_until,
+};
 
 /// A request of `kind` on the instance `id`.
 fn on_instance(
@@ -356,18 +358,6 @@ async fn past_its_spawn_a_start_fails_or_cancels_without_compensation_and_never_
         2,
         "neither start's folder was compensated"
     );
-}
-
-/// A precheck that counts how often it ran.
-fn counted(
-    calls: &Arc<AtomicU32>,
-    decide: impl FnOnce() -> PrecheckOutcome + Send + 'static,
-) -> Box<dyn stackly_core::operation::Precheck> {
-    let calls = Arc::clone(calls);
-    Box::new(move || {
-        calls.fetch_add(1, Ordering::SeqCst);
-        decide()
-    })
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

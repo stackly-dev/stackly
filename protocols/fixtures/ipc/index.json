@@ -350,6 +350,11 @@
       "expect": "roundtrip"
     },
     {
+      "file": "frame-response-operation-get-failed-items.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
       "file": "frame-response-operation-list.json",
       "type": "ServerFrame",
       "expect": "roundtrip"

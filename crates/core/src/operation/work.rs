@@ -7,8 +7,9 @@ use std::pin::Pin;
 
 use serde_json::{Map, Value};
 use stackly_domain::{
-    CreatedRecord, CreatedSeq, CreatedState, DetailKey, ErrorCodeName, Generation, JournalPayload,
-    JournalView, Operation, ReasonCode, Registry, ResourceRef, StageName, WriteOp,
+    CreatedRecord, CreatedSeq, CreatedState, DetailKey, ErrorCodeName, FailureItem, Generation,
+    JournalPayload, JournalView, Operation, ReasonCode, Registry, ResourceRef, Rule, StageName,
+    WriteOp,
 };
 
 use super::EngineError;
@@ -285,8 +286,14 @@ pub trait OperationError: std::error::Error + Send + Sync + 'static {
     fn retryable(&self) -> bool;
     /// The details, by the keys of the catalog entry.
     fn details(&self) -> Vec<(DetailKey, String)>;
+    /// The items the error lists, such as each missing secret. The kind
+    /// and the field keys of every item come from the `ItemSpec` of the
+    /// code's catalog entry.
+    fn items(&self) -> Vec<FailureItem> {
+        Vec::new()
+    }
     /// The business rule the error enforces, if any.
-    fn rule(&self) -> Option<&'static str> {
+    fn rule(&self) -> Option<Rule> {
         None
     }
 }

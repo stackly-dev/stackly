@@ -1,12 +1,14 @@
 //! Begin, idempotency, lock keys, the queue, progress, and stale revisions
 //! (spec 0007 AC-1 to AC-6, AC-12, AC-13, AC-15).
 
+use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
 use std::time::{Duration, Instant};
 
-use stackly_core::operation::testing::{EffectCounter, HoldHandle, ScriptedWork};
+use stackly_core::operation::testing::{EffectCounter, HoldHandle, ScriptedFactory, ScriptedWork};
 use stackly_core::operation::{
-    BeginError, BeginOutcome, BoxFuture, BusyPolicy, LockHolder, OperationContext, OperationWork,
-    StepSpec, WorkOutcome, WorkResult,
+    BeginError, BeginOutcome, BoxFuture, BusyPolicy, LockHolder, NoOpOutcome, OperationContext,
+    OperationWork, PrecheckOutcome, StepSpec, WorkOutcome, WorkResult,
 };
 use stackly_domain::{
     EnvironmentId, LockKey, OperationKind, OperationResource, OperationState, Progress, Registry,
@@ -16,7 +18,10 @@ use stackly_platform::Clock;
 use stackly_testkit::EnvironmentBuilder;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::common::{Harness, manager_request, request, user, wait_event, wait_state, wait_until};
+use crate::common::{
+    Harness, counted, fast, instance, manager_request, record_no_op, request, request_origin, user,
+    wait_event, wait_state, wait_until,
+};
 
 fn revision(number: u64) -> ResourceRevision {
     ResourceRevision::new(number).expect("a test revision is at least 1")
@@ -782,4 +787,318 @@ async fn the_commit_that_ends_an_operation_carries_its_last_progress_and_nothing
         done.view.operation.revision()
     );
     assert_eq!(last_event.revision, later.view.operation.revision());
+}
+
+/// The idempotency key `key` reads from the registry, with the generation
+/// of that read.
+fn bound(harness: &Harness, key: &str) -> (bool, u64) {
+    let read = harness
+        .registry
+        .operation_by_idempotency_key(&key.parse().expect("an idempotency key"))
+        .expect("the registry reads");
+    (read.value.is_some(), read.generation.get())
+}
+
+fn origin_of(
+    request: &stackly_core::operation::BeginRequest,
+) -> stackly_core::operation::RequestOrigin {
+    match &request.origin {
+        stackly_core::operation::Origin::Request(origin) => origin.clone(),
+        stackly_core::operation::Origin::Background => panic!("a background request has no key"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_finds_the_operation_begin_created_and_agrees_with_the_begin_that_follows() {
+    let harness = Harness::new().await;
+    let hold = HoldHandle::new();
+    let mut first = manager_request(
+        OperationKind::UpdateManager,
+        ScriptedWork::new().step("apply").hold(&hold).boxed(),
+    );
+    first.origin = user("replay-1", 0x31);
+    let origin = origin_of(&first);
+    let BeginOutcome::Created(created) = harness.engine.begin(first).await.unwrap() else {
+        panic!("a new key creates an operation");
+    };
+    hold.started().await;
+
+    let held = harness.engine.replay(&origin).await.unwrap();
+    let mut again = manager_request(
+        OperationKind::UpdateManager,
+        ScriptedWork::new().step("apply").boxed(),
+    );
+    again.origin = user("replay-1", 0x31);
+    let begun = harness.engine.begin(again).await.unwrap();
+
+    let Some(BeginOutcome::Replayed(view)) = held.clone() else {
+        panic!("expected a replayed operation, got {held:?}");
+    };
+    assert_eq!(view.operation.id(), created.operation.id());
+    assert_eq!(
+        held,
+        Some(begun),
+        "begin gives the same answer for the same running operation"
+    );
+
+    hold.release();
+    wait_state(
+        &harness.engine,
+        created.operation.id(),
+        OperationState::Succeeded,
+    )
+    .await;
+    let done = harness.engine.replay(&origin).await.unwrap();
+    let mut third = manager_request(
+        OperationKind::UpdateManager,
+        ScriptedWork::new().step("apply").boxed(),
+    );
+    third.origin = user("replay-1", 0x31);
+    assert_eq!(
+        done,
+        Some(harness.engine.begin(third).await.unwrap()),
+        "begin gives the same answer for the same finished operation"
+    );
+    let Some(BeginOutcome::Replayed(final_view)) = done else {
+        panic!("expected a replayed operation");
+    };
+    assert_eq!(final_view.operation.state(), OperationState::Succeeded);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_of_a_recorded_no_op_answer_is_the_no_op_begin_replays() {
+    let harness = Harness::new().await;
+    let target = instance(&harness);
+    let origin = request_origin("instance.stop", "stop-replay", 0x41);
+    let recorded = record_no_op(&harness, target, origin.clone()).await;
+
+    let found = harness.engine.replay(&origin).await.unwrap();
+
+    assert_eq!(
+        found,
+        Some(BeginOutcome::NoOp(NoOpOutcome {
+            recorded: Some(recorded.clone()),
+            replayed: true,
+        }))
+    );
+    let calls = Arc::new(AtomicU32::new(0));
+    let mut again = request(
+        OperationKind::StopInstance,
+        OperationResource::Instance(target),
+        ScriptedWork::new().step("stop").boxed(),
+    );
+    again.origin = stackly_core::operation::Origin::Request(origin);
+    again.precheck = Some(counted(&calls, || PrecheckOutcome::Proceed));
+    assert_eq!(found, Some(harness.engine.begin(again).await.unwrap()));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_of_an_unbound_key_is_none_and_writes_nothing_and_publishes_nothing() {
+    let harness = Harness::new().await;
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new().step("apply").boxed(),
+        ))
+        .await;
+    wait_state(&harness.engine, id, OperationState::Succeeded).await;
+    let before = (bound(&harness, "never-used"), harness.events.events().len());
+
+    let found = harness
+        .engine
+        .replay(&request_origin("manager.update", "never-used", 0x51))
+        .await
+        .unwrap();
+
+    assert_eq!(found, None);
+    assert_eq!(
+        (bound(&harness, "never-used"), harness.events.events().len()),
+        before,
+        "the generation and the events are the same after a miss"
+    );
+    assert_eq!(before.0, (false, before.0.1));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_refuses_a_key_bound_to_another_method_or_another_fingerprint() {
+    let harness = Harness::new().await;
+    let mut first = manager_request(
+        OperationKind::UpdateManager,
+        ScriptedWork::new().step("apply").boxed(),
+    );
+    first.origin = user("reuse-1", 0x61);
+    let BeginOutcome::Created(created) = harness.engine.begin(first).await.unwrap() else {
+        panic!("a new key creates an operation");
+    };
+    let existing = created.operation.id();
+
+    for other in [
+        request_origin("manager.update", "reuse-1", 0x62),
+        request_origin("instance.start", "reuse-1", 0x61),
+    ] {
+        let error = harness.engine.replay(&other).await.unwrap_err();
+        assert_eq!(error, BeginError::KeyReused { existing });
+        let mut begin = manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new().step("apply").boxed(),
+        );
+        begin.origin = stackly_core::operation::Origin::Request(other);
+        assert_eq!(
+            harness.engine.begin(begin).await.unwrap_err(),
+            error,
+            "begin refuses with the same existing operation"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_never_finds_a_background_operation() {
+    let harness = Harness::new().await;
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new().step("apply").boxed(),
+        ))
+        .await;
+    wait_state(&harness.engine, id, OperationState::Succeeded).await;
+
+    let found = harness
+        .engine
+        .replay(&request_origin("manager.update", &id.to_string(), 0x71))
+        .await
+        .unwrap();
+
+    assert_eq!(found, None);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_waits_for_recovery_and_stops_at_shutdown_like_begin() {
+    let origin = request_origin("manager.update", "phase-1", 0x81);
+    let harness = Harness::idle(fast());
+    assert_eq!(
+        harness.engine.replay(&origin).await.unwrap_err(),
+        BeginError::NotReady,
+        "before recover"
+    );
+
+    // An interrupted resumable operation whose rebuild blocks keeps the
+    // second engine in its recovering phase until the test lets go.
+    let first = Harness::new().await;
+    let stuck = HoldHandle::new();
+    let mut install = request(
+        OperationKind::InstallRuntime,
+        OperationResource::Runtime(stackly_domain::RuntimeId::generate()),
+        ScriptedWork::new()
+            .step("download")
+            .repeatable()
+            .hold(&stuck)
+            .boxed(),
+    );
+    install.creates_resource = true;
+    first.begin(install).await;
+    stuck.started().await;
+    let (engine, _) = first.restarted(fast());
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel::<()>();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let release_rx = std::sync::Mutex::new(release_rx);
+    engine.register_factory(
+        OperationKind::InstallRuntime,
+        Arc::new(ScriptedFactory::new(move |_, _| {
+            entered_tx.send(()).expect("the test listens");
+            release_rx
+                .lock()
+                .expect("the release is not poisoned")
+                .recv()
+                .expect("the test releases the rebuild");
+            Ok(ScriptedWork::new().step("download").repeatable())
+        })),
+    );
+    let engine = Arc::new(engine);
+    let recovering = {
+        let engine = Arc::clone(&engine);
+        tokio::spawn(async move { engine.recover().await })
+    };
+    tokio::task::spawn_blocking(move || entered_rx.recv_timeout(Duration::from_secs(10)))
+        .await
+        .unwrap()
+        .expect("recover reached the blocked rebuild");
+
+    assert_eq!(
+        engine.replay(&origin).await.unwrap_err(),
+        BeginError::NotReady,
+        "while recover runs"
+    );
+
+    release_tx.send(()).expect("recover waits for the release");
+    recovering.await.unwrap().unwrap();
+    assert_eq!(engine.replay(&origin).await.unwrap(), None, "after recover");
+    engine.start();
+    let _ = engine.shutdown(Duration::from_secs(5)).await;
+    assert_eq!(
+        engine.replay(&origin).await.unwrap_err(),
+        BeginError::ShuttingDown,
+        "after shutdown began"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_returns_while_another_begin_holds_the_gate_in_its_precheck() {
+    let harness = Harness::new().await;
+    let mut bound_first = manager_request(
+        OperationKind::UpdateManager,
+        ScriptedWork::new().step("apply").boxed(),
+    );
+    bound_first.origin = user("gate-bound", 0x91);
+    let origin = origin_of(&bound_first);
+    let BeginOutcome::Created(created) = harness.engine.begin(bound_first).await.unwrap() else {
+        panic!("a new key creates an operation");
+    };
+
+    let (started_tx, started_rx) = std::sync::mpsc::channel::<()>();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let mut slow = manager_request(
+        OperationKind::UpdateManager,
+        ScriptedWork::new().step("apply").boxed(),
+    );
+    slow.origin = user("gate-slow", 0x92);
+    slow.precheck = Some(Box::new(move || {
+        started_tx.send(()).expect("the test listens");
+        release_rx.recv().expect("the test releases the precheck");
+        PrecheckOutcome::Proceed
+    }));
+    let engine = harness.engine.clone();
+    let holding = tokio::spawn(async move { engine.begin(slow).await });
+    tokio::task::spawn_blocking(move || started_rx.recv_timeout(Duration::from_secs(10)))
+        .await
+        .unwrap()
+        .expect("the precheck started, so begin holds the gate");
+
+    let within = Duration::from_secs(2);
+    let found = tokio::time::timeout(within, harness.engine.replay(&origin))
+        .await
+        .expect("replay does not wait for the gate")
+        .unwrap();
+    let missed = tokio::time::timeout(
+        within,
+        harness
+            .engine
+            .replay(&request_origin("manager.update", "gate-slow", 0x92)),
+    )
+    .await
+    .expect("replay does not wait for the gate")
+    .unwrap();
+
+    let Some(BeginOutcome::Replayed(view)) = found else {
+        panic!("a bound key is found while the gate is held");
+    };
+    assert_eq!(view.operation.id(), created.operation.id());
+    assert_eq!(
+        missed, None,
+        "the key of the begin that holds the gate is not bound yet"
+    );
+    release_tx.send(()).expect("the precheck waits");
+    assert!(matches!(
+        holding.await.unwrap().unwrap(),
+        BeginOutcome::Created(_)
+    ));
 }

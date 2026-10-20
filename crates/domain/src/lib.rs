@@ -71,9 +71,9 @@ pub use observation::{
     ReadinessState,
 };
 pub use operation::{
-    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, InterruptPolicy,
-    JournalPayload, JournalStep, JournalView, LockKey, NewJournal, NewOperation, NewStep,
-    Operation, OperationEvent, OperationFailure, OperationJournal, OperationKind,
+    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, FailureItem,
+    InterruptPolicy, JournalPayload, JournalStep, JournalView, LockKey, NewJournal, NewOperation,
+    NewStep, Operation, OperationEvent, OperationFailure, OperationJournal, OperationKind,
     OperationResource, OperationState, OperationTrigger, Outcome, Progress, RecoveryCause,
     RecoveryHint, StepSeq, StepState, StoredCreatedRecord, StoredJournal, StoredOperation,
     StoredStep, TriggerOrigin,

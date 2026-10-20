@@ -1,13 +1,15 @@
 //! The harness every engine test shares.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use jiff::SignedDuration;
-use stackly_core::operation::testing::{RecordedEvent, RecordingEvents};
+use stackly_core::operation::testing::{RecordedEvent, RecordingEvents, ScriptedWork};
 use stackly_core::operation::{
-    BeginOutcome, BeginRequest, BusyPolicy, EngineDeps, EngineLimits, OperationDetailView,
-    OperationEngine, OperationError, OperationWork, Origin, RequestOrigin,
+    BeginOutcome, BeginRequest, BusyPolicy, EngineDeps, EngineLimits, FinalBatch, NoOpOutcome,
+    NoOpReply, OperationDetailView, OperationEngine, OperationError, OperationView, OperationWork,
+    Origin, Precheck, PrecheckOutcome, RequestOrigin,
 };
 use stackly_core::secret::Redactor;
 use stackly_core::{PreparedLayout, prepare_layout};
@@ -17,7 +19,8 @@ use stackly_domain::{
 };
 use stackly_platform::{Clock, Platform};
 use stackly_testkit::{
-    FakePlatform, FakeRegistry, InstanceBuilder, ProviderRevisionBuilder, RuntimeBuilder, TestRoot,
+    EnvironmentBuilder, FakePlatform, FakeRegistry, InstanceBuilder, ProviderRevisionBuilder,
+    RuntimeBuilder, TestRoot,
 };
 
 /// Limits with short intervals, so retries and progress windows take
@@ -159,10 +162,11 @@ pub fn manager_request(kind: OperationKind, work: Box<dyn OperationWork>) -> Beg
     request(kind, OperationResource::Manager, work)
 }
 
-/// A client origin with `key` and a fingerprint made of `byte`.
-pub fn user(key: &str, byte: u8) -> Origin {
-    Origin::Request(RequestOrigin {
-        method: "manager.update".parse().expect("a method name"),
+/// The request of `method` with `key` and a fingerprint made of `byte`,
+/// from an interactive CLI.
+pub fn request_origin(method: &str, key: &str, byte: u8) -> RequestOrigin {
+    RequestOrigin {
+        method: method.parse().expect("a method name"),
         key: key.parse().expect("an idempotency key"),
         fingerprint: format!("{byte:02x}")
             .repeat(32)
@@ -170,7 +174,58 @@ pub fn user(key: &str, byte: u8) -> Origin {
             .expect("a 64 hex digest"),
         client: "cli".parse().expect("a client code"),
         interactive: true,
+    }
+}
+
+/// A client origin for `manager.update` with `key` and a fingerprint made
+/// of `byte`.
+pub fn user(key: &str, byte: u8) -> Origin {
+    Origin::Request(request_origin("manager.update", key, byte))
+}
+
+/// A precheck that counts how often it ran, then decides with `decide`.
+pub fn counted(
+    calls: &Arc<AtomicU32>,
+    decide: impl FnOnce() -> PrecheckOutcome + Send + 'static,
+) -> Box<dyn Precheck> {
+    let calls = Arc::clone(calls);
+    Box::new(move || {
+        calls.fetch_add(1, Ordering::SeqCst);
+        decide()
     })
+}
+
+/// Begins a stop of `target` under `origin` whose precheck answers
+/// without an operation and writes a new environment, so the engine
+/// records a `succeeded` operation that binds the key. Returns its view.
+pub async fn record_no_op(
+    harness: &Harness,
+    target: InstanceId,
+    origin: RequestOrigin,
+) -> OperationView {
+    let batch = FinalBatch {
+        expected_generation: None,
+        ops: vec![WriteOp::InsertEnvironment(
+            EnvironmentBuilder::new().no_members().build(),
+        )],
+    };
+    let mut begin = request(
+        OperationKind::StopInstance,
+        OperationResource::Instance(target),
+        ScriptedWork::new().step("stop").boxed(),
+    );
+    begin.origin = Origin::Request(origin);
+    begin.precheck = Some(Box::new(move || {
+        PrecheckOutcome::NoOp(NoOpReply::writing(batch))
+    }));
+    harness.tick();
+    match harness.engine.begin(begin).await {
+        Ok(BeginOutcome::NoOp(NoOpOutcome {
+            recorded: Some(view),
+            replayed: false,
+        })) => view,
+        other => panic!("expected a recorded no operation answer, got {other:?}"),
+    }
 }
 
 /// Waits until the operation matches `ready`, for at most ten seconds.

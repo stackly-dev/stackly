@@ -39,6 +39,31 @@ struct OperationContractTests {
         #expect(detail.created?.first?.state == .compensationFailed)
     }
 
+    @Test func aFailedOperationCarriesItsErrorItemsRuleAndOmittedCount() throws {
+        guard
+            case .operationGet(let detail) = try Self.reply(
+                "frame-response-operation-get-failed-items.json")
+        else {
+            Issue.record("expected an operation.get reply")
+            return
+        }
+        let operation = detail.operation
+        #expect(operation.state == .failed)
+        let failure = try #require(operation.failure)
+        #expect(failure.reason == "step_failed")
+        #expect(failure.retryable == false)
+        let error = failure.error
+        #expect(error.code == "provider.invalid_settings")
+        #expect(error.operationId == operation.id)
+        #expect(error.rule == "BR-002")
+        #expect(error.details?.first { $0.key == "omitted" }?.value == "2")
+        let items = try #require(error.items)
+        #expect(items.count == 2)
+        #expect(items.first?.kind == "issue")
+        #expect(items.first?.fields?.first { $0.key == "location" }?.value == "greeting")
+        #expect(items.last?.fields?.first { $0.key == "reason" }?.value == "out of range")
+    }
+
     @Test func aListPageCarriesItsNextCursorForTheNextRequest() throws {
         guard case .operationList(let page) = try Self.reply("frame-response-operation-list.json")
         else {

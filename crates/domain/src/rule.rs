@@ -1,6 +1,9 @@
 //! The business rules of the PRD, BR-001 to BR-025.
 
 use std::fmt;
+use std::str::FromStr;
+
+use crate::error::{ValueError, ValueKind};
 
 /// Defines [`Rule`] with one variant per business rule and its stable ID.
 macro_rules! rules {
@@ -68,6 +71,21 @@ rules! {
     Br025 => "BR-025",
 }
 
+impl FromStr for Rule {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|rule| rule.id() == s)
+            .ok_or(ValueError::new(
+                ValueKind::Rule,
+                "must be a known business rule ID such as BR-002",
+            ))
+    }
+}
+
 impl fmt::Display for Rule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.id())
@@ -85,5 +103,17 @@ mod tests {
 
         assert_eq!(ids, expected);
         assert_eq!(Rule::Br023.to_string(), "BR-023");
+    }
+
+    #[test]
+    fn rule_ids_parse_back_and_unknown_ids_are_rejected() {
+        for rule in Rule::ALL {
+            assert_eq!(rule.id().parse::<Rule>().unwrap(), rule);
+        }
+        for bad in [
+            "", "BR-000", "BR-026", "br-001", "BR-1", "VAL-007", "BR-001 ",
+        ] {
+            assert!(bad.parse::<Rule>().is_err(), "{bad:?}");
+        }
     }
 }
