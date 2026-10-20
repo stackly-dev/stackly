@@ -2,14 +2,6 @@ import Foundation
 import Observation
 import StacklyClient
 
-/// An instance is known by its ID, so the shell keeps it in a store keyed by that ID.
-///
-/// This is a retroactive conformance because `StacklyClient` does not declare it yet (it
-/// does for `OperationSummary`, in `Wire/OperationSummary+Identifiable.swift`). Move it
-/// there when the client package next changes, and drop this line.
-// swift-format-ignore: AvoidRetroactiveConformances
-extension InstanceSummary: @retroactive Identifiable {}
-
 /// The instances the daemon manages, kept from snapshots plus `instance.` events (spec 0013,
 /// *Daftar instance sementara*).
 ///
