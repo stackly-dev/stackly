@@ -4,6 +4,7 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::error::PlatformError;
 use crate::identity::UserId;
+use crate::tree::TreeWriter;
 
 /// The deepest directory nesting [`Filesystem::remove_tree`] walks, with
 /// the target counted as the first level.
@@ -13,9 +14,10 @@ pub const REMOVE_TREE_MAX_DEPTH: usize = 128;
 /// already derived from the layout.
 ///
 /// No method follows a symlink in the last path component except
-/// [`canonicalize`](Self::canonicalize), and no method deletes anything
-/// except [`remove_tree`](Self::remove_tree) and the temporary file of a
-/// failed atomic write.
+/// [`canonicalize`](Self::canonicalize) and the volume queries, and no
+/// method deletes anything except [`remove_tree`](Self::remove_tree), the
+/// temporary file of a failed atomic write, and the bytes an
+/// [`AppendFile::truncate`] cuts off.
 pub trait Filesystem: Send + Sync {
     /// Returns the absolute path with every symlink resolved and no `.` or
     /// `..` component.
@@ -100,6 +102,136 @@ pub trait Filesystem: Send + Sync {
     /// argument, and other variants when an entry cannot be read or
     /// removed.
     fn remove_tree(&self, root: &Path, relative: &Path) -> Result<RemoveReport, PlatformError>;
+
+    /// Opens a regular file for reading and seeking, without following a
+    /// symlink in the last component and without ever opening a FIFO or
+    /// device for reading.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::NotARegularFile`] when the path is a symlink
+    /// or anything but a regular file, [`PlatformError::NotFound`] when it
+    /// does not exist, and other variants when it cannot be opened.
+    fn open_read(&self, path: &Path) -> Result<Box<dyn ReadSeekFile>, PlatformError>;
+
+    /// Opens a regular file for appending, creating it with mode 0600 when
+    /// it does not exist, without following a symlink in the last
+    /// component (spec 0018, *Download dan cache*).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::NotARegularFile`] when the path is a symlink
+    /// or anything but a regular file, [`PlatformError::NotFound`] when the
+    /// parent does not exist, and other variants when it cannot be opened.
+    fn open_append(&self, path: &Path) -> Result<Box<dyn AppendFile>, PlatformError>;
+
+    /// Moves the entry at `from` to `to` in one atomic step and syncs both
+    /// parent directories. It never replaces or deletes anything: `to` must
+    /// not exist, not even as a symlink, and a symlink at `from` moves as
+    /// itself.
+    ///
+    /// The port does not check ownership. Its caller in core checks both
+    /// paths with `check_owned_path` and that they share one owned root
+    /// first (spec 0018, *Commit atomik*).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::AlreadyExists`] when `to` exists,
+    /// [`PlatformError::CrossesDevice`] when the paths lie on different
+    /// volumes, [`PlatformError::NotFound`] when `from` or the parent of
+    /// `to` does not exist, and other variants when the move fails.
+    fn rename_no_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError>;
+
+    /// Returns how many bytes an unprivileged user can still write on the
+    /// volume that holds `path`, which is
+    /// [`VolumeSpace::available`] of [`volume_space`](Self::volume_space).
+    ///
+    /// # Errors
+    ///
+    /// Returns the errors of [`volume_space`](Self::volume_space).
+    fn available_space(&self, path: &Path) -> Result<u64, PlatformError> {
+        Ok(self.volume_space(path)?.available)
+    }
+
+    /// Returns a [`TreeWriter`] that builds a new tree inside `root`, which
+    /// must be an empty directory with mode 0700 and not a symlink
+    /// (spec 0018, *Ekstraksi aman*).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::SymlinkInPath`] when `root` is a symlink,
+    /// [`PlatformError::NotADirectory`] when it is not a directory,
+    /// [`PlatformError::Io`] with kind `DirectoryNotEmpty` when it holds an
+    /// entry or `InvalidInput` when its mode is not 0700, and other
+    /// variants when it cannot be opened.
+    fn open_tree_writer(&self, root: &Path) -> Result<Box<dyn TreeWriter>, PlatformError>;
+
+    /// Returns the size and the space left of the volume that holds
+    /// `path`, following symlinks to find it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::NotFound`] when the path does not exist,
+    /// and other variants when the volume cannot be read.
+    fn volume_space(&self, path: &Path) -> Result<VolumeSpace, PlatformError>;
+}
+
+/// A regular file opened by [`Filesystem::open_read`].
+pub trait ReadSeekFile: io::Read + io::Seek + Send {
+    /// Returns the size of the file in bytes when it was opened.
+    fn len(&self) -> u64;
+
+    /// Returns true when the file was empty when it was opened.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// A regular file opened by [`Filesystem::open_append`]. Every write goes
+/// to its end.
+pub trait AppendFile: io::Write + Send {
+    /// Returns the size of the file in bytes, counting every write so far.
+    fn len(&self) -> u64;
+
+    /// Returns true when the file holds no bytes.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Cuts the file down to `len` bytes; later writes continue from there.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::Io`] with kind `InvalidInput` when `len` is
+    /// above [`len`](Self::len), since the file never grows this way, and
+    /// other variants when the file cannot be cut.
+    fn truncate(&mut self, len: u64) -> Result<(), PlatformError>;
+
+    /// Makes every byte written so far durable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file cannot be synced.
+    fn sync(&mut self) -> Result<(), PlatformError>;
+}
+
+/// The size and the space left of one volume, in bytes
+/// ([`Filesystem::volume_space`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct VolumeSpace {
+    /// The size of the volume.
+    pub total: u64,
+    /// The bytes an unprivileged user can still write.
+    pub available: u64,
+}
+
+impl VolumeSpace {
+    /// Bundles the two sizes an adapter read.
+    #[must_use]
+    pub const fn new(total: u64, available: u64) -> Self {
+        Self { total, available }
+    }
 }
 
 /// What one [`Filesystem::remove_tree`] call removed.

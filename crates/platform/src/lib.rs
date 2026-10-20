@@ -34,6 +34,7 @@ mod platform;
 mod private_dir;
 mod process;
 mod secret;
+mod tree;
 mod unsupported;
 
 pub use bundle::AppBundle;
@@ -41,8 +42,8 @@ pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability}
 pub use clock::{Clock, SystemClock};
 pub use error::PlatformError;
 pub use fs::{
-    DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
-    RemoveReport, is_same_or_inside, remove_tree_names,
+    AppendFile, DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
+    ReadSeekFile, RemoveReport, VolumeSpace, is_same_or_inside, remove_tree_names,
 };
 pub use identity::{UserId, UserIdentity};
 pub use info::{PlatformInfo, host_target};
@@ -64,5 +65,9 @@ pub use secret::{
     Interaction, MAX_SECRET_LEN, SCRUB_ANYWHERE_LEN, SCRUB_MIN_LEN, SECRET_SERVICE, SecretBackend,
     SecretPresence, SecretStore, SecretStoreError, SecretValue, SecretValueError, StoreState,
     UnsupportedSecretStore, WriteMode,
+};
+pub use tree::{
+    ENTRY_NAME_MAX_LEN, ENTRY_PATH_MAX_DEPTH, ENTRY_PATH_MAX_LEN, EntryPath, EntryPathError,
+    FileMode, TreeFile, TreeWriter,
 };
 pub use unsupported::UnsupportedPlatform;

@@ -1,7 +1,7 @@
 # 0018. Install runtime managed
 
 **Date**: 2026-10-19
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

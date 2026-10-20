@@ -98,8 +98,9 @@ pub enum PlatformError {
         /// The OS error message.
         message: String,
     },
-    /// A component on the way to the target of a removal is a symlink, so
-    /// nothing was removed.
+    /// A component on the way to the target of a removal or of a
+    /// [`TreeWriter`](crate::TreeWriter) entry, or the root of a tree
+    /// writer, is a symlink, so nothing was removed or created.
     #[error("{} is a symlink on the way to the target", path.display())]
     SymlinkInPath {
         /// The symlink.
@@ -112,7 +113,8 @@ pub enum PlatformError {
         path: PathBuf,
     },
     /// An entry lies on another device than the root of the removal, so
-    /// the removal stopped before touching that device.
+    /// the removal stopped before touching that device, or the two paths
+    /// of a rename lie on different volumes.
     #[error("{} is on another device than its root", path.display())]
     CrossesDevice {
         /// The first entry found on another device.
