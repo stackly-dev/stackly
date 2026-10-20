@@ -843,3 +843,25 @@ Nit yang ditunda: Swift membaca `sequence` dan `revision` sebagai `UInt64` biasa
 Kelas versi: memberi batas pada `fields` dan menolak array posisional dihitung minor, bukan "menurunkan batas" yang major. `fields` tanpa batas tidak pernah benar benar bisa dikirim di atas sekitar 10 500 entri (frame nya gagal dan koneksi putus), jadi pembaca lama tidak kehilangan apa pun yang pernah sampai; array posisional tidak pernah ditulis client Rust maupun Swift. Aturan ini sekarang tertulis di *Versi dan kompatibilitas*.
 
 Cross check model lain (Sonnet) atas update spec ini menemukan: batas yang belum terdaftar (segmen reference secret dan batas bawah `limit` operasi, kini terdaftar plus test pindai sumber), aturan arah yang terbalik untuk batas yang dijamin pengirim (kini dibedakan, dan `--check` hanya memaksa versi baru), arti `omitted` sebagai batas bawah dan larangan `items` di kode yang membawa `fields` (kini tertulis dan diperiksa setiap kali field ditambah), AC-10 yang belum menyebut aturan objek di client dan waktu terakhir jiff (kini disebut), test wire daemon untuk AC-7 (kini ada), dan invariant ukuran frame yang terlalu luas (kini hanya untuk penolakan decode, sisanya Follow-up untuk daemon). Test versi literal (`current_version_is_one_point_four`, `protocolIsOnePointFour`) tetap ada sebagai tanda sengaja bahwa versi naik, walau fixture sudah dijaga sama dengan `CURRENT`.
+
+## Perubahan 2026-10-20 (fase 02)
+
+Update `architect (update)` dari inventaris lead scope 02 (`docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md`, bagian *Spec 0006*), setelah fitur 6 selesai dan sesi Contract 1.4 merge. Semua perubahan additive atau klarifikasi: tidak ada AC yang diganti nomornya, tidak ada langkah Build plan yang berubah, dan teks ini sendiri tidak mengubah kontrak, jadi `ProtocolVersion::CURRENT` tidak naik karenanya. Setiap spec sumber menaikkan minor di build nya sendiri, dan cabang paralel diselesaikan dengan aturan *Merge* yang sudah ada.
+
+| Item | Perubahan | Sumber |
+| --- | --- | --- |
+| Hint | satu bentuk untuk semua area: `codes::<area>::hint(code, details) -> Option<&'static str>`, teks statis, dipasang `stacklyd` lewat `ErrorBody::with_hint`, juga untuk `FailureError` operasi yang hint tersimpannya kosong | spec 0017 (*Usulan update spec lain*, *Kode error di wire*), spec 0018 (*Usulan additive untuk spec lain*, *Kode error*), keputusan lead 2026-10-20 |
+| Batas hint 200 karakter | dinyatakan sebagai properti katalog yang dicek test katalog per area, bukan entri `CONTRACT_LIMITS`; `with_hint` tidak memotong | spec 0018, resolusi 6 inventaris |
+| Tabel area | `catalog` (spec 0017), `runtime` (spec 0018), `storage` (spec 0022) dipindah dari baris "fitur yang pertama kali memakainya" ke baris pemilik | spec 0017, 0018, 0022 |
+| Kode `daemon.restart_unavailable` | tabel baru "kode di area spec ini milik spec lain", pemilik spec 0015 | spec 0015 *Usulan update untuk spec lain*, resolusi 7 |
+| `ShutdownReason::RestartRequested` | `requested` berarti `daemon.shutdown` mode `stop`; AC-11 dan urutan berhenti langkah 2 dan 7 mengikuti pemicunya (exit 0 atau 75) | spec 0015 AC-6 dan *Method `daemon.shutdown` dan exit code* |
+| `daemon.shutdown`, `DaemonInfo.launch` | baris API surface, field opsional `DaemonInfo`, selalu dilayani di slot start | spec 0015 |
+| Exit 75 | tabel exit code `stacklyd` | spec 0015 |
+| `StartConfig`, `DaemonDeps`, `DaemonConfig`, launch record, catalog di slot start, subsystem `catalog`, `STACKLY_CATALOG_DIR`, `XPC_SERVICE_NAME` | *Daemon* (pengantar, langkah 1, 8, 8a, 11, subsystem) dan *Configuration required* (implisit di spec sumber) | spec 0015 *Konteks launch dan launch record di daemon*, spec 0017 *Lokasi catalog saat start* dan K-2 |
+| Subsystem baru | aturan bahwa subsystem baru ditambah fitur pemakai pertama, dengan `catalog` tercantum; kedua opsi resolusi 2 dipakai karena keduanya additive | spec 0017, resolusi 2 |
+| Hint CLI daemon status | `start it with stacklyd` diganti penunjuk ke *Langkah pemulihan CLI* spec 0015 | spec 0015 |
+| `SignedSafeInteger` | aturan wire dan mapping typeshare `Int64`, memakai ulang `MAX_SAFE_INTEGER` tanpa konstanta baru sehingga `CONTRACT_LIMITS` tidak berubah | spec 0020 (implisit; spec itu menyatakan tidak ada update untuk 0006), resolusi 5 |
+| Security model | verifikasi tanda tangan peer menunjuk spec 0015 (ditunda ke fitur 60 dan 63) | spec 0015 *Verifikasi tanda tangan peer* |
+| *Asumsi ke spec lain* | tambahan spec 0015, 0017, 0018, 0020, dan 0022 dicatat dengan cara yang sama dengan spec lain | inventaris, pengantar bagian *Spec 0006* |
+
+Tidak diterapkan: item 10 inventaris (daftar pemakai *Fuzzing* ditambah fitur 19 dan 23), karena ditandai opsional dan tidak diusulkan. Follow-up spec ini untuk fitur 15 (verifikasi tanda tangan dan `stackly daemon start`) sudah terjawab spec 0015 dan dicentang lead lewat `/sync`, bukan di sini.
