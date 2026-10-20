@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a156f2-1081-7088-9d73-3bc3223ae27b",
+  "covers": [
+    "NFR-009"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Fuzz nats_readiness_protocol, then rerun provider_manifest and provider_interpolation, 10 minutes each",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "cargo xtask fuzz run runs nats_readiness_protocol, then provider_manifest and provider_interpolation, for 600 seconds each, one at a time, with the pinned nightly and cargo-fuzz, and finds no crash, hang, or out of memory.",
+  "actual": "no crash, hang, or out of memory in any target and fuzz/artifacts/ empty; nats_readiness_protocol: 4369977 runs in 601 s (7271 exec/s), 12538 new units, peak RSS 590 MB; provider_manifest: 958658 runs in 601 s (1595 exec/s), 9459 new units, peak RSS 462 MB; provider_interpolation: 1821178 runs in 601 s (3030 exec/s), 3878 new units, peak RSS 664 MB",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 63d7a54 (spec 0023 step 4: the nats_readiness_protocol harness, target, TARGETS row, and seeds, on top of main with spec 0017 step 1 and spec 0019 steps 1 and 2) with a clean tree, use the pinned fuzz toolchain nightly-2026-10-17 and cargo-fuzz 0.13.2; `cargo xtask fuzz build nats_readiness_protocol` builds the target with AddressSanitizer (default)",
+    "start from the committed seeds only (fuzz/corpus empty in this worktree): nats_readiness_protocol 11 (7 transcripts recorded from nats-server 2.15.1 in the step 0 spike and 4 synthetic ones), provider_manifest 4, provider_interpolation 32",
+    "run `/usr/bin/time cargo xtask fuzz run <target> --time 600` for nats_readiness_protocol, provider_manifest, and provider_interpolation one at a time, because the Mac is shared by other sessions; the runs went from 2026-10-20T01:34:32Z to 02:04:43Z",
+    "check that each command exits 0 with `ran for 600 s without a crash`, that fuzz/artifacts/ holds no input for any target, and read the libFuzzer final stats",
+    "keep the head and tail of each log in this record's files folder (the middle NEW, REDUCE, and pulse progress lines are cut)",
+    "spec 0023 AC-7 asks for the provider_manifest and provider_interpolation reruns after the step 1 validator change; step 1 is not built yet, so these reruns cover the validator on 63d7a54 and must run again once step 1 lands"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5)",
+  "startedAt": "2026-10-20T01:34:26.9447Z",
+  "finishedAt": "2026-10-20T02:04:43Z",
+  "evidencePath": "evidence/manual/files/01a156f2-1081-7088-9d73-3bc3223ae27b/",
+  "context": {
+    "sourceCommit": "63d7a54bb72fcb1a8bd157ab4808268085d38de9",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

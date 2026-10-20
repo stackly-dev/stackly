@@ -1,0 +1,51 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
+     Running `fuzz/target/aarch64-apple-darwin/release/nats_readiness_protocol -artifact_prefix=fuzz/artifacts/nats_readiness_protocol/ -max_len=262144 -max_total_time=600 -print_final_stats=1 fuzz/corpus/nats_readiness_protocol fuzz/seeds/nats_readiness_protocol`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2717679120
+INFO: Loaded 1 modules   (303597 inline 8-bit counters): 303597 [0x1017f71d0, 0x1018413bd), 
+INFO: Loaded 1 PC tables (303597 PCs): 303597 [0x1018413c0,0x101ce3290), 
+INFO:        0 files found in fuzz/corpus/nats_readiness_protocol
+INFO:       11 files found in fuzz/seeds/nats_readiness_protocol
+INFO: seed corpus: files: 11 min: 368b max: 1246b total: 8122b rss: 46Mb
+#12	INITED cov: 550 ft: 684 corp: 11/8122b exec/s: 0 rss: 49Mb
+	NEW_FUNC[1/6]: 0x0001012bbed4 in _RINvMs0_NtCsccconMumvMc_10serde_json5errorNtB6_5Error12fix_positionNCNvMs3_NtB8_2deINtB1b_12DeserializerNtNtB8_4read9SliceReadE12fix_position0ECsiC0AsM8BhA0_12stackly_core+0x0 (nats_readiness_protocol:arm64+0x100f73ed4)
+	NEW_FUNC[2/6]: 0x00010041b3c8 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueNtNtCsccconMumvMc_10serde_json5error9ErrorCodeECsiC0AsM8BhA0_12stackly_core+0x0 (nats_readiness_protocol:arm64+0x1000d33c8)
+#19	NEW    cov: 601 ft: 800 corp: 12/8709b lim: 1246 exec/s: 0 rss: 51Mb L: 587/1246 MS: 2 CrossOver-InsertByte-
+	NEW_FUNC[1/1]: 0x000101307c24 in _RINvNtCsccconMumvMc_10serde_json4read5errorNtB2_9SliceReadINtB2_9ReferenceShEEB4_+0x0 (nats_readiness_protocol:arm64+0x100fbfc24)
+#22	NEW    cov: 605 ft: 821 corp: 13/9938b lim: 1246 exec/s: 0 rss: 51Mb L: 1229/1246 MS: 3 ShuffleBytes-ChangeASCIIInt-ShuffleBytes-
+#25	NEW    cov: 612 ft: 833 corp: 14/10685b lim: 1246 exec/s: 0 rss: 51Mb L: 747/1246 MS: 3 ChangeBit-CopyPart-CrossOver-
+#30	NEW    cov: 612 ft: 838 corp: 15/11551b lim: 1246 exec/s: 0 rss: 51Mb L: 866/1246 MS: 5 ChangeBinInt-CrossOver-ShuffleBytes-ChangeByte-CopyPart-
+#31	NEW    cov: 613 ft: 856 corp: 16/11581b lim: 1246 exec/s: 0 rss: 51Mb L: 30/1246 MS: 1 CrossOver-
+	NEW_FUNC[1/1]: 0x00010130bf7c in _RNvMs3_NtCsccconMumvMc_10serde_json4readNtB5_9SliceRead19skip_to_escape_slow+0x0 (nats_readiness_protocol:arm64+0x100fc3f7c)
+... (NEW, REDUCE, and pulse progress lines cut) ...
+"G\000\000\000\000\000\000\000" # Uses: 645
+"b\000" # Uses: 647
+"\377v" # Uses: 630
+"\376\377\377\373" # Uses: 598
+"\001\000\000m" # Uses: 580
+"\361\377\377\377" # Uses: 542
+"\022\000\000\000\000\000\000\000" # Uses: 513
+"_\000\000\000" # Uses: 510
+"\001\000`\037\000\003\265p" # Uses: 479
+"\002\000\000\000\000\000\000\000" # Uses: 476
+"\377d" # Uses: 374
+"\377\377\377\377\377\377\377." # Uses: 366
+"\000\000\000\000\000\000\000\007" # Uses: 318
+"z\000" # Uses: 302
+"\372\377\377\377" # Uses: 246
+"\007\000\000\000\000\000\000\000" # Uses: 217
+";\000\000\000" # Uses: 193
+"\000\000\000\346" # Uses: 138
+"\000\000\000\367" # Uses: 140
+"E\000\000\000\000\000\000\000" # Uses: 143
+"\373\377\377\377" # Uses: 71
+###### End of recommended dictionary. ######
+Done 4369977 runs in 601 second(s)
+stat::number_of_executed_units: 4369977
+stat::average_exec_per_sec:     7271
+stat::new_units_added:          12538
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              590
+fuzz run: nats_readiness_protocol ran for 600 s without a crash
+      602.89 real       506.81 user         9.37 sys

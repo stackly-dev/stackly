@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
     EnvValue, InitStep, IssueCode, Location, NameCheck, PackageError, PackageFiles, PlanContext,
-    PlanError, ResolvedEndpoint, RuntimeContext, SettingClass, ValidatedPackage, read_package,
+    PlanError, ResolvedEndpoint, RuntimeContext, SettingClass, Stdin, ValidatedPackage,
+    read_package,
 };
 use stackly_core::secret::ResolvedSecrets;
 use stackly_domain::{EndpointName, InstanceId, Port};
@@ -596,6 +597,111 @@ fn a_whole_secret_env_value_is_accepted_only_where_secrets_resolve() {
         IssueCode::SecretNotAllowedHere,
     );
     ev.pass();
+}
+
+/// The literal stdin line of the `fake-command` init step, as written in
+/// its `provider.yaml`.
+const STDIN_TEXT_LINE: &str =
+    r#"text: "first line ü 空\n\tsecond line with $(touch pwned) and 'quotes'\n""#;
+
+#[test]
+fn stdin_text_is_literal_one_key_bounded_and_free_of_tokens_and_most_control_characters() {
+    let yaml = "provider.yaml";
+    let at = "lifecycle.initialize[4].stdin";
+    let with_text =
+        |text: &str| Edit::fake_command().replace(yaml, STDIN_TEXT_LINE, &format!("text: {text}"));
+    assert!(with_text(r#""a\tb\nc""#).validate().is_ok());
+    assert_manifest_issue(
+        with_text(r#""home is ${HOME}""#),
+        &format!("{at}.text"),
+        IssueCode::TokenNotAllowedHere,
+    );
+    assert_manifest_issue(
+        with_text(r#""""#),
+        &format!("{at}.text"),
+        IssueCode::InvalidValue,
+    );
+    assert_manifest_issue(
+        with_text(&format!("\"{}\"", "x".repeat(16 * 1024 + 1))),
+        &format!("{at}.text"),
+        IssueCode::InvalidValue,
+    );
+    assert!(
+        with_text(&format!("\"{}\"", "x".repeat(16 * 1024)))
+            .validate()
+            .is_ok()
+    );
+    for control in [r"\r", r"\u0000", r"\u007f", r"\u0085"] {
+        assert_manifest_issue(
+            with_text(&format!("\"a{control}b\"")),
+            &format!("{at}.text"),
+            IssueCode::InvalidValue,
+        );
+    }
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            STDIN_TEXT_LINE,
+            &format!("{STDIN_TEXT_LINE}\n        secret: authToken"),
+        ),
+        at,
+        IssueCode::InvalidValue,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            &format!("stdin:\n        {STDIN_TEXT_LINE}"),
+            "stdin: {}",
+        ),
+        at,
+        IssueCode::InvalidValue,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "      args: [version]\n  failureThreshold",
+            "      args: [version]\n      stdin: { text: x }\n  failureThreshold",
+        ),
+        "health.probe.command.stdin",
+        IssueCode::UnknownField,
+    );
+}
+
+#[test]
+fn stdin_text_reaches_the_plan_exactly_and_changes_the_digest() {
+    let package = Edit::fake_command()
+        .validate()
+        .expect("the fixture is valid");
+    let init = package
+        .init_plan(&context_for(
+            &package,
+            serde_json::json!({ "authToken": SECRET_REF }),
+            "/Volumes/T",
+        ))
+        .expect("the init plan builds");
+    let run = init
+        .steps
+        .iter()
+        .find_map(|step| match step {
+            InitStep::Run(run) => Some(run),
+            _ => None,
+        })
+        .expect("the init step runs");
+
+    assert_eq!(
+        run.stdin,
+        Stdin::Text("first line ü 空\n\tsecond line with $(touch pwned) and 'quotes'\n".into())
+    );
+    assert!(format!("{:?}", run.stdin).contains("second line"));
+
+    let changed = Edit::fake_command()
+        .replace("provider.yaml", "second line with", "second line wiTh")
+        .validate()
+        .expect("still valid");
+    assert_ne!(
+        package.key().manifest_sha256(),
+        changed.key().manifest_sha256()
+    );
 }
 
 #[test]
@@ -1602,6 +1708,103 @@ fn plans_report_unresolved_and_lan_endpoints_and_long_arguments() {
         PlanError::ArgumentTooLong {
             position: "lifecycle.start.args[5]".into()
         }
+    );
+}
+
+/// The first config file written by an init plan.
+fn first_write(
+    package: &ValidatedPackage,
+    settings: serde_json::Value,
+) -> stackly_core::provider::FileWrite {
+    let init = package
+        .init_plan(&context_for(package, settings, "/Volumes/T"))
+        .expect("the init plan builds");
+    init.steps
+        .into_iter()
+        .find_map(|step| match step {
+            InitStep::WriteFile(write) => Some(write),
+            _ => None,
+        })
+        .expect("the config is written")
+}
+
+fn token(text: &str) -> ResolvedSecrets {
+    ResolvedSecrets::for_tests([(
+        "authToken".parse().expect("valid field"),
+        SecretValue::new(text.to_owned()).expect("a valid secret value"),
+    )])
+}
+
+#[test]
+fn postgresql_conf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: postgresqlConf")
+        .set(
+            "templates/fake.json.tmpl",
+            "greeting = {{ settings.greeting }}\nfail_init = {{ settings.failInit }}\nignore_term = {{ settings.ignoreTerm }}\nready_delay = {{ settings.readyDelayMs }}\ntoken = {{ secret.authToken }}\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(
+        &package,
+        serde_json::json!({
+            "authToken": SECRET_REF,
+            "greeting": "it's a\\b ü",
+            "failInit": true,
+            "readyDelayMs": 250,
+        }),
+    );
+
+    assert_eq!(
+        write.content.materialize(&token("x'y")).expect("the config materializes"),
+        "greeting = 'it''s a\\\\b ü'\nfail_init = on\nignore_term = off\nready_delay = 250\ntoken = 'x''y'\n".as_bytes()
+    );
+    let err = write.content.materialize(&token("a\nb")).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "secret.authToken".into()
+        }
+    );
+    assert!(!err.to_string().contains("a\nb"), "{err}");
+}
+
+#[test]
+fn plain_templates_keep_text_and_comments_and_reject_output_and_block_tags() {
+    let template = "templates/fake.json.tmpl";
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: plain")
+        .set(
+            template,
+            "{{! a comment line disappears }}\nlocal   all   all   scram-sha-256\n\\{{ stays literal }}\nmap /^.*$ x\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(&package, serde_json::json!({ "authToken": SECRET_REF }));
+    assert_eq!(
+        write
+            .content
+            .materialize(&token("unused"))
+            .expect("the file materializes"),
+        b"local   all   all   scram-sha-256\n{{ stays literal }}\nmap /^.*$ x\n"
+    );
+
+    let plain = || Edit::fake().replace("provider.yaml", "format: json", "format: plain");
+    assert_issue(
+        &plain()
+            .set(template, "a\n{{ settings.greeting }}\n")
+            .issues(),
+        template,
+        "2:1",
+        IssueCode::TemplateType,
+    );
+    assert_issue(
+        &plain()
+            .set(template, "{{#if settings.failInit}}x{{/if}}\n")
+            .issues(),
+        template,
+        "1:1",
+        IssueCode::TemplateType,
     );
 }
 

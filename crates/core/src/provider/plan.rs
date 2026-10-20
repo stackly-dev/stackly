@@ -25,7 +25,8 @@ use super::interpolate::{
     EndpointTransport, ExecRef, InstanceDir, Interp, PathBase, PathExpr, Piece, SECRETS_DIR, Token,
 };
 use super::manifest::{
-    CommandSpec, InitStepSpec, Manifest, ProbeDef, ReloadActionSpec, StopSignal, StopSpec,
+    CommandSpec, InitStepSpec, Manifest, ProbeDef, ReloadActionSpec, StdinSpec, StopSignal,
+    StopSpec,
 };
 use super::names::SettingName;
 use super::settings::{ScalarValue, SettingValue, SettingsError, SettingsItem, SettingsValues};
@@ -276,6 +277,9 @@ pub enum Stdin {
     Null,
     /// The exact bytes of a secret, then end of file.
     Secret(PlanSecret),
+    /// Literal manifest text, written exactly, then end of file (spec
+    /// 0019). It is not a secret, so `Debug` and `Serialize` show it.
+    Text(String),
 }
 
 /// The plan of the start action and of the running process.
@@ -1084,7 +1088,8 @@ impl ValidatedPackage {
                     success,
                 } => {
                     let stdin = match stdin {
-                        Some(field) => Stdin::Secret(resolver.secret(field)?),
+                        Some(StdinSpec::Secret(field)) => Stdin::Secret(resolver.secret(field)?),
+                        Some(StdinSpec::Text(text)) => Stdin::Text(text.clone()),
                         None => Stdin::Null,
                     };
                     let timeout = secs(timeout.unwrap_or(manifest.timeouts.init));

@@ -60,6 +60,8 @@ pub(crate) struct RawManifest {
     pub(crate) logs: Option<RawLogs>,
     pub(crate) backup: Option<RawBackup>,
     pub(crate) permissions: RawPermissions,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 8)))]
+    pub(crate) connection: Option<Vec<RawConnection>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -219,9 +221,15 @@ pub(crate) struct RawStep {
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[cfg_attr(feature = "json-schema", schemars(rename = "Stdin"))]
+#[cfg_attr(
+    feature = "json-schema",
+    schemars(rename = "Stdin", extend("minProperties" = 1, "maxProperties" = 1))
+)]
 pub(crate) struct RawStdin {
-    pub(crate) secret: String,
+    /// A secret field whose exact bytes go to stdin.
+    pub(crate) secret: Option<String>,
+    /// Literal text written to stdin exactly (spec 0019).
+    pub(crate) text: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -355,6 +363,23 @@ pub(crate) struct RawPermissions {
     #[serde(default)]
     #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::MANIFEST_NAME }, "maxProperties" = 16)))]
     pub(crate) additional_executables: BTreeMap<String, String>,
+}
+
+/// One `connection` entry: a named URI template (spec 0021).
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Connection"))]
+pub(crate) struct RawConnection {
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::CONNECTION_NAME))
+    )]
+    pub(crate) name: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 64)))]
+    pub(crate) title: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 512)))]
+    pub(crate) template: String,
 }
 
 /// `schemas/settings.schema.json`.

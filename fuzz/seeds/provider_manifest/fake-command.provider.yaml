@@ -1,9 +1,10 @@
 # Fixture package for the primitives the fake provider does not use:
 # materializeSecret (referenced through ${instance.secrets}), a secret as a
 # whole env value, tcp and exec probes, the command stop strategy, the run
-# reload action, a unix endpoint, an executable alias, and a config file in a
-# subfolder. It runs the same stackly-fake-server binary, which ignores the
-# env it does not know.
+# reload action, a unix endpoint, an executable alias, a config file in a
+# subfolder, and literal stdin text on an init step (spec 0019). It runs the
+# same stackly-fake-server binary, which ignores the env and the stdin it
+# does not know.
 apiVersion: stackly/v1alpha1
 kind: Provider
 metadata:
@@ -48,6 +49,8 @@ lifecycle:
       args: [init, "--data=${instance.data}"]
       env:
         FAKE_TOKEN_FILE: "${instance.secrets}/token"
+      stdin:
+        text: "first line ü 空\n\tsecond line with $(touch pwned) and 'quotes'\n"
       timeoutSeconds: 20
       successExitCodes: [0]
   start:

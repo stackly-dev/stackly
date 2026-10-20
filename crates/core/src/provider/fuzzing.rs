@@ -11,6 +11,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path};
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use stackly_domain::EndpointName;
 use stackly_platform::SecretValue;
@@ -27,6 +28,8 @@ use super::plan::{
     ARGUMENT_MAX_LEN, CHILD_PATH, Command, EnvValue, InitStep, PlanContext, PlanError, ProbeSpec,
     ReloadAction, Resolver, StopPlan,
 };
+use super::probe::NativeProbeFailure;
+use super::probe::nats::{self, Exchange, Expectation, connect_bytes};
 use super::raw::{RawSettingsSchema, decode_json, parse_json};
 use super::settings::{SettingsSchema, parse_schema};
 use super::validate::{ValidatedPackage, sample_context};
@@ -102,9 +105,11 @@ pub fn manifest(data: &[u8]) {
 }
 
 /// Target `provider_template`: the first byte picks a setup, the rest is
-/// the template. Setups 0, 1, and 2 replace the fake template and render
-/// it as `json`, `yaml`, and `natsConf` against the fake context; setup 3
-/// replaces the traefik routes template, whose context has a list.
+/// the template. Setups 0, 1, 2, 4, and 5 replace the fake template and
+/// render it as `json`, `yaml`, `natsConf`, `postgresqlConf`, and `plain`
+/// against the fake context; setup 3 replaces the traefik routes template,
+/// whose context has a list. Setups 0 to 3 keep the numbers of the seeds
+/// written before the `postgresqlConf` and `plain` formats (spec 0019).
 ///
 /// # Panics
 ///
@@ -115,11 +120,17 @@ pub fn template(data: &[u8]) {
     let Some((&selector, template)) = data.split_first() else {
         return;
     };
-    let (folder, mut files, slot) = match selector % 4 {
+    let (folder, mut files, slot) = match selector % 6 {
         3 => ("traefik", package_files(&TRAEFIK), TRAEFIK_ROUTES),
         other => {
             let mut files = package_files(&FAKE);
-            let format = ["json", "yaml", "natsConf"][usize::from(other)];
+            let format = match other {
+                0 => "json",
+                1 => "yaml",
+                2 => "natsConf",
+                4 => "postgresqlConf",
+                _ => "plain",
+            };
             let manifest = FAKE[0]
                 .1
                 .replace("format: json", &format!("format: {format}"));
@@ -318,6 +329,68 @@ pub fn settings_schema(data: &[u8]) {
 }
 
 /// The files of an embedded package.
+/// Target `nats_readiness_protocol` (spec 0023, *Fuzz target*): bit 0 of
+/// the first byte picks the JetStream expectation, the first byte shifted
+/// right by one plus one (1 to 128) is the chunk size, and the other bytes
+/// reach [`Exchange`] as the server's bytes in chunks of that size, with
+/// `golden` as the expected server name. An empty input does nothing.
+///
+/// # Panics
+///
+/// Panics when the chunk size changes what the attempt writes or how it
+/// ends, when a result changes or more bytes are written after it is
+/// known, when the attempt writes anything but CONNECT and PING, a PONG
+/// per PING, and the JetStream request once and only when asked, when it
+/// is ready without that whole exchange, or when a failure has a reason
+/// the exchange never gives or a detail over 256 characters or with a
+/// control character.
+pub fn nats_readiness_protocol(data: &[u8]) {
+    let Some((&mode, server)) = data.split_first() else {
+        return;
+    };
+    let expectation = Expectation {
+        server_name: "golden".to_owned(),
+        jetstream: mode & 1 == 1,
+    };
+    let chunk = usize::from(mode >> 1) + 1;
+    let (written, result, exchange) = nats_attempt(&expectation, server, chunk);
+    let (whole_written, whole_result, _) = nats_attempt(&expectation, server, usize::MAX);
+    assert_eq!(
+        written, whole_written,
+        "the chunk size changed what the attempt wrote"
+    );
+    assert_eq!(
+        result, whole_result,
+        "the chunk size changed how the attempt ended"
+    );
+    check_nats_writes(&expectation, &exchange, &written, result.as_ref());
+    if let Some(Err(failure)) = &result {
+        let reasons = [
+            nats::PROTOCOL_ERROR,
+            nats::IDENTITY_MISMATCH,
+            nats::TLS_REQUIRED,
+            nats::AUTH_REQUIRED,
+            nats::LAME_DUCK,
+            nats::JETSTREAM_DISABLED,
+            nats::JETSTREAM_UNEXPECTED,
+            nats::JETSTREAM_UNAVAILABLE,
+        ];
+        assert!(
+            reasons.contains(&failure.reason),
+            "the exchange gave reason {}",
+            failure.reason.as_str()
+        );
+        check_nats_detail(&failure.detail);
+    }
+    for failure in [
+        exchange.closed(),
+        exchange.reset(),
+        exchange.timed_out(Duration::from_millis(2000)),
+    ] {
+        check_nats_detail(&failure.detail);
+    }
+}
+
 fn package_files(files: &[(&str, &str)]) -> BTreeMap<String, Vec<u8>> {
     files
         .iter()
@@ -559,6 +632,85 @@ fn documents(schema: &SettingsSchema) -> Vec<serde_json::Value> {
     ]
 }
 
+/// What one `nats-readiness` attempt wrote, how it ended, and the
+/// exchange, after feeding `server` in chunks of `chunk` bytes until a
+/// result.
+fn nats_attempt(
+    expectation: &Expectation,
+    server: &[u8],
+    chunk: usize,
+) -> (Vec<u8>, Option<Result<(), NativeProbeFailure>>, Exchange) {
+    let mut exchange = Exchange::new(expectation.clone(), [0x5a; 16]);
+    let mut written = Vec::new();
+    for piece in server.chunks(chunk) {
+        let step = exchange.feed(piece);
+        written.extend_from_slice(&step.write);
+        if let Some(done) = step.done {
+            let again = exchange.feed(b"PING\r\n");
+            assert!(again.write.is_empty(), "the attempt wrote after its result");
+            assert_eq!(
+                again.done.as_ref(),
+                Some(&done),
+                "a result changed after it was known"
+            );
+            return (written, Some(done), exchange);
+        }
+    }
+    let result = exchange.result().cloned();
+    (written, result, exchange)
+}
+
+/// Checks that `written` is CONNECT and PING, then PONGs and at most one
+/// JetStream request (only when asked), and that a ready attempt sent the
+/// whole exchange.
+fn check_nats_writes(
+    expectation: &Expectation,
+    exchange: &Exchange,
+    written: &[u8],
+    result: Option<&Result<(), NativeProbeFailure>>,
+) {
+    let connect = connect_bytes();
+    let request = exchange.jetstream_request();
+    let Some(mut rest) = written.strip_prefix(connect.as_slice()) else {
+        assert!(written.is_empty(), "the attempt wrote before CONNECT");
+        assert!(result != Some(&Ok(())), "ready without CONNECT");
+        return;
+    };
+    let mut requested = false;
+    while !rest.is_empty() {
+        if let Some(after) = rest.strip_prefix(b"PONG\r\n".as_slice()) {
+            rest = after;
+        } else if let Some(after) = rest
+            .strip_prefix(request.as_slice())
+            .filter(|_| expectation.jetstream && !requested)
+        {
+            rest = after;
+            requested = true;
+        } else {
+            panic!("the attempt wrote bytes outside the protocol");
+        }
+    }
+    if result == Some(&Ok(())) {
+        assert_eq!(
+            requested, expectation.jetstream,
+            "ready without the JetStream request it needs"
+        );
+    }
+}
+
+/// A detail from the exchange fits the observation limit before the
+/// runner of spec 0010 redacts and cuts it, and has no control character.
+fn check_nats_detail(detail: &str) {
+    assert!(
+        detail.chars().count() <= 256,
+        "a detail has more than 256 characters"
+    );
+    assert!(
+        !detail.chars().any(char::is_control),
+        "a detail has a control character"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -613,6 +765,7 @@ mod tests {
             template(input);
             interpolation(input);
             settings_schema(input);
+            nats_readiness_protocol(input);
         }
     }
 }

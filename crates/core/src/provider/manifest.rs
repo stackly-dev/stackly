@@ -10,6 +10,7 @@ use stackly_domain::{
     SoftwareName, Target,
 };
 
+use super::connection::ConnectionSpec;
 use super::interpolate::{EndpointTransport, ExecRef, InstanceDir, Interp, PathExpr};
 use super::names::SettingName;
 use super::settings::Pattern;
@@ -156,10 +157,19 @@ pub(crate) enum InitStepSpec {
     },
     RunExecutable {
         command: CommandSpec,
-        stdin: Option<SettingName>,
+        stdin: Option<StdinSpec>,
         timeout: Option<u64>,
         success: Vec<u8>,
     },
+}
+
+/// The stdin of a `runExecutable` step.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum StdinSpec {
+    /// The exact bytes of a secret field.
+    Secret(SettingName),
+    /// Literal manifest text, written exactly (spec 0019).
+    Text(String),
 }
 
 /// The signal of a graceful stop.
@@ -274,6 +284,7 @@ pub struct Manifest {
     pub(crate) managed_fs: BTreeSet<InstanceDir>,
     pub(crate) aliases: BTreeMap<String, Vec<String>>,
     pub(crate) managed_fields: Vec<ManagedField>,
+    pub(crate) connections: Vec<ConnectionSpec>,
 }
 
 impl Manifest {
@@ -335,5 +346,13 @@ impl Manifest {
     #[must_use]
     pub fn cold_backup_paths(&self) -> &[InstanceDir] {
         &self.cold_backup_paths
+    }
+
+    /// Returns the `connection` entries in manifest order; the first is the
+    /// main connection, and a package without the block has none (spec
+    /// 0021).
+    #[must_use]
+    pub fn connections(&self) -> &[ConnectionSpec] {
+        &self.connections
     }
 }
