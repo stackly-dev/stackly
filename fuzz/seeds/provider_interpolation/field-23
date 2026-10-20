@@ -1,1 +1,1 @@
-${instance.config}/peers.yaml
+${instance.config}/conf/server.json

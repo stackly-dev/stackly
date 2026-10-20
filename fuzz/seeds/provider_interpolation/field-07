@@ -1,1 +1,1 @@
---host=${endpoint.http.host}
+--port=${endpoint.http.port}

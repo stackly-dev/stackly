@@ -1,1 +1,1 @@
---port=${endpoint.http.port}
+--config=${instance.config}/fake.json

@@ -1,1 +1,1 @@
-${instance.config}/conf/server.json
+fake.${endpoint.http.port}

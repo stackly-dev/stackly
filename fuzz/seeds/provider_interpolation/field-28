@@ -1,1 +1,1 @@
-${endpoint.http.address}
+${endpoint.control.socket}

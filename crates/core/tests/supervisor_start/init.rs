@@ -42,6 +42,7 @@ async fn init_runs_the_plan_with_the_secret_on_stdin_and_the_lock_at_fd_three() 
             format!("--data={}", data.display()),
             "--token-stdin".to_owned(),
             "--fail=false".to_owned(),
+            "--delay-ms=0".to_owned(),
         ]
     );
     assert_eq!(step.stdin_len, Some(TOKEN.len()));

@@ -6,6 +6,7 @@ use std::fs;
 use std::io::{self, Read};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::Path;
+use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
@@ -19,11 +20,12 @@ const TOKEN_DIGEST_FILE: &str = "token.sha256";
 /// Data marker the `testing/fake` manifest names in `compatibility.dataMarker`.
 const MARKER_FILE: &str = "FAKE_VERSION";
 
-/// Runs `init --data=<dir> [--token-stdin] [--fail=<bool>]`.
+/// Runs `init --data=<dir> [--token-stdin] [--fail=<bool>] [--delay-ms=<n>]`.
 pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
-    let flags = Flags::parse(args, &["data", "fail"], &["token-stdin"])?;
+    let flags = Flags::parse(args, &["data", "fail", "delay-ms"], &["token-stdin"])?;
     let data = flags.required_path("data")?;
     let fail = flags.boolean("fail", false)?;
+    let delay = Duration::from_millis(flags.number("delay-ms", 0)?);
 
     // Drain stdin before anything can fail, so the executor writing the
     // secret never meets a closed pipe.
@@ -32,6 +34,12 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
     } else {
         None
     };
+
+    // Hold the data folder untouched for the delay, so a test can stop the
+    // daemon while the helper is still initializing.
+    if !delay.is_zero() {
+        std::thread::sleep(delay);
+    }
 
     ensure_private_dir(&data)?;
     write_argv(&data.join(ARGV_FILE), argv)?;

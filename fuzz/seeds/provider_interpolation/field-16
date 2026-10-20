@@ -1,1 +1,1 @@
-${instance.name}
+${instance.config}/nats.conf

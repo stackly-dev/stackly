@@ -68,6 +68,15 @@
       "default": false,
       "x-stackly": { "apply": "immutableAfterInit", "visibility": "advanced" }
     },
+    "initDelayMs": {
+      "type": "integer",
+      "title": "Init delay (ms)",
+      "description": "How long init waits after reading the token and before touching the data folder; 0 does not wait.",
+      "minimum": 0,
+      "maximum": 600000,
+      "default": 0,
+      "x-stackly": { "apply": "immutableAfterInit", "visibility": "advanced" }
+    },
     "authToken": {
       "type": "string",
       "title": "Auth token",

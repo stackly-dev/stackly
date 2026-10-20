@@ -1,1 +1,1 @@
---config=${instance.config}/conf/server.json
+${instance.secrets}/token
