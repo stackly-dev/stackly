@@ -33,6 +33,12 @@ struct SecretViewsAccessibilityTests {
             })
     }
 
+    @Test func aShownValueIsReadByVoiceOverAsTheLabelsValue() throws {
+        let file = try source("RevealableSecretText.swift")
+        #expect(file.codeLines.contains { $0.contains(#".accessibilityLabel("Password, shown")"#) })
+        #expect(file.codeLines.contains { $0.contains(".accessibilityValue(shown)") })
+    }
+
     @Test func showHideAndCopyAreNativeButtonsWithTheirOwnLabels() throws {
         let file = try source("RevealableSecretText.swift")
         let code = file.codeLines.joined(separator: "\n")
