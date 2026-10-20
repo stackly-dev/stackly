@@ -8,6 +8,7 @@ pub mod dto;
 pub mod golden;
 pub mod pty;
 pub mod scripted;
+pub mod stacklyd;
 
 use std::collections::BTreeSet;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
