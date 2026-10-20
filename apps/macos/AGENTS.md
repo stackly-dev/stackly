@@ -18,6 +18,8 @@ The native macOS GUI: the `Stackly` app target plus the local `StacklyUI` packag
 
 ```bash
 cargo xtask build-app   # from the repo root, runs xcodebuild for scheme Stackly into target/xcode
+cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed   # before swift test; without them SkeletonEndToEndTests end as BLOCKED
+swift test --package-path apps/macos/Packages/StacklyUI
 ```
 
 ## Conventions

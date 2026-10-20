@@ -224,7 +224,7 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
   - [x] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
   - [ ] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19, AC-24; build steps 9 to 11; needs features 12 and 13)
 - [ ] Verify it: `/check verify secret store & redaction`
-- [ ] Test it: `/test secret store & redaction`
+- [x] Test it: `/test secret store & redaction`
 - [ ] Review it (fresh model): `/check review secret store & redaction`
 - [ ] Document it: `/document secret store & redaction`
 
@@ -250,4 +250,4 @@ Satu irisan tipis yang membuktikan stack sudah tersambung: fake provider dibuat,
   - [ ] GUI and AC-001: `SkeletonEndToEndTests` in `StacklyUI` with the real seed and daemon binaries and a second client connection making the changes (events in `InstanceStore`, close and reopen with three instances), then the manual fixture record that you review, where the CLI makes the changes (spec 0014 AC-14 to AC-16; build steps 9 and 10; step 9 needs the first milestone and spec 0013 step 16 in `ui-macos.md`, step 10 needs the second and third milestones and spec 0013 step 15)
   - [ ] Secrets end to end: `--secret <field>=<source>` on create through `secret_input`, the fixture credential sentinel, and a locked file keychain giving `needsSecret` in the CLI and `InstanceStore` (spec 0014 AC-17 to AC-19; build steps 11 to 13; after the third milestone and spec 0011 step 8; step 13 after step 9)
 - [ ] Verify it: `/check verify walking skeleton`
-- [ ] Test it: `/test walking skeleton`
+- [x] Test it: `/test walking skeleton`

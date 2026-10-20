@@ -257,6 +257,8 @@
 
 - `10` · `Document it` · `/document changelog` oleh lead untuk F10 (rentang `4311e5c^..ace35e1`, path F10): enam bullet `Added` dan dua `Security` di `CHANGELOG.md` · commit `docs(changelog): process supervisor` dan `docs(scope): tick 10 document it`. F10 tinggal `Verify it`, yang menunggu reboot dari user.
 
+- `11` dan `14` · `Test it` · `/sync` oleh lead: bukti `/test` sudah ada di repo (F11 `76d8a12` dan `8eb087e`, F14 `89ac5b9`), jadi kotak ini dicentang sekarang. Rencana sebelumnya menunggu `Build it` selesai, dan diganti dengan aturan `/sync` yang mencentang kotak yang selesai menurut bukti · commit `chore(sync): reconcile docs`
+
 ## Riwayat wave
 
 - Wave `1` (`2026-10-20`, hash awal `eea005d`): selesai di `4434632`. Merge: F8 langkah 12 dan test (`87e905e`, `ed731b5`, `6cc2c10`), update spec 0007 (`8e2a94a`), F11 langkah 5 (`08bc15f`, `14653f8`), F10 langkah 7 dan 8 (`4434632`). Dicentang: F8 milestone 2, `Build it`, `Verify it`, `Test it`, dan F8 `done`. Terbuka: F7 langkah 16, F10 M1 sampai M4 dan kotak penutup, F11 M4 (langkah 7), M5, M6, dan kotak penutup, serta F14. Blocker: baris Boot setelah reboot F10 (`BLOCKED`, owner user).
