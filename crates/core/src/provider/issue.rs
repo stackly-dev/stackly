@@ -138,6 +138,11 @@ issue_codes! {
     FixtureOutsideTesting => "fixture_outside_testing",
     /// A provider ID whose name differs from the package folder.
     DirectoryNameMismatch => "directory_name_mismatch",
+    /// A `connection` entry whose name, title, or template breaks a rule;
+    /// [`Issue::reason`] says which (spec 0021).
+    ConnectionInvalid => "connection_invalid",
+    /// Two `connection` entries with the same name (spec 0021).
+    ConnectionNameDuplicate => "connection_name_duplicate",
     /// More than [`MAX_ISSUES`] issues; the rest were dropped.
     TooManyIssues => "too_many_issues",
 }
@@ -192,6 +197,10 @@ pub struct Issue {
     pub code: IssueCode,
     /// What is wrong.
     pub message: String,
+    /// A stable snake_case reason, set only by codes that declare a list
+    /// of reasons, such as `connection_invalid` (spec 0021), and empty for
+    /// every other code.
+    pub reason: Option<&'static str>,
 }
 
 impl Issue {
@@ -208,7 +217,15 @@ impl Issue {
             location,
             code,
             message: message.into(),
+            reason: None,
         }
+    }
+
+    /// Sets the stable reason of a code that declares a list of reasons.
+    #[must_use]
+    pub const fn with_reason(mut self, reason: &'static str) -> Self {
+        self.reason = Some(reason);
+        self
     }
 }
 
@@ -295,6 +312,19 @@ impl<'a> FileIssues<'a> {
         ));
     }
 
+    /// Adds an issue with a stable reason at a field path.
+    pub(crate) fn at_with_reason(
+        &mut self,
+        path: impl Into<String>,
+        code: IssueCode,
+        reason: &'static str,
+        message: impl Into<String>,
+    ) {
+        self.issues.push(
+            Issue::new(self.file, Location::Field(path.into()), code, message).with_reason(reason),
+        );
+    }
+
     /// Returns how many issues were pushed so far, in every file.
     pub(crate) fn count(&self) -> usize {
         self.issues.count()
@@ -325,7 +355,7 @@ mod tests {
                 "{text}"
             );
         }
-        assert_eq!(IssueCode::ALL.len(), 50);
+        assert_eq!(IssueCode::ALL.len(), 52);
     }
 
     #[test]
