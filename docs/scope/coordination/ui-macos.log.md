@@ -10,6 +10,10 @@
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `Langkah penyelesaian foundation.md` | lead foundation | penutupan `01-foundation` | `01-foundation.md` | tidak menyentuh `ui-macos.md` | tidak ada | tidak diketahui | `peer` (idle) |
+| `arc-f67-spec` | architect | F67 `Design it (spec)`, spec 0067 | `ui-macos.md` | `docs/specs/0067-komponen-dasar-stackly/` | `claude/arc-f67-spec-281774` | `opus-5-5 · xhigh` | `aktif` |
+| `arc-f68-spec` | architect | F68 `Design it (spec)`, spec 0068 | `ui-macos.md` | `docs/specs/0068-fixture-tampilan-cek-visual/`, baris snapshot spec 0001, teks XCTest dan Follow-up spec 0002 | `claude/arc-f68-spec-3056e5` | `opus-5-5 · xhigh` | `aktif` |
+| `arc-f69-spec` | architect | F69 `Design it (spec)`, spec 0069 | `ui-macos.md` | `docs/specs/0069-menu-aplikasi-perintah-shortcut/` | `claude/arc-f69-spec-a4bbd3` | `opus-5-5 · xhigh` | `aktif` |
+| `chk-f13-m4` | checker (verify) | F13 milestone 4, langkah 15 sampai 18 (kode di `main`) | `ui-macos.md` | centang `verify.md` 0013 Milestone 4, record baru `evidence/manual/` 0013 | `claude/chk-f13-m4-10cbd7` | `sonnet-5-5 · high` | `aktif` |
 
 ## Keputusan
 
@@ -22,6 +26,7 @@
 | `2026-10-21` | Tiga baris `/scope` dari Follow-up spec 0012 dan 0013 diterapkan ke `ui-macos.md`: Done when F67 memakai ulang `StatusLabel`, `ToneBadge`, `StateBanner`, `StatePlaceholder`, `.mutationGated()`, `.disabled(reason:)`, `.stacklyConfirmation`; baris Selisih fitur 12 (teks status, stale, konfirmasi native) dan fitur 13 (badge native, Open Diagnostics, banner informative dan critical, notice dengan Dock, 900 × 600). Baris Follow-up di spec 0012 dan 0013 dicentang lewat `/sync` akhir wave. | `user` |
 | `2026-10-21` | Rekonsiliasi `main` `ff6e626`: kode F13 milestone 4 lengkap di `main`. Langkah 15 dan 17 serta bagian daemon langkah 18 (`cdad419`, `bbf722e`), langkah 16 (`a3916eb`), dan bagian instance langkah 18 lewat `SkeletonEndToEndTests.theInstanceStoreFollowsChangesAnotherClientMakes` (`b3e293c`, F14 langkah 9). Milestone ini bukan item developer: langsung checker verify `chk-f13-m4` dari `main`. Sisa langkah `verify.md` M4: cek 6 (keyboard dan VoiceOver, user, `docs/manual.md` bagian F), langkah 16 dan cek 3 (dijalankan checker lewat accessibility API seperti cek 1, 2, 4, 5, 7, 8). | `lead` |
 | `2026-10-21` | `arc-f68-spec` juga memegang baris "Library snapshot test Swift" di tabel spec 0001 dan teks helper XCTest beserta baris Follow-up-nya di spec 0002 ("Helper evidence untuk XCTest saat XCUITest pertama datang (fitur 68)"), karena F1 dan F2 `done` dan tidak ada sesi lain yang menyentuh kedua spec itu (preseden `arc-f15-spec` dengan spec 0004). | `lead` |
+| `2026-10-21` | Empat sub sesi wave 1 dimulai dari giliran user. Worktree aplikasi ada di `/Users/ojiepermana/worktrees/Stackly/<name>-<hash>`, bukan `.claude/worktrees/`; gerbang langkah 6 memakai path itu. `chk-f12-verify` (opus · high) menunggu slot kosong. | `lead` |
 | `2026-10-21` | Update spec 0013 dari usulan fase 02 (`02-instalasi-pertama.usulan-fondasi.md` bagian Spec 0013, sisa setelah K16 sampai K18; prasyarat F16 M1) ada di luar scope ini dan memuat perubahan teks AC-7. Diajukan ke user di akhir wave, setelah F13 `Verify it`, supaya verify penuh F13 memakai spec yang dibangun. | `lead` |
 
 ## Blocker terbuka
