@@ -1,0 +1,2 @@
+INFO {"server_id":"NDB3MWZTITFTNTDLEBU6V6V4LZCXNAQXRJVYCYXGMAMPBJBQQLWKJGEY","server_name":"golden","version":"2.15.1","proto":1,"git_commit":"b2fd3ef","go":"go1.27.2","host":"127.0.0.1","port":56630,"headers":true,"auth_required":true,"max_payload":1048576,"client_id":6,"client_ip":"127.0.0.1","api_lvl":5,"xkey":"XASIJAY256DUK64HZWWYLOML6YPBURCUUNW6JMNFN5KWP6OTXUMSH3G6"} 
+-ERR 'Authorization Violation'

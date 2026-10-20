@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.nats-transcripts/v1",
+  "source": "Recorded 2026-10-20 by the spec 0023 step 0 spike from nats-server 2.15.1 (nats-2.15.1-macos-aarch64, sha256 ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd, from the xtask runtime cache) on loopback, after sending the exact nats-readiness CONNECT and PING and, for JetStream, the SUB and PUB of $JS.API.INFO to _INBOX.stackly.00112233445566778899aabbccddeeff. Each file holds every byte the server sent on that connection.",
+  "transcripts": [
+    {
+      "file": "real-js-on.bin",
+      "server": "-n golden -js",
+      "serverName": "golden",
+      "jetstream": true,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": null
+    },
+    {
+      "file": "real-js-on.bin",
+      "server": "-n golden -js",
+      "serverName": "golden",
+      "jetstream": false,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": "jetstream_unexpected"
+    },
+    {
+      "file": "real-js-off.bin",
+      "server": "-n golden",
+      "serverName": "golden",
+      "jetstream": false,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": null
+    },
+    {
+      "file": "real-js-off.bin",
+      "server": "-n golden",
+      "serverName": "golden",
+      "jetstream": true,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": "jetstream_disabled"
+    },
+    {
+      "file": "real-foreign.bin",
+      "server": "-n foreign",
+      "serverName": "golden",
+      "jetstream": false,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": "identity_mismatch"
+    },
+    {
+      "file": "real-auth.bin",
+      "server": "-n golden --user u --pass p",
+      "serverName": "golden",
+      "jetstream": false,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": "auth_required"
+    },
+    {
+      "file": "real-lame-duck.bin",
+      "server": "-n golden, then SIGUSR2 (the INFO an open connection received)",
+      "serverName": "golden",
+      "jetstream": false,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": "lame_duck"
+    }
+  ]
+}
