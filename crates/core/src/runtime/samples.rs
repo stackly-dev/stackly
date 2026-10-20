@@ -1043,3 +1043,211 @@ pub fn archive_samples() -> Vec<ArchiveSample> {
     );
     samples
 }
+
+const MH_MAGIC_64: u32 = 0xfeed_facf;
+const CPU_TYPE_ARM64: u32 = 0x0100_000c;
+const CPU_TYPE_X86_64: u32 = 0x0100_0007;
+const CPU_SUBTYPE_ARM64E: u32 = 2;
+const MH_EXECUTE: u32 = 2;
+const MH_DYLIB: u32 = 6;
+const FAT_MAGIC: u32 = 0xcafe_babe;
+/// The alignment of each slice in a universal file: 16 KiB.
+const SLICE_ALIGN: usize = 1 << 14;
+
+/// A thin 64 bit little endian Mach-O file, built from its load
+/// commands; it has no segments, which is all the parser reads.
+#[derive(Debug, Clone)]
+pub struct MachOBuilder {
+    cputype: u32,
+    cpusubtype: u32,
+    file_type: u32,
+    commands: Vec<Vec<u8>>,
+}
+
+impl MachOBuilder {
+    /// An arm64 main executable.
+    #[must_use]
+    pub fn executable() -> Self {
+        Self {
+            cputype: CPU_TYPE_ARM64,
+            cpusubtype: 0,
+            file_type: MH_EXECUTE,
+            commands: Vec::new(),
+        }
+    }
+
+    /// An arm64 library with this `LC_ID_DYLIB`.
+    #[must_use]
+    pub fn dylib(install_name: &str) -> Self {
+        Self {
+            file_type: MH_DYLIB,
+            ..Self::executable()
+        }
+        .dylib_command(0xd, install_name)
+    }
+
+    /// The same file for Intel.
+    #[must_use]
+    pub fn x86_64(mut self) -> Self {
+        self.cputype = CPU_TYPE_X86_64;
+        self.cpusubtype = 3;
+        self
+    }
+
+    /// The same file for arm64e.
+    #[must_use]
+    pub fn arm64e(mut self) -> Self {
+        self.cpusubtype = CPU_SUBTYPE_ARM64E;
+        self
+    }
+
+    /// Adds `LC_BUILD_VERSION` for macOS `major.minor`.
+    #[must_use]
+    pub fn min_os(self, major: u32, minor: u32) -> Self {
+        self.build_version(1, major, minor)
+    }
+
+    /// Adds `LC_BUILD_VERSION` for another platform (2 is iOS).
+    #[must_use]
+    pub fn build_version(mut self, platform: u32, major: u32, minor: u32) -> Self {
+        let mut command = Vec::new();
+        for word in [0x32, 24, platform, (major << 16) | (minor << 8), 0, 0] {
+            command.extend_from_slice(&u32::to_le_bytes(word));
+        }
+        self.commands.push(command);
+        self
+    }
+
+    /// Adds `LC_VERSION_MIN_MACOSX` for `major.minor`.
+    #[must_use]
+    pub fn version_min(mut self, major: u32, minor: u32) -> Self {
+        let mut command = Vec::new();
+        for word in [0x24, 16, (major << 16) | (minor << 8), 0] {
+            command.extend_from_slice(&u32::to_le_bytes(word));
+        }
+        self.commands.push(command);
+        self
+    }
+
+    /// Adds `LC_LOAD_DYLIB`.
+    #[must_use]
+    pub fn load(self, name: &str) -> Self {
+        self.dylib_command(0xc, name)
+    }
+
+    /// Adds `LC_LOAD_WEAK_DYLIB`.
+    #[must_use]
+    pub fn weak(self, name: &str) -> Self {
+        self.dylib_command(0x8000_0018, name)
+    }
+
+    /// Adds `LC_REEXPORT_DYLIB`.
+    #[must_use]
+    pub fn reexport(self, name: &str) -> Self {
+        self.dylib_command(0x8000_001f, name)
+    }
+
+    /// Adds `LC_LAZY_LOAD_DYLIB`.
+    #[must_use]
+    pub fn lazy(self, name: &str) -> Self {
+        self.dylib_command(0x20, name)
+    }
+
+    /// Adds `LC_LOAD_UPWARD_DYLIB`.
+    #[must_use]
+    pub fn upward(self, name: &str) -> Self {
+        self.dylib_command(0x8000_0023, name)
+    }
+
+    /// Adds `LC_RPATH`.
+    #[must_use]
+    pub fn rpath(mut self, path: &str) -> Self {
+        let mut command = Vec::new();
+        let size = padded(12 + path.len() + 1);
+        for word in [0x8000_001c, u32_of(size as u64), 12] {
+            command.extend_from_slice(&u32::to_le_bytes(word));
+        }
+        command.extend_from_slice(path.as_bytes());
+        command.resize(size, 0);
+        self.commands.push(command);
+        self
+    }
+
+    /// Adds a raw load command.
+    #[must_use]
+    pub fn command(mut self, bytes: Vec<u8>) -> Self {
+        self.commands.push(bytes);
+        self
+    }
+
+    /// Writes the file.
+    #[must_use]
+    pub fn build(&self) -> Vec<u8> {
+        let size: usize = self.commands.iter().map(Vec::len).sum();
+        let mut out = Vec::new();
+        for word in [
+            MH_MAGIC_64,
+            self.cputype,
+            self.cpusubtype,
+            self.file_type,
+            u32_of(self.commands.len() as u64),
+            u32_of(size as u64),
+            0,
+            0,
+        ] {
+            out.extend_from_slice(&word.to_le_bytes());
+        }
+        for command in &self.commands {
+            out.extend_from_slice(command);
+        }
+        out
+    }
+
+    fn dylib_command(mut self, cmd: u32, name: &str) -> Self {
+        let mut command = Vec::new();
+        let size = padded(24 + name.len() + 1);
+        for word in [cmd, u32_of(size as u64), 24, 2, 0x1_0000, 0x1_0000] {
+            command.extend_from_slice(&u32::to_le_bytes(word));
+        }
+        command.extend_from_slice(name.as_bytes());
+        command.resize(size, 0);
+        self.commands.push(command);
+        self
+    }
+}
+
+/// Wraps thin Mach-O files into a universal file, each slice aligned to
+/// 16 KiB, with the CPU each slice's own header names.
+#[must_use]
+pub fn universal(slices: &[Vec<u8>]) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&FAT_MAGIC.to_be_bytes());
+    out.extend_from_slice(&u32_of(slices.len() as u64).to_be_bytes());
+    let mut offset = SLICE_ALIGN;
+    let mut layout = Vec::new();
+    for slice in slices {
+        let cputype = u32::from_le_bytes(slice[4..8].try_into().expect("a slice has a header"));
+        let cpusubtype = u32::from_le_bytes(slice[8..12].try_into().expect("a slice has a header"));
+        for word in [
+            cputype,
+            cpusubtype,
+            u32_of(offset as u64),
+            u32_of(slice.len() as u64),
+            14,
+        ] {
+            out.extend_from_slice(&word.to_be_bytes());
+        }
+        layout.push(offset);
+        offset += slice.len().div_ceil(SLICE_ALIGN) * SLICE_ALIGN;
+    }
+    for (slice, at) in slices.iter().zip(layout) {
+        out.resize(at, 0);
+        out.extend_from_slice(slice);
+    }
+    out
+}
+
+/// Rounds a load command size up to 8 bytes.
+fn padded(len: usize) -> usize {
+    len.div_ceil(8) * 8
+}

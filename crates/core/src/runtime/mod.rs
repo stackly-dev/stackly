@@ -8,5 +8,7 @@
 //! writes an extended attribute.
 
 pub mod archive;
+pub mod closure;
+pub mod macho;
 #[doc(hidden)]
 pub mod samples;
