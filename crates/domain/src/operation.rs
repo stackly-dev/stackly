@@ -8,10 +8,10 @@ mod lock;
 use jiff::Timestamp;
 
 pub use journal::{
-    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, JournalPayload,
-    JournalStep, JournalView, NewJournal, NewStep, OperationJournal, OperationTrigger,
-    RecoveryCause, StepSeq, StepState, StoredCreatedRecord, StoredJournal, StoredStep,
-    TriggerOrigin,
+    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, FailureItem,
+    JournalPayload, JournalStep, JournalView, NewJournal, NewStep, OperationJournal,
+    OperationTrigger, RecoveryCause, StepSeq, StepState, StoredCreatedRecord, StoredJournal,
+    StoredStep, TriggerOrigin,
 };
 pub use lock::LockKey;
 

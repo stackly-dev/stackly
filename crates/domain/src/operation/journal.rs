@@ -15,6 +15,7 @@ use crate::error::{
 };
 use crate::id::{EnvironmentId, InstanceId, OperationId};
 use crate::operation::lock::LockKey;
+use crate::rule::Rule;
 use crate::secret::SecretRef;
 use crate::value::{
     ClientCode, CompensatorName, CustomItemKey, DetailKey, ErrorCodeName, MethodName, ReasonCode,
@@ -242,13 +243,68 @@ code_enum! {
     }
 }
 
-/// The error an operation stored: a catalog code, a redacted message, and
-/// details.
+/// One entry of a [`FailureError`] list, such as one missing secret or one
+/// invalid setting: a reason kind and up to [`FailureItem::FIELDS_MAX`]
+/// fields. It has the shape of the wire `ErrorItem` of spec 0006.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FailureItem {
+    kind: ReasonCode,
+    fields: Vec<(DetailKey, String)>,
+}
+
+impl FailureItem {
+    /// The most fields one item holds.
+    pub const FIELDS_MAX: usize = 8;
+
+    /// Bundles an item. The caller redacts the field values first.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ValueError`] when there are more than
+    /// [`FailureItem::FIELDS_MAX`] fields or a field value is longer than
+    /// [`FailureError::DETAIL_VALUE_MAX`] bytes.
+    pub fn new(kind: ReasonCode, fields: Vec<(DetailKey, String)>) -> Result<Self, ValueError> {
+        if fields.len() > Self::FIELDS_MAX {
+            return Err(ValueError::new(
+                ValueKind::FailureItem,
+                "an item holds at most 8 fields",
+            ));
+        }
+        if fields
+            .iter()
+            .any(|(_, value)| value.len() > FailureError::DETAIL_VALUE_MAX)
+        {
+            return Err(ValueError::new(
+                ValueKind::FailureItem,
+                "a field value must be at most 512 bytes",
+            ));
+        }
+        Ok(Self { kind, fields })
+    }
+
+    /// Returns the item kind.
+    #[must_use]
+    pub const fn kind(&self) -> &ReasonCode {
+        &self.kind
+    }
+
+    /// Returns the fields, in order.
+    #[must_use]
+    pub fn fields(&self) -> &[(DetailKey, String)] {
+        &self.fields
+    }
+}
+
+/// The error an operation stored: a catalog code, a redacted message,
+/// details, and the items and business rule the error carried. It never
+/// holds a hint: `stacklyd` computes that from the code and details.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FailureError {
     code: ErrorCodeName,
     message: String,
     details: Vec<(DetailKey, String)>,
+    items: Vec<FailureItem>,
+    rule: Option<Rule>,
 }
 
 impl FailureError {
@@ -256,9 +312,11 @@ impl FailureError {
     pub const MESSAGE_MAX: usize = 200;
     /// The longest detail value, in bytes.
     pub const DETAIL_VALUE_MAX: usize = 512;
+    /// The most items one error holds.
+    pub const ITEMS_MAX: usize = 100;
 
-    /// Bundles an error. The caller redacts `message` and the detail values
-    /// first.
+    /// Bundles an error without items or rule. The caller redacts `message`
+    /// and the detail values first.
     ///
     /// # Errors
     ///
@@ -290,7 +348,33 @@ impl FailureError {
             code,
             message,
             details,
+            items: Vec::new(),
+            rule: None,
         })
+    }
+
+    /// Adds the items the error carried.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ValueError`] when there are more than
+    /// [`FailureError::ITEMS_MAX`] items.
+    pub fn with_items(mut self, items: Vec<FailureItem>) -> Result<Self, ValueError> {
+        if items.len() > Self::ITEMS_MAX {
+            return Err(ValueError::new(
+                ValueKind::FailureError,
+                "an error holds at most 100 items",
+            ));
+        }
+        self.items = items;
+        Ok(self)
+    }
+
+    /// Adds the business rule the error was rejected under.
+    #[must_use]
+    pub fn with_rule(mut self, rule: Rule) -> Self {
+        self.rule = Some(rule);
+        self
     }
 
     /// Returns the catalog code.
@@ -309,6 +393,18 @@ impl FailureError {
     #[must_use]
     pub fn details(&self) -> &[(DetailKey, String)] {
         &self.details
+    }
+
+    /// Returns the items, in order.
+    #[must_use]
+    pub fn items(&self) -> &[FailureItem] {
+        &self.items
+    }
+
+    /// Returns the business rule, if the error carried one.
+    #[must_use]
+    pub const fn rule(&self) -> Option<Rule> {
+        self.rule
     }
 }
 
@@ -1318,6 +1414,42 @@ mod tests {
         assert!(FailureError::new(code.clone(), "", Vec::new()).is_err());
         assert!(FailureError::new(code.clone(), "é".repeat(201), Vec::new()).is_err());
         assert!(FailureError::new(code, "x", vec![(key, "v".repeat(513))]).is_err());
+    }
+
+    #[test]
+    fn a_failure_item_holds_at_most_eight_short_fields() {
+        let kind: ReasonCode = "issue".parse().unwrap();
+        let key: DetailKey = "path".parse().unwrap();
+        let fields = |n: usize| vec![(key.clone(), "v".to_owned()); n];
+
+        assert!(FailureItem::new(kind.clone(), fields(8)).is_ok());
+        assert!(FailureItem::new(kind.clone(), fields(9)).is_err());
+        assert!(FailureItem::new(kind.clone(), vec![(key.clone(), "v".repeat(512))]).is_ok());
+        assert!(FailureItem::new(kind, vec![(key, "v".repeat(513))]).is_err());
+    }
+
+    #[test]
+    fn a_failure_error_keeps_up_to_one_hundred_items_and_a_rule() {
+        let code: ErrorCodeName = "provider.invalid_settings".parse().unwrap();
+        let item = FailureItem::new("issue".parse().unwrap(), Vec::new()).unwrap();
+        let base = || FailureError::new(code.clone(), "invalid settings", Vec::new()).unwrap();
+
+        let plain = base();
+        assert!(plain.items().is_empty() && plain.rule().is_none());
+
+        let full = base()
+            .with_items(vec![item.clone(); FailureError::ITEMS_MAX])
+            .unwrap()
+            .with_rule(Rule::Br002);
+        assert_eq!(full.items().len(), 100);
+        assert_eq!(full.items()[0].kind().as_str(), "issue");
+        assert_eq!(full.rule(), Some(Rule::Br002));
+
+        assert!(
+            base()
+                .with_items(vec![item; FailureError::ITEMS_MAX + 1])
+                .is_err()
+        );
     }
 
     #[test]

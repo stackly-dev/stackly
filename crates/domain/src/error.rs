@@ -138,6 +138,10 @@ pub enum ValueKind {
     RecoveryHint,
     /// A [`FailureError`](crate::FailureError).
     FailureError,
+    /// A [`FailureItem`](crate::FailureItem).
+    FailureItem,
+    /// A [`Rule`](crate::Rule).
+    Rule,
     /// A [`LockKey`](crate::LockKey).
     LockKey,
     /// A [`SecretPurpose`](crate::SecretPurpose).
@@ -248,6 +252,8 @@ impl ValueKind {
             Self::RecoveryCause => "recovery cause",
             Self::RecoveryHint => "recovery hint",
             Self::FailureError => "failure error",
+            Self::FailureItem => "failure item",
+            Self::Rule => "business rule",
             Self::LockKey => "lock key",
             Self::SecretPurpose => "secret purpose",
             Self::SecretOwnerKind => "secret owner kind",
