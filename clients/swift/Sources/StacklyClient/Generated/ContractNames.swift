@@ -11,6 +11,10 @@ public enum ContractNames {
 		"operation.state_changed",
 		"operation.progress",
 		"secret.changed",
+		"instance.state_changed",
+		"instance.health_changed",
+		"instance.removed",
+		"daemon.reconciling",
 	]
 }
 
@@ -37,6 +41,11 @@ extension Call {
 		case .secretSet: "secret.set"
 		case .secretReveal: "secret.reveal"
 		case .secretDelete: "secret.delete"
+		case .instanceCreate: "instance.create"
+		case .instanceStart: "instance.start"
+		case .instanceStop: "instance.stop"
+		case .instanceGet: "instance.get"
+		case .instanceList: "instance.list"
 		}
 	}
 }
@@ -64,6 +73,11 @@ extension Reply {
 		case .secretSet: "secret.set"
 		case .secretReveal: "secret.reveal"
 		case .secretDelete: "secret.delete"
+		case .instanceCreate: "instance.create"
+		case .instanceStart: "instance.start"
+		case .instanceStop: "instance.stop"
+		case .instanceGet: "instance.get"
+		case .instanceList: "instance.list"
 		}
 	}
 }
@@ -77,6 +91,10 @@ extension EventKind {
 		case .operationStateChanged: "operation.state_changed"
 		case .operationProgress: "operation.progress"
 		case .secretChanged: "secret.changed"
+		case .instanceStateChanged: "instance.state_changed"
+		case .instanceHealthChanged: "instance.health_changed"
+		case .instanceRemoved: "instance.removed"
+		case .daemonReconciling: "daemon.reconciling"
 		}
 	}
 }

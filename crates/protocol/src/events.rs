@@ -12,6 +12,9 @@ use typeshare::typeshare;
 use uuid::Uuid;
 
 use crate::error::FieldError;
+use crate::instance::{
+    DaemonReconciling, InstanceHealthChanged, InstanceRemoved, InstanceStateChanged,
+};
 use crate::json::{FieldCode, Validate};
 use crate::operation::OperationSummary;
 use crate::secret::SecretChanged;
@@ -70,6 +73,25 @@ pub enum EventKind {
     /// `{kind: secret, id: <reference>}`.
     #[serde(rename = "secret.changed")]
     SecretChanged(SecretChanged),
+    /// An instance changed in a way that raised its revision: created,
+    /// lifecycle, desired state, or an `Auto` port (spec 0010). The event's
+    /// resource is the instance and its revision the instance's.
+    #[serde(rename = "instance.state_changed")]
+    InstanceStateChanged(Box<InstanceStateChanged>),
+    /// The status of an instance changed (spec 0010). Clients apply it by
+    /// `statusSeq`, never by revision. The event's resource is the
+    /// instance.
+    #[serde(rename = "instance.health_changed")]
+    InstanceHealthChanged(Box<InstanceHealthChanged>),
+    /// An instance row was deleted (spec 0010). The event's revision is
+    /// the last revision plus one. Never sent before feature 20.
+    #[serde(rename = "instance.removed")]
+    InstanceRemoved(InstanceRemoved),
+    /// The supervisor started or finished reconciling instances with the
+    /// processes found after a daemon start (spec 0010). A daemon event:
+    /// no resource, no revision.
+    #[serde(rename = "daemon.reconciling")]
+    DaemonReconciling(DaemonReconciling),
 }
 
 /// Lists every event kind once, giving `EventKind::KINDS` and
@@ -98,6 +120,10 @@ event_kinds! {
     "operation.state_changed" => OperationStateChanged;
     "operation.progress" => OperationProgress;
     "secret.changed" => SecretChanged;
+    "instance.state_changed" => InstanceStateChanged;
+    "instance.health_changed" => InstanceHealthChanged;
+    "instance.removed" => InstanceRemoved;
+    "daemon.reconciling" => DaemonReconciling;
 }
 
 impl EventKind {

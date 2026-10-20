@@ -682,6 +682,246 @@
       "file": "dto-needs-secret-blocker.json",
       "type": "NeedsSecretBlocker",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-create.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-create-without-fields.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "request-instance-start.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-start-without-revision.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "request-instance-stop.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-get.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-list.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-list-without-fields.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "reject-instance-create-empty-secret-value.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-instance-create-empty-revision.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-instance-list-limit.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-instance-create.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-start.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-start-already-running.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-stop.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-failed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-identity-unproven.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-data-in-use.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-needs-secret.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-uninitialized.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-without-ownership.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-instance-get-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-instance-list.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-list-last-page.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-instance-state-changed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-instance-health-changed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-instance-health-changed-lower-revision.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-instance-removed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-daemon-reconciling-started.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-daemon-reconciling-finished.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-daemon-reconciling-unknown-phase.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-error-supervisor-identity-unproven.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-supervisor-endpoint-unavailable.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-supervisor-stop-requires-override.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-supervisor-data-in-use.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-name-taken.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-settings-invalid.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-process-spawn-failed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "dto-instance-summary.json",
+      "type": "InstanceSummary",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "dto-instance-blocker-data-in-use.json",
+      "type": "InstanceBlocker",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "dto-settings-document.json",
+      "type": "SettingsDocument",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-instance-create-settings-array.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params"
+    },
+    {
+      "file": "reject-instance-create-settings-scalar.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params"
+    },
+    {
+      "file": "reject-instance-create-settings-big-integer.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params"
     }
   ]
 }

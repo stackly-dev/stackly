@@ -896,6 +896,51 @@
         "socketPath"
       ]
     },
+    "DaemonReconciling": {
+      "description": "Content of `daemon.reconciling`, a daemon event published at the start\nand at the end of the reconciliation.",
+      "type": "object",
+      "properties": {
+        "adopted": {
+          "description": "Processes adopted.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instances": {
+          "description": "Instances looked at.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "phase": {
+          "description": "Started or finished.",
+          "$ref": "#/$defs/ReconcilePhase"
+        },
+        "restarting": {
+          "description": "Instances that restart.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "unknown": {
+          "description": "Instances left `unknown`.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "phase",
+        "instances",
+        "adopted",
+        "unknown",
+        "restarting"
+      ]
+    },
     "DaemonRoots": {
       "description": "The daemon's resolved (not canonical) roots, as lossy UTF-8 text.",
       "type": "object",
@@ -962,6 +1007,106 @@
         },
         {
           "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "EndpointPortMode": {
+      "description": "How an IP endpoint asked for its port. Open.",
+      "oneOf": [
+        {
+          "description": "Exactly the requested port.",
+          "type": "string",
+          "const": "fixed"
+        },
+        {
+          "description": "Any free port, given when the process starts.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "A mode this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "EndpointStatus": {
+      "description": "One endpoint of an instance.",
+      "type": "object",
+      "properties": {
+        "bound": {
+          "description": "True only after readiness succeeded for the current process.",
+          "type": "boolean"
+        },
+        "host": {
+          "description": "The host of an IP endpoint.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The endpoint name from the manifest.",
+          "type": "string"
+        },
+        "port": {
+          "description": "The effective port: the bound one if there is one, else the `Fixed`\nport; null for an `Auto` endpoint without a bound port.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "portMode": {
+          "description": "How the port was asked for.",
+          "$ref": "#/$defs/EndpointPortMode"
+        },
+        "socketPath": {
+          "description": "The socket path of a `unix` endpoint, null while its port is not\nknown.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "transport": {
+          "description": "The transport.",
+          "$ref": "#/$defs/EndpointTransport"
+        }
+      },
+      "required": [
+        "name",
+        "transport",
+        "portMode",
+        "bound"
+      ]
+    },
+    "EndpointTransport": {
+      "description": "The transport of an endpoint. Open.",
+      "oneOf": [
+        {
+          "description": "TCP.",
+          "type": "string",
+          "const": "tcp"
+        },
+        {
+          "description": "UDP.",
+          "type": "string",
+          "const": "udp"
+        },
+        {
+          "description": "A Unix domain socket.",
+          "type": "string",
+          "const": "unix"
+        },
+        {
+          "description": "A transport this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
         }
@@ -1337,6 +1482,74 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "An instance changed in a way that raised its revision: created,\nlifecycle, desired state, or an `Auto` port (spec 0010). The event's\nresource is the instance and its revision the instance's.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceStateChanged"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.state_changed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The status of an instance changed (spec 0010). Clients apply it by\n`statusSeq`, never by revision. The event's resource is the\ninstance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceHealthChanged"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.health_changed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "An instance row was deleted (spec 0010). The event's revision is\nthe last revision plus one. Never sent before feature 20.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceRemoved"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.removed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The supervisor started or finished reconciling instances with the\nprocesses found after a daemon start (spec 0010). A daemon event:\nno resource, no revision.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DaemonReconciling"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.reconciling"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1463,6 +1676,164 @@
         "arch"
       ]
     },
+    "IdentityBlocker": {
+      "description": "The content of the `dataInUse` and `identityUnproven` blockers.",
+      "type": "object",
+      "properties": {
+        "evidence": {
+          "description": "What the checks found.",
+          "$ref": "#/$defs/IdentityEvidence"
+        },
+        "observedAt": {
+          "description": "When the evidence was gathered.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "evidence",
+        "observedAt"
+      ]
+    },
+    "IdentityCheckEntry": {
+      "description": "The result of one identity check, by name.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Which check.",
+          "$ref": "#/$defs/IdentityCheckName"
+        },
+        "result": {
+          "description": "What it found.",
+          "$ref": "#/$defs/IdentityCheckResult"
+        }
+      },
+      "required": [
+        "name",
+        "result"
+      ]
+    },
+    "IdentityCheckName": {
+      "description": "The seven checks that prove a process belongs to an instance. Open.",
+      "oneOf": [
+        {
+          "description": "The boot ID now equals the recorded one.",
+          "type": "string",
+          "const": "boot_matches"
+        },
+        {
+          "description": "A live process has the recorded PID.",
+          "type": "string",
+          "const": "pid_exists"
+        },
+        {
+          "description": "Its start time equals the recorded one.",
+          "type": "string",
+          "const": "start_matches"
+        },
+        {
+          "description": "Its executable is the recorded canonical path.",
+          "type": "string",
+          "const": "executable_matches"
+        },
+        {
+          "description": "It runs as the user running now.",
+          "type": "string",
+          "const": "user_matches"
+        },
+        {
+          "description": "Its session ID equals the recorded one.",
+          "type": "string",
+          "const": "session_matches"
+        },
+        {
+          "description": "It holds the instance lock file open.",
+          "type": "string",
+          "const": "holds_lock"
+        },
+        {
+          "description": "A check this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "IdentityCheckResult": {
+      "description": "The result of one identity check. Open. `not_checked` is spelled\n`notChecked` on the wire.",
+      "oneOf": [
+        {
+          "description": "The check ran and passed.",
+          "type": "string",
+          "const": "passed"
+        },
+        {
+          "description": "The check ran and failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "The check did not run, because an earlier one already decided the\noutcome or an input was missing.",
+          "type": "string",
+          "const": "notChecked"
+        },
+        {
+          "description": "A result this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "IdentityEvidence": {
+      "description": "What gathering evidence found about a process, in the order the checks\nrun. Checks that did not run are `notChecked`.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "One entry per check.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/IdentityCheckEntry"
+          }
+        },
+        "error": {
+          "description": "Redacted text of the error that stopped the gathering.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "lock": {
+          "description": "The state of the instance lock.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstanceLockState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pid": {
+          "description": "The PID of the recorded observation.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "stopped": {
+          "description": "True when the process is still suspended: its daemon died after\nspawning it and before resuming it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "stopped"
+      ]
+    },
     "InstallVerdict": {
       "description": "The install gate's verdict for one version on this Mac.",
       "type": "object",
@@ -1486,6 +1857,702 @@
       },
       "required": [
         "installable"
+      ]
+    },
+    "InstanceActionAccepted": {
+      "description": "The reply of `instance.start` and `instance.stop`.\n\nAn action that changes something starts an operation and returns it in\n`accepted`. An instance already in the asked state answers\n`alreadyInState` with no operation and no bound idempotency key.",
+      "type": "object",
+      "properties": {
+        "accepted": {
+          "description": "The operation, as created or as it stands now; null when nothing\nran.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationAccepted"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "alreadyInState": {
+          "description": "True when the instance was already in the asked state.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "alreadyInState"
+      ]
+    },
+    "InstanceBlocker": {
+      "description": "Why an instance cannot start or be trusted, one value with the priority\n`identityUnproven`, then `dataInUse`, then `needsSecret`. A blocker this\nbuild does not know makes the snapshot fail to decode, so a new blocker\nis a protocol major.",
+      "oneOf": [
+        {
+          "description": "A process matches the recorded identity but does not hold the\ninstance lock, or gathering the evidence failed.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/IdentityBlocker"
+            },
+            "type": {
+              "type": "string",
+              "const": "identityUnproven"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A process Stackly cannot prove is the instance's own holds the\ninstance lock.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/IdentityBlocker"
+            },
+            "type": {
+              "type": "string",
+              "const": "dataInUse"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A secret the instance needs cannot be read (spec 0011).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/NeedsSecretBlocker"
+            },
+            "type": {
+              "type": "string",
+              "const": "needsSecret"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
+    "InstanceDesired": {
+      "description": "Whether the person wants an instance running. Closed.",
+      "oneOf": [
+        {
+          "description": "The person wants it running.",
+          "type": "string",
+          "const": "running"
+        },
+        {
+          "description": "The person wants it stopped.",
+          "type": "string",
+          "const": "stopped"
+        }
+      ]
+    },
+    "InstanceHealth": {
+      "description": "Health as read now (`effective` at the time of the snapshot).",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "Redacted text with more about the reason.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "observedAt": {
+          "description": "When the observation was made.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "description": "A snake case code saying why.",
+          "type": "string"
+        },
+        "state": {
+          "description": "The state.",
+          "$ref": "#/$defs/InstanceHealthState"
+        }
+      },
+      "required": [
+        "state",
+        "reason",
+        "observedAt"
+      ]
+    },
+    "InstanceHealthChanged": {
+      "description": "Content of `instance.health_changed`: the status fields of an instance\nafter the effective readiness, health, blocker, restart status,\nprocess, or log availability changed. A client applies it when\n`statusSeq` is greater than the one it holds for the instance, whatever\nthe event's revision says.",
+      "type": "object",
+      "properties": {
+        "blocker": {
+          "description": "Why the instance is blocked, if it is.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstanceBlocker"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "health": {
+          "description": "Health.",
+          "$ref": "#/$defs/InstanceHealth"
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "logsUnavailable": {
+          "description": "True when the output of the running process cannot be read.",
+          "type": "boolean"
+        },
+        "process": {
+          "description": "The process, if one runs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstanceProcess"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "readiness": {
+          "description": "Readiness.",
+          "$ref": "#/$defs/InstanceReadiness"
+        },
+        "restart": {
+          "description": "The restart policy.",
+          "$ref": "#/$defs/InstanceRestart"
+        },
+        "statusSeq": {
+          "description": "The status counter after this change.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "instanceId",
+        "statusSeq",
+        "readiness",
+        "health",
+        "restart",
+        "logsUnavailable"
+      ]
+    },
+    "InstanceHealthState": {
+      "description": "Health of an instance as read now. Closed.",
+      "oneOf": [
+        {
+          "description": "Nothing is known, or the last observation is too old.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "Everything works.",
+          "type": "string",
+          "const": "healthy"
+        },
+        {
+          "description": "It works with problems.",
+          "type": "string",
+          "const": "degraded"
+        },
+        {
+          "description": "It does not work.",
+          "type": "string",
+          "const": "unhealthy"
+        }
+      ]
+    },
+    "InstanceLastFailure": {
+      "description": "How the last start, init, or run failed.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "description": "When it happened; null after a daemon restart.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "code": {
+          "description": "The failure code, such as `process_exited` or `crash_loop`.",
+          "type": "string"
+        },
+        "excerpt": {
+          "description": "At most ten redacted lines from the end of the process output,\nstderr first, each at most 256 characters.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "exitCode": {
+          "description": "The exit code, if the process exited.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32",
+          "default": null
+        },
+        "signal": {
+          "description": "The signal number, if a signal ended the process.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32",
+          "default": null
+        }
+      },
+      "required": [
+        "code"
+      ]
+    },
+    "InstanceLifecycle": {
+      "description": "The lifecycle of an instance (PRD section 19.1). Closed: `unknown` is a\nreal state and the set is fixed, so a new value is a protocol major.",
+      "oneOf": [
+        {
+          "description": "Created; the data folder is not initialized yet.",
+          "type": "string",
+          "const": "uninitialized"
+        },
+        {
+          "description": "The data folder is being initialized.",
+          "type": "string",
+          "const": "initializing"
+        },
+        {
+          "description": "Not running.",
+          "type": "string",
+          "const": "stopped"
+        },
+        {
+          "description": "The process is starting.",
+          "type": "string",
+          "const": "starting"
+        },
+        {
+          "description": "The process runs.",
+          "type": "string",
+          "const": "running"
+        },
+        {
+          "description": "The process is stopping.",
+          "type": "string",
+          "const": "stopping"
+        },
+        {
+          "description": "Initialization, a start, or the process failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "The process crashed and is being restarted.",
+          "type": "string",
+          "const": "recovering"
+        },
+        {
+          "description": "The identity of the process is lost; it is never signalled.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "Removed with its data kept.",
+          "type": "string",
+          "const": "retained"
+        }
+      ]
+    },
+    "InstanceLockState": {
+      "description": "Whether the instance lock is held, as a probe saw it. Open.",
+      "oneOf": [
+        {
+          "description": "Nobody holds the lock.",
+          "type": "string",
+          "const": "free"
+        },
+        {
+          "description": "A process holds the lock.",
+          "type": "string",
+          "const": "held"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "InstanceOwnership": {
+      "description": "How an instance came to be managed here. Open. Not the registry column\n`instances.ownership` (where the data came from: `created`, later\n`restored` and `adopted`, spec 0005), and not the `Ownership` of an\nenvironment in the domain (`Dedicated` or `Shared`): this says whether\na person runs the instance by hand or an environment owns it. `stacklyd`\nsends `manual` until feature 44 adds environment membership.",
+      "oneOf": [
+        {
+          "description": "A person starts and stops it.",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "A value this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "InstancePage": {
+      "description": "Reply of `instance.list`: ordered by name, then ID, without retained\ninstances.",
+      "type": "object",
+      "properties": {
+        "items": {
+          "description": "The instances on this page.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/InstanceSummary"
+          }
+        },
+        "next": {
+          "description": "The cursor of the next page, to send back as `before`; null on the\nlast page. A page stops before its JSON passes\n[`INSTANCE_PAGE_BYTES_MAX`].",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    },
+    "InstanceProcess": {
+      "description": "The process of an instance.",
+      "type": "object",
+      "properties": {
+        "adoptable": {
+          "description": "Whether a daemon restart can adopt the process; null until\nreadiness succeeded once.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "adopted": {
+          "description": "True for a process the daemon found running after its own restart.",
+          "type": "boolean"
+        },
+        "pid": {
+          "description": "The process ID.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "startedAt": {
+          "description": "When the process started.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "pid",
+        "startedAt",
+        "adopted"
+      ]
+    },
+    "InstanceReadiness": {
+      "description": "Readiness as read now (`effective` at the time of the snapshot).",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "Redacted text with more about the reason.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "observedAt": {
+          "description": "When the observation was made.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "description": "A snake case code saying why, such as `probe_ok` or\n`daemon_restarted`.",
+          "type": "string"
+        },
+        "state": {
+          "description": "The state.",
+          "$ref": "#/$defs/InstanceReadinessState"
+        }
+      },
+      "required": [
+        "state",
+        "reason",
+        "observedAt"
+      ]
+    },
+    "InstanceReadinessState": {
+      "description": "Readiness of an instance as read now. Closed.",
+      "oneOf": [
+        {
+          "description": "Nothing is known, or the last observation is too old.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "The process runs but does not accept work yet.",
+          "type": "string",
+          "const": "not_ready"
+        },
+        {
+          "description": "The instance accepts work.",
+          "type": "string",
+          "const": "ready"
+        }
+      ]
+    },
+    "InstanceRemoved": {
+      "description": "Content of `instance.removed`: the instance row was deleted. The event's\nrevision is the last revision plus one, and a client drops the instance\nfrom its list. No daemon sends it before feature 20.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance that is gone.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
+      ]
+    },
+    "InstanceRestart": {
+      "description": "The restart policy's state.",
+      "type": "object",
+      "properties": {
+        "attempts": {
+          "description": "Crashes in the sliding window.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "budget": {
+          "description": "The respawns the window allows.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "exhausted": {
+          "description": "True after the budget ran out.",
+          "type": "boolean"
+        },
+        "nextAttemptAt": {
+          "description": "When the next respawn happens, while one waits.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "windowSeconds": {
+          "description": "The window, in seconds.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "attempts",
+        "budget",
+        "windowSeconds",
+        "exhausted"
+      ]
+    },
+    "InstanceStateChanged": {
+      "description": "Content of `instance.state_changed`: the instance after a batch that\nraised its revision (create, lifecycle, desired state, an `Auto` port).\nThe event's resource is the instance and its revision the instance's.\nA retained instance is announced with lifecycle `retained`.",
+      "type": "object",
+      "properties": {
+        "instance": {
+          "description": "The instance now.",
+          "$ref": "#/$defs/InstanceSummary"
+        }
+      },
+      "required": [
+        "instance"
+      ]
+    },
+    "InstanceSummary": {
+      "description": "One instance, as `instance.get`, `instance.list`, and\n`instance.state_changed` show it.",
+      "type": "object",
+      "properties": {
+        "blocker": {
+          "description": "Why the instance is blocked, if it is.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstanceBlocker"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "desired": {
+          "description": "What the person wants.",
+          "$ref": "#/$defs/InstanceDesired"
+        },
+        "displayName": {
+          "description": "The name to show, if the person gave one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "endpoints": {
+          "description": "Every endpoint.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EndpointStatus"
+          }
+        },
+        "health": {
+          "description": "Health.",
+          "$ref": "#/$defs/InstanceHealth"
+        },
+        "id": {
+          "description": "The instance ID, a lowercase UUID.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "initialized": {
+          "description": "Whether the data folder was initialized (`data_initialized_at` is\nset). Absent in older daemons, which means true; read it through\n[`InstanceSummary::is_initialized`]. It is an `Option` so the Swift\ntype is optional too: typeshare reads only a plain\n`#[serde(default)]` as optional, and this default is true.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "lastFailure": {
+          "description": "The last failure, if there was one.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstanceLastFailure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "leftoverProcesses": {
+          "description": "PIDs of group members left after the last stop; reported, never\nsignalled.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "lifecycle": {
+          "description": "The lifecycle.",
+          "$ref": "#/$defs/InstanceLifecycle"
+        },
+        "logsUnavailable": {
+          "description": "True when the output of the running process cannot be read.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "The unique instance name.",
+          "type": "string"
+        },
+        "ownership": {
+          "description": "Who runs the instance. Absent in older daemons; read as `manual`.",
+          "$ref": "#/$defs/InstanceOwnership",
+          "default": "manual"
+        },
+        "process": {
+          "description": "The process, if one runs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstanceProcess"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provider": {
+          "description": "The pinned package.",
+          "$ref": "#/$defs/ProviderPin"
+        },
+        "readiness": {
+          "description": "Readiness.",
+          "$ref": "#/$defs/InstanceReadiness"
+        },
+        "restart": {
+          "description": "The restart policy.",
+          "$ref": "#/$defs/InstanceRestart"
+        },
+        "revision": {
+          "description": "The revision of the registry row.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "runtimeId": {
+          "description": "The runtime the instance runs on.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "runtimeVersion": {
+          "description": "The exact version of that runtime.",
+          "type": "string"
+        },
+        "software": {
+          "description": "The software, such as `postgresql`.",
+          "type": "string"
+        },
+        "statusSeq": {
+          "description": "Counts the changes of the status fields per instance and per daemon\nrun, from 1; it starts again from 1 after a daemon restart.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "revision",
+        "software",
+        "provider",
+        "runtimeId",
+        "runtimeVersion",
+        "lifecycle",
+        "desired",
+        "readiness",
+        "health",
+        "statusSeq",
+        "restart",
+        "logsUnavailable"
       ]
     },
     "Limits": {
@@ -1585,6 +2652,104 @@
       },
       "required": [
         "store"
+      ]
+    },
+    "NeedsSecretBlocker": {
+      "description": "The content of the `needsSecret` blocker of an instance (spec 0011,\n*Needs secret*): the instance DTO of feature 10 carries it in its\n`blocker` slot as `{type: needsSecret, content: ...}`.",
+      "type": "object",
+      "properties": {
+        "observedAt": {
+          "description": "When the daemon saw it.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "references": {
+          "description": "Every reference that cannot be read, ordered by reference text.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NeedsSecretItem"
+          }
+        }
+      },
+      "required": [
+        "observedAt"
+      ]
+    },
+    "NeedsSecretItem": {
+      "description": "One reference a resource needs and cannot read.",
+      "type": "object",
+      "properties": {
+        "generateAllowed": {
+          "description": "Whether a generated value would work for it.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Why it cannot be read.",
+          "$ref": "#/$defs/NeedsSecretReason"
+        },
+        "reference": {
+          "description": "The reference.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference",
+        "reason",
+        "generateAllowed"
+      ]
+    },
+    "NeedsSecretReason": {
+      "description": "Why a reference needs a value. Open.",
+      "oneOf": [
+        {
+          "description": "The store holds no value.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "The keychain is locked.",
+          "type": "string",
+          "const": "store_locked"
+        },
+        {
+          "description": "The user or the access list refused the read.",
+          "type": "string",
+          "const": "access_denied"
+        },
+        {
+          "description": "The store call did not start in time.",
+          "type": "string",
+          "const": "store_busy"
+        },
+        {
+          "description": "The OS has no store.",
+          "type": "string",
+          "const": "store_unsupported"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "OperationAccepted": {
+      "description": "The reply, or the part of the reply, of every method that starts an\noperation (spec 0007, *Idempotency*). The method's own reply may wrap\nit.",
+      "type": "object",
+      "properties": {
+        "operation": {
+          "description": "The operation, as created or as it stands now.",
+          "$ref": "#/$defs/OperationSummary"
+        },
+        "replayed": {
+          "description": "True when the idempotency key named an operation an earlier request\nstarted, so nothing new ran.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operation",
+        "replayed"
       ]
     },
     "OperationDetail": {
@@ -2469,6 +3634,29 @@
         "summary"
       ]
     },
+    "ProviderPin": {
+      "description": "The package an instance runs, pinned when it was created.",
+      "type": "object",
+      "properties": {
+        "manifestSha256": {
+          "description": "SHA-256 of the pinned package, in lowercase hex.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The provider ID, such as `official/nats`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision of the pinned package.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "manifestSha256"
+      ]
+    },
     "ProviderSummary": {
       "description": "One catalog entry as a card or a list row shows it.",
       "type": "object",
@@ -2601,6 +3789,26 @@
         "versionCount",
         "mark",
         "tile"
+      ]
+    },
+    "ReconcilePhase": {
+      "description": "The phase of the reconciliation. Open.",
+      "oneOf": [
+        {
+          "description": "Reconciliation began.",
+          "type": "string",
+          "const": "started"
+        },
+        {
+          "description": "Reconciliation ended.",
+          "type": "string",
+          "const": "finished"
+        },
+        {
+          "description": "A phase this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "RecoveryAction": {
@@ -3077,6 +4285,91 @@
             "type": {
               "type": "string",
               "const": "secret.delete"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that creates the instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceActionAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.create"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that starts the instance, or that it already runs.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceActionAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.start"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that stops the instance, or that it already stopped.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceActionAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.stop"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceSummary"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One page of instances.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstancePage"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.list"
             }
           },
           "required": [

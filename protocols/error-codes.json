@@ -49,6 +49,18 @@
       "owner": "spec 0011"
     },
     {
+      "name": "supervisor",
+      "owner": "spec 0010"
+    },
+    {
+      "name": "process",
+      "owner": "spec 0010"
+    },
+    {
+      "name": "instance",
+      "owner": "spec 0010"
+    },
+    {
       "name": "internal",
       "owner": "spec 0006"
     },
@@ -286,6 +298,80 @@
       ],
       "items": null,
       "summary": "no subscription with this id exists on the connection"
+    },
+    {
+      "code": "instance.endpoint_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "endpoint",
+        "omitted"
+      ],
+      "items": null,
+      "summary": "an endpoint is not in the manifest, has a port outside 1 to 65535, or asks for a port on a unix endpoint"
+    },
+    {
+      "code": "instance.name_taken",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "existing"
+      ],
+      "items": null,
+      "summary": "another instance has the name"
+    },
+    {
+      "code": "instance.provider_ambiguous",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "provider",
+        "revision"
+      ],
+      "items": null,
+      "summary": "more than one package digest matches the provider and revision"
+    },
+    {
+      "code": "instance.provider_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "provider",
+        "revision"
+      ],
+      "items": null,
+      "summary": "no pinned package or provider revision with that name"
+    },
+    {
+      "code": "instance.runtime_mismatch",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "runtimeSoftware",
+        "providerSoftware"
+      ],
+      "items": null,
+      "summary": "the runtime software differs from the provider software"
+    },
+    {
+      "code": "instance.runtime_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "runtimeId"
+      ],
+      "items": null,
+      "summary": "no runtime with that id"
+    },
+    {
+      "code": "instance.settings_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "omitted"
+      ],
+      "items": null,
+      "summary": "the settings break the schema of the package; fields lists each issue"
     },
     {
       "code": "internal.unexpected",
@@ -601,6 +687,44 @@
       ],
       "items": null,
       "summary": "an operation that needs recovery holds a lock the request needs"
+    },
+    {
+      "code": "process.identity_capture_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the identity of the suspended child could not be captured or recorded"
+    },
+    {
+      "code": "process.signal_refused",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "pid"
+      ],
+      "items": null,
+      "summary": "the identity changed at the check right before a signal"
+    },
+    {
+      "code": "process.spawn_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "kind"
+      ],
+      "items": null,
+      "summary": "the os could not spawn the process"
+    },
+    {
+      "code": "process.unsupported",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "os"
+      ],
+      "items": null,
+      "summary": "this platform has no process supervision"
     },
     {
       "code": "protocol.handshake_repeated",
@@ -1124,6 +1248,275 @@
       "details": [],
       "items": null,
       "summary": "this OS has no secret store"
+    },
+    {
+      "code": "supervisor.auto_port_unavailable",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "endpoint"
+      ],
+      "items": null,
+      "summary": "no free candidate port for an automatic endpoint"
+    },
+    {
+      "code": "supervisor.capability_unsupported",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "capability"
+      ],
+      "items": null,
+      "summary": "the provider lacks the capability for an action on an existing instance"
+    },
+    {
+      "code": "supervisor.config_invalid",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "field",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the settings or endpoints no longer fit the plan of the package"
+    },
+    {
+      "code": "supervisor.data_in_use",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "lockPath",
+        "pid"
+      ],
+      "items": null,
+      "summary": "the instance lock is held, or the last observed process still runs"
+    },
+    {
+      "code": "supervisor.data_incompatible",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "outcome",
+        "data",
+        "runtime"
+      ],
+      "items": null,
+      "summary": "the data and the runtime are not compatible"
+    },
+    {
+      "code": "supervisor.data_unavailable",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "path",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the instance folder is missing, not the user's, or not private"
+    },
+    {
+      "code": "supervisor.endpoint_conflict",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "endpoint",
+        "port",
+        "otherInstance",
+        "omitted"
+      ],
+      "items": null,
+      "summary": "the effective port belongs to another instance"
+    },
+    {
+      "code": "supervisor.endpoint_in_use",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "endpoint",
+        "address",
+        "port",
+        "omitted"
+      ],
+      "items": null,
+      "summary": "another process holds the port of an endpoint"
+    },
+    {
+      "code": "supervisor.endpoint_unavailable",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "endpoint",
+        "address",
+        "port",
+        "reason",
+        "omitted"
+      ],
+      "items": null,
+      "summary": "the os refused the trial bind of a fixed port, or the address is not available"
+    },
+    {
+      "code": "supervisor.executable_invalid",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the executable is not a canonical regular file inside its runtime"
+    },
+    {
+      "code": "supervisor.identity_unproven",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "pid",
+        "omitted"
+      ],
+      "items": {
+        "kind": "check",
+        "fields": [
+          "name",
+          "result"
+        ],
+        "max": 7
+      },
+      "summary": "a start or stop on an instance whose process cannot be proven to be its own"
+    },
+    {
+      "code": "supervisor.init_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "reason",
+        "step",
+        "exitCode"
+      ],
+      "items": null,
+      "summary": "the init plan ended failed"
+    },
+    {
+      "code": "supervisor.instance_initializing",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "a stop while the data folder is being initialized"
+    },
+    {
+      "code": "supervisor.instance_retained",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "an action on a retained instance"
+    },
+    {
+      "code": "supervisor.instance_stopping",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "a start while the instance is stopping"
+    },
+    {
+      "code": "supervisor.not_initialized",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "lifecycle"
+      ],
+      "items": null,
+      "summary": "a start before the data folder was initialized"
+    },
+    {
+      "code": "supervisor.package_unavailable",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "provider",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the pinned package is missing, invalid, or has another digest"
+    },
+    {
+      "code": "supervisor.readiness_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "deadlineSeconds"
+      ],
+      "items": null,
+      "summary": "the readiness deadline passed and the process keeps running"
+    },
+    {
+      "code": "supervisor.reload_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the reload action or its verification failed"
+    },
+    {
+      "code": "supervisor.retry_budget_exhausted",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "attempts",
+        "lastExitCode",
+        "lastSignal"
+      ],
+      "items": null,
+      "summary": "the restart budget ran out during a start"
+    },
+    {
+      "code": "supervisor.runtime_unavailable",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "runtimeId",
+        "state"
+      ],
+      "items": null,
+      "summary": "the runtime or one it depends on is not installed"
+    },
+    {
+      "code": "supervisor.stop_command_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "exitCode"
+      ],
+      "items": null,
+      "summary": "the stop command exited with a code it does not accept"
+    },
+    {
+      "code": "supervisor.stop_requires_override",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "omitted"
+      ],
+      "items": {
+        "kind": "environment",
+        "fields": [
+          "environmentId"
+        ],
+        "max": 100
+      },
+      "summary": "an active environment lease needs an override to stop the instance"
+    },
+    {
+      "code": "supervisor.stop_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "timeoutSeconds"
+      ],
+      "items": null,
+      "summary": "the stop budget ran out"
     }
   ]
 }

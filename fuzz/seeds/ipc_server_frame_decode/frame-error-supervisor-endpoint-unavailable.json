@@ -1,0 +1,46 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000721",
+    "error": {
+      "code": "supervisor.endpoint_unavailable",
+      "category": "unavailable",
+      "message": "the operating system refused port 80 for endpoint postgres",
+      "retryable": true,
+      "resource": null,
+      "fields": [
+        {
+          "path": "endpoints[0].port",
+          "code": "invalid_value",
+          "message": "value does not match the expected type or format"
+        }
+      ],
+      "hint": null,
+      "details": [
+        {
+          "key": "endpoint",
+          "value": "postgres"
+        },
+        {
+          "key": "address",
+          "value": "127.0.0.1"
+        },
+        {
+          "key": "port",
+          "value": "80"
+        },
+        {
+          "key": "reason",
+          "value": "denied"
+        },
+        {
+          "key": "omitted",
+          "value": "0"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

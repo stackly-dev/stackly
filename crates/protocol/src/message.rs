@@ -24,6 +24,10 @@ use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo};
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
+use crate::instance::{
+    CreateInstanceParams, GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceSummary,
+    ListInstancesParams, StartInstanceParams, StopInstanceParams,
+};
 use crate::json;
 use crate::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
@@ -116,6 +120,21 @@ pub enum Call {
     /// Deletes a reference and the value behind it.
     #[serde(rename = "secret.delete")]
     SecretDelete(DeleteSecretParams),
+    /// Creates an instance and starts the operation that initializes it.
+    #[serde(rename = "instance.create")]
+    InstanceCreate(CreateInstanceParams),
+    /// Starts an instance.
+    #[serde(rename = "instance.start")]
+    InstanceStart(StartInstanceParams),
+    /// Stops an instance.
+    #[serde(rename = "instance.stop")]
+    InstanceStop(StopInstanceParams),
+    /// One instance with its status.
+    #[serde(rename = "instance.get")]
+    InstanceGet(GetInstanceParams),
+    /// One page of instances, retained ones left out.
+    #[serde(rename = "instance.list")]
+    InstanceList(ListInstancesParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -180,6 +199,21 @@ pub enum Reply {
     /// The reference that was deleted.
     #[serde(rename = "secret.delete")]
     SecretDelete(DeleteSecretReply),
+    /// The operation that creates the instance.
+    #[serde(rename = "instance.create")]
+    InstanceCreate(Box<InstanceActionAccepted>),
+    /// The operation that starts the instance, or that it already runs.
+    #[serde(rename = "instance.start")]
+    InstanceStart(Box<InstanceActionAccepted>),
+    /// The operation that stops the instance, or that it already stopped.
+    #[serde(rename = "instance.stop")]
+    InstanceStop(Box<InstanceActionAccepted>),
+    /// The instance.
+    #[serde(rename = "instance.get")]
+    InstanceGet(Box<InstanceSummary>),
+    /// One page of instances.
+    #[serde(rename = "instance.list")]
+    InstanceList(Box<InstancePage>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -269,6 +303,11 @@ methods! {
     "secret.set" => SecretSet(SetSecretParams), recovery refused;
     "secret.reveal" => SecretReveal(RevealSecretParams), recovery refused;
     "secret.delete" => SecretDelete(DeleteSecretParams), recovery refused;
+    "instance.create" => InstanceCreate(CreateInstanceParams), recovery refused;
+    "instance.start" => InstanceStart(StartInstanceParams), recovery refused;
+    "instance.stop" => InstanceStop(StopInstanceParams), recovery refused;
+    "instance.get" => InstanceGet(GetInstanceParams), recovery refused;
+    "instance.list" => InstanceList(ListInstancesParams), recovery refused;
 }
 
 impl Reply {
@@ -358,6 +397,15 @@ mod tests {
         }
     }
 
+    /// The methods the table marks `recovery allowed`.
+    fn methods_allowed_in_recovery() -> Vec<&'static str> {
+        include_str!("message.rs")
+            .lines()
+            .filter(|line| line.contains("recovery allowed;"))
+            .filter_map(|line| line.trim().split('"').nth(1))
+            .collect()
+    }
+
     #[test]
     fn every_method_of_spec_0006_and_the_catalog_is_allowed_in_recovery_and_no_operation_method_is()
     {
@@ -397,8 +445,29 @@ mod tests {
                 == 5,
             "every secret method needs the registry, so none is allowed in recovery"
         );
+        assert!(
+            Call::METHODS
+                .iter()
+                .filter(|method| method.starts_with("instance."))
+                .count()
+                == 5
+                && Call::METHODS
+                    .iter()
+                    .filter(|method| method.starts_with("instance."))
+                    .all(|method| {
+                        !matches!(
+                            *method,
+                            "instance.create"
+                                | "instance.start"
+                                | "instance.stop"
+                                | "instance.get"
+                                | "instance.list"
+                        ) || !methods_allowed_in_recovery().contains(method)
+                    }),
+            "every instance method needs the registry, so none is allowed in recovery"
+        );
         assert_eq!(
-            allowed.len() + refused.len() + 1 + 5,
+            allowed.len() + refused.len() + 1 + 5 + 5,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

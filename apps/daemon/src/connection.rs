@@ -1015,7 +1015,26 @@ async fn dispatch(
             .map(Reply::SecretDelete),
             None,
         ),
+        // provisional: F10 step 13 (the instance handlers of `ipc::instance`)
+        Call::InstanceCreate(_)
+        | Call::InstanceStart(_)
+        | Call::InstanceStop(_)
+        | Call::InstanceGet(_)
+        | Call::InstanceList(_) => (Err(not_served(call.method())), None),
     }
+}
+
+/// The error for a method the protocol knows and this build of the daemon
+/// does not serve yet, so a client falls back as it would with an older
+/// daemon (spec 0006, *Kompatibilitas*). provisional: F10 step 13
+fn not_served(method: &str) -> Box<ErrorBody> {
+    Box::new(
+        ErrorBody::new(
+            &request::UNKNOWN_METHOD,
+            "the daemon does not serve this method yet",
+        )
+        .with_detail("method", method),
+    )
 }
 
 /// The operation a request names in its params, for its log line.

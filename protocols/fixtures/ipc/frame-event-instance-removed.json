@@ -1,0 +1,19 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 133,
+    "at": "2026-10-20T09:05:00.000Z",
+    "resource": {
+      "kind": "instance",
+      "id": "0192f3a5-0000-7000-8000-000000000002"
+    },
+    "revision": 10,
+    "kind": {
+      "type": "instance.removed",
+      "content": {
+        "instanceId": "0192f3a5-0000-7000-8000-000000000002"
+      }
+    }
+  }
+}

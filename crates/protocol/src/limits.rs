@@ -60,12 +60,46 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
         crate::handshake::CONTRACT_DIGEST_LEN as u64,
     ),
     ("controlFrameMax", CONTROL_FRAME_MAX as u64),
+    (
+        "createEndpointsMax",
+        crate::instance::CREATE_ENDPOINTS_MAX as u64,
+    ),
+    (
+        "createSecretsMax",
+        crate::instance::CREATE_SECRETS_MAX as u64,
+    ),
     ("eventBufferLen", EVENT_BUFFER_LEN as u64),
     ("eventReplayLen", EVENT_REPLAY_LEN as u64),
     ("fieldErrorsMax", FIELD_ERRORS_MAX as u64),
     ("fieldPathMax", FIELD_PATH_MAX as u64),
     ("frameHeaderLen", crate::frame::HEADER_LEN as u64),
     ("idempotencyKeyMax", IDEMPOTENCY_KEY_MAX as u64),
+    (
+        "instanceCursorMax",
+        crate::instance::INSTANCE_CURSOR_MAX as u64,
+    ),
+    (
+        "instanceDisplayNameMax",
+        crate::instance::INSTANCE_DISPLAY_NAME_MAX as u64,
+    ),
+    ("instanceKeyMax", crate::instance::INSTANCE_KEY_MAX as u64),
+    (
+        "instanceListLimitDefault",
+        crate::instance::INSTANCE_LIST_LIMIT_DEFAULT as u64,
+    ),
+    (
+        "instanceListLimitMax",
+        crate::instance::INSTANCE_LIST_LIMIT_MAX as u64,
+    ),
+    (
+        "instanceListLimitMin",
+        crate::instance::INSTANCE_LIST_LIMIT_MIN as u64,
+    ),
+    ("instanceNameMax", crate::instance::INSTANCE_NAME_MAX as u64),
+    (
+        "instancePageBytesMax",
+        crate::instance::INSTANCE_PAGE_BYTES_MAX as u64,
+    ),
     ("logBatchMax", LOG_BATCH_MAX as u64),
     ("maxInFlightRequests", MAX_IN_FLIGHT_REQUESTS as u64),
     ("maxJsonDepth", MAX_JSON_DEPTH as u64),
@@ -93,6 +127,10 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
     (
         "operationPageBytesMax",
         crate::operation::OPERATION_PAGE_BYTES_MAX as u64,
+    ),
+    (
+        "providerRevisionMax",
+        crate::instance::PROVIDER_REVISION_MAX as u64,
     ),
     ("requestIdMax", REQUEST_ID_MAX as u64),
     (
@@ -179,7 +217,7 @@ mod tests {
 
     /// Every module of the crate whose constants can be contract limits:
     /// all but the fuzz harnesses and the generated digest.
-    const SOURCES: [(&str, &str); 15] = [
+    const SOURCES: [(&str, &str); 16] = [
         ("catalog", include_str!("catalog.rs")),
         ("codes", include_str!("codes.rs")),
         ("daemon", include_str!("daemon.rs")),
@@ -188,6 +226,7 @@ mod tests {
         ("fingerprint", include_str!("fingerprint.rs")),
         ("frame", include_str!("frame.rs")),
         ("handshake", include_str!("handshake.rs")),
+        ("instance", include_str!("instance.rs")),
         ("json", include_str!("json.rs")),
         ("limits", include_str!("limits.rs")),
         ("message", include_str!("message.rs")),
