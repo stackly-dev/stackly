@@ -994,7 +994,7 @@ impl Checker<'_> {
                 self.at(
                     format!("{path}.format"),
                     IssueCode::UnknownTemplateFormat,
-                    "format must be yaml, json, or natsConf",
+                    "format must be yaml, json, natsConf, postgresqlConf, or plain",
                 );
             }
             let destination = check_path(
@@ -1934,10 +1934,23 @@ fn check_templates(
         let Some(result) = checked.get(&spec.template) else {
             continue;
         };
+        let file = format!("templates/{}", spec.template);
+        if !spec.format.allows_tags() {
+            for at in result.tag_positions() {
+                issues.push(Issue::new(
+                    &file,
+                    Location::Position {
+                        line: at.line,
+                        column: at.column,
+                    },
+                    IssueCode::TemplateType,
+                    format!("config file {config} is plain, which allows only text and comments"),
+                ));
+            }
+        }
         if spec.sensitive {
             continue;
         }
-        let file = format!("templates/{}", spec.template);
         for (secret, at) in result.secrets() {
             issues.push(Issue::new(
                 &file,
