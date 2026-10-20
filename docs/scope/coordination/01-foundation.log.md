@@ -182,6 +182,8 @@
 
 - `14` · milestone `Through the real daemon and restart` · laporan `dev-f14-m3` (`5ea49b8`) dan `chk-f14-m3` PASS 9/9 (`2bc13a7`): 5 test daemon sungguhan, 3 record fixture (AC-013 dua, AC-029 satu), tanpa proses yatim, serta adopsi dan create terputus diulang manual lewat daemon sungguhan · merge `58f02dc` dan verify · gate lead · commit `docs(scope): tick 14 milestone 3`
 
+- `14` · milestone `Development root seed` · laporan `dev-f14-m1` (`851de3a`, `3ee1e3d`) dan `chk-f14-m1` PASS 9/9 (`01cafab`): seed idempoten, penolakan root, `createCommand` berhasil lewat CLI, dan `cargo tree` tanpa `fixture` · merge `59a4188`, `5eace53`, lalu verify · commit `docs(scope): tick 14 milestone 1`. Teks `verify.md` 0014 M1 baris 19 masih menyebut `--revision 0.1.0`; dikoreksi oleh developer F14 berikutnya.
+
 ## Riwayat wave
 
 - Wave `1` (`2026-10-20`, hash awal `eea005d`): selesai di `4434632`. Merge: F8 langkah 12 dan test (`87e905e`, `ed731b5`, `6cc2c10`), update spec 0007 (`8e2a94a`), F11 langkah 5 (`08bc15f`, `14653f8`), F10 langkah 7 dan 8 (`4434632`). Dicentang: F8 milestone 2, `Build it`, `Verify it`, `Test it`, dan F8 `done`. Terbuka: F7 langkah 16, F10 M1 sampai M4 dan kotak penutup, F11 M4 (langkah 7), M5, M6, dan kotak penutup, serta F14. Blocker: baris Boot setelah reboot F10 (`BLOCKED`, owner user).
