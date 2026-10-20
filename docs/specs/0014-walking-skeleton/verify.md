@@ -78,3 +78,36 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 - AC-8 · `args::`, `wait::`, `create::` (key buatan, replay), `action::` (`ipc.call_timeout` dengan hint)
 - AC-1 sampai AC-4 · milik Milestone 1 dan 3
 - AC-9 sampai AC-19 · belum, milik Milestone 3, 4, dan 5 (daemon asli, restart, GUI, `--secret`)
+
+## Milestone 4: GUI and AC-001
+
+Langkah build 9. Test Swift `SkeletonEndToEndTests` memakai binary seed dan `stacklyd` asli, dengan koneksi `StacklyClient` kedua (noninteractive) yang membuat perubahan. Langkah build 10 (record manual dengan CLI yang mengubah, AC-16) menunggu Milestone 2 dan 3 di main dan belum dikerjakan.
+
+Keputusan kecil yang diambil saat membangun, karena spec diam:
+
+- Setelah `stacklyd` mulai, panggilan pertama bisa dijawab `daemon.starting` (retryable) selama supervisor merekonsiliasi. Rig test mengirim ulang dengan key yang sama sampai 20 detik; model GUI tidak diubah.
+- `SkeletonRig` memakai `LiveDaemon` yang sudah ada (root dibuat di sana, lalu seed dijalankan pada root itu sebelum `stacklyd` mulai), jadi helper daemon baru tidak dibuat. `ProcessRunner` menunggu exit lewat handler terminasi dan membunuh proses yang melewati batas waktu.
+- Teardown selalu menghentikan setiap instance yang dibuat rig, membunuh proses yang tersisa, lalu menghentikan daemon, juga saat test gagal.
+- Test tidak mengunci revision paket atau delay init; keduanya dibaca dari output seed.
+
+### UI / manual
+
+- [ ] Buka `apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Support/ProcessRunner.swift` → tidak ada `waitUntilExit()`; exit datang lewat `terminationHandler`, dan watchdog mengirim SIGKILL setelah batas waktu → AC-14, AC-15
+- [ ] Setelah `swift test` selesai, jalankan `ps -axww -o pid=,args= | grep stk-ui-` → tidak ada `stackly-fake-server` atau `stacklyd` dengan root `/private/tmp/stk-ui-*` yang tersisa → AC-14, AC-15
+
+### Commands
+
+- [ ] `cargo build --locked -p stacklyd -p stackly-fake-server && cargo build --locked -p stacklyd --example skeleton_seed` → binary `target/debug/stacklyd`, `target/debug/stackly-fake-server`, dan `target/debug/examples/skeleton_seed` ada (atau set `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN`) → AC-14, AC-15
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter SkeletonEndToEndTests` → 2 test lulus. `theInstanceStoreFollowsChangesAnotherClientMakes`: `demo` muncul di `InstanceStore` setelah create lewat koneksi kedua, melewati `running` dengan readiness `not_ready` sebelum `ready` (`readyDelayMs` 1500), berakhir `stopped` tanpa proses, dan himpunan ID di `operation.list` sama persis dengan operasi koneksi kedua → AC-14. `quittingTheGUIKeepsThreeInstancesRunningForTheNextModel`: `alpha`, `beta`, `gamma` ready, `willTerminate()`, lalu lewat koneksi kedua ketiganya tetap `running` dengan PID yang sama, `GET /health` menjawab 200, `operation.list` tidak berubah, dan model baru dari `ShellBootstrap.live` memegang ketiganya dengan PID yang sama → AC-15
+- [ ] Hapus `target/debug/examples/skeleton_seed` sementara lalu jalankan filter yang sama → kedua test berhenti sebagai `BLOCKED` dengan petunjuk perintah build, bukan gagal; bangun lagi sesudahnya → AC-14, AC-15
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --skip "NativeTests\."` → seluruh suite `StacklyUI` hijau, termasuk aturan sumber yang tidak memindai `Tests/` → AC-14, AC-15
+- [ ] `cargo xtask evidence run --kind fixture -- sh -c 'cargo build --locked -p stacklyd -p stackly-fake-server && cargo build --locked -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI --skip "NativeTests\."'` lalu `cargo xtask evidence check` → record `fixture` untuk kedua test dengan `covers` AC-001 dan AC-029 (AC-14) serta AC-001 (AC-15) lulus → AC-14, AC-15
+- [ ] `xcrun swift-format lint --strict` pada ketiga file baru, lalu `cargo xtask build-app` → lulus → AC-14, AC-15
+
+### Acceptance-criteria coverage
+
+- AC-14 · `theInstanceStoreFollowsChangesAnotherClientMakes`
+- AC-15 · `quittingTheGUIKeepsThreeInstancesRunningForTheNextModel`
+- AC-16 · belum, milik langkah build 10 (record manual, menunggu Milestone 2 dan 3 di main)
+- AC-1 sampai AC-13 · milik Milestone 1 sampai 3
+- AC-17 sampai AC-19 · belum, milik Milestone 5
