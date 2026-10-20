@@ -180,6 +180,12 @@ impl RestartHistory {
         }
     }
 
+    /// Takes back the crash recorded last: the exit turned out to be a stop,
+    /// so it uses no budget.
+    pub fn forget_last_crash(&mut self) {
+        self.crashes.pop_back();
+    }
+
     /// Notes a successful readiness observation at `now`. Returns true when
     /// this cleared the history, because the instance has been `ready`
     /// without a break for the healthy reset period.
@@ -250,6 +256,18 @@ mod tests {
             RestartDecision::Retry { delay, .. } => delay,
             RestartDecision::Exhausted { .. } => panic!("expected a retry, got {decision:?}"),
         }
+    }
+
+    #[test]
+    fn a_crash_taken_back_uses_no_budget() {
+        let config = SupervisorConfig::default();
+        let mut history = RestartHistory::new();
+        let now = Instant::now();
+        history.record_crash(now, JitterFactor::MAX, &config);
+
+        history.forget_last_crash();
+
+        assert_eq!(history.crashes_in_window(now, &config), 0);
     }
 
     #[test]

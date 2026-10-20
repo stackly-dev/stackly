@@ -15,7 +15,7 @@ use tokio::sync::Semaphore;
 
 use super::Supervisor;
 use super::error::SupervisorError;
-use super::persist::read_instance;
+use super::persist::read_instance_actor;
 use super::respawn::{arm_pause, pause_then_respawn};
 use super::startup::StartRequest;
 use super::stop::StopRequest;
@@ -96,27 +96,14 @@ impl Supervisor {
 async fn run_one(sup: &Supervisor, run: &PendingRun) {
     let deps = sup.deps();
     let id = run.id;
-    let mut degraded = false;
-    let instance = loop {
-        match read_instance(deps, id).await {
-            Ok(instance) => break Some(instance),
-            // A failed read decides nothing (AC-22): the run waits and
-            // reads again, and the subsystem reads `degraded` meanwhile.
-            Err(SupervisorError::Registry(error)) if !sup.is_shutdown() => {
-                tracing::warn!(instance = %id, %error, "the registry could not be read for a pending run; trying again");
-                degraded = true;
-                deps.events
-                    .registry_degraded(true, "the registry cannot be read");
-                tokio::time::sleep(deps.config.restart_base_delay).await;
-            }
-            Err(_) => break None,
+    // A failed read decides nothing (AC-22): it waits and reads again.
+    let instance = match read_instance_actor(sup, id).await {
+        Ok(instance) => instance,
+        Err(SupervisorError::NotFound(_)) => return,
+        Err(error) => {
+            tracing::warn!(instance = %id, %error, "a pending run is dropped: the instance cannot be read");
+            return;
         }
-    };
-    if degraded {
-        deps.events.registry_degraded(false, "");
-    }
-    let Some(instance) = instance else {
-        return;
     };
     // Something may have changed since reconciliation decided: a pending
     // run only goes on when the instance still looks as it did.

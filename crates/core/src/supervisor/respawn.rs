@@ -24,7 +24,7 @@ use tokio::time::Instant;
 
 use super::actor::{ActorState, InstanceActor, restart_status};
 use super::error::SupervisorError;
-use super::persist::read_instance;
+use super::persist::read_instance_actor;
 use super::startup::StartRequest;
 use super::{Supervisor, SupervisorDeps};
 use crate::operation::{BeginError, BeginRequest, BusyPolicy, Origin};
@@ -91,22 +91,7 @@ pub(crate) async fn pause_then_respawn(
     sup: &Supervisor,
     actor: &Arc<InstanceActor>,
     delay: Duration,
-    cancel: watch::Receiver<bool>,
-) -> Option<OperationId> {
-    let mut degraded = false;
-    let operation = pause_loop(sup, actor, delay, cancel, &mut degraded).await;
-    if degraded {
-        sup.deps().events.registry_degraded(false, "");
-    }
-    operation
-}
-
-async fn pause_loop(
-    sup: &Supervisor,
-    actor: &Arc<InstanceActor>,
-    delay: Duration,
     mut cancel: watch::Receiver<bool>,
-    degraded: &mut bool,
 ) -> Option<OperationId> {
     let deps = sup.deps();
     let id = actor.id;
@@ -119,26 +104,18 @@ async fn pause_loop(
         if *cancel.borrow() || sup.is_shutdown() {
             return None;
         }
-        let wanted = match read_instance(deps, id).await {
+        // A failed read decides nothing (AC-22): `read_instance_actor`
+        // waits, marks the subsystem `degraded`, and reads again.
+        let wanted = match read_instance_actor(sup, id).await {
             Ok(instance) => {
-                if *degraded {
-                    *degraded = false;
-                    deps.events.registry_degraded(false, "");
-                }
                 instance.lifecycle() == InstanceLifecycle::Recovering
                     && instance.desired() == DesiredState::Running
             }
-            // A failed read decides nothing (AC-22): the pause stays, the
-            // subsystem reads `degraded`, and the read comes again.
-            Err(SupervisorError::Registry(error)) => {
-                tracing::warn!(instance = %id, %error, "the registry could not be read at the end of a respawn pause; trying again");
-                *degraded = true;
-                deps.events
-                    .registry_degraded(true, "the registry cannot be read");
-                pause = deps.config.restart_base_delay;
-                continue;
+            Err(SupervisorError::NotFound(_)) => false,
+            Err(error) => {
+                tracing::warn!(instance = %id, %error, "the respawn is dropped: the instance cannot be read");
+                false
             }
-            Err(_) => false,
         };
         if !wanted {
             // A stop or a user action came first: nothing to respawn.

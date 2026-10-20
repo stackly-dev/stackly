@@ -25,11 +25,16 @@ pub(crate) fn spawn_recheck(sup: &Supervisor) {
     {
         return;
     }
-    let sup = sup.clone();
+    // Weak, because the task sleeps past the daemon's stop and a strong
+    // handle would keep the registry open meanwhile.
+    let interval = sup.deps().config.unknown_recheck_interval;
+    let sup = sup.downgrade();
     tokio::spawn(async move {
-        let interval = sup.deps().config.unknown_recheck_interval;
         loop {
             tokio::time::sleep(interval).await;
+            let Some(sup) = sup.upgrade() else {
+                return;
+            };
             if sup.is_shutdown() {
                 return;
             }

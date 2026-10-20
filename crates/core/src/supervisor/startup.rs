@@ -26,7 +26,7 @@ use stackly_platform::{
 use tokio::sync::watch;
 use tokio::time::Instant;
 
-use super::actor::{ExitSlot, ProcessSlot, restart_status};
+use super::actor::{ExitSlot, InstanceActor, ProcessSlot, restart_status};
 use super::drain::{DrainSlot, Opening};
 use super::error::{EndpointFault, SupervisorError, UnavailableReason};
 use super::exit::{crash_reason, finish_process, remove_material, spawn_exit_task};
@@ -699,7 +699,7 @@ async fn after_journal(
 
 /// The error of an operation whose instance was stopped under it.
 fn stopped_meanwhile() -> SupervisorError {
-    SupervisorError::internal("the instance was stopped while its process exited")
+    SupervisorError::InstanceStopping
 }
 
 /// Puts the last exit of the crash loop into a spent budget's details.
@@ -1060,7 +1060,7 @@ async fn run_attempt(
         let error = SupervisorError::IdentityCaptureFailed;
         return Ok(fail(sup, id, FailureCode::IDENTITY_CAPTURE_FAILED, error).await);
     }
-    spawn_exit_task(sup.clone(), Arc::clone(&actor), generation, exit_rx.clone());
+    spawn_exit_task(sup, Arc::clone(&actor), generation, exit_rx.clone());
     let resumed = {
         let platform = deps.platform.clone();
         blocking(move || platform.processes().resume(child)).await
@@ -1242,7 +1242,10 @@ async fn apply_policy(
             .await;
             match committed {
                 Ok(()) if recorded == ExitRecord::Crashed => Next::Retry(delay),
-                Ok(()) => Next::Settled,
+                Ok(()) => {
+                    forget_crash(deps, &actor);
+                    Next::Settled
+                }
                 Err(error) => Next::Final(error),
             }
         }
@@ -1271,11 +1274,19 @@ async fn apply_policy(
                         last_signal: None,
                     })
                 }
-                Ok(()) => Next::Settled,
+                Ok(()) => {
+                    forget_crash(deps, &actor);
+                    Next::Settled
+                }
                 Err(error) => Next::Final(error),
             }
         }
     }
+}
+
+/// The exit was a stop, not a crash: it uses no restart budget.
+fn forget_crash(deps: &SupervisorDeps, actor: &InstanceActor) {
+    actor.update(deps, |state| state.restart.forget_last_crash());
 }
 
 /// A cancel after the journal: with a process alive, the graceful stop of

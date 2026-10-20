@@ -3,6 +3,7 @@
 //! running fake, the recheck of `unknown` instances, and the shutdown that
 //! signals nothing and commits nothing.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use stackly_core::supervisor::{ReconcilePhase, RegistryMode, codes};
@@ -85,6 +86,27 @@ async fn a_killed_daemon_leaves_the_process_and_the_next_daemon_adopts_it_withou
     let phases = rig.events.reconciling.lock().unwrap().clone();
     assert!(matches!(phases[0], ReconcilePhase::Started));
     assert!(matches!(phases[1], ReconcilePhase::Finished(counts) if counts.adopted == 1));
+}
+
+#[tokio::test]
+async fn a_shut_down_supervisor_lets_go_of_the_registry_though_it_adopted_a_live_process() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&Spec::default());
+    let _spawn = running(&rig, id).await;
+    rig.sup.shutdown();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let before = Arc::strong_count(&rig.registry);
+
+    let next = rig.reborn();
+    next.reconcile(RegistryMode::Ready).await.unwrap();
+    assert!(next.status(id).process.is_some(), "the process is adopted");
+    next.shutdown();
+    drop(next);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // The exit task of the adopted process and the recheck task outlive the
+    // stop but hold the supervisor weakly, so nothing keeps the registry.
+    assert_eq!(Arc::strong_count(&rig.registry), before);
 }
 
 #[tokio::test]
@@ -175,6 +197,33 @@ async fn a_vanished_process_on_the_same_boot_crashes_and_respawns_once_the_engin
     })
     .await;
     assert_eq!(main_spawns(&rig), 1);
+}
+
+#[tokio::test]
+async fn a_registry_read_that_fails_for_a_pending_run_is_tried_again_and_the_respawn_goes_on() {
+    let rig = Rig::with_config(|config| {
+        config.registry_retry_interval = Duration::from_millis(20);
+    })
+    .await;
+    let id = rig.instance(&spec(InstanceLifecycle::Running, DesiredState::Running));
+    let identity = rig.plant(id, Plant::live());
+    rig.processes().exit(identity.pid, None);
+    rig.sup.reconcile(RegistryMode::Ready).await.unwrap();
+
+    rig.registry.fail_instance_reads(vec![
+        stackly_domain::RegistryError::Unavailable,
+        stackly_domain::RegistryError::Unavailable,
+    ]);
+    rig.sup.start_reconciled();
+    let spawn = rig.main_spawn(1).await;
+    rig.serve(&spawn);
+    wait_for("the respawn is ready", || {
+        rig.instance_row(id).lifecycle() == InstanceLifecycle::Running
+    })
+    .await;
+
+    assert!(rig.events.degraded.lock().unwrap().contains(&true));
+    assert_eq!(rig.events.degraded.lock().unwrap().last(), Some(&false));
 }
 
 #[tokio::test]

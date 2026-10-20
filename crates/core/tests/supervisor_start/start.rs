@@ -5,7 +5,9 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 use stackly_core::supervisor::codes;
-use stackly_domain::{DesiredState, InstanceLifecycle, OperationState, ReadinessState, Registry};
+use stackly_domain::{
+    DesiredState, InstanceLifecycle, OperationKind, OperationState, ReadinessState, Registry,
+};
 use stackly_platform::{
     ChildRole, ExitStatus, HoldsFile, LockOutcome, ProcessSupervision, ProviderSignal,
 };
@@ -714,6 +716,51 @@ async fn a_start_that_fails_to_spawn_removes_the_secret_material_it_rendered() {
     assert!(
         !rendered.exists(),
         "no process ran, so no exit would remove the rendered secrets"
+    );
+}
+
+#[tokio::test]
+async fn a_cancel_after_the_render_and_before_any_process_runs_removes_the_secret_material() {
+    let rig = rig_rendering_into_secrets().await;
+    let id = rig.instance(&Spec::default());
+    let rendered = rig
+        .layout
+        .layout()
+        .instance_secrets_dir(id.short_key())
+        .join("fake.json");
+    // The start waits before its `render` stage; the cancel is asked there
+    // and is seen at the `spawn` stage, after the render wrote its files.
+    let door = rig
+        .registry
+        .hold_stage(OperationKind::StartInstance, "render");
+
+    let op = rig.start(id).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+    while !door.entered() {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the start never reached the spawn"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    // The cancel is asked while the start waits at the door.
+    let engine = rig.engine.clone();
+    let cancel = tokio::spawn(async move { engine.cancel(op).await });
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    door.release();
+    let detail = rig.wait_final(op).await;
+    cancel.await.unwrap().unwrap();
+
+    assert_eq!(
+        detail.view.operation.state(),
+        OperationState::Cancelled,
+        "{}",
+        Rig::failure_code(&detail)
+    );
+    assert!(rig.sup.status(id).process.is_none());
+    assert!(
+        !rendered.exists(),
+        "a cancel before any process runs removes it"
     );
 }
 

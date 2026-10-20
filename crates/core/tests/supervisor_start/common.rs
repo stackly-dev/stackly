@@ -230,6 +230,8 @@ pub struct FaultyRegistry {
     read_faults: Mutex<Vec<stackly_domain::RegistryError>>,
     /// Holds the next commit that records a crash until the test opens it.
     crash_hold: Mutex<Option<Arc<Hold>>>,
+    /// Holds the next commit that moves an operation of a kind to a stage.
+    stage_hold: Mutex<Option<(stackly_domain::OperationKind, &'static str, Arc<Hold>)>>,
 }
 
 /// A closed door in front of the registry's `instances` read, which the
@@ -308,6 +310,26 @@ impl FaultyRegistry {
             .crash_hold
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&hold));
+        hold
+    }
+
+    /// Closes a door in front of the next commit that moves an operation of
+    /// `kind` to `stage`: the operation has not run the stage yet, and
+    /// waits there until the hold is released.
+    pub fn hold_stage(
+        &self,
+        kind: stackly_domain::OperationKind,
+        stage: &'static str,
+    ) -> Arc<Hold> {
+        let hold = Arc::new(Hold {
+            entered: AtomicBool::new(false),
+            open: Mutex::new(false),
+            opened: std::sync::Condvar::new(),
+        });
+        *self
+            .stage_hold
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some((kind, stage, Arc::clone(&hold)));
         hold
     }
 
@@ -395,6 +417,26 @@ impl Registry for FaultyRegistry {
                     )
             )
         });
+        let held_stage = {
+            let mut door = self
+                .stage_hold
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            let hit = door.as_ref().is_some_and(|(kind, stage, _)| {
+                batch.ops.iter().any(|op| {
+                    matches!(
+                        op,
+                        WriteOp::UpdateOperation { operation, .. }
+                            if operation.kind() == *kind
+                                && operation.stage().is_some_and(|name| name.as_str() == *stage)
+                    )
+                })
+            });
+            if hit { door.take() } else { None }
+        };
+        if let Some((_, _, hold)) = held_stage {
+            hold.pass();
+        }
         if records_crash {
             let hold = self
                 .crash_hold
@@ -555,6 +597,7 @@ impl Rig {
             hold: Mutex::new(None),
             read_faults: Mutex::new(Vec::new()),
             crash_hold: Mutex::new(None),
+            stage_hold: Mutex::new(None),
         });
         let redactor = Arc::new(Redactor::new());
         let secrets = Arc::new(SecretService::new(SecretDeps {

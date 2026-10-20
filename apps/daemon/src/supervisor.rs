@@ -390,11 +390,13 @@ mod tests {
         (root, supervisor, watch)
     }
 
-    #[test]
-    fn closing_the_supervision_lets_go_of_the_registry_the_supervisor_held() {
+    #[tokio::test]
+    async fn closing_the_supervision_lets_go_of_the_registry_the_supervisor_held() {
         let supervision = Supervision::default();
         let (_root, supervisor, registry) = built(&supervision);
         assert!(registry.upgrade().is_some(), "the supervisor holds it");
+        // Reconciliation starts the recheck task, which outlives the stop.
+        assert!(supervision.reconcile(&supervisor).await.is_some());
 
         supervision.shutdown();
         supervision.close();
