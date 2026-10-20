@@ -29,6 +29,7 @@ pub mod bundle;
 mod capability;
 mod clock;
 mod error;
+mod fetch;
 mod fs;
 mod identity;
 mod info;
@@ -48,6 +49,7 @@ pub use bundle::AppBundle;
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 pub use clock::{Clock, SystemClock};
 pub use error::PlatformError;
+pub use fetch::StopFlag;
 pub use fs::{
     AppendFile, DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
     ReadSeekFile, RemoveReport, VolumeSpace, is_same_or_inside, remove_tree_names,

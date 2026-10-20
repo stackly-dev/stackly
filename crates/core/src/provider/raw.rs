@@ -127,6 +127,22 @@ pub(crate) struct RawDataMarker {
 pub(crate) struct RawRuntime {
     pub(crate) executable: String,
     pub(crate) execution_mode: String,
+    pub(crate) version_check: Option<RawVersionCheck>,
+}
+
+/// `runtime.versionCheck`: how the installer reads the version of a
+/// runtime once (spec 0018, *Validasi binary* step 8).
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "VersionCheck"))]
+pub(crate) struct RawVersionCheck {
+    #[cfg_attr(feature = "json-schema", schemars(length(max = 8)))]
+    pub(crate) args: Vec<String>,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 512)))]
+    pub(crate) pattern: String,
+    #[cfg_attr(feature = "json-schema", schemars(range(min = 1, max = 60)))]
+    pub(crate) timeout_seconds: Option<u64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -544,6 +560,27 @@ pub(crate) struct RawArtifact {
     pub(crate) license_url: Option<String>,
     pub(crate) executables: Option<Vec<String>>,
     pub(crate) blocked: Option<RawBlocked>,
+    pub(crate) stable: Option<bool>,
+    #[cfg_attr(feature = "json-schema", schemars(range(min = 1)))]
+    pub(crate) build: Option<u32>,
+    pub(crate) unpacked_size: Option<u64>,
+    pub(crate) entry_count: Option<u64>,
+    pub(crate) dependencies: Option<Vec<RawDependency>>,
+}
+
+/// One library an available artifact links (spec 0009, fase 02 fields).
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Dependency"))]
+pub(crate) struct RawDependency {
+    pub(crate) name: String,
+    pub(crate) kind: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 1024)))]
+    pub(crate) install_name: String,
+    pub(crate) version: Option<String>,
+    pub(crate) license: Option<String>,
+    pub(crate) source_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -49,6 +49,31 @@
             }
           ]
         },
+        "build": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1
+        },
+        "dependencies": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/Dependency"
+          }
+        },
+        "entryCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "executables": {
           "type": [
             "array",
@@ -113,8 +138,22 @@
           "format": "uint64",
           "minimum": 0
         },
+        "stable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "status": {
           "type": "string"
+        },
+        "unpackedSize": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         },
         "urls": {
           "type": [
@@ -160,6 +199,47 @@
         "reason",
         "owner",
         "since"
+      ]
+    },
+    "Dependency": {
+      "description": "One library an available artifact links (spec 0009, fase 02 fields).",
+      "type": "object",
+      "properties": {
+        "installName": {
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string"
+        },
+        "license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "sourceUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "kind",
+        "installName"
       ]
     }
   }

@@ -30,10 +30,11 @@ const MAX_LENGTH_MAX: u64 = 4096;
 const ENUM_MAX: usize = 64;
 /// Longest `enum` value, in characters.
 const ENUM_VALUE_MAX: usize = 128;
-/// Longest `pattern`, in characters.
-const PATTERN_MAX: usize = 512;
-/// Size limit of a compiled pattern, in bytes.
-const PATTERN_SIZE_LIMIT: usize = 64 * 1024;
+/// Longest `pattern`, in characters; `runtime.versionCheck` shares it.
+pub(crate) const PATTERN_MAX: usize = 512;
+/// Size limit of a compiled pattern, in bytes; `runtime.versionCheck`
+/// shares it.
+pub(crate) const PATTERN_SIZE_LIMIT: usize = 64 * 1024;
 /// Largest `maxItems`.
 const MAX_ITEMS_MAX: u64 = 256;
 /// Bounds of `minimum` and `maximum`: plus and minus 2^53.

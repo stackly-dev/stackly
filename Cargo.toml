@@ -45,9 +45,14 @@ cargo_metadata = "0.23"
 clap = { version = "4.6", features = ["derive"] }
 core-foundation = "0.10"
 ctrlc = { version = "3.5", features = ["termination"] }
+# Pure Rust deflate (miniz_oxide) for the runtime extractor (spec 0018).
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 getrandom = "0.4"
 jiff = { version = "0.2", features = ["serde"] }
 libc = "0.2"
+# Mach-O headers and load commands only, for the runtime closure check
+# (spec 0018).
+object = { version = "0.40", default-features = false, features = ["read_core", "macho", "std"] }
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 regex = "1.13"
 rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
@@ -61,6 +66,8 @@ sha2 = "0.11"
 signal-hook = "0.4"
 socket2 = "0.6"
 syn = { version = "3.0", features = ["full", "visit"] }
+# Read only: no xattr restore, no unpack (spec 0018).
+tar = { version = "0.4", default-features = false }
 tempfile = "3"
 thiserror = "2.0"
 tokio = "1.53"
@@ -71,6 +78,8 @@ typeshare = "1.0"
 unicode-width = "0.2"
 uuid = { version = "1.28", features = ["v7", "serde"] }
 zeroize = "1.9"
+# Stored and deflate entries only, decompressed through flate2 (spec 0018).
+zip = { version = "9.0", default-features = false, features = ["deflate-flate2"] }
 
 [workspace.lints.rust]
 missing_docs = "warn"

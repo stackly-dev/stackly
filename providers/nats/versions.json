@@ -22,6 +22,29 @@
       "licenseUrl": "https://github.com/nats-io/nats-server/blob/v2.15.1/LICENSE",
       "executables": [
         "nats-server"
+      ],
+      "stable": true,
+      "dependencies": [
+        {
+          "name": "libSystem.B.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libSystem.B.dylib"
+        },
+        {
+          "name": "libresolv.9.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libresolv.9.dylib"
+        },
+        {
+          "name": "CoreFoundation",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+        },
+        {
+          "name": "Security",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+        }
       ]
     }
   ]

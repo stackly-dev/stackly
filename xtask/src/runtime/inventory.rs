@@ -1,5 +1,5 @@
 //! The runtime inventory `runtimes/inventory.toml` (spec 0003) and rules 1
-//! to 6 and 9 of `cargo xtask runtime check`.
+//! to 6, 9, and 10 of `cargo xtask runtime check`.
 //!
 //! Every field is read as written, with enum values kept as strings, so a
 //! wrong value becomes one `<id>: <rule>` line instead of a TOML error.
@@ -82,6 +82,9 @@ pub struct Artifact {
     pub min_os: Option<String>,
     /// `available` or `blocked`.
     pub status: Option<String>,
+    /// True for the one available artifact `@stable` selects per provider,
+    /// os, and arch (rule 10, spec 0018).
+    pub stable: Option<bool>,
     /// Why the line has no managed artifact.
     pub blocked_reason: Option<String>,
     /// Who can unblock it, as `@handle`.
@@ -100,6 +103,12 @@ pub struct Artifact {
     pub sha256: Option<String>,
     /// The size of the download in bytes.
     pub size: Option<i64>,
+    /// The bytes of every regular file inside, as `runtime pin` measures
+    /// them with the extractor's scan (spec 0018).
+    pub unpacked_size: Option<i64>,
+    /// The entries inside, skipped AppleDouble members counted, as
+    /// `runtime pin` measures them (spec 0018).
+    pub entry_count: Option<i64>,
     /// The single top folder of a `tar_gz` or `zip` archive, when it has
     /// one.
     pub archive_root: Option<String>,
@@ -255,6 +264,50 @@ impl Inventory {
         self.artifacts
             .iter()
             .filter(|artifact| artifact.status.as_deref() == Some("available"))
+    }
+
+    /// Checks rule 10: `stable` is `true` when present, only on an
+    /// available artifact, and on at most one per provider, os, and arch.
+    pub fn stable_violations(&self) -> Vec<Violation> {
+        let mut out = Vec::new();
+        let mut seen: HashMap<(&str, &str, &str), String> = HashMap::new();
+        for (index, artifact) in self.artifacts.iter().enumerate() {
+            let Some(stable) = artifact.stable else {
+                continue;
+            };
+            let subject = artifact.label(index);
+            let mut push = |message: String| {
+                out.push(Violation {
+                    subject: subject.clone(),
+                    rule: 10,
+                    message,
+                });
+            };
+            if !stable {
+                push("stable is true or left out".to_owned());
+                continue;
+            }
+            if artifact.status.as_deref() != Some("available") {
+                push("only an available artifact can be stable".to_owned());
+                continue;
+            }
+            if let (Some(provider), Some(os), Some(arch)) = (
+                filled(&artifact.provider),
+                filled(&artifact.os),
+                filled(&artifact.arch),
+            ) {
+                match seen.entry((provider, os, arch)) {
+                    Entry::Occupied(first) => push(format!(
+                        "{} is already the stable artifact of {provider} {os}-{arch}",
+                        first.get()
+                    )),
+                    Entry::Vacant(slot) => {
+                        slot.insert(subject.clone());
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// Checks rule 9: every required line has exactly one entry, whatever
@@ -1442,6 +1495,58 @@ upstream_signature = { kind = "none" }
         assert_one(
             &check(&twice),
             "nats-2.15.1-macos-aarch64: dependency libSystem is listed more than once (rule 6)",
+        );
+    }
+
+    fn stable_lines(text: &str) -> Vec<String> {
+        Inventory::parse(text)
+            .unwrap()
+            .stable_violations()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn rule_10_allows_one_stable_available_artifact_per_provider_and_target() {
+        let stable = edit(
+            UPSTREAM,
+            "status = \"available\"",
+            "status = \"available\"\nstable = true",
+        );
+        let other_line = edit(
+            &edit(&stable, "line = \"2.15\"", "line = \"2.14\""),
+            "nats-2.15.1-macos-aarch64",
+            "nats-2.14.0-macos-aarch64",
+        );
+        let second = other_line
+            .split_once("[[artifact]]")
+            .map(|(_, rest)| format!("[[artifact]]{rest}"))
+            .unwrap();
+
+        assert_eq!(stable_lines(&stable), Vec::<String>::new());
+        assert_eq!(stable_lines(UPSTREAM), Vec::<String>::new());
+        assert_eq!(
+            stable_lines(&format!("{stable}\n{second}")),
+            [
+                "nats-2.14.0-macos-aarch64: nats-2.15.1-macos-aarch64 is already the stable artifact of nats macos-aarch64 (rule 10)"
+            ]
+        );
+        assert_eq!(
+            stable_lines(&edit(
+                UPSTREAM,
+                "status = \"available\"",
+                "status = \"available\"\nstable = false"
+            )),
+            ["nats-2.15.1-macos-aarch64: stable is true or left out (rule 10)"]
+        );
+        assert_eq!(
+            stable_lines(&edit(
+                &stable,
+                "status = \"available\"",
+                "status = \"blocked\""
+            )),
+            ["nats-2.15.1-macos-aarch64: only an available artifact can be stable (rule 10)"]
         );
     }
 

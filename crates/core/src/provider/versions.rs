@@ -12,11 +12,19 @@ use super::issue::{FileIssues, Issue, IssueCode, Location};
 use super::names::is_component;
 use super::package::MANIFEST_FILE;
 use super::raw::{
-    RawArtifact, RawMetadata, RawVersions, check_yaml_value, decode_yaml, join_path, parse_yaml,
+    RawArtifact, RawDependency, RawMetadata, RawVersions, check_yaml_value, decode_yaml, join_path,
+    parse_yaml,
 };
 
 /// The only `schema` of `versions.json` this engine reads.
 pub const VERSIONS_SCHEMA: &str = "stackly.provider-versions/v1";
+
+/// The largest `unpackedSize` or `entryCount`: a `Count` on the wire stays
+/// within `Number.MAX_SAFE_INTEGER`, 2^53 - 1.
+const COUNT_MAX: u64 = (1 << 53) - 1;
+
+/// The longest dependency `installName`, in bytes.
+const INSTALL_NAME_MAX: usize = 1024;
 
 /// The validated `versions.json` of a package (spec 0009, *Tipe core*): its
 /// software and every artifact, in file order (the inventory order).
@@ -84,6 +92,16 @@ pub enum ArtifactStatus {
         license_url: String,
         /// Executable paths relative to the runtime root.
         executables: Vec<String>,
+        /// True for the one artifact `@stable` selects for its target.
+        stable: bool,
+        /// The maintainer build number, for a maintainer artifact.
+        build: Option<u32>,
+        /// What `runtime pin` measured inside the artifact, when the
+        /// catalog has it.
+        unpacked: Option<UnpackedSize>,
+        /// Every library it links, or `None` when the catalog does not
+        /// say, which differs from an empty list.
+        dependencies: Option<Vec<ArtifactDependency>>,
     },
     /// An artifact that cannot be installed yet, with the recorded reason.
     #[non_exhaustive]
@@ -98,6 +116,8 @@ pub enum ArtifactStatus {
         license: Option<String>,
         /// The `https` URL of the license text, if known.
         license_url: Option<String>,
+        /// The maintainer build number, for a maintainer artifact.
+        build: Option<u32>,
     },
     /// A test fixture of the `testing` namespace, never downloadable.
     Fixture {
@@ -131,6 +151,65 @@ impl SigningPolicy {
             .into_iter()
             .find(|policy| policy.as_code() == code)
     }
+}
+
+/// The size and entry count `cargo xtask runtime pin` measured inside an
+/// artifact with the extractor's scan (spec 0018, `unpackedSize` and
+/// `entryCount`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct UnpackedSize {
+    /// The bytes of every regular file.
+    pub bytes: u64,
+    /// The entries, skipped AppleDouble members counted.
+    pub entries: u64,
+}
+
+/// How an artifact carries a library it links.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DependencyKind {
+    /// Built elsewhere and shipped inside the artifact.
+    Bundled,
+    /// Built with the artifact, from its own source.
+    Own,
+    /// Part of macOS.
+    System,
+}
+
+impl DependencyKind {
+    /// Returns the stable code, such as `bundled`.
+    #[must_use]
+    pub const fn as_code(self) -> &'static str {
+        match self {
+            Self::Bundled => "bundled",
+            Self::Own => "own",
+            Self::System => "system",
+        }
+    }
+
+    fn from_code(code: &str) -> Option<Self> {
+        [Self::Bundled, Self::Own, Self::System]
+            .into_iter()
+            .find(|kind| kind.as_code() == code)
+    }
+}
+
+/// One library an available artifact links.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ArtifactDependency {
+    /// The file name, unique in the artifact, such as `libssl.3.dylib`.
+    pub name: String,
+    /// How the artifact carries it.
+    pub kind: DependencyKind,
+    /// The install name the executables load it by.
+    pub install_name: String,
+    /// The exact version, required for a bundled library.
+    pub version: Option<String>,
+    /// The SPDX license, required for a bundled library.
+    pub license: Option<String>,
+    /// The `https` URL of its source, required for a bundled library.
+    pub source_url: Option<String>,
 }
 
 /// Reads `metadata.software` from the text of a `provider.yaml`, for the
@@ -226,8 +305,19 @@ pub(crate) fn check_versions(
     let mut artifacts = Vec::with_capacity(raw.artifacts.len());
     let mut ids = BTreeSet::new();
     let mut builds = BTreeSet::new();
+    let mut stable_targets = BTreeSet::new();
     for (index, artifact) in raw.artifacts.iter().enumerate() {
         let path = format!("artifacts[{index}]");
+        if artifact.stable == Some(true)
+            && artifact.status == "available"
+            && !stable_targets.insert((artifact.os.as_str(), artifact.arch.as_str()))
+        {
+            issues.at(
+                format!("{path}.stable"),
+                rule,
+                "at most one artifact per os and arch is stable",
+            );
+        }
         if !ids.insert(artifact.id.as_str()) {
             issues.at(format!("{path}.id"), rule, "artifact IDs must be unique");
         }
@@ -328,6 +418,11 @@ fn check_artifact(
         ("licenseUrl", artifact.license_url.is_some()),
         ("executables", artifact.executables.is_some()),
         ("blocked", artifact.blocked.is_some()),
+        ("stable", artifact.stable.is_some()),
+        ("build", artifact.build.is_some()),
+        ("unpackedSize", artifact.unpacked_size.is_some()),
+        ("entryCount", artifact.entry_count.is_some()),
+        ("dependencies", artifact.dependencies.is_some()),
     ];
     let (required, forbidden): (&[&str], &[&str]) = match artifact.status.as_str() {
         "available" => (
@@ -355,6 +450,10 @@ fn check_artifact(
                 "archiveRoot",
                 "signingPolicy",
                 "executables",
+                "stable",
+                "unpackedSize",
+                "entryCount",
+                "dependencies",
             ],
         ),
         "fixture" => {
@@ -375,6 +474,11 @@ fn check_artifact(
                     "minOs",
                     "signingPolicy",
                     "blocked",
+                    "stable",
+                    "build",
+                    "unpackedSize",
+                    "entryCount",
+                    "dependencies",
                 ],
             )
         }
@@ -485,6 +589,7 @@ fn check_artifact(
             );
         }
     }
+    check_phase_02_fields(artifact, path, issues);
     if let Some(executables) = &artifact.executables {
         if executables.is_empty() {
             issues.at(
@@ -529,6 +634,20 @@ fn check_artifact(
             license: artifact.license.clone()?,
             license_url: artifact.license_url.clone()?,
             executables: artifact.executables.clone()?,
+            stable: artifact.stable == Some(true),
+            build: artifact.build,
+            unpacked: artifact
+                .unpacked_size
+                .zip(artifact.entry_count)
+                .map(|(bytes, entries)| UnpackedSize { bytes, entries }),
+            dependencies: match &artifact.dependencies {
+                Some(list) => Some(
+                    list.iter()
+                        .map(typed_dependency)
+                        .collect::<Option<Vec<_>>>()?,
+                ),
+                None => None,
+            },
         },
         "blocked" => {
             let blocked = artifact.blocked.as_ref()?;
@@ -538,6 +657,7 @@ fn check_artifact(
                 since: blocked.since.clone(),
                 license: artifact.license.clone(),
                 license_url: artifact.license_url.clone(),
+                build: artifact.build,
             }
         }
         _ => ArtifactStatus::Fixture {
@@ -550,6 +670,116 @@ fn check_artifact(
         version: version.ok()?,
         target: Target::new(os.ok()?, arch.ok()?),
         status,
+    })
+}
+
+/// Checks the fields spec 0018 added (spec 0009, *Field artefak fase 02*);
+/// which status may carry them is checked with the other fields.
+fn check_phase_02_fields(artifact: &RawArtifact, path: &str, issues: &mut FileIssues<'_>) {
+    let rule = IssueCode::VersionsRule;
+    let at = |field: &str| format!("{path}.{field}");
+    if artifact.stable == Some(false) {
+        issues.at(at("stable"), rule, "stable is true or left out");
+    }
+    if artifact.build == Some(0) {
+        issues.at(at("build"), rule, "build must be at least 1");
+    }
+    match (artifact.unpacked_size, artifact.entry_count) {
+        (Some(_), None) | (None, Some(_)) => {
+            issues.at(
+                at("unpackedSize"),
+                rule,
+                "unpackedSize and entryCount come together",
+            );
+        }
+        (Some(bytes), Some(entries)) => {
+            for (field, value) in [("unpackedSize", bytes), ("entryCount", entries)] {
+                if value > COUNT_MAX {
+                    issues.at(at(field), rule, format!("{field} must be at most 2^53 - 1"));
+                }
+            }
+            if bytes == 0 && entries != 0 {
+                issues.at(
+                    at("unpackedSize"),
+                    rule,
+                    "unpackedSize is 0 only when entryCount is 0",
+                );
+            }
+        }
+        (None, None) => {}
+    }
+    let Some(dependencies) = &artifact.dependencies else {
+        return;
+    };
+    let mut names = BTreeSet::new();
+    for (index, dependency) in dependencies.iter().enumerate() {
+        let at = |field: &str| format!("{path}.dependencies[{index}].{field}");
+        if !names.insert(dependency.name.as_str()) {
+            issues.at(at("name"), rule, "dependency names must be unique");
+        }
+        let kind = DependencyKind::from_code(&dependency.kind);
+        if kind.is_none() {
+            issues.at(
+                at("kind"),
+                IssueCode::InvalidValue,
+                "kind must be bundled, own, or system",
+            );
+        }
+        if dependency.install_name.is_empty() || dependency.install_name.len() > INSTALL_NAME_MAX {
+            issues.at(
+                at("installName"),
+                rule,
+                format!("installName must be 1 to {INSTALL_NAME_MAX} bytes"),
+            );
+        }
+        for (field, value) in [
+            ("name", Some(&dependency.name)),
+            ("installName", Some(&dependency.install_name)),
+            ("version", dependency.version.as_ref()),
+            ("license", dependency.license.as_ref()),
+        ] {
+            if value.is_some_and(|text| text.is_empty() || text.chars().any(char::is_control)) {
+                issues.at(
+                    at(field),
+                    rule,
+                    format!("{field} must be non-empty text without control characters"),
+                );
+            }
+        }
+        if dependency
+            .source_url
+            .as_ref()
+            .is_some_and(|url| !url.starts_with("https://"))
+        {
+            issues.at(at("sourceUrl"), rule, "sourceUrl must be an https URL");
+        }
+        if kind == Some(DependencyKind::Bundled) {
+            for (field, set) in [
+                ("version", dependency.version.is_some()),
+                ("license", dependency.license.is_some()),
+                ("sourceUrl", dependency.source_url.is_some()),
+            ] {
+                if !set {
+                    issues.at(
+                        at(field),
+                        rule,
+                        format!("a bundled dependency needs {field}"),
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// The typed form of a dependency that passed its checks.
+fn typed_dependency(raw: &RawDependency) -> Option<ArtifactDependency> {
+    Some(ArtifactDependency {
+        name: raw.name.clone(),
+        kind: DependencyKind::from_code(&raw.kind)?,
+        install_name: raw.install_name.clone(),
+        version: raw.version.clone(),
+        license: raw.license.clone(),
+        source_url: raw.source_url.clone(),
     })
 }
 
@@ -673,6 +903,10 @@ mod tests {
             license,
             license_url,
             executables,
+            stable,
+            build,
+            unpacked: _,
+            dependencies,
         } = &artifact.status
         else {
             panic!("the nats artifact is available");
@@ -693,6 +927,15 @@ mod tests {
         assert_eq!(license, "Apache-2.0");
         assert!(license_url.starts_with("https://"));
         assert_eq!(executables, &["nats-server"]);
+        assert!(*stable);
+        assert_eq!(*build, None);
+        let dependencies = dependencies.as_ref().expect("the inventory lists them");
+        assert!(!dependencies.is_empty());
+        assert!(
+            dependencies
+                .iter()
+                .all(|dependency| dependency.kind == DependencyKind::System)
+        );
     }
 
     #[test]
@@ -747,6 +990,7 @@ mod tests {
             since,
             license,
             license_url,
+            build,
         } = &catalog.artifacts()[0].status
         else {
             panic!("the artifact is blocked");
@@ -756,6 +1000,190 @@ mod tests {
         assert_eq!(since, "2026-10-01");
         assert_eq!(license.as_deref(), Some("Apache-2.0"));
         assert_eq!(*license_url, None);
+        assert_eq!(*build, None);
+    }
+
+    /// `AVAILABLE` with `extra` JSON fields added before its closing brace.
+    fn available_with(extra: &str) -> String {
+        format!("{}, {extra} }}", AVAILABLE.trim_end_matches(" }"))
+    }
+
+    const BUNDLED: &str = r#"{ "name": "libssl.3.dylib", "kind": "bundled", "installName": "@rpath/libssl.3.dylib", "version": "3.5.9", "license": "Apache-2.0", "sourceUrl": "https://example.invalid/openssl.tar.gz" }"#;
+
+    #[test]
+    fn the_phase_02_fields_reach_the_typed_artifact() {
+        let artifact = available_with(&format!(
+            r#""stable": true, "build": 2, "unpackedSize": 80668813, "entryCount": 2030, "dependencies": [{BUNDLED}, {{ "name": "libSystem.B.dylib", "kind": "system", "installName": "/usr/lib/libSystem.B.dylib" }}]"#
+        ));
+
+        let (catalog, codes) = check(&versions_with(&[&artifact]), false);
+
+        assert_eq!(codes, []);
+        let catalog = catalog.unwrap();
+        let ArtifactStatus::Available {
+            stable,
+            build,
+            unpacked,
+            dependencies,
+            ..
+        } = &catalog.artifacts()[0].status
+        else {
+            panic!("the artifact is available");
+        };
+        assert!(*stable);
+        assert_eq!(*build, Some(2));
+        assert_eq!(
+            *unpacked,
+            Some(UnpackedSize {
+                bytes: 80_668_813,
+                entries: 2030
+            })
+        );
+        let dependencies = dependencies.as_ref().unwrap();
+        assert_eq!(dependencies.len(), 2);
+        assert_eq!(dependencies[0].kind, DependencyKind::Bundled);
+        assert_eq!(dependencies[0].version.as_deref(), Some("3.5.9"));
+        assert_eq!(dependencies[1].kind, DependencyKind::System);
+        assert_eq!(dependencies[1].source_url, None);
+    }
+
+    #[test]
+    fn without_the_phase_02_fields_an_artifact_is_not_stable_and_has_no_data() {
+        let (catalog, codes) = check(&versions_with(&[AVAILABLE]), false);
+
+        assert_eq!(codes, []);
+        let catalog = catalog.unwrap();
+        let ArtifactStatus::Available {
+            stable,
+            build,
+            unpacked,
+            dependencies,
+            ..
+        } = &catalog.artifacts()[0].status
+        else {
+            panic!("the artifact is available");
+        };
+        assert_eq!((*stable, *build, *unpacked), (false, None, None));
+        assert_eq!(*dependencies, None);
+        let (empty, _) = check(
+            &versions_with(&[&available_with(r#""dependencies": []"#)]),
+            false,
+        );
+        let empty = empty.unwrap();
+        let ArtifactStatus::Available { dependencies, .. } = &empty.artifacts()[0].status else {
+            panic!("the artifact is available");
+        };
+        assert_eq!(*dependencies, Some(Vec::new()));
+    }
+
+    #[test]
+    fn at_most_one_available_artifact_per_target_is_stable() {
+        let first = available_with(r#""stable": true"#);
+        let second = first
+            .replace("nats-2.15.1-macos-aarch64", "nats-2.15.2-macos-aarch64")
+            .replace("2.15.1", "2.15.2");
+
+        let (catalog, codes) = check(&versions_with(&[&first, &second]), false);
+
+        assert_eq!(
+            codes,
+            [("artifacts[1].stable".to_owned(), IssueCode::VersionsRule)]
+        );
+        assert!(catalog.is_none());
+    }
+
+    #[test]
+    fn each_phase_02_rule_is_enforced() {
+        let blocked = r#"{ "id": "nats-2.16.0-macos-aarch64", "line": "2.16", "version": "2.16.0", "os": "macos", "arch": "aarch64", "status": "blocked", "build": 1, "blocked": { "reason": "not signed", "owner": "maintainer", "since": "2026-10-01" }"#;
+        let cases: Vec<(String, &str)> = vec![
+            (available_with(r#""stable": false"#), "artifacts[0].stable"),
+            (available_with(r#""build": 0"#), "artifacts[0].build"),
+            (
+                available_with(r#""unpackedSize": 10"#),
+                "artifacts[0].unpackedSize",
+            ),
+            (
+                available_with(r#""entryCount": 10"#),
+                "artifacts[0].unpackedSize",
+            ),
+            (
+                available_with(r#""unpackedSize": 0, "entryCount": 3"#),
+                "artifacts[0].unpackedSize",
+            ),
+            (
+                available_with(r#""unpackedSize": 9007199254740992, "entryCount": 3"#),
+                "artifacts[0].unpackedSize",
+            ),
+            (
+                available_with(&format!(r#""dependencies": [{BUNDLED}, {BUNDLED}]"#)),
+                "artifacts[0].dependencies[1].name",
+            ),
+            (
+                available_with(&format!(
+                    r#""dependencies": [{}]"#,
+                    BUNDLED.replace(r#", "version": "3.5.9""#, "")
+                )),
+                "artifacts[0].dependencies[0].version",
+            ),
+            (
+                available_with(&format!(
+                    r#""dependencies": [{}]"#,
+                    BUNDLED.replace("https://", "http://")
+                )),
+                "artifacts[0].dependencies[0].sourceUrl",
+            ),
+            (
+                available_with(&format!(
+                    r#""dependencies": [{}]"#,
+                    BUNDLED.replace(r#""@rpath/libssl.3.dylib""#, r#""""#)
+                )),
+                "artifacts[0].dependencies[0].installName",
+            ),
+            (
+                format!(r#"{blocked}, "stable": true }}"#),
+                "artifacts[0].stable",
+            ),
+            (
+                format!(r#"{blocked}, "unpackedSize": 1, "entryCount": 1 }}"#),
+                "artifacts[0].unpackedSize",
+            ),
+            (
+                format!(r#"{blocked}, "dependencies": [] }}"#),
+                "artifacts[0].dependencies",
+            ),
+        ];
+        for (artifact, location) in cases {
+            let (catalog, codes) = check(&versions_with(&[&artifact]), false);
+            assert!(
+                codes
+                    .iter()
+                    .any(|(at, code)| at == location && matches!(code, IssueCode::VersionsRule)),
+                "{location}: {codes:?}"
+            );
+            assert!(catalog.is_none(), "{location}");
+        }
+        let (_, codes) = check(&versions_with(&[&format!("{blocked} }}")]), false);
+        assert_eq!(codes, [], "a blocked maintainer artifact may carry build");
+        let unknown_kind = available_with(&format!(
+            r#""dependencies": [{}]"#,
+            BUNDLED.replace(r#""bundled""#, r#""vendored""#)
+        ));
+        assert!(check(&versions_with(&[&unknown_kind]), false).1.contains(&(
+            "artifacts[0].dependencies[0].kind".to_owned(),
+            IssueCode::InvalidValue
+        )));
+    }
+
+    #[test]
+    fn fixture_artifacts_take_none_of_the_phase_02_fields() {
+        let fixture = r#"{ "id": "fake-1.0.0-macos-aarch64", "line": "1.0", "version": "1.0.0", "os": "macos", "arch": "aarch64", "status": "fixture", "executables": ["nats-server"], "build": 1 }"#;
+
+        let (_, codes) = check(&versions_with(&[fixture]), true);
+
+        assert_eq!(
+            codes,
+            [("artifacts[0].build".to_owned(), IssueCode::VersionsRule)]
+        );
     }
 
     #[test]

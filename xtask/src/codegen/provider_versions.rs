@@ -15,7 +15,7 @@ use stackly_core::provider::{VERSIONS_SCHEMA, manifest_software};
 use toml::value::Datetime;
 
 use super::{Generated, pretty_json};
-use crate::runtime::inventory::{Artifact, Inventory};
+use crate::runtime::inventory::{Artifact, Dependency, Inventory};
 
 /// The provider packages, relative to the repository root.
 pub const PROVIDERS_DIR: &str = "providers";
@@ -66,6 +66,32 @@ struct CatalogArtifact<'a> {
     executables: Option<&'a [String]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     blocked: Option<Blocked<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    build: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unpacked_size: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entry_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dependencies: Option<Vec<CatalogDependency<'a>>>,
+}
+
+/// One library an available artifact links, copied from
+/// `[[artifact.dependency]]`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CatalogDependency<'a> {
+    name: &'a str,
+    kind: &'a str,
+    install_name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_url: Option<&'a str>,
 }
 
 /// Why a line has no managed artifact.
@@ -140,8 +166,9 @@ fn package_dirs(root: &Path) -> Result<Vec<PathBuf>> {
 }
 
 /// Maps one inventory entry to a catalog artifact. Tooling only fields
-/// (build, dependencies, upstream checksum and signature, recipe, origin,
-/// distribution, maintainer source) are left out.
+/// (upstream checksum and signature, recipe, origin, distribution,
+/// maintainer source) are left out; `stable`, `build`, the scan values,
+/// and the dependencies are copied (spec 0009, fase 02).
 fn catalog_artifact(index: usize, artifact: &Artifact) -> Result<CatalogArtifact<'_>> {
     let label = artifact.label(index);
     let blocked = match (
@@ -177,7 +204,41 @@ fn catalog_artifact(index: usize, artifact: &Artifact) -> Result<CatalogArtifact
         license_url: artifact.license_url.as_deref(),
         executables: artifact.executables.as_deref(),
         blocked,
+        stable: artifact.stable,
+        build: artifact.build,
+        unpacked_size: artifact.unpacked_size,
+        entry_count: artifact.entry_count,
+        dependencies: catalog_dependencies(&label, artifact)?,
     })
+}
+
+/// The dependencies of an available artifact, or `None` for any other
+/// status, which `versions.json` refuses them on.
+fn catalog_dependencies<'a>(
+    label: &str,
+    artifact: &'a Artifact,
+) -> Result<Option<Vec<CatalogDependency<'a>>>> {
+    if artifact.status.as_deref() != Some("available") || artifact.dependencies.is_empty() {
+        return Ok(None);
+    }
+    artifact
+        .dependencies
+        .iter()
+        .map(|dependency: &Dependency| {
+            let field = |name: &str, value: &'a Option<String>| {
+                required(&format!("{label}: dependency"), name, value)
+            };
+            Ok(CatalogDependency {
+                name: field("name", &dependency.name)?,
+                kind: field("kind", &dependency.kind)?,
+                install_name: field("install_name", &dependency.install_name)?,
+                version: dependency.version.as_deref(),
+                license: dependency.license.as_deref(),
+                source_url: dependency.source_url.as_deref(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(Some)
 }
 
 /// A field every catalog artifact carries.
@@ -313,6 +374,14 @@ status = "available"
       "licenseUrl": "https://example.com/LICENSE",
       "executables": [
         "nats-server"
+      ],
+      "build": 1,
+      "dependencies": [
+        {
+          "name": "libSystem.B.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libSystem.B.dylib"
+        }
       ]
     },
     {
