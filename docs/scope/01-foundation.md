@@ -203,7 +203,7 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
 - [ ] Verify it: `/check verify process supervisor`
 - [x] Test it: `/test process supervisor`
 - [x] Review it (fresh model): `/check review process supervisor`
-- [ ] Document it: `/document process supervisor`
+- [x] Document it: `/document process supervisor`
 
 ### 11. Secret store & redaction · in-progress · GA
 
