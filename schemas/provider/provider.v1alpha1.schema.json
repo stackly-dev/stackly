@@ -34,6 +34,17 @@
         "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
       }
     },
+    "connection": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/Connection"
+      },
+      "maxItems": 8,
+      "minItems": 1
+    },
     "health": {
       "anyOf": [
         {
@@ -255,6 +266,32 @@
         "template",
         "format",
         "destination"
+      ]
+    },
+    "Connection": {
+      "description": "One `connection` entry: a named URI template (spec 0021).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}$"
+        },
+        "template": {
+          "type": "string",
+          "maxLength": 512,
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "title",
+        "template"
       ]
     },
     "DataMarker": {

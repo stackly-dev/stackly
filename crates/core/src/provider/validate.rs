@@ -12,6 +12,7 @@ use stackly_domain::{
 };
 use stackly_platform::{DirectoryLayout, RootSet};
 
+use super::connection;
 use super::digest::manifest_sha256;
 use super::interpolate::{
     EndpointTransport, InstanceDir, Interp, PathExpr, PathPosition, Token, TypeEnv, ValuePosition,
@@ -304,6 +305,9 @@ fn validate(files: &PackageFiles, name_check: NameCheck, issues: &mut Issues) ->
     if issues.is_empty() {
         sample_renders(&manifest, &settings, &templates, issues);
     }
+    if issues.is_empty() {
+        connection::check_sentinels(&manifest, &settings, issues);
+    }
     Some((manifest, settings, templates, versions))
 }
 
@@ -525,6 +529,7 @@ impl Checker<'_> {
         let readiness = self.readiness(raw, &env, &timeouts, reload.as_ref());
         let health = self.health(raw, &env, readiness.as_ref());
         let log_files = self.log_files(raw, &env);
+        let connections = connection::check(raw.connection.as_deref(), &env, &mut self.yaml());
         let (capabilities, cold_backup_paths) =
             self.capabilities(raw, &endpoints, &managed_fs, reload.is_some());
         if self.count() != start {
@@ -556,6 +561,7 @@ impl Checker<'_> {
             managed_fs,
             aliases,
             managed_fields,
+            connections,
         })
     }
 

@@ -417,7 +417,8 @@
           "file",
           "location",
           "code",
-          "message"
+          "message",
+          "reason"
         ],
         "max": 100
       },
@@ -600,7 +601,8 @@
           "file",
           "location",
           "code",
-          "message"
+          "message",
+          "reason"
         ],
         "max": 100
       },
