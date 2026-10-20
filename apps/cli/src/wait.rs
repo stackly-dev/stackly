@@ -170,6 +170,11 @@ impl Waiter {
     /// caught.
     pub async fn wait(cx: &mut Context, id: Uuid, args: &WaitArgs, mode: WaitMode) -> WaitOutcome {
         let mut interrupt = signal(SignalKind::interrupt()).ok();
+        if interrupt.is_some() {
+            // A hidden prompt before this wait left a listener that ends the
+            // command on Ctrl+C; from here the wait answers it.
+            crate::secret_input::hand_over_to_wait();
+        }
         let started = Instant::now();
         let deadline = args.timeout.and_then(|limit| started.checked_add(limit));
         if !cx.output.quiet {

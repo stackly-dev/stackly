@@ -259,6 +259,28 @@ async fn a_secret_that_cannot_be_read_blocks_the_start_with_needs_secret_and_the
     let failed = api.wait_final(accepted.operation.id).await;
     assert_eq!(failed.operation.state, OperationState::Failed);
     assert_eq!(Api::failure_code(&failed), "secret.needs_secret");
+    let error = &failed
+        .operation
+        .failure
+        .as_ref()
+        .expect("the failed operation carries its error")
+        .error;
+    assert_eq!(error.items().len(), 1, "{error:?}");
+    assert_eq!(error.items()[0].kind(), "reference");
+    assert_eq!(
+        error.items()[0].field("reference"),
+        Some(reference.to_string().as_str())
+    );
+    assert_eq!(error.items()[0].field("reason"), Some("missing"));
+    assert_eq!(error.items()[0].field("generateAllowed"), Some("false"));
+    assert_eq!(error.detail("count"), Some("1"));
+    assert_eq!(error.detail("omitted"), None);
+    assert!(
+        error
+            .hint()
+            .is_some_and(|hint| hint.contains("stackly secret set")),
+        "{error:?}"
+    );
     let blocked = api
         .wait_instance(id, "a needsSecret blocker", |summary| {
             matches!(summary.blocker, Some(InstanceBlocker::NeedsSecret(_)))

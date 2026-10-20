@@ -17,12 +17,13 @@ use crate::operation::Redact;
 pub const MASK: &str = "****";
 
 /// A sensitive key, case insensitive, after the start of a line or a
-/// character that is not a letter or digit, maybe in quotes, then `=` or
-/// `:` with optional spaces around it. The key alone, followed only by
+/// character that is not a letter or digit, maybe in quotes (a quote the JSON
+/// log formatter escaped as `\"` included), then `=` or `:` with optional
+/// spaces around it. The key alone, followed only by
 /// spaces, does not match, so `password authentication failed` stays.
 static SENSITIVE_KEY: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?im)(?:^|[^\p{L}\p{N}])["']?(password|passwd|pwd|secret|token|api_key|apikey|access_key|private_key|authorization|requirepass|masterauth|pgpassword|mysql_pwd|rediscli_auth)["']?[ \t]*[=:][ \t]*"#,
+        r#"(?im)(?:^|[^\p{L}\p{N}])\\?["']?(password|passwd|pwd|secret|token|api_key|apikey|access_key|private_key|authorization|requirepass|masterauth|pgpassword|mysql_pwd|rediscli_auth)\\?["']?[ \t]*[=:][ \t]*"#,
     )
     .expect("the sensitive key pattern is a valid regex")
 });
@@ -44,7 +45,8 @@ static URI_SCHEME: LazyLock<Regex> = LazyLock::new(|| {
 ///    The password runs from the first `:` after `://` to the last `@`
 ///    before `/`, `?`, `#`, whitespace, or the end of the line.
 /// 3. The value after a sensitive key such as `password=`, `token:`, or
-///    `"api_key": "..."`. A quoted value keeps its quotes; a bare value
+///    `"api_key": "..."`. A quoted value keeps its quotes, an escaped quote
+///    (`\"`, as the JSON log formatter writes it) included; a bare value
 ///    ends before whitespace, `&`, `,`, `;`, `)`, `}`, `]`, or a quote; and
 ///    a bare value after `authorization` runs to the end of the line, so
 ///    `Authorization: Bearer x` is hidden whole.
@@ -285,6 +287,18 @@ fn key_values(text: &str) -> Vec<Range<usize>> {
         let start = whole.end();
         let rest = &text[start..];
         let (value, next) = match rest.chars().next() {
+            Some('\\') if matches!(rest[1..].chars().next(), Some('"' | '\'')) => {
+                // The key sits inside a JSON string: the formatter escaped
+                // the quotes of the value, so the value ends at `\` + quote.
+                let quote = rest[1..].chars().next().unwrap_or('"');
+                let inner = start + 2;
+                let line = line_end(text, inner);
+                let closing = format!("\\{quote}");
+                match text[inner..line].find(&closing) {
+                    Some(offset) => (inner..inner + offset, inner + offset + closing.len()),
+                    None => (inner..line, line),
+                }
+            }
             Some(quote @ ('"' | '\'')) => {
                 let inner = start + 1;
                 let line = line_end(text, inner);
@@ -374,6 +388,32 @@ mod tests {
         for (input, expected) in cases {
             assert_eq!(redactor.redact(&input), expected, "{input}");
         }
+    }
+
+    #[test]
+    fn a_sensitive_key_in_a_json_escaped_message_hides_its_value() {
+        let redactor = Redactor::new();
+        let messages = [
+            r#"cfg {"password": "hunter2"} done"#,
+            r#"cfg {"authorization": "Bearer hunter2"} done"#,
+            r#"cfg {'token': 'hunter2'} done"#,
+            r#"cfg {"password":"hunter2","user":"app"}"#,
+        ];
+
+        for message in messages {
+            // What the JSON formatter of the log writes for the message.
+            let line = serde_json::to_string(message).expect("a string serializes");
+            let hidden = redactor.redact(&line);
+
+            assert!(!hidden.contains("hunter2"), "{line} became {hidden}");
+            assert!(hidden.contains(MASK), "{hidden}");
+        }
+        let line = serde_json::to_string(r#"{"password": "hunter2","user":"app"}"#)
+            .expect("a string serializes");
+        assert_eq!(
+            redactor.redact(&line),
+            r#""{\"password\": \"****\",\"user\":\"app\"}""#
+        );
     }
 
     #[test]

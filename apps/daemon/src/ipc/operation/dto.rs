@@ -205,10 +205,11 @@ pub fn catalog_body(
     if !allowed.is_empty() {
         body = body.with_items(allowed);
     }
-    match rule {
+    let body = match rule {
         Some(rule) => body.with_rule(rule.id()),
         None => body,
-    }
+    };
+    crate::ipc::secret::with_secret_hint(body)
 }
 
 /// The items `spec` allows, as wire items; the rest are logged and left out.

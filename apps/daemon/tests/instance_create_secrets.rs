@@ -146,6 +146,51 @@ async fn reveal(client: &Client, reference: &str) -> String {
     revealed.value.expose().to_owned()
 }
 
+/// Waits for the operation of a create to fail and returns its error.
+async fn create_failure(
+    client: &Client,
+    params: CreateInstanceParams,
+    key: &str,
+) -> stackly_protocol::ErrorBody {
+    let Reply::InstanceCreate(accepted) = client
+        .call_detailed(
+            Call::InstanceCreate(params),
+            CallOptions::default().with_idempotency_key(key),
+        )
+        .await
+        .expect("the create is accepted")
+    else {
+        panic!("not a create reply");
+    };
+    let operation = accepted
+        .accepted
+        .expect("a create starts an operation")
+        .operation;
+    let deadline = tokio::time::Instant::now() + PATIENCE;
+    loop {
+        let Ok(Reply::OperationGet(detail)) = client
+            .call(Call::OperationGet(GetOperationParams {
+                operation_id: operation.id,
+            }))
+            .await
+        else {
+            panic!("operation.get failed");
+        };
+        if detail.operation.state == OperationState::Failed {
+            return detail
+                .operation
+                .failure
+                .expect("a failed operation carries its error")
+                .error;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the create did not fail: {detail:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 /// Spec 0014 AC-1.
 #[tokio::test]
 async fn a_create_without_secrets_generates_every_secret_field() {
@@ -224,4 +269,66 @@ async fn an_explicit_secret_keeps_the_source_the_client_sent() {
     );
     assert_eq!(summary.value_origin, Some(SecretValueOrigin::Entered));
     assert_eq!(reveal(&client, &summary.reference).await, EXPLICIT);
+}
+
+/// Spec 0011 AC-11, AC-21, and AC-23: a create whose `bind` source the locked
+/// keychain cannot read fails with one `reference` item for the source and the
+/// hint, and no instance exists to carry a blocker.
+#[tokio::test]
+async fn a_bind_to_a_source_in_a_locked_keychain_fails_the_create_with_the_source_as_an_item() {
+    let root = TestRoot::new().expect("a test root");
+    let (runtime_id, revision) = seed(&root);
+    let _reap = ReapGuard::new(root.path(), &daemon_paths(&root).runtime);
+    let daemon = start_daemon(&root);
+    let (client, _) = client(daemon.socket()).await;
+    create(
+        &client,
+        params("source", runtime_id, &revision, Vec::new()),
+        "create-source",
+    )
+    .await;
+    let source = references(&client).await.remove(0).reference;
+    let keychain = daemon_paths(&root)
+        .layout
+        .keychain_dir()
+        .join("stackly.keychain-db");
+    let locked = Command::new("/usr/bin/security")
+        .arg("lock-keychain")
+        .arg(&keychain)
+        .output()
+        .expect("security runs");
+    assert!(
+        locked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&locked.stderr)
+    );
+
+    let error = create_failure(
+        &client,
+        params(
+            "bound",
+            runtime_id,
+            &revision,
+            vec![SecretFieldInput {
+                field: "authToken".to_owned(),
+                input: SecretInput::Bind(source.clone()),
+            }],
+        ),
+        "create-bound",
+    )
+    .await;
+
+    assert_eq!(error.code(), "secret.needs_secret", "{error:?}");
+    assert_eq!(error.items().len(), 1, "{error:?}");
+    assert_eq!(error.items()[0].kind(), "reference");
+    assert_eq!(error.items()[0].field("reference"), Some(source.as_str()));
+    assert_eq!(error.items()[0].field("reason"), Some("store_locked"));
+    assert_eq!(error.items()[0].field("generateAllowed"), Some("false"));
+    assert_eq!(error.detail("count"), Some("1"));
+    assert!(
+        error
+            .hint()
+            .is_some_and(|hint| hint.contains("unlock the keychain")),
+        "{error:?}"
+    );
 }

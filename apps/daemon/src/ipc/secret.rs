@@ -8,9 +8,8 @@
 //! [`SecretValue`] and back, so `cargo xtask check-deps` allows `expose`
 //! here and nowhere else in the crate.
 
-use stackly_core::secret::delivery::SecretInArgv;
 use stackly_core::secret::{
-    ConflictReason, EffectKind, NeedsSecret, PutOutcome, PutRequest, PutTarget, PutWarning,
+    ConflictReason, EffectKind, PutOutcome, PutRequest, PutTarget, PutWarning,
     RevealPurpose as CoreRevealPurpose, SecretCaller, SecretEffect, SecretError,
     SecretInput as CoreInput,
 };
@@ -37,8 +36,6 @@ use crate::dispatch::{HandlerFuture, RequestContext};
 use crate::secrets::store_status;
 use crate::state::DaemonCore;
 
-/// The item kind of one unreadable reference.
-const REFERENCE_ITEM: &str = "reference";
 /// The item kind of one use of a reference.
 const USE_ITEM: &str = "use";
 /// The item kind of one effect of a replace.
@@ -407,48 +404,47 @@ const fn needs_reason(reason: DomainReason) -> NeedsSecretReason {
     }
 }
 
-/// The hint every `secret.needs_secret` error carries.
-const NEEDS_SECRET_HINT: &str =
-    "fill them with stackly secret set, or unlock the keychain, then try again";
-
-/// The error body of a needs secret result (spec 0011, *Needs secret*):
-/// one `reference` item per unreadable reference, in the order given.
-#[must_use]
-pub fn needs_secret_error(needs: &NeedsSecret) -> ErrorBody {
-    needs_secret_items(&needs.references)
+/// The hint of a `secret.*` code, the one source for the `secret.*` methods
+/// and for an operation that failed with a secret code (spec 0011,
+/// *Needs secret* and AC-21). `reason` is the `reason` detail of
+/// `secret.conflict`, which tells a reference in use from one that exists.
+fn hint_for(code: &str, reason: Option<&str>) -> Option<&'static str> {
+    match (code, reason) {
+        ("secret.needs_secret", _) => {
+            Some("fill them with stackly secret set, or unlock the keychain, then try again")
+        }
+        ("secret.delivery_rejected", _) => Some(
+            "the provider package must deliver the secret by stdin, a file, or the environment",
+        ),
+        ("secret.confirmation_required", _) => {
+            Some("send the request again with confirmStoredOnly")
+        }
+        ("secret.conflict", Some("already_exists")) => Some("use replace to change the value"),
+        ("secret.conflict", Some("in_use")) => Some("stop using the reference, then delete it"),
+        ("secret.store_locked", _) => Some("unlock the keychain, then try again"),
+        ("secret.store_access_denied", _) => {
+            Some("allow stacklyd to use the item when the keychain asks, then try again")
+        }
+        ("secret.store_busy", _) => Some("try again in a moment"),
+        ("secret.store_outcome_unknown", _) => {
+            Some("check the reference with stackly secret status before trying again")
+        }
+        _ => None,
+    }
 }
 
-fn needs_secret_items(references: &[DomainNeedsItem]) -> ErrorBody {
-    let count = references.len();
-    ErrorBody::new(
-        &secret::NEEDS_SECRET,
-        if count == 1 {
-            "1 secret reference cannot be read".to_owned()
-        } else {
-            format!("{count} secret references cannot be read")
-        },
-    )
-    .with_detail("count", count.to_string())
-    .with_items(references.iter().map(|item| {
-        ErrorItem::new(REFERENCE_ITEM)
-            .with_field("reference", item.reference.to_string())
-            .with_field("reason", item.reason.as_code())
-            .with_field("generateAllowed", item.generate_allowed.to_string())
-    }))
-    .with_hint(NEEDS_SECRET_HINT)
-}
-
-/// The error body of an argument that would carry a secret value to a
-/// provider process (`secret.delivery_rejected`). It names the rule, never
-/// the argument or the value.
+/// `body` with the hint of its `secret.*` code, unless it carries one. The
+/// operation path ([`dto::catalog_body`]) and the `secret.*` methods both
+/// end here, so a code has one hint wherever it is raised.
 #[must_use]
-pub fn delivery_error(error: &SecretInArgv) -> ErrorBody {
-    ErrorBody::new(
-        &secret::DELIVERY_REJECTED,
-        "an argument would carry a secret value",
-    )
-    .with_detail("reason", error.reason.as_code())
-    .with_hint("the provider package must deliver the secret by stdin, a file, or the environment")
+pub(crate) fn with_secret_hint(body: ErrorBody) -> ErrorBody {
+    if body.hint().is_some() {
+        return body;
+    }
+    match hint_for(body.code(), body.detail("reason")) {
+        Some(hint) => body.with_hint(hint),
+        None => body,
+    }
 }
 
 /// The error body of a secret service failure: one catalog code for every
@@ -456,6 +452,10 @@ pub fn delivery_error(error: &SecretInArgv) -> ErrorBody {
 /// message or detail holds a value.
 #[must_use]
 pub fn secret_error(error: &SecretError) -> ErrorBody {
+    with_secret_hint(secret_body(error))
+}
+
+fn secret_body(error: &SecretError) -> ErrorBody {
     let about = |body: ErrorBody, reference: &SecretRef| {
         body.with_resource(ResourceRef {
             kind: ResourceKind::Secret,
@@ -486,8 +486,7 @@ pub fn secret_error(error: &SecretError) -> ErrorBody {
                     .with_field("resourceId", effect.user.id().to_string())
                     .with_field("field", effect.field.to_string())
                     .with_field("effect", effect.effect.as_code())
-            }))
-            .with_hint("send the request again with confirmStoredOnly"),
+            })),
             reference,
         ),
         SecretError::InvalidValue {
@@ -521,7 +520,8 @@ pub fn secret_error(error: &SecretError) -> ErrorBody {
             .with_hint("refresh the resource, then try again"),
             reference,
         ),
-        SecretError::NeedsSecret { needs } => needs_secret_error(needs),
+        // The operation path's mapping, so items and hint have one source.
+        SecretError::NeedsSecret { .. } => super::operation::operation_error_body(error),
         SecretError::Store { reference, error } => store_error(reference, *error),
         SecretError::WriteBackFailed { .. } => ErrorBody::new(
             &secret::STORE_OUTCOME_UNKNOWN,
@@ -573,15 +573,13 @@ fn conflict(reference: &SecretRef, reason: &ConflictReason) -> ErrorBody {
         id: reference.to_string(),
     });
     match reason {
-        ConflictReason::InUse(uses) => body
-            .with_items(uses.iter().map(|used| {
-                ErrorItem::new(USE_ITEM)
-                    .with_field("resourceKind", user_kind_code(&used.user))
-                    .with_field("resourceId", used.user.id().to_string())
-                    .with_field("field", used.field.to_string())
-            }))
-            .with_hint("stop using the reference, then delete it"),
-        _ => body.with_hint("use replace to change the value"),
+        ConflictReason::InUse(uses) => body.with_items(uses.iter().map(|used| {
+            ErrorItem::new(USE_ITEM)
+                .with_field("resourceKind", user_kind_code(&used.user))
+                .with_field("resourceId", used.user.id().to_string())
+                .with_field("field", used.field.to_string())
+        })),
+        _ => body,
     }
 }
 
@@ -593,29 +591,29 @@ const fn user_kind_code(user: &SecretUser) -> &'static str {
 /// [`SecretStoreError`] variant (spec 0011, *Kode error di wire*).
 #[must_use]
 pub fn store_error(reference: &SecretRef, error: SecretStoreError) -> ErrorBody {
+    with_secret_hint(store_body(reference, error))
+}
+
+fn store_body(reference: &SecretRef, error: SecretStoreError) -> ErrorBody {
     let body = match error {
         SecretStoreError::NotFound => return not_found(reference),
         SecretStoreError::AlreadyExists => {
             return conflict(reference, &ConflictReason::AlreadyExists);
         }
-        SecretStoreError::Locked => ErrorBody::new(&secret::STORE_LOCKED, "the keychain is locked")
-            .with_hint("unlock the keychain, then try again"),
+        SecretStoreError::Locked => ErrorBody::new(&secret::STORE_LOCKED, "the keychain is locked"),
         SecretStoreError::AccessDenied { by_user } => ErrorBody::new(
             &secret::STORE_ACCESS_DENIED,
             "access to the keychain item was denied",
         )
-        .with_detail("byUser", by_user.to_string())
-        .with_hint("allow stacklyd to use the item when the keychain asks, then try again"),
+        .with_detail("byUser", by_user.to_string()),
         SecretStoreError::Busy => ErrorBody::new(
             &secret::STORE_BUSY,
             "the keychain is busy with another request",
-        )
-        .with_hint("try again in a moment"),
+        ),
         SecretStoreError::OutcomeUnknown => ErrorBody::new(
             &secret::STORE_OUTCOME_UNKNOWN,
             "the keychain did not answer in time, so the change may have happened",
-        )
-        .with_hint("check the reference with stackly secret status before trying again"),
+        ),
         SecretStoreError::NotSupported { .. } => {
             ErrorBody::new(&secret::STORE_UNSUPPORTED, "this OS has no secret store")
         }
@@ -856,6 +854,15 @@ mod tests {
         assert!(body.items().is_empty());
     }
 
+    /// The body an operation that failed with these references stores: the
+    /// one mapping behind `secret.needs_secret`.
+    fn needs_secret_body(references: &[DomainNeedsItem]) -> ErrorBody {
+        let error = SecretError::NeedsSecret {
+            needs: stackly_core::secret::NeedsSecret::new(references.to_vec()),
+        };
+        crate::ipc::operation::operation_error_body(&error)
+    }
+
     #[test]
     fn a_needs_secret_error_lists_every_reference_with_its_reason_and_whether_generate_works() {
         let references = [
@@ -863,7 +870,7 @@ mod tests {
             DomainNeedsItem::new(reference("local:erp/postgres/root"), Reason::Missing, false),
         ];
 
-        let body = needs_secret_items(&references);
+        let body = needs_secret_body(&references);
 
         assert_eq!(checked(&body).code(), "secret.needs_secret");
         assert_eq!(
@@ -894,11 +901,12 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let body = needs_secret_items(&references);
+        let body = needs_secret_body(&references);
 
         assert_eq!(body.items().len(), 100);
         assert_eq!(body.detail("count"), Some("120"));
         assert_eq!(body.detail("omitted"), Some("20"));
+        assert!(body.hint().is_some());
     }
 
     #[test]
@@ -915,7 +923,9 @@ mod tests {
         )
         .expect_err("the second argument assigns the value");
 
-        let body = delivery_error(&error);
+        let body = crate::ipc::operation::operation_error_body(
+            &stackly_core::supervisor::SupervisorError::SecretInArgv(error),
+        );
 
         assert_eq!(checked(&body).code(), "secret.delivery_rejected");
         assert_eq!(body.detail("reason"), Some("assigns_value"));

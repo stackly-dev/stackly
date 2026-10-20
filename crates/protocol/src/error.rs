@@ -129,17 +129,50 @@ pub struct ErrorBody {
     /// `kind` and field keys from the code's catalog entry.
     #[serde(default)]
     items: Vec<ErrorItem>,
+    /// The message before [`ErrorBody::new`] cut it, for
+    /// [`redacted_with`](Self::redacted_with). It never travels.
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[typeshare(skip)]
+    uncut: Uncut,
 }
+
+/// The text a message lost to the cut at [`MESSAGE_MAX`], up to
+/// [`KEPT_BEFORE_CUT`] characters. Two errors are equal whatever they hold here,
+/// and `Debug` shows nothing, so the text never reaches a log unredacted.
+#[derive(Clone, Default)]
+struct Uncut(Option<String>);
+
+impl PartialEq for Uncut {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Uncut {}
+
+impl std::fmt::Debug for Uncut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Uncut(..)")
+    }
+}
+
+/// The most characters of a message [`ErrorBody`] keeps for redaction before
+/// the cut.
+const KEPT_BEFORE_CUT: usize = 4096;
 
 impl ErrorBody {
     /// An error for `spec` with `message`, truncated to [`MESSAGE_MAX`]
     /// characters. Category and `retryable` come from the catalog entry.
     #[must_use]
     pub fn new(spec: &ErrorSpec, message: impl Into<String>) -> Self {
+        let message = message.into();
+        let uncut = (message.chars().nth(MESSAGE_MAX).is_some())
+            .then(|| truncate(message.clone(), KEPT_BEFORE_CUT));
         Self {
             code: spec.code.to_owned(),
             category: spec.category,
-            message: truncate(message.into(), MESSAGE_MAX),
+            message: truncate(message, MESSAGE_MAX),
             retryable: spec.retryable,
             resource: None,
             fields: Vec::new(),
@@ -148,6 +181,7 @@ impl ErrorBody {
             operation_id: None,
             rule: None,
             items: Vec::new(),
+            uncut: Uncut(uncut),
         }
     }
 
@@ -287,7 +321,10 @@ impl ErrorBody {
     /// (spec 0011 AC-14).
     #[must_use]
     pub fn redacted_with(mut self, redact: impl Fn(&str) -> String) -> Self {
-        self.message = truncate(redact(&self.message), MESSAGE_MAX);
+        // Redact the whole message first, then cut: a value that straddles
+        // the cut at 200 characters would otherwise survive as a prefix.
+        let source = self.uncut.0.take().unwrap_or_else(|| self.message.clone());
+        self.message = truncate(redact(&source), MESSAGE_MAX);
         self.hint = self.hint.map(|hint| redact(&hint));
         for detail in &mut self.details {
             detail.value = redact(&detail.value);
@@ -598,6 +635,33 @@ mod tests {
         let error = ErrorBody::new(&request::MALFORMED, "x".repeat(200));
         let redacted = error.redacted_with(|text| text.replace('x', "xx"));
         assert_eq!(redacted.message().chars().count(), 200);
+    }
+
+    #[test]
+    fn a_value_that_straddles_the_cut_is_redacted_before_the_message_is_cut() {
+        let value = "hunter2-fixture-value";
+        // The value starts 10 characters before character 200, so the cut
+        // alone would leave its first 10 characters.
+        let text = format!("{}{value} and more text after it", "a".repeat(190));
+        let error = ErrorBody::new(&request::MALFORMED, text);
+        assert!(error.message().ends_with("hunter2-fi"));
+
+        let redacted = error.redacted_with(|text| text.replace(value, "****"));
+
+        assert!(!redacted.message().contains("hunter2"), "{redacted:?}");
+        assert!(redacted.message().contains("a****"), "{redacted:?}");
+        assert_eq!(redacted.message().chars().count(), MESSAGE_MAX);
+    }
+
+    #[test]
+    fn the_message_before_the_cut_never_travels_and_does_not_change_equality() {
+        let long = ErrorBody::new(&request::MALFORMED, "é".repeat(300));
+        let wire = serde_json::to_string(&long).expect("an error serializes");
+
+        assert!(wire.len() < 600 && !wire.contains("ncut"), "{wire}");
+        let back: ErrorBody = serde_json::from_str(&wire).expect("an error parses");
+        assert_eq!(back, long);
+        assert!(!format!("{long:?}").contains(&"é".repeat(250)));
     }
 
     #[test]

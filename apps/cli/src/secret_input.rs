@@ -15,10 +15,13 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use clap::Args;
+use stackly_protocol::ErrorBody;
+use stackly_protocol::codes::cli;
 use stackly_protocol::secret::{MAX_SECRET_LEN, SecretInput, SecretText};
 
 use crate::args;
 use crate::context::Context;
+use crate::exit::EXIT_INTERRUPTED;
 use crate::failure::CliFailure;
 
 /// The most bytes read from stdin or a file: one past the longest value,
@@ -115,8 +118,119 @@ pub struct Tty;
 
 impl HiddenInput for Tty {
     fn read_hidden(&mut self) -> io::Result<String> {
-        rpassword::read_password()
+        interrupt::guarded(rpassword::read_password)
     }
+}
+
+/// What keeps Ctrl+C at the hidden prompt from leaving the terminal raw.
+///
+/// `rpassword` turns off `ISIG` on the terminal, so Ctrl+C arrives as a
+/// byte, and `rpassword` raises `SIGINT` itself before it restores the
+/// terminal modes. With no handler that signal ends the process inside the
+/// raise, and a shell without job control (`sh`, a wrapper script, a pty of
+/// another tool) is left with echo off. A listener on its own thread, like
+/// the one `wait` keeps for a second Ctrl+C, turns the signal into a
+/// returned `Interrupted` error, so the modes are restored on drop.
+///
+/// The listener stays for the rest of the process, since a registered
+/// handler cannot be taken back. Outside a prompt it ends the command with
+/// exit 130, as the default action would, until a wait takes over
+/// ([`hand_over_to_wait`]) and handles Ctrl+C itself.
+mod interrupt {
+    use std::io;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Once, OnceLock};
+    use std::time::{Duration, Instant};
+
+    use tokio::signal::unix::{SignalKind, signal};
+
+    use super::EXIT_INTERRUPTED;
+
+    /// A prompt is reading, so a `SIGINT` is the prompt's own Ctrl+C.
+    static READING: AtomicBool = AtomicBool::new(false);
+    /// How many `SIGINT` the listener has taken so far.
+    static SEEN: AtomicUsize = AtomicUsize::new(0);
+    /// A wait listens for `SIGINT` itself, so the listener leaves it alone.
+    static HANDED_OVER: AtomicBool = AtomicBool::new(false);
+    static STARTED: Once = Once::new();
+    static LISTENING: OnceLock<bool> = OnceLock::new();
+
+    /// How long the prompt waits for the listener to take the signal it
+    /// raised itself.
+    const SETTLE: Duration = Duration::from_millis(500);
+
+    fn listen() -> bool {
+        STARTED.call_once(|| {
+            let (ready, registered) = std::sync::mpsc::channel();
+            let spawned = std::thread::Builder::new()
+                .name("stackly-prompt-interrupt".to_owned())
+                .spawn(move || {
+                    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    else {
+                        let _ = ready.send(false);
+                        return;
+                    };
+                    runtime.block_on(async move {
+                        let Ok(mut interrupts) = signal(SignalKind::interrupt()) else {
+                            let _ = ready.send(false);
+                            return;
+                        };
+                        let _ = ready.send(true);
+                        while interrupts.recv().await.is_some() {
+                            // Read before the count moves: the prompt clears
+                            // the flag only after it saw the count move.
+                            let at_prompt = READING.load(Ordering::SeqCst);
+                            SEEN.fetch_add(1, Ordering::SeqCst);
+                            if !at_prompt && !HANDED_OVER.load(Ordering::SeqCst) {
+                                std::process::exit(i32::from(EXIT_INTERRUPTED));
+                            }
+                        }
+                    });
+                });
+            let listening = spawned.is_ok() && registered.recv_timeout(SETTLE).unwrap_or(false);
+            let _ = LISTENING.set(listening);
+        });
+        LISTENING.get().copied().unwrap_or(false)
+    }
+
+    pub(super) fn hand_over() {
+        HANDED_OVER.store(true, Ordering::SeqCst);
+    }
+
+    /// Runs `read` with the listener on. An `Interrupted` result comes back
+    /// only after the listener took the signal `rpassword` raised, so that
+    /// signal never counts as a later Ctrl+C.
+    pub(super) fn guarded<T>(read: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
+        let listening = listen();
+        let before = SEEN.load(Ordering::SeqCst);
+        READING.store(true, Ordering::SeqCst);
+        let result = read();
+        if listening && matches!(&result, Err(error) if error.kind() == io::ErrorKind::Interrupted)
+        {
+            let waited = Instant::now();
+            while SEEN.load(Ordering::SeqCst) == before && waited.elapsed() < SETTLE {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        READING.store(false, Ordering::SeqCst);
+        result
+    }
+
+    #[cfg(test)]
+    pub(super) fn seen() -> usize {
+        SEEN.load(Ordering::SeqCst)
+    }
+}
+
+/// Leaves `SIGINT` to the caller from now on. A wait calls it once it
+/// listens for the signal itself: until then the listener a hidden prompt
+/// started ends the command with exit 130 on Ctrl+C, and from then on Ctrl+C
+/// stops the wait the way spec 0008 says, with the operation left running.
+/// Without a prompt before it, nothing changes.
+pub fn hand_over_to_wait() {
+    interrupt::hand_over();
 }
 
 /// The value of an environment variable, or `None` when it is unset.
@@ -196,6 +310,7 @@ fn prompt_once(
     cx.output.stderr.line("");
     match read {
         Ok(line) => Ok(SecretText::new(line)),
+        Err(error) if error.kind() == io::ErrorKind::Interrupted => Err(interrupted()),
         Err(_) => Err(refuse(
             "secret_prompt_failed",
             "the value could not be read from the terminal",
@@ -344,6 +459,19 @@ fn file_error(error: &io::Error) -> CliFailure {
 }
 
 /// `cli.usage` for input the CLI refuses, with a stable `kind`.
+/// `cli.interrupted` for Ctrl+C at the hidden prompt: nothing was sent, so
+/// no operation is left running. Exits 130.
+fn interrupted() -> CliFailure {
+    CliFailure {
+        body: Box::new(ErrorBody::new(
+            &cli::INTERRUPTED,
+            "interrupted at the secret prompt; nothing was set",
+        )),
+        request_id: None,
+        exit_override: Some(EXIT_INTERRUPTED),
+    }
+}
+
 fn refuse(kind: &str, message: &str) -> CliFailure {
     CliFailure::usage(kind, message)
 }
@@ -384,8 +512,6 @@ pub fn field_source(text: &str) -> Result<(String, SecretSource), String> {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
-
-    use stackly_protocol::codes::cli;
 
     use super::*;
     use crate::context::testing::context;
@@ -428,6 +554,55 @@ mod tests {
             SecretInput::Value(text) => text.expose().to_owned(),
             other => panic!("expected a value, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn ctrl_c_at_the_prompt_is_cli_interrupted_with_exit_130_and_no_retry() {
+        struct Interrupts(usize);
+        impl HiddenInput for Interrupts {
+            fn read_hidden(&mut self) -> io::Result<String> {
+                self.0 += 1;
+                Err(io::Error::new(io::ErrorKind::Interrupted, "interrupted"))
+            }
+        }
+        let (mut cx, _out) = context(true, "");
+        let mut hidden = Interrupts(0);
+
+        let failure = read_input(
+            &mut cx,
+            &SecretSource::Prompt,
+            "adminPassword",
+            &mut hidden,
+            &no_env,
+        )
+        .expect_err("an interrupted prompt sets nothing");
+
+        assert!(failure.body.is(&cli::INTERRUPTED), "{failure:?}");
+        assert_eq!(failure.exit_code(), 130);
+        assert_eq!(hidden.0, 1, "no second prompt after Ctrl+C");
+    }
+
+    #[test]
+    fn a_sigint_raised_during_a_guarded_read_does_not_end_the_process() {
+        let before = interrupt::seen();
+
+        let result = interrupt::guarded(|| {
+            // What `rpassword` does when it reads Ctrl+C, here from the
+            // shell so the signal reaches the whole process.
+            let status = std::process::Command::new("/bin/kill")
+                .args(["-INT", &std::process::id().to_string()])
+                .status()
+                .expect("kill runs");
+            assert!(status.success());
+            Err::<String, _>(io::Error::new(io::ErrorKind::Interrupted, "interrupted"))
+        });
+
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::Interrupted);
+        assert_eq!(
+            interrupt::seen(),
+            before + 1,
+            "the listener took the signal"
+        );
     }
 
     #[test]

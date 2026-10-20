@@ -745,6 +745,30 @@ fn a_locked_file_keychain_blocks_the_start_with_needs_secret_until_the_daemon_re
 
     assert_ne!(code, Some(0), "{blocked}");
     assert_eq!(blocked["error"]["code"], "secret.needs_secret", "{blocked}");
+    let failure = &blocked["error"];
+    let items = failure["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("the failure lists the references: {blocked}"));
+    assert!(!items.is_empty(), "{blocked}");
+    let field = |item: &serde_json::Value, key: &str| -> Option<String> {
+        item["fields"]
+            .as_array()?
+            .iter()
+            .find(|field| field["key"] == key)
+            .and_then(|field| field["value"].as_str().map(str::to_owned))
+    };
+    assert!(
+        items.iter().all(|item| item["kind"] == "reference"
+            && field(item, "reason").as_deref() == Some("store_locked")
+            && field(item, "reference").is_some_and(|r| r.starts_with("local:instance/"))),
+        "{blocked}"
+    );
+    assert!(
+        failure["hint"]
+            .as_str()
+            .is_some_and(|hint| hint.contains("stackly secret set")),
+        "{blocked}"
+    );
     let instance = rig.get(&id);
     assert_eq!(instance["lifecycle"], "stopped", "{instance}");
     assert_eq!(instance["blocker"]["type"], "needsSecret", "{instance}");
