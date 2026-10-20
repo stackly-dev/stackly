@@ -1,7 +1,7 @@
 # 0017. Catalog dan provider detail
 
 **Date**: 2026-10-19
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
