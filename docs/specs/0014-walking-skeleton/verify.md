@@ -95,18 +95,18 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 
 ### UI / manual
 
-- [ ] `cargo build -p stackly-fake-server -p stacklyd`, lalu `R="$(mktemp -d /tmp/stackly-m3.XXXXXX)"`, `target/debug/examples/skeleton_seed --root "$R"`, dan `STACKLY_ROOT="$R" target/debug/stacklyd` di terminal lain; jalankan `next` dari seed, lalu `instance start <id> --wait`, `instance get <id>`, `ps -axww -o pid=,args= | grep "$R" | grep "stackly-fake-server serve"` → satu baris; `kill -9` daemon, jalankan lagi, ulangi `get` dan `ps` → PID dan `startedAt` sama, `adopted: true`, tetap satu proses → AC-9, AC-11
-- [ ] Buat instance dengan `--set-json initDelayMs=15000`, `kill -9` daemon begitu `ps` memperlihatkan `stackly-fake-server init`, jalankan lagi → operasi `needs_recovery`, satu instance `failed`, pembantu init selesai sendiri setelah 15 detik → AC-12
+- [x] `cargo build -p stackly-fake-server -p stacklyd`, lalu `R="$(mktemp -d /tmp/stackly-m3.XXXXXX)"`, `target/debug/examples/skeleton_seed --root "$R"`, dan `STACKLY_ROOT="$R" target/debug/stacklyd` di terminal lain; jalankan `next` dari seed, lalu `instance start <id> --wait`, `instance get <id>`, `ps -axww -o pid=,args= | grep "$R" | grep "stackly-fake-server serve"` → satu baris; `kill -9` daemon, jalankan lagi, ulangi `get` dan `ps` → PID dan `startedAt` sama, `adopted: true`, tetap satu proses → AC-9, AC-11
+- [x] Buat instance dengan `--set-json initDelayMs=15000`, `kill -9` daemon begitu `ps` memperlihatkan `stackly-fake-server init`, jalankan lagi → operasi `needs_recovery`, satu instance `failed`, pembantu init selesai sendiri setelah 15 detik → AC-12
 
 ### Commands
 
-- [ ] `cargo test -p stackly-fake-server` → `--delay-ms` menunda sampai setelah token dibaca dan sebelum folder data dibuat; nilai yang bukan angka exit 2 → AC-4
-- [ ] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stackly-core --test provider_packages` lalu `cargo test -p stackly-core --test provider_packages --test provider_rules --test supervisor_start` → golden `fake/init.json` memuat `--delay-ms=0`, revision `0.2.0`, argv init di test supervisor ikut → AC-4
-- [ ] `cargo xtask provider check providers/fake` → `ok testing/fake 0.2.0 <sha256>` → AC-4
-- [ ] `cargo test -p stackly-testkit` → `ProcessTable`, `CliRunner`, `ReapGuard`, `SpawnedDaemon::kill` → AC-9, AC-11, AC-12 (prasyarat)
-- [ ] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test skeleton --locked --no-fail-fast` → lima test: happy path (create, start, get, stop; satu proses `serve` selama jalan dan nol sesudah stop; file keychain ada), init gagal lalu abandon (`supervisor.init_failed`, `needs_recovery`, `operation.abandoned`, `supervisor.not_initialized`, tidak ada proses), keychain file tanpa dialog, restart `SIGKILL` dan `SIGTERM` (PID, `startedAt`, `adopted`, satu instance, satu proses, isi data sama, start berikutnya `alreadyInState`), create terputus (replay key yang sama, `instance.name_taken`, `dataInUse` bila pembantu terlihat hidup sebelum dan sesudah `get`, abandon, pembantu selesai sendiri) → AC-9 sampai AC-13
-- [ ] `ps -axww -o pid=,args= | grep stackly-test-` setelah suite → tidak ada proses `stackly-fake-server` dari run ini → AC-9, AC-11, AC-12
-- [ ] `cargo xtask evidence check`, `cargo xtask check-deps`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check` → lulus → AC-4, AC-9 sampai AC-13
+- [x] `cargo test -p stackly-fake-server` → `--delay-ms` menunda sampai setelah token dibaca dan sebelum folder data dibuat; nilai yang bukan angka exit 2 → AC-4
+- [x] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stackly-core --test provider_packages` lalu `cargo test -p stackly-core --test provider_packages --test provider_rules --test supervisor_start` → golden `fake/init.json` memuat `--delay-ms=0`, revision `0.2.0`, argv init di test supervisor ikut → AC-4
+- [x] `cargo xtask provider check providers/fake` → `ok testing/fake 0.2.0 <sha256>` → AC-4
+- [x] `cargo test -p stackly-testkit` → `ProcessTable`, `CliRunner`, `ReapGuard`, `SpawnedDaemon::kill` → AC-9, AC-11, AC-12 (prasyarat)
+- [x] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test skeleton --locked --no-fail-fast` → lima test: happy path (create, start, get, stop; satu proses `serve` selama jalan dan nol sesudah stop; file keychain ada), init gagal lalu abandon (`supervisor.init_failed`, `needs_recovery`, `operation.abandoned`, `supervisor.not_initialized`, tidak ada proses), keychain file tanpa dialog, restart `SIGKILL` dan `SIGTERM` (PID, `startedAt`, `adopted`, satu instance, satu proses, isi data sama, start berikutnya `alreadyInState`), create terputus (replay key yang sama, `instance.name_taken`, `dataInUse` bila pembantu terlihat hidup sebelum dan sesudah `get`, abandon, pembantu selesai sendiri) → AC-9 sampai AC-13
+- [x] `ps -axww -o pid=,args= | grep stackly-test-` setelah suite → tidak ada proses `stackly-fake-server` dari run ini → AC-9, AC-11, AC-12
+- [x] `cargo xtask evidence check`, `cargo xtask check-deps`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check` → lulus → AC-4, AC-9 sampai AC-13
 
 ### Acceptance-criteria coverage
 
