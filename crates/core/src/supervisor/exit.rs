@@ -1,6 +1,8 @@
 //! What happens when a supervised process exits (spec 0010, *Stop*, step 5,
 //! and *Restart policy*): one handler, whether a stop asked for the exit or
-//! the process died on its own.
+//! the process died on its own. A crash outside any operation goes through
+//! the restart policy here and, when the budget allows, starts the pause of
+//! [`respawn`](super::respawn).
 //!
 //! The watcher of the platform hands the exit to a [`watch`] channel; one
 //! task per process waits on it. A start operation that is still waiting for
@@ -9,13 +11,17 @@
 
 use std::sync::Arc;
 
-use stackly_domain::{FailureCode, LifecycleEvent, Pid};
+use stackly_domain::{
+    DesiredState, FailureCode, InstanceId, InstanceLifecycle, LifecycleEvent, Pid,
+};
 use stackly_platform::{ExitNotice, ExitStatus};
 use tokio::sync::watch;
 
 use super::Supervisor;
 use super::actor::InstanceActor;
-use super::persist::{CommitMode, apply_event, blocking, commit_instance};
+use super::persist::{CommitMode, apply_event, blocking, commit_instance, read_instance};
+use super::respawn::schedule_respawn;
+use super::startup::{Next, after_unrequested_exit};
 use crate::secret::delivery::remove_secret_material;
 
 /// Starts the task that handles the exit of one process.
@@ -38,6 +44,11 @@ pub(crate) fn spawn_exit_task(
                 break;
             }
             actor.released.notified().await;
+        }
+        // A shut down daemon leaves the registry as it is: the next daemon
+        // finds the process gone or adopts it.
+        if sup.is_shutdown() {
+            return;
         }
         handle_exit(&sup, &actor, generation, &notice).await;
     });
@@ -83,27 +94,64 @@ pub(crate) async fn handle_exit(
     remove_material(sup, actor).await;
     let leftover = leftover_members(sup, group, notice.pid).await;
 
+    let next = settle(sup, actor.id, stopping, notice).await;
+    finish_process(sup, actor, generation, leftover);
+    match next {
+        Some(Next::Retry(delay)) => schedule_respawn(sup, actor.id, delay),
+        Some(Next::Final(error)) => {
+            tracing::info!(instance = %actor.id, %error, "the instance is not restarted");
+        }
+        None => {}
+    }
+}
+
+/// Records what the exit means for the lifecycle. A stop asked for it:
+/// `exited`. Otherwise, with desired `running`, it is a crash and the restart
+/// policy decides (spec 0010, *Restart policy*); with any other desired
+/// state the instance ends `failed` with the reason, and nothing respawns.
+async fn settle(
+    sup: &Supervisor,
+    id: InstanceId,
+    stopping: bool,
+    notice: &ExitNotice,
+) -> Option<Next> {
+    let deps = sup.deps();
+    let instance = read_instance(deps, id).await;
+    let stop_asked = stopping
+        || instance
+            .as_ref()
+            .is_ok_and(|instance| instance.lifecycle() == InstanceLifecycle::Stopping);
+    if !stop_asked
+        && instance.as_ref().is_ok_and(|instance| {
+            instance.desired() == DesiredState::Running
+                && matches!(
+                    instance.lifecycle(),
+                    InstanceLifecycle::Starting
+                        | InstanceLifecycle::Running
+                        | InstanceLifecycle::Recovering
+                )
+        })
+    {
+        return Some(after_unrequested_exit(sup, id, notice, CommitMode::Actor).await);
+    }
     let now = deps.platform.clock().now();
-    let event = if stopping {
+    let event = if stop_asked {
         LifecycleEvent::Exited
     } else {
-        // provisional: F10 step 9. Until the restart policy runs in the
-        // actor, an exit outside an operation ends the instance `failed`
-        // with the reason, and the user starts it again.
         LifecycleEvent::Crashed {
             will_retry: false,
             reason: crash_reason(notice.status),
         }
     };
-    let committed = commit_instance(sup, actor.id, None, CommitMode::Actor, |changes| {
+    let committed = commit_instance(sup, id, None, CommitMode::Actor, |changes| {
         apply_event(changes, event.clone(), now)?;
         Ok(Vec::new())
     })
     .await;
     if let Err(error) = committed {
-        tracing::warn!(instance = %actor.id, %error, "the exit of a process could not be recorded");
+        tracing::warn!(instance = %id, %error, "the exit of a process could not be recorded");
     }
-    finish_process(sup, actor, generation, leftover);
+    None
 }
 
 /// Removes the instance's secret material after its process exited.
