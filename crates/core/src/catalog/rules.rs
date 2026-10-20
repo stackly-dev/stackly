@@ -7,7 +7,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use stackly_domain::{Os, ProviderName};
 
-use crate::provider::{ArtifactStatus, ValidatedPackage};
+use crate::provider::{ArtifactStatus, Category, ValidatedPackage};
 
 use super::index::{CatalogIndex, IndexPlatformNote};
 
@@ -119,6 +119,25 @@ impl fmt::Display for TileColor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_code())
     }
+}
+
+/// Returns the stable code of a category, such as `database`.
+#[must_use]
+pub const fn category_code(category: Category) -> &'static str {
+    match category {
+        Category::Database => "database",
+        Category::Messaging => "messaging",
+        Category::Cache => "cache",
+        Category::Proxy => "proxy",
+        Category::Analytics => "analytics",
+        Category::Testing => "testing",
+    }
+}
+
+/// Reads a category from its code.
+#[must_use]
+pub fn category_from_code(code: &str) -> Option<Category> {
+    Category::from_code(code)
 }
 
 /// Returns whether a tile mark is 1 or 2 characters of `[A-Za-z0-9]`.

@@ -1,0 +1,21 @@
+{
+  "schema": "stackly.provider-versions/v1",
+  "software": "nats",
+  "artifacts": [
+    {
+      "id": "nats-2.15.1-macos-aarch64",
+      "line": "2.15",
+      "version": "2.15.1",
+      "os": "macos",
+      "arch": "aarch64",
+      "status": "blocked",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://github.com/nats-io/nats-server/blob/v2.15.1/LICENSE",
+      "blocked": {
+        "reason": "the upstream build fails the closure audit",
+        "owner": "runtime maintainer",
+        "since": "2026-10-01"
+      }
+    }
+  ]
+}

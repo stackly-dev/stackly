@@ -88,6 +88,8 @@ pub use registry::{
     ProviderRevisionBuilder, RegistrySeed, RuntimeBuilder, WrittenAt, registry_conformance,
 };
 #[cfg(unix)]
-pub use spawned_daemon::{DAEMON_START_TIMEOUT, DAEMON_STOP_TIMEOUT, SpawnedDaemon};
+pub use spawned_daemon::{
+    DAEMON_START_TIMEOUT, DAEMON_STOP_TIMEOUT, EMPTY_CATALOG_JSON, SpawnCatalog, SpawnedDaemon,
+};
 pub use stackly_evidence as evidence;
 pub use test_root::TestRoot;

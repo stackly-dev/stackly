@@ -140,6 +140,18 @@ issue_codes! {
     DirectoryNameMismatch => "directory_name_mismatch",
     /// More than [`MAX_ISSUES`] issues; the rest were dropped.
     TooManyIssues => "too_many_issues",
+    /// A catalog entry whose `manifestSha256` or `versionsSha256` differs
+    /// from its package files (spec 0017 loader).
+    CatalogDigestMismatch => "catalog_digest_mismatch",
+    /// A catalog entry whose package has another `metadata.id` (spec 0017
+    /// loader).
+    CatalogIdMismatch => "catalog_id_mismatch",
+    /// A catalog entry outside the namespaces the catalog accepts (spec
+    /// 0017 loader).
+    NamespaceNotAllowed => "namespace_not_allowed",
+    /// A catalog entry over a catalog limit; the limit is in
+    /// [`Issue::reason`] (spec 0017 loader).
+    CatalogLimit => "catalog_limit",
 }
 
 impl fmt::Display for IssueCode {
@@ -192,6 +204,9 @@ pub struct Issue {
     pub code: IssueCode,
     /// What is wrong.
     pub message: String,
+    /// A stable snake_case reason for codes that declare a list of
+    /// reasons, such as `catalog_limit`; `None` for every other code.
+    pub reason: Option<&'static str>,
 }
 
 impl Issue {
@@ -208,7 +223,15 @@ impl Issue {
             location,
             code,
             message: message.into(),
+            reason: None,
         }
+    }
+
+    /// Returns the issue with a stable reason code.
+    #[must_use]
+    pub const fn with_reason(mut self, reason: &'static str) -> Self {
+        self.reason = Some(reason);
+        self
     }
 }
 
@@ -325,7 +348,7 @@ mod tests {
                 "{text}"
             );
         }
-        assert_eq!(IssueCode::ALL.len(), 50);
+        assert_eq!(IssueCode::ALL.len(), 54);
     }
 
     #[test]
