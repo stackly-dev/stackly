@@ -12,6 +12,13 @@ import StacklyClient
 /// `compose`; only the composed text of Show is kept, until Hide, 30 seconds, the view going
 /// away, or the app becoming inactive. The model is owned by the view's `@State`, so it goes
 /// with the view.
+///
+/// Hiding and cancelling are different things. Those four exits only conceal what is on
+/// screen. A Show that still waits for the daemon when one of them comes in (for example the
+/// app turns inactive because a Keychain dialog opened) drops its value and ends in
+/// ``Phase/failed(_:)`` with a message that says why, never in a silent ``Phase/idle``. A Copy
+/// that waits is an explicit request that shows nothing, so it finishes and writes the
+/// pasteboard whatever happens to the screen meanwhile.
 @Observable
 public final class RevealModel {
     /// How long a shown value stays on screen: 30 seconds.
@@ -54,6 +61,10 @@ public final class RevealModel {
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var hideTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
+    /// The purpose of the request that waits for the daemon, or `nil` when none does.
+    @ObservationIgnored private var inFlight: RevealPurpose?
+    /// Numbers each request, so a cancelled one that finishes late leaves a newer one alone.
+    @ObservationIgnored private var flight = 0
 
     /// Creates a model.
     ///
@@ -89,9 +100,11 @@ public final class RevealModel {
     /// Nothing shows when any reveal or the composition fails.
     public func show() async {
         guard phase != .working else { return }
-        hide()
+        conceal(because: nil)
         let mine = generation
         phase = .working
+        let flight = begin(.show)
+        defer { end(flight) }
         guard let text = await gather(purpose: .show, generation: mine) else { return }
         shownText = text
         phase = .idle
@@ -100,37 +113,54 @@ public final class RevealModel {
 
     /// Reveals every reference for `.copy`, composes the text, and copies it with
     /// ``ConcealedPasteboard``. Nothing is copied when any reveal or the composition fails.
+    ///
+    /// Hide, the 30 second limit, and the app becoming inactive do not cancel a Copy that
+    /// waits for the daemon: it shows nothing, so there is nothing to conceal.
     public func copy() async {
         guard phase != .working else { return }
-        let mine = generation
         phase = .working
-        guard let text = await gather(purpose: .copy, generation: mine) else { return }
+        let flight = begin(.copy)
+        defer { end(flight) }
+        guard let text = await gather(purpose: .copy, generation: nil) else { return }
         pasteboard.copy(text)
         phase = .copied
     }
 
-    /// Hides the value and drops it.
+    /// Hides the value and drops it. A Show that still waits for the daemon ends in
+    /// ``Phase/failed(_:)``.
     public func hide() {
-        generation += 1
-        hideTask?.cancel()
-        hideTask = nil
-        shownText = nil
-        if phase == .working { phase = .idle }
+        conceal(because: "Hidden before the value arrived. Press Show to try again.")
     }
 
     /// The view went away: hide.
     public func viewDisappeared() {
-        hide()
+        conceal(because: "Hidden because the view went away. Press Show to try again.")
     }
 
     /// The app is no longer the active app: hide.
     public func appBecameInactive() {
-        hide()
+        conceal(
+            because: "Hidden because Stackly went to the background. Press Show to try again.")
+    }
+
+    /// Drops the shown text, stops the timer, and cancels a Show that still waits. `reason`
+    /// is what the user reads when such a Show is cancelled; `nil` means the caller is about
+    /// to start a new action and nothing needs saying.
+    private func conceal(because reason: String?) {
+        generation += 1
+        hideTask?.cancel()
+        hideTask = nil
+        shownText = nil
+        if let reason, phase == .working, inFlight == .show {
+            phase = .failed(reason)
+        }
     }
 
     /// Reveals every reference and composes the text, or returns `nil` after setting
-    /// ``phase`` to `.failed` (or to `.idle` when a hide came in while it waited).
-    private func gather(purpose: RevealPurpose, generation mine: Int) async -> String? {
+    /// ``phase`` to `.failed`. With a `generation`, the action stops as soon as a conceal
+    /// bumps it: the values are dropped and ``phase`` stays as ``conceal(because:)`` left
+    /// it. Without one, nothing cancels the action.
+    private func gather(purpose: RevealPurpose, generation mine: Int?) async -> String? {
         var values: [String: RevealedSecret] = [:]
         for reference in references {
             do throws(ClientError) {
@@ -138,7 +168,7 @@ public final class RevealModel {
             } catch {
                 return fail(.failed(Self.message(for: error)), generation: mine)
             }
-            if generation != mine { return nil }
+            if !isCurrent(mine) { return nil }
         }
         let text: String
         do {
@@ -148,11 +178,25 @@ public final class RevealModel {
                 .failed("Couldn’t build the text from the revealed values."), generation: mine)
         }
         values.removeAll()
-        return generation == mine ? text : nil
+        return text
     }
 
-    private func fail(_ failure: Phase, generation mine: Int) -> String? {
-        if generation == mine { phase = failure }
+    private func begin(_ purpose: RevealPurpose) -> Int {
+        flight += 1
+        inFlight = purpose
+        return flight
+    }
+
+    private func end(_ finished: Int) {
+        if flight == finished { inFlight = nil }
+    }
+
+    private func isCurrent(_ mine: Int?) -> Bool {
+        mine.map { $0 == generation } ?? true
+    }
+
+    private func fail(_ failure: Phase, generation mine: Int?) -> String? {
+        if isCurrent(mine) { phase = failure }
         return nil
     }
 
@@ -166,7 +210,7 @@ public final class RevealModel {
                 return
             }
             guard let self, generation == mine else { return }
-            hide()
+            conceal(because: nil)
         }
     }
 

@@ -12,6 +12,10 @@ import SwiftUI
 /// `compose`, and writes it with ``ConcealedPasteboard``. Both are all or nothing: one reveal
 /// that fails cancels the action and nothing is shown or copied.
 ///
+/// Hide, the 30 second limit, or the app turning inactive while Show still waits for the
+/// daemon cancels that Show with a message ("Hidden because Stackly went to the background.
+/// Press Show to try again."); a Copy that waits finishes anyway, because it shows nothing.
+///
 /// Show, Hide, and Copy are native buttons, reachable with Tab and activated with Space.
 public struct RevealableSecretText: View {
     @State private var model: RevealModel
@@ -85,6 +89,7 @@ public struct RevealableSecretText: View {
             Text(shown)
                 .stacklyCode()
                 .accessibilityLabel("Password, shown")
+                .accessibilityValue(shown)
         } else {
             Text(maskedText)
                 .font(.callout.monospaced())

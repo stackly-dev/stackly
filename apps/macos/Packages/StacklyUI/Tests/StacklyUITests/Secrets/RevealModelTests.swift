@@ -189,26 +189,145 @@ struct RevealModelTests {
         #expect(f.model.shownText == "fixture-secret-0014")
     }
 
-    @Test func aHideWhileRevealingDiscardsTheResult() async {
-        let gate = Mutex<CheckedContinuation<Void, Never>?>(nil)
-        let model = RevealModel(
-            references: [Self.password],
-            reveal: { reference, _ throws(ClientError) in
-                await withCheckedContinuation { continuation in
-                    gate.withLock { $0 = continuation }
+    /// A reveal that waits until the test lets it answer, like a daemon behind a Keychain
+    /// dialog.
+    private final class Gate: Sendable {
+        private let continuation = Mutex<CheckedContinuation<Void, Never>?>(nil)
+
+        var isWaiting: Bool { continuation.withLock { $0 != nil } }
+
+        func reveal(value: String) -> RevealModel.Reveal {
+            { [self] reference, _ throws(ClientError) in
+                await withCheckedContinuation { waiting in
+                    continuation.withLock { $0 = waiting }
                 }
-                return RevealedSecret(reference: reference, value: "fixture-secret-0015")
-            },
-            compose: { $0[Self.password]?.value ?? "?" },
-            pasteboard: ConcealedPasteboard(pasteboard: FakePasteboard()))
+                return RevealedSecret(reference: reference, value: value)
+            }
+        }
+
+        func waitUntilWaiting() async {
+            while !isWaiting { await Task.yield() }
+        }
+
+        func open() {
+            let waiting = continuation.withLock { current in
+                defer { current = nil }
+                return current
+            }
+            waiting?.resume()
+        }
+    }
+
+    private static func gated(
+        _ gate: Gate, value: String, sleep: ManualSleep = ManualSleep(),
+        pasteboard: FakePasteboard = FakePasteboard()
+    ) -> RevealModel {
+        RevealModel(
+            references: [password], reveal: gate.reveal(value: value),
+            compose: { $0[password]?.value ?? "?" },
+            pasteboard: ConcealedPasteboard(
+                pasteboard: pasteboard, sleep: { try await sleep.sleep(for: $0) }),
+            sleep: { try await sleep.sleep(for: $0) })
+    }
+
+    @Test func aHideWhileShowWaitsExplainsItAndNeverShowsTheValue() async {
+        let gate = Gate()
+        let sleep = ManualSleep()
+        let model = Self.gated(gate, value: "fixture-secret-0015", sleep: sleep)
 
         let showing = Task { await model.show() }
-        while gate.withLock({ $0 }) == nil { await Task.yield() }
+        await gate.waitUntilWaiting()
         model.hide()
-        gate.withLock { $0 }?.resume()
+        #expect(model.phase == .failed("Hidden before the value arrived. Press Show to try again."))
+        gate.open()
         await showing.value
 
         #expect(model.shownText == nil)
+        #expect(model.phase == .failed("Hidden before the value arrived. Press Show to try again."))
+        #expect(sleep.durations.isEmpty, "a dropped value arms no timer")
+    }
+
+    @Test func theAppTurningInactiveWhileShowWaitsExplainsItAndShowsNothing() async {
+        // The first reveal on the login Keychain opens a SecurityAgent dialog, which makes
+        // Stackly inactive while the daemon still waits for Allow.
+        let gate = Gate()
+        let model = Self.gated(gate, value: "fixture-secret-0016")
+
+        let showing = Task { await model.show() }
+        await gate.waitUntilWaiting()
+        model.appBecameInactive()
+        gate.open()
+        await showing.value
+
+        #expect(model.shownText == nil)
+        #expect(
+            model.phase
+                == .failed(
+                    "Hidden because Stackly went to the background. Press Show to try again."))
+    }
+
+    @Test func aShowCancelledByTheAppTurningInactiveCanBeStartedAgain() async {
+        let gate = Gate()
+        let model = Self.gated(gate, value: "fixture-secret-0017")
+        let first = Task { await model.show() }
+        await gate.waitUntilWaiting()
+        model.appBecameInactive()
+        gate.open()
+        await first.value
+
+        let second = Task { await model.show() }
+        await gate.waitUntilWaiting()
+        gate.open()
+        await second.value
+
+        #expect(model.shownText == "fixture-secret-0017")
         #expect(model.phase == .idle)
+    }
+
+    @Test func theThirtySecondTimerFiringWhileCopyWaitsStillCopies() async {
+        let credential = FixtureCredential()
+        let gate = Gate()
+        let sleep = ManualSleep()
+        let pasteboard = FakePasteboard()
+        let model = Self.gated(gate, value: credential.value, sleep: sleep, pasteboard: pasteboard)
+
+        // Show first (answered at once), so the 30 second timer is armed.
+        let showing = Task { await model.show() }
+        await gate.waitUntilWaiting()
+        gate.open()
+        await showing.value
+        await sleep.waitUntilSleeping()
+        #expect(model.isShown)
+
+        // Copy at second 29, then the timer fires before the daemon answers.
+        let copying = Task { await model.copy() }
+        while !gate.isWaiting { await Task.yield() }
+        sleep.fire()
+        while model.isShown { await Task.yield() }
+        #expect(model.phase == .working)
+        gate.open()
+        await copying.value
+
+        #expect(model.shownText == nil, "the timer still hides the shown text")
+        #expect(model.phase == .copied)
+        #expect(pasteboard.holds(credential.value))
+    }
+
+    @Test func theAppTurningInactiveWhileCopyWaitsStillCopies() async {
+        let credential = FixtureCredential()
+        let gate = Gate()
+        let pasteboard = FakePasteboard()
+        let model = Self.gated(gate, value: credential.value, pasteboard: pasteboard)
+
+        let copying = Task { await model.copy() }
+        await gate.waitUntilWaiting()
+        model.appBecameInactive()
+        #expect(model.phase == .working)
+        gate.open()
+        await copying.value
+
+        #expect(model.phase == .copied)
+        #expect(pasteboard.holds(credential.value))
+        #expect(model.shownText == nil)
     }
 }
