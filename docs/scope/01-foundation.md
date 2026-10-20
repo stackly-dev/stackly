@@ -134,11 +134,12 @@ Mesin operasi async yang dipakai semua mutasi: journal, idempotency key, lock pe
 **Pointer:** spec [0007](../specs/0007-operation-engine/index.md) · code in `crates/core/src/operation/`, `crates/core/src/ownership.rs`, `crates/domain/`, `crates/storage/`, `crates/platform/`, `crates/platform-macos/`, `crates/testkit/`, `crates/protocol/`, `apps/daemon/`
 
 - [x] Design it (spec): `/architect operation engine`
-- [x] Build it: `/develop operation engine`
+- [ ] Build it: `/develop operation engine`
   - [x] Journal di registry: tipe journal di domain, `Operation::touch`, `Outcome::Failed`, tambahan port `Registry`, `FakeRegistry`, migrasi `operation_journal` (key ganda, unique index, backfill), dan conformance di `SqliteRegistry` (spec 0007 AC-2, AC-10, AC-11, AC-17; build steps 1 to 3; langkah 1 dan 2 butuh spec 0005 milestone 2, langkah 3 butuh milestone 3)
   - [x] Primitive hapus aman: `Filesystem::remove_tree`, `FakeFilesystem`, adapter macOS berbasis file descriptor dengan test balapan dan `CrossesDevice`, dan `remove_owned_tree` (spec 0007 AC-8, AC-9; build steps 4 to 6; bisa mulai sekarang sebagai sesi paralel)
   - [x] Engine dari ujung ke ujung di atas fake: lock dan antrian FIFO, `begin` dengan idempotency, runner dengan langkah dan progress, cancel, kompensasi, `recover`, resume, abandon, shutdown, dan skenario AC-054 dengan evidence (spec 0007 AC-1 to AC-8, AC-10 to AC-16; build steps 7 to 12; butuh langkah 1 dan 2, kompensasi butuh langkah 4)
   - [x] Kontrak wire dan daemon: DTO, event, kode, sidik jari, fixture dan test Swift, lalu wiring engine di `stacklyd`, enam method, subsystem `operations`, hook shutdown, dan test integrasi daemon (spec 0007 AC-1, AC-3, AC-5, AC-6, AC-10, AC-11, AC-13, AC-14, AC-16, AC-18 to AC-20; build steps 13 to 15; langkah 13 bisa paralel dengan milestone engine setelah spec 0006 milestone 1, langkah 14 dan 15 butuh spec 0006 milestone 4)
+  - [ ] Failure items, rule, and replay: `FailureError` keeps `items` and `rule` (not `hint`) in a new migration with its frozen fixture, `OperationEngine::replay` as a read only lookup before `begin`, and the stacklyd mapping, plus a scoped `/check verify`, `/test`, `/check review`, and `/document` for this step (spec 0007 build step 16; decisions K11 and K12 with the scope 02 lead; before spec 0010 step 13, spec 0011 step 7 and steps 9 to 11, and spec 0018 step 6)
 - [x] Verify it: `/check verify operation engine`
 - [x] Test it: `/test operation engine`
 - [x] Review it (fresh model): `/check review operation engine`
