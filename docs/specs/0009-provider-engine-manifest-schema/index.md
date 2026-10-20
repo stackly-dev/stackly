@@ -1,7 +1,7 @@
 # 0009. Provider engine dan manifest schema
 
 **Date**: 2026-10-18
-**Status**: Accepted
+**Status**: In Progress
 
 ## Summary
 
