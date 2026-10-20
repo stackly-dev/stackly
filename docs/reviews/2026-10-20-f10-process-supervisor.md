@@ -6,6 +6,51 @@
 **Status setelah fix** (`036a9b8..fa6d6a1`): Changes requested. Major 2, 3, dan 4 tertutup; Major 1 masih terbuka untuk satu urutan kejadian yang belum ditangani; dua Minor dan tiga Nit baru dari diff fix. Rincian di *Konfirmasi fix* di bawah.
 **Status setelah fix putaran 2** (`d34e762..b2c7fae`): Approve with nits. Keempat Major tertutup, tanpa Blocker atau Major yang terbuka; dua Minor dari putaran 1 tertutup; satu Nit baru dan satu Nit putaran 1 (flag `degraded` tunggal) tetap terbuka. Rincian di *Konfirmasi fix putaran 2*.
 **Status setelah fix race stop** (`0ec6bc1`, `8be1876`): Changes requested. Fix nya benar untuk slot yang sudah kosong saat `lock`, tetapi jendela tetangganya, antara `lock` dan `journal`, masih terbuka untuk urutan kejadian yang sama dan sekarang berakhir `internal.unexpected` (satu Major baru); satu Minor dan satu Nit baru; teks spec 0010 *Stop* perlu diselaraskan. Rincian di *Konfirmasi fix race stop*.
+**Status setelah fix race stop putaran 2** (`174b676`): Approve with nits. Major dan Minor race stop tertutup, begitu juga Nit nya; tanpa Blocker atau Major yang terbuka; tidak ada jendela tetangga lain di `run_stop` yang bisa membuat stop salah; tiga Nit baru. Usulan kalimat final spec 0010 *Stop* langkah 2 dan 6 ada di *Konfirmasi fix race stop putaran 2*.
+
+## Konfirmasi fix race stop putaran 2 (174b676)
+
+**Dikonfirmasi oleh**: Claude Opus 5.5 (sesi `chk-f11-review`), inline. Commit `174b676` ditulis Claude Sonnet 5.5, jadi reviewer beda family. Worktree di `git merge main` (memuat `174b676`); diff dibaca dengan `git show 174b676` (`crates/core/src/supervisor/stop.rs`, dua file test core), lalu `run_stop`, `journal_stop`, `signal_and_wait`, `cancel_cleanup`, `adopt_process`, `lose_identity`, `commit_instance`, dan gerbang `daemon.starting` di `apps/daemon/src/supervisor.rs` dibaca di sekitarnya. Tidak ada build atau test di sesi ini; gate lead di `main` (fmt, clippy, check-deps, cek Windows, core 16 target, `stacklyd` 19 target, test process tanpa sleep 5 dari 5, evidence, tanpa proses yatim) dipakai sebagai bukti test baru lulus.
+
+| Butir putaran 1 | Hasil | Bukti |
+| --- | --- | --- |
+| Major, exit di antara `lock` dan `journal` pada instance `stopping` menjadi `internal.unexpected` | tertutup | `journal_stop` (`stop.rs:284`) memutuskan dari aggregate yang dibaca di dalam commit: `stopped`, `failed`, atau `uninitialized` hanya menulis desired dan mengembalikan `StopJournal::AlreadyStopped` (`:303`), `stopping` tanpa `stop_begin`, sisanya `stop_begin` ditambah `exited` bila `no_process`. Nilai `journaled` diset ulang di awal setiap putaran closure, jadi putaran ulang commit tidak membawa jawaban basi. `run_stop` melewati tahap `stop` bila `AlreadyStopped` (`:471`). Test `a_stop_whose_process_exit_lands_before_its_journal_on_a_stopping_instance_ends_stopped` (`crates/core/tests/supervisor_start/stop.rs:165`) |
+| Minor, crash sendiri di antara `validate` dan `lock` menjadi `identity_unproven` dan stop pengguna hilang | tertutup | cabang slot kosong (`stop.rs:431` sampai `:458`) membaca lifecycle segar: `stopping`, `stopped`, `failed` ke `settle_gone_process` (`:450`); `recovering` lanjut ke jalur biasa dengan `no_process` yang kini dihitung dari lifecycle segar, jadi `cancel_respawn` (`:462`) membatalkan jeda dan `journal` menulis `stop_begin` lalu `exited`; selain itu `identity_unproven`. Test `a_crash_between_the_validate_and_the_lock_of_a_stop_cancels_the_respawn_and_ends_stopped` (`crates/core/tests/supervisor_start/actor_commit.rs:161`) memastikan tidak ada spawn kedua setelah jeda lewat |
+| Nit, jalur slot kosong selesai dari tahap `lock` | tertutup | komentar di cabang `stopping`, `stopped`, `failed` |
+
+### Jendela tetangga yang tersisa di `run_stop`
+
+Saya telusuri setiap titik tempat stop membaca slot atau lifecycle, dengan exit yang mendarat di setiap celah:
+
+- **Sebelum `validate`**: `validate` membaca `stopped` atau `failed` dan menjawab tanpa operasi lanjutan (hanya desired). Aman.
+- **Antara `validate` dan `lock`**: ditutup `0ec6bc1` dan `174b676` (cabang slot kosong, lifecycle segar).
+- **Antara `lock` (slot terisi) dan `journal`**: ditutup `174b676`. Lifecycle segar `stopped` atau `failed` menjadi `AlreadyStopped`; `recovering` (crash dengan respawn) menjadi `stop_begin`, lalu tahap `stop` menemukan slot kosong di `signal_and_wait` (`stop.rs:180`) dan `settle_stopping` menulis `exited` (test putaran 2 `a_stop_whose_process_exit_was_handled_before_its_journal_still_ends_stopped`).
+- **Antara `journal` dan `stop`**: sudah aman sejak putaran 2: `signal_and_wait` menganggap slot kosong sebagai berhenti, dan sinyal yang menjawab `NotFound` menunggu exit yang sedang datang. `journal` sendiri tidak bisa menghasilkan `AlreadyStopped` untuk instance yang prosesnya masih tercatat dan hidup, karena lifecycle `stopped` atau `failed` hanya ditulis handler exit.
+- **Selama tahap `stop`**: tidak berubah; `IdentityMismatch` menjadi `unknown` lewat `identity_lost` milik stop itu sendiri.
+
+**`AlreadyStopped` tidak bisa menimpa start pengguna.** Start pengguna dan respawn adalah operasi atas resource `Instance(id)` yang sama, yang dipegang stop dari `begin` sampai selesai (start pengguna antre, respawn `BusyPolicy::Reject`). `AlreadyStopped` dan `settle_gone_process` hanya menulis desired `stopped` (dan `exited` dari `stopping`), lalu start yang antre berjalan sesudahnya dan menulis desired `running`: urutannya sesuai urutan permintaan. Start yang sudah berjalan lebih dulu membuat stop pengguna ditolak `resource.busy` (spec 0010).
+
+**Slot kosong selalu berarti proses sudah pergi.** Aturan ini bergantung pada satu invarian: dalam satu run daemon, slot yang kosong pada lifecycle `starting`, `running`, atau `stopping` hanya muncul setelah handler exit selesai. Saya cek satu satunya pengecualian yang mungkin, adopsi yang gagal: `adopt_process` (`crates/core/src/supervisor/adopt.rs:43`) memanggil `lose_identity`, yang commit `IdentityLost` dalam mode actor (dicoba lagi sampai berhasil, `persist.rs:84` sampai `:131`). Adopsi saat start daemon terjadi di dalam `reconcile`, dan method instance menjawab `daemon.starting` sampai `reconcile` selesai (`apps/daemon/src/supervisor.rs:98`, `:122`, `:150`), jadi commit itu selesai sebelum stop pengguna mana pun masuk. Adopsi dari recheck hanya untuk `unknown`, yang `validate` tolak. Invarian berlaku.
+
+`cancel_cleanup` (`startup.rs:1304`) mengabaikan nilai balik `journal_stop`. Itu aman: selama operasi start memiliki exit, lifecycle tidak bisa menjadi `stopped` atau `failed` di bawahnya, jadi `AlreadyStopped` tidak terjadi di sana.
+
+### Usulan kalimat final spec 0010 *Stop*
+
+Untuk `/architect`, menggantikan langkah 2 dan 6 di `docs/specs/0010-process-supervisor/index.md:279` dan `:283`:
+
+> 2. `lock`, lalu `journal`. Di `lock`, slot proses yang kosong padahal lifecycle yang dibaca `validate` adalah `starting`, `running`, atau `stopping` membuat stop membaca instance lagi, karena handler exit menulis lifecycle sebelum mengosongkan slot: `stopping`, `stopped`, atau `failed` berarti prosesnya sudah keluar, jadi desired menjadi `stopped`, `exited` ditulis bila masih `stopping`, dan operasi `succeeded` dari tahap `lock` tanpa sinyal; `recovering` berarti crash dengan respawn tertunda, jadi stop berlanjut seperti instance `recovering` tanpa proses; selain itu `supervisor.identity_unproven`. `journal` memutuskan dari aggregate yang dibaca di dalam commit: desired selalu menjadi `stopped`; `starting`, `running`, atau `recovering` mendapat `stop_begin`, dan instance tanpa proses (jeda backoff, yang timer nya dibatalkan lebih dulu) langsung `exited`; `stopping` (stop sebelumnya timeout, atau rekonsiliasi) tetap `stopping` dan lanjut ke langkah 3 dengan anggaran baru; `stopped`, `failed`, atau `uninitialized` berarti prosesnya keluar setelah `lock`, jadi hanya desired yang ditulis, langkah 3 dilewati, dan operasi `succeeded`.
+
+> 6. Stop menutup `stopping` sendiri *(2026-10-20 dan 2026-10-21, review fitur 10)*: stop yang melihat proses saat `lock` dan `journal` tetapi menemukan slot proses sudah kosong di langkah 3 (handler exit selesai di antaranya) menganggap proses sudah berhenti, lalu commit actor menulis `exited` untuk lifecycle yang masih `stopping`, dan operasi `succeeded`. Commit yang sama berjalan setelah setiap stop yang berakhir dengan proses keluar, sebagai jaring pengaman untuk exit yang tercatat sebagai hal lain tepat saat stop menulis `journal`. Bersama langkah 2, setiap titik tempat stop membaca slot atau lifecycle memutuskan dari keadaan segar, jadi exit atau crash yang mendarat di antara dua tahap tidak pernah menjadi `supervisor.identity_unproven` atau `internal.unexpected`. Slot hanya bisa kosong setelah exit ditangani: respawn dan start pengguna tidak bisa mengisinya selama stop berjalan, karena operasi stop memegang lock instance (respawn memakai `BusyPolicy::Reject`, start pengguna antre), dan adopsi hanya terjadi saat rekonsiliasi, sebelum method instance dibuka, atau dari `unknown`, yang ditolak langkah 1.
+
+### Temuan baru
+
+Tidak ada Blocker, Major, atau Minor baru.
+
+#### Nit baru
+
+- ⚪ `crates/core/src/supervisor/stop.rs:462`, `cancel_respawn` berjalan sebelum `journal`; crash yang ditangani di antara keduanya (lifecycle `recovering`, kasus test putaran 2) memasang timer respawn baru yang tidak dibatalkan stop. Timer itu membaca instance `stopped` saat waktunya tiba dan berhenti sendiri, jadi tidak ada spawn, tetapi `restart.nextAttemptAt` di status tetap tampil sampai jeda lewat. Satu `cancel_respawn` lagi setelah `journal_stop` menutupnya.
+- ⚪ `crates/core/src/supervisor/stop.rs:307`, cabang `_` di `journal_stop` juga menangkap `unknown`, `initializing`, dan `retained`, yang jatuh ke `stop_begin` lalu `internal.unexpected`. Tidak terjangkau di bawah lock stop (`IdentityLost` hanya ditulis stop itu sendiri setelah `journal`, atau adopsi dari `unknown` yang `validate` tolak), tetapi lengan eksplisit (`unknown` ke `identity_unproven`) membuat invarian itu terbaca di kode.
+- ⚪ Celah test kecil: lifecycle segar `failed` di cabang slot kosong (`settle_gone_process` dengan lifecycle yang tetap `failed`) dan `AlreadyStopped` dari `failed` di `journal` belum punya test; jalurnya sederhana dan sama dengan cabang yang sudah diuji.
 
 ## Konfirmasi fix race stop (0ec6bc1)
 
