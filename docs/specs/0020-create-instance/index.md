@@ -90,8 +90,8 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang. Contohnya: tidak
 
 | Bagian | Pemilik |
 | --- | --- |
-| `InstanceName`, `Endpoint`, `endpoints_conflict`, `resolve_port`, `create_instance_layout`, `check_owned_path`, `check_data_root_overlap`, manifest instance | spec 0004 (validasi endpoint di `Instance::new` dan `volume_facts` ditambah lewat *Usulan update spec lain*) |
-| `WriteOp`, baca registry, `provider_sources`, `ProviderSourceRecord` | spec 0005 (tambahan di *Usulan update spec lain*) |
+| `InstanceName`, `Endpoint`, `endpoints_conflict`, `resolve_port`, `create_instance_layout`, `check_owned_path`, `check_data_root_overlap`, manifest instance | spec 0004 (validasi endpoint di `Instance::new` dan `volume_facts` sudah ditambah untuk fitur 20 pada 2026-10-20) |
+| `WriteOp`, baca registry, `provider_sources`, `ProviderSourceRecord` | spec 0005 (*Tambahan fitur 20*, sudah masuk pada 2026-10-20) |
 | Engine operasi, kompensasi, `claim_resource`, `record_secret_intent`, `ctx.commit`, kompensator `instance_tree` | spec 0007 (baris resume `create_instance`, detail `data_not_empty`, dan probe lock di `instance_tree` lewat usulan) |
 | Settings schema, `SettingsSchema::validate`, plan, `PlanError` | spec 0009 (urutan deklarasi dan jenis issue settings lewat usulan) |
 | `execute_init`, `PortProbe`, start, `InstanceSummary`, event instance, method instance minimal, area `instance` dan `supervisor` | spec 0010 (create diperluas lewat usulan) |
@@ -139,7 +139,7 @@ Tidak ada tabel atau kolom baru dan tidak ada migrasi. Yang ditulis create:
 
 - Endpoint `tcp` dan `udp` manifest menjadi endpoint IP (`Endpoint::Ip` dengan `IpEndpoint` yang dibangun lewat konstruktor domain spec 0004) dengan nama, transport, alamat `defaultHost`, permintaan dari draft (`Fixed(port)` atau `Auto`; tanpa permintaan berarti `Auto`), dan tanpa `bound`.
 - Endpoint `unix` menjadi endpoint Unix dengan nama dan `SocketName` hasil render *Socket Unix dengan token port*.
-- `Instance::new` menolak nama endpoint ganda, `bound` yang terisi, socket Unix ganda, dan endpoint IP draft yang saling konflik (`endpoints_conflict` di antara port `Fixed` instance itu sendiri, rule BR-004) (*Usulan update spec lain*, spec 0004).
+- `Instance::new` mengembalikan `Result<Instance, InvariantError>` dan menolak nama endpoint ganda (`DuplicateEndpoint`, rule None), `bound` yang terisi (`BoundOnNew`, rule None), nama socket Unix ganda (`DuplicateSocket`, BR-004), dan endpoint IP draft yang saling konflik (`endpoints_conflict` di antara port `Fixed` instance itu sendiri, `EndpointSelfConflict`, BR-004) (spec 0004, *Model domain*).
 
 ### Socket Unix dengan token port
 
@@ -373,7 +373,7 @@ Semua langkah `reversible: true`, jadi operasi ini tidak punya titik tak bisa di
 - `finalize` tidak menulis apa pun selain yang ditambahkan engine; `result.resources` berisi `Instance(id)`.
 - Config revision awal: `ConfigRevisionId::generate()`, `values` dari `SettingsValues::to_json()` (secret sebagai teks reference), status `active`, `created_by_operation` operasi ini, `created_at` sama dengan `created_at` instance, tanpa `rendered_sha256` dan `previous` (spec 0010).
 - `ReplaceSecretUses { user: Instance(id), uses }` memetakan setiap secret field ke reference hasil `put` atau reference yang di `bind`. `bind` tidak memanggil `put`, karena pemakaiannya ditulis di batch ini (klarifikasi atas spec 0011).
-- Kompensator kustom `instance_registration` (didaftarkan `stacklyd`, karena ia juga mengirim event): baca instance; tidak ada berarti `Compensated`; `created_by` operasi ini berarti commit `WriteOp::DeleteInstanceCreatedBy { id, expected, operation }` (usulan spec 0005), lalu `instance.removed`, lalu `Compensated`; selain itu `NotOwned` reason `created_by_other_operation`. Kepemilikan cukup dibuktikan `created_by`, karena kompensasi hanya berjalan selama operasi pembuatnya memegang lock key instance itu, sehingga tidak ada start yang bisa terjadi di antaranya. Karena catatannya lebih baru dari catatan reference secret, ia dikompensasi lebih dulu, sehingga pemakaian secret sudah hilang sebelum reference dihapus (`ON DELETE RESTRICT`).
+- Kompensator kustom `instance_registration` (didaftarkan `stacklyd`, karena ia juga mengirim event): baca instance; tidak ada berarti `Compensated`; `created_by` operasi ini berarti commit `WriteOp::DeleteInstanceCreatedBy { id, expected, operation }` (spec 0005), lalu `instance.removed`, lalu `Compensated`; selain itu `NotOwned` reason `created_by_other_operation`. Kepemilikan cukup dibuktikan `created_by`, karena kompensasi hanya berjalan selama operasi pembuatnya memegang lock key instance itu, sehingga tidak ada start yang bisa terjadi di antaranya. Karena catatannya lebih baru dari catatan reference secret, ia dikompensasi lebih dulu, sehingga pemakaian secret sudah hilang sebelum reference dihapus (`ON DELETE RESTRICT`).
 - Kompensator `instance_tree` spec 0007 memanggil `probe_lock(InstancePaths.lock)` lebih dulu; `Held` membuat item `compensation_failed` dengan detail `instance_locked` tanpa menghapus apa pun (usulan spec 0007). Itu hanya mungkin setelah daemon mati saat pembantu init masih berjalan.
 - Cancel di langkah mana pun menjalankan kompensasi; cancel saat `init` berlaku setelah `execute_init` kembali, karena langkah `Run` init tidak dibatalkan di tengah.
 - `WorkFactory` create membangun ulang operasi antri yang belum mulai setelah daemon restart dari `input`; input dengan sumber `value` atau `settingsOmitted` menghasilkan `NotRebuildable`, sehingga operasi itu ditutup `failed interrupted`.
@@ -400,7 +400,7 @@ Area `instance` milik spec 0010, area `catalog` milik spec 0017, area `registry`
 | `instance.data_overlap` | `conflict` | folder data bertumpuk dengan instance lain (BR-002, `rule`) | `path`, `otherInstance` | `the new data folder overlaps another instance` | "run stackly doctor" |
 | `instance.short_key_taken` | `conflict` | balapan short key (spec 0007) | `shortKey` | `the new instance ID collided with another instance` | "try again, a new ID is generated" |
 | `catalog.pin_failed` | `failed` | K-1 | `provider`, `revision`, `reason` | `the provider package could not be pinned` | "run stackly doctor" |
-| `registry.not_deletable` | `conflict` | `DeleteInstanceCreatedBy` ditolak (usulan spec 0005) | `resource`, `reason` | `the instance can't be removed by this operation` | |
+| `registry.not_deletable` | `conflict` | `DeleteInstanceCreatedBy` ditolak (spec 0005) | `reason` (`created_by_other_operation` atau `active`); instance nya di `ErrorBody.resource` (`ResourceKind` `instance`) | `the instance can't be removed by this operation` | |
 | `cli.runtime_not_found` | `not_found` | `--runtime software@versi` tidak cocok | `selector` | `no installed runtime matches {selector}` | "run stackly runtime list" |
 | `cli.runtime_ambiguous` | `conflict` | lebih dari satu runtime cocok | `selector`, `candidates` | `more than one installed runtime matches {selector}` | "pass the runtime ID instead" |
 
@@ -653,6 +653,8 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawa daf
 
 #### Spec 0004 (domain core dan abstraksi platform)
 
+Diterapkan di spec 0004 pada 2026-10-20 (sesi `upd-0004-0005`). Teks baru butir 2 dan 3 di bawah sudah disamakan dengan teks yang diterapkan: `DuplicateSocket` masuk BR-004 (bukan rule None), dan `Instance::new` mengembalikan `Result<Instance, InvariantError>`.
+
 1. *Model domain*, tabel ID. Sisipkan sesudah:
 
    ```text
@@ -674,7 +676,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawa daf
    dengan:
 
    ```text
-   setter `display_name` dan `startup` (fitur 29 dan 31) serta port yang di bind (fitur 10); *(ditambah fitur 20, spec 0020:* `Instance::new` *menolak nama endpoint ganda dan nama socket Unix ganda (detail* `DuplicateEndpoint` *dan* `DuplicateSocket`*, rule None),* `bound` *yang terisi (*`BoundOnNew`*, rule None), dan dua endpoint IP instance itu sendiri yang konflik menurut* `endpoints_conflict` *atas port* `Fixed` *(*`EndpointSelfConflict`*, BR-004));*
+   setter `display_name` dan `startup` (fitur 29 dan 31) serta port yang di bind (fitur 10); *(ditambah fitur 20, spec 0020:* `Instance::new` *mengembalikan* `Result<Instance, InvariantError>` *dan menolak nama endpoint ganda (detail* `DuplicateEndpoint`*, rule None), nama socket Unix ganda (*`DuplicateSocket`*, BR-004, karena dua endpoint Unix dengan nama socket sama konflik menurut baris BR-004), `bound` yang terisi (*`BoundOnNew`*, rule None; endpoint yang sudah di bind dibangun lewat* `Instance::restore` *atau* `set_bound_port`*), dan dua endpoint IP instance itu sendiri yang konflik menurut* `endpoints_conflict` *atas port* `Fixed` *(*`EndpointSelfConflict`*, BR-004));*
    ```
 
 3. *Model domain*, butir error "Pemetaan detail ke aturan". Ganti:
@@ -686,7 +688,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawa daf
    dengan:
 
    ```text
-   `FixedPortConflict` dan `AutoPortUnavailable` ke BR-005; `EndpointSelfConflict` ke BR-004 (spec 0020);
+   `FixedPortConflict` dan `AutoPortUnavailable` ke BR-005; `EndpointSelfConflict` dan `DuplicateSocket` ke BR-004 (spec 0020);
    ```
 
 4. *Port platform*, trait `Filesystem`. Sisipkan sesudah:
@@ -709,6 +711,8 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawa daf
    ```
 
 #### Spec 0005 (data model registry)
+
+Diterapkan di spec 0005 pada 2026-10-20 (sesi `upd-0004-0005`). Teks baru butir 3, 5, dan 6 di bawah sudah disamakan dengan teks yang diterapkan: tipe `ProviderSourceKind` dan `ProviderSourceStatus`, builder `with_source_id`, enum `NotDeletableReason`, dan kunci `details` `registry.not_deletable` yang hanya `reason` (instance nya di `ErrorBody.resource`).
 
 1. *Port registry*, trait `Registry`. Sisipkan sesudah:
 
@@ -744,10 +748,10 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawa daf
    dengan:
 
    ```text
-   `ProviderRevisionRecord { revision: ProviderRevision, schema_version: Option<String>, publisher: Option<String>, approval: Option<String>, source_id: Option<ProviderSourceId> }` (`source_id` dicek `MissingReference`, spec 0020), `ProviderSourceRecord { id: ProviderSourceId, kind, location, trust_root: Option<String>, last_sync_at: Option<Timestamp>, status, revision, created_at, updated_at }` (spec 0020, kode `kind` dan `status` set terbuka, nilai awal di K-2 spec 0017),
+   `ProviderRevisionRecord { revision: ProviderRevision, schema_version: Option<String>, publisher: Option<String>, approval: Option<String>, source_id: Option<ProviderSourceId> }` (`source_id` dicek `MissingReference`, spec 0020), `ProviderSourceRecord { id: ProviderSourceId, kind: ProviderSourceKind, location: String, trust_root: Option<String>, last_sync_at: Option<Timestamp>, status: ProviderSourceStatus, revision: ResourceRevision, created_at: Timestamp, updated_at: Timestamp }` (spec 0020; `ProviderSourceKind` dan `ProviderSourceStatus` adalah kode set terbuka seperti `ConfigRevisionStatus`, dengan nilai awal dari K-2 spec 0017: kind `bundled` dan `development`, status `active`; fitur 37 menambah `local` dan status lain),
    ```
 
-   dan di kalimat sesudahnya ganti `` (`source_id`, `approved_at`, `` dengan `` (`approved_at`, ``.
+   dan di kalimat sesudahnya ganti `` (`source_id`, `approved_at`, `` dengan `` (`approved_at`, ``; `source_id` masuk lewat method builder additive `with_source_id`, karena `ProviderRevisionRecord::new` tidak berubah arity.
 
 4. *Port registry*, `ResourceRef`. Ganti:
 
@@ -770,7 +774,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawa daf
    dengan:
 
    ```text
-   `NoSpace`, `Busy`, `Unavailable`, `Io { detail }`, `NotDeletable { resource, reason }` (spec 0020).
+   `NoSpace`, `Busy`, `Unavailable`, `Io { detail }`, `NotDeletable { resource: ResourceRef, reason: NotDeletableReason }` (spec 0020; `NotDeletableReason`: `CreatedByOtherOperation` atau `Active`, kode `created_by_other_operation` dan `active`).
    ```
 
 6. *Kode error di wire*. Sisipkan sesudah:
@@ -782,7 +786,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawa daf
    baris:
 
    ```text
-   | `NotDeletable` | `registry.not_deletable` | `conflict` | `resource`, `reason` |
+   | `NotDeletable` (fitur 20) | `registry.not_deletable` | `conflict` | `reason` (`created_by_other_operation` atau `active`); instance nya dikirim di `ErrorBody.resource` (`ResourceKind` `instance`), sesuai aturan di atas, bukan sebagai kunci `details` |
    ```
 
 #### Spec 0007 (operation engine)
@@ -1039,7 +1043,7 @@ Sesi paralel: langkah 16 bagian fuzz bisa berjalan sebagai sesi sendiri begitu l
 
 ## Follow-up
 
-- [ ] Lead: bawa *Usulan update spec lain* (spec 0001, 0004, 0005, 0007, 0009, 0010, 0011) ke program foundation sebagai item `architect (update)` sebelum milestone 1 (spec 0004 dan 0005 juga membawa usulan K-1 dan K-2 dari spec 0017).
+- [ ] Lead: bawa *Usulan update spec lain* (spec 0001, 0004, 0005, 0007, 0009, 0010, 0011) ke program foundation sebagai item `architect (update)` sebelum milestone 1 (spec 0004 dan 0005 juga membawa usulan K-1 dan K-2 dari spec 0017). Spec 0004 dan 0005 sudah diterapkan pada 2026-10-20 (sesi `upd-0004-0005`).
 - [ ] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`.
 - [ ] Fitur 14: pakai nama flag di *CLI* (`--runtime`, `--port`, `--set`, `--secret`) untuk `stackly instance create` dasar, supaya fitur ini hanya menambah flag.
 - [ ] Fitur 21: baca purpose endpoint dan template socket dari paket pinned untuk connection string; tampilkan socket path hanya saat `socketPath` tidak null.
