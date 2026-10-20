@@ -14,3 +14,4 @@ mod exit_codes;
 mod get;
 #[path = "../operation/play.rs"]
 mod play;
+mod secrets;

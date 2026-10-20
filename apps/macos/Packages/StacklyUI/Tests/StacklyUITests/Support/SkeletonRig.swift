@@ -36,8 +36,8 @@ final class SkeletonRig {
     let daemon: LiveDaemon
     /// What the seed wrote into the root.
     let seed: SeedReport
-    /// The test's own connection, which makes the changes.
-    let connection: DaemonConnection
+    /// The test's own connection, which makes the changes. ``restartDaemon()`` replaces it.
+    private(set) var connection: DaemonConnection
     /// The operations this connection started, in order.
     private(set) var startedOperations: [UUID] = []
     /// The instances this connection created.
@@ -180,6 +180,75 @@ final class SkeletonRig {
                 try await Task.sleep(for: .milliseconds(100))
             }
         }
+    }
+
+    /// Starts an instance whose start must be refused for a secret it cannot read, and
+    /// returns the error code, whether the daemon refuses the call or the operation
+    /// ends failed.
+    func startRefusedCode(_ id: UUID) async throws -> String {
+        let reply: Reply
+        do {
+            reply = try await send(
+                .instanceStart(StartInstanceParams(instanceId: id, expectedRevision: nil)),
+                key: Self.newKey())
+        } catch ClientError.rejected(let body) {
+            return body.code
+        }
+        let operation = try accept(reply, "start")
+        let deadline = ContinuousClock.now + .seconds(60)
+        while true {
+            let answer = try await send(.operationGet(GetOperationParams(operationId: operation)))
+            guard case .operationGet(let detail) = answer else {
+                throw RigFailure(description: "operation.get gave the wrong reply")
+            }
+            switch detail.operation.state {
+            case .failed, .cancelled, .needsRecovery:
+                return detail.operation.failure?.error.code ?? "no failure code"
+            case .succeeded:
+                throw RigFailure(description: "start \(id) succeeded but was to be refused")
+            case .queued, .running, .cancelRequested:
+                break
+            }
+            guard ContinuousClock.now < deadline else {
+                throw RigFailure(description: "start \(id) did not finish within 60 seconds")
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    // MARK: - Keychain and restart
+
+    /// The file keychain of the rig's root (spec 0011).
+    var keychainFile: String {
+        "\(daemon.root)/data/keychain/stackly.keychain-db"
+    }
+
+    /// Locks the file keychain with `security lock-keychain`, the way a locked login
+    /// session would leave it, so secrets cannot be read until the daemon opens it again.
+    func lockKeychain() async throws {
+        let outcome = try await ProcessRunner.run(
+            URL(filePath: "/usr/bin/security"), arguments: ["lock-keychain", keychainFile],
+            timeout: .seconds(30))
+        guard outcome.status == 0, outcome.timedOut == false else {
+            throw RigFailure(
+                description:
+                    "security lock-keychain ended with status \(outcome.status): \(outcome.output)"
+            )
+        }
+    }
+
+    /// Stops the daemon the usual way and starts it again on the same root, which opens
+    /// the file keychain again; the test's connection is replaced with a new one.
+    func restartDaemon() async throws {
+        await connection.close()
+        await daemon.stop()
+        try await daemon.start()
+        let client = ClientInfo(
+            kind: .cli, version: "0.1.0", pid: UInt32(ProcessInfo.processInfo.processIdentifier),
+            interactive: false)
+        let (fresh, _) = try await DaemonConnection.open(
+            endpoint: daemon.endpoint, policy: .sameUser, client: client)
+        connection = fresh
     }
 
     // MARK: - Reads
