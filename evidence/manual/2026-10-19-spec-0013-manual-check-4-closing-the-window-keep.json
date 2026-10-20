@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15653-fc20-7035-b3bc-e077b8e24190",
+  "covers": [
+    "REQ-024"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 manual check 4: closing the window keeps stacklyd running",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "The first close of the main window shows the notice Stackly is still running once, stackly daemon status and ps still show stacklyd, a Dock click opens the window again, a second close shows no notice, and Cmd-Q quits only the app with no notice while stacklyd keeps running.",
+  "actual": "the first close in each launch showed the panel `Stackly is still running` / `Closing the window doesn’t stop stacklyd or your instances. Click Stackly in the Dock to reopen it.` for about 5 s; the app process kept running and its heartbeat kept reaching the daemon; the Dock item reopened the window; the second close showed no panel; Quit Stackly ended the app with no panel, the GUI connection closed at 22:46:14.651Z with no request after the regular heartbeat 4.5 s earlier, and stacklyd (pid 84307) stayed ready",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 7818bea with a clean tree, `cargo xtask build-app` (Debug) and `cargo build -p stacklyd -p stackly-cli`; STACKLY_ROOT is the private folder /private/tmp/stk-gui-check (mode 0700)",
+    "Claude Code drove Stackly through the macOS accessibility API (System Events menu clicks, the window's close button, Dock item clicks, AX row selection and sizes) and captured only the Stackly window with `screencapture -l <window id>`; synthetic keystrokes do not reach apps on this Mac, so no step uses the keyboard",
+    "with stacklyd running and Stackly connected, click the main window's close button; list Stackly's windows with CGWindowListCopyWindowInfo: a 360 by 78 floating panel appeared and left after about 5 s; check `ps` and `stackly daemon status`",
+    "click Stackly's Dock item: the main window opens again (check4-reopened.png); click the close button again and poll the window list for 3 s: no panel",
+    "click the Dock item again, then choose `Quit Stackly` from the app menu (the item Cmd-Q triggers; its accessibility key equivalent is Cmd-Q); poll for a panel for 3 s; check the app process, `stackly daemon status`, and the daemon debug log of check 2 (stacklyd.log in that record's folder)",
+    "open the app again (a new launch) and click the close button once more, capturing the floating panel while it shows (check4-notice.png)"
+  ],
+  "reviewer": "ojiepermana, reviewing the screenshots and logs Claude Code (Claude Opus 5.5) took while it drove the app",
+  "startedAt": "2026-10-19T22:41:47.04015Z",
+  "finishedAt": "2026-10-20T02:15:03.849824Z",
+  "evidencePath": "evidence/manual/files/01a15653-fc20-7035-b3bc-e077b8e24190/",
+  "context": {
+    "sourceCommit": "7818bea186bae7048a8b5eeee71e03eb932e6a76",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

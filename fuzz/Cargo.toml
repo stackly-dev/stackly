@@ -70,4 +70,11 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "nats_readiness_protocol"
+path = "fuzz_targets/nats_readiness_protocol.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]

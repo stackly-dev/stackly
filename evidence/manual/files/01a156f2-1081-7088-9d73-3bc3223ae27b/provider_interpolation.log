@@ -1,0 +1,51 @@
+   Compiling stackly-fuzz v0.0.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/eager-roentgen-3863a9/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.85s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+     Running `fuzz/target/aarch64-apple-darwin/release/provider_interpolation -artifact_prefix=fuzz/artifacts/provider_interpolation/ -max_len=4096 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_interpolation fuzz/seeds/provider_interpolation`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3925862452
+INFO: Loaded 1 modules   (303597 inline 8-bit counters): 303597 [0x1016b3270, 0x1016fd45d), 
+INFO: Loaded 1 PC tables (303597 PCs): 303597 [0x1016fd460,0x101b9f330), 
+INFO:        0 files found in fuzz/corpus/provider_interpolation
+INFO:       32 files found in fuzz/seeds/provider_interpolation
+INFO: seed corpus: files: 32 min: 16b max: 52b total: 957b rss: 57Mb
+#33	INITED cov: 1285 ft: 1818 corp: 27/775b exec/s: 0 rss: 58Mb
+#34	NEW    cov: 1297 ft: 1843 corp: 28/794b lim: 52 exec/s: 0 rss: 58Mb L: 19/52 MS: 1 ChangeBit-
+#35	NEW    cov: 1299 ft: 1845 corp: 29/831b lim: 52 exec/s: 0 rss: 59Mb L: 37/52 MS: 1 InsertByte-
+#36	NEW    cov: 1300 ft: 1851 corp: 30/870b lim: 52 exec/s: 0 rss: 59Mb L: 39/52 MS: 1 CrossOver-
+#37	NEW    cov: 1307 ft: 1866 corp: 31/896b lim: 52 exec/s: 0 rss: 59Mb L: 26/52 MS: 1 CrossOver-
+#38	NEW    cov: 1312 ft: 1871 corp: 32/927b lim: 52 exec/s: 0 rss: 59Mb L: 31/52 MS: 1 EraseBytes-
+#39	NEW    cov: 1312 ft: 1873 corp: 33/943b lim: 52 exec/s: 0 rss: 59Mb L: 16/52 MS: 1 ChangeByte-
+#40	NEW    cov: 1312 ft: 1875 corp: 34/989b lim: 52 exec/s: 0 rss: 59Mb L: 46/52 MS: 1 InsertRepeatedBytes-
+#42	NEW    cov: 1320 ft: 1886 corp: 35/1009b lim: 52 exec/s: 0 rss: 59Mb L: 20/52 MS: 2 InsertRepeatedBytes-EraseBytes-
+... (NEW, REDUCE, and pulse progress lines cut) ...
+"\000\000\0000" # Uses: 1735
+"\377\001" # Uses: 1760
+"T\000" # Uses: 1694
+"\001\000\000\000\000\000\000\013" # Uses: 1679
+"\012\000\000\000\000\000\000\000" # Uses: 1566
+"\000\000\000\000\000\000\000\011" # Uses: 1435
+"\021\000" # Uses: 1355
+"+\000\000\000" # Uses: 1340
+"\014\000\000\000" # Uses: 1296
+"\376\377\377\377\377\377\377\377" # Uses: 1180
+"\013\000\000\000\000\000\000\000" # Uses: 1092
+"y\000\000\000" # Uses: 1193
+"\017\000" # Uses: 1156
+"\377\377" # Uses: 1020
+"\000\000\000\377" # Uses: 686
+"\001\000\000#" # Uses: 645
+"\000\002" # Uses: 518
+"\000\006" # Uses: 425
+"\004\000\000\000\000\000\000\000" # Uses: 260
+"\000\000\000\000\000\000\000\010" # Uses: 47
+"\000\000\021\000" # Uses: 17
+###### End of recommended dictionary. ######
+Done 1821178 runs in 601 second(s)
+stat::number_of_executed_units: 1821178
+stat::average_exec_per_sec:     3030
+stat::new_units_added:          3878
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              664
+fuzz run: provider_interpolation ran for 600 s without a crash
+      604.09 real       560.19 user         5.91 sys

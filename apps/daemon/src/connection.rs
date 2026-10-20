@@ -30,9 +30,11 @@ use stackly_protocol::{
 use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore, mpsc, watch};
 use tokio::task::AbortHandle;
 use tokio::time::{Instant, timeout};
+use uuid::Uuid;
 
 use crate::dispatch::{HandlerFuture, Handlers, RequestContext};
 use crate::events::BusSubscription;
+use crate::ipc::operation::{StartOutcome, StartRequest, TestStartingMethod, start_operation};
 use crate::map;
 use crate::shutdown::DrainGuard;
 use crate::state::DaemonCore;
@@ -557,6 +559,7 @@ async fn handshake(
         Some("daemon.handshake"),
         started,
         None,
+        None,
     );
     Handshake::Accepted
 }
@@ -640,6 +643,14 @@ async fn on_frame(
     handlers: &Arc<dyn Handlers>,
 ) {
     let received = Instant::now();
+    // provisional: F10 (no contract method starts an operation yet; only a
+    // test registers this one)
+    if let Some(starting) = handlers.test_starting_method()
+        && let Some(frame) = starting_frame(bytes, starting.method())
+    {
+        on_starting(frame, starting, conn, core, received).await;
+        return;
+    }
     let request = match json::decode_request(bytes) {
         Ok(request) => request,
         Err(rejection) => {
@@ -651,6 +662,7 @@ async fn on_frame(
                 None,
                 received,
                 Some(&rejection.error),
+                None,
             );
             let _ = conn
                 .enqueue(&ServerFrame::Error(rejection.into_frame()))
@@ -659,41 +671,10 @@ async fn on_frame(
         }
     };
     let method = request.call.method();
-    // Counted before the stop check, so a stop either sees this request in
-    // the drain or this request sees the stop (spec 0006, *Berhenti*).
-    let guard = core.drain().enter();
-    let refused = if matches!(request.call, Call::DaemonHandshake(_)) {
-        Some(ErrorBody::new(
-            &protocol::HANDSHAKE_REPEATED,
-            "the handshake was already accepted on this connection",
-        ))
-    } else if core.is_stopping() {
-        Some(ErrorBody::new(
-            &daemon::SHUTTING_DOWN,
-            "the daemon is stopping",
-        ))
-    } else if !conn.reserve_id(&request.request_id) {
-        Some(ErrorBody::new(
-            &request::DUPLICATE_ID,
-            "another request with this requestId still runs on this connection",
-        ))
-    } else {
-        None
-    };
-    if let Some(error) = refused {
-        drop(guard);
-        reply_error(conn, request.request_id, method, received, error).await;
-        return;
-    }
-    let Ok(permit) = Arc::clone(&conn.permits).try_acquire_owned() else {
-        drop(guard);
-        conn.release_id(&request.request_id);
-        let error = ErrorBody::new(
-            &request::TOO_MANY_IN_FLIGHT,
-            "the connection runs the most requests it may at once",
-        )
-        .with_detail("max", MAX_IN_FLIGHT_REQUESTS.to_string());
-        reply_error(conn, request.request_id, method, received, error).await;
+    let repeated = matches!(request.call, Call::DaemonHandshake(_));
+    let Some((permit, guard)) =
+        admit(conn, core, &request.request_id, method, repeated, received).await
+    else {
         return;
     };
     tokio::spawn(run_request(
@@ -705,6 +686,58 @@ async fn on_frame(
         guard,
         received,
     ));
+}
+
+/// Admits one request that decoded: counts it in the drain, then refuses
+/// it when it repeats the handshake, the daemon stops, its `requestId`
+/// still runs, or the connection runs the most requests it may. A refused
+/// request is answered here and gives `None`.
+async fn admit(
+    conn: &Arc<Conn>,
+    core: &Arc<DaemonCore>,
+    request_id: &str,
+    method: &'static str,
+    repeated_handshake: bool,
+    received: Instant,
+) -> Option<(OwnedSemaphorePermit, DrainGuard)> {
+    // Counted before the stop check, so a stop either sees this request in
+    // the drain or this request sees the stop (spec 0006, *Berhenti*).
+    let guard = core.drain().enter();
+    let refused = if repeated_handshake {
+        Some(ErrorBody::new(
+            &protocol::HANDSHAKE_REPEATED,
+            "the handshake was already accepted on this connection",
+        ))
+    } else if core.is_stopping() {
+        Some(ErrorBody::new(
+            &daemon::SHUTTING_DOWN,
+            "the daemon is stopping",
+        ))
+    } else if !conn.reserve_id(request_id) {
+        Some(ErrorBody::new(
+            &request::DUPLICATE_ID,
+            "another request with this requestId still runs on this connection",
+        ))
+    } else {
+        None
+    };
+    if let Some(error) = refused {
+        drop(guard);
+        reply_error(conn, request_id.to_owned(), method, received, error).await;
+        return None;
+    }
+    let Ok(permit) = Arc::clone(&conn.permits).try_acquire_owned() else {
+        drop(guard);
+        conn.release_id(request_id);
+        let error = ErrorBody::new(
+            &request::TOO_MANY_IN_FLIGHT,
+            "the connection runs the most requests it may at once",
+        )
+        .with_detail("max", MAX_IN_FLIGHT_REQUESTS.to_string());
+        reply_error(conn, request_id.to_owned(), method, received, error).await;
+        return None;
+    };
+    Some((permit, guard))
 }
 
 async fn reply_error(
@@ -720,6 +753,7 @@ async fn reply_error(
         Some(method),
         received,
         Some(&error),
+        None,
     );
     let frame = ServerFrame::Error(ErrorFrame {
         request_id: Some(request_id),
@@ -741,6 +775,7 @@ async fn run_request(
         request_id, call, ..
     } = request;
     let method = call.method();
+    let operation_id = named_operation(&call);
     let context = RequestContext::new(conn.id, request_id.clone(), conn.peer, conn.client());
     let (result, subscription) = dispatch(&conn, &core, &handlers, context, call).await;
     let subscription_id = subscription.as_ref().map(BusSubscription::subscription_id);
@@ -779,6 +814,7 @@ async fn run_request(
         Some(method),
         received,
         error.as_ref(),
+        operation_id,
     );
     let delivered = conn.enqueue_bytes(bytes).await;
     match (subscription, delivered, error) {
@@ -826,7 +862,6 @@ async fn dispatch(
     if let Some(error) = recovery_refusal(core, call.allowed_in_recovery()) {
         return (Err(error), None);
     }
-    let method = call.method();
     match call {
         Call::DaemonHandshake(_) => (
             Err(Box::new(ErrorBody::new(
@@ -868,15 +903,54 @@ async fn dispatch(
                 .map(|()| Reply::EventsUnsubscribe),
             None,
         ),
-        // provisional: F7 step 14 (the operation engine is not wired into
-        // stacklyd yet, so these methods are answered like a method this
-        // daemon does not serve)
-        Call::OperationGet(_)
-        | Call::OperationList(_)
-        | Call::OperationCancel(_)
-        | Call::OperationResume(_)
-        | Call::OperationAbandon(_)
-        | Call::OperationGetStats => (Err(not_served(method)), None),
+        Call::OperationGet(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_operation(c, x, p)
+            })
+            .await
+            .map(|detail| Reply::OperationGet(Box::new(detail))),
+            None,
+        ),
+        Call::OperationList(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.list_operations(c, x, p)
+            })
+            .await
+            .map(Reply::OperationList),
+            None,
+        ),
+        Call::OperationCancel(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.cancel_operation(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::OperationCancel(Box::new(reply))),
+            None,
+        ),
+        Call::OperationResume(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.resume_operation(c, x, p)
+            })
+            .await
+            .map(|summary| Reply::OperationResume(Box::new(summary))),
+            None,
+        ),
+        Call::OperationAbandon(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.abandon_operation(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::OperationAbandon(Box::new(reply))),
+            None,
+        ),
+        Call::OperationGetStats => (
+            guarded(core, handlers, context, |h, c, x| {
+                h.get_operation_stats(c, x)
+            })
+            .await
+            .map(Reply::OperationGetStats),
+            None,
+        ),
         // provisional: F17 step 6 (the catalog subsystem and its handlers)
         Call::CatalogListProviders | Call::CatalogGetProvider(_) => (Err(no_catalog_yet()), None),
     }
@@ -898,18 +972,15 @@ fn no_catalog_yet() -> Box<ErrorBody> {
     Box::new(body)
 }
 
-/// `request.unknown_method` for a method in the contract that this build
-/// of the daemon does not serve yet, so a client falls back as it would
-/// with an older daemon (spec 0006, *Kompatibilitas*). provisional: F7
-/// step 14
-fn not_served(method: &str) -> Box<ErrorBody> {
-    Box::new(
-        ErrorBody::new(
-            &request::UNKNOWN_METHOD,
-            "the daemon does not serve this method yet",
-        )
-        .with_detail("method", method),
-    )
+/// The operation a request names in its params, for its log line.
+fn named_operation(call: &Call) -> Option<Uuid> {
+    match call {
+        Call::OperationGet(params) => Some(params.operation_id),
+        Call::OperationCancel(params) => Some(params.operation_id),
+        Call::OperationResume(params) => Some(params.operation_id),
+        Call::OperationAbandon(params) => Some(params.operation_id),
+        _ => None,
+    }
 }
 
 /// Runs a handler in its own task, so a panic becomes
@@ -937,6 +1008,195 @@ async fn guarded<T: Send + 'static>(
             Err(unexpected("the request failed inside the daemon"))
         }
     }
+}
+
+/// [`guarded`] for a handler that takes the request's params.
+async fn guarded_with<P: Send + 'static, T: Send + 'static>(
+    core: &Arc<DaemonCore>,
+    handlers: &Arc<dyn Handlers>,
+    context: RequestContext,
+    params: P,
+    call: for<'a> fn(
+        &'a dyn Handlers,
+        &'a DaemonCore,
+        &'a RequestContext,
+        P,
+    ) -> HandlerFuture<'a, T>,
+) -> Result<T, Box<ErrorBody>> {
+    let core = Arc::clone(core);
+    let handlers = Arc::clone(handlers);
+    let connection_id = context.connection_id;
+    let request_id = context.request_id.clone();
+    let task = tokio::spawn(async move { call(&*handlers, &core, &context, params).await });
+    match task.await {
+        Ok(result) => result,
+        Err(failure) => {
+            tracing::error!(
+                connection_id,
+                request_id = request_id.as_str(),
+                panicked = failure.is_panic(),
+                "a handler failed",
+            );
+            Err(unexpected("the request failed inside the daemon"))
+        }
+    }
+}
+
+/// A request for the test's starting method. provisional: F10
+struct StartingFrame {
+    request_id: String,
+    idempotency_key: Option<String>,
+    params: Option<serde_json::Value>,
+}
+
+/// Reads `bytes` as a request for the test's starting method `method`;
+/// `None` when it names another method, so the contract decode handles it.
+/// A request whose `requestId` or `idempotencyKey` breaks the protocol's
+/// format still comes back, with the bad part left out, so it gets
+/// `request.malformed` there. provisional: F10
+fn starting_frame(bytes: &[u8], method: &str) -> Option<StartingFrame> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    if value["call"]["type"].as_str() != Some(method) {
+        return None;
+    }
+    Some(StartingFrame {
+        request_id: value["requestId"].as_str().unwrap_or_default().to_owned(),
+        idempotency_key: match &value["idempotencyKey"] {
+            serde_json::Value::Null => None,
+            other => Some(other.as_str().unwrap_or_default().to_owned()),
+        },
+        params: value["call"].get("content").cloned(),
+    })
+}
+
+/// Admits and runs a request for the test's starting method like a
+/// contract request. provisional: F10
+async fn on_starting(
+    frame: StartingFrame,
+    starting: Arc<dyn TestStartingMethod>,
+    conn: &Arc<Conn>,
+    core: &Arc<DaemonCore>,
+    received: Instant,
+) {
+    let method = starting.method();
+    let key_ok = frame
+        .idempotency_key
+        .as_deref()
+        .is_none_or(json::is_idempotency_key);
+    if !json::is_request_id(&frame.request_id) || !key_ok {
+        core.counters().frame_rejected();
+        let request_id = json::is_request_id(&frame.request_id).then(|| frame.request_id.clone());
+        let error = ErrorBody::new(
+            &request::MALFORMED,
+            "requestId or idempotencyKey has a bad format",
+        );
+        log_request(
+            conn,
+            request_id.as_deref(),
+            None,
+            received,
+            Some(&error),
+            None,
+        );
+        let _ = conn
+            .enqueue(&ServerFrame::Error(ErrorFrame { request_id, error }))
+            .await;
+        return;
+    }
+    let Some((permit, guard)) = admit(conn, core, &frame.request_id, method, false, received).await
+    else {
+        return;
+    };
+    tokio::spawn(run_starting(
+        Arc::clone(conn),
+        Arc::clone(core),
+        starting,
+        frame,
+        permit,
+        guard,
+        received,
+    ));
+}
+
+/// Runs one request for the test's starting method: refused in recovery
+/// mode like every method that writes, then [`start_operation`] on its own
+/// task, and a raw response frame whose reply `type` is the method and
+/// whose `content` is the [`OperationAccepted`](stackly_protocol::operation::OperationAccepted)
+/// (null when nothing was started). provisional: F10
+async fn run_starting(
+    conn: Arc<Conn>,
+    core: Arc<DaemonCore>,
+    starting: Arc<dyn TestStartingMethod>,
+    frame: StartingFrame,
+    permit: OwnedSemaphorePermit,
+    guard: DrainGuard,
+    received: Instant,
+) {
+    let method = starting.method();
+    let request_id = frame.request_id.clone();
+    let context = RequestContext::new(conn.id, request_id.clone(), conn.peer, conn.client());
+    let result = match recovery_refusal(&core, false) {
+        Some(error) => Err(error),
+        None => {
+            let core = Arc::clone(&core);
+            let task = tokio::spawn(async move {
+                let prepared = starting.prepare(frame.params.as_ref())?;
+                let start = StartRequest::new(
+                    method,
+                    frame.idempotency_key.as_deref(),
+                    prepared.fingerprint,
+                );
+                start_operation(&core, &context, start, prepared.build).await
+            });
+            task.await.unwrap_or_else(|failure| {
+                tracing::error!(
+                    connection_id = conn.id,
+                    request_id = request_id.as_str(),
+                    panicked = failure.is_panic(),
+                    "a handler failed",
+                );
+                Err(unexpected("the request failed inside the daemon"))
+            })
+        }
+    };
+    let (bytes, error, operation_id) = match result {
+        Ok(outcome) => {
+            let content = match &outcome {
+                StartOutcome::Accepted(accepted) => {
+                    serde_json::to_value(accepted).expect("an accepted operation always serializes")
+                }
+                StartOutcome::NothingToDo => serde_json::Value::Null,
+            };
+            let frame = serde_json::json!({
+                "type": "response",
+                "content": {
+                    "requestId": request_id,
+                    "reply": { "type": method, "content": content },
+                },
+            });
+            let bytes = serde_json::to_vec(&frame).expect("a json value always serializes");
+            (bytes, None, outcome.operation_id())
+        }
+        Err(error) => {
+            let bytes = encode(&ServerFrame::Error(ErrorFrame {
+                request_id: Some(request_id.clone()),
+                error: (*error).clone(),
+            }));
+            (bytes, Some(*error), None)
+        }
+    };
+    log_request(
+        &conn,
+        Some(&request_id),
+        Some(method),
+        received,
+        error.as_ref(),
+        operation_id,
+    );
+    let _ = conn.enqueue_bytes(bytes).await;
+    conn.release_id(&request_id);
+    drop(permit);
+    drop(guard);
 }
 
 /// Forwards one subscription's events to the outbound queue, recording
@@ -1019,18 +1279,22 @@ fn log_refusal(conn: &Conn, request_id: Option<&str>, error: &ErrorBody) {
 }
 
 /// The line that closes one request: `debug` when it succeeded, `info`
-/// when it failed, `error` for an `internal` failure. Params, replies, and
-/// frame bytes are never logged.
+/// when it failed, `error` for an `internal` failure. It carries
+/// `operation_id` when the request names or starts an operation (spec
+/// 0007 AC-19). Params, replies, and frame bytes are never logged.
 fn log_request(
     conn: &Conn,
     request_id: Option<&str>,
     method: Option<&str>,
     received: Instant,
     error: Option<&ErrorBody>,
+    operation_id: Option<Uuid>,
 ) {
     let duration_ms = u64::try_from(received.elapsed().as_millis()).unwrap_or(u64::MAX);
     let client_kind = conn.client_kind();
     let interactive = conn.interactive();
+    let operation_id = operation_id.map(|id| id.to_string());
+    let operation_id = operation_id.as_deref();
     match error {
         None => tracing::debug!(
             connection_id = conn.id,
@@ -1038,6 +1302,7 @@ fn log_request(
             method,
             client_kind,
             interactive,
+            operation_id,
             duration_ms,
             outcome = "ok",
             "request",
@@ -1048,6 +1313,7 @@ fn log_request(
             method,
             client_kind,
             interactive,
+            operation_id,
             duration_ms,
             outcome = "error",
             code = error.code(),
@@ -1059,6 +1325,7 @@ fn log_request(
             method,
             client_kind,
             interactive,
+            operation_id,
             duration_ms,
             outcome = "error",
             code = error.code(),
@@ -1069,4 +1336,64 @@ fn log_request(
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const METHOD: &str = "test.start_operation";
+
+    fn frame(value: &serde_json::Value) -> Option<StartingFrame> {
+        starting_frame(&serde_json::to_vec(value).unwrap(), METHOD)
+    }
+
+    #[test]
+    fn a_request_for_another_method_or_broken_json_is_left_to_the_contract_decode() {
+        let other = serde_json::json!({ "requestId": "r", "call": { "type": "daemon.get_info" } });
+
+        assert!(frame(&other).is_none());
+        assert!(starting_frame(b"{broken", METHOD).is_none());
+        assert!(starting_frame(b"[]", METHOD).is_none());
+    }
+
+    #[test]
+    fn a_request_for_the_starting_method_keeps_its_id_key_and_params() {
+        let request = serde_json::json!({
+            "requestId": "r-1",
+            "idempotencyKey": "k-1",
+            "call": { "type": METHOD, "content": { "script": "quick" } },
+        });
+
+        let read = frame(&request).unwrap();
+
+        assert_eq!(read.request_id, "r-1");
+        assert_eq!(read.idempotency_key.as_deref(), Some("k-1"));
+        assert_eq!(read.params, Some(serde_json::json!({ "script": "quick" })));
+    }
+
+    #[test]
+    fn a_missing_key_or_params_stay_absent() {
+        let request = serde_json::json!({ "requestId": "r-2", "call": { "type": METHOD } });
+
+        let read = frame(&request).unwrap();
+
+        assert_eq!(read.idempotency_key, None);
+        assert_eq!(read.params, None);
+    }
+
+    #[test]
+    fn an_id_or_key_that_is_not_a_string_comes_back_empty_so_it_is_malformed() {
+        let request = serde_json::json!({
+            "requestId": 7,
+            "idempotencyKey": 9,
+            "call": { "type": METHOD },
+        });
+
+        let read = frame(&request).unwrap();
+
+        assert!(!json::is_request_id(&read.request_id));
+        assert_eq!(read.idempotency_key.as_deref(), Some(""));
+        assert!(!json::is_idempotency_key(""));
+    }
 }

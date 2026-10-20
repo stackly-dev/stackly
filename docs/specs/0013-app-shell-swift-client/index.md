@@ -1,7 +1,7 @@
 # 0013. App shell SwiftUI dan Swift client
 
 **Date**: 2026-10-18
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
@@ -190,7 +190,7 @@ Fixture `protocols/fixtures/endpoint/checks.json` mengunci paritas dengan Rust: 
 - `subscribe(_ params: SubscribeParams) async throws(ClientError) -> (Subscribed, AsyncThrowingStream<DecodedFrame, ClientError>)`: event dan skipped untuk `subscriptionId` itu, berurutan. Stream berakhir saat koneksi tutup.
 - `close()` idempoten; `termination` memberi alasan tutup ke `DaemonLink`.
 
-`ClientErrorCatalog` membuat `ErrorBody` sisi client untuk kode `ipc.endpoint_missing`, `ipc.endpoint_untrusted`, `ipc.connection_refused`, `ipc.connection_closed`, `ipc.io_error`, `ipc.protocol_violation`, `ipc.frame_empty`, `ipc.frame_too_large`, `ipc.not_connected`, dan `ipc.call_timeout`, dengan kategori, `retryable`, dan kunci `details` yang dites sama dengan `error-codes.json`. Pesan tetapnya (huruf kecil, tanpa titik di akhir): "no socket at the daemon path", "the daemon socket failed a security check", "the daemon refused the connection", "the daemon closed the connection", "an os error stopped the connection", "the daemon sent a frame the client could not read", "the daemon sent an empty frame", "the daemon sent a frame above the size limit", "the daemon did not answer the handshake in time", "the client is not connected to the daemon", dan "the daemon did not answer in time".
+`ClientErrorCatalog` membuat `ErrorBody` sisi client untuk kode `ipc.endpoint_missing`, `ipc.endpoint_untrusted`, `ipc.connection_refused`, `ipc.connection_closed`, `ipc.io_error`, `ipc.protocol_violation`, `ipc.frame_empty`, `ipc.frame_too_large`, `ipc.not_connected`, dan `ipc.call_timeout`, dengan kategori, `retryable`, dan kunci `details` yang dites sama dengan `error-codes.json`. Pesan tetapnya (huruf kecil, tanpa titik di akhir): "no socket at the daemon path", "the daemon socket failed a security check", "the daemon refused the connection", "the daemon closed the connection", "an os error stopped the connection", "the daemon sent a frame the client could not read", "the daemon sent an empty frame", "the daemon sent a frame above the size limit", "the client is not connected to the daemon", dan "the daemon did not answer in time".
 
 Logging lewat `os.Logger(subsystem: "com.ojiepermana.stackly", category: "client")`: transisi status, kode error, nama method, dan durasi. Params, reply, isi frame, dan teks error decode tidak pernah dicatat; path socket dicatat dengan privasi default.
 

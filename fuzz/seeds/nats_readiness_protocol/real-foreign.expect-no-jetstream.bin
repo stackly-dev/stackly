@@ -1,0 +1,3 @@
+þINFO {"server_id":"NBSLJ4GBJSOCAVBTSDMR7ATVS6WNIL3FAQ6WGQ4MR7FZBJUK422I3BVJ","server_name":"foreign","version":"2.15.1","proto":1,"git_commit":"b2fd3ef","go":"go1.27.2","host":"127.0.0.1","port":56625,"headers":true,"max_payload":1048576,"client_id":6,"client_ip":"127.0.0.1","api_lvl":5,"xkey":"XBDUBGNQVPTHX4CQT7L2FB7WOMA47C47M7ARHWO4AWALMILB3HUWTM5F"} 
+PONG
+INFO {"server_id":"NBSLJ4GBJSOCAVBTSDMR7ATVS6WNIL3FAQ6WGQ4MR7FZBJUK422I3BVJ","server_name":"foreign","version":"2.15.1","proto":1,"git_commit":"b2fd3ef","go":"go1.27.2","host":"127.0.0.1","port":56625,"headers":true,"max_payload":1048576,"client_id":6,"client_ip":"127.0.0.1","connect_info":true,"remote_account":"$G","api_lvl":5,"xkey":"XBDUBGNQVPTHX4CQT7L2FB7WOMA47C47M7ARHWO4AWALMILB3HUWTM5F"} 

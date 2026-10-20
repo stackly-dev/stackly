@@ -72,6 +72,25 @@ public enum ShellBootstrap {
         clientVersion: String,
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> ShellRuntime {
+        assemble(rootOverride: rootOverride, clientVersion: clientVersion, now: now).runtime
+    }
+
+    /// Builds the live shell and returns its link and sync engine too, for the end to
+    /// end tests that stop them and read the cursor.
+    ///
+    /// - Parameters:
+    ///   - rootOverride: `STACKLY_ROOT`, or `nil` when it is not set.
+    ///   - clientVersion: The bundle's `CFBundleShortVersionString`.
+    ///   - now: The wall clock.
+    ///   - announce: Posts a VoiceOver announcement.
+    ///   - closeNotice: The notice shown the first time the main window closes.
+    static func assemble(
+        rootOverride: String?,
+        clientVersion: String,
+        now: @escaping @Sendable () -> Date = { Date() },
+        announce: @escaping (String) -> Void = { StacklyUI.announce($0) },
+        closeNotice: CloseNotice = CloseNotice()
+    ) -> LiveShellParts {
         let endpoint = Result { () throws(RootOverrideProblem) -> SocketEndpoint in
             try SocketPathResolver.current(rootOverride: rootOverride)
         }
@@ -87,7 +106,21 @@ public enum ShellBootstrap {
             signals: engine.signals,
             endpoint: try? endpoint.get(),
             launchedAt: now(),
-            now: now)
-        return ShellRuntime(model: model)
+            now: now,
+            announce: announce)
+        return LiveShellParts(
+            runtime: ShellRuntime(model: model, closeNotice: closeNotice),
+            link: link,
+            engine: engine)
     }
+}
+
+/// The pieces ``ShellBootstrap`` wires together.
+struct LiveShellParts {
+    /// What the app target holds.
+    let runtime: ShellRuntime
+    /// The daemon link under the model.
+    let link: DaemonLink
+    /// The sync engine that feeds the model's stores.
+    let engine: SyncEngine
 }

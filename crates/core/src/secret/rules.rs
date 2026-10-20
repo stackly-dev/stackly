@@ -19,27 +19,43 @@ pub struct SecretFieldRule {
     pub max_length: Option<u64>,
     /// When a change reaches the process.
     pub apply: Option<ApplyClass>,
+    /// The value holds no control character (`x-stackly.printableOnly`).
+    pub printable_only: bool,
 }
 
 impl SecretFieldRule {
-    /// The rules of a field with the given bounds and apply class.
+    /// The rules of a field with the given bounds and apply class, which
+    /// takes control characters.
     #[must_use]
     pub const fn new(min_length: u64, max_length: Option<u64>, apply: Option<ApplyClass>) -> Self {
         Self {
             min_length,
             max_length,
             apply,
+            printable_only: false,
         }
     }
 
+    /// Returns the rules with `printable_only` set: whether the value must
+    /// hold no control character.
+    #[must_use]
+    pub const fn with_printable_only(mut self, printable_only: bool) -> Self {
+        self.printable_only = printable_only;
+        self
+    }
+
     /// Reads the rules of a secret field of a settings schema, or `None`
-    /// when the field is not a secret text field.
+    /// when the field is not a secret text field. `printable_only` stays
+    /// false until the settings model carries `x-stackly.printableOnly`
+    /// (spec 0019, through spec 0009).
     #[must_use]
     pub fn from_setting(field: &SettingField) -> Option<Self> {
         if !field.is_secret() {
             return None;
         }
         match field.kind() {
+            // provisional: F19 fills printable_only from x-stackly.printableOnly
+            // once the settings model of spec 0009 carries it.
             FieldKind::Scalar(ScalarKind::Text(rules)) => {
                 Some(Self::new(rules.min_length, rules.max_length, field.apply()))
             }
@@ -47,10 +63,58 @@ impl SecretFieldRule {
         }
     }
 
-    /// Returns whether a value of `chars` characters fits.
+    /// Checks a value of `chars` characters, `has_control` when it holds a
+    /// control character: its length first, then, for a `printable_only`
+    /// field, its control characters (AC-22).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidValueReason::Length`] when `chars` is outside
+    /// `min_length` and `max_length`, and
+    /// [`InvalidValueReason::ControlCharacters`] when the length fits but
+    /// the field is `printable_only` and the value holds a control
+    /// character.
+    pub const fn check(&self, chars: u64, has_control: bool) -> Result<(), InvalidValueReason> {
+        let too_long = match self.max_length {
+            Some(max) => chars > max,
+            None => false,
+        };
+        if chars < self.min_length || too_long {
+            Err(InvalidValueReason::Length)
+        } else if self.printable_only && has_control {
+            Err(InvalidValueReason::ControlCharacters)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// Why a value breaks the rules of a secret field, the `reason` detail of
+/// `secret.invalid_value`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum InvalidValueReason {
+    /// Its character count is outside `minLength` and `maxLength`.
+    Length,
+    /// The field is `printableOnly`, and the value holds a control
+    /// character.
+    ControlCharacters,
+}
+
+impl InvalidValueReason {
+    /// Returns the stable code, `length` or `control_characters`.
     #[must_use]
-    pub fn fits(&self, chars: u64) -> bool {
-        chars >= self.min_length && self.max_length.is_none_or(|max| chars <= max)
+    pub const fn as_code(self) -> &'static str {
+        match self {
+            Self::Length => "length",
+            Self::ControlCharacters => "control_characters",
+        }
+    }
+}
+
+impl fmt::Display for InvalidValueReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_code())
     }
 }
 
@@ -177,9 +241,21 @@ impl Bounds {
         self.fields.push((field, rule));
     }
 
-    /// Returns the first field whose bounds `chars` breaks.
-    pub(crate) fn broken_by(&self, chars: u64) -> Option<&(SecretFieldName, SecretFieldRule)> {
-        self.fields.iter().find(|(_, rule)| !rule.fits(chars))
+    /// Returns the first field, in order, whose rules a value of `chars`
+    /// characters breaks, `has_control` when it holds a control
+    /// character, and why.
+    pub(crate) fn broken_by(
+        &self,
+        chars: u64,
+        has_control: bool,
+    ) -> Option<(&(SecretFieldName, SecretFieldRule), InvalidValueReason)> {
+        self.fields.iter().find_map(|field| {
+            field
+                .1
+                .check(chars, has_control)
+                .err()
+                .map(|reason| (field, reason))
+        })
     }
 
     /// Returns `preferred` clamped to every field's bounds, at least 1, or
@@ -199,8 +275,10 @@ impl Bounds {
             .min()
             .unwrap_or(u64::MAX);
         let length = preferred.clamp(low, high.max(low));
-        match self.broken_by(length) {
-            Some(broken) => Err(broken),
+        // A generated value is `[A-Za-z0-9]`, so only its length can break
+        // a field.
+        match self.broken_by(length, false) {
+            Some((broken, _)) => Err(broken),
             None => Ok(length),
         }
     }
@@ -239,6 +317,12 @@ mod tests {
         assert!(clash.clamp(32).is_err());
     }
 
+    fn broken(bounds: &Bounds, chars: u64, has_control: bool) -> Option<(&str, &'static str)> {
+        bounds
+            .broken_by(chars, has_control)
+            .map(|((name, _), reason)| (name.as_str(), reason.as_code()))
+    }
+
     #[test]
     fn a_value_breaks_the_first_field_it_does_not_fit() {
         let bounds = Bounds {
@@ -247,18 +331,51 @@ mod tests {
                 (field("b"), SecretFieldRule::new(12, None, None)),
             ],
         };
+        assert_eq!(broken(&bounds, 7, false), Some(("a", "length")));
+        assert_eq!(broken(&bounds, 10, false), Some(("b", "length")));
+        assert_eq!(broken(&bounds, 12, false), None);
+        assert_eq!(broken(&bounds, 65, false), Some(("a", "length")));
+        // Neither field is printable only, so control characters pass.
+        assert_eq!(broken(&bounds, 12, true), None);
+    }
+
+    #[test]
+    fn the_check_takes_the_length_first_then_control_characters_of_a_printable_only_field() {
+        let printable = SecretFieldRule::new(8, Some(16), None).with_printable_only(true);
+        assert!(printable.printable_only);
+        assert!(!SecretFieldRule::new(8, Some(16), None).printable_only);
+        assert_eq!(printable.check(12, false), Ok(()));
         assert_eq!(
-            bounds.broken_by(7).map(|(name, _)| name.as_str()),
-            Some("a")
+            printable.check(12, true),
+            Err(InvalidValueReason::ControlCharacters)
         );
+        assert_eq!(printable.check(7, true), Err(InvalidValueReason::Length));
+        assert_eq!(printable.check(17, true), Err(InvalidValueReason::Length));
+        assert_eq!(printable.check(17, false), Err(InvalidValueReason::Length));
+        let open = SecretFieldRule::new(0, None, None);
+        assert_eq!(open.check(u64::MAX, true), Ok(()));
+        assert_eq!(printable.with_printable_only(false).check(12, true), Ok(()));
+        assert_eq!(InvalidValueReason::Length.as_code(), "length");
         assert_eq!(
-            bounds.broken_by(10).map(|(name, _)| name.as_str()),
-            Some("b")
+            InvalidValueReason::ControlCharacters.to_string(),
+            "control_characters"
         );
-        assert_eq!(bounds.broken_by(12), None);
-        assert_eq!(
-            bounds.broken_by(65).map(|(name, _)| name.as_str()),
-            Some("a")
-        );
+    }
+
+    #[test]
+    fn the_fields_are_checked_in_order_each_by_length_then_control_characters() {
+        let bounds = Bounds {
+            fields: vec![
+                (
+                    field("a"),
+                    SecretFieldRule::new(0, Some(64), None).with_printable_only(true),
+                ),
+                (field("b"), SecretFieldRule::new(20, None, None)),
+            ],
+        };
+        assert_eq!(broken(&bounds, 10, true), Some(("a", "control_characters")));
+        assert_eq!(broken(&bounds, 10, false), Some(("b", "length")));
+        assert_eq!(broken(&bounds, 70, true), Some(("a", "length")));
+        assert_eq!(broken(&bounds, 30, false), None);
     }
 }

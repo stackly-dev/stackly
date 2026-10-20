@@ -3,8 +3,8 @@
 
 use stackly_core::provider::ApplyClass;
 use stackly_core::secret::{
-    ChangeStatus, ConflictReason, EffectKind, FieldContext, PutRequest, PutTarget, PutWarning,
-    SecretError, SecretFieldRule, SecretInput,
+    ChangeStatus, ConflictReason, EffectKind, FieldContext, InvalidValueReason, PutRequest,
+    PutTarget, PutWarning, SecretError, SecretFieldRule, SecretInput,
 };
 use stackly_domain::{
     AuditActor, AuditResult, RegistryError, ResourceRevision, SecretOrigin, SecretOwner,
@@ -613,6 +613,7 @@ fn a_value_outside_its_field_bounds_fails_before_the_store_without_naming_the_va
             field: field_name("adminPassword"),
             min_length: 8,
             max_length: Some(10),
+            reason: InvalidValueReason::Length,
         }
     );
     assert_eq!(err.code().as_str(), "secret.invalid_value");
@@ -685,7 +686,13 @@ fn a_store_failure_stops_the_put_and_is_audited() {
         ))
         .unwrap_err();
 
-    assert_eq!(err, SecretError::Store(SecretStoreError::Locked));
+    assert_eq!(
+        err,
+        SecretError::Store {
+            reference: target.clone(),
+            error: SecretStoreError::Locked
+        }
+    );
     assert_eq!(err.code().as_str(), "secret.store_locked");
     assert!(harness.view(&target).is_none());
     let audit = harness.audit();

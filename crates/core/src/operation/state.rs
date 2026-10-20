@@ -8,10 +8,10 @@ use std::sync::{Arc, Mutex};
 
 use jiff::Timestamp;
 use stackly_domain::{
-    CreatedRecord, DetailKey, ErrorCodeName, FailureError, InterruptPolicy, JournalStep,
-    JournalView, LockKey, Operation, OperationCursor, OperationId, OperationJournal, OperationKind,
-    OperationQuery, OperationState, Progress, RecoveryHint, Registry, RegistryError, StepState,
-    WriteBatch, WriteOp,
+    CreatedRecord, CreatedSeq, DetailKey, ErrorCodeName, FailureError, InterruptPolicy,
+    JournalStep, JournalView, LockKey, Operation, OperationCursor, OperationId, OperationJournal,
+    OperationKind, OperationQuery, OperationState, Progress, RecoveryHint, Registry, RegistryError,
+    StepSeq, StepState, WriteBatch, WriteOp,
 };
 use tokio::sync::{Mutex as AsyncMutex, watch};
 use tokio::time::Instant;
@@ -21,7 +21,9 @@ use super::{
     RecoveryAction, lock,
 };
 
-/// The rows of one operation as the engine last committed them.
+/// The rows of one operation as the engine last committed them, plus the
+/// steps and created records changed in memory after their own commit
+/// failed, which the next batch writes.
 #[derive(Debug, Clone)]
 pub(crate) struct OpRecord {
     pub(crate) operation: Operation,
@@ -29,17 +31,60 @@ pub(crate) struct OpRecord {
     pub(crate) steps: Vec<JournalStep>,
     pub(crate) created: Vec<CreatedRecord>,
     pub(crate) locks: Vec<LockKey>,
+    unwritten_steps: Vec<StepSeq>,
+    unwritten_created: Vec<CreatedSeq>,
 }
 
 impl OpRecord {
     pub(crate) fn from_view(operation: Operation, view: JournalView) -> Self {
+        Self::new(
+            operation,
+            view.journal,
+            view.steps,
+            view.created,
+            view.locks,
+        )
+    }
+
+    pub(crate) const fn new(
+        operation: Operation,
+        journal: OperationJournal,
+        steps: Vec<JournalStep>,
+        created: Vec<CreatedRecord>,
+        locks: Vec<LockKey>,
+    ) -> Self {
         Self {
             operation,
-            journal: view.journal,
-            steps: view.steps,
-            created: view.created,
-            locks: view.locks,
+            journal,
+            steps,
+            created,
+            locks,
+            unwritten_steps: Vec::new(),
+            unwritten_created: Vec::new(),
         }
+    }
+
+    /// Remembers that the step `seq` changed in memory only, because its
+    /// commit failed, so the next batch writes it (spec 0007, "kalau
+    /// tulisan itu gagal, hasilnya disimpan di memori dan ditulis di batch
+    /// akhir").
+    pub(crate) fn mark_unwritten_step(&mut self, seq: StepSeq) {
+        if !self.unwritten_steps.contains(&seq) {
+            self.unwritten_steps.push(seq);
+        }
+    }
+
+    /// Remembers that the created record `seq` changed in memory only.
+    pub(crate) fn mark_unwritten_created(&mut self, seq: CreatedSeq) {
+        if !self.unwritten_created.contains(&seq) {
+            self.unwritten_created.push(seq);
+        }
+    }
+
+    /// Forgets what was unwritten, once a batch wrote it.
+    fn written(&mut self) {
+        self.unwritten_steps.clear();
+        self.unwritten_created.clear();
     }
 
     /// The step that runs now, if any.
@@ -49,12 +94,13 @@ impl OpRecord {
             .find(|step| step.state() == StepState::Running)
     }
 
-    /// The upsert of every step in `next` that differs from `self`.
+    /// The upsert of every step in `next` that differs from `self` or
+    /// that `self` changed without writing it.
     pub(crate) fn changed_steps(&self, next: &Self) -> Vec<WriteOp> {
         let id = next.operation.id();
         next.steps
             .iter()
-            .filter(|step| !self.steps.contains(step))
+            .filter(|step| !self.steps.contains(step) || self.unwritten_steps.contains(&step.seq()))
             .map(|step| WriteOp::UpsertStep {
                 operation: id,
                 step: step.clone(),
@@ -63,12 +109,14 @@ impl OpRecord {
     }
 
     /// The upsert of every created record in `next` that differs from
-    /// `self`.
+    /// `self` or that `self` changed without writing it.
     pub(crate) fn changed_created(&self, next: &Self) -> Vec<WriteOp> {
         let id = next.operation.id();
         next.created
             .iter()
-            .filter(|record| !self.created.contains(record))
+            .filter(|record| {
+                !self.created.contains(record) || self.unwritten_created.contains(&record.seq())
+            })
             .map(|record| WriteOp::UpsertCreated {
                 operation: id,
                 record: record.clone(),
@@ -274,8 +322,10 @@ impl Inner {
     {
         let now = self.now();
         let mut next = record.clone();
-        let extra = change(&mut next, now)?;
+        // Folded before the change, while the state still takes progress,
+        // so a commit that ends the run carries the last value (AC-13).
         let progressed = self.fold_progress(handle, &mut next, now);
+        let extra = change(&mut next, now)?;
         next.operation.touch(now);
         let mut ops = vec![
             WriteOp::UpdateOperation {
@@ -298,6 +348,7 @@ impl Inner {
         }
         let shown = visible(record, &next);
         *record = next;
+        record.written();
         self.after_commit(handle, record, shown);
         Ok(())
     }

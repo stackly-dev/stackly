@@ -56,7 +56,10 @@ impl SecretService {
             drop(guard);
             return match deleted {
                 Ok(()) | Err(SecretStoreError::NotFound) => Ok(Removed::Removed),
-                Err(error) => Err(SecretError::Store(error)),
+                Err(error) => Err(SecretError::Store {
+                    reference: reference.clone(),
+                    error,
+                }),
             };
         };
         let owned = match view.record.owner {
@@ -114,7 +117,12 @@ impl SecretService {
                     reference: reference.clone(),
                 });
             }
-            Err(error) => return fail(SecretError::Store(error)),
+            Err(error) => {
+                return fail(SecretError::Store {
+                    reference: reference.clone(),
+                    error,
+                });
+            }
         };
         self.deps.redactor.learn(&value);
         let audit = self.audit_row(
@@ -202,7 +210,10 @@ impl SecretService {
         match self.store().delete(reference, caller.interaction) {
             Ok(()) | Err(SecretStoreError::NotFound) => {}
             Err(store) => {
-                let error = SecretError::Store(store);
+                let error = SecretError::Store {
+                    reference: reference.clone(),
+                    error: store,
+                };
                 let mut restored = view.record.clone();
                 restored.revision = stored.next();
                 let audit = self.audit_row(
