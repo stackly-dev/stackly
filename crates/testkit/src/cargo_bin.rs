@@ -8,7 +8,7 @@ use std::sync::{Mutex, OnceLock, PoisonError};
 
 /// The target folder for these builds, so they never wait on the build
 /// lock of the `cargo test` that runs them.
-const TARGET_DIR: &str = "target/testkit-bin";
+pub(crate) const TARGET_DIR: &str = "target/testkit-bin";
 
 /// Builds `bin` of `package` once per test process and returns the path of
 /// the binary.
@@ -60,7 +60,7 @@ fn build(package: &str, bin: &str) -> PathBuf {
 }
 
 /// The workspace root, two levels above this crate's manifest folder.
-fn workspace_root() -> PathBuf {
+pub(crate) fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)

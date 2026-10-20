@@ -2,6 +2,41 @@
 
 _Langkah diturunkan dari acceptance criteria spec 0014. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27._
 
+## Milestone 1: Development root seed
+
+Langkah build 1 dan 2. Seed berjalan sendiri; belum ada daemon asli yang menjalankan instance dari root nya (itu Milestone 3).
+
+Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua hal:
+
+- `install_fake_runtime` sudah publik dari langkah 13 spec 0010, jadi `seed_fake` memakainya dan tidak membuat fungsi baru. Pemindahan helper commit langkah 14 (`seed_root` di `apps/daemon/tests/supervisor/support.rs`) ke `seed_fake` belum dilakukan, karena folder itu di luar file yang boleh diubah sesi ini; hasilnya ada dua helper yang setara sampai sesi lain memindahkannya.
+- Registry hanya mencari provider revision lewat kunci lengkap (nama, revision, digest), jadi `Conflict` untuk "nama dan revision sama, digest berbeda" dideteksi dari folder pinned: ada folder digest lain di bawah folder revision yang sama. Runtime dibandingkan lewat `runtimes()` (software `fake`, versi sama) dengan SHA-256 binary.
+- Penolakan root (`validate_root_override`, lock yang dipegang `stacklyd`, registry recovery) terjadi sebelum `seed_fake`, dan `Leftover` serta `Conflict` terjadi sebelum tulisan apa pun; `prepare_layout` dan pembukaan registry tetap boleh membuat folder layout dan registry kosong di root yang lolos pemeriksaan.
+- `--json` mencetak `root` sebagai path canonical dari `--root`.
+- `createCommand` memakai `demo` sebagai nama instance dan tidak memuat `--secret`. Daemon saat ini belum memakai `generate` untuk secret field yang tidak dikirim (`settings.authToken` wajib di skema paket fake), jadi create dari perintah itu gagal `instance.settings_invalid` sampai `--secret` (Milestone 5) atau default `generate` di daemon ada. Test AC-1 memberi `authToken` lewat client IPC.
+
+### UI / manual
+
+- [ ] `cargo build -p stackly-fake-server -p stacklyd --example skeleton_seed`, lalu `R="$(mktemp -d /tmp/stackly-seed.XXXXXX)"` dan `target/debug/examples/skeleton_seed --root "$R"` → empat baris `root`, `runtime`, `provider`, `next`; `next` adalah satu perintah `STACKLY_ROOT=<R> stackly instance create demo --runtime <uuid> --provider testing/fake --revision 0.1.0 --wait` → AC-1
+- [ ] Ulangi perintah yang sama → output identik (runtime ID sama) dan `find "$R/data/runtimes" "$R/data/providers"` tidak berubah → AC-1
+- [ ] `target/debug/examples/skeleton_seed` tanpa argumen → pesan clap dan exit 2; `--root relatif` dan `--root "$R/tidak-ada"` → satu baris `error: ...` dan exit 1 → AC-2
+
+### Commands
+
+- [ ] `cargo test -p stackly-core --test fixture_seed` → root kosong (satu commit, tiga record), ulang tanpa tulisan, runtime saja, provider saja, folder tanpa baris (`Leftover` runtime dan provider), kedua `Conflict` → AC-1, AC-2
+- [ ] `cargo test -p stacklyd --test skeleton_seed` → seed lewat binary example (JSON, teks, idempoten), create lewat daemon asli `succeeded`, tanpa `--root` exit 2, root relatif atau tidak ada, daemon yang hidup, binary fake yang tidak ada (pesan `cargo build -p stackly-fake-server`), folder tanpa baris registry, dan binary lain untuk versi yang sama; setelah setiap penolakan folder runtime dan paket serta jumlah baris sama → AC-1, AC-2
+- [ ] `cargo tree -p stacklyd -p stackly-cli --edges features,no-dev -i stackly-core` → graph hanya memuat fitur `default`, tanpa `fixture` → AC-3
+- [ ] `cargo xtask check-deps` → 13 crate lulus dengan example dan dependency dev `fixture` di tempatnya → AC-3
+- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core`, dan `cargo xtask evidence check` → lulus → AC-1 sampai AC-3
+
+### Acceptance-criteria coverage
+
+- AC-1 · `fixture_seed` (record dan idempotensi), `skeleton_seed` (output, ulang, daemon asli menerima create)
+- AC-2 · `fixture_seed` (`Leftover`, `Conflict`), `skeleton_seed` (parser, root, lock, binary, leftover, conflict)
+- AC-3 · `cargo tree` dan `check-deps`; penolakan setiap crate fixture yang melanggar sudah diuji langkah 15 spec 0010 (`b08d4f5`)
+- AC-4 · belum, milik Milestone 3
+- AC-5 sampai AC-8 · milik Milestone 2
+- AC-9 sampai AC-19 · belum, milik Milestone 3, 4, dan 5
+
 ## Milestone 2: CLI instance commands
 
 Langkah build 3 dan 4. Semua langkah di bagian ini berjalan terhadap daemon skrip (`apps/cli/tests/common/scripted.rs`); `stacklyd` asli menunggu Milestone 3.
