@@ -265,8 +265,8 @@ impl Rig {
 
     /// Every file a secret value must stay out of, as lossy text: the
     /// daemon log and stderr, the registry with its `-wal` and `-shm`, the
-    /// runtime root (spool files, not the `secrets/` folders, which hold the
-    /// sensitive config while an instance runs), and every file under
+    /// runtime root (spool files, and any `secrets/` folder, which must be
+    /// gone once the instance has stopped), and every file under
     /// `instances/<id>/` in the data root (the instance manifest, `config/`,
     /// `data/`, and `temp/`).
     fn scanned_files(&self) -> Vec<(String, String)> {
@@ -285,9 +285,7 @@ impl Rig {
             for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    if path.file_name().is_some_and(|name| name != "secrets") {
-                        pending.push(path);
-                    }
+                    pending.push(path);
                 } else {
                     files.push(path);
                 }
@@ -701,9 +699,11 @@ fn the_fixture_credential_reaches_the_init_helper_and_leaves_no_trace_anywhere_e
     );
     let (code, stopped) = rig.json(&["instance", "stop", &id, "--wait"]);
     assert_eq!(code, Some(0), "{stopped}");
+    let secrets_dir = rig.secrets_dir(&id);
     assert!(
-        !rig.secrets_dir(&id).exists(),
-        "the stop removed the secrets folder of the instance"
+        !secrets_dir.exists(),
+        "the stop left the secrets folder of the instance at {}",
+        secrets_dir.display()
     );
 
     credential.assert_absent(&rig.transcript.borrow(), "the CLI output");
