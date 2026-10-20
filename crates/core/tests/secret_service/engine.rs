@@ -13,11 +13,13 @@ use stackly_core::operation::{
 };
 use stackly_core::prepare_layout;
 use stackly_core::secret::{
-    PutRequest, PutTarget, SECRET_REF_COMPENSATOR, SecretCaller, SecretInput, SecretRefCompensator,
+    ConflictReason, NeedsSecret, PutRequest, PutTarget, SECRET_REF_COMPENSATOR, SecretCaller,
+    SecretError, SecretInput, SecretRefCompensator,
 };
 use stackly_domain::{
-    CreatedItem, CreatedState, DetailKey, ErrorCodeName, InstanceId, JournalPayload, OperationId,
-    OperationKind, OperationResource, OperationState, Registry, SecretOwner, SecretRef,
+    CreatedItem, CreatedState, DetailKey, ErrorCodeName, InstanceId, JournalPayload,
+    NeedsSecretItem, NeedsSecretReason, OperationId, OperationKind, OperationResource,
+    OperationState, Registry, SecretOwner, SecretRef,
 };
 use stackly_platform::WriteMode;
 use stackly_testkit::evidence::{Kind, evidence};
@@ -115,6 +117,19 @@ impl OperationError for InitFailed {
     }
 }
 
+/// Fails its one step with the error it was given.
+struct FailsWith(SecretError);
+
+impl OperationWork for FailsWith {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("secrets".parse().expect("a step name")))
+                .await?;
+            Err(WorkError::Failed(Box::new(self.0)))
+        })
+    }
+}
+
 struct Engine {
     harness: Arc<Harness>,
     engine: OperationEngine,
@@ -139,6 +154,27 @@ impl Engine {
         engine.recover().await.expect("an empty registry recovers");
         engine.start();
         Self { harness, engine }
+    }
+
+    /// Runs an operation whose only step fails with `error`.
+    async fn fail_with(&self, error: SecretError) -> OperationDetailView {
+        let request = BeginRequest {
+            kind: OperationKind::CreateInstance,
+            resource: OperationResource::Manager,
+            creates_resource: false,
+            extra_locks: Vec::new(),
+            busy: BusyPolicy::Queue,
+            expected_revision: None,
+            origin: Origin::Background,
+            input: JournalPayload::empty(),
+            work: Box::new(FailsWith(error)),
+            precheck: None,
+        };
+        let id = match self.engine.begin(request).await {
+            Ok(BeginOutcome::Created(view)) => view.operation.id(),
+            other => panic!("expected a created operation, got {other:?}"),
+        };
+        self.settled(id).await
     }
 
     async fn run(
@@ -353,4 +389,184 @@ async fn without_the_secret_ref_compensator_the_compensation_fails() {
         Some("compensator_missing")
     );
     assert!(engine.harness.store().contains(&target));
+}
+
+fn detail_of(detail: &OperationDetailView, key: &str) -> Option<String> {
+    detail
+        .view
+        .journal
+        .failure_error()
+        .expect("the operation failed with an error")
+        .details()
+        .iter()
+        .find(|(name, _)| name.as_str() == key)
+        .map(|(_, value)| value.clone())
+}
+
+fn field_of(item: &stackly_domain::FailureItem, key: &str) -> Option<String> {
+    item.fields()
+        .iter()
+        .find(|(name, _)| name.as_str() == key)
+        .map(|(_, value)| value.clone())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_needs_secret_failure_stores_one_reference_item_per_unreadable_reference() {
+    let engine = Engine::new().await;
+    let needs = NeedsSecret::new(vec![
+        NeedsSecretItem::new(
+            reference("local:erp/postgres/admin"),
+            NeedsSecretReason::StoreLocked,
+            true,
+        ),
+        NeedsSecretItem::new(
+            reference("local:erp/postgres/root"),
+            NeedsSecretReason::Missing,
+            false,
+        ),
+    ]);
+
+    let detail = engine.fail_with(SecretError::NeedsSecret { needs }).await;
+
+    assert_eq!(
+        failure_code(&detail).as_deref(),
+        Some("secret.needs_secret")
+    );
+    let items = detail
+        .view
+        .journal
+        .failure_error()
+        .expect("the failure error")
+        .items();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].kind().as_str(), "reference");
+    assert_eq!(
+        field_of(&items[0], "reference").as_deref(),
+        Some("local:erp/postgres/admin")
+    );
+    assert_eq!(
+        field_of(&items[0], "reason").as_deref(),
+        Some("store_locked")
+    );
+    assert_eq!(
+        field_of(&items[0], "generateAllowed").as_deref(),
+        Some("true")
+    );
+    assert_eq!(field_of(&items[1], "reason").as_deref(), Some("missing"));
+    assert_eq!(detail_of(&detail, "count").as_deref(), Some("2"));
+    assert_eq!(detail_of(&detail, "omitted"), None);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn items_above_the_limit_are_counted_in_omitted_exactly_once() {
+    let engine = Engine::new().await;
+    let references = (0..120)
+        .map(|n| {
+            NeedsSecretItem::new(
+                reference(&format!("local:erp/many/ref{n}")),
+                NeedsSecretReason::Missing,
+                true,
+            )
+        })
+        .collect();
+
+    let detail = engine
+        .fail_with(SecretError::NeedsSecret {
+            needs: NeedsSecret::new(references),
+        })
+        .await;
+
+    let error = detail
+        .view
+        .journal
+        .failure_error()
+        .expect("the failure error");
+    assert_eq!(error.items().len(), 100);
+    assert_eq!(detail_of(&detail, "count").as_deref(), Some("120"));
+    assert_eq!(
+        detail_of(&detail, "omitted").as_deref(),
+        Some("20"),
+        "the engine counts the dropped items once, and the details add nothing"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_conflict_in_use_and_a_confirmation_store_their_use_and_effect_items() {
+    use stackly_core::secret::{EffectKind, SecretEffect};
+    use stackly_domain::{SecretUse, SecretUser};
+
+    let engine = Engine::new().await;
+    let target = reference("local:erp/postgres/admin");
+    let user = SecretUser::Instance(InstanceId::generate());
+    let field = "adminPassword".parse().expect("a field name");
+    let in_use = SecretError::Conflict {
+        reference: target.clone(),
+        reason: ConflictReason::InUse(vec![SecretUse::new(
+            target.clone(),
+            user,
+            "adminPassword".parse().expect("a field name"),
+        )]),
+    };
+    let confirmation = SecretError::ConfirmationRequired {
+        reference: target.clone(),
+        effects: vec![SecretEffect::new(user, field, EffectKind::StoredOnly)],
+    };
+
+    let conflict = engine.fail_with(in_use).await;
+    let confirm = engine.fail_with(confirmation).await;
+
+    let uses = conflict
+        .view
+        .journal
+        .failure_error()
+        .expect("an error")
+        .items();
+    assert_eq!(uses.len(), 1);
+    assert_eq!(uses[0].kind().as_str(), "use");
+    assert_eq!(
+        field_of(&uses[0], "resourceKind").as_deref(),
+        Some("instance")
+    );
+    assert_eq!(
+        field_of(&uses[0], "resourceId"),
+        Some(user.id().to_string())
+    );
+    assert_eq!(
+        field_of(&uses[0], "field").as_deref(),
+        Some("adminPassword")
+    );
+    assert_eq!(detail_of(&conflict, "reason").as_deref(), Some("in_use"));
+    let effects = confirm
+        .view
+        .journal
+        .failure_error()
+        .expect("an error")
+        .items();
+    assert_eq!(effects.len(), 1);
+    assert_eq!(effects[0].kind().as_str(), "effect");
+    assert_eq!(
+        field_of(&effects[0], "effect").as_deref(),
+        Some("stored_only")
+    );
+    assert_eq!(detail_of(&confirm, "omitted"), None);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_store_that_already_holds_the_item_fails_with_the_reference_and_the_reason() {
+    let engine = Engine::new().await;
+    let target = reference("local:erp/postgres/admin");
+
+    let detail = engine
+        .fail_with(SecretError::Store {
+            reference: target.clone(),
+            error: stackly_platform::SecretStoreError::AlreadyExists,
+        })
+        .await;
+
+    assert_eq!(failure_code(&detail).as_deref(), Some("secret.conflict"));
+    assert_eq!(detail_of(&detail, "reference"), Some(target.to_string()));
+    assert_eq!(
+        detail_of(&detail, "reason").as_deref(),
+        Some("already_exists")
+    );
 }

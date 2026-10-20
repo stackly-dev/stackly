@@ -3,8 +3,8 @@
 //! `put` ([`classify_create_failure`], AC-23).
 
 use stackly_domain::{
-    DetailKey, ErrorCodeName, NeedsSecretItem, NeedsSecretReason, RegistryError, ResourceRevision,
-    SecretFieldName, SecretRef, SecretUse,
+    DetailKey, ErrorCodeName, FailureItem, NeedsSecretItem, NeedsSecretReason, ReasonCode,
+    RegistryError, ResourceRevision, SecretFieldName, SecretRef, SecretUse,
 };
 use stackly_platform::SecretStoreError;
 
@@ -74,6 +74,14 @@ pub mod codes {
 pub struct NeedsSecret {
     /// Every reference that could not be read.
     pub references: Vec<NeedsSecretItem>,
+}
+
+impl NeedsSecret {
+    /// Bundles the references in the order given.
+    #[must_use]
+    pub const fn new(references: Vec<NeedsSecretItem>) -> Self {
+        Self { references }
+    }
 }
 
 /// Why [`SecretError::Conflict`] reports `secret.conflict`.
@@ -277,11 +285,52 @@ fn key(text: &str) -> DetailKey {
         .expect("the detail keys of spec 0011 are camelCase constants")
 }
 
-/// The most items an error lists; the rest is counted in `omitted`.
-const ITEMS_MAX: usize = 100;
+/// Builds an item of the catalog entry's kind; every field value is a short
+/// token or an id, never a secret value.
+fn item(kind: &str, fields: &[(&str, String)]) -> Option<FailureItem> {
+    let kind: ReasonCode = kind.parse().ok()?;
+    let fields = fields
+        .iter()
+        .map(|(name, value)| Some((name.parse::<DetailKey>().ok()?, value.clone())))
+        .collect::<Option<Vec<_>>>()?;
+    FailureItem::new(kind, fields).ok()
+}
 
-fn omitted(count: usize) -> String {
-    count.saturating_sub(ITEMS_MAX).to_string()
+/// The `use` item of a reference that is still used.
+fn use_item(used: &SecretUse) -> Option<FailureItem> {
+    item(
+        "use",
+        &[
+            ("resourceKind", used.user.kind_code().to_owned()),
+            ("resourceId", used.user.id().to_string()),
+            ("field", used.field.to_string()),
+        ],
+    )
+}
+
+/// The `effect` item of a replace that changes only the stored copy.
+fn effect_item(effect: &SecretEffect) -> Option<FailureItem> {
+    item(
+        "effect",
+        &[
+            ("resourceKind", effect.user.kind_code().to_owned()),
+            ("resourceId", effect.user.id().to_string()),
+            ("field", effect.field.to_string()),
+            ("effect", effect.effect.as_code().to_owned()),
+        ],
+    )
+}
+
+/// The `reference` item of a reference that cannot be read.
+fn reference_item(needs: &NeedsSecretItem) -> Option<FailureItem> {
+    item(
+        "reference",
+        &[
+            ("reference", needs.reference.to_string()),
+            ("reason", needs.reason.as_code().to_owned()),
+            ("generateAllowed", needs.generate_allowed.to_string()),
+        ],
+    )
 }
 
 impl OperationError for SecretError {
@@ -304,21 +353,8 @@ impl OperationError for SecretError {
             Self::Conflict {
                 reference: r,
                 reason,
-            } => {
-                let listed = match reason {
-                    ConflictReason::AlreadyExists => 0,
-                    ConflictReason::InUse(uses) => uses.len(),
-                };
-                vec![
-                    reference(r),
-                    (key("reason"), reason.as_code().to_owned()),
-                    (key("omitted"), omitted(listed)),
-                ]
-            }
-            Self::ConfirmationRequired {
-                reference: r,
-                effects,
-            } => vec![reference(r), (key("omitted"), omitted(effects.len()))],
+            } => vec![reference(r), (key("reason"), reason.as_code().to_owned())],
+            Self::ConfirmationRequired { reference: r, .. } => vec![reference(r)],
             Self::InvalidValue {
                 field,
                 min_length,
@@ -341,10 +377,9 @@ impl OperationError for SecretError {
                 (key("expected"), expected.to_string()),
                 (key("actual"), actual.to_string()),
             ],
-            Self::NeedsSecret { needs } => vec![
-                (key("count"), needs.references.len().to_string()),
-                (key("omitted"), omitted(needs.references.len())),
-            ],
+            Self::NeedsSecret { needs } => {
+                vec![(key("count"), needs.references.len().to_string())]
+            }
             Self::Store {
                 reference: r,
                 error: SecretStoreError::NotFound,
@@ -357,6 +392,16 @@ impl OperationError for SecretError {
                 error: SecretStoreError::Backend { code },
                 ..
             } => vec![(key("code"), code.to_string())],
+            Self::Store {
+                reference: r,
+                error: SecretStoreError::AlreadyExists,
+            } => vec![
+                reference(r),
+                (
+                    key("reason"),
+                    ConflictReason::AlreadyExists.as_code().to_owned(),
+                ),
+            ],
             Self::Registry(RegistryError::RevisionConflict {
                 expected, actual, ..
             }) => vec![
@@ -367,6 +412,25 @@ impl OperationError for SecretError {
             | Self::WriteBackFailed { .. }
             | Self::Registry(_)
             | Self::Internal { .. } => Vec::new(),
+        }
+    }
+
+    /// The items of the three codes that list them. The engine keeps the
+    /// first 100 and counts the rest in `omitted`, so the details never
+    /// carry that count themselves.
+    fn items(&self) -> Vec<FailureItem> {
+        match self {
+            Self::NeedsSecret { needs } => {
+                needs.references.iter().filter_map(reference_item).collect()
+            }
+            Self::Conflict {
+                reason: ConflictReason::InUse(uses),
+                ..
+            } => uses.iter().filter_map(use_item).collect(),
+            Self::ConfirmationRequired { effects, .. } => {
+                effects.iter().filter_map(effect_item).collect()
+            }
+            _ => Vec::new(),
         }
     }
 }

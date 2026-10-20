@@ -4,7 +4,8 @@
 
 use stackly_domain::Os;
 use stackly_domain::{
-    DetailKey, ErrorCodeName, InstanceId, InstanceLifecycle, Pid, RegistryError, ResourceRevision,
+    DetailKey, ErrorCodeName, FailureItem, InstanceId, InstanceLifecycle, Pid, RegistryError,
+    ResourceRevision,
 };
 use stackly_platform::ProcessError;
 
@@ -444,6 +445,7 @@ impl OperationError for SupervisorError {
             Self::SignalRefused { pid } => vec![(key("pid"), pid.to_string())],
             Self::ProcessUnsupported { os } => vec![(key("os"), os.to_string())],
             Self::Secret(error) => OperationError::details(error),
+            Self::SecretInArgv(error) => vec![(key("reason"), error.reason.as_code().to_owned())],
             Self::RevisionMismatch {
                 expected, actual, ..
             } => vec![
@@ -455,10 +457,16 @@ impl OperationError for SupervisorError {
             | Self::InstanceStopping
             | Self::InstanceRetained
             | Self::IdentityCaptureFailed
-            | Self::SecretInArgv(_)
             | Self::Registry(_)
             | Self::NotFound(_)
             | Self::Internal { .. } => Vec::new(),
+        }
+    }
+
+    fn items(&self) -> Vec<FailureItem> {
+        match self {
+            Self::Secret(error) => OperationError::items(error),
+            _ => Vec::new(),
         }
     }
 }
@@ -473,6 +481,38 @@ mod tests {
             address: "127.0.0.1".to_owned(),
             port: 18080,
         }
+    }
+
+    #[test]
+    fn a_secret_in_argv_names_the_rule_it_broke_and_a_secret_error_delegates_its_items() {
+        use crate::secret::NeedsSecret;
+        use crate::secret::delivery::SecretInArgvReason;
+        use stackly_domain::{NeedsSecretItem, NeedsSecretReason, SecretRef};
+
+        let argv = SupervisorError::SecretInArgv(SecretInArgv {
+            index: 1,
+            field: "adminPassword".parse().expect("a setting name"),
+            reason: SecretInArgvReason::AssignsValue,
+        });
+        let details: Vec<_> = argv
+            .details()
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect();
+        assert_eq!(details, [("reason".to_owned(), "assigns_value".to_owned())]);
+
+        let reference = SecretRef::parse("local:erp/postgres/admin").expect("a reference");
+        let needs = SupervisorError::Secret(SecretError::NeedsSecret {
+            needs: NeedsSecret::new(vec![NeedsSecretItem::new(
+                reference,
+                NeedsSecretReason::StoreLocked,
+                false,
+            )]),
+        });
+        let items = OperationError::items(&needs);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].kind().as_str(), "reference");
+        assert!(OperationError::items(&argv).is_empty());
     }
 
     #[test]
