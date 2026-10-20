@@ -1273,6 +1273,117 @@ mod tests {
         assert_eq!(codes(&issues), [IssueCode::PathNotPermitted]);
     }
 
+    /// Spec 0009 AC-20: every folder token other than the secrets folder is
+    /// refused at the start of a sensitive destination once the folder is
+    /// managed, so none of them is a way around the rule.
+    #[test]
+    fn a_sensitive_destination_in_any_managed_folder_but_secrets_is_refused_with_token_not_allowed_here()
+     {
+        let all = BTreeSet::from([
+            InstanceDir::Config,
+            InstanceDir::Data,
+            InstanceDir::Run,
+            InstanceDir::Temp,
+            InstanceDir::Logs,
+        ]);
+        for dir in ["config", "data", "run", "temp", "logs"] {
+            let text = format!("${{instance.{dir}}}/fake.json");
+            let issues = check_with_managed(&all, |e, i| {
+                check_path(
+                    &text,
+                    PathPosition::ConfigDestination { sensitive: true },
+                    e,
+                    i,
+                    "x",
+                )
+            })
+            .unwrap_err();
+
+            assert_eq!(codes(&issues), [IssueCode::TokenNotAllowedHere], "{dir}");
+            assert!(issues[0].message.contains("${instance.secrets}"), "{dir}");
+            assert!(
+                issues[0].message.contains(dir),
+                "{dir}: {}",
+                issues[0].message
+            );
+        }
+    }
+
+    /// Spec 0009 AC-20: a folder missing from `managedFilesystem` keeps its
+    /// single `path_not_permitted`, whichever folder it is; the refusal of
+    /// the sensitive position never adds a second issue.
+    #[test]
+    fn path_not_permitted_wins_over_token_not_allowed_here_for_every_unmanaged_folder() {
+        let all = [
+            InstanceDir::Config,
+            InstanceDir::Data,
+            InstanceDir::Run,
+            InstanceDir::Temp,
+            InstanceDir::Logs,
+        ];
+        for dir in all {
+            let managed: BTreeSet<_> = all.into_iter().filter(|other| *other != dir).collect();
+            let text = format!("${{instance.{}}}/fake.json", dir.as_code());
+            let issues = check_with_managed(&managed, |e, i| {
+                check_path(
+                    &text,
+                    PathPosition::ConfigDestination { sensitive: true },
+                    e,
+                    i,
+                    "x",
+                )
+            })
+            .unwrap_err();
+
+            assert_eq!(codes(&issues), [IssueCode::PathNotPermitted], "{text}");
+        }
+    }
+
+    /// Spec 0009 AC-20: a sensitive destination in the secrets folder may
+    /// name one intermediate folder, and no more.
+    #[test]
+    fn a_nested_secrets_destination_keeps_its_intermediate_folder_and_stops_at_two_components() {
+        let nested = check(|e, i| {
+            check_path(
+                "${instance.secrets}/conf/server.json",
+                PathPosition::ConfigDestination { sensitive: true },
+                e,
+                i,
+                "x",
+            )
+        });
+        let deep = check(|e, i| {
+            check_path(
+                "${instance.secrets}/a/b/c.json",
+                PathPosition::ConfigDestination { sensitive: true },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+        let escape = check(|e, i| {
+            check_path(
+                "${instance.secrets}/../fake.json",
+                PathPosition::ConfigDestination { sensitive: true },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+
+        assert_eq!(
+            nested,
+            Ok(PathExpr {
+                base: PathBase::Secrets,
+                components: vec!["conf".into(), "server.json".into()],
+            })
+        );
+        assert_eq!(codes(&deep), [IssueCode::InvalidValue]);
+        assert_eq!(codes(&escape), [IssueCode::PathEscapesScope]);
+    }
+
     #[test]
     fn a_plain_destination_may_start_with_any_managed_folder_but_not_the_secrets_folder() {
         for dir in ["config", "data", "run"] {
