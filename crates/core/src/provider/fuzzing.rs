@@ -152,7 +152,9 @@ pub fn template(data: &[u8]) {
 /// secret in a value other than a whole env value of a command that
 /// resolves secrets, a flag from a free setting, an executable with text
 /// around it, a path component that escapes its folder, the secrets folder
-/// outside a sensitive destination, a secret file name that is not one
+/// outside a sensitive destination, a sensitive destination outside the
+/// secrets folder (so a destination has the secrets folder as its base if
+/// and only if it is sensitive), a secret file name that is not one
 /// component, or a socket name longer than 15 bytes.
 pub fn interpolation(data: &[u8]) {
     let Ok(text) = std::str::from_utf8(data) else {
@@ -245,10 +247,16 @@ pub fn interpolation(data: &[u8]) {
                 .all(|component| is_component(component)),
             "a path component breaks the charset or is . or .."
         );
+        let is_destination = matches!(position, PathPosition::ConfigDestination { .. });
+        let is_sensitive_destination =
+            position == (PathPosition::ConfigDestination { sensitive: true });
         assert!(
-            expr.base != PathBase::Secrets
-                || position == (PathPosition::ConfigDestination { sensitive: true }),
+            expr.base != PathBase::Secrets || is_sensitive_destination,
             "the secrets folder starts a path that is not a sensitive destination"
+        );
+        assert!(
+            !is_destination || (expr.base == PathBase::Secrets) == is_sensitive_destination,
+            "a sensitive destination is outside the secrets folder, or a plain one is inside it"
         );
         let base = expr.base.path(&context.paths);
         let full = expr

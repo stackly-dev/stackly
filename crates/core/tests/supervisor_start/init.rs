@@ -46,6 +46,10 @@ async fn init_runs_the_plan_with_the_secret_on_stdin_and_the_lock_at_fd_three() 
         ]
     );
     assert_eq!(step.stdin_len, Some(TOKEN.len()));
+    assert!(
+        config_file(&rig, id).is_file(),
+        "the sensitive config is written in the secrets folder while the step runs"
+    );
     let stdin = rig
         .processes()
         .take_stdin(step.pid)
@@ -65,8 +69,8 @@ async fn init_runs_the_plan_with_the_secret_on_stdin_and_the_lock_at_fd_three() 
     assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
     assert!(instance.data_initialized_at().is_some());
     assert!(
-        config_file(&rig.paths(id)).is_file(),
-        "the config is written"
+        !config_file(&rig, id).exists(),
+        "the sensitive config is removed when the init succeeds"
     );
     let manifest = stackly_core::read_instance_manifest(&rig.platform, &rig.paths(id)).unwrap();
     assert_eq!(
@@ -110,6 +114,10 @@ async fn a_step_that_exits_with_another_code_fails_the_init_and_frees_the_lock()
     );
     // K10: the executor released the lock before the error came back.
     rig.wait_lock_free(id).await;
+    assert!(
+        !config_file(&rig, id).exists(),
+        "the sensitive config is removed when the init fails"
+    );
 }
 
 #[tokio::test]
@@ -187,10 +195,7 @@ async fn a_missing_secret_stops_the_init_before_any_side_effect() {
     );
     assert!(rig.processes().spawns().is_empty(), "no step ran");
     assert!(rig.sup.status(id).blocker.is_some(), "the blocker is set");
-    assert!(
-        !config_file(&rig.paths(id)).exists(),
-        "no config was written"
-    );
+    assert!(!config_file(&rig, id).exists(), "no config was written");
     let _ = rig.registry.instance(id);
 }
 

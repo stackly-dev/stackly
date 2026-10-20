@@ -123,3 +123,28 @@ _Review 2026-10-19 sudah berjalan dan mengonfirmasi kelima catatan ini sebagai M
 - Paket dengan 33 template memakai kode `file_too_large` untuk jumlah template, bukan untuk ukuran, dan dilaporkan sekali per template.
 - Pesan probe tcp ke endpoint udp berbunyi "tcp probes cannot use a metricsudp endpoint of that transport" (nama endpoint ada di posisi jenis transport).
 - `Issue.file` untuk error nilai settings adalah `settings`, bukan salah satu nama file di daftar spec, dan ikut ke field `file` item `issue` di wire.
+
+## Milestone 4: Config sensitif di folder secrets
+
+_Langkah 18 sampai 21 (update 2026-10-20, review F11). Jalankan dari root repo pada commit bersih; `cargo test -p stacklyd` dijalankan sendiri, bukan bersama fuzz, karena test timing nya memegang batas spec hanya tanpa beban lain._
+
+### UI / manual
+
+Tidak ada. Config sensitif adalah urusan engine, plan, dan daemon; tidak ada layar baru.
+
+### Commands
+
+- [ ] `cargo xtask provider check` → tiga baris `ok`: `testing/fake 0.3.0` dengan digest baru, `official/nats 1.0.0 eb02876b…` dan `official/traefik 1.0.0 b3e039f1…` dengan digest yang sama seperti sebelumnya → AC-14, AC-20
+- [ ] `cargo test -p stackly-core --lib provider::interpolate` → test posisi: destination `sensitive: true` yang diawali `${instance.config}`, `${instance.data}`, atau `${instance.run}` ditolak `token_not_allowed_here` dengan pesan yang menyebut `${instance.secrets}`; folder yang tidak tercantum di `managedFilesystem` tetap `path_not_permitted` saja; destination tidak sensitif tetap menerima folder terkelola dan menolak `${instance.secrets}` → AC-7, AC-20
+- [ ] `cargo test -p stackly-core --test provider_rules` → 40 test lulus, termasuk penolakan `${instance.config}/fake.json` dan `${instance.data}/fake.json` dengan satu issue `token_not_allowed_here` di `configFiles.fakeConfig.destination` per kasus plus `unknown_config_file` di langkah `renderConfig` dan entri `reload.render`, plan default fake di folder secrets, dan reload `fake-command` yang menyentuh `data`, `temp`, dan `run` → AC-20
+- [ ] `cargo test -p stackly-core --test provider_packages` → 20 test lulus: `init.cleanup` `fake-command` sama dengan `[<run>/secrets/token, <run>/secrets/conf]`, render run `fake-command` membuat folder config, folder secrets, dan `secrets/conf`, dan revision fake `0.3.0` → AC-20
+- [ ] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stackly-core --test provider_packages` lalu `git diff --stat crates/core/tests/golden` → hanya `fake/{init,run,reload}.json` dan `fake-command/{init,run,reload}.json` yang berubah, path config sensitif ada di folder secrets, `render-*.txt` tidak berubah; kembalikan dengan `git checkout` bila tidak sengaja → AC-20
+- [ ] `cargo test -p stackly-core --test supervisor_start` → config fake ada di `instance_secrets_dir/fake.json` selama langkah `Run` init dan hilang setelah init berhasil maupun gagal; start yang gagal spawn atau dibatalkan sesudah render juga menghapusnya → AC-20
+- [ ] `cargo test -p stacklyd --test skeleton` → sentinel fixture tidak ditemukan di seluruh `instances/<id>/` di root data, config sensitif fake memuat token selama instance berjalan, dan folder `secrets/` instance di runtime root tidak ada setelah `instance stop --wait` → spec 0014 AC-18
+- [ ] `cargo test -p stackly-cli` → hijau dengan revision `0.3.0` di contoh dan argumen → AC-20
+- [ ] `cargo xtask fuzz run provider_interpolation --time 600` → berjalan sampai habis tanpa temuan dengan invariant dua arah yang baru (destination memakai `PathBase::Secrets` jika dan hanya jika `sensitive`); `fuzz/artifacts/` kosong → AC-16
+
+### Acceptance-criteria coverage
+
+- AC-20 · validasi di `interpolate.rs`, invariant harness dua arah, `InitPlan.cleanup` untuk config sensitif hasil `renderConfig`, paket `fake` revision `0.3.0` dan `fake-command` yang menulis ke folder secrets, golden, seed fuzz, dan test supervisor; paket NATS dan Traefik tidak berubah
+- spec 0014 AC-18 · pindaian sentinel seluruh folder instance di root data dan folder `secrets/` instance yang hilang setelah stop, di `apps/daemon/tests/skeleton.rs`

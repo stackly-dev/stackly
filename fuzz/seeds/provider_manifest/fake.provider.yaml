@@ -4,7 +4,7 @@ metadata:
   id: testing/fake
   software: fake
   displayName: Fake Provider
-  revision: "0.2.0"
+  revision: "0.3.0"
   category: testing
   description: Dummy server for Stackly tests. Never part of the app catalog.
 compatibility:
@@ -28,7 +28,7 @@ configFiles:
   fakeConfig:
     template: templates/fake.json.tmpl
     format: json
-    destination: "${instance.config}/fake.json"
+    destination: "${instance.secrets}/fake.json"
     sensitive: true
 lifecycle:
   initialize:
@@ -47,7 +47,7 @@ lifecycle:
     executable: "${runtime.executable}"
     args:
       - serve
-      - "--config=${instance.config}/fake.json"
+      - "--config=${instance.secrets}/fake.json"
       - "--data=${instance.data}"
       - "--port=${endpoint.http.port}"
       - "--host=${endpoint.http.host}"

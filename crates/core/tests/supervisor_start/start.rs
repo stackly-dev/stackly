@@ -90,10 +90,7 @@ async fn a_start_runs_every_stage_and_ends_ready_with_final_ports() {
     assert!(spawn.spools.is_some());
     assert_eq!(spawn.stdin_len, None);
     assert_eq!(spawn.role, ChildRole::Main);
-    assert!(
-        config_file(&rig.paths(id)).is_file(),
-        "the config was rendered"
-    );
+    assert!(config_file(&rig, id).is_file(), "the config was rendered");
     assert_eq!(
         rig.processes().process_state(spawn.pid),
         Some(FakeProcessState::Running)
@@ -685,29 +682,12 @@ async fn a_spawn_the_os_refuses_fails_the_start_with_the_spawn_code() {
     );
 }
 
-/// A package whose server config is rendered into the secrets folder, the
-/// way a `config_plaintext` template is (spec 0011, mechanism 5).
-async fn rig_rendering_into_secrets() -> Rig {
-    Rig::patched(|text| {
-        replace(
-            text,
-            "destination: \"${instance.config}/fake.json\"",
-            "destination: \"${instance.secrets}/fake.json\"",
-        )
-    })
-    .await
-}
-
 #[tokio::test]
 async fn a_start_that_fails_to_spawn_removes_the_secret_material_it_rendered() {
-    let rig = rig_rendering_into_secrets().await;
+    let rig = Rig::new().await;
     let id = rig.instance(&Spec::default());
     rig.fail_spawn();
-    let rendered = rig
-        .layout
-        .layout()
-        .instance_secrets_dir(id.short_key())
-        .join("fake.json");
+    let rendered = config_file(&rig, id);
 
     let op = rig.start(id).await;
     let detail = rig.wait_state(op, OperationState::Failed).await;
@@ -721,13 +701,9 @@ async fn a_start_that_fails_to_spawn_removes_the_secret_material_it_rendered() {
 
 #[tokio::test]
 async fn a_cancel_after_the_render_and_before_any_process_runs_removes_the_secret_material() {
-    let rig = rig_rendering_into_secrets().await;
+    let rig = Rig::new().await;
     let id = rig.instance(&Spec::default());
-    let rendered = rig
-        .layout
-        .layout()
-        .instance_secrets_dir(id.short_key())
-        .join("fake.json");
+    let rendered = config_file(&rig, id);
     // The start waits before its `render` stage; the cancel is asked there
     // and is seen at the `spawn` stage, after the render wrote its files.
     let door = rig

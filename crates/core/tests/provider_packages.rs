@@ -269,7 +269,7 @@ fn the_fake_package_reads_without_writes_and_validates() {
 
     let key = package.key();
     assert_eq!(key.provider().as_str(), "testing/fake");
-    assert_eq!(key.revision().as_str(), "0.2.0");
+    assert_eq!(key.revision().as_str(), "0.3.0");
     assert_eq!(package.software().as_str(), "fake");
     assert_eq!(
         package
@@ -360,7 +360,8 @@ fn fake_command_plans_match_the_golden_files() {
 fn materialize_secret_names_a_file_in_the_secrets_folder() {
     let package = validated(&fake_command_dir());
     let context = golden_context(&package, fake_command_settings());
-    let token = context.paths.run.join("secrets/token");
+    let secrets = context.paths.run.join("secrets");
+    let token = secrets.join("token");
 
     let init = package
         .init_plan(&context)
@@ -376,7 +377,11 @@ fn materialize_secret_names_a_file_in_the_secrets_folder() {
         .expect("fake-command materializes its token");
     assert_eq!(secret.field.as_str(), "authToken");
     assert_eq!(file_name, "token");
-    assert_eq!(init.cleanup, [token.as_path()]);
+    assert_eq!(
+        init.cleanup,
+        [token.clone(), secrets.join("conf")],
+        "initialize removes the token and the folder of the sensitive config"
+    );
     let run = init
         .steps
         .iter()
@@ -427,6 +432,7 @@ fn run_plans_render_every_config_file_before_the_spawn() {
     let package = validated(&fake_command_dir());
     let context = golden_context(&package, fake_command_settings());
     let config = &context.paths.config;
+    let secrets = context.paths.run.join("secrets");
 
     let run = package
         .run_plan(&context)
@@ -440,9 +446,13 @@ fn run_plans_render_every_config_file_before_the_spawn() {
     else {
         panic!("one EnsureDirectories and two writes: {:#?}", run.render);
     };
-    assert_eq!(dirs, &[config.clone(), config.join("conf")]);
+    assert_eq!(
+        dirs,
+        &[config.clone(), secrets.clone(), secrets.join("conf")],
+        "the config folder, then the secrets folder and its intermediate folder"
+    );
     assert_eq!(peers.path, config.join("peers.yaml"));
-    assert_eq!(server.path, config.join("conf/server.json"));
+    assert_eq!(server.path, secrets.join("conf/server.json"));
     assert!(server.sensitive);
     assert_eq!(
         rendered(&package, &run.render),

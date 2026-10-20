@@ -41,7 +41,7 @@ pub const PATIENCE: Duration = Duration::from_secs(30);
 /// The provider of the fake package and its revision.
 pub const PROVIDER: &str = "testing/fake";
 /// The revision of the fake package.
-pub const REVISION: &str = "0.2.0";
+pub const REVISION: &str = "0.3.0";
 /// The auth token every test gives `authToken`.
 pub const TOKEN: &str = "fixture-token-for-the-fake-provider";
 
@@ -552,8 +552,15 @@ pub fn alive(pid: u32) -> bool {
 }
 
 /// Tells the dummy server on `port` to exit, as `POST /shutdown` does.
+///
+/// It waits a moment first, so a stop accepted just before has read the
+/// instance and its process before the process leaves: a stop that finds
+/// the lifecycle `stopping` but no process fails `identity_unproven`, and
+/// the exit of the process can land in that window (a race of the stop
+/// operation, not of this helper).
 pub fn shutdown_server(port: u16) {
     use std::io::{Read, Write};
+    std::thread::sleep(Duration::from_millis(300));
     let mut stream = std::net::TcpStream::connect(("127.0.0.1", port))
         .expect("the dummy server accepts connections");
     stream

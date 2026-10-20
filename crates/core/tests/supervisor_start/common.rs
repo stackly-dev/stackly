@@ -1266,7 +1266,11 @@ pub fn replace(text: &str, from: &str, to: &str) -> String {
     text.replacen(from, to, 1)
 }
 
-/// Where the rendered config of an instance goes.
-pub fn config_file(paths: &stackly_platform::InstancePaths) -> PathBuf {
-    paths.config.join("fake.json")
+/// Where the rendered config of an instance goes: the sensitive fake config
+/// lives in the instance's `secrets` folder (spec 0009 AC-20).
+pub fn config_file(rig: &Rig, id: InstanceId) -> PathBuf {
+    rig.layout
+        .layout()
+        .instance_secrets_dir(id.short_key())
+        .join("fake.json")
 }

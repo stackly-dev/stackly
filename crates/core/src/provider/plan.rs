@@ -125,9 +125,11 @@ pub struct InitPlan {
     /// The deadline of the whole action (`timeouts.initSeconds`).
     #[serde(serialize_with = "serialize_duration")]
     pub deadline: Duration,
-    /// Files to delete at the end of the action, whether it succeeded or
-    /// failed: every materialized secret, in the instance's `secrets`
-    /// folder.
+    /// Entries to delete at the end of the action, whether it succeeded or
+    /// failed, without duplicates and in step order: every materialized
+    /// secret, and the first component under the instance's `secrets`
+    /// folder of every sensitive config file that `renderConfig` writes
+    /// there (the intermediate folder for a two component destination).
     pub cleanup: Vec<PathBuf>,
 }
 
@@ -1073,13 +1075,29 @@ impl ValidatedPackage {
                         .collect::<Result<Vec<_>, _>>()?;
                     steps.push(InitStep::EnsureDirectories(dirs));
                 }
-                InitStepSpec::RenderConfig(name) => resolver.write_steps(self, name, &mut steps)?,
+                InitStepSpec::RenderConfig(name) => {
+                    resolver.write_steps(self, name, &mut steps)?;
+                    let secrets_entry = manifest
+                        .config_files
+                        .get(name)
+                        .filter(|spec| spec.destination.base == PathBase::Secrets)
+                        .and_then(|spec| spec.destination.components.first());
+                    if let Some(first) = secrets_entry {
+                        let entry = resolver.secrets_dir()?.join(first);
+                        if !cleanup.contains(&entry) {
+                            cleanup.push(entry);
+                        }
+                    }
+                }
                 InitStepSpec::MaterializeSecret { secret, file_name } => {
                     steps.push(InitStep::MaterializeSecret {
                         secret: resolver.secret(secret)?,
                         file_name: file_name.clone(),
                     });
-                    cleanup.push(resolver.secrets_dir()?.join(file_name));
+                    let entry = resolver.secrets_dir()?.join(file_name);
+                    if !cleanup.contains(&entry) {
+                        cleanup.push(entry);
+                    }
                 }
                 InitStepSpec::RunExecutable {
                     command,
