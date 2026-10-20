@@ -1,13 +1,15 @@
 //! Behavior of `FakeFilesystem`: confinement to the test roots, fault
-//! injection, the mutation log, and the shared `fs_conformance` and
-//! `fs_cross_device_conformance` suites.
+//! injection, the mutation log, the volume table, and the shared
+//! `fs_conformance` and `fs_cross_device_conformance` suites.
 #![cfg(unix)]
 
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
-use stackly_platform::{Filesystem, PlatformError, RemoveReport};
-use stackly_testkit::{FakeFilesystem, Fault, FsOp, TestRoot, fs_conformance};
+use std::io::Write;
+
+use stackly_platform::{EntryPath, Filesystem, PlatformError, RemoveReport, VolumeSpace};
+use stackly_testkit::{FakeFilesystem, FakeVolume, Fault, FsOp, TestRoot, fs_conformance};
 
 fn fake() -> (TestRoot, FakeFilesystem) {
     let root = TestRoot::new().expect("a test root can be created");
@@ -270,4 +272,143 @@ fn fake_remove_tree_stops_at_another_device() {
         other => panic!("unexpected cross device outcome {other:?}"),
     }
     assert_eq!(fs.violations(), 0);
+}
+
+#[test]
+fn mutations_log_append_opens_renames_and_tree_writer_creations() {
+    let (root, fs) = fake();
+    let part = root.path().join("artifact.part");
+    let done = root.path().join("artifact");
+    let tree = root.path().join("tree");
+    std::fs::create_dir(&tree).unwrap();
+    std::fs::set_permissions(&tree, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+
+    fs.open_append(&part).unwrap().write_all(b"bytes").unwrap();
+    fs.open_read(&part).unwrap();
+    fs.rename_no_replace(&part, &done).unwrap();
+    let mut writer = fs.open_tree_writer(&tree).unwrap();
+    writer.create_dir(&EntryPath::new("bin").unwrap()).unwrap();
+    writer
+        .create_file(&EntryPath::new("bin/tool").unwrap())
+        .unwrap()
+        .finish()
+        .unwrap();
+    writer
+        .create_symlink(&EntryPath::new("tool").unwrap(), "bin/tool")
+        .unwrap();
+    writer
+        .set_mode(
+            &EntryPath::new("bin/tool").unwrap(),
+            stackly_platform::FileMode::new(0o555).unwrap(),
+        )
+        .unwrap();
+    writer.sync().unwrap();
+
+    let log: Vec<_> = fs.mutations().into_iter().map(|m| (m.op, m.path)).collect();
+    assert_eq!(
+        log,
+        [
+            (FsOp::OpenAppend, part),
+            (FsOp::RenameNoReplace, done),
+            (FsOp::TreeCreateDir, tree.join("bin")),
+            (FsOp::TreeCreateFile, tree.join("bin/tool")),
+            (FsOp::TreeCreateSymlink, tree.join("tool")),
+        ]
+    );
+}
+
+#[test]
+fn faults_fire_on_the_new_operations_and_their_tree_entries() {
+    let (root, fs) = fake();
+    let file = root.path().join("file");
+    std::fs::write(&file, b"x").unwrap();
+    let tree = root.path().join("tree");
+    std::fs::create_dir(&tree).unwrap();
+    std::fs::set_permissions(&tree, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    fs.fail_next(FsOp::OpenRead, Fault::Io);
+    fs.fail_next(FsOp::VolumeSpace, Fault::PermissionDenied);
+    fs.fail_when(FsOp::TreeCreateFile, "bin/tool", Fault::NoSpace);
+
+    let read = fs.open_read(&file).map(drop);
+    let space = fs.available_space(root.path());
+    let mut writer = fs.open_tree_writer(&tree).unwrap();
+    writer.create_dir(&EntryPath::new("bin").unwrap()).unwrap();
+    let full = writer
+        .create_file(&EntryPath::new("bin/tool").unwrap())
+        .map(drop);
+    let other = writer
+        .create_file(&EntryPath::new("bin/other").unwrap())
+        .map(drop);
+
+    assert!(
+        matches!(
+            read,
+            Err(PlatformError::Io {
+                op: "open_read",
+                ..
+            })
+        ),
+        "{read:?}"
+    );
+    assert!(
+        matches!(space, Err(PlatformError::PermissionDenied { .. })),
+        "{space:?}"
+    );
+    assert!(
+        matches!(full, Err(PlatformError::NoSpace { .. })),
+        "{full:?}"
+    );
+    assert!(other.is_ok(), "{other:?}");
+    assert!(!tree.join("bin/tool").exists());
+    assert!(fs.open_read(&file).is_ok(), "fail_next fires once");
+}
+
+#[test]
+fn volume_space_answers_from_the_longest_matching_prefix() {
+    let (root, fs) = fake();
+    let outer = root.path().join("data");
+    let inner = outer.join("cache");
+    std::fs::create_dir_all(&inner).unwrap();
+    fs.set_volume(&outer, FakeVolume::new(1_000, 600));
+    fs.set_volume(&inner, FakeVolume::new(1_000, 10));
+
+    assert_eq!(
+        fs.volume_space(root.path()).unwrap(),
+        VolumeSpace::new(FakeVolume::DEFAULT.total, FakeVolume::DEFAULT.available)
+    );
+    assert_eq!(
+        fs.volume_space(&outer).unwrap(),
+        VolumeSpace::new(1_000, 600)
+    );
+    assert_eq!(fs.available_space(&inner).unwrap(), 10);
+
+    fs.set_volume(&inner, FakeVolume::new(1_000, 0));
+    assert_eq!(fs.available_space(&inner).unwrap(), 0);
+    assert!(matches!(
+        fs.volume_space(&outer.join("missing")),
+        Err(PlatformError::NotFound { .. })
+    ));
+}
+
+#[test]
+fn a_rename_out_of_or_into_another_root_is_a_violation() {
+    let (root, fs) = fake();
+    let other = TestRoot::new().unwrap();
+    let inside = root.path().join("inside");
+    let outside = other.path().join("outside");
+    std::fs::write(&inside, b"in").unwrap();
+    std::fs::write(&outside, b"out").unwrap();
+
+    let out_of = fs.rename_no_replace(&outside, &root.path().join("taken"));
+    let into = fs.rename_no_replace(&inside, &other.path().join("moved"));
+
+    for result in [out_of, into] {
+        assert!(
+            matches!(result, Err(PlatformError::OutsideTestRoots { .. })),
+            "{result:?}"
+        );
+    }
+    assert_eq!(fs.violations(), 2);
+    assert!(inside.exists() && outside.exists());
+    assert!(fs.mutations().is_empty());
 }

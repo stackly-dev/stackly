@@ -4,7 +4,7 @@
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{Arch, Os, Target};
-use stackly_platform::{CapabilityStatus, PlatformCapability, UserId};
+use stackly_platform::{AgentOp, CapabilityStatus, PlatformCapability, UserId};
 use stackly_testkit::{FakeClock, FakePlatform, FakePlatformInfo, TestRoot};
 
 #[test]
@@ -36,6 +36,21 @@ fn fake_platform_shares_its_clock_and_identity_with_the_bundle() {
         UserId::Unix(4242)
     );
     assert_ne!(owner, UserId::Unix(4242));
+}
+
+#[test]
+fn fake_platform_shares_its_background_agent_with_the_bundle() {
+    let root = TestRoot::new().unwrap();
+    let fake = FakePlatform::new(&root);
+    let platform = fake.platform();
+
+    platform.background_agent().status().unwrap();
+    platform.background_agent().register().unwrap();
+
+    assert_eq!(
+        fake.background_agent().calls(),
+        vec![AgentOp::Status, AgentOp::Register]
+    );
 }
 
 #[test]
@@ -76,6 +91,7 @@ fn fake_platform_info_reports_macos_capabilities_and_takes_overrides() {
         PlatformCapability::UserIdentity,
         PlatformCapability::SecretStore,
         PlatformCapability::ProcessSupervision,
+        PlatformCapability::BackgroundAgent,
     ] {
         assert!(caps.status(supported).is_supported(), "{supported}");
     }

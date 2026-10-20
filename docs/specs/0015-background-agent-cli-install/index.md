@@ -1,7 +1,7 @@
 # 0015. Background agent dan instalasi CLI
 
 **Date**: 2026-10-19
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

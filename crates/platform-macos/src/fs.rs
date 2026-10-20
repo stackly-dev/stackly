@@ -5,9 +5,17 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use stackly_platform::{DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, RemoveReport};
+use stackly_platform::{
+    AppendFile, DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, ReadSeekFile,
+    RemoveReport, TreeWriter, VolumeSpace,
+};
 
+mod fd;
+mod handles;
 mod remove_tree;
+mod rename;
+mod tree_writer;
+mod volume;
 
 /// Counter that makes each temporary file name unique within the process.
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -15,8 +23,13 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// The macOS filesystem, through `std::fs` plus `O_NOFOLLOW` and
 /// `O_NONBLOCK` for reads, so a symlink is never followed and a FIFO never
 /// blocks. [`remove_tree`](Filesystem::remove_tree) works on file
-/// descriptors (`openat`, `fstatat`, `unlinkat`, `fdopendir`), so a folder
-/// swapped for a symlink while it runs is never followed.
+/// descriptors (`openat`, `fstatat`, `unlinkat`, `fdopendir`), and so does
+/// the [`TreeWriter`] from [`open_tree_writer`](Filesystem::open_tree_writer)
+/// (`openat`, `mkdirat`, `symlinkat`, `fchmodat`), so a folder swapped for
+/// a symlink while they run is never followed.
+/// [`rename_no_replace`](Filesystem::rename_no_replace) uses
+/// `renamex_np(RENAME_EXCL)`, and [`volume_space`](Filesystem::volume_space)
+/// reads `statfs`.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MacosFilesystem;
 
@@ -107,6 +120,26 @@ impl Filesystem for MacosFilesystem {
 
     fn remove_tree(&self, root: &Path, relative: &Path) -> Result<RemoveReport, PlatformError> {
         remove_tree::remove_tree(root, relative)
+    }
+
+    fn open_read(&self, path: &Path) -> Result<Box<dyn ReadSeekFile>, PlatformError> {
+        handles::open_read(path)
+    }
+
+    fn open_append(&self, path: &Path) -> Result<Box<dyn AppendFile>, PlatformError> {
+        handles::open_append(path)
+    }
+
+    fn rename_no_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError> {
+        rename::rename_no_replace(from, to)
+    }
+
+    fn open_tree_writer(&self, root: &Path) -> Result<Box<dyn TreeWriter>, PlatformError> {
+        tree_writer::open_tree_writer(root)
+    }
+
+    fn volume_space(&self, path: &Path) -> Result<VolumeSpace, PlatformError> {
+        volume::volume_space(path)
     }
 }
 

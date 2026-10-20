@@ -4,14 +4,17 @@ use std::io::{self, Read, Write};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use stackly_platform::{
-    DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, REMOVE_TREE_MAX_DEPTH,
-    RemoveReport, remove_tree_names,
+    AppendFile, DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, REMOVE_TREE_MAX_DEPTH,
+    ReadSeekFile, RemoveReport, TreeWriter, VolumeSpace, remove_tree_names,
 };
 
 use crate::TestRoot;
+
+mod handles;
+mod tree_writer;
 
 /// Counter that makes each temporary file name unique within the process.
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -34,6 +37,29 @@ pub enum FsOp {
     WriteFileAtomic,
     /// [`Filesystem::remove_tree`].
     RemoveTree,
+    /// [`Filesystem::open_read`].
+    OpenRead,
+    /// [`Filesystem::open_append`].
+    OpenAppend,
+    /// [`Filesystem::rename_no_replace`].
+    RenameNoReplace,
+    /// [`Filesystem::open_tree_writer`].
+    OpenTreeWriter,
+    /// [`Filesystem::volume_space`], and through it
+    /// [`Filesystem::available_space`].
+    VolumeSpace,
+    /// [`TreeWriter::create_dir`], matched against the root joined with
+    /// the entry path.
+    TreeCreateDir,
+    /// [`TreeWriter::create_file`], matched like [`FsOp::TreeCreateDir`].
+    TreeCreateFile,
+    /// [`TreeWriter::create_symlink`], matched like
+    /// [`FsOp::TreeCreateDir`].
+    TreeCreateSymlink,
+    /// [`TreeWriter::set_mode`], matched like [`FsOp::TreeCreateDir`].
+    TreeSetMode,
+    /// [`TreeWriter::sync`], matched against the root.
+    TreeSync,
 }
 
 impl FsOp {
@@ -48,6 +74,16 @@ impl FsOp {
             Self::ReadFileLimited => "read_file_limited",
             Self::WriteFileAtomic => "write_file_atomic",
             Self::RemoveTree => "remove_tree",
+            Self::OpenRead => "open_read",
+            Self::OpenAppend => "open_append",
+            Self::RenameNoReplace => "rename_no_replace",
+            Self::OpenTreeWriter => "open_tree_writer",
+            Self::VolumeSpace => "volume_space",
+            Self::TreeCreateDir => "create_dir",
+            Self::TreeCreateFile => "create_file",
+            Self::TreeCreateSymlink => "create_symlink",
+            Self::TreeSetMode => "set_mode",
+            Self::TreeSync => "sync",
         }
     }
 }
@@ -84,12 +120,39 @@ impl Fault {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Mutation {
-    /// The operation, [`FsOp::CreateDirPrivate`],
-    /// [`FsOp::WriteFileAtomic`], or [`FsOp::RemoveTree`].
+    /// The operation: [`FsOp::CreateDirPrivate`],
+    /// [`FsOp::WriteFileAtomic`], [`FsOp::RemoveTree`],
+    /// [`FsOp::OpenAppend`], [`FsOp::RenameNoReplace`],
+    /// [`FsOp::TreeCreateDir`], [`FsOp::TreeCreateFile`], or
+    /// [`FsOp::TreeCreateSymlink`].
     pub op: FsOp,
     /// The path it created, replaced, or removed (the target of a
-    /// removal, `root` joined with `relative`).
+    /// removal, `root` joined with `relative`; the new path of a rename;
+    /// the root joined with the entry path for a tree writer).
     pub path: PathBuf,
+}
+
+/// The size and the space left that [`FakeFilesystem::volume_space`]
+/// answers for paths below one prefix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct FakeVolume {
+    /// The size of the volume, in bytes.
+    pub total: u64,
+    /// The bytes left, in bytes.
+    pub available: u64,
+}
+
+impl FakeVolume {
+    /// The volume every path lies on until a test sets another: 1 TiB,
+    /// half of it free.
+    pub const DEFAULT: Self = Self::new(1 << 40, 1 << 39);
+
+    /// A volume of `total` bytes with `available` bytes left.
+    #[must_use]
+    pub const fn new(total: u64, available: u64) -> Self {
+        Self { total, available }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -97,6 +160,45 @@ struct State {
     next: Vec<(FsOp, Fault)>,
     when: Vec<(FsOp, PathBuf, Fault)>,
     mutations: Vec<Mutation>,
+    volumes: Vec<(PathBuf, FakeVolume)>,
+}
+
+/// The fault and mutation state, shared with the handles and tree writers
+/// a [`FakeFilesystem`] hands out.
+#[derive(Debug, Clone, Default)]
+struct Shared(Arc<Mutex<State>>);
+
+impl Shared {
+    fn lock(&self) -> MutexGuard<'_, State> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn take_fault(&self, op: FsOp, path: &Path) -> Option<Fault> {
+        let mut state = self.lock();
+        if let Some(index) = state.next.iter().position(|(next_op, _)| *next_op == op) {
+            return Some(state.next.remove(index).1);
+        }
+        state
+            .when
+            .iter()
+            .find(|(when_op, suffix, _)| *when_op == op && path.ends_with(suffix))
+            .map(|(_, _, fault)| *fault)
+    }
+
+    /// Fails with the fault injected for `op` on `path`, if any.
+    fn check_fault(&self, op: FsOp, path: &Path) -> Result<(), PlatformError> {
+        match self.take_fault(op, path) {
+            Some(fault) => Err(fault.to_error(op, path)),
+            None => Ok(()),
+        }
+    }
+
+    fn record(&self, op: FsOp, path: &Path) {
+        self.lock().mutations.push(Mutation {
+            op,
+            path: path.to_path_buf(),
+        });
+    }
 }
 
 /// A real filesystem confined to the folders of one [`TestRoot`].
@@ -123,11 +225,22 @@ struct State {
 /// and checking each entry's device. Unlike the macOS adapter it is not
 /// safe against a folder swapped for a symlink during the walk, so race
 /// tests run only against the adapter.
+///
+/// The same holds for [`open_read`](Filesystem::open_read),
+/// [`open_append`](Filesystem::open_append),
+/// [`rename_no_replace`](Filesystem::rename_no_replace), and the
+/// [`TreeWriter`] from [`open_tree_writer`](Filesystem::open_tree_writer):
+/// each checks a path with `symlink_metadata` and acts on it afterwards.
+/// The tree writer's [`set_mode`](TreeWriter::set_mode) leaves a symlink
+/// as it is, since `std` cannot change a link's own bits; it never touches
+/// the target. [`volume_space`](Filesystem::volume_space) answers from a
+/// table of volumes per path prefix ([`set_volume`](Self::set_volume)),
+/// and [`FakeVolume::DEFAULT`] for any other path that exists.
 #[derive(Debug)]
 pub struct FakeFilesystem {
     roots: Vec<PathBuf>,
     violations: AtomicUsize,
-    state: Mutex<State>,
+    state: Shared,
 }
 
 impl FakeFilesystem {
@@ -137,7 +250,7 @@ impl FakeFilesystem {
         Self {
             roots: vec![root.path().to_path_buf(), root.run_dir().to_path_buf()],
             violations: AtomicUsize::new(0),
-            state: Mutex::new(State::default()),
+            state: Shared::default(),
         }
     }
 
@@ -168,14 +281,26 @@ impl FakeFilesystem {
 
     /// Returns every directory created, file written, and tree removed so
     /// far, in order. A removal counts when it removed at least one entry,
-    /// even if it then failed.
+    /// even if it then failed. An append file counts once, when it is
+    /// opened, a rename once it moved the entry, and a tree writer once per
+    /// directory, file, and symlink it created.
     #[must_use]
     pub fn mutations(&self) -> Vec<Mutation> {
         self.state().mutations.clone()
     }
 
+    /// Makes [`volume_space`](Filesystem::volume_space) answer `volume`
+    /// for every path below `prefix` (compared by whole components); the
+    /// longest matching prefix wins.
+    pub fn set_volume(&self, prefix: impl Into<PathBuf>, volume: FakeVolume) {
+        let prefix = prefix.into();
+        let mut state = self.state();
+        state.volumes.retain(|(existing, _)| *existing != prefix);
+        state.volumes.push((prefix, volume));
+    }
+
     fn state(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.lock()
     }
 
     /// Checks confinement, then injected faults (except for writes, whose
@@ -205,22 +330,11 @@ impl FakeFilesystem {
     }
 
     fn take_fault(&self, op: FsOp, path: &Path) -> Option<Fault> {
-        let mut state = self.state();
-        if let Some(index) = state.next.iter().position(|(next_op, _)| *next_op == op) {
-            return Some(state.next.remove(index).1);
-        }
-        state
-            .when
-            .iter()
-            .find(|(when_op, suffix, _)| *when_op == op && path.ends_with(suffix))
-            .map(|(_, _, fault)| *fault)
+        self.state.take_fault(op, path)
     }
 
     fn record(&self, op: FsOp, path: &Path) {
-        self.state().mutations.push(Mutation {
-            op,
-            path: path.to_path_buf(),
-        });
+        self.state.record(op, path);
     }
 }
 
@@ -325,6 +439,44 @@ impl Filesystem for FakeFilesystem {
             self.record(FsOp::RemoveTree, &target);
         }
         result.map(|()| report)
+    }
+
+    fn open_read(&self, path: &Path) -> Result<Box<dyn ReadSeekFile>, PlatformError> {
+        self.enter(FsOp::OpenRead, path)?;
+        handles::open_read(path)
+    }
+
+    fn open_append(&self, path: &Path) -> Result<Box<dyn AppendFile>, PlatformError> {
+        self.enter(FsOp::OpenAppend, path)?;
+        let file = handles::open_append(path)?;
+        self.record(FsOp::OpenAppend, path);
+        Ok(file)
+    }
+
+    fn rename_no_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError> {
+        self.confine(from)?;
+        self.enter(FsOp::RenameNoReplace, to)?;
+        handles::rename_no_replace(from, to)?;
+        self.record(FsOp::RenameNoReplace, to);
+        Ok(())
+    }
+
+    fn open_tree_writer(&self, root: &Path) -> Result<Box<dyn TreeWriter>, PlatformError> {
+        self.enter(FsOp::OpenTreeWriter, root)?;
+        tree_writer::open(root, self.state.clone())
+    }
+
+    fn volume_space(&self, path: &Path) -> Result<VolumeSpace, PlatformError> {
+        self.enter(FsOp::VolumeSpace, path)?;
+        fs::metadata(path).map_err(|err| PlatformError::from_io("volume_space", path, &err))?;
+        let state = self.state();
+        let volume = state
+            .volumes
+            .iter()
+            .filter(|(prefix, _)| path.starts_with(prefix))
+            .max_by_key(|(prefix, _)| prefix.components().count())
+            .map_or(FakeVolume::DEFAULT, |(_, volume)| *volume);
+        Ok(VolumeSpace::new(volume.total, volume.available))
     }
 }
 
