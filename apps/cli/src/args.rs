@@ -2,11 +2,6 @@
 //! flag global*). clap calls them, so a refused value exits 2 before
 //! anything reaches the daemon.
 
-#![expect(
-    dead_code,
-    reason = "the instance commands use the new parsers in the next commit"
-)]
-
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -198,6 +193,20 @@ impl FromStr for InstanceIdArg {
             .map(Self)
             .map_err(|_| "expected a whole instance id in hex with hyphens".to_owned())
     }
+}
+
+/// `--runtime`: a runtime ID, a whole UUID in its hyphenated form.
+///
+/// # Errors
+///
+/// Returns why `text` is not one, for clap's message.
+pub fn runtime_id(text: &str) -> Result<Uuid, String> {
+    if text.len() != 36 {
+        return Err(
+            "expected a whole runtime id, such as 0192f3a5-0000-7000-8000-0000000000a1".to_owned(),
+        );
+    }
+    Uuid::try_parse(text).map_err(|_| "expected a whole runtime id in hex with hyphens".to_owned())
 }
 
 /// `--port <endpoint>=<port|auto>`: the shape only. The number is 0 to

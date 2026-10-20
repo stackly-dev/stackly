@@ -71,7 +71,6 @@ pub struct AsyncArgs {
 /// What a starting method's reply holds, read by the `extract` function a
 /// command gives to [`Context::submit`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[expect(dead_code, reason = "the instance commands use it in the next commit")]
 pub struct Accepted {
     /// The operation, or `None` when the request changed nothing, such as
     /// `alreadyInState`.
@@ -83,7 +82,6 @@ pub struct Accepted {
 
 /// How a submitted request ended, before the command shapes its result.
 #[derive(Debug)]
-#[expect(dead_code, reason = "the instance commands use it in the next commit")]
 pub struct Submission {
     /// The operation: the one the reply carried, or with `--wait` the
     /// newest snapshot of it. `None` when the request started none.
@@ -99,10 +97,6 @@ pub struct Submission {
     pub failure: Option<CliFailure>,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the instance commands use it in the next commit")
-)]
 impl Submission {
     /// Whether nothing is left to wait for: the request started no
     /// operation, or `--wait` saw it stop moving. Only then does a command

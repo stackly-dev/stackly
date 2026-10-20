@@ -146,7 +146,6 @@ impl Context {
     /// `extract` refuses the reply. A wait that ends badly is not an error
     /// here: it is the `failure` of the [`Submission`], next to the last
     /// snapshot.
-    #[expect(dead_code, reason = "the instance commands use it in the next commit")]
     pub async fn submit(
         &mut self,
         call: Call,

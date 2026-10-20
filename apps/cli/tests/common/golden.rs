@@ -13,13 +13,17 @@ pub fn dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
-/// `text` with every age (`3m ago`, `now`) in brackets written as `<age>`,
+/// `text` with every age (`3m ago`, `now`) in brackets or after `checked`
+/// written as `<age>`,
 /// and this build's contract digest and protocol version as placeholders,
 /// so a protocol minor bump does not move the goldens.
 pub fn normalize(text: &str) -> String {
     let ages = Regex::new(r"\((?:\d+[smhd] ago|now)\)").expect("the age pattern is valid");
     let protocol = ProtocolVersion::CURRENT;
-    ages.replace_all(text, "(<age>)")
+    let checked =
+        Regex::new(r"checked (?:\d+[smhd] ago|now)").expect("the checked pattern is valid");
+    let text = checked.replace_all(text, "checked <age>");
+    ages.replace_all(&text, "(<age>)")
         .replace(CONTRACT_DIGEST, "<contract-digest>")
         .replace(
             &format!(
