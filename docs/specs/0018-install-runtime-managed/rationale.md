@@ -250,3 +250,13 @@ Penyelarasan dengan keputusan lead foundation K1 sampai K18 dan update spec foun
 | Usulan untuk spec lain | dicatat bahwa usulan untuk spec 0001 sampai 0010 sudah diterapkan dan spec pemilik yang mengikat; follow up yang sudah diterapkan dicentang | spec 0001, 0002, 0003, 0004, 0005, 0006, 0009, 0010, 0019 |
 
 Tidak berubah karena sudah sesuai: K4 (kenaikan minor protokol mengambil nomor bebas berikutnya saat merge), dan butir K lain yang tidak menyentuh fitur ini (K1 sampai K3, K5, K8, K10, K13 sampai K17).
+
+## Perbaikan pasca penyelarasan (2026-10-20)
+
+Delapan temuan minor dari reviewer lintas dokumen (`docs/scope/coordination/post-alignment/post-0018.md`), dengan keputusan lead D3 dan D5 (`post-decisions.md`). Temuan yang berulang dari dua batas diterapkan sekali.
+
+- Hint `runtime.install_conflict` mengikuti aturan hint engine spec 0007: `resume`, karena `install_runtime` resumable dan langkah `commit` repeatable; resume gagal lagi sampai folder dibereskan atau operasi di abandon.
+- Paket PostgreSQL dibuat langkah 4 spec 0019, dan `runtime.versionCheck` nya di langkah 7 (D5); AC-20, test native, dan milestone 5 menyebut keduanya.
+- Override catalog test bernama `CatalogOverride` (milik spec 0017, varian `Location` dan `Preloaded`, D3), bukan `CatalogConfig`.
+- `ProviderSummary.software` dibangun langkah 5 spec 0017 dan hanya dipakai di sini sebagai kunci join; atribusi langkah di usulan spec 0017 dirinci (gerbang dan `support_status` langkah 9 dan 11, `SupportReason` wire langkah 10, `RuntimeGetAction` langkah 15).
+- AC-1 tidak lagi bertentangan dengan input journal: artefak hasil resolusi adalah sumber kebenaran, dan selector hanya dicatat sebagai asal tanpa pernah diresolusi ulang.
