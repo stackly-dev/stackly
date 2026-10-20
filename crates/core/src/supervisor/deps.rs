@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use stackly_domain::{Instance, InstanceId, Registry, ResourceRevision};
@@ -39,6 +40,13 @@ pub trait SupervisorEvents: Send + Sync + 'static {
     /// reports the `supervisor` subsystem from it.
     fn registry_degraded(&self, degraded: bool, detail: &str) {
         let _ = (degraded, detail);
+    }
+
+    /// Reconciliation began or ended (`daemon.reconciling`); the finished
+    /// phase carries the counts, and the daemon reports the `supervisor`
+    /// subsystem `ok` from it, with the number of `unknown` instances.
+    fn reconciling(&self, phase: &super::ReconcilePhase) {
+        let _ = phase;
     }
 }
 
@@ -130,6 +138,14 @@ pub(crate) struct Shared {
     /// respawn after a crash, a start after reconciliation); set once by
     /// the daemon.
     operations: OnceLock<OperationEngine>,
+    /// Set when the daemon shuts down: nothing new runs, and no actor
+    /// commits a lifecycle any more.
+    shutdown: AtomicBool,
+    /// What reconciliation decided to run again, taken once by
+    /// [`Supervisor::start_reconciled`].
+    pub(crate) pending: Mutex<Vec<super::pending::PendingRun>>,
+    /// Whether the recheck task of `unknown` instances runs.
+    pub(crate) recheck_running: AtomicBool,
 }
 
 /// The process supervisor: one actor per instance, and the operations that
@@ -157,6 +173,9 @@ impl Supervisor {
                 deps,
                 actors: Mutex::new(HashMap::new()),
                 operations: OnceLock::new(),
+                shutdown: AtomicBool::new(false),
+                pending: Mutex::new(Vec::new()),
+                recheck_running: AtomicBool::new(false),
             }),
         }
     }
@@ -177,6 +196,43 @@ impl Supervisor {
 
     pub(crate) fn operations(&self) -> Option<&OperationEngine> {
         self.shared.operations.get()
+    }
+
+    /// Stops the supervisor for a daemon shutdown (spec 0010 AC-21): the
+    /// probes, the spool readers, the respawn pauses, the recheck, and the
+    /// handling of exits end, and no instance process is signalled and no
+    /// lifecycle committed. An operation that still runs is left for the
+    /// engine to end; the next daemon closes it and reconciliation adopts
+    /// the process. Calling it again changes nothing.
+    pub fn shutdown(&self) {
+        self.shared.shutdown.store(true, Ordering::SeqCst);
+        let actors: Vec<_> = self
+            .shared
+            .actors
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .cloned()
+            .collect();
+        for actor in actors {
+            actor.stop_background(self.deps());
+        }
+    }
+
+    /// Returns true once [`shutdown`](Self::shutdown) was called.
+    pub(crate) fn is_shutdown(&self) -> bool {
+        self.shared.shutdown.load(Ordering::SeqCst)
+    }
+
+    /// Returns the actors that exist now, in no order.
+    pub(crate) fn actors(&self) -> Vec<Arc<InstanceActor>> {
+        self.shared
+            .actors
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .cloned()
+            .collect()
     }
 
     pub(crate) fn deps(&self) -> &SupervisorDeps {

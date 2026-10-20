@@ -10,6 +10,12 @@
 //!   it to a crash outside any operation: a timer holds the pause, then a
 //!   system `start_instance` operation respawns the process
 //!   ([`Supervisor::attach_operations`] gives the actors their engine).
+//! - [`Supervisor::reconcile`] finds what became of every instance's process
+//!   while no daemon watched: it gathers the evidence in a fixed order,
+//!   applies the table of the spec, adopts the processes whose identity is
+//!   proven, and leaves what it cannot prove `unknown`, never signalled.
+//!   [`Supervisor::start_reconciled`] then runs what must run again, and
+//!   [`Supervisor::shutdown`] stops the actors without a signal or a commit.
 //! - [`InstanceChanges`] and [`ActorCommitRetry`] are the commit rules: one
 //!   `UpdateInstance` per mutation, and how an actor commit retries.
 //! - [`PortProbe`] tells whether an endpoint's port is free, with the
@@ -32,6 +38,7 @@
 //! - [`SupervisorConfig`] holds every constant, shrinkable in tests.
 
 mod actor;
+mod adopt;
 mod classify;
 pub mod codes;
 mod commit;
@@ -39,16 +46,20 @@ mod config;
 mod deps;
 mod drain;
 mod error;
+mod evidence;
 mod exit;
 mod helper;
 mod http;
 mod init;
 mod lock;
+mod pending;
 mod persist;
 mod ports;
 mod prepare;
 pub mod probe;
 mod readiness;
+mod recheck;
+mod reconcile;
 mod reload;
 mod respawn;
 mod restart;
@@ -78,6 +89,7 @@ pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents}
 pub use error::{EndpointFault, SupervisorError, UnavailableReason};
 pub use init::InitRequest;
 pub use ports::{BindOptions, BindOutcome, PortProbe, SocketPortProbe};
+pub use reconcile::{ReconcilePhase, ReconcileReport, RegistryMode};
 pub use reload::ReloadRequest;
 pub use restart::{JitterFactor, RestartDecision, RestartHistory, backoff_delay};
 pub use sink::{LogBatch, LogLine, LogSink, SinkOutcome, SinkSet, TailSink};

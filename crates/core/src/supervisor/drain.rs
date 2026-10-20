@@ -23,8 +23,6 @@ pub(crate) enum Opening {
     Fresh,
     /// The process was found running after a daemon restart: reading
     /// resumes at the first byte that is not freed.
-    // provisional: F10 step 11 (adoption) opens its slots this way.
-    #[allow(dead_code)]
     Resumed,
 }
 

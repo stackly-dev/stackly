@@ -34,7 +34,7 @@ use stackly_domain::{
     OperationState, Port, PortRequest, ProviderRevisionKey, Registry, ResourceRevision,
     RuntimeState, SecretFieldName, SecretRef, SecretUser, Transport, WriteBatch, WriteOp,
 };
-use stackly_platform::{Clock, Platform, ProcessError};
+use stackly_platform::{Clock, Platform, ProcessError, ProcessSupervision};
 use stackly_testkit::{
     FakePlatform, FakeProcessSupervision, FakeRegistry, InstanceBuilder, ProcessOp, RuntimeBuilder,
     TestRoot, allocate_port, fake_server,
@@ -58,6 +58,7 @@ pub struct Recorded {
     pub lifecycles: Mutex<Vec<(InstanceId, InstanceLifecycle, ResourceRevision)>>,
     pub statuses: Mutex<Vec<(InstanceId, InstanceStatus, ResourceRevision)>>,
     pub degraded: Mutex<Vec<bool>>,
+    pub reconciling: Mutex<Vec<stackly_core::supervisor::ReconcilePhase>>,
 }
 
 impl Recorded {
@@ -107,6 +108,13 @@ impl SupervisorEvents for Recorded {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(degraded);
+    }
+
+    fn reconciling(&self, phase: &stackly_core::supervisor::ReconcilePhase) {
+        self.reconciling
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(*phase);
     }
 }
 
@@ -214,9 +222,19 @@ impl SecretEvents for NoSecretEvents {
 pub struct FaultyRegistry {
     pub inner: Arc<FakeRegistry>,
     refuse_observation: Mutex<bool>,
+    /// Errors the next commits answer with, one each, oldest first.
+    commit_faults: Mutex<Vec<stackly_domain::RegistryError>>,
 }
 
 impl FaultyRegistry {
+    /// Makes the next commits fail with `errors`, one error per commit.
+    pub fn fail_commits(&self, errors: Vec<stackly_domain::RegistryError>) {
+        *self
+            .commit_faults
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = errors;
+    }
+
     pub fn refuse_process_observations(&self, refuse: bool) {
         *self
             .refuse_observation
@@ -262,6 +280,15 @@ impl Registry for FaultyRegistry {
     }
 
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
+        {
+            let mut faults = self
+                .commit_faults
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if !faults.is_empty() {
+                return Err(BatchError::batch(faults.remove(0)));
+            }
+        }
         let refuse = *self
             .refuse_observation
             .lock()
@@ -275,6 +302,26 @@ impl Registry for FaultyRegistry {
             return Err(BatchError::batch(stackly_domain::RegistryError::NoSpace));
         }
         self.inner.commit(batch)
+    }
+}
+
+/// How a process planted by [`Rig::plant`] looks.
+#[derive(Clone, Copy)]
+pub struct Plant {
+    /// It is held back before its first instruction.
+    pub stopped: bool,
+    /// It holds the instance lock.
+    pub holds_lock: bool,
+}
+
+impl Plant {
+    /// A running process that holds the lock: the one an instance's main
+    /// process is.
+    pub const fn live() -> Self {
+        Self {
+            stopped: false,
+            holds_lock: true,
+        }
     }
 }
 
@@ -314,6 +361,7 @@ pub struct Rig {
     pub ports: Arc<ScriptedPorts>,
     pub logs: Arc<LogRecorder>,
     pub sup: Supervisor,
+    pub deps: SupervisorDeps,
     pub engine: OperationEngine,
     pub package: ValidatedPackage,
     pub runtime: stackly_domain::Runtime,
@@ -378,6 +426,7 @@ impl Rig {
         let registry = Arc::new(FaultyRegistry {
             inner,
             refuse_observation: Mutex::new(false),
+            commit_faults: Mutex::new(Vec::new()),
         });
         let redactor = Arc::new(Redactor::new());
         let secrets = Arc::new(SecretService::new(SecretDeps {
@@ -405,7 +454,7 @@ impl Rig {
         ]));
         fast_config(&mut deps.config);
         tweak(&mut deps.config);
-        let sup = Supervisor::new(deps);
+        let sup = Supervisor::new(deps.clone());
         let engine = OperationEngine::new(
             EngineDeps {
                 registry: Arc::clone(&registry) as Arc<dyn Registry>,
@@ -458,10 +507,80 @@ impl Rig {
             ports,
             logs,
             sup,
+            deps,
             engine,
             package,
             runtime,
             servers: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// A new supervisor on the same registry, platform, and engine, as a
+    /// daemon that started again: it knows no actor, and the processes of
+    /// the fake platform are still there.
+    pub fn reborn(&self) -> Supervisor {
+        let sup = Supervisor::new(self.deps.clone());
+        sup.attach_operations(self.engine.clone());
+        sup
+    }
+
+    /// Plants a process the fake did not spawn as the last recorded process
+    /// of `id`: the facts of a live process, the observation in the
+    /// registry, and, when `plant.holds_lock`, the instance lock.
+    pub fn plant(&self, id: InstanceId, plant: Plant) -> stackly_domain::ProcessIdentity {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(60_000);
+        let raw = NEXT.fetch_add(1, Ordering::SeqCst);
+        let pid = stackly_domain::Pid::new(raw).expect("a planted PID is not 0");
+        let executable = PathBuf::from("/planted/stackly-fake-server");
+        let start = stackly_domain::ProcessStart::new(1_760_000_000, raw % 1_000_000)
+            .expect("a planted start time");
+        let boot = self
+            .processes()
+            .boot_id()
+            .expect("the fake answers its boot ID");
+        let identity = stackly_domain::ProcessIdentity {
+            pid,
+            start,
+            executable: executable.clone(),
+            session: pid,
+            boot,
+        };
+        self.processes().insert(stackly_platform::ProcessFacts {
+            pid,
+            parent: stackly_domain::Pid::new(1).ok(),
+            group: pid,
+            session: pid,
+            uid: self.processes().user(),
+            start,
+            executable,
+            stopped: plant.stopped,
+        });
+        let lock = self.take_lock(id);
+        if plant.holds_lock {
+            self.processes().hand_lock(pid, lock);
+        }
+        self.registry
+            .commit(WriteBatch::new(vec![WriteOp::RecordProcessObservation(
+                stackly_domain::ProcessObservation {
+                    instance: id,
+                    identity: identity.clone(),
+                    observed_at: self.fake_now(),
+                },
+            )]))
+            .expect("the observation is stored");
+        identity
+    }
+
+    /// Takes the instance lock of `id` and returns it; dropping it frees
+    /// the lock.
+    pub fn take_lock(&self, id: InstanceId) -> stackly_platform::InstanceLock {
+        match self
+            .processes()
+            .lock_instance(&self.paths(id).lock)
+            .expect("the fake locks")
+        {
+            stackly_platform::LockOutcome::Acquired(lock) => lock,
+            stackly_platform::LockOutcome::Held => panic!("the lock of {id} is held already"),
         }
     }
 

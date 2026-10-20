@@ -16,7 +16,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use stackly_domain::{
-    DesiredState, InstanceId, InstanceLifecycle, JournalPayload, OperationKind, OperationResource,
+    DesiredState, InstanceId, InstanceLifecycle, JournalPayload, OperationId, OperationKind,
+    OperationResource,
 };
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -25,7 +26,7 @@ use super::actor::{ActorState, InstanceActor, restart_status};
 use super::persist::read_instance;
 use super::startup::StartRequest;
 use super::{Supervisor, SupervisorDeps};
-use crate::operation::{BeginError, BeginOutcome, BeginRequest, BusyPolicy, Origin};
+use crate::operation::{BeginError, BeginRequest, BusyPolicy, Origin};
 
 /// The journal input of a respawn, naming what started the operation.
 const TRIGGER_INPUT: &str = r#"{"trigger":"restart_policy"}"#;
@@ -45,6 +46,21 @@ pub(crate) fn show_pause(deps: &SupervisorDeps, state: &mut ActorState, delay: D
 /// begins the respawn operation, unless a stop cancels the pause first or
 /// the instance is no longer `recovering` with desired `running`.
 pub(crate) fn schedule_respawn(sup: &Supervisor, id: InstanceId, delay: Duration) {
+    let (actor, cancel_rx) = arm_pause(sup, id, delay);
+    let sup = sup.clone();
+    tokio::spawn(async move {
+        pause_then_respawn(&sup, &actor, delay, cancel_rx).await;
+    });
+}
+
+/// Registers the pause before a respawn with the actor, so a stop can cancel
+/// it, and shows when it ends. Returns the actor and the receiver that
+/// flips to `true` on a cancel.
+pub(crate) fn arm_pause(
+    sup: &Supervisor,
+    id: InstanceId,
+    delay: Duration,
+) -> (Arc<InstanceActor>, watch::Receiver<bool>) {
     let deps = sup.deps();
     let actor = sup.actor(id);
     let (cancel, cancel_rx) = watch::channel(false);
@@ -54,35 +70,38 @@ pub(crate) fn schedule_respawn(sup: &Supervisor, id: InstanceId, delay: Duration
         }
         show_pause(deps, state, delay);
     });
-    tokio::spawn(respawn_task(sup.clone(), actor, delay, cancel_rx));
+    (actor, cancel_rx)
 }
 
 /// How one try to begin the respawn operation went.
 enum Begun {
     /// The operation exists.
-    Started,
+    Started(Option<OperationId>),
     /// The engine could not take it yet; try again after a pause.
     Later,
     /// Nothing will begin: the engine is gone or refused for good.
     GaveUp,
 }
 
-async fn respawn_task(
-    sup: Supervisor,
-    actor: Arc<InstanceActor>,
+/// Waits out the pause, then begins the respawn operation and returns its
+/// ID. Returns `None` when a stop cancelled the pause, the instance is no
+/// longer `recovering` with desired `running`, or no operation could begin.
+pub(crate) async fn pause_then_respawn(
+    sup: &Supervisor,
+    actor: &Arc<InstanceActor>,
     delay: Duration,
     mut cancel: watch::Receiver<bool>,
-) {
+) -> Option<OperationId> {
     let deps = sup.deps();
     let id = actor.id;
     let mut pause = delay;
     loop {
         tokio::select! {
             () = tokio::time::sleep(pause) => {}
-            _ = cancel.wait_for(|cancelled| *cancelled) => return,
+            _ = cancel.wait_for(|cancelled| *cancelled) => return None,
         }
-        if *cancel.borrow() {
-            return;
+        if *cancel.borrow() || sup.is_shutdown() {
+            return None;
         }
         let wanted = matches!(
             read_instance(deps, id).await,
@@ -91,17 +110,17 @@ async fn respawn_task(
         );
         if !wanted {
             // A stop or a user action came first: nothing to respawn.
-            clear_pause(deps, &actor);
-            return;
+            clear_pause(deps, actor);
+            return None;
         }
-        match begin_respawn(&sup, id).await {
-            Begun::Started => {
-                clear_pause(deps, &actor);
-                return;
+        match begin_respawn(sup, id).await {
+            Begun::Started(operation) => {
+                clear_pause(deps, actor);
+                return operation;
             }
             Begun::GaveUp => {
-                clear_pause(deps, &actor);
-                return;
+                clear_pause(deps, actor);
+                return None;
             }
             Begun::Later => pause = deps.config.restart_base_delay,
         }
@@ -125,6 +144,9 @@ fn clear_pause(deps: &SupervisorDeps, actor: &InstanceActor) {
 /// looks again, because that operation may be the stop that makes the
 /// respawn unnecessary.
 async fn begin_respawn(sup: &Supervisor, id: InstanceId) -> Begun {
+    if sup.is_shutdown() {
+        return Begun::GaveUp;
+    }
     let Some(engine) = sup.operations() else {
         tracing::warn!(instance = %id, "no operation engine is attached, so the respawn does not run");
         return Begun::GaveUp;
@@ -146,9 +168,7 @@ async fn begin_respawn(sup: &Supervisor, id: InstanceId) -> Begun {
         precheck: None,
     };
     match engine.begin(request).await {
-        Ok(BeginOutcome::Created(_) | BeginOutcome::Replayed(_) | BeginOutcome::NoOp(_)) => {
-            Begun::Started
-        }
+        Ok(outcome) => Begun::Started(outcome.view().map(|view| view.operation.id())),
         Err(BeginError::Busy { .. } | BeginError::NotReady | BeginError::QueueFull { .. }) => {
             Begun::Later
         }

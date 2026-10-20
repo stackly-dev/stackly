@@ -160,6 +160,21 @@ impl ActorState {
         }
     }
 
+    /// Replaces the blocker the supervisor itself sets (`identityUnproven`
+    /// or `dataInUse`) with `blocker`, or removes it when `blocker` is
+    /// `None`. A `needsSecret` blocker is not the supervisor's to remove.
+    pub(crate) fn set_supervisor_blocker(&mut self, blocker: Option<InstanceBlocker>) {
+        if matches!(
+            self.blocker,
+            Some(InstanceBlocker::IdentityUnproven { .. } | InstanceBlocker::DataInUse { .. })
+        ) {
+            self.blocker = None;
+        }
+        if let Some(blocker) = blocker {
+            self.offer_blocker(blocker);
+        }
+    }
+
     /// Sets readiness to `not_ready` with the reason `awaiting_probe`, as a
     /// process that just spawned reads (the lifecycle event `spawned` does
     /// the same to the aggregate).
@@ -293,6 +308,22 @@ impl InstanceActor {
                     .restart
                     .crashes_in_window(tokio::time::Instant::now(), &deps.config);
                 state.restart_status = restart_status(&deps.config, attempts, None, false);
+            }
+        });
+    }
+
+    /// Stops everything this actor runs in the background, for a daemon
+    /// shutdown: the probes, the spool reading, and the pause before a
+    /// respawn. The process itself is left alone, and no lifecycle is
+    /// committed.
+    pub(crate) fn stop_background(&self, deps: &SupervisorDeps) {
+        self.update(deps, |state| {
+            if let Some(slot) = &state.process {
+                slot.probes_stop.send_replace(true);
+                slot.drain.stop();
+            }
+            if let Some(cancel) = state.respawn.take() {
+                cancel.send_replace(true);
             }
         });
     }

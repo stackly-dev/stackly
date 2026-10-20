@@ -45,6 +45,11 @@ pub(crate) fn spawn_exit_task(
             }
             actor.released.notified().await;
         }
+        // A shut down daemon leaves the registry as it is: the next daemon
+        // finds the process gone or adopts it.
+        if sup.is_shutdown() {
+            return;
+        }
         handle_exit(&sup, &actor, generation, &notice).await;
     });
 }

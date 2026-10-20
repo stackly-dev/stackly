@@ -81,6 +81,10 @@ pub(crate) async fn commit_instance(
     let mut degraded = false;
     let mut pinned = base.cloned();
     let result = loop {
+        // A daemon that shut down leaves the registry as it is (AC-21).
+        if sup.is_shutdown() {
+            break Err(SupervisorError::internal("the daemon is shutting down"));
+        }
         let instance = match pinned.clone() {
             Some(instance) => instance,
             None => read_instance(deps, id).await?,

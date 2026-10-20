@@ -44,6 +44,10 @@ pub struct StopRequest {
     /// Whether the user chose to stop it although environments hold it
     /// (BR-015).
     pub override_leases: bool,
+    /// A stop the daemon makes itself after reconciliation (trigger
+    /// `reconcile`): it does not ask whether environments hold the
+    /// instance, because the user already chose `stopped`.
+    pub(crate) system: bool,
 }
 
 impl StopRequest {
@@ -53,6 +57,17 @@ impl StopRequest {
         Self {
             instance,
             override_leases: false,
+            system: false,
+        }
+    }
+
+    /// A stop the daemon makes after reconciliation, with no lease check.
+    #[must_use]
+    pub(crate) const fn reconcile(instance: InstanceId) -> Self {
+        Self {
+            instance,
+            override_leases: false,
+            system: true,
         }
     }
 
@@ -314,22 +329,24 @@ async fn run_stop(
         | InstanceLifecycle::Recovering
         | InstanceLifecycle::Stopping => {}
     }
-    let registry = deps.registry.clone();
-    let leases = blocking(move || registry.leases(id, LeaseFilter::Unreleased))
-        .await
-        .map_err(failed)?
-        .map_err(|error| failed(SupervisorError::Registry(error)))?
-        .value;
-    let decision = evaluate_stop(
-        id,
-        &leases,
-        &LeaseStopRequest::Manual {
-            session: None,
-            override_leases: request.override_leases,
-        },
-    );
-    if matches!(decision, StopDecision::RequiresOverride { .. }) {
-        return Err(failed(SupervisorError::StopRequiresOverride));
+    if !request.system {
+        let registry = deps.registry.clone();
+        let leases = blocking(move || registry.leases(id, LeaseFilter::Unreleased))
+            .await
+            .map_err(failed)?
+            .map_err(|error| failed(SupervisorError::Registry(error)))?
+            .value;
+        let decision = evaluate_stop(
+            id,
+            &leases,
+            &LeaseStopRequest::Manual {
+                session: None,
+                override_leases: request.override_leases,
+            },
+        );
+        if matches!(decision, StopDecision::RequiresOverride { .. }) {
+            return Err(failed(SupervisorError::StopRequiresOverride));
+        }
     }
 
     ctx.begin_step(StepSpec::new(StageName::LOCK)).await?;
