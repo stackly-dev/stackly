@@ -2,3 +2,8 @@
 # Rust types in crates/evidence, is already in the graph; the schemas would
 # only add hundreds of generic `type` and `description` nodes.
 schemas/evidence/*.schema.json
+
+# Agent skills (ours and third party). Sessions read them directly, and in
+# the graph they mostly add noise to code and spec queries, so a skill edit
+# needs no graph update.
+.claude/skills/
