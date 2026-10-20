@@ -19,6 +19,7 @@ mod names;
 mod package;
 mod plan;
 mod preflight;
+pub mod probe;
 mod raw;
 mod settings;
 mod template;

@@ -1,6 +1,7 @@
 //! `cargo xtask fuzz list|build|seed|run`: the cargo-fuzz project in
-//! `fuzz/` (spec 0006, *Fuzzing*), with the IPC targets of spec 0006 and
-//! the provider targets of spec 0009.
+//! `fuzz/` (spec 0006, *Fuzzing*), with the IPC targets of spec 0006, the
+//! provider targets of spec 0009, and the `nats-readiness` target of spec
+//! 0023.
 //!
 //! `fuzz/` is its own workspace and builds only with the dated nightly
 //! [`FUZZ_TOOLCHAIN`], so the stable toolchain of the main workspace never
@@ -61,6 +62,15 @@ const PROVIDER_FILE_MAX_LEN: usize = 262_144;
 const SETTINGS_SCHEMA_MAX_LEN: usize = 131_072;
 /// The longest manifest field the interpolation target tries.
 const INTERPOLATION_MAX_LEN: usize = 4096;
+/// The `nats-readiness` transcripts and their index, the seed source of
+/// `nats_readiness_protocol` (spec 0023, *Fuzz target*).
+const NATS_TRANSCRIPTS: &str = "crates/core/tests/fixtures/nats-protocol";
+/// The longest `nats_readiness_protocol` input: twice the 128 KiB read
+/// limit of one attempt, so the fuzzer reaches that limit.
+const NATS_PROTOCOL_MAX_LEN: usize = 262_144;
+/// The first byte of every `nats_readiness_protocol` seed without its
+/// JetStream bit: chunks of 128 bytes.
+const NATS_CHUNK_SEED: u8 = 0xfe;
 
 const USAGE: &str =
     "cargo xtask fuzz list | build [<target>] | seed | run <target> [--time <seconds>]";
@@ -121,6 +131,12 @@ const TARGETS: &[Target] = &[
         crate_dir: "crates/core",
         max_len: SETTINGS_SCHEMA_MAX_LEN,
         seeds: provider_settings_schema_seeds,
+    },
+    Target {
+        name: "nats_readiness_protocol",
+        crate_dir: "crates/core",
+        max_len: NATS_PROTOCOL_MAX_LEN,
+        seeds: nats_readiness_protocol_seeds,
     },
 ];
 
@@ -545,6 +561,50 @@ fn provider_settings_schema_seeds(root: &Path) -> Result<Vec<Seed>> {
 }
 
 /// Reads a repository file.
+/// One seed per transcript in the index: the mode byte (128 byte chunks,
+/// bit 0 for the transcript's JetStream expectation), then every byte the
+/// server sent.
+fn nats_readiness_protocol_seeds(root: &Path) -> Result<Vec<Seed>> {
+    #[derive(Deserialize)]
+    struct Index {
+        transcripts: Vec<Transcript>,
+    }
+    #[derive(Deserialize)]
+    struct Transcript {
+        file: String,
+        jetstream: bool,
+    }
+    let path = format!("{NATS_TRANSCRIPTS}/transcripts.json");
+    let text =
+        fs::read_to_string(root.join(&path)).with_context(|| format!("cannot read {path}"))?;
+    let index: Index =
+        serde_json::from_str(&text).with_context(|| format!("cannot parse {path}"))?;
+    index
+        .transcripts
+        .into_iter()
+        .map(|transcript| {
+            let mut bytes = vec![NATS_CHUNK_SEED | u8::from(transcript.jetstream)];
+            bytes.extend(read(
+                root,
+                &format!("{NATS_TRANSCRIPTS}/{}", transcript.file),
+            )?);
+            let stem = transcript
+                .file
+                .strip_suffix(".bin")
+                .unwrap_or(&transcript.file);
+            let mode = if transcript.jetstream {
+                "jetstream"
+            } else {
+                "no-jetstream"
+            };
+            Ok(Seed {
+                name: format!("{stem}.expect-{mode}.bin"),
+                bytes,
+            })
+        })
+        .collect()
+}
+
 fn read(root: &Path, path: &str) -> Result<Vec<u8>> {
     fs::read(root.join(path)).with_context(|| format!("cannot read {path}"))
 }
@@ -718,6 +778,22 @@ mod tests {
                 .all(|text| text.windows(2).any(|pair| pair == b"${"))
         );
         assert_eq!(provider_settings_schema_seeds(&root).unwrap().len(), 4);
+    }
+
+    #[test]
+    fn nats_seeds_are_the_mode_byte_then_the_transcript() {
+        let root = repo_root();
+        let seeds = nats_readiness_protocol_seeds(&root).unwrap();
+        assert_eq!(seeds.len(), 11);
+        let transcript = read(&root, &format!("{NATS_TRANSCRIPTS}/real-js-on.bin")).unwrap();
+        for (name, mode) in [
+            ("real-js-on.expect-jetstream.bin", 0xff),
+            ("real-js-on.expect-no-jetstream.bin", 0xfe),
+        ] {
+            let seed = seeds.iter().find(|seed| seed.name == name).unwrap();
+            assert_eq!(seed.bytes[0], mode, "{name}");
+            assert_eq!(seed.bytes[1..], transcript, "{name}");
+        }
     }
 
     #[test]
