@@ -29,6 +29,13 @@ pub enum TemplateFormat {
     /// The NATS server config; text becomes a double quoted string, and
     /// text holding `"`, `\`, `$`, or a control character is rejected.
     NatsConf,
+    /// The PostgreSQL server config (spec 0019): text becomes a single
+    /// quoted value with `'` doubled and `\` doubled, text holding a
+    /// control character is rejected, and a boolean is `on` or `off`.
+    PostgresqlConf,
+    /// A static file (spec 0019): validation rejects every output and
+    /// block tag, so the template comes out as written.
+    Plain,
 }
 
 impl TemplateFormat {
@@ -38,6 +45,8 @@ impl TemplateFormat {
             "yaml" => Some(Self::Yaml),
             "json" => Some(Self::Json),
             "natsConf" => Some(Self::NatsConf),
+            "postgresqlConf" => Some(Self::PostgresqlConf),
+            "plain" => Some(Self::Plain),
             _ => None,
         }
     }
@@ -74,7 +83,41 @@ impl TemplateFormat {
                     Some(format!("\"{text}\""))
                 }
             }
+            Self::PostgresqlConf => {
+                if text.chars().any(char::is_control) {
+                    return None;
+                }
+                let mut out = String::with_capacity(text.len() + 2);
+                out.push('\'');
+                for c in text.chars() {
+                    match c {
+                        '\'' => out.push_str("''"),
+                        '\\' => out.push_str("\\\\"),
+                        c => out.push(c),
+                    }
+                }
+                out.push('\'');
+                Some(out)
+            }
+            // Validation rejects every output tag of a plain template.
+            Self::Plain => None,
         }
+    }
+
+    /// Writes a boolean the way this format reads it.
+    pub(crate) fn boolean(self, flag: bool) -> &'static str {
+        match (self, flag) {
+            (Self::PostgresqlConf, true) => "on",
+            (Self::PostgresqlConf, false) => "off",
+            (_, true) => "true",
+            (_, false) => "false",
+        }
+    }
+
+    /// Returns whether templates of this format may hold output and block
+    /// tags; a `plain` template holds only text and comments.
+    pub(crate) fn allows_tags(self) -> bool {
+        !matches!(self, Self::Plain)
     }
 
     /// Checks that rendered output is a valid document of this format.
@@ -82,7 +125,7 @@ impl TemplateFormat {
         match self {
             Self::Yaml => super::raw::yaml_value(text).is_ok(),
             Self::Json => serde_json::from_str::<serde_json::Value>(text).is_ok(),
-            Self::NatsConf => true,
+            Self::NatsConf | Self::PostgresqlConf | Self::Plain => true,
         }
     }
 }
@@ -467,6 +510,15 @@ pub(crate) fn check(
 }
 
 impl Checked {
+    /// Returns where each top level output or block tag starts, for the
+    /// check that a `plain` template holds none.
+    pub(crate) fn tag_positions(&self) -> impl Iterator<Item = Pos> {
+        self.nodes.iter().filter_map(|node| match node {
+            Node::Text(_) => None,
+            Node::Output { at, .. } | Node::Each { at, .. } | Node::If { at, .. } => Some(*at),
+        })
+    }
+
     /// Returns where the template outputs a secret.
     pub(crate) fn secrets(&self) -> impl Iterator<Item = (&SettingName, Pos)> {
         self.tokens.iter().filter_map(|(token, at)| match token {
@@ -753,7 +805,7 @@ impl Output {
                 self.push_text(&escaped)
             }
             Value::Integer(number) => self.push_text(&number.to_string()),
-            Value::Boolean(flag) => self.push_text(if flag { "true" } else { "false" }),
+            Value::Boolean(flag) => self.push_text(self.format.boolean(flag)),
             Value::Secret(secret) => {
                 if !self.text.is_empty() {
                     self.segments
@@ -1047,5 +1099,73 @@ mod tests {
         for bad in ["a\"b", "a\\b", "$HOME", "a\nb", "a\u{0}"] {
             assert_eq!(TemplateFormat::NatsConf.escape_text(bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn postgresql_conf_single_quotes_text_and_doubles_quotes_and_backslashes() {
+        let format = TemplateFormat::PostgresqlConf;
+
+        assert_eq!(format.escape_text("none").unwrap(), "'none'");
+        assert_eq!(format.escape_text("a'b\\c d").unwrap(), "'a''b\\\\c d'");
+        assert_eq!(format.escape_text("ü 空").unwrap(), "'ü 空'");
+        assert_eq!(format.escape_text("").unwrap(), "''");
+        assert_eq!(
+            format.escape_text("$(touch pwned) \"q\" `id`").unwrap(),
+            "'$(touch pwned) \"q\" `id`'"
+        );
+    }
+
+    #[test]
+    fn postgresql_conf_rejects_every_control_character() {
+        for bad in [
+            "a\nb", "a\tb", "a\rb", "a\u{0}", "a\u{1f}", "a\u{7f}", "a\u{85}", "a\u{9f}",
+        ] {
+            assert_eq!(
+                TemplateFormat::PostgresqlConf.escape_text(bad),
+                None,
+                "{bad:?}"
+            );
+        }
+        assert!(
+            TemplateFormat::PostgresqlConf
+                .escape_text("a\u{a0}b")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn postgresql_conf_writes_booleans_as_on_and_off_and_other_formats_as_true_and_false() {
+        assert_eq!(TemplateFormat::PostgresqlConf.boolean(true), "on");
+        assert_eq!(TemplateFormat::PostgresqlConf.boolean(false), "off");
+        for format in [
+            TemplateFormat::Yaml,
+            TemplateFormat::Json,
+            TemplateFormat::NatsConf,
+        ] {
+            assert_eq!(format.boolean(true), "true");
+            assert_eq!(format.boolean(false), "false");
+        }
+    }
+
+    #[test]
+    fn plain_escapes_nothing_and_allows_no_tags() {
+        assert_eq!(TemplateFormat::Plain.escape_text("x"), None);
+        assert!(!TemplateFormat::Plain.allows_tags());
+        assert!(TemplateFormat::PostgresqlConf.allows_tags());
+        assert!(TemplateFormat::Plain.output_parses("local all all scram-sha-256\n"));
+    }
+
+    #[test]
+    fn the_new_formats_parse_from_their_manifest_codes() {
+        assert_eq!(
+            TemplateFormat::from_code("postgresqlConf"),
+            Some(TemplateFormat::PostgresqlConf)
+        );
+        assert_eq!(
+            TemplateFormat::from_code("plain"),
+            Some(TemplateFormat::Plain)
+        );
+        assert_eq!(TemplateFormat::from_code("postgresql"), None);
+        assert_eq!(TemplateFormat::from_code("Plain"), None);
     }
 }

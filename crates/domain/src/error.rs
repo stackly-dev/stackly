@@ -169,6 +169,12 @@ pub enum ValueKind {
     AuditResource,
     /// A [`SecretUser`](crate::SecretUser).
     SecretUser,
+    /// An [`OsVersion`](crate::OsVersion).
+    OsVersion,
+    /// An [`ArtifactFormat`](crate::ArtifactFormat).
+    ArtifactFormat,
+    /// A [`SupportStatus`](crate::SupportStatus).
+    SupportStatus,
 }
 
 impl ValueKind {
@@ -253,6 +259,9 @@ impl ValueKind {
             Self::AuditResult => "audit result",
             Self::AuditResource => "audit resource",
             Self::SecretUser => "secret user",
+            Self::OsVersion => "os version",
+            Self::ArtifactFormat => "artifact format",
+            Self::SupportStatus => "support status",
         }
     }
 }

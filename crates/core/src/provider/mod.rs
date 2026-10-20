@@ -51,4 +51,7 @@ pub use settings::{
 };
 pub use template::{OUTPUT_MAX_LEN, TemplateFormat};
 pub use validate::ValidatedPackage;
-pub use versions::{VERSIONS_SCHEMA, manifest_software};
+pub use versions::{
+    ArtifactStatus, SigningPolicy, VERSIONS_SCHEMA, VersionArtifact, VersionCatalog,
+    manifest_software,
+};
