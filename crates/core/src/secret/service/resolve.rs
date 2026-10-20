@@ -130,7 +130,7 @@ impl SecretService {
                     let allowed = self.generate_allowed(&reference)?;
                     needs.push(NeedsSecretItem::new(reference, reason, allowed));
                 }
-                Read::Backend(error) => return Err(SecretError::Store(error)),
+                Read::Backend(error) => return Err(SecretError::Store { reference, error }),
             }
         }
         if needs.is_empty() {

@@ -630,7 +630,10 @@ impl OperationContext {
                     reason: ConflictReason::AlreadyExists,
                 })))
             }
-            Err(error) => Err(WorkError::Failed(Box::new(SecretError::Store(error)))),
+            Err(error) => Err(WorkError::Failed(Box::new(SecretError::Store {
+                reference,
+                error,
+            }))),
         }
     }
 
