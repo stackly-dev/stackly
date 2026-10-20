@@ -682,3 +682,104 @@ async fn finalize_runs_again_after_a_generation_conflict_and_a_stale_revision_fa
         Some("resource.revision_mismatch")
     );
 }
+
+#[tokio::test]
+async fn a_background_operation_records_no_key_method_or_fingerprint_and_a_request_records_all_three()
+ {
+    // Spec 0007 AC-3: an operation the daemon starts itself carries no
+    // idempotency key; one a client starts carries its key, its method, and
+    // its fingerprint.
+    let harness = Harness::new().await;
+    let background = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new().boxed(),
+        ))
+        .await;
+    let mut from_client =
+        manager_request(OperationKind::UpdateManager, ScriptedWork::new().boxed());
+    from_client.origin = user("cli-run-7", 0x5a);
+    let requested = harness.begin(from_client).await;
+
+    let background = harness.engine.get(background).await.unwrap().unwrap().view;
+    let requested = harness.engine.get(requested).await.unwrap().unwrap().view;
+
+    assert_eq!(background.operation.idempotency_key(), None);
+    assert_eq!(background.journal.method(), None);
+    assert_eq!(background.journal.fingerprint(), None);
+    assert_eq!(
+        background.journal.trigger().origin(),
+        stackly_domain::TriggerOrigin::Background
+    );
+    assert_eq!(
+        requested
+            .operation
+            .idempotency_key()
+            .map(|key| key.as_str().to_owned()),
+        Some("cli-run-7".to_owned())
+    );
+    assert_eq!(
+        requested
+            .journal
+            .method()
+            .map(|method| method.as_str().to_owned()),
+        Some("manager.update".to_owned())
+    );
+    assert!(requested.journal.fingerprint().is_some());
+    assert_eq!(
+        requested.journal.trigger().origin(),
+        stackly_domain::TriggerOrigin::User
+    );
+}
+
+/// Reports progress twice inside one window, then ends at once.
+struct EndsRightAfterProgress;
+
+impl OperationWork for EndsRightAfterProgress {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("copy".parse().expect("a step name")))
+                .await?;
+            ctx.set_progress(Progress::Counted { done: 1, total: 10 });
+            ctx.set_progress(Progress::Counted {
+                done: 10,
+                total: 10,
+            });
+            Ok(WorkOutcome {
+                result: stackly_core::operation::OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_commit_that_ends_an_operation_carries_its_last_progress_and_nothing_follows_it() {
+    // Spec 0007 AC-13: the state change carries the last progress, and the
+    // revision of the last event stays the operation's revision.
+    let harness = Harness::new().await;
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(EndsRightAfterProgress),
+        ))
+        .await;
+    let done = wait_state(&harness.engine, id, OperationState::Succeeded).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let later = harness.engine.get(id).await.unwrap().unwrap();
+    let last_event = harness.events.of(id).last().cloned().unwrap();
+
+    assert_eq!(
+        done.view.operation.progress(),
+        Progress::Counted {
+            done: 10,
+            total: 10
+        }
+    );
+    assert_eq!(
+        later.view.operation.revision(),
+        done.view.operation.revision()
+    );
+    assert_eq!(last_event.revision, later.view.operation.revision());
+}

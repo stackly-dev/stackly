@@ -30,6 +30,7 @@ stackly-platform-macos.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+sha2.workspace = true
 stackly-testkit.workspace = true
 tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
 

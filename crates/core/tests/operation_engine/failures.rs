@@ -1,20 +1,23 @@
 //! Panics, works that end with items still intended, journal writes that
 //! fail, and payloads over their limit (spec 0007 AC-16).
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use stackly_core::operation::testing::{HoldHandle, ScriptedWork};
+use stackly_core::operation::testing::{HoldHandle, ScriptedFactory, ScriptedWork};
 use stackly_core::operation::{
-    BeginError, BoxFuture, EngineLimits, OperationContext, OperationError, OperationOutcome,
-    OperationWork, StepSpec, WorkError, WorkOutcome, WorkResult, codes,
+    BeginError, BoxFuture, CompensationError, CompensationResult, CompensationScope, Compensator,
+    EngineLimits, OperationContext, OperationError, OperationOutcome, OperationWork, StepSpec,
+    WorkError, WorkOutcome, WorkResult, codes,
 };
 use stackly_domain::{
-    CreatedState, DetailKey, ErrorCodeName, JournalPayload, LockKey, OperationKind,
-    OperationResource, OperationState, RegistryError, RuntimeId, StepState,
+    CreatedRecord, CreatedState, DetailKey, ErrorCodeName, JournalPayload, LockKey, OperationKind,
+    OperationResource, OperationState, Registry, RegistryError, RuntimeId, StepState,
 };
 use stackly_platform::SecretValue;
+use stackly_testkit::FakeRegistry;
 
-use crate::common::{Harness, manager_request, request, wait_state};
+use crate::common::{Harness, TestError, manager_request, request, wait_state};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_panicking_work_is_compensated_and_failed_and_the_engine_keeps_running() {
@@ -287,4 +290,237 @@ async fn a_failure_is_stored_through_the_redactor_so_a_learned_value_never_lands
     assert_eq!(error.message(), "login with **** failed");
     assert_eq!(error.details()[0].1, "postgres://app:****@127.0.0.1/db");
     assert!(!format!("{failed:?}").contains(LEAKED));
+}
+
+/// Arms a failing commit on the fake registry, then says the item is gone,
+/// so the commit that settles it as compensated fails.
+struct FullDiskCompensator {
+    registry: Arc<FakeRegistry>,
+}
+
+impl Compensator for FullDiskCompensator {
+    fn compensate(
+        &self,
+        _scope: CompensationScope,
+        _record: &CreatedRecord,
+    ) -> BoxFuture<'static, Result<CompensationResult, CompensationError>> {
+        self.registry.fail_next_commit(RegistryError::NoSpace);
+        Box::pin(async { Ok(CompensationResult::Compensated) })
+    }
+}
+
+/// Records one custom item in a reversible step, then fails.
+struct CustomThenFail;
+
+impl OperationWork for CustomThenFail {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("mark".parse().expect("a step name")))
+                .await?;
+            let item = ctx
+                .record_custom_intent(
+                    "full_disk".parse().expect("a compensator name"),
+                    "marker".parse().expect("an item key"),
+                    None,
+                )
+                .await?;
+            ctx.confirm_created(item).await?;
+            Err(WorkError::Failed(TestError::boxed(
+                "internal.unexpected",
+                false,
+            )))
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_item_settled_while_its_commit_failed_still_lands_in_the_registry() {
+    let harness = Harness::new().await;
+    harness.engine.register_compensator(
+        "full_disk".parse().unwrap(),
+        Arc::new(FullDiskCompensator {
+            registry: Arc::clone(&harness.registry),
+        }),
+    );
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(CustomThenFail),
+        ))
+        .await;
+    wait_state(&harness.engine, id, OperationState::Failed).await;
+    let stored = harness
+        .registry
+        .operation_journal(id)
+        .unwrap()
+        .value
+        .unwrap();
+
+    assert_eq!(stored.created.len(), 1);
+    assert_eq!(stored.created[0].state(), CreatedState::Compensated);
+}
+
+/// Passes its point of no return, then fails a repeatable step after it
+/// armed a failing commit, so the commit that ends the step fails.
+struct FailsOnAFullDisk {
+    registry: Arc<FakeRegistry>,
+}
+
+impl OperationWork for FailsOnAFullDisk {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("fetch".parse().expect("a step name")).irreversible())
+                .await?;
+            ctx.finish_step(None).await?;
+            ctx.begin_step(StepSpec::new("verify".parse().expect("a step name")).repeatable())
+                .await?;
+            self.registry.fail_next_commit(RegistryError::NoSpace);
+            Err(WorkError::Failed(TestError::boxed(
+                "runtime.checksum_mismatch",
+                true,
+            )))
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_step_ended_while_its_commit_failed_lands_and_resumes_after_a_restart() {
+    let harness = Harness::new().await;
+    let rebuilt = || {
+        Arc::new(ScriptedFactory::always(
+            ScriptedWork::new()
+                .step("fetch")
+                .irreversible()
+                .step("verify")
+                .repeatable(),
+        ))
+    };
+    harness
+        .engine
+        .register_factory(OperationKind::InstallRuntime, rebuilt());
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::InstallRuntime,
+            Box::new(FailsOnAFullDisk {
+                registry: Arc::clone(&harness.registry),
+            }),
+        ))
+        .await;
+    let stuck = wait_state(&harness.engine, id, OperationState::NeedsRecovery).await;
+    let stored = harness
+        .registry
+        .operation_journal(id)
+        .unwrap()
+        .value
+        .unwrap();
+    let (engine, _) = harness.restarted(crate::common::fast());
+    engine.register_factory(OperationKind::InstallRuntime, rebuilt());
+    engine.recover().await.unwrap();
+    engine.start();
+    engine
+        .resume(id, Some(stuck.view.operation.revision()))
+        .await
+        .unwrap();
+    let done = wait_state(&engine, id, OperationState::Succeeded).await;
+
+    assert_eq!(stored.steps[1].state(), StepState::Failed);
+    let attempts: Vec<(&str, u32)> = done
+        .steps
+        .iter()
+        .map(|step| (step.name().as_str(), step.attempts()))
+        .collect();
+    assert_eq!(attempts, [("fetch", 1), ("verify", 2)]);
+}
+
+/// Begins one step more than a journal holds.
+struct TooManySteps;
+
+impl OperationWork for TooManySteps {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            for n in 1..=257 {
+                ctx.begin_step(StepSpec::new(format!("s{n}").parse().expect("a step name")))
+                    .await?;
+                ctx.finish_step(None).await?;
+            }
+            Ok(WorkOutcome {
+                result: OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+/// Ends its step with a checkpoint over the limit.
+struct HugeCheckpoint;
+
+impl OperationWork for HugeCheckpoint {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("stage".parse().expect("a step name")))
+                .await?;
+            let checkpoint =
+                JournalPayload::new(format!(r#"{{"blob":"{}"}}"#, "x".repeat(5_000)), usize::MAX)
+                    .expect("a json object");
+            ctx.finish_step(Some(checkpoint)).await?;
+            Ok(WorkOutcome {
+                result: OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_journal_over_its_limits_fails_with_its_own_catalog_code() {
+    // Spec 0007 AC-16 and *Kode error*: journal_full with kind and max,
+    // payload_too_large with field and max, not internal.unexpected.
+    let harness = Harness::new().await;
+
+    let steps = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(TooManySteps),
+        ))
+        .await;
+    let full = wait_state(&harness.engine, steps, OperationState::Failed).await;
+    let checkpoint = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            Box::new(HugeCheckpoint),
+        ))
+        .await;
+    let large = wait_state(&harness.engine, checkpoint, OperationState::Failed).await;
+
+    let error_of = |detail: &stackly_core::operation::OperationDetailView| {
+        let error = detail.view.journal.failure_error().expect("a stored error");
+        let details: Vec<(String, String)> = error
+            .details()
+            .iter()
+            .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
+            .collect();
+        (error.code().as_str().to_owned(), details)
+    };
+    assert_eq!(
+        error_of(&full),
+        (
+            "operation.journal_full".to_owned(),
+            vec![
+                ("kind".to_owned(), "steps".to_owned()),
+                ("max".to_owned(), "256".to_owned())
+            ]
+        )
+    );
+    assert_eq!(
+        error_of(&large),
+        (
+            "operation.payload_too_large".to_owned(),
+            vec![
+                ("field".to_owned(), "checkpoint".to_owned()),
+                ("max".to_owned(), "4096".to_owned())
+            ]
+        )
+    );
 }

@@ -88,7 +88,7 @@ async fn health_reports_starting_while_the_start_slot_is_held_then_ready() {
     );
     assert_eq!(
         status_of(&health, subsystem::OPERATIONS),
-        SubsystemStatus::NotBuilt
+        SubsystemStatus::Ok
     );
     let names: Vec<_> = health.subsystems.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, subsystem::ALL);

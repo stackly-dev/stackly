@@ -44,6 +44,31 @@ pub(crate) enum Cause {
 }
 
 impl Cause {
+    /// The cause of an engine error a work ran into: a journal over its
+    /// limits keeps its own catalog code and details (spec 0007, *Kode
+    /// error*); anything else is a bug, stored as `internal.unexpected`.
+    fn engine(error: &EngineError) -> Self {
+        let limit = |code: ErrorCodeName, first: (&'static str, String), max: String| Self::Step {
+            code,
+            message: error.to_string(),
+            details: vec![pair(first.0, first.1), pair("max", max)],
+            retryable: false,
+        };
+        match error {
+            EngineError::JournalFull { kind, max } => limit(
+                codes::JOURNAL_FULL,
+                ("kind", (*kind).to_owned()),
+                max.to_string(),
+            ),
+            EngineError::PayloadTooLarge { field, max } => limit(
+                codes::PAYLOAD_TOO_LARGE,
+                ("field", (*field).to_owned()),
+                max.to_string(),
+            ),
+            other => Self::Engine(other.to_string()),
+        }
+    }
+
     fn reason(&self) -> FailureCode {
         match self {
             Self::Panic => FailureCode::PANICKED,
@@ -100,28 +125,45 @@ pub(crate) enum Close {
     },
 }
 
-/// Runs a started queue entry, then gives its slot back.
+/// Runs a started queue entry, then gives its slot back. Every line the
+/// runner logs, the work's own included, carries the `operation` span with
+/// `operation_id` and `kind` (spec 0007 AC-19).
 pub(crate) async fn run(inner: &Arc<Inner>, entry: QueueEntry) {
+    // Gives the slot back however the run ends, a panic in it included.
+    let _slot = SlotGuard(inner);
     let id = entry.id;
     match inner.handle(id) {
         Some(handle) => {
-            handle.in_runner.store(true, Ordering::SeqCst);
-            // Shutdown may be counting the slots it waits for right now.
-            inner.idle.notify_waiters();
-            match entry.job {
-                Job::Work(work) => {
-                    let parts = (entry.cursor, entry.keys);
-                    run_work(inner, &handle, parts, work).await;
-                }
-                Job::Compensate => auto_compensate(inner, &handle).await,
-            }
-            // Cleared before the slot goes back, so shutdown never leaves
-            // out a slot that is already free.
-            handle.in_runner.store(false, Ordering::SeqCst);
+            let span = tracing::info_span!("operation", operation_id = %id, kind = %handle.kind);
+            tracing::Instrument::instrument(run_entry(inner, &handle, entry), span).await;
         }
         None => inner.locks.release_operation(id),
     }
-    inner.finish_slot();
+}
+
+/// Gives a running slot back when it drops.
+struct SlotGuard<'a>(&'a Inner);
+
+impl Drop for SlotGuard<'_> {
+    fn drop(&mut self) {
+        self.0.finish_slot();
+    }
+}
+
+async fn run_entry(inner: &Arc<Inner>, handle: &Arc<OpHandle>, entry: QueueEntry) {
+    handle.in_runner.store(true, Ordering::SeqCst);
+    // Shutdown may be counting the slots it waits for right now.
+    inner.idle.notify_waiters();
+    match entry.job {
+        Job::Work(work) => {
+            let parts = (entry.cursor, entry.keys);
+            run_work(inner, handle, parts, work).await;
+        }
+        Job::Compensate => auto_compensate(inner, handle).await,
+    }
+    // Cleared before the slot goes back, so shutdown never leaves out a
+    // slot that is already free.
+    handle.in_runner.store(false, Ordering::SeqCst);
 }
 
 /// Puts a work back in the queue, to start after the retry interval.
@@ -234,7 +276,7 @@ async fn run_work(
         record.journal.resumable(),
     );
     drop(record);
-    let span = tracing::info_span!("operation", operation_id = %id, kind = %handle.kind);
+    let span = tracing::Span::current();
     let ended = match tokio::spawn(tracing::Instrument::instrument(work.run(ctx), span)).await {
         Ok(result) => Ended::Returned(result),
         Err(_) => Ended::Panicked,
@@ -352,7 +394,7 @@ async fn settle(inner: &Arc<Inner>, handle: &Arc<OpHandle>, ended: Ended) {
             fail(inner, handle, &mut record, cause).await;
         }
         Ended::Returned(Err(WorkError::Engine(error))) => {
-            fail(inner, handle, &mut record, Cause::Engine(error.to_string())).await;
+            fail(inner, handle, &mut record, Cause::engine(&error)).await;
         }
         Ended::Panicked => fail(inner, handle, &mut record, Cause::Panic).await,
     }
@@ -377,7 +419,13 @@ async fn mark_open_step(
         .await;
     if written.is_err() {
         let now = inner.now();
+        let open = record.open_step().map(stackly_domain::JournalStep::seq);
         end_open_step(record, state, code, now);
+        // Kept in memory; the next batch, at the latest the final one,
+        // writes it.
+        if let Some(seq) = open {
+            record.mark_unwritten_step(seq);
+        }
     }
 }
 
@@ -603,7 +651,7 @@ async fn succeed(inner: &Inner, handle: &OpHandle, record: &mut OpRecord, outcom
     let payload = match outcome.result.to_payload() {
         Ok(payload) => payload,
         Err(error) => {
-            fail(inner, handle, record, Cause::Engine(error.to_string())).await;
+            fail(inner, handle, record, Cause::engine(&error)).await;
             return;
         }
     };
