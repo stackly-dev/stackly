@@ -246,6 +246,23 @@ impl SpawnedDaemon {
         self.terminate()
     }
 
+    /// Sends SIGKILL and waits for the process to end, so the daemon gets no
+    /// chance to clean up. A test uses it to start a new daemon on the same
+    /// root and prove the restart.
+    ///
+    /// # Errors
+    ///
+    /// Returns the I/O error of the kill or wait call.
+    pub fn kill(mut self) -> io::Result<ExitStatus> {
+        if let Some(status) = self.try_status()? {
+            return Ok(status);
+        }
+        self.child.kill()?;
+        let status = self.child.wait()?;
+        self.status = Some(status);
+        Ok(status)
+    }
+
     /// Waits up to `timeout` for a daemon that should exit on its own, and
     /// returns its exit status.
     ///

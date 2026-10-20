@@ -24,6 +24,10 @@
 //! crate find the binary through [`cargo_bin`] (spec 0006), and an example
 //! through [`cargo_example`] (spec 0014).
 //!
+//! End to end tests of the daemon and the CLI count and reap processes
+//! through [`ProcessTable`] and [`ReapGuard`], and run the `stackly` binary
+//! on a test root through [`CliRunner`] (spec 0014).
+//!
 //! Tests that need a process to supervise run the dummy server from
 //! [`fake_server::binary`], which builds `stackly-fake-server` once per
 //! test process (spec 0009).
@@ -44,6 +48,8 @@
 mod cargo_bin;
 mod cargo_example;
 #[cfg(unix)]
+mod cli_runner;
+#[cfg(unix)]
 mod conformance;
 #[cfg(target_os = "macos")]
 mod disk_image;
@@ -61,6 +67,10 @@ pub mod fake_server;
 mod fifo;
 mod port;
 #[cfg(unix)]
+mod process_table;
+#[cfg(unix)]
+mod reap_guard;
+#[cfg(unix)]
 mod registry;
 #[cfg(unix)]
 mod spawned_daemon;
@@ -68,6 +78,8 @@ mod test_root;
 
 pub use cargo_bin::cargo_bin;
 pub use cargo_example::cargo_example;
+#[cfg(unix)]
+pub use cli_runner::{CLI_TIMEOUT, CliOutput, CliRunner};
 #[cfg(unix)]
 pub use conformance::fs_conformance;
 #[cfg(target_os = "macos")]
@@ -87,6 +99,10 @@ pub use fake_secret::{FakeSecretStore, SecretCall, SecretHold, SecretOp};
 #[cfg(unix)]
 pub use fifo::make_fifo;
 pub use port::allocate_port;
+#[cfg(unix)]
+pub use process_table::{ProcessEntry, ProcessTable};
+#[cfg(unix)]
+pub use reap_guard::{REAP_GRACE, ReapGuard};
 #[cfg(unix)]
 pub use registry::{
     BackupSeed, EnvironmentBuilder, FakeRegistry, InstanceBuilder, LeaseBuilder, OperationBuilder,

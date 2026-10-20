@@ -64,6 +64,28 @@ fn stop_reports_how_the_process_ended() {
 }
 
 #[test]
+fn kill_ends_the_process_with_sigkill_and_waits_for_it() {
+    use std::os::unix::process::ExitStatusExt;
+
+    let root = TestRoot::new().unwrap();
+    let (socket, runtime) = paths(&root);
+    let daemon = SpawnedDaemon::spawn(
+        Path::new("/bin/sleep"),
+        root.path(),
+        &socket,
+        &runtime,
+        &["30"],
+    )
+    .unwrap();
+    let pid = daemon.pid();
+
+    let status = daemon.kill().unwrap();
+
+    assert_eq!(status.signal(), Some(9), "{status:?}");
+    assert!(!running(pid));
+}
+
+#[test]
 fn start_fails_with_the_stderr_when_the_process_exits_before_it_is_ready() {
     let root = TestRoot::new().unwrap();
     let (socket, runtime) = paths(&root);

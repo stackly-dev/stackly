@@ -4,7 +4,7 @@ metadata:
   id: testing/fake
   software: fake
   displayName: Fake Provider
-  revision: "0.1.0"
+  revision: "0.2.0"
   category: testing
   description: Dummy server for Stackly tests. Never part of the app catalog.
 compatibility:
@@ -41,6 +41,7 @@ lifecycle:
         - "--data=${instance.data}"
         - --token-stdin
         - "--fail=${settings.failInit}"
+        - "--delay-ms=${settings.initDelayMs}"
       stdin: { secret: authToken }
   start:
     executable: "${runtime.executable}"

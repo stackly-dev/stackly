@@ -10,7 +10,7 @@
 //! only flag without one. Commands:
 //!
 //! - `version` prints `stackly-fake-server <crate version>`.
-//! - `init --data=<dir> [--token-stdin] [--fail=<bool>]` records its argv in
+//! - `init --data=<dir> [--token-stdin] [--fail=<bool>] [--delay-ms=<n>]` records its argv in
 //!   `<dir>/argv-init.json`, refuses a folder that holds anything else,
 //!   writes the SHA-256 of the exact stdin bytes to `<dir>/token.sha256`
 //!   with `--token-stdin`, and writes `<major>.<minor>` to

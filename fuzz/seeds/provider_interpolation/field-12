@@ -1,1 +1,1 @@
---log-lines-per-second=${settings.logLinesPerSecond}
+--crash-exit-code=${settings.crashExitCode}

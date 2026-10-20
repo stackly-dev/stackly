@@ -17,7 +17,7 @@ use stackly_core::{daemon_info, prepare_layout};
 use stackly_domain::Registry;
 use stackly_platform_macos::MacosPlatform;
 use stackly_storage::{RegistryOpen, open_registry};
-use stackly_testkit::{TestRoot, cargo_bin, cargo_example, fake_server};
+use stackly_testkit::{ReapGuard, TestRoot, cargo_bin, cargo_example, fake_server};
 use uuid::Uuid;
 
 /// How long the printed command gets before the test kills it and fails.
@@ -183,6 +183,7 @@ fn seeding_an_empty_root_prints_ids_and_a_command_the_daemon_accepts() {
         "--runtime {runtime_id} --provider testing/fake --revision {revision}"
     )));
 
+    let _reap = ReapGuard::new(root.path(), &daemon_paths(&root).runtime);
     let daemon = start_daemon(&root);
     let created = run_printed_command(&root, command);
     assert_eq!(
@@ -292,6 +293,7 @@ fn a_root_with_a_running_daemon_is_refused_and_unchanged() {
     let root = TestRoot::new().expect("a test root");
     seed_json(&root);
     let paths = seeded_paths(&root);
+    let _reap = ReapGuard::new(root.path(), &daemon_paths(&root).runtime);
     let daemon = start_daemon(&root);
 
     let output = seed(&root);

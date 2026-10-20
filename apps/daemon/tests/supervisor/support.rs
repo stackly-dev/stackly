@@ -12,11 +12,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Map, Value};
-use stackly_core::supervisor::fixture::install_fake;
+use stackly_core::supervisor::fixture::seed_fake;
 use stackly_core::supervisor::{LogBatch, LogSink as SupervisorLogSink, SinkOutcome};
 use stackly_core::{PreparedLayout, daemon_info, prepare_layout};
 use stackly_domain::InstanceId;
-use stackly_domain::{Registry, WriteBatch, WriteOp};
 use stackly_ipc::{CallOptions, Client, ConnectPolicy};
 use stackly_platform::{Clock, Platform, SystemClock, UserId};
 use stackly_platform_macos::MacosPlatform;
@@ -30,7 +29,7 @@ use stackly_protocol::operation::{GetOperationParams, OperationDetail, Operation
 use stackly_protocol::secret::{SecretInput, SecretText};
 use stackly_protocol::{Call, ErrorBody, Reply, Timestamp};
 use stackly_storage::{OpenOptions, RegistryOpen};
-use stackly_testkit::{FakeSecretStore, TestRoot, fake_server};
+use stackly_testkit::{FakeSecretStore, ReapGuard, TestRoot, fake_server};
 use stacklyd::lock::{DaemonLock, LockOwner};
 use stacklyd::log_sink::{LogSink, LogSinkConfig};
 use stacklyd::map::StartFacts;
@@ -42,7 +41,7 @@ pub const PATIENCE: Duration = Duration::from_secs(30);
 /// The provider of the fake package and its revision.
 pub const PROVIDER: &str = "testing/fake";
 /// The revision of the fake package.
-pub const REVISION: &str = "0.1.0";
+pub const REVISION: &str = "0.2.0";
 /// The auth token every test gives `authToken`.
 pub const TOKEN: &str = "fixture-token-for-the-fake-provider";
 
@@ -62,6 +61,9 @@ pub fn fast() -> DaemonConfig {
 /// One test's root: the platform, the layout, the fake secret store, the
 /// daemon lock, and the fake runtime and package already in the registry.
 pub struct Site {
+    /// Declared first, so it drops first: it stops the instance processes
+    /// that name this root, then removes the runtime root.
+    _reap: ReapGuard,
     pub root: TestRoot,
     pub platform: Platform,
     pub prepared: PreparedLayout,
@@ -93,28 +95,24 @@ impl Site {
             panic!("a fresh registry opens ready");
         };
         let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake");
-        let installed = install_fake(
+        let seeded = seed_fake(
             &platform,
             prepared.layout(),
+            &registry,
             &fake_server::binary(),
             &package,
         )
-        .expect("the fake runtime and package install");
-        registry
-            .commit(WriteBatch::new(vec![
-                WriteOp::InsertProviderRevision(installed.provider),
-                WriteOp::InsertArtifact(installed.artifact),
-                WriteOp::InsertRuntime(installed.runtime.clone()),
-            ]))
-            .expect("the fake records are stored");
+        .expect("the fake runtime and package are seeded");
         // The registry closes here, so the daemon opens it alone.
         drop(registry);
+        let reap = ReapGuard::new(root.path(), root.roots().runtime());
         Self {
+            _reap: reap,
             root,
             platform,
             prepared,
             secrets,
-            runtime_id: installed.runtime.id().as_uuid(),
+            runtime_id: seeded.runtime_id.as_uuid(),
             _lock: lock,
         }
     }
@@ -225,22 +223,33 @@ pub fn seed_root(root: &TestRoot) -> Uuid {
         panic!("a fresh registry opens ready");
     };
     let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake");
-    let installed = install_fake(
+    let seeded = seed_fake(
         &platform,
         prepared.layout(),
+        &registry,
         &fake_server::binary(),
         &package,
     )
-    .expect("the fake runtime and package install");
-    registry
-        .commit(WriteBatch::new(vec![
-            WriteOp::InsertProviderRevision(installed.provider),
-            WriteOp::InsertArtifact(installed.artifact),
-            WriteOp::InsertRuntime(installed.runtime.clone()),
-        ]))
-        .expect("the fake records are stored");
+    .expect("the fake runtime and package are seeded");
     drop(registry);
-    installed.runtime.id().as_uuid()
+    seeded.runtime_id.as_uuid()
+}
+
+/// A guard for a root a `stacklyd` binary serves with `STACKLY_ROOT`: on
+/// drop it stops every process whose argv names the root (the instances a
+/// stopped daemon leaves running) and removes the root's runtime root. It
+/// matches only paths under this root's own canonical path, never a name
+/// pattern. Declare it right after the root, before the daemons.
+pub fn reap_guard(root: &TestRoot) -> ReapGuard {
+    let platform =
+        MacosPlatform::new(Some(root.path().into())).expect("a test root is a valid root override");
+    let runtime = platform
+        .directories()
+        .roots()
+        .expect("the macOS platform resolved its roots")
+        .runtime()
+        .to_path_buf();
+    ReapGuard::new(root.path(), &runtime)
 }
 
 impl Api {

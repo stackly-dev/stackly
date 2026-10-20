@@ -1274,6 +1274,7 @@ name = "stackly-testkit"
 version = "0.1.0"
 dependencies = [
  "jiff",
+ "serde_json",
  "stackly-domain",
  "stackly-evidence",
  "stackly-platform",

@@ -11,7 +11,7 @@ mod common;
 use std::process::Command;
 use std::time::Duration;
 
-use common::{client, start_daemon};
+use common::{client, daemon_paths, start_daemon};
 use stackly_ipc::{CallOptions, Client};
 use stackly_protocol::instance::{
     CreateInstanceParams, ProviderSelector, SecretFieldInput, SettingsDocument,
@@ -22,7 +22,7 @@ use stackly_protocol::secret::{
     SecretStatus, SecretText, SecretValueOrigin,
 };
 use stackly_protocol::{Call, Reply};
-use stackly_testkit::{TestRoot, cargo_example, fake_server};
+use stackly_testkit::{ReapGuard, TestRoot, cargo_example, fake_server};
 use uuid::Uuid;
 
 const PATIENCE: Duration = Duration::from_secs(30);
@@ -150,6 +150,7 @@ async fn reveal(client: &Client, reference: &str) -> String {
 async fn a_create_without_secrets_generates_every_secret_field() {
     let root = TestRoot::new().expect("a test root");
     let (runtime_id, revision) = seed(&root);
+    let _reap = ReapGuard::new(root.path(), &daemon_paths(&root).runtime);
     let daemon = start_daemon(&root);
     let (client, _) = client(daemon.socket()).await;
 
@@ -192,6 +193,7 @@ async fn a_create_without_secrets_generates_every_secret_field() {
 async fn an_explicit_secret_keeps_the_source_the_client_sent() {
     let root = TestRoot::new().expect("a test root");
     let (runtime_id, revision) = seed(&root);
+    let _reap = ReapGuard::new(root.path(), &daemon_paths(&root).runtime);
     let daemon = start_daemon(&root);
     let (client, _) = client(daemon.socket()).await;
 

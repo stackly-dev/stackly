@@ -537,6 +537,55 @@ fn init_with_fail_true_exits_with_four_and_leaves_only_the_argv_record() {
 }
 
 #[test]
+fn init_delay_waits_after_the_token_and_before_touching_the_data_folder() {
+    let root = TestRoot::new().unwrap();
+    let data = root.path().join("instances/one/data");
+    let args = vec![
+        "init".to_owned(),
+        format!("--data={}", data.display()),
+        "--token-stdin".to_owned(),
+        "--delay-ms=1200".to_owned(),
+    ];
+    let started = Instant::now();
+
+    let fake = Fake::spawn(&args, Some(FIXTURE_TOKEN.as_bytes()), root.path());
+    thread::sleep(Duration::from_millis(400));
+    assert!(
+        !data.exists(),
+        "the data folder stays untouched during the delay"
+    );
+    let finished = fake.finish();
+
+    assert_eq!(finished.status.code(), Some(0), "{finished:?}");
+    assert!(started.elapsed() >= Duration::from_millis(1200));
+    assert_eq!(
+        std::fs::read_to_string(data.join("token.sha256")).unwrap(),
+        sha256_hex(FIXTURE_TOKEN.as_bytes()),
+        "the token is still read in full"
+    );
+    assert_eq!(read_argv(&data.join("argv-init.json")), args);
+}
+
+#[test]
+fn init_with_a_delay_that_is_not_a_number_is_a_usage_failure() {
+    let root = TestRoot::new().unwrap();
+    let data = root.path().join("data");
+
+    let finished = run(
+        &root,
+        &[
+            "init",
+            &format!("--data={}", data.display()),
+            "--delay-ms=soon",
+        ],
+        None,
+    );
+
+    assert_eq!(finished.status.code(), Some(2), "{finished:?}");
+    assert!(!data.exists());
+}
+
+#[test]
 fn serve_answers_ready_only_after_the_delay() {
     let mut setup = Setup::new();
     let started = Instant::now();

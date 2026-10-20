@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 jiff.workspace = true
+serde_json.workspace = true
 stackly-domain.workspace = true
 stackly-evidence.workspace = true
 stackly-platform.workspace = true

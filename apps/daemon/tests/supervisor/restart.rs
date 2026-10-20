@@ -19,7 +19,7 @@ use stackly_testkit::evidence::{Kind, evidence};
 use uuid::Uuid;
 
 use crate::common::{client, daemon_paths, runtime, start_daemon};
-use crate::support::{Api, alive, seed_root, serving};
+use crate::support::{Api, alive, reap_guard, seed_root, serving};
 
 /// Name and SHA-256 of every file under `data`, so a restart can be shown
 /// to have deleted nothing.
@@ -84,6 +84,7 @@ fn a_daemon_killed_with_sigkill_leaves_the_process_and_the_next_daemon_adopts_it
         expected = "after stacklyd is killed with SIGKILL the fake keeps running, and the next stacklyd adopts the same pid and start time without a spawn, shows it ready again on its stored port, deletes no data file, and lists one instance",
     );
     let root = TestRoot::new().expect("a test root can be created");
+    let _reap = reap_guard(&root);
     let runtime_id = seed_root(&root);
     let paths = daemon_paths(&root);
     let rt = runtime();
@@ -167,6 +168,7 @@ fn sigterm_leaves_the_instance_running_and_the_next_daemon_closes_the_interrupte
         expected = "SIGTERM during a start leaves the fake running, the next stacklyd closes the start operation failed with reason interrupted and adopts the process, and the instance becomes ready",
     );
     let root = TestRoot::new().expect("a test root can be created");
+    let _reap = reap_guard(&root);
     let runtime_id = seed_root(&root);
     let rt = runtime();
 
@@ -236,6 +238,7 @@ fn a_process_lost_while_the_daemon_was_away_is_started_again_in_the_same_boot() 
         expected = "an instance that should run whose process died while the daemon was away is started again by the next stacklyd in the same boot, and it ends running and ready with a new process",
     );
     let root = TestRoot::new().expect("a test root can be created");
+    let _reap = reap_guard(&root);
     let runtime_id = seed_root(&root);
     let rt = runtime();
 
@@ -383,6 +386,7 @@ fn a_recorded_pid_that_another_program_owns_now_is_never_signalled_and_the_insta
         expected = "RISK-14 (status from an old PID): when the last recorded pid belongs to another program with another start time and the instance lock is free, the next stacklyd takes the old process for gone, never signals that program, and starts the instance again",
     );
     let root = TestRoot::new().expect("a test root can be created");
+    let _reap = reap_guard(&root);
     let (id, runtime_id) = leave_a_dead_instance(&root);
     let impostor = plant_impostor(&root, id);
     let rt = runtime();
@@ -421,6 +425,7 @@ fn a_recorded_pid_with_the_lock_held_by_someone_makes_the_instance_unknown_and_n
         expected = "RISK-14 (status from an old PID): when the last recorded process cannot be proven and instance.lock is held by another process, the next stacklyd makes the instance unknown with a dataInUse blocker, refuses start and stop with supervisor.identity_unproven, and signals nothing",
     );
     let root = TestRoot::new().expect("a test root can be created");
+    let _reap = reap_guard(&root);
     let (id, runtime_id) = leave_a_dead_instance(&root);
     let impostor = plant_impostor(&root, id);
     let paths = daemon_paths(&root);
