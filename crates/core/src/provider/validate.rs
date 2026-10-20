@@ -44,7 +44,7 @@ use super::timeouts::{
     HEALTH_INTERVAL_SECONDS, INIT_SECONDS, READINESS_INTERVAL_MS, READINESS_SECONDS,
     RECOVERY_SECONDS, RELOAD_SECONDS, STOP_SECONDS, SUCCESS_EXIT_CODES_MAX, Timeouts,
 };
-use super::versions::{VersionsContext, check_versions};
+use super::versions::{VersionCatalog, VersionsContext, check_versions};
 
 /// The `file` of issues about the settings schema.
 const SETTINGS_ISSUE_FILE: &str = "settings.schema.json";
@@ -82,6 +82,7 @@ pub struct ValidatedPackage {
     pub(crate) manifest: Manifest,
     pub(crate) settings: SettingsSchema,
     pub(crate) templates: BTreeMap<String, Checked>,
+    pub(crate) versions: VersionCatalog,
 }
 
 impl ValidatedPackage {
@@ -100,7 +101,7 @@ impl ValidatedPackage {
         let mut issues = Issues::new();
         let result = validate(&files, name_check, &mut issues);
         match result {
-            Some((manifest, settings, templates)) if issues.is_empty() => {
+            Some((manifest, settings, templates, Some(versions))) if issues.is_empty() => {
                 let mut hashed: Vec<(&str, &[u8])> = Vec::new();
                 for path in [MANIFEST_FILE, SETTINGS_SCHEMA_FILE] {
                     if let Some(bytes) = files.get(path) {
@@ -134,6 +135,7 @@ impl ValidatedPackage {
                     manifest,
                     settings,
                     templates,
+                    versions,
                 })
             }
             _ => Err(PackageError {
@@ -186,9 +188,21 @@ impl ValidatedPackage {
     pub const fn files(&self) -> &PackageFiles {
         &self.files
     }
+
+    /// Returns the typed `versions.json`: every artifact in file order, for
+    /// the catalog (spec 0017) and the installer (spec 0018).
+    #[must_use]
+    pub const fn versions(&self) -> &VersionCatalog {
+        &self.versions
+    }
 }
 
-type Validated = (Manifest, SettingsSchema, BTreeMap<String, Checked>);
+type Validated = (
+    Manifest,
+    SettingsSchema,
+    BTreeMap<String, Checked>,
+    Option<VersionCatalog>,
+);
 
 fn validate(files: &PackageFiles, name_check: NameCheck, issues: &mut Issues) -> Option<Validated> {
     let texts = check_files(files, issues);
@@ -263,6 +277,7 @@ fn validate(files: &PackageFiles, name_check: NameCheck, issues: &mut Issues) ->
         issues,
     );
     check_setting_refs(&manifest, settings.as_ref(), &refs, &templates, issues);
+    let mut versions = None;
     if let Some(raw) = &raw_versions {
         let mut executables = vec![(
             manifest.executable.join("/"),
@@ -280,14 +295,14 @@ fn validate(files: &PackageFiles, name_check: NameCheck, issues: &mut Issues) ->
             platforms: &manifest.platforms,
             executables,
         };
-        check_versions(raw, &context, &mut FileIssues::new(VERSIONS_FILE, issues));
+        versions = check_versions(raw, &context, &mut FileIssues::new(VERSIONS_FILE, issues));
     }
     let settings = settings?;
     let templates = templates?;
     if issues.is_empty() {
         sample_renders(&manifest, &settings, &templates, issues);
     }
-    Some((manifest, settings, templates))
+    Some((manifest, settings, templates, versions))
 }
 
 fn decode_manifest(text: &str, issues: &mut Issues) -> Option<RawManifest> {

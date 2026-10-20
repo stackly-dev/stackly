@@ -14,7 +14,9 @@
 //! rules that the domain checks reject with an [`InvariantError`] whose
 //! `rule()` names the BR.
 
+mod artifact_format;
 mod capability;
+mod catalog;
 mod code;
 mod endpoint;
 mod environment;
@@ -26,6 +28,7 @@ mod lease;
 mod manifest;
 mod observation;
 mod operation;
+mod os_version;
 mod process;
 mod provider;
 mod registry;
@@ -37,7 +40,9 @@ mod target;
 mod text;
 mod value;
 
+pub use artifact_format::ArtifactFormat;
 pub use capability::{Capability, CapabilitySet};
+pub use catalog::SupportStatus;
 pub use endpoint::{
     Endpoint, IpEndpoint, PortRequest, Transport, UnixEndpoint, endpoints_conflict, resolve_port,
 };
@@ -73,6 +78,7 @@ pub use operation::{
     RecoveryHint, StepSeq, StepState, StoredCreatedRecord, StoredJournal, StoredOperation,
     StoredStep, TriggerOrigin,
 };
+pub use os_version::OsVersion;
 pub use process::{
     BootId, IdentityCheck, IdentityCheckName, IdentityEvidence, LockState, Pid, ProcessIdentity,
     ProcessObservation, ProcessStart,
