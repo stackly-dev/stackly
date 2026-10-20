@@ -229,6 +229,8 @@
 
 - `14` · milestone `CLI instance commands` · laporan `dev-f14-m2` (`386d9b6`, `8c6cf43`) dan `chk-f14-m2` PASS 12/12 (`d8cfadc`, termasuk smoke check `resource.not_found` ke `stacklyd` sungguhan) · merge `94b7f6e`, `3b1fcab`, lalu verify · commit `docs(scope): tick 14 milestone 2`. Temuan teks spec: AC-6 (`operation` null) bertentangan dengan jawaban `alreadyInState` yang membawa operasi `no_op`; path fixture instance ditulis `protocols/fixtures/instance/` padahal yang ada `protocols/fixtures/ipc/`. Keduanya untuk `/architect` update spec 0014.
 
+- `7` · milestone `Failure items, rule, and replay`, `Build it`, lalu fitur ditandai `done` (heading, At a glance, Urutan file, dan Status spec 0007 `Accepted`) atas izin user · laporan `dev-f7-m5` (`32ae29f`), `chk-f7-m5` PASS 15/15 (`1690081`), `tst-f7-m5` (`abcbd08`), `chk-f7-review` Approve with nits (`9625447`), dan `/document changelog` oleh lead (empat bullet di `CHANGELOG.md`, rentang langkah 16 `cf009b4^..32ae29f` ditambah `abcbd08`) · merge `fffa50e`, `6235716`, `b465ef5`, `a1f483f` · commit `docs(scope): tick 7 step 16, build it, and mark feature 7 done`
+
 ## Riwayat wave
 
 - Wave `1` (`2026-10-20`, hash awal `eea005d`): selesai di `4434632`. Merge: F8 langkah 12 dan test (`87e905e`, `ed731b5`, `6cc2c10`), update spec 0007 (`8e2a94a`), F11 langkah 5 (`08bc15f`, `14653f8`), F10 langkah 7 dan 8 (`4434632`). Dicentang: F8 milestone 2, `Build it`, `Verify it`, `Test it`, dan F8 `done`. Terbuka: F7 langkah 16, F10 M1 sampai M4 dan kotak penutup, F11 M4 (langkah 7), M5, M6, dan kotak penutup, serta F14. Blocker: baris Boot setelah reboot F10 (`BLOCKED`, owner user).
