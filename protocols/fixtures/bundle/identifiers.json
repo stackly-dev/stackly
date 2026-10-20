@@ -1,0 +1,15 @@
+{
+  "appBundleId": "com.ojiepermana.stackly",
+  "daemonLabel": "com.ojiepermana.stackly.daemon",
+  "daemonPlistFile": "com.ojiepermana.stackly.daemon.plist",
+  "daemonSigningId": "com.ojiepermana.stackly.daemon",
+  "cliSigningId": "com.ojiepermana.stackly.cli",
+  "testAgentLabelPrefix": "dev.stackly.test.agent.",
+  "appExecutable": "Stackly",
+  "daemonExecutable": "stacklyd",
+  "cliExecutable": "stackly",
+  "macosDir": "Contents/MacOS",
+  "launchAgentsDir": "Contents/Library/LaunchAgents",
+  "resourcesDir": "Contents/Resources",
+  "daemonBundleProgram": "Contents/MacOS/stacklyd"
+}
