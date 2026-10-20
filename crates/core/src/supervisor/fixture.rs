@@ -13,8 +13,9 @@ use std::path::{Path, PathBuf};
 use jiff::Timestamp;
 use sha2::{Digest, Sha256};
 use stackly_domain::{
-    ArtifactRecord, InstallMode, ProviderRevisionRecord, Runtime, RuntimeId, RuntimeState,
-    Sha256Digest, StoredRuntime,
+    ArtifactRecord, BatchError, InstallMode, ProviderRevisionKey, ProviderRevisionRecord, Registry,
+    RegistryError, Runtime, RuntimeId, RuntimeState, Sha256Digest, StoredRuntime, WriteBatch,
+    WriteOp,
 };
 use stackly_platform::{DirectoryLayout, Platform};
 
@@ -51,6 +52,19 @@ pub enum FixtureError {
         /// The folder.
         path: PathBuf,
     },
+    /// The root holds a different fake runtime or provider revision than
+    /// the one to seed, so seeding it again would change what it means.
+    #[error("the root holds a different {what}")]
+    Conflict {
+        /// What differs, such as `fake runtime 0.1.0` or `provider testing/fake 0.2.0`.
+        what: String,
+    },
+    /// The registry could not be read.
+    #[error("cannot read the registry: {0}")]
+    Registry(#[from] RegistryError),
+    /// The registry refused the records.
+    #[error("cannot store the fake records: {}", .0.error)]
+    Commit(#[from] BatchError),
 }
 
 impl FixtureError {
@@ -220,5 +234,125 @@ pub fn install_fake(
         runtime,
         artifact,
         provider,
+    })
+}
+
+/// What [`seed_fake`] found or made.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct SeededFake {
+    /// The fake runtime the instances of the root run on.
+    pub runtime_id: RuntimeId,
+    /// The pinned fake provider revision.
+    pub provider: ProviderRevisionKey,
+    /// Whether this call wrote anything; false when the root held both
+    /// already.
+    pub created: bool,
+}
+
+/// Puts the fake runtime and the fake provider package into a development
+/// root: copies `fake_server` and the package `package` into the folders of
+/// `layout` and commits the records to `registry` in one batch. A part the
+/// root holds already is left alone, so running it again writes nothing and
+/// returns the same IDs.
+///
+/// The caller holds the daemon lock of the root (spec 0014, `skeleton_seed`);
+/// this function never writes anything when it returns an error.
+///
+/// # Errors
+///
+/// Returns [`FixtureError::Conflict`] when the root holds a fake runtime of
+/// the same version with a different binary, or a provider revision of the
+/// same name and revision with a different digest;
+/// [`FixtureError::Leftover`] when a folder to write exists without its
+/// registry row; and the errors of [`install_fake_runtime`] and
+/// [`pin_package`] otherwise.
+pub fn seed_fake(
+    platform: &Platform,
+    layout: &DirectoryLayout,
+    registry: &dyn Registry,
+    fake_server: &Path,
+    package: &Path,
+) -> Result<SeededFake, FixtureError> {
+    let validated = read_valid(platform, package)?;
+    let artifact = validated
+        .versions()
+        .artifacts()
+        .first()
+        .ok_or(FixtureError::NoArtifact)?;
+    let bytes =
+        fs::read(fake_server).map_err(|error| FixtureError::io("read", fake_server, error))?;
+    let digest = Sha256Digest::from_bytes(Sha256::digest(&bytes).into());
+    drop(bytes);
+
+    let existing = registry.runtimes()?.value.into_iter().find(|runtime| {
+        runtime.software() == validated.software() && runtime.version() == &artifact.version
+    });
+    let runtime_id = match &existing {
+        Some(runtime) => match runtime.install() {
+            InstallMode::Managed { artifact_sha256 } if *artifact_sha256 == digest => {
+                Some(runtime.id())
+            }
+            _ => {
+                return Err(FixtureError::Conflict {
+                    what: format!("fake runtime {}", artifact.version),
+                });
+            }
+        },
+        None => None,
+    };
+
+    let key = validated.key().clone();
+    let pinned = registry.provider_revision(&key)?.value.is_some();
+    let target = layout.provider_revision_dir(&key);
+    if !pinned {
+        if let Some(parent) = target.parent()
+            && let Ok(entries) = fs::read_dir(parent)
+            && entries.flatten().any(|entry| entry.path() != target)
+        {
+            return Err(FixtureError::Conflict {
+                what: format!("provider {} {}", key.provider(), key.revision()),
+            });
+        }
+        if target.exists() {
+            return Err(FixtureError::Leftover { path: target });
+        }
+    }
+    if runtime_id.is_none() {
+        let dir = layout.runtime_dir(
+            validated.software(),
+            &artifact.version,
+            artifact.target,
+            &digest,
+        );
+        if dir.exists() {
+            return Err(FixtureError::Leftover { path: dir });
+        }
+    }
+
+    let mut ops = Vec::new();
+    let runtime_id = match runtime_id {
+        Some(id) => id,
+        None => {
+            let installed_at = platform.clock().now();
+            let (runtime, record) =
+                install_fake_runtime(layout, &validated, fake_server, installed_at)?;
+            let id = runtime.id();
+            ops.push(WriteOp::InsertArtifact(record));
+            ops.push(WriteOp::InsertRuntime(runtime));
+            id
+        }
+    };
+    if !pinned {
+        ops.push(WriteOp::InsertProviderRevision(pin(layout, &validated)?));
+    }
+    let created = !ops.is_empty();
+    if created {
+        registry.commit(WriteBatch::new(ops))?;
+    }
+    Ok(SeededFake {
+        runtime_id,
+        provider: key,
+        created,
     })
 }

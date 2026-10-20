@@ -42,7 +42,7 @@ test-support = []
 fixture = []
 
 [dev-dependencies]
-stackly-core = { workspace = true, features = ["test-support"] }
+stackly-core = { workspace = true, features = ["test-support", "fixture"] }
 stackly-evidence.workspace = true
 stackly-testkit.workspace = true
 tokio = { workspace = true, features = [
