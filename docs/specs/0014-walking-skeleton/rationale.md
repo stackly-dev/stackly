@@ -109,3 +109,22 @@ Update `/architect` sesi `arc-foundation-update`. Kode di `main` sudah sesuai; n
 | Path fixture instance | `protocols/fixtures/instance/` diganti `protocols/fixtures/ipc/` (`dto-instance-*.json` dan `frame-*-instance-*.json`), tempat langkah 12 spec 0010 menaruhnya | keputusan lokal developer langkah 3 dan 4 yang diterima lead; temuan `chk-f14-m2` |
 | Secret yang tidak dikirim | *Asumsi lintas spec*: create sementara di daemon membangkitkan secret field yang tidak dikirim lewat `generate`; perbaikannya masuk milestone 1 fitur ini di `apps/daemon/src/ipc/instance/create.rs` | keputusan lead saat merge milestone 1 (`3ee1e3d`) |
 | Teks langkah `verify.md` M5 | "keenam sumber" menjadi "ketujuh sumber", karena daftar `--secret` memuat tujuh sumber; centang tidak berubah | permintaan lead untuk update ini (log koordinasi, temuan checker milestone 5) |
+
+## Update 2026-10-20 (config sensitif fake di folder secrets)
+
+Review fitur 11 (`docs/reviews/2026-10-20-f11-secret-store.md`, *Penilaian celah yang diketahui*) menemukan bahwa paket fake merender token ke `${instance.config}/fake.json` di root data, dan bahwa pindaian sentinel AC-18 sengaja mengecualikan file itu, jadi celah ini tidak terlihat oleh suite mana pun. Keputusan user (dikutip lead): "Ya: lewat /architect, spec 0009 mewajibkan config sensitive di ${instance.secrets}, paket fake menulis ke ${instance.secrets}/fake.json, dan pengecualian fake.json di AC-18 spec 0014 dihapus. Saya setujui perubahan teks AC itu."
+
+| Bagian | Perubahan | Alasan |
+| --- | --- | --- |
+| AC-18 (ID tetap) | pengecualian `fake.json` dihapus; pindaian mencakup seluruh folder instance di root data (`instance-manifest.json`, `config/`, `data/`, `temp/`); hanya folder `secrets/` instance di runtime root yang tetap tidak dipindai | keputusan user; folder data dulu dikecualikan dengan alasan yang sama (catatan build di `verify.md`), dan isinya tidak pernah memuat nilai, jadi tidak ada alasan lagi untuk melewatkannya. Runner up: hanya menambah `config/`, yang membiarkan folder data tanpa bukti |
+| *Value sourcing* baris sentinel | daftar file yang dipindai mengikuti AC-18 | satu sumber kebenaran untuk test |
+| Langkah 12 | catatan bahwa perluasan pindaian dibangun spec 0009 langkah 21 | pindaian baru bisa hijau setelah paket fake berubah, jadi keduanya satu milestone (spec 0009 milestone 4) |
+| `verify.md` | catatan build pindaian dan teks langkah manual AC-18 (pengecualian, revision `0.3.0` setelah spec 0009 milestone 4); centang tidak berubah | brief lead: teks langkah ikut, status centang tidak |
+| Follow-up | baris spec 0009 milestone 4 dan run ulang verify AC-18 | AC-18 yang diperbarui belum terbukti sampai langkah 21 masuk |
+
+Teks yang mencatat sejarah (langkah 5 dan *Consequences* tentang revision `0.2.0`) tidak diubah. Baris desain file `providers/fake/provider.yaml` mendapat catatan bahwa revision nya `0.3.0` sejak spec 0009 milestone 4. AC-4 juga tidak diubah: teksnya ("naik ke revision `0.2.0` dengan setting `initDelayMs`") mencatat perubahan yang membawa delay init, dan setting itu tetap ada di `0.3.0`; test `skeleton_seed.rs` yang memeriksa revision paket ikut ke `0.3.0` di spec 0009 langkah 20.
+
+Cross check model lain (Sonnet 5.5, read only) atas update ini membenarkan bahwa isi folder instance di root data tidak pernah memuat nilai (`token.sha256`, `argv-*.json`, `FAKE_VERSION`, pesan error yang hanya menyebut path). Dua saran tidak diterapkan karena melewati teks AC yang disetujui user, dan diteruskan ke lead sebagai pilihan:
+
+- Folder `secrets/` instance juga bisa dipindai, atau test bisa menegaskan folder itu tidak ada lagi: test sentinel memindai setelah create, start, dan stop, jadi folder itu seharusnya sudah dihapus `remove_secret_material`, dan cek ini akan membuktikan celah F11 sampai ujung. Rekomendasi: tambahkan cek "folder `secrets/` instance tidak ada setelah stop" ke AC-18 bila user setuju.
+- Folder log instance di root log (`<logs>/instances/<id>/`) tidak disebut AC-18. Fake tidak menulis `logs.files`, jadi folder itu kosong; menyebutnya eksplisit hanya memperjelas.

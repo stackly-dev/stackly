@@ -282,7 +282,7 @@ Operasi `stop_instance`:
 5. Handler exit tunggal (di dalam atau di luar operasi): pembaca spool selesai, `exited`, `remove_secret_material` (spec 0011), lalu `group_members(pid)`; anggota tersisa dicatat di status dan log sebagai `leftoverProcesses`, tidak disinyal. Kalau operasi stop masih berjalan, ia `succeeded`.
 6. Stop menutup `stopping` sendiri *(2026-10-20, review fitur 10)*: stop yang melihat proses saat `lock` tetapi menemukan slot proses sudah kosong di langkah 3 (handler exit selesai di antaranya) menganggap proses sudah berhenti, lalu commit actor menulis `exited` untuk lifecycle yang masih `stopping`, dan operasi `succeeded`. Commit yang sama berjalan setelah setiap stop yang berakhir dengan proses keluar, sebagai jaring pengaman untuk exit yang tercatat sebagai hal lain tepat saat stop menulis `journal`. Respawn tidak bisa mengisi slot di antaranya, karena operasi stop memegang lock instance dan respawn memakai `BusyPolicy::Reject`.
 
-`remove_secret_material` juga dipanggil setiap kali proses utama keluar tanpa respawn (`crash_loop`, `start_failed`, `endpoint_in_use`).
+`remove_secret_material` juga dipanggil setiap kali proses utama keluar tanpa respawn (`crash_loop`, `start_failed`, `endpoint_in_use`). Sejak spec 0009 AC-20 (2026-10-20), config `sensitive` selalu berada di folder `secrets/` instance, jadi `remove_secret_material` di sini dan sweep di langkah 4 *Rekonsiliasi* sudah mencakupnya tanpa perubahan di spec ini; config sensitif yang dirender init masuk `InitPlan.cleanup` dan dihapus di langkah 3 *Init*.
 
 ### Probe, readiness, dan health
 
