@@ -226,6 +226,10 @@ pub struct FaultyRegistry {
     commit_faults: Mutex<Vec<stackly_domain::RegistryError>>,
     /// Holds every `instances` read until the test opens it.
     hold: Mutex<Option<Arc<Hold>>>,
+    /// Errors the next `instance` reads answer with, one each, oldest first.
+    read_faults: Mutex<Vec<stackly_domain::RegistryError>>,
+    /// Holds the next commit that records a crash until the test opens it.
+    crash_hold: Mutex<Option<Arc<Hold>>>,
 }
 
 /// A closed door in front of the registry's `instances` read, which the
@@ -281,6 +285,32 @@ impl FaultyRegistry {
             .unwrap_or_else(PoisonError::into_inner) = errors;
     }
 
+    /// Makes the next `instance` reads fail with `errors`, one error per
+    /// read.
+    pub fn fail_instance_reads(&self, errors: Vec<stackly_domain::RegistryError>) {
+        *self
+            .read_faults
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = errors;
+    }
+
+    /// Closes a door in front of the next commit that records a crash (an
+    /// instance update that ends `recovering` or `failed`): the commit has
+    /// read its aggregate and decided, and waits there until the hold is
+    /// released, so a test can land a stop in between.
+    pub fn hold_crash_commit(&self) -> Arc<Hold> {
+        let hold = Arc::new(Hold {
+            entered: AtomicBool::new(false),
+            open: Mutex::new(false),
+            opened: std::sync::Condvar::new(),
+        });
+        *self
+            .crash_hold
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&hold));
+        hold
+    }
+
     pub fn refuse_process_observations(&self, refuse: bool) {
         *self
             .refuse_observation
@@ -302,7 +332,6 @@ impl Registry for FaultyRegistry {
         runtime(id: stackly_domain::RuntimeId) -> Result<stackly_domain::Versioned<Option<stackly_domain::Runtime>>, stackly_domain::RegistryError>;
         runtimes() -> Result<stackly_domain::Versioned<Vec<stackly_domain::Runtime>>, stackly_domain::RegistryError>;
         runtime_references(id: stackly_domain::RuntimeId) -> Result<stackly_domain::Versioned<stackly_domain::RuntimeReferences>, stackly_domain::RegistryError>;
-        instance(id: InstanceId) -> Result<stackly_domain::Versioned<Option<Instance>>, stackly_domain::RegistryError>;
         instance_by_name(name: &stackly_domain::InstanceName) -> Result<stackly_domain::Versioned<Option<Instance>>, stackly_domain::RegistryError>;
         known_instance_ids() -> Result<stackly_domain::Versioned<Vec<InstanceId>>, stackly_domain::RegistryError>;
         latest_process_observation(instance: InstanceId) -> Result<stackly_domain::Versioned<Option<stackly_domain::ProcessObservation>>, stackly_domain::RegistryError>;
@@ -324,6 +353,22 @@ impl Registry for FaultyRegistry {
         prune(policy: &stackly_domain::RetentionPolicy, now: jiff::Timestamp) -> Result<stackly_domain::PruneReport, stackly_domain::RegistryError>;
     }
 
+    fn instance(
+        &self,
+        id: InstanceId,
+    ) -> Result<stackly_domain::Versioned<Option<Instance>>, stackly_domain::RegistryError> {
+        {
+            let mut faults = self
+                .read_faults
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if !faults.is_empty() {
+                return Err(faults.remove(0));
+            }
+        }
+        self.inner.instance(id)
+    }
+
     fn instances(
         &self,
         filter: stackly_domain::InstanceFilter,
@@ -340,6 +385,26 @@ impl Registry for FaultyRegistry {
     }
 
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
+        let records_crash = batch.ops.iter().any(|op| {
+            matches!(
+                op,
+                WriteOp::UpdateInstance { instance, .. }
+                    if matches!(
+                        instance.lifecycle(),
+                        InstanceLifecycle::Recovering | InstanceLifecycle::Failed
+                    )
+            )
+        });
+        if records_crash {
+            let hold = self
+                .crash_hold
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take();
+            if let Some(hold) = hold {
+                hold.pass();
+            }
+        }
         {
             let mut faults = self
                 .commit_faults
@@ -488,6 +553,8 @@ impl Rig {
             refuse_observation: Mutex::new(false),
             commit_faults: Mutex::new(Vec::new()),
             hold: Mutex::new(None),
+            read_faults: Mutex::new(Vec::new()),
+            crash_hold: Mutex::new(None),
         });
         let redactor = Arc::new(Redactor::new());
         let secrets = Arc::new(SecretService::new(SecretDeps {

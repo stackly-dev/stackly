@@ -14,6 +14,7 @@ use stackly_domain::{
 use tokio::sync::Semaphore;
 
 use super::Supervisor;
+use super::error::SupervisorError;
 use super::persist::read_instance;
 use super::respawn::{arm_pause, pause_then_respawn};
 use super::startup::StartRequest;
@@ -95,7 +96,26 @@ impl Supervisor {
 async fn run_one(sup: &Supervisor, run: &PendingRun) {
     let deps = sup.deps();
     let id = run.id;
-    let Ok(instance) = read_instance(deps, id).await else {
+    let mut degraded = false;
+    let instance = loop {
+        match read_instance(deps, id).await {
+            Ok(instance) => break Some(instance),
+            // A failed read decides nothing (AC-22): the run waits and
+            // reads again, and the subsystem reads `degraded` meanwhile.
+            Err(SupervisorError::Registry(error)) if !sup.is_shutdown() => {
+                tracing::warn!(instance = %id, %error, "the registry could not be read for a pending run; trying again");
+                degraded = true;
+                deps.events
+                    .registry_degraded(true, "the registry cannot be read");
+                tokio::time::sleep(deps.config.restart_base_delay).await;
+            }
+            Err(_) => break None,
+        }
+    };
+    if degraded {
+        deps.events.registry_degraded(false, "");
+    }
+    let Some(instance) = instance else {
         return;
     };
     // Something may have changed since reconciliation decided: a pending

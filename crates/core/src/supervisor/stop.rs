@@ -115,6 +115,34 @@ impl Supervisor {
         id: InstanceId,
         abandoned: impl Future<Output = ()>,
     ) -> Result<StopEnd, SupervisorError> {
+        let end = self.signal_and_wait(id, abandoned).await?;
+        if end == StopEnd::Stopped {
+            self.settle_stopping(id).await?;
+        }
+        Ok(end)
+    }
+
+    /// Makes sure a stop whose process is gone does not leave the lifecycle
+    /// `stopping`. The exit handler writes `exited`, but an exit that was
+    /// already being recorded as something else when the stop journaled
+    /// (the process died on its own at that moment) could finish before it
+    /// saw `stopping`; this closes that window.
+    async fn settle_stopping(&self, id: InstanceId) -> Result<(), SupervisorError> {
+        let now = self.deps().platform.clock().now();
+        commit_instance(self, id, None, CommitMode::Actor, |changes| {
+            if changes.instance().lifecycle() == InstanceLifecycle::Stopping {
+                apply_event(changes, LifecycleEvent::Exited, now)?;
+            }
+            Ok(Vec::new())
+        })
+        .await
+    }
+
+    async fn signal_and_wait(
+        &self,
+        id: InstanceId,
+        abandoned: impl Future<Output = ()>,
+    ) -> Result<StopEnd, SupervisorError> {
         let deps = self.deps();
         let actor = self.actor(id);
         let target = actor.read(|state| {

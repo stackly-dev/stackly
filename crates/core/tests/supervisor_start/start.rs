@@ -683,6 +683,40 @@ async fn a_spawn_the_os_refuses_fails_the_start_with_the_spawn_code() {
     );
 }
 
+/// A package whose server config is rendered into the secrets folder, the
+/// way a `config_plaintext` template is (spec 0011, mechanism 5).
+async fn rig_rendering_into_secrets() -> Rig {
+    Rig::patched(|text| {
+        replace(
+            text,
+            "destination: \"${instance.config}/fake.json\"",
+            "destination: \"${instance.secrets}/fake.json\"",
+        )
+    })
+    .await
+}
+
+#[tokio::test]
+async fn a_start_that_fails_to_spawn_removes_the_secret_material_it_rendered() {
+    let rig = rig_rendering_into_secrets().await;
+    let id = rig.instance(&Spec::default());
+    rig.fail_spawn();
+    let rendered = rig
+        .layout
+        .layout()
+        .instance_secrets_dir(id.short_key())
+        .join("fake.json");
+
+    let op = rig.start(id).await;
+    let detail = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(Rig::failure_code(&detail), codes::SPAWN_FAILED.to_string());
+    assert!(
+        !rendered.exists(),
+        "no process ran, so no exit would remove the rendered secrets"
+    );
+}
+
 #[tokio::test]
 async fn an_executable_that_leaves_the_runtime_is_refused_before_the_spawn() {
     let rig = Rig::new().await;

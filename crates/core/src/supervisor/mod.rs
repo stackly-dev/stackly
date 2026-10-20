@@ -87,7 +87,7 @@ pub use config::{
     RESTART_HEALTHY_RESET, RESTART_MAX_DELAY, RESTART_WINDOW, SPOOL_BACKLOG_MAX,
     SPOOL_DRAIN_INTERVAL, SPOOL_READ_CHUNK, SupervisorConfig, TAIL_LINES, UNKNOWN_RECHECK_INTERVAL,
 };
-pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents};
+pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents, WeakSupervisor};
 pub use error::{EndpointFault, SupervisorError, UnavailableReason};
 pub use init::InitRequest;
 pub use ports::{BindOptions, BindOutcome, PortProbe, SocketPortProbe};
