@@ -138,6 +138,26 @@ impl Supervisor {
         .await
     }
 
+    /// Ends a stop whose process left before the stop took the lock: the
+    /// desired state becomes `stopped`, and a lifecycle the exit handler
+    /// left `stopping` goes on to `stopped`.
+    async fn settle_gone_process(&self, id: InstanceId) -> Result<(), SupervisorError> {
+        let now = self.deps().platform.clock().now();
+        commit_instance(self, id, None, CommitMode::Operation, |changes| {
+            if changes.instance().desired() != DesiredState::Stopped {
+                changes.apply(|instance| {
+                    instance.set_desired(DesiredState::Stopped);
+                    Ok::<_, SupervisorError>(())
+                })?;
+            }
+            if changes.instance().lifecycle() == InstanceLifecycle::Stopping {
+                apply_event(changes, LifecycleEvent::Exited, now)?;
+            }
+            Ok(Vec::new())
+        })
+        .await
+    }
+
     async fn signal_and_wait(
         &self,
         id: InstanceId,
@@ -391,8 +411,20 @@ async fn run_stop(
             InstanceLifecycle::Starting | InstanceLifecycle::Running | InstanceLifecycle::Stopping
         )
     {
-        // A process the actor does not know: reconciliation owns it.
-        return Err(failed(SupervisorError::IdentityUnproven { pid: None }));
+        // The exit handler records the lifecycle before it clears the
+        // process, so an empty slot makes a fresh read current. A process
+        // that left between the read in `validate` and now is a stop that
+        // is done; only a process the actor never knew is left to
+        // reconciliation.
+        let current = read_instance(deps, id).await.map_err(failed)?;
+        if !matches!(
+            current.lifecycle(),
+            InstanceLifecycle::Stopping | InstanceLifecycle::Stopped
+        ) {
+            return Err(failed(SupervisorError::IdentityUnproven { pid: None }));
+        }
+        sup.settle_gone_process(id).await.map_err(failed)?;
+        return Ok(outcome());
     }
 
     // The pause before a respawn holds no operation, so the stop has the
