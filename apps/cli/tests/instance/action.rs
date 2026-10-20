@@ -60,6 +60,7 @@ fn stopped() -> stackly_protocol::instance::InstanceSummary {
     })
 }
 
+/// Spec 0014 AC-6.
 #[test]
 fn start_and_stop_send_the_instance_id_in_lower_case_and_never_override_leases() {
     let ev = evidence!(
@@ -110,6 +111,7 @@ fn start_and_stop_send_the_instance_id_in_lower_case_and_never_override_leases()
     ev.pass();
 }
 
+/// Spec 0014 AC-6, AC-8.
 #[test]
 fn start_without_wait_prints_the_operation_and_a_hint_and_reads_no_instance() {
     let root = TestRoot::new().expect("a test root is made");
@@ -144,6 +146,7 @@ fn start_without_wait_prints_the_operation_and_a_hint_and_reads_no_instance() {
     assert_eq!(gets(&daemon), 0);
 }
 
+/// Spec 0014 AC-6.
 #[test]
 fn already_in_state_exits_0_with_a_null_operation_and_reads_the_instance_once() {
     let ev = evidence!(
@@ -195,6 +198,7 @@ fn already_in_state_exits_0_with_a_null_operation_and_reads_the_instance_once() 
     ev.pass();
 }
 
+/// Spec 0014 AC-6.
 #[test]
 fn start_and_stop_with_wait_write_one_line_and_golden_json() {
     let ev = evidence!(
@@ -265,6 +269,7 @@ fn start_and_stop_with_wait_write_one_line_and_golden_json() {
     ev.pass();
 }
 
+/// Spec 0014 AC-6.
 #[test]
 fn a_start_that_fails_under_wait_keeps_the_failed_instance_in_the_result() {
     let root = TestRoot::new().expect("a test root is made");
@@ -301,6 +306,7 @@ fn a_start_that_fails_under_wait_keeps_the_failed_instance_in_the_result() {
     assert_eq!(gets(&daemon), 2);
 }
 
+/// Spec 0014 AC-6, AC-8.
 #[test]
 fn a_wait_that_ran_out_of_time_reads_no_instance() {
     let root = TestRoot::new().expect("a test root is made");
@@ -334,6 +340,7 @@ fn a_wait_that_ran_out_of_time_reads_no_instance() {
     assert_eq!(gets(&daemon), 0);
 }
 
+/// Spec 0014 AC-6.
 #[test]
 fn a_synchronous_error_exits_by_its_category_and_reads_no_instance() {
     let root = TestRoot::new().expect("a test root is made");
@@ -361,6 +368,7 @@ fn a_synchronous_error_exits_by_its_category_and_reads_no_instance() {
     assert_eq!(gets(&daemon), 0);
 }
 
+/// Spec 0014 AC-8.
 #[test]
 fn a_request_that_ran_out_of_time_names_the_key_to_retry_with() {
     let ev = evidence!(
@@ -400,6 +408,7 @@ fn a_request_that_ran_out_of_time_names_the_key_to_retry_with() {
     ev.pass();
 }
 
+/// Spec 0014 AC-6, AC-8.
 #[test]
 fn a_bad_instance_id_or_key_exits_2_without_connecting() {
     let root = TestRoot::new().expect("a test root is made");
@@ -427,6 +436,7 @@ fn a_bad_instance_id_or_key_exits_2_without_connecting() {
     assert_eq!(daemon.connections(), 0);
 }
 
+/// Spec 0014 AC-6.
 #[test]
 fn already_in_state_with_a_succeeded_no_op_operation_waits_for_nothing() {
     let root = TestRoot::new().expect("a test root is made");

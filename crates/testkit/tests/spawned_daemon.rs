@@ -63,6 +63,7 @@ fn stop_reports_how_the_process_ended() {
     assert_eq!(status.code(), None, "SIGTERM ends sleep: {status:?}");
 }
 
+/// Spec 0014 prerequisite of AC-11 and AC-12 (the SIGKILL of the end to end suite).
 #[test]
 fn kill_ends_the_process_with_sigkill_and_waits_for_it() {
     use std::os::unix::process::ExitStatusExt;

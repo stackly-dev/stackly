@@ -18,6 +18,7 @@ fn script(root: &TestRoot, body: &str) -> PathBuf {
 
 const ECHO: &str = r#"printf '{"args":"%s","root":"%s","noInput":"%s","noColor":"%s"}' "$*" "$STACKLY_ROOT" "$STACKLY_NO_INPUT" "$NO_COLOR""#;
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the CLI runner rules of the end to end suite).
 #[test]
 fn a_run_sets_the_environment_and_adds_json() {
     let root = TestRoot::new().unwrap();
@@ -33,6 +34,7 @@ fn a_run_sets_the_environment_and_adds_json() {
     assert_eq!(json["noColor"], "1");
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the CLI runner rules of the end to end suite).
 #[test]
 fn a_wait_without_a_timeout_gets_sixty_seconds_and_an_own_timeout_stays() {
     let root = TestRoot::new().unwrap();
@@ -61,6 +63,7 @@ fn a_wait_without_a_timeout_gets_sixty_seconds_and_an_own_timeout_stays() {
     );
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the CLI runner rules of the end to end suite).
 #[test]
 fn stdin_is_null_unless_the_test_passes_bytes() {
     let root = TestRoot::new().unwrap();
@@ -73,6 +76,7 @@ fn stdin_is_null_unless_the_test_passes_bytes() {
     assert_eq!(some.stdout, "fixture bytes\n");
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the CLI runner rules of the end to end suite).
 #[test]
 fn a_failing_run_keeps_its_code_and_streams_and_non_json_stdout_is_an_error() {
     let root = TestRoot::new().unwrap();
@@ -88,6 +92,7 @@ fn a_failing_run_keeps_its_code_and_streams_and_non_json_stdout_is_an_error() {
     assert!(output.json().unwrap_err().to_string().contains("plain"));
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the CLI runner rules of the end to end suite).
 #[test]
 fn a_run_that_outlives_the_limit_is_killed_and_reported() {
     let root = TestRoot::new().unwrap();

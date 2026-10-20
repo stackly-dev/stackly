@@ -57,6 +57,7 @@ fn params(daemon: &ScriptedDaemon) -> Vec<serde_json::Value> {
         .collect()
 }
 
+/// Spec 0014 AC-5.
 #[test]
 fn create_sends_one_call_with_the_params_the_flags_map_to() {
     let ev = evidence!(
@@ -134,6 +135,7 @@ fn create_sends_one_call_with_the_params_the_flags_map_to() {
     ev.pass();
 }
 
+/// Spec 0014 AC-5, AC-8.
 #[test]
 fn create_without_wait_prints_the_instance_and_the_operation_with_a_hint() {
     let root = TestRoot::new().expect("a test root is made");
@@ -163,6 +165,7 @@ fn create_without_wait_prints_the_instance_and_the_operation_with_a_hint() {
     assert_eq!(daemon.methods(), ["daemon.handshake", "instance.create"]);
 }
 
+/// Spec 0014 AC-8.
 #[test]
 fn a_key_made_by_the_cli_is_a_lowercase_uuid_v7_sent_and_returned() {
     let root = TestRoot::new().expect("a test root is made");
@@ -185,6 +188,7 @@ fn a_key_made_by_the_cli_is_a_lowercase_uuid_v7_sent_and_returned() {
     assert_eq!(uuid.get_version_num(), 7);
 }
 
+/// Spec 0014 AC-8.
 #[test]
 fn a_replayed_create_returns_the_same_operation_and_says_so_on_stderr() {
     let root = TestRoot::new().expect("a test root is made");
@@ -211,6 +215,7 @@ fn a_replayed_create_returns_the_same_operation_and_says_so_on_stderr() {
     );
 }
 
+/// Spec 0014 AC-5, AC-6.
 #[test]
 fn create_with_wait_follows_the_operation_then_reads_the_instance_once() {
     let ev = evidence!(
@@ -270,6 +275,7 @@ fn create_with_wait_follows_the_operation_then_reads_the_instance_once() {
     ev.pass();
 }
 
+/// Spec 0014 AC-6, AC-8.
 #[test]
 fn a_create_that_ends_needs_recovery_exits_by_its_error_and_still_shows_the_instance() {
     let ev = evidence!(
@@ -323,6 +329,7 @@ fn a_create_that_ends_needs_recovery_exits_by_its_error_and_still_shows_the_inst
     ev.pass();
 }
 
+/// Spec 0014 AC-6.
 #[test]
 fn a_failed_read_after_the_wait_leaves_instance_null_and_the_operation_error_in_charge() {
     let ev = evidence!(
@@ -366,6 +373,7 @@ fn a_failed_read_after_the_wait_leaves_instance_null_and_the_operation_error_in_
     ev.pass();
 }
 
+/// Spec 0014 AC-5.
 #[test]
 fn arguments_with_a_wrong_shape_exit_2_without_connecting() {
     let ev = evidence!(
@@ -432,6 +440,7 @@ fn arguments_with_a_wrong_shape_exit_2_without_connecting() {
     ev.pass();
 }
 
+/// Spec 0014 AC-5.
 #[test]
 fn port_zero_is_sent_for_the_daemon_to_refuse() {
     let root = TestRoot::new().expect("a test root is made");

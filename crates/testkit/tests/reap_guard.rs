@@ -10,6 +10,7 @@ use stackly_testkit::{ProcessTable, ReapGuard, TestRoot};
 /// Replaces the arguments of `sleep` with the marker: argv[0] is the marker.
 const SLEEP: &str = r#"exec -a "$0" /bin/sleep 300"#;
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (no process or runtime root left behind).
 #[test]
 fn dropping_the_guard_stops_the_processes_and_removes_a_runtime_root() {
     let root = TestRoot::new().unwrap();
@@ -35,6 +36,7 @@ fn dropping_the_guard_stops_the_processes_and_removes_a_runtime_root() {
     assert!(!runtime.exists());
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (no process or runtime root left behind).
 #[test]
 fn a_folder_that_is_not_named_like_a_runtime_root_is_never_removed() {
     let root = TestRoot::new().unwrap();

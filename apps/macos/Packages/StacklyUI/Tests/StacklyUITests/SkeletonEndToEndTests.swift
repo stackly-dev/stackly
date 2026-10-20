@@ -233,3 +233,41 @@ struct SkeletonEndToEndTests {
         return pids
     }
 }
+
+/// The async process runner the skeleton rig runs its binaries with (spec 0014 step 9;
+/// prerequisite of AC-14, AC-15, and AC-19): the exit arrives through the termination
+/// handler, the environment is exactly the one given, and a process that outlives its
+/// limit is killed.
+@Suite struct SkeletonProcessRunnerTests {
+    @Test func aProcessRunsToItsEndWithItsStatusAndBothOutputStreams() async throws {
+        let outcome = try await ProcessRunner.run(
+            URL(filePath: "/bin/sh"),
+            arguments: ["-c", "echo to-out; echo to-err 1>&2; exit 3"],
+            timeout: .seconds(10))
+
+        #expect(outcome.status == 3)
+        #expect(outcome.output.contains("to-out"))
+        #expect(outcome.output.contains("to-err"))
+        #expect(!outcome.timedOut)
+    }
+
+    @Test func theChildSeesExactlyTheEnvironmentItWasGiven() async throws {
+        let outcome = try await ProcessRunner.run(
+            URL(filePath: "/usr/bin/env"), arguments: [],
+            environment: ["ONLY_THIS": "one"], timeout: .seconds(10))
+
+        #expect(outcome.status == 0)
+        #expect(outcome.output == "ONLY_THIS=one\n")
+    }
+
+    @Test func aProcessThatOutlivesItsLimitIsKilledAndReportedAsTimedOut() async throws {
+        let started = ContinuousClock.now
+
+        let outcome = try await ProcessRunner.run(
+            URL(filePath: "/bin/sleep"), arguments: ["60"], timeout: .milliseconds(300))
+
+        #expect(outcome.timedOut)
+        #expect(outcome.status == SIGKILL)
+        #expect(ContinuousClock.now - started < .seconds(20))
+    }
+}

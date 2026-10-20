@@ -24,6 +24,7 @@ fn marked(script: &str, marker: &std::path::Path) -> Child {
         .expect("sh starts")
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the process counts and the reaping of the end to end suite).
 #[test]
 fn a_snapshot_finds_a_process_by_the_path_in_its_arguments_and_leaves_out_the_test() {
     let root = TestRoot::new().unwrap();
@@ -48,6 +49,7 @@ fn a_snapshot_finds_a_process_by_the_path_in_its_arguments_and_leaves_out_the_te
     child.wait().unwrap();
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the process counts and the reaping of the end to end suite).
 #[test]
 fn wait_for_fails_with_the_matching_rows_when_the_time_runs_out() {
     let root = TestRoot::new().unwrap();
@@ -61,6 +63,7 @@ fn wait_for_fails_with_the_matching_rows_when_the_time_runs_out() {
     assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the process counts and the reaping of the end to end suite).
 #[test]
 fn reap_under_stops_only_the_processes_that_name_the_path() {
     let root = TestRoot::new().unwrap();
@@ -84,6 +87,7 @@ fn reap_under_stops_only_the_processes_that_name_the_path() {
     );
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the process counts and the reaping of the end to end suite).
 #[test]
 fn reap_under_kills_a_process_that_ignores_sigterm() {
     let root = TestRoot::new().unwrap();
@@ -98,6 +102,7 @@ fn reap_under_kills_a_process_that_ignores_sigterm() {
     assert!(!status.success(), "{status:?}");
 }
 
+/// Spec 0014 prerequisite of AC-9, AC-11, AC-12 (the process counts and the reaping of the end to end suite).
 #[test]
 fn under_matches_a_whole_path_and_never_a_longer_sibling_name() {
     let root = TestRoot::new().unwrap();

@@ -95,6 +95,7 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
+/// Spec 0014 AC-1.
 #[test]
 fn an_empty_root_gets_the_runtime_the_artifact_and_the_provider_in_one_commit() {
     let site = Site::new();
@@ -126,6 +127,7 @@ fn an_empty_root_gets_the_runtime_the_artifact_and_the_provider_in_one_commit() 
     assert!(site.layout.provider_revision_dir(&seeded.provider).is_dir());
 }
 
+/// Spec 0014 AC-1.
 #[test]
 fn seeding_again_writes_nothing_and_returns_the_same_ids() {
     let site = Site::new();
@@ -141,6 +143,7 @@ fn seeding_again_writes_nothing_and_returns_the_same_ids() {
     assert_eq!(site.runtime_count(), 1);
 }
 
+/// Spec 0014 AC-1.
 #[test]
 fn a_root_with_the_runtime_only_gets_the_provider_alone() {
     let site = Site::new();
@@ -200,6 +203,7 @@ fn a_root_with_the_runtime_only_gets_the_provider_alone() {
     assert_eq!(fresh.runtimes().expect("reads").value.len(), 1);
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn folders_without_their_rows_are_a_leftover_and_nothing_is_written() {
     let site = Site::new();
@@ -230,6 +234,7 @@ fn folders_without_their_rows_are_a_leftover_and_nothing_is_written() {
     assert!(site.layout.provider_revision_dir(&first.provider).is_dir());
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn a_provider_folder_without_its_row_is_a_leftover() {
     let site = Site::new();
@@ -280,6 +285,7 @@ fn a_provider_folder_without_its_row_is_a_leftover() {
     assert_eq!(fresh.runtimes().expect("reads").generation.get(), 1);
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn a_runtime_of_the_same_version_with_another_binary_is_a_conflict() {
     let site = Site::new();
@@ -297,6 +303,7 @@ fn a_runtime_of_the_same_version_with_another_binary_is_a_conflict() {
     assert_eq!(site.runtime_count(), 1);
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn a_provider_of_the_same_revision_with_another_digest_is_a_conflict() {
     let site = Site::new();
@@ -316,6 +323,7 @@ fn a_provider_of_the_same_revision_with_another_digest_is_a_conflict() {
     assert_eq!(site.generation(), generation);
 }
 
+/// Spec 0014 AC-1.
 #[test]
 fn a_root_with_the_provider_only_gets_the_runtime_alone() {
     let site = Site::new();
