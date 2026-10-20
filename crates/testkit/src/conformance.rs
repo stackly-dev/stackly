@@ -8,6 +8,8 @@ use stackly_platform::{
 
 use crate::TestRoot;
 
+mod runtime_files;
+
 /// Runs the same behavior checks against any [`Filesystem`], so the fake in
 /// this crate and each OS adapter cannot drift apart unnoticed.
 ///
@@ -22,6 +24,16 @@ use crate::TestRoot;
 /// symlink or file on the way to the target and a symlinked root without
 /// removing anything, rejects invalid arguments, and stops past
 /// [`REMOVE_TREE_MAX_DEPTH`] levels with `TooDeep`.
+///
+/// For feature 18 it also checks that `open_read` reads and seeks a
+/// regular file and refuses a symlink, directory, and FIFO; that
+/// `open_append` creates mode 0600, appends, truncates without growing,
+/// and refuses the same kinds; that `rename_no_replace` moves a file, a
+/// folder, and a symlink as itself and refuses any existing target; that
+/// `volume_space` and `available_space` read the test volume; and that a
+/// tree writer creates folders 0700 and files 0600, sets modes without
+/// following a symlink, refuses existing entries and every symlink or file
+/// on the way, and opens only an empty, non symlinked root with mode 0700.
 ///
 /// # Panics
 ///
@@ -43,6 +55,11 @@ pub fn fs_conformance(fs: &dyn Filesystem, root: &TestRoot) {
     check_listing(fs, &base);
     check_failed_write_cleanup(fs, &base);
     check_removal(fs, &base);
+    runtime_files::check_open_read(fs, &base);
+    runtime_files::check_open_append(fs, &base);
+    runtime_files::check_rename_no_replace(fs, &base);
+    runtime_files::check_volume_space(fs, &base);
+    runtime_files::check_tree_writer(fs, &base);
 }
 
 fn check_directories(fs: &dyn Filesystem, base: &Path, uid: u32) {

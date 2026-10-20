@@ -6,13 +6,16 @@ use stackly_domain::{Os, Target};
 use crate::capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 use crate::clock::SystemClock;
 use crate::error::PlatformError;
-use crate::fs::{DirEntryInfo, FileInfo, Filesystem, RemoveReport};
+use crate::fs::{
+    AppendFile, DirEntryInfo, FileInfo, Filesystem, ReadSeekFile, RemoveReport, VolumeSpace,
+};
 use crate::identity::{UserId, UserIdentity};
 use crate::info::PlatformInfo;
 use crate::layout::{DirectoryResolver, RootSet};
 use crate::platform::Platform;
 use crate::process::UnsupportedProcessSupervision;
 use crate::secret::UnsupportedSecretStore;
+use crate::tree::TreeWriter;
 
 /// The platform for an OS that has no adapter yet, such as Windows today.
 ///
@@ -87,6 +90,26 @@ impl Filesystem for UnsupportedPlatform {
     }
 
     fn remove_tree(&self, _root: &Path, _relative: &Path) -> Result<RemoveReport, PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
+
+    fn open_read(&self, _path: &Path) -> Result<Box<dyn ReadSeekFile>, PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
+
+    fn open_append(&self, _path: &Path) -> Result<Box<dyn AppendFile>, PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
+
+    fn rename_no_replace(&self, _from: &Path, _to: &Path) -> Result<(), PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
+
+    fn open_tree_writer(&self, _root: &Path) -> Result<Box<dyn TreeWriter>, PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
+
+    fn volume_space(&self, _path: &Path) -> Result<VolumeSpace, PlatformError> {
         Err(self.not_supported(PlatformCapability::Filesystem))
     }
 }
@@ -174,6 +197,12 @@ mod tests {
             fs.remove_tree(path, Path::new("instances")),
             Fs
         ));
+        assert!(is_not_supported(fs.open_read(path).map(drop), Fs));
+        assert!(is_not_supported(fs.open_append(path).map(drop), Fs));
+        assert!(is_not_supported(fs.rename_no_replace(path, path), Fs));
+        assert!(is_not_supported(fs.open_tree_writer(path).map(drop), Fs));
+        assert!(is_not_supported(fs.volume_space(path), Fs));
+        assert!(is_not_supported(fs.available_space(path), Fs));
         assert!(is_not_supported(
             platform.identity().current_user(),
             Identity

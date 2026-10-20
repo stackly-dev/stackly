@@ -71,7 +71,7 @@ pub use conformance::{CrossDevice, fs_cross_device_conformance};
 #[cfg(target_os = "macos")]
 pub use disk_image::DiskImage;
 #[cfg(unix)]
-pub use fake_fs::{FakeFilesystem, Fault, FsOp, Mutation};
+pub use fake_fs::{FakeFilesystem, FakeVolume, Fault, FsOp, Mutation};
 #[cfg(unix)]
 pub use fake_platform::{FakeClock, FakeIdentity, FakePlatform, FakePlatformInfo};
 #[cfg(unix)]
