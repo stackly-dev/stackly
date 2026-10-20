@@ -95,6 +95,7 @@ fn calls(daemon: &ScriptedDaemon) -> usize {
         .count()
 }
 
+/// Spec 0014 AC-17.
 #[test]
 fn every_source_maps_to_a_secret_input_and_the_last_flag_for_a_field_wins() {
     let ev = evidence!(
@@ -162,6 +163,7 @@ fn every_source_maps_to_a_secret_input_and_the_last_flag_for_a_field_wins() {
     ev.pass();
 }
 
+/// Spec 0014 AC-17.
 #[test]
 fn a_create_without_secret_flags_sends_no_secret_field() {
     let root = TestRoot::new().expect("a test root is made");
@@ -173,6 +175,7 @@ fn a_create_without_secret_flags_sends_no_secret_field() {
     assert_eq!(secrets_sent(&daemon), [json!([])]);
 }
 
+/// Spec 0014 AC-17.
 #[test]
 fn the_text_output_holds_no_value_either() {
     let root = TestRoot::new().expect("a test root is made");
@@ -214,6 +217,7 @@ fn refused(root: &TestRoot, extra: &[&str], input: &[u8], kind: &str) {
     assert_eq!(calls(&daemon), 0, "{extra:?}: nothing reached the daemon");
 }
 
+/// Spec 0014 AC-17.
 #[test]
 fn a_secret_flag_the_cli_refuses_stops_before_the_daemon() {
     let ev = evidence!(
@@ -253,6 +257,7 @@ fn a_secret_flag_the_cli_refuses_stops_before_the_daemon() {
     ev.pass();
 }
 
+/// Spec 0014 AC-17.
 #[test]
 fn the_prompt_source_without_a_terminal_fails_at_once() {
     let root = TestRoot::new().expect("a test root is made");
@@ -269,6 +274,7 @@ fn the_prompt_source_without_a_terminal_fails_at_once() {
     assert_eq!(calls(&daemon), 0);
 }
 
+/// Spec 0014 AC-17.
 #[test]
 fn help_lists_the_secret_flag_with_its_sources() {
     let root = TestRoot::new().expect("a test root is made");

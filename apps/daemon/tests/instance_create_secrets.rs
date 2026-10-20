@@ -146,6 +146,7 @@ async fn reveal(client: &Client, reference: &str) -> String {
     revealed.value.expose().to_owned()
 }
 
+/// Spec 0014 AC-1.
 #[tokio::test]
 async fn a_create_without_secrets_generates_every_secret_field() {
     let root = TestRoot::new().expect("a test root");
@@ -189,6 +190,7 @@ async fn a_create_without_secrets_generates_every_secret_field() {
     );
 }
 
+/// Spec 0014 AC-1.
 #[tokio::test]
 async fn an_explicit_secret_keeps_the_source_the_client_sent() {
     let root = TestRoot::new().expect("a test root");

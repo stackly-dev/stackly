@@ -152,6 +152,7 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
+/// Spec 0014 AC-1.
 #[test]
 fn seeding_an_empty_root_prints_ids_and_a_command_the_daemon_accepts() {
     let root = TestRoot::new().expect("a test root");
@@ -231,6 +232,7 @@ fn run_printed_command(root: &TestRoot, command: &str) -> Value {
     serde_json::from_slice(&output.stdout).expect("stackly prints JSON")
 }
 
+/// Spec 0014 AC-1.
 #[test]
 fn seeding_again_writes_nothing_and_prints_the_same_ids() {
     let root = TestRoot::new().expect("a test root");
@@ -244,6 +246,7 @@ fn seeding_again_writes_nothing_and_prints_the_same_ids() {
     assert_eq!(rows(&root), (1, 1));
 }
 
+/// Spec 0014 AC-1.
 #[test]
 fn the_text_output_has_four_labelled_lines() {
     let root = TestRoot::new().expect("a test root");
@@ -265,6 +268,7 @@ fn the_text_output_has_four_labelled_lines() {
     assert_eq!(labels, ["root", "runtime", "provider", "next"], "{text}");
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn a_missing_root_argument_is_a_usage_error() {
     let output = seed_with(&[]);
@@ -272,6 +276,7 @@ fn a_missing_root_argument_is_a_usage_error() {
     assert_eq!(output.status.code(), Some(2));
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn a_relative_or_missing_root_is_refused_with_one_error_line() {
     let root = TestRoot::new().expect("a test root");
@@ -288,6 +293,7 @@ fn a_relative_or_missing_root_is_refused_with_one_error_line() {
     assert!(!missing.exists(), "the refusal created nothing");
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn a_root_with_a_running_daemon_is_refused_and_unchanged() {
     let root = TestRoot::new().expect("a test root");
@@ -307,6 +313,7 @@ fn a_root_with_a_running_daemon_is_refused_and_unchanged() {
     assert_eq!(rows(&root), (1, 1));
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn a_missing_fake_server_binary_names_the_build_command() {
     let root = TestRoot::new().expect("a test root");
@@ -328,6 +335,7 @@ fn a_missing_fake_server_binary_names_the_build_command() {
     assert!(seeded_paths(&root).is_empty());
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn folders_without_registry_rows_are_a_leftover_and_nothing_changes() {
     let seeded = TestRoot::new().expect("a test root");
@@ -354,6 +362,7 @@ fn folders_without_registry_rows_are_a_leftover_and_nothing_changes() {
     assert_eq!(rows(&root), (0, 0));
 }
 
+/// Spec 0014 AC-2.
 #[test]
 fn another_fake_server_binary_for_the_same_version_is_a_conflict() {
     let root = TestRoot::new().expect("a test root");
@@ -374,4 +383,198 @@ fn another_fake_server_binary_for_the_same_version_is_a_conflict() {
     assert!(stderr.contains("seed a new root"), "{stderr}");
     assert_eq!(seeded_paths(&root), paths);
     assert_eq!(rows(&root), (1, 1));
+}
+
+/// Makes `parent/name` as a private folder (mode 0700), the shape of a root
+/// `validate_root_override` accepts.
+fn private_dir(parent: &Path, name: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = parent.join(name);
+    std::fs::create_dir(&dir).expect("the folder is made");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
+        .expect("the folder is made private");
+    dir
+}
+
+/// Runs the seed on `root` and returns its output.
+fn seed_at(root: &Path) -> Output {
+    let fake = fake_server::binary();
+    seed_with(&[
+        "--root".as_ref(),
+        root.as_os_str(),
+        "--fake-server".as_ref(),
+        fake.as_os_str(),
+    ])
+}
+
+/// Asserts the seed refused with exit 1 and one `error: ` line on stderr.
+fn assert_refused(output: &Output, what: &str) {
+    assert_eq!(output.status.code(), Some(1), "{what}");
+    let stderr = stderr_of(output);
+    assert!(stderr.starts_with("error: "), "{what}: {stderr}");
+    assert_eq!(stderr.lines().count(), 1, "{what}: {stderr}");
+    assert!(output.stdout.is_empty(), "{what}: nothing is printed");
+}
+
+/// Spec 0014 AC-2.
+#[test]
+fn a_root_that_is_a_file_a_symlink_or_open_to_others_is_refused_and_left_alone() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = TestRoot::new().expect("a test root");
+    let file = base.path().join("a-file");
+    std::fs::write(&file, b"").expect("the file is made");
+    let target = private_dir(base.path(), "target");
+    let link = base.path().join("a-link");
+    std::os::unix::fs::symlink(&target, &link).expect("the link is made");
+    let group = private_dir(base.path(), "group");
+    std::fs::set_permissions(&group, std::fs::Permissions::from_mode(0o770))
+        .expect("the folder opens to the group");
+    let other = private_dir(base.path(), "other");
+    std::fs::set_permissions(&other, std::fs::Permissions::from_mode(0o707))
+        .expect("the folder opens to everyone");
+
+    for (root, what) in [
+        (&file, "a file"),
+        (&link, "a symlink"),
+        (&group, "a folder the group can write"),
+        (&other, "a folder everyone can write"),
+    ] {
+        assert_refused(&seed_at(root), what);
+    }
+
+    assert_eq!(std::fs::read(&file).expect("the file reads"), b"");
+    for dir in [&target, &group, &other] {
+        assert_eq!(
+            std::fs::read_dir(dir).expect("the folder reads").count(),
+            0,
+            "the refusal wrote nothing into {}",
+            dir.display()
+        );
+    }
+}
+
+/// Spec 0014 AC-2.
+#[test]
+fn a_registry_in_recovery_mode_is_refused_and_not_touched() {
+    let root = TestRoot::new().expect("a test root");
+    drop(open(&root));
+    let registry = daemon_paths(&root).layout.registry_db();
+    let not_a_database = b"just some text, not a database at all";
+    std::fs::write(&registry, not_a_database).expect("the registry file is replaced");
+
+    let output = seed_at(root.path());
+
+    assert_refused(&output, "a registry in recovery mode");
+    assert!(
+        stderr_of(&output).contains("recovery mode"),
+        "{}",
+        stderr_of(&output)
+    );
+    assert!(
+        seeded_paths(&root).is_empty(),
+        "no runtime or package was written"
+    );
+    assert_eq!(
+        std::fs::read(&registry).expect("the registry file reads"),
+        not_a_database,
+        "the registry file is as it was"
+    );
+}
+
+/// Spec 0014 AC-1.
+#[test]
+fn a_root_with_a_space_is_quoted_in_the_printed_command() {
+    let base = TestRoot::new().expect("a test root");
+    let root = private_dir(base.path(), "with space");
+    let canonical = root.canonicalize().expect("the root canonicalizes");
+
+    let output = seed_with(&[
+        "--root".as_ref(),
+        root.as_os_str(),
+        "--fake-server".as_ref(),
+        fake_server::binary().as_os_str(),
+        "--json".as_ref(),
+    ]);
+
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    let seeded: Value = serde_json::from_slice(&output.stdout).expect("the seed prints JSON");
+    assert_eq!(seeded["root"], canonical.display().to_string());
+    let command = seeded["createCommand"].as_str().expect("a command");
+    assert!(
+        command.starts_with(&format!(
+            "STACKLY_ROOT='{}' stackly instance create demo",
+            canonical.display()
+        )),
+        "the root is single quoted: {command}"
+    );
+}
+
+/// `cargo tree` for the feature graph of `stackly-core` under `stacklyd`
+/// and `stackly-cli`; `edges` is the `--edges` value.
+fn feature_graph(edges: &str) -> String {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let output = Command::new(cargo)
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .args(["tree", "--offline", "--locked"])
+        .args(["-p", "stacklyd", "-p", "stackly-cli"])
+        .args(["--edges", edges, "-i", "stackly-core"])
+        .output()
+        .expect("cargo tree runs");
+    assert!(
+        output.status.success(),
+        "cargo tree failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+/// Spec 0014 AC-3.
+#[test]
+fn the_fixture_feature_is_in_no_graph_without_dev_dependencies() {
+    let without_dev = feature_graph("features,no-dev");
+    let with_dev = feature_graph("features");
+
+    assert!(
+        without_dev.contains("feature \"default\""),
+        "the graph reaches stackly-core: {without_dev}"
+    );
+    assert!(
+        !without_dev.contains("feature \"fixture\""),
+        "fixture must not reach a build without dev dependencies: {without_dev}"
+    );
+    assert!(
+        with_dev.contains("feature \"fixture\""),
+        "the dev dependencies do turn it on, so the check above can fail: {with_dev}"
+    );
+}
+
+/// Spec 0014 AC-4.
+#[test]
+fn the_fake_package_declares_the_init_delay_and_passes_it_to_init() {
+    let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake");
+    let manifest =
+        std::fs::read_to_string(package.join("provider.yaml")).expect("the fake manifest reads");
+    let schema: Value = serde_json::from_slice(
+        &std::fs::read(package.join("schemas/settings.schema.json"))
+            .expect("the fake schema reads"),
+    )
+    .expect("the schema is JSON");
+
+    assert!(manifest.contains("revision: \"0.2.0\""), "{manifest}");
+    let init = manifest
+        .split("lifecycle:")
+        .nth(1)
+        .and_then(|rest| rest.split("  start:").next())
+        .expect("the manifest has an init step");
+    assert!(
+        init.contains("- \"--delay-ms=${settings.initDelayMs}\""),
+        "init passes the delay: {init}"
+    );
+    let delay = &schema["properties"]["initDelayMs"];
+    assert_eq!(delay["type"], "integer", "{delay}");
+    assert_eq!(delay["minimum"], 0, "{delay}");
+    assert_eq!(delay["maximum"], 600_000, "{delay}");
+    assert_eq!(delay["default"], 0, "{delay}");
+    assert_eq!(delay["x-stackly"]["apply"], "immutableAfterInit", "{delay}");
+    assert_eq!(delay["x-stackly"]["visibility"], "advanced", "{delay}");
 }

@@ -20,6 +20,7 @@ fn serving(instance: stackly_protocol::instance::InstanceSummary) -> (TestRoot, 
     (root, daemon)
 }
 
+/// Spec 0014 AC-7.
 #[test]
 fn get_writes_the_block_the_endpoints_and_the_json_result() {
     let ev = evidence!(
@@ -61,6 +62,7 @@ fn get_writes_the_block_the_endpoints_and_the_json_result() {
     ev.pass();
 }
 
+/// Spec 0014 AC-7.
 #[test]
 fn a_failed_instance_shows_its_last_failure_and_the_failure_output() {
     let (root, _daemon) = serving(data::instance("failed"));
@@ -71,6 +73,7 @@ fn a_failed_instance_shows_its_last_failure_and_the_failure_output() {
     golden::check("instance_get_failed.txt", &text.stdout);
 }
 
+/// Spec 0014 AC-7.
 #[test]
 fn an_adopted_instance_and_a_locked_one_show_their_process_and_blocker() {
     let (root, _daemon) = serving(data::adopted());
@@ -84,6 +87,7 @@ fn an_adopted_instance_and_a_locked_one_show_their_process_and_blocker() {
     drop(root);
 }
 
+/// Spec 0014 AC-7.
 #[test]
 fn text_from_the_daemon_never_reaches_the_terminal_raw() {
     let instance = data::edited(|value| {
@@ -114,6 +118,7 @@ fn text_from_the_daemon_never_reaches_the_terminal_raw() {
     );
 }
 
+/// Spec 0014 AC-7.
 #[test]
 fn an_unknown_instance_exits_10_and_a_bad_id_exits_2() {
     let root = TestRoot::new().expect("a test root is made");

@@ -31,6 +31,7 @@ fn start_queued() -> Reply {
     )))
 }
 
+/// Spec 0014 AC-6, AC-7.
 #[test]
 fn the_instance_rows_of_the_exit_code_matrix() {
     let ev = evidence!(

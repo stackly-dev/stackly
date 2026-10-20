@@ -536,6 +536,7 @@ fn init_with_fail_true_exits_with_four_and_leaves_only_the_argv_record() {
     assert_eq!(read_argv(&data.join("argv-init.json")), args);
 }
 
+/// Spec 0014 AC-4.
 #[test]
 fn init_delay_waits_after_the_token_and_before_touching_the_data_folder() {
     let root = TestRoot::new().unwrap();
@@ -566,6 +567,7 @@ fn init_delay_waits_after_the_token_and_before_touching_the_data_folder() {
     assert_eq!(read_argv(&data.join("argv-init.json")), args);
 }
 
+/// Spec 0014 AC-4.
 #[test]
 fn init_with_a_delay_that_is_not_a_number_is_a_usage_failure() {
     let root = TestRoot::new().unwrap();

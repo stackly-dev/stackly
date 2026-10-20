@@ -401,6 +401,7 @@ fn instance_id(envelope: &Value) -> String {
         .to_owned()
 }
 
+/// Spec 0014 AC-9, AC-13.
 #[test]
 fn an_instance_is_created_started_read_and_stopped_through_the_real_daemon() {
     let ev = evidence!(
@@ -444,6 +445,7 @@ fn an_instance_is_created_started_read_and_stopped_through_the_real_daemon() {
     ev.pass();
 }
 
+/// Spec 0014 AC-10.
 #[test]
 fn a_failed_init_needs_recovery_and_abandoning_it_leaves_no_instance_to_start() {
     let rig = Rig::new();
@@ -477,6 +479,7 @@ fn a_failed_init_needs_recovery_and_abandoning_it_leaves_no_instance_to_start() 
     );
 }
 
+/// Spec 0014 AC-13.
 #[test]
 fn secrets_go_to_the_file_keychain_of_the_root_without_any_prompt() {
     let rig = Rig::new();
@@ -499,6 +502,7 @@ fn secrets_go_to_the_file_keychain_of_the_root_without_any_prompt() {
     assert_eq!(code, Some(0), "{started}");
 }
 
+/// Spec 0014 AC-11.
 #[test]
 fn a_running_instance_survives_sigkill_and_sigterm_of_the_daemon_with_the_same_process() {
     let ev = evidence!(
@@ -546,6 +550,7 @@ fn a_running_instance_survives_sigkill_and_sigterm_of_the_daemon_with_the_same_p
     ev.pass();
 }
 
+/// Spec 0014 AC-12.
 #[test]
 fn a_create_cut_off_by_sigkill_ends_needing_recovery_with_one_instance_and_no_stray_process() {
     let ev = evidence!(
@@ -572,8 +577,14 @@ fn a_create_cut_off_by_sigkill_ends_needing_recovery_with_one_instance_and_no_st
         .to_owned();
     let data = rig.data_dir(&id).display().to_string();
     let helper = [data.as_str(), "stackly-fake-server init"];
-    ProcessTable::wait_for(&helper, Duration::from_secs(20), |rows| !rows.is_empty())
+    let started = ProcessTable::wait_for(&helper, Duration::from_secs(20), |rows| !rows.is_empty())
         .expect("the init helper starts");
+    assert!(
+        started
+            .iter()
+            .all(|row| row.args.contains("--delay-ms=15000")),
+        "the delay of the setting reaches init (AC-4): {started:?}"
+    );
 
     rig.restart(Stop::Kill);
 
@@ -633,6 +644,7 @@ fn a_create_cut_off_by_sigkill_ends_needing_recovery_with_one_instance_and_no_st
     ev.pass();
 }
 
+/// Spec 0014 AC-18.
 #[test]
 fn the_fixture_credential_reaches_the_init_helper_and_leaves_no_trace_anywhere_else() {
     let ev = evidence!(
@@ -701,6 +713,7 @@ fn lock_keychain(file: &Path) {
     );
 }
 
+/// Spec 0014 AC-19.
 #[test]
 fn a_locked_file_keychain_blocks_the_start_with_needs_secret_until_the_daemon_restarts() {
     let ev = evidence!(
@@ -747,4 +760,78 @@ fn a_locked_file_keychain_blocks_the_start_with_needs_secret_until_the_daemon_re
     let (code, stopped) = rig.json(&["instance", "stop", &id, "--wait"]);
     assert_eq!(code, Some(0), "{stopped}");
     ev.pass();
+}
+
+/// Spec 0014 AC-6.
+#[test]
+fn a_start_of_a_running_instance_and_a_stop_of_a_stopped_one_answer_already_in_state() {
+    let rig = Rig::new();
+    let (code, created) = rig.create("demo", &[]);
+    assert_eq!(code, Some(0), "{created}");
+    let id = instance_id(&created);
+
+    let (code, stopped_again) = rig.json(&["instance", "stop", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{stopped_again}");
+    assert_eq!(stopped_again["result"]["instance"]["lifecycle"], "stopped");
+    assert!(
+        rig.servers(&id).is_empty(),
+        "a stop of a stopped instance starts nothing"
+    );
+
+    let (code, started) = rig.json(&["instance", "start", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{started}");
+    let pid = rig.servers(&id);
+    assert_eq!(pid.len(), 1);
+    let (code, started_again) = rig.json(&["instance", "start", &id, "--wait"]);
+
+    assert_eq!(code, Some(0), "{started_again}");
+    assert_eq!(started_again["result"]["instance"]["lifecycle"], "running");
+    assert_eq!(rig.servers(&id), pid, "a second start spawns nothing");
+    let operation = &started_again["result"]["operation"];
+    assert!(
+        operation.is_null() || operation["state"] == "succeeded",
+        "an answer that was already in state leaves no operation to wait for: {operation}"
+    );
+    let (code, stopped) = rig.json(&["instance", "stop", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{stopped}");
+    assert!(rig.servers(&id).is_empty());
+}
+
+/// Spec 0014 AC-8.
+#[test]
+fn a_create_repeated_with_the_same_key_returns_the_same_operation_and_one_instance() {
+    let rig = Rig::new();
+    let args = ["--wait", "--idempotency-key", "same-key"];
+
+    let (code, first) = rig.create_with("demo", &args);
+    let (second_code, second) = rig.create_with("demo", &args);
+
+    assert_eq!(code, Some(0), "{first}");
+    assert_eq!(second_code, Some(0), "{second}");
+    assert_eq!(first["result"]["idempotencyKey"], "same-key");
+    assert_eq!(second["result"]["idempotencyKey"], "same-key");
+    assert_eq!(
+        second["result"]["operation"]["id"], first["result"]["operation"]["id"],
+        "the key names the first operation again"
+    );
+    assert_eq!(instance_id(&second), instance_id(&first));
+    assert_eq!(rig.listed_names(), ["demo"]);
+}
+
+/// Spec 0014 AC-7.
+#[test]
+fn an_instance_the_real_daemon_does_not_know_fails_not_found_with_exit_10() {
+    let rig = Rig::new();
+
+    for verb in ["get", "start", "stop"] {
+        let (code, envelope) =
+            rig.json(&["instance", verb, "0192f3a5-0000-7000-8000-000000000001"]);
+
+        assert_eq!(code, Some(10), "{verb}: {envelope}");
+        assert_eq!(
+            envelope["error"]["code"], "resource.not_found",
+            "{verb}: {envelope}"
+        );
+    }
+    assert!(rig.listed_names().is_empty());
 }
