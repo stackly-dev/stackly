@@ -130,9 +130,9 @@ async fn a_process_that_keeps_crashing_ends_failed_with_crash_loop_and_an_exhaus
 #[tokio::test(flavor = "multi_thread")]
 async fn a_process_that_runs_but_is_not_ready_shows_not_ready_and_a_cancel_stops_it() {
     let ev = evidence!(
-        covers = ["AC-012", "BR-010", "REQ-010"],
+        covers = ["AC-012", "BR-010", "REQ-010", "REQ-012"],
         kind = Kind::Fixture,
-        expected = "while the fake delays its readiness the instance is running with readiness not_ready and its port not final, and a cancel of the start stops the process and ends the operation cancelled",
+        expected = "while the fake delays its readiness the instance is running with readiness not_ready and its port not final, failing probes over a while neither restart nor stop the process, and a cancel of the start stops the process and ends the operation cancelled",
     );
     let site = Site::new();
     let daemon = site.start().await;
@@ -160,6 +160,18 @@ async fn a_process_that_runs_but_is_not_ready_shows_not_ready_and_a_cancel_stops
     );
     assert!(!waiting.endpoints[0].bound, "but it is not final yet");
     assert_ne!(waiting.health.state, InstanceHealthState::Healthy);
+
+    // Probes keep failing for a while, and a bad readiness never restarts or
+    // stops anything (REQ-012): same process, still running, still not ready.
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    let later = api.get(id).await.expect("the instance reads");
+    assert_eq!(later.lifecycle, InstanceLifecycle::Running);
+    assert_eq!(later.readiness.state, InstanceReadinessState::NotReady);
+    assert_eq!(
+        later.process.as_ref().map(|process| process.pid),
+        waiting.process.as_ref().map(|process| process.pid),
+        "the same process still runs"
+    );
 
     let reply = api
         .client

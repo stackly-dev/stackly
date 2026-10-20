@@ -79,7 +79,7 @@ async fn ten_starts_from_two_clients_spawn_one_process_and_a_held_lock_blocks_a_
     let ev = evidence!(
         covers = ["REQ-013"],
         kind = Kind::Fixture,
-        expected = "a held instance.lock makes the start fail with supervisor.data_in_use and no spawn, and ten simultaneous starts from two clients leave exactly one dummy server process for the data folder",
+        expected = "RISK-03 (two servers on one data folder): a held instance.lock makes the start fail with supervisor.data_in_use and no spawn, and ten simultaneous starts from two clients leave exactly one dummy server process for the data folder",
     );
     let site = Site::new();
     let daemon = site.start().await;

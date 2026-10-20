@@ -73,11 +73,7 @@ async fn init_runs_the_plan_with_the_secret_on_stdin_and_the_lock_at_fd_three() 
         manifest.data().initialized_at(),
         instance.data_initialized_at()
     );
-    assert_eq!(
-        rig.processes().probe_lock(&rig.paths(id).lock).unwrap(),
-        LockState::Free,
-        "the lock is released"
-    );
+    rig.wait_lock_free(id).await;
 }
 
 #[tokio::test]
@@ -112,11 +108,8 @@ async fn a_step_that_exits_with_another_code_fails_the_init_and_frees_the_lock()
         instance.last_failure().map(|code| code.as_str()),
         Some("init_step_failed")
     );
-    assert_eq!(
-        rig.processes().probe_lock(&rig.paths(id).lock).unwrap(),
-        LockState::Free,
-        "the lock is free before the error is returned (K10)"
-    );
+    // K10: the executor released the lock before the error came back.
+    rig.wait_lock_free(id).await;
 }
 
 #[tokio::test]

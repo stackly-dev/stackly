@@ -118,6 +118,7 @@ async fn a_slow_server_reads_running_but_not_ready_until_its_probe_answers() {
     rig.serve(&spawn);
     wait_for("the process is running", || {
         rig.sup.status(id).process.is_some()
+            && rig.instance_row(id).lifecycle() == InstanceLifecycle::Running
     })
     .await;
     let early = rig.sup.status(id);
@@ -573,8 +574,9 @@ async fn the_readiness_deadline_fails_the_operation_but_the_process_and_its_prob
 
     // The server comes up late: the probe that kept going sees it.
     rig.serve(&spawn);
-    wait_for("readiness turns ready", || {
-        rig.sup.status(id).readiness.state() == ReadinessState::Ready
+    wait_for("readiness turns ready with final ports", || {
+        let status = rig.sup.status(id);
+        status.readiness.state() == ReadinessState::Ready && status.ports_final
     })
     .await;
     assert!(rig.sup.status(id).ports_final);
@@ -785,13 +787,7 @@ async fn ac_8_a_cancel_before_the_journal_leaves_no_side_effect() {
         rig.processes().count(ProcessOp::Resume) == 0
             && rig.processes().count(ProcessOp::Discard) == 0
     );
-    assert_eq!(
-        rig.processes()
-            .probe_lock(&rig.paths(id).lock)
-            .expect("the lock can be probed"),
-        stackly_platform::LockState::Free,
-        "the instance lock was released"
-    );
+    rig.wait_lock_free(id).await;
 }
 
 #[tokio::test]

@@ -105,11 +105,11 @@ async fn a_busy_sink_does_not_hold_the_process_or_its_exit() {
 
     rig.processes().exit(spawn.pid, Some(ExitStatus::Exited(1)));
 
-    wait_for("the exit lifecycle", || {
+    wait_for("the exit lifecycle and the forgotten process", || {
         rig.instance_row(id).lifecycle() == InstanceLifecycle::Failed
+            && rig.sup.status(id).process.is_none()
     })
     .await;
-    assert!(rig.sup.status(id).process.is_none());
     rig.kill_servers();
 }
 
