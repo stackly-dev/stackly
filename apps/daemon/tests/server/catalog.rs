@@ -531,6 +531,12 @@ fn package_at_limits(nats: &PackageFiles, name: &str) -> ValidatedPackage {
             artifact["line"] = format!("2.{n}").into();
             artifact["license"] = filled(&format!("License-{n}-"), LICENSE_MAX_LEN).into();
             artifact["licenseUrl"] = filled("https://example.com/", LICENSE_URL_MAX_LEN).into();
+            if n > 0 {
+                artifact
+                    .as_object_mut()
+                    .expect("an artifact is a JSON object")
+                    .remove("stable");
+            }
             if n % 4 == 3 {
                 let object = artifact
                     .as_object_mut()
@@ -544,6 +550,9 @@ fn package_at_limits(nats: &PackageFiles, name: &str) -> ValidatedPackage {
                     "archiveRoot",
                     "signingPolicy",
                     "executables",
+                    "unpackedSize",
+                    "entryCount",
+                    "dependencies",
                 ] {
                     object.remove(field);
                 }

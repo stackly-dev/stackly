@@ -711,6 +711,9 @@ mod tests {
                 let mut artifact = first.clone();
                 artifact["id"] = format!("nats-2.15.{patch}-macos-aarch64").into();
                 artifact["version"] = format!("2.15.{patch}").into();
+                if patch > 0 {
+                    artifact.as_object_mut().unwrap().remove("stable");
+                }
                 artifact
             })
             .collect();
