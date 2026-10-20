@@ -220,8 +220,8 @@ pub(crate) struct PathExpr {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PathPosition {
     Cwd,
-    /// A `configFiles` destination; only a sensitive one may use
-    /// `${instance.secrets}`.
+    /// A `configFiles` destination; a sensitive one must start with
+    /// `${instance.secrets}` and any other one must not.
     ConfigDestination {
         sensitive: bool,
     },
@@ -620,8 +620,15 @@ pub(crate) fn check_path(
     };
     let refusal = match (position, base) {
         (PathPosition::LogFile, PathBase::Dir(InstanceDir::Logs))
-        | (PathPosition::Cwd | PathPosition::ConfigDestination { .. }, PathBase::Dir(_))
+        | (
+            PathPosition::Cwd | PathPosition::ConfigDestination { sensitive: false },
+            PathBase::Dir(_),
+        )
         | (PathPosition::ConfigDestination { sensitive: true }, PathBase::Secrets) => None,
+        (PathPosition::ConfigDestination { sensitive: true }, PathBase::Dir(dir)) => Some(format!(
+            "a sensitive config file must be written to ${{instance.secrets}}, not ${{instance.{}}}",
+            dir.as_code()
+        )),
         (PathPosition::LogFile, PathBase::Dir(dir)) => {
             Some(format!("instance.{} cannot start this path", dir.as_code()))
         }
@@ -1228,6 +1235,72 @@ mod tests {
         assert_eq!(codes(&plain), [IssueCode::TokenNotAllowedHere]);
         assert_eq!(codes(&cwd), [IssueCode::TokenNotAllowedHere]);
         assert_eq!(codes(&log), [IssueCode::TokenNotAllowedHere]);
+    }
+
+    #[test]
+    fn a_sensitive_destination_must_start_with_the_secrets_folder() {
+        for dir in ["config", "data", "run"] {
+            let text = format!("${{instance.{dir}}}/fake.json");
+            let issues = check(|e, i| {
+                check_path(
+                    &text,
+                    PathPosition::ConfigDestination { sensitive: true },
+                    e,
+                    i,
+                    "x",
+                )
+            })
+            .unwrap_err();
+
+            assert_eq!(codes(&issues), [IssueCode::TokenNotAllowedHere], "{dir}");
+            assert!(issues[0].message.contains("${instance.secrets}"), "{dir}");
+        }
+    }
+
+    #[test]
+    fn a_sensitive_destination_in_an_unmanaged_folder_reports_path_not_permitted_only() {
+        let issues = check(|e, i| {
+            check_path(
+                "${instance.temp}/fake.json",
+                PathPosition::ConfigDestination { sensitive: true },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+
+        assert_eq!(codes(&issues), [IssueCode::PathNotPermitted]);
+    }
+
+    #[test]
+    fn a_plain_destination_may_start_with_any_managed_folder_but_not_the_secrets_folder() {
+        for dir in ["config", "data", "run"] {
+            let text = format!("${{instance.{dir}}}/app.conf");
+            assert!(
+                check(|e, i| check_path(
+                    &text,
+                    PathPosition::ConfigDestination { sensitive: false },
+                    e,
+                    i,
+                    "x"
+                ))
+                .is_ok(),
+                "{dir}"
+            );
+        }
+        let secrets = check(|e, i| {
+            check_path(
+                "${instance.secrets}/app.conf",
+                PathPosition::ConfigDestination { sensitive: false },
+                e,
+                i,
+                "x",
+            )
+        })
+        .unwrap_err();
+
+        assert_eq!(codes(&secrets), [IssueCode::TokenNotAllowedHere]);
     }
 
     #[test]
