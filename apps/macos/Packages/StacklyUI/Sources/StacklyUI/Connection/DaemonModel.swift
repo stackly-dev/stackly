@@ -237,6 +237,15 @@ public final class DaemonModel {
         }
     }
 
+    /// The secret methods over this model's link (spec 0011), for the views that fill or
+    /// reveal a secret.
+    public var secrets: SecretsClient {
+        let link = self.link
+        return SecretsClient { call, options throws(ClientError) in
+            try await link.call(call, nil, options)
+        }
+    }
+
     /// Whether the link holds an open connection.
     var isLinked: Bool {
         if case .connected = connectionState { return true }
