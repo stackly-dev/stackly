@@ -1,8 +1,8 @@
 # Log koordinasi: `02-instalasi-pertama`
 
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
-- **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `58e3bc2`
-- **Wave aktif:** `2`, mulai `2026-10-20`
+- **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `355cfa6`
+- **Wave aktif:** `3`, mulai `2026-10-20`
 - **Diperbarui:** `2026-10-20 07:00`
 
 ## Sub sesi wave `1` dan `2`
@@ -30,6 +30,9 @@
 | `upd-0010` (sesi `arc-f22-spec` dipakai ulang lagi) | `architect (update)` | spec 0010 dari usulan fase 02 dan keputusan K1 sampai K9 lead foundation | `01-foundation.md` (spec fitur 10) | `docs/specs/0010-process-supervisor/` | `claude/exciting-wescoff-e3d601` | `opus` | `merged` (`73449bd` → `989e816`) |
 | `upd-0011` (sesi `arc-f19-spec` dipakai ulang) | `architect (update)` | spec 0011 dari usulan fase 02 dan keputusan K8, K13 sampai K15 | `01-foundation.md` (spec fitur 11) | `docs/specs/0011-secret-store-redaction/` | `claude/arc-f19-spec-b5bcbf` | `opus` | `merged` (`b0e2346` → `4827440`) |
 | `align-0016`, `align-0017`, `align-0018`, `align-0019`, `align-0020`, `align-0022`, `align-0023` (sesi architect asal masing masing, dipakai ulang) | `architect (update)` | penyelarasan spec fase 02 terhadap keputusan K1 sampai K18 dan update fondasi di `main` (daftar di `02-instalasi-pertama.penyelarasan-k.md`) | `02-instalasi-pertama.md` | folder spec masing masing | branch sesi masing masing | `opus` | `merged` (`b580ac1`, `3dd2d18`, `251db0d`, `3d77a95`, `f30ffc1`, `8ac300a`, `56c90a8`) |
+| `dev-f17-m1` (sesi `arc-f17-spec` dipakai ulang) | `developer` | 17 · Catalog from repo to daemon (spec 0017 milestone 1, langkah 1 sampai 6; langkah 1 di-merge lebih dulu untuk F18) | `02-instalasi-pertama.md` | lihat brief: domain, `core::catalog`, xtask catalog, protocol `catalog`, stacklyd catalog, testkit | `claude/arc-f17-spec-5e714b` | `opus` | `aktif` |
+| `dev-f19-m1-s1s2` (sesi `arc-f19-spec` dipakai ulang) | `developer` | 19 · milestone 1 langkah 1 dan 2 (format template, `Stdin::Text` plan) | `02-instalasi-pertama.md` | `crates/core/src/provider/` template, raw, validate, plan; golden; harness fuzz `provider_template` | `claude/arc-f19-spec-b5bcbf` | `opus` | `aktif` |
+| `dev-f23-m1-s034` (sesi `arc-f23-spec` dipakai ulang) | `developer` | 23 · milestone 1 langkah 0, 3, 4 (spike, `Exchange`, fuzz) | `02-instalasi-pertama.md` | `crates/core/src/provider/probe/`, harness fuzz baru, `fuzz/`, `xtask/src/fuzz.rs`, `evidence/` | `claude/eager-roentgen-3863a9` | `opus` | `aktif` |
 
 ## Keputusan
 
@@ -110,6 +113,7 @@
 | `2026-10-20` | Perbaikan pasca penyelarasan 0022 dan 0010 di-merge (`0a2315b`, `fc03b7b` → `0b99192`): 0022 memulihkan `openInstance` sementara sampai 0021 langkah 10 dan membangun `ReadinessText` bila 0021 langkah 9 belum ada; 0010 menjelaskan kompensasi create F20 setelah daemon siap, baris create sementara di Value sourcing, arm executor `Stdin::Text` ditambah yang merge kedua antara F10 langkah 7 dan 0019 langkah 2, satu urutan detail probe (redaksi, potong 256, lalu `ObservationDetail`), dan `omitted` pada enam kode (D7). Teks milestone 3 F22 diperbarui; cermin ke 0019, 0009, 0021, 0023 diteruskan ke pemiliknya. | `lead` |
 | `2026-10-20` | Perbaikan pasca penyelarasan 0021, 0009, 0023 di-merge (`91bc758`, `bc7e309`, `1593ace` → `fb180a8`): D1 (blok NATS hanya dari 0023 langkah 2), D2 (`Issue.reason` inti di 0017 M1 langkah 3, key wire di 0021 M1 langkah 1), D6 (bukti PostgreSQL butuh 0019 langkah 9), usulan baru ke spec 0013 `ShellSync.events(kindPrefix:)` sebelum 0021 langkah 9, 0023 AC-13 memakai `stackly instance inspect --json`. Teks milestone 1, 3, 4 F21 dan milestone 3 F23 diganti. | `lead` |
 | `2026-10-20` | Perbaikan pasca penyelarasan 0020 di-merge (`a7c860e` → `31b9053`): tipe inti `CreateFormModel` dan `CommandSpec` dengan `CommandDraft` di protocol (D8), `FieldCode` tetap spec 0006 dan `fields` hanya pada kode yang mencantumkan `omitted` (D7), langkah 9 memperbarui test init gagal 0019 AC-5 (D9), slot `Evaluation` untuk `fields` saat precheck menolak, pengecualian `ctx.commit` untuk `InsertProviderRevision` (usulan 0007 butir 4), lookup revision pinned, milestone 4 butuh 0019 langkah 9 (D6). Keempat milestone F20 diganti (langkah 5 setelah langkah 2, rentang AC sesuai Build plan). | `lead` |
+| `2026-10-20` | Wave 3 (build) dimulai dengan item yang tidak butuh kode fondasi yang belum selesai: F17 M1, F19 langkah 1 dan 2, F23 langkah 0, 3, 4; dibatasi tiga developer karena program foundation juga menjalankan build. Merge kode lewat worktree integrasi lead `.claude/worktrees/lead-02-integrate` (detached), pemeriksaan penuh di sana, lalu fast-forward `main`. Item berikutnya: F18 M1 setelah langkah 1 F17 di-merge; F21 M1 langkah 1 dan 4 setelah langkah 1 dan 2 F19; sisanya menunggu build fondasi (F7 closeout, F8, F10, F11 langkah 4a dan 5, F13 M4). | `lead` |
 
 ## Blocker terbuka
 
@@ -142,4 +146,5 @@
 ## Riwayat wave
 
 - Wave `1` (`2026-10-19` sampai `2026-10-19`, hash awal `6b3da2c`): selesai. Graph diperbarui di akhir wave (`/graphify . --update`, 13 dokumen, 17038 node, 799 community). `Design it` F15, F17, F18, F19 dicentang dan keempat branch architect di-merge (`776f4bb`, `78f3ec7`, `ede6d7b`, `f9bece6`). Terbuka: `Build it` keempat fitur (menunggu fondasi dan item `architect (update)`), Design it F16, F20, F22, F23. Blocker: F15 milestone 4 (signing), update spec 0009 (F9 belum ditutup). Kotak di scope lain yang terbuka karena wave ini: tidak ada.
-- Wave `2` (`2026-10-20` sampai `-`, hash awal `58e3bc2`): architect F16, F20, F22, F23 diajukan sebagai kartu; F21 architect menyusul setelah spec 0020 di-merge.
+- Wave `2` (`2026-10-20` sampai `2026-10-20`, hash awal `58e3bc2`): selesai. Spec F16, F20, F21, F22, F23 di-merge dan dicentang (F21 lewat Pointer di bawah `Build it`); update spec fondasi 0001 sampai 0006, 0009 sampai 0012 dari usulan fase 02; jawaban K1 sampai K18 lead foundation; penyelarasan dan perbaikan pasca penyelarasan semua spec fase 02. Terbuka: semua `Build it` fase 02; update 0007, 0008, 0013 menunggu branch foundation.
+- Wave `3` (`2026-10-20` sampai `-`, hash awal `355cfa6`): build pertama F17 M1, F19 langkah 1 dan 2, F23 langkah 0, 3, 4.
