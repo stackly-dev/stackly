@@ -1,0 +1,75 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000501",
+    "error": {
+      "code": "manifest.invalid",
+      "category": "invalid_input",
+      "message": "the provider package is invalid",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "package",
+          "value": "postgresql"
+        },
+        {
+          "key": "issueCount",
+          "value": "2"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": [
+        {
+          "kind": "issue",
+          "fields": [
+            {
+              "key": "file",
+              "value": "provider.yaml"
+            },
+            {
+              "key": "location",
+              "value": "connection[0].template"
+            },
+            {
+              "key": "code",
+              "value": "connection_invalid"
+            },
+            {
+              "key": "message",
+              "value": "with sentinel values and host ::1 the template does not render to an absolute uri (RFC 3986)"
+            },
+            {
+              "key": "reason",
+              "value": "not_a_uri"
+            }
+          ]
+        },
+        {
+          "kind": "issue",
+          "fields": [
+            {
+              "key": "file",
+              "value": "provider.yaml"
+            },
+            {
+              "key": "location",
+              "value": "connection[1].name"
+            },
+            {
+              "key": "code",
+              "value": "connection_name_duplicate"
+            },
+            {
+              "key": "message",
+              "value": "the connection name uri is used twice"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

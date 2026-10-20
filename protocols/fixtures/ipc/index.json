@@ -246,6 +246,11 @@
       "expect": "roundtrip"
     },
     {
+      "file": "frame-error-issue-with-reason.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
       "file": "frame-error-unknown-item-kind.json",
       "type": "ServerFrame",
       "expect": "decode"

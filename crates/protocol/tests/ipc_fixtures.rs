@@ -732,6 +732,23 @@ fn package_and_settings_errors_list_each_issue_with_its_file_location_code_and_m
 }
 
 #[test]
+fn an_issue_item_carries_a_reason_only_when_its_code_declares_reasons() {
+    let error = error_body("frame-error-issue-with-reason.json");
+    assert!(error.is(&codes::manifest::INVALID));
+    let [invalid, duplicate] = error.items() else {
+        panic!("expected two issue items, got {:?}", error.items());
+    };
+    assert_eq!(invalid.field("code"), Some("connection_invalid"));
+    assert_eq!(invalid.field("reason"), Some("not_a_uri"));
+    assert_eq!(duplicate.field("code"), Some("connection_name_duplicate"));
+    assert_eq!(duplicate.field("reason"), None);
+    let allowed = codes::manifest::INVALID
+        .items
+        .expect("manifest.invalid carries issue items");
+    assert!(allowed.fields.contains(&"reason"));
+}
+
+#[test]
 fn an_unsupported_capability_names_the_capability_and_rule_br_016() {
     let error = error_body("frame-error-unsupported-capability.json");
     assert!(error.is(&codes::provider::UNSUPPORTED_CAPABILITY));
