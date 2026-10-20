@@ -213,7 +213,7 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
 
 **Trace:** REQ-016, BR-018, AC-016, AC-062, OQ-008
 
-**Pointer:** spec [0011](../specs/0011-secret-store-redaction/index.md)
+**Pointer:** spec [0011](../specs/0011-secret-store-redaction/index.md) · code in `crates/domain/src/secret/`, `crates/platform/`, `crates/platform-macos/src/secret*`, `crates/core/src/secret/`, `crates/storage/`, `crates/testkit/`, `crates/protocol/src/secret.rs`, `apps/daemon/src/ipc/secret.rs`, `apps/daemon/src/secrets.rs`, `apps/daemon/src/log_sink/`, `apps/cli/src/secret_input.rs`, `apps/cli/src/commands/secret.rs`
 
 - [x] Design it (spec): `/architect secret store & redaction`
 - [ ] Build it: `/develop secret store & redaction`
@@ -221,7 +221,7 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
   - [x] Secret registry and core service: the secret migration and the registry ops spec 0005 designs for this feature (reference insert, update, observe, delete, and restore, `ReplaceSecretUses`, `InsertAuditEvent`, and the secret and audit reads), then `SecretWorker`, `put`, reveal, delete, `resolve_for_start`, `Redactor`, delivery rules, and the `check-deps` allowlist (spec 0011 AC-4 to AC-6, AC-8 to AC-13, AC-15, AC-20; build steps 0, 4, and 6; does not need feature 6; step 0 needs step 1 and never runs at the same time as spec 0010 step 2a, in either order, because both touch the same registry files; step 4 needs steps 0 and 2; step 6 can run as its own session)
   - [x] Phase 02 core rules: `printable_only` on `SecretFieldRule`, `reason` on `secret.invalid_value`, `put(Bind)` with a field that reads and checks, store errors that carry their reference, and `classify_create_failure` (spec 0011 AC-22, AC-23; build step 4a; in the step 5 session or its own core session, always before spec 0010 step 13 and spec 0020 milestone 1 step 3)
   - [ ] Secret service through the daemon: IPC handlers, `codes::secret` and the error mapping, the redacting log writer, `Redactor` on envelopes and events, and the daemon sentinel suite (spec 0011 AC-3, AC-5, AC-7, AC-8, AC-9, AC-11, AC-13, AC-14, AC-16, AC-21, AC-22; build steps 5 and 7; needs feature 6 and the two milestones above)
-  - [ ] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
+  - [x] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
   - [ ] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19, AC-24; build steps 9 to 11; needs features 12 and 13)
 - [ ] Verify it: `/check verify secret store & redaction`
 - [ ] Test it: `/test secret store & redaction`
