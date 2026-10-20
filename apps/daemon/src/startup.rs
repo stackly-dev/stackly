@@ -1,7 +1,8 @@
 //! The start order of `stacklyd` (spec 0006, *Urutan start*).
 //!
 //! Steps 1 to 8 run here: read the configuration, start the log writer,
-//! resolve the roots (`--print-roots` stops there), prepare the layout,
+//! resolve the roots and check the catalog folder (`--print-roots` stops
+//! there), prepare the layout,
 //! create the server instance ID, take the daemon lock, install the log
 //! file, and log the start line. [`crate::server`] then binds the socket,
 //! serves, and runs the start slot (the registry, spec 0005) until SIGTERM,
@@ -9,14 +10,21 @@
 //! last.
 
 use std::ffi::{OsStr, OsString};
+use std::path::Path;
 use std::process::ExitCode;
 
+use stackly_core::catalog::CatalogLocation;
+use stackly_platform::{FileKind, Filesystem};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 
 /// The variable that holds the `tracing` filter, for example `info` or
 /// `stacklyd=debug`. Unset or empty means `info`.
 pub const LOG_FILTER_ENV: &str = "STACKLY_LOG";
+/// The variable that names a catalog folder built by `cargo xtask catalog
+/// build`, for development and tests (spec 0017). A catalog from it is
+/// always labelled `development`, never `official`.
+pub const CATALOG_DIR_ENV: &str = "STACKLY_CATALOG_DIR";
 /// Exit code when the daemon cannot start.
 pub const EXIT_START_FAILED: u8 = 1;
 /// Exit code when another daemon holds the lock for the same data root.
@@ -32,6 +40,8 @@ pub struct StartConfig {
     pub log_filter: Option<OsString>,
     /// Whether `--print-roots` was given.
     pub print_roots: bool,
+    /// The value of `STACKLY_CATALOG_DIR`, or `None` when it is unset.
+    pub catalog_dir: Option<OsString>,
 }
 
 impl StartConfig {
@@ -46,7 +56,15 @@ impl StartConfig {
             root_override,
             log_filter,
             print_roots,
+            catalog_dir: None,
         }
+    }
+
+    /// Adds the value of `STACKLY_CATALOG_DIR`.
+    #[must_use]
+    pub fn with_catalog_dir(mut self, catalog_dir: Option<OsString>) -> Self {
+        self.catalog_dir = catalog_dir;
+        self
     }
 }
 
@@ -84,6 +102,46 @@ pub fn parse_log_filter(value: Option<&OsStr>) -> Result<EnvFilter, InvalidLogFi
         .map_err(|error| invalid(error.to_string()))
 }
 
+/// The `STACKLY_CATALOG_DIR` value is not an absolute path to a folder.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{CATALOG_DIR_ENV} {value:?} is not an absolute path to a folder")]
+#[non_exhaustive]
+pub struct InvalidCatalogDir {
+    /// The value as read, converted lossily for display.
+    pub value: String,
+}
+
+/// Checks `STACKLY_CATALOG_DIR` through `fs`: unset means no catalog
+/// folder; otherwise the value must be an absolute path to a folder, whose
+/// canonical path becomes a development catalog location. It only reads.
+///
+/// # Errors
+///
+/// Returns [`InvalidCatalogDir`] for an empty or relative value, a path
+/// that does not exist, and a path that is not a folder.
+pub fn parse_catalog_dir(
+    fs: &dyn Filesystem,
+    value: Option<&OsStr>,
+) -> Result<Option<CatalogLocation>, InvalidCatalogDir> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let invalid = || InvalidCatalogDir {
+        value: value.to_string_lossy().into_owned(),
+    };
+    let path = Path::new(value);
+    if value.is_empty() || !path.is_absolute() {
+        return Err(invalid());
+    }
+    let canonical = fs.canonicalize(path).map_err(|_| invalid())?;
+    match fs.symlink_metadata(&canonical) {
+        Ok(Some(info)) if info.kind == FileKind::Dir => {
+            Ok(Some(CatalogLocation::Development(canonical)))
+        }
+        _ => Err(invalid()),
+    }
+}
+
 /// Runs the daemon until SIGTERM or SIGINT and returns its exit code: 0
 /// after a normal stop or `--print-roots`, [`EXIT_START_FAILED`] when it
 /// cannot start, and [`EXIT_LOCK_HELD`] when another daemon holds the lock.
@@ -109,7 +167,9 @@ mod imp {
     use tracing_subscriber::EnvFilter;
     use uuid::Uuid;
 
-    use super::{EXIT_LOCK_HELD, EXIT_START_FAILED, StartConfig, parse_log_filter};
+    use super::{
+        EXIT_LOCK_HELD, EXIT_START_FAILED, StartConfig, parse_catalog_dir, parse_log_filter,
+    };
     use crate::lock::{DaemonLock, LockError, LockOwner};
     use crate::log_sink::{LOG_CONTROL_TIMEOUT, LogSink, LogSinkConfig};
     use crate::map::StartFacts;
@@ -178,6 +238,14 @@ mod imp {
                     root_override = has_override,
                     "cannot resolve the Stackly directories",
                 );
+                return EXIT_START_FAILED;
+            }
+        };
+        // Step 3 also checks the catalog folder, which only reads.
+        let catalog = match parse_catalog_dir(platform.fs(), config.catalog_dir.as_deref()) {
+            Ok(catalog) => catalog,
+            Err(error) => {
+                tracing::error!(error = %error, "cannot start stacklyd");
                 return EXIT_START_FAILED;
             }
         };
@@ -270,7 +338,8 @@ mod imp {
         };
 
         let facts = StartFacts::new(server_instance_id, started_at, has_override, pid);
-        let deps = DaemonDeps::new(platform, prepared, facts, Arc::clone(sink));
+        let deps = DaemonDeps::new(platform, prepared, facts, Arc::clone(sink))
+            .with_catalog_location(catalog);
         let code = runtime.block_on(serve(deps, &mut signals));
         // Blocking tasks (a registry close, a prune) get a moment to end.
         runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
@@ -404,6 +473,57 @@ mod tests {
                 .starts_with(r#"STACKLY_LOG "stacklyd=loud" is not a valid log filter: "#),
             "{error}"
         );
+    }
+
+    #[test]
+    fn an_unset_catalog_dir_means_no_catalog_folder() {
+        let root = stackly_testkit::TestRoot::new().unwrap();
+        let fs = stackly_testkit::FakeFilesystem::new(&root);
+
+        assert_eq!(parse_catalog_dir(&fs, None), Ok(None));
+    }
+
+    #[test]
+    fn a_catalog_dir_is_kept_as_its_canonical_development_location() {
+        let root = stackly_testkit::TestRoot::new().unwrap();
+        let fs = stackly_testkit::FakeFilesystem::new(&root);
+        let dir = root.path().join("catalog");
+        std::fs::create_dir(&dir).unwrap();
+        let dotted = root.path().join("catalog/../catalog");
+
+        let location = parse_catalog_dir(&fs, Some(dotted.as_os_str())).unwrap();
+
+        assert_eq!(
+            location,
+            Some(CatalogLocation::Development(
+                std::fs::canonicalize(&dir).unwrap()
+            ))
+        );
+    }
+
+    #[test]
+    fn an_empty_relative_missing_or_file_catalog_dir_is_refused_with_its_value() {
+        let root = stackly_testkit::TestRoot::new().unwrap();
+        let fs = stackly_testkit::FakeFilesystem::new(&root);
+        let file = root.path().join("catalog.json");
+        std::fs::write(&file, "{}").unwrap();
+        let missing = root.path().join("missing");
+        for value in [
+            OsStr::new(""),
+            OsStr::new("relative/catalog"),
+            missing.as_os_str(),
+            file.as_os_str(),
+        ] {
+            let error = parse_catalog_dir(&fs, Some(value)).unwrap_err();
+
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "STACKLY_CATALOG_DIR {:?} is not an absolute path to a folder",
+                    value.to_string_lossy()
+                )
+            );
+        }
     }
 
     #[cfg(unix)]

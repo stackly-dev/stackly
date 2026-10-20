@@ -16,6 +16,7 @@ use std::time::Instant;
 
 use stackly_ipc::PeerCred;
 use stackly_protocol::ErrorBody;
+use stackly_protocol::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use stackly_protocol::daemon::{Capabilities, DaemonHealth, DaemonInfo};
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::operation::{
@@ -25,8 +26,8 @@ use stackly_protocol::operation::{
 };
 
 use crate::ipc::operation::{self, TestStartingMethod};
-use crate::map;
 use crate::state::DaemonCore;
+use crate::{catalog, map};
 
 /// What a handler may know about the request it serves: filled from the
 /// accept and the handshake of its connection, so a handler never guesses
@@ -97,6 +98,27 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, Capabilities> {
         let _ = context;
         get_capabilities(core)
+    }
+
+    /// `catalog.list_providers`.
+    fn list_providers<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, ListProvidersReply> {
+        let _ = context;
+        catalog::list_providers(core)
+    }
+
+    /// `catalog.get_provider`.
+    fn get_provider<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetProviderParams,
+    ) -> HandlerFuture<'a, Box<ProviderDetail>> {
+        let _ = context;
+        catalog::get_provider(core, params)
     }
 
     /// `operation.get`.

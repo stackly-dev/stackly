@@ -1,6 +1,7 @@
 //! `stacklyd`, the per user Stackly daemon.
 //!
-//! `main` only reads the arguments and the environment, once, and hands
+//! `main` only reads the arguments and the environment (`STACKLY_ROOT`,
+//! `STACKLY_LOG`, and `STACKLY_CATALOG_DIR`), once, and hands
 //! them to [`stacklyd::run`]. Exit codes: 0 after a normal stop or
 //! `--print-roots`, 1 when the daemon cannot start, 2 for bad arguments
 //! (clap), and 3 when another daemon holds the lock.
@@ -9,7 +10,7 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use stackly_platform::ROOT_OVERRIDE_ENV;
-use stacklyd::{LOG_FILTER_ENV, StartConfig};
+use stacklyd::{CATALOG_DIR_ENV, LOG_FILTER_ENV, StartConfig};
 
 /// The per user Stackly daemon.
 #[derive(Debug, Parser)]
@@ -23,9 +24,12 @@ struct Args {
 
 fn main() -> ExitCode {
     let args = Args::parse();
-    stacklyd::run(StartConfig::new(
-        std::env::var_os(ROOT_OVERRIDE_ENV),
-        std::env::var_os(LOG_FILTER_ENV),
-        args.print_roots,
-    ))
+    stacklyd::run(
+        StartConfig::new(
+            std::env::var_os(ROOT_OVERRIDE_ENV),
+            std::env::var_os(LOG_FILTER_ENV),
+            args.print_roots,
+        )
+        .with_catalog_dir(std::env::var_os(CATALOG_DIR_ENV)),
+    )
 }

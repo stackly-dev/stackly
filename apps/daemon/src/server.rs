@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
+use stackly_core::catalog::CatalogLocation;
 use stackly_core::operation::{EngineError, OperationEngine};
 use stackly_core::{PreparedLayout, daemon_info};
 use stackly_domain::{PruneReport, Registry, RegistryError, RetentionPolicy};
@@ -26,6 +27,7 @@ use tokio::sync::{Semaphore, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, MissedTickBehavior, timeout};
 
+use crate::catalog::{self, CatalogOverride};
 use crate::connection;
 use crate::dispatch::{DefaultHandlers, Handlers};
 use crate::events::EventBus;
@@ -75,6 +77,10 @@ pub struct DaemonConfig {
     /// The uid a peer must have; `None`, the daemon's choice, means its own
     /// uid. Tests set another uid to watch a refused peer (spec 0006 AC-2).
     pub peer_uid: Option<u32>,
+    /// The catalog an in process test gives the daemon; `None`, the
+    /// daemon's choice, loads the folder of the start configuration
+    /// (spec 0017).
+    pub catalog: Option<CatalogOverride>,
 }
 
 impl Default for DaemonConfig {
@@ -86,6 +92,7 @@ impl Default for DaemonConfig {
             registry_open: OpenOptions::new(),
             start_gate: None,
             peer_uid: None,
+            catalog: None,
         }
     }
 }
@@ -99,6 +106,7 @@ pub struct DaemonDeps {
     log: Arc<LogSink>,
     handlers: Arc<dyn Handlers>,
     config: DaemonConfig,
+    catalog: Option<CatalogLocation>,
 }
 
 impl std::fmt::Debug for DaemonDeps {
@@ -128,7 +136,16 @@ impl DaemonDeps {
             log,
             handlers: Arc::new(DefaultHandlers),
             config: DaemonConfig::default(),
+            catalog: None,
         }
+    }
+
+    /// Loads the catalog at `location`, the folder `STACKLY_CATALOG_DIR`
+    /// named; `None` means no catalog.
+    #[must_use]
+    pub fn with_catalog_location(mut self, location: Option<CatalogLocation>) -> Self {
+        self.catalog = location;
+        self
     }
 
     /// Serves requests through `handlers` instead of [`DefaultHandlers`].
@@ -219,6 +236,7 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         log,
         handlers,
         config,
+        catalog,
     } = deps;
     let user = platform
         .identity()
@@ -255,6 +273,7 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         handlers,
         version,
         config,
+        catalog,
     ));
     Ok(DaemonHandle {
         core,
@@ -538,7 +557,8 @@ async fn start_slot(
     tasks: Arc<Tasks>,
     handlers: Arc<dyn Handlers>,
     version: String,
-    config: DaemonConfig,
+    mut config: DaemonConfig,
+    catalog: Option<CatalogLocation>,
 ) {
     if let Some(mut gate) = config.start_gate {
         let _ = gate.wait_for(|open| *open).await;
@@ -614,6 +634,11 @@ async fn start_slot(
             core.fail(EXIT_START_FAILED);
         }
     }
+    // The catalog loads after the registry, in recovery mode too (spec
+    // 0017); its methods answer `daemon.starting` until then.
+    let loaded = catalog::load(&core, catalog, config.catalog.take()).await;
+    catalog::log_loaded(&loaded);
+    core.set_catalog(loaded);
     core.mark_ready();
     // A stop that began during the start slot leaves the dispatcher closed:
     // what `recover` queued runs at the next start.

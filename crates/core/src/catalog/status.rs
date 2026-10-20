@@ -41,6 +41,19 @@ pub enum SupportReason {
 }
 
 impl SupportReason {
+    /// Every reason.
+    pub const ALL: [Self; 9] = [
+        Self::Untested,
+        Self::NoBuild,
+        Self::NoBuildForArch,
+        Self::NoBuildForHost,
+        Self::PlatformNote,
+        Self::ArtifactBlocked,
+        Self::FixtureOnly,
+        Self::ProviderPlanned,
+        Self::PackageInvalid,
+    ];
+
     /// Returns the stable code, such as `no_build_for_arch`.
     #[must_use]
     pub const fn as_code(self) -> &'static str {
@@ -75,6 +88,15 @@ pub enum EntryState {
 }
 
 impl EntryState {
+    /// Every state.
+    pub const ALL: [Self; 5] = [
+        Self::Available,
+        Self::Blocked,
+        Self::Unsupported,
+        Self::Planned,
+        Self::Invalid,
+    ];
+
     /// Returns the stable code, such as `available`.
     #[must_use]
     pub const fn as_code(self) -> &'static str {

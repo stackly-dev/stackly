@@ -167,7 +167,9 @@ pub mod subsystem {
     /// catalog, `degraded` while an entry failed validation.
     pub const CATALOG: &str = "catalog";
     /// Every name, in the order `get_health` lists them.
-    pub const ALL: [&str; 6] = [IPC, EVENT_BUS, LOG_SINK, REGISTRY, OPERATIONS, SUPERVISOR];
+    pub const ALL: [&str; 7] = [
+        IPC, EVENT_BUS, LOG_SINK, REGISTRY, OPERATIONS, SUPERVISOR, CATALOG,
+    ];
 }
 
 /// Counters since daemon start.
