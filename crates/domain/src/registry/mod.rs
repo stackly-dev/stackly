@@ -7,6 +7,7 @@
 //! suite.
 
 mod batch;
+mod config;
 mod error;
 mod path;
 mod query;
@@ -25,6 +26,7 @@ use crate::id::{EnvironmentId, InstanceId, InvalidId, OperationId, RuntimeId};
 use crate::instance::Instance;
 use crate::lease::Lease;
 use crate::operation::{JournalView, Operation, OperationJournal};
+use crate::process::ProcessObservation;
 use crate::provider::ProviderRevisionKey;
 use crate::runtime::{Runtime, RuntimeReferences};
 use crate::secret::SecretRef;
@@ -32,6 +34,7 @@ use crate::text::serde_as_text;
 use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
 
 pub use batch::{Committed, Generation, Versioned, WriteBatch, WriteOp};
+pub use config::{ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson};
 pub use error::{BatchError, RegistryError, ResourceRef};
 pub use path::{InstancePathEntry, InstancePathKind, LogicalRoot, RelativePath};
 pub use query::{InstanceFilter, LeaseFilter, OperationCursor, OperationPage, OperationQuery};
@@ -86,6 +89,16 @@ pub use secret::{
 /// its uses say which resource needs it for which field (spec 0011). A
 /// reference that is still used cannot be deleted
 /// ([`RegistryError::ReferenceInUse`]). Audit rows are append only.
+///
+/// # Process observations and config revisions
+///
+/// The supervisor records one process observation per spawn and adoption
+/// (spec 0010); the newest one is the one with the largest row ID, never
+/// the latest `observed_at`, so a clock that went back cannot pick an old
+/// one. Neither an observation nor a config revision is part of the
+/// [`Instance`] aggregate: writing one raises no revision and returns none
+/// in [`Committed::revisions`]. Writing a config revision also makes it the
+/// instance's active one.
 pub trait Registry: Send + Sync {
     /// Returns a provider revision by its key.
     ///
@@ -166,6 +179,30 @@ pub trait Registry: Send + Sync {
     ///
     /// Returns `Busy`, `Unavailable`, or `Io`.
     fn known_instance_ids(&self) -> Result<Versioned<Vec<InstanceId>>, RegistryError>;
+
+    /// Returns the newest process observation of an instance: the one
+    /// recorded last, whatever its `observed_at`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NotFound` for an unknown instance, or `Corrupt`, `Busy`,
+    /// `Unavailable`, or `Io`.
+    fn latest_process_observation(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ProcessObservation>>, RegistryError>;
+
+    /// Returns the config revision an instance runs with, or `None` while
+    /// it has none.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NotFound` for an unknown instance, or `Corrupt`, `Busy`,
+    /// `Unavailable`, or `Io`.
+    fn active_config_revision(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ConfigRevisionRecord>>, RegistryError>;
 
     /// Returns the seven stored paths of an instance, in
     /// [`InstancePathKind::ALL`] order.
@@ -334,6 +371,12 @@ uuid_id! {
     /// registry; it never changes afterwards, so a restored or copied
     /// registry can be told apart from a new one.
     RegistryId
+}
+
+uuid_id! {
+    /// Stable identifier of one config revision of an instance, always a
+    /// UUID version 7. The daemon creates it when it writes the revision.
+    ConfigRevisionId
 }
 
 uuid_id! {

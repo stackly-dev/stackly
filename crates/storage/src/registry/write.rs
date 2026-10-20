@@ -20,7 +20,7 @@ use stackly_platform::instance_path_entries;
 use super::column::{corrupt, exists, first, int, opt_ts, sql_error, ts};
 use super::journal;
 use super::read::{self, resource_columns};
-use super::secret;
+use super::{secret, supervision};
 
 /// Applies `batch` in one transaction stamped `now`: all of it, or none.
 pub(super) fn commit(
@@ -185,6 +185,12 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
         } => secret::delete_reference(conn, reference, *expected),
         WriteOp::ReplaceSecretUses { user, uses } => secret::replace_uses(conn, *user, uses, op),
         WriteOp::InsertAuditEvent(record) => secret::insert_audit(conn, record, op),
+        WriteOp::RecordProcessObservation(observation) => {
+            supervision::record_observation(conn, observation)
+        }
+        WriteOp::InsertConfigRevision(record) => {
+            supervision::insert_config_revision(conn, record, op)
+        }
         _ => Err(RegistryError::Integrity {
             detail: "the SQLite registry does not support this write op yet".to_owned(),
         }),

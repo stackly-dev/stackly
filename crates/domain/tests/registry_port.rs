@@ -7,16 +7,17 @@ use std::collections::BTreeSet;
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
-    BatchError, Endpoint, Environment, EnvironmentId, EnvironmentMember, Generation, HealthState,
-    InstallMode, Instance, InstanceId, InstanceLifecycle, InvariantDetail, Lease, LeaseHolder,
-    LeaseId, LeaseState, LifecycleEvent, LineCompatibility, NewInstance, NewOperation, NewRuntime,
-    Operation, OperationCursor, OperationEvent, OperationFailure, OperationId, OperationKind,
-    OperationQuery, OperationResource, OperationState, Ownership, Progress, ProviderRevision,
-    ProviderRevisionKey, ProviderRevisionRecord, PruneReport, ReadinessState, ReasonCode,
-    RecoveryHint, Registry, RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime,
-    RuntimeEvent, RuntimeId, RuntimeReferences, RuntimeState, StartupPolicy, StoredEnvironment,
-    StoredInstance, StoredLease, StoredOperation, StoredRuntime, UnixEndpoint, Versioned,
-    WriteBatch, WriteOp,
+    BatchError, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, Endpoint, Environment,
+    EnvironmentId, EnvironmentMember, Generation, HealthState, InstallMode, Instance, InstanceId,
+    InstanceLifecycle, InvariantDetail, Lease, LeaseHolder, LeaseId, LeaseState, LifecycleEvent,
+    LineCompatibility, NewInstance, NewOperation, NewRuntime, Operation, OperationCursor,
+    OperationEvent, OperationFailure, OperationId, OperationKind, OperationQuery,
+    OperationResource, OperationState, Ownership, Pid, ProcessIdentity, ProcessObservation,
+    ProcessStart, Progress, ProviderRevision, ProviderRevisionKey, ProviderRevisionRecord,
+    PruneReport, ReadinessState, ReasonCode, RecoveryHint, Registry, RegistryError, ResourceRef,
+    ResourceRevision, RetentionPolicy, Runtime, RuntimeEvent, RuntimeId, RuntimeReferences,
+    RuntimeState, StartupPolicy, StoredEnvironment, StoredInstance, StoredLease, StoredOperation,
+    StoredRuntime, UnixEndpoint, Versioned, WriteBatch, WriteOp,
 };
 
 /// Returns `2026-01-01T00:00:00Z` plus `seconds`.
@@ -644,6 +645,71 @@ fn write_ops_name_their_resource_revision_and_expected_revision() {
     );
     assert_eq!(record.revision(), None);
     record.check_shape().unwrap();
+}
+
+fn observation(executable: std::path::PathBuf) -> ProcessObservation {
+    ProcessObservation {
+        instance: InstanceId::generate(),
+        identity: ProcessIdentity {
+            pid: Pid::new(4242).expect("4242 is a process ID"),
+            start: ProcessStart::new(1_700_000_000, 0).expect("0 microseconds is in range"),
+            executable,
+            session: Pid::new(4242).expect("4242 is a process ID"),
+            boot: "6f9619ff-8b86-d011-b42d-00c04fc964ff"
+                .parse()
+                .expect("a hyphenated UUID is a boot ID"),
+        },
+        observed_at: at(0),
+    }
+}
+
+#[test]
+fn observation_and_config_revision_ops_carry_no_revision() {
+    let observation = observation("/opt/stackly/bin/postgres".into());
+    let instance = observation.instance;
+    let config = ConfigRevisionRecord::first(
+        ConfigRevisionId::generate(),
+        instance,
+        ConfigValuesJson::new("{}".to_owned()).unwrap(),
+        Some(OperationId::generate()),
+        at(0),
+    );
+    let observe = WriteOp::RecordProcessObservation(observation);
+    let configure = WriteOp::InsertConfigRevision(config.clone());
+
+    assert_eq!(observe.resource(), ResourceRef::Instance(instance));
+    assert_eq!(configure.resource(), ResourceRef::ConfigRevision(config.id));
+    for op in [&observe, &configure] {
+        assert_eq!((op.revision(), op.expected()), (None, None));
+        assert_eq!(op.journal_operation(), None);
+        op.check_shape().unwrap();
+    }
+    assert_eq!(
+        RegistryError::DuplicateResource {
+            resource: ResourceRef::ConfigRevision(config.id),
+        }
+        .to_string(),
+        format!("config revision {} already exists", config.id)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_executable_that_is_not_utf8_is_refused_by_the_shape_check() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    let executable = OsStr::from_bytes(b"/opt/stackly/bin/postgres-\xff").into();
+    let err = WriteOp::RecordProcessObservation(observation(executable))
+        .check_shape()
+        .unwrap_err();
+
+    assert_eq!(
+        err,
+        RegistryError::NotUtf8Path {
+            field: "executable_identity"
+        }
+    );
 }
 
 #[test]
