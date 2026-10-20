@@ -1,0 +1,142 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000504",
+    "reply": {
+      "type": "catalog.get_provider",
+      "content": {
+        "summary": {
+          "provider": "official/nats",
+          "revision": 1,
+          "displayName": "NATS Server",
+          "software": "nats",
+          "category": "observability",
+          "description": "NATS messaging server with JetStream, one server per instance.",
+          "state": "teleported",
+          "stateReason": "moon_phase",
+          "stateNote": null,
+          "providerRevision": "1.0.0",
+          "publisher": "Stackly",
+          "trust": "community",
+          "versions": [
+            "2.15.1"
+          ],
+          "versionCount": 1,
+          "licenses": [
+            "Apache-2.0"
+          ],
+          "mark": "Na",
+          "tile": "magenta"
+        },
+        "software": "nats",
+        "manifestSha256": "eb02876b69a4a0bb1abd4393a482903e118afba77a3eb5ef25d7ba3d07242363",
+        "capabilities": [
+          {
+            "capability": "multi_instance",
+            "supported": true
+          },
+          {
+            "capability": "persistence",
+            "supported": true
+          },
+          {
+            "capability": "reload",
+            "supported": false
+          },
+          {
+            "capability": "metrics",
+            "supported": true
+          },
+          {
+            "capability": "tls",
+            "supported": false
+          },
+          {
+            "capability": "cold_backup",
+            "supported": true
+          },
+          {
+            "capability": "online_backup",
+            "supported": false
+          },
+          {
+            "capability": "logical_backup",
+            "supported": false
+          },
+          {
+            "capability": "time_travel",
+            "supported": true
+          }
+        ],
+        "versions": [
+          {
+            "version": "2.15.1",
+            "line": "2.15",
+            "support": [
+              {
+                "os": "macos",
+                "arches": [
+                  "riscv64"
+                ],
+                "status": "certified",
+                "reason": "moon_phase",
+                "note": null
+              },
+              {
+                "os": "freebsd",
+                "arches": [],
+                "status": "unsupported",
+                "reason": "no_build",
+                "note": null
+              },
+              {
+                "os": "windows",
+                "arches": [],
+                "status": "planned",
+                "reason": "platform_note",
+                "note": "Windows builds are planned for a later release."
+              }
+            ],
+            "install": {
+              "installable": true,
+              "reason": "moon_phase"
+            },
+            "artifacts": [
+              {
+                "id": "nats-2.15.1-macos-aarch64",
+                "os": "plan9",
+                "arch": "riscv64",
+                "status": "quarantined",
+                "sha256": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+                "minOs": "13.0",
+                "downloadSize": 6785953,
+                "installedSize": null,
+                "license": "Apache-2.0",
+                "licenseUrl": "https://github.com/nats-io/nats-server/blob/v2.15.1/LICENSE",
+                "source": "github.com/nats-io",
+                "blockedReason": null,
+                "dependencies": [
+                  {
+                    "name": "openssl",
+                    "kind": "vendored",
+                    "version": "3.4.0",
+                    "license": "Apache-2.0"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "platformNotes": [
+          {
+            "os": "haiku",
+            "status": "certified",
+            "note": "Windows builds are planned for a later release."
+          }
+        ],
+        "note": null,
+        "issues": []
+      }
+    }
+  }
+}
