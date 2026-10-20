@@ -88,6 +88,15 @@ pub(crate) enum StopEnd {
     Abandoned,
 }
 
+/// What [`Supervisor::journal_stop`] found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StopJournal {
+    /// The lifecycle is `stopping`: a process may still have to stop.
+    Begun,
+    /// Nothing runs any more: the stop has no `stop` stage to run.
+    AlreadyStopped,
+}
+
 impl Supervisor {
     /// Builds the operation work of `stop_instance` for the engine.
     #[must_use]
@@ -263,17 +272,22 @@ impl Supervisor {
         }
     }
 
-    /// Records the start of a stop: the desired state becomes `stopped` and
-    /// the lifecycle `stopping`; with `no_process` the lifecycle goes on to
-    /// `stopped` at once, because no process remains to stop (an instance
-    /// paused between two respawns, or one whose start was cancelled before
-    /// it spawned).
+    /// Records the start of a stop from the aggregate read inside the
+    /// commit: the desired state becomes `stopped`, and a lifecycle that
+    /// can begin a stop becomes `stopping` (one that already is `stopping`
+    /// stays). With `no_process` the lifecycle goes on to `stopped` at
+    /// once, because no process remains to stop (an instance paused between
+    /// two respawns, or one whose start was cancelled before it spawned).
+    /// A lifecycle that is `stopped`, `failed`, or `uninitialized` has
+    /// nothing left to stop, because the process left after the caller saw
+    /// it: only the desired state is written, and the answer says so.
     pub(crate) async fn journal_stop(
         &self,
         id: InstanceId,
         no_process: bool,
-    ) -> Result<(), SupervisorError> {
+    ) -> Result<StopJournal, SupervisorError> {
         let now = self.deps().platform.clock().now();
+        let mut journaled = StopJournal::Begun;
         commit_instance(self, id, None, CommitMode::Operation, |changes| {
             if changes.instance().desired() != DesiredState::Stopped {
                 changes.apply(|instance| {
@@ -281,15 +295,24 @@ impl Supervisor {
                     Ok::<_, SupervisorError>(())
                 })?;
             }
-            if changes.instance().lifecycle() != InstanceLifecycle::Stopping {
-                apply_event(changes, LifecycleEvent::StopBegin, now)?;
+            journaled = StopJournal::Begun;
+            match changes.instance().lifecycle() {
+                InstanceLifecycle::Stopped
+                | InstanceLifecycle::Failed
+                | InstanceLifecycle::Uninitialized => {
+                    journaled = StopJournal::AlreadyStopped;
+                    return Ok(Vec::new());
+                }
+                InstanceLifecycle::Stopping => {}
+                _ => apply_event(changes, LifecycleEvent::StopBegin, now)?,
             }
             if no_process {
                 apply_event(changes, LifecycleEvent::Exited, now)?;
             }
             Ok(Vec::new())
         })
-        .await
+        .await?;
+        Ok(journaled)
     }
 
     /// Records that the identity of the process changed: the instance
@@ -405,26 +428,33 @@ async fn run_stop(
 
     let actor = sup.actor(id);
     let has_process = actor.read(|state| state.process.is_some());
+    let mut lifecycle = instance.lifecycle();
     if !has_process
         && matches!(
-            instance.lifecycle(),
+            lifecycle,
             InstanceLifecycle::Starting | InstanceLifecycle::Running | InstanceLifecycle::Stopping
         )
     {
         // The exit handler records the lifecycle before it clears the
         // process, so an empty slot makes a fresh read current. A process
         // that left between the read in `validate` and now is a stop that
-        // is done; only a process the actor never knew is left to
-        // reconciliation.
-        let current = read_instance(deps, id).await.map_err(failed)?;
-        if !matches!(
-            current.lifecycle(),
-            InstanceLifecycle::Stopping | InstanceLifecycle::Stopped
-        ) {
-            return Err(failed(SupervisorError::IdentityUnproven { pid: None }));
+        // is done, or a crash the stop takes over from; only a process the
+        // actor never knew is left to reconciliation.
+        lifecycle = read_instance(deps, id).await.map_err(failed)?.lifecycle();
+        match lifecycle {
+            // This path ends the operation from the `lock` stage, without
+            // the `journal`, `stop`, and `complete` stages.
+            InstanceLifecycle::Stopping
+            | InstanceLifecycle::Stopped
+            | InstanceLifecycle::Failed => {
+                sup.settle_gone_process(id).await.map_err(failed)?;
+                return Ok(outcome());
+            }
+            // A crash with a respawn pending: the stop goes on and ends
+            // the pause.
+            InstanceLifecycle::Recovering => {}
+            _ => return Err(failed(SupervisorError::IdentityUnproven { pid: None })),
         }
-        sup.settle_gone_process(id).await.map_err(failed)?;
-        return Ok(outcome());
     }
 
     // The pause before a respawn holds no operation, so the stop has the
@@ -434,11 +464,11 @@ async fn run_stop(
     ctx.begin_step(StepSpec::new(StageName::JOURNAL).irreversible())
         .await?;
     ctx.set_stage(StageName::JOURNAL).await?;
-    let no_process = !has_process && instance.lifecycle() == InstanceLifecycle::Recovering;
+    let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
     // A pause between two respawns has no process to stop.
-    sup.journal_stop(id, no_process).await.map_err(failed)?;
+    let journaled = sup.journal_stop(id, no_process).await.map_err(failed)?;
 
-    if has_process {
+    if has_process && journaled == StopJournal::Begun {
         ctx.begin_step(StepSpec::new(StageName::STOP).irreversible())
             .await?;
         ctx.set_stage(StageName::STOP).await?;

@@ -8,7 +8,7 @@ use std::time::Duration;
 use stackly_domain::{
     DesiredState, InstanceId, InstanceLifecycle, OperationKind, OperationState, RegistryError,
 };
-use stackly_platform::ExitStatus;
+use stackly_platform::{ChildRole, ExitStatus};
 
 use crate::common::{Rig, Spec};
 
@@ -155,4 +155,50 @@ async fn a_stop_whose_process_exit_was_handled_before_its_journal_still_ends_sto
     let instance = rig.instance_row(id);
     assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
     assert_eq!(instance.desired(), DesiredState::Stopped);
+}
+
+#[tokio::test]
+async fn a_crash_between_the_validate_and_the_lock_of_a_stop_cancels_the_respawn_and_ends_stopped()
+{
+    let rig = Rig::with_config(|config| {
+        config.restart_base_delay = Duration::from_millis(500);
+        config.restart_max_delay = Duration::from_millis(500);
+    })
+    .await;
+    let id = rig.instance(&Spec::default());
+    let first = running(&rig, id).await;
+
+    // The stop has read the instance `running`; it waits before its `lock`
+    // stage while the process crashes on its own and the crash is handled:
+    // `recovering`, the actor's slot empty, a respawn pending.
+    let door = rig.registry.hold_stage(OperationKind::StopInstance, "lock");
+    let stop = rig.stop(id).await;
+    wait_for("the stop waits before the lock", || door.entered()).await;
+    rig.processes()
+        .exit(first.pid, Some(ExitStatus::Exited(70)));
+    wait_for("the crash is handled", || {
+        rig.instance_row(id).lifecycle() == InstanceLifecycle::Recovering
+            && rig.sup.status(id).process.is_none()
+    })
+    .await;
+    door.release();
+    let detail = rig.wait_final(stop).await;
+
+    assert_eq!(
+        detail.view.operation.state(),
+        OperationState::Succeeded,
+        "a crash that left no process is a stopped process"
+    );
+    let instance = rig.instance_row(id);
+    assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(instance.desired(), DesiredState::Stopped);
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    let mains = rig
+        .processes()
+        .spawns()
+        .into_iter()
+        .filter(|spawn| spawn.role == ChildRole::Main)
+        .count();
+    assert_eq!(mains, 1, "the pending respawn was cancelled by the stop");
+    assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Stopped);
 }

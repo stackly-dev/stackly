@@ -162,6 +162,54 @@ async fn a_stop_that_finds_its_process_already_gone_after_the_lock_ends_stopped(
 }
 
 #[tokio::test]
+async fn a_stop_whose_process_exit_lands_before_its_journal_on_a_stopping_instance_ends_stopped() {
+    let rig = Rig::patched(|text| replace(text, "stopSeconds: 10", "stopSeconds: 1")).await;
+    let id = rig.instance(&Spec::default());
+    let spawn = running(&rig, id).await;
+    let first = rig.stop(id).await;
+    let detail = rig.wait_state(first, OperationState::Failed).await;
+    assert_eq!(Rig::failure_code(&detail), codes::STOP_TIMEOUT.to_string());
+    assert_eq!(
+        rig.instance_row(id).lifecycle(),
+        InstanceLifecycle::Stopping
+    );
+    // The second stop has seen the process; it waits before its `journal`
+    // stage while the process exits and the exit handler finishes.
+    let door = rig
+        .registry
+        .hold_stage(OperationKind::StopInstance, "journal");
+    let second = rig.stop(id).await;
+    wait_for("the second stop reaches the journal stage", || {
+        door.entered()
+    })
+    .await;
+
+    rig.kill_servers();
+    rig.processes().exit(spawn.pid, Some(ExitStatus::Exited(0)));
+    wait_for("the exit is handled to the end", || {
+        rig.instance_row(id).lifecycle() == InstanceLifecycle::Stopped
+            && rig.sup.status(id).process.is_none()
+    })
+    .await;
+    door.release();
+
+    let detail = rig.wait_final(second).await;
+    assert_eq!(
+        detail.view.operation.state(),
+        OperationState::Succeeded,
+        "a process that is already gone is a stopped process"
+    );
+    let instance = rig.instance_row(id);
+    assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(instance.desired(), DesiredState::Stopped);
+    assert_eq!(
+        rig.processes().signals(spawn.pid),
+        [ProviderSignal::Term],
+        "the second stop signalled nothing"
+    );
+}
+
+#[tokio::test]
 async fn a_changed_identity_refuses_the_signal_and_the_instance_becomes_unknown() {
     let rig = Rig::new().await;
     let id = rig.instance(&Spec::default());
