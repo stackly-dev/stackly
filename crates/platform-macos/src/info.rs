@@ -18,7 +18,7 @@ const CAPABILITIES: PlatformCapabilities = PlatformCapabilities::none("")
     )
     .with(
         PlatformCapability::ProcessSupervision,
-        not_built("not built yet (feature 10)"),
+        CapabilityStatus::Supported,
     )
     .with(PlatformCapability::SecretStore, CapabilityStatus::Supported)
     // Feature 6 provides it without a platform trait: the transport lives
