@@ -1,0 +1,4 @@
+set window 500x400 -> 900, 652
+set sidebar 100 -> 200, 652
+set sidebar 400 -> 260, 652
+set sidebar 260 -> 260, 652

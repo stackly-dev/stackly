@@ -1,0 +1,57 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15654-0709-7207-9d89-5996a893375c",
+  "covers": [
+    "REQ-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 manual check 6: keyboard and VoiceOver in the shell",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "The arrow keys move the sidebar selection, Tab reaches the content, the banner buttons, Settings, Diagnostics, and Reconnect work from the keyboard, VoiceOver reads a label for every element, and each connection change is announced once.",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-19T22:41:49.831632Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-19-spec-0013-manual-check-6-keyboard-and-voiceover.json",
+  "context": {
+    "sourceCommit": "7818bea186bae7048a8b5eeee71e03eb932e6a76",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15654-10a3-70b3-9094-a7cdcfade57f",
+  "covers": [
+    "AC-024",
+    "REQ-024"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 manual check 8: an empty STACKLY_ROOT is misconfigured",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "With STACKLY_ROOT set but empty, the app shows the critical banner STACKLY_ROOT is invalid., makes no connection attempt, and Reconnect in Diagnostics is disabled with the reason Relaunch Stackly after fixing the problem.",
+  "actual": "critical banner `STACKLY_ROOT is invalid.` / `STACKLY_ROOT is set but empty. Fix the variable and relaunch Stackly.` with only Open Diagnostics, footer `Stackly misconfigured`; Diagnostics shows Socket `Unavailable`, What to do with the same message, and Reconnect disabled with `Relaunch Stackly after fixing the problem.`; the app holds no stacklyd socket and the daemon log gained no line, so no connection was attempted",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 7818bea with a clean tree, `cargo xtask build-app` (Debug) and `cargo build -p stacklyd -p stackly-cli`; STACKLY_ROOT is the private folder /private/tmp/stk-gui-check (mode 0700)",
+    "Claude Code drove Stackly through the macOS accessibility API (System Events menu clicks, the window's close button, Dock item clicks, AX row selection and sizes) and captured only the Stackly window with `screencapture -l <window id>`; synthetic keystrokes do not reach apps on this Mac, so no step uses the keyboard",
+    "with stacklyd still running from check 7, quit Stackly and open it with `open -n --env STACKLY_ROOT= Stackly.app` (`ps eww` shows `STACKLY_ROOT=` empty), capture it, then select Diagnostics and capture it",
+    "check `lsof -a -p <app pid> -U` for a stacklyd socket and the daemon log length"
+  ],
+  "reviewer": "ojiepermana, reviewing the screenshots and logs Claude Code (Claude Opus 5.5) took while it drove the app",
+  "startedAt": "2026-10-19T22:41:52.290816Z",
+  "finishedAt": "2026-10-20T02:15:03.849824Z",
+  "evidencePath": "evidence/manual/files/01a15654-10a3-70b3-9094-a7cdcfade57f/",
+  "context": {
+    "sourceCommit": "7818bea186bae7048a8b5eeee71e03eb932e6a76",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
