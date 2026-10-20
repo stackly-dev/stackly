@@ -887,3 +887,17 @@ Update `/architect` dari usulan fase 02 (spec 0018, 0019, 0020, 0022, dan 0023) 
 - Kode apa pun, termasuk entri `EXPOSE_ALLOWED` dan konstanta `FailureCode`.
 - Fallback `ChildRole::Probe` (P10, ditolak K6 butir 4) dan kompensasi penuh untuk create di fitur ini (P3 versi asli, ditolak K1 butir 4).
 - Nomor minor yang ditetapkan di muka (inventaris konflik 7, ditolak K4 butir 1).
+
+## Perbaikan pasca penyelarasan 2026-10-20
+
+Dari `docs/scope/coordination/post-alignment/post-0010.md` (workflow lead `wf_fa323a0b-69e`) dan keputusan lead D7 di `post-decisions.md`. Teks saja, minimal, karena langkah 3, 2a, 5, dan 6 sedang dibangun; nomor langkah dan ID AC tidak berubah.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Create yang terputus | untuk create fitur 20, kompensasi berjalan setelah daemon siap, jadi rekonsiliasi lebih dulu menerapkan baris `initializing` atau membiarkan `uninitialized`, lalu `instance_registration` menghapusnya kecuali `instance.lock` masih dipegang | butir 1; spec 0007 (urutan slot, AC-10) dan AC-11 spec 0020 |
+| Value sourcing create | baris create ditandai `create sementara`, dengan satu kalimat yang menunjuk target fitur 20 di spec 0020 (termasuk `created_at` config revision awal dari tahap `layout`) | butir 2, opsi pertama (penanda), karena isi baris memang milik create sementara |
+| Arm `Stdin::Text` | ditambah oleh yang di merge belakangan di antara langkah 7 dan langkah 2 spec 0019 | butir 3 |
+| Urutan detail probe | satu urutan untuk setiap runner: samarkan teks mentah, potong 256 karakter, lalu buat `ObservationDetail` | butir 4 |
+| `omitted` | enam kode yang boleh membawa `fields` mencantumkan `omitted` dan tidak punya `items` | D7 |
+
+Cermin di spec 0019, 0009, dan 0023 (butir 3 dan 4) di luar folder spec ini dan dirutekan lewat lead.
