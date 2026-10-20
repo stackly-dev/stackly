@@ -118,6 +118,7 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 - AC-13 · `skeleton::secrets_go_to_the_file_keychain_of_the_root_without_any_prompt` dan setiap test lain di `skeleton.rs` (semua jalan noninteractive di keychain file)
 - AC-1 sampai AC-3 · milik Milestone 1 · AC-5 sampai AC-8 · milik Milestone 2
 - AC-14 sampai AC-16 · belum, milik Milestone 4 · AC-17 sampai AC-19 · belum, milik Milestone 5
+
 ## Milestone 4: GUI and AC-001
 
 Langkah build 9. Test Swift `SkeletonEndToEndTests` memakai binary seed dan `stacklyd` asli, dengan koneksi `StacklyClient` kedua (noninteractive) yang membuat perubahan. Langkah build 10 (record manual dengan CLI yang mengubah, AC-16) menunggu Milestone 2 dan 3 di main dan belum dikerjakan.

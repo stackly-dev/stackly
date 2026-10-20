@@ -84,6 +84,19 @@ impl ProcessTable {
             .collect()
     }
 
+    /// Returns the rows whose arguments name `path` or something under it:
+    /// the path stands at the start, after a space, `=`, or `:`, and ends
+    /// the arguments or is followed by a space or `/`. Another root whose
+    /// name only starts with the same letters never matches.
+    #[must_use]
+    pub fn under(&self, path: &Path) -> Vec<&ProcessEntry> {
+        let needle = path.to_string_lossy();
+        self.entries
+            .iter()
+            .filter(|entry| names_path(&entry.args, &needle))
+            .collect()
+    }
+
     /// Takes snapshots until `done` accepts the rows that contain every
     /// one of `needles`, and returns those rows.
     ///
@@ -115,7 +128,8 @@ impl ProcessTable {
         }
     }
 
-    /// Stops every process whose arguments contain `path`: SIGTERM first
+    /// Stops every process whose arguments name `path` or something under
+    /// it (see [`under`](Self::under)): SIGTERM first
     /// (through `/bin/kill`, so testkit needs no libc), then SIGKILL for
     /// the ones still there after `grace`. Returns how many processes it
     /// found.
@@ -127,18 +141,18 @@ impl ProcessTable {
     pub fn reap_under(path: &Path, grace: Duration) -> io::Result<usize> {
         let needle = path.to_string_lossy().into_owned();
         let found = Self::snapshot()?;
-        let first = found.containing(&needle);
+        let first = found.under(path);
         if first.is_empty() {
             return Ok(0);
         }
         let count = first.len();
         signal("-TERM", &first);
-        if Self::remaining(&needle, grace)?.is_empty() {
+        if Self::remaining(path, grace)?.is_empty() {
             return Ok(count);
         }
         let table = Self::snapshot()?;
-        signal("-KILL", &table.containing(&needle));
-        let left = Self::remaining(&needle, KILL_GRACE)?;
+        signal("-KILL", &table.under(path));
+        let left = Self::remaining(path, KILL_GRACE)?;
         if left.is_empty() {
             Ok(count)
         } else {
@@ -148,19 +162,31 @@ impl ProcessTable {
         }
     }
 
-    /// Waits up to `limit` for no process to contain `needle`, and returns
-    /// the ones that are still there.
-    fn remaining(needle: &str, limit: Duration) -> io::Result<Vec<ProcessEntry>> {
+    /// Waits up to `limit` for no process to name `path`, and returns the
+    /// ones that are still there.
+    fn remaining(path: &Path, limit: Duration) -> io::Result<Vec<ProcessEntry>> {
         let deadline = Instant::now() + limit;
         loop {
             let table = Self::snapshot()?;
-            let rows: Vec<ProcessEntry> = table.containing(needle).into_iter().cloned().collect();
+            let rows: Vec<ProcessEntry> = table.under(path).into_iter().cloned().collect();
             if rows.is_empty() || Instant::now() >= deadline {
                 return Ok(rows);
             }
             thread::sleep(POLL);
         }
     }
+}
+
+/// Whether `args` holds `needle` as a whole path: bounded on the left by
+/// the start, a space, `=`, or `:`, and on the right by the end, a space,
+/// or `/`.
+fn names_path(args: &str, needle: &str) -> bool {
+    args.match_indices(needle).any(|(at, _)| {
+        let before = args[..at].chars().next_back();
+        let after = args[at + needle.len()..].chars().next();
+        before.is_none_or(|c| matches!(c, ' ' | '=' | ':'))
+            && after.is_none_or(|c| c == ' ' || c == '/')
+    })
 }
 
 fn parse_line(line: &str) -> Option<ProcessEntry> {

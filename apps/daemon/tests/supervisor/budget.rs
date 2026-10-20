@@ -15,7 +15,7 @@ use serde_json::json;
 use stackly_testkit::TestRoot;
 
 use crate::common::{client, runtime, start_daemon};
-use crate::support::{Api, seed_root};
+use crate::support::{Api, reap_guard, seed_root};
 
 /// The most resident memory the daemon may hold, in KiB (150 MiB).
 const RSS_MAX_KIB: u64 = 150 * 1024;
@@ -60,6 +60,7 @@ fn measure_the_daemon_with_ten_idle_fake_instances() {
         return;
     }
     let root = TestRoot::new().expect("a test root can be created");
+    let _reap = reap_guard(&root);
     let runtime_id = seed_root(&root);
     let rt = runtime();
     let daemon = start_daemon(&root);

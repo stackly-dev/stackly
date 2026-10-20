@@ -97,3 +97,33 @@ fn reap_under_kills_a_process_that_ignores_sigterm() {
     let status = stubborn.wait().unwrap();
     assert!(!status.success(), "{status:?}");
 }
+
+#[test]
+fn under_matches_a_whole_path_and_never_a_longer_sibling_name() {
+    let root = TestRoot::new().unwrap();
+    let sibling = std::path::PathBuf::from(format!("{}x", root.path().display()));
+    let mut near = marked(SLEEP, &sibling);
+    let mut inside = marked(SLEEP, &root.path().join("data/instances/one"));
+    let mut flag = Command::new("/bin/bash")
+        .arg("-c")
+        .arg(r#"exec -a "--config=$0/config/fake.json" /bin/sleep 300"#)
+        .arg(root.path())
+        .stdin(Stdio::null())
+        .spawn()
+        .expect("bash starts");
+    let marker = root.path().to_string_lossy().into_owned();
+    ProcessTable::wait_for(&[&marker], Duration::from_secs(5), |rows| rows.len() == 3).unwrap();
+
+    let table = ProcessTable::snapshot().unwrap();
+    let pids: Vec<u32> = table.under(root.path()).iter().map(|row| row.pid).collect();
+
+    assert!(
+        pids.contains(&inside.id()) && pids.contains(&flag.id()),
+        "{pids:?}"
+    );
+    assert!(!pids.contains(&near.id()), "{pids:?}");
+    for child in [&mut near, &mut inside, &mut flag] {
+        child.kill().unwrap();
+        child.wait().unwrap();
+    }
+}
