@@ -152,6 +152,73 @@ struct SkeletonEndToEndTests {
         }
     }
 
+    // MARK: - Locked keychain (AC-19)
+
+    @Test(
+        .evidence(
+            covers: ["AC-016"],
+            expected:
+                "with the file keychain of the root locked, a start made by a second noninteractive connection is refused for a secret it cannot read, the instance stays stopped, the store item carries the needsSecret blocker, and after the daemon starts again the start succeeds and the blocker is gone"
+        ))
+    func aLockedKeychainShowsTheNeedsSecretBlockerInTheStore() async throws {
+        try await SkeletonRig.run(recordsEvidence: true) { rig in
+            let id = try await rig.create("locked")
+            let parts = ShellEndToEndTests.shell(
+                for: rig.daemon, announcements: ShellEndToEndTests.Announcements())
+            let model = parts.runtime.model
+            do {
+                try await ShellEndToEndTests.waitUntilRefreshed(
+                    model, "the shell to connect and refresh")
+                try await waitFor("the store to hold locked, stopped", seconds: 20) {
+                    Self.item(id, in: model)?.lifecycle == .stopped
+                }
+                #expect(Self.item(id, in: model)?.blocker == nil)
+
+                try await rig.lockKeychain()
+                let code = try await rig.startRefusedCode(id)
+                #expect(code == "secret.needs_secret")
+
+                try await waitFor(
+                    "the store item to carry the needsSecret blocker", seconds: 20,
+                    state: { "item \(String(describing: Self.item(id, in: model)))" },
+                    until: { Self.needsSecret(Self.item(id, in: model)) })
+                #expect(Self.item(id, in: model)?.lifecycle == .stopped)
+                let read = try await rig.instance(id)
+                #expect(read.lifecycle == .stopped)
+                #expect(Self.needsSecret(read))
+
+                try await rig.restartDaemon()
+                try await rig.start(id)
+                _ = try await rig.waitForInstance(id, "locked to be running") {
+                    $0.lifecycle == .running
+                }
+                try await waitFor(
+                    "the store item to run without a blocker", seconds: 30,
+                    state: { "item \(String(describing: Self.item(id, in: model)))" },
+                    until: {
+                        Self.item(id, in: model)?.lifecycle == .running
+                            && Self.item(id, in: model)?.blocker == nil
+                    })
+                Evidence.actual(
+                    "with the keychain locked the start ended \(code), the stopped item carried needsSecret in the store, and after the daemon started again the start succeeded with no blocker"
+                )
+            } catch {
+                await parts.shutDown()
+                throw error
+            }
+            await parts.shutDown()
+        }
+    }
+
+    private static func item(_ id: UUID, in model: DaemonModel) -> InstanceSummary? {
+        model.instances.instances.first { $0.id == id }
+    }
+
+    private static func needsSecret(_ instance: InstanceSummary?) -> Bool {
+        if case .needsSecret = instance?.blocker { return true }
+        return false
+    }
+
     /// The PID of each instance, after checking that it runs and is ready.
     private static func runningProcesses(
         _ rig: SkeletonRig, _ ids: [UUID]
