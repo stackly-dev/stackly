@@ -392,7 +392,6 @@ fn listed(run: &Run) -> Vec<String> {
 }
 
 #[tokio::test]
-#[ignore = "unfinished F8 close-out work: the listed running operation has no `stage` yet"]
 async fn a_running_operation_is_listed_inspected_and_waited_for_and_stopping_the_wait_never_cancels_it()
  {
     let ev = evidence!(
@@ -430,7 +429,9 @@ async fn a_running_operation_is_listed_inspected_and_waited_for_and_stopping_the
     assert_eq!(listed(&list), std::slice::from_ref(&id_text));
     let item = &list.envelope()["result"]["items"][0];
     assert_eq!(item["state"], "running");
-    assert_eq!(item["stage"], "wait");
+    // A stage comes only from the work's `set_stage` (spec 0007), which a
+    // scripted work never calls: a step name is not a stage.
+    assert!(item["stage"].is_null(), "{item}");
     assert_eq!(item["kind"], "update_manager");
     assert_eq!(listed(&active), std::slice::from_ref(&id_text));
     assert_eq!(table.code, Some(0), "{table:?}");
@@ -501,7 +502,7 @@ async fn a_running_operation_is_listed_inspected_and_waited_for_and_stopping_the
         &["operation", "inspect", &id_text, "--wait", "--json"],
     )
     .await;
-    interrupted.until("running wait").await;
+    interrupted.until(" running\n").await;
     interrupted.interrupt();
     let interrupted = interrupted.finish().await;
 
@@ -525,7 +526,7 @@ async fn a_running_operation_is_listed_inspected_and_waited_for_and_stopping_the
         &["operation", "inspect", &id_text, "--wait", "--json"],
     )
     .await;
-    waiting.until("running wait").await;
+    waiting.until(" running\n").await;
     hold.release();
     let waited = waiting.finish().await;
 
@@ -665,7 +666,6 @@ async fn cancel_wait_undoes_an_operation_before_its_point_of_no_return_and_exits
 }
 
 #[tokio::test]
-#[ignore = "unfinished F8 close-out work: stackly never prints the commit step while waiting"]
 async fn cancel_wait_past_the_point_of_no_return_ends_succeeded_and_exits_3() {
     let ev = evidence!(
         covers = ["REQ-028", "REQ-054", "AC-054"],
@@ -704,7 +704,7 @@ async fn cancel_wait_past_the_point_of_no_return_ends_succeeded_and_exits_3() {
         &["operation", "cancel", &id_text, "--wait", "--json"],
     )
     .await;
-    waiting.until(" commit\n").await;
+    waiting.until(" cancel_requested\n").await;
     hold.release();
     let run = waiting.finish().await;
 
@@ -776,7 +776,6 @@ async fn a_failed_operation_exits_0_to_inspect_and_by_its_errors_category_to_ins
 }
 
 #[tokio::test]
-#[ignore = "unfinished F8 close-out work: the resume wait assertion fails against stacklyd"]
 async fn resume_sends_the_revision_it_read_and_waits_for_the_resumed_operation() {
     let ev = evidence!(
         covers = ["REQ-028", "REQ-054", "AC-054"],
@@ -831,10 +830,9 @@ async fn resume_sends_the_revision_it_read_and_waits_for_the_resumed_operation()
     assert_eq!(value["result"]["operation"]["state"], "needs_recovery");
     assert_eq!(stuck_text.code, Some(0), "{stuck_text:?}");
     assert!(
-        stuck_text
-            .stdout
-            .lines()
-            .any(|line| line.starts_with("Recovery ") && line.ends_with(" resume after failed")),
+        stuck_text.stdout.lines().any(
+            |line| line.starts_with("Recovery ") && line.ends_with(" resume after step_failed")
+        ),
         "{}",
         stuck_text.stdout
     );
