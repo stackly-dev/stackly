@@ -452,6 +452,38 @@ fn settings_of(
             input: secret.input.clone(),
         });
     }
+    // A secret field the client did not mention is generated (spec 0011
+    // AC-6), within the field's length bounds.
+    for setting in schema.fields() {
+        let Some(rule) = SecretFieldRule::from_setting(setting) else {
+            continue;
+        };
+        let name = setting.name().as_str();
+        if document.contains_key(name) {
+            continue;
+        }
+        let (Ok(field), Ok(purpose)) = (
+            name.parse::<SecretFieldName>(),
+            SecretPurpose::from_field_name(name),
+        ) else {
+            continue;
+        };
+        if secrets.iter().any(|plan: &SecretPlan| plan.field == field) {
+            continue;
+        }
+        let reference = SecretRef::for_instance(id, &purpose);
+        document.insert(
+            name.to_owned(),
+            serde_json::Value::String(reference.to_string()),
+        );
+        secrets.push(SecretPlan {
+            field,
+            reference,
+            purpose,
+            rule,
+            input: WireInput::Generate,
+        });
+    }
     if !fields.is_empty() {
         return Err(settings_invalid(fields));
     }
