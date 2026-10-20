@@ -346,7 +346,7 @@ Kontrak ini dipakai `stackly secret set` dan setiap command lain yang butuh nila
 
 ### Sisi Swift fixture credential
 
-`FixtureCredential` di `StacklyTestSupport` (target dari spec 0002): `init()` membuat `stackly-fixture-credential-<32 hex huruf kecil>` dari UUID acak, `value`, `description` dan `debugDescription` `FixtureCredential(****)`, dan `assertAbsent(in: String, what: String)` yang gagal dengan pesan `fixture credential found in <what>` tanpa mencetak nilainya. Prefixnya satu konstanta yang dicek sama dengan nilai Rust lewat satu fixture di `protocols/fixtures/`.
+`FixtureCredential` di `StacklyTestSupport` (target dari spec 0002): `init()` membuat `stackly-fixture-credential-<32 hex huruf kecil>` dari UUID acak, `value`, `description` dan `debugDescription` `FixtureCredential(****)`, dan `assertAbsent(in: String, what: String)` yang gagal dengan pesan `fixture credential found in <what>` tanpa mencetak nilainya. Prefixnya satu konstanta Swift. Test `FixtureCredentialTests` mencocokkannya dengan `FIXTURE_CREDENTIAL_PREFIX` di source Rust `crates/evidence/src/credential.rs`, yang dibaca sebagai teks dari akar repo. *(Keputusan 2026-10-20, diambil lead atas delegasi user saat langkah 9 dan 10 di merge: tidak ada fixture prefix di `protocols/fixtures/`. Prefix itu bukan bagian dari kontrak wire, sehingga folder fixture kontrak tidak perlu memuatnya, dan konstanta Rust tetap menjadi satu satunya sumber nilainya.)*
 
 ### Asumsi lintas spec
 
