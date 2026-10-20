@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 use uuid::Uuid;
 
+use crate::secret::SecretStoreStatus;
 use crate::version::ProtocolVersion;
 use crate::wire::{Count, Timestamp};
 
@@ -38,6 +39,10 @@ pub struct DaemonInfo {
     /// (spec 0005).
     #[serde(default)]
     pub registry_schema: Option<u32>,
+    /// The secret store and the keychain chosen at start, or null from an
+    /// older daemon (spec 0011).
+    #[serde(default)]
+    pub secret_store: Option<SecretStoreStatus>,
 }
 
 /// The daemon's resolved (not canonical) roots, as lossy UTF-8 text.

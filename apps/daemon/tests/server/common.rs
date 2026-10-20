@@ -75,6 +75,13 @@ impl Site {
         }
     }
 
+    /// Gives the site's platform `store` as its secret store, the way the
+    /// daemon installs its worker (spec 0011).
+    pub fn with_secret_store(mut self, store: Arc<dyn stackly_platform::SecretStore>) -> Self {
+        self.platform = self.platform.clone().with_secrets(store);
+        self
+    }
+
     pub fn socket(&self) -> PathBuf {
         self.prepared.layout().daemon_socket()
     }

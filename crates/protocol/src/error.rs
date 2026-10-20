@@ -278,6 +278,28 @@ impl ErrorBody {
         self
     }
 
+    /// Returns this error with `redact` applied to its message, hint,
+    /// detail values, and item field values: every free text it carries.
+    /// The code, category, field errors (fixed text), and detail keys are
+    /// not text a secret can reach. The message is cut to [`MESSAGE_MAX`]
+    /// again, since a mask can be longer than the text it hides. The
+    /// daemon calls this with its `Redactor` on every error it sends
+    /// (spec 0011 AC-14).
+    #[must_use]
+    pub fn redacted_with(mut self, redact: impl Fn(&str) -> String) -> Self {
+        self.message = truncate(redact(&self.message), MESSAGE_MAX);
+        self.hint = self.hint.map(|hint| redact(&hint));
+        for detail in &mut self.details {
+            detail.value = redact(&detail.value);
+        }
+        for item in &mut self.items {
+            for field in &mut item.fields {
+                field.value = redact(&field.value);
+            }
+        }
+        self
+    }
+
     /// Adds `omitted` to the [`OMITTED_DETAIL`] detail, creating it at the
     /// first drop. Debug builds assert that the catalog entry lists it.
     fn add_omitted(&mut self, omitted: u64) {
@@ -553,6 +575,29 @@ mod tests {
         assert!(error.retryable());
         assert!(error.is(&request::TOO_MANY_IN_FLIGHT));
         assert_eq!(error.spec(), Some(&request::TOO_MANY_IN_FLIGHT));
+    }
+
+    #[test]
+    fn redacting_rewrites_every_free_text_and_keeps_the_rest() {
+        let error = ErrorBody::new(&request::TOO_MANY_IN_FLIGHT, "token hunter2 leaked")
+            .with_hint("hunter2 is not a hint")
+            .with_detail("max", "hunter2");
+        let redacted = error
+            .clone()
+            .redacted_with(|text| text.replace("hunter2", "****"));
+        assert_eq!(redacted.message(), "token **** leaked");
+        assert_eq!(redacted.hint(), Some("**** is not a hint"));
+        assert_eq!(redacted.detail("max"), Some("****"));
+        assert_eq!(redacted.code(), error.code());
+        assert_eq!(redacted.category(), error.category());
+        assert_eq!(redacted.retryable(), error.retryable());
+    }
+
+    #[test]
+    fn redacting_cuts_a_message_that_a_mask_made_longer() {
+        let error = ErrorBody::new(&request::MALFORMED, "x".repeat(200));
+        let redacted = error.redacted_with(|text| text.replace('x', "xx"));
+        assert_eq!(redacted.message().chars().count(), 200);
     }
 
     #[test]

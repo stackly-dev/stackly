@@ -844,6 +844,18 @@
           "description": "The four resolved roots.",
           "$ref": "#/$defs/DaemonRoots"
         },
+        "secretStore": {
+          "description": "The secret store and the keychain chosen at start, or null from an\nolder daemon (spec 0011).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretStoreStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "serverInstanceId": {
           "description": "The UUID v7 of this daemon run.",
           "type": "string",
@@ -915,6 +927,19 @@
         "cache",
         "runtime",
         "rootOverride"
+      ]
+    },
+    "DeleteSecretReply": {
+      "description": "Reply of `secret.delete`.",
+      "type": "object",
+      "properties": {
+        "reference": {
+          "description": "The reference that was deleted.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference"
       ]
     },
     "DependencyKind": {
@@ -1295,6 +1320,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "A secret reference was stored, observed with another status,\nrestored, or deleted (spec 0011). The event's resource is\n`{kind: secret, id: <reference>}`.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SecretChanged"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.changed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1522,6 +1564,27 @@
       },
       "required": [
         "catalog"
+      ]
+    },
+    "ListSecretsReply": {
+      "description": "Reply of `secret.list`: the cached rows, ordered by reference.",
+      "type": "object",
+      "properties": {
+        "items": {
+          "description": "The references.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretRefSummary"
+          }
+        },
+        "store": {
+          "description": "The store.",
+          "$ref": "#/$defs/SecretStoreStatus"
+        }
+      },
+      "required": [
+        "store"
       ]
     },
     "OperationDetail": {
@@ -2935,6 +2998,91 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The secret references and the store.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ListSecretsReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The reference after the probe, and the store.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SecretStatusReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.status"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The reference after the write, never the value.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SetSecretReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.set"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The value; the one reply that carries one.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RevealSecretReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.reveal"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The reference that was deleted.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DeleteSecretReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.delete"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -2977,6 +3125,11 @@
           "const": "manager"
         },
         {
+          "description": "A secret reference (spec 0011); its `id` is the reference text,\nsuch as `local:erp/postgres/admin`.",
+          "type": "string",
+          "const": "secret"
+        },
+        {
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
@@ -3017,6 +3170,478 @@
       "required": [
         "requestId",
         "reply"
+      ]
+    },
+    "RevealSecretReply": {
+      "description": "Reply of `secret.reveal`: the one place a value leaves the daemon.",
+      "type": "object",
+      "properties": {
+        "reference": {
+          "description": "The reference.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value.",
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "reference",
+        "value"
+      ]
+    },
+    "SecretChangeStatus": {
+      "description": "The status in `secret.changed`: a [`SecretStatus`] or `deleted`.",
+      "oneOf": [
+        {
+          "description": "The store holds a value.",
+          "type": "string",
+          "const": "present"
+        },
+        {
+          "description": "The store holds none.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "The store could not be checked.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "The reference row is gone.",
+          "type": "string",
+          "const": "deleted"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretChanged": {
+      "description": "Content of the `secret.changed` event. The event's resource is\n`{kind: secret, id: <reference>}` and its revision the row's; a change\nof status seen by a probe keeps the revision.",
+      "type": "object",
+      "properties": {
+        "status": {
+          "description": "The status now.",
+          "$ref": "#/$defs/SecretChangeStatus"
+        },
+        "statusObservedAt": {
+          "description": "When the status was observed.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "SecretEffectInfo": {
+      "description": "The effect of a new value on one use.",
+      "type": "object",
+      "properties": {
+        "effect": {
+          "description": "What changes.",
+          "$ref": "#/$defs/SecretEffectKind"
+        },
+        "field": {
+          "description": "The secret field.",
+          "type": "string"
+        },
+        "resourceId": {
+          "description": "The resource ID.",
+          "type": "string"
+        },
+        "resourceKind": {
+          "description": "The kind of resource that uses the reference.",
+          "$ref": "#/$defs/ResourceKind"
+        }
+      },
+      "required": [
+        "resourceKind",
+        "resourceId",
+        "field",
+        "effect"
+      ]
+    },
+    "SecretEffectKind": {
+      "description": "What a new value changes for one use. Open.",
+      "oneOf": [
+        {
+          "description": "Only the stored copy changes; the value inside the data stays.",
+          "type": "string",
+          "const": "stored_only"
+        },
+        {
+          "description": "The next reload uses it.",
+          "type": "string",
+          "const": "next_reload"
+        },
+        {
+          "description": "The next start uses it.",
+          "type": "string",
+          "const": "next_start"
+        },
+        {
+          "description": "An effect this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretOwnerKind": {
+      "description": "Who owns a secret reference.",
+      "oneOf": [
+        {
+          "description": "An instance.",
+          "type": "string",
+          "const": "instance"
+        },
+        {
+          "description": "An environment.",
+          "type": "string",
+          "const": "environment"
+        },
+        {
+          "description": "The user, who registered the reference with `secret.set`.",
+          "type": "string",
+          "const": "user"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretRefSummary": {
+      "description": "One reference row, without any value.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "description": "The owner's UUID, or null for the user.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "ownerKind": {
+          "description": "Who owns it.",
+          "$ref": "#/$defs/SecretOwnerKind"
+        },
+        "purpose": {
+          "description": "The purpose of its field, or `user`.",
+          "type": "string"
+        },
+        "reference": {
+          "description": "The reference, `local:<segment>/<segment>...`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The row's revision.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "status": {
+          "description": "What the store held at the last look.",
+          "$ref": "#/$defs/SecretStatus"
+        },
+        "statusObservedAt": {
+          "description": "When the status was observed.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "usedBy": {
+          "description": "Every resource that uses the reference.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretUseInfo"
+          }
+        },
+        "valueOrigin": {
+          "description": "How the value came to be, or null before the first value.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretValueOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "valueUpdatedAt": {
+          "description": "When the value was last filled through Stackly.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        }
+      },
+      "required": [
+        "reference",
+        "ownerKind",
+        "purpose",
+        "status",
+        "revision"
+      ]
+    },
+    "SecretStatus": {
+      "description": "What the store held when the daemon last looked, never a value.",
+      "oneOf": [
+        {
+          "description": "The store holds a value.",
+          "type": "string",
+          "const": "present"
+        },
+        {
+          "description": "The store holds none.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "The store could not be checked.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretStatusReply": {
+      "description": "Reply of `secret.status`: the row after a fresh probe.",
+      "type": "object",
+      "properties": {
+        "store": {
+          "description": "The store.",
+          "$ref": "#/$defs/SecretStoreStatus"
+        },
+        "summary": {
+          "description": "The reference row.",
+          "$ref": "#/$defs/SecretRefSummary"
+        }
+      },
+      "required": [
+        "summary",
+        "store"
+      ]
+    },
+    "SecretStoreBackend": {
+      "description": "Which secret store the daemon uses.",
+      "oneOf": [
+        {
+          "description": "The macOS Keychain.",
+          "type": "string",
+          "const": "macos_keychain"
+        },
+        {
+          "description": "A fake store, only in tests.",
+          "type": "string",
+          "const": "fake"
+        },
+        {
+          "description": "No store on this OS.",
+          "type": "string",
+          "const": "unsupported"
+        },
+        {
+          "description": "A backend this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretStoreState": {
+      "description": "The state of the secret store, from the daemon's cache; asking never\nwaits on the store.",
+      "oneOf": [
+        {
+          "description": "The store answers.",
+          "type": "string",
+          "const": "available"
+        },
+        {
+          "description": "The keychain is locked.",
+          "type": "string",
+          "const": "locked"
+        },
+        {
+          "description": "The OS has no store.",
+          "type": "string",
+          "const": "unsupported"
+        },
+        {
+          "description": "Nothing was observed yet.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretStoreStatus": {
+      "description": "The secret store as `secret.list`, `secret.status`, and\n`daemon.get_info` report it.",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "description": "Which store it is.",
+          "$ref": "#/$defs/SecretStoreBackend"
+        },
+        "state": {
+          "description": "Its state now.",
+          "$ref": "#/$defs/SecretStoreState"
+        },
+        "target": {
+          "description": "The keychain chosen at start, or null for a store without one.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretStoreTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "backend",
+        "state"
+      ]
+    },
+    "SecretStoreTarget": {
+      "description": "Which keychain the daemon chose at start.",
+      "oneOf": [
+        {
+          "description": "The user's login Keychain, for the default root.",
+          "type": "string",
+          "const": "login"
+        },
+        {
+          "description": "A keychain file of its own, for a `STACKLY_ROOT` root.",
+          "type": "string",
+          "const": "file"
+        },
+        {
+          "description": "A target this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretUseInfo": {
+      "description": "One resource that uses a reference.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The secret field of the manifest, or the `secretRefs` key.",
+          "type": "string"
+        },
+        "resourceId": {
+          "description": "The resource ID.",
+          "type": "string"
+        },
+        "resourceKind": {
+          "description": "The kind of resource: `instance` or `environment`.",
+          "$ref": "#/$defs/ResourceKind"
+        }
+      },
+      "required": [
+        "resourceKind",
+        "resourceId",
+        "field"
+      ]
+    },
+    "SecretValueOrigin": {
+      "description": "How the current value came to be.",
+      "oneOf": [
+        {
+          "description": "Typed, pasted, or piped in.",
+          "type": "string",
+          "const": "entered"
+        },
+        {
+          "description": "Generated by the daemon.",
+          "type": "string",
+          "const": "generated"
+        },
+        {
+          "description": "Copied from another reference.",
+          "type": "string",
+          "const": "copied"
+        },
+        {
+          "description": "An origin this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretWarning": {
+      "description": "A warning a stored value comes with. Open.",
+      "oneOf": [
+        {
+          "description": "The value is shorter than 8 bytes, so redaction never matches it in\ntext.",
+          "type": "string",
+          "const": "short_value_not_scrubbed"
+        },
+        {
+          "description": "A warning this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SetSecretReply": {
+      "description": "Reply of `secret.set`: never the value.",
+      "type": "object",
+      "properties": {
+        "effects": {
+          "description": "The effect on every use.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretEffectInfo"
+          }
+        },
+        "summary": {
+          "description": "The reference row after the write.",
+          "$ref": "#/$defs/SecretRefSummary"
+        },
+        "warnings": {
+          "description": "Warnings about the stored value.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretWarning"
+          }
+        }
+      },
+      "required": [
+        "summary"
       ]
     },
     "ShutdownReason": {

@@ -13,13 +13,14 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use stackly_platform::{
-    ChildRole, ExitListener, ExitNotice, HelperHandle, OutputTarget, Platform, ProcessError,
-    SpawnRequest, StdinSource,
+    ChildRole, ExitListener, ExitNotice, HelperHandle, InstanceLock, OutputTarget, Platform,
+    ProcessError, SecretValue, SpawnRequest, StdinSource,
 };
 use tokio::sync::oneshot;
 
-/// One helper to run: no lock, stdin from `/dev/null`, output captured.
-#[derive(Debug, Clone)]
+/// One helper to run: output captured, stdin from `/dev/null` unless it
+/// carries bytes, and the instance lock at fd 3 only for an init step.
+#[derive(Debug)]
 pub(crate) struct HelperCommand {
     /// The absolute executable from the plan.
     pub(crate) program: PathBuf,
@@ -31,6 +32,11 @@ pub(crate) struct HelperCommand {
     pub(crate) cwd: PathBuf,
     /// Why it runs.
     pub(crate) role: ChildRole,
+    /// Bytes written once to its stdin, then the pipe is closed; `None`
+    /// means `/dev/null`.
+    pub(crate) stdin: Option<SecretValue>,
+    /// The instance lock it inherits, for an init step.
+    pub(crate) lock: Option<Arc<InstanceLock>>,
 }
 
 /// How a helper ended.
@@ -66,9 +72,9 @@ pub(crate) async fn run_helper(
             args: &command.args,
             env: &command.env,
             cwd: &command.cwd,
-            stdin: StdinSource::Null,
+            stdin: command.stdin.map_or(StdinSource::Null, StdinSource::Bytes),
             output: OutputTarget::Capture,
-            lock: None,
+            lock: command.lock.as_deref(),
             role: command.role,
         })?;
         if let Err(error) = processes.watch_exit(handle.pid(), listener) {

@@ -11,6 +11,7 @@ use stackly_core::operation::{
     BeginError, BeginOutcome, BeginRequest, EngineError, LockHolder, OperationEvents,
     OperationView, Origin, RequestOrigin,
 };
+use stackly_core::secret::Redactor;
 use stackly_domain::{
     ClientCode, IdempotencyKey, MethodName, OperationCursor, OperationId, OperationQuery,
     OperationResource, ResourceRevision, Sha256Digest,
@@ -40,17 +41,20 @@ use crate::state::DaemonCore;
 #[derive(Debug, Clone)]
 pub struct BusEvents {
     bus: Arc<EventBus>,
+    redactor: Arc<Redactor>,
 }
 
 impl BusEvents {
-    /// A sink that publishes on `bus`.
+    /// A sink that publishes on `bus`, with the text of each summary
+    /// passed through `redactor` first (spec 0011 AC-14).
     #[must_use]
-    pub const fn new(bus: Arc<EventBus>) -> Self {
-        Self { bus }
+    pub const fn new(bus: Arc<EventBus>, redactor: Arc<Redactor>) -> Self {
+        Self { bus, redactor }
     }
 
     fn publish(&self, view: &OperationView, kind: fn(Box<OperationSummary>) -> EventKind) {
-        let summary = dto::summary(view);
+        let mut summary = dto::summary(view);
+        map::redact::summary(&self.redactor, &mut summary);
         let resource = ResourceRef {
             kind: ResourceKind::Operation,
             id: summary.id.to_string(),
@@ -359,7 +363,7 @@ fn accepted(view: &OperationView, replayed: bool) -> StartOutcome {
 }
 
 /// The client code a request's operation records, from its handshake.
-fn client_code(kind: ClientKind) -> ClientCode {
+pub(crate) fn client_code(kind: ClientKind) -> ClientCode {
     let code = match kind {
         ClientKind::Cli => "cli",
         ClientKind::Gui => "gui",

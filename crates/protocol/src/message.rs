@@ -30,6 +30,10 @@ use crate::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
+use crate::secret::{
+    DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
+    RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
+};
 
 /// The only frame a client sends.
 #[typeshare]
@@ -97,6 +101,21 @@ pub enum Call {
     /// One catalog entry with its versions and artifacts.
     #[serde(rename = "catalog.get_provider")]
     CatalogGetProvider(GetProviderParams),
+    /// The secret references, from the cached status.
+    #[serde(rename = "secret.list")]
+    SecretList(ListSecretsParams),
+    /// One secret reference after a fresh probe.
+    #[serde(rename = "secret.status")]
+    SecretStatus(SecretStatusParams),
+    /// Fills, generates, copies, or replaces the value behind a reference.
+    #[serde(rename = "secret.set")]
+    SecretSet(SetSecretParams),
+    /// Reads the value behind a reference, recorded in the audit.
+    #[serde(rename = "secret.reveal")]
+    SecretReveal(RevealSecretParams),
+    /// Deletes a reference and the value behind it.
+    #[serde(rename = "secret.delete")]
+    SecretDelete(DeleteSecretParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -146,6 +165,21 @@ pub enum Reply {
     /// One catalog entry in detail.
     #[serde(rename = "catalog.get_provider")]
     CatalogGetProvider(Box<ProviderDetail>),
+    /// The secret references and the store.
+    #[serde(rename = "secret.list")]
+    SecretList(ListSecretsReply),
+    /// The reference after the probe, and the store.
+    #[serde(rename = "secret.status")]
+    SecretStatus(Box<SecretStatusReply>),
+    /// The reference after the write, never the value.
+    #[serde(rename = "secret.set")]
+    SecretSet(Box<SetSecretReply>),
+    /// The value; the one reply that carries one.
+    #[serde(rename = "secret.reveal")]
+    SecretReveal(RevealSecretReply),
+    /// The reference that was deleted.
+    #[serde(rename = "secret.delete")]
+    SecretDelete(DeleteSecretReply),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -230,6 +264,11 @@ methods! {
     "operation.get_stats" => OperationGetStats, recovery refused;
     "catalog.list_providers" => CatalogListProviders, recovery allowed;
     "catalog.get_provider" => CatalogGetProvider(GetProviderParams), recovery allowed;
+    "secret.list" => SecretList(ListSecretsParams), recovery refused;
+    "secret.status" => SecretStatus(SecretStatusParams), recovery refused;
+    "secret.set" => SecretSet(SetSecretParams), recovery refused;
+    "secret.reveal" => SecretReveal(RevealSecretParams), recovery refused;
+    "secret.delete" => SecretDelete(DeleteSecretParams), recovery refused;
 }
 
 impl Reply {
@@ -350,8 +389,16 @@ mod tests {
             Call::OperationGetStats,
         ];
         assert!(!refused.iter().any(Call::allowed_in_recovery));
+        assert!(
+            Call::METHODS
+                .iter()
+                .filter(|method| method.starts_with("secret."))
+                .count()
+                == 5,
+            "every secret method needs the registry, so none is allowed in recovery"
+        );
         assert_eq!(
-            allowed.len() + refused.len() + 1,
+            allowed.len() + refused.len() + 1 + 5,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

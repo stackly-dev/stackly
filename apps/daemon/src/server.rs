@@ -14,6 +14,9 @@ use std::time::Duration;
 
 use stackly_core::catalog::CatalogLocation;
 use stackly_core::operation::{EngineError, OperationEngine};
+use stackly_core::secret::{
+    Redactor, SECRET_REF_COMPENSATOR, SecretRefCompensator, SecretService, SecretWorker,
+};
 use stackly_core::{PreparedLayout, daemon_info};
 use stackly_domain::{PruneReport, Registry, RegistryError, RetentionPolicy};
 use stackly_ipc::{Accepted, BindState, IpcError, Listener};
@@ -22,6 +25,7 @@ use stackly_protocol::ErrorBody;
 use stackly_protocol::codes::ipc;
 use stackly_protocol::daemon::{DaemonHealth, DaemonInfo};
 use stackly_protocol::events::{EventKind, ShutdownReason, ShuttingDown};
+use stackly_protocol::secret::SecretStoreTarget;
 use stackly_storage::{OpenOptions, RecoveryReason, RegistryOpen, SqliteRegistry, StorageError};
 use tokio::sync::{Semaphore, watch};
 use tokio::task::JoinHandle;
@@ -33,6 +37,7 @@ use crate::dispatch::{DefaultHandlers, Handlers};
 use crate::events::EventBus;
 use crate::log_sink::LogSink;
 use crate::map::{self, StartFacts};
+use crate::secrets;
 use crate::shutdown::{SHUTDOWN_DRAIN, SHUTDOWN_FLUSH};
 use crate::startup::EXIT_START_FAILED;
 use crate::state::{DaemonCore, Phase, RegistryState};
@@ -107,6 +112,9 @@ pub struct DaemonDeps {
     handlers: Arc<dyn Handlers>,
     config: DaemonConfig,
     catalog: Option<CatalogLocation>,
+    redactor: Arc<Redactor>,
+    secret_target: Option<SecretStoreTarget>,
+    secret_worker: Option<Arc<SecretWorker>>,
 }
 
 impl std::fmt::Debug for DaemonDeps {
@@ -137,7 +145,37 @@ impl DaemonDeps {
             handlers: Arc::new(DefaultHandlers),
             config: DaemonConfig::default(),
             catalog: None,
+            redactor: Arc::new(Redactor::new()),
+            secret_target: None,
+            secret_worker: None,
         }
+    }
+
+    /// Shares `redactor` with the daemon, so the log writer that already
+    /// uses it, the error bodies, the events, and the secret service all
+    /// hide the same values (spec 0011 AC-13). Without it the daemon makes
+    /// a redactor of its own.
+    #[must_use]
+    pub fn with_redactor(mut self, redactor: Arc<Redactor>) -> Self {
+        self.redactor = redactor;
+        self
+    }
+
+    /// Records which keychain the platform's secret store uses, for
+    /// `daemon.get_info`; without it the store reports no target.
+    #[must_use]
+    pub const fn with_secret_target(mut self, target: Option<SecretStoreTarget>) -> Self {
+        self.secret_target = target;
+        self
+    }
+
+    /// Gives the daemon the worker its platform's secret store is, so a
+    /// write or delete that finishes after its caller stopped waiting is
+    /// probed once the secret service exists (spec 0011 AC-4).
+    #[must_use]
+    pub fn with_secret_worker(mut self, worker: Arc<SecretWorker>) -> Self {
+        self.secret_worker = Some(worker);
+        self
     }
 
     /// Loads the catalog at `location`, the folder `STACKLY_CATALOG_DIR`
@@ -237,6 +275,9 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         handlers,
         config,
         catalog,
+        redactor,
+        secret_target,
+        secret_worker,
     } = deps;
     let user = platform
         .identity()
@@ -249,7 +290,15 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         facts.server_instance_id,
         platform.shared_clock(),
     ));
-    let core = Arc::new(DaemonCore::new(info, platform, prepared, bus, log));
+    let core = Arc::new(DaemonCore::new(
+        info,
+        platform,
+        prepared,
+        bus,
+        log,
+        redactor,
+        secret_target,
+    ));
 
     // Step 9.
     let socket = layout.daemon_socket();
@@ -274,6 +323,7 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         version,
         config,
         catalog,
+        secret_worker,
     ));
     Ok(DaemonHandle {
         core,
@@ -374,6 +424,7 @@ impl DaemonHandle {
         // The engine's tasks have ended, unless the stop was forced; its
         // last handle goes here, so its registry handle goes with it.
         core.operations().close();
+        core.secrets().close();
         let prune = self
             .tasks
             .prune
@@ -559,6 +610,7 @@ async fn start_slot(
     version: String,
     mut config: DaemonConfig,
     catalog: Option<CatalogLocation>,
+    secret_worker: Option<Arc<SecretWorker>>,
 ) {
     if let Some(mut gate) = config.start_gate {
         let _ = gate.wait_for(|open| *open).await;
@@ -576,6 +628,7 @@ async fn start_slot(
             let pruned = prune_once(&core, &registry).await;
             if matches!(pruned, Err(RegistryError::Unavailable)) {
                 registry_failed(&core);
+                core.secrets().unavailable();
                 core.set_registry(RegistryState::Failed, Some(registry));
             } else {
                 if let Err(error) = &pruned {
@@ -602,7 +655,35 @@ async fn start_slot(
                 );
                 let prune = tokio::spawn(prune_loop(Arc::clone(&core), config.prune_interval));
                 *tasks.prune.lock().unwrap_or_else(PoisonError::into_inner) = Some(prune);
-                recovered = recover_operations(&core, registry, handlers.as_ref()).await;
+                // The secret service comes first: it probes every reference
+                // once, and the engine's `secret_ref` compensator deletes
+                // through it (spec 0011, *Status dan probe*).
+                let service = core.secrets().build(
+                    registry.clone(),
+                    core.platform(),
+                    Arc::clone(core.redactor()),
+                    core.bus(),
+                );
+                if let Some(worker) = &secret_worker {
+                    // A weak handle: the worker lives in the platform for the
+                    // whole run, and a strong one would keep the service, and
+                    // so the registry handle, open past the stop.
+                    let late = Arc::downgrade(&service);
+                    worker.on_late_change(move |reference| {
+                        let Some(service) = late.upgrade() else {
+                            return;
+                        };
+                        if let Err(error) = service.probe_one(reference) {
+                            tracing::warn!(
+                                %reference,
+                                %error,
+                                "cannot probe a reference after a late secret store change",
+                            );
+                        }
+                    });
+                }
+                secrets::probe_all(Arc::clone(&service)).await;
+                recovered = recover_operations(&core, registry, handlers.as_ref(), service).await;
                 // Spec 0010's reconciliation runs here, between `recover`
                 // and `ready` (feature 10).
             }
@@ -621,16 +702,19 @@ async fn start_slot(
                 None,
             );
             core.operations().unavailable("registry in recovery");
+            core.secrets().unavailable();
         }
         Some(Err(error)) => {
             tracing::error!(error = %error, "cannot open the registry");
             core.set_registry(RegistryState::Failed, None);
             core.operations().unavailable(REGISTRY_FAILED);
+            core.secrets().unavailable();
             core.fail(EXIT_START_FAILED);
         }
         None => {
             core.set_registry(RegistryState::Failed, None);
             core.operations().unavailable(REGISTRY_FAILED);
+            core.secrets().unavailable();
             core.fail(EXIT_START_FAILED);
         }
     }
@@ -672,10 +756,19 @@ async fn recover_operations(
     core: &DaemonCore,
     registry: SqliteRegistry,
     handlers: &dyn Handlers,
+    secrets: Arc<SecretService>,
 ) -> Option<OperationEngine> {
-    let engine = core
-        .operations()
-        .create(registry, core.platform(), core.prepared(), core.bus());
+    let engine = core.operations().create(
+        registry,
+        core.platform(),
+        core.prepared(),
+        core.bus(),
+        core.redactor(),
+    );
+    engine.register_compensator(
+        SECRET_REF_COMPENSATOR,
+        Arc::new(SecretRefCompensator::new(secrets)),
+    );
     if let Some(starting) = handlers.test_starting_method() {
         starting.register(&engine);
     }

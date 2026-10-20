@@ -5,7 +5,7 @@
 //! [`log_sink`] writes every log line without ever blocking the daemon,
 //! [`server`] binds the socket and serves [`connection`]s through the
 //! [`dispatch`] handlers, whose operation methods live in [`ipc`],
-//! [`operations`] holds the operation engine, [`events`] is the event bus,
+//! [`operations`] holds the operation engine, [`secrets`] the secret service, [`events`] is the event bus,
 //! [`state`] holds the health, [`catalog`] the provider catalog, and
 //! [`shutdown`] the stop order's pieces. No other crate depends on this
 //! library.
@@ -28,6 +28,8 @@ pub mod log_sink;
 pub mod map;
 #[cfg(unix)]
 pub mod operations;
+#[cfg(unix)]
+pub mod secrets;
 #[cfg(unix)]
 pub mod server;
 #[cfg(unix)]

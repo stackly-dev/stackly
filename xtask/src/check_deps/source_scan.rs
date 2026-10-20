@@ -82,11 +82,12 @@ const CLI_CODES_RULE: &str = "only the cli and the protocol name codes::cli, so 
 /// has a call site (`stackly-platform` `secret`,
 /// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input` and
 /// `commands::secret`).
-pub const EXPOSE_ALLOWED: [(&str, &[&str]); 4] = [
+pub const EXPOSE_ALLOWED: [(&str, &[&str]); 5] = [
     ("stackly-core", &["secret::redact", "secret::delivery"]),
     ("stackly-platform-macos", &["secret", "process::stdin"]),
     ("stackly-protocol", &["secret"]),
     ("stackly-testkit", &["fake_secret"]),
+    ("stacklyd", &["ipc::secret"]),
 ];
 /// The `std::env` functions a library never calls.
 const ENV_READS: [&str; 6] = ["var", "var_os", "vars", "vars_os", "home_dir", "temp_dir"];
@@ -1381,6 +1382,7 @@ mod tests {
                 ("stackly-platform-macos", &["secret", "process::stdin"][..]),
                 ("stackly-protocol", &["secret"][..]),
                 ("stackly-testkit", &["fake_secret"][..]),
+                ("stacklyd", &["ipc::secret"][..]),
             ]
         );
     }

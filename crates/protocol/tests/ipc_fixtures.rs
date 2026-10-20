@@ -17,7 +17,11 @@ use stackly_protocol::operation::{
     OperationState, PartialOutcome, RecoveryAction, RecoveryCause, RecoveryHint, StepState,
     TriggerOrigin,
 };
-use stackly_protocol::secret::SecretInput;
+use stackly_protocol::secret::{
+    NeedsSecretBlocker, NeedsSecretReason, SecretChangeStatus, SecretInput, SecretMode,
+    SecretOwnerKind, SecretStatus, SecretStoreBackend, SecretStoreState, SecretStoreTarget,
+    SecretValueOrigin, SecretWarning,
+};
 use stackly_protocol::{
     Call, ErrorBody, ErrorFrame, Reply, Request, ResourceKind, ResourceRef, ServerFrame, Timestamp,
 };
@@ -259,6 +263,7 @@ fn every_fixture_in_the_index_behaves_as_expected_in_rust() {
             "Request" => check_request(&entry, &bytes),
             "ServerFrame" => check_server_frame(&entry, &bytes),
             "SecretInput" => check_dto::<SecretInput>(&entry, &bytes),
+            "NeedsSecretBlocker" => check_dto::<NeedsSecretBlocker>(&entry, &bytes),
             "OperationAccepted" => check_dto::<OperationAccepted>(&entry, &bytes),
             other => panic!("{}: no decoder for type `{other}`", entry.file),
         }
@@ -812,4 +817,164 @@ fn the_latest_time_jiff_holds_reads_and_writes_back_unchanged() {
     };
     assert_eq!(event.at, Timestamp::from_jiff(jiff::Timestamp::MAX));
     assert_eq!(event.at.to_string(), "9999-12-30T22:00:00.999Z");
+}
+
+#[test]
+fn a_set_request_carries_its_value_as_secret_text_and_a_reveal_reply_carries_one() {
+    let Reply::SecretReveal(revealed) = reply("frame-response-secret-reveal.json") else {
+        panic!("expected a reveal reply");
+    };
+    assert_eq!(revealed.reference, "local:erp/postgres/admin");
+    assert_eq!(revealed.value.expose(), "not-a-real-secret");
+    assert!(!format!("{revealed:?}").contains("not-a-real-secret"));
+    let bytes = read("request-secret-set.json");
+    let request = decode_request(&bytes).expect("a valid set request decodes");
+    let Call::SecretSet(params) = request.call else {
+        panic!("expected a secret.set call");
+    };
+    assert_eq!(params.mode, SecretMode::Create);
+    assert!(!params.confirm_stored_only);
+    assert!(!format!("{params:?}").contains("not-a-real-secret"));
+}
+
+#[test]
+fn a_set_request_without_its_optional_fields_reads_them_as_absent_and_false() {
+    let request = decode_request(&read("request-secret-set-without-flags.json")).unwrap();
+    let Call::SecretSet(params) = request.call else {
+        panic!("expected a secret.set call");
+    };
+    assert_eq!(params.expected_revision, None);
+    assert!(!params.confirm_stored_only);
+    assert!(matches!(params.input, SecretInput::CopyFrom(_)));
+}
+
+#[test]
+fn a_bind_an_empty_value_and_a_bad_reference_are_refused_on_their_own_field() {
+    for (file, path) in [
+        ("reject-secret-set-bind.json", "input"),
+        ("reject-secret-set-empty-value.json", "input.content"),
+        ("reject-secret-status-reference.json", "reference"),
+    ] {
+        let rejection = decode_request(&read(file)).unwrap_err();
+        assert_eq!(rejection.error.code(), "request.invalid_params", "{file}");
+        assert_eq!(rejection.error.fields()[0].path(), path, "{file}");
+    }
+}
+
+#[test]
+fn the_secret_list_reply_names_owner_status_origin_and_the_store() {
+    let Reply::SecretList(list) = reply("frame-response-secret-list.json") else {
+        panic!("expected a list reply");
+    };
+    assert_eq!(list.items.len(), 2);
+    assert_eq!(list.items[0].owner_kind, SecretOwnerKind::User);
+    assert_eq!(list.items[0].status, SecretStatus::Present);
+    assert_eq!(list.items[0].value_origin, Some(SecretValueOrigin::Entered));
+    assert_eq!(list.items[1].owner_kind, SecretOwnerKind::Instance);
+    assert!(list.items[1].owner_id.is_some());
+    assert_eq!(list.store.backend, SecretStoreBackend::MacosKeychain);
+    assert_eq!(list.store.state, SecretStoreState::Available);
+    assert_eq!(list.store.target, Some(SecretStoreTarget::File));
+}
+
+#[test]
+fn foreign_values_of_the_secret_enums_decode_as_unrecognized() {
+    let Reply::SecretList(list) = reply("frame-response-secret-unknown-values.json") else {
+        panic!("expected a list reply");
+    };
+    assert_eq!(list.items[0].owner_kind, SecretOwnerKind::Unrecognized);
+    assert_eq!(list.items[0].status, SecretStatus::Unrecognized);
+    assert_eq!(
+        list.items[0].value_origin,
+        Some(SecretValueOrigin::Unrecognized)
+    );
+    assert_eq!(
+        list.items[0].used_by[0].resource_kind,
+        ResourceKind::Unrecognized
+    );
+    assert_eq!(list.store.backend, SecretStoreBackend::Unrecognized);
+    assert_eq!(list.store.state, SecretStoreState::Unrecognized);
+    assert_eq!(list.store.target, Some(SecretStoreTarget::Unrecognized));
+    let Reply::SecretSet(set) = reply("frame-response-secret-set-unknown-values.json") else {
+        panic!("expected a set reply");
+    };
+    assert_eq!(set.warnings, [SecretWarning::Unrecognized]);
+    assert_eq!(
+        set.effects[0].effect,
+        stackly_protocol::secret::SecretEffectKind::Unrecognized
+    );
+    let EventKind::SecretChanged(changed) =
+        event_kind("frame-event-secret-changed-unknown-status.json")
+    else {
+        panic!("expected a secret.changed event");
+    };
+    assert_eq!(changed.status, SecretChangeStatus::Unrecognized);
+}
+
+#[test]
+fn a_secret_event_is_about_the_reference_at_its_revision() {
+    let bytes = read("frame-event-secret-changed.json");
+    let ServerFrame::Event(event) = serde_json::from_slice(&bytes).unwrap() else {
+        panic!("expected an event frame");
+    };
+    assert_eq!(
+        event.resource,
+        Some(ResourceRef {
+            kind: ResourceKind::Secret,
+            id: "local:erp/postgres/admin".to_owned()
+        })
+    );
+    assert!(event.revision.is_some());
+    assert!(matches!(
+        event.kind,
+        EventKind::SecretChanged(changed) if changed.status == SecretChangeStatus::Present
+    ));
+    let deleted = event_kind("frame-event-secret-deleted.json");
+    assert!(matches!(
+        deleted,
+        EventKind::SecretChanged(changed)
+            if changed.status == SecretChangeStatus::Deleted && changed.status_observed_at.is_none()
+    ));
+}
+
+#[test]
+fn info_carries_the_secret_store_and_an_older_daemon_reads_without_it() {
+    let Reply::DaemonGetInfo(info) = reply("frame-response-get-info-secret-store.json") else {
+        panic!("expected an info reply");
+    };
+    let store = info.secret_store.expect("the fixture carries the store");
+    assert_eq!(store.backend, SecretStoreBackend::MacosKeychain);
+    assert_eq!(store.target, Some(SecretStoreTarget::File));
+    let Reply::DaemonGetInfo(older) = reply("frame-response-get-info-older-daemon.json") else {
+        panic!("expected an info reply");
+    };
+    assert_eq!(older.secret_store, None);
+}
+
+#[test]
+fn the_blocker_lists_each_reference_with_its_reason_and_whether_generate_works() {
+    let blocker: NeedsSecretBlocker = dto("dto-needs-secret-blocker.json");
+    assert_eq!(blocker.references.len(), 2);
+    assert_eq!(blocker.references[0].reason, NeedsSecretReason::Missing);
+    assert!(blocker.references[0].generate_allowed);
+    assert_eq!(
+        blocker.references[1].reason,
+        NeedsSecretReason::AccessDenied
+    );
+    assert!(!blocker.references[1].generate_allowed);
+}
+
+#[test]
+fn every_secret_error_fixture_carries_the_items_and_details_its_code_lists() {
+    let needs = error_body("frame-error-secret-needs-secret.json");
+    assert_eq!(needs.items().len(), 2);
+    assert_eq!(needs.items()[1].field("reason"), Some("store_locked"));
+    assert_eq!(needs.items()[1].field("generateAllowed"), Some("false"));
+    let conflict = error_body("frame-error-secret-conflict-in-use.json");
+    assert_eq!(conflict.detail("reason"), Some("in_use"));
+    assert_eq!(conflict.items()[0].field("field"), Some("adminPassword"));
+    let invalid = error_body("frame-error-secret-invalid-value.json");
+    assert_eq!(invalid.detail("reason"), Some("length"));
+    assert!(invalid.items().is_empty());
+    assert_eq!(invalid.fields().len(), 1);
 }
