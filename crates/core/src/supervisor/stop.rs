@@ -154,8 +154,11 @@ impl Supervisor {
                 )
             })
         });
+        // Both callers saw a process before they journaled the stop. An
+        // empty slot now means its exit was handled in between, so there is
+        // nothing left to stop (`stop_process` closes `stopping`).
         let Some((generation, identity, mut done)) = target else {
-            return Err(SupervisorError::IdentityUnproven { pid: None });
+            return Ok(StopEnd::Stopped);
         };
         actor.update(deps, |state| state.stopping = true);
         if *done.borrow() {

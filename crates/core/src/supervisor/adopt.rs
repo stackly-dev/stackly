@@ -97,7 +97,7 @@ pub(crate) async fn adopt_process(sup: &Supervisor, adoption: Adoption) -> bool 
         lose_identity(sup, id, &identity).await;
         return false;
     }
-    spawn_exit_task(sup.clone(), Arc::clone(&actor), generation, exit_rx);
+    spawn_exit_task(sup, Arc::clone(&actor), generation, exit_rx);
     match probe_plans(sup, id).await {
         Some((readiness, health)) => {
             // The first success ends the wait nobody holds here.

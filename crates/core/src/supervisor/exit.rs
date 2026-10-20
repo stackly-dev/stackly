@@ -27,11 +27,15 @@ use crate::secret::delivery::remove_secret_material;
 
 /// Starts the task that handles the exit of one process.
 pub(crate) fn spawn_exit_task(
-    sup: Supervisor,
+    sup: &Supervisor,
     actor: Arc<InstanceActor>,
     generation: u64,
     mut exit: watch::Receiver<Option<ExitNotice>>,
 ) {
+    // A process outlives a daemon that shuts down, so this task may wait
+    // for the exit past the stop. It holds the supervisor weakly: a strong
+    // handle would keep the registry open until the process is gone.
+    let sup = sup.downgrade();
     tokio::spawn(async move {
         let notice = match exit.wait_for(Option::is_some).await {
             Ok(seen) => seen.clone(),
@@ -48,6 +52,7 @@ pub(crate) fn spawn_exit_task(
         }
         // A shut down daemon leaves the registry as it is: the next daemon
         // finds the process gone or adopts it.
+        let Some(sup) = sup.upgrade() else { return };
         if sup.is_shutdown() {
             return;
         }

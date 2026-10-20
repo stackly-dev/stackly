@@ -5,7 +5,9 @@
 
 use std::time::Duration;
 
-use stackly_domain::{DesiredState, InstanceId, InstanceLifecycle, OperationState, RegistryError};
+use stackly_domain::{
+    DesiredState, InstanceId, InstanceLifecycle, OperationKind, OperationState, RegistryError,
+};
 use stackly_platform::ExitStatus;
 
 use crate::common::{Rig, Spec};
@@ -115,4 +117,42 @@ async fn a_registry_read_that_fails_at_the_end_of_a_pause_does_not_drop_the_resp
         rig.events.degraded.lock().unwrap().last() == Some(&false)
     })
     .await;
+}
+
+#[tokio::test]
+async fn a_stop_whose_process_exit_was_handled_before_its_journal_still_ends_stopped() {
+    let rig = Rig::with_config(|config| {
+        config.restart_base_delay = Duration::from_secs(30);
+        config.restart_max_delay = Duration::from_secs(30);
+    })
+    .await;
+    let id = rig.instance(&Spec::default());
+    let first = running(&rig, id).await;
+
+    // The stop has seen the process; it waits before its `journal` stage.
+    let door = rig
+        .registry
+        .hold_stage(OperationKind::StopInstance, "journal");
+    let stop = rig.stop(id).await;
+    wait_for("the stop waits before the journal", || door.entered()).await;
+    // The process exits and the exit handler finishes completely: the crash
+    // is recorded as `recovering` and the actor's slot is empty.
+    rig.processes()
+        .exit(first.pid, Some(ExitStatus::Exited(70)));
+    wait_for("the exit is handled", || {
+        rig.instance_row(id).lifecycle() == InstanceLifecycle::Recovering
+            && rig.sup.status(id).process.is_none()
+    })
+    .await;
+    door.release();
+    let detail = rig.wait_final(stop).await;
+
+    assert_eq!(
+        detail.view.operation.state(),
+        OperationState::Succeeded,
+        "a process that is already gone is a stopped process"
+    );
+    let instance = rig.instance_row(id);
+    assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(instance.desired(), DesiredState::Stopped);
 }
