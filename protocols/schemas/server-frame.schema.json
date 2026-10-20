@@ -77,6 +77,65 @@
         "operation"
       ]
     },
+    "ArtifactDependency": {
+      "description": "One dependency of an artifact.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Where it comes from.",
+          "$ref": "#/$defs/DependencyKind"
+        },
+        "license": {
+          "description": "Its license, if known.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The dependency, such as `openssl`.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Its version, if known.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ]
+    },
+    "ArtifactStatus": {
+      "description": "The status of an artifact in `versions.json`. Open.",
+      "oneOf": [
+        {
+          "description": "A pinned download.",
+          "type": "string",
+          "const": "available"
+        },
+        {
+          "description": "Blocked, with a reason.",
+          "type": "string",
+          "const": "blocked"
+        },
+        {
+          "description": "A test fixture, never installable.",
+          "type": "string",
+          "const": "fixture"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "CancelDisposition": {
       "description": "What a cancel did. Open.",
       "oneOf": [
@@ -159,6 +218,324 @@
           }
         }
       }
+    },
+    "CapabilityStatus": {
+      "description": "Whether a provider has one capability.",
+      "type": "object",
+      "properties": {
+        "capability": {
+          "description": "The capability.",
+          "$ref": "#/$defs/ProviderCapability"
+        },
+        "supported": {
+          "description": "Whether the provider revision declares it.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "capability",
+        "supported"
+      ]
+    },
+    "CatalogArtifact": {
+      "description": "One artifact of a version.",
+      "type": "object",
+      "properties": {
+        "arch": {
+          "description": "The architecture it is built for.",
+          "$ref": "#/$defs/TargetArch"
+        },
+        "blockedReason": {
+          "description": "Why the artifact is blocked; only for `blocked` artifacts.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dependencies": {
+          "description": "Its dependencies; null while `versions.json` does not record them.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/ArtifactDependency"
+          }
+        },
+        "downloadSize": {
+          "description": "The archive size in bytes; only for `available` artifacts.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "id": {
+          "description": "The artifact ID from `versions.json`.",
+          "type": "string"
+        },
+        "installedSize": {
+          "description": "The unpacked size in bytes, once `versions.json` records it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "license": {
+          "description": "The license, such as `Apache-2.0`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "licenseUrl": {
+          "description": "Where the license text is.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "minOs": {
+          "description": "The oldest OS version it runs on, such as `13.0`; only for\n`available` artifacts.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "os": {
+          "description": "The OS it is built for.",
+          "$ref": "#/$defs/TargetOs"
+        },
+        "sha256": {
+          "description": "The SHA-256 of the archive, 64 lowercase hex characters; only for\n`available` artifacts. Clients match installed runtimes and running\ninstalls by it.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "source": {
+          "description": "The host of the first download URL and its first path segment,\nsuch as `github.com/nats-io`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "status": {
+          "description": "Its status in `versions.json`.",
+          "$ref": "#/$defs/ArtifactStatus"
+        }
+      },
+      "required": [
+        "id",
+        "os",
+        "arch",
+        "status"
+      ]
+    },
+    "CatalogEntryState": {
+      "description": "What this Mac can do with a catalog entry. Open.",
+      "oneOf": [
+        {
+          "description": "At least one version installs on this Mac.",
+          "type": "string",
+          "const": "available"
+        },
+        {
+          "description": "The artifact for this Mac is blocked.",
+          "type": "string",
+          "const": "blocked"
+        },
+        {
+          "description": "No version installs on this Mac.",
+          "type": "string",
+          "const": "unsupported"
+        },
+        {
+          "description": "On the roadmap, without a package.",
+          "type": "string",
+          "const": "planned"
+        },
+        {
+          "description": "The package failed validation.",
+          "type": "string",
+          "const": "invalid"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "CatalogInfo": {
+      "description": "The facts about the catalog the daemon loaded.",
+      "type": "object",
+      "properties": {
+        "contentSha256": {
+          "description": "The content digest from `catalog.json`, 64 lowercase hex\ncharacters.",
+          "type": "string"
+        },
+        "host": {
+          "description": "The target of this Mac, which every install verdict is for.",
+          "$ref": "#/$defs/HostTarget"
+        },
+        "invalidCount": {
+          "description": "How many entries failed validation.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "loadedAt": {
+          "description": "When the daemon loaded it, for diagnostics.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "outdated": {
+          "description": "Whether the catalog was published more than 180 days before the\nrequest.",
+          "type": "boolean"
+        },
+        "publishedAt": {
+          "description": "When the catalog was published, from `catalog.json`.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "revision": {
+          "description": "The catalog revision.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "source": {
+          "description": "Where the catalog came from.",
+          "$ref": "#/$defs/CatalogSourceKind"
+        },
+        "trust": {
+          "description": "How far the catalog is trusted.",
+          "$ref": "#/$defs/TrustLevel"
+        }
+      },
+      "required": [
+        "revision",
+        "publishedAt",
+        "loadedAt",
+        "contentSha256",
+        "source",
+        "trust",
+        "host",
+        "outdated",
+        "invalidCount"
+      ]
+    },
+    "CatalogIssue": {
+      "description": "One thing wrong with an invalid entry.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The issue code, such as `catalog_digest_mismatch`.",
+          "type": "string"
+        },
+        "file": {
+          "description": "The file, such as `provider.yaml` or `catalog.json`.",
+          "type": "string"
+        },
+        "location": {
+          "description": "Where in the file, such as `metadata.id`.",
+          "type": "string"
+        },
+        "message": {
+          "description": "What is wrong, in lowercase English.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Which limit or rule, only for codes with a reason list, such as\n`total_bytes` for `catalog_limit`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "file",
+        "location",
+        "code",
+        "message"
+      ]
+    },
+    "CatalogSourceKind": {
+      "description": "Where a catalog came from. Open.",
+      "oneOf": [
+        {
+          "description": "The catalog inside the app bundle.",
+          "type": "string",
+          "const": "bundled"
+        },
+        {
+          "description": "A catalog folder from `STACKLY_CATALOG_DIR`.",
+          "type": "string",
+          "const": "development"
+        },
+        {
+          "description": "A source this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "CatalogVersion": {
+      "description": "One exact version of a provider.",
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "description": "Its artifacts, in `versions.json` order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CatalogArtifact"
+          }
+        },
+        "install": {
+          "description": "Whether this version installs on this Mac.",
+          "$ref": "#/$defs/InstallVerdict"
+        },
+        "line": {
+          "description": "The runtime line, such as `2.15`.",
+          "type": "string"
+        },
+        "support": {
+          "description": "One cell per OS, always `macos`, `linux`, then `windows`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TargetSupport"
+          }
+        },
+        "version": {
+          "description": "The exact version, such as `2.15.1`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "line",
+        "install"
+      ]
     },
     "ClientKind": {
       "description": "The kinds of client. Open: a newer client may send a value an older\ndaemon reads as `unrecognized`.",
@@ -538,6 +915,31 @@
         "cache",
         "runtime",
         "rootOverride"
+      ]
+    },
+    "DependencyKind": {
+      "description": "Where an artifact dependency comes from. Open.",
+      "oneOf": [
+        {
+          "description": "Inside the artifact.",
+          "type": "string",
+          "const": "bundled"
+        },
+        {
+          "description": "Another artifact Stackly installs.",
+          "type": "string",
+          "const": "own"
+        },
+        {
+          "description": "Part of macOS.",
+          "type": "string",
+          "const": "system"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "ErrorBody": {
@@ -1001,6 +1403,49 @@
         "head"
       ]
     },
+    "HostTarget": {
+      "description": "An OS and architecture pair.",
+      "type": "object",
+      "properties": {
+        "arch": {
+          "description": "The architecture.",
+          "$ref": "#/$defs/TargetArch"
+        },
+        "os": {
+          "description": "The OS.",
+          "$ref": "#/$defs/TargetOs"
+        }
+      },
+      "required": [
+        "os",
+        "arch"
+      ]
+    },
+    "InstallVerdict": {
+      "description": "The install gate's verdict for one version on this Mac.",
+      "type": "object",
+      "properties": {
+        "installable": {
+          "description": "Whether the version can be installed.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Why not; null when it can.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SupportReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "installable"
+      ]
+    },
     "Limits": {
       "description": "The limits a daemon enforces, as sent in `HandshakeAccepted`.",
       "type": "object",
@@ -1056,6 +1501,27 @@
         "maxSubscriptions",
         "eventBufferLen",
         "eventReplayLen"
+      ]
+    },
+    "ListProvidersReply": {
+      "description": "Reply of `catalog.list_providers`: every entry in display order, in one\npage.",
+      "type": "object",
+      "properties": {
+        "catalog": {
+          "description": "The facts about the catalog.",
+          "$ref": "#/$defs/CatalogInfo"
+        },
+        "items": {
+          "description": "Provider and invalid entries first, planned entries last; then\ncategory, display name, and ID.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ProviderSummary"
+          }
+        }
+      },
+      "required": [
+        "catalog"
       ]
     },
     "OperationDetail": {
@@ -1736,6 +2202,29 @@
         "supported"
       ]
     },
+    "PlatformNoteDto": {
+      "description": "What the catalog says about one OS a provider has no artifact for.",
+      "type": "object",
+      "properties": {
+        "note": {
+          "description": "The note.",
+          "type": "string"
+        },
+        "os": {
+          "description": "`linux` or `windows`.",
+          "$ref": "#/$defs/TargetOs"
+        },
+        "status": {
+          "description": "`planned` or `unsupported`.",
+          "$ref": "#/$defs/SupportStatus"
+        }
+      },
+      "required": [
+        "os",
+        "status",
+        "note"
+      ]
+    },
     "ProtocolVersion": {
       "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
       "type": "object",
@@ -1756,6 +2245,299 @@
       "required": [
         "major",
         "minor"
+      ]
+    },
+    "ProviderCapability": {
+      "description": "A provider capability. Open.",
+      "oneOf": [
+        {
+          "description": "Run more than one instance side by side.",
+          "type": "string",
+          "const": "multi_instance"
+        },
+        {
+          "description": "Keep data across restarts.",
+          "type": "string",
+          "const": "persistence"
+        },
+        {
+          "description": "Reload the configuration without a restart.",
+          "type": "string",
+          "const": "reload"
+        },
+        {
+          "description": "Expose metrics.",
+          "type": "string",
+          "const": "metrics"
+        },
+        {
+          "description": "Serve TLS.",
+          "type": "string",
+          "const": "tls"
+        },
+        {
+          "description": "Back up while the instance is stopped.",
+          "type": "string",
+          "const": "cold_backup"
+        },
+        {
+          "description": "Back up while the instance runs.",
+          "type": "string",
+          "const": "online_backup"
+        },
+        {
+          "description": "Back up as a logical dump.",
+          "type": "string",
+          "const": "logical_backup"
+        },
+        {
+          "description": "A capability this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ProviderCategory": {
+      "description": "The category of a provider. Open.",
+      "oneOf": [
+        {
+          "description": "A database server.",
+          "type": "string",
+          "const": "database"
+        },
+        {
+          "description": "A message broker.",
+          "type": "string",
+          "const": "messaging"
+        },
+        {
+          "description": "An analytics store.",
+          "type": "string",
+          "const": "analytics"
+        },
+        {
+          "description": "A cache.",
+          "type": "string",
+          "const": "cache"
+        },
+        {
+          "description": "A proxy.",
+          "type": "string",
+          "const": "proxy"
+        },
+        {
+          "description": "A test provider.",
+          "type": "string",
+          "const": "testing"
+        },
+        {
+          "description": "A category this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ProviderDetail": {
+      "description": "Reply of `catalog.get_provider`: one entry with its versions, its\nartifacts, and what is wrong with it.",
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "description": "The eight capabilities in [`ProviderCapability::ALL`] order; empty\nfor planned and invalid entries.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CapabilityStatus"
+          }
+        },
+        "issues": {
+          "description": "What failed validation; only for invalid entries.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CatalogIssue"
+          }
+        },
+        "manifestSha256": {
+          "description": "The digest of the provider package, 64 lowercase hex characters;\nnull for planned and invalid entries.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "note": {
+          "description": "The note of a planned entry.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "platformNotes": {
+          "description": "What the catalog says about an OS without artifacts.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlatformNoteDto"
+          }
+        },
+        "software": {
+          "description": "The software the provider runs; null for planned and invalid\nentries.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "summary": {
+          "description": "The entry as the list shows it.",
+          "$ref": "#/$defs/ProviderSummary"
+        },
+        "versions": {
+          "description": "One row per exact version, in `versions.json` order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CatalogVersion"
+          }
+        }
+      },
+      "required": [
+        "summary"
+      ]
+    },
+    "ProviderSummary": {
+      "description": "One catalog entry as a card or a list row shows it.",
+      "type": "object",
+      "properties": {
+        "category": {
+          "description": "The category; null only for an invalid entry whose manifest\nmetadata does not decode.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderCategory"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "description": "What the provider is; null for invalid entries.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "displayName": {
+          "description": "The name shown; an invalid entry shows its ID.",
+          "type": "string"
+        },
+        "licenses": {
+          "description": "The distinct licenses of those artifacts, in `versions.json` order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "mark": {
+          "description": "One or two characters for the tile.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "The provider ID, such as `official/nats`.",
+          "type": "string"
+        },
+        "providerRevision": {
+          "description": "The provider revision of the package, such as `1.0.0`; null for\nplanned and invalid entries.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "publisher": {
+          "description": "Who publishes the package: `Stackly` for the `official` namespace.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "revision": {
+          "description": "The catalog revision, the same for every entry.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "software": {
+          "description": "The software the provider runs, such as `nats`; the key that joins\ninstalled runtimes to the entry. Null for planned and invalid\nentries.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "state": {
+          "description": "What this Mac can do with the entry.",
+          "$ref": "#/$defs/CatalogEntryState"
+        },
+        "stateNote": {
+          "description": "A note for the state, such as the reason an artifact is blocked.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "stateReason": {
+          "description": "Why the entry has its state; null for `available`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SupportReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tile": {
+          "description": "The tile color.",
+          "$ref": "#/$defs/TileColor"
+        },
+        "trust": {
+          "description": "How far the entry is trusted, the same as the catalog's.",
+          "$ref": "#/$defs/TrustLevel"
+        },
+        "versionCount": {
+          "description": "How many exact versions have an `available` artifact for this Mac.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "versions": {
+          "description": "The first 16 exact versions with an `available` artifact for this\nMac, in `versions.json` order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "provider",
+        "revision",
+        "displayName",
+        "state",
+        "trust",
+        "versionCount",
+        "mark",
+        "tile"
       ]
     },
     "RecoveryAction": {
@@ -2119,6 +2901,40 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Every catalog entry, in display order.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ListProvidersReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "catalog.list_providers"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One catalog entry in detail.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ProviderDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "catalog.get_provider"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -2342,6 +3158,252 @@
         }
       ]
     },
+    "SupportReason": {
+      "description": "Why an entry, a matrix cell, or an install verdict has its status.\nOpen: feature 18 adds reasons.",
+      "oneOf": [
+        {
+          "description": "A build exists but was not tested on this Mac.",
+          "type": "string",
+          "const": "untested"
+        },
+        {
+          "description": "No build for the OS.",
+          "type": "string",
+          "const": "no_build"
+        },
+        {
+          "description": "Builds for the OS exist, but not for its architecture.",
+          "type": "string",
+          "const": "no_build_for_arch"
+        },
+        {
+          "description": "No build for this Mac.",
+          "type": "string",
+          "const": "no_build_for_host"
+        },
+        {
+          "description": "The catalog's platform note decides.",
+          "type": "string",
+          "const": "platform_note"
+        },
+        {
+          "description": "The artifact is blocked.",
+          "type": "string",
+          "const": "artifact_blocked"
+        },
+        {
+          "description": "The artifact is a test fixture.",
+          "type": "string",
+          "const": "fixture_only"
+        },
+        {
+          "description": "The provider is planned.",
+          "type": "string",
+          "const": "provider_planned"
+        },
+        {
+          "description": "The provider package failed validation.",
+          "type": "string",
+          "const": "package_invalid"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SupportStatus": {
+      "description": "The support status of a version on one OS (PRD section 5.1). Open.",
+      "oneOf": [
+        {
+          "description": "Planned for a later release.",
+          "type": "string",
+          "const": "planned"
+        },
+        {
+          "description": "Builds exist but were not tested here.",
+          "type": "string",
+          "const": "unverified"
+        },
+        {
+          "description": "Tested, with known gaps.",
+          "type": "string",
+          "const": "experimental"
+        },
+        {
+          "description": "Tested with a compatibility record.",
+          "type": "string",
+          "const": "supported"
+        },
+        {
+          "description": "Not supported.",
+          "type": "string",
+          "const": "unsupported"
+        },
+        {
+          "description": "Blocked in the catalog.",
+          "type": "string",
+          "const": "blocked"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "TargetArch": {
+      "description": "An architecture of a target. Open.",
+      "oneOf": [
+        {
+          "description": "64 bit ARM, such as Apple Silicon.",
+          "type": "string",
+          "const": "aarch64"
+        },
+        {
+          "description": "64 bit x86.",
+          "type": "string",
+          "const": "x86_64"
+        },
+        {
+          "description": "An architecture this build does not know. The daemon never sends\nit.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "TargetOs": {
+      "description": "An OS of a target. Open.",
+      "oneOf": [
+        {
+          "description": "macOS.",
+          "type": "string",
+          "const": "macos"
+        },
+        {
+          "description": "Linux.",
+          "type": "string",
+          "const": "linux"
+        },
+        {
+          "description": "Windows.",
+          "type": "string",
+          "const": "windows"
+        },
+        {
+          "description": "An OS this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "TargetSupport": {
+      "description": "The support of one version on one OS: one cell of the version matrix.",
+      "type": "object",
+      "properties": {
+        "arches": {
+          "description": "The architectures of the version's artifacts for the OS, by code;\nempty when there are none.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TargetArch"
+          }
+        },
+        "note": {
+          "description": "A note, such as a platform note or the reason an artifact is\nblocked.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "os": {
+          "description": "The OS.",
+          "$ref": "#/$defs/TargetOs"
+        },
+        "reason": {
+          "description": "Why the cell has its status.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SupportReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "description": "The support status.",
+          "$ref": "#/$defs/SupportStatus"
+        }
+      },
+      "required": [
+        "os",
+        "status"
+      ]
+    },
+    "TileColor": {
+      "description": "The system color of a provider tile. Open: clients show an\nunrecognized color as gray.",
+      "oneOf": [
+        {
+          "description": "System blue.",
+          "type": "string",
+          "const": "blue"
+        },
+        {
+          "description": "System cyan.",
+          "type": "string",
+          "const": "cyan"
+        },
+        {
+          "description": "System teal.",
+          "type": "string",
+          "const": "teal"
+        },
+        {
+          "description": "System green.",
+          "type": "string",
+          "const": "green"
+        },
+        {
+          "description": "System yellow.",
+          "type": "string",
+          "const": "yellow"
+        },
+        {
+          "description": "System orange.",
+          "type": "string",
+          "const": "orange"
+        },
+        {
+          "description": "System red.",
+          "type": "string",
+          "const": "red"
+        },
+        {
+          "description": "System brown.",
+          "type": "string",
+          "const": "brown"
+        },
+        {
+          "description": "System indigo.",
+          "type": "string",
+          "const": "indigo"
+        },
+        {
+          "description": "System gray.",
+          "type": "string",
+          "const": "gray"
+        },
+        {
+          "description": "A color this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "TriggerOrigin": {
       "description": "Where an operation came from. Open.",
       "oneOf": [
@@ -2357,6 +3419,26 @@
         },
         {
           "description": "An origin this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "TrustLevel": {
+      "description": "How far a catalog is trusted. Open.",
+      "oneOf": [
+        {
+          "description": "The catalog shipped with Stackly.",
+          "type": "string",
+          "const": "official"
+        },
+        {
+          "description": "A development catalog, never shown as official.",
+          "type": "string",
+          "const": "development"
+        },
+        {
+          "description": "A trust level this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
         }

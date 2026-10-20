@@ -1,0 +1,59 @@
+# The bundled provider catalog (spec 0017). Only `cargo xtask catalog` reads
+# this file; the daemon reads the catalog.json it builds.
+#
+# A provider moves from [[planned]] to [[provider]] in the commit of the
+# feature that proves its lifecycle end to end (spec 0017, Consequences).
+# Every change here or in a listed package needs a new revision and
+# published_at, then `cargo xtask catalog check --update`.
+
+schema = "stackly.catalog-source/v1"
+revision = 1
+published_at = 2026-10-20T01:26:00Z
+
+[[planned]]
+id = "official/postgresql"
+display_name = "PostgreSQL"
+category = "database"
+description = "Relational database. Multiple majors and multiple clusters per version, each with its own data area."
+mark = "Pg"
+tile = "blue"
+
+[[planned]]
+id = "official/mysql"
+display_name = "MySQL"
+category = "database"
+description = "Relational server with isolated datadir, socket and tmpdir per instance. Never bound to an existing system service."
+mark = "My"
+tile = "teal"
+
+[[planned]]
+id = "official/nats"
+display_name = "NATS Server"
+category = "messaging"
+description = "Core messaging with optional JetStream. Client and monitoring endpoints are configured separately."
+mark = "Na"
+tile = "green"
+
+[[planned]]
+id = "official/clickhouse"
+display_name = "ClickHouse"
+category = "analytics"
+description = "Columnar analytics database. Single node with HTTP and native TCP endpoints."
+mark = "Ch"
+tile = "yellow"
+
+[[planned]]
+id = "official/valkey"
+display_name = "Valkey"
+category = "cache"
+description = "In-memory key-value store. Standalone, with RDB or AOF persistence per instance."
+mark = "Vk"
+tile = "red"
+
+[[planned]]
+id = "official/traefik"
+display_name = "Traefik"
+category = "proxy"
+description = "Reverse proxy with file-based routes. Entrypoints bind to loopback by default."
+mark = "Tr"
+tile = "cyan"

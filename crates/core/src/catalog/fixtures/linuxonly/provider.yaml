@@ -1,0 +1,46 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: official/linuxonly
+  software: nats
+  displayName: NATS Linux Build
+  revision: "1.0.0"
+  category: messaging
+  description: NATS messaging server with JetStream, one server per instance.
+compatibility:
+  platforms:
+    - { os: linux, arch: x86_64 }
+runtime:
+  executable: nats-server
+  executionMode: foreground
+capabilities:
+  multiInstance: true
+  persistence: true
+  metrics: true
+  backup: [cold]
+resources:
+  endpoints:
+    client: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 4222 }
+    monitoring: { transport: tcp, purpose: monitoring, defaultHost: "127.0.0.1", defaultPort: 8222 }
+configFiles:
+  natsConf:
+    template: templates/nats.conf.tmpl
+    format: natsConf
+    destination: "${instance.config}/nats.conf"
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+    - { primitive: renderConfig, file: natsConf }
+  start:
+    executable: "${runtime.executable}"
+    args: ["--config", "${instance.config}/nats.conf"]
+    cwd: "${instance.data}"
+  stop: { strategy: gracefulProcess, signal: term }
+readiness:
+  probe: { type: http, endpoint: monitoring, path: /healthz }
+timeouts: { readinessSeconds: 30, stopSeconds: 30 }
+backup:
+  cold: { paths: [data] }
+permissions:
+  managedFilesystem: [data, config, logs, temp]
+  executeRuntimeBinary: true

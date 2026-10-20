@@ -41,6 +41,10 @@
       "owner": "spec 0009"
     },
     {
+      "name": "catalog",
+      "owner": "spec 0017"
+    },
+    {
       "name": "internal",
       "owner": "spec 0006"
     },
@@ -50,6 +54,52 @@
     }
   ],
   "codes": [
+    {
+      "code": "catalog.not_installable",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "provider",
+        "version",
+        "target",
+        "availableTargets",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the provider version can't be installed on this Mac"
+    },
+    {
+      "code": "catalog.provider_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "provider",
+        "suggestion"
+      ],
+      "items": null,
+      "summary": "no provider with that ID in the catalog"
+    },
+    {
+      "code": "catalog.unavailable",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the provider catalog is not available"
+    },
+    {
+      "code": "catalog.version_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "provider",
+        "version"
+      ],
+      "items": null,
+      "summary": "the provider has no such version in the catalog"
+    },
     {
       "code": "cli.cancel_not_applied",
       "category": "conflict",

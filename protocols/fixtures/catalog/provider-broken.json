@@ -1,0 +1,36 @@
+{
+  "summary": {
+    "provider": "official/broken",
+    "revision": 1,
+    "displayName": "official/broken",
+    "software": null,
+    "category": "cache",
+    "description": null,
+    "state": "invalid",
+    "stateReason": "package_invalid",
+    "stateNote": null,
+    "providerRevision": null,
+    "publisher": "Stackly",
+    "trust": "official",
+    "versions": [],
+    "versionCount": 0,
+    "licenses": [],
+    "mark": "Br",
+    "tile": "gray"
+  },
+  "software": null,
+  "manifestSha256": null,
+  "capabilities": [],
+  "versions": [],
+  "platformNotes": [],
+  "note": null,
+  "issues": [
+    {
+      "file": "catalog.json",
+      "location": "providers[1].manifestSha256",
+      "code": "catalog_digest_mismatch",
+      "message": "manifestSha256 does not match the package files",
+      "reason": null
+    }
+  ]
+}

@@ -951,6 +951,20 @@ async fn dispatch(
             .map(Reply::OperationGetStats),
             None,
         ),
+        Call::CatalogListProviders => (
+            guarded(core, handlers, context, |h, c, x| h.list_providers(c, x))
+                .await
+                .map(Reply::CatalogListProviders),
+            None,
+        ),
+        Call::CatalogGetProvider(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_provider(c, x, p)
+            })
+            .await
+            .map(Reply::CatalogGetProvider),
+            None,
+        ),
     }
 }
 

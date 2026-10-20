@@ -20,6 +20,7 @@ whole_workspace=no
 packages=''
 swift_files=''
 lint_all_swift=no
+catalog_changed=no
 
 # Prints the package name of the nearest crate above a file, or nothing when
 # the file belongs to no workspace member.
@@ -48,6 +49,11 @@ for file in $staged; do
             ;;
         # The cargo-fuzz project is its own nightly workspace (spec 0006).
         fuzz/*)
+            ;;
+        # The bundled catalog and what its packages are generated from
+        # (spec 0017): a changed package needs a new catalog revision.
+        providers/* | runtimes/inventory.toml)
+            catalog_changed=yes
             ;;
         *.rs | */Cargo.toml)
             rust_changed=yes
@@ -93,6 +99,11 @@ if [ "$rust_changed" = yes ]; then
         echo "pre-commit: cargo clippy $* --all-targets --locked -- -D warnings"
         cargo clippy "$@" --all-targets --locked -- -D warnings || failed=yes
     fi
+fi
+
+if [ "$catalog_changed" = yes ]; then
+    echo "pre-commit: cargo xtask catalog check"
+    cargo xtask catalog check || failed=yes
 fi
 
 if [ "$lint_all_swift" = yes ]; then

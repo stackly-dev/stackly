@@ -238,6 +238,36 @@
           "required": [
             "type"
           ]
+        },
+        {
+          "description": "Every catalog entry with the facts about the catalog.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "catalog.list_providers"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "One catalog entry with its versions and artifacts.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetProviderParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "catalog.get_provider"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -345,6 +375,19 @@
       },
       "required": [
         "operationId"
+      ]
+    },
+    "GetProviderParams": {
+      "description": "Params of `catalog.get_provider`.",
+      "type": "object",
+      "properties": {
+        "provider": {
+          "description": "The provider ID, such as `official/nats`: 1 to 127 bytes of\n`[a-z0-9/-]` with at most one `/`. A name without its namespace\npasses, so the daemon can suggest the full ID, but never matches a\nprovider.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider"
       ]
     },
     "HandshakeParams": {

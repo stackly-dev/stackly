@@ -67,7 +67,70 @@ extension CreatedState {
 	}
 }
 
+extension DependencyKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
 extension CancelDisposition {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension ProviderCapability {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension TargetOs {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension TargetArch {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension ArtifactStatus {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension CatalogSourceKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension TrustLevel {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SupportStatus {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SupportReason {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
 		self = Self(rawValue: value) ?? .unrecognized
@@ -89,6 +152,27 @@ extension SubsystemStatus {
 }
 
 extension GapReason {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension ProviderCategory {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension CatalogEntryState {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension TileColor {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
 		self = Self(rawValue: value) ?? .unrecognized

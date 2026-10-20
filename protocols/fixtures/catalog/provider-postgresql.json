@@ -1,0 +1,28 @@
+{
+  "summary": {
+    "provider": "official/postgresql",
+    "revision": 1,
+    "displayName": "PostgreSQL",
+    "software": null,
+    "category": "database",
+    "description": "Relational database. Multiple majors and multiple clusters per version, each with its own data area.",
+    "state": "planned",
+    "stateReason": "provider_planned",
+    "stateNote": null,
+    "providerRevision": null,
+    "publisher": "Stackly",
+    "trust": "official",
+    "versions": [],
+    "versionCount": 0,
+    "licenses": [],
+    "mark": "Pg",
+    "tile": "blue"
+  },
+  "software": null,
+  "manifestSha256": null,
+  "capabilities": [],
+  "versions": [],
+  "platformNotes": [],
+  "note": "Planned for a later release.",
+  "issues": []
+}

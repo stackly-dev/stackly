@@ -3,6 +3,7 @@
 //! test may wrap, while clients connect over the real Unix socket.
 #![cfg(target_os = "macos")]
 
+mod catalog;
 mod common;
 mod events;
 mod handshake;

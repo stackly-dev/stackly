@@ -10,7 +10,7 @@ use stackly_ipc::{Client, ConnectPolicy, connect_verified};
 use stackly_platform::DirectoryLayout;
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::handshake::{ClientInfo, ClientKind, HandshakeAccepted};
-use stackly_testkit::{SpawnedDaemon, TestRoot};
+use stackly_testkit::{SpawnCatalog, SpawnedDaemon, TestRoot};
 
 /// The daemon binary cargo built for these tests.
 pub const STACKLYD: &str = env!("CARGO_BIN_EXE_stacklyd");
@@ -82,15 +82,27 @@ const CONNECTION_CLOSED: &str = "connection closed";
 /// the close line means no line of the probe lands after a test reads the
 /// log.
 pub fn start_daemon(root: &TestRoot) -> SpawnedDaemon {
+    start_daemon_with(root, SpawnCatalog::Empty)
+}
+
+/// [`start_daemon`] with a chosen catalog; it also waits for the line the
+/// start slot logs once the catalog loaded (`catalog_state`).
+pub fn start_daemon_with(root: &TestRoot, catalog: SpawnCatalog) -> SpawnedDaemon {
     let paths = daemon_paths(root);
     let log = paths.layout.daemon_log_dir().join("stacklyd.log");
     let closed_before = count_messages(&log, CONNECTION_CLOSED);
-    let daemon = SpawnedDaemon::start(
+    let daemon = SpawnedDaemon::start_with_catalog(
         Path::new(STACKLYD),
         root.path(),
         &paths.socket,
         &paths.runtime,
-        |daemon| logged(&daemon.stderr(), "registry_state") && handshakes(daemon.socket()),
+        catalog,
+        |daemon| {
+            let stderr = daemon.stderr();
+            logged(&stderr, "registry_state")
+                && logged(&stderr, "catalog_state")
+                && handshakes(daemon.socket())
+        },
     )
     .expect("stacklyd starts");
     let deadline = Instant::now() + PROBE_LOG_TIMEOUT;

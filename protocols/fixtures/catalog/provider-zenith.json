@@ -1,0 +1,36 @@
+{
+  "summary": {
+    "provider": "official/zenith",
+    "revision": 1,
+    "displayName": "official/zenith",
+    "software": null,
+    "category": null,
+    "description": null,
+    "state": "invalid",
+    "stateReason": "package_invalid",
+    "stateNote": null,
+    "providerRevision": null,
+    "publisher": "Stackly",
+    "trust": "official",
+    "versions": [],
+    "versionCount": 0,
+    "licenses": [],
+    "mark": "Ze",
+    "tile": "gray"
+  },
+  "software": null,
+  "manifestSha256": null,
+  "capabilities": [],
+  "versions": [],
+  "platformNotes": [],
+  "note": null,
+  "issues": [
+    {
+      "file": "catalog.json",
+      "location": "providers[4]",
+      "code": "catalog_limit",
+      "message": "the catalog packages are larger than 16 MiB together",
+      "reason": "total_bytes"
+    }
+  ]
+}

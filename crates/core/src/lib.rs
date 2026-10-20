@@ -7,6 +7,7 @@
 //! supervisor, provider, environment, operation, diagnostics) start as
 //! modules here and move to their own crate once their boundary is proven.
 
+pub mod catalog;
 mod daemon;
 mod error;
 mod instance_dir;
