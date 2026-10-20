@@ -5,6 +5,7 @@
 //! `progress`.
 
 pub mod daemon;
+pub mod instance;
 pub mod operation;
 pub mod secret;
 

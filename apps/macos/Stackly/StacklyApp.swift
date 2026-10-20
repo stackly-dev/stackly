@@ -23,7 +23,7 @@ struct StacklyApp: App {
         #if DEBUG
             // The design gallery of spec 0012, listed in the Window menu. Debug builds only.
             Window("Design Gallery", id: "design-gallery") {
-                DesignGallery()
+                DesignGallery(secrets: appDelegate.runtime.model.secrets)
             }
             .defaultSize(width: 1100, height: 780)
         #endif

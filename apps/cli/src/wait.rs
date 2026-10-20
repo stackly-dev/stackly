@@ -13,13 +13,14 @@ use clap::Args;
 use stackly_protocol::codes::{daemon, ipc};
 use stackly_protocol::events::SubscribeParams;
 use stackly_protocol::operation::{
-    GetOperationParams, OperationDetail, OperationProgress, OperationState,
+    GetOperationParams, OperationDetail, OperationProgress, OperationState, OperationSummary,
 };
 use stackly_protocol::{Call, ResourceKind, ResourceRef};
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use tokio::time::{Instant, interval_at, sleep, sleep_until};
 use uuid::Uuid;
 
+use crate::args::IdempotencyKeyArg;
 use crate::context::Context;
 use crate::exit::EXIT_INTERRUPTED;
 use crate::failure::CliFailure;
@@ -52,6 +53,76 @@ pub struct WaitArgs {
     /// With --wait, stop waiting after this long: 90, 30s, 5m, or 1h30m
     #[arg(long, requires = "wait", value_name = "DURATION", value_parser = crate::args::timeout)]
     pub timeout: Option<Duration>,
+}
+
+/// `--wait`, `--timeout`, and `--idempotency-key`: the flags of a command
+/// that starts an operation (spec 0008, *Perintah async dan menambah
+/// command group*).
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AsyncArgs {
+    /// `--wait` and `--timeout`.
+    #[command(flatten)]
+    pub wait: WaitArgs,
+    /// Send this key so a repeated request gets the same operation; by default a new one is made and written in the result
+    #[arg(long, value_name = "KEY")]
+    pub idempotency_key: Option<IdempotencyKeyArg>,
+}
+
+/// What a starting method's reply holds, read by the `extract` function a
+/// command gives to [`Context::submit`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Accepted {
+    /// The operation, or `None` when the request changed nothing, such as
+    /// `alreadyInState`.
+    pub operation: Option<OperationSummary>,
+    /// True when the idempotency key named an operation an earlier request
+    /// started.
+    pub replayed: bool,
+}
+
+/// How a submitted request ended, before the command shapes its result.
+#[derive(Debug)]
+pub struct Submission {
+    /// The operation: the one the reply carried, or with `--wait` the
+    /// newest snapshot of it. `None` when the request started none.
+    pub operation: Option<OperationSummary>,
+    /// The key the request carried, from `--idempotency-key` or made here.
+    pub idempotency_key: String,
+    /// True when the daemon answered with an operation an earlier request
+    /// with this key started.
+    pub replayed: bool,
+    /// `--wait` was given and the request started an operation.
+    pub waited: bool,
+    /// The failure the wait ended with, `None` for exit 0.
+    pub failure: Option<CliFailure>,
+}
+
+impl Submission {
+    /// Whether nothing is left to wait for: the request started no
+    /// operation, or `--wait` saw it stop moving. Only then does a command
+    /// read the resource again.
+    #[must_use]
+    pub fn finished(&self) -> bool {
+        match &self.operation {
+            None => true,
+            Some(operation) => self.waited && settled(operation.state),
+        }
+    }
+
+    /// The hint that tells how to wait for the operation later, when
+    /// something is still left to wait for.
+    #[must_use]
+    pub fn wait_hint(&self) -> Option<String> {
+        self.operation
+            .as_ref()
+            .filter(|operation| !settled(operation.state))
+            .map(|operation| {
+                format!(
+                    "wait with: stackly operation inspect {} --wait",
+                    operation.id
+                )
+            })
+    }
 }
 
 /// What the wait is for, which decides the exit at the end.
@@ -517,6 +588,45 @@ mod tests {
                 &detail(OperationState::NeedsRecovery, false)
             )),
             Some(("cli.operation_needs_recovery".to_owned(), 7))
+        );
+    }
+
+    fn submission(operation: Option<OperationState>, waited: bool) -> Submission {
+        Submission {
+            operation: operation.map(|state| detail(state, false).operation),
+            idempotency_key: "k-1".to_owned(),
+            replayed: false,
+            waited,
+            failure: None,
+        }
+    }
+
+    #[test]
+    fn a_submission_is_finished_without_an_operation_or_after_a_wait_that_settled() {
+        assert!(submission(None, false).finished());
+        assert!(submission(None, true).finished());
+        assert!(!submission(Some(OperationState::Queued), false).finished());
+        assert!(!submission(Some(OperationState::Succeeded), false).finished());
+        assert!(!submission(Some(OperationState::Running), true).finished());
+        for state in [
+            OperationState::Succeeded,
+            OperationState::Failed,
+            OperationState::NeedsRecovery,
+        ] {
+            assert!(submission(Some(state), true).finished(), "{state:?}");
+        }
+    }
+
+    #[test]
+    fn the_wait_hint_names_the_operation_until_it_settled() {
+        assert_eq!(submission(None, false).wait_hint(), None);
+        assert_eq!(
+            submission(Some(OperationState::Running), false).wait_hint(),
+            Some(format!("wait with: stackly operation inspect {ID} --wait"))
+        );
+        assert_eq!(
+            submission(Some(OperationState::Succeeded), false).wait_hint(),
+            None
         );
     }
 

@@ -24,6 +24,7 @@ public struct AppShell: View {
     private let presentation: ShellPresentation
     private let diagnostics: ConnectionDiagnostics
     private let counts: SidebarCounts
+    private let instances: InstanceStore?
     private let windowOpener: WindowOpener
     private let windowWillClose: (NSWindow) -> Void
     private let reconnect: @MainActor () -> Void
@@ -35,6 +36,8 @@ public struct AppShell: View {
     ///   - presentation: What the shell shows for the daemon's state.
     ///   - diagnostics: The Connection section of Diagnostics.
     ///   - counts: The counts behind the sidebar badges.
+    ///   - instances: The instance store behind the Instances page, or `nil` to show the
+    ///     placeholder (previews).
     ///   - windowOpener: Receives the scene's `openWindow` action.
     ///   - windowWillClose: Called with the main window right before it closes.
     ///   - reconnect: Tries to connect now (banner, Diagnostics).
@@ -43,6 +46,7 @@ public struct AppShell: View {
         presentation: ShellPresentation,
         diagnostics: ConnectionDiagnostics,
         counts: SidebarCounts = SidebarCounts(),
+        instances: InstanceStore? = nil,
         windowOpener: WindowOpener,
         windowWillClose: @escaping (NSWindow) -> Void,
         reconnect: @escaping @MainActor () -> Void,
@@ -51,6 +55,7 @@ public struct AppShell: View {
         self.presentation = presentation
         self.diagnostics = diagnostics
         self.counts = counts
+        self.instances = instances
         self.windowOpener = windowOpener
         self.windowWillClose = windowWillClose
         self.reconnect = reconnect
@@ -130,8 +135,18 @@ public struct AppShell: View {
             // provisional: F22
             UnbuiltScrollPage(section: .overview)
         case .instances:
-            // provisional: F13 (milestone 4 shows the provisional instance list here)
-            UnbuiltScrollPage(section: .instances)
+            if let instances {
+                // provisional: F22
+                ProvisionalInstanceList(
+                    store: instances,
+                    waiting: presentation.pageFailure,
+                    hasConnection: presentation.hasConnection,
+                    reconnect: reconnect,
+                    openDiagnostics: { section = .diagnostics }
+                )
+            } else {
+                UnbuiltScrollPage(section: .instances)
+            }
         case .environments:
             // provisional: F44
             UnbuiltScrollPage(section: .environments)

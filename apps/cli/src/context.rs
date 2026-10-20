@@ -7,13 +7,16 @@ use std::io::BufRead;
 use stackly_ipc::EventStream;
 use stackly_protocol::events::{SubscribeParams, Subscribed};
 use stackly_protocol::handshake::HandshakeAccepted;
+use stackly_protocol::operation::OperationDetail;
 use stackly_protocol::{Call, Reply};
+use uuid::Uuid;
 
 use crate::failure::CliFailure;
 use crate::output::Output;
 use crate::output::envelope::Warning;
 use crate::progress::ProgressMode;
-use crate::session::{CallSpec, Connector, Session};
+use crate::session::{CallSpec, Connector, RequestTimeout, Session};
+use crate::wait::{Accepted, AsyncArgs, Submission, WaitMode, Waiter, settle, settled};
 
 /// What a command runs with.
 pub struct Context {
@@ -126,6 +129,68 @@ impl Context {
         session
             .call_once(call, &spec, &mut self.output.stderr, self.output.verbose)
             .await
+    }
+
+    /// Sends `call`, a method that starts an operation, with an
+    /// idempotency key (`--idempotency-key`, or a new lowercase UUID v7),
+    /// reads the operation from the reply with `extract`, and with `--wait`
+    /// follows it with [`Waiter`] in [`WaitMode::Observe`].
+    ///
+    /// `extract` returns `None` for a reply of another method. A request
+    /// that runs out of time fails `ipc.call_timeout` with the key in its
+    /// details, because it may have run.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Self::call`], and `ipc.protocol_violation` when
+    /// `extract` refuses the reply. A wait that ends badly is not an error
+    /// here: it is the `failure` of the [`Submission`], next to the last
+    /// snapshot.
+    pub async fn submit(
+        &mut self,
+        call: Call,
+        args: &AsyncArgs,
+        extract: fn(Reply) -> Option<Accepted>,
+    ) -> Result<Submission, CliFailure> {
+        let idempotency_key = args
+            .idempotency_key
+            .as_ref()
+            .map_or_else(|| Uuid::now_v7().to_string(), |key| key.as_str().to_owned());
+        let spec = CallSpec {
+            timeout: RequestTimeout::Control,
+            idempotency_key: Some(idempotency_key.clone()),
+        };
+        let reply = self.call(call, spec).await?;
+        let accepted = extract(reply).ok_or_else(|| CliFailure::unexpected_reply(None))?;
+        let mut submission = Submission {
+            operation: accepted.operation,
+            idempotency_key,
+            replayed: accepted.replayed,
+            waited: false,
+            failure: None,
+        };
+        let Some(operation) = submission.operation.clone() else {
+            return Ok(submission);
+        };
+        if !args.wait.wait {
+            return Ok(submission);
+        }
+        submission.waited = true;
+        if settled(operation.state) {
+            let detail = OperationDetail {
+                operation,
+                steps: Vec::new(),
+                created: Vec::new(),
+            };
+            submission.failure = settle(WaitMode::Observe, &detail);
+            return Ok(submission);
+        }
+        let outcome = Waiter::wait(self, operation.id, &args.wait, WaitMode::Observe).await;
+        if let Some(detail) = outcome.last {
+            submission.operation = Some(detail.operation);
+        }
+        submission.failure = outcome.failure;
+        Ok(submission)
     }
 
     /// Starts an event subscription, connecting first if needed.
