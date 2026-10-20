@@ -20,8 +20,8 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 
 | File | Fase | Fitur | Status |
 | --- | --- | --- | --- |
-| [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 1 done, 3 in-progress, 8 planned |
-| [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 5 planned |
+| [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 7 done, 5 in-progress |
+| [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 2 in-progress, 3 planned |
 | [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 9 in-progress |
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 planned |
 | [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 planned |
@@ -39,18 +39,18 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | # | Feature | Phase | Status |
 | --- | --- | --- | --- |
 | 1 | Stack & arsitektur | Foundation | done |
-| 2 | Coding standards & tooling | Foundation | in-progress |
-| 3 | Sumber & packaging runtime | Foundation | in-progress |
-| 4 | Domain core & platform abstraction | Foundation | in-progress |
-| 5 | Data model registry | Foundation | planned |
-| 6 | Protokol IPC & daemon | Foundation | planned |
-| 7 | Operation engine | Foundation | planned |
-| 8 | CLI client & kontrak output | Foundation | planned |
-| 9 | Provider engine & manifest schema | Foundation | in-progress |
-| 10 | Process supervisor | Foundation | planned |
-| 11 | Secret store & redaction | Foundation | planned |
-| 12 | Design system & UI foundation | Foundation | planned |
-| 13 | App shell SwiftUI & Swift client | Foundation | planned |
+| 2 | Coding standards & tooling | Foundation | done |
+| 3 | Sumber & packaging runtime | Foundation | done |
+| 4 | Domain core & platform abstraction | Foundation | done |
+| 5 | Data model registry | Foundation | done |
+| 6 | Protokol IPC & daemon | Foundation | done |
+| 7 | Operation engine | Foundation | in-progress |
+| 8 | CLI client & kontrak output | Foundation | in-progress |
+| 9 | Provider engine & manifest schema | Foundation | done |
+| 10 | Process supervisor | Foundation | in-progress |
+| 11 | Secret store & redaction | Foundation | in-progress |
+| 12 | Design system & UI foundation | Foundation | in-progress |
+| 13 | App shell SwiftUI & Swift client | Foundation | in-progress |
 | 14 | Walking skeleton | Skeleton | in-progress |
 | 15 | Background agent & CLI install | Instalasi pertama | in-progress |
 | 16 | Onboarding | Instalasi pertama | in-progress |

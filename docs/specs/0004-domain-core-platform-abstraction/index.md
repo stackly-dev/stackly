@@ -1,7 +1,7 @@
 # 0004. Domain core dan abstraksi platform
 
 **Date**: 2026-10-17
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 

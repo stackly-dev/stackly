@@ -19,7 +19,7 @@ Putuskan stack dan susunan monorepo, lalu scaffold proyek yang bisa dijalankan, 
 - [x] Decide the stack (spec): `/architect stack & arsitektur`
 - [x] Scaffold from the decision: `/develop stack & arsitektur`
 
-### 2. Coding standards & tooling · in-progress
+### 2. Coding standards & tooling · done
 
 Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang format, lint, typecheck, dan aturan test integrasi yang wajib diikuti semua fitur berikutnya.
 
@@ -41,7 +41,7 @@ Catat konvensi dan pilihan tooling dari proyek hasil scaffold, lalu pasang forma
 - [x] Verify it: `/check verify coding standards & tooling`
 - [x] Test it: `/test coding standards & tooling`
 
-### 3. Sumber & packaging runtime · in-progress
+### 3. Sumber & packaging runtime · done
 
 Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka dipaketkan supaya bisa dipindah dan dipasang tanpa Homebrew global. Ini risiko terbesar proyek (RISK-01), jadi harus jelas sebelum install runtime (fitur 18) dibangun.
 
@@ -64,7 +64,7 @@ Tentukan dari mana artefak runtime enam provider berasal dan bagaimana mereka di
 - [x] Verify it: `/check verify sumber & packaging runtime`
 - [x] Test it: `/test sumber & packaging runtime`
 
-### 4. Domain core & platform abstraction · in-progress
+### 4. Domain core & platform abstraction · done
 
 Model domain (software, provider revision, runtime, instance, environment, operation, lease), tiga state machine yang terpisah, invariant bisnis, dan trait platform (termasuk resolver direktori per user untuk owned root, registry, runtimes, instances, logs, cache, retained, dan path socket pendek) dengan fake platform untuk test. Core tidak boleh tahu soal SwiftUI, WinUI, atau command macOS.
 
@@ -83,7 +83,7 @@ Model domain (software, provider revision, runtime, instance, environment, opera
 - [x] Verify it: `/check verify domain core & platform abstraction`
 - [x] Test it: `/test domain core & platform abstraction`
 
-### 5. Data model registry · in-progress
+### 5. Data model registry · done
 
 Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision per resource. Model data adalah hal paling mahal untuk diulang, jadi ia diputuskan sebelum fitur apa pun menyimpan state.
 
@@ -101,7 +101,7 @@ Skema SQLite untuk registry: entitas, relasi, constraint, migrasi, dan revision 
 - [x] Verify it: `/check verify data model registry`
 - [x] Test it: `/test data model registry`
 
-### 6. Protokol IPC & daemon · in-progress · GA
+### 6. Protokol IPC & daemon · done · GA
 
 Daemon per user dengan protokol berversi di atas encoding dan framing yang dikunci di fitur 1, lewat Unix domain socket privat: handshake, request ID, error terstruktur, event dengan cursor, dan otorisasi user lokal. GUI dan CLI hanya client; hanya daemon yang menulis registry dan mengendalikan lifecycle.
 
@@ -162,7 +162,7 @@ CLI `stackly` sebagai client daemon dengan help, `--json`, exit code stabil, mod
 - [ ] Verify it: `/check verify CLI client & kontrak output`
 - [ ] Test it: `/test CLI client & kontrak output`
 
-### 9. Provider engine & manifest schema · in-progress · GA
+### 9. Provider engine & manifest schema · done · GA
 
 Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, interpolasi terkontrol, dan primitive aman yang menghasilkan execution plan tervalidasi. Kontrak adapter juga mencakup preflight kompatibilitas data dan runtime per provider, supaya tool baru yang cukup dengan primitive yang ada tidak perlu patch core atau GUI.
 

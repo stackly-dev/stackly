@@ -1,7 +1,7 @@
 # 0005. Data model registry
 
 **Date**: 2026-10-18
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
