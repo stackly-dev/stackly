@@ -28,6 +28,8 @@ fn allocated(path: &std::path::Path) -> u64 {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_chatty_process_reaches_the_sink_and_its_spools_stay_under_2_mib() {
+    // Partial cover of REQ-017: only the spool size bound and a slow reader;
+    // log retention belongs to feature 27.
     let ev = evidence!(
         covers = ["REQ-017"],
         kind = Kind::Fixture,
