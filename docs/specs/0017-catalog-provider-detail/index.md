@@ -63,7 +63,7 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang. Contohnya decode
 
 | Bagian | Pemilik |
 | --- | --- |
-| Schema manifest, loader paket, `ValidatedPackage`, `versions.json`, digest paket | spec 0009 (tambahan accessor `versions()` di *Usulan update spec lain*) |
+| Schema manifest, loader paket, `ValidatedPackage`, `versions.json`, digest paket | spec 0009 (termasuk `versions()` dan empat kode issue loader yang ditambah untuk spec ini, lihat *Update spec lain*) |
 | Helper di `Contents/MacOS/`, `AppBundle`, `cargo xtask build-app`, dan slot langkah catalog di `xtask/src/build_app/assemble.rs` (sebelum signing) | spec 0015 |
 | Isi slot itu: langkah `xtask::catalog::build` di dalam proses dengan `--out <staging>/Contents/Resources/catalog`, dan test langkah catalog yang sengaja gagal | spec ini (milestone 4 langkah 11) |
 | `providers/catalog.toml`, ledger revision, `catalog.json`, `cargo xtask catalog`, read model `Catalog`, `SupportStatus`, aturan status di luar compatibility record, gate `installability`, method dan kode area `catalog`, layar Catalog, `stackly provider list` dan `inspect` | spec ini |
@@ -230,13 +230,26 @@ impl ProviderEntry {
 }
 ```
 
-- `load_catalog` membaca `catalog.json` lewat `read_file_limited` (256 KiB), memeriksa aturan index (AC-3), lalu setiap entri provider lewat `read_package` dan `from_files(.., NameCheck::FolderName)`, membandingkan `manifestSha256`, SHA-256 byte `versions.json` dari `PackageFiles`, `metadata.id`, namespace, dan batas per provider, sambil menjumlah byte paket (entri yang membuat jumlah melewati 16 MiB, dan semua entri sesudahnya dalam urutan ID, menjadi invalid). Entri yang gagal menjadi `InvalidEntry` dengan issue dari `PackageError` atau satu issue buatan loader (`catalog_digest_mismatch`, `catalog_id_mismatch`, `namespace_not_allowed`, `catalog_limit`); `category` nya dari decode ketat bagian `metadata` saja (cara yang sama dengan `manifest_software` spec 0009) kalau bisa, selain itu `None`. Fungsi ini tidak pernah menulis, spawn, atau menyelesaikan secret.
+- `load_catalog` membaca `catalog.json` lewat `read_file_limited` (256 KiB), memeriksa aturan index (AC-3), lalu setiap entri provider lewat `read_package` dan `from_files(.., NameCheck::FolderName)`, membandingkan `manifestSha256`, SHA-256 byte `versions.json` dari `PackageFiles`, `metadata.id`, namespace, dan batas per provider, sambil menjumlah byte paket (entri yang membuat jumlah melewati 16 MiB, dan semua entri sesudahnya dalam urutan ID, menjadi invalid). Entri yang gagal menjadi `InvalidEntry` dengan issue dari `PackageError` atau satu issue buatan loader, dengan kode `IssueCode` spec 0009 dan `file` serta `location` di *Issue loader*; `category` nya dari decode ketat bagian `metadata` saja (cara yang sama dengan `manifest_software` spec 0009) kalau bisa, selain itu `None`. Fungsi ini tidak pernah menulis, spawn, atau menyelesaikan secret.
 - Namespace yang diterima: `official`; `testing` hanya dengan `allow_testing_namespace`. Namespace lain (milik fitur 37) menjadi `namespace_not_allowed`.
 - `Category`, `Os`, dan `SupportStatus` adalah tipe domain; `TileHint { mark: String, tile: TileColor }` dan `SupportReason` di `core::catalog::status`.
 - `SupportStatus` (baru, `stackly-domain::catalog`, kode snake_case stabil, `#[non_exhaustive]`): `planned`, `unverified`, `experimental`, `supported`, `unsupported`, `blocked` (PRD 5.1). Fitur 18 memakainya ulang untuk runtime terpasang.
 - `Catalog::for_tests` (fitur `test-support` core, sama dengan pola `ResolvedSecrets::for_tests`) membangun catalog dari entri yang sudah tervalidasi, termasuk paket `testing/`, untuk test di dalam proses fitur 18 dan 20; `DaemonConfig.catalog` menerimanya lewat `CatalogOverride::Preloaded(Arc<Catalog>)`.
 - `stackly_core::catalog::testing::CatalogBuilder` (fitur `test-support` yang sama) menulis folder catalog yang valid di `TestRoot` untuk binary test: memakai tipe `catalog::index`, *Digest isi*, dan `ValidatedPackage::key()` yang sama dengan xtask, menerima paket `testing/` hanya kalau diminta, dan membawa paket fixture `official/linuxonly`, `official/intelonly`, dan `official/blockedhost` (file nya di `crates/core/tests/fixtures/catalog/`). `stackly-testkit` tidak boleh bergantung pada `stackly-core` (spec 0001), jadi builder ini tidak ada di testkit; `stacklyd` dan `stackly-cli` memakainya sebagai dev dependency.
 - `CatalogState` disimpan di state daemon sebagai `Arc` dan tidak berubah selama daemon berjalan; fitur 37 yang nanti menambah perubahan saat berjalan.
+
+### Issue loader
+
+Empat kode `IssueCode` spec 0009 yang dibuat `load_catalog` untuk `InvalidEntry.issues`. Daftar `file` validator paket spec 0009 tidak berlaku untuk keempatnya; `file` di sini menyebut file di folder catalog, dan `i` adalah posisi entri di `providers` `catalog.json`, `j` posisi artefak di `versions.json`.
+
+| Kode | `file` | `location` | `reason` (`Issue.reason`) |
+| --- | --- | --- | --- |
+| `catalog_digest_mismatch` | `catalog.json` | `providers[i].manifestSha256` atau `providers[i].versionsSha256` | kosong (lokasi sudah membedakan) |
+| `catalog_id_mismatch` | `provider.yaml` | `metadata.id` | kosong |
+| `namespace_not_allowed` | `catalog.json` | `providers[i].id` | kosong |
+| `catalog_limit` | `versions.json` untuk batas per artefak, `catalog.json` untuk batas entri | `artifacts` (jumlah artefak), `artifacts[j].dependencies` (jumlah dependency), `artifacts[j].<field>` (panjang teks), `providers[i]` (total byte paket), atau `providers[i].platformNotes` (catatan platform) | `artifacts`, `dependencies`, `text_length`, `total_bytes`, atau `platform_notes` |
+
+`message` mengikuti aturan spec 0009 (lowercase, tanpa titik, tanpa nilai secret), misalnya `manifestSha256 does not match the package files` atau `more than 32 artifacts`.
 
 ### Urutan tampil
 
@@ -267,7 +280,7 @@ Sel matrix `TargetSupport` untuk setiap (exact version, OS) dengan OS tetap `mac
 5. `supported` dan `experimental` hanya datang dari fungsi fitur 18 dengan compatibility record (BR-025).
 6. `compatibility.platforms` manifest tidak dipakai: spec 0009 sudah menolak artefak di luar daftar itu, dan platform yang dideklarasikan tanpa artefak untuk sebuah versi tetap tidak punya build.
 
-`minOs` tidak dicek terhadap versi macOS host di fitur ini: build catalog menolak artefak dengan `minOs` di atas 27.0, minimum app, dan perbandingannya numerik per komponen bertitik (`13.0` lebih kecil dari `27.0`), jadi kondisi itu tidak bisa sampai ke Mac yang didukung. `APP_MINIMUM_MACOS` adalah konstanta di `xtask::catalog`.
+`minOs` tidak dicek terhadap versi macOS host di fitur ini: build catalog menolak artefak dengan `minOs` di atas 27.0, minimum app, dan perbandingannya memakai urutan `OsVersion` spec 0004 (numerik per komponen, `13.0` lebih kecil dari `27.0`), jadi kondisi itu tidak bisa sampai ke Mac yang didukung. `APP_MINIMUM_MACOS` adalah konstanta `OsVersion` di `xtask::catalog`.
 
 ### Gate install
 
@@ -356,7 +369,7 @@ Enum terbuka (masing masing diakhiri `Unrecognized`, Swift `.unrecognized` lewat
 
 ### Kode error di wire
 
-Area `catalog` milik spec ini (spec 0006). Semua `retryable` false. Pesan dibuat daemon (lowercase tanpa titik; `{x}` diisi dari `details`), dan `summary` katalog adalah bentuk pesan tanpa isian. Hint selalu teks statis dari `codes::catalog::hint(code, details) -> Option<&'static str>`, dipilih dari kode dan nilai `details` (tanpa isian), lalu dipasang `stacklyd` lewat `ErrorBody::with_hint`; ini bentuk hint yang sama untuk semua area (usulan update spec 0006 di *Usulan update spec lain*).
+Area `catalog` milik spec ini (spec 0006). Semua `retryable` false. Pesan dibuat daemon (lowercase tanpa titik; `{x}` diisi dari `details`), dan `summary` katalog adalah bentuk pesan tanpa isian. Hint selalu teks statis dari `codes::catalog::hint(code, details) -> Option<&'static str>`, dipilih dari kode dan nilai `details` (tanpa isian), lalu dipasang `stacklyd` lewat `ErrorBody::with_hint`; ini bentuk hint yang sama untuk semua area menurut aturan *Hint* spec 0006, termasuk test katalog yang memeriksa setiap hint paling banyak 200 karakter tanpa `{`.
 
 | Kode | Kategori | Kapan | Kunci `details` | Pesan | Hint statis |
 | --- | --- | --- | --- | --- | --- |
@@ -379,7 +392,7 @@ Modul `apps/cli/src/commands/provider.rs` dengan pola command group spec 0008 (A
 
 Folder `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/`: `CatalogStore`, `ProviderDetailModel`, `CatalogPage`, `ProviderCard`, `ProviderDetailPanel`, `VersionMatrix`, `CapabilityList`, `CatalogAppearance`, `CatalogCopy`, dan `ProviderTile`. Kalau fitur 67 sudah menyediakan tile provider, daftar key value, atau banner item, komponen itu yang dipakai dan `ProviderTile` tidak dibuat.
 
-- `CatalogStore`: `ResourceStore<ProviderSummary>` spec 0013 dengan ID `provider`, `revision` dari `ProviderSummary.revision`, `kinds` `["catalog."]` (belum ada event), `fetchPage` memanggil `catalog.list_providers` (satu halaman, tanpa token) dan menyimpan `CatalogInfo` terakhir di `info`, dan `fetchOne` memanggil `catalog.get_provider` lalu mengambil `summary`. Didaftarkan ke `ShellSync` oleh `DaemonModel`. `request.unknown_method` menandai store `unsupported`.
+- `CatalogStore`: `ResourceStore<ProviderSummary>` spec 0013 dengan ID `provider`, `revision` dari `ProviderSummary.revision`, `kinds` `["catalog."]` (belum ada event), `fetchPage` memanggil `catalog.list_providers` (satu halaman, tanpa token) dan menyimpan `CatalogInfo` terakhir di `info`, dan `fetchOne` memanggil `catalog.get_provider` lalu mengambil `summary`. Didaftarkan ke `ShellSync` oleh `DaemonModel`. `request.unknown_method` menandai store `unsupported`. Catalog tidak punya event maupun observasi, jadi `CatalogStore` hanya memakai `.upsert` dan resnapshot, dan bukan pemilik aturan umum observasi dengan revision yang sama di `ResourceStore` (keputusan K18: pemiliknya store fase 02 pertama yang mempublikasikan observasi seperti itu, misalnya `RuntimeStore` fitur 18).
 - Detail: `ProviderDetailModel` memanggil `DaemonModel.read(.catalogGetProvider)` saat pilihan berubah, menyimpan hasil per (`serverInstanceId`, `provider`, revision catalog), dan membuang cache saat store resnapshot. Gagal memuat menampilkan `FailureContent` di panel dengan Retry.
 - Pilihan: entri pertama hasil filter kalau belum ada pilihan atau pilihan tersaring keluar; tanpa entri terlihat, panel menampilkan "No provider selected". Pilihan disimpan `@SceneStorage("catalog.selection")`; filter kategori dan teks pencarian tidak disimpan. Segmen Testing tidak ada; entri `testing` (hanya di test) dan entri tanpa kategori hanya tampil di All.
 - Artefak host adalah artefak dengan `os` dan `arch` sama dengan `CatalogInfo.host`; baris License, Source, Download, Disk, dan Requires hanya memakai artefak host (penyaringan tampilan, bukan penurunan status).
@@ -468,9 +481,9 @@ Nilai `unrecognized` di enum terbuka lain ditampilkan sebagai teks netral, tidak
 | artefak | `id`, `os`, `arch`, `status`, `minOs`, `license`, `licenseUrl`, `blockedReason` | `versions.json` lewat `ValidatedPackage::versions()` |
 | artefak | `sha256` | `ArtifactStatus::Available.sha256` dari `ValidatedPackage::versions()`; null untuk `blocked` dan `fixture` |
 | artefak | `downloadSize` | `size` di `versions.json` |
-| artefak | `installedSize` | `unpackedSize` fitur 18, null sebelumnya |
+| artefak | `installedSize` | `ArtifactStatus::Available.unpacked.bytes` (field `unpackedSize` fitur 18 di spec 0009), null sebelumnya |
 | artefak | `source` | host URL pertama ditambah segmen path pertamanya (misalnya `github.com/nats-io`), tanpa skema |
-| artefak | `dependencies` | `dependencies` fitur 18, null sebelumnya |
+| artefak | `dependencies` | `ArtifactStatus::Available.dependencies` (field fitur 18 di spec 0009; `None` berarti tidak ada data), null sebelumnya |
 | detail | `platformNotes`, `note` | `catalog.json` |
 | detail | `issues` | `PackageError` atau issue loader |
 | gate | target host | `PlatformInfo::target()` |
@@ -556,20 +569,20 @@ pub fn ensure_source(registry: &dyn Registry, clock: &dyn Clock, meta: &CatalogM
 
 Kode `kind` dan `status` adalah set terbuka spec 0005; fitur 37 menambah `local` dan status lain.
 
-Usulan update spec lain untuk kontrak ini (milik fitur 20, dijadwalkan lead sebagai item `architect (update)` bersama spec 0020):
+Tambahan spec lain untuk kontrak ini sudah diterapkan di `main` (2026-10-20) dan dibangun fitur 20:
 
-- **Spec 0005** (additive, tanpa migrasi karena tabel dan kolom sudah ada): `WriteOp::InsertProviderSource(ProviderSourceRecord)` dengan cek `DuplicateResource` untuk ID atau (`kind`, `location`); baca `provider_source_by_location(kind: &str, location: &str) -> Versioned<Option<ProviderSourceRecord>>`; `ProviderRevisionRecord.source_id: Option<ProviderSourceId>` dengan cek `MissingReference`; `ResourceRef::ProviderSource(ProviderSourceId)`; kode di tabel di atas.
-- **Spec 0004** (additive): ID `ProviderSourceId` (UUID v7) dan `ProviderSourceRecord { id, kind, location, trust_root, last_sync_at, status, revision, created_at, updated_at }` di modul `registry` domain.
+- **Spec 0005** (sudah di *Tambahan fitur 20* spec itu, tanpa migrasi karena tabel dan kolom sudah ada): `WriteOp::InsertProviderSource(ProviderSourceRecord)` dengan cek `DuplicateResource` untuk ID atau (`kind`, `location`); baca `provider_source_by_location(kind: &str, location: &str) -> Versioned<Option<ProviderSourceRecord>>`; `ProviderRevisionRecord.source_id: Option<ProviderSourceId>` dengan cek `MissingReference`; `ResourceRef::ProviderSource(ProviderSourceId)`; kode di tabel di atas.
+- **Spec 0004** (sudah di titik perluasan spec itu): ID `ProviderSourceId` (UUID v7) dan `ProviderSourceRecord { id, kind, location, trust_root, last_sync_at, status, revision, created_at, updated_at }` di modul `registry` domain.
 
 ## Build plan
 
 Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap lebih dulu adalah "pengguna membuka catalog dan melihat provider dengan status yang jujur", dari repo sampai daemon dengan semua state gagalnya, lalu CLI, lalu GUI, karena itu langkah catalog di JOURNEY-01. Bukti di bundle dan penolakan install end to end terakhir karena menunggu fitur 15 dan 18. Pin dan baris sumber dibangun fitur 20.
 
-**Milestone 1: Catalog dari repo sampai daemon** (needs `/architect` update spec 0009: accessor `ValidatedPackage::versions()`, setelah fitur 9 ditutup)
+**Milestone 1: Catalog dari repo sampai daemon** (prasyarat teks spec 0009 untuk `ValidatedPackage::versions()` dan empat kode issue loader sudah terpenuhi di `main` sejak 1fe59b0; fitur ini membangun kode nya sendiri di langkah 1 dan 3)
 
-1. Domain: `SupportStatus` di `stackly-domain::catalog` dengan kode stabil; accessor `ValidatedPackage::versions()` dan tipe `VersionArtifact` di `core::provider::versions` sesuai update spec 0009. Memenuhi **AC-6**.
+1. Domain lebih dulu: value type `OsVersion` dan enum `ArtifactFormat` persis seperti *Model domain* spec 0004 (di tabel titik perluasan spec itu tercatat milik fitur 18; fitur 17 membangunnya lebih dulu karena dibangun lebih awal, dan langkah 6 spec 0018 memakainya tanpa membangun ulang), lalu `SupportStatus` di `stackly-domain::catalog` dengan kode stabil. Setelah itu `ValidatedPackage::versions()`, `VersionCatalog` (dengan `artifacts()` dalam urutan file), `VersionArtifact`, dan `ArtifactStatus` (`Available`, `Blocked`, `Fixture` dengan field dasar spec 0009; field fase 02 fitur 18 menyusul di langkah 1 spec 0018) di `core::provider::versions`, persis seperti *Tipe core* spec 0009. Memenuhi **AC-6**.
 2. `core::catalog::index` (tipe `catalog.json`, digest isi) dan xtask `catalog` (`source.rs`, ledger, `build`, `check`, `--update`, `--amend`, `pub fn build` untuk spec 0015), `providers/catalog.toml` dan `providers/catalog-revisions.json` dengan isi awal, dan langkah `catalog check` di `.githooks/pre-commit`. Memenuhi **AC-1**.
-3. `core::catalog::load` dan `model`: lokasi, decode ketat, aturan index, batas, isolasi entri, penjaga namespace, urutan tampil, `outdated`, `Catalog::for_tests`; `stackly_core::catalog::testing::CatalogBuilder` dengan fixture `official/linuxonly`, `official/intelonly`, dan `official/blockedhost` (fitur `test-support`), dan file `catalog.json` kosong tetap di testkit sebagai default `SpawnedDaemon`. Memenuhi **AC-2**, **AC-3**, **AC-8**.
+3. `core::catalog::load` dan `model`: lokasi, decode ketat, aturan index, batas, isolasi entri, penjaga namespace, urutan tampil, `outdated`, `Catalog::for_tests`; empat kode `IssueCode` loader spec 0009 dengan `file`, `location`, dan `reason` di *Issue loader*, plus test jumlah kode di `issue.rs`; `stackly_core::catalog::testing::CatalogBuilder` dengan fixture `official/linuxonly`, `official/intelonly`, dan `official/blockedhost` (fitur `test-support`), dan file `catalog.json` kosong tetap di testkit sebagai default `SpawnedDaemon`. Memenuhi **AC-2**, **AC-3**, **AC-8**.
 4. `core::catalog::status` (aturan status dengan pengganti `// provisional: F18`) dan `core::catalog::install` (gate). Memenuhi **AC-6**, **AC-7**.
 5. Protokol: modul `catalog` (DTO, enum terbuka), dua varian `Call` dan `Reply` di tabel `methods!` dengan `recovery allowed`, `GetProviderParams::validate`, `codes::catalog` dengan pesan dan `codes::catalog::hint`, sha256 artefak di `CatalogArtifact`, `software` di `ProviderSummary` (fixture dengan nilai dan dengan null untuk planned), fixture `protocols/fixtures/ipc/` dan `protocols/fixtures/catalog/`, kenaikan minor `ProtocolVersion::CURRENT`, dan `cargo xtask codegen`. Memenuhi **AC-13**.
 6. `stacklyd`: `StartConfig.catalog_dir` dan validasinya di sebelah `parse_log_filter`, lokasi bundle dari `DaemonDeps.bundle`, override `DaemonConfig.catalog` untuk test, hint lewat `ErrorBody::with_hint`, muat di slot start, subsystem `catalog`, handler kedua method, pemetaan DTO dan error di `map` dengan test per varian, dan test anggaran frame. Memenuhi **AC-2**, **AC-3**, **AC-4**, **AC-5**, **AC-7**, **AC-8**, **AC-13**.
@@ -578,7 +591,7 @@ Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap lebih dulu
 
 7. Command group `provider` dengan output teks dan JSON, `--category`, golden dari fixture catalog dengan `TZ=UTC`, dan binary test terhadap `stacklyd` dengan `STACKLY_CATALOG_DIR`. Memenuhi **AC-9**.
 
-**Milestone 3: Layar Catalog** (needs fitur 13 milestone 4 di `ui-macos.md`; memakai komponen fitur 67 kalau sudah ada)
+**Milestone 3: Layar Catalog** (needs fitur 13 milestone 4 sampai langkah 16 di `ui-macos.md`, yang menunggu fitur 10 milestone 2 dan langkah 12 nya di `01-foundation.md`; memakai komponen fitur 67 kalau sudah ada)
 
 8. `CatalogAppearance`, `CatalogCopy`, nilai asing, dan tabel *Tone dan label* di `apps/macos/design.md`. Memenuhi **AC-12**.
 9. `CatalogStore`, `ProviderDetailModel`, pendaftaran ke `ShellSync`, filter, pencarian, pilihan, dan artefak host, dengan test Swift dari fixture yang sama dengan golden CLI. Memenuhi **AC-9**, **AC-10**.
@@ -618,17 +631,18 @@ Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap lebih dulu
 
 **Aturan masuk catalog** (wajib diikuti fitur 19, 23, dan 40 sampai 43): sebuah provider pindah dari `planned` ke `provider` di `providers/catalog.toml` di commit yang sama dengan commit fitur pemiliknya yang membuktikan lifecycle nya end to end (install, create, start, readiness, stop lewat integration test di Mac ini): fitur 19 untuk PostgreSQL, fitur 23 untuk NATS, fitur 40 sampai 43 untuk Valkey, Traefik, MySQL, dan ClickHouse. Commit itu juga menaikkan `revision` dan `published_at` lalu menjalankan `cargo xtask catalog check --update`. Paket yang sudah ada di `providers/` tetapi belum lulus syarat itu (misalnya Traefik dari fitur 9) tetap planned.
 
-### Usulan update spec lain
+### Update spec lain
 
-Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikannya item `architect (update)`.
+Semua usulan spec ini ke spec lain sudah diterapkan di `main` (2026-10-20); daftar ini mencatat apa yang sekarang menjadi teks spec lain.
 
-- **Spec 0009** (additive, prasyarat milestone 1, setelah fitur 9 ditutup): `ValidatedPackage::versions() -> &VersionCatalog` dengan `VersionArtifact { id, line: RuntimeLine, version: ExactVersion, target: Target, status: ArtifactStatus }` dan `ArtifactStatus` `Available { min_os, format, urls, sha256, size, archive_root, signing_policy, license, license_url, executables }`, `Blocked { reason, owner, since, license, license_url }`, atau `Fixture { executables }`, dibangun dari decode yang sudah divalidasi. Field tambahan fitur 18 (`compatibility`, `unpackedSize`, `entryCount`, `dependencies`, `stable`) masuk ke tipe yang sama lewat update spec 0018. Baris Follow-up "Fitur 17 dan 15: jangan pernah memuat atau membundel paket namespace `testing/`" dijawab spec ini (penjaga namespace di build dan loader), dan baris tentang `ValidatedPackage::files()` untuk pin dijawab *Kontrak untuk fitur 20*.
-- **Spec 0005 dan 0004**: usulan untuk pin dan sumber ada di *Kontrak untuk fitur 20* dan menjadi milik fitur 20.
-- **Spec 0006** (additive, dijadwalkan lead): satu bentuk hint untuk semua area, yaitu fungsi `codes::<area>::hint(code: &str, details: &[ErrorDetail]) -> Option<&'static str>` per submodul katalog yang memilih teks statis dari kode dan nilai `details`, dipasang `stacklyd` lewat `ErrorBody::with_hint` saat membangun error; teks hint tidak pernah diisi nilai. Area `catalog` dan subsystem `catalog` sendiri tidak butuh update (aturan "fitur yang pertama kali memakainya").
+- **Spec 0009** (diterapkan di `main` 2026-10-20, commit 1fe59b0 dan sesudahnya): `ValidatedPackage::versions()`, `VersionCatalog`, `VersionArtifact`, `ArtifactStatus`, empat kode issue loader catalog, dan field opsional `Issue.reason` (spec 0021). Baris Follow-up spec 0009 tentang namespace `testing/` dan tentang `ValidatedPackage::files()` untuk pin sudah dicentang di sana. `file` dan `location` keempat issue loader, yang dibiarkan spec 0009 sebagai keputusan fitur 17, ada di *Issue loader*.
+- **Spec 0004** (diterapkan): modul domain `catalog` dengan `SupportStatus`, `OsVersion`, `ArtifactFormat`, serta tipe registry kontrak fitur 20.
+- **Spec 0005** (diterapkan): tambahan registry kontrak fitur 20 (*Tambahan fitur 20* spec itu).
+- **Spec 0006** (diterapkan): bentuk hint satu untuk semua area (`codes::<area>::hint`, `ErrorBody::with_hint`, test 200 karakter tanpa `{`), area dan subsystem `catalog`, `STACKLY_CATALOG_DIR` di `StartConfig`, dan muat catalog di slot start.
+- **Spec 0001** (diterapkan): `stackly-cli` boleh memakai `stackly-core` sebagai dependency dev dengan `features = ["test-support"]` untuk `CatalogBuilder`, serta `providers/catalog.toml`, `catalog-revisions.json`, dan subcommand `cargo xtask catalog` di peta repo.
 
 ## Follow-up
 
-- [ ] `/architect` update spec 0009 dengan accessor `ValidatedPackage::versions()` dari *Usulan update spec lain* (lead menjadwalkannya setelah fitur 9 ditutup); milestone 1 langkah 1 menunggu update itu.
 - [ ] Fitur 18: tambah reason `SupportReason` untuk `supported` dan `experimental`, ganti fungsi pengganti `// provisional: F18` di `catalog::status` dengan `runtime::compatibility::support_status`, isi `installedSize` dan `dependencies`, tambah tombol Get, progress, dan status "{n} installed".
 - [ ] Fitur 18: setelah `HostFacts` ada, ganti penolakan build untuk `minOs` di atas 27.0 dengan cek saat berjalan (artefak itu menjadi `unsupported` di host yang lebih lama), lalu hapus `APP_MINIMUM_MACOS` dari aturan build.
 - [ ] Fitur 19, 23, dan 40 sampai 43: ikuti *Aturan masuk catalog*.
@@ -636,7 +650,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikann
 - [ ] Fitur 37: namespace lain, kind sumber `local`, publisher dan trust untuk paket lokal, default tile, tombol Import Provider, event `catalog.changed`, dan cara entri lokal bergabung ke read model.
 - [ ] Fitur 16 (onboarding, langkah Catalog Trust): pakai `CatalogInfo.source`, `trust`, dan `publishedAt` dari spec ini.
 - [x] `ui-macos.md` (lewat `/scope`): catat selisih mockup yang diketahui untuk Catalog: Available netral bukan biru, Unverified bukan Tested sampai fitur 18, kartu planned tanpa opacity, dan MariaDB serta RabbitMQ tidak tampil. Diterapkan di `ui-macos.md` (2026-10-19).
-- [ ] `/sync` setelah build: catat `cargo xtask catalog build`, `catalog check`, ledger, dan `STACKLY_CATALOG_DIR` di root `AGENTS.md`, serta folder `Catalog/` di `apps/macos/AGENTS.md`.
+- [ ] `/sync` setelah build: catat `cargo xtask catalog build`, `catalog check`, ledger, `STACKLY_CATALOG_DIR`, dan langkah `cargo xtask catalog check` di hook pre commit (baris Pre commit di bagian Tooling) di root `AGENTS.md`, serta folder `Catalog/` di `apps/macos/AGENTS.md`.
 
 ## Rationale
 
