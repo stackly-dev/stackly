@@ -45,6 +45,10 @@
       "owner": "spec 0017"
     },
     {
+      "name": "secret",
+      "owner": "spec 0011"
+    },
+    {
       "name": "internal",
       "owner": "spec 0006"
     },
@@ -964,6 +968,162 @@
       ],
       "items": null,
       "summary": "the resource revision is not the expected one, reserved for the registry compare and swap"
+    },
+    {
+      "code": "secret.confirmation_required",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "reference",
+        "omitted"
+      ],
+      "items": {
+        "kind": "effect",
+        "fields": [
+          "resourceKind",
+          "resourceId",
+          "field",
+          "effect"
+        ],
+        "max": 100
+      },
+      "summary": "a replace changes only the stored copy and needs confirmStoredOnly"
+    },
+    {
+      "code": "secret.conflict",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "reference",
+        "reason",
+        "omitted"
+      ],
+      "items": {
+        "kind": "use",
+        "fields": [
+          "resourceKind",
+          "resourceId",
+          "field"
+        ],
+        "max": 100
+      },
+      "summary": "a create names an item that exists, or a delete names a reference that is still used"
+    },
+    {
+      "code": "secret.delivery_rejected",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "an argument would carry a secret value to a provider process"
+    },
+    {
+      "code": "secret.invalid_reference",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "reference",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the reference names the reserved first segment and is not registered"
+    },
+    {
+      "code": "secret.invalid_value",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "field",
+        "minLength",
+        "maxLength",
+        "reason",
+        "omitted"
+      ],
+      "items": null,
+      "summary": "the value breaks the length or character rules of a secret field that uses the reference"
+    },
+    {
+      "code": "secret.needs_secret",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "count",
+        "omitted"
+      ],
+      "items": {
+        "kind": "reference",
+        "fields": [
+          "reference",
+          "reason",
+          "generateAllowed"
+        ],
+        "max": 100
+      },
+      "summary": "a resource needs references that cannot be read, or a create or restore names a source reference that cannot be read"
+    },
+    {
+      "code": "secret.not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "reference"
+      ],
+      "items": null,
+      "summary": "the reference is not registered, or a replace names an item that does not exist"
+    },
+    {
+      "code": "secret.store_access_denied",
+      "category": "unauthorized",
+      "retryable": false,
+      "details": [
+        "byUser"
+      ],
+      "items": null,
+      "summary": "the person refused the dialog, or the access list does not trust the daemon"
+    },
+    {
+      "code": "secret.store_backend",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "code"
+      ],
+      "items": null,
+      "summary": "the store failed with another OSStatus"
+    },
+    {
+      "code": "secret.store_busy",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the store job did not start in time"
+    },
+    {
+      "code": "secret.store_locked",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the keychain is locked"
+    },
+    {
+      "code": "secret.store_outcome_unknown",
+      "category": "timeout",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "a write or delete passed its wait limit, or putting the old value back failed"
+    },
+    {
+      "code": "secret.store_unsupported",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "this OS has no secret store"
     }
   ]
 }

@@ -151,6 +151,27 @@ extension SubsystemStatus {
 	}
 }
 
+extension SecretStoreBackend {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SecretStoreState {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SecretStoreTarget {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
 extension GapReason {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
@@ -179,7 +200,70 @@ extension TileColor {
 	}
 }
 
+extension SecretOwnerKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SecretStatus {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SecretValueOrigin {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension NeedsSecretReason {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
 extension StepState {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension RevealPurpose {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SecretChangeStatus {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SecretEffectKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SecretMode {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension SecretWarning {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
 		self = Self(rawValue: value) ?? .unrecognized

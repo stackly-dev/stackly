@@ -965,6 +965,16 @@ async fn dispatch(
             .map(Reply::CatalogGetProvider),
             None,
         ),
+        // provisional: F11 step 5 (the handlers replace this arm in the
+        // next commit)
+        Call::SecretList(_)
+        | Call::SecretStatus(_)
+        | Call::SecretSet(_)
+        | Call::SecretReveal(_)
+        | Call::SecretDelete(_) => (
+            Err(unexpected("the secret methods are not served yet")),
+            None,
+        ),
     }
 }
 

@@ -18,6 +18,8 @@ struct IpcFixtureTests {
             try check(SecretInput.self, fixture, data)
         case "OperationAccepted":
             try check(OperationAccepted.self, fixture, data)
+        case "NeedsSecretBlocker":
+            try check(NeedsSecretBlocker.self, fixture, data)
         default:
             Issue.record("no Swift decoder for type \(fixture.type)")
         }
@@ -46,7 +48,12 @@ struct IpcFixtureTests {
         #expect(methods.contains(.operationGetStats))
         #expect(methods.contains(.catalogListProviders))
         #expect(methods.contains { if case .catalogGetProvider = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 14)
+        #expect(methods.contains { if case .secretList = $0 { true } else { false } })
+        #expect(methods.contains { if case .secretStatus = $0 { true } else { false } })
+        #expect(methods.contains { if case .secretSet = $0 { true } else { false } })
+        #expect(methods.contains { if case .secretReveal = $0 { true } else { false } })
+        #expect(methods.contains { if case .secretDelete = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 19)
     }
 
     private func check<Value: Codable & Equatable>(

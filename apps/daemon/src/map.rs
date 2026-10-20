@@ -100,6 +100,7 @@ pub fn daemon_info(
         },
         socket_path: path_text(&layout.daemon_socket()),
         registry_schema: None,
+        secret_store: None,
     }
 }
 

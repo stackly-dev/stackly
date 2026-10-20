@@ -91,6 +91,9 @@ public enum ResourceKind: String, Codable, Sendable, Equatable {
 	/// Stackly itself, the target of an `update_manager` operation; its
 	/// `id` is always [`ResourceRef::MANAGER_ID`] (spec 0007).
 	case manager
+	/// A secret reference (spec 0011); its `id` is the reference text,
+	/// such as `local:erp/postgres/admin`.
+	case secret
 	/// A kind this build does not know. The daemon never sends it.
 	case unrecognized
 }
@@ -1194,6 +1197,60 @@ public struct DaemonRoots: Codable, Sendable, Equatable {
 	}
 }
 
+/// Which secret store the daemon uses.
+public enum SecretStoreBackend: String, Codable, Sendable, Equatable {
+	/// The macOS Keychain.
+	case macosKeychain = "macos_keychain"
+	/// A fake store, only in tests.
+	case fake
+	/// No store on this OS.
+	case unsupported
+	/// A backend this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The state of the secret store, from the daemon's cache; asking never
+/// waits on the store.
+public enum SecretStoreState: String, Codable, Sendable, Equatable {
+	/// The store answers.
+	case available
+	/// The keychain is locked.
+	case locked
+	/// The OS has no store.
+	case unsupported
+	/// Nothing was observed yet.
+	case unknown
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Which keychain the daemon chose at start.
+public enum SecretStoreTarget: String, Codable, Sendable, Equatable {
+	/// The user's login Keychain, for the default root.
+	case login
+	/// A keychain file of its own, for a `STACKLY_ROOT` root.
+	case file
+	/// A target this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The secret store as `secret.list`, `secret.status`, and
+/// `daemon.get_info` report it.
+public struct SecretStoreStatus: Codable, Sendable, Equatable {
+	/// Which store it is.
+	public let backend: SecretStoreBackend
+	/// Its state now.
+	public let state: SecretStoreState
+	/// The keychain chosen at start, or null for a store without one.
+	public let target: SecretStoreTarget?
+
+	public init(backend: SecretStoreBackend, state: SecretStoreState, target: SecretStoreTarget?) {
+		self.backend = backend
+		self.state = state
+		self.target = target
+	}
+}
+
 /// Reply of `daemon.get_info`: who the daemon is and where it keeps things.
 public struct DaemonInfo: Codable, Sendable, Equatable {
 	/// The daemon's version.
@@ -1218,8 +1275,11 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 	/// null while it opens, in recovery mode, or from an older daemon
 	/// (spec 0005).
 	public let registrySchema: UInt32?
+	/// The secret store and the keychain chosen at start, or null from an
+	/// older daemon (spec 0011).
+	public let secretStore: SecretStoreStatus?
 
-	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?) {
+	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?, secretStore: SecretStoreStatus?) {
 		self.version = version
 		self.protocol = `protocol`
 		self.contractDigest = contractDigest
@@ -1230,6 +1290,30 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 		self.roots = roots
 		self.socketPath = socketPath
 		self.registrySchema = registrySchema
+		self.secretStore = secretStore
+	}
+}
+
+/// Params of `secret.delete`.
+public struct DeleteSecretParams: Codable, Sendable, Equatable {
+	/// The reference.
+	public let reference: String
+	/// The revision of the row the client read, if it names one.
+	public let expectedRevision: UInt64?
+
+	public init(reference: String, expectedRevision: UInt64?) {
+		self.reference = reference
+		self.expectedRevision = expectedRevision
+	}
+}
+
+/// Reply of `secret.delete`.
+public struct DeleteSecretReply: Codable, Sendable, Equatable {
+	/// The reference that was deleted.
+	public let reference: String
+
+	public init(reference: String) {
+		self.reference = reference
 	}
 }
 
@@ -1261,12 +1345,17 @@ public enum EventKind: Codable, Sendable, Equatable {
 	/// An operation changed without changing state: stage, progress,
 	/// `waitingOn`, the point of no return, or a cancel (spec 0007).
 	case operationProgress(OperationSummary)
+	/// A secret reference was stored, observed with another status,
+	/// restored, or deleted (spec 0011). The event's resource is
+	/// `{kind: secret, id: <reference>}`.
+	case secretChanged(SecretChanged)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case eventsGap = "events.gap",
 			daemonShuttingDown = "daemon.shutting_down",
 			operationStateChanged = "operation.state_changed",
-			operationProgress = "operation.progress"
+			operationProgress = "operation.progress",
+			secretChanged = "secret.changed"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -1297,6 +1386,11 @@ public enum EventKind: Codable, Sendable, Equatable {
 					self = .operationProgress(content)
 					return
 				}
+			case .secretChanged:
+				if let content = try? container.decode(SecretChanged.self, forKey: .content) {
+					self = .secretChanged(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(EventKind.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EventKind"))
@@ -1316,6 +1410,9 @@ public enum EventKind: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .operationProgress(let content):
 			try container.encode(CodingKeys.operationProgress, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretChanged(let content):
+			try container.encode(CodingKeys.secretChanged, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -1674,6 +1771,168 @@ public struct ListProvidersReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// Who owns a secret reference.
+public enum SecretOwnerKind: String, Codable, Sendable, Equatable {
+	/// An instance.
+	case instance
+	/// An environment.
+	case environment
+	/// The user, who registered the reference with `secret.set`.
+	case user
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What the store held when the daemon last looked, never a value.
+public enum SecretStatus: String, Codable, Sendable, Equatable {
+	/// The store holds a value.
+	case present
+	/// The store holds none.
+	case missing
+	/// The store could not be checked.
+	case unknown
+	/// A status this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Params of `secret.list`.
+public struct ListSecretsParams: Codable, Sendable, Equatable {
+	/// Only references of this owner kind.
+	public let ownerKind: SecretOwnerKind?
+	/// Only references with this status.
+	public let status: SecretStatus?
+
+	public init(ownerKind: SecretOwnerKind?, status: SecretStatus?) {
+		self.ownerKind = ownerKind
+		self.status = status
+	}
+}
+
+/// How the current value came to be.
+public enum SecretValueOrigin: String, Codable, Sendable, Equatable {
+	/// Typed, pasted, or piped in.
+	case entered
+	/// Generated by the daemon.
+	case generated
+	/// Copied from another reference.
+	case copied
+	/// An origin this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One resource that uses a reference.
+public struct SecretUseInfo: Codable, Sendable, Equatable {
+	/// The kind of resource: `instance` or `environment`.
+	public let resourceKind: ResourceKind
+	/// The resource ID.
+	public let resourceId: String
+	/// The secret field of the manifest, or the `secretRefs` key.
+	public let field: String
+
+	public init(resourceKind: ResourceKind, resourceId: String, field: String) {
+		self.resourceKind = resourceKind
+		self.resourceId = resourceId
+		self.field = field
+	}
+}
+
+/// One reference row, without any value.
+public struct SecretRefSummary: Codable, Sendable, Equatable {
+	/// The reference, `local:<segment>/<segment>...`.
+	public let reference: String
+	/// Who owns it.
+	public let ownerKind: SecretOwnerKind
+	/// The owner's UUID, or null for the user.
+	public let ownerId: UUID?
+	/// The purpose of its field, or `user`.
+	public let purpose: String
+	/// What the store held at the last look.
+	public let status: SecretStatus
+	/// When the status was observed.
+	public let statusObservedAt: Date?
+	/// How the value came to be, or null before the first value.
+	public let valueOrigin: SecretValueOrigin?
+	/// When the value was last filled through Stackly.
+	public let valueUpdatedAt: Date?
+	/// Every resource that uses the reference.
+	public let usedBy: [SecretUseInfo]?
+	/// The row's revision.
+	public let revision: UInt64
+
+	public init(reference: String, ownerKind: SecretOwnerKind, ownerId: UUID?, purpose: String, status: SecretStatus, statusObservedAt: Date?, valueOrigin: SecretValueOrigin?, valueUpdatedAt: Date?, usedBy: [SecretUseInfo]?, revision: UInt64) {
+		self.reference = reference
+		self.ownerKind = ownerKind
+		self.ownerId = ownerId
+		self.purpose = purpose
+		self.status = status
+		self.statusObservedAt = statusObservedAt
+		self.valueOrigin = valueOrigin
+		self.valueUpdatedAt = valueUpdatedAt
+		self.usedBy = usedBy
+		self.revision = revision
+	}
+}
+
+/// Reply of `secret.list`: the cached rows, ordered by reference.
+public struct ListSecretsReply: Codable, Sendable, Equatable {
+	/// The references.
+	public let items: [SecretRefSummary]?
+	/// The store.
+	public let store: SecretStoreStatus
+
+	public init(items: [SecretRefSummary]?, store: SecretStoreStatus) {
+		self.items = items
+		self.store = store
+	}
+}
+
+/// Why a reference needs a value. Open.
+public enum NeedsSecretReason: String, Codable, Sendable, Equatable {
+	/// The store holds no value.
+	case missing
+	/// The keychain is locked.
+	case storeLocked = "store_locked"
+	/// The user or the access list refused the read.
+	case accessDenied = "access_denied"
+	/// The store call did not start in time.
+	case storeBusy = "store_busy"
+	/// The OS has no store.
+	case storeUnsupported = "store_unsupported"
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One reference a resource needs and cannot read.
+public struct NeedsSecretItem: Codable, Sendable, Equatable {
+	/// The reference.
+	public let reference: String
+	/// Why it cannot be read.
+	public let reason: NeedsSecretReason
+	/// Whether a generated value would work for it.
+	public let generateAllowed: Bool
+
+	public init(reference: String, reason: NeedsSecretReason, generateAllowed: Bool) {
+		self.reference = reference
+		self.reason = reason
+		self.generateAllowed = generateAllowed
+	}
+}
+
+/// The content of the `needsSecret` blocker of an instance (spec 0011,
+/// *Needs secret*): the instance DTO of feature 10 carries it in its
+/// `blocker` slot as `{type: needsSecret, content: ...}`.
+public struct NeedsSecretBlocker: Codable, Sendable, Equatable {
+	/// Every reference that cannot be read, ordered by reference text.
+	public let references: [NeedsSecretItem]?
+	/// When the daemon saw it.
+	public let observedAt: Date
+
+	public init(references: [NeedsSecretItem]?, observedAt: Date) {
+		self.references = references
+		self.observedAt = observedAt
+	}
+}
+
 /// The reply, or the part of the reply, of every method that starts an
 /// operation (spec 0007, *Idempotency*). The method's own reply may wrap
 /// it.
@@ -1887,6 +2146,16 @@ public enum Call: Codable, Sendable, Equatable {
 	case catalogListProviders
 	/// One catalog entry with its versions and artifacts.
 	case catalogGetProvider(GetProviderParams)
+	/// The secret references, from the cached status.
+	case secretList(ListSecretsParams)
+	/// One secret reference after a fresh probe.
+	case secretStatus(SecretStatusParams)
+	/// Fills, generates, copies, or replaces the value behind a reference.
+	case secretSet(SetSecretParams)
+	/// Reads the value behind a reference, recorded in the audit.
+	case secretReveal(RevealSecretParams)
+	/// Deletes a reference and the value behind it.
+	case secretDelete(DeleteSecretParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -1902,7 +2171,12 @@ public enum Call: Codable, Sendable, Equatable {
 			operationAbandon = "operation.abandon",
 			operationGetStats = "operation.get_stats",
 			catalogListProviders = "catalog.list_providers",
-			catalogGetProvider = "catalog.get_provider"
+			catalogGetProvider = "catalog.get_provider",
+			secretList = "secret.list",
+			secretStatus = "secret.status",
+			secretSet = "secret.set",
+			secretReveal = "secret.reveal",
+			secretDelete = "secret.delete"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -1973,6 +2247,31 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .catalogGetProvider(content)
 					return
 				}
+			case .secretList:
+				if let content = try? container.decode(ListSecretsParams.self, forKey: .content) {
+					self = .secretList(content)
+					return
+				}
+			case .secretStatus:
+				if let content = try? container.decode(SecretStatusParams.self, forKey: .content) {
+					self = .secretStatus(content)
+					return
+				}
+			case .secretSet:
+				if let content = try? container.decode(SetSecretParams.self, forKey: .content) {
+					self = .secretSet(content)
+					return
+				}
+			case .secretReveal:
+				if let content = try? container.decode(RevealSecretParams.self, forKey: .content) {
+					self = .secretReveal(content)
+					return
+				}
+			case .secretDelete:
+				if let content = try? container.decode(DeleteSecretParams.self, forKey: .content) {
+					self = .secretDelete(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -2017,6 +2316,21 @@ public enum Call: Codable, Sendable, Equatable {
 			try container.encode(CodingKeys.catalogListProviders, forKey: .type)
 		case .catalogGetProvider(let content):
 			try container.encode(CodingKeys.catalogGetProvider, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretList(let content):
+			try container.encode(CodingKeys.secretList, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretStatus(let content):
+			try container.encode(CodingKeys.secretStatus, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretSet(let content):
+			try container.encode(CodingKeys.secretSet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretReveal(let content):
+			try container.encode(CodingKeys.secretReveal, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretDelete(let content):
+			try container.encode(CodingKeys.secretDelete, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -2071,6 +2385,16 @@ public enum Reply: Codable, Sendable, Equatable {
 	case catalogListProviders(ListProvidersReply)
 	/// One catalog entry in detail.
 	case catalogGetProvider(ProviderDetail)
+	/// The secret references and the store.
+	case secretList(ListSecretsReply)
+	/// The reference after the probe, and the store.
+	case secretStatus(SecretStatusReply)
+	/// The reference after the write, never the value.
+	case secretSet(SetSecretReply)
+	/// The value; the one reply that carries one.
+	case secretReveal(RevealSecretReply)
+	/// The reference that was deleted.
+	case secretDelete(DeleteSecretReply)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -2086,7 +2410,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			operationAbandon = "operation.abandon",
 			operationGetStats = "operation.get_stats",
 			catalogListProviders = "catalog.list_providers",
-			catalogGetProvider = "catalog.get_provider"
+			catalogGetProvider = "catalog.get_provider",
+			secretList = "secret.list",
+			secretStatus = "secret.status",
+			secretSet = "secret.set",
+			secretReveal = "secret.reveal",
+			secretDelete = "secret.delete"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -2165,6 +2494,31 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .catalogGetProvider(content)
 					return
 				}
+			case .secretList:
+				if let content = try? container.decode(ListSecretsReply.self, forKey: .content) {
+					self = .secretList(content)
+					return
+				}
+			case .secretStatus:
+				if let content = try? container.decode(SecretStatusReply.self, forKey: .content) {
+					self = .secretStatus(content)
+					return
+				}
+			case .secretSet:
+				if let content = try? container.decode(SetSecretReply.self, forKey: .content) {
+					self = .secretSet(content)
+					return
+				}
+			case .secretReveal:
+				if let content = try? container.decode(RevealSecretReply.self, forKey: .content) {
+					self = .secretReveal(content)
+					return
+				}
+			case .secretDelete:
+				if let content = try? container.decode(DeleteSecretReply.self, forKey: .content) {
+					self = .secretDelete(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -2214,6 +2568,21 @@ public enum Reply: Codable, Sendable, Equatable {
 		case .catalogGetProvider(let content):
 			try container.encode(CodingKeys.catalogGetProvider, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .secretList(let content):
+			try container.encode(CodingKeys.secretList, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretStatus(let content):
+			try container.encode(CodingKeys.secretStatus, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretSet(let content):
+			try container.encode(CodingKeys.secretSet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretReveal(let content):
+			try container.encode(CodingKeys.secretReveal, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .secretDelete(let content):
+			try container.encode(CodingKeys.secretDelete, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -2246,64 +2615,123 @@ public struct ResumeOperationParams: Codable, Sendable, Equatable {
 	}
 }
 
-/// Why the daemon stops. Open: newer daemons may add values.
-public enum ShutdownReason: String, Codable, Sendable, Equatable {
-	/// SIGTERM or SIGINT.
-	case signal
-	/// A client asked it to stop.
-	case requested
-	/// A reason this build does not know. The daemon never sends it.
+/// Why a client reveals a value (spec 0011 AC-9).
+public enum RevealPurpose: String, Codable, Sendable, Equatable {
+	/// To show it on screen.
+	case show
+	/// To copy it.
+	case copy
+	/// A purpose this build does not know. The daemon never sends it.
 	case unrecognized
 }
 
-/// Content of `daemon.shutting_down`.
-public struct ShuttingDown: Codable, Sendable, Equatable {
-	/// Why the daemon stops.
-	public let reason: ShutdownReason
+/// Params of `secret.reveal`.
+public struct RevealSecretParams: Codable, Sendable, Equatable {
+	/// The reference.
+	public let reference: String
+	/// Why the client asks; recorded in the audit row.
+	public let purpose: RevealPurpose
 
-	public init(reason: ShutdownReason) {
-		self.reason = reason
+	public init(reference: String, purpose: RevealPurpose) {
+		self.reference = reference
+		self.purpose = purpose
 	}
 }
 
-/// Params of `events.subscribe`.
-public struct SubscribeParams: Codable, Sendable, Equatable {
-	/// Replay every event after this cursor, or null for new events only.
-	public let since: EventCursor?
-	/// Full kinds such as `instance.state_changed` or area prefixes ending
-	/// in a dot such as `operation.`; empty means every kind. At most 32.
-	public let kinds: [String]?
-	/// Only events about this resource.
-	public let resource: ResourceRef?
+/// Reply of `secret.reveal`: the one place a value leaves the daemon.
+public struct RevealSecretReply: Codable, Sendable, Equatable {
+	/// The reference.
+	public let reference: String
+	/// The value.
+	public let value: SecretText
 
-	public init(since: EventCursor?, kinds: [String]?, resource: ResourceRef?) {
-		self.since = since
-		self.kinds = kinds
-		self.resource = resource
+	public init(reference: String, value: SecretText) {
+		self.reference = reference
+		self.value = value
 	}
 }
 
-/// Reply of `events.subscribe`. It always precedes the subscription's first
-/// event.
-public struct Subscribed: Codable, Sendable, Equatable {
-	/// Starts at 1 per connection and is never reused on it.
-	public let subscriptionId: UInt32
-	/// The newest cursor when the subscription started.
-	public let head: EventCursor
+/// The status in `secret.changed`: a [`SecretStatus`] or `deleted`.
+public enum SecretChangeStatus: String, Codable, Sendable, Equatable {
+	/// The store holds a value.
+	case present
+	/// The store holds none.
+	case missing
+	/// The store could not be checked.
+	case unknown
+	/// The reference row is gone.
+	case deleted
+	/// A status this build does not know. The daemon never sends it.
+	case unrecognized
+}
 
-	public init(subscriptionId: UInt32, head: EventCursor) {
-		self.subscriptionId = subscriptionId
-		self.head = head
+/// Content of the `secret.changed` event. The event's resource is
+/// `{kind: secret, id: <reference>}` and its revision the row's; a change
+/// of status seen by a probe keeps the revision.
+public struct SecretChanged: Codable, Sendable, Equatable {
+	/// The status now.
+	public let status: SecretChangeStatus
+	/// When the status was observed.
+	public let statusObservedAt: Date?
+
+	public init(status: SecretChangeStatus, statusObservedAt: Date?) {
+		self.status = status
+		self.statusObservedAt = statusObservedAt
 	}
 }
 
-/// Params of `events.unsubscribe`.
-public struct UnsubscribeParams: Codable, Sendable, Equatable {
-	/// The subscription to end.
-	public let subscriptionId: UInt32
+/// What a new value changes for one use. Open.
+public enum SecretEffectKind: String, Codable, Sendable, Equatable {
+	/// Only the stored copy changes; the value inside the data stays.
+	case storedOnly = "stored_only"
+	/// The next reload uses it.
+	case nextReload = "next_reload"
+	/// The next start uses it.
+	case nextStart = "next_start"
+	/// An effect this build does not know. The daemon never sends it.
+	case unrecognized
+}
 
-	public init(subscriptionId: UInt32) {
-		self.subscriptionId = subscriptionId
+/// The effect of a new value on one use.
+public struct SecretEffectInfo: Codable, Sendable, Equatable {
+	/// The kind of resource that uses the reference.
+	public let resourceKind: ResourceKind
+	/// The resource ID.
+	public let resourceId: String
+	/// The secret field.
+	public let field: String
+	/// What changes.
+	public let effect: SecretEffectKind
+
+	public init(resourceKind: ResourceKind, resourceId: String, field: String, effect: SecretEffectKind) {
+		self.resourceKind = resourceKind
+		self.resourceId = resourceId
+		self.field = field
+		self.effect = effect
+	}
+}
+
+/// Params of `secret.status` and the other methods that name only a
+/// reference.
+public struct SecretStatusParams: Codable, Sendable, Equatable {
+	/// The reference.
+	public let reference: String
+
+	public init(reference: String) {
+		self.reference = reference
+	}
+}
+
+/// Reply of `secret.status`: the row after a fresh probe.
+public struct SecretStatusReply: Codable, Sendable, Equatable {
+	/// The reference row.
+	public let summary: SecretRefSummary
+	/// The store.
+	public let store: SecretStoreStatus
+
+	public init(summary: SecretRefSummary, store: SecretStoreStatus) {
+		self.summary = summary
+		self.store = store
 	}
 }
 
@@ -2377,6 +2805,128 @@ public enum SecretInput: Codable, Sendable, Equatable {
 			try container.encode(CodingKeys.bind, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
+	}
+}
+
+/// How `secret.set` treats a value that exists already: `create` fails on
+/// an existing item, `replace` on a missing one, and `upsert` takes either
+/// (spec 0011 AC-5).
+public enum SecretMode: String, Codable, Sendable, Equatable {
+	/// The item must not exist yet.
+	case create
+	/// The item must exist.
+	case replace
+	/// Either; it is written whichever way.
+	case upsert
+	/// A mode this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Params of `secret.set`.
+public struct SetSecretParams: Codable, Sendable, Equatable {
+	/// The reference to fill.
+	public let reference: String
+	/// Where the value comes from; `bind` is refused here.
+	public let input: SecretInput
+	/// How to treat a value that exists.
+	public let mode: SecretMode
+	/// The revision of the row the client read, if it names one.
+	public let expectedRevision: UInt64?
+	/// Confirms that a replace changes only the stored copy.
+	public let confirmStoredOnly: Bool?
+
+	public init(reference: String, input: SecretInput, mode: SecretMode, expectedRevision: UInt64?, confirmStoredOnly: Bool?) {
+		self.reference = reference
+		self.input = input
+		self.mode = mode
+		self.expectedRevision = expectedRevision
+		self.confirmStoredOnly = confirmStoredOnly
+	}
+}
+
+/// A warning a stored value comes with. Open.
+public enum SecretWarning: String, Codable, Sendable, Equatable {
+	/// The value is shorter than 8 bytes, so redaction never matches it in
+	/// text.
+	case shortValueNotScrubbed = "short_value_not_scrubbed"
+	/// A warning this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Reply of `secret.set`: never the value.
+public struct SetSecretReply: Codable, Sendable, Equatable {
+	/// The reference row after the write.
+	public let summary: SecretRefSummary
+	/// Warnings about the stored value.
+	public let warnings: [SecretWarning]?
+	/// The effect on every use.
+	public let effects: [SecretEffectInfo]?
+
+	public init(summary: SecretRefSummary, warnings: [SecretWarning]?, effects: [SecretEffectInfo]?) {
+		self.summary = summary
+		self.warnings = warnings
+		self.effects = effects
+	}
+}
+
+/// Why the daemon stops. Open: newer daemons may add values.
+public enum ShutdownReason: String, Codable, Sendable, Equatable {
+	/// SIGTERM or SIGINT.
+	case signal
+	/// A client asked it to stop.
+	case requested
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Content of `daemon.shutting_down`.
+public struct ShuttingDown: Codable, Sendable, Equatable {
+	/// Why the daemon stops.
+	public let reason: ShutdownReason
+
+	public init(reason: ShutdownReason) {
+		self.reason = reason
+	}
+}
+
+/// Params of `events.subscribe`.
+public struct SubscribeParams: Codable, Sendable, Equatable {
+	/// Replay every event after this cursor, or null for new events only.
+	public let since: EventCursor?
+	/// Full kinds such as `instance.state_changed` or area prefixes ending
+	/// in a dot such as `operation.`; empty means every kind. At most 32.
+	public let kinds: [String]?
+	/// Only events about this resource.
+	public let resource: ResourceRef?
+
+	public init(since: EventCursor?, kinds: [String]?, resource: ResourceRef?) {
+		self.since = since
+		self.kinds = kinds
+		self.resource = resource
+	}
+}
+
+/// Reply of `events.subscribe`. It always precedes the subscription's first
+/// event.
+public struct Subscribed: Codable, Sendable, Equatable {
+	/// Starts at 1 per connection and is never reused on it.
+	public let subscriptionId: UInt32
+	/// The newest cursor when the subscription started.
+	public let head: EventCursor
+
+	public init(subscriptionId: UInt32, head: EventCursor) {
+		self.subscriptionId = subscriptionId
+		self.head = head
+	}
+}
+
+/// Params of `events.unsubscribe`.
+public struct UnsubscribeParams: Codable, Sendable, Equatable {
+	/// The subscription to end.
+	public let subscriptionId: UInt32
+
+	public init(subscriptionId: UInt32) {
+		self.subscriptionId = subscriptionId
 	}
 }
 

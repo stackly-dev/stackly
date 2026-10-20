@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::error::FieldError;
 use crate::json::{FieldCode, Validate};
 use crate::operation::OperationSummary;
+use crate::secret::SecretChanged;
 use crate::wire::{ResourceRef, Revision, Sequence, Timestamp};
 
 /// Most entries in `SubscribeParams.kinds`.
@@ -64,6 +65,11 @@ pub enum EventKind {
     /// `waitingOn`, the point of no return, or a cancel (spec 0007).
     #[serde(rename = "operation.progress")]
     OperationProgress(Box<OperationSummary>),
+    /// A secret reference was stored, observed with another status,
+    /// restored, or deleted (spec 0011). The event's resource is
+    /// `{kind: secret, id: <reference>}`.
+    #[serde(rename = "secret.changed")]
+    SecretChanged(SecretChanged),
 }
 
 /// Lists every event kind once, giving `EventKind::KINDS` and
@@ -91,6 +97,7 @@ event_kinds! {
     "daemon.shutting_down" => DaemonShuttingDown;
     "operation.state_changed" => OperationStateChanged;
     "operation.progress" => OperationProgress;
+    "secret.changed" => SecretChanged;
 }
 
 impl EventKind {

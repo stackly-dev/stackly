@@ -277,6 +277,9 @@ pub enum ResourceKind {
     /// Stackly itself, the target of an `update_manager` operation; its
     /// `id` is always [`ResourceRef::MANAGER_ID`] (spec 0007).
     Manager,
+    /// A secret reference (spec 0011); its `id` is the reference text,
+    /// such as `local:erp/postgres/admin`.
+    Secret,
     /// A kind this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,
