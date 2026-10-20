@@ -831,12 +831,20 @@ pub trait ProcessSupervision: Send + Sync {
     /// Returns [`ProcessError::NotFound`] when the child no longer exists.
     fn resume(&self, child: SuspendedChild) -> Result<MainHandle, ProcessError>;
 
-    /// Kills and reaps a suspended main process that never ran.
+    /// Gets rid of a suspended main process that never ran.
+    ///
+    /// It reaps first without waiting: a child that already died on its
+    /// own, for example one the OS killed during exec, answers the status
+    /// it ended with, and no signal is sent. A child that is still alive
+    /// gets `SIGKILL` and is reaped, and the answer is `None`. So the
+    /// identity stage can tell a binary the OS refused from a discard of
+    /// its own (spec 0010, K7).
     ///
     /// # Errors
     ///
-    /// Returns [`ProcessError::NotFound`] when the child no longer exists.
-    fn discard(&self, child: SuspendedChild) -> Result<(), ProcessError>;
+    /// Returns [`ProcessError::NotFound`] when the child no longer exists
+    /// and its status is gone too.
+    fn discard(&self, child: SuspendedChild) -> Result<Option<ExitStatus>, ProcessError>;
 
     /// Spawns a helper, running at once, in its own session.
     ///
@@ -991,7 +999,7 @@ impl ProcessSupervision for UnsupportedProcessSupervision {
         Err(self.not_supported())
     }
 
-    fn discard(&self, _child: SuspendedChild) -> Result<(), ProcessError> {
+    fn discard(&self, _child: SuspendedChild) -> Result<Option<ExitStatus>, ProcessError> {
         Err(self.not_supported())
     }
 

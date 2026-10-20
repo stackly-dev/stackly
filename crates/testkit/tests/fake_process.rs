@@ -209,7 +209,7 @@ fn only_a_suspended_main_process_can_be_discarded() {
         .watch_exit(discarded_pid, notices.clone())
         .unwrap();
 
-    setup.fake.discard(discarded).unwrap();
+    assert_eq!(setup.fake.discard(discarded).unwrap(), None);
     assert_eq!(
         notices.taken(),
         [ExitNotice {
@@ -230,6 +230,34 @@ fn only_a_suspended_main_process_can_be_discarded() {
     assert_eq!(
         setup.fake.process_state(facts.pid),
         Some(FakeProcessState::Running)
+    );
+}
+
+#[test]
+fn a_suspended_main_process_that_died_on_its_own_is_discarded_with_its_status() {
+    let setup = Setup::new();
+    let lock = setup.lock();
+    let child = setup.spawn_main(&lock);
+    let facts = child.facts().clone();
+
+    setup.fake.exit(facts.pid, Some(ExitStatus::Signaled(9)));
+    assert_eq!(setup.fake.discard(child), Ok(Some(ExitStatus::Signaled(9))));
+    assert!(setup.fake.signals(facts.pid).is_empty());
+    assert_eq!(
+        setup.fake.discard(SuspendedChild::new(facts.clone())),
+        Err(ProcessError::NotFound { pid: facts.pid })
+    );
+
+    let notices = Arc::new(Notices::default());
+    setup.fake.watch_exit(facts.pid, notices.clone()).unwrap();
+    assert_eq!(
+        notices.taken(),
+        [ExitNotice {
+            pid: facts.pid,
+            status: None,
+            captured: None,
+        }],
+        "the discard reaped the child, so a later watch knows nothing of it"
     );
 }
 

@@ -228,6 +228,10 @@ struct FakeProcess {
     output: Option<[File; 2]>,
     holds_override: Option<HoldsFile>,
     signals: Vec<ProviderSignal>,
+    /// The status of a suspended main process that ended before it was
+    /// resumed or discarded, which [`ProcessSupervision::discard`] answers
+    /// once.
+    died_suspended: Option<ExitStatus>,
 }
 
 impl FakeProcess {
@@ -314,6 +318,7 @@ impl FakeProcessSupervision {
             output: None,
             holds_override: None,
             signals: Vec::new(),
+            died_suspended: None,
         };
         let mut guard = self.lock_state();
         guard.pending.remove(&process.facts.pid);
@@ -373,7 +378,12 @@ impl FakeProcessSupervision {
     /// it at once; otherwise the next [`watch_exit`] does. A process that
     /// is already gone or unknown is left alone.
     ///
+    /// Ending a suspended main process acts out a child the OS killed
+    /// during exec: a later [`discard`] answers `status` once, without a
+    /// signal.
+    ///
     /// [`watch_exit`]: ProcessSupervision::watch_exit
+    /// [`discard`]: ProcessSupervision::discard
     pub fn exit(&self, pid: Pid, status: Option<ExitStatus>) {
         self.end(pid, status, None);
     }
@@ -659,6 +669,7 @@ impl State {
             output: None,
             holds_override: None,
             signals: Vec::new(),
+            died_suspended: None,
         };
         let lock = match request.lock {
             Some(lock) => {
@@ -712,6 +723,9 @@ impl State {
         captured: Option<CapturedOutput>,
     ) -> Delivery {
         let process = self.live_mut(pid).ok()?;
+        if process.state == FakeProcessState::Suspended && process.role == Some(ChildRole::Main) {
+            process.died_suspended = status;
+        }
         process.state = FakeProcessState::Exited;
         process.files.clear();
         process.output = None;
@@ -815,7 +829,7 @@ impl ProcessSupervision for FakeProcessSupervision {
         })
     }
 
-    fn discard(&self, child: SuspendedChild) -> Result<(), ProcessError> {
+    fn discard(&self, child: SuspendedChild) -> Result<Option<ExitStatus>, ProcessError> {
         let pid = child.pid();
         let call = ProcessCall {
             pid: Some(pid),
@@ -823,16 +837,28 @@ impl ProcessSupervision for FakeProcessSupervision {
         };
         let mut delivery = None;
         let result = self.call(call, |state| {
-            let process = state.live_mut(pid)?;
-            if process.state != FakeProcessState::Suspended || process.role != Some(ChildRole::Main)
-            {
-                return Err(ProcessError::NotFound { pid });
-            }
-            delivery = state.end(pid, Some(ExitStatus::Signaled(KILL_SIGNAL_NUMBER)), None);
+            let process = state
+                .processes
+                .get_mut(&pid)
+                .filter(|process| process.role == Some(ChildRole::Main))
+                .ok_or(ProcessError::NotFound { pid })?;
+            let status = match process.state {
+                FakeProcessState::Suspended => {
+                    delivery = state.end(pid, Some(ExitStatus::Signaled(KILL_SIGNAL_NUMBER)), None);
+                    None
+                }
+                FakeProcessState::Exited => Some(
+                    process
+                        .died_suspended
+                        .take()
+                        .ok_or(ProcessError::NotFound { pid })?,
+                ),
+                FakeProcessState::Running => return Err(ProcessError::NotFound { pid }),
+            };
             // The adapter reaps a discarded child itself: no later watch
             // hears of it.
             state.pending.remove(&pid);
-            Ok(())
+            Ok(status)
         });
         deliver(delivery);
         result

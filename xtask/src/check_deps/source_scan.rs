@@ -84,7 +84,7 @@ const CLI_CODES_RULE: &str = "only the cli and the protocol name codes::cli, so 
 /// `commands::secret`).
 pub const EXPOSE_ALLOWED: [(&str, &[&str]); 4] = [
     ("stackly-core", &["secret::redact", "secret::delivery"]),
-    ("stackly-platform-macos", &["secret"]),
+    ("stackly-platform-macos", &["secret", "process::stdin"]),
     ("stackly-protocol", &["secret"]),
     ("stackly-testkit", &["fake_secret"]),
 ];
@@ -1378,7 +1378,7 @@ mod tests {
             EXPOSE_ALLOWED,
             [
                 ("stackly-core", &["secret::redact", "secret::delivery"][..]),
-                ("stackly-platform-macos", &["secret"][..]),
+                ("stackly-platform-macos", &["secret", "process::stdin"][..]),
                 ("stackly-protocol", &["secret"][..]),
                 ("stackly-testkit", &["fake_secret"][..]),
             ]

@@ -1205,6 +1205,7 @@ dependencies = [
  "core-foundation",
  "libc",
  "security-framework",
+ "serde_json",
  "stackly-core",
  "stackly-domain",
  "stackly-platform",

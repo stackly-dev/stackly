@@ -17,6 +17,7 @@ stackly-platform.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 stackly-core.workspace = true
 stackly-testkit.workspace = true
 
