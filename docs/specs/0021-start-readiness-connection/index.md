@@ -20,7 +20,7 @@ Spec ini menutup JOURNEY-01: setelah instance dibuat, pengguna menjalankannya, m
 
 **Acceptance criteria** (ID lokal spec ini; ID PRD selalu tiga digit, misalnya AC-012):
 
-- **AC-1** (blok `connection` di manifest): manifest `stackly/v1alpha1` menerima blok opsional `connection`, daftar 1 sampai 8 entri `{ name, title, template }` seperti *Blok connection di manifest*; setiap template adalah URI. Loader menolak dengan path field dan kode issue: `name` di luar pola `^[a-z][a-z0-9_]{0,31}$`, `title` kosong, lebih dari 64 karakter, atau berkarakter kontrol, dan `template` kosong atau di atas 512 byte dengan `connection_invalid`; `name` ganda dengan `connection_name_duplicate`; token di luar baris matriks posisi `connection.template` (termasuk `endpoint.<n>.host` dan `settings.*`) dengan `token_not_allowed_here`; endpoint atau secret yang tidak ada dengan `unknown_endpoint` dan `unknown_secret`; dan template yang hasil render nya dengan nilai sentinel (port 15432, host `127.0.0.1` dan `::1`, folder run `/tmp/stackly sentinel/run`, secret `sentinel value`) gagal diparse sebagai URI absolut RFC 3986 dengan `connection_invalid` reason `not_a_uri`. Blok ini ikut `manifest_sha256`. Paket `providers/postgresql`, `providers/nats`, dan `providers/fake` membawa blok di *Connection PostgreSQL, NATS, dan fake*, dan `cargo xtask provider check` serta golden render lolos.
+- **AC-1** (blok `connection` di manifest): manifest `stackly/v1alpha1` menerima blok opsional `connection`, daftar 1 sampai 8 entri `{ name, title, template }` seperti *Blok connection di manifest*; setiap template adalah URI. Loader menolak dengan path field dan kode issue: `name` di luar pola `^[a-z][a-z0-9_]{0,31}$`, `title` kosong, lebih dari 64 karakter, atau berkarakter kontrol, dan `template` kosong atau di atas 512 byte dengan `connection_invalid`; `name` ganda dengan `connection_name_duplicate`; token di luar baris matriks posisi `connection.template` (termasuk `endpoint.<n>.host` dan `settings.*`) dengan `token_not_allowed_here`; endpoint atau secret yang tidak ada dengan `unknown_endpoint` dan `unknown_secret`; dan template yang hasil render nya dengan nilai sentinel (port 15432, host `127.0.0.1` dan `::1`, folder run `/tmp/stackly sentinel/run`, secret `sentinel value`) gagal diparse sebagai URI absolut RFC 3986 dengan `connection_invalid` reason `not_a_uri`. Blok ini ikut `manifest_sha256`. Reason ada di `Issue.reason` (spec 0009). Paket `providers/postgresql` dan `providers/fake` membawa blok di *Connection PostgreSQL, NATS, dan fake* (ditulis langkah 2), paket `providers/nats` membawanya lewat langkah 2 spec 0023 di commit yang sama dengan readiness (keputusan lead D1), dan `cargo xtask provider check` serta golden render ketiga paket lolos.
 - **AC-2** (render connection): `instance::connection::render(package, ctx)` memakai `PlanContext` dan resolver interpolasi spec 0009 yang sama dengan plan, lalu mengembalikan satu `RenderedConnection` per entri manifest dalam urutan manifest. Status entri dipilih dengan urutan `retained` (instance retained), lalu `package_unavailable` (paket pinned tidak terbaca atau digest beda), lalu `port_not_assigned` (entri merujuk port atau socket endpoint yang belum punya port efektif), selain itu tersedia. Entri tersedia membawa `parts` (teks yang sudah di encode dan bagian secret yang hanya membawa field dan reference) dan `masked` (gabungan teks dengan setiap bagian secret diganti `****`, selalu empat bintang). Nilai setiap token di percent encode sebagai byte UTF 8 dengan hex huruf besar, kecuali karakter unreserved RFC 3986 (`A-Z a-z 0-9 - . _ ~`), kecuali `endpoint.<n>.port` dan `endpoint.<n>.address` (IPv6 dalam kurung siku) yang disisipkan apa adanya; teks literal template tidak pernah di encode. `port_may_change` bernilai true jika dan hanya jika entri merujuk endpoint `Auto` dan lifecycle instance bukan `running`. Render tidak pernah membaca Keychain atau filesystem selain paket pinned di cache.
 - **AC-3** (komposisi): fungsi murni `compose(parts, values)` dengan `values` berupa peta reference ke nilai secret ada dua kali dengan perilaku sama, `stackly_protocol::instance::connection::compose` (Rust, dipakai CLI) dan `ConnectionComposer.compose(parts:values:)` (Swift, `StacklyUI`): teks apa adanya, nilai secret di percent encode dengan aturan AC-2, dan reference yang tidak ada di `values` menghasilkan error `MissingValue { reference }`, tidak pernah string kosong. Keduanya menghasilkan string yang sama persis untuk setiap kasus fixture `protocols/fixtures/instance/connection-compose.json` (password dengan spasi, `@`, `:`, `/`, `%`, `?`, `#`, `'`, `"`, `\`, emoji, dan huruf beraksen; entri dengan dua secret; nilai yang hilang), dan bagian teks fixture yang sama (nilai `instance.name` dan folder socket berspasi dan Unicode) dijalankan juga lewat `render` core dan menghasilkan teks yang sama. Nilai secret tidak pernah ada di DTO `InstanceDetail`.
 - **AC-4** (`instance.get_detail`): `instance.get_detail { instanceId }` (`recovery refused`, hanya membaca) membalas `InstanceDetail` seperti *Method IPC* dengan setiap field bersumber dari tabel *Value sourcing*: provider dan runtime dari registry dan paket pinned (nama tampil dari `metadata.displayName` paket pinned, null kalau paket tidak terbaca, tidak pernah dari catalog), target runtime sebagai `HostTarget`, path data absolut dari baris path `data` registry yang diselesaikan lewat `RootSet::resolve`, `startup`, satu baris secret per pemakaian secret instance urut field (judul dari schema paket pinned atau nama field, status dari cache spec 0011 atau `unknown` kalau belum ada), dependents dari environment dan lease registry urut nama lalu ID, dan connection dari AC-2. Paket pinned yang tidak terbaca tidak menggagalkan method. ID yang tidak ada menghasilkan `resource.not_found`. Method ini tidak menulis apa pun, tidak spawn, dan tidak pernah membaca nilai secret. Setiap request memeriksa ulang `provider.yaml` di folder pinned (inode, ukuran, mtime) sebelum memakai cache paket, dan perbedaan memicu baca ulang dengan cek digest.
@@ -235,7 +235,7 @@ Folder baru `StacklyUI/InstanceDetail/`: `InstanceDetailPage`, `InstanceDetailMo
   Lalu satu baris "Secret" per `DetailSecret`: reference monospace, dan untuk status `missing` atau `unknown` keterangan "Missing; starting asks for it." atau "Status unknown".
 - **Dependents**: judul "Dependents"; "Nothing depends on this instance." kalau kosong, selain itu satu baris per environment "{name} · {Dedicated | Shared}" ditambah " · lease active".
 - **Details**: judul "Details"; `LabeledContent` dengan nilai `textSecondary` bisa dipilih, baris dan format di *Format bersama*: Instance ID (dengan Copy), Runtime, Version, Digest, Provider, Data, Data size (dengan tombol `arrow.clockwise` berlabel "Recalculate data size" yang memanggil `refresh: true`, dan keterangan "scanned {RelativeAge}"), Uptime, Restart attempts (hanya kalau lebih dari 0 atau `exhausted`), Autostart.
-- `InstanceDetailModel` (`@Observable`, main actor) memegang detail, data usage, state muat, dan error, tanpa nilai secret; memuat detail saat halaman tampil, saat `revision` summary berubah (jeda `DETAIL_RELOAD_DEBOUNCE`), dan saat event `secret.changed` dari stream event shell menyebut salah satu reference nya, dan membuang balasan yang `revision` nya lebih lama dari detail yang dipegang; data usage dimuat saat halaman tampil dan saat Recalculate. Uptime diperbarui lewat `TimelineView(.periodic(from:by: 1))` hanya di baris itu.
+- `InstanceDetailModel` (`@Observable`, main actor) memegang detail, data usage, state muat, dan error, tanpa nilai secret; memuat detail saat halaman tampil, saat `revision` summary berubah (jeda `DETAIL_RELOAD_DEBOUNCE`), dan saat event `secret.changed` yang diterima lewat `ShellSync.events(kindPrefix: "secret.")` (usulan spec 0013, dibangun langkah 9) menyebut salah satu reference nya, dan membuang balasan yang `revision` nya lebih lama dari detail yang dipegang; data usage dimuat saat halaman tampil dan saat Recalculate. Uptime diperbarui lewat `TimelineView(.periodic(from:by: 1))` hanya di baris itu.
 
 ### Format bersama
 
@@ -294,7 +294,7 @@ Semua `retryable` false. Hint statis lewat `codes::<area>::hint(code, details)` 
 | `cli.connection_not_found` | `not_found` | `--format` tidak ada, atau provider tanpa blok `connection` | `format`, `available` | `no connection named <format>` atau `this provider describes no connection strings` | "list them with stackly instance connection <instance> --all" |
 | `cli.connection_unavailable` | `conflict` | entri terpilih tidak tersedia | `format`, `reason` | `the <format> connection is not available yet` | per `reason`: `port_not_assigned` "start the instance to assign its port"; `package_unavailable` "run stackly doctor"; `retained` "the instance was removed"; asing "update Stackly" |
 
-Kode issue manifest baru `connection_invalid` (detail `reason`: `name`, `title`, `template_length`, `not_a_uri`) dan `connection_name_duplicate` masuk katalog `IssueCode` spec 0009 (usulan).
+Kode issue manifest `connection_invalid` (reason di `Issue.reason`: `name`, `title`, `template_length`, `not_a_uri`) dan `connection_name_duplicate` ada di katalog `IssueCode` spec 0009 (diterapkan 2026-10-20). Aturan `Issue.reason` (spec 0009, keputusan lead D2): field core dibangun spec 0017 milestone 1 langkah 3 (pemakai pertama `catalog_limit`); kunci wire `reason` di `ItemSpec` `issue` `codes::manifest`, fixture, `cargo xtask codegen`, dan kenaikan minor protokol (CURRENT+1 saat merge, K4) ikut langkah build pertama yang mengirim issue ber reason lewat wire: langkah 5 spec 0017 kalau issue catalog sampai ke wire, selain itu langkah 1 spec ini.
 
 ### Aksesibilitas
 
@@ -422,6 +422,8 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawanya 
 
 #### Spec 0004 (domain core dan abstraksi platform)
 
+Diterapkan di spec 0004 pada 2026-10-20.
+
 1. *Port platform*, trait `Filesystem`. Sisipkan sesudah baris berikut (dan sesudah baris `volume_facts` usulan spec 0020 kalau sudah masuk):
 
    ```text
@@ -454,7 +456,7 @@ Diterapkan di spec 0009 pada 2026-10-20 (sesi `upd-0009`).
    baris:
 
    ```text
-   | `connection` | daftar `{ name, title, template }` | tidak | 1 sampai 8 entri; `name` `^[a-z][a-z0-9_]{0,31}$` dan unik, `title` 1 sampai 64 karakter tanpa karakter kontrol, `template` 1 sampai 512 byte di posisi `connection.template` yang hasil render nya dengan nilai sentinel wajib URI absolut RFC 3986; entri pertama adalah connection utama; kode issue `connection_invalid` (detail `reason`: `name`, `title`, `template_length`, `not_a_uri`) dan `connection_name_duplicate`, token salah memakai `token_not_allowed_here`, `unknown_endpoint`, dan `unknown_secret` (spec 0021) |
+   | `connection` | daftar `{ name, title, template }` | tidak | 1 sampai 8 entri; `name` `^[a-z][a-z0-9_]{0,31}$` dan unik, `title` 1 sampai 64 karakter tanpa karakter kontrol, `template` 1 sampai 512 byte di posisi `connection.template` yang hasil render nya dengan nilai sentinel wajib URI absolut RFC 3986; entri pertama adalah connection utama; kode issue `connection_invalid` (reason di `Issue.reason`: `name`, `title`, `template_length`, `not_a_uri`) dan `connection_name_duplicate`, token salah memakai `token_not_allowed_here`, `unknown_endpoint`, dan `unknown_secret` (spec 0021) |
    ```
 
 2. *Interpolasi terkontrol*, matriks posisi. Sisipkan sesudah:
@@ -470,6 +472,8 @@ Diterapkan di spec 0009 pada 2026-10-20 (sesi `upd-0009`).
    ```
 
 #### Spec 0011 (secret store dan redaction)
+
+Diterapkan di spec 0011 pada 2026-10-20.
 
 1. *Reveal dan copy*, butir GUI. Ganti:
 
@@ -657,7 +661,27 @@ Diterapkan di spec 0023 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
    - Langkah 2 butuh langkah 1 spec 0021 (loader blok `connection`), dan langkah 9 butuh blok `connection` sudah di paket, supaya evidence dibuat dari `provider.yaml` final (spec 0021).
    ```
 
-Tidak ada update untuk spec 0006, 0008, 0010, 0012, dan 0013: method dan kode baru masuk area pemiliknya lewat aturan pemakai pertama, `socketPath` sudah diusulkan spec 0020, dan label status spec 0012 dipakai apa adanya.
+#### Spec 0013 (app shell SwiftUI dan Swift client)
+
+1. *API surface*, tabel. Sisipkan sesudah:
+
+   ```text
+   | `ShellSync.register` | main actor | `ResourceStore` | | |
+   ```
+
+   baris:
+
+   ```text
+   | `ShellSync.events(kindPrefix:)` *(ditambah fitur 21, spec 0021)* | main actor | awalan jenis event (misalnya `secret.`) | `AsyncStream<Event>` | |
+   ```
+
+2. *ShellSync*, butir `.event`. Sesudah kalimat "`.event`: diarahkan ke store yang mendaftarkan awalan jenis itu (misalnya `instance.`), lalu ke `reduce` store." tambahkan:
+
+   ```text
+   Pengamat tanpa store (misalnya `InstanceDetailModel` spec 0021 untuk `secret.`) memakai `events(kindPrefix:) -> AsyncStream<Event>` *(ditambah fitur 21, spec 0021, dibangun langkah 9 nya)*, yang menerima setiap event dengan awalan jenis itu.
+   ```
+
+Tidak ada update untuk spec 0006, 0008, 0010, dan 0012: method dan kode baru masuk area pemiliknya lewat aturan pemakai pertama, `socketPath` sudah diusulkan spec 0020, dan label status spec 0012 dipakai apa adanya.
 
 ### Selisih mockup yang disengaja
 
@@ -677,10 +701,10 @@ Untuk dicatat lead di `ui-macos.md`:
 
 Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap adalah "pengguna menjalankan instance, melihat ready, lalu menyalin connection", lebih dulu di core (manifest, render, ukuran data), lalu lewat daemon dan CLI dengan bukti offline, lalu di GUI, lalu dibuktikan dengan PostgreSQL dan NATS nyata di Mac ini.
 
-**Milestone 1: Connection dan ukuran data di core** (needs `/architect` update spec 0004, 0009, 0011, 0019, 0022, dan 0023 dari *Usulan update spec lain*; fitur 9 build; fitur 19 milestone 1 (paket PostgreSQL) dan fitur 23 langkah 2 (perubahan paket NATS) untuk blok paket)
+**Milestone 1: Connection dan ukuran data di core** (update spec 0004, 0009, 0011, 0019, 0022, dan 0023 dari *Usulan update spec lain* sudah ada di `main`; needs fitur 9 build; langkah 2 butuh fitur 19 langkah 4 (paket PostgreSQL, keputusan lead D5) dan, untuk cek golden render NATS, fitur 23 langkah 2 (blok NATS, D1), yang sendiri menunggu langkah 1 spec ini)
 
-1. Blok `connection` di `core::provider` (raw, validasi dengan kode issue, posisi matriks, render sentinel dan parse URI, JSON Schema `schemas/provider/`, `provider check`), dengan test penolakan. Memenuhi **AC-1**.
-2. Blok `connection` di paket PostgreSQL, NATS, dan fake, dengan golden render dan kenaikan revision catalog sesuai aturan spec 0017. Memenuhi **AC-1**.
+1. Blok `connection` di `core::provider` (raw, validasi dengan kode issue, posisi matriks, render sentinel dan parse URI, JSON Schema `schemas/provider/`, `provider check`), dengan test penolakan; `Issue.reason` dari spec 0009 (field core sudah dibangun spec 0017 milestone 1 langkah 3), dan kunci wire `reason` di `ItemSpec` `issue` dengan fixture, `cargo xtask codegen`, dan kenaikan minor sendiri kalau langkah 5 spec 0017 belum mengirim issue ber reason lewat wire (D2). Memenuhi **AC-1**.
+2. Blok `connection` di paket PostgreSQL dan fake (blok NATS ditulis langkah 2 spec 0023 di commit yang sama dengan readiness, D1; golden render NATS dicek di sini), dengan golden render dan kenaikan revision catalog sesuai aturan spec 0017. Memenuhi **AC-1**.
 3. `core::instance::connection::render` di atas `PlanContext` dengan test tabel, `stackly_protocol::instance::connection::compose`, dan fixture `connection-compose.json` yang dijalankan lewat keduanya. Memenuhi **AC-2**, **AC-3**.
 4. `Filesystem::tree_usage` di `MacosFilesystem` dan `FakeFilesystem` dengan `fs_conformance` dan test volume lain di macOS. Memenuhi **AC-5**.
 5. `core::instance::detail::build` (fungsi murni dari snapshot registry, paket pinned, dan layout) dengan test. Memenuhi **AC-4**.
@@ -697,13 +721,13 @@ Sesi paralel: setelah langkah 6 masuk, langkah 7 dan 8 bisa menjadi dua sesi (da
 
 **Milestone 3: Halaman detail dan tab Summary** (after langkah 6; needs fitur 12 dan fitur 13 milestone 4 (`ui-macos.md`), fitur 11 langkah 10 (`RevealableSecretText` dengan usulan spec 0011, `ConcealedPasteboard`, `SecretEntrySheet`), fitur 22 milestone 3 (Instances, inspector, `InstanceActionModel`, `ShellNavigator`) dan usulan spec 0022 nomor 1 sampai 6; memakai komponen fitur 67 dan peta perintah fitur 69 kalau sudah ada)
 
-9. `StacklyClient` method baru, `ConnectionComposer` dengan fixture komposisi, `DetailFormat`, `ProcessText`, dan `ReadinessText` dengan fixture detail, dan `InstanceDetailModel` dengan service tiruan. Memenuhi **AC-3**, **AC-7**, **AC-9**, **AC-14**.
+9. `StacklyClient` method baru, `ShellSync.events(kindPrefix:)` (usulan spec 0013), `ConnectionComposer` dengan fixture komposisi, `DetailFormat`, `ProcessText`, dan `ReadinessText` dengan fixture detail, dan `InstanceDetailModel` dengan service tiruan. Memenuhi **AC-3**, **AC-7**, **AC-9**, **AC-14**.
 10. `InstanceDetailPage`, navigasi `.instance(id)` lewat `instanceRequest`, header, toolbar, kartu Summary, banner, state, tambahan inspector, dan sentinel bagian Swift, dengan test dan preview. Memenuhi **AC-8**, **AC-11** sampai **AC-15**, **AC-18**.
 11. Evidence manual keyboard dan VoiceOver untuk alur Start sampai Copy dengan daemon development. Memenuhi **AC-16**.
 
 Sesi paralel: milestone 3 bisa berjalan bersamaan dengan langkah 7 dan 8 karena hanya bergantung pada fixture langkah 6.
 
-**Milestone 4: PostgreSQL dan NATS nyata, dan offline di Mac ini** (after milestone 2 dan 3; needs fitur 19 milestone 2, fitur 23 milestone 2, fitur 18 milestone 2 (`install_cached_artifact`), dan spec 0020 milestone 2 dan 3 (create lewat daemon dan GUI); artefak di cache runtime xtask, selain itu `BLOCKED`)
+**Milestone 4: PostgreSQL dan NATS nyata, dan offline di Mac ini** (after milestone 2 dan 3; needs fitur 19 milestone 3 langkah 9 (PostgreSQL sebagai `[[provider]]` di `providers/catalog.toml`, keputusan lead D6; test daemon sebelum itu boleh memakai catalog `CatalogBuilder` yang memuat `official/postgresql`), fitur 23 milestone 2, fitur 18 milestone 2 (`install_cached_artifact`), dan spec 0020 milestone 2 dan 3 (create lewat daemon dan GUI); artefak di cache runtime xtask, selain itu `BLOCKED`)
 
 12. Test native: PostgreSQL 18 dan NATS di start dari CLI dan GUI sampai `ready`, `psql` milik runtime menjalankan `SELECT 1` dengan string `uri` dan `socket` hasil komposisi, dan klien TCP menerima `INFO` NATS lewat string `uri`. Memenuhi **AC-20**.
 13. Run offline dengan jaringan Mac ini dimatikan setelah persetujuan user (start, status, Summary, `connection`, `inspect`), dicatat evidence `native`; `BLOCKED` sampai disetujui. Memenuhi **AC-10**.
@@ -729,12 +753,13 @@ Sesi paralel: milestone 3 bisa berjalan bersamaan dengan langkah 7 dan 8 karena 
 
 **Neutral**:
 
-- Dua method baru, satu kode wire, dua kode `cli`, dua kode issue manifest, satu field manifest, satu method `Filesystem`, dan kenaikan minor protokol.
+- Dua method baru, satu kode wire, dua kode `cli`, dua kode issue manifest, satu field manifest, satu method `Filesystem`, dan satu atau dua kenaikan minor protokol (langkah 6, dan langkah 1 kalau kunci wire `reason` ikut di sana menurut aturan D2 spec 0009).
 - Folder Swift baru `InstanceDetail/`, modul core `instance::connection` dan `instance::detail`.
 
 ## Follow-up
 
-- [ ] Lead: bawa *Usulan update spec lain* ke pemiliknya: spec 0004, 0009, dan 0011 lewat program foundation, spec 0019, 0022, dan 0023 lewat sesi architect fase 02, sebelum milestone 1 dan 2; blok `connection` paket masuk sebelum evidence BR-025 fitur 19 dan 23.
+- [x] Lead: bawa *Usulan update spec lain* ke pemiliknya: spec 0004, 0009, dan 0011 lewat program foundation, spec 0019, 0022, dan 0023 lewat sesi architect fase 02, sebelum milestone 1 dan 2; blok `connection` paket masuk sebelum evidence BR-025 fitur 19 dan 23. Diterapkan 2026-10-20 (penanda di setiap blok).
+- [ ] Lead: bawa usulan spec 0013 (`ShellSync.events(kindPrefix:)`) ke pemilik spec 0013 sebelum langkah 9.
 - [ ] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`.
 - [ ] Fitur 24, 26, 27, 28, 29, 35, 49, dan 54: tambah tab dan tombol masing masing ke halaman detail lewat `InstanceTab` dan toolbar spec ini.
 - [ ] Fitur 28: jumlah restart sejak dibuat dan latensi probe di baris Readiness dan Restart attempts.
