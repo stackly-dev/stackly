@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, Once, PoisonError};
 use std::time::Duration;
 
 use serde_json::{Value, json};
+use stackly_core::catalog::Catalog;
 use stackly_core::{PreparedLayout, prepare_layout};
 use stackly_ipc::{Client, ConnectPolicy};
 use stackly_platform::{Clock, Platform, SystemClock, UserId};
@@ -19,6 +20,7 @@ use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::handshake::{ClientInfo, ClientKind, HandshakeAccepted};
 use stackly_protocol::{CONTRACT_DIGEST, ErrorBody, ProtocolVersion, Timestamp};
 use stackly_testkit::TestRoot;
+use stacklyd::catalog::CatalogOverride;
 use stacklyd::dispatch::{HandlerFuture, Handlers, RequestContext, get_info};
 use stacklyd::lock::{DaemonLock, LockOwner};
 use stacklyd::log_sink::{LogSink, LogSinkConfig};
@@ -33,6 +35,15 @@ use uuid::Uuid;
 
 /// How long a test waits for a frame that should come.
 pub const PATIENCE: Duration = Duration::from_secs(5);
+
+/// The config of every in process server: the daemon's defaults with the
+/// valid empty test catalog preloaded (spec 0017), so its health is
+/// `ready`. A test of a daemon without a catalog sets `catalog` to `None`.
+pub fn config() -> DaemonConfig {
+    let mut config = DaemonConfig::default();
+    config.catalog = Some(CatalogOverride::Preloaded(Catalog::for_tests(&[])));
+    config
+}
 
 /// One test's daemon site: a test root, its prepared layout, and the
 /// daemon lock, which the server's caller must hold.
@@ -95,6 +106,7 @@ impl Site {
             facts,
             Arc::new(log),
         )
+        .with_config(config())
     }
 
     /// Starts a server with the default handlers and waits for the start
@@ -127,7 +139,7 @@ impl Site {
     /// sends true.
     pub async fn start_held(&self) -> (DaemonHandle, watch::Sender<bool>) {
         let (gate, held) = watch::channel(false);
-        let mut config = DaemonConfig::default();
+        let mut config = config();
         config.start_gate = Some(held);
         let handle = server::start(self.deps().with_config(config))
             .await

@@ -143,6 +143,18 @@ issue_codes! {
     ConnectionInvalid => "connection_invalid",
     /// Two `connection` entries with the same name (spec 0021).
     ConnectionNameDuplicate => "connection_name_duplicate",
+    /// A catalog entry whose `manifestSha256` or `versionsSha256` differs
+    /// from its package files (spec 0017 loader).
+    CatalogDigestMismatch => "catalog_digest_mismatch",
+    /// A catalog entry whose package has another `metadata.id` (spec 0017
+    /// loader).
+    CatalogIdMismatch => "catalog_id_mismatch",
+    /// A catalog entry outside the namespaces the catalog accepts (spec
+    /// 0017 loader).
+    NamespaceNotAllowed => "namespace_not_allowed",
+    /// A catalog entry over a catalog limit; the limit is in
+    /// [`Issue::reason`] (spec 0017 loader).
+    CatalogLimit => "catalog_limit",
     /// More than [`MAX_ISSUES`] issues; the rest were dropped.
     TooManyIssues => "too_many_issues",
 }
@@ -198,8 +210,8 @@ pub struct Issue {
     /// What is wrong.
     pub message: String,
     /// A stable snake_case reason, set only by codes that declare a list
-    /// of reasons, such as `connection_invalid` (spec 0021), and empty for
-    /// every other code.
+    /// of reasons, such as `connection_invalid` (spec 0021) and
+    /// `catalog_limit` (spec 0017), and empty for every other code.
     pub reason: Option<&'static str>,
 }
 
@@ -355,7 +367,7 @@ mod tests {
                 "{text}"
             );
         }
-        assert_eq!(IssueCode::ALL.len(), 52);
+        assert_eq!(IssueCode::ALL.len(), 56);
     }
 
     #[test]

@@ -4,6 +4,10 @@
 //! and the private temporary directory (or from `STACKLY_ROOT`, which the
 //! binary passes in) and assembles a [`stackly_platform::Platform`].
 //!
+//! [`MacosProcessSupervision`] starts, watches, and signals the processes
+//! of instances (spec 0010); [`MacosPlatform`] installs it with
+//! `Platform::with_processes`.
+//!
 //! [`MacosSecretStore`] keeps secret values in the login Keychain, or in a
 //! file keychain of its own for a root override and tests (spec 0011); the
 //! daemon installs it with `Platform::with_secrets`.
@@ -18,10 +22,14 @@ mod fs;
 mod identity;
 mod info;
 mod platform;
+mod process;
 mod secret;
 
 pub use fs::MacosFilesystem;
 pub use identity::MacosIdentity;
 pub use info::MacosPlatformInfo;
 pub use platform::MacosPlatform;
+#[doc(hidden)]
+pub use process::KinfoFacts;
+pub use process::MacosProcessSupervision;
 pub use secret::{KeychainSetupError, KeychainTarget, MacosSecretStore, map_status};

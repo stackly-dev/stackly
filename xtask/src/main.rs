@@ -1,6 +1,7 @@
 //! Repo tasks for Stackly, run as `cargo xtask <task>`.
 
 mod build_app;
+mod catalog;
 mod check_deps;
 mod codegen;
 mod evidence;
@@ -29,6 +30,13 @@ Tasks:
   provider check [<dir>...]
                        Read and validate provider packages (default: every folder
                        in providers/) on macOS; exit 1 with one line per problem
+  catalog build --out <dir>
+                       Build the bundled catalog from providers/catalog.toml into
+                       <dir> (macOS reads the packages); exit 1 with one line per problem
+  catalog check [--update [--amend]]
+                       Check providers/catalog.toml, its packages, and the revision
+                       ledger; --update records the revision, --amend rewrites one
+                       not yet on main
   build-app            Build the macOS app with xcodebuild (scheme Stackly, Debug)
   build-app --release  Same, with the Release configuration
   evidence run --kind <fixture|native> [--out <folder>] -- <command>
@@ -88,6 +96,7 @@ fn run() -> Result<ExitCode> {
         ["fuzz", rest @ ..] => done(fuzz::run(&root, rest)),
         ["runtime", rest @ ..] => runtime::run(&root, rest),
         ["provider", rest @ ..] => provider::run(&root, rest),
+        ["catalog", rest @ ..] => catalog::run(&root, rest),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");
             Ok(ExitCode::SUCCESS)

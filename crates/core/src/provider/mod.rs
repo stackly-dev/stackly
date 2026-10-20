@@ -25,6 +25,7 @@ mod settings;
 mod template;
 mod timeouts;
 mod validate;
+mod version_check;
 mod versions;
 
 pub use connection::{
@@ -55,7 +56,11 @@ pub use settings::{
 };
 pub use template::{OUTPUT_MAX_LEN, TemplateFormat};
 pub use validate::ValidatedPackage;
+pub use version_check::{
+    VERSION_CHECK_ARGS_MAX, VERSION_CHECK_TIMEOUT_DEFAULT, VERSION_CHECK_TIMEOUT_MAX_SECONDS,
+    VersionCheck,
+};
 pub use versions::{
-    ArtifactStatus, SigningPolicy, VERSIONS_SCHEMA, VersionArtifact, VersionCatalog,
-    manifest_software,
+    ArtifactDependency, ArtifactStatus, DependencyKind, SigningPolicy, UnpackedSize,
+    VERSIONS_SCHEMA, VersionArtifact, VersionCatalog, manifest_software,
 };

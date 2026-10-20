@@ -1,0 +1,535 @@
+From c7f2fdb2c6f5ad9dd9a22a6d3f4ef19adcf9cfde Mon Sep 17 00:00:00 2001
+From: ojiepermana <me@ojiepermana.com>
+Date: Tue, 20 Oct 2026 09:32:09 +0700
+Subject: [PATCH 3/3] feat(platform-macos): spec 0015 step 5,
+ MacosBackgroundAgent on SMAppService
+
+Add MacosBackgroundAgent: status, register, unregister, and relaunch through SMAppService.agent on objc2-service-management, each inside an autorelease pool, with every unsafe block commented. Before any SMAppService call it checks that NSBundle.mainBundle is the Stackly app and holds the LaunchAgent plist and stacklyd, so a cargo build or test answers NotBundled or HelperMissing without asking the OS. NSError codes map by SDK symbol to AgentOsErrorKind. MacosPlatform installs it and the background_agent capability reports supported. Tests never register: they cover the status and error maps, the helper check, and every call from outside a bundle.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ Cargo.lock                                    |  46 +++
+ Cargo.toml                                    |   3 +
+ crates/platform-macos/Cargo.toml              |   3 +
+ crates/platform-macos/src/agent.rs            | 280 ++++++++++++++++++
+ crates/platform-macos/src/info.rs             |   2 +-
+ crates/platform-macos/src/lib.rs              |   5 +
+ crates/platform-macos/src/platform.rs         |   2 +
+ .../platform-macos/tests/background_agent.rs  |  45 +++
+ crates/platform-macos/tests/layout.rs         |   3 +-
+ 9 files changed, 387 insertions(+), 2 deletions(-)
+ create mode 100644 crates/platform-macos/src/agent.rs
+ create mode 100644 crates/platform-macos/tests/background_agent.rs
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 8a0cba2..845ab2d 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -656,12 +656,55 @@ dependencies = [
+  "objc2-encode",
+ ]
+ 
++[[package]]
++name = "objc2-core-foundation"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
++dependencies = [
++ "dispatch2",
++ "objc2",
++]
++
+ [[package]]
+ name = "objc2-encode"
+ version = "4.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33"
+ 
++[[package]]
++name = "objc2-foundation"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
++dependencies = [
++ "bitflags 2.13.2",
++ "objc2",
++]
++
++[[package]]
++name = "objc2-security"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "709fe137109bd1e8b5a99390f77a7d8b2961dafc1a1c5db8f2e60329ad6d895a"
++dependencies = [
++ "bitflags 2.13.2",
++ "objc2",
++ "objc2-core-foundation",
++]
++
++[[package]]
++name = "objc2-service-management"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b213642d6959cc6023ceb1217aa595eaaf09b8094ce95127c103cab611fe65e8"
++dependencies = [
++ "objc2",
++ "objc2-core-foundation",
++ "objc2-foundation",
++ "objc2-security",
++]
++
+ [[package]]
+ name = "once_cell"
+ version = "1.21.4"
+@@ -1139,6 +1182,9 @@ version = "0.1.0"
+ dependencies = [
+  "core-foundation",
+  "libc",
++ "objc2",
++ "objc2-foundation",
++ "objc2-service-management",
+  "security-framework",
+  "stackly-core",
+  "stackly-domain",
+diff --git a/Cargo.toml b/Cargo.toml
+index 53a44cf..f0e4a95 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -48,6 +48,9 @@ ctrlc = { version = "3.5", features = ["termination"] }
+ getrandom = "0.4"
+ jiff = { version = "0.2", features = ["serde"] }
+ libc = "0.2"
++objc2 = "0.6"
++objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSBundle", "NSError", "NSString"] }
++objc2-service-management = { version = "0.3", default-features = false, features = ["std", "SMAppService", "SMErrors", "objc2", "objc2-foundation"] }
+ proc-macro2 = { version = "1.0", features = ["span-locations"] }
+ regex = "1.13"
+ rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
+diff --git a/crates/platform-macos/Cargo.toml b/crates/platform-macos/Cargo.toml
+index 9521ada..0cc866b 100644
+--- a/crates/platform-macos/Cargo.toml
++++ b/crates/platform-macos/Cargo.toml
+@@ -11,6 +11,9 @@ publish.workspace = true
+ [dependencies]
+ core-foundation.workspace = true
+ libc.workspace = true
++objc2.workspace = true
++objc2-foundation.workspace = true
++objc2-service-management.workspace = true
+ security-framework.workspace = true
+ stackly-domain.workspace = true
+ stackly-platform.workspace = true
+diff --git a/crates/platform-macos/src/agent.rs b/crates/platform-macos/src/agent.rs
+new file mode 100644
+index 0000000..f47d0bb
+--- /dev/null
++++ b/crates/platform-macos/src/agent.rs
+@@ -0,0 +1,280 @@
++//! The background agent through `SMAppService` (spec 0015).
++//!
++//! The adapter asks the OS only for the bundle the process runs from, the
++//! one `SMAppService` uses itself (`NSBundle.mainBundle`). Before any
++//! `SMAppService` call it checks that this bundle is the Stackly app and
++//! holds both the LaunchAgent property list and `stacklyd`; a process
++//! outside the bundle (a cargo build, a test) or a bundle without the
++//! helper (a build from the Xcode IDE) gets an answer without the OS being
++//! asked, so it can never register anything.
++
++use std::path::{Path, PathBuf};
++
++use objc2::rc::{Retained, autoreleasepool};
++use objc2_foundation::{NSBundle, NSError, NSString};
++// The SDK names of the error codes are lower camel case, which a match
++// pattern would flag, so they get upper case aliases here.
++use objc2_service_management::{
++    SMAppService, SMAppServiceErrorDomain, SMAppServiceStatus,
++    kSMErrorAlreadyRegistered as ALREADY_REGISTERED, kSMErrorInvalidSignature as INVALID_SIGNATURE,
++    kSMErrorJobMustBeEnabled as JOB_MUST_BE_ENABLED, kSMErrorJobNotFound as JOB_NOT_FOUND,
++    kSMErrorJobPlistNotFound as JOB_PLIST_NOT_FOUND,
++    kSMErrorLaunchDeniedByUser as LAUNCH_DENIED_BY_USER,
++};
++use stackly_platform::bundle::{
++    APP_BUNDLE_ID, DAEMON_BUNDLE_PROGRAM, DAEMON_PLIST_FILE, LAUNCH_AGENTS_DIR,
++};
++use stackly_platform::{
++    AgentOp, AgentOsErrorKind, AgentProbe, AgentRegistration, BackgroundAgent, BackgroundAgentError,
++};
++
++/// The daemon's LaunchAgent, registered with `SMAppService.agent`.
++///
++/// Every method runs inside its own autorelease pool, so it is safe on any
++/// thread; the CLI calls it from a blocking thread with a time limit.
++#[derive(Debug, Default, Clone, Copy)]
++pub struct MacosBackgroundAgent;
++
++impl MacosBackgroundAgent {
++    /// Creates the adapter.
++    #[must_use]
++    pub const fn new() -> Self {
++        Self
++    }
++}
++
++impl BackgroundAgent for MacosBackgroundAgent {
++    fn status(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        with_service(|service, bundle| Ok(probe(service, bundle)))
++    }
++
++    fn register(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        with_service(|service, bundle| {
++            register(service, AgentOp::Register)?;
++            Ok(probe(service, bundle))
++        })
++    }
++
++    fn unregister(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        with_service(|service, bundle| {
++            unregister(service, AgentOp::Unregister)?;
++            Ok(probe(service, bundle))
++        })
++    }
++
++    fn relaunch(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        with_service(|service, bundle| {
++            // A job the OS no longer knows has nothing to unregister; the
++            // register step that follows still starts it.
++            match unregister(service, AgentOp::Relaunch) {
++                Err(BackgroundAgentError::Os {
++                    kind: AgentOsErrorKind::NotFound,
++                    ..
++                })
++                | Ok(()) => {}
++                Err(error) => return Err(error),
++            }
++            match register(service, AgentOp::Relaunch) {
++                Err(BackgroundAgentError::Os {
++                    kind: AgentOsErrorKind::AlreadyRegistered,
++                    ..
++                })
++                | Ok(()) => {}
++                Err(error) => return Err(error),
++            }
++            Ok(probe(service, bundle))
++        })
++    }
++}
++
++/// Finds the bundle and its service, then runs `call`; answers without the
++/// OS when the process is not inside a complete Stackly bundle.
++fn with_service<F>(call: F) -> Result<AgentProbe, BackgroundAgentError>
++where
++    F: FnOnce(&SMAppService, &Path) -> Result<AgentProbe, BackgroundAgentError>,
++{
++    autoreleasepool(|_| {
++        let bundle = match locate() {
++            Ok(bundle) => bundle,
++            Err(probe) => return Ok(probe),
++        };
++        let name = NSString::from_str(DAEMON_PLIST_FILE);
++        // SAFETY: `agentServiceWithPlistName:` only builds a service object
++        // for a property list name; `name` is a valid NSString that outlives
++        // the call, and the method has no other precondition.
++        let service = unsafe { SMAppService::agentServiceWithPlistName(&name) };
++        call(&service, &bundle)
++    })
++}
++
++/// Returns the bundle folder when the process runs from a Stackly bundle
++/// that holds the property list and `stacklyd`, else the probe to answer.
++fn locate() -> Result<PathBuf, AgentProbe> {
++    let main = NSBundle::mainBundle();
++    let root = PathBuf::from(main.bundlePath().to_string());
++    let identifier = main.bundleIdentifier().map(|id| id.to_string());
++    if identifier.as_deref() != Some(APP_BUNDLE_ID) {
++        let executable = main
++            .executablePath()
++            .map_or_else(|| root.clone(), |path| PathBuf::from(path.to_string()));
++        return Err(AgentProbe::NotBundled { executable });
++    }
++    if helper_present(&root) {
++        Ok(root)
++    } else {
++        Err(AgentProbe::HelperMissing { bundle: root })
++    }
++}
++
++/// Returns whether the bundle at `root` holds the LaunchAgent property list
++/// and the daemon executable.
++fn helper_present(root: &Path) -> bool {
++    root.join(LAUNCH_AGENTS_DIR)
++        .join(DAEMON_PLIST_FILE)
++        .is_file()
++        && root.join(DAEMON_BUNDLE_PROGRAM).is_file()
++}
++
++/// Reads the status of `service` as a probe for `bundle`.
++fn probe(service: &SMAppService, bundle: &Path) -> AgentProbe {
++    // SAFETY: `status` is a read only property of a valid service object
++    // and has no precondition.
++    let SMAppServiceStatus(raw) = unsafe { service.status() };
++    AgentProbe::Registration {
++        registration: map_status(raw),
++        bundle: bundle.to_path_buf(),
++    }
++}
++
++fn register(service: &SMAppService, op: AgentOp) -> Result<(), BackgroundAgentError> {
++    // SAFETY: `registerAndReturnError:` is called on a valid service object
++    // and reports failure through the returned error, never by unwinding.
++    unsafe { service.registerAndReturnError() }.map_err(|error| os_error(op, &error))
++}
++
++fn unregister(service: &SMAppService, op: AgentOp) -> Result<(), BackgroundAgentError> {
++    // SAFETY: `unregisterAndReturnError:` is called on a valid service
++    // object and reports failure through the returned error, never by
++    // unwinding.
++    unsafe { service.unregisterAndReturnError() }.map_err(|error| os_error(op, &error))
++}
++
++/// Maps an `NSError` from `SMAppService` to the port error.
++fn os_error(op: AgentOp, error: &Retained<NSError>) -> BackgroundAgentError {
++    let domain = error.domain().to_string();
++    let code = i64::try_from(error.code()).unwrap_or(i64::MIN);
++    // SAFETY: `SMAppServiceErrorDomain` is an immutable NSString constant
++    // that the ServiceManagement framework exports for the life of the
++    // process.
++    let service_domain = unsafe { SMAppServiceErrorDomain }.to_string();
++    let kind = if domain == service_domain {
++        map_error_code(code)
++    } else {
++        AgentOsErrorKind::Other
++    };
++    BackgroundAgentError::Os {
++        op,
++        kind,
++        domain,
++        code,
++        message: error.localizedDescription().to_string(),
++    }
++}
++
++/// Maps a raw `SMAppServiceStatus` value to the port's registration.
++#[must_use]
++pub(crate) fn map_status(raw: isize) -> AgentRegistration {
++    match SMAppServiceStatus(raw) {
++        SMAppServiceStatus::Enabled => AgentRegistration::Enabled,
++        SMAppServiceStatus::RequiresApproval => AgentRegistration::RequiresApproval,
++        SMAppServiceStatus::NotRegistered => AgentRegistration::NotRegistered,
++        SMAppServiceStatus::NotFound => AgentRegistration::NotFound,
++        SMAppServiceStatus(other) => {
++            AgentRegistration::Unrecognized(i64::try_from(other).unwrap_or(i64::MIN))
++        }
++    }
++}
++
++/// Maps an error code of `SMAppServiceErrorDomain` to its kind, with the
++/// table *Hasil pendaftaran* of spec 0015. The values come from the SDK
++/// header (`ServiceManagement/SMErrors.h`) through the binding, never typed
++/// by hand.
++#[must_use]
++pub(crate) fn map_error_code(code: i64) -> AgentOsErrorKind {
++    let Ok(code) = u32::try_from(code) else {
++        return AgentOsErrorKind::Other;
++    };
++    match code {
++        ALREADY_REGISTERED => AgentOsErrorKind::AlreadyRegistered,
++        LAUNCH_DENIED_BY_USER => AgentOsErrorKind::LaunchDenied,
++        JOB_MUST_BE_ENABLED => AgentOsErrorKind::MustBeEnabled,
++        INVALID_SIGNATURE => AgentOsErrorKind::InvalidSignature,
++        JOB_NOT_FOUND | JOB_PLIST_NOT_FOUND => AgentOsErrorKind::NotFound,
++        _ => AgentOsErrorKind::Other,
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use objc2_service_management::{
++        kSMErrorAlreadyRegistered, kSMErrorInternalFailure, kSMErrorInvalidPlist,
++        kSMErrorInvalidSignature, kSMErrorJobMustBeEnabled, kSMErrorJobNotFound,
++        kSMErrorJobPlistNotFound, kSMErrorLaunchDeniedByUser,
++    };
++    use stackly_testkit::TestRoot;
++
++    use super::*;
++
++    #[test]
++    fn known_statuses_map_to_their_registration() {
++        assert_eq!(map_status(0), AgentRegistration::NotRegistered);
++        assert_eq!(map_status(1), AgentRegistration::Enabled);
++        assert_eq!(map_status(2), AgentRegistration::RequiresApproval);
++        assert_eq!(map_status(3), AgentRegistration::NotFound);
++    }
++
++    #[test]
++    fn an_unknown_status_keeps_its_raw_value() {
++        assert_eq!(map_status(42), AgentRegistration::Unrecognized(42));
++        assert_eq!(map_status(-1), AgentRegistration::Unrecognized(-1));
++    }
++
++    #[test]
++    fn header_error_codes_map_to_the_spec_table() {
++        let cases = [
++            (
++                kSMErrorAlreadyRegistered,
++                AgentOsErrorKind::AlreadyRegistered,
++            ),
++            (kSMErrorLaunchDeniedByUser, AgentOsErrorKind::LaunchDenied),
++            (kSMErrorJobMustBeEnabled, AgentOsErrorKind::MustBeEnabled),
++            (kSMErrorInvalidSignature, AgentOsErrorKind::InvalidSignature),
++            (kSMErrorJobNotFound, AgentOsErrorKind::NotFound),
++            (kSMErrorJobPlistNotFound, AgentOsErrorKind::NotFound),
++            (kSMErrorInternalFailure, AgentOsErrorKind::Other),
++            (kSMErrorInvalidPlist, AgentOsErrorKind::Other),
++        ];
++        for (code, kind) in cases {
++            assert_eq!(map_error_code(i64::from(code)), kind, "code {code}");
++        }
++    }
++
++    #[test]
++    fn a_negative_or_huge_code_is_other() {
++        assert_eq!(map_error_code(-5), AgentOsErrorKind::Other);
++        assert_eq!(map_error_code(i64::MAX), AgentOsErrorKind::Other);
++    }
++
++    #[test]
++    fn a_folder_with_both_files_has_the_helper() {
++        let test_root = TestRoot::new().unwrap();
++        let root = test_root.path().join("Stackly.app");
++        std::fs::create_dir_all(root.join(LAUNCH_AGENTS_DIR)).unwrap();
++        std::fs::create_dir_all(root.join("Contents/MacOS")).unwrap();
++        assert!(!helper_present(&root));
++        std::fs::write(root.join(LAUNCH_AGENTS_DIR).join(DAEMON_PLIST_FILE), b"").unwrap();
++        assert!(!helper_present(&root));
++        std::fs::write(root.join(DAEMON_BUNDLE_PROGRAM), b"").unwrap();
++        assert!(helper_present(&root));
++    }
++}
+diff --git a/crates/platform-macos/src/info.rs b/crates/platform-macos/src/info.rs
+index 5f47df2..e3427d0 100644
+--- a/crates/platform-macos/src/info.rs
++++ b/crates/platform-macos/src/info.rs
+@@ -27,7 +27,7 @@ const CAPABILITIES: PlatformCapabilities = PlatformCapabilities::none("")
+     .with(PlatformCapability::IpcEndpoint, CapabilityStatus::Supported)
+     .with(
+         PlatformCapability::BackgroundAgent,
+-        not_built("not built yet (feature 15)"),
++        CapabilityStatus::Supported,
+     )
+     .with(
+         PlatformCapability::ProcessMetrics,
+diff --git a/crates/platform-macos/src/lib.rs b/crates/platform-macos/src/lib.rs
+index 531c6a2..96e95d0 100644
+--- a/crates/platform-macos/src/lib.rs
++++ b/crates/platform-macos/src/lib.rs
+@@ -8,11 +8,15 @@
+ //! file keychain of its own for a root override and tests (spec 0011); the
+ //! daemon installs it with `Platform::with_secrets`.
+ //!
++//! [`MacosBackgroundAgent`] registers the daemon's LaunchAgent with
++//! `SMAppService` (spec 0015); [`MacosPlatform`] installs it.
++//!
+ //! This is the only crate where `unsafe` code may live. Every `unsafe` block
+ //! needs a `// SAFETY:` comment, and `cargo xtask check-deps` rejects this
+ //! opt out anywhere else.
+ #![allow(unsafe_code)]
+ 
++mod agent;
+ mod dirs;
+ mod fs;
+ mod identity;
+@@ -20,6 +24,7 @@ mod info;
+ mod platform;
+ mod secret;
+ 
++pub use agent::MacosBackgroundAgent;
+ pub use fs::MacosFilesystem;
+ pub use identity::MacosIdentity;
+ pub use info::MacosPlatformInfo;
+diff --git a/crates/platform-macos/src/platform.rs b/crates/platform-macos/src/platform.rs
+index e39df7d..59fa8ed 100644
+--- a/crates/platform-macos/src/platform.rs
++++ b/crates/platform-macos/src/platform.rs
+@@ -7,6 +7,7 @@ use stackly_platform::{
+     validate_root_override,
+ };
+ 
++use crate::agent::MacosBackgroundAgent;
+ use crate::dirs::{CACHE_DIR, DATA_DIR, LOGS_DIR, darwin_user_temp_dir, home_dir};
+ use crate::fs::MacosFilesystem;
+ use crate::identity::MacosIdentity;
+@@ -81,5 +82,6 @@ impl MacosPlatform {
+             Arc::new(MacosIdentity),
+             Arc::new(MacosPlatformInfo),
+         )
++        .with_background_agent(Arc::new(MacosBackgroundAgent::new()))
+     }
+ }
+diff --git a/crates/platform-macos/tests/background_agent.rs b/crates/platform-macos/tests/background_agent.rs
+new file mode 100644
+index 0000000..93ce3d5
+--- /dev/null
++++ b/crates/platform-macos/tests/background_agent.rs
+@@ -0,0 +1,45 @@
++//! `MacosBackgroundAgent` from a process outside the Stackly app bundle, the
++//! only case a test may run: a cargo test binary has no bundle identifier,
++//! so every call answers `NotBundled` before `SMAppService` is asked, and
++//! nothing is ever registered (spec 0015). Real registration runs only in
++//! the manual native steps the user approves.
++#![cfg(target_os = "macos")]
++
++use stackly_platform::{AgentProbe, BackgroundAgent, CapabilityStatus, PlatformCapability};
++use stackly_platform_macos::{MacosBackgroundAgent, MacosPlatform};
++use stackly_testkit::TestRoot;
++
++fn assert_not_bundled(probe: AgentProbe) {
++    match probe {
++        AgentProbe::NotBundled { executable } => {
++            assert!(executable.is_absolute(), "{}", executable.display());
++        }
++        other => panic!("expected NotBundled, got {other:?}"),
++    }
++}
++
++#[test]
++fn status_outside_the_bundle_is_not_bundled() {
++    assert_not_bundled(MacosBackgroundAgent::new().status().unwrap());
++}
++
++#[test]
++fn every_change_outside_the_bundle_answers_not_bundled_without_the_os() {
++    let agent = MacosBackgroundAgent::new();
++    assert_not_bundled(agent.register().unwrap());
++    assert_not_bundled(agent.unregister().unwrap());
++    assert_not_bundled(agent.relaunch().unwrap());
++}
++
++#[test]
++fn macos_platform_installs_the_agent_and_reports_it_supported() {
++    let platform = MacosPlatform::with_roots(TestRoot::new().unwrap().roots());
++    assert_eq!(
++        platform
++            .info()
++            .capabilities()
++            .status(PlatformCapability::BackgroundAgent),
++        CapabilityStatus::Supported
++    );
++    assert_not_bundled(platform.background_agent().status().unwrap());
++}
+diff --git a/crates/platform-macos/tests/layout.rs b/crates/platform-macos/tests/layout.rs
+index 7dd699a..a3f1ad9 100644
+--- a/crates/platform-macos/tests/layout.rs
++++ b/crates/platform-macos/tests/layout.rs
+@@ -183,7 +183,8 @@ fn the_built_capabilities_are_supported_and_the_rest_name_their_feature() {
+             | PlatformCapability::Clock
+             | PlatformCapability::UserIdentity
+             | PlatformCapability::SecretStore
+-            | PlatformCapability::IpcEndpoint => {
++            | PlatformCapability::IpcEndpoint
++            | PlatformCapability::BackgroundAgent => {
+                 assert_eq!(status, CapabilityStatus::Supported, "{capability}");
+             }
+             _ => assert!(
+-- 
+2.54.0 (Apple Git-157)
+

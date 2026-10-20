@@ -21,7 +21,8 @@ use stacklyd::server::{self, DaemonConfig, StartError};
 use stacklyd::state::DaemonCore;
 
 use crate::common::{
-    Hold, HoldInfo, Logs, PATIENCE, Raw, RegistryHolder, Site, client, client_as, error_of, request,
+    self, Hold, HoldInfo, Logs, PATIENCE, Raw, RegistryHolder, Site, client, client_as, error_of,
+    request,
 };
 
 /// The line the start slot logs before each new try at a locked registry.
@@ -30,7 +31,7 @@ const LOCKED_RETRY: &str = "another process holds the registry; trying again";
 /// A config whose registry open gives up on a held lock after 50 ms and
 /// waits `wait` between tries.
 fn locked_config(wait: Duration) -> DaemonConfig {
-    let mut config = DaemonConfig::default();
+    let mut config = common::config();
     config.registry_open = OpenOptions::new().with_busy_timeout(Duration::from_millis(50));
     config.registry_locked_retries = vec![wait; 3];
     config
@@ -282,7 +283,7 @@ async fn the_retries_at_a_held_registry_wait_one_two_then_four_seconds() {
     let holder = RegistryHolder::lock(&site.prepared.layout().registry_db());
 
     let logs = Logs::capture();
-    let mut config = DaemonConfig::default();
+    let mut config = common::config();
     config.registry_open = OpenOptions::new().with_busy_timeout(Duration::from_millis(50));
     let begun = tokio::time::Instant::now();
     let daemon = site.start_configured(config).await;
@@ -416,7 +417,7 @@ async fn a_stale_socket_is_replaced_and_the_final_path_is_only_ever_mode_0600() 
 #[tokio::test]
 async fn a_socket_and_runtime_root_removed_while_serving_come_back_at_the_next_check() {
     let site = Site::new();
-    let mut config = DaemonConfig::default();
+    let mut config = common::config();
     config.socket_check_interval = Duration::from_millis(100);
     let daemon = server::start(site.deps().with_config(config))
         .await
@@ -654,7 +655,7 @@ async fn the_registry_history_is_pruned_again_at_every_interval() {
     );
     let site = Site::new();
     let logs = Logs::capture();
-    let mut config = DaemonConfig::default();
+    let mut config = common::config();
     config.prune_interval = Duration::from_millis(20);
 
     let daemon = site.start_configured(config).await;
@@ -715,7 +716,7 @@ async fn a_file_at_the_socket_path_makes_ipc_unavailable_until_the_path_is_free(
         expected = "a regular file in place of the socket makes subsystem ipc unavailable and the daemon degraded at the next check, and once the file is gone the socket is bound again and clients connect",
     );
     let site = Site::new();
-    let mut config = DaemonConfig::default();
+    let mut config = common::config();
     config.socket_check_interval = Duration::from_millis(50);
     let daemon = site.start_configured(config).await;
     std::fs::remove_file(site.socket()).unwrap();
@@ -754,7 +755,7 @@ async fn a_file_at_the_socket_path_makes_ipc_unavailable_until_the_path_is_free(
 async fn a_socket_that_replaced_ours_is_replaced_back_at_the_next_check() {
     let site = Site::new();
     let logs = Logs::capture();
-    let mut config = DaemonConfig::default();
+    let mut config = common::config();
     config.socket_check_interval = Duration::from_millis(50);
     let daemon = site.start_configured(config).await;
     std::fs::remove_file(site.socket()).unwrap();
@@ -787,7 +788,7 @@ async fn a_peer_of_another_uid_is_refused_counted_and_logged_with_its_uid_and_pi
     );
     let site = Site::new();
     let logs = Logs::capture();
-    let mut config = DaemonConfig::default();
+    let mut config = common::config();
     config.peer_uid = Some(site.uid() + 1);
     let daemon = site.start_configured(config).await;
 

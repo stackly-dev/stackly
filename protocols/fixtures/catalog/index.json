@@ -1,0 +1,32 @@
+{
+  "fixtures": [
+    {
+      "file": "list-providers.json",
+      "type": "ListProvidersReply"
+    },
+    {
+      "file": "provider-nats.json",
+      "type": "ProviderDetail"
+    },
+    {
+      "file": "provider-intelonly.json",
+      "type": "ProviderDetail"
+    },
+    {
+      "file": "provider-blockedhost.json",
+      "type": "ProviderDetail"
+    },
+    {
+      "file": "provider-broken.json",
+      "type": "ProviderDetail"
+    },
+    {
+      "file": "provider-zenith.json",
+      "type": "ProviderDetail"
+    },
+    {
+      "file": "provider-postgresql.json",
+      "type": "ProviderDetail"
+    }
+  ]
+}

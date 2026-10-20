@@ -36,6 +36,8 @@ const INSTANCE_CONFIG_HISTORY_DIR: &str = "config-history";
 const INSTANCE_TEMP_DIR: &str = "temp";
 /// Folder under the data root that holds the registry.
 const REGISTRY_DIR: &str = "registry";
+/// The launch record in the data root (spec 0015).
+const AGENT_LAUNCH_RECORD_FILE: &str = "background-agent.json";
 /// Folder under the data root that holds the file keychain of a root
 /// override (spec 0011).
 const KEYCHAIN_DIR: &str = "keychain";
@@ -116,6 +118,14 @@ impl DirectoryLayout {
     #[must_use]
     pub fn daemon_lock(&self) -> PathBuf {
         self.roots.data().join("stacklyd.lock")
+    }
+
+    /// Returns the launch record `<data>/background-agent.json`, which only
+    /// the daemon writes, and only when launchd started the production agent
+    /// for the default root (spec 0015).
+    #[must_use]
+    pub fn agent_launch_record(&self) -> PathBuf {
+        self.roots.data().join(AGENT_LAUNCH_RECORD_FILE)
     }
 
     /// Returns the folder that holds the registry database.
@@ -544,6 +554,16 @@ mod tests {
         );
         assert_eq!(retained.logs, active.logs);
         assert_eq!(retained.run, active.run);
+    }
+
+    #[test]
+    fn the_agent_launch_record_is_a_file_in_the_data_root() {
+        let layout = layout();
+
+        assert_eq!(
+            layout.agent_launch_record(),
+            layout.roots().data().join("background-agent.json")
+        );
     }
 
     #[test]

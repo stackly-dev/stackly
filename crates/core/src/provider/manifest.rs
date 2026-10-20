@@ -16,6 +16,7 @@ use super::names::SettingName;
 use super::settings::Pattern;
 use super::template::TemplateFormat;
 use super::timeouts::Timeouts;
+use super::version_check::VersionCheck;
 
 /// The catalog category of a provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -285,6 +286,7 @@ pub struct Manifest {
     pub(crate) aliases: BTreeMap<String, Vec<String>>,
     pub(crate) managed_fields: Vec<ManagedField>,
     pub(crate) connections: Vec<ConnectionSpec>,
+    pub(crate) version_check: Option<VersionCheck>,
 }
 
 impl Manifest {
@@ -354,5 +356,12 @@ impl Manifest {
     #[must_use]
     pub fn connections(&self) -> &[ConnectionSpec] {
         &self.connections
+    }
+
+    /// Returns `runtime.versionCheck`, or `None` when the manifest leaves
+    /// it out (spec 0018).
+    #[must_use]
+    pub const fn version_check(&self) -> Option<&VersionCheck> {
+        self.version_check.as_ref()
     }
 }

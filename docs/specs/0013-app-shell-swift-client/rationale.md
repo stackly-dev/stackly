@@ -528,3 +528,25 @@ Sonnet 5.5 membaca draf spec secara read only (tanpa mengubah file) dan membandi
 
 Disetujui engineer: `ClientInfo.interactive` true untuk GUI; store menerapkan event menurut resep spec 0006 langkah 4 (revision, observasi per jenis, dan `statusSeq` untuk status instance), bukan "revision tidak lebih besar dilewati", supaya readiness dan health tetap hidup tanpa resnapshot; fallback enum terbuka `unrecognized`; `DaemonHealthStatus` menghapus bentrok nama dengan `HealthStatus` instance; laporan recovery dari `DaemonHealth.recovery` (`RegistryRecovery`). `ipc.not_connected` dan `ipc.call_timeout` kini ada di katalog spec 0006.
 
+
+## Perubahan 2026-10-20 (fase 02, K16 sampai K18)
+
+Update `/architect` setelah branch `claude/f13-wiring-7b3a78` di merge (cdad419), sebelum langkah 16 dibangun. Lead scope 02 menghentikan program di tengah update ini, jadi hanya keputusan lead fondasi K16, K17, dan K18 yang diterapkan; usulan fase 02 lain untuk spec ini belum. Teks saja: ID AC, nomor langkah build, dan baris Status tidak berubah; tambahan per langkah ada di blok *Tambahan langkah 16 dari keputusan K16 dan K17* di bawah *Build plan*.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Aturan `statusSeq` | AC-8, *Sinkronisasi snapshot plus cursor*, dan *Key invariants*: kalimat "`.patch` dengan revision yang sama" diganti efek observasi tanpa revision `.observe(id, revision, apply:)` plus `merge` per store; observasi tidak pernah mengubah revision atau tombstone; berlaku juga untuk hasil `fetchOne` dan event yang ditahan; batas di reset saat gap `server_restarted` | K16 (b), risiko K18 "literal statusSeq rule bug" dan "statusSeq resets per daemon run"; 0006 langkah 4 |
+| Aturan observasi umum | dicatat belum dibangun; pemiliknya store fase 02 pertama yang mempublikasikan observasi dengan revision yang sama | risiko K18 "generic observation rule" |
+| Instance `retained` | disaring di `fetchPage`, `fetchOne` (nil, jadi delete dengan tombstone), dan `reduce` (`.delete`); `count`, badge AC-13, dan subjudul AC-17 tidak menghitungnya; invariant baru; test `offer` dan refetch | K16 (a), risiko K18 "retained filter guard" |
+| `limit` 200 | `fetchPage` memanggil `instance.list { limit: 200, before }` | K16; usulan 0022 (P15) |
+| `instance.removed` | dipetakan ke `.delete` pada revision event di langkah 16, karena DTO nya ikut langkah 12 spec 0010 yang menjadi prasyarat langkah 16 | K16 (c) dan SEQ 7, K4 |
+| Pembagian resep | langkah 12 spec 0010 berhenti di decode dan test kontrak; langkah 16 menjalankan resep lewat `InstanceStore` | K16 SEQ 3 dan 4, risiko K18 "recipe test ownership" |
+| AC-17 | ditulis ulang: tanpa aksi selama `newInstanceAction` nil; bila fitur 20 mengisinya, tombol toolbar dan aksi kedua empty state dengan `.mutationGated()` sampai fitur 22; pesan empty state tetap; langkah 16 tanpa aksi dan tanpa `NewInstanceAction` | K17 |
+| `LiveShell` dan `assemble` | *Model shell* dan *Shell jendela* mendeskripsikan yang dibangun langkah 15: `LiveShell(runtime:windowWillClose:)`, `assemble -> LiveShellParts`, `live()` satu satunya pintu publik; snippet `AppShell().environment(runtime.model)` dan kalimat accessor diganti | K18 |
+| `MainWindowRoot` | hanya baris batas milik spec 0016, berlaku mulai langkah 2 milestone 1 fitur 16; perpindahan accessor, `openWindow`, frame, pengecualian `onboarding.finished`, dan `onboardingStore` ditulis di commit langkah itu | K18; usulan 0016 |
+| `rootOverrideActive` | Bool baca saja dari `rootOverride != nil` di `assemble`, tanpa parameter baru, ditambah oleh yang lebih dulu memakainya di antara fitur 15 M3 dan fitur 16 M1 langkah 2 | K18 |
+| Urutan file | milestone 3 fitur 22 dan langkah 2 milestone 1 fitur 16 berjalan setelah langkah 16 di merge | K16 SEQ 6, K18 SEQ 4 |
+
+**Keputusan kecil yang diambil update ini.** `.observe` membawa revision event, yang hanya dipakai untuk id yang tidak dipegang: refetch butuh revision supaya aturan tombstone tetap menolak instance yang sudah dihapus (contoh K16 tanpa revision tidak bisa membedakannya). `instance.state_changed` dengan revision yang tidak lebih besar dilewati seluruhnya, karena daemon menaikkan revision di setiap batch yang mengirim event ini, sehingga summary lain pada revision yang sama tidak pernah membawa `statusSeq` yang lebih kecil. Snapshot mengganti item apa adanya tanpa `merge`, karena snapshot selalu lebih baru dari item yang dipegang sebelum snapshot itu dimulai.
+
+**Belum diterapkan (dihentikan lead):** usulan fase 02 lain di inventaris `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md` bagian *Spec 0013* (P1 sampai P13, P16, P17, P19, P20, dan butir gabungan 1 sampai 9, 11 sampai 13 yang bukan K16 sampai K18): banner dan seksi agent spec 0015 (AC-7, AC-9, `ConnectionHint`, aturan sumber), registrasi `CatalogStore` dan `RuntimeStore`, `ShellNavigator`, `ShellDestination`, `newInstanceAction` sebagai API shell, `ResourceStore.itemFailures` dan `retry`, `CapacityModel`, `ShellSync.events(kindPrefix:)` spec 0021, `ShellPresentation.status`, `.commands` ⌘N, dan pemecahan Follow-up. Semuanya additive dan masih tertulis di spec pemiliknya.

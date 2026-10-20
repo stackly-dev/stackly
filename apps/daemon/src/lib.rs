@@ -6,9 +6,12 @@
 //! [`server`] binds the socket and serves [`connection`]s through the
 //! [`dispatch`] handlers, whose operation methods live in [`ipc`],
 //! [`operations`] holds the operation engine, [`events`] is the event bus,
-//! [`state`] holds the health, and [`shutdown`] the stop order's pieces.
-//! No other crate depends on this library.
+//! [`state`] holds the health, [`catalog`] the provider catalog, and
+//! [`shutdown`] the stop order's pieces. No other crate depends on this
+//! library.
 
+#[cfg(unix)]
+pub mod catalog;
 #[cfg(unix)]
 pub mod connection;
 #[cfg(unix)]
@@ -34,5 +37,6 @@ pub mod startup;
 pub mod state;
 
 pub use startup::{
-    EXIT_LOCK_HELD, EXIT_START_FAILED, LOG_FILTER_ENV, StartConfig, parse_log_filter, run,
+    CATALOG_DIR_ENV, EXIT_LOCK_HELD, EXIT_START_FAILED, LOG_FILTER_ENV, StartConfig,
+    parse_catalog_dir, parse_log_filter, run,
 };

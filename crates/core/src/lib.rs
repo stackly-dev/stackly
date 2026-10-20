@@ -7,6 +7,7 @@
 //! supervisor, provider, environment, operation, diagnostics) start as
 //! modules here and move to their own crate once their boundary is proven.
 
+pub mod catalog;
 mod daemon;
 mod error;
 mod instance_dir;
@@ -16,6 +17,7 @@ mod observation;
 pub mod operation;
 mod ownership;
 pub mod provider;
+pub mod runtime;
 pub mod secret;
 pub mod supervisor;
 #[cfg(all(test, unix))]

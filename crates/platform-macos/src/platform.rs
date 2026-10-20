@@ -11,6 +11,7 @@ use crate::dirs::{CACHE_DIR, DATA_DIR, LOGS_DIR, darwin_user_temp_dir, home_dir}
 use crate::fs::MacosFilesystem;
 use crate::identity::MacosIdentity;
 use crate::info::MacosPlatformInfo;
+use crate::process::MacosProcessSupervision;
 
 /// Assembles the macOS [`Platform`].
 ///
@@ -70,7 +71,8 @@ impl MacosPlatform {
     }
 
     /// Assembles the platform with roots the caller chose, without the
-    /// default resolver. Integration tests use it with a test root, so no
+    /// default resolver, and with [`MacosProcessSupervision`] as its process
+    /// port. Integration tests use it with a test root, so no
     /// folder is left in the real user temporary directory.
     #[must_use]
     pub fn with_roots(roots: RootSet) -> Platform {
@@ -81,5 +83,6 @@ impl MacosPlatform {
             Arc::new(MacosIdentity),
             Arc::new(MacosPlatformInfo),
         )
+        .with_processes(Arc::new(MacosProcessSupervision::new()))
     }
 }

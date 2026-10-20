@@ -20,12 +20,16 @@
 //! process that ran, except a helper's group (spec 0010).
 //!
 //! [`bundle`] names the app bundle that carries the daemon and the CLI, with
-//! the temporary identifiers of spec 0015.
+//! the temporary identifiers of spec 0015, and the background agent port
+//! ([`BackgroundAgent`]) reads and changes the registration of the daemon's
+//! LaunchAgent.
 
+mod agent;
 pub mod bundle;
 mod capability;
 mod clock;
 mod error;
+mod fetch;
 mod fs;
 mod identity;
 mod info;
@@ -34,15 +38,21 @@ mod platform;
 mod private_dir;
 mod process;
 mod secret;
+mod tree;
 mod unsupported;
 
+pub use agent::{
+    AgentOp, AgentOsErrorKind, AgentProbe, AgentRegistration, BackgroundAgent,
+    BackgroundAgentError, LaunchContext, UnsupportedBackgroundAgent,
+};
 pub use bundle::AppBundle;
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 pub use clock::{Clock, SystemClock};
 pub use error::PlatformError;
+pub use fetch::StopFlag;
 pub use fs::{
-    DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
-    RemoveReport, is_same_or_inside, remove_tree_names,
+    AppendFile, DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
+    ReadSeekFile, RemoveReport, VolumeSpace, is_same_or_inside, remove_tree_names,
 };
 pub use identity::{UserId, UserIdentity};
 pub use info::{PlatformInfo, host_target};
@@ -64,5 +74,9 @@ pub use secret::{
     Interaction, MAX_SECRET_LEN, SCRUB_ANYWHERE_LEN, SCRUB_MIN_LEN, SECRET_SERVICE, SecretBackend,
     SecretPresence, SecretStore, SecretStoreError, SecretValue, SecretValueError, StoreState,
     UnsupportedSecretStore, WriteMode,
+};
+pub use tree::{
+    ENTRY_NAME_MAX_LEN, ENTRY_PATH_MAX_DEPTH, ENTRY_PATH_MAX_LEN, EntryPath, EntryPathError,
+    FileMode, TreeFile, TreeWriter,
 };
 pub use unsupported::UnsupportedPlatform;

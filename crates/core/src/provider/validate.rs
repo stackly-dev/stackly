@@ -45,6 +45,7 @@ use super::timeouts::{
     HEALTH_INTERVAL_SECONDS, INIT_SECONDS, READINESS_INTERVAL_MS, READINESS_SECONDS,
     RECOVERY_SECONDS, RELOAD_SECONDS, STOP_SECONDS, SUCCESS_EXIT_CODES_MAX, Timeouts,
 };
+use super::version_check::{self, VersionCheck};
 use super::versions::{VersionCatalog, VersionsContext, check_versions};
 
 /// The `file` of issues about the settings schema.
@@ -197,6 +198,13 @@ impl ValidatedPackage {
     #[must_use]
     pub const fn versions(&self) -> &VersionCatalog {
         &self.versions
+    }
+
+    /// Returns `runtime.versionCheck`, which the installer runs once from
+    /// staging (spec 0018, *Validasi binary* step 8).
+    #[must_use]
+    pub const fn version_check(&self) -> Option<&VersionCheck> {
+        self.manifest.version_check()
     }
 }
 
@@ -530,6 +538,8 @@ impl Checker<'_> {
         let health = self.health(raw, &env, readiness.as_ref());
         let log_files = self.log_files(raw, &env);
         let connections = connection::check(raw.connection.as_deref(), &env, &mut self.yaml());
+        let version_check =
+            version_check::check(raw.runtime.version_check.as_ref(), &mut self.yaml());
         let (capabilities, cold_backup_paths) =
             self.capabilities(raw, &endpoints, &managed_fs, reload.is_some());
         if self.count() != start {
@@ -562,6 +572,7 @@ impl Checker<'_> {
             aliases,
             managed_fields,
             connections,
+            version_check,
         })
     }
 

@@ -44,7 +44,9 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .operationResume = $0 { true } else { false } })
         #expect(methods.contains { if case .operationAbandon = $0 { true } else { false } })
         #expect(methods.contains(.operationGetStats))
-        #expect(Set(methods.map(\.methodName)).count == 12)
+        #expect(methods.contains(.catalogListProviders))
+        #expect(methods.contains { if case .catalogGetProvider = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 14)
     }
 
     private func check<Value: Codable & Equatable>(

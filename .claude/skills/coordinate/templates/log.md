@@ -9,7 +9,7 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `<nama>` | `<peran>` | `<fitur, milestone, dan langkah Build plan bila pecahan>` | `<file scope>` | `<path>` | `claude/<name>-<hash>` | `<family>` | `aktif` / `peer` / `done` / `blocked` / `failed` / `merged` / `dipakai ulang` / `diarsipkan` / `tidak di-merge` |
+| `<nama>` | `<peran>` | `<fitur, milestone, dan langkah Build plan bila pecahan>` | `<file scope>` | `<path>` | `claude/<name>-<hash>` | `<model · effort, mis. sonnet-5-5 · high>` | `aktif` / `peer` / `done` / `blocked` / `failed` / `merged` / `dipakai ulang` / `diarsipkan` / `tidak di-merge` |
 
 ## Keputusan
 
@@ -36,4 +36,7 @@
 - **Document:** `<fitur>` · rentang `<a>..<b>` · commit `<hash>`
 - **/sync:** `<YYYY-MM-DD>`, rentang `<hash awal>..<hash akhir>`, `<file yang diperbarui>`, `<centang yang ditolak dari /sync>`
 - **Commit penutup:** `<hash>` `<subject>`
+- **Push:** `origin/main` = `<hash>` · `<YYYY-MM-DD HH:MM>`
+- **Dibersihkan:** `claude/<name>-<hash>` · sesi diarsipkan · worktree dihapus · branch dihapus (satu baris per branch; hanya yang lulus cek `merge-base --is-ancestor <branch> origin/main` dan worktree bersih)
+- **Disimpan:** `claude/<name>-<hash>` · `<alasan: belum di origin/main, worktree kotor, sesi masih bekerja, di-pin, tidak di-merge>`, atau `tidak ada`
 - **Blocker tersisa:** `<item dan alasan, atau tidak ada>`

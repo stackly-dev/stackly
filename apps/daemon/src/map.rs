@@ -1,5 +1,8 @@
 //! Maps platform and domain values to the DTOs of `stackly-protocol`.
 //! Boundaries carry DTOs only, so this is the one place that knows both.
+//! [`catalog`] maps the catalog read model.
+
+pub mod catalog;
 
 use std::path::Path;
 

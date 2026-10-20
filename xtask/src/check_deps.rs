@@ -7,7 +7,10 @@
 //! from spec 0011: the `expose` scan and where `security-framework` and
 //! `rpassword` may be direct dependencies, and the CLI rules from spec
 //! 0008: no process spawning paths, crates, or print macros in
-//! `stackly-cli`, and no `codes::cli` outside the CLI and the protocol.
+//! `stackly-cli`, and no `codes::cli` outside the CLI and the protocol, and
+//! the crate placement rules from spec 0015: the Objective-C bindings only
+//! in `stackly-platform-macos`, and the clap completion and man page crates
+//! only in `stackly-cli`.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
 //! build). Transitive dependencies are left alone: portability is proven by
@@ -70,6 +73,17 @@ const SECURITY_FRAMEWORK: [&str; 2] = ["security-framework", "security-framework
 /// The terminal password reader, which only the CLI may depend on
 /// (spec 0011).
 const RPASSWORD: &str = "rpassword";
+/// The Objective-C binding crates behind `SMAppService`, which only the
+/// macOS adapter may depend on (spec 0015).
+const OBJC2: [&str; 3] = ["objc2", "objc2-foundation", "objc2-service-management"];
+/// The clap crates that write shell completion scripts and man pages, which
+/// only the CLI may depend on (spec 0015).
+const CLAP_DOCS: [&str; 2] = ["clap_complete", "clap_mangen"];
+/// The archive and object file readers of the runtime extractor, which
+/// only core and xtask take as direct dependencies (spec 0018); the fuzz
+/// workspace is outside this check.
+const ARCHIVE_CRATES: [&str; 4] = ["tar", "flate2", "zip", "object"];
+const ARCHIVE_USERS: [&str; 2] = ["stackly-core", "xtask"];
 const CLI: &str = "stackly-cli";
 /// Crates that run or open other programs, which `stackly-cli` never takes
 /// as a normal dependency (spec 0008, BR-011). Dev dependencies may.
@@ -232,6 +246,15 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
     }
     if name == RPASSWORD && package != CLI {
         deny("only stackly-cli reads a secret from the terminal (spec 0011)");
+    }
+    if OBJC2.contains(&name) && package != MACOS_ADAPTER {
+        deny("only stackly-platform-macos calls Objective-C APIs (spec 0015)");
+    }
+    if CLAP_DOCS.contains(&name) && package != CLI {
+        deny("only stackly-cli writes shell completion and man pages (spec 0015)");
+    }
+    if ARCHIVE_CRATES.contains(&name) && !ARCHIVE_USERS.contains(&package) {
+        deny("only stackly-core and xtask read archives and Mach-O files (spec 0018)");
     }
     if package == CLI && dependency.kind == DependencyKind::Normal && CLI_SPAWN_DEPS.contains(&name)
     {
@@ -927,6 +950,72 @@ mod tests {
                         "{package} has a {label} dependency on rpassword: {RPASSWORD_RULE}"
                     )]
                 );
+            }
+        }
+    }
+
+    const OBJC2_RULE: &str = "only stackly-platform-macos calls Objective-C APIs (spec 0015)";
+    const CLAP_DOCS_RULE: &str =
+        "only stackly-cli writes shell completion and man pages (spec 0015)";
+
+    #[test]
+    fn the_objc2_crates_belong_to_the_macos_adapter_and_the_clap_doc_crates_to_the_cli() {
+        let kinds = [
+            (None, "normal"),
+            (Some("dev"), "dev"),
+            (Some("build"), "build"),
+        ];
+        for name in OBJC2 {
+            for (kind, _) in kinds {
+                assert!(violations(MACOS_ADAPTER, name, kind).is_empty(), "{name}");
+            }
+            for package in ["stackly-platform", "stackly-core", "stacklyd", CLI, TESTKIT] {
+                for (kind, label) in kinds {
+                    assert_eq!(
+                        violations(package, name, kind),
+                        [format!(
+                            "{package} has a {label} dependency on {name}: {OBJC2_RULE}"
+                        )]
+                    );
+                }
+            }
+        }
+        for name in CLAP_DOCS {
+            for (kind, _) in kinds {
+                assert!(violations(CLI, name, kind).is_empty(), "{name}");
+            }
+            for package in ["stacklyd", "stackly-core", MACOS_ADAPTER, "xtask"] {
+                for (kind, label) in kinds {
+                    assert_eq!(
+                        violations(package, name, kind),
+                        [format!(
+                            "{package} has a {label} dependency on {name}: {CLAP_DOCS_RULE}"
+                        )]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn archive_readers_belong_to_core_and_xtask() {
+        const RULE: &str = "only stackly-core and xtask read archives and Mach-O files (spec 0018)";
+        for name in ARCHIVE_CRATES {
+            for package in ARCHIVE_USERS {
+                assert!(
+                    violations(package, name, None).is_empty(),
+                    "{package} {name}"
+                );
+            }
+            for package in ["stackly-platform", MACOS_ADAPTER, TESTKIT, "stacklyd", CLI] {
+                for (kind, label) in [(None, "normal"), (Some("dev"), "dev")] {
+                    assert_eq!(
+                        violations(package, name, kind),
+                        [format!(
+                            "{package} has a {label} dependency on {name}: {RULE}"
+                        )]
+                    );
+                }
             }
         }
     }

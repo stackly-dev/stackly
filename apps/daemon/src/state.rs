@@ -3,10 +3,11 @@
 //! `daemon.get_info` reports.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Instant;
 
 use stackly_core::PreparedLayout;
+use stackly_core::catalog::CatalogState;
 use stackly_platform::Platform;
 use stackly_protocol::Count;
 use stackly_protocol::daemon::{
@@ -16,6 +17,7 @@ use stackly_protocol::daemon::{
 use stackly_storage::SqliteRegistry;
 use tokio::sync::watch;
 
+use crate::catalog;
 use crate::connection::Connections;
 use crate::events::EventBus;
 use crate::log_sink::LogSink;
@@ -117,6 +119,7 @@ pub struct DaemonCore {
     phase: Mutex<Phase>,
     registry_state: Mutex<RegistryState>,
     registry: Mutex<Option<SqliteRegistry>>,
+    catalog: OnceLock<Arc<CatalogState>>,
     ipc_problem: Mutex<Option<String>>,
     counters: Counters,
     drain: Drain,
@@ -156,6 +159,7 @@ impl DaemonCore {
             phase: Mutex::new(Phase::Starting),
             registry_state: Mutex::new(RegistryState::Opening),
             registry: Mutex::new(None),
+            catalog: OnceLock::new(),
             ipc_problem: Mutex::new(None),
             counters: Counters::default(),
             drain: Drain::default(),
@@ -308,6 +312,18 @@ impl DaemonCore {
         lock(&self.registry).take()
     }
 
+    /// The catalog the start slot loaded, or `None` while it loads.
+    #[must_use]
+    pub fn catalog(&self) -> Option<Arc<CatalogState>> {
+        self.catalog.get().cloned()
+    }
+
+    /// Records the catalog of this run. The first call wins: the catalog
+    /// never changes while the daemon runs.
+    pub fn set_catalog(&self, state: CatalogState) {
+        let _ = self.catalog.set(Arc::new(state));
+    }
+
     /// Marks the socket listener working (`None`) or not, with a safe
     /// sentence for the health detail.
     pub fn set_ipc_problem(&self, problem: Option<String>) {
@@ -394,6 +410,7 @@ impl DaemonCore {
             registry,
             self.operations.health(),
             subsystem_health(subsystem::SUPERVISOR, SubsystemStatus::NotBuilt, None),
+            catalog::health(self.catalog.get().map(AsRef::as_ref)),
         ];
         let status = match self.phase() {
             Phase::Starting => DaemonHealthStatus::Starting,

@@ -686,6 +686,16 @@
         },
         "executionMode": {
           "type": "string"
+        },
+        "versionCheck": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionCheck"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -918,6 +928,38 @@
         }
       },
       "additionalProperties": false
+    },
+    "VersionCheck": {
+      "description": "`runtime.versionCheck`: how the installer reads the version of a\nruntime once (spec 0018, *Validasi binary* step 8).",
+      "type": "object",
+      "properties": {
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8
+        },
+        "pattern": {
+          "type": "string",
+          "maxLength": 512,
+          "minLength": 1
+        },
+        "timeoutSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "maximum": 60,
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "args",
+        "pattern"
+      ]
     }
   }
 }

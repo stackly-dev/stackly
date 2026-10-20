@@ -1,6 +1,7 @@
 //! Runs the real `stacklyd` binary against a test root (spec 0006,
 //! *Testkit*).
 
+use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -14,9 +15,31 @@ pub const DAEMON_STOP_TIMEOUT: Duration = Duration::from_secs(5);
 /// How often a wait checks the process and the ready condition.
 const POLL: Duration = Duration::from_millis(10);
 
+/// A valid catalog with no entries (spec 0017): what a spawned daemon loads
+/// by default, so its `catalog` subsystem is `ok`. The loader does not
+/// check `contentSha256`, but this one is the real digest of empty lists.
+pub const EMPTY_CATALOG_JSON: &str = include_str!("empty_catalog.json");
+
+/// Which catalog a spawned daemon gets through `STACKLY_CATALOG_DIR`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum SpawnCatalog {
+    /// A fresh folder in the root holding [`EMPTY_CATALOG_JSON`].
+    #[default]
+    Empty,
+    /// This catalog folder, for example one a test wrote.
+    Dir(PathBuf),
+    /// No `STACKLY_CATALOG_DIR`, so the daemon has no catalog.
+    Unset,
+    /// This exact value of `STACKLY_CATALOG_DIR`, valid or not.
+    Raw(OsString),
+}
+
 /// A `stacklyd` process started for one test, which never outlives it.
 ///
-/// The daemon runs with `STACKLY_ROOT=<root>` and `STACKLY_LOG=debug`, its
+/// The daemon runs with `STACKLY_ROOT=<root>`, `STACKLY_LOG=debug`, and by
+/// default `STACKLY_CATALOG_DIR` pointing at an empty catalog in the root
+/// (see [`SpawnCatalog`]), its
 /// stdout goes nowhere and its stderr to a fresh file inside the root. On
 /// drop the process gets SIGTERM (through `/bin/kill`, so testkit needs no
 /// libc), then is killed if it still runs after
@@ -55,7 +78,24 @@ impl SpawnedDaemon {
         runtime_root: &Path,
         ready: impl FnMut(&Self) -> bool,
     ) -> io::Result<Self> {
-        let mut daemon = Self::spawn(bin, root, socket, runtime_root, &[])?;
+        Self::start_with_catalog(bin, root, socket, runtime_root, SpawnCatalog::Empty, ready)
+    }
+
+    /// [`start`](Self::start) with a chosen catalog.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`start`](Self::start), and the I/O error when the
+    /// empty catalog cannot be written.
+    pub fn start_with_catalog(
+        bin: &Path,
+        root: &Path,
+        socket: &Path,
+        runtime_root: &Path,
+        catalog: SpawnCatalog,
+        ready: impl FnMut(&Self) -> bool,
+    ) -> io::Result<Self> {
+        let mut daemon = Self::spawn_with_catalog(bin, root, socket, runtime_root, &[], catalog)?;
         daemon.wait_ready(ready)?;
         Ok(daemon)
     }
@@ -74,16 +114,52 @@ impl SpawnedDaemon {
         runtime_root: &Path,
         args: &[&str],
     ) -> io::Result<Self> {
+        Self::spawn_with_catalog(bin, root, socket, runtime_root, args, SpawnCatalog::Empty)
+    }
+
+    /// [`spawn`](Self::spawn) with a chosen catalog.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`spawn`](Self::spawn), and the I/O error when the
+    /// empty catalog cannot be written.
+    pub fn spawn_with_catalog(
+        bin: &Path,
+        root: &Path,
+        socket: &Path,
+        runtime_root: &Path,
+        args: &[&str],
+        catalog: SpawnCatalog,
+    ) -> io::Result<Self> {
+        let catalog_dir = match catalog {
+            SpawnCatalog::Empty => {
+                let dir = tempfile::Builder::new()
+                    .prefix("stacklyd-catalog-")
+                    .tempdir_in(root)?
+                    .keep();
+                std::fs::write(dir.join("catalog.json"), EMPTY_CATALOG_JSON)?;
+                Some(dir.into_os_string())
+            }
+            SpawnCatalog::Dir(dir) => Some(dir.into_os_string()),
+            SpawnCatalog::Raw(value) => Some(value),
+            SpawnCatalog::Unset => None,
+        };
         let (file, stderr) = tempfile::Builder::new()
             .prefix("stacklyd-")
             .suffix(".stderr")
             .tempfile_in(root)?
             .keep()
             .map_err(|error| error.error)?;
-        let child = Command::new(bin)
+        let mut command = Command::new(bin);
+        command
             .args(args)
             .env("STACKLY_ROOT", root)
             .env("STACKLY_LOG", "debug")
+            .env_remove("STACKLY_CATALOG_DIR");
+        if let Some(dir) = catalog_dir {
+            command.env("STACKLY_CATALOG_DIR", dir);
+        }
+        let child = command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::from(file))

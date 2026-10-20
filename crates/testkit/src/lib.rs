@@ -45,6 +45,7 @@ mod cargo_bin;
 mod conformance;
 #[cfg(target_os = "macos")]
 mod disk_image;
+mod fake_agent;
 #[cfg(unix)]
 mod fake_fs;
 #[cfg(unix)]
@@ -70,8 +71,9 @@ pub use conformance::fs_conformance;
 pub use conformance::{CrossDevice, fs_cross_device_conformance};
 #[cfg(target_os = "macos")]
 pub use disk_image::DiskImage;
+pub use fake_agent::{FAKE_AGENT_BUNDLE, FakeBackgroundAgent};
 #[cfg(unix)]
-pub use fake_fs::{FakeFilesystem, Fault, FsOp, Mutation};
+pub use fake_fs::{FakeFilesystem, FakeVolume, Fault, FsOp, Mutation};
 #[cfg(unix)]
 pub use fake_platform::{FakeClock, FakeIdentity, FakePlatform, FakePlatformInfo};
 #[cfg(unix)]
@@ -89,6 +91,8 @@ pub use registry::{
     registry_conformance, seeded_observation,
 };
 #[cfg(unix)]
-pub use spawned_daemon::{DAEMON_START_TIMEOUT, DAEMON_STOP_TIMEOUT, SpawnedDaemon};
+pub use spawned_daemon::{
+    DAEMON_START_TIMEOUT, DAEMON_STOP_TIMEOUT, EMPTY_CATALOG_JSON, SpawnCatalog, SpawnedDaemon,
+};
 pub use stackly_evidence as evidence;
 pub use test_root::TestRoot;
