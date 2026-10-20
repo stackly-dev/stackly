@@ -201,7 +201,7 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
   - [x] Crash, spool, and reconciliation: restart policy in the actor, spool reader with redaction and punch hole, reconciliation table, adoption, `unknown` recheck, and daemon shutdown without signals (spec 0010 AC-7 to AC-12, AC-17, AC-21, AC-22; build steps 9 to 11; the spool step can run as its own session)
   - [ ] Daemon, IPC, and end to end proof: protocol DTOs, events, and error codes with fixtures and Swift contract tests, `stacklyd` start slot and shutdown step, `instance.create`, `start`, `stop`, `get`, and `list`, `install_fake`, daemon integration tests with evidence, `check-deps` rules, and the NFR-003 measurement (spec 0010 AC-3 to AC-12, AC-15 to AC-17, AC-20, AC-21, AC-23; build steps 12 to 15; needs the spec 0006 daemon server, the spec 0005 SQLite registry, and `ReplaceSecretUses` from spec 0011 step 0 for create; protocol and `check-deps` can run as parallel sessions)
 - [ ] Verify it: `/check verify process supervisor`
-- [ ] Test it: `/test process supervisor`
+- [x] Test it: `/test process supervisor`
 - [ ] Review it (fresh model): `/check review process supervisor`
 - [ ] Document it: `/document process supervisor`
 
