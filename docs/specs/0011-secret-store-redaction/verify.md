@@ -97,3 +97,19 @@ _Build step 8. Test CLI memakai daemon skrip (`ScriptedDaemon`) atau `stacklyd` 
 - AC-16 (bagian CLI) · `cli_secret` terhadap `stacklyd` sungguhan dan `secret` terhadap daemon skrip; AC-17 · `secret_input` dan `secret`; AC-7 · batas nilai di CLI (kosong, NUL, 65537 byte, UTF-8 tidak valid) sebelum daemon disentuh
 - Menunggu step 7 (suite sentinel daemon): rekaman frame IPC selama skenario sentinel; CLI tidak menulis rekaman frame sendiri
 - Menunggu fitur lain: pemakai `--secret <field>=<sumber>` (create instance dan restore, spec 0020); dialog Keychain sungguhan untuk panggilan `AllowPrompt` (`RequestTimeout::Interactive`) dibuktikan di record manual step 7
+
+## Milestone 6: Swift client and GUI secret flows
+
+_Build step 9 (`StacklyClient` dan `StacklyTestSupport`) dan step 10 (`StacklyUI`). Semua test memakai fixture credential atau nilai contoh tetap `not-a-real-secret`, tidak pernah credential asli. Step 11 (record manual GUI) menambah ke bagian ini setelah step 10 masuk._
+
+### Commands
+
+- [ ] `swift test --package-path clients/swift --filter SecretsClientTests` → lima method (`listSecrets`, `secretStatus`, `setSecret`, `revealSecret`, `deleteSecret`) membangun params kontrak, membaca balasan fixture, memakai batas waktu 190 detik untuk panggilan yang bisa menunggu dialog Keychain dan 10 detik untuk list dan status; balasan jenis lain atau untuk reference lain menjadi `outcomeUnknown` dengan `ipc.protocol_violation`; error daemon sampai utuh; nilai asing enum terbuka terbaca `.unrecognized` → AC-18
+- [ ] `swift test --package-path clients/swift --filter RevealedSecretTests` → `description`, `debugDescription`, interpolasi, `print`, `debugPrint`, `dump`, dan `String(reflecting:)` mencetak `RevealedSecret(<reference>, ****)` tanpa nilai; mirror hanya berisi reference dan `****`; nilai tetap terbaca lewat `value` → AC-18, AC-14 (AC-016, REQ-016)
+- [ ] `swift test --package-path clients/swift --filter FixtureCredentialTests` → nilai `stackly-fixture-credential-<32 hex huruf kecil>`, dua nilai berbeda, `description`, `debugDescription`, dan `dump` bertopeng `FixtureCredential(****)`, `assertAbsent(in:what:)` mencatat `fixture credential found in <what>` tanpa nilai, dan prefix sama dengan `FIXTURE_CREDENTIAL_PREFIX` di `crates/evidence/src/credential.rs` → AC-18
+- [ ] `swift test --package-path clients/swift` → seluruh suite tetap lulus, termasuk `SourceRuleTests` (tanpa spawn proses atau socket jaringan di `clients/swift/Sources`) dan fixture secret di `protocols/fixtures/ipc/` (`frame-response-secret-reveal.json` dengan nilai `not-a-real-secret`) → AC-18
+
+### Acceptance-criteria coverage
+
+- AC-18 · `SecretsClientTests`, `RevealedSecretTests`, `FixtureCredentialTests`
+- Catatan: prefix `FixtureCredential` dicek terhadap konstanta Rust lewat teks `credential.rs`, karena belum ada fixture prefix di `protocols/fixtures/` (spec *Sisi Swift fixture credential* menyebut satu fixture; folder itu bukan milik sesi ini)
