@@ -1,6 +1,6 @@
 # Langkah manual untuk user: `01-foundation`
 
-Tiga langkah manual menahan F11 milestone 4 dan 6, dan F14 milestone 4. Jalankan dari root repo di checkout utama (`main` ≥ `cdd1434`), di Terminal sungguhan dengan sesi GUI. Kirim hasilnya ke sesi lead. Lead meneruskannya ke sub sesi yang mengisi record di `evidence/manual/`.
+Empat langkah manual menahan F11 milestone 4 dan 6, serta F14 milestone 4 dan 5. Jalankan dari root repo di checkout utama (`main` ≥ `cdd1434`), di Terminal sungguhan dengan sesi GUI. Kirim hasilnya ke sesi lead. Lead meneruskannya ke sub sesi yang mengisi record di `evidence/manual/`.
 
 ## A. Deny dan Cancel di login Keychain (F11 langkah 7)
 
@@ -90,3 +90,14 @@ Record: `evidence/manual/2026-10-20-walking-skeleton-through-the-cli-and-gui.jso
     - Jalankan `rm -rf "$R"`, lalu cek `ls "$TMPDIR" | grep '^stackly-'`.
 
 Yang dikirim: untuk setiap langkah yang tidak sesuai, nomornya dan apa yang terlihat, plus versi macOS. Lead meneruskannya ke sub sesi yang mengisi record.
+
+## D. Keychain terkunci terlihat di app (F14 milestone 5, AC-19)
+
+Satu baris di `docs/specs/0014-walking-skeleton/verify.md` Milestone 5 (bagian UI / manual, butir ketiga). Bagian CLI-nya sudah lulus oleh checker; yang tersisa hanya pengamatan di jendela app. Bisa dijalankan tepat sesudah bagian C (root `$R` dan instance `demo` yang sama), sebelum langkah pembersihan C.14.
+
+1. Pastikan `demo` berhenti: `STACKLY_ROOT="$R" $S instance stop $ID --wait`.
+2. Kunci keychain file root itu: `security lock-keychain "$R/data/keychain/stackly.keychain-db"`.
+3. `STACKLY_ROOT="$R" $S instance start $ID --wait </dev/null`. Perintah ini harus gagal dengan `secret.needs_secret` dan tanpa dialog. `STACKLY_ROOT="$R" $S instance get $ID` harus menampilkan `Blocker` `needs secret`. Di app, baris `demo` harus tetap Stopped.
+4. Hentikan `stacklyd` (Ctrl+C di Terminal B), jalankan lagi, lalu ulangi start tanpa `</dev/null`. Start sekarang harus berhasil, dan baris `demo` di app menjadi Running.
+
+Yang dikirim: apakah baris app tetap Stopped di langkah 3, dan apakah start di langkah 4 berhasil.
