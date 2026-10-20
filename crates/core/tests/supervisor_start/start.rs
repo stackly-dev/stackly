@@ -118,6 +118,7 @@ async fn a_slow_server_reads_running_but_not_ready_until_its_probe_answers() {
     rig.serve(&spawn);
     wait_for("the process is running", || {
         rig.sup.status(id).process.is_some()
+            && rig.instance_row(id).lifecycle() == InstanceLifecycle::Running
     })
     .await;
     let early = rig.sup.status(id);
@@ -573,8 +574,9 @@ async fn the_readiness_deadline_fails_the_operation_but_the_process_and_its_prob
 
     // The server comes up late: the probe that kept going sees it.
     rig.serve(&spawn);
-    wait_for("readiness turns ready", || {
-        rig.sup.status(id).readiness.state() == ReadinessState::Ready
+    wait_for("readiness turns ready with final ports", || {
+        let status = rig.sup.status(id);
+        status.readiness.state() == ReadinessState::Ready && status.ports_final
     })
     .await;
     assert!(rig.sup.status(id).ports_final);

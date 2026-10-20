@@ -253,8 +253,9 @@ async fn sixty_seconds_of_ready_clears_the_history_so_the_next_crash_is_the_firs
 
     rig.processes()
         .exit(second.pid, Some(ExitStatus::Exited(1)));
-    wait_for("the instance recovers", || {
+    wait_for("the instance recovers with one attempt counted", || {
         rig.instance_row(id).lifecycle() == InstanceLifecycle::Recovering
+            && rig.sup.status(id).restart.attempts == 1
     })
     .await;
 

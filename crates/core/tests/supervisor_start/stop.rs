@@ -107,8 +107,9 @@ async fn a_stop_past_its_budget_fails_keeps_stopping_and_the_exit_ends_it_later(
     // The process finally exits on its own: the same handler stops it.
     rig.kill_servers();
     rig.processes().exit(spawn.pid, Some(ExitStatus::Exited(0)));
-    wait_for("the instance stops", || {
+    wait_for("the instance stops and its process is forgotten", || {
         rig.instance_row(id).lifecycle() == InstanceLifecycle::Stopped
+            && rig.sup.status(id).process.is_none()
     })
     .await;
     assert!(rig.sup.status(id).process.is_none());
@@ -282,8 +283,9 @@ async fn ac_5_a_stop_command_past_its_timeout_fails_with_stop_timeout_and_the_in
     // The exit of the main process ends the stop through the one handler.
     rig.kill_servers();
     rig.processes().exit(spawn.pid, Some(ExitStatus::Exited(0)));
-    wait_for("the instance stops", || {
+    wait_for("the instance stops and its process is forgotten", || {
         rig.instance_row(id).lifecycle() == InstanceLifecycle::Stopped
+            && rig.sup.status(id).process.is_none()
     })
     .await;
     assert!(rig.sup.status(id).process.is_none());
