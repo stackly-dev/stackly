@@ -919,6 +919,50 @@ async fn replay_of_an_unbound_key_is_none_and_writes_nothing_and_publishes_nothi
     assert_eq!(before.0, (false, before.0.1));
 }
 
+/// covers: AC-21. A hit writes nothing and publishes nothing either: the
+/// registry generation and the events are the same after it, for an
+/// operation and for a recorded no-op answer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_of_a_bound_key_writes_nothing_and_publishes_nothing() {
+    let harness = Harness::new().await;
+    let mut first = manager_request(
+        OperationKind::UpdateManager,
+        ScriptedWork::new().step("apply").boxed(),
+    );
+    first.origin = user("hit-quiet", 0xa1);
+    let origin = origin_of(&first);
+    let BeginOutcome::Created(created) = harness.engine.begin(first).await.unwrap() else {
+        panic!("a new key creates an operation");
+    };
+    wait_state(
+        &harness.engine,
+        created.operation.id(),
+        OperationState::Succeeded,
+    )
+    .await;
+    let target = instance(&harness);
+    let no_op = request_origin("instance.stop", "hit-quiet-no-op", 0xa2);
+    record_no_op(&harness, target, no_op.clone()).await;
+
+    let before = (
+        bound(&harness, "hit-quiet"),
+        bound(&harness, "hit-quiet-no-op"),
+        harness.events.events().len(),
+    );
+    let operation = harness.engine.replay(&origin).await.unwrap();
+    let answer = harness.engine.replay(&no_op).await.unwrap();
+    let after = (
+        bound(&harness, "hit-quiet"),
+        bound(&harness, "hit-quiet-no-op"),
+        harness.events.events().len(),
+    );
+
+    assert!(matches!(operation, Some(BeginOutcome::Replayed(_))));
+    assert!(matches!(answer, Some(BeginOutcome::NoOp(_))));
+    assert!(before.0.0 && before.1.0, "both keys were bound");
+    assert_eq!(after, before, "generation and events did not move");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn replay_refuses_a_key_bound_to_another_method_or_another_fingerprint() {
     let harness = Harness::new().await;

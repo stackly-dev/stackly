@@ -741,6 +741,66 @@ async fn a_failed_operation_carries_its_items_rule_and_omitted_count_on_get_even
     stop(daemon).await;
 }
 
+/// covers: AC-16. A parked operation carries the items and the rule of its
+/// cause in `recovery.error`, and a restart reads the same back.
+#[tokio::test]
+async fn a_parked_operation_carries_its_items_and_rule_in_recovery_error_after_a_restart() {
+    let site = Site::new();
+    let scripts = Scripts::new();
+    let parked = || {
+        ScriptedWork::new()
+            .step("download")
+            .repeatable()
+            .irreversible()
+            .fail("provider.invalid_settings", false)
+            .failing_with(
+                vec![("issueCount".parse().unwrap(), "2".to_owned())],
+                vec![issue("/port", "too large"), issue("/name", "empty")],
+                Some(Rule::Br002),
+            )
+    };
+    scripts.add(
+        "parked",
+        Script::new(OperationKind::InstallRuntime, parked()).rebuilt_as(parked()),
+    );
+    let daemon = site.start(&scripts).await;
+    let client = client(&site).await;
+    let mut raw = Raw::ready(&site.socket()).await;
+
+    let id = accepted(&raw.start(Some(&key()), json!({ "script": "parked" })).await)
+        .operation
+        .id;
+    let stuck = wait_state(&client, id, OperationState::NeedsRecovery).await;
+
+    let error = stuck
+        .operation
+        .recovery
+        .expect("recovery info")
+        .error
+        .expect("the cause's error");
+    checked(&error);
+    assert_eq!(error.rule(), Some("BR-002"));
+    assert_eq!(error.detail("issueCount"), Some("2"));
+    assert_eq!(error.items().len(), 2);
+    assert_eq!(error.items()[0].field("location"), Some("/port"));
+    assert_eq!(error.items()[1].field("reason"), Some("empty"));
+    assert_eq!(stuck.operation.failure, None);
+
+    drop(client);
+    drop(raw);
+    stop(daemon).await;
+    let daemon = site.start(&scripts).await;
+    let client = self::client(&site).await;
+    let after = get(&client, id).await;
+    assert_eq!(after.operation.state, OperationState::NeedsRecovery);
+    assert_eq!(
+        after.operation.recovery.and_then(|recovery| recovery.error),
+        Some(error),
+        "the same error, items, and rule after a restart"
+    );
+    stop(daemon).await;
+}
+
 #[tokio::test]
 async fn items_past_the_stored_size_limit_are_cut_by_the_engine_before_sqlite_checks_them() {
     let site = Site::new();

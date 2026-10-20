@@ -141,6 +141,32 @@ fn the_checks_refuse_items_or_a_rule_without_an_error_and_bad_shapes() {
     assert_eq!(failure_columns(&conn, WITH_ITEMS).1, None);
 }
 
+/// covers: AC-17. The CHECK allows `failure_items` up to and including 65 536
+/// bytes and refuses one byte more.
+#[test]
+fn the_items_check_accepts_exactly_65536_bytes_and_refuses_one_more() {
+    let harness = Harness::new();
+    harness.load_fixture(&fixture(4));
+    let _ = ready(harness.open());
+    let conn = harness.connect();
+    let at = |len: usize| {
+        let prefix = r#"[{"kind":"issue","fields":[{"key":"a","value":""#;
+        let suffix = r#""}]}]"#;
+        let pad = len - prefix.len() - suffix.len();
+        format!("{prefix}{}{suffix}", "x".repeat(pad))
+    };
+
+    assert_eq!(at(65_536).len(), 65_536);
+    assert!(set(&conn, WITH_ITEMS, &at(65_536), None).is_ok());
+    assert_eq!(failure_columns(&conn, WITH_ITEMS).0.len(), 65_536);
+    assert!(set(&conn, WITH_ITEMS, &at(65_537), None).is_err());
+    assert_eq!(
+        failure_columns(&conn, WITH_ITEMS).0.len(),
+        65_536,
+        "the refused write left the row alone"
+    );
+}
+
 #[test]
 fn a_rule_id_the_domain_does_not_know_is_a_corrupt_row() {
     let harness = Harness::new();
