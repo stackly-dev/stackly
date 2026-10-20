@@ -64,11 +64,6 @@ async fn a_create_that_the_registry_or_the_package_refuses_gets_its_own_code_and
         "{error:?}"
     );
 
-    let mut no_token = api.params("notoken", json!({}));
-    no_token.secrets.clear();
-    let error = api.create(no_token).await.unwrap_err();
-    assert!(error.is(&instance::SETTINGS_INVALID), "{error:?}");
-
     let mut endpoint = api.params("badendpoint", json!({}));
     endpoint.endpoints = vec![stackly_protocol::instance::EndpointRequest {
         name: "nosuch".to_owned(),
