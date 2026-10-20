@@ -1,0 +1,16 @@
+#!/bin/zsh
+# Rebuilds only spike-agent with a build tag (new cdhash) inside the existing bundle, then re-signs the bundle.
+set -euo pipefail
+S=${0:A:h:h}
+APP=$S/build/StacklyTestAgentSpike.app
+C=$APP/Contents
+TAG=$1
+sed -e "s|@SPIKE_DIR@|$S|g" -e "s|@BUILD@|$TAG|g" $S/src/spike-agent.swift > $S/obj/spike-agent-$TAG.swift
+xcrun swiftc -O -swift-version 5 -target arm64-apple-macosx27.0 -o $S/obj/spike-agent-$TAG $S/obj/spike-agent-$TAG.swift
+# Replace the file the way an installer copy does: write a new file, then rename over the old one.
+cp $S/obj/spike-agent-$TAG $C/MacOS/.spike-agent.new
+codesign --force --sign - --options runtime --timestamp=none --identifier dev.stackly.test.agent.spike-agent $C/MacOS/.spike-agent.new
+mv -f $C/MacOS/.spike-agent.new $C/MacOS/spike-agent
+codesign --force --sign - --options runtime --timestamp=none $APP
+codesign --verify --strict --deep $APP && echo "verify ok"
+for f in $C/MacOS/spike-agent $APP; do echo "$f"; codesign -dvvv $f 2>&1 | grep -E "^CDHash="; done

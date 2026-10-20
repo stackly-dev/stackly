@@ -1,0 +1,29 @@
+# Helpers for the spike shell steps.
+S=<spike>
+APP=$S/build/StacklyTestAgentSpike.app
+cd $S
+nowms() { python3 -c 'import time;print(int(time.time()*1000))'; }
+short() { python3 -c 'import json,sys
+for l in sys.stdin:
+  l=l.strip()
+  if not l.startswith("{"): print(l); continue
+  d=json.loads(l); print(json.dumps({k:d[k] for k in ("op","isMainThread","bundleMainIdentifier","statusBefore","steps","statusFinal") if k in d}))'; }
+# waitstart <after_ms> <timeout_s>: waits for an agent "start" line after after_ms, prints the delay.
+waitstart() { python3 - "$1" "$2" <<'PY'
+import json,sys,time
+after=int(sys.argv[1]); deadline=time.time()+float(sys.argv[2])
+path="<spike>/logs/agent.log"
+while time.time()<deadline:
+    for l in open(path):
+        d=json.loads(l)
+        if d["event"]=="start" and d["ms"]>after:
+            print(f"new start pid {d['pid']} at {d['time']}, {d['ms']-after} ms after reference; ppid {d['ppid']} XPC_SERVICE_NAME {d['XPC_SERVICE_NAME']}")
+            sys.exit(0)
+    time.sleep(0.05)
+print(f"no new start within {sys.argv[2]} s"); sys.exit(1)
+PY
+}
+lastevents() { tail -n ${1:-4} $S/logs/agent.log | python3 -c 'import json,sys
+for l in sys.stdin:
+  d=json.loads(l); d.pop("envKeys",None); d.pop("bundleMainPath",None); d.pop("executable",None); print(json.dumps(d))'; }
+listjob() { launchctl list | grep dev.stackly.test || echo "(no dev.stackly.test job in launchctl list)"; }

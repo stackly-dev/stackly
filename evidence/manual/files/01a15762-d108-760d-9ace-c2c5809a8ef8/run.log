@@ -1,0 +1,656 @@
+=================== 01-build.log
+<spike>/build/StacklyTestAgentSpike.app/Contents/Info.plist: OK
+<spike>/build/StacklyTestAgentSpike.app/Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist: OK
+<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spike-agent: replacing existing signature
+<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spikectl: replacing existing signature
+<spike>/build/StacklyTestAgentSpike.app: replacing existing signature
+--prepared:<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spikectl
+--prepared:<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spike-agent
+--validated:<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spikectl
+--validated:<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spike-agent
+<spike>/build/StacklyTestAgentSpike.app: valid on disk
+<spike>/build/StacklyTestAgentSpike.app: satisfies its Designated Requirement
+== <spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spike-agent
+Identifier=dev.stackly.test.agent.spike-agent
+Format=Mach-O thin (arm64)
+CodeDirectory v=20500 size=387 flags=0x10002(adhoc,runtime) hashes=6+2 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+Runtime Version=27.0.0
+# designated => cdhash H"03b0d93c2c384d313031c0c37d4af4b5433866c0"
+== <spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spikectl
+Identifier=dev.stackly.test.agent.spikectl
+Format=Mach-O thin (arm64)
+CodeDirectory v=20500 size=352 flags=0x10002(adhoc,runtime) hashes=5+2 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+Runtime Version=27.0.0
+# designated => cdhash H"e5d794647499cccc534c8464efe211dc518ab4c5"
+== <spike>/build/StacklyTestAgentSpike.app
+Identifier=dev.stackly.test.agent.spikeapp
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=384 flags=0x10002(adhoc,runtime) hashes=5+3 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+Runtime Version=27.0.0
+# designated => cdhash H"9cba0e54884185105e273f1bf28d4008ee09c517"
+<spike>/bin/spikectl-copy: replacing existing signature
+built <spike>/build/StacklyTestAgentSpike.app
+=================== 02-baseline.log
+### 2026-10-20T02:21:18.3NZ baseline before any registration
+$ xattr -lr build/StacklyTestAgentSpike.app
+<spike>/build/StacklyTestAgentSpike.app/Contents/_CodeSignature/CodeResources: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/_CodeSignature: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/StacklyTestAgentSpike: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spikectl: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spike-agent: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/Library/LaunchAgents: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/Library: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents/Info.plist: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app/Contents: com.apple.provenance: 
+<spike>/build/StacklyTestAgentSpike.app: com.apple.provenance: 
+(exit 0)
+$ launchctl list | grep dev.stackly.test
+(grep exit 1)
+$ Contents/MacOS/StacklyTestAgentSpike status   # main executable
+{"argv0":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/StacklyTestAgentSpike","bundleMainExecutable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/StacklyTestAgentSpike","bundleMainIdentifier":"dev.stackly.test.agent.spikeapp","bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","finishedMs":1792462879132,"isMainThread":true,"nsGetExecutablePath":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/StacklyTestAgentSpike","op":"status","statusBefore":{"ms":17,"name":"notFound","raw":3},"statusFinal":{"ms":8,"name":"notFound","raw":3},"steps":[]}
+$ Contents/MacOS/spikectl status   # second tool in Contents/MacOS
+{"argv0":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spikectl","bundleMainExecutable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spikectl","bundleMainIdentifier":"dev.stackly.test.agent.spikeapp","bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","finishedMs":1792462879173,"isMainThread":true,"nsGetExecutablePath":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spikectl","op":"status","statusBefore":{"ms":4,"name":"notFound","raw":3},"statusFinal":{"ms":3,"name":"notFound","raw":3},"steps":[]}
+$ Contents/MacOS/spikectl status --bg   # call on a background thread
+{"argv0":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spikectl","bundleMainExecutable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spikectl","bundleMainIdentifier":"dev.stackly.test.agent.spikeapp","bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","finishedMs":1792462879197,"isMainThread":false,"nsGetExecutablePath":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spikectl","op":"status","statusBefore":{"ms":4,"name":"notFound","raw":3},"statusFinal":{"ms":4,"name":"notFound","raw":3},"steps":[]}
+$ bin/spikectl status   # symlink outside the bundle -> Contents/MacOS/spikectl
+lrwxr-xr-x@ 1 ojiepermana  wheel  223 Oct 20 09:21 bin/spikectl -> <spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spikectl
+{"argv0":"bin\/spikectl","bundleMainExecutable":"<spike>\/bin\/spikectl","bundleMainIdentifier":null,"bundleMainPath":"<spike>\/bin","finishedMs":1792462879229,"isMainThread":true,"nsGetExecutablePath":"<spike>\/bin\/spikectl","op":"status","statusBefore":{"ms":4,"name":"notFound","raw":3},"statusFinal":{"ms":5,"name":"notFound","raw":3},"steps":[]}
+$ bin/spikectl-copy status   # plain copy outside any bundle
+{"argv0":"bin\/spikectl-copy","bundleMainExecutable":"<spike>\/bin\/spikectl-copy","bundleMainIdentifier":null,"bundleMainPath":"<spike>\/bin","finishedMs":1792462879523,"isMainThread":true,"nsGetExecutablePath":"<spike>\/bin\/spikectl-copy","op":"status","statusBefore":{"ms":1,"name":"notFound","raw":3},"statusFinal":{"ms":1,"name":"notFound","raw":3},"steps":[]}
+=================== 03-register.log
+### 2026-10-20T02:21:48Z check 1: register from Contents/MacOS/spikectl
+$ Contents/MacOS/spikectl register
+{"op": "register", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 23, "name": "notFound", "raw": 3}, "steps": [{"call": "register", "endMs": 1792462908857, "ms": 141, "ok": true, "startMs": 1792462908716, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 5, "name": "enabled", "raw": 1}}
+$ cat logs/agent.log
+{"bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","cwd":"\/","envKeys":["HOME","LOGNAME","OSLogRateLimit","PATH","SHELL","SSH_AUTH_SOCK","TMPDIR","USER","XPC_FLAGS","XPC_SERVICE_NAME","__CF_USER_TEXT_ENCODING"],"event":"start","executable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spike-agent","HOME":"\/Users\/ojiepermana","isatty0":false,"ms":1792462909357,"PATH":"\/usr\/bin:\/bin:\/usr\/sbin:\/sbin","pgid":93330,"pid":93330,"ppid":1,"sid":1,"time":"2026-10-20T02:21:49.357Z","TMPDIR":"\/var\/folders\/sx\/35k0wvh13dg0cgpr19hnkjb80000gp\/T\/","uid":502,"XPC_FLAGS":"0x0","XPC_SERVICE_NAME":"dev.stackly.test.agent.spike"}
+{"event":"children","groupChild":93383,"ms":1792462910124,"ownSessionChild":93382,"pid":93330,"time":"2026-10-20T02:21:50.124Z"}
+$ launchctl list | grep dev.stackly.test
+93330	0	dev.stackly.test.agent.spike
+(grep exit 0)
+$ Contents/MacOS/StacklyTestAgentSpike status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 22, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 13, "name": "enabled", "raw": 1}}
+$ Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 16, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 8, "name": "enabled", "raw": 1}}
+$ Contents/MacOS/spikectl status --bg
+{"op": "status", "isMainThread": false, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 25, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 35, "name": "enabled", "raw": 1}}
+$ bin/spikectl status   # symlink
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 8, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 6, "name": "enabled", "raw": 1}}
+$ bin/spikectl-copy status   # copy outside any bundle
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 3, "name": "notFound", "raw": 3}, "steps": [], "statusFinal": {"ms": 1, "name": "notFound", "raw": 3}}
+=================== 04-reregister-unregister.log
+### 2026-10-20T02:22:12Z register while already registered and enabled
+$ Contents/MacOS/spikectl register
+{"op": "register", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 33, "name": "enabled", "raw": 1}, "steps": [{"call": "register", "endMs": 1792462933051, "ms": 20, "ok": true, "startMs": 1792462933031, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 14, "name": "enabled", "raw": 1}}
+$ launchctl list | grep dev.stackly.test
+93330	0	dev.stackly.test.agent.spike
+$ launchctl print gui/502/dev.stackly.test.agent.spike (selected lines)
+gui/502/dev.stackly.test.agent.spike = {
+	path = (submitted by smd.28489)
+	managed_by = com.apple.xpc.ServiceManagement
+	state = running
+	program identifier = Contents/MacOS/spike-agent (mode: 2)
+	parent bundle identifier = dev.stackly.test.agent.spikeapp
+	parent bundle version = 1
+	domain = gui/502 [100002]
+	runs = 1
+	pid = 93330
+	immediate reason = speculative
+	forks = 2
+	execs = 1
+	last exit code = (never exited)
+		state = active
+		state = active
+	spawn type = daemon (3)
+	jetsamproperties category = daemon
+	submitted job. ignore execute allowed
+	job state = running
+	properties = partial import | runatload | resolve program | has LWCR
+}
+
+### 2026-10-20T02:22:14Z check 6: unregister while the job runs
+$ Contents/MacOS/spikectl unregister
+{"op": "unregister", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 13, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792462934367, "ms": 20, "ok": true, "startMs": 1792462934347, "statusAfter": {"name": "notRegistered", "raw": 0}}], "statusFinal": {"ms": 9, "name": "notRegistered", "raw": 0}}
+$ tail -n 3 logs/agent.log
+{"bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","cwd":"\/","envKeys":["HOME","LOGNAME","OSLogRateLimit","PATH","SHELL","SSH_AUTH_SOCK","TMPDIR","USER","XPC_FLAGS","XPC_SERVICE_NAME","__CF_USER_TEXT_ENCODING"],"event":"start","executable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spike-agent","HOME":"\/Users\/ojiepermana","isatty0":false,"ms":1792462909357,"PATH":"\/usr\/bin:\/bin:\/usr\/sbin:\/sbin","pgid":93330,"pid":93330,"ppid":1,"sid":1,"time":"2026-10-20T02:21:49.357Z","TMPDIR":"\/var\/folders\/sx\/35k0wvh13dg0cgpr19hnkjb80000gp\/T\/","uid":502,"XPC_FLAGS":"0x0","XPC_SERVICE_NAME":"dev.stackly.test.agent.spike"}
+{"event":"children","groupChild":93383,"ms":1792462910124,"ownSessionChild":93382,"pid":93330,"time":"2026-10-20T02:21:50.124Z"}
+{"event":"sigterm","ms":1792462934366,"pid":93330,"time":"2026-10-20T02:22:14.366Z"}
+$ launchctl list | grep dev.stackly.test
+(grep exit 1)
+$ children of the first job (901 own session, 902 agent group)
+pid 93330 gone
+pid 93382 alive: 93382     1 93382      0 /bin/sleep 901
+pid 93383 gone
+$ Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 8, "name": "notRegistered", "raw": 0}, "steps": [], "statusFinal": {"ms": 14, "name": "notRegistered", "raw": 0}}
+$ bin/spikectl status   # symlink
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 34, "name": "notRegistered", "raw": 0}, "steps": [], "statusFinal": {"ms": 9, "name": "notRegistered", "raw": 0}}
+$ Contents/MacOS/spikectl unregister   # unregister when not registered
+{"op": "unregister", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 6, "name": "notRegistered", "raw": 0}, "steps": [{"call": "unregister", "endMs": 1792462936732, "ms": 19, "ok": true, "startMs": 1792462936713, "statusAfter": {"name": "notRegistered", "raw": 0}}], "statusFinal": {"ms": 13, "name": "notRegistered", "raw": 0}}
+=================== 05-relaunch-a-b.log
+### 2026-10-20T02:22:44Z check 3a: register when not registered, last launch more than 10 s ago
+$ Contents/MacOS/spikectl register
+{"op": "register", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 6, "name": "notRegistered", "raw": 0}, "steps": [{"call": "register", "endMs": 1792462964864, "ms": 18, "ok": true, "startMs": 1792462964846, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 14, "name": "enabled", "raw": 1}}
+new start pid 97660 at 2026-10-20T02:22:45.154Z, 328 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+97660	0	dev.stackly.test.agent.spike
+
+### 2026-10-20T02:22:45Z check 3b: relaunch (unregister then register) while the job runs, launched under 10 s ago
+$ Contents/MacOS/spikectl relaunch
+{"op": "relaunch", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 11, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792462967420, "ms": 27, "ok": true, "startMs": 1792462967393, "statusAfter": {"name": "notRegistered", "raw": 0}}, {"call": "register", "endMs": 1792462967490, "ms": 49, "ok": true, "startMs": 1792462967441, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 12, "name": "enabled", "raw": 1}}
+new start pid 97929 at 2026-10-20T02:22:47.970Z, 668 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+{"event": "sigterm", "ms": 1792462934366, "pid": 93330, "time": "2026-10-20T02:22:14.366Z"}
+{"cwd": "/", "event": "start", "HOME": "/Users/ojiepermana", "isatty0": false, "ms": 1792462965154, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 97660, "pid": 97660, "ppid": 1, "sid": 1, "time": "2026-10-20T02:22:45.154Z", "TMPDIR": "/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
+{"event": "children", "groupChild": 97665, "ms": 1792462965206, "ownSessionChild": 97664, "pid": 97660, "time": "2026-10-20T02:22:45.206Z"}
+{"event": "sigterm", "ms": 1792462967417, "pid": 97660, "time": "2026-10-20T02:22:47.417Z"}
+{"cwd": "/", "event": "start", "HOME": "/Users/ojiepermana", "isatty0": false, "ms": 1792462967970, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 97929, "pid": 97929, "ppid": 1, "sid": 1, "time": "2026-10-20T02:22:47.970Z", "TMPDIR": "/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
+97929	0	dev.stackly.test.agent.spike
+=================== 06-stop-exit75.log
+### 2026-10-20T02:23:02Z check 3c: job exits 0 (stop); KeepAlive SuccessfulExit false keeps it dead; then relaunch
+{"code": 0, "event": "exit", "ms": 1792462982706, "pid": 97929, "time": "2026-10-20T02:23:02.706Z", "why": "control stop"}
+waiting 15 s for an unwanted respawn
+no new start within 15 s
+-	0	dev.stackly.test.agent.spike
+$ Contents/MacOS/spikectl status   # job loaded, not running
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 17, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 9, "name": "enabled", "raw": 1}}
+$ launchctl print (state lines)
+	state = not running
+	runs = 1
+	last exit code = 0
+		state = active
+		state = active
+	job state = exited
+$ Contents/MacOS/spikectl relaunch
+{"op": "relaunch", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 21, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792462999441, "ms": 19, "ok": true, "startMs": 1792462999422, "statusAfter": {"name": "notRegistered", "raw": 0}}, {"call": "register", "endMs": 1792462999511, "ms": 60, "ok": true, "startMs": 1792462999451, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 13, "name": "enabled", "raw": 1}}
+new start pid 576 at 2026-10-20T02:23:19.803Z, 448 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+
+### 2026-10-20T02:23:19Z check 3d: stop under 10 s after launch, then relaunch at once
+{"code": 0, "event": "exit", "ms": 1792463001319, "pid": 576, "time": "2026-10-20T02:23:21.319Z", "why": "control stop"}
+$ Contents/MacOS/spikectl relaunch
+{"op": "relaunch", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 10, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792463001891, "ms": 11, "ok": true, "startMs": 1792463001880, "statusAfter": {"name": "notRegistered", "raw": 0}}, {"call": "register", "endMs": 1792463001922, "ms": 18, "ok": true, "startMs": 1792463001904, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 12, "name": "enabled", "raw": 1}}
+new start pid 944 at 2026-10-20T02:23:22.299Z, 476 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+
+### 2026-10-20T02:23:22Z extra: exit 75 under 10 s after launch, KeepAlive respawn delay
+new start pid 1762 at 2026-10-20T02:23:32.078Z, 8278 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+{"event": "children", "groupChild": 952, "ms": 1792463002600, "ownSessionChild": 951, "pid": 944, "time": "2026-10-20T02:23:22.600Z"}
+{"code": 75, "event": "exit", "ms": 1792463003898, "pid": 944, "time": "2026-10-20T02:23:23.898Z", "why": "control exit75"}
+{"cwd": "/", "event": "start", "HOME": "/Users/ojiepermana", "isatty0": false, "ms": 1792463012078, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 1762, "pid": 1762, "ppid": 1, "sid": 1, "time": "2026-10-20T02:23:32.078Z", "TMPDIR": "/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
+$ launchctl print (state lines)
+	state = running
+	runs = 2
+	pid = 1762
+	last exit code = 75: EX_TEMPFAIL
+		state = active
+		state = active
+	job state = running
+
+### 2026-10-20T02:23:32Z extra: exit 75 more than 10 s after launch
+new start pid 2211 at 2026-10-20T02:23:44.698Z, 338 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+2211	75	dev.stackly.test.agent.spike
+=================== 07-symlink-bg-copy.log
+### 2026-10-20T02:23:58Z check 2b: relaunch through the symlink outside the bundle
+$ bin/spikectl relaunch
+{"op": "relaunch", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 44, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792463039844, "ms": 17, "ok": true, "startMs": 1792463039827, "statusAfter": {"name": "notRegistered", "raw": 0}}, {"call": "register", "endMs": 1792463039929, "ms": 48, "ok": true, "startMs": 1792463039881, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 3, "name": "enabled", "raw": 1}}
+new start pid 2827 at 2026-10-20T02:24:00.007Z, 264 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+$ launchctl print (bundle lines)
+	state = running
+	program identifier = Contents/MacOS/spike-agent (mode: 2)
+	parent bundle identifier = dev.stackly.test.agent.spikeapp
+	parent bundle version = 1
+	runs = 1
+		state = active
+		state = active
+	job state = running
+
+### 2026-10-20T02:24:00Z extra: relaunch on a background thread (not the main thread)
+$ Contents/MacOS/spikectl relaunch --bg
+{"op": "relaunch", "isMainThread": false, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 5, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792463041360, "ms": 8, "ok": true, "startMs": 1792463041352, "statusAfter": {"name": "notRegistered", "raw": 0}}, {"call": "register", "endMs": 1792463041393, "ms": 19, "ok": true, "startMs": 1792463041374, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 5, "name": "enabled", "raw": 1}}
+new start pid 3129 at 2026-10-20T02:24:02.307Z, 979 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+
+### 2026-10-20T02:24:02Z extra: register and unregister from a plain copy outside any bundle
+$ bin/spikectl-copy register
+{"op": "register", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 1, "name": "notFound", "raw": 3}, "steps": [{"call": "register", "endMs": 1792463042796, "error": {"code": 3, "domain": "SMAppServiceErrorDomain", "message": "The operation couldn\u2019t be completed. Codesigning failure loading plist: dev.stackly.test.agent.spike.plist code: -67028"}, "ms": 25, "ok": false, "startMs": 1792463042771, "statusAfter": {"name": "notFound", "raw": 3}}], "statusFinal": {"ms": 1, "name": "notFound", "raw": 3}}
+$ bin/spikectl-copy unregister
+{"op": "unregister", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 1, "name": "notFound", "raw": 3}, "steps": [{"call": "unregister", "endMs": 1792463042859, "error": {"code": 22, "domain": "SMAppServiceErrorDomain", "message": "The operation couldn\u2019t be completed. Invalid argument"}, "ms": 15, "ok": false, "startMs": 1792463042844, "statusAfter": {"name": "notFound", "raw": 3}}], "statusFinal": {"ms": 2, "name": "notFound", "raw": 3}}
+3129	0	dev.stackly.test.agent.spike
+$ Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 19, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 14, "name": "enabled", "raw": 1}}
+=================== 08-copy-path.log
+### 2026-10-20T02:24:41Z extra: status from an identical copy of the bundle at another path (status only)
+$ build-copy/StacklyTestAgentSpike.app/Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 5, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 3, "name": "enabled", "raw": 1}}
+$ build/.../spikectl status   # the registered copy
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 5, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 4, "name": "enabled", "raw": 1}}
+removed build-copy
+=================== 09-replace-binary.log
+### 2026-10-20T02:25:11Z extra: replace spike-agent with a new build (new cdhash) while the job is registered and running
+3129	0	dev.stackly.test.agent.spike
+$ src/rebuild-agent.sh b2
+<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/.spike-agent.new: replacing existing signature
+<spike>/build/StacklyTestAgentSpike.app: replacing existing signature
+verify ok
+<spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spike-agent
+CDHash=8cc94cdf235b691c5e0a53c68418d6357b6453ef
+<spike>/build/StacklyTestAgentSpike.app
+CDHash=93a70d8dff174a013811c7e885ff3bff22c4f3bb
+$ Contents/MacOS/spikectl status   # after the bundle changed
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 8, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 9, "name": "enabled", "raw": 1}}
+running job still the old process:
+3129	0	dev.stackly.test.agent.spike
+--- exit 75 so KeepAlive respawns from the replaced binary (job launched more than 10 s ago)
+no new start within 30 s
+{"event": "children", "groupChild": 3147, "ms": 1792463042752, "ownSessionChild": 3146, "pid": 3129, "time": "2026-10-20T02:24:02.752Z"}
+{"code": 75, "event": "exit", "ms": 1792463114579, "pid": 3129, "time": "2026-10-20T02:25:14.579Z", "why": "control exit75"}
+$ launchctl print (state lines)
+	state = spawn scheduled
+	runs = 5
+	last exit code = 78: EX_CONFIG
+		state = active
+		state = active
+	jetsamproperties category = daemon
+	job state = spawn failed
+	properties = partial import | runatload | resolve program | needs LWCR update | has LWCR
+-	78	dev.stackly.test.agent.spike
+$ Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 19, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 26, "name": "enabled", "raw": 1}}
+=================== 10-lwcr-relaunch.log
+### 2026-10-20T02:26:03Z launchd log lines for the failed spawn (read only)
+$ log show --last 3m --style compact --predicate 'eventMessage CONTAINS "dev.stackly.test.agent.spike"' | grep -iE "lwcr|constraint|spawn|exit|78|denied|cdhash" | tail -25
+$ launchctl print (state lines)
+	state = spawn scheduled
+	runs = 6
+	last exit code = 78: EX_CONFIG
+		state = active
+		state = active
+	jetsamproperties category = daemon
+	job state = spawn failed
+	properties = partial import | runatload | resolve program | needs LWCR update | has LWCR
+
+### 2026-10-20T02:26:03Z extra: relaunch after the binary changed
+$ Contents/MacOS/spikectl relaunch
+{"op": "relaunch", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 16, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792463163502, "ms": 52, "ok": true, "startMs": 1792463163450, "statusAfter": {"name": "notRegistered", "raw": 0}}, {"call": "register", "endMs": 1792463163570, "ms": 52, "ok": true, "startMs": 1792463163518, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 21, "name": "enabled", "raw": 1}}
+new start pid 11727 at 2026-10-20T02:26:03.818Z, 431 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+{'event': 'start', 'pid': 11727, 'build': 'b2', 'time': '2026-10-20T02:26:03.818Z', 'XPC_SERVICE_NAME': 'dev.stackly.test.agent.spike'}
+{'event': 'children', 'pid': 11727, 'build': None, 'time': '2026-10-20T02:26:03.990Z', 'XPC_SERVICE_NAME': None}
+$ launchctl print (state lines)
+	state = running
+	runs = 1
+	last exit code = (never exited)
+		state = active
+		state = active
+	jetsamproperties category = daemon
+	job state = running
+	properties = partial import | runatload | resolve program | has LWCR
+11727	0	dev.stackly.test.agent.spike
+=================== 11-toggle-off.log
+### 2026-10-20T02:29:03Z check 5: after the user toggled StacklyTestAgentSpike off in Login Items (asked at 2026-10-20T02:26:50Z)
+$ Contents/MacOS/StacklyTestAgentSpike status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 181, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 41, "name": "enabled", "raw": 1}}
+$ Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 43, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 57, "name": "enabled", "raw": 1}}
+$ bin/spikectl status   # symlink
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 26, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 32, "name": "enabled", "raw": 1}}
+$ agent log events after the request
+$ ps for pid 11727 (the job before the toggle)
+  PID  PPID ELAPSED COMMAND
+11727     1   03:02 Contents/MacOS/spike-agent
+11727	0	dev.stackly.test.agent.spike
+$ launchctl print gui/502/dev.stackly.test.agent.spike (state lines)
+	managed_by = com.apple.xpc.ServiceManagement
+	state = running
+	runs = 1
+	pid = 11727
+	last exit code = (never exited)
+		state = active
+		state = active
+	jetsamproperties category = daemon
+	job state = running
+	properties = partial import | runatload | resolve program | has LWCR
+$ launchctl print-disabled gui/502 | grep dev.stackly
+		"dev.stackly.test.agent.spike" => enabled
+=================== 12-toggle-recheck.log
+### 2026-10-20T02:29:41Z check 5 recheck 20 s later
+$ Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 20, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 7, "name": "enabled", "raw": 1}}
+11727	0	dev.stackly.test.agent.spike
+		"dev.stackly.test.agent.spike" => enabled
+$ log show --last 6m (BTM/smd lines naming the test item, read only)
+=================== 13-btm-log.log
+### 2026-10-20T02:29:49Z BTM daemon log, last 12 min (read only)
+(total BTM/smd lines:        0)
+=================== 13-unified-log.log
+### 2026-10-20T02:30:09Z unified log lines naming the test item, last 15 min (read only, /usr/bin/log)
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 09:29:04.655 Df backgroundtaskmanagementd[280:183c507] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/buil
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 09:29:41.241 Df backgroundtaskmanagementd[280:183c507] [com.apple.backgroundtaskmanagement:main] effectiveItemDispositionWithAuditToken: pid=28115, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 09:29:41.245 Df backgroundtaskmanagementd[280:183c507] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/buil
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 09:29:41.251 Df backgroundtaskmanagementd[280:183c507] [com.apple.backgroundtaskmanagement:main] effectiveItemDispositionWithAuditToken: pid=28115, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 09:29:41.255 Df backgroundtaskmanagementd[280:183c507] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/buil
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 09:30:10.040 Df log[30269:1843988] [com.apple.log:] log run noninteractively, parent: 30266 (zsh), args: '/usr/bin/log' 'show' '--last' '15m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS[c] "StacklyTestAgentSpike" OR eventMessage CONTAINS[c] "dev.stackly.test.agent"'
+=================== 14-btm-window.log
+### backgroundtaskmanagementd one-line messages 09:26:30-09:29:00 local (UTC+7), read only
+2026-10-20 09:26:55.845 Df smd[28489:1836f50] [com.apple.xpc:connection] [0x7a49040780] activating connection: mach=false listener=false peer=true name=com.apple.xpc.smd.peer[14285].0x7a49040780
+2026-10-20 09:26:55.915 Df smd[28489:1836f50] [com.apple.xpc:connection] [0x7a49040780] invalidated because the client process (pid 14285) either cancelled the connection or exited
+2026-10-20 09:26:56.618 Df smd[28489:1836f50] [com.apple.xpc:connection] [0x7a49040780] activating connection: mach=false listener=false peer=true name=com.apple.xpc.smd.peer[14285].0x7a49040780
+2026-10-20 09:26:57.041 Df smd[28489:1836f50] [com.apple.xpc:connection] [0x7a49040780] invalidated because the client process (pid 14285) either cancelled the connection or exited
+(dispositions by minute)
+  21 2026-10-20 09:20
+  87 2026-10-20 09:21
+  90 2026-10-20 09:22
+  77 2026-10-20 09:23
+  46 2026-10-20 09:24
+  58 2026-10-20 09:25
+  26 2026-10-20 09:26
+  16 2026-10-20 09:29
+=================== 15-waiting.log
+### 2026-10-20T02:33:31Z state while waiting for the second look
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 14, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 7, "name": "enabled", "raw": 1}}
+11727	0	dev.stackly.test.agent.spike
+		"dev.stackly.test.agent.spike" => enabled
+=================== 16-toggle-off-2.log
+### 2026-10-20T03:35:00Z check 5 (second toggle): the user switched StacklyTestAgentSpike off and it stayed off
+$ Contents/MacOS/StacklyTestAgentSpike status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 7, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 3, "name": "enabled", "raw": 1}}
+$ Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 3, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 2, "name": "enabled", "raw": 1}}
+$ bin/spikectl status   # symlink
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 6, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 3, "name": "enabled", "raw": 1}}
+$ agent log events since 02:26:05Z
+{"code": 0, "event": "exit", "ms": 1792464364084, "pid": 11727, "time": "2026-10-20T02:46:04.084Z", "why": "max lifetime"}
+$ ps -p 11727
+  PID  PPID ELAPSED COMMAND
+pid 11727 gone
+-	0	dev.stackly.test.agent.spike
+$ launchctl print gui/502/dev.stackly.test.agent.spike (state lines)
+	managed_by = com.apple.xpc.ServiceManagement
+	state = not running
+	runs = 1
+	last exit code = 0
+		state = active
+		state = active
+	jetsamproperties category = daemon
+	job state = exited
+	properties = partial import | runatload | resolve program | has LWCR
+$ launchctl print-disabled gui/502 | grep dev.stackly
+		"dev.stackly.test.agent.spike" => enabled
+=================== 17-btm-second-toggle.log
+### backgroundtaskmanagementd 09:31-10:35 local (UTC+7): lines per minute, read only
+  39 2026-10-20 09:33
+  17 2026-10-20 09:37
+  25 2026-10-20 09:42
+   9 2026-10-20 09:49
+   9 2026-10-20 09:50
+   1 2026-10-20 10:11
+  12 2026-10-20 10:35
+### one-line messages other than effectiveItemDisposition
+2026-10-20 09:42:07.565 A  backgroundtaskmanagementd[280:186e5c2] (BackgroundTaskManagement) BTMManager.userDataDidChange
+2026-10-20 09:42:16.940 Df backgroundtaskmanagementd[280:18701dd] [com.apple.backgroundtaskmanagement:main] BTMStore: store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18.btm
+2026-10-20 09:42:17.452 Df backgroundtaskmanagementd[280:18701dd] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-CF465903-9B80-46D7-818F-B6029856515A.btm
+2026-10-20 09:42:17.836 Df backgroundtaskmanagementd[280:18701dd] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAA00000000.btm
+2026-10-20 09:42:17.872 Df backgroundtaskmanagementd[280:18701dd] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAAFFFFFFFE.btm
+2026-10-20 09:42:21.950 Df backgroundtaskmanagementd[280:18701dd] [com.apple.backgroundtaskmanagement:main] checkTasksAllowedInBackgroundForAppURL: uid=502, shouldRegister:false, url:<private>, ASN:LSASN:{0x0-0x1148147}
+2026-10-20 09:42:21.953 Df backgroundtaskmanagementd[280:18701dd] [com.apple.backgroundtaskmanagement:main] itemWithAppURL: appURL=<other app>, type=background tasks, url=(
+2026-10-20 09:42:21.959 Df backgroundtaskmanagementd[280:18701dd] [com.apple.backgroundtaskmanagement:main] noteUseOfItemWithURL: url=<private>, bundleURL=(null), type=app, uid=502
+2026-10-20 09:42:21.961 Df backgroundtaskmanagementd[280:18701dd] [com.apple.backgroundtaskmanagement:main] noteUseOfItemWithIdentifier: identifier=<other app>, uid=502
+2026-10-20 09:42:24.169 A  backgroundtaskmanagementd[280:18701dd] (BackgroundTaskManagement) BTMManager.userDataDidChange
+2026-10-20 09:42:28.089 Df backgroundtaskmanagementd[280:1870291] [com.apple.backgroundtaskmanagement:main] BTMStore: store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18.btm
+2026-10-20 09:42:31.854 Df backgroundtaskmanagementd[280:1870291] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-CF465903-9B80-46D7-818F-B6029856515A.btm
+2026-10-20 09:42:32.688 Df backgroundtaskmanagementd[280:1870291] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAA00000000.btm
+2026-10-20 09:42:33.905 Df backgroundtaskmanagementd[280:1870291] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAAFFFFFFFE.btm
+2026-10-20 09:42:35.658 Df backgroundtaskmanagementd[280:1871198] [com.apple.backgroundtaskmanagement:main] noteUseOfItemWithURL: url=<private>, bundleURL=(null), type=app, uid=502
+2026-10-20 09:42:35.661 Df backgroundtaskmanagementd[280:1871198] [com.apple.backgroundtaskmanagement:main] noteUseOfItemWithIdentifier: identifier=<other app>, uid=502
+2026-10-20 09:42:36.357 A  backgroundtaskmanagementd[280:1871198] (BackgroundTaskManagement) BTMManager.userDataDidChange
+2026-10-20 09:42:39.762 Df backgroundtaskmanagementd[280:1871e7d] [com.apple.backgroundtaskmanagement:main] BTMStore: store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18.btm
+2026-10-20 09:42:43.385 Df backgroundtaskmanagementd[280:1871e7d] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-CF465903-9B80-46D7-818F-B6029856515A.btm
+2026-10-20 09:42:45.332 Df backgroundtaskmanagementd[280:1871e7d] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAA00000000.btm
+2026-10-20 09:42:45.682 Df backgroundtaskmanagementd[280:1871e7d] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAAFFFFFFFE.btm
+2026-10-20 09:49:19.771 Df backgroundtaskmanagementd[280:187c547] [com.apple.backgroundtaskmanagement:main] checkTasksAllowedInBackgroundForAppURL: uid=502, shouldRegister:false, url:<private>, ASN:(null)
+2026-10-20 09:49:19.772 Df backgroundtaskmanagementd[280:187c547] [com.apple.backgroundtaskmanagement:main] itemWithAppURL: appURL=<other app>, type=background tasks, url
+2026-10-20 09:49:22.597 Df backgroundtaskmanagementd[280:187c547] [com.apple.backgroundtaskmanagement:main] noteUseOfItemWithURL: url=<private>, bundleURL=(null), type=app, uid=502
+2026-10-20 09:49:22.603 Df backgroundtaskmanagementd[280:187c547] [com.apple.backgroundtaskmanagement:main] noteUseOfItemWithIdentifier: identifier=<other app>, uid=502
+2026-10-20 09:49:23.129 A  backgroundtaskmanagementd[280:1886033] (BackgroundTaskManagement) BTMManager.userDataDidChange
+2026-10-20 09:49:25.626 Df backgroundtaskmanagementd[280:187c547] [com.apple.backgroundtaskmanagement:main] BTMStore: store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18.btm
+2026-10-20 09:49:25.650 Df backgroundtaskmanagementd[280:187c547] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-CF465903-9B80-46D7-818F-B6029856515A.btm
+2026-10-20 09:49:25.686 Df backgroundtaskmanagementd[280:187c547] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAA00000000.btm
+2026-10-20 09:49:25.702 Df backgroundtaskmanagementd[280:187c547] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAAFFFFFFFE.btm
+2026-10-20 09:50:24.191 Df backgroundtaskmanagementd[280:1886059] [com.apple.backgroundtaskmanagement:main] checkTasksAllowedInBackgroundForAppURL: uid=502, shouldRegister:false, url:<private>, ASN:(null)
+2026-10-20 09:50:24.194 Df backgroundtaskmanagementd[280:1886059] [com.apple.backgroundtaskmanagement:main] itemWithAppURL: appURL=<other app>, type=background tasks, url
+2026-10-20 09:50:24.884 Df backgroundtaskmanagementd[280:1886059] [com.apple.backgroundtaskmanagement:main] noteUseOfItemWithURL: url=<private>, bundleURL=(null), type=app, uid=502
+2026-10-20 09:50:24.896 Df backgroundtaskmanagementd[280:1886059] [com.apple.backgroundtaskmanagement:main] noteUseOfItemWithIdentifier: identifier=<other app>, uid=502
+2026-10-20 09:50:25.410 A  backgroundtaskmanagementd[280:1887118] (BackgroundTaskManagement) BTMManager.userDataDidChange
+2026-10-20 09:50:27.901 Df backgroundtaskmanagementd[280:1886059] [com.apple.backgroundtaskmanagement:main] BTMStore: store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18.btm
+2026-10-20 09:50:27.912 Df backgroundtaskmanagementd[280:1886059] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-CF465903-9B80-46D7-818F-B6029856515A.btm
+2026-10-20 09:50:27.924 Df backgroundtaskmanagementd[280:1886059] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAA00000000.btm
+2026-10-20 09:50:27.934 Df backgroundtaskmanagementd[280:1886059] [com.apple.backgroundtaskmanagement:main] saveStoreForUserIdentifier: user store saved to /var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v18-FFFFEEEE-DDDD-CCCC-BBBB-AAAAFFFFFFFE.btm
+2026-10-20 10:11:44.073 Df backgroundtaskmanagementd[280:1886059] [com.apple.launchservices:db] NotifyToken::RegisterDispatch(com.apple.LaunchServices.database) fired for session key <private>
+=================== 18-btm-disposition-check5.log
+Timestamp               Ty Process[PID:TID]
+2026-10-20 10:35:00.643 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDispositionWithAuditToken: pid=15923, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.646 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/build/StacklyTestAgentSpike.app/, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.648 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDispositionWithAuditToken: pid=15923, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.649 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/build/StacklyTestAgentSpike.app/, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.664 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDispositionWithAuditToken: pid=15930, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.665 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/build/StacklyTestAgentSpike.app/, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.666 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDispositionWithAuditToken: pid=15930, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.667 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/build/StacklyTestAgentSpike.app/, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.698 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDispositionWithAuditToken: pid=15932, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.699 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/build/StacklyTestAgentSpike.app/, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.701 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDispositionWithAuditToken: pid=15932, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+2026-10-20 10:35:00.702 Df backgroundtaskmanagementd[280:18c5f1e] [com.apple.backgroundtaskmanagement:main] effectiveItemDisposition: appURL=file://<spike>/build/StacklyTestAgentSpike.app/, type=agent, url=Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist -- file:///, config={
+    BTMConfigArguments =     (
+    );
+    BTMConfigBundleIdentifiers =     (
+        "dev.stackly.test.agent.spikeapp"
+    );
+    BTMConfigExecutablePath = "Contents/MacOS/spike-agent";
+    BTMConfigLabel = "dev.stackly.test.agent.spike";
+    BTMConfigSHA256Checksum = {length = 32, bytes = 0x63661107 edd8fe9e 12ac9b3f 6432db0a ... 1ee54a3e 350e3178 };
+}
+=================== 19-relaunch-while-off.log
+### 2026-10-20T03:36:13Z check 5b: relaunch (unregister then register) while the user's Login Items switch is off
+$ Contents/MacOS/spikectl relaunch
+{"op": "relaunch", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 5, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792467373138, "ms": 3, "ok": true, "startMs": 1792467373135, "statusAfter": {"name": "notRegistered", "raw": 0}}, {"call": "register", "endMs": 1792467373146, "ms": 4, "ok": true, "startMs": 1792467373142, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 2, "name": "enabled", "raw": 1}}
+new start pid 21398 at 2026-10-20T03:36:13.205Z, 84 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
+21398	0	dev.stackly.test.agent.spike
+		"dev.stackly.test.agent.spike" => enabled
+$ Contents/MacOS/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 3, "name": "enabled", "raw": 1}, "steps": [], "statusFinal": {"ms": 3, "name": "enabled", "raw": 1}}
+=================== 20-cleanup.log
+### 2026-10-20T03:36:36Z cleanup 1: unregister the test agent
+$ Contents/MacOS/spikectl unregister
+{"op": "unregister", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 6, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792467396605, "ms": 19, "ok": true, "startMs": 1792467396586, "statusAfter": {"name": "notRegistered", "raw": 0}}], "statusFinal": {"ms": 8, "name": "notRegistered", "raw": 0}}
+{"event": "sigterm", "ms": 1792467396606, "pid": 21398, "time": "2026-10-20T03:36:36.606Z"}
+$ Contents/MacOS/StacklyTestAgentSpike status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 5, "name": "notRegistered", "raw": 0}, "steps": [], "statusFinal": {"ms": 6, "name": "notRegistered", "raw": 0}}
+$ bin/spikectl status
+{"op": "status", "isMainThread": true, "bundleMainIdentifier": null, "statusBefore": {"ms": 3, "name": "notRegistered", "raw": 0}, "steps": [], "statusFinal": {"ms": 5, "name": "notRegistered", "raw": 0}}
+### cleanup 2: bootout any leftover dev.stackly.test.agent.* job
+$ launchctl list | grep dev.stackly.test.agent.
+(none; nothing to boot out)
+### cleanup 3: stop the /bin/sleep children the test agent spawned
+kill 21400 (/bin/sleep 901)
+$ pgrep -u 502 -fl "^/bin/sleep 90[12]$"
+(none left)
+=================== 21-cleanup-gone.log
+### 2026-10-20T03:36:48Z cleanup 4: delete the throwaway bundle, the symlink, the copy, and the build objects
+lrwxr-xr-x@ 1 ojiepermana  wheel    223 Oct 20 09:21 bin/spikectl -> <spike>/build/StacklyTestAgentSpike.app/Contents/MacOS/spikectl
+-rwxr-xr-x@ 1 ojiepermana  wheel  80144 Oct 20 09:21 bin/spikectl-copy
+drwxr-xr-x@ 3 ojiepermana  wheel     96 Oct 20 09:21 build/StacklyTestAgentSpike.app
+drwxr-xr-x@ 7 ojiepermana  wheel    224 Oct 20 09:25 obj
+bin:
+total 0
+drwxr-xr-x@ 2 ojiepermana  wheel   64 Oct 20 10:36 .
+drwxr-xr-x@ 7 ojiepermana  wheel  224 Oct 20 10:36 ..
+
+build:
+total 0
+drwxr-xr-x@ 2 ojiepermana  wheel   64 Oct 20 10:36 .
+drwxr-xr-x@ 7 ojiepermana  wheel  224 Oct 20 10:36 ..
+### cleanup 5: show nothing is left
+$ launchctl list | grep dev.stackly.test
+(grep exit 1)
+$ launchctl print gui/502/dev.stackly.test.agent.spike
+Bad request.
+Could not find service "dev.stackly.test.agent.spike" in domain for user gui: 502
+$ pgrep -u 502 -fl "spike-agent|/bin/sleep 90[12]$"
+(no process)
+$ launchctl print-disabled gui/502 | grep dev.stackly
+		"dev.stackly.test.agent.spike" => enabled

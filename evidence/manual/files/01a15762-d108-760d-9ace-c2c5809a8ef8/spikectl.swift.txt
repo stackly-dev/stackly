@@ -1,0 +1,108 @@
+// Throwaway controller for the spec 0015 step 0 spike (AC-21). Never part of the repo.
+// Usage: spikectl <status|register|unregister|relaunch> [--bg]
+// Prints one JSON object per call on stdout.
+import Darwin
+import Foundation
+import ServiceManagement
+
+let plistName = "dev.stackly.test.agent.spike.plist"
+
+func nowMs() -> Int64 { Int64((Date().timeIntervalSince1970 * 1000).rounded()) }
+
+func statusName(_ s: SMAppService.Status) -> String {
+    switch s {
+    case .notRegistered: return "notRegistered"
+    case .enabled: return "enabled"
+    case .requiresApproval: return "requiresApproval"
+    case .notFound: return "notFound"
+    @unknown default: return "unknown(\(s.rawValue))"
+    }
+}
+
+func executablePath() -> String {
+    var size: UInt32 = 4096
+    var buf = [CChar](repeating: 0, count: Int(size))
+    if _NSGetExecutablePath(&buf, &size) != 0 { return "?" }
+    return String(cString: buf)
+}
+
+func describe(_ error: Error) -> [String: Any] {
+    let ns = error as NSError
+    var out: [String: Any] = ["domain": ns.domain, "code": ns.code, "message": ns.localizedDescription]
+    if let u = ns.userInfo[NSUnderlyingErrorKey] as? NSError {
+        out["underlying"] = ["domain": u.domain, "code": u.code, "message": u.localizedDescription]
+    }
+    return out
+}
+
+func perform(_ op: String) -> [String: Any] {
+    var out: [String: Any] = [:]
+    out["op"] = op
+    out["isMainThread"] = Thread.isMainThread
+    out["argv0"] = CommandLine.arguments.first ?? "?"
+    out["nsGetExecutablePath"] = executablePath()
+    out["bundleMainPath"] = Bundle.main.bundlePath
+    out["bundleMainIdentifier"] = Bundle.main.bundleIdentifier ?? NSNull()
+    out["bundleMainExecutable"] = Bundle.main.executablePath ?? NSNull()
+    let service = SMAppService.agent(plistName: plistName)
+    let t0 = nowMs()
+    let before = service.status
+    let t1 = nowMs()
+    out["statusBefore"] = ["name": statusName(before), "raw": before.rawValue, "ms": t1 - t0]
+    var steps: [[String: Any]] = []
+    func step(_ name: String, _ body: () throws -> Void) {
+        let s = nowMs()
+        var entry: [String: Any] = ["call": name, "startMs": s]
+        do {
+            try body()
+            entry["ok"] = true
+        } catch {
+            entry["ok"] = false
+            entry["error"] = describe(error)
+        }
+        let e = nowMs()
+        entry["endMs"] = e
+        entry["ms"] = e - s
+        let st = service.status
+        entry["statusAfter"] = ["name": statusName(st), "raw": st.rawValue]
+        steps.append(entry)
+    }
+    switch op {
+    case "status": break
+    case "register": step("register") { try service.register() }
+    case "unregister": step("unregister") { try service.unregister() }
+    case "relaunch":
+        step("unregister") { try service.unregister() }
+        step("register") { try service.register() }
+    default:
+        out["error"] = "unknown op"
+    }
+    out["steps"] = steps
+    let t2 = nowMs()
+    let after = service.status
+    out["statusFinal"] = ["name": statusName(after), "raw": after.rawValue, "ms": nowMs() - t2]
+    out["finishedMs"] = nowMs()
+    return out
+}
+
+let args = Array(CommandLine.arguments.dropFirst())
+let op = args.first ?? "status"
+let onBackground = args.contains("--bg")
+
+var result: [String: Any] = [:]
+if onBackground {
+    let done = DispatchSemaphore(value: 0)
+    let thread = Thread {
+        result = perform(op)
+        done.signal()
+    }
+    thread.start()
+    if done.wait(timeout: .now() + 30) == .timedOut {
+        result = ["op": op, "error": "timed out after 30 s on a background thread"]
+    }
+} else {
+    result = perform(op)
+}
+let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+FileHandle.standardOutput.write(data)
+FileHandle.standardOutput.write("\n".data(using: .utf8)!)
