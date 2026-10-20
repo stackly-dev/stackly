@@ -30,7 +30,7 @@
 | `chk-f7-m5` (sesi `dev-f10-m4-s15` dipakai ulang) | `checker (verify)` | F7 `verify.md` Milestone 5 (langkah 16) | `01-foundation.md` | centang `verify.md` 0007 M5 | `claude/dev-f10-m2-s78-25dea3` | `sonnet-5-5 · high` | `merged` (`1690081` → `6235716`) |
 | `chk-f10-m3` (sesi `chk-f7-m5` dipakai ulang) | `checker (verify)` | F10 `verify.md` Milestone 3 | `01-foundation.md` | centang `verify.md` 0010 M3 | `claude/dev-f10-m2-s78-25dea3` | `sonnet-5-5 · high` | `merged` (`30d60d1`) |
 | `tst-f7-m5` (sesi yang sama dipakai ulang) | `tester` | F7 langkah 16 `/test` | `01-foundation.md` | test domain, core `operation_engine`, storage, conformance, `apps/daemon/tests/operations/`, `crates/protocol/tests/`, `evidence/` | `claude/dev-f10-m2-s78-25dea3` | `sonnet-5-5 · high` | `merged` (`abcbd08`) |
-| `dev-f10-m4-s1314` (sesi `dev-f10-m4-s12` dipakai ulang) | `developer` | F10 milestone 4, langkah 13 dan 14, plus pengukuran NFR-003 langkah 15 | `01-foundation.md` | `apps/daemon/src/`, `apps/daemon/tests/` (kecuali `cli*.rs`), `crates/core/src/supervisor/fixture.rs`, fitur `fixture` di `crates/core/Cargo.toml`, `crates/testkit/`, `evidence/`, `verify.md` 0010 M4 | `claude/dev-f11-m4-s5-b32aac` | `sonnet-5-5 · high` | `dipakai ulang` |
+| `dev-f10-m4-s1314` (sesi `dev-f10-m4-s12` dipakai ulang) | `developer` | F10 milestone 4, langkah 13 dan 14, plus pengukuran NFR-003 langkah 15 | `01-foundation.md` | `apps/daemon/src/`, `apps/daemon/tests/` (kecuali `cli*.rs`), `crates/core/src/supervisor/fixture.rs`, fitur `fixture` di `crates/core/Cargo.toml`, `crates/testkit/`, `evidence/`, `verify.md` 0010 M4 | `claude/dev-f11-m4-s5-b32aac` | `sonnet-5-5 · high` | `merged` (`73723d6`) |
 | `dev-f14-m2` (sesi `tst-f7-m5` dipakai ulang) | `developer` | F14 milestone 2, langkah 3 dan 4 (`stackly instance`) | `01-foundation.md` | `apps/cli/`, `verify.md` 0014 baru, Status spec 0014 | `claude/dev-f10-m2-s78-25dea3` | `sonnet-5-5 · high` | `merged` (`386d9b6`) |
 | `dev-f13-m4-s16` (sesi `dev-f11-m4-s7` dipakai ulang) | `developer` | F13 milestone 4 langkah 16 (`StatusAdapter`, `InstanceStore`, `ProvisionalInstanceList`, resep `statusSeq`), prasyarat F11 langkah 9 sampai 11 dan F14 milestone 4 | `ui-macos.md` | `apps/macos/Packages/StacklyUI/`, `verify.md` 0013 M4 langkah 16 | `claude/dbg-f8-m2-ba9bdb` | `sonnet-5-5 · high` | `merged` (`a3916eb`) |
 | `dev-f11-m6-s910` (sesi yang sama dipakai ulang) | `developer` | F11 milestone 6, langkah 9 dan 10 (Swift client secret dan komponen UI), plus pemindahan `InstanceSummary: Identifiable` ke client | `01-foundation.md` | `clients/swift/Sources/StacklyClient/` (bukan `Generated/`), `StacklyTestSupport/`, `clients/swift/Tests/`, `apps/macos/Packages/StacklyUI/`, `verify.md` 0011 M6 | `claude/dbg-f8-m2-ba9bdb` | `sonnet-5-5 · high` | `merged` (`efeadd2`; persiapan langkah 11 `2c80691` → `cdd1434`), record manual `NOT_RUN` menunggu user |
@@ -84,6 +84,16 @@
 | `2026-10-20` | Disk penuh kedua kali, di tengah gate F10 langkah 13–14 (ENOSPC). Lead menghapus `target/` di empat worktree yang sesinya idle; sisa ruang 46 GiB. Gate yang terpotong diulang. | `lead` |
 | `2026-10-20` | Merge F10 langkah 13–14 dibatalkan: `stackly-cli --test daemon_status` merah di `main` gabungan. Daemon kini `ready`, sehingga lebar kolom `kv` berubah, sementara test mengunci padding. Gate lain lulus: core 15, testkit 10, `stacklyd` 15 target. Pemilik (`dev-f10-m4-s1314`) diberi ownership `apps/cli/tests/daemon_status.rs` untuk membuat assertion tidak bergantung padding, setelah `git merge main`. | `lead` |
 | `2026-10-20` | Merge perbaikan F14 `8c6cf43`: `alreadyInState` dengan operasi `no_op` yang `succeeded` diperlakukan sebagai already in state. `operation` di `--json` tetap memuat operasi itu. Ini menyimpang dari teks AC-6 spec 0014 (`operation` null), tetapi sesuai pengecualian AC-23 spec 0010 (tulis desired state membuat operasi `no_op`). Konflik dua spec ini diajukan ke `/architect` update spec 0014 di penutupan. Gate: fmt, clippy CLI, `cargo test -p stackly-cli` (6 target). | `lead` |
+| `2026-10-20` | Merge F10 langkah 13, 14, dan pengukuran NFR-003 setelah perbaikan test `daemon_status`. Gate: fmt, clippy workspace, check-deps, cek Windows, test core (15), testkit (10), `stacklyd` (15), `stackly-cli` (6), dan evidence check (34). NFR-003 PASS: 58,2 MiB RSS dan 0,714% CPU selama 301 detik, setelah perbaikan backoff pembaca spool `4e2d637`; run pertama gagal pada CPU 1,133%. Penyimpangan dan celah yang diterima:
+  - `test_starting_method` dipertahankan, karena test integrasi adalah crate terpisah dan `check-deps` melarang self dev-dependency.
+  - `install_fake` menerima path binary dan path paket.
+  - `lastFailure.at`, `exitCode`, dan `signal` selalu null.
+  - `socketPath` untuk unix null, dan nama socket hanya pengisi.
+  - Nama yang buruk menjadi `request.invalid_params`.
+  - Belum ada `WorkFactory` untuk start, stop, dan create.
+  - `runtimeVersion` sama dengan `data_version`.
+
+  Semuanya masuk review F10. | `lead` |
 | `2026-10-20` | Pemilik kontrak wave 2 sesudah `fffa50e` adalah `dev-f10-m4-s12` (minor 1.8). `chk-f10-m3` menunggu sesi bebas: sesi `chk-f11-m5` sedang dibuka user di layar sehingga tidak bisa dibersihkan, dan `start_session` ditolak pada giliran yang dipicu event. | `lead` |
 | `2026-10-20` | `chk-f7-m5` PASS 15/15 langkah Milestone 5 spec 0007 (`1690081` → `6235716`), termasuk sha256 `registry-v4.sql` sama dengan `FIXTURE_SHA256` 4, migrasi 0002/0003 dan fixture v1 sampai v3 tidak berubah, dan `ProtocolVersion` tidak naik. Kotak milestone langkah 16 F7 baru dicentang setelah `/test`, `/check review` (sesi baru), dan `/document` khusus langkah itu juga selesai, sesuai teks kotaknya. | `lead` |
 | `2026-10-20` | Temuan `chk-f10-m3` (tidak FAIL): spec 0010 belum menyebut secara eksplisit bahwa jeda di dalam operasi respawn sistem dipegang operasi itu, dan respawn memakai `BusyPolicy::Reject` dengan ulangan tiap `restart_base_delay`. Butuh satu kalimat lewat `/architect` update spec 0010 berikutnya, dicatat sebagai item Follow-up untuk penutupan. | `lead` |
@@ -98,6 +108,16 @@
 | `2026-10-20` | Disk penuh kedua kali, di tengah gate F10 langkah 13–14 (ENOSPC). Lead menghapus `target/` di empat worktree yang sesinya idle; sisa ruang 46 GiB. Gate yang terpotong diulang. | `lead` |
 | `2026-10-20` | Merge F10 langkah 13–14 dibatalkan: `stackly-cli --test daemon_status` merah di `main` gabungan. Daemon kini `ready`, sehingga lebar kolom `kv` berubah, sementara test mengunci padding. Gate lain lulus: core 15, testkit 10, `stacklyd` 15 target. Pemilik (`dev-f10-m4-s1314`) diberi ownership `apps/cli/tests/daemon_status.rs` untuk membuat assertion tidak bergantung padding, setelah `git merge main`. | `lead` |
 | `2026-10-20` | Merge perbaikan F14 `8c6cf43`: `alreadyInState` dengan operasi `no_op` yang `succeeded` diperlakukan sebagai already in state. `operation` di `--json` tetap memuat operasi itu. Ini menyimpang dari teks AC-6 spec 0014 (`operation` null), tetapi sesuai pengecualian AC-23 spec 0010 (tulis desired state membuat operasi `no_op`). Konflik dua spec ini diajukan ke `/architect` update spec 0014 di penutupan. Gate: fmt, clippy CLI, `cargo test -p stackly-cli` (6 target). | `lead` |
+| `2026-10-20` | Merge F10 langkah 13, 14, dan pengukuran NFR-003 setelah perbaikan test `daemon_status`. Gate: fmt, clippy workspace, check-deps, cek Windows, test core (15), testkit (10), `stacklyd` (15), `stackly-cli` (6), dan evidence check (34). NFR-003 PASS: 58,2 MiB RSS dan 0,714% CPU selama 301 detik, setelah perbaikan backoff pembaca spool `4e2d637`; run pertama gagal pada CPU 1,133%. Penyimpangan dan celah yang diterima:
+  - `test_starting_method` dipertahankan, karena test integrasi adalah crate terpisah dan `check-deps` melarang self dev-dependency.
+  - `install_fake` menerima path binary dan path paket.
+  - `lastFailure.at`, `exitCode`, dan `signal` selalu null.
+  - `socketPath` untuk unix null, dan nama socket hanya pengisi.
+  - Nama yang buruk menjadi `request.invalid_params`.
+  - Belum ada `WorkFactory` untuk start, stop, dan create.
+  - `runtimeVersion` sama dengan `data_version`.
+
+  Semuanya masuk review F10. | `lead` |
 | `2026-10-20` | Pemilik kontrak (`crates/protocol/`, `protocols/fixtures/`, hasil codegen) wave 1 adalah `dev-f11-m4-s5`; F7 langkah 16 (fixture `frame-response-operation-get-failed-items.json`) dan F10 langkah 12 menunggu kontrak bebas. | `lead` |
 
 ## Blocker terbuka
