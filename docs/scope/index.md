@@ -20,7 +20,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 
 | File | Fase | Fitur | Status |
 | --- | --- | --- | --- |
-| [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 9 done, 3 in-progress |
+| [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 10 done, 2 in-progress |
 | [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 2 in-progress, 3 planned |
 | [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 9 in-progress |
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 planned |
@@ -47,7 +47,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 7 | Operation engine | Foundation | done |
 | 8 | CLI client & kontrak output | Foundation | done |
 | 9 | Provider engine & manifest schema | Foundation | done |
-| 10 | Process supervisor | Foundation | in-progress |
+| 10 | Process supervisor | Foundation | done |
 | 11 | Secret store & redaction | Foundation | in-progress |
 | 12 | Design system & UI foundation | Foundation | in-progress |
 | 13 | App shell SwiftUI & Swift client | Foundation | in-progress |

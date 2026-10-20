@@ -1,7 +1,7 @@
 # 0010. Process supervisor
 
 **Date**: 2026-10-18
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 

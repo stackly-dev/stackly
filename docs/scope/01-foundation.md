@@ -185,7 +185,7 @@ Schema manifest provider deklaratif (`stackly/v1alpha1`), loader, validasi, inte
 - [x] Review it (fresh model): `/check review provider engine & manifest schema`
 - [x] Document it: `/document provider engine & manifest schema`
 
-### 10. Process supervisor · in-progress · GA
+### 10. Process supervisor · done · GA
 
 Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv eksplisit, mencatat identitas proses (bukan PID saja), menjalankan probe readiness, dan menghentikan proses secara graceful sesuai strategi provider. Spec ini juga pemilik tunggal rekonsiliasi dasar setelah daemon restart dan restart policy (backoff, jitter, retry budget, reset setelah periode sehat, timeout per provider).
 
@@ -201,7 +201,7 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
   - [x] Start to ready and safe stop on the fake provider: `classify`, restart policy math, `SupervisorConfig`, `PortProbe`, commit rules, probes `tcp`, `http`, and `exec`, `execute_init`, render before spawn, startup transaction with dry run and suspended spawn, stop, ports, readiness and health, `statusSeq`, and `execute_reload` (spec 0010 AC-2 to AC-8, AC-10, AC-13 to AC-15, AC-17 to AC-19, AC-22; build steps 5 to 8; needs spec 0009 milestone 1, spec 0011 step 4 (`SecretService` with `resolve_for_start`, `put`, and `secret::delivery`), step 2a, and the spec 0007 operation API; steps 5 and 6 can run as two parallel sessions)
   - [x] Crash, spool, and reconciliation: restart policy in the actor, spool reader with redaction and punch hole, reconciliation table, adoption, `unknown` recheck, and daemon shutdown without signals (spec 0010 AC-7 to AC-12, AC-17, AC-21, AC-22; build steps 9 to 11; the spool step can run as its own session)
   - [x] Daemon, IPC, and end to end proof: protocol DTOs, events, and error codes with fixtures and Swift contract tests, `stacklyd` start slot and shutdown step, `instance.create`, `start`, `stop`, `get`, and `list`, `install_fake`, daemon integration tests with evidence, `check-deps` rules, and the NFR-003 measurement (spec 0010 AC-3 to AC-12, AC-15 to AC-17, AC-20, AC-21, AC-23; build steps 12 to 15; needs the spec 0006 daemon server, the spec 0005 SQLite registry, and `ReplaceSecretUses` from spec 0011 step 0 for create; protocol and `check-deps` can run as parallel sessions)
-- [ ] Verify it: `/check verify process supervisor`
+- [x] Verify it: `/check verify process supervisor`
 - [x] Test it: `/test process supervisor`
 - [x] Review it (fresh model): `/check review process supervisor`
 - [x] Document it: `/document process supervisor`
