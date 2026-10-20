@@ -15,6 +15,7 @@
 | `dev-f10-m2-s78` | `developer` | F10 milestone 2, langkah 7 dan 8, plus `verify.md` Milestone 1 dan 2 | `01-foundation.md` | `crates/core/src/supervisor/`, `crates/core/tests/supervisor*`, `crates/core/Cargo.toml`, `crates/testkit/src/fake_process.rs`, `docs/specs/0010-process-supervisor/verify.md` | `claude/dev-f10-m2-s78-*` (sesi `local_685e0303`) | `sonnet-5-5 · high` | `aktif` |
 | `dbg-f8-m2` | `debugger` (dengan ownership) | F8 milestone 2: tiga test real daemon yang gagal, cabut `#[ignore]`, `verify.md` 0008 Milestone 1 dan 2 | `01-foundation.md` | `apps/cli/`, `apps/daemon/tests/cli.rs`, `docs/specs/0008-cli-client-kontrak-output/verify.md` | `claude/dbg-f8-m2-ba9bdb` dari `claude/f8-closeout-2fe0b1` (sesi `local_9eadb11d`) | `opus-5-5 · xhigh` | `merged` (`000415a` → `87e905e`) |
 | `chk-f8-verify` (sesi `dbg-f8-m2` dipakai ulang) | `checker (verify)` penuh | F8 milestone 1 dan 2, `Build it`, `Verify it` | `01-foundation.md` | centang `docs/specs/0008-cli-client-kontrak-output/verify.md` | `claude/dbg-f8-m2-ba9bdb` | `opus-5-5 · high` | `merged` (`ece0672` → `ed731b5`) |
+| `dev-f10-m3-s10` (sesi `dbg-f8-m2` dipakai ulang lagi) | `developer` | F10 milestone 3, pecahan langkah 10 (spool, `LogSink`, `SinkSet`, `TailSink`) | `01-foundation.md` | modul spool dan sink baru di `crates/core/src/supervisor/`, test spool di `crates/core/tests/`, bagian Milestone 3 `verify.md` 0010 | `claude/dbg-f8-m2-ba9bdb` | `sonnet-5-5 · high` | `dipakai ulang` |
 
 ## Keputusan
 
