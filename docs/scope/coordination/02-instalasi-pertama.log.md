@@ -105,6 +105,7 @@
 | `2026-10-20` | Perbaikan pasca penyelarasan 0016 di-merge (`9062118` → `c91af15`): milestone 1 F16 kini butuh spec 0015 langkah 10 (`BackgroundAgentState`), tidak berjalan bersamaan dengan F15 milestone 3 langkah 10 dan 12; teks milestone 1 F16 dan milestone 3 F15 di scope diperbarui. | `lead` |
 | `2026-10-20` | Perbaikan pasca penyelarasan 0015 di-merge (`1a84009` → `497c737`): `DaemonModel.rootOverrideActive` (Bool baca saja dari `ShellBootstrap.assemble`, tanpa parameter baru, K18) dan cek teks besar spec 0012 di lebar sempit 640 pt menggantikan Dynamic Type di AC-13 dan langkah 11; teks milestone 3 F15 menyebut Bool itu. | `lead` |
 | `2026-10-20` | Perbaikan pasca penyelarasan 0017 di-merge (`e303cef` → `00f9f0a`): cabang catalog bundle hanya di M4 langkah 11, test dalam proses memakai `CatalogOverride::Preloaded(Catalog::for_tests(&[]))`, `Issue.reason` inti di M1 langkah 3. Jawaban D2: issue catalog sampai ke wire hanya di DTO `ProviderDetail.issues` (`CatalogIssue.reason` dalam minor F17 sendiri), jadi key `reason` di `ErrorItem` `issue`, perubahan `ItemSpec`, dan minornya milik spec 0021 M1 langkah 1. Teks milestone 1 F17 diganti. | `lead` |
+| `2026-10-20` | Perbaikan pasca penyelarasan 0018 dan nama `CatalogOverride` di 0006 di-merge (`374769c`, `f2651ef` → `793cb71`): `runtime.install_conflict` hint `resume`, paket PostgreSQL dari spec 0019 langkah 4 dan `versionCheck` langkah 7, `ProviderSummary.software` milik spec 0017 langkah 5, journal menyimpan artefak hasil resolusi. Teks milestone 5 F18 diganti. | `lead` |
 
 ## Blocker terbuka
 
