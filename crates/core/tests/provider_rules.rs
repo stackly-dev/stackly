@@ -2134,3 +2134,275 @@ fn readme_and_tests_never_change_the_digest_of_a_read_package() {
     assert_eq!(base, documented);
     assert_ne!(base.manifest_sha256(), changed.manifest_sha256());
 }
+
+/// Spec 0009 AC-20: a sensitive config whose destination starts in any
+/// folder token other than the secrets folder is rejected once, and the
+/// `renderConfig` step and the `reload.render` entry that name it each add
+/// `unknown_config_file`.
+#[test]
+fn a_sensitive_destination_in_logs_temp_or_run_leaves_its_references_unknown() {
+    let yaml = "provider.yaml";
+    for folder in ["logs", "temp", "run"] {
+        let issues = Edit::fake()
+            .replace(
+                yaml,
+                "destination: \"${instance.secrets}/fake.json\"",
+                &format!("destination: \"${{instance.{folder}}}/fake.json\""),
+            )
+            .issues();
+
+        let at_destination: Vec<_> = issues
+            .iter()
+            .filter(|(file, location, _)| {
+                file == yaml && location == "configFiles.fakeConfig.destination"
+            })
+            .collect();
+        assert_eq!(
+            at_destination.len(),
+            1,
+            "one issue for a sensitive config in {folder}: {issues:#?}"
+        );
+        assert_eq!(at_destination[0].2, IssueCode::TokenNotAllowedHere);
+        for location in ["lifecycle.initialize[1].file", "lifecycle.reload.render[0]"] {
+            assert_issue(&issues, yaml, location, IssueCode::UnknownConfigFile);
+        }
+    }
+}
+
+/// Spec 0009 AC-20: when the folder is not in `managedFilesystem`,
+/// `path_not_permitted` is the only issue at the destination, for every
+/// folder but `run`, and the references to the config stay unknown.
+#[test]
+fn an_unmanaged_folder_in_a_sensitive_destination_reports_path_not_permitted_only() {
+    let yaml = "provider.yaml";
+    for (folder, managed) in [
+        ("config", "[data, logs, temp, run]"),
+        ("data", "[config, logs, temp, run]"),
+        ("logs", "[data, config, temp, run]"),
+        ("temp", "[data, config, logs, run]"),
+        ("run", "[data, config, logs, temp]"),
+    ] {
+        let issues = Edit::fake()
+            .replace(
+                yaml,
+                "destination: \"${instance.secrets}/fake.json\"",
+                &format!("destination: \"${{instance.{folder}}}/fake.json\""),
+            )
+            .replace(
+                yaml,
+                "managedFilesystem: [data, config, logs, temp, run]",
+                &format!("managedFilesystem: {managed}"),
+            )
+            .issues();
+
+        let at_destination: Vec<_> = issues
+            .iter()
+            .filter(|(file, location, _)| {
+                file == yaml && location == "configFiles.fakeConfig.destination"
+            })
+            .collect();
+        assert_eq!(
+            at_destination.len(),
+            1,
+            "one issue for a sensitive config in unmanaged {folder}: {issues:#?}"
+        );
+        assert_eq!(at_destination[0].2, IssueCode::PathNotPermitted, "{folder}");
+        for location in ["lifecycle.initialize[1].file", "lifecycle.reload.render[0]"] {
+            assert_issue(&issues, yaml, location, IssueCode::UnknownConfigFile);
+        }
+    }
+}
+
+/// Spec 0009 AC-20: in `fake-command` (two component destination in the
+/// secrets folder), a rejected `serverConfig` leaves the `renderConfig`
+/// step and the `reload.render` entry unknown, while the plain `peers`
+/// config stays valid.
+#[test]
+fn a_rejected_nested_sensitive_destination_leaves_only_its_own_references_unknown() {
+    let yaml = "provider.yaml";
+    let issues = Edit::fake_command()
+        .replace(
+            yaml,
+            "destination: \"${instance.secrets}/conf/server.json\"",
+            "destination: \"${instance.config}/conf/server.json\"",
+        )
+        .issues();
+
+    assert_issue(
+        &issues,
+        yaml,
+        "configFiles.serverConfig.destination",
+        IssueCode::TokenNotAllowedHere,
+    );
+    assert_issue(
+        &issues,
+        yaml,
+        "lifecycle.initialize[2].file",
+        IssueCode::UnknownConfigFile,
+    );
+    assert_issue(
+        &issues,
+        yaml,
+        "lifecycle.reload.render[0]",
+        IssueCode::UnknownConfigFile,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(_, location, _)| location.contains("peers") || location.ends_with("[3].file")),
+        "{issues:#?}"
+    );
+}
+
+/// Builds a `fake-command` package with `extra` as a second sensitive
+/// config written to `destination`, rendered by an extra `renderConfig`
+/// step placed after the `serverConfig` one and re-rendered by reload.
+fn fake_command_with_extra_sensitive(destination: &str) -> Edit {
+    let yaml = "provider.yaml";
+    let template = Edit::fake_command().text("templates/server.json.tmpl");
+    Edit::fake_command()
+        .set("templates/extra.json.tmpl", template)
+        .replace(
+            yaml,
+            "  peers:\n",
+            &format!(
+                "  extra:\n    template: templates/extra.json.tmpl\n    format: yaml\n    destination: \"{destination}\"\n    sensitive: true\n  peers:\n"
+            ),
+        )
+        .replace(
+            yaml,
+            "    - { primitive: renderConfig, file: serverConfig }\n",
+            "    - { primitive: renderConfig, file: serverConfig }\n    - { primitive: renderConfig, file: extra }\n",
+        )
+        .replace(yaml, "render: [serverConfig]", "render: [serverConfig, extra]")
+}
+
+fn fake_command_context(package: &ValidatedPackage) -> PlanContext {
+    context_for(
+        package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/T",
+    )
+}
+
+/// Spec 0009 AC-20: two sensitive configs under the same intermediate
+/// folder add that folder to `InitPlan.cleanup` once.
+#[test]
+fn init_cleanup_lists_a_shared_intermediate_secrets_folder_once() {
+    let package = fake_command_with_extra_sensitive("${instance.secrets}/conf/extra.json")
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = fake_command_context(&package);
+    let secrets = context.paths.run.join("secrets");
+
+    let init = package.init_plan(&context).expect("the init plan builds");
+
+    assert_eq!(init.cleanup, [secrets.join("token"), secrets.join("conf")]);
+}
+
+/// Spec 0009 AC-20: cleanup follows the order of the initialize steps, and
+/// a sensitive config written straight into the secrets folder is listed
+/// as its own file.
+#[test]
+fn init_cleanup_follows_step_order_and_names_flat_sensitive_configs() {
+    let yaml = "provider.yaml";
+    let package = fake_command_with_extra_sensitive("${instance.secrets}/flat.json")
+        .replace(
+            yaml,
+            "    - { primitive: materializeSecret, secret: authToken, destination: token }\n",
+            "",
+        )
+        .replace(
+            yaml,
+            "    - { primitive: renderConfig, file: extra }\n",
+            "    - { primitive: renderConfig, file: extra }\n    - { primitive: materializeSecret, secret: authToken, destination: token }\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = fake_command_context(&package);
+    let secrets = context.paths.run.join("secrets");
+
+    let init = package.init_plan(&context).expect("the init plan builds");
+
+    assert_eq!(
+        init.cleanup,
+        [
+            secrets.join("conf"),
+            secrets.join("flat.json"),
+            secrets.join("token")
+        ]
+    );
+}
+
+/// Spec 0009 AC-20: a secret materialized under the name of the
+/// intermediate folder of a sensitive config, or a config rendered twice,
+/// still gives one cleanup entry per path.
+#[test]
+fn init_cleanup_has_no_duplicate_entries() {
+    let yaml = "provider.yaml";
+    let rendered_twice = Edit::fake_command()
+        .replace(
+            yaml,
+            "    - { primitive: renderConfig, file: peers }\n",
+            "    - { primitive: renderConfig, file: serverConfig }\n    - { primitive: renderConfig, file: peers }\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = fake_command_context(&rendered_twice);
+    let secrets = context.paths.run.join("secrets");
+    let init = rendered_twice
+        .init_plan(&context)
+        .expect("the init plan builds");
+    assert_eq!(init.cleanup, [secrets.join("token"), secrets.join("conf")]);
+
+    let same_name = Edit::fake_command()
+        .replace(yaml, "destination: token }", "destination: conf }")
+        .replace(
+            yaml,
+            "FAKE_TOKEN_FILE: \"${instance.secrets}/token\"",
+            "FAKE_TOKEN_FILE: \"${instance.secrets}/conf\"",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = fake_command_context(&same_name);
+    let init = same_name.init_plan(&context).expect("the init plan builds");
+    assert_eq!(init.cleanup, [secrets.join("conf")]);
+}
+
+/// Spec 0009 AC-20: only configs written into the secrets folder reach
+/// `InitPlan.cleanup`; a plain config in the config folder never does.
+#[test]
+fn init_cleanup_skips_configs_outside_the_secrets_folder() {
+    let package = Edit::fake_command()
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = fake_command_context(&package);
+
+    let init = package.init_plan(&context).expect("the init plan builds");
+
+    assert!(
+        init.cleanup
+            .iter()
+            .all(|entry| entry.starts_with(context.paths.run.join("secrets"))),
+        "{:#?}",
+        init.cleanup
+    );
+    assert!(
+        !init
+            .cleanup
+            .iter()
+            .any(|entry| entry.ends_with("peers.yaml")),
+        "{:#?}",
+        init.cleanup
+    );
+
+    let fake = Edit::fake()
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let fake_context = fake_command_context(&fake);
+    let fake_init = fake.init_plan(&fake_context).expect("the init plan builds");
+    assert_eq!(
+        fake_init.cleanup,
+        [fake_context.paths.run.join("secrets").join("fake.json")]
+    );
+}
