@@ -10,7 +10,7 @@ Kirim ke lead lewat `SendMessage` saat selesai, terblokir, gagal, atau butuh kep
 - **Pointer code in** (developer): `<folder atau file rumah kode milestone ini, untuk baris Pointer scope>`
 - **Langkah Build plan selesai** (developer): `<nomor langkah, misalnya 13, 14, 15>`
 - **Perintah uji** (developer): `<perintah test dan langkah verify milestone ini, satu per baris>`
-- **Model:** `<family model sesi ini>`
+- **Model:** `<model · effort sesi ini, dari get_session "self">`; bila beda dari "Model sesi" di brief, sebut di Blocker
 
 **Perintah dijalankan dan hasil:**
 
