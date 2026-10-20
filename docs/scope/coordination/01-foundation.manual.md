@@ -60,8 +60,15 @@ Record: `evidence/manual/2026-10-20-spec-0011-step-11-secret-entry-and-reveal-fl
     - Keluar dari app dengan Cmd-Q.
     - Ctrl-C daemon di Terminal A.
     - `rm -rf $ROOT $ROOT.daemon.log`
+12. Opsional, dialog Keychain asli (record langkah 22, hasil fix review Major 2). Langkah ini memakai login Keychain dan folder Application Support yang asli. Jalankan hanya kalau kamu tidak keberatan ada item `stackly-secret` sementara di sana.
+    1. Di Terminal A, hentikan daemon langkah 3 dengan Ctrl-C, lalu bangun ulang agar tanda tangan ad hoc berubah dan Keychain bertanya lagi: `touch apps/daemon/src/main.rs && cargo build -q -p stacklyd`. Jalankan daemon tanpa `STACKLY_ROOT`: `cargo run -q -p stacklyd`.
+    2. Di Terminal B, buka app tanpa `STACKLY_ROOT`: `target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly`. Buka Window > Design Gallery > Secrets, buka entry sheet, pilih Generate untuk `local:debug/gallery/password`, lalu Save. Klik Allow bila dialog muncul.
+    3. Hentikan daemon, lalu ulangi touch, build, dan start seperti langkah 12.1 supaya pembacaan berikutnya memunculkan dialog lagi.
+    4. Klik Show di baris connection string. Saat dialog Keychain muncul, Stackly kehilangan fokus. Setelah kamu klik Allow, nilai tidak boleh tampil sendiri, dan baris menampilkan teks merah `Hidden because Stackly went to the background. Press Show to try again.` Klik Show lagi; nilainya tampil tanpa dialog.
+    5. Ulangi build sekali lagi, lalu klik Copy. Dialog muncul. Setelah Allow, muncul `Copied. The clipboard clears in 90 seconds.`, dan `pbpaste` menampilkan URI lengkap.
+    6. Bersihkan: Delete Reference… lalu konfirmasi, keluar dari app, hentikan daemon, lalu pastikan di Keychain Access tidak ada item `stackly-secret` yang tersisa. Kalau dialog ternyata tidak membuat app kehilangan fokus di Mac ini, catat saja itu.
 
-Yang dikirim: versi macOS, waktu terukur untuk cek 30 detik dan 90 detik, serta nomor dan apa yang terlihat untuk setiap langkah yang tidak sesuai.
+Yang dikirim: versi macOS, waktu terukur untuk cek 30 detik dan 90 detik, serta nomor dan apa yang terlihat untuk setiap langkah yang tidak sesuai (termasuk langkah 12, atau "12 dilewati").
 
 ## C. Walking skeleton lewat CLI dan GUI (F14 langkah 10, AC-001)
 
