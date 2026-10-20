@@ -279,3 +279,7 @@ Dari inventaris `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md`
 - Yang tidak diubah di sini: Follow-up `--cleanup` (proses sisa di luar spike) dibiarkan terbuka sampai `/sync` lead setelah milestone 5 langkah 16 spec 0018 dan milestone 2 langkah 8 spec 0015 mendarat; penambahan `cargo xtask catalog check` ke pre commit hook (spec 0017) adalah item `/sync` untuk `AGENTS.md`, karena spec ini tidak mendeskripsikan hook.
 
 Perubahan ini dibaca model lain (Sonnet 5.5, baca saja) sebelum commit. Semua butir inventaris dinilai sudah diterapkan dengan benar; perbaikan kata yang diusulkannya ikut diterapkan (sumber fitur 65 menjadi lima tempat, dan siapa yang menulis kedua folder evidence).
+
+## Perubahan 2026-10-20 (ID risiko PRD, penyelarasan setelah build)
+
+Update `/architect` sesi `arc-foundation-update`, dari log koordinasi `docs/scope/coordination/01-foundation.log.md` bagian Keputusan (catatan `evidence!` hanya menerima AC, REQ, NFR, VAL, dan BR). Satu baris Follow-up baru mencatat bahwa ID risiko `RISK-NN` tidak lolos pola PRD ID, sehingga guard spec 0010 untuk RISK-03 dan RISK-14 menulisnya di awal `expected`, dan bahwa itu aturan sementara sampai laporan rilis butuh hitungan per risiko. Keputusan spec ini tidak berubah, dan kode `stackly-evidence` serta `StacklyTestSupport` tidak disentuh. Runner up yang tidak diambil sekarang: langsung menambah `RISK` dua digit ke pola, karena itu perubahan kode di dua bahasa tanpa pemakai yang membutuhkannya hari ini.

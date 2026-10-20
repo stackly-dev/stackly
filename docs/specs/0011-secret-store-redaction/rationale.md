@@ -809,3 +809,15 @@ Sumber, menurut urutan prioritas: keputusan lead foundation K8 dan K13 sampai K1
 ## Perubahan 2026-10-20 (D7, kode yang membawa `fields`)
 
 Keputusan lead D7: kode yang membawa `fields` (spec 0006) mendaftar `omitted` dan tidak punya `items`. `secret.invalid_value` mendapat kunci `details` `omitted` supaya create spec 0020 bisa melampirkan `fields` untuk field secret yang ditolak; `secret.needs_secret` tidak pernah membawa `fields`, karena daftar reference nya selalu di `items`. Hanya teks; nomor langkah dan AC tidak berubah, dan kunci baru ikut katalog `codes::secret` di langkah 5.
+
+## Penyelarasan teks setelah build 2026-10-20
+
+Update `/architect` sesi `arc-foundation-update`. Kode di `main` sudah sesuai; nomor langkah build dan ID AC tidak berubah. Sumbernya log koordinasi `docs/scope/coordination/01-foundation.log.md`, bagian Keputusan.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Prefix `FixtureCredential` | *Sisi Swift fixture credential*: prefix Swift dicocokkan dengan `FIXTURE_CREDENTIAL_PREFIX` di `crates/evidence/src/credential.rs` lewat teks source, bukan lewat fixture di `protocols/fixtures/`. Dicatat sebagai keputusan, bukan langkah Build plan baru | penyimpangan langkah 9 dan 10 yang diterima lead; temuan `chk-f11-m6`; rekomendasi lead |
+| Versi protokol di `verify.md` | langkah UI / manual Milestone 4 yang membaca `ProtocolVersion::CURRENT` kini berbunyi "1.7 atau lebih baru", karena langkah 12 fitur 10 menaikkan `CURRENT` ke 1.8; centang tidak berubah | temuan `chk-f11-m4` |
+| AC-11 lewat daemon | coverage M4 di `verify.md` tidak lagi menyebut AC-11 lewat daemon "belum bisa dibuktikan"; ia terbukti oleh `skeleton.rs` dan `supervisor/actions` | temuan `chk-f11-m4` |
+
+Opsi yang tidak dipilih untuk prefix: langkah Build plan kecil yang membuat fixture prefix di `protocols/fixtures/` dan mengubah test Swift untuk membacanya. Opsi itu menambah satu file kontrak yang tidak pernah lewat wire, dan pemilik kontrak harus menjaga dua salinan nilai yang sama.

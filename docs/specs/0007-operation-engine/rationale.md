@@ -877,6 +877,90 @@ Operasi create spec 0020 menjalankan langkah `init` lewat pembantu yang memegang
 
 - Memeriksa lock pohon yang bukan milik operasi tidak memberi informasi apa pun, dan membuat hasil `not_owned` bergantung pada keadaan lock.
 
+### Keputusan 31: `begin` di fase `Ready` (2026-10-20)
+
+Butir (1) *Urutan cek `begin`* menulis `NotReady` berlaku sampai `start()` dipanggil, tetapi `scheduler::begin` di `main` menolak hanya fase `Created` dan `Recovering`, dan di fase `Ready` (setelah `recover`, sebelum `start()`) operasinya masuk antrian sampai `start()` membuka dispatcher. Di `stacklyd`, slot start menandai daemon siap lalu memanggil `start()`, dan rekonsiliasi supervisor (spec 0010) berjalan di fase `Ready` tetapi menulis registry langsung; start dan stop yang ia putuskan dikirim lewat `start_reconciled()` setelah `start()`. Jadi pemanggil `begin` di fase `Ready` adalah request client di jendela antara siap dan `start()`, dan timer respawn proses yang diadopsi rekonsiliasi.
+
+#### Option 1: teks mengikuti kode, `begin` diterima di fase `Ready` (dipilih)
+
+**Pros**:
+
+- Tidak ada perubahan kode; perilaku yang sudah diuji dan dipakai supervisor tetap.
+- Operasi yang dibuat di fase `Ready` (request client, timer respawn) tidak hilang: ia `queued` dan dijalankan urut `(created_at, id)` begitu dispatcher terbuka, sama seperti operasi antri dari run sebelumnya.
+
+**Cons**:
+
+- Client yang memanggil di fase `Ready` mendapat operasi `queued`, bukan `daemon.starting`; jendelanya hanya sepanjang rekonsiliasi.
+
+#### Option 2: kode mengikuti teks, `NotReady` sampai `start()`
+
+**Pros**:
+
+- Satu batas yang lebih sederhana untuk dijelaskan.
+
+**Cons**:
+
+- Mengubah engine yang sudah `Accepted` dan supervisor yang sudah dibangun, tanpa bug yang diperbaiki.
+
+Diambil lead atas delegasi user (rekomendasi lead). `replay` memakai cek fase yang sama, jadi ia mengikuti keputusan ini tanpa perubahan.
+
+### Keputusan 32: CHECK `failure_items` menghitung karakter (2026-10-20)
+
+Review langkah 16 membuktikan dengan `sqlite3` bahwa `length(failure_items) <= 65536` di migrasi 0004 menghitung karakter (kolom TEXT di tabel `STRICT`), sedangkan AC-17, *Model data*, komentar migrasi, dan nama test menyebut byte. Tidak ada bug hari ini, karena `failure::fit` di core mengukur byte dan jumlah byte UTF 8 selalu paling sedikit sama dengan jumlah karakter.
+
+#### Option 1: selaraskan teks spec, migrasi tidak diedit (dipilih)
+
+**Pros**:
+
+- Migrasi 0004 dan `registry-v4.sql` sudah beku (`FIXTURE_SHA256` 4), dan registry yang sudah dibuka build ini mencatat checksum 0004; alasan yang sama dengan keputusan 28 opsi 3.
+- Batas byte tetap dijaga core, yang memang penjaga utama bentuk item.
+
+**Cons**:
+
+- CHECK SQL hanya menahan sampai kira kira empat kali batas untuk teks multibyte; ia jaring kasar, bukan penjaga byte.
+- Komentar baris 11 migrasi 0004 tetap menyebut byte, karena file beku.
+
+#### Option 2: CHECK byte di migrasi berikutnya (`length(CAST(failure_items AS BLOB))`)
+
+**Pros**:
+
+- SQL menjadi penjaga byte yang sebenarnya.
+
+**Cons**:
+
+- Satu migrasi tambahan untuk aturan yang tidak pernah dilanggar core, dan pola karakter yang sama sudah ada di `input`, `result`, `checkpoint`, dan `payload` migrasi 0002.
+
+Diambil lead atas delegasi user. Nama test storage dan kasus multibyte masuk Follow-up kode.
+
+### Keputusan 33: redaksi sebelum potong untuk nilai field item (2026-10-20)
+
+`FailureItem::new` menolak nilai di atas 512 byte dan lebih dari 8 field, jadi pekerjaan yang punya teks panjang harus memotongnya sendiri sebelum engine meredaksi. Kalau potongan jatuh di tengah nilai secret yang dikenal, awalannya lolos redaksi engine dan tersimpan di `failure_items` serta terkirim lewat wire. Belum ada pekerjaan nyata yang mengisi `items()` dengan nilai panjang; error provider (spec 0019 dan 0023) akan menjadi yang pertama.
+
+#### Option 1: pekerjaan wajib meredaksi sebelum memotong (dipilih)
+
+**Pros**:
+
+- Tidak mengubah API `OperationError::items()` dan tipe domain yang sudah dipakai fitur lain.
+- Pekerjaan sudah punya `Redactor` bersama daemon lewat deps fitur nya (misalnya `SupervisorDeps.redactor`), jadi aturannya bisa langsung dipenuhi; pemotongnya satu helper engine yang dibuka publik, supaya batas karakter UTF 8 tidak diputuskan ulang tiap fitur.
+- Nilai yang sudah muat tidak dipotong, jadi redaksi engine melihatnya utuh; aturan ini hanya mengenai nilai yang memang harus dipotong. Cross check menyarankan meredaksi semua nilai dari keluaran alat berapa pun panjangnya; itu tidak menambah perlindungan selama engine meredaksi ulang, jadi tidak diambil.
+- Redaksi engine tetap jalan sebagai lapis kedua.
+
+**Cons**:
+
+- Aturan yang harus diingat setiap pemakai, bukan dijamin konstruksi; test pemakai pertama dengan secret yang melintasi byte ke 512 menjadi penjaganya.
+
+#### Option 2: engine memegang validasi (`items()` mengembalikan bentuk mentah tanpa batas)
+
+**Pros**:
+
+- Urutan "redaksi lalu potong" dijamin satu tempat untuk semua pemakai.
+
+**Cons**:
+
+- Mengubah API `OperationError` dan konstruktor domain setelah fitur 7 `Accepted`, dan memindahkan batas yang tabel *Model domain* tetapkan di konstruktor.
+
+Diambil lead atas delegasi user (rekomendasi lead), sebelum fitur berikutnya mengisi `items()`.
+
 ## Rationale
 
 Pilihan di setiap keputusan berangkat dari dua bahaya di Context: efek ganda dan hapus yang salah sasaran. Idempotency key wajib dengan sidik jari, lock di memori dengan antrian FIFO, CAS, dan satu commit akhir yang atomik saling menutup celah: key mencegah pengulangan dari client, lock mencegah dua operasi menyentuh resource yang sama, CAS menangkap keadaan yang berubah di antara baca dan tulis, dan commit akhir membuat hasil terlihat sekaligus atau tidak sama sekali. Lock tidak pernah ditulis sebagai mutex di SQLite, dan registry tidak punya transaksi yang dibuka pemanggil (spec 0005), jadi REQ-048 terpenuhi karena konstruksi, bukan karena disiplin.
@@ -963,3 +1047,9 @@ Menutup baris keputusan di Follow-up dari review 2026-10-20. Bagian [index.md](i
 Menerapkan antrian lead scope 02 di Follow-up: K10, K12, blok usulan spec 0020 untuk spec 0007, baris `BusyPolicy` dari Follow-up spec 0010 (K1), dan post alignment 0007 butir 1. Bagian [index.md](index.md) yang berubah: AC-21 dan AC-22 baru (ID lama tidak berubah); *Peta modul* (`stacklyd`); *API engine* (`replay`, `BeginOutcome::NoOp`, `NoOpOutcome`, `BeginError::Rejected`, dan butir *Commit registry terakhir*, *Resource baru*, *Catatan dibuat*, *Bagian kritis di task engine*); *Tabel resume* (baris `create_instance` sendiri, penunjuk *Alur install* spec 0018); *Idempotency* (butir replay dan `replay_operation`); *Kompensasi dan primitive hapus* (urutan `instance_tree` K10); *Asumsi lintas spec* (*Untuk spec 0010*: `Reject` untuk create); *Value sourcing*; *Key invariants*; *Critical test scenarios*; *Build plan* langkah 16 dan paragraf *Dibangun di luar spec ini*; *Consequences*; dan *Follow-up*. Tidak ada perubahan wire, migrasi, atau kode error baru: `instance_locked` dan `lock_probe_failed` adalah detail `ReasonCode` di catatan dibuat, bukan kode katalog. Lead program foundation menerima keputusan 29 dan 30 pada 2026-10-20 (user mendelegasikan keputusan ke opsi rekomendasi), termasuk Follow-up `NotReady` lawan fase `Ready`.
 
 Cross check model lain (Sonnet 5.5, read only) atas update ini menemukan 13 butir. Yang kecil dan lokal langsung diambil dengan rekomendasinya (brief lead mengizinkan): error `symlink_metadata` menjadi `lock_probe_failed` dan alasan pemeriksaan file lock ditulis; manifest yang tidak ada atau milik operasi ini lanjut; probe yang dilewati terlihat dari panggilan `FakeProcessSupervision`; `not_created` pada catatan `created` membuat context tidak bisa dipakai lagi; `replay_operation` memakai `operations().writer()`; peta hasil menjadi fungsi murni dengan varian yang tidak mungkin dipetakan ke `internal.unexpected`, diuji tanpa wire; `Replay.input` untuk `NoOp` tercatat adalah input request pertama, `NoOp` dikenali dari stage `no_op`, `Replay::operation_id()` untuk log request, dan `Debug` tanpa `input`; resep `replay_operation` sekali lagi saat `start_operation` mengembalikan `replayed` setelah `replay` meleset; rincian harness test AC-21; AC-21 menyebut fase `Created` dan `Recovering`; operasi latar tidak punya key; abandon selagi lock dipegang meninggalkan sisa untuk purge fitur 54; *Resource baru* menyebut restore sebagai instance baru; dan langkah spec 0020 yang memenuhi AC-22. Satu butir menjadi Follow-up karena menyentuh keputusan lama: butir (1) *Urutan cek `begin`* tertinggal dari kode di fase `Ready`. Dua butir dilaporkan ke lead, tidak diubah di sini: baris lain spec 0020 (95, 1029, 1077, 1095) yang masih menyebut update ini tertunda, dan start rekonsiliasi yang tidak disebut di butir *Untuk spec 0010* (sudah begitu sebelum update ini).
+
+## Perubahan 2026-10-20 (keputusan 31 sampai 33, penyelarasan setelah build)
+
+Update `/architect` sesi `arc-foundation-update`. Kode di `main` tidak berubah, dan nomor langkah build serta ID AC tetap. Bagian [index.md](index.md) yang berubah: AC-17 (CHECK menghitung karakter, keputusan 32); *Model domain* baris `FailureItem` dan *Kegagalan dan error* (aturan redaksi sebelum potong, keputusan 33); *Model data* kolom `failure_items` (keputusan 32); *API engine* butir (1) *Urutan cek `begin`* (fase `Ready`, keputusan 31); *Asumsi lintas spec* butir *Untuk spec 0010* (tanpa `LockTable::holder` dan `try_lock_internal` di handler exit, dan ulangan respawn, mengikuti review fitur 10 dan spec 0010); dan *Follow-up* (baris `NotReady` dicentang, dua baris baru untuk nama test storage dan pemakai pertama `items()`). Sumbernya log koordinasi `docs/scope/coordination/01-foundation.log.md` bagian Keputusan, review `docs/reviews/2026-10-20-f7-step16.md` Minor 1 dan 2, dan review `docs/reviews/2026-10-20-f10-process-supervisor.md`. Minor 3 dan 4 review langkah 16 (log `catalog_body` tanpa `operation_id`, cabang `Corrupt` yang belum diuji) urusan kode dan tidak mengubah spec.
+
+Cross check model lain (Sonnet 5.5, baca saja) atas update ini membetulkan alasan keputusan 31 (rekonsiliasi tidak memanggil `begin` di fase `Ready`; pemanggilnya request client dan timer respawn), mengembalikan kalimat pemangkasan field di atas 8, menetapkan satu pemotong UTF 8 bersama dan sumber `Redactor` per fitur untuk keputusan 33, dan mengganti contoh `try_lock_internal` yang masih menyebut supervisor. Sarannya untuk meredaksi semua nilai dari keluaran alat berapa pun panjangnya tidak diambil (alasan di keputusan 33).
