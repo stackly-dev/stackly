@@ -298,6 +298,11 @@ impl Site {
     }
 
     pub fn deps(&self, scripts: &Scripts) -> DaemonDeps {
+        self.deps_with(WithScripts(scripts.clone()))
+    }
+
+    /// The deps of a daemon with `handlers`.
+    pub fn deps_with(&self, handlers: impl Handlers) -> DaemonDeps {
         let log = LogSink::start(Box::new(io::sink()), LogSinkConfig::DAEMON)
             .expect("the log writer starts");
         let facts = StartFacts::new(
@@ -312,7 +317,7 @@ impl Site {
             facts,
             Arc::new(log),
         )
-        .with_handlers(WithScripts(scripts.clone()))
+        .with_handlers(handlers)
     }
 
     /// Starts a daemon serving `scripts` and waits for its start slot.

@@ -1,0 +1,67 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15810-11e3-7649-b5b0-1fd2dbf49c93",
+  "covers": [
+    "REQ-016",
+    "AC-016"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0011 step 7: Deny and Cancel on the login Keychain dialog through stacklyd",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "With stacklyd on the default root and an item in the login Keychain made by an earlier build, secret.reveal from an interactive client shows the Keychain dialog; pressing Deny and dismissing with Cancel or Escape each end the call without a value, each maps to a stable secret.* error code (the spike on the file keychain recorded errSecUserCanceled for both), and the codes and the dialog labels are noted",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "In a Terminal at the repo root, build both binaries: `cargo build -q -p stacklyd -p stackly-cli`.",
+    "Terminal A: start the daemon on the DEFAULT root (no STACKLY_ROOT, so it uses the login Keychain, and it creates ~/Library/Application Support/Stackly if absent): `cargo run -q -p stacklyd`. Leave it running.",
+    "Terminal B (a real Terminal, nothing piped, so the client is interactive): `cargo run -q -p stackly-cli -- secret set local:user/manual-keychain-check --generate`. Expect exit 0; note whether any Keychain dialog appeared (none is expected for the build that made the item).",
+    "Terminal A: press Ctrl-C to stop the daemon. Then `touch apps/daemon/src/main.rs && cargo build -q -p stacklyd` (a new ad hoc build, so a new code identity), and start it again with `cargo run -q -p stacklyd`.",
+    "Terminal B: `cargo run -q -p stackly-cli -- secret reveal local:user/manual-keychain-check`. A Keychain dialog should appear. Click Deny. Note: the CLI exit code, the error code printed (run again with `--json` if the text is unclear), and the dialog's buttons.",
+    "Run the same reveal again. This time dismiss the dialog with the Cancel button if it has one, or the Escape key if not. Note the same three things.",
+    "Note whether the two outcomes gave the same `secret.*` error code and whether the second run showed the dialog again.",
+    "Cleanup: `cargo run -q -p stackly-cli -- secret delete local:user/manual-keychain-check`, then `security delete-generic-password -s stackly-secret -a user/manual-keychain-check` (ignore 'could not be found'), then Ctrl-C the daemon in Terminal A.",
+    "Write down the macOS version and the exact dialog wording and button labels you saw."
+  ],
+  "reviewer": null,
+  "startedAt": "2026-10-20T06:46:50.594706Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-20-spec-0011-step-7-deny-and-cancel-on-the-login-ke.json",
+  "context": {
+    "sourceCommit": "1cc86edd8e44f53ac1ab4421c05de64094b698de",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
