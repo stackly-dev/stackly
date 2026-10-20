@@ -22,7 +22,7 @@ use super::issue::{FileIssues, Issue, IssueCode, Issues, Location};
 use super::manifest::{
     Category, CommandSpec, ConfigFileSpec, DataMarker, EndpointPurpose, EndpointSpec, HealthSpec,
     InitStepSpec, ManagedField, Manifest, ProbeDef, ReadinessSpec, ReloadActionSpec, ReloadSpec,
-    StopSignal, StopSpec,
+    StdinSpec, StopSignal, StopSpec,
 };
 use super::names::{
     COMPONENT_RULE, NAME_RULE, SettingName, env_key_problem, is_component, is_name,
@@ -34,8 +34,8 @@ use super::package::{
 };
 use super::plan::{PlanContext, ResolvedEndpoint, RuntimeContext};
 use super::raw::{
-    API_VERSION, KIND, RawCommand, RawManifest, RawProbe, RawSettingsSchema, RawStep, RawVersions,
-    check_yaml_value, decode_json, decode_yaml, parse_json, parse_yaml,
+    API_VERSION, KIND, RawCommand, RawManifest, RawProbe, RawSettingsSchema, RawStdin, RawStep,
+    RawVersions, check_yaml_value, decode_json, decode_yaml, parse_json, parse_yaml,
 };
 use super::settings::{ApplyClass, FieldKind, ScalarKind, SettingsSchema, parse_schema};
 use super::template::{self, Checked, TemplateFormat};
@@ -70,6 +70,8 @@ const DISPLAY_NAME_MAX: usize = 64;
 const DESCRIPTION_MAX: usize = 512;
 /// Longest HTTP probe path, in bytes.
 const HTTP_PATH_MAX: usize = 256;
+/// Longest literal stdin text of a `runExecutable` step, in bytes (spec 0019).
+const STDIN_TEXT_MAX: usize = 16 * 1024;
 
 /// A provider package that passed every rule: the manifest, settings
 /// schema, and templates in their checked form, its digest, and the files
@@ -1009,7 +1011,7 @@ impl Checker<'_> {
                 self.at(
                     format!("{path}.format"),
                     IssueCode::UnknownTemplateFormat,
-                    "format must be yaml, json, or natsConf",
+                    "format must be yaml, json, natsConf, postgresqlConf, or plain",
                 );
             }
             let destination = check_path(
@@ -1153,6 +1155,55 @@ impl Checker<'_> {
         }
     }
 
+    /// Checks the stdin of a `runExecutable` step: exactly one of a secret
+    /// field or literal text (spec 0019). The text is written exactly, so
+    /// it holds no `${` (it is never interpolated) and no control
+    /// character other than a newline or a tab.
+    fn stdin(&mut self, stdin: &RawStdin, path: &str) -> Option<StdinSpec> {
+        match (&stdin.secret, &stdin.text) {
+            (Some(name), None) => self
+                .secret_field(name, &format!("{path}.secret"))
+                .map(StdinSpec::Secret),
+            (None, Some(text)) => {
+                let at = format!("{path}.text");
+                let start = self.count();
+                if text.is_empty() || text.len() > STDIN_TEXT_MAX {
+                    self.at(
+                        &at,
+                        IssueCode::InvalidValue,
+                        format!("stdin text must be 1 to {STDIN_TEXT_MAX} bytes"),
+                    );
+                }
+                if text.contains("${") {
+                    self.at(
+                        &at,
+                        IssueCode::TokenNotAllowedHere,
+                        "stdin text is literal and never interpolated, so it holds no ${",
+                    );
+                }
+                if text
+                    .chars()
+                    .any(|c| c.is_control() && !matches!(c, '\n' | '\t'))
+                {
+                    self.at(
+                        &at,
+                        IssueCode::InvalidValue,
+                        "stdin text holds no control character other than a newline or a tab",
+                    );
+                }
+                (self.count() == start).then(|| StdinSpec::Text(text.clone()))
+            }
+            _ => {
+                self.at(
+                    path,
+                    IssueCode::InvalidValue,
+                    "stdin takes exactly one of secret and text",
+                );
+                None
+            }
+        }
+    }
+
     fn secret_field(&mut self, name: &str, path: &str) -> Option<SettingName> {
         let schema = self.settings?;
         match schema.field(name) {
@@ -1286,7 +1337,7 @@ impl Checker<'_> {
                 let stdin = step
                     .stdin
                     .as_ref()
-                    .map(|stdin| self.secret_field(&stdin.secret, &format!("{path}.stdin.secret")));
+                    .map(|stdin| self.stdin(stdin, &format!("{path}.stdin")));
                 if let Some(timeout) = step.timeout_seconds
                     && !(1..=init_seconds).contains(&timeout)
                 {
@@ -1304,7 +1355,7 @@ impl Checker<'_> {
                 );
                 let stdin = match stdin {
                     Some(None) => return None,
-                    Some(Some(name)) => Some(name),
+                    Some(Some(spec)) => Some(spec),
                     None => None,
                 };
                 Some(InitStepSpec::RunExecutable {
@@ -1949,10 +2000,23 @@ fn check_templates(
         let Some(result) = checked.get(&spec.template) else {
             continue;
         };
+        let file = format!("templates/{}", spec.template);
+        if !spec.format.allows_tags() {
+            for at in result.tag_positions() {
+                issues.push(Issue::new(
+                    &file,
+                    Location::Position {
+                        line: at.line,
+                        column: at.column,
+                    },
+                    IssueCode::TemplateType,
+                    format!("config file {config} is plain, which allows only text and comments"),
+                ));
+            }
+        }
         if spec.sensitive {
             continue;
         }
-        let file = format!("templates/{}", spec.template);
         for (secret, at) in result.secrets() {
             issues.push(Issue::new(
                 &file,

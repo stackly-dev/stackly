@@ -102,9 +102,11 @@ pub fn manifest(data: &[u8]) {
 }
 
 /// Target `provider_template`: the first byte picks a setup, the rest is
-/// the template. Setups 0, 1, and 2 replace the fake template and render
-/// it as `json`, `yaml`, and `natsConf` against the fake context; setup 3
-/// replaces the traefik routes template, whose context has a list.
+/// the template. Setups 0, 1, 2, 4, and 5 replace the fake template and
+/// render it as `json`, `yaml`, `natsConf`, `postgresqlConf`, and `plain`
+/// against the fake context; setup 3 replaces the traefik routes template,
+/// whose context has a list. Setups 0 to 3 keep the numbers of the seeds
+/// written before the `postgresqlConf` and `plain` formats (spec 0019).
 ///
 /// # Panics
 ///
@@ -115,11 +117,17 @@ pub fn template(data: &[u8]) {
     let Some((&selector, template)) = data.split_first() else {
         return;
     };
-    let (folder, mut files, slot) = match selector % 4 {
+    let (folder, mut files, slot) = match selector % 6 {
         3 => ("traefik", package_files(&TRAEFIK), TRAEFIK_ROUTES),
         other => {
             let mut files = package_files(&FAKE);
-            let format = ["json", "yaml", "natsConf"][usize::from(other)];
+            let format = match other {
+                0 => "json",
+                1 => "yaml",
+                2 => "natsConf",
+                4 => "postgresqlConf",
+                _ => "plain",
+            };
             let manifest = FAKE[0]
                 .1
                 .replace("format: json", &format!("format: {format}"));
