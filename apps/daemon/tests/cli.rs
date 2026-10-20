@@ -201,6 +201,39 @@ fn command(root: &Path, args: &[String]) -> Command {
     command
 }
 
+/// Runs `stackly` with stderr on a pty (through `/usr/bin/script`), where
+/// progress is the live line, and returns the exit code and what the pty
+/// showed. `script` ties stdout to the pty too, so the text is both.
+async fn on_a_pty(site: &Site, args: &[&str]) -> (Option<i32>, String) {
+    let root = site.root.path().to_path_buf();
+    let args = owned(args);
+    tokio::task::spawn_blocking(move || {
+        let mut command = Command::new("/usr/bin/script");
+        command
+            .args(["-q", "/dev/null"])
+            .arg(cargo_bin("stackly-cli", "stackly"))
+            .args(&args)
+            .env("STACKLY_ROOT", &root)
+            .env("TZ", "UTC")
+            .env("TERM", "xterm-256color")
+            .env_remove("NO_COLOR")
+            .env_remove("CLICOLOR")
+            .env_remove("CLICOLOR_FORCE")
+            .env_remove("STACKLY_NO_INPUT")
+            .env_remove("CI")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        let output = command.output().expect("script runs");
+        (
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+        )
+    })
+    .await
+    .expect("the pty run's thread ends")
+}
+
 fn owned(args: &[&str]) -> Vec<String> {
     args.iter().map(|arg| (*arg).to_owned()).collect()
 }
@@ -397,7 +430,7 @@ async fn a_running_operation_is_listed_inspected_and_waited_for_and_stopping_the
     let ev = evidence!(
         covers = ["REQ-028", "REQ-054", "AC-054", "AC-028"],
         kind = Kind::Fixture,
-        expected = "against stacklyd with a held operation, stackly operation list and inspect show it running, inspect --wait --timeout 1s exits 8 and Ctrl+C exits 130 with the operation still running and no operation.cancel sent, inspect --wait exits 0 once it succeeds, and a cancel after that exits 3 with cli.cancel_not_applied",
+        expected = "against stacklyd with a held operation, stackly operation list and inspect show it running, inspect --wait --timeout 1s exits 8 and Ctrl+C exits 130 with the operation still running and no operation.cancel sent, inspect --wait exits 0 once it succeeds, AC-8: counted progress 1/2 shows in the list, the table, and the live wait line on a pty, and a cancel after that exits 3 with cli.cancel_not_applied",
     );
     let site = Site::new();
     let scripts = Scripts::new();
@@ -406,7 +439,11 @@ async fn a_running_operation_is_listed_inspected_and_waited_for_and_stopping_the
         "held",
         Script::new(
             OperationKind::UpdateManager,
-            ScriptedWork::new().step("prepare").step("wait").hold(&hold),
+            ScriptedWork::new()
+                .step("prepare")
+                .step("wait")
+                .hold(&hold)
+                .progress(1, 2),
         ),
     );
     let daemon = site.start(&scripts).await;
@@ -496,6 +533,37 @@ async fn a_running_operation_is_listed_inspected_and_waited_for_and_stopping_the
         Some("1")
     );
     assert_eq!(value["result"]["operation"]["state"], "running");
+
+    // AC-8: counted progress reaches the wait line. Off a terminal a wait
+    // line has no count (spec 0008, Progress), so the count is read from
+    // the table and from the live line on a pty.
+    assert_eq!(
+        item["progress"],
+        json!({ "type": "counted", "content": { "done": 1, "total": 2 } }),
+        "{item}"
+    );
+    assert!(
+        rows[1].contains(" 1/2 "),
+        "the table shows the count: {}",
+        table.stdout
+    );
+    let (live_code, live) = on_a_pty(
+        &site,
+        &[
+            "operation",
+            "inspect",
+            &id_text,
+            "--wait",
+            "--timeout",
+            "2s",
+        ],
+    )
+    .await;
+    assert_eq!(live_code, Some(8), "{live:?}");
+    assert!(
+        live.contains("\r\u{1b}[Krunning 1/2 ("),
+        "the live wait line carries the count: {live:?}"
+    );
 
     let interrupted = Waiting::start(
         &site,
