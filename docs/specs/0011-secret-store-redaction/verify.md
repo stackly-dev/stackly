@@ -63,3 +63,31 @@ _Build step 5, protokol 1.7. Semua test memakai `FakeSecretStore` di belakang `S
 - Menunggu step 7 (suite sentinel daemon): AC-3 lewat `stacklyd` (record manual Deny dan Cancel di login Keychain), AC-16, dan bukti byte scan registry, log, dan frame IPC di bawah sentinel
 - Menunggu fitur lain: kompensator `secret_ref` terdaftar di `recover_operations` (kodenya ada; pembuktian ujung ke ujung lewat operasi nyata menunggu langkah 13 spec 0010), `learn_running` dan `resolve_for_start` dari supervisor (fitur 10)
 
+
+## Milestone 5: CLI secret commands and secure input
+
+_Build step 8. Test CLI memakai daemon skrip (`ScriptedDaemon`) atau `stacklyd` sungguhan dengan `STACKLY_ROOT` ke `TestRoot`, jadi keychain file di bawah root itu dan fixture credential; tidak ada test yang menyentuh login Keychain. Test yang memakai `stacklyd` butuh sesi login GUI untuk membuat keychain file; tanpa sesi itu tercatat `BLOCKED` (spec 0011, *Menjalankan test di Mac ini*). Protokol tidak berubah (tetap 1.7)._
+
+### UI / manual
+
+- [ ] Di Terminal, `stackly secret set local:user/uji` tanpa flag → ada prompt `Value for local:user/uji:` dan `Repeat the value:` di stderr; ketikan tidak tampil (echo mati) dan baris baru sesudah tiap isian → AC-17
+- [ ] Ketik dua nilai yang berbeda tiga kali berturut turut → pesan `the two entries differ, try again` dua kali, lalu `the two entries differed three times, so nothing was set` dan exit code 2 → AC-17
+- [ ] `printf 'x' | stackly secret set local:user/uji --stdin` lalu `stackly secret reveal local:user/uji` → nilai `x` dan satu baris baru di stdout, stderr kosong → AC-17
+- [ ] `stackly secret set local:user/uji --stdin </dev/null` dan `stackly secret set local:user/uji --no-input` → keduanya gagal seketika, `cli.input_required` dan `cli.usage` (kind `secret_value_invalid`), exit 2, tanpa menunggu → AC-17
+- [ ] `stackly secret set --help` → memuat `--stdin`, `--from-file`, `--from-env`, `--generate`, `--copy-from`, `--replace`, `--upsert`, `--expected-revision`, `--confirm-stored-only`, dan tidak ada flag yang menerima nilai → AC-17
+
+### Commands
+
+- [ ] `cargo test -p stackly-cli --bin stackly secret_input` → pembacaan stdin (satu `\n` atau `\r\n` dibuang, batas 65536 dan 65537 byte, kosong, NUL, UTF-8 tidak valid), file (symlink, bukan file biasa, hilang, terlalu besar, izin longgar memberi peringatan), env (apa adanya, kosong atau tidak ada ditolak), prompt dua kali (cocok, tiga pasangan berbeda, tanpa TTY gagal `cli.input_required` tanpa membaca), flag sumber saling meniadakan, dan pengurai `--secret <field>=<sumber>` → AC-7, AC-17
+- [ ] `cargo test -p stackly-cli --bin stackly args` → pengurai reference rahasia dan `--expected-revision` → AC-17
+- [ ] `cargo test -p stackly-cli --test secret` → 12 test lulus terhadap daemon skrip dan pty: tanpa sumber dan tanpa TTY gagal seketika tanpa menyentuh socket; dua sumber, `--password`, `--value`, reference salah ditolak clap dengan exit 2; `--stdin` dengan `\r\n`; nilai yang ditolak CLI tidak pernah sampai ke daemon; `--from-file` dan `--from-env`; `--generate`, `--copy-from`, mode, revision; reveal mencetak nilai saja dan `--json` membawa `{ reference, value }`; list, status, delete tanpa nilai; replace `stored_only` noninteractive diserahkan ke daemon (`secret.confirmation_required`, exit 2) dan `--confirm-stored-only` mengirim sekali; interaktif menampilkan efek dan `[y/N]` (Enter menolak, exit 9; `y` mengirim ulang dengan `confirmStoredOnly`); prompt TTY dua kali dan tiga pasangan berbeda → AC-16, AC-17
+- [ ] `cargo test -p stacklyd --test cli_secret` → sentinel lewat CLI terhadap `stacklyd` sungguhan: set lewat `--stdin`, `--from-file`, `--from-env`, `--copy-from`, `--generate`, list, status, reveal, error yang dipicu (`secret.conflict` exit 3, `secret.not_found` exit 10), delete; prefix fixture credential tidak ada di output CLI selain `reveal`, log daemon, maupun byte registry beserta WAL → AC-16
+- [ ] `cargo test -p stackly-cli` dan `cargo test -p stacklyd` → seluruh suite kedua crate tetap lulus
+- [ ] `cargo xtask check-deps` dan `cargo test -p xtask` → lulus; `stackly-cli` `commands::secret` masuk `EXPOSE_ALLOWED` di commit yang sama dengan pemanggilan `expose()` pertamanya (hanya `reveal` yang mencetak nilai), dan `rpassword` hanya di `stackly-cli` → AC-15
+- [ ] `cargo xtask evidence check` → lulus; test CLI menulis evidence `fixture` dengan `covers` AC-016, REQ-016, BR-018, REQ-028, dan AC-028
+
+### Acceptance-criteria coverage
+
+- AC-16 (bagian CLI) · `cli_secret` terhadap `stacklyd` sungguhan dan `secret` terhadap daemon skrip; AC-17 · `secret_input` dan `secret`; AC-7 · batas nilai di CLI (kosong, NUL, 65537 byte, UTF-8 tidak valid) sebelum daemon disentuh
+- Menunggu step 7 (suite sentinel daemon): rekaman frame IPC selama skenario sentinel; CLI tidak menulis rekaman frame sendiri
+- Menunggu fitur lain: pemakai `--secret <field>=<sumber>` (create instance dan restore, spec 0020); dialog Keychain sungguhan untuk panggilan `AllowPrompt` (`RequestTimeout::Interactive`) dibuktikan di record manual step 7

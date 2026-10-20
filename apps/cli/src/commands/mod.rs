@@ -6,6 +6,7 @@
 
 pub mod daemon;
 pub mod operation;
+pub mod secret;
 
 use std::future::Future;
 

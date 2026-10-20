@@ -82,7 +82,8 @@ const CLI_CODES_RULE: &str = "only the cli and the protocol name codes::cli, so 
 /// has a call site (`stackly-platform` `secret`,
 /// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input` and
 /// `commands::secret`).
-pub const EXPOSE_ALLOWED: [(&str, &[&str]); 5] = [
+pub const EXPOSE_ALLOWED: [(&str, &[&str]); 6] = [
+    ("stackly-cli", &["commands::secret"]),
     ("stackly-core", &["secret::redact", "secret::delivery"]),
     ("stackly-platform-macos", &["secret", "process::stdin"]),
     ("stackly-protocol", &["secret"]),
@@ -1378,6 +1379,7 @@ mod tests {
         assert_eq!(
             EXPOSE_ALLOWED,
             [
+                ("stackly-cli", &["commands::secret"][..]),
                 ("stackly-core", &["secret::redact", "secret::delivery"][..]),
                 ("stackly-platform-macos", &["secret", "process::stdin"][..]),
                 ("stackly-protocol", &["secret"][..]),

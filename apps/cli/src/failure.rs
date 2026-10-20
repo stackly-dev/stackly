@@ -88,10 +88,6 @@ impl CliFailure {
     /// `cli.input_required`: a prompt for `input` is needed, but the CLI runs
     /// noninteractive.
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "spec 0011 step 8 asks for secrets through it")
-    )]
     pub fn input_required(input: &str) -> Self {
         Self::local(
             ErrorBody::new(

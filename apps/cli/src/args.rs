@@ -5,7 +5,8 @@
 use std::time::Duration;
 
 use stackly_protocol::operation::OperationCursor;
-use stackly_protocol::{ResourceKind, ResourceRef};
+use stackly_protocol::secret::{SECRET_REFERENCE_MAX, reference_field_code};
+use stackly_protocol::{ResourceKind, ResourceRef, Revision};
 use uuid::Uuid;
 
 /// The shortest `--timeout`.
@@ -98,6 +99,41 @@ pub fn timeout(text: &str) -> Result<Duration, String> {
         return Err(refused());
     }
     Ok(duration)
+}
+
+/// A secret reference such as `local:instance/0192f3a0/password`: the
+/// grammar of the protocol, so a malformed one never reaches the daemon.
+///
+/// # Errors
+///
+/// Returns why `text` is not one, for clap's message.
+pub fn secret_reference(text: &str) -> Result<String, String> {
+    match reference_field_code(text) {
+        None => Ok(text.to_owned()),
+        Some(_) if text.len() > SECRET_REFERENCE_MAX => Err(format!(
+            "a secret reference is at most {SECRET_REFERENCE_MAX} bytes"
+        )),
+        Some(_) => Err(
+            "expected local: then 2 to 8 segments of a-z, 0-9, dot, underscore, or hyphen, joined by /"
+                .to_owned(),
+        ),
+    }
+}
+
+/// `--expected-revision`: a whole number the wire accepts.
+///
+/// # Errors
+///
+/// Returns why `text` is not one, for clap's message.
+pub fn revision(text: &str) -> Result<Revision, String> {
+    let refused = || "expected a whole number such as 3".to_owned();
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(refused());
+    }
+    text.parse::<u64>()
+        .ok()
+        .and_then(Revision::new)
+        .ok_or_else(refused)
 }
 
 #[cfg(test)]
@@ -197,6 +233,46 @@ mod tests {
             "99999999999999999999",
         ] {
             assert!(timeout(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_secret_reference_follows_the_protocol_grammar() {
+        for text in [
+            "local:user/api-token",
+            "local:instance/0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e/password",
+        ] {
+            assert_eq!(secret_reference(text), Ok(text.to_owned()), "{text}");
+        }
+        for text in [
+            "",
+            "local:",
+            "local:one",
+            "Local:user/x",
+            "local:User/x",
+            "local:user//x",
+            "local:user/../x",
+            "keychain:user/x",
+            &format!("local:user/{}", "a".repeat(300)),
+        ] {
+            assert!(secret_reference(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_revision_is_a_whole_number_the_wire_accepts() {
+        assert_eq!(revision("0"), Ok(Revision::new(0).unwrap()));
+        assert_eq!(revision("42"), Ok(Revision::new(42).unwrap()));
+        for text in [
+            "",
+            "-1",
+            "1.5",
+            "abc",
+            "+1",
+            "99999999999999999999",
+            "9007199254740992",
+        ] {
+            assert!(revision(text).is_err(), "{text}");
         }
     }
 }
