@@ -201,7 +201,7 @@ Hasil per perintah di fitur ini:
 | `operation cancel` | `CancelReply` (`{ operation, disposition }`) | dengan `--wait`: DTO terakhir bersama `error` kalau tidak sukses |
 | `operation resume` | `OperationSummary` | dengan `--wait`: sama seperti inspect |
 | `operation abandon` | `AbandonReply` (`{ operation, leftovers }`) | tidak |
-| perintah async (fitur 14 ke atas) | `{ operation: OperationSummary \| null, idempotencyKey: string, ... }` (`operation` null kalau permintaan tidak membuat operasi, misalnya `alreadyInState`: tanpa maupun dengan `--wait` CLI keluar 0 karena tidak ada yang ditunggu, dan teks manusia menulis `already <state>`); fitur pemilik boleh menambah key saudara (misalnya `instance`) | dengan `--wait`: sama seperti inspect |
+| perintah async (fitur 14 ke atas) | `{ operation: OperationSummary \| null, idempotencyKey: string, ... }` (`operation` null kalau permintaan tidak membuat operasi, misalnya `alreadyInState` tanpa operasi: tanpa maupun dengan `--wait` CLI keluar 0 karena tidak ada yang ditunggu, dan teks manusia menulis `already <state>`; jawaban `alreadyInState` yang membawa operasi `succeeded` dengan stage `no_op` tetap mengisi `operation`, spec 0014 AC-6, 2026-10-20); fitur pemilik boleh menambah key saudara (misalnya `instance`) | dengan `--wait`: sama seperti inspect |
 
 Aturan stabilitas:
 
