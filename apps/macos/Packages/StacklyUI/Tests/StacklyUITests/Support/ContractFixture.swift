@@ -24,6 +24,14 @@ enum ContractFixture {
         return response.reply
     }
 
+    /// The error body of the error frame in `ipc/<name>.json`.
+    static func error(_ name: String) throws -> ErrorBody {
+        guard case .error(let frame) = try frame(name) else {
+            throw Mismatch(description: "\(name) is not an error frame")
+        }
+        return frame.error
+    }
+
     /// The event of the event frame in `ipc/<name>.json`.
     static func event(_ name: String) throws -> Event {
         guard case .event(let event) = try frame(name) else {
