@@ -683,13 +683,23 @@
       "type": "object",
       "properties": {
         "secret": {
-          "type": "string"
+          "description": "A secret field whose exact bytes go to stdin.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "description": "Literal text written to stdin exactly (spec 0019).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
-      "required": [
-        "secret"
-      ]
+      "maxProperties": 1,
+      "minProperties": 1
     },
     "Step": {
       "description": "One initialize step; `primitive` picks which other fields belong.",
