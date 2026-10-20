@@ -7,6 +7,56 @@ import StacklyClient
 /// `default`, so a new protocol case fails to compile until the UI knows how to show it.
 /// The source rule test rejects `default:` anywhere in `Adapters/`.
 nonisolated public enum StatusAdapter {
+    /// The reason of a `not_ready` readiness that means the first probe has not run.
+    static let awaitingProbeReason = "awaiting_probe"
+
+    /// The UI status of an instance lifecycle.
+    public static func lifecycle(_ lifecycle: InstanceLifecycle) -> LifecycleStatus {
+        switch lifecycle {
+        case .uninitialized: .uninitialized
+        case .initializing: .initializing
+        case .stopped: .stopped
+        case .starting: .starting
+        case .running: .running
+        case .stopping: .stopping
+        case .failed: .failed
+        case .recovering: .recovering
+        case .unknown: .unknown
+        case .retained: .retained
+        }
+    }
+
+    /// The UI status of an instance's readiness. `not_ready` with the reason
+    /// `awaiting_probe` is "waiting for the first probe"; any other reason keeps the
+    /// daemon's detail.
+    public static func readiness(_ readiness: InstanceReadiness) -> ReadinessStatus {
+        switch readiness.state {
+        case .ready: .ready
+        case .notReady:
+            readiness.reason == awaitingProbeReason
+                ? .awaitingProbe : .notReady(detail: readiness.detail)
+        case .unknown: .unknown
+        }
+    }
+
+    /// The UI status of an instance's health.
+    public static func health(_ health: InstanceHealth) -> HealthStatus {
+        switch health.state {
+        case .unknown: .unknown
+        case .healthy: .healthy
+        case .degraded: .degraded
+        case .unhealthy: .unhealthy
+        }
+    }
+
+    /// How an instance's status looks in a row, from the instance status table of spec 0012.
+    public static func appearance(of instance: InstanceSummary) -> StatusAppearance {
+        .instance(
+            lifecycle: lifecycle(instance.lifecycle),
+            readiness: readiness(instance.readiness),
+            health: health(instance.health))
+    }
+
     /// The UI status of an operation state.
     public static func operation(_ state: OperationState) -> OperationStatus {
         switch state {

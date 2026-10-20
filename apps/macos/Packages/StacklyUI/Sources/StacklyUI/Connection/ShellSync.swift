@@ -10,6 +10,8 @@ protocol SyncedStore: AnyObject {
     func receive(_ event: Event)
     /// Loads a snapshot in a new generation; `true` once it settled.
     func resnapshot() async -> Bool
+    /// The daemon restarted: forget observation bounds before the snapshot starts.
+    func serverRestarted()
 }
 
 extension ResourceStore: SyncedStore {}
@@ -72,6 +74,12 @@ public final class ShellSync {
         switch signal {
         case .resnapshot(let reason):
             lastResnapshot = reason
+            if case .gap(.serverRestarted) = reason {
+                // Counters such as `statusSeq` start again at 1 in a new run (spec 0010).
+                for store in stores {
+                    store.serverRestarted()
+                }
+            }
             generation += 1
             pending = Set(stores.map(ObjectIdentifier.init))
             isSettled = pending.isEmpty
