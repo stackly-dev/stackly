@@ -647,3 +647,23 @@ Cross check model lain (Sonnet 5.5, baca saja) atas update ini menemukan 12 cela
 - Daftar pekerjaan migrasi secret (daftar migrasi dan sidik jari, fixture v3, seed v3, test versi schema, test trigger pemilik), daftar conformance langkah 2a, `omitted` dan batas 100 di `ReferenceInUse`, pemetaan `ResourceKind`, `PlatformStoreKey`, `SecretOwnerKind`, urutan `used_by` menurut teks kolom, `record.id` yang diabaikan saat update, dan dua entri `Committed.revisions` untuk dua `UpdateInstance`.
 
 Catatan soundness yang tidak diubah: gabungan langkah 2a dan langkah 0 spec 0011 menjadi satu langkah registry (lebih sederhana, tetapi menyatukan dua fitur di satu sesi); dan AC-12 yang lebih kuat dengan kontrol positif (dicatat untuk `/test` fitur 11).
+
+## Perubahan 2026-10-20 (fase 02)
+
+Update `/architect` dari inventaris `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md` (bagian *Spec 0005*, 9 usulan dari spec 0017, 0018, dan 0020). Semua perubahan additive atau klarifikasi; acceptance criteria tidak bertambah, dan AC-1 hanya mendapat catatan tabel fitur 18 dengan pola yang sama dengan migrasi secret fitur 11. Keputusan lead atas nama user mengikuti rekomendasi:
+
+| Selisih | Keputusan | Alasan | Runner up |
+| --- | --- | --- | --- |
+| Usulan spec 0017 (K-2) dan spec 0020 sama sama mendefinisikan op dan baca sumber provider | blok verbatim spec 0020, dengan nilai kode dari K-2 spec 0017 | spec 0020 adalah superset: ia menambah aturan revision 1 dan entri `Committed.revisions` | menggabungkan keduanya kalimat per kalimat |
+| `registry.not_deletable` dengan kunci `details` `resource` dan `reason` (teks usulan spec 0020) | instance dikirim di `ErrorBody.resource` (`ResourceKind` `instance`), dan `details` hanya `reason` | aturan *Kode error di wire* spec ini sudah mengirim resource yang punya `ResourceKind` lewat `ErrorBody.resource`, jadi tidak ada pengecualian baru; tabel kode spec 0020 perlu disesuaikan lewat lead | pengecualian eksplisit untuk kunci `resource` |
+| Kalimat field yang belum dipakai di record diedit dua usulan (spec 0020 mengeluarkan `source_id`, spec 0018 mengisi `signature_info` dan `dependency_manifest`) | kalimat gabungan hanya menyisakan `approved_at` dan `provider_revision_pk` artefak; baris *Pemetaan aggregate* ikut disesuaikan | satu kalimat yang benar untuk kedua fitur | dua kalimat bersyarat per fitur |
+| Konstruktor `ProviderRevisionRecord::new` dan `ArtifactRecord::new` (`const fn`, arity tetap) dipanggil di banyak tempat | field baru lewat method builder additive (`with_source_id` dan builder field fitur 18) | pemanggil yang ada dan pemanggil baru (`install_fake`, `pin_package`) tidak patah | fitur 18 langkah 6 dan fitur 20 langkah 2 memperbarui semua pemanggil |
+| Tipe `kind` dan `status` sumber provider tidak bernama di usulan | `ProviderSourceKind` dan `ProviderSourceStatus`, kode set terbuka seperti `ConfigRevisionStatus` | pembangun tidak menebak tipe, dan fitur 37 menambah nilai tanpa migrasi | `String` mentah |
+| Alasan `NotDeletable` hanya disebut sebagai teks | enum `NotDeletableReason` (`CreatedByOtherOperation`, `Active`) | dua nilai tetap yang dipakai test conformance dan pemetaan wire | `&'static str` |
+
+Keputusan kecil:
+
+- **`NotDeletable` dicek setelah revision**, karena revision yang basi berarti pemanggil membaca keadaan lama, dan error itu lebih berguna lebih dulu.
+- **Create mengulang saat `DuplicateResource` untuk provider revision**, karena dua create bersamaan bisa memasukkan revision yang sama; batas lima kali sama dengan `GenerationConflict`.
+- **Urutan build kode** (bukan teks spec) dicatat di *Consequences*: langkah 2a spec 0010 lebih dulu, lalu fitur 18 dan 20 satu per satu; `DeleteInstanceCreatedBy` dan `NotDeletable` sebelum langkah 13 spec 0010 kalau create yang bisa dikompensasi penuh dilipat ke sana.
+- **Follow-up fitur 20 dicentang**, karena spec 0020 merancang langkah `layout` dan `register` serta AC-10 yang menjawabnya; dua baris terbuka baru melacak build fitur 18 dan 20.
