@@ -9,6 +9,7 @@ use serde_json::json;
 use stackly_platform::OutputStream;
 use stackly_protocol::events::ShutdownReason;
 use stackly_protocol::operation::OperationState;
+use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::support::{LogRecorder, Site, fast};
 
@@ -27,6 +28,11 @@ fn allocated(path: &std::path::Path) -> u64 {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_chatty_process_reaches_the_sink_and_its_spools_stay_under_2_mib() {
+    let ev = evidence!(
+        covers = ["REQ-017"],
+        kind = Kind::Fixture,
+        expected = "a fake that logs 2000 lines per second for 25 seconds reaches the daemon's sink as whole lines while each spool is written past 2 MiB and still never holds more than 2 MiB in blocks, and a slow reader never holds the process",
+    );
     let site = Site::new();
     let recorder = Arc::new(LogRecorder::default());
     let mut config = fast();
@@ -96,4 +102,5 @@ async fn a_chatty_process_reaches_the_sink_and_its_spools_stay_under_2_mib() {
     daemon
         .shutdown(ShutdownReason::Requested, std::future::pending())
         .await;
+    ev.pass();
 }
