@@ -10,7 +10,7 @@
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `arc-f7-update` | `architect (update)` | F7 langkah 16: update spec 0007 (K10, K12 `replay`, blok usulan 0020, post alignment butir 1) | `01-foundation.md` | `docs/specs/0007-operation-engine/` | `claude/arc-f7-update-a6649f` (sesi `local_47acc685`) | `opus-5-5 · xhigh` | `merged` (`6e20890` → `8e2a94a`) |
-| `tst-f8-test` (sesi `arc-f7-update` dipakai ulang) | `tester` | F8 `Test it`, AC-1 sampai AC-15 | `01-foundation.md` | `apps/cli/tests/`, `apps/daemon/tests/cli.rs`, `crates/ipc/tests/`, `evidence/` | `claude/arc-f7-update-a6649f` | `sonnet-5-5 · high` | `dipakai ulang` |
+| `tst-f8-test` (sesi `arc-f7-update` dipakai ulang) | `tester` | F8 `Test it`, AC-1 sampai AC-15 | `01-foundation.md` | `apps/cli/tests/`, `apps/daemon/tests/cli.rs`, `crates/ipc/tests/`, `evidence/` | `claude/arc-f7-update-a6649f` | `sonnet-5-5 · high` | `merged` (`5442aba` → `6cc2c10`) |
 | `dev-f11-m4-s5` | `developer` (pemilik kontrak wave 1) | F11 milestone 4, langkah 5 | `01-foundation.md` | `crates/protocol/`, `protocols/`, hasil codegen, `apps/daemon/src/`, `docs/specs/0011-secret-store-redaction/verify.md` (bagian Milestone 1) | `claude/dev-f11-m4-s5-*` (sesi `local_9735fe52`) | `sonnet-5-5 · high` | `aktif` |
 | `dev-f10-m2-s78` | `developer` | F10 milestone 2, langkah 7 dan 8, plus `verify.md` Milestone 1 dan 2 | `01-foundation.md` | `crates/core/src/supervisor/`, `crates/core/tests/supervisor*`, `crates/core/Cargo.toml`, `crates/testkit/src/fake_process.rs`, `docs/specs/0010-process-supervisor/verify.md` | `claude/dev-f10-m2-s78-*` (sesi `local_685e0303`) | `sonnet-5-5 · high` | `aktif` |
 | `dbg-f8-m2` | `debugger` (dengan ownership) | F8 milestone 2: tiga test real daemon yang gagal, cabut `#[ignore]`, `verify.md` 0008 Milestone 1 dan 2 | `01-foundation.md` | `apps/cli/`, `apps/daemon/tests/cli.rs`, `docs/specs/0008-cli-client-kontrak-output/verify.md` | `claude/dbg-f8-m2-ba9bdb` dari `claude/f8-closeout-2fe0b1` (sesi `local_9eadb11d`) | `opus-5-5 · xhigh` | `merged` (`000415a` → `87e905e`) |
@@ -43,6 +43,8 @@
 ## Dicentang pada wave ini
 
 - `8` · milestone `stackly operation list, inspect, cancel, resume, abandon, and --wait`, `Build it`, `Verify it` · laporan `dbg-f8-m2` (langkah 12, `000415a`) dan `chk-f8-verify` PASS 28/28 langkah (`ece0672`) · `claude/dbg-f8-m2-ba9bdb` → `87e905e` dan `ed731b5` · gate lead di main: fmt, clippy `-D warnings`, check-deps, test `stackly-cli` dan `stacklyd`, evidence check · commit `docs(scope): tick 8 milestone 2, build it, verify it`
+
+- `8` · `Test it`, lalu fitur ditandai `done` (heading, At a glance, Urutan file, Status spec 0008 `Accepted`) atas izin user · laporan `tst-f8-test` (`54a05c2`, `5442aba`: `-v` tanpa params, penolakan `--timeout`, abandon ditolak di pty, progress berhitung lewat `stacklyd` di list, tabel, dan baris live pty) · `claude/arc-f7-update-a6649f` → `6cc2c10` · gate lead: fmt, clippy workspace `-D warnings`, `cargo test -p stackly-cli` (78+24+8+22), `cargo test -p stacklyd --test cli` (6), evidence check · commit `docs(scope): tick 8 test it and mark feature 8 done`
 
 ## Riwayat wave
 

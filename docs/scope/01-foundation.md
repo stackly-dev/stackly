@@ -145,7 +145,7 @@ Mesin operasi async yang dipakai semua mutasi: journal, idempotency key, lock pe
 - [x] Review it (fresh model): `/check review operation engine`
 - [x] Document it: `/document operation engine`
 
-### 8. CLI client & kontrak output · in-progress
+### 8. CLI client & kontrak output · done
 
 CLI `stackly` sebagai client daemon dengan help, `--json`, exit code stabil, mode noninteractive, progress ke stderr, input secret yang aman, dan `--wait` untuk operasi async. Command lain disebut di Done when fitur yang memilikinya dan menempel ke kontrak ini.
 
@@ -160,7 +160,7 @@ CLI `stackly` sebagai client daemon dengan help, `--json`, exit code stabil, mod
   - [x] CLI framework and `stackly daemon status` end to end: `codes::cli`, the `check-deps` no spawn rule, exit code map, `--json` envelope, human output, progress, noninteractive mode and `Confirm`, `Session` with `call_detailed`, the final `daemon status`, scripted daemon, pty and golden tests (spec 0008 AC-1 to AC-6, AC-9 to AC-14; build steps 1 to 8; needs spec 0006 milestones 1, 2, and 4; step 2 can run as a parallel session)
   - [x] `stackly operation list`, `inspect`, `cancel`, `resume`, `abandon`, and `--wait`: argument parsers, operation rendering, the five commands with the destructive confirmation for `abandon`, `Waiter` with timeout, Ctrl+C, and reconnect, and the wait matrix (spec 0008 AC-3, AC-4, AC-7 to AC-9, AC-12, AC-15; build steps 9 to 12; needs milestone 1 and the spec 0007 operation DTOs; the real daemon tests need the spec 0007 engine)
 - [x] Verify it: `/check verify CLI client & kontrak output`
-- [ ] Test it: `/test CLI client & kontrak output`
+- [x] Test it: `/test CLI client & kontrak output`
 
 ### 9. Provider engine & manifest schema · done · GA
 
