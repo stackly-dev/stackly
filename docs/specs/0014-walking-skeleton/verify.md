@@ -16,18 +16,18 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 
 ### UI / manual
 
-- [ ] `cargo build -p stackly-fake-server -p stacklyd --example skeleton_seed`, lalu `R="$(mktemp -d /tmp/stackly-seed.XXXXXX)"` dan `target/debug/examples/skeleton_seed --root "$R"` → empat baris `root`, `runtime`, `provider`, `next`; `next` adalah satu perintah `STACKLY_ROOT=<R> stackly instance create demo --runtime <uuid> --provider testing/fake --revision 0.1.0 --wait` → AC-1
-- [ ] Ulangi perintah yang sama → output identik (runtime ID sama) dan `find "$R/data/runtimes" "$R/data/providers"` tidak berubah → AC-1
-- [ ] `target/debug/examples/skeleton_seed` tanpa argumen → pesan clap dan exit 2; `--root relatif` dan `--root "$R/tidak-ada"` → satu baris `error: ...` dan exit 1 → AC-2
+- [x] `cargo build -p stackly-fake-server -p stacklyd --example skeleton_seed`, lalu `R="$(mktemp -d /tmp/stackly-seed.XXXXXX)"` dan `target/debug/examples/skeleton_seed --root "$R"` → empat baris `root`, `runtime`, `provider`, `next`; `next` adalah satu perintah `STACKLY_ROOT=<R> stackly instance create demo --runtime <uuid> --provider testing/fake --revision 0.1.0 --wait` → AC-1
+- [x] Ulangi perintah yang sama → output identik (runtime ID sama) dan `find "$R/data/runtimes" "$R/data/providers"` tidak berubah → AC-1
+- [x] `target/debug/examples/skeleton_seed` tanpa argumen → pesan clap dan exit 2; `--root relatif` dan `--root "$R/tidak-ada"` → satu baris `error: ...` dan exit 1 → AC-2
 
 ### Commands
 
-- [ ] `cargo test -p stackly-core --test fixture_seed` → root kosong (satu commit, tiga record), ulang tanpa tulisan, runtime saja, provider saja, folder tanpa baris (`Leftover` runtime dan provider), kedua `Conflict` → AC-1, AC-2
-- [ ] `cargo test -p stacklyd --test instance_create_secrets` → create tanpa `secrets[]` membuat reference `local:instance/<id>/<purpose>` berstatus `present` dengan asal `generated` (32 karakter, tidak ada di log daemon), create dengan `secrets[]` eksplisit memakai nilai yang dikirim → AC-1
-- [ ] `cargo test -p stacklyd --test skeleton_seed` → seed lewat binary example (JSON, teks, idempoten), perintah `createCommand` yang dicetak dijalankan dengan `stackly` dan `succeeded`, tanpa `--root` exit 2, root relatif atau tidak ada, daemon yang hidup, binary fake yang tidak ada (pesan `cargo build -p stackly-fake-server`), folder tanpa baris registry, dan binary lain untuk versi yang sama; setelah setiap penolakan folder runtime dan paket serta jumlah baris sama → AC-1, AC-2
-- [ ] `cargo tree -p stacklyd -p stackly-cli --edges features,no-dev -i stackly-core` → graph hanya memuat fitur `default`, tanpa `fixture` → AC-3
-- [ ] `cargo xtask check-deps` → 13 crate lulus dengan example dan dependency dev `fixture` di tempatnya → AC-3
-- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core`, dan `cargo xtask evidence check` → lulus → AC-1 sampai AC-3
+- [x] `cargo test -p stackly-core --test fixture_seed` → root kosong (satu commit, tiga record), ulang tanpa tulisan, runtime saja, provider saja, folder tanpa baris (`Leftover` runtime dan provider), kedua `Conflict` → AC-1, AC-2
+- [x] `cargo test -p stacklyd --test instance_create_secrets` → create tanpa `secrets[]` membuat reference `local:instance/<id>/<purpose>` berstatus `present` dengan asal `generated` (32 karakter, tidak ada di log daemon), create dengan `secrets[]` eksplisit memakai nilai yang dikirim → AC-1
+- [x] `cargo test -p stacklyd --test skeleton_seed` → seed lewat binary example (JSON, teks, idempoten), perintah `createCommand` yang dicetak dijalankan dengan `stackly` dan `succeeded`, tanpa `--root` exit 2, root relatif atau tidak ada, daemon yang hidup, binary fake yang tidak ada (pesan `cargo build -p stackly-fake-server`), folder tanpa baris registry, dan binary lain untuk versi yang sama; setelah setiap penolakan folder runtime dan paket serta jumlah baris sama → AC-1, AC-2
+- [x] `cargo tree -p stacklyd -p stackly-cli --edges features,no-dev -i stackly-core` → graph hanya memuat fitur `default`, tanpa `fixture` → AC-3
+- [x] `cargo xtask check-deps` → 13 crate lulus dengan example dan dependency dev `fixture` di tempatnya → AC-3
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core`, dan `cargo xtask evidence check` → lulus → AC-1 sampai AC-3
 
 ### Acceptance-criteria coverage
 
@@ -95,18 +95,18 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 
 ### UI / manual
 
-- [ ] `cargo build -p stackly-fake-server -p stacklyd`, lalu `R="$(mktemp -d /tmp/stackly-m3.XXXXXX)"`, `target/debug/examples/skeleton_seed --root "$R"`, dan `STACKLY_ROOT="$R" target/debug/stacklyd` di terminal lain; jalankan `next` dari seed, lalu `instance start <id> --wait`, `instance get <id>`, `ps -axww -o pid=,args= | grep "$R" | grep "stackly-fake-server serve"` → satu baris; `kill -9` daemon, jalankan lagi, ulangi `get` dan `ps` → PID dan `startedAt` sama, `adopted: true`, tetap satu proses → AC-9, AC-11
-- [ ] Buat instance dengan `--set-json initDelayMs=15000`, `kill -9` daemon begitu `ps` memperlihatkan `stackly-fake-server init`, jalankan lagi → operasi `needs_recovery`, satu instance `failed`, pembantu init selesai sendiri setelah 15 detik → AC-12
+- [x] `cargo build -p stackly-fake-server -p stacklyd`, lalu `R="$(mktemp -d /tmp/stackly-m3.XXXXXX)"`, `target/debug/examples/skeleton_seed --root "$R"`, dan `STACKLY_ROOT="$R" target/debug/stacklyd` di terminal lain; jalankan `next` dari seed, lalu `instance start <id> --wait`, `instance get <id>`, `ps -axww -o pid=,args= | grep "$R" | grep "stackly-fake-server serve"` → satu baris; `kill -9` daemon, jalankan lagi, ulangi `get` dan `ps` → PID dan `startedAt` sama, `adopted: true`, tetap satu proses → AC-9, AC-11
+- [x] Buat instance dengan `--set-json initDelayMs=15000`, `kill -9` daemon begitu `ps` memperlihatkan `stackly-fake-server init`, jalankan lagi → operasi `needs_recovery`, satu instance `failed`, pembantu init selesai sendiri setelah 15 detik → AC-12
 
 ### Commands
 
-- [ ] `cargo test -p stackly-fake-server` → `--delay-ms` menunda sampai setelah token dibaca dan sebelum folder data dibuat; nilai yang bukan angka exit 2 → AC-4
-- [ ] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stackly-core --test provider_packages` lalu `cargo test -p stackly-core --test provider_packages --test provider_rules --test supervisor_start` → golden `fake/init.json` memuat `--delay-ms=0`, revision `0.2.0`, argv init di test supervisor ikut → AC-4
-- [ ] `cargo xtask provider check providers/fake` → `ok testing/fake 0.2.0 <sha256>` → AC-4
-- [ ] `cargo test -p stackly-testkit` → `ProcessTable`, `CliRunner`, `ReapGuard`, `SpawnedDaemon::kill` → AC-9, AC-11, AC-12 (prasyarat)
-- [ ] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test skeleton --locked --no-fail-fast` → lima test: happy path (create, start, get, stop; satu proses `serve` selama jalan dan nol sesudah stop; file keychain ada), init gagal lalu abandon (`supervisor.init_failed`, `needs_recovery`, `operation.abandoned`, `supervisor.not_initialized`, tidak ada proses), keychain file tanpa dialog, restart `SIGKILL` dan `SIGTERM` (PID, `startedAt`, `adopted`, satu instance, satu proses, isi data sama, start berikutnya `alreadyInState`), create terputus (replay key yang sama, `instance.name_taken`, `dataInUse` bila pembantu terlihat hidup sebelum dan sesudah `get`, abandon, pembantu selesai sendiri) → AC-9 sampai AC-13
-- [ ] `ps -axww -o pid=,args= | grep stackly-test-` setelah suite → tidak ada proses `stackly-fake-server` dari run ini → AC-9, AC-11, AC-12
-- [ ] `cargo xtask evidence check`, `cargo xtask check-deps`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check` → lulus → AC-4, AC-9 sampai AC-13
+- [x] `cargo test -p stackly-fake-server` → `--delay-ms` menunda sampai setelah token dibaca dan sebelum folder data dibuat; nilai yang bukan angka exit 2 → AC-4
+- [x] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stackly-core --test provider_packages` lalu `cargo test -p stackly-core --test provider_packages --test provider_rules --test supervisor_start` → golden `fake/init.json` memuat `--delay-ms=0`, revision `0.2.0`, argv init di test supervisor ikut → AC-4
+- [x] `cargo xtask provider check providers/fake` → `ok testing/fake 0.2.0 <sha256>` → AC-4
+- [x] `cargo test -p stackly-testkit` → `ProcessTable`, `CliRunner`, `ReapGuard`, `SpawnedDaemon::kill` → AC-9, AC-11, AC-12 (prasyarat)
+- [x] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test skeleton --locked --no-fail-fast` → lima test: happy path (create, start, get, stop; satu proses `serve` selama jalan dan nol sesudah stop; file keychain ada), init gagal lalu abandon (`supervisor.init_failed`, `needs_recovery`, `operation.abandoned`, `supervisor.not_initialized`, tidak ada proses), keychain file tanpa dialog, restart `SIGKILL` dan `SIGTERM` (PID, `startedAt`, `adopted`, satu instance, satu proses, isi data sama, start berikutnya `alreadyInState`), create terputus (replay key yang sama, `instance.name_taken`, `dataInUse` bila pembantu terlihat hidup sebelum dan sesudah `get`, abandon, pembantu selesai sendiri) → AC-9 sampai AC-13
+- [x] `ps -axww -o pid=,args= | grep stackly-test-` setelah suite → tidak ada proses `stackly-fake-server` dari run ini → AC-9, AC-11, AC-12
+- [x] `cargo xtask evidence check`, `cargo xtask check-deps`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check` → lulus → AC-4, AC-9 sampai AC-13
 
 ### Acceptance-criteria coverage
 
@@ -121,7 +121,7 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 
 ## Milestone 4: GUI and AC-001
 
-Langkah build 9. Test Swift `SkeletonEndToEndTests` memakai binary seed dan `stacklyd` asli, dengan koneksi `StacklyClient` kedua (noninteractive) yang membuat perubahan. Langkah build 10 (record manual dengan CLI yang mengubah, AC-16) menunggu Milestone 2 dan 3 di main dan belum dikerjakan.
+Langkah build 9. Test Swift `SkeletonEndToEndTests` memakai binary seed dan `stacklyd` asli, dengan koneksi `StacklyClient` kedua (noninteractive) yang membuat perubahan. Langkah build 10 menambah record manual `NOT_RUN` untuk AC-16 (CLI yang mengubah, GUI yang menampilkan); reviewer menjalankannya dengan tangan dan mengisi hasilnya.
 
 Keputusan kecil yang diambil saat membangun, karena spec diam:
 
@@ -134,6 +134,9 @@ Keputusan kecil yang diambil saat membangun, karena spec diam:
 
 - [ ] Buka `apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Support/ProcessRunner.swift` → tidak ada `waitUntilExit()`; exit datang lewat `terminationHandler`, dan watchdog mengirim SIGKILL setelah batas waktu → AC-14, AC-15
 - [ ] Setelah `swift test` selesai, jalankan `ps -axww -o pid=,args= | grep stk-ui-` → tidak ada `stackly-fake-server` atau `stacklyd` dengan root `/private/tmp/stk-ui-*` yang tersisa → AC-14, AC-15
+- [ ] Buka `evidence/manual/2026-10-20-walking-skeleton-through-the-cli-and-gui.json` → `covers` AC-001, AC-013, AC-029, `kind` `fixture`, `method` `manual`, `status` `NOT_RUN`, dan 15 `steps` bernomor (bangun, seed, `stacklyd`, app, create, start, tutup jendela, ⌘Q, Ctrl+C daemon, `kill -9` daemon, init gagal, create terputus, stop, bersih, isi record) → AC-16
+- [ ] Jalankan langkah record itu di Mac ini pada root sementara (`export R="$(mktemp -d /tmp/stk-skel.XXXXXX)"`; seed `target/debug/examples/skeleton_seed --root "$R"`; `STACKLY_ROOT="$R" target/debug/stacklyd`; app `STACKLY_ROOT="$R" target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly`; CLI `STACKLY_ROOT="$R" target/debug/stackly instance ...`) → baris `demo` muncul, berubah ke Running dan siap, dan Stopped tanpa klik atau refresh; PID sama setelah tutup jendela, ⌘Q, Ctrl+C dan `kill -9` daemon (`adopted`); tepat satu proses `serve` dan satu baris `demo`; `slow` dan `broken` Failed; tidak ada proses fake setelah stop → AC-16
+- [ ] Isi `steps`, `actual`, `status`, `reviewer`, dan `finishedAt` di record, lalu `cargo xtask evidence check` → lulus; `status` `PASS` hanya kalau setiap hasil di atas terlihat sendiri oleh reviewer → AC-16
 
 ### Commands
 
@@ -143,12 +146,13 @@ Keputusan kecil yang diambil saat membangun, karena spec diam:
 - [ ] `swift test --package-path apps/macos/Packages/StacklyUI --skip "NativeTests\."` → seluruh suite `StacklyUI` hijau, termasuk aturan sumber yang tidak memindai `Tests/` → AC-14, AC-15
 - [ ] `cargo xtask evidence run --kind fixture -- sh -c 'cargo build --locked -p stacklyd -p stackly-fake-server && cargo build --locked -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI --skip "NativeTests\."'` lalu `cargo xtask evidence check` → record `fixture` untuk kedua test dengan `covers` AC-001 dan AC-029 (AC-14) serta AC-001 (AC-15) lulus → AC-14, AC-15
 - [ ] `xcrun swift-format lint --strict` pada ketiga file baru, lalu `cargo xtask build-app` → lulus → AC-14, AC-15
+- [ ] `cargo xtask evidence check` → record manual AC-16 diterima dengan status `NOT_RUN` atau final → AC-16
 
 ### Acceptance-criteria coverage
 
 - AC-14 · `theInstanceStoreFollowsChangesAnotherClientMakes`
 - AC-15 · `quittingTheGUIKeepsThreeInstancesRunningForTheNextModel`
-- AC-16 · belum, milik langkah build 10 (record manual, menunggu Milestone 2 dan 3 di main)
+- AC-16 · record manual `2026-10-20-walking-skeleton-through-the-cli-and-gui.json` (langkah build 10), `NOT_RUN` sampai reviewer menjalankannya dan mengisi hasilnya; langkah otomatisnya (seed, `stacklyd`, `instance create`, `start`, `get`, `stop`, Ctrl+C dan `kill -9` daemon, init gagal, create terputus) sudah dicoba pada commit ini terhadap binary asli, hanya bagian yang butuh mata reviewer (jendela Stackly, notice, Dock, ⌘Q) yang belum
 - AC-1 sampai AC-13 · milik Milestone 1 sampai 3
 - AC-17 sampai AC-19 · belum, milik Milestone 5
 

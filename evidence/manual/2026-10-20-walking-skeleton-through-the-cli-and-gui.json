@@ -1,0 +1,74 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a158bf-3bb8-7664-986d-e51086de92f8",
+  "covers": [
+    "AC-001",
+    "AC-013",
+    "AC-029"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Walking skeleton through the CLI and GUI",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "Instances created, started, and stopped through stackly show up in the Stackly window without a refresh, survive closing and quitting the app and a killed or stopped stacklyd with the same PID, never appear twice, and leave no fake process after stop",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on the commit this record was made on, with a clean tree: `cargo build -p stacklyd -p stackly-cli -p stackly-fake-server`, `cargo build -p stacklyd --example skeleton_seed`, and `cargo xtask build-app` (Debug app at target/xcode/Build/Products/Debug/Stackly.app); in Terminal A `export R=\"$(mktemp -d /tmp/stk-skel.XXXXXX)\"` and `S=target/debug/stackly`",
+    "seed: `target/debug/examples/skeleton_seed --root \"$R\"`; note the runtime UUID on the `runtime` line as RT",
+    "Terminal B: `STACKLY_ROOT=\"$R\" target/debug/stacklyd` and leave it running (stacklyd reports `degraded` in `stackly daemon status` because no catalog is found outside an app bundle; that is expected here)",
+    "Terminal C: open the app on the same root with `STACKLY_ROOT=\"$R\" target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly`, select Instances, and expect the footer `stacklyd running` and the page `No Instances`",
+    "Terminal A: `STACKLY_ROOT=\"$R\" $S instance create demo --runtime $RT --provider testing/fake --revision 0.2.0 --set-json readyDelayMs=3000 --wait`; expect, without clicking or refreshing anything, a row `demo` whose second line names the fake provider and runtime version 0.1.0, status Stopped; copy the instance UUID from the last output line as ID",
+    "`STACKLY_ROOT=\"$R\" $S instance start $ID --wait` (takes about 3 s); expect the row to show a starting status first, then Running and ready, with no click; `STACKLY_ROOT=\"$R\" $S instance get $ID` shows `Lifecycle running`, `Readiness ready`, and `Process pid <PID>`; write PID down; `ps -axww -o pid=,args= | grep \"$R\" | grep \"stackly-fake-server serve\" | grep -v grep` shows exactly one line with that PID",
+    "close the Stackly window with the red button: the notice `Stackly is still running` appears; the same `ps` line and `instance get $ID` (`running`, same PID) are unchanged; click Stackly in the Dock and expect the window back with the same `demo` row, Running",
+    "press ⌘Q; `instance get $ID` still shows `running` with the same PID; start the app again as in step 4 and expect the `demo` row Running without a refresh",
+    "Terminal B: Ctrl+C on stacklyd; expect the banner `Can’t connect to stacklyd.` with the time and the `demo` row kept; the fake `ps` line is still there with the same PID; run `STACKLY_ROOT=\"$R\" target/debug/stacklyd` again; expect the banner gone within a few seconds and `instance get $ID` showing the same PID with `adopted` on the Process line",
+    "Terminal A: `kill -9 $(pgrep -f \"target/debug/stacklyd\")` (check with `pgrep -fl stacklyd` that it names only this daemon), then start stacklyd again in Terminal B; expect the same as the previous step: the same PID, `adopted`, exactly one fake `serve` process in `ps`, and exactly one `demo` row in the window",
+    "failed init: `STACKLY_ROOT=\"$R\" $S instance create broken --runtime $RT --provider testing/fake --revision 0.2.0 --set-json failInit=true --wait`; expect exit 7, `code: supervisor.init_failed`, state `needs_recovery`, and a row `broken` shown as Failed (write down the operation UUID as OP1); then `STACKLY_ROOT=\"$R\" $S operation abandon $OP1 --yes`, which prints `abandoned operation ... (state failed)` and one `secret_ref` leftover with `compensation_failed`; write down whether the `broken` row is still in the window afterwards",
+    "interrupted create: `STACKLY_ROOT=\"$R\" $S instance create slow --runtime $RT --provider testing/fake --revision 0.2.0 --set-json initDelayMs=20000` without `--wait`; as soon as `ps -axww -o pid=,args= | grep \"$R\" | grep -v grep | grep \"stackly-fake-server init\"` shows a line (within a second or two), `kill -9` stacklyd and start it again; expect a single `slow` row shown as Failed (never two), `STACKLY_ROOT=\"$R\" $S operation inspect <op>` with `State needs_recovery`, and, within 20 s of the create, the `init` helper gone from `ps` on its own; then `operation abandon <op> --yes`",
+    "stop: `STACKLY_ROOT=\"$R\" $S instance stop $ID --wait`; expect the `demo` row to become Stopped without a click, `instance get $ID` `Lifecycle stopped` with `Process -`, and `ps -axww -o pid=,args= | grep \"$R\" | grep stackly-fake-server | grep -v grep` printing nothing",
+    "clean up: Ctrl+C stacklyd in Terminal B, ⌘Q the app, `ps -axww -o pid=,args= | grep -E \"stackly|$R\" | grep -v grep` shows nothing from this run, then `rm -rf \"$R\"` and unset R; also remove the leftover folder `ls -d \"$TMPDIR\"stackly-*` that stacklyd made for the socket if one stays after a kill -9 (check with `ls \"$TMPDIR\" | grep '^stackly-'`)",
+    "fill in this record: steps (note any change), actual (what you saw at each numbered step, the PID, and the `broken` row result), status (PASS, FAIL, or BLOCKED with reason and owner), reviewer, and finishedAt, then run `cargo xtask evidence check`"
+  ],
+  "reviewer": null,
+  "startedAt": "2026-10-20T09:58:10.103606Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-20-walking-skeleton-through-the-cli-and-gui.json",
+  "context": {
+    "sourceCommit": "c4c7e3e978f64c86abc0fce3f4ad2f613645853e",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
