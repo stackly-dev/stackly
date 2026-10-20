@@ -14,6 +14,7 @@ use stackly_protocol::operation::{OperationKind, OperationState};
 use stackly_testkit::TestRoot;
 use stackly_testkit::evidence::{FixtureCredential, Kind, evidence};
 
+use crate::common::pty::{PtyOptions, run_in_pty};
 use crate::common::scripted::ScriptedDaemon;
 use crate::common::{Run, detail, envelope, run, stackly};
 use crate::data::{self, RUNTIME};
@@ -288,4 +289,74 @@ fn help_lists_the_secret_flag_with_its_sources() {
         help.stdout
     );
     assert!(help.stdout.contains("file:PATH"), "{}", help.stdout);
+}
+
+/// Spec 0011 review, spec 0008: Ctrl+C during `--wait` after a hidden prompt
+/// stops the wait the way it does without a prompt.
+#[test]
+fn ctrl_c_during_wait_after_a_secret_prompt_stays_graceful() {
+    let ev = evidence!(
+        covers = ["REQ-016", "REQ-028", "AC-054"],
+        kind = Kind::Fixture,
+        expected = "a create with a prompted secret and --wait that gets SIGINT while it waits ends with cli.interrupted and exit 130, names the operation that keeps running and how to check it, and never sends operation.cancel, the same as a wait without a prompt",
+    );
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = ScriptedDaemon::serve(
+        &root,
+        data::scripted(
+            Reply::InstanceCreate(Box::new(data::accepted(
+                data::operation(OperationKind::CreateInstance, OperationState::Queued, 1),
+                false,
+            ))),
+            vec![data::operation(
+                OperationKind::CreateInstance,
+                OperationState::Running,
+                2,
+            )],
+            None,
+        ),
+    );
+    let mut args = base();
+    args.extend(["--secret", "authToken=prompt", "--wait"]);
+
+    let run = run_in_pty(
+        root.path(),
+        &args,
+        &PtyOptions {
+            stdin_tty: true,
+            input: Some("fixture-prompt-value\nfixture-prompt-value\n"),
+            interrupt_after: Some(Duration::from_secs(3)),
+            ..PtyOptions::default()
+        },
+    );
+
+    assert_eq!(run.code, Some(130), "{run:?}");
+    assert!(
+        run.stderr.contains("waiting for operation "),
+        "the wait began after the prompt: {}",
+        run.stderr
+    );
+    assert!(
+        run.stderr.contains("is still running")
+            && run.stderr.contains("code: cli.interrupted")
+            && run
+                .stderr
+                .contains("hint: check it with: stackly operation inspect "),
+        "{}",
+        run.stderr
+    );
+    assert!(
+        !run.stderr.contains("interrupted at the secret prompt"),
+        "{}",
+        run.stderr
+    );
+    assert!(
+        daemon
+            .methods()
+            .iter()
+            .all(|method| method != "operation.cancel"),
+        "{:?}",
+        daemon.methods()
+    );
+    ev.pass();
 }

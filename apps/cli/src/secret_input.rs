@@ -134,7 +134,8 @@ impl HiddenInput for Tty {
 ///
 /// The listener stays for the rest of the process, since a registered
 /// handler cannot be taken back. Outside a prompt it ends the command with
-/// exit 130, as the default action would.
+/// exit 130, as the default action would, until a wait takes over
+/// ([`hand_over_to_wait`]) and handles Ctrl+C itself.
 mod interrupt {
     use std::io;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -149,6 +150,8 @@ mod interrupt {
     static READING: AtomicBool = AtomicBool::new(false);
     /// How many `SIGINT` the listener has taken so far.
     static SEEN: AtomicUsize = AtomicUsize::new(0);
+    /// A wait listens for `SIGINT` itself, so the listener leaves it alone.
+    static HANDED_OVER: AtomicBool = AtomicBool::new(false);
     static STARTED: Once = Once::new();
     static LISTENING: OnceLock<bool> = OnceLock::new();
 
@@ -180,7 +183,7 @@ mod interrupt {
                             // the flag only after it saw the count move.
                             let at_prompt = READING.load(Ordering::SeqCst);
                             SEEN.fetch_add(1, Ordering::SeqCst);
-                            if !at_prompt {
+                            if !at_prompt && !HANDED_OVER.load(Ordering::SeqCst) {
                                 std::process::exit(i32::from(EXIT_INTERRUPTED));
                             }
                         }
@@ -190,6 +193,10 @@ mod interrupt {
             let _ = LISTENING.set(listening);
         });
         LISTENING.get().copied().unwrap_or(false)
+    }
+
+    pub(super) fn hand_over() {
+        HANDED_OVER.store(true, Ordering::SeqCst);
     }
 
     /// Runs `read` with the listener on. An `Interrupted` result comes back
@@ -215,6 +222,15 @@ mod interrupt {
     pub(super) fn seen() -> usize {
         SEEN.load(Ordering::SeqCst)
     }
+}
+
+/// Leaves `SIGINT` to the caller from now on. A wait calls it once it
+/// listens for the signal itself: until then the listener a hidden prompt
+/// started ends the command with exit 130 on Ctrl+C, and from then on Ctrl+C
+/// stops the wait the way spec 0008 says, with the operation left running.
+/// Without a prompt before it, nothing changes.
+pub fn hand_over_to_wait() {
+    interrupt::hand_over();
 }
 
 /// The value of an environment variable, or `None` when it is unset.

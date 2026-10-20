@@ -32,6 +32,9 @@ pub struct PtyOptions<'a> {
     pub stdin_tty: bool,
     /// What to type on the pty, when stdin is the pty.
     pub input: Option<&'a str>,
+    /// Sends `SIGINT` to `stackly` this long after it started, as Ctrl+C
+    /// does, without touching the terminal modes.
+    pub interrupt_after: Option<std::time::Duration>,
 }
 
 fn quote(arg: &str) -> String {
@@ -43,7 +46,16 @@ pub fn run_in_pty(root: &Path, args: &[&str], options: &PtyOptions<'_>) -> PtyRu
     let dir = tempfile_dir(root);
     let out = dir.join("stdout");
     let status = dir.join("status");
-    let mut line = quote(STACKLY);
+    let mut line = String::new();
+    if let Some(after) = options.interrupt_after {
+        // `stackly` takes the shell's place, so the file holds its own pid
+        // and runs in the foreground with the default signal handling.
+        line.push_str(&format!(
+            "(sleep {}; kill -INT \"$(cat \"$PIDFILE\")\") & /bin/sh -c 'echo $$ >\"$PIDFILE\"; exec \"$@\"' sh ",
+            after.as_secs_f32()
+        ));
+    }
+    line.push_str(&quote(STACKLY));
     for arg in args {
         line.push(' ');
         line.push_str(&quote(arg));
@@ -58,6 +70,7 @@ pub fn run_in_pty(root: &Path, args: &[&str], options: &PtyOptions<'_>) -> PtyRu
         .args(["-q", "/dev/null", "/bin/sh", "-c", &line])
         .env("OUT", &out)
         .env("STATUS", &status)
+        .env("PIDFILE", dir.join("pid"))
         .env("STACKLY_ROOT", root)
         .env("TZ", "UTC")
         .env("TERM", "xterm-256color")
