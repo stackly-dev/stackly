@@ -14,6 +14,9 @@
 //! - [`probe`] runs one attempt of a `tcp`, `http`, or `exec` probe and
 //!   reports a [`ProbeOutcome`](probe::ProbeOutcome) with a redacted
 //!   detail.
+//! - [`SpoolDrain`] reads one spool stream into redacted [`LogLine`]s for a
+//!   [`LogSink`]; [`SinkSet`] fans them out and [`TailSink`] keeps the tail
+//!   for failure excerpts.
 //! - [`SupervisorConfig`] holds every constant, shrinkable in tests.
 
 mod classify;
@@ -24,6 +27,8 @@ mod http;
 mod ports;
 pub mod probe;
 mod restart;
+mod sink;
+mod spool;
 
 use stackly_domain::ObservationDetail;
 
@@ -41,6 +46,8 @@ pub use config::{
 };
 pub use ports::{BindOptions, BindOutcome, PortProbe, SocketPortProbe};
 pub use restart::{JitterFactor, RestartDecision, RestartHistory, backoff_delay};
+pub use sink::{LogBatch, LogLine, LogSink, SinkOutcome, SinkSet, TailSink};
+pub use spool::{DrainContext, DrainOutcome, SpoolDrain};
 
 /// Longest [`ObservationDetail`], in characters.
 const DETAIL_MAX_CHARS: usize = 256;
