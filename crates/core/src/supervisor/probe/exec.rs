@@ -34,6 +34,8 @@ pub(super) async fn run(
         env,
         cwd: spec.command.cwd.clone(),
         role: ChildRole::Probe,
+        stdin: None,
+        lock: None,
     };
     let limit = limit.min(spec.timeout);
     match run_helper(

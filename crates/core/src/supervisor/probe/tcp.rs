@@ -47,7 +47,7 @@ async fn unix(path: &std::path::Path, _limit: Duration, redactor: &Redactor) -> 
 /// any, closes when it drops.
 pub(super) async fn connect<S>(
     connecting: impl Future<Output = io::Result<S>>,
-    target: &dyn Display,
+    target: &(dyn Display + Sync),
     limit: Duration,
     redactor: &Redactor,
 ) -> ProbeOutcome {
