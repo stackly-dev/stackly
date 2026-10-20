@@ -227,7 +227,7 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
 - [ ] Verify it: `/check verify secret store & redaction`
 - [x] Test it: `/test secret store & redaction`
 - [x] Review it (fresh model): `/check review secret store & redaction`
-- [ ] Document it: `/document secret store & redaction`
+- [x] Document it: `/document secret store & redaction`
 
 _Catatan:_ fitur 12 (Design system & UI foundation) dan 13 (App shell SwiftUI & Swift client) sekarang ada di [ui-macos.md](ui-macos.md), bersama fitur UI lintas layar lain yang diturunkan dari mockup UI. Nomor, urutan, dan statusnya tidak berubah.
 

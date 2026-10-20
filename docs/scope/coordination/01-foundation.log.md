@@ -302,6 +302,8 @@
 
 - `11` · `Review it (fresh model)` · review `chk-f11-review` (Changes requested, 2 Major) lalu fix `dev-f11-fix-rust` (`b5941d1`) dan `dev-f11-fix-swift` (`a1cc473`); konfirmasi (`a5eb965`) menyatakan kedua Major dan enam Minor tertutup, Approve with nits, keputusan Copy diterima · commit `docs(scope): tick 11 review it`. Sisa untuk Follow-up: 14 Minor putaran 1, 1 Minor baru (Copy terlambat menimpa clipboard, dikirim ke `dev-f11-fix-swift`), 44 Nit.
 
+- `11` · `Document it` · `/document changelog` oleh lead: lima bullet `Added` dan dua `Security` untuk F11 di `CHANGELOG.md`. Sebelumnya, Minor "Copy terlambat menimpa clipboard" di-merge (`bdf5b38` → `32219ce`, StacklyUI 315). · commit `docs(changelog): secret store and redaction` dan `docs(scope): tick 11 document it`. F11 tinggal record manual A, B, dan E untuk `Build it` dan `Verify it`.
+
 ## Riwayat wave
 
 - Wave `1` (`2026-10-20`, hash awal `eea005d`): selesai di `4434632`. Merge: F8 langkah 12 dan test (`87e905e`, `ed731b5`, `6cc2c10`), update spec 0007 (`8e2a94a`), F11 langkah 5 (`08bc15f`, `14653f8`), F10 langkah 7 dan 8 (`4434632`). Dicentang: F8 milestone 2, `Build it`, `Verify it`, `Test it`, dan F8 `done`. Terbuka: F7 langkah 16, F10 M1 sampai M4 dan kotak penutup, F11 M4 (langkah 7), M5, M6, dan kotak penutup, serta F14. Blocker: baris Boot setelah reboot F10 (`BLOCKED`, owner user).
