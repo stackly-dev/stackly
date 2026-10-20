@@ -651,6 +651,24 @@ async fn an_error_with_101_items_keeps_100_and_counts_one_omitted() {
     assert_eq!(pairs(&error), [("omitted", "1")]);
 }
 
+/// covers: AC-16. The limit is 100 items, so exactly 100 keep every item and
+/// count no omitted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_error_with_exactly_100_items_keeps_all_of_them_and_counts_no_omitted() {
+    let harness = Harness::new().await;
+    let items: Vec<FailureItem> = (0..100)
+        .map(|n| item("issue", &[("path", &format!("/field{n}"))]))
+        .collect();
+
+    let error = failed_with(&harness, Vec::new(), items.clone(), None).await;
+
+    assert_eq!(error.items(), items.as_slice());
+    assert!(
+        error.details().is_empty(),
+        "no omitted detail without a drop"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn omitted_from_the_engine_adds_to_the_omitted_the_work_reported() {
     let harness = Harness::new().await;
