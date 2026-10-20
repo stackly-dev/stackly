@@ -539,3 +539,12 @@ Dijalankan 2026-10-20 oleh model lain (Sonnet, read only) atas draft `7815b6a`, 
 | S6 | Instance hantu di GUI setelah kompensasi | event `instance.removed` (Keputusan 18) |
 | S7 | Create bernama sama menunggu init pemenang lalu gagal | `BusyPolicy::Reject` (Keputusan 16) |
 | S8 | `check_data_root_overlap` setelah layout hampir tidak bisa menemukan apa pun | dipertahankan sebagai pemeriksaan berlapis yang murah untuk symlink yang ditanam lebih dulu (AC-6) |
+
+## Penyesuaian dengan update spec 0004 dan 0005 (2026-10-20)
+
+Spec 0004 dan 0005 menerapkan blok usulan spec ini lewat sesi `upd-0004-0005`, dengan dua keputusan yang berbeda dari teks usulan. Spec ini mengikuti keduanya, karena spec pemilik yang menentukan:
+
+- **`DuplicateSocket` masuk BR-004**, bukan rule None, karena baris BR-004 spec 0004 sudah menyatakan dua endpoint Unix dengan nama socket sama konflik. *Endpoint di aggregate* dan butir 2 dan 3 blok spec 0004 disamakan, termasuk `Instance::new` yang mengembalikan `Result<Instance, InvariantError>`.
+- **`registry.not_deletable` hanya membawa kunci `details` `reason`** (`created_by_other_operation` atau `active`), dan instance nya dikirim di `ErrorBody.resource` (`ResourceKind` `instance`), mengikuti aturan *Kode error di wire* spec 0005. Tabel *Kode error* dan butir 6 blok spec 0005 disamakan; butir 3 dan 5 ikut memuat nama tipe yang dipilih spec 0005 (`ProviderSourceKind`, `ProviderSourceStatus`, `NotDeletableReason`) dan builder `with_source_id`.
+
+Acceptance criteria dan build plan tidak berubah.
