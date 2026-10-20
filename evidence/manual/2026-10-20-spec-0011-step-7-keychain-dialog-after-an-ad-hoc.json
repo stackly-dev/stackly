@@ -1,0 +1,68 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15810-151a-77cb-a71e-f9e0753509b6",
+  "covers": [
+    "REQ-016",
+    "AC-016"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0011 step 7: Keychain dialog after an ad hoc rebuild of stacklyd",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "After rebuilding stacklyd with ad hoc signing, a user action (secret.reveal from an interactive client) on an item made by the earlier build shows the Keychain dialog, while a background trigger (a start that needs the secret, a client that cannot show a dialog) gets secret.needs_secret or secret.store_access_denied without any dialog, and the observed behavior is noted for each",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "In a Terminal at the repo root, build both binaries: `cargo build -q -p stacklyd -p stackly-cli`.",
+    "Terminal A: start the daemon on the DEFAULT root (no STACKLY_ROOT, so it uses the login Keychain, and it creates ~/Library/Application Support/Stackly if absent): `cargo run -q -p stacklyd`. Leave it running.",
+    "Terminal B (a real Terminal, nothing piped, so the client is interactive): `cargo run -q -p stackly-cli -- secret set local:user/manual-keychain-check --generate`. Expect exit 0; note whether any Keychain dialog appeared (none is expected for the build that made the item).",
+    "Terminal A: press Ctrl-C to stop the daemon. Then `touch apps/daemon/src/main.rs && cargo build -q -p stacklyd` (a new ad hoc build, so a new code identity), and start it again with `cargo run -q -p stacklyd`.",
+    "Terminal B: `cargo run -q -p stackly-cli -- secret reveal local:user/manual-keychain-check`. Note whether the Keychain dialog appears for the item made by the earlier build, and what it says. Click Deny.",
+    "Terminal B, a client that cannot show a dialog: `cargo run -q -p stackly-cli -- secret reveal local:user/manual-keychain-check </dev/null | cat`. Expect no dialog and an immediate failure; note the error code, whether the detail byUser is false, and the exit code.",
+    "Terminal B: `cargo run -q -p stackly-cli -- secret status local:user/manual-keychain-check` and `cargo run -q -p stackly-cli -- secret list`. Expect no dialog and the reference listed as present (the probe never reads the value). Note it.",
+    "Not covered here: a start that needs the secret (needs instances, feature 10). Write 'not covered' for that part.",
+    "Cleanup: `cargo run -q -p stackly-cli -- secret delete local:user/manual-keychain-check`, then `security delete-generic-password -s stackly-secret -a user/manual-keychain-check` (ignore 'could not be found'), then Ctrl-C the daemon in Terminal A.",
+    "Write down the macOS version and the exact dialog wording and button labels you saw."
+  ],
+  "reviewer": null,
+  "startedAt": "2026-10-20T06:46:51.418311Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-20-spec-0011-step-7-keychain-dialog-after-an-ad-hoc.json",
+  "context": {
+    "sourceCommit": "1cc86edd8e44f53ac1ab4421c05de64094b698de",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

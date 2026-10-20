@@ -10,3 +10,4 @@ mod handshake;
 mod lifecycle;
 mod limits;
 mod secret;
+mod secret_log;

@@ -1,6 +1,8 @@
 //! Helpers shared by the daemon's integration tests that run the binary.
 #![allow(dead_code, reason = "each test binary uses a part of these helpers")]
 
+pub mod frame_tap;
+
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

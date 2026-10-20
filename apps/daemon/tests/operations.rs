@@ -11,6 +11,8 @@ mod flow;
 mod perf;
 #[path = "operations/recovery.rs"]
 mod recovery;
+#[path = "operations/secret_intent.rs"]
+mod secret_intent;
 #[path = "operations/secrets.rs"]
 mod secrets;
 #[path = "operations/support.rs"]
