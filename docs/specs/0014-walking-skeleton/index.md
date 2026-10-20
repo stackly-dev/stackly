@@ -1,7 +1,7 @@
 # 0014. Walking skeleton
 
 **Date**: 2026-10-20
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

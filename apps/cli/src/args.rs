@@ -2,8 +2,11 @@
 //! flag global*). clap calls them, so a refused value exits 2 before
 //! anything reaches the daemon.
 
+use std::str::FromStr;
 use std::time::Duration;
 
+use stackly_protocol::instance::PortRequest;
+use stackly_protocol::json::is_idempotency_key;
 use stackly_protocol::operation::OperationCursor;
 use stackly_protocol::secret::{SECRET_REFERENCE_MAX, reference_field_code};
 use stackly_protocol::{ResourceKind, ResourceRef, Revision};
@@ -134,6 +137,163 @@ pub fn revision(text: &str) -> Result<Revision, String> {
         .ok()
         .and_then(Revision::new)
         .ok_or_else(refused)
+}
+
+/// `--idempotency-key`: 1 to 128 bytes of printable ASCII without spaces,
+/// the rule of the protocol, so a key the daemon would refuse never leaves
+/// the CLI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdempotencyKeyArg(String);
+
+impl IdempotencyKeyArg {
+    /// The key as it goes on the wire.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl FromStr for IdempotencyKeyArg {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        if is_idempotency_key(text) {
+            Ok(Self(text.to_owned()))
+        } else {
+            Err("expected 1 to 128 printable ASCII characters without spaces".to_owned())
+        }
+    }
+}
+
+/// An instance ID argument: a whole UUID in its hyphenated form, in upper
+/// or lower case, and never a prefix or a name (names arrive with the
+/// resolver of spec 0022).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InstanceIdArg(Uuid);
+
+impl InstanceIdArg {
+    /// The ID; its text form is always lower case.
+    #[must_use]
+    pub const fn get(self) -> Uuid {
+        self.0
+    }
+}
+
+impl FromStr for InstanceIdArg {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        if text.len() != 36 {
+            return Err(
+                "expected a whole instance id, such as 0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e"
+                    .to_owned(),
+            );
+        }
+        Uuid::try_parse(text)
+            .map(Self)
+            .map_err(|_| "expected a whole instance id in hex with hyphens".to_owned())
+    }
+}
+
+/// `--runtime`: a runtime ID, a whole UUID in its hyphenated form.
+///
+/// # Errors
+///
+/// Returns why `text` is not one, for clap's message.
+pub fn runtime_id(text: &str) -> Result<Uuid, String> {
+    if text.len() != 36 {
+        return Err(
+            "expected a whole runtime id, such as 0192f3a5-0000-7000-8000-0000000000a1".to_owned(),
+        );
+    }
+    Uuid::try_parse(text).map_err(|_| "expected a whole runtime id in hex with hyphens".to_owned())
+}
+
+/// `--port <endpoint>=<port|auto>`: the shape only. The number is 0 to
+/// 65535 and 0 is still sent, because the daemon decides what a port may be.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortArg {
+    /// The endpoint name from the manifest.
+    pub endpoint: String,
+    /// What it asks for.
+    pub port: PortRequest,
+}
+
+impl FromStr for PortArg {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        let refused =
+            || "expected <endpoint>=<port> or <endpoint>=auto, port 0 to 65535".to_owned();
+        let (endpoint, port) = text.split_once('=').ok_or_else(refused)?;
+        if endpoint.is_empty() {
+            return Err(refused());
+        }
+        let port = if port == "auto" {
+            PortRequest::Auto
+        } else if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) {
+            PortRequest::Fixed(port.parse().map_err(|_| refused())?)
+        } else {
+            return Err(refused());
+        };
+        Ok(Self {
+            endpoint: endpoint.to_owned(),
+            port,
+        })
+    }
+}
+
+/// `--set <field>=<text>`: a settings field with a text value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettingArg {
+    /// The settings field.
+    pub field: String,
+    /// Its value, which may be empty.
+    pub value: String,
+}
+
+impl FromStr for SettingArg {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        let (field, value) = setting_parts(text)?;
+        Ok(Self {
+            field: field.to_owned(),
+            value: value.to_owned(),
+        })
+    }
+}
+
+/// `--set-json <field>=<json>`: a settings field with any JSON value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SettingJsonArg {
+    /// The settings field.
+    pub field: String,
+    /// Its value.
+    pub value: serde_json::Value,
+}
+
+impl FromStr for SettingJsonArg {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        let (field, value) = setting_parts(text)?;
+        let value = serde_json::from_str(value)
+            .map_err(|_| "expected <field>=<json>, and the value is not JSON".to_owned())?;
+        Ok(Self {
+            field: field.to_owned(),
+            value,
+        })
+    }
+}
+
+/// `<field>=<value>` split at the first `=`, with a field that is not
+/// empty.
+fn setting_parts(text: &str) -> Result<(&str, &str), String> {
+    match text.split_once('=') {
+        Some((field, value)) if !field.is_empty() => Ok((field, value)),
+        _ => Err("expected <field>=<value>".to_owned()),
+    }
 }
 
 #[cfg(test)]
@@ -273,6 +433,89 @@ mod tests {
             "9007199254740992",
         ] {
             assert!(revision(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn an_idempotency_key_is_one_to_128_printable_ascii_bytes() {
+        for text in ["k", "create-orders-db-0001", &"a".repeat(128), "!~"] {
+            assert_eq!(
+                text.parse::<IdempotencyKeyArg>().unwrap().as_str(),
+                text,
+                "{text}"
+            );
+        }
+        for text in ["", " ", "a b", "tab\t", "é", &"a".repeat(129)] {
+            assert!(text.parse::<IdempotencyKeyArg>().is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn an_instance_id_is_a_whole_hyphenated_uuid_in_either_case() {
+        let lower: InstanceIdArg = ID.parse().unwrap();
+        let upper: InstanceIdArg = ID.to_uppercase().parse().unwrap();
+        assert_eq!(lower, upper);
+        assert_eq!(lower.get().to_string(), ID);
+        for text in [
+            "",
+            "0192f3a0",
+            "orders-db",
+            "0192f3a07c1e7b2a9d4e5f6a7b8c9d0e",
+            "{0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e}",
+            "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0g",
+        ] {
+            assert!(text.parse::<InstanceIdArg>().is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_port_is_an_endpoint_with_auto_or_a_number_up_to_65535() {
+        let port = |text: &str| text.parse::<PortArg>();
+        assert_eq!(
+            port("postgres=5432"),
+            Ok(PortArg {
+                endpoint: "postgres".to_owned(),
+                port: PortRequest::Fixed(5432)
+            })
+        );
+        assert_eq!(port("admin=auto").unwrap().port, PortRequest::Auto);
+        assert_eq!(port("x=0").unwrap().port, PortRequest::Fixed(0));
+        assert_eq!(port("x=65535").unwrap().port, PortRequest::Fixed(65535));
+        for text in [
+            "", "x", "=80", "x=", "x=65536", "x=-1", "x=+1", "x=1.5", "x=Auto", "x=80 ", "x=0x50",
+        ] {
+            assert!(port(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_setting_splits_at_the_first_equals_and_keeps_the_rest_as_it_is() {
+        assert_eq!(
+            "token=a=b".parse::<SettingArg>(),
+            Ok(SettingArg {
+                field: "token".to_owned(),
+                value: "a=b".to_owned()
+            })
+        );
+        assert_eq!("note=".parse::<SettingArg>().unwrap().value, "");
+        for text in ["", "x", "=v"] {
+            assert!(text.parse::<SettingArg>().is_err(), "{text}");
+            assert!(text.parse::<SettingJsonArg>().is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_json_setting_takes_any_json_value_and_refuses_text_that_is_not() {
+        let json = |text: &str| text.parse::<SettingJsonArg>().map(|arg| arg.value);
+        assert_eq!(json("n=1500"), Ok(serde_json::json!(1500)));
+        assert_eq!(json("f=true"), Ok(serde_json::json!(true)));
+        assert_eq!(json("s=\"x\""), Ok(serde_json::json!("x")));
+        assert_eq!(
+            json("o={\"a\":[1,null]}"),
+            Ok(serde_json::json!({"a": [1, null]}))
+        );
+        for text in ["n=", "n=abc", "n={", "n=1 2"] {
+            assert!(json(text).is_err(), "{text}");
         }
     }
 }

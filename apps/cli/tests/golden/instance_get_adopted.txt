@@ -1,0 +1,25 @@
+Name          orders-db
+Display name  Orders database
+ID            0192f3a5-0000-7000-8000-000000000001
+Provider      official/postgresql revision 2026.10.1
+Manifest      sha256:3f786850e387
+Software      postgresql
+Runtime       0192f3a5-0000-7000-8000-0000000000a1
+Version       17.2.0
+Ownership     manual
+Initialized   yes
+Lifecycle     running
+Desired       running
+Readiness     ready (probe_ok), checked <age>
+Health        healthy (probe_ok), checked <age>
+Process       pid 4242, started 2026-10-20 09:00:02 +00:00 (<age>), adopted, not adoptable
+Restarts      0 of 5 in 1m, next attempt 2026-10-20 09:05:00 +00:00
+Last failure  -
+Blocker       -
+Logs          available
+Revision      7
+
+ENDPOINT  TRANSPORT  ADDRESS                                                                                  PORT MODE  BOUND
+postgres  tcp        127.0.0.1:5432                                                                           fixed      yes
+admin     tcp        127.0.0.1:49211                                                                          auto       yes
+socket    unix       /Users/fixture/Library/Application Support/Stackly/instances/0192f3a5/run/.s.PGSQL.5432  fixed      no

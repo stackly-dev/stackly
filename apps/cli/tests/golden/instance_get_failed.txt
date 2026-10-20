@@ -1,0 +1,25 @@
+Name                cache
+Display name        -
+ID                  0192f3a5-0000-7000-8000-000000000002
+Provider            official/postgresql revision 2026.10.1
+Manifest            sha256:3f786850e387
+Software            postgresql
+Runtime             0192f3a5-0000-7000-8000-0000000000a1
+Version             17.2.0
+Ownership           manual
+Initialized         yes
+Lifecycle           failed
+Desired             running
+Readiness           unknown (not_running), checked <age>
+Health              unhealthy (crash_loop), checked <age>
+Process             -
+Restarts            5 of 5 in 1m, exhausted
+Last failure        crash_loop at 2026-10-20 09:03:00 +00:00, exit code 1
+Blocker             -
+Logs                available
+Leftover processes  4243, 4244
+Revision            9
+
+Failure output:
+  FATAL: could not open shared memory segment
+  LOG: shutting down
