@@ -45,13 +45,6 @@ pub enum SecretSource {
     /// A copy of the value under another reference, made by the daemon.
     CopyFrom(String),
     /// An existing reference used without writing a value.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "spec 0020 binds references when it creates instances"
-        )
-    )]
     Bind(String),
 }
 
@@ -361,10 +354,6 @@ fn refuse(kind: &str, message: &str) -> CliFailure {
 /// # Errors
 ///
 /// Returns why `text` is not one, for clap's message.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "spec 0020 reads --secret on create instance")
-)]
 pub fn field_source(text: &str) -> Result<(String, SecretSource), String> {
     let refused = || {
         "expected <field>=<generate|prompt|stdin|file:<path>|env:<NAME>|copy:<reference>|bind:<reference>>"
