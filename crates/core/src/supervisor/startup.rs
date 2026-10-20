@@ -790,6 +790,9 @@ async fn fail(
     reason: FailureCode,
     error: SupervisorError,
 ) -> AttemptEnd {
+    // The process never ran, so no exit will remove what the render wrote
+    // (spec 0010, *Stop*: `start_failed` removes the secret material).
+    remove_material(sup, &sup.actor(id)).await;
     fail_lifecycle(sup, id, &reason, CommitMode::Operation).await;
     AttemptEnd::Failed(error)
 }
@@ -1283,6 +1286,10 @@ async fn cancel_cleanup(sup: &Supervisor, ctx: &OperationContext, id: InstanceId
     let actor = sup.actor(id);
     actor.release_exit(deps);
     let has_process = actor.read(|state| state.process.is_some());
+    if !has_process {
+        // No process will exit to remove what a render wrote.
+        remove_material(sup, &actor).await;
+    }
     sup.journal_stop(id, !has_process).await.map_err(failed)?;
     if has_process {
         let abandoned = async {
