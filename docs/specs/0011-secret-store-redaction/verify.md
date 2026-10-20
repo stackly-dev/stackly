@@ -1,6 +1,6 @@
 # Verify: secret store & redaction · spec 0011 · updated 2026-10-20
 
-_Langkah ini diturunkan dari acceptance criteria spec 0011 untuk build step 0 (registry secret dan audit) dan step 4 (core: `SecretWorker`, `SecretService`, hook operasi). `/check verify` menjalankannya; `/test` mengunci yang tahan lama. Langkah 5 dan 7 (daemon) belum dibangun, jadi tidak ada langkah UI atau daemon di sini._
+_Langkah ini diturunkan dari acceptance criteria spec 0011 untuk build step 0 (registry secret dan audit) dan step 4 (core: `SecretWorker`, `SecretService`, hook operasi). `/check verify` menjalankannya; `/test` mengunci yang tahan lama. Build step 5 (daemon) ada di bagian `## Milestone 4: Secret service through the daemon` di bawah; step 7 (suite sentinel) menambah ke bagian itu setelah dibangun._
 
 ## Commands
 
@@ -36,3 +36,30 @@ _Langkah ini diturunkan dari acceptance criteria spec 0011 untuk build step 0 (r
 
 - AC-4 · langkah worker · AC-5 · langkah put · AC-6 · langkah generate · AC-8 · langkah put dan status · AC-9 · langkah access (reveal) · AC-10 · langkah access (delete) · AC-11 · langkah resolve · AC-15 · check-deps
 - Belum dicakup di sini (langkah 5 dan 7, daemon): AC-3 lewat `stacklyd`, AC-13 writer log, AC-14, AC-16, AC-21
+
+## Milestone 4: Secret service through the daemon
+
+_Build step 5, protokol 1.7. Semua test memakai `FakeSecretStore` di belakang `SecretWorker` yang asli, atau keychain file di bawah `TestRoot` lewat `STACKLY_ROOT`; tidak ada test yang menyentuh login Keychain. Test binary butuh sesi login GUI untuk membuat keychain file; tanpa sesi itu tercatat `BLOCKED` (spec 0011, *Menjalankan test di Mac ini*). Suite sentinel AC-16 (step 7) belum ada._
+
+### UI / manual
+
+- [ ] Buka `protocols/error-codes.json` → area `secret` milik spec 0011 punya 13 kode persis seperti tabel *Kode error di wire*: kategori, `retryable` false semua, `details` (`secret.invalid_value` mendaftar `field`, `minLength`, `maxLength`, `reason`, `omitted`), dan `items` untuk `secret.needs_secret` (`reference`), `secret.conflict` (`use`), dan `secret.confirmation_required` (`effect`) dengan `max` 100 → AC-21
+- [ ] Buka `protocols/contract-versions.json` dan `crates/protocol/src/version.rs` → entri 1.7 ada, `ProtocolVersion::CURRENT` 1.7; `ResourceKind` punya `secret`, `DaemonInfo` punya `secretStore`, dan `EventKind` punya `secret.changed` di `StacklyProtocol.swift` → AC-14, AC-21
+
+### Commands
+
+- [ ] `cargo test -p stackly-protocol` → semua lulus: katalog (13 kode `secret`), tabel method (lima method `secret.*`, semuanya `recovery refused`), `ErrorBody::redacted_with`, `SetSecretParams::validate` (tolak `bind`, nilai kosong atau NUL pada `input.content`, referensi salah format, mode asing), dan fixture `ipc` baru (permintaan, balasan, tujuh error, dua event, enum asing, blocker) → AC-7, AC-14, AC-21
+- [ ] `cargo xtask codegen --check` dan `swift test --package-path clients/swift` → lulus; fixture baru terbaca di Swift (`NeedsSecretBlocker`, balasan `secret.*`, event `secret.changed`) → AC-14
+- [ ] `cargo test -p stacklyd --lib ipc::secret` → satu kode katalog per varian `SecretStoreError` dan `SecretError`, daftar `use` dan `effect`, `secret.invalid_value` dengan `reason`, `secret.needs_secret` dengan item urut dan batas 100 (`omitted`), `secret.delivery_rejected` tanpa nilai, blocker DTO, dan konversi `SecretText` ke `SecretValue` bolak balik → AC-7, AC-11, AC-21, AC-22
+- [ ] `cargo test -p stacklyd --lib log_sink::redacting` dan `map::redact` → writer log menyamarkan nilai yang ditulis dua potongan, pola `POSTGRES_PASSWORD=` dan password URI, baris tanpa rahasia lewat utuh; error, ringkasan operasi, dan balasan operasi kehilangan nilai yang dikenal → AC-13, AC-14
+- [ ] `cargo test -p stacklyd --test server secret` → 12 test lulus: set, list, status, reveal, delete lewat socket; peringatan nilai pendek dan nilai bangkitan tidak dikembalikan; setiap kode kegagalan (`secret.conflict`, `secret.not_found`, `resource.revision_mismatch`, `secret.invalid_reference`, `secret.store_locked`, `secret.store_access_denied`, `secret.store_unsupported`); params salah ditolak `request.invalid_params` tanpa panggilan store; hanya klien interaktif memakai `AllowPrompt`; satu baris audit per set dan reveal tanpa nilai; event `secret.changed` (delete menaikkan revision); `daemon.get_info` melaporkan store tanpa memanggilnya; probe saat start menandai item hilang `missing` tanpa menaikkan revision; error yang dibuat handler dengan nilai di dalamnya sampai ke klien tersamar; method `secret.*` ditolak `registry.recovery_mode` → AC-5, AC-7, AC-8, AC-9, AC-14, AC-21
+- [ ] `cargo test -p stacklyd --test secret` → daemon binary dengan `STACKLY_ROOT` memakai keychain file di `<data>/keychain/`, `secretStore.target` bernilai `file`, set dan reveal berhasil, dan log daemon tidak memuat fixture credential → AC-5, AC-9, AC-13
+- [ ] `cargo test -p stacklyd` → seluruh suite daemon tetap lulus
+- [ ] `cargo xtask check-deps` dan `cargo test -p xtask` → lulus; `stacklyd` `ipc::secret` masuk `EXPOSE_ALLOWED` di commit yang sama dengan pemanggilan `expose()` pertamanya → AC-15
+
+### Acceptance-criteria coverage
+
+- AC-5 · `secret.set` lewat socket (create, replace, upsert, mode salah, revision salah) dan binary; AC-7 · `Validate` `secret.set` dan konversi `SecretText` ke `SecretValue` di `ipc::secret`; AC-8 · list tanpa panggilan store, status probe ulang, probe saat start, `secretStore` di `daemon.get_info`; AC-9 · reveal dan audit lewat socket; AC-11 · pemetaan `NeedsSecret` ke `secret.needs_secret` dan DTO blocker (field `blocker` di DTO instance menunggu DTO instance fitur 10); AC-13 · writer log yang lewat `Redactor`; AC-14 · error, ringkasan operasi, dan balasan operasi lewat `Redactor`, DTO tanpa field nilai selain `SecretText`; AC-21 · katalog dan pemetaan per varian; AC-22 · `secret.invalid_value` membawa `reason`
+- Menunggu step 7 (suite sentinel daemon): AC-3 lewat `stacklyd` (record manual Deny dan Cancel di login Keychain), AC-16, dan bukti byte scan registry, log, dan frame IPC di bawah sentinel
+- Menunggu fitur lain: kompensator `secret_ref` terdaftar di `recover_operations` (kodenya ada; pembuktian ujung ke ujung lewat operasi nyata menunggu langkah 13 spec 0010), `learn_running` dan `resolve_for_start` dari supervisor (fitur 10)
+

@@ -8,12 +8,14 @@ use std::time::Instant;
 
 use stackly_core::PreparedLayout;
 use stackly_core::catalog::CatalogState;
+use stackly_core::secret::Redactor;
 use stackly_platform::Platform;
 use stackly_protocol::Count;
 use stackly_protocol::daemon::{
     DaemonCounters, DaemonHealth, DaemonHealthStatus, DaemonInfo, RegistryRecovery,
     SubsystemHealth, SubsystemStatus, subsystem,
 };
+use stackly_protocol::secret::SecretStoreTarget;
 use stackly_storage::SqliteRegistry;
 use tokio::sync::watch;
 
@@ -22,6 +24,7 @@ use crate::connection::Connections;
 use crate::events::EventBus;
 use crate::log_sink::LogSink;
 use crate::operations::Operations;
+use crate::secrets::Secrets;
 use crate::shutdown::Drain;
 
 /// Where the daemon is in its life.
@@ -125,6 +128,8 @@ pub struct DaemonCore {
     drain: Drain,
     connections: Connections,
     operations: Operations,
+    redactor: Arc<Redactor>,
+    secrets: Secrets,
     next_connection_id: AtomicU64,
     stop: watch::Sender<bool>,
     fatal: watch::Sender<Option<u8>>,
@@ -141,7 +146,9 @@ impl std::fmt::Debug for DaemonCore {
 
 impl DaemonCore {
     /// The state of a run that just bound its socket: phase `starting`,
-    /// registry `opening`.
+    /// registry `opening`. `redactor` is the run's one redactor, which the
+    /// log writer already uses, and `secret_target` the keychain chosen at
+    /// start (`None` for a store without one).
     #[must_use]
     pub fn new(
         info: DaemonInfo,
@@ -149,6 +156,8 @@ impl DaemonCore {
         prepared: PreparedLayout,
         bus: Arc<EventBus>,
         log: Arc<LogSink>,
+        redactor: Arc<Redactor>,
+        secret_target: Option<SecretStoreTarget>,
     ) -> Self {
         Self {
             info,
@@ -165,6 +174,8 @@ impl DaemonCore {
             drain: Drain::default(),
             connections: Connections::default(),
             operations: Operations::default(),
+            redactor,
+            secrets: Secrets::new(secret_target),
             next_connection_id: AtomicU64::new(1),
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
@@ -180,6 +191,7 @@ impl DaemonCore {
             RegistryState::Ready { schema_version } => Some(schema_version),
             _ => None,
         };
+        info.secret_store = Some(self.secrets.store(&self.platform));
         info
     }
 
@@ -235,6 +247,19 @@ impl DaemonCore {
     #[must_use]
     pub const fn operations(&self) -> &Operations {
         &self.operations
+    }
+
+    /// The run's one redactor, shared by the log writer, the error bodies,
+    /// the events, and the secret service (spec 0011 AC-13, AC-14).
+    #[must_use]
+    pub const fn redactor(&self) -> &Arc<Redactor> {
+        &self.redactor
+    }
+
+    /// The secret service and the facts about its store (spec 0011).
+    #[must_use]
+    pub const fn secrets(&self) -> &Secrets {
+        &self.secrets
     }
 
     /// A new connection ID: a counter per run, from 1.

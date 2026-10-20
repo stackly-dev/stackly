@@ -210,7 +210,10 @@ mod tests {
     #[test]
     fn drift_means_same_version_with_another_digest() {
         let v = ProtocolVersion::CURRENT;
-        let newer = ProtocolVersion { major: 1, minor: 7 };
+        let newer = ProtocolVersion {
+            major: 1,
+            minor: 99,
+        };
         assert!(contract_drift(v, "a", v, "b"));
         assert!(!contract_drift(v, "a", v, "a"));
         assert!(!contract_drift(v, "a", newer, "b"));

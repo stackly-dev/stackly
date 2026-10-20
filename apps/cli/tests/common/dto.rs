@@ -33,6 +33,7 @@ pub fn info(root_override: bool) -> DaemonInfo {
         },
         socket_path: "/stackly/run/stacklyd.sock".to_owned(),
         registry_schema: Some(2),
+        secret_store: None,
     }
 }
 

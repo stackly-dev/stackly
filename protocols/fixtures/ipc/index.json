@@ -515,6 +515,168 @@
       "file": "frame-error-catalog-not-installable.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-secret-list.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-secret-list-without-fields.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "request-secret-status.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-secret-set.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-secret-set-generate.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-secret-reveal.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-secret-delete.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-secret-set-without-flags.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "reject-secret-set-bind.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-secret-set-empty-value.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-secret-status-reference.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-secret-list.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-secret-status.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-secret-set.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-secret-reveal.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-secret-delete.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-secret-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-secret-set-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-get-info-secret-store.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-secret-needs-secret.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-secret-conflict-in-use.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-secret-confirmation-required.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-secret-invalid-value.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-secret-store-locked.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-secret-store-access-denied.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-secret-not-found.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-secret-changed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-secret-deleted.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-secret-changed-unknown-status.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "dto-needs-secret-blocker.json",
+      "type": "NeedsSecretBlocker",
+      "expect": "roundtrip"
     }
   ]
 }

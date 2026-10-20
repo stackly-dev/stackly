@@ -778,6 +778,16 @@ async fn run_request(
     let operation_id = named_operation(&call);
     let context = RequestContext::new(conn.id, request_id.clone(), conn.peer, conn.client());
     let (result, subscription) = dispatch(&conn, &core, &handlers, context, call).await;
+    // Every error and every operation summary passes the run's redactor
+    // before it is encoded (spec 0011 AC-14); only `secret.reveal` sends a
+    // value, and its reply is left as it is.
+    let result = match result {
+        Ok(mut reply) => {
+            map::redact::operation_reply(core.redactor(), &mut reply);
+            Ok(reply)
+        }
+        Err(error) => Err(Box::new(map::redact::error(core.redactor(), *error))),
+    };
     let subscription_id = subscription.as_ref().map(BusSubscription::subscription_id);
     let (mut bytes, mut error) = match result {
         Ok(reply) => (
@@ -963,6 +973,46 @@ async fn dispatch(
             })
             .await
             .map(Reply::CatalogGetProvider),
+            None,
+        ),
+        Call::SecretList(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.list_secrets(c, x, p)
+            })
+            .await
+            .map(Reply::SecretList),
+            None,
+        ),
+        Call::SecretStatus(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.secret_status(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::SecretStatus(Box::new(reply))),
+            None,
+        ),
+        Call::SecretSet(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.set_secret(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::SecretSet(Box::new(reply))),
+            None,
+        ),
+        Call::SecretReveal(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.reveal_secret(c, x, p)
+            })
+            .await
+            .map(Reply::SecretReveal),
+            None,
+        ),
+        Call::SecretDelete(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.delete_secret(c, x, p)
+            })
+            .await
+            .map(Reply::SecretDelete),
             None,
         ),
     }

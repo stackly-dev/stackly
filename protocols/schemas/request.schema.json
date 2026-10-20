@@ -268,6 +268,91 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The secret references, from the cached status.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ListSecretsParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One secret reference after a fresh probe.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SecretStatusParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.status"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Fills, generates, copies, or replaces the value behind a reference.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SetSecretParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.set"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Reads the value behind a reference, recorded in the audit.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RevealSecretParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.reveal"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Deletes a reference and the value behind it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DeleteSecretParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "secret.delete"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -339,6 +424,30 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "DeleteSecretParams": {
+      "description": "Params of `secret.delete`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "The revision of the row the client read, if it names one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "reference": {
+          "description": "The reference.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference"
       ]
     },
     "EventCursor": {
@@ -454,6 +563,36 @@
         }
       }
     },
+    "ListSecretsParams": {
+      "description": "Params of `secret.list`.",
+      "type": "object",
+      "properties": {
+        "ownerKind": {
+          "description": "Only references of this owner kind.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretOwnerKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "description": "Only references with this status.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      }
+    },
     "ProtocolVersion": {
       "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
       "type": "object",
@@ -515,6 +654,11 @@
           "const": "manager"
         },
         {
+          "description": "A secret reference (spec 0011); its `id` is the reference text,\nsuch as `local:erp/postgres/admin`.",
+          "type": "string",
+          "const": "secret"
+        },
+        {
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
@@ -562,6 +706,241 @@
       },
       "required": [
         "operationId"
+      ]
+    },
+    "RevealPurpose": {
+      "description": "Why a client reveals a value (spec 0011 AC-9).",
+      "oneOf": [
+        {
+          "description": "To show it on screen.",
+          "type": "string",
+          "const": "show"
+        },
+        {
+          "description": "To copy it.",
+          "type": "string",
+          "const": "copy"
+        },
+        {
+          "description": "A purpose this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "RevealSecretParams": {
+      "description": "Params of `secret.reveal`.",
+      "type": "object",
+      "properties": {
+        "purpose": {
+          "description": "Why the client asks; recorded in the audit row.",
+          "$ref": "#/$defs/RevealPurpose"
+        },
+        "reference": {
+          "description": "The reference.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference",
+        "purpose"
+      ]
+    },
+    "SecretInput": {
+      "description": "Where a new secret value comes from (spec 0011 AC-5): shared by\n`secret.set` and by the requests that create an instance, bring an\nenvironment up, or restore.\n\nA reference is the text form `local:<segment>/<segment>...`; it is not a\nsecret and may appear anywhere.",
+      "oneOf": [
+        {
+          "description": "A value the person typed, pasted, or piped in.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "writeOnly": true
+            },
+            "type": {
+              "type": "string",
+              "const": "value"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A new random value the daemon generates.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "generate"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A copy of the value stored under another reference.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "copyFrom"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Use an existing reference without writing a value. Only for a new\nresource; `secret.set` refuses it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "bind"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
+    "SecretMode": {
+      "description": "How `secret.set` treats a value that exists already: `create` fails on\nan existing item, `replace` on a missing one, and `upsert` takes either\n(spec 0011 AC-5).",
+      "oneOf": [
+        {
+          "description": "The item must not exist yet.",
+          "type": "string",
+          "const": "create"
+        },
+        {
+          "description": "The item must exist.",
+          "type": "string",
+          "const": "replace"
+        },
+        {
+          "description": "Either; it is written whichever way.",
+          "type": "string",
+          "const": "upsert"
+        },
+        {
+          "description": "A mode this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretOwnerKind": {
+      "description": "Who owns a secret reference.",
+      "oneOf": [
+        {
+          "description": "An instance.",
+          "type": "string",
+          "const": "instance"
+        },
+        {
+          "description": "An environment.",
+          "type": "string",
+          "const": "environment"
+        },
+        {
+          "description": "The user, who registered the reference with `secret.set`.",
+          "type": "string",
+          "const": "user"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretStatus": {
+      "description": "What the store held when the daemon last looked, never a value.",
+      "oneOf": [
+        {
+          "description": "The store holds a value.",
+          "type": "string",
+          "const": "present"
+        },
+        {
+          "description": "The store holds none.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "The store could not be checked.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretStatusParams": {
+      "description": "Params of `secret.status` and the other methods that name only a\nreference.",
+      "type": "object",
+      "properties": {
+        "reference": {
+          "description": "The reference.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference"
+      ]
+    },
+    "SetSecretParams": {
+      "description": "Params of `secret.set`.",
+      "type": "object",
+      "properties": {
+        "confirmStoredOnly": {
+          "description": "Confirms that a replace changes only the stored copy.",
+          "type": "boolean",
+          "default": false
+        },
+        "expectedRevision": {
+          "description": "The revision of the row the client read, if it names one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "input": {
+          "description": "Where the value comes from; `bind` is refused here.",
+          "$ref": "#/$defs/SecretInput"
+        },
+        "mode": {
+          "description": "How to treat a value that exists.",
+          "$ref": "#/$defs/SecretMode"
+        },
+        "reference": {
+          "description": "The reference to fill.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference",
+        "input",
+        "mode"
       ]
     },
     "SubscribeParams": {

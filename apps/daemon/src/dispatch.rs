@@ -7,7 +7,8 @@
 //! on the connection rather than on a use case. Whether a method is served
 //! in recovery mode is its `methods!` table line in `stackly-protocol`
 //! ([`Call::allowed_in_recovery`](stackly_protocol::Call::allowed_in_recovery)).
-//! The operation methods (spec 0007) live in [`crate::ipc::operation`].
+//! The operation methods (spec 0007) live in [`crate::ipc::operation`] and
+//! the secret methods (spec 0011) in [`crate::ipc::secret`].
 
 use std::future::Future;
 use std::pin::Pin;
@@ -24,8 +25,13 @@ use stackly_protocol::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
+use stackly_protocol::secret::{
+    DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
+    RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
+};
 
 use crate::ipc::operation::{self, TestStartingMethod};
+use crate::ipc::secret;
 use crate::state::DaemonCore;
 use crate::{catalog, map};
 
@@ -184,6 +190,58 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, OperationStats> {
         let _ = context;
         operation::get_stats(core)
+    }
+
+    /// `secret.list`.
+    fn list_secrets<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ListSecretsParams,
+    ) -> HandlerFuture<'a, ListSecretsReply> {
+        let _ = context;
+        secret::list(core, params)
+    }
+
+    /// `secret.status`.
+    fn secret_status<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: SecretStatusParams,
+    ) -> HandlerFuture<'a, SecretStatusReply> {
+        let _ = context;
+        secret::status(core, params)
+    }
+
+    /// `secret.set`.
+    fn set_secret<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: SetSecretParams,
+    ) -> HandlerFuture<'a, SetSecretReply> {
+        secret::set(core, context, params)
+    }
+
+    /// `secret.reveal`.
+    fn reveal_secret<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: RevealSecretParams,
+    ) -> HandlerFuture<'a, RevealSecretReply> {
+        secret::reveal(core, context, params)
+    }
+
+    /// `secret.delete`.
+    fn delete_secret<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: DeleteSecretParams,
+    ) -> HandlerFuture<'a, DeleteSecretReply> {
+        secret::delete(core, context, params)
     }
 
     /// A method outside the contract that starts an operation, which only

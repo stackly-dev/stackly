@@ -394,6 +394,51 @@ area! {
 }
 
 area! {
+    /// Secret store and redaction codes (spec 0011, *Kode error di wire*).
+    /// None is retryable: even a code that is safe to repeat needs the
+    /// person to act first, such as filling a value or unlocking the
+    /// keychain. The format of a reference and the basic rules of a value
+    /// (UTF-8, length, NUL) are `request.invalid_params`; these codes are
+    /// for rules that need state. `secret.invalid_value` may carry
+    /// `fields` and never `items`; every other list is `items`.
+    pub mod secret = "secret", owner "spec 0011" {
+        NEEDS_SECRET = "secret.needs_secret", Unavailable, retryable false,
+            details ["count", "omitted"],
+            items { kind "reference", fields ["reference", "reason", "generateAllowed"], max 100 },
+            "a resource needs references that cannot be read, or a create or restore names a source reference that cannot be read";
+        NOT_FOUND = "secret.not_found", NotFound, retryable false,
+            details ["reference"], "the reference is not registered, or a replace names an item that does not exist";
+        CONFLICT = "secret.conflict", Conflict, retryable false,
+            details ["reference", "reason", "omitted"],
+            items { kind "use", fields ["resourceKind", "resourceId", "field"], max 100 },
+            "a create names an item that exists, or a delete names a reference that is still used";
+        CONFIRMATION_REQUIRED = "secret.confirmation_required", InvalidInput, retryable false,
+            details ["reference", "omitted"],
+            items { kind "effect", fields ["resourceKind", "resourceId", "field", "effect"], max 100 },
+            "a replace changes only the stored copy and needs confirmStoredOnly";
+        INVALID_REFERENCE = "secret.invalid_reference", InvalidInput, retryable false,
+            details ["reference", "reason"], "the reference names the reserved first segment and is not registered";
+        INVALID_VALUE = "secret.invalid_value", InvalidInput, retryable false,
+            details ["field", "minLength", "maxLength", "reason", "omitted"],
+            "the value breaks the length or character rules of a secret field that uses the reference";
+        DELIVERY_REJECTED = "secret.delivery_rejected", Failed, retryable false,
+            details ["reason"], "an argument would carry a secret value to a provider process";
+        STORE_LOCKED = "secret.store_locked", Unavailable, retryable false,
+            details [], "the keychain is locked";
+        STORE_ACCESS_DENIED = "secret.store_access_denied", Unauthorized, retryable false,
+            details ["byUser"], "the person refused the dialog, or the access list does not trust the daemon";
+        STORE_BUSY = "secret.store_busy", Unavailable, retryable false,
+            details [], "the store job did not start in time";
+        STORE_OUTCOME_UNKNOWN = "secret.store_outcome_unknown", Timeout, retryable false,
+            details [], "a write or delete passed its wait limit, or putting the old value back failed";
+        STORE_UNSUPPORTED = "secret.store_unsupported", Unsupported, retryable false,
+            details [], "this OS has no secret store";
+        STORE_BACKEND = "secret.store_backend", Failed, retryable false,
+            details ["code"], "the store failed with another OSStatus";
+    }
+}
+
+area! {
     /// Codes for bugs and broken invariants.
     pub mod internal = "internal", owner "spec 0006" {
         UNEXPECTED = "internal.unexpected", Internal, retryable false,
@@ -451,6 +496,7 @@ pub const AREAS: &[Area] = &[
     manifest::AREA,
     provider::AREA,
     catalog::AREA,
+    secret::AREA,
     internal::AREA,
     cli::AREA,
 ];
@@ -850,6 +896,7 @@ mod tests {
                 ("manifest", "spec 0009"),
                 ("provider", "spec 0009"),
                 ("catalog", "spec 0017"),
+                ("secret", "spec 0011"),
                 ("internal", "spec 0006"),
                 ("cli", "spec 0008"),
             ]

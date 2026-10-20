@@ -10,6 +10,7 @@ public enum ContractNames {
 		"daemon.shutting_down",
 		"operation.state_changed",
 		"operation.progress",
+		"secret.changed",
 	]
 }
 
@@ -31,6 +32,11 @@ extension Call {
 		case .operationGetStats: "operation.get_stats"
 		case .catalogListProviders: "catalog.list_providers"
 		case .catalogGetProvider: "catalog.get_provider"
+		case .secretList: "secret.list"
+		case .secretStatus: "secret.status"
+		case .secretSet: "secret.set"
+		case .secretReveal: "secret.reveal"
+		case .secretDelete: "secret.delete"
 		}
 	}
 }
@@ -53,6 +59,11 @@ extension Reply {
 		case .operationGetStats: "operation.get_stats"
 		case .catalogListProviders: "catalog.list_providers"
 		case .catalogGetProvider: "catalog.get_provider"
+		case .secretList: "secret.list"
+		case .secretStatus: "secret.status"
+		case .secretSet: "secret.set"
+		case .secretReveal: "secret.reveal"
+		case .secretDelete: "secret.delete"
 		}
 	}
 }
@@ -65,6 +76,7 @@ extension EventKind {
 		case .daemonShuttingDown: "daemon.shutting_down"
 		case .operationStateChanged: "operation.state_changed"
 		case .operationProgress: "operation.progress"
+		case .secretChanged: "secret.changed"
 		}
 	}
 }

@@ -56,6 +56,9 @@ impl Default for Operations {
 impl Operations {
     /// Creates the engine on the ready registry, publishing its events on
     /// `bus`, and holds it as recovering until [`Operations::recovered`].
+    /// `redactor` is the daemon's one shared redactor: the engine hides
+    /// known values in what it stores, and the events it publishes pass it
+    /// again (spec 0011 AC-14).
     #[must_use]
     pub fn create(
         &self,
@@ -63,18 +66,16 @@ impl Operations {
         platform: &Platform,
         prepared: &PreparedLayout,
         bus: &Arc<EventBus>,
+        redactor: &Arc<Redactor>,
     ) -> OperationEngine {
-        // provisional: F11 (spec 0011 step 5 hands the engine the daemon's
-        // one shared Redactor, and stacklyd registers the `secret_ref`
-        // compensator on top of the secret delete use case)
-        let redactor: Arc<dyn Redact> = Arc::new(Redactor::new());
+        let engine_redactor: Arc<dyn Redact> = Arc::clone(redactor) as Arc<dyn Redact>;
         let engine = OperationEngine::new(
             EngineDeps {
                 registry: Arc::new(registry) as Arc<dyn Registry>,
                 platform: Arc::new(platform.clone()),
                 layout: Arc::new(prepared.clone()),
-                events: Arc::new(BusEvents::new(Arc::clone(bus))),
-                redactor,
+                events: Arc::new(BusEvents::new(Arc::clone(bus), Arc::clone(redactor))),
+                redactor: engine_redactor,
             },
             EngineLimits::default(),
         );
@@ -262,6 +263,7 @@ mod tests {
             &site.platform,
             &site.prepared,
             &site.bus,
+            &Arc::new(Redactor::new()),
         )
     }
 
