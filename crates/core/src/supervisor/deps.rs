@@ -9,6 +9,7 @@ use stackly_domain::{Instance, InstanceId, Registry, ResourceRevision};
 use stackly_platform::Platform;
 
 use super::actor::InstanceActor;
+use super::sink::{LogSink, SinkSet, TailSink};
 use super::status::InstanceStatus;
 use super::{PortProbe, SupervisorConfig};
 use crate::layout::PreparedLayout;
@@ -70,6 +71,13 @@ pub struct SupervisorDeps {
     pub secrets: Arc<SecretService>,
     /// Hides known secrets in every text that leaves the supervisor.
     pub redactor: Arc<Redactor>,
+    /// The in memory tail of every instance's output, the source of the
+    /// failure excerpt. Put it in `sinks` too, or nothing reaches it.
+    pub tail: Arc<TailSink>,
+    /// Where redacted log lines go. [`SupervisorDeps::new`] makes a set
+    /// that holds [`tail`](Self::tail); the daemon replaces it with a set
+    /// that also holds its other sinks.
+    pub sinks: Arc<dyn LogSink>,
     /// Trial binds, injectable in tests.
     pub ports: Arc<dyn PortProbe>,
     /// Where changes are reported.
@@ -89,12 +97,17 @@ impl SupervisorDeps {
         secrets: Arc<SecretService>,
         redactor: Arc<Redactor>,
     ) -> Self {
+        let tail = Arc::new(TailSink::default());
+        let sinks: Arc<dyn LogSink> =
+            Arc::new(SinkSet::new(vec![Arc::clone(&tail) as Arc<dyn LogSink>]));
         Self {
             registry,
             platform,
             layout,
             secrets,
             redactor,
+            tail,
+            sinks,
             ports: Arc::new(super::SocketPortProbe::new()),
             events: Arc::new(NoSupervisorEvents),
             config: SupervisorConfig::default(),
@@ -159,6 +172,19 @@ impl Supervisor {
                 self.shared.deps.platform.clock().now(),
             ))
         }))
+    }
+
+    /// Returns the failure excerpt of `id`: the last lines it wrote,
+    /// stderr first, then stdout, already redacted, at most
+    /// [`FAILURE_EXCERPT_LINES`](super::FAILURE_EXCERPT_LINES) of at most
+    /// [`FAILURE_EXCERPT_LINE_CHARS`](super::FAILURE_EXCERPT_LINE_CHARS)
+    /// characters. Empty when the instance wrote nothing since it last
+    /// started.
+    #[must_use]
+    pub fn failure_excerpt(&self, id: InstanceId) -> Vec<String> {
+        self.deps()
+            .tail
+            .excerpt_of(id, self.deps().config.failure_excerpt_lines)
     }
 
     /// Returns the status of `id` as read now: readiness and health through

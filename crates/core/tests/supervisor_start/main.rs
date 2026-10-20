@@ -6,6 +6,7 @@
 mod common;
 mod init;
 mod reload;
+mod spool;
 mod start;
 mod status;
 mod stop;

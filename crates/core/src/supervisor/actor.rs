@@ -6,7 +6,7 @@
 //! actor again, with readiness and health `unknown` (reason
 //! `daemon_restarted`) and `status_seq` at zero.
 
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use jiff::Timestamp;
 use stackly_domain::{
@@ -16,6 +16,7 @@ use stackly_domain::{
 use stackly_platform::{ExitListener, ExitNotice, FileIdentity};
 use tokio::sync::{Notify, watch};
 
+use super::drain::DrainSlot;
 use super::restart::RestartHistory;
 use super::status::{InstanceStatus, ProcessStatus, RestartStatus};
 use super::{SupervisorConfig, SupervisorDeps};
@@ -40,6 +41,8 @@ pub(crate) struct ProcessSlot {
     pub(crate) done: watch::Sender<bool>,
     /// Flips to `true` to stop the probe loops of this process.
     pub(crate) probes_stop: watch::Sender<bool>,
+    /// Reads the process's spools.
+    pub(crate) drain: Arc<DrainSlot>,
 }
 
 /// Hands the exit of one process to the tasks waiting for it.

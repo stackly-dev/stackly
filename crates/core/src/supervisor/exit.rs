@@ -53,7 +53,7 @@ pub(crate) fn crash_reason(status: Option<ExitStatus>) -> FailureCode {
 }
 
 /// Handles the exit of the process of generation `generation`: reads the
-/// spool to the end (spec 0010 step 10, not built yet), removes the secret
+/// spools to the end, removes the secret
 /// material, reports the members of the group that are left, records the
 /// lifecycle event, and lets everyone waiting for the process know.
 pub(crate) async fn handle_exit(
@@ -68,9 +68,9 @@ pub(crate) async fn handle_exit(
             .process
             .as_ref()
             .filter(|slot| slot.generation == generation)
-            .map(|slot| (slot.group, state.stopping))
+            .map(|slot| (slot.group, state.stopping, Arc::clone(&slot.drain)))
     });
-    let Some((group, stopping)) = info else {
+    let Some((group, stopping, drain)) = info else {
         return;
     };
     actor.update(deps, |state| {
@@ -79,6 +79,7 @@ pub(crate) async fn handle_exit(
         }
     });
 
+    drain.finish(sup, actor.id).await;
     remove_material(sup, actor).await;
     let leftover = leftover_members(sup, group, notice.pid).await;
 
@@ -152,6 +153,7 @@ pub(crate) fn finish_process(
         }
         if let Some(slot) = state.process.take() {
             slot.probes_stop.send_replace(true);
+            slot.drain.stop();
             slot.done.send_replace(true);
         }
         state.stopping = false;

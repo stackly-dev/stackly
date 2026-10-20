@@ -8,6 +8,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -22,8 +23,8 @@ use stackly_core::secret::{
     SecretFieldRule, SecretFieldRules, SecretInput, SecretService,
 };
 use stackly_core::supervisor::{
-    BindOptions, BindOutcome, InstanceStatus, PortProbe, SocketPortProbe, Supervisor,
-    SupervisorDeps, SupervisorEvents,
+    BindOptions, BindOutcome, InstanceStatus, LogBatch, LogSink, PortProbe, SinkOutcome, SinkSet,
+    SocketPortProbe, Supervisor, SupervisorDeps, SupervisorEvents,
 };
 use stackly_core::{PreparedLayout, create_instance_layout, daemon_info, prepare_layout};
 use stackly_domain::{
@@ -106,6 +107,53 @@ impl SupervisorEvents for Recorded {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(degraded);
+    }
+}
+
+/// A log sink that records every batch and can be told to be busy.
+#[derive(Default)]
+pub struct LogRecorder {
+    batches: Mutex<Vec<(InstanceId, LogBatch)>>,
+    busy: AtomicBool,
+}
+
+impl LogRecorder {
+    /// Makes the sink answer `Busy` (or accept again).
+    pub fn set_busy(&self, busy: bool) {
+        self.busy.store(busy, Ordering::SeqCst);
+    }
+
+    /// Every batch of `id`, oldest first.
+    pub fn batches_of(&self, id: InstanceId) -> Vec<LogBatch> {
+        self.batches
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter(|(instance, _)| *instance == id)
+            .map(|(_, batch)| batch.clone())
+            .collect()
+    }
+
+    /// The text of every line of `id`, oldest first, with its flags.
+    pub fn lines_of(&self, id: InstanceId) -> Vec<String> {
+        self.batches_of(id)
+            .into_iter()
+            .flat_map(|batch| batch.lines)
+            .map(|line| line.text)
+            .collect()
+    }
+}
+
+impl LogSink for LogRecorder {
+    fn accept(&self, instance: InstanceId, batch: LogBatch) -> SinkOutcome {
+        if self.busy.load(Ordering::SeqCst) {
+            return SinkOutcome::Busy;
+        }
+        self.batches
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push((instance, batch));
+        SinkOutcome::Accepted
     }
 }
 
@@ -264,6 +312,7 @@ pub struct Rig {
     pub secrets: Arc<SecretService>,
     pub events: Arc<Recorded>,
     pub ports: Arc<ScriptedPorts>,
+    pub logs: Arc<LogRecorder>,
     pub sup: Supervisor,
     pub engine: OperationEngine,
     pub package: ValidatedPackage,
@@ -349,6 +398,11 @@ impl Rig {
         );
         deps.ports = Arc::clone(&ports) as Arc<dyn PortProbe>;
         deps.events = Arc::clone(&events) as Arc<dyn SupervisorEvents>;
+        let logs = Arc::new(LogRecorder::default());
+        deps.sinks = Arc::new(SinkSet::new(vec![
+            Arc::clone(&deps.tail) as Arc<dyn LogSink>,
+            Arc::clone(&logs) as Arc<dyn LogSink>,
+        ]));
         fast_config(&mut deps.config);
         tweak(&mut deps.config);
         let sup = Supervisor::new(deps);
@@ -401,6 +455,7 @@ impl Rig {
             secrets,
             events,
             ports,
+            logs,
             sup,
             engine,
             package,

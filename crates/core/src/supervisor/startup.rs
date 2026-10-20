@@ -27,6 +27,7 @@ use tokio::sync::watch;
 use tokio::time::Instant;
 
 use super::actor::{ExitSlot, ProcessSlot, restart_status};
+use super::drain::{DrainSlot, Opening};
 use super::error::{EndpointFault, SupervisorError, UnavailableReason};
 use super::exit::{crash_reason, finish_process, remove_material, spawn_exit_task};
 use super::init::config_invalid;
@@ -36,7 +37,10 @@ use super::prepare::{Checks, Prepared, prepare};
 use super::readiness::spawn_probes;
 use super::restart::{JitterFactor, RestartDecision};
 use super::steps::{command_parts, run_render};
-use super::{BindOptions, BindOutcome, Supervisor, secrets};
+use super::{
+    BindOptions, BindOutcome, DrainContext, DrainOutcome, SpoolDrain, Supervisor, SupervisorDeps,
+    secrets,
+};
 use crate::operation::{
     BoxFuture, OperationContext, OperationOutcome, OperationWork, StepSpec, WorkError, WorkOutcome,
     WorkResult,
@@ -758,19 +762,21 @@ async fn remove_stale_sockets(sup: &Supervisor, prepared: &Prepared) {
     }
 }
 
-/// Makes the two spool files of a new main process: the old ones are
-/// removed first.
-// provisional: F10 step 10 reads the old spool to the end into the sink
-// before it is removed.
+/// Makes the two spool files of a new main process. An old spool is read
+/// to the end into the sinks first (the lines a process wrote while no
+/// daemon was reading), then removed, and the tail of the earlier run is
+/// forgotten.
 async fn fresh_spools(
     sup: &Supervisor,
     prepared: &Prepared,
 ) -> Result<stackly_platform::OutputTarget, SupervisorError> {
     let deps = sup.deps().clone();
     let key = prepared.key;
+    let id = prepared.instance.id();
     blocking(move || -> Result<OutputTarget, SupervisorError> {
         let [stdout, stderr] = stackly_platform::OutputStream::ALL
             .map(|stream| deps.layout.layout().instance_spool(key, stream));
+        drain_old_spools(&deps, id, &[&stdout, &stderr]);
         for path in [&stdout, &stderr] {
             remove_owned_tree(&deps.platform, &deps.layout, path)
                 .map_err(|error| SupervisorError::internal(error.to_string()))?;
@@ -785,6 +791,36 @@ async fn fresh_spools(
         Ok(OutputTarget::Spool { stdout, stderr })
     })
     .await?
+}
+
+/// Reads the spools a finished run left to the end into the sinks, then
+/// forgets the tail of that run. A spool that is missing or cannot be read
+/// only costs a warning.
+fn drain_old_spools(deps: &SupervisorDeps, id: InstanceId, paths: &[&std::path::PathBuf; 2]) {
+    let streams = stackly_platform::OutputStream::ALL;
+    let ctx = DrainContext::new(id, &deps.redactor, &*deps.sinks, deps.platform.clock());
+    for (stream, path) in streams.into_iter().zip(paths) {
+        let reader = match deps.platform.processes().open_spool(path) {
+            Ok(Some(reader)) => reader,
+            Ok(None) => continue,
+            Err(error) => {
+                tracing::warn!(instance = %id, stream = stream.as_code(), %error, "an old spool could not be opened");
+                continue;
+            }
+        };
+        let finished = SpoolDrain::resume(stream, reader, &deps.config)
+            .and_then(|mut drain| drain.finish(&ctx));
+        match finished {
+            Ok(DrainOutcome::Busy) => {
+                tracing::warn!(instance = %id, stream = stream.as_code(), "the log sink was busy; an old spool is dropped unread");
+            }
+            Ok(_) => {}
+            Err(error) => {
+                tracing::warn!(instance = %id, stream = stream.as_code(), %error, "an old spool could not be read");
+            }
+        }
+    }
+    deps.tail.forget(id);
 }
 
 /// One attempt: `render`, `spawn`, `identity`, and `readiness`.
@@ -924,6 +960,7 @@ async fn run_attempt(
         return Ok(fail(sup, id, FailureCode::IDENTITY_CAPTURE_FAILED, error).await);
     }
 
+    let (drain, logs_unavailable) = DrainSlot::start(sup, id, Opening::Fresh).await;
     let (exit_slot, exit_rx) = ExitSlot::new();
     let (done, _) = watch::channel(false);
     let (probes_stop, probes_stop_rx) = watch::channel(false);
@@ -939,11 +976,12 @@ async fn run_attempt(
             lock: lock.identity(),
             done,
             probes_stop,
+            drain,
         });
         state.op_owns_exit = true;
         state.stopping = false;
         state.leftover.clear();
-        state.logs_unavailable = false;
+        state.logs_unavailable = logs_unavailable;
         state.awaiting_probe(now);
         generation
     });
@@ -1032,14 +1070,15 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
         state
             .process
             .as_ref()
-            .map(|slot| (slot.generation, slot.group))
+            .map(|slot| (slot.generation, slot.group, Arc::clone(&slot.drain)))
     });
-    if let Some((generation, group)) = target {
+    if let Some((generation, group, drain)) = target {
         actor.update(deps, |state| {
             if let Some(slot) = &state.process {
                 slot.probes_stop.send_replace(true);
             }
         });
+        drain.finish(sup, id).await;
         remove_material(sup, &actor).await;
         let platform = deps.platform.clone();
         let main = notice.pid;

@@ -14,6 +14,9 @@
 //! - [`probe`] runs one attempt of a `tcp`, `http`, or `exec` probe and
 //!   reports a [`ProbeOutcome`](probe::ProbeOutcome) with a redacted
 //!   detail.
+//! - [`SpoolDrain`] reads one spool stream into redacted [`LogLine`]s for a
+//!   [`LogSink`]; [`SinkSet`] fans them out and [`TailSink`] keeps the tail
+//!   for failure excerpts.
 //! - [`Supervisor`] is the executor: [`Supervisor::execute_init`] runs an
 //!   init plan, [`Supervisor::start_work`] the startup transaction (checks
 //!   before the first side effect, a suspended spawn whose identity is
@@ -31,6 +34,7 @@ pub mod codes;
 mod commit;
 mod config;
 mod deps;
+mod drain;
 mod error;
 mod exit;
 mod helper;
@@ -45,6 +49,8 @@ mod readiness;
 mod reload;
 mod restart;
 mod secrets;
+mod sink;
+mod spool;
 mod startup;
 mod status;
 mod steps;
@@ -70,6 +76,8 @@ pub use init::InitRequest;
 pub use ports::{BindOptions, BindOutcome, PortProbe, SocketPortProbe};
 pub use reload::ReloadRequest;
 pub use restart::{JitterFactor, RestartDecision, RestartHistory, backoff_delay};
+pub use sink::{LogBatch, LogLine, LogSink, SinkOutcome, SinkSet, TailSink};
+pub use spool::{DrainContext, DrainOutcome, SpoolDrain};
 pub use startup::{StartRequest, StartTrigger};
 pub use status::{InstanceStatus, ProcessStatus, RestartStatus};
 pub use stop::StopRequest;
