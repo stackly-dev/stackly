@@ -226,7 +226,7 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
   - [ ] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19, AC-24; build steps 9 to 11; needs features 12 and 13)
 - [ ] Verify it: `/check verify secret store & redaction`
 - [x] Test it: `/test secret store & redaction`
-- [ ] Review it (fresh model): `/check review secret store & redaction`
+- [x] Review it (fresh model): `/check review secret store & redaction`
 - [ ] Document it: `/document secret store & redaction`
 
 _Catatan:_ fitur 12 (Design system & UI foundation) dan 13 (App shell SwiftUI & Swift client) sekarang ada di [ui-macos.md](ui-macos.md), bersama fitur UI lintas layar lain yang diturunkan dari mockup UI. Nomor, urutan, dan statusnya tidak berubah.
