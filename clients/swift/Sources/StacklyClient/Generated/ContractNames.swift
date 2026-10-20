@@ -29,6 +29,8 @@ extension Call {
 		case .operationResume: "operation.resume"
 		case .operationAbandon: "operation.abandon"
 		case .operationGetStats: "operation.get_stats"
+		case .catalogListProviders: "catalog.list_providers"
+		case .catalogGetProvider: "catalog.get_provider"
 		}
 	}
 }
@@ -49,6 +51,8 @@ extension Reply {
 		case .operationResume: "operation.resume"
 		case .operationAbandon: "operation.abandon"
 		case .operationGetStats: "operation.get_stats"
+		case .catalogListProviders: "catalog.list_providers"
+		case .catalogGetProvider: "catalog.get_provider"
 		}
 	}
 }

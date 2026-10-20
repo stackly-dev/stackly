@@ -163,6 +163,9 @@ pub mod subsystem {
     pub const OPERATIONS: &str = "operations";
     /// The process supervisor (feature 10).
     pub const SUPERVISOR: &str = "supervisor";
+    /// The provider catalog (feature 17); `unavailable` without a usable
+    /// catalog, `degraded` while an entry failed validation.
+    pub const CATALOG: &str = "catalog";
     /// Every name, in the order `get_health` lists them.
     pub const ALL: [&str; 6] = [IPC, EVENT_BUS, LOG_SINK, REGISTRY, OPERATIONS, SUPERVISOR];
 }

@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use typeshare::typeshare;
 
+use crate::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo};
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
@@ -90,6 +91,12 @@ pub enum Call {
     /// The engine's counters and limits.
     #[serde(rename = "operation.get_stats")]
     OperationGetStats,
+    /// Every catalog entry with the facts about the catalog.
+    #[serde(rename = "catalog.list_providers")]
+    CatalogListProviders,
+    /// One catalog entry with its versions and artifacts.
+    #[serde(rename = "catalog.get_provider")]
+    CatalogGetProvider(GetProviderParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -133,6 +140,12 @@ pub enum Reply {
     /// The engine's counters and limits.
     #[serde(rename = "operation.get_stats")]
     OperationGetStats(OperationStats),
+    /// Every catalog entry, in display order.
+    #[serde(rename = "catalog.list_providers")]
+    CatalogListProviders(ListProvidersReply),
+    /// One catalog entry in detail.
+    #[serde(rename = "catalog.get_provider")]
+    CatalogGetProvider(Box<ProviderDetail>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -215,6 +228,8 @@ methods! {
     "operation.resume" => OperationResume(ResumeOperationParams), recovery refused;
     "operation.abandon" => OperationAbandon(AbandonOperationParams), recovery refused;
     "operation.get_stats" => OperationGetStats, recovery refused;
+    "catalog.list_providers" => CatalogListProviders, recovery allowed;
+    "catalog.get_provider" => CatalogGetProvider(GetProviderParams), recovery allowed;
 }
 
 impl Reply {
@@ -305,13 +320,18 @@ mod tests {
     }
 
     #[test]
-    fn every_method_of_spec_0006_is_allowed_in_recovery_and_no_operation_method_is() {
+    fn every_method_of_spec_0006_and_the_catalog_is_allowed_in_recovery_and_no_operation_method_is()
+    {
         let allowed = [
             Call::DaemonGetInfo,
             Call::DaemonGetHealth,
             Call::DaemonGetCapabilities,
             Call::EventsSubscribe(SubscribeParams::default()),
             Call::EventsUnsubscribe(UnsubscribeParams { subscription_id: 1 }),
+            Call::CatalogListProviders,
+            Call::CatalogGetProvider(GetProviderParams {
+                provider: "official/nats".to_owned(),
+            }),
         ];
         assert!(allowed.iter().all(Call::allowed_in_recovery));
         let operation_id = uuid::Uuid::nil();

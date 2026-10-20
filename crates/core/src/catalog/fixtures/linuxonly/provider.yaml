@@ -3,7 +3,7 @@ kind: Provider
 metadata:
   id: official/linuxonly
   software: nats
-  displayName: NATS Server
+  displayName: NATS Linux Build
   revision: "1.0.0"
   category: messaging
   description: NATS messaging server with JetStream, one server per instance.

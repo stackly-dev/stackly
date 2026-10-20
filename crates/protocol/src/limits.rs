@@ -48,6 +48,10 @@ pub const FIELD_PATH_MAX: usize = 256;
 /// or ends in `_LEN` or `_DEFAULT` that this list does not name.
 pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
     (
+        "catalogProviderIdMax",
+        crate::catalog::PROVIDER_ID_MAX as u64,
+    ),
+    (
         "clientVersionMax",
         crate::handshake::CLIENT_VERSION_MAX as u64,
     ),
@@ -175,7 +179,8 @@ mod tests {
 
     /// Every module of the crate whose constants can be contract limits:
     /// all but the fuzz harnesses and the generated digest.
-    const SOURCES: [(&str, &str); 14] = [
+    const SOURCES: [(&str, &str); 15] = [
+        ("catalog", include_str!("catalog.rs")),
         ("codes", include_str!("codes.rs")),
         ("daemon", include_str!("daemon.rs")),
         ("error", include_str!("error.rs")),

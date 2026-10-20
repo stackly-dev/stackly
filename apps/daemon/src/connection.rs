@@ -877,6 +877,8 @@ async fn dispatch(
         | Call::OperationResume(_)
         | Call::OperationAbandon(_)
         | Call::OperationGetStats => (Err(not_served(method)), None),
+        // provisional: F17 step 6 (the catalog subsystem and its handlers)
+        Call::CatalogListProviders | Call::CatalogGetProvider(_) => (Err(not_served(method)), None),
     }
 }
 

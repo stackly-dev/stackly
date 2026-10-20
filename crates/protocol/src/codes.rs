@@ -59,7 +59,9 @@ pub struct Area {
 
 /// Defines one area submodule: a constant per code and the `ALL` slice. A
 /// code that carries list items adds
-/// `items { kind "<kind>", fields [..], max <n> }` after its details.
+/// `items { kind "<kind>", fields [..], max <n> }` after its details. An
+/// area with hints adds `@functions` and its `hint` function after its codes
+/// (spec 0006, *Hint*).
 macro_rules! area {
     (@items) => { None };
     (@items $kind:literal, [$($field:literal),* $(,)?], $max:literal) => {
@@ -74,6 +76,7 @@ macro_rules! area {
                 $(items { kind $item_kind:literal, fields [$($item_field:literal),* $(,)?], max $item_max:literal },)?
                 $summary:literal;
             )*
+            $(@functions $($extra:item)*)?
         }
     ) => {
         $(#[$meta])*
@@ -100,6 +103,8 @@ macro_rules! area {
 
             /// This area, as registered in [`AREAS`](super::AREAS).
             pub const AREA: Area = Area { name: NAME, owner: $owner, codes: ALL };
+
+            $($($extra)*)?
         }
     };
 }
@@ -321,6 +326,74 @@ area! {
 }
 
 area! {
+    /// Provider catalog codes (spec 0017, *Kode error di wire*). None
+    /// carries items: catalog issues reach the wire only in
+    /// `ProviderDetail.issues`. Every code has a static hint from
+    /// [`catalog::hint`](self::catalog::hint).
+    pub mod catalog = "catalog", owner "spec 0017" {
+        UNAVAILABLE = "catalog.unavailable", Unavailable, retryable false,
+            details ["reason"], "the provider catalog is not available";
+        PROVIDER_NOT_FOUND = "catalog.provider_not_found", NotFound, retryable false,
+            details ["provider", "suggestion"], "no provider with that ID in the catalog";
+        VERSION_NOT_FOUND = "catalog.version_not_found", NotFound, retryable false,
+            details ["provider", "version"], "the provider has no such version in the catalog";
+        NOT_INSTALLABLE = "catalog.not_installable", Unsupported, retryable false,
+            details ["provider", "version", "target", "availableTargets", "reason"],
+            "the provider version can't be installed on this Mac";
+
+        @functions
+
+        /// The static hint of a catalog error, chosen from its code and
+        /// the values of its `details`; `None` for a code outside the
+        /// area or a `reason` this build does not know. A hint never
+        /// holds a value: versions and targets are in the message and the
+        /// details.
+        #[must_use]
+        pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
+            let detail = |key: &str| {
+                details
+                    .iter()
+                    .find(|detail| detail.key() == key)
+                    .map(crate::error::ErrorDetail::value)
+            };
+            if code == UNAVAILABLE.code {
+                return match detail("reason")? {
+                    "not_configured" => Some("run stacklyd from Stackly.app or set STACKLY_CATALOG_DIR"),
+                    "missing" => Some("reinstall Stackly, its bundled catalog is missing"),
+                    "index_invalid" => Some("reinstall Stackly, its bundled catalog is damaged"),
+                    "unsupported_schema" => Some("update Stackly, this catalog needs a newer version"),
+                    _ => None,
+                };
+            }
+            if code == PROVIDER_NOT_FOUND.code {
+                return Some(if detail("suggestion").is_some() {
+                    "use the full provider ID, including its namespace"
+                } else {
+                    "run stackly provider list to see the catalog"
+                });
+            }
+            if code == VERSION_NOT_FOUND.code {
+                return Some("run stackly provider inspect for this provider to see its versions");
+            }
+            if code == NOT_INSTALLABLE.code {
+                return match detail("reason")? {
+                    "provider_planned" => Some("this provider is not in this release"),
+                    "package_invalid" => Some("reinstall Stackly, this provider package failed validation"),
+                    "no_build_for_host" => Some("the catalog has no build of this version for this Mac"),
+                    "no_build_for_arch" => Some(
+                        "builds exist only for the targets in availableTargets, and Stackly never runs another architecture",
+                    ),
+                    "artifact_blocked" => Some("this version is blocked in the catalog"),
+                    "fixture_only" => Some("test fixtures are never installable"),
+                    _ => None,
+                };
+            }
+            None
+        }
+    }
+}
+
+area! {
     /// Codes for bugs and broken invariants.
     pub mod internal = "internal", owner "spec 0006" {
         UNEXPECTED = "internal.unexpected", Internal, retryable false,
@@ -377,6 +450,7 @@ pub const AREAS: &[Area] = &[
     operation::AREA,
     manifest::AREA,
     provider::AREA,
+    catalog::AREA,
     internal::AREA,
     cli::AREA,
 ];
@@ -775,6 +849,7 @@ mod tests {
                 ("operation", "spec 0007"),
                 ("manifest", "spec 0009"),
                 ("provider", "spec 0009"),
+                ("catalog", "spec 0017"),
                 ("internal", "spec 0006"),
                 ("cli", "spec 0008"),
             ]
@@ -837,6 +912,121 @@ mod tests {
                 .iter()
                 .all(|spec| !spec.retryable && spec.items.is_none())
         );
+    }
+
+    #[test]
+    fn catalog_codes_match_the_spec_0017_table() {
+        let table: Vec<_> = catalog::ALL
+            .iter()
+            .map(|spec| (spec.code, spec.category, spec.details))
+            .collect();
+        let expected: &[(&str, ErrorCategory, &[&str])] = &[
+            (
+                "catalog.unavailable",
+                ErrorCategory::Unavailable,
+                &["reason"],
+            ),
+            (
+                "catalog.provider_not_found",
+                ErrorCategory::NotFound,
+                &["provider", "suggestion"],
+            ),
+            (
+                "catalog.version_not_found",
+                ErrorCategory::NotFound,
+                &["provider", "version"],
+            ),
+            (
+                "catalog.not_installable",
+                ErrorCategory::Unsupported,
+                &[
+                    "provider",
+                    "version",
+                    "target",
+                    "availableTargets",
+                    "reason",
+                ],
+            ),
+        ];
+        assert_eq!(table, expected);
+        assert!(
+            catalog::ALL
+                .iter()
+                .all(|spec| !spec.retryable && spec.items.is_none())
+        );
+    }
+
+    fn catalog_hint(code: &ErrorSpec, details: &[(&str, &str)]) -> Option<&'static str> {
+        let details: Vec<_> = details
+            .iter()
+            .map(|(key, value)| crate::error::ErrorDetail::new(*key, *value))
+            .collect();
+        catalog::hint(code.code, &details)
+    }
+
+    #[test]
+    fn every_catalog_error_has_a_short_static_hint() {
+        let mut hints = Vec::new();
+        for reason in [
+            "not_configured",
+            "missing",
+            "index_invalid",
+            "unsupported_schema",
+        ] {
+            hints.push(catalog_hint(&catalog::UNAVAILABLE, &[("reason", reason)]));
+        }
+        hints.push(catalog_hint(
+            &catalog::PROVIDER_NOT_FOUND,
+            &[("provider", "nats")],
+        ));
+        hints.push(catalog_hint(
+            &catalog::PROVIDER_NOT_FOUND,
+            &[("provider", "nats"), ("suggestion", "official/nats")],
+        ));
+        hints.push(catalog_hint(&catalog::VERSION_NOT_FOUND, &[]));
+        for reason in [
+            "provider_planned",
+            "package_invalid",
+            "no_build_for_host",
+            "no_build_for_arch",
+            "artifact_blocked",
+            "fixture_only",
+        ] {
+            hints.push(catalog_hint(
+                &catalog::NOT_INSTALLABLE,
+                &[("reason", reason)],
+            ));
+        }
+        for hint in hints {
+            let hint = hint.expect("every catalog case has a hint");
+            assert!(hint.len() <= 200, "{hint}");
+            assert!(!hint.contains('{'), "{hint}");
+        }
+    }
+
+    #[test]
+    fn a_catalog_hint_depends_on_the_details() {
+        assert_eq!(
+            catalog_hint(
+                &catalog::PROVIDER_NOT_FOUND,
+                &[("suggestion", "official/nats")]
+            ),
+            Some("use the full provider ID, including its namespace")
+        );
+        assert_eq!(
+            catalog_hint(&catalog::PROVIDER_NOT_FOUND, &[]),
+            Some("run stackly provider list to see the catalog")
+        );
+        assert_eq!(
+            catalog_hint(&catalog::UNAVAILABLE, &[("reason", "not_configured")]),
+            Some("run stacklyd from Stackly.app or set STACKLY_CATALOG_DIR")
+        );
+        assert_eq!(
+            catalog_hint(&catalog::UNAVAILABLE, &[("reason", "from_the_future")]),
+            None
+        );
+        assert_eq!(catalog_hint(&catalog::NOT_INSTALLABLE, &[]), None);
+        assert_eq!(catalog_hint(&operation::QUEUE_FULL, &[]), None);
     }
 
     #[test]

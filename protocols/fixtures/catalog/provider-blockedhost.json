@@ -1,0 +1,112 @@
+{
+  "summary": {
+    "provider": "official/blockedhost",
+    "revision": 1,
+    "displayName": "NATS Blocked Build",
+    "software": "nats",
+    "category": "messaging",
+    "description": "NATS messaging server with JetStream, one server per instance.",
+    "state": "blocked",
+    "stateReason": "artifact_blocked",
+    "stateNote": "the upstream build fails the closure audit",
+    "providerRevision": "1.0.0",
+    "publisher": "Stackly",
+    "trust": "official",
+    "versions": [],
+    "versionCount": 0,
+    "licenses": [],
+    "mark": "Na",
+    "tile": "gray"
+  },
+  "software": "nats",
+  "manifestSha256": "6c4ab70f4eb4efd24b875ebbdc6a946d094406b8a825f8471a472d0d41684dab",
+  "capabilities": [
+    {
+      "capability": "multi_instance",
+      "supported": true
+    },
+    {
+      "capability": "persistence",
+      "supported": true
+    },
+    {
+      "capability": "reload",
+      "supported": false
+    },
+    {
+      "capability": "metrics",
+      "supported": true
+    },
+    {
+      "capability": "tls",
+      "supported": false
+    },
+    {
+      "capability": "cold_backup",
+      "supported": true
+    },
+    {
+      "capability": "online_backup",
+      "supported": false
+    },
+    {
+      "capability": "logical_backup",
+      "supported": false
+    }
+  ],
+  "versions": [
+    {
+      "version": "2.15.1",
+      "line": "2.15",
+      "support": [
+        {
+          "os": "macos",
+          "arches": [
+            "aarch64"
+          ],
+          "status": "blocked",
+          "reason": "artifact_blocked",
+          "note": "the upstream build fails the closure audit"
+        },
+        {
+          "os": "linux",
+          "arches": [],
+          "status": "unsupported",
+          "reason": "no_build",
+          "note": null
+        },
+        {
+          "os": "windows",
+          "arches": [],
+          "status": "unsupported",
+          "reason": "no_build",
+          "note": null
+        }
+      ],
+      "install": {
+        "installable": false,
+        "reason": "artifact_blocked"
+      },
+      "artifacts": [
+        {
+          "id": "nats-2.15.1-macos-aarch64",
+          "os": "macos",
+          "arch": "aarch64",
+          "status": "blocked",
+          "sha256": null,
+          "minOs": null,
+          "downloadSize": null,
+          "installedSize": null,
+          "license": "Apache-2.0",
+          "licenseUrl": "https://github.com/nats-io/nats-server/blob/v2.15.1/LICENSE",
+          "source": null,
+          "blockedReason": "the upstream build fails the closure audit",
+          "dependencies": null
+        }
+      ]
+    }
+  ],
+  "platformNotes": [],
+  "note": null,
+  "issues": []
+}

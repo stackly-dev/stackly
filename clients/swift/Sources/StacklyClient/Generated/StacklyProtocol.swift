@@ -568,6 +568,37 @@ public struct AbandonReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// Where an artifact dependency comes from. Open.
+public enum DependencyKind: String, Codable, Sendable, Equatable {
+	/// Inside the artifact.
+	case bundled
+	/// Another artifact Stackly installs.
+	case own
+	/// Part of macOS.
+	case system
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One dependency of an artifact.
+public struct ArtifactDependency: Codable, Sendable, Equatable {
+	/// The dependency, such as `openssl`.
+	public let name: String
+	/// Where it comes from.
+	public let kind: DependencyKind
+	/// Its version, if known.
+	public let version: String?
+	/// Its license, if known.
+	public let license: String?
+
+	public init(name: String, kind: DependencyKind, version: String?, license: String?) {
+		self.name = name
+		self.kind = kind
+		self.version = version
+		self.license = license
+	}
+}
+
 /// Params of `operation.cancel`.
 public struct CancelOperationParams: Codable, Sendable, Equatable {
 	/// The operation to cancel.
@@ -637,6 +668,320 @@ public struct Capabilities: Codable, Sendable, Equatable {
 		self.platform = platform
 		self.methods = methods
 		self.eventKinds = eventKinds
+	}
+}
+
+/// A provider capability. Open.
+public enum ProviderCapability: String, Codable, Sendable, Equatable {
+	/// Run more than one instance side by side.
+	case multiInstance = "multi_instance"
+	/// Keep data across restarts.
+	case persistence
+	/// Reload the configuration without a restart.
+	case reload
+	/// Expose metrics.
+	case metrics
+	/// Serve TLS.
+	case tls
+	/// Back up while the instance is stopped.
+	case coldBackup = "cold_backup"
+	/// Back up while the instance runs.
+	case onlineBackup = "online_backup"
+	/// Back up as a logical dump.
+	case logicalBackup = "logical_backup"
+	/// A capability this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Whether a provider has one capability.
+public struct CapabilityStatus: Codable, Sendable, Equatable {
+	/// The capability.
+	public let capability: ProviderCapability
+	/// Whether the provider revision declares it.
+	public let supported: Bool
+
+	public init(capability: ProviderCapability, supported: Bool) {
+		self.capability = capability
+		self.supported = supported
+	}
+}
+
+/// An OS of a target. Open.
+public enum TargetOs: String, Codable, Sendable, Equatable {
+	/// macOS.
+	case macos
+	/// Linux.
+	case linux
+	/// Windows.
+	case windows
+	/// An OS this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// An architecture of a target. Open.
+public enum TargetArch: String, Codable, Sendable, Equatable {
+	/// 64 bit ARM, such as Apple Silicon.
+	case aarch64
+	/// 64 bit x86.
+	case x8664 = "x86_64"
+	/// An architecture this build does not know. The daemon never sends
+	/// it.
+	case unrecognized
+}
+
+/// The status of an artifact in `versions.json`. Open.
+public enum ArtifactStatus: String, Codable, Sendable, Equatable {
+	/// A pinned download.
+	case available
+	/// Blocked, with a reason.
+	case blocked
+	/// A test fixture, never installable.
+	case fixture
+	/// A status this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One artifact of a version.
+public struct CatalogArtifact: Codable, Sendable, Equatable {
+	/// The artifact ID from `versions.json`.
+	public let id: String
+	/// The OS it is built for.
+	public let os: TargetOs
+	/// The architecture it is built for.
+	public let arch: TargetArch
+	/// Its status in `versions.json`.
+	public let status: ArtifactStatus
+	/// The SHA-256 of the archive, 64 lowercase hex characters; only for
+	/// `available` artifacts. Clients match installed runtimes and running
+	/// installs by it.
+	public let sha256: String?
+	/// The oldest OS version it runs on, such as `13.0`; only for
+	/// `available` artifacts.
+	public let minOs: String?
+	/// The archive size in bytes; only for `available` artifacts.
+	public let downloadSize: UInt64?
+	/// The unpacked size in bytes, once `versions.json` records it.
+	public let installedSize: UInt64?
+	/// The license, such as `Apache-2.0`.
+	public let license: String?
+	/// Where the license text is.
+	public let licenseUrl: String?
+	/// The host of the first download URL and its first path segment,
+	/// such as `github.com/nats-io`.
+	public let source: String?
+	/// Why the artifact is blocked; only for `blocked` artifacts.
+	public let blockedReason: String?
+	/// Its dependencies; null while `versions.json` does not record them.
+	public let dependencies: [ArtifactDependency]?
+
+	public init(id: String, os: TargetOs, arch: TargetArch, status: ArtifactStatus, sha256: String?, minOs: String?, downloadSize: UInt64?, installedSize: UInt64?, license: String?, licenseUrl: String?, source: String?, blockedReason: String?, dependencies: [ArtifactDependency]?) {
+		self.id = id
+		self.os = os
+		self.arch = arch
+		self.status = status
+		self.sha256 = sha256
+		self.minOs = minOs
+		self.downloadSize = downloadSize
+		self.installedSize = installedSize
+		self.license = license
+		self.licenseUrl = licenseUrl
+		self.source = source
+		self.blockedReason = blockedReason
+		self.dependencies = dependencies
+	}
+}
+
+/// Where a catalog came from. Open.
+public enum CatalogSourceKind: String, Codable, Sendable, Equatable {
+	/// The catalog inside the app bundle.
+	case bundled
+	/// A catalog folder from `STACKLY_CATALOG_DIR`.
+	case development
+	/// A source this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// How far a catalog is trusted. Open.
+public enum TrustLevel: String, Codable, Sendable, Equatable {
+	/// The catalog shipped with Stackly.
+	case official
+	/// A development catalog, never shown as official.
+	case development
+	/// A trust level this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// An OS and architecture pair.
+public struct HostTarget: Codable, Sendable, Equatable {
+	/// The OS.
+	public let os: TargetOs
+	/// The architecture.
+	public let arch: TargetArch
+
+	public init(os: TargetOs, arch: TargetArch) {
+		self.os = os
+		self.arch = arch
+	}
+}
+
+/// The facts about the catalog the daemon loaded.
+public struct CatalogInfo: Codable, Sendable, Equatable {
+	/// The catalog revision.
+	public let revision: UInt64
+	/// When the catalog was published, from `catalog.json`.
+	public let publishedAt: Date
+	/// When the daemon loaded it, for diagnostics.
+	public let loadedAt: Date
+	/// The content digest from `catalog.json`, 64 lowercase hex
+	/// characters.
+	public let contentSha256: String
+	/// Where the catalog came from.
+	public let source: CatalogSourceKind
+	/// How far the catalog is trusted.
+	public let trust: TrustLevel
+	/// The target of this Mac, which every install verdict is for.
+	public let host: HostTarget
+	/// Whether the catalog was published more than 180 days before the
+	/// request.
+	public let outdated: Bool
+	/// How many entries failed validation.
+	public let invalidCount: UInt64
+
+	public init(revision: UInt64, publishedAt: Date, loadedAt: Date, contentSha256: String, source: CatalogSourceKind, trust: TrustLevel, host: HostTarget, outdated: Bool, invalidCount: UInt64) {
+		self.revision = revision
+		self.publishedAt = publishedAt
+		self.loadedAt = loadedAt
+		self.contentSha256 = contentSha256
+		self.source = source
+		self.trust = trust
+		self.host = host
+		self.outdated = outdated
+		self.invalidCount = invalidCount
+	}
+}
+
+/// One thing wrong with an invalid entry.
+public struct CatalogIssue: Codable, Sendable, Equatable {
+	/// The file, such as `provider.yaml` or `catalog.json`.
+	public let file: String
+	/// Where in the file, such as `metadata.id`.
+	public let location: String
+	/// The issue code, such as `catalog_digest_mismatch`.
+	public let code: String
+	/// What is wrong, in lowercase English.
+	public let message: String
+	/// Which limit or rule, only for codes with a reason list, such as
+	/// `total_bytes` for `catalog_limit`.
+	public let reason: String?
+
+	public init(file: String, location: String, code: String, message: String, reason: String?) {
+		self.file = file
+		self.location = location
+		self.code = code
+		self.message = message
+		self.reason = reason
+	}
+}
+
+/// The support status of a version on one OS (PRD section 5.1). Open.
+public enum SupportStatus: String, Codable, Sendable, Equatable {
+	/// Planned for a later release.
+	case planned
+	/// Builds exist but were not tested here.
+	case unverified
+	/// Tested, with known gaps.
+	case experimental
+	/// Tested with a compatibility record.
+	case supported
+	/// Not supported.
+	case unsupported
+	/// Blocked in the catalog.
+	case blocked
+	/// A status this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Why an entry, a matrix cell, or an install verdict has its status.
+/// Open: feature 18 adds reasons.
+public enum SupportReason: String, Codable, Sendable, Equatable {
+	/// A build exists but was not tested on this Mac.
+	case untested
+	/// No build for the OS.
+	case noBuild = "no_build"
+	/// Builds for the OS exist, but not for its architecture.
+	case noBuildForArch = "no_build_for_arch"
+	/// No build for this Mac.
+	case noBuildForHost = "no_build_for_host"
+	/// The catalog's platform note decides.
+	case platformNote = "platform_note"
+	/// The artifact is blocked.
+	case artifactBlocked = "artifact_blocked"
+	/// The artifact is a test fixture.
+	case fixtureOnly = "fixture_only"
+	/// The provider is planned.
+	case providerPlanned = "provider_planned"
+	/// The provider package failed validation.
+	case packageInvalid = "package_invalid"
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The support of one version on one OS: one cell of the version matrix.
+public struct TargetSupport: Codable, Sendable, Equatable {
+	/// The OS.
+	public let os: TargetOs
+	/// The architectures of the version's artifacts for the OS, by code;
+	/// empty when there are none.
+	public let arches: [TargetArch]?
+	/// The support status.
+	public let status: SupportStatus
+	/// Why the cell has its status.
+	public let reason: SupportReason?
+	/// A note, such as a platform note or the reason an artifact is
+	/// blocked.
+	public let note: String?
+
+	public init(os: TargetOs, arches: [TargetArch]?, status: SupportStatus, reason: SupportReason?, note: String?) {
+		self.os = os
+		self.arches = arches
+		self.status = status
+		self.reason = reason
+		self.note = note
+	}
+}
+
+/// The install gate's verdict for one version on this Mac.
+public struct InstallVerdict: Codable, Sendable, Equatable {
+	/// Whether the version can be installed.
+	public let installable: Bool
+	/// Why not; null when it can.
+	public let reason: SupportReason?
+
+	public init(installable: Bool, reason: SupportReason?) {
+		self.installable = installable
+		self.reason = reason
+	}
+}
+
+/// One exact version of a provider.
+public struct CatalogVersion: Codable, Sendable, Equatable {
+	/// The exact version, such as `2.15.1`.
+	public let version: String
+	/// The runtime line, such as `2.15`.
+	public let line: String
+	/// One cell per OS, always `macos`, `linux`, then `windows`.
+	public let support: [TargetSupport]?
+	/// Whether this version installs on this Mac.
+	public let install: InstallVerdict
+	/// Its artifacts, in `versions.json` order.
+	public let artifacts: [CatalogArtifact]?
+
+	public init(version: String, line: String, support: [TargetSupport]?, install: InstallVerdict, artifacts: [CatalogArtifact]?) {
+		self.version = version
+		self.line = line
+		self.support = support
+		self.install = install
+		self.artifacts = artifacts
 	}
 }
 
@@ -1077,6 +1422,19 @@ public struct GetOperationParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `catalog.get_provider`.
+public struct GetProviderParams: Codable, Sendable, Equatable {
+	/// The provider ID, such as `official/nats`: 1 to 127 bytes of
+	/// `[a-z0-9/-]` with at most one `/`. A name without its namespace
+	/// passes, so the daemon can suggest the full ID, but never matches a
+	/// provider.
+	public let provider: String
+
+	public init(provider: String) {
+		self.provider = provider
+	}
+}
+
 /// The limits a daemon enforces, as sent in `HandshakeAccepted`.
 public struct Limits: Codable, Sendable, Equatable {
 	/// Largest control frame payload, in bytes.
@@ -1174,6 +1532,145 @@ public struct ListOperationsParams: Codable, Sendable, Equatable {
 		self.resource = resource
 		self.limit = limit
 		self.before = before
+	}
+}
+
+/// The category of a provider. Open.
+public enum ProviderCategory: String, Codable, Sendable, Equatable {
+	/// A database server.
+	case database
+	/// A message broker.
+	case messaging
+	/// An analytics store.
+	case analytics
+	/// A cache.
+	case cache
+	/// A proxy.
+	case proxy
+	/// A test provider.
+	case testing
+	/// A category this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What this Mac can do with a catalog entry. Open.
+public enum CatalogEntryState: String, Codable, Sendable, Equatable {
+	/// At least one version installs on this Mac.
+	case available
+	/// The artifact for this Mac is blocked.
+	case blocked
+	/// No version installs on this Mac.
+	case unsupported
+	/// On the roadmap, without a package.
+	case planned
+	/// The package failed validation.
+	case invalid
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The system color of a provider tile. Open: clients show an
+/// unrecognized color as gray.
+public enum TileColor: String, Codable, Sendable, Equatable {
+	/// System blue.
+	case blue
+	/// System cyan.
+	case cyan
+	/// System teal.
+	case teal
+	/// System green.
+	case green
+	/// System yellow.
+	case yellow
+	/// System orange.
+	case orange
+	/// System red.
+	case red
+	/// System brown.
+	case brown
+	/// System indigo.
+	case indigo
+	/// System gray.
+	case gray
+	/// A color this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One catalog entry as a card or a list row shows it.
+public struct ProviderSummary: Codable, Sendable, Equatable {
+	/// The provider ID, such as `official/nats`.
+	public let provider: String
+	/// The catalog revision, the same for every entry.
+	public let revision: UInt64
+	/// The name shown; an invalid entry shows its ID.
+	public let displayName: String
+	/// The software the provider runs, such as `nats`; the key that joins
+	/// installed runtimes to the entry. Null for planned and invalid
+	/// entries.
+	public let software: String?
+	/// The category; null only for an invalid entry whose manifest
+	/// metadata does not decode.
+	public let category: ProviderCategory?
+	/// What the provider is; null for invalid entries.
+	public let description: String?
+	/// What this Mac can do with the entry.
+	public let state: CatalogEntryState
+	/// Why the entry has its state; null for `available`.
+	public let stateReason: SupportReason?
+	/// A note for the state, such as the reason an artifact is blocked.
+	public let stateNote: String?
+	/// The provider revision of the package, such as `1.0.0`; null for
+	/// planned and invalid entries.
+	public let providerRevision: String?
+	/// Who publishes the package: `Stackly` for the `official` namespace.
+	public let publisher: String?
+	/// How far the entry is trusted, the same as the catalog's.
+	public let trust: TrustLevel
+	/// The first 16 exact versions with an `available` artifact for this
+	/// Mac, in `versions.json` order.
+	public let versions: [String]?
+	/// How many exact versions have an `available` artifact for this Mac.
+	public let versionCount: UInt64
+	/// The distinct licenses of those artifacts, in `versions.json` order.
+	public let licenses: [String]?
+	/// One or two characters for the tile.
+	public let mark: String
+	/// The tile color.
+	public let tile: TileColor
+
+	public init(provider: String, revision: UInt64, displayName: String, software: String?, category: ProviderCategory?, description: String?, state: CatalogEntryState, stateReason: SupportReason?, stateNote: String?, providerRevision: String?, publisher: String?, trust: TrustLevel, versions: [String]?, versionCount: UInt64, licenses: [String]?, mark: String, tile: TileColor) {
+		self.provider = provider
+		self.revision = revision
+		self.displayName = displayName
+		self.software = software
+		self.category = category
+		self.description = description
+		self.state = state
+		self.stateReason = stateReason
+		self.stateNote = stateNote
+		self.providerRevision = providerRevision
+		self.publisher = publisher
+		self.trust = trust
+		self.versions = versions
+		self.versionCount = versionCount
+		self.licenses = licenses
+		self.mark = mark
+		self.tile = tile
+	}
+}
+
+/// Reply of `catalog.list_providers`: every entry in display order, in one
+/// page.
+public struct ListProvidersReply: Codable, Sendable, Equatable {
+	/// The facts about the catalog.
+	public let catalog: CatalogInfo
+	/// Provider and invalid entries first, planned entries last; then
+	/// category, display name, and ID.
+	public let items: [ProviderSummary]?
+
+	public init(catalog: CatalogInfo, items: [ProviderSummary]?) {
+		self.catalog = catalog
+		self.items = items
 	}
 }
 
@@ -1307,6 +1804,57 @@ public struct OperationStats: Codable, Sendable, Equatable {
 	}
 }
 
+/// What the catalog says about one OS a provider has no artifact for.
+public struct PlatformNoteDto: Codable, Sendable, Equatable {
+	/// `linux` or `windows`.
+	public let os: TargetOs
+	/// `planned` or `unsupported`.
+	public let status: SupportStatus
+	/// The note.
+	public let note: String
+
+	public init(os: TargetOs, status: SupportStatus, note: String) {
+		self.os = os
+		self.status = status
+		self.note = note
+	}
+}
+
+/// Reply of `catalog.get_provider`: one entry with its versions, its
+/// artifacts, and what is wrong with it.
+public struct ProviderDetail: Codable, Sendable, Equatable {
+	/// The entry as the list shows it.
+	public let summary: ProviderSummary
+	/// The software the provider runs; null for planned and invalid
+	/// entries.
+	public let software: String?
+	/// The digest of the provider package, 64 lowercase hex characters;
+	/// null for planned and invalid entries.
+	public let manifestSha256: String?
+	/// The eight capabilities in [`ProviderCapability::ALL`] order; empty
+	/// for planned and invalid entries.
+	public let capabilities: [CapabilityStatus]?
+	/// One row per exact version, in `versions.json` order.
+	public let versions: [CatalogVersion]?
+	/// What the catalog says about an OS without artifacts.
+	public let platformNotes: [PlatformNoteDto]?
+	/// The note of a planned entry.
+	public let note: String?
+	/// What failed validation; only for invalid entries.
+	public let issues: [CatalogIssue]?
+
+	public init(summary: ProviderSummary, software: String?, manifestSha256: String?, capabilities: [CapabilityStatus]?, versions: [CatalogVersion]?, platformNotes: [PlatformNoteDto]?, note: String?, issues: [CatalogIssue]?) {
+		self.summary = summary
+		self.software = software
+		self.manifestSha256 = manifestSha256
+		self.capabilities = capabilities
+		self.versions = versions
+		self.platformNotes = platformNotes
+		self.note = note
+		self.issues = issues
+	}
+}
+
 /// One variant per method, tagged by the method name. Methods without
 /// params are unit variants, written without `content`.
 public enum Call: Codable, Sendable, Equatable {
@@ -1335,6 +1883,10 @@ public enum Call: Codable, Sendable, Equatable {
 	case operationAbandon(AbandonOperationParams)
 	/// The engine's counters and limits.
 	case operationGetStats
+	/// Every catalog entry with the facts about the catalog.
+	case catalogListProviders
+	/// One catalog entry with its versions and artifacts.
+	case catalogGetProvider(GetProviderParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -1348,7 +1900,9 @@ public enum Call: Codable, Sendable, Equatable {
 			operationCancel = "operation.cancel",
 			operationResume = "operation.resume",
 			operationAbandon = "operation.abandon",
-			operationGetStats = "operation.get_stats"
+			operationGetStats = "operation.get_stats",
+			catalogListProviders = "catalog.list_providers",
+			catalogGetProvider = "catalog.get_provider"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -1411,6 +1965,14 @@ public enum Call: Codable, Sendable, Equatable {
 			case .operationGetStats:
 				self = .operationGetStats
 				return
+			case .catalogListProviders:
+				self = .catalogListProviders
+				return
+			case .catalogGetProvider:
+				if let content = try? container.decode(GetProviderParams.self, forKey: .content) {
+					self = .catalogGetProvider(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -1451,6 +2013,11 @@ public enum Call: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .operationGetStats:
 			try container.encode(CodingKeys.operationGetStats, forKey: .type)
+		case .catalogListProviders:
+			try container.encode(CodingKeys.catalogListProviders, forKey: .type)
+		case .catalogGetProvider(let content):
+			try container.encode(CodingKeys.catalogGetProvider, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -1500,6 +2067,10 @@ public enum Reply: Codable, Sendable, Equatable {
 	case operationAbandon(AbandonReply)
 	/// The engine's counters and limits.
 	case operationGetStats(OperationStats)
+	/// Every catalog entry, in display order.
+	case catalogListProviders(ListProvidersReply)
+	/// One catalog entry in detail.
+	case catalogGetProvider(ProviderDetail)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -1513,7 +2084,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			operationCancel = "operation.cancel",
 			operationResume = "operation.resume",
 			operationAbandon = "operation.abandon",
-			operationGetStats = "operation.get_stats"
+			operationGetStats = "operation.get_stats",
+			catalogListProviders = "catalog.list_providers",
+			catalogGetProvider = "catalog.get_provider"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -1582,6 +2155,16 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .operationGetStats(content)
 					return
 				}
+			case .catalogListProviders:
+				if let content = try? container.decode(ListProvidersReply.self, forKey: .content) {
+					self = .catalogListProviders(content)
+					return
+				}
+			case .catalogGetProvider:
+				if let content = try? container.decode(ProviderDetail.self, forKey: .content) {
+					self = .catalogGetProvider(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -1624,6 +2207,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .operationGetStats(let content):
 			try container.encode(CodingKeys.operationGetStats, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .catalogListProviders(let content):
+			try container.encode(CodingKeys.catalogListProviders, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .catalogGetProvider(let content):
+			try container.encode(CodingKeys.catalogGetProvider, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
