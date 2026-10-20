@@ -228,3 +228,25 @@ Pemeriksaan lintas spec 0015, 0017, 0018, dan 0019 oleh lead menemukan 22 temuan
 - Keputusan lead yang menyentuh spec lain: bentuk hint `codes::<area>::hint` lewat `ErrorBody::with_hint` menjadi usulan spec 0006; `CatalogArtifact.sha256` ditambah spec 0017 sendiri dan hanya dirujuk di sini; `ProviderSummary.software` dan `InstallingRuntime.provider` tetap di usulan spec 0017 spec ini; langkah catalog di `cargo xtask build-app` milik spec 0017 milestone 4 (spec ini tidak menyebutnya); test native per lini dibatasi ke provider yang paketnya ada (NATS, Traefik, PostgreSQL setelah spec 0019), dan MySQL, ClickHouse, serta Valkey tercatat `BLOCKED` sampai fitur 40 sampai 43.
 
 Perubahan kecil yang ikut: `runtime.selector_invalid` dihapus karena bentuk selector kini dicek `Validate` (`request.invalid_params`), `ListRuntimesParams` mendapat `Validate`, replay idempotency key dilayani dari input journal sebelum catalog dibaca, `DaemonConfig.fetcher` diganti `Platform::with_fetcher`, `compat-record` hanya menyalin record BR-025, `install_cached_artifact` mendapat signature dan perilaku commit, DTO runtime diberi tipe (`HostTarget`, `DependencyInfo`, `SignatureInfo`, `CompatibilityRecordView`, enum terbuka), usulan spec 0010 mendapat kode kegagalan start, dan usulan spec 0002 mendapat `evidence/compatibility/`.
+
+## Penyelarasan 2026-10-20 (keputusan K foundation)
+
+Penyelarasan dengan keputusan lead foundation K1 sampai K18 dan update spec foundation di `main` (0001, 0002, 0003, 0004, 0005, 0006, 0009, 0010, 0011, 0012), dari daftar lead `docs/scope/coordination/02-instalasi-pertama.penyelarasan-k.md` bagian *0018* dan *Cross-cutting*. Setiap butir dicek ulang terhadap teks spec foundation di `main` sebelum ditulis. AC dan nomor langkah Build plan tidak berubah; status tetap `Proposed`.
+
+| Butir | Perubahan di spec ini | Dasar |
+| --- | --- | --- |
+| K6 | exec check memakai `ChildRole::RuntimeCheck` yang langsung di kill saat timeout, hanya `core::runtime::validate` yang memakainya, fallback `Probe` dihapus | spec 0010 *Port*, *Aturan pembantu*, AC-15 |
+| K7 | `classify_early_exit` hanya untuk `Some(Signaled(9))` child daemon yang tidak dihentikan daemon; status dari `discard` di tahap `identity`; langkah 8 memasang ke `core::supervisor` kalau langkah 7 spec 0010 sudah ada, dan memuat konstanta `FailureCode` beserta test pin nya; test native binary bertanda tangan rusak lewat `spawn_main` di langkah 16 | spec 0010 *Startup transaction*, langkah 7, Follow-up |
+| K9 | `MacosCodeSigning` memakai helper spawn dan kill `pub(crate)` modul `process`, me reap hanya PID nya sendiri, tanpa token `SIGKILL` di luar `process/kill.rs` | spec 0010 *Adapter macOS*, spec 0004 *Key invariants* |
+| K11 | migrasi `0005_runtime_install.sql` dan fixture `registry-v5.sql` di atas `0004_operation_failure.sql` langkah 16 fitur 7; langkah 6 menunggu langkah itu; catatan bahwa setelah K11 `FailureError` tidak menyimpan hint | keputusan K11, spec 0005 *Tambahan fitur 18* |
+| K12 | handler memakai `OperationEngine::replay(&RequestOrigin)` lewat `replay_operation`, bukan pencarian `operation_by_idempotency_key`; langkah 11 membangunnya kalau fitur 7 belum | keputusan K12 |
+| K18 | milestone 4 menunggu langkah 16 spec 0013 (yang menunggu milestone 2 fitur 10); `RuntimeStore` tidak menerima observasi dengan revision sama, jadi aturan observasi generik spec 0013 bukan milik fitur ini | keputusan K18 |
+| `OsVersion`, `ArtifactFormat` | dibangun milestone 1 langkah 1 spec 0017; milestone 1 dan langkah 6 spec ini hanya memakainya | spec 0004, 0009 (tipe harus ada sebelum spec 0017 milestone 1 langkah 1) |
+| `pin`, `verify`, dan `scan` | bagian `pin` dan `verify` dengan `scan`, pengisian `unpacked_size` dan `entry_count`, dan aturan 11 pindah dari akhir langkah 1 ke akhir langkah 3, tempat `archive::scan` dibangun | urutan langkah; spec 0003 aturan 11 masih menyebut langkah 1 (dilaporkan ke lead) |
+| Teks besar dan umpan balik | "Dynamic Type" diganti cek lebar sempit 640 pt spec 0012; toast diganti umpan balik opak atau presentasi sistem, `// provisional: F67` | spec 0012 *Tipografi*, *Material* |
+| `with_roots` dan `host_facts` | `MacosPlatform::new` dan `with_roots` membaca host facts sekali dan gagal `HostFactsUnavailable`; langkah 8 memperbarui pemanggil `with_roots` | spec 0004 *Port platform* |
+| `available_space` | provided method di atas `volume_space` spec 0022; langkah 2 membangun `volume_space` kalau belum ada | spec 0004 *Port platform* |
+| Exec check | `CHILD_PATH` di `core::provider::plan`, accessor `ValidatedPackage::version_check`, paket fake memakai subcommand `version` | spec 0009 |
+| Usulan untuk spec lain | dicatat bahwa usulan untuk spec 0001 sampai 0010 sudah diterapkan dan spec pemilik yang mengikat; follow up yang sudah diterapkan dicentang | spec 0001, 0002, 0003, 0004, 0005, 0006, 0009, 0010, 0019 |
+
+Tidak berubah karena sudah sesuai: K4 (kenaikan minor protokol mengambil nomor bebas berikutnya saat merge), dan butir K lain yang tidak menyentuh fitur ini (K1 sampai K3, K5, K8, K10, K13 sampai K17).
