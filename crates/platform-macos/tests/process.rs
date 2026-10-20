@@ -24,8 +24,10 @@ use stackly_platform_macos::{MacosIdentity, MacosPlatform, MacosProcessSupervisi
 use stackly_testkit::evidence::{FixtureCredential, Kind, evidence};
 use stackly_testkit::{TestRoot, allocate_port, fake_server};
 
-/// How long a test waits for something a process does.
-const PATIENCE: Duration = Duration::from_secs(10);
+/// How long a test waits for something a process does. Generous on
+/// purpose: on a loaded Mac the first run of a freshly linked binary waits
+/// for its code signature check, and a passing run never comes close.
+const PATIENCE: Duration = Duration::from_secs(30);
 /// How long a test watches for something that must not happen.
 const QUIET: Duration = Duration::from_millis(400);
 /// An argument full of shell syntax: any shell that reads it creates a
@@ -79,6 +81,8 @@ struct Setup {
     adapter: MacosProcessSupervision,
     children: Mutex<Vec<ProcessFacts>>,
     spools: Mutex<usize>,
+    /// The spools of each main process, for failure messages.
+    spools_of: Mutex<Vec<(Pid, [PathBuf; 2])>>,
 }
 
 impl Setup {
@@ -92,6 +96,7 @@ impl Setup {
             adapter: MacosProcessSupervision::new(),
             children: Mutex::new(Vec::new()),
             spools: Mutex::new(0),
+            spools_of: Mutex::new(Vec::new()),
         }
     }
 
@@ -164,7 +169,43 @@ impl Setup {
             })
             .expect("the main process spawns");
         self.track(child.facts().clone());
+        self.spools_of
+            .lock()
+            .expect("no test thread panics")
+            .push((child.pid(), paths));
         child
+    }
+
+    /// Waits until a resumed fake server wrote its argv record, and says
+    /// what the process did when it never does.
+    fn wait_for_argv(&self, pid: Pid, data: &Path) -> Vec<String> {
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            if let Some(argv) = argv_record(data) {
+                return argv;
+            }
+            if Instant::now() >= deadline {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        let spools = self.spools_of.lock().expect("no test thread panics");
+        let output: Vec<String> = spools
+            .iter()
+            .filter(|(owner, _)| *owner == pid)
+            .flat_map(|(_, paths)| paths.iter())
+            .map(|path| {
+                format!(
+                    "{}: {:?}",
+                    path.display(),
+                    fs::read_to_string(path).unwrap_or_else(|error| error.to_string())
+                )
+            })
+            .collect();
+        panic!(
+            "fake server {pid} wrote no argv record within {PATIENCE:?}; facts now {:?}; spools {output:?}",
+            self.adapter.inspect(pid),
+        );
     }
 
     /// A suspended fake server in a fresh data folder, with the arguments
@@ -366,13 +407,9 @@ fn a_main_process_starts_suspended_with_exactly_the_plan_and_only_fds_0_to_3() {
     let notices = setup.watch(facts.pid);
     let handle = setup.adapter.resume(child).unwrap();
     assert_eq!(handle.pid(), facts.pid);
-    wait_for("the argv record", || argv_record(&data).is_some());
+    let argv = setup.wait_for_argv(facts.pid, &data);
 
-    assert_eq!(
-        argv_record(&data).unwrap(),
-        args,
-        "argv after argv[0] is the plan"
-    );
+    assert_eq!(argv, args, "argv after argv[0] is the plan");
     let mut names = Vec::new();
     names_under(setup.root.path(), &mut names);
     names_under(setup.root.run_dir(), &mut names);
@@ -547,7 +584,7 @@ fn a_signal_reaches_only_the_identity_it_targets() {
     let facts = child.facts().clone();
     let notices = setup.watch(facts.pid);
     setup.adapter.resume(child).unwrap();
-    wait_for("the fake to run", || argv_record(&data).is_some());
+    setup.wait_for_argv(facts.pid, &data);
     let right = setup.target(&facts);
     let mut later = right.expected().clone();
     later.start = ProcessStart::new(facts.start.seconds() + 1, facts.start.micros()).unwrap();
