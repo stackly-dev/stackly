@@ -48,6 +48,8 @@
 | `chk-f11-m6` (sesi `dev-f14-m4-s10` dipakai ulang) | `checker (verify)` | F11 `verify.md` Milestone 6 (bagian otomatis) | `01-foundation.md` | centang `verify.md` 0011 M6 | `claude/dbg-f8-m2-ba9bdb` | `sonnet-5-5 · high` | `merged` (`d4a96da`) |
 | `chk-f7-review` (sesi baru `local_0c04c586`) | `checker (review)` | F7 langkah 16, review | `01-foundation.md` | `docs/reviews/` | `claude/chk-f7-review-*` | `opus-5-5 · xhigh` | `aktif` |
 | `chk-f10-review` (sesi baru `local_0e3505ca`) | `checker (review)` | F10 `Review it` | `01-foundation.md` | `docs/reviews/` | `claude/chk-f10-review-*` | `opus-5-5 · xhigh` | `aktif` |
+| `tst-f11-test` (sesi `chk-f14-m2` dipakai ulang) | `tester` | F11 `Test it` | `01-foundation.md` | test area secret di crate F11, daemon, CLI, Swift; `evidence/` | `claude/arc-f7-update-a6649f` | `sonnet-5-5 · high` | `dipakai ulang` |
+| `tst-f14-test` (sesi `chk-f11-m6` dipakai ulang) | `tester` | F14 `Test it` | `01-foundation.md` | test walking skeleton (core `fixture_seed`, testkit, fake-server, daemon `skeleton*`, CLI `instance/`, Swift `SkeletonEndToEndTests`); `evidence/` | `claude/dbg-f8-m2-ba9bdb` | `sonnet-5-5 · high` | `dipakai ulang` |
 | `dev-f14-m4-s10` (sesi `chk-f10-198` dipakai ulang) | `developer` | F14 langkah 10, record manual AC-001 | `01-foundation.md` | `evidence/manual/`, `verify.md` 0014 M4 langkah 10 | `claude/dbg-f8-m2-ba9bdb` | `sonnet-5-5 · high` | `merged` (`fca47d9` → `8ecf808`), record `NOT_RUN` menunggu user |
 | `dev-f10-m3-s10` (lanjutan) | `developer` | F10 langkah 10: titik panggil spool di actor, `startup.rs`, `exit.rs` | `01-foundation.md` | spool dan sink plus `crates/core/src/supervisor/{actor,startup,exit,status}.rs` dan `crates/core/tests/supervisor_start/` (hanya pemasangan spool) | `claude/dbg-f8-m2-ba9bdb` | `sonnet-5-5 · high` | `merged` (`ed651b8` → `c56780b`) |
 | `dev-f10-m3-s911` (sesi yang sama dipakai ulang) | `developer` | F10 milestone 3, langkah 9 dan 11 | `01-foundation.md` | `crates/core/src/supervisor/`, test supervisor di `crates/core/tests/`, `crates/testkit/src/fake_process.rs`, `verify.md` 0010 M3 | `claude/dbg-f8-m2-ba9bdb` | `sonnet-5-5 · high` | `merged` (`0ac88e0` → `69569da`) |
@@ -131,6 +133,7 @@
   - record GUI langkah 11, menunggu user lewat bagian B;
   - konfirmasi `stored_only` di GUI, yang baru bisa dibuktikan di layar produk fitur 20 atau 21. Butir ini butuh keputusan user apakah dicentang dengan status `DEFERRED` ke fitur 20/21; padanan otomatisnya `SecretEntryModelTests` sudah lulus.
   Temuan: prefix `FixtureCredential` dicocokkan lewat source Rust, bukan fixture `protocols/`. | `lead` |
+| `2026-10-20` | Tester F11 dan F14 dimulai sebelum `Build it` keduanya dicentang. Kode kedua fitur sudah lengkap di `main`; yang menahan `Build it` hanya record manual user (F11 M4 dan M6, F14 M4 dan M5). Kotak `Test it` baru dicentang setelah `Build it`. | `lead` |
 | `2026-10-20` | Pemilik kontrak wave 2 sesudah `fffa50e` adalah `dev-f10-m4-s12` (minor 1.8). `chk-f10-m3` menunggu sesi bebas: sesi `chk-f11-m5` sedang dibuka user di layar sehingga tidak bisa dibersihkan, dan `start_session` ditolak pada giliran yang dipicu event. | `lead` |
 | `2026-10-20` | `chk-f7-m5` PASS 15/15 langkah Milestone 5 spec 0007 (`1690081` → `6235716`), termasuk sha256 `registry-v4.sql` sama dengan `FIXTURE_SHA256` 4, migrasi 0002/0003 dan fixture v1 sampai v3 tidak berubah, dan `ProtocolVersion` tidak naik. Kotak milestone langkah 16 F7 baru dicentang setelah `/test`, `/check review` (sesi baru), dan `/document` khusus langkah itu juga selesai, sesuai teks kotaknya. | `lead` |
 | `2026-10-20` | Temuan `chk-f10-m3` (tidak FAIL): spec 0010 belum menyebut secara eksplisit bahwa jeda di dalam operasi respawn sistem dipegang operasi itu, dan respawn memakai `BusyPolicy::Reject` dengan ulangan tiap `restart_base_delay`. Butuh satu kalimat lewat `/architect` update spec 0010 berikutnya, dicatat sebagai item Follow-up untuk penutupan. | `lead` |
@@ -177,6 +180,7 @@
   - record GUI langkah 11, menunggu user lewat bagian B;
   - konfirmasi `stored_only` di GUI, yang baru bisa dibuktikan di layar produk fitur 20 atau 21. Butir ini butuh keputusan user apakah dicentang dengan status `DEFERRED` ke fitur 20/21; padanan otomatisnya `SecretEntryModelTests` sudah lulus.
   Temuan: prefix `FixtureCredential` dicocokkan lewat source Rust, bukan fixture `protocols/`. | `lead` |
+| `2026-10-20` | Tester F11 dan F14 dimulai sebelum `Build it` keduanya dicentang. Kode kedua fitur sudah lengkap di `main`; yang menahan `Build it` hanya record manual user (F11 M4 dan M6, F14 M4 dan M5). Kotak `Test it` baru dicentang setelah `Build it`. | `lead` |
 | `2026-10-20` | Pemilik kontrak (`crates/protocol/`, `protocols/fixtures/`, hasil codegen) wave 1 adalah `dev-f11-m4-s5`; F7 langkah 16 (fixture `frame-response-operation-get-failed-items.json`) dan F10 langkah 12 menunggu kontrak bebas. | `lead` |
 
 ## Blocker terbuka
