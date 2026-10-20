@@ -774,6 +774,109 @@ Karena app belum pernah dirilis, kolom ditambah langsung ke `CREATE TABLE operat
 - `secret.needs_secret` dari operasi kehilangan daftar reference nya, jadi spec 0011 AC-11 dan spec 0020 AC-7 tidak bisa dipenuhi lewat operasi.
 - Error dari jalur sinkron dan jalur operasi berbeda isi untuk kode yang sama.
 
+### Keputusan 29: replay sebelum `begin` (K12, 2026-10-20)
+
+Spec 0018 menulis handler `runtime.install` yang harus meresolusi catalog (selector menjadi artefak, gerbang installability, cek `expectedSha256`) sebelum ia bisa membangun `BeginRequest`, karena artefak terpilih masuk `input` dan lock `Artifact(sha256)`. Spec ini menaruh pencarian idempotency key hanya di dalam `begin`, setelah `BeginRequest` jadi. Akibatnya request yang di replay (client mengirim ulang setelah koneksi putus, atau setelah daemon restart) mengulang resolusi catalog, dan bisa gagal dengan error catalog padahal operasinya sudah ada, misalnya karena catalog sudah berganti. Spec 0020 tidak butuh apa pun di sini: `gather` nya dibuang saat replay, dan precheck nya berjalan setelah pencarian key. Lead scope 02 mencatat ini sebagai K12 dengan rekomendasi API baca saja yang aditif; penyelarasan K menulis bentuknya `OperationEngine::replay(&RequestOrigin)`, dan spec 0018 sudah memakai tanda tangan `-> Result<Option<BeginOutcome>, BeginError>`. Yang belum diputuskan adalah di mana ia dibangun dan bagaimana `stacklyd` membungkusnya.
+
+Fakta kode di `main`: `scheduler::lookup(inner, origin) -> Result<Option<BeginOutcome>, BeginError>` sudah ada sebagai fungsi privat yang dipanggil `begin` di dalam gerbang, dan sudah mengembalikan `Replayed` atau `NoOp { replayed: true }` untuk jawaban tanpa operasi yang tercatat. `start_operation` di `apps/daemon/src/ipc/operation.rs` memeriksa key, membangun `RequestOrigin`, memanggil `begin`, lalu memetakan hasilnya.
+
+#### Option 1: `OperationEngine::replay` di atas `lookup` yang sama, dibangun di langkah 16 bersama `replay_operation`
+
+**Pros**:
+
+- Satu fungsi pencarian untuk `replay` dan `begin`, jadi paritas hasilnya terjamin karena konstruksi; test cukup memastikan pemanggilannya, bukan logika kedua.
+- `begin` tetap otoritatif dan tidak berubah, sehingga AC-2 dan AC-3 aman tanpa test baru.
+- Tidak ada perubahan wire: reply tetap `OperationAccepted`, jadi langkah 16 tetap tanpa kenaikan minor dan tanpa pemilik kontrak tambahan.
+- Fitur 7 memiliki dan menutup API engine dan `ipc::operation` nya sendiri di foundation; spec 0018 langkah 11 tinggal memakainya.
+
+**Cons**:
+
+- Request baru dari handler yang memakainya membaca registry dua kali.
+- `replay_operation` belum punya pemanggil kontrak sampai spec 0018 langkah 11, jadi sampai saat itu ia hanya diuji test core dan unit test.
+
+#### Option 2: API yang sama, dibangun di spec 0018 langkah 11
+
+Ini bunyi penyelarasan K12 dan cadangan di spec 0018 langkah 11.
+
+**Pros**:
+
+- Dibangun bersama pemanggil pertamanya, dengan test daemon lewat wire di sesi yang sama.
+
+**Cons**:
+
+- Fitur lain mengedit modul inti engine dan `ipc::operation` milik fitur 7, file yang juga disentuh langkah 16, sehingga sesi fase 02 bisa bentrok dengan sesi foundation.
+- Fitur 7 tidak bisa ditutup di foundation karena baris scope langkah 16 sudah menyebut `replay`.
+
+#### Option 3: `begin` dengan builder yang dijalankan setelah pencarian key
+
+Misalnya `begin_with(origin, FnOnce() -> BeginRequest)`: engine mencari key dulu di dalam gerbang, lalu baru memanggil builder.
+
+**Pros**:
+
+- Satu panggilan, satu baca, dan tidak ada jendela antara pencarian dan pembuatan.
+
+**Cons**:
+
+- Kerja mahal dan bergantung keadaan luar (resolusi catalog, baca filesystem) berjalan di dalam gerbang begin, sehingga semua `begin` di daemon menunggu resolusi satu install.
+- Mengubah bentuk API yang dipakai semua fitur, padahal hanya satu handler yang butuh.
+
+#### Option 4: Peta key ke reply di memori `stacklyd`
+
+**Pros**:
+
+- Tidak menyentuh engine.
+
+**Cons**:
+
+- Basi setelah prune dan hilang setelah restart, persis kasus yang ingin ditangani; spec ini sudah menolak peta key di memori untuk `begin` dengan alasan yang sama (*Gerbang begin*).
+
+### Keputusan 30: urutan kompensator `instance_tree` dengan probe lock (K10, 2026-10-20)
+
+Operasi create spec 0020 menjalankan langkah `init` lewat pembantu yang memegang `instance.lock` (spec 0010). Kalau daemon mati selagi pembantu itu berjalan, pembantu bisa hidup lebih lama dari daemon dan masih menulis ke folder data. Setelah restart, `recover` dan dispatcher mengompensasi create itu otomatis (tidak ada titik tak bisa dibalik), dan kompensator `instance_tree` di `main` menghapus pohon instance setelah hanya memeriksa manifest. Kompensasi berjalan urut terbalik, jadi kompensator `instance_registration` spec 0020 menghapus baris registry lebih dulu; spec 0020 memberi kompensator itu probe yang sama supaya instance yang masih dipakai tetap terlihat. Port `ProcessSupervision::probe_lock` sudah ada dan tidak pernah menyimpan lock; `flock` berlaku per open file description, jadi lock milik daemon sendiri juga terbaca `Held`.
+
+#### Option 1: manifest, lalu keberadaan file lock, lalu `probe_lock`, lalu hapus; `Held` atau error probe menolak tanpa menghapus
+
+**Pros**:
+
+- Tidak pernah menghapus folder yang masih dipakai proses lain, termasuk saat probe sendiri gagal (gagal tertutup).
+- File lock yang tidak ada berarti tidak ada pemegang, jadi probe dilewati dan kompensasi tidak bergantung pada probe macOS untuk kasus umum (create yang gagal sebelum layout).
+- Pemeriksaan manifest tetap pertama, jadi keputusan `not_owned` tidak bergantung pada keadaan lock.
+
+**Cons**:
+
+- Penolakan berarti `needs_recovery` dengan hint `abandon`, yang butuh tindakan pengguna setelah lock bebas.
+- Bergantung pada aturan spec 0010 langkah 7 bahwa `execute_init` melepas `InstanceLock` daemon sebelum mengembalikan error; tanpa itu setiap init yang gagal biasa ikut ditolak.
+
+#### Option 2: hapus tanpa probe (perilaku `main` hari ini)
+
+**Pros**:
+
+- Paling sederhana dan selalu membersihkan.
+
+**Cons**:
+
+- Menghapus folder data di bawah pembantu init yang masih hidup, yang bisa terus menulis ke folder yang sudah hilang atau dibuat ulang; ini bertentangan dengan semangat BR-023 dan VAL-007.
+
+#### Option 3: tunggu lock bebas dengan batas waktu, lalu hapus
+
+**Pros**:
+
+- Kompensasi selesai sendiri setelah pembantu keluar.
+
+**Cons**:
+
+- Kompensasi memegang slot berjalan dan mutex penulis operasi untuk waktu yang tidak tentu, dan pembantu bisa tidak pernah keluar; engine tidak pernah menunggu hal di luar dirinya tanpa batas.
+
+#### Option 4: probe lock sebelum pemeriksaan manifest
+
+**Pros**:
+
+- Satu pemeriksaan lebih awal.
+
+**Cons**:
+
+- Memeriksa lock pohon yang bukan milik operasi tidak memberi informasi apa pun, dan membuat hasil `not_owned` bergantung pada keadaan lock.
+
 ## Rationale
 
 Pilihan di setiap keputusan berangkat dari dua bahaya di Context: efek ganda dan hapus yang salah sasaran. Idempotency key wajib dengan sidik jari, lock di memori dengan antrian FIFO, CAS, dan satu commit akhir yang atomik saling menutup celah: key mencegah pengulangan dari client, lock mencegah dua operasi menyentuh resource yang sama, CAS menangkap keadaan yang berubah di antara baca dan tulis, dan commit akhir membuat hasil terlihat sekaligus atau tidak sama sekali. Lock tidak pernah ditulis sebagai mutex di SQLite, dan registry tidak punya transaksi yang dibuka pemanggil (spec 0005), jadi REQ-048 terpenuhi karena konstruksi, bukan karena disiplin.
@@ -783,6 +886,10 @@ Untuk hapus, keputusan terpentingnya adalah "milik karena konstruksi": kompensas
 Sisanya memilih yang paling sederhana yang tetap jujur ke pengguna. Retensi ikut spec 0005, event membawa snapshot lengkap supaya client tidak perlu request tambahan, progress satu kali per detik sesuai asumsi spec 0005, batas 8 dan 64 cukup untuk enam service sekaligus, dan cancel yang terlambat dilaporkan apa adanya. API engine dibuat eksplisit dan sempit (begin, langkah bertanda, catatan dibuat, finalize, kompensator, factory, lock internal) karena spec 0010 dan fitur 18, 20, 49, 51 dibangun di atasnya secara paralel.
 
 Keputusan 28 (2026-10-20) memilih Option 1, sama dengan jawaban K11 lead foundation. Yang menentukan adalah perbedaan antara data dan turunan: item dan rule adalah fakta tentang satu kegagalan yang tidak bisa dibangun ulang setelah restart, sedangkan hint adalah fungsi murni dari kode dan details (spec 0006 *Hint*), jadi menyimpannya hanya menambah salinan yang bisa basi. Kolom baru lewat migrasi 4, bukan edit 0002, karena aturan fixture beku sudah berlaku untuk v2 dan v3 walau app belum dirilis, dan karena registry di Mac pengembang yang sudah membuka 0002 akan masuk recovery mode kalau checksum nya berubah. Batas 65 536 byte untuk `failure_items` dipilih supaya satu ringkasan `failed` tetap jauh di bawah frame kontrol 1 MiB di `get` dan event, yang tidak punya anggaran halaman seperti `list`, sementara 100 item dengan beberapa field pendek, kasus nyata `secret.needs_secret` dan issue manifest, muat dengan longgar; yang terpotong tetap terhitung di `omitted`, mekanisme yang sudah dipakai `ErrorBody::with_items`. `OperationError::rule()` menjadi `Option<Rule>` seperti `rule()` di error domain dan core, karena satu satunya override hari ini adalah test daemon, dan tipe domain membuat CHECK `BR-NNN` dan baca ulang dari registry pasti cocok. Fungsi peta bersama untuk `failure_body` dan `rejected()` menutup risiko kode yang sama membawa hint atau item di satu jalur (sinkron) tetapi tidak di jalur lain (tersimpan), dan urutan details, item, rule membuat `omitted` dari engine dan dari `ItemSpec.max` menyatu tanpa logika khusus.
+
+Keputusan 29 (2026-10-20) memilih Option 1, sama dengan rekomendasi lead untuk K12. Yang menentukan adalah pemilik dan paritas: pencarian key adalah aturan inti engine (Keputusan 1 sampai 3), jadi API yang membacanya sebelum `begin` harus memakai fungsi yang sama dan dimiliki fitur yang sama, bukan disalin di handler fitur lain. Membangunnya di langkah 16 membuat fitur 7 tertutup di foundation, menjauhkan sesi fase 02 dari file inti engine, dan tidak menyentuh kontrak karena reply nya tetap `OperationAccepted`. Option 3 ditolak karena memindahkan kerja mahal ke dalam gerbang begin, satu satunya titik serial semua mutasi. `stacklyd` mendapat `replay_operation` dengan fungsi bersama untuk key, origin, dan peta hasil, supaya jawaban lewat `replay` dan lewat `begin` tidak pernah berbeda untuk request yang sama, dan `Replay.input` memberi handler bahan untuk reply fiturnya tanpa mengulang kerja.
+
+Keputusan 30 (2026-10-20) memilih Option 1, sama dengan keputusan K10 lead foundation dan teks spec 0020. Yang menentukan adalah arah kegagalan: kompensasi yang ragu harus berhenti dan menyerahkan ke pengguna, bukan menghapus, karena data yang terhapus di bawah proses hidup tidak bisa dipulihkan, sedangkan `needs_recovery` selalu punya jalan keluar lewat abandon. Pemeriksaan keberadaan file lock lebih dulu membuat jalur umum tidak bergantung pada probe, dan aturan spec 0010 langkah 7 (lepas `InstanceLock` sebelum error) membatasi penolakan ke satu kasus nyata, pembantu yang hidup lebih lama dari daemon. Kodenya dibangun spec 0020 milestone 1 langkah 3, karena satu satunya jalan yang bisa meninggalkan pemegang lock adalah `init` milik create, dan test nya dengan `FakeProcessSupervision` hidup bersama pekerjaan itu.
 
 ### Keputusan kecil
 
@@ -804,6 +911,11 @@ Diambil saat menulis spec, masing masing dengan pilihan kedua:
 - **Aturan hint**: empat nilai (`auto_compensate`, `resume`, `abandon`, `manual`) dihitung dari titik tak bisa dibalik, sifat jenis, factory, dan langkah yang terputus. Kedua: satu hint generik, yang tidak memberi tahu pengguna apa yang aman dilakukan.
 - **Letak `ScriptedWork`**: `#[doc(hidden)] pub mod testing` di `stackly-core`, karena `stackly-testkit` tidak boleh bergantung pada core (spec 0001) dan test `stacklyd` juga butuh. Kedua: fitur Cargo `test-support`, menambah konfigurasi.
 - **Abandon tidak memakai slot berjalan**: pemulihan yang diminta pengguna tidak boleh tertahan antrian penuh. Kedua: abandon antri seperti operasi biasa.
+- **Hasil `replay`** (keputusan 29): `Option<BeginOutcome>`, tanda tangan yang sudah dipakai spec 0018, karena jawaban tanpa operasi yang tercatat harus di replay sebagai `NoOp`, bukan sebagai operasi biasa. Kedua: enum `ReplayOutcome` sendiri, yang menduplikasi varian `BeginOutcome`.
+- **Error `replay`**: hanya `NotReady`, `ShuttingDown`, `KeyReused`, dan `Registry`; `InvalidRequest` dan `PayloadTooLarge` tidak berlaku karena belum ada `BeginRequest`. Kedua: `replay` menerima `BeginRequest` utuh, yang memaksa handler menyelesaikan kerja mahalnya dulu.
+- **Test wire `replay_operation`**: ditunda ke pemanggil kontrak pertamanya (`runtime.install`, spec 0018 langkah 11); fitur 7 menguji lewat test core dan unit test fungsi bersama. Kedua: kait opt in di `TestStartingMethod` (`provisional: F10`), yang menambah jalur di kode test sementara yang akan diganti fitur 10.
+- **ID untuk aturan K10 dan `data_not_empty`**: AC-22 baru, bukan kalimat tambahan di AC-8 seperti usulan spec 0020 butir 3, karena AC-8 sudah dicentang di `verify.md` fitur 7 dan aturan baru dibangun fitur lain; ID baru menjaga status verify tetap jujur. Kedua: memperluas AC-8 dan membuka ulang verify nya.
+- **Daftar API**: blok *API engine* kini mencantumkan `BeginOutcome::NoOp`, `NoOpOutcome`, dan `BeginError::Rejected` yang sudah ada di `main` sejak closeout, karena hasil `replay` merujuknya. Kedua: membiarkan daftar tertinggal dari kode.
 
 ## Cross check
 
@@ -845,3 +957,9 @@ Cross check model lain atas ronde 2 menambah, atas persetujuan engineer: untuk j
 ## Perubahan 2026-10-20 (keputusan 28)
 
 Menutup baris keputusan di Follow-up dari review 2026-10-20. Bagian [index.md](index.md) yang berubah: AC-16, AC-17, AC-18; *Peta modul* (storage); *Model domain* (`FailureError` tanpa `hint`, dengan `rule`, dan baris `FailureItem` baru dengan `kind` bertipe `ReasonCode`); *Model data* (kolom `failure_items` dan `failure_rule`, dua CHECK, paragraf migrasi `0004_operation_failure.sql`); *Port registry*; *API engine* (`OperationError::items()` dan `rule()` bertipe `Option<Rule>`); *Kegagalan dan error* (penyimpanan, pemangkasan, dan fungsi peta bersama di `stacklyd`); *Batas*; asumsi spec 0011; *Value sourcing*; *Critical test scenarios*; *Build plan* milestone 5 langkah 16; *Consequences*; dan *Follow-up* (baris keputusan dicentang, baris baru untuk spec 0005, 0006, 0011, dan sisa antrian update spec ini). Tidak ada perubahan di `crates/protocol`: `ErrorBody` sudah punya `with_hint`, `with_items`, dan `with_rule`.
+
+## Perubahan 2026-10-20 (keputusan 29 dan 30)
+
+Menerapkan antrian lead scope 02 di Follow-up: K10, K12, blok usulan spec 0020 untuk spec 0007, baris `BusyPolicy` dari Follow-up spec 0010 (K1), dan post alignment 0007 butir 1. Bagian [index.md](index.md) yang berubah: AC-21 dan AC-22 baru (ID lama tidak berubah); *Peta modul* (`stacklyd`); *API engine* (`replay`, `BeginOutcome::NoOp`, `NoOpOutcome`, `BeginError::Rejected`, dan butir *Commit registry terakhir*, *Resource baru*, *Catatan dibuat*, *Bagian kritis di task engine*); *Tabel resume* (baris `create_instance` sendiri, penunjuk *Alur install* spec 0018); *Idempotency* (butir replay dan `replay_operation`); *Kompensasi dan primitive hapus* (urutan `instance_tree` K10); *Asumsi lintas spec* (*Untuk spec 0010*: `Reject` untuk create); *Value sourcing*; *Key invariants*; *Critical test scenarios*; *Build plan* langkah 16 dan paragraf *Dibangun di luar spec ini*; *Consequences*; dan *Follow-up*. Tidak ada perubahan wire, migrasi, atau kode error baru: `instance_locked` dan `lock_probe_failed` adalah detail `ReasonCode` di catatan dibuat, bukan kode katalog. Lead program foundation menerima keputusan 29 dan 30 pada 2026-10-20 (user mendelegasikan keputusan ke opsi rekomendasi), termasuk Follow-up `NotReady` lawan fase `Ready`.
+
+Cross check model lain (Sonnet 5.5, read only) atas update ini menemukan 13 butir. Yang kecil dan lokal langsung diambil dengan rekomendasinya (brief lead mengizinkan): error `symlink_metadata` menjadi `lock_probe_failed` dan alasan pemeriksaan file lock ditulis; manifest yang tidak ada atau milik operasi ini lanjut; probe yang dilewati terlihat dari panggilan `FakeProcessSupervision`; `not_created` pada catatan `created` membuat context tidak bisa dipakai lagi; `replay_operation` memakai `operations().writer()`; peta hasil menjadi fungsi murni dengan varian yang tidak mungkin dipetakan ke `internal.unexpected`, diuji tanpa wire; `Replay.input` untuk `NoOp` tercatat adalah input request pertama, `NoOp` dikenali dari stage `no_op`, `Replay::operation_id()` untuk log request, dan `Debug` tanpa `input`; resep `replay_operation` sekali lagi saat `start_operation` mengembalikan `replayed` setelah `replay` meleset; rincian harness test AC-21; AC-21 menyebut fase `Created` dan `Recovering`; operasi latar tidak punya key; abandon selagi lock dipegang meninggalkan sisa untuk purge fitur 54; *Resource baru* menyebut restore sebagai instance baru; dan langkah spec 0020 yang memenuhi AC-22. Satu butir menjadi Follow-up karena menyentuh keputusan lama: butir (1) *Urutan cek `begin`* tertinggal dari kode di fase `Ready`. Dua butir dilaporkan ke lead, tidak diubah di sini: baris lain spec 0020 (95, 1029, 1077, 1095) yang masih menyebut update ini tertunda, dan start rekonsiliasi yang tidak disebut di butir *Untuk spec 0010* (sudah begitu sebelum update ini).
