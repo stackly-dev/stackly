@@ -378,7 +378,7 @@ Daemon membaca pipe, menyamarkan, dan menulis log.
 
 **Cons**:
 
-- Fitur 20 harus memperluas create secara additive, dan spec ini lebih besar.
+- Fitur 20 harus memperluas create secara additive, dan spec ini lebih besar. *(2026-10-20: pilihan ini tetap, tetapi fitur 20 kini mengganti handler create sementara, bukan memperluasnya; lihat Perubahan 2026-10-20, K1.)*
 
 #### Option 2: Spec ini tanpa create
 
@@ -841,3 +841,49 @@ Update `/architect` yang membuka build langkah 2 dan seterusnya. Keputusan engin
 - **Config revision awal**: `config_values` disimpan sebagai `ConfigValuesJson` (teks JSON object kanonik yang dibuat dan dibaca core), dan `InsertConfigRevision` tidak menaikkan revision instance. Alasannya di rationale spec 0005.
 - **Sesi paralel**: langkah 2a, 3, dan 4 bisa menjadi tiga sesi setelah langkah 2. Langkah 2a dan langkah 0 spec 0011 menyentuh file registry yang sama, jadi keduanya berjalan berurutan, bukan sebagai dua sesi penulis bersamaan. Langkah 2 boleh berjalan bersamaan dengan langkah 0 spec 0011.
 - **Cross check** (Sonnet 5.5, baca saja) atas update ini menemukan celah yang diperbaiki atas persetujuan engineer: bentuk `ProcessObservation` (`instance`, `identity`, `observed_at` dari jam supervisor) dan observasi terakhir menurut `id`, bukan waktu; milestone 2 butuh langkah 4 spec 0011 (`resolve_for_start` dan `put`), bukan hanya `secret::delivery`; langkah 2 butuh langkah 1 spec 0011 yang membuat `InstanceBlocker`; sumber setiap field config revision awal; daftar conformance langkah 2a; dan catatan bahwa konflik revision di *Commit* baru menangkap perubahan config setelah fitur 29.
+
+## Perubahan 2026-10-20 (fase 02, K1-K9)
+
+Update `/architect` dari usulan fase 02 (spec 0018, 0019, 0020, 0022, dan 0023) dan keputusan lead fondasi K1 sampai K9, ditambah butir K10, K12, K14, K15, dan K16 yang menyasar spec ini. Urutan prioritas sumber: keputusan K lebih dulu, lalu inventaris usulan fondasi (`docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md`, bagian *Spec 0010*, P1 sampai P24 dan butir gabungan 1 sampai 19), lalu blok usulan spec 0021 dan 0023. Ini perubahan teks saja: nomor langkah build dan ID AC tidak berubah, dan setiap tambahan per langkah ada di blok *Tambahan per langkah dari fase 02 dan keputusan K1 sampai K9* di bawah *Build plan*.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Create sementara | Paragraf *Create sementara* bertanda `// provisional: F20 until F20 step 9` menggantikan *Create minimal*: validasi di method, `provider.revision` `Option` di wire tetapi `None` ditolak `request.invalid_params`, `begin` dengan `creates_resource: true`, `LockKey::InstanceName`, dan `BusyPolicy::Reject`, tahap `validate`, `secrets`, dan `layout` reversible, `register` langkah pertama yang `reversible: false`, kegagalan di `register` atau `init` meninggalkan `needs_recovery` dan instance `failed`, tanpa kompensasi penuh, dan `Instance::new` fallible sebagai preferensi | K1 butir 1, 4, dan 5; P3; gabungan 12 |
+| Target fitur 20 | Teks 0020:869 ditambahkan sesudahnya sebagai target fitur 20, plus `StageName::PIN` dan test urutan tahap di langkah 7 spec 0020 | K1 butir 2 dan 6; P3, P9 |
+| Create yang terputus | AC-11 dan *Rekonsiliasi*: create sementara yang terputus sesudah `register` menjadi `needs_recovery`, instance `init_failed { interrupted }`; test langkah 14 dan fitur 14 mengharapkan `needs_recovery` lalu abandon | K1, K9 risiko 3 |
+| `BusyPolicy` | Asumsi spec 0007: Queue untuk start dan reload pengguna, Reject untuk create | K1 butir 3; P8; gabungan 14 |
+| Precheck dan replay | Validasi dari registry berjalan sebagai precheck sesudah pencarian key, atau handler memanggil `OperationEngine::replay` lebih dulu | K12 |
+| Secret di create | `Validate` params create memanggil `SecretInput::field_errors` per entri `secrets`; `put` memakai `SecretFieldRule::from_setting` dan helper `secret::error::classify_create_failure` spec 0011; konversi `SecretText` di `ipc::secret`, tidak pernah `.expose()` di `ipc::instance` | K14, K15 |
+| Prasyarat langkah 13 | closeout fitur 7, langkah 2a, `failure_items` (langkah 16 fitur 7), dan langkah 5 spec 0011 (`codes::secret` dan kompensator `secret_ref`) sebelum langkah 13 dan 14 | K1 SEQ, K11, K12 risiko 3, K13, urutan lead fondasi di log koordinasi 2026-10-20 |
+| `PortProbe` | `try_bind` dengan `socket2`, `BindOptions { reuse_addr: true, v6only }`, hasil `Free`, `InUse`, `Denied`, `Unavailable`; `Denied` dan `Unavailable` di port `Fixed` menjadi `supervisor.endpoint_unavailable` sebelum `journal`; `bound` yang `Denied` atau `Unavailable` tidak dipakai ulang; bind efemeral `:0` tanpa `reuse_addr`; exit dini memakai opsi yang sama dan hanya `InUse` memberi `endpoint_in_use`; AC-17 dan test port ditulis ulang dengan listener di alamat yang persis sama; risiko sisa di *Consequences* | K2; P4; gabungan 1 dan 2 |
+| `socket2` | baris core di peta modul; versinya lewat update spec 0001 | K2 SEQ; gabungan 1 |
+| Probe | `ProbeOutcome`, reason `probe_ok`, `connect_failed`, `timeout`, `protocol_error`, `unexpected_status` (`status <n>`), dan `check_failed` (format 0019:331 atau `exit <code>`); timeout `exec` tetap `timeout`; setiap detail tersamar; `supervisor::probe` modul folder | K3; P14, P18, P21; gabungan 3 |
+| Probe native | dispatch `ProbeSpec::Native` ke `supervisor::probe::native::run` dengan connect yang bisa diganti di test | P19 (usulan spec 0023); gabungan 4 |
+| Versi protokol | tidak ada minor yang ditetapkan di muka; `CURRENT` di main ditambah 1 saat merge | K4 butir 1 dan 6 |
+| Field wire baru | `InstanceSummary.ownership` (`InstanceOwnership`, default `manual`, doc comment yang membedakannya dari kolom registry dan `Ownership` environment) dan `initialized` (default true); `provider.revision` opsional; DTO dan fixture `instance.removed` tanpa pernah dikirim sebelum fitur 20 | K4 butir 2 dan 3; P1, P6, P22; gabungan 8, 10, 11 |
+| Kode `instance.*` | sembilan baris bertanda *(fitur 20, spec 0020)*, dibangun langkah 8 spec 0020; `instance.name_invalid` boleh lebih dulu di langkah 12; `instance.endpoint_invalid` dilebarkan; `supervisor.capability_unsupported` dibedakan | K4 butir 4; P7; gabungan 13 |
+| Kolom error `instance.create` | dipisah antara create sementara dan target fitur 20 | P2; gabungan 11 |
+| `socketPath` | dirender dari `socketName` paket pinned dengan port efektif, di cache, atau null | P5; gabungan 9 |
+| Resep `statusSeq` Swift | langkah 12 berhenti di decode dan test kontrak; resep dijalankan langkah 16 spec 0013 | K16 butir 3 dan 4 |
+| Fixture test | `DaemonConfig.extra_log_sinks` (field biasa, default kosong, tanpa feature gate) dan `supervisor::fixture::pin_package`, dengan `install_fake` di atasnya | K5; P15; gabungan 16 |
+| `ChildRole::RuntimeCheck` | tanpa lock, Capture, stdin Null, timeout langsung `SIGKILL` tanpa `HELPER_TERM_GRACE` (AC-15, *Aturan pembantu*); fallback `Probe` ditolak; adapter tidak me match `ChildRole` secara exhaustive; aturan opsional langkah 15 | K6; P10; gabungan 6 |
+| Decision dan Security model | dipersempit: hanya daemon yang men spawn, hanya lewat `ProcessSupervision`; `core::runtime::validate` hanya dengan `RuntimeCheck`; pengecualian codesign | K6 butir 2, K9 butir 1 |
+| Launch check | `check_launchable` di tahap `spawn` (`start_failed { quarantined }`, `runtime.quarantined`); `classify_early_exit` hanya untuk child daemon ini dengan `Some(Signaled(9))` yang tidak dikirim daemon, lebih dulu dari port probe; `FailureCode` `quarantined` dan `binary_rejected_by_os` dengan test pin nya di satu commit; yang di merge belakangan di antara langkah 7 dan langkah 8 spec 0018 memasang keduanya; test native broken signature lewat `spawn_main`; risiko salah klasifikasi di *Consequences* | K7 butir 1, 2, 4, 5, dan 6; P11, P12; gabungan 7 |
+| Signature `discard` | `Result<Option<ExitStatus>, ProcessError>`: `waitpid(WNOHANG)` lebih dulu, child yang sudah mati mengembalikan `Some(status)` tanpa sinyal, selain itu `SIGKILL`, reap, lalu `None`; tahap `identity` meneruskan `Some` ke `classify_early_exit` | K7 butir 3 (diputuskan update ini, lihat di bawah) |
+| Stdin pembantu | modul daun `process::stdin`, satu satunya tempat `expose()` di adapter proses, dengan entri `EXPOSE_ALLOWED` di commit yang sama | K8 butir 1 dan 2 |
+| `Stdin::Text` | dikirim sebagai `StdinSource::Bytes(SecretValue::new(text))`; kegagalan `SecretValue::new` menjadi `init_step_failed`, tidak pernah `config_render_failed` | K8 butir 3; P13; gabungan 5 |
+| Helper codesign | memakai helper spawn dan penghentian `pub(crate)` di `process`; pengecualian bernama `src/codesign` di aturan lokasi spawn langkah 15 | K9 butir 1 dan 2 |
+| `probe_lock` dan lock init | `probe_lock` menjawab `Free` untuk file yang tidak ada; dipakai kompensator `instance_tree`; `execute_init` melepas `InstanceLock` sebelum mengembalikan error | K10 SEQ butir 4 dan 5 |
+| Asumsi spec 0008 | fitur 14 membangun create, start, dan stop; `get` opsional sebagai alias `inspect` spec 0022 | P23; gabungan 15 |
+| Bukti native | *Menjalankan test di Mac ini* mengutip AC-10, AC-11, dan AC-13 spec 0019 serta AC-8, AC-9, dan AC-11 spec 0023 | P16, P20; gabungan 17 |
+| Consequences dan Follow-up | kalimat create minimal diganti, tiga bullet baru, baris fitur 14 dan fitur 20 ditulis ulang, baris fitur 18 dan spec 0007 ditambahkan | K1, K2, K7; gabungan 18 |
+
+**Keputusan yang diambil update ini.** K7 butir 3 meminta keputusan sebelum langkah 3 di merge, tetapi tidak menetapkan jawabannya. Pilihan update ini mengikuti rekomendasi architect: `discard` melaporkan status child tertahan yang sudah mati, sehingga `classify_early_exit` juga menjangkau tahap `identity` (binary yang dibunuh OS saat masih tertahan tidak lagi terbaca `identity_capture_failed`). Runner up: `discard` tetap `Result<(), ProcessError>` dan tahap `identity` tidak pernah mengklasifikasi, yang lebih sederhana tetapi membuat kasus itu menghabiskan budget restart. Lead fondasi boleh membalik pilihan ini sebelum langkah 3.
+
+**Sengaja tidak diterapkan di spec ini:**
+
+- Centang Follow-up fitur 15 dan fitur 20 (inventaris gabungan 19): urusan `/sync` lead; baris fitur 20 ditulis ulang, tidak dicentang.
+- Teks spec 0007 (`BusyPolicy` di 0007:530 dan aturan `instance_tree`, K1 butir 3 dan K10), tabel modul spec 0011 (K8 butir 1, sudah di main lewat `b0e2346`), mirror spec 0004 (K9, sudah di main), dan dependency spec 0001 (`socket2`, K2, sudah di main lewat `ea759f6`): di luar folder spec ini, dicatat di Follow-up atau dirutekan lewat lead.
+- Kode apa pun, termasuk entri `EXPOSE_ALLOWED` dan konstanta `FailureCode`.
+- Fallback `ChildRole::Probe` (P10, ditolak K6 butir 4) dan kompensasi penuh untuk create di fitur ini (P3 versi asli, ditolak K1 butir 4).
+- Nomor minor yang ditetapkan di muka (inventaris konflik 7, ditolak K4 butir 1).
