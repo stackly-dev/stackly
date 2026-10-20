@@ -268,3 +268,14 @@ Tiga sesi build fitur 2 mengambil beberapa pilihan kecil yang tidak disebut spec
 
 XCUITest pertama kini milik fitur 68, karena spec 0013 membuktikan shell dengan Swift Testing dan record manual. `StacklyTestSupport` menjadi product package `clients/swift` supaya test `StacklyUI` bisa memakai `.evidence`, dan integration test Swift yang butuh `stacklyd` memakai `STACKLY_DAEMON_BIN` dengan pola `BLOCKED` saat binary tidak ada. Tidak ada keputusan spec ini yang berubah.
 
+
+## Perubahan 2026-10-20 (ditambah fase 02)
+
+Dari inventaris `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md` bagian *Spec 0002*; semua resolusi yang direkomendasikan diambil (keputusan lead scope 02 atas nama user). Keputusan spec ini tidak berubah.
+
+- Folder `evidence/compatibility/<runId>/` (spec 0018) masuk tabel *Folder dan file*; kalimat evidence otomatis di git, baris `evidence check`, invariant salinan record, dan sumber fitur 65 di Consequences menyebut kedua folder.
+- *Menjalankan test di Mac ini* mencatat dua langkah `--cleanup` baru: pencabutan agent test `dev.stackly.test.agent.*` tanpa lock (spec 0015) dan TERM lalu KILL untuk proses `/stackly-test-` (spec 0018). Spec ini hanya menjelaskan apa yang jalan dan kapan relatif terhadap run native; semantik lock dan urutannya ditunjuk ke spec 0003, supaya kedua spec tidak bergeser satu sama lain.
+- Gate test `STACKLY_NATIVE_NETWORK=1` (spec 0018) dicatat di sebelah urutan run native.
+- Yang tidak diubah di sini: Follow-up `--cleanup` (proses sisa di luar spike) dibiarkan terbuka sampai `/sync` lead setelah milestone 5 langkah 16 spec 0018 dan milestone 2 langkah 8 spec 0015 mendarat; penambahan `cargo xtask catalog check` ke pre commit hook (spec 0017) adalah item `/sync` untuk `AGENTS.md`, karena spec ini tidak mendeskripsikan hook.
+
+Perubahan ini dibaca model lain (Sonnet 5.5, baca saja) sebelum commit. Semua butir inventaris dinilai sudah diterapkan dengan benar; perbaikan kata yang diusulkannya ikut diterapkan (sumber fitur 65 menjadi lima tempat, dan siapa yang menulis kedua folder evidence).
