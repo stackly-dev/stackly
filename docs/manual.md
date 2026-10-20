@@ -169,7 +169,7 @@ Bagian ini untuk F13 di [scope/ui-macos.md](scope/ui-macos.md) (spec 0013 cek 6,
    - Satu baris per instance (nama, label provider, status), urut nama.
    - Subjudul "1 instance" atau "{n} instances", dan badge sidebar sama dengan jumlah itu.
    - `STACKLY_ROOT="$R" $S instance start $ID` (atau stop) mengubah status barisnya tanpa memuat ulang daftar.
-   - VoiceOver membaca satu elemen per baris, misalnya "demo, <provider>, Status: Running".
+   - VoiceOver membaca satu elemen per baris, misalnya "demo, (nama provider), Status: Running".
    - Bagian "instance yang dihapus hilang dari daftar" dilewati dulu, karena CLI belum punya perintah hapus.
 5. Matikan VoiceOver, lalu bersihkan seperti langkah D.5.
 
