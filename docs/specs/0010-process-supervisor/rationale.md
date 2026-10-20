@@ -901,3 +901,19 @@ Dari `docs/scope/coordination/post-alignment/post-0010.md` (workflow lead `wf_fa
 | `omitted` | enam kode yang boleh membawa `fields` mencantumkan `omitted` dan tidak punya `items` | D7 |
 
 Cermin di spec 0019, 0009, dan 0023 (butir 3 dan 4) di luar folder spec ini dan dirutekan lewat lead.
+
+## Penyelarasan teks setelah build 2026-10-20
+
+Update `/architect` sesi `arc-foundation-update`. Teks saja: kode di `main` sudah sesuai, nomor langkah build dan ID AC tidak berubah, dan tidak ada keputusan baru. Setiap butir sudah diambil lead atas delegasi user (log koordinasi `docs/scope/coordination/01-foundation.log.md`, bagian Keputusan) atau diterima reviewer (`docs/reviews/2026-10-20-f10-process-supervisor.md`).
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Keputusan exit | *Asumsi lintas spec*: kalimat `LockTable::holder` dan `try_lock_internal` diganti. Commit actor memutuskan arti exit dari aggregate yang baru dibacanya dengan CAS revision (bullet baru di *Commit*), dan stop yang menemukan prosesnya sudah keluar menutup `stopping` sendiri (*Stop* langkah 6). Alasannya: operasi stop memegang `LockKey::Instance` selama menunggu exit, jadi `try_lock_internal` di handler exit justru gagal di kasus terpenting | review fitur 10 Major 1 (putaran 1 dan 2); merge `fa6d6a1` dan `b2c7fae` |
+| `InstanceSummary.initialized` | `Option<bool>` dengan `#[serde(default)]`, dibaca true lewat `is_initialized()`; daemon mengirim `Some(..)`. Baris *Value sourcing* ikut | keputusan developer langkah 12 yang diterima lead (batas typeshare) |
+| Jeda respawn | *Restart policy*: jeda di dalam operasi respawn sistem dipegang operasi itu (stop pengguna mendapat `resource.busy` sampai dibatalkan); respawn memakai `BusyPolicy::Reject` dan dicoba lagi setiap `restart_base_delay` saat `begin` menjawab `Busy`, `NotReady`, atau `QueueFull`, selama instance masih `recovering` dengan desired `running`. Catatan di AC-7 menegaskan arti "jeda di luar operasi pengguna" tanpa mengubah teks kriterianya | keputusan lead saat merge langkah 9 dan 11; temuan `chk-f10-m3` |
+| Exit saat desired `stopped` | *Restart policy*: exit tanpa permintaan saat desired `stopped` berakhir `stopped` (`stop_begin` lalu `exited`), bukan `failed`, tanpa respawn dan tanpa memakai budget | merge `fa6d6a1` |
+| Fase `Ready` spec 0007 | *Rekonsiliasi* langkah 7: kalimat "sebelum itu `begin` menjawab `NotReady`" dicabut, karena menurut keputusan 31 spec 0007 `begin` di fase `Ready` diterima dan antri; langkah 7 tetap berjalan setelah `start()` lewat `start_reconciled()` | keputusan 31 spec 0007, update yang sama |
+| Konsistensi yang ikut | `NoOp` yang menulis desired state mengikat key (*Permukaan IPC*); `Value sourcing` create sementara menyebut `generate` untuk secret field yang tidak dikirim; skenario crash loop membedakan jeda pertama dan jeda di dalam operasi respawn; RISK-03 dan RISK-14 di teks `expected`; batas ulangan respawn dan akibat error `begin` lain; Swift membaca `initialized` `nil` sebagai true | cross check model lain (Sonnet 5.5, baca saja) atas update ini |
+| `Next::Settled` di start | *Startup transaction* dan tabel *Kode error*: operasi start yang commit exit nya berakhir `stopped` gagal `supervisor.instance_stopping`, bukan `internal.unexpected` | review fitur 10 Nit putaran 1, tertutup di putaran 2 |
+
+**Sengaja tidak diterapkan di update ini:** temuan review fitur 10 lain yang menyebut `/architect` (kode kegagalan untuk keluarga tahap verify pada respawn, dan aturan `Skip::ToNewline` saat resume spool) tetap Minor yang dicatat lead untuk Follow-up, karena belum ada keputusan yang diambil untuk keduanya.
