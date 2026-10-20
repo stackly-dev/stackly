@@ -1,4 +1,4 @@
-//! `cargo xtask runtime check`: rules 1 to 9 of spec 0003 (*Key
+//! `cargo xtask runtime check`: rules 1 to 10 of spec 0003 (*Key
 //! invariants*) on `runtimes/inventory.toml` and `evidence/runtime/`.
 //! Read only; runs on any OS, by hand on this Mac.
 
@@ -21,6 +21,7 @@ pub fn run(root: &Path) -> Result<ExitCode> {
     let inventory = Inventory::load(root)?;
     let mut violations = inventory.violations(root);
     violations.extend(inventory.required_line_violations());
+    violations.extend(inventory.stable_violations());
     let evidence = read_evidence(&root.join(EVIDENCE_DIR))?;
     let runs = evidence.runs;
     violations.extend(evidence.violations);
