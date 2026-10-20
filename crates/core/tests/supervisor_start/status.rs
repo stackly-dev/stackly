@@ -9,6 +9,7 @@ use std::time::Duration;
 use jiff::SignedDuration;
 use stackly_domain::{HealthState, InstanceLifecycle, OperationState, ReadinessState};
 use stackly_platform::ChildRole;
+use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::{Rig, Spec, replace};
 
@@ -22,6 +23,11 @@ async fn wait_for(what: &str, mut ready: impl FnMut() -> bool) {
 
 #[tokio::test]
 async fn two_failed_probes_turn_ready_into_not_ready_and_never_touch_the_process() {
+    let ev = evidence!(
+        covers = ["REQ-012", "AC-012"],
+        kind = Kind::Fixture,
+        expected = "two failed readiness probes turn ready into not_ready with reason connect_failed while the lifecycle stays running, nothing is signalled, no second spawn happens, and readiness recovers on the same process when the server returns",
+    );
     let rig = Rig::new().await;
     let id = rig.instance(&Spec::default());
     let op = rig.start(id).await;
@@ -62,6 +68,7 @@ async fn two_failed_probes_turn_ready_into_not_ready_and_never_touch_the_process
         rig.sup.status(id).process.map(|process| process.pid),
         Some(spawn.pid)
     );
+    ev.pass();
 }
 
 #[tokio::test]

@@ -380,7 +380,7 @@ fn a_recorded_pid_that_another_program_owns_now_is_never_signalled_and_the_insta
     let ev = evidence!(
         covers = ["AC-067", "REQ-011", "REQ-013"],
         kind = Kind::Fixture,
-        expected = "when the last recorded pid belongs to another program with another start time and the instance lock is free, the next stacklyd takes the old process for gone, never signals that program, and starts the instance again",
+        expected = "RISK-14 (status from an old PID): when the last recorded pid belongs to another program with another start time and the instance lock is free, the next stacklyd takes the old process for gone, never signals that program, and starts the instance again",
     );
     let root = TestRoot::new().expect("a test root can be created");
     let (id, runtime_id) = leave_a_dead_instance(&root);
@@ -418,7 +418,7 @@ fn a_recorded_pid_with_the_lock_held_by_someone_makes_the_instance_unknown_and_n
     let ev = evidence!(
         covers = ["AC-067", "REQ-013"],
         kind = Kind::Fixture,
-        expected = "when the last recorded process cannot be proven and instance.lock is held by another process, the next stacklyd makes the instance unknown with a dataInUse blocker, refuses start and stop with supervisor.identity_unproven, and signals nothing",
+        expected = "RISK-14 (status from an old PID): when the last recorded process cannot be proven and instance.lock is held by another process, the next stacklyd makes the instance unknown with a dataInUse blocker, refuses start and stop with supervisor.identity_unproven, and signals nothing",
     );
     let root = TestRoot::new().expect("a test root can be created");
     let (id, runtime_id) = leave_a_dead_instance(&root);

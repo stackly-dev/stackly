@@ -533,8 +533,13 @@ async fn an_unknown_instance_is_adopted_by_the_recheck_once_its_process_is_prove
     assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Unknown);
 
     rig.processes().set_holds(identity.pid, HoldsFile::Yes);
+    // The registry row and the actor's status change in two steps: wait for
+    // everything the assertions below read.
     wait_for("the recheck adopts the process", || {
+        let status = rig.sup.status(id);
         rig.instance_row(id).lifecycle() == InstanceLifecycle::Running
+            && status.process.is_some_and(|process| process.adopted)
+            && status.blocker.is_none()
     })
     .await;
 
