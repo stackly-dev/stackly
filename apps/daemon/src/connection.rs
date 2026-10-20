@@ -16,7 +16,7 @@ use std::time::Duration;
 use stackly_ipc::{
     FrameReader, FrameWriter, FramedConnection, IpcError, PeerCred, REJECT_WRITE_TIMEOUT,
 };
-use stackly_protocol::codes::{daemon, events, internal, ipc, protocol, request};
+use stackly_protocol::codes::{catalog, daemon, events, internal, ipc, protocol, request};
 use stackly_protocol::events::Subscribed;
 use stackly_protocol::handshake::{
     ClientInfo, ClientKind, DaemonIdentity, HandshakeAccepted, HandshakeParams, contract_drift,
@@ -878,8 +878,24 @@ async fn dispatch(
         | Call::OperationAbandon(_)
         | Call::OperationGetStats => (Err(not_served(method)), None),
         // provisional: F17 step 6 (the catalog subsystem and its handlers)
-        Call::CatalogListProviders | Call::CatalogGetProvider(_) => (Err(not_served(method)), None),
+        Call::CatalogListProviders | Call::CatalogGetProvider(_) => (Err(no_catalog_yet()), None),
     }
+}
+
+/// `catalog.unavailable` (reason `not_configured`) with its static hint,
+/// the answer to both catalog methods until the daemon loads a catalog.
+/// provisional: F17 step 6
+fn no_catalog_yet() -> Box<ErrorBody> {
+    let body = ErrorBody::new(
+        &catalog::UNAVAILABLE,
+        "the provider catalog is not available",
+    )
+    .with_detail("reason", "not_configured");
+    let body = match catalog::hint(body.code(), body.details()) {
+        Some(hint) => body.with_hint(hint),
+        None => body,
+    };
+    Box::new(body)
 }
 
 /// `request.unknown_method` for a method in the contract that this build
