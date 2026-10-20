@@ -32,7 +32,10 @@ use super::error::{EndpointFault, SupervisorError, UnavailableReason};
 use super::exit::{crash_reason, finish_process, remove_material, spawn_exit_task};
 use super::init::config_invalid;
 use super::lock::{guard_last_observation, take_lock};
-use super::persist::{CommitMode, apply_event, blocking, commit_instance, read_instance};
+use super::persist::{
+    CommitMode, ExitRecord, apply_event, apply_exit, blocking, commit_instance, read_instance,
+    read_instance_actor,
+};
 use super::prepare::{Checks, Prepared, prepare};
 use super::readiness::spawn_probes;
 use super::respawn::show_pause;
@@ -616,6 +619,9 @@ pub(crate) enum Next {
     /// No respawn; the lifecycle is `failed` (or the commit failed, which
     /// the error says). The operation, if one runs, fails with this error.
     Final(SupervisorError),
+    /// A stop got to the lifecycle first and ended it `stopped`, or there
+    /// was nothing to record: no respawn, and no failure.
+    Settled,
 }
 
 /// Runs the attempts of a start after its `journal`: `first` holds what the
@@ -650,6 +656,7 @@ async fn after_journal(
                                 continue;
                             }
                             Next::Final(error) => return Err(failed(error)),
+                            Next::Settled => return Err(failed(stopped_meanwhile())),
                         }
                     }
                     Err(Gate::Error(error)) => {
@@ -683,10 +690,16 @@ async fn after_journal(
                     Next::Final(error) => {
                         return Err(failed(with_last_exit(error, last_exit)));
                     }
+                    Next::Settled => return Err(failed(stopped_meanwhile())),
                 }
             }
         }
     }
+}
+
+/// The error of an operation whose instance was stopped under it.
+fn stopped_meanwhile() -> SupervisorError {
+    SupervisorError::internal("the instance was stopped while its process exited")
 }
 
 /// Puts the last exit of the crash loop into a spent budget's details.
@@ -758,6 +771,8 @@ async fn fail_lifecycle(sup: &Supervisor, id: InstanceId, reason: &FailureCode, 
                 will_retry: false,
                 reason: reason.clone(),
             },
+            // A stop got here first; the exit ends it.
+            InstanceLifecycle::Stopping => LifecycleEvent::Exited,
             _ => return Ok(Vec::new()),
         };
         apply_event(changes, event, now)?;
@@ -1155,7 +1170,12 @@ pub(crate) async fn after_unrequested_exit(
     mode: CommitMode,
 ) -> Next {
     let deps = sup.deps();
-    if let Ok(instance) = read_instance(deps, id).await {
+    let read = match mode {
+        // An actor waits for the registry; an operation decides on the error.
+        CommitMode::Actor => read_instance_actor(sup, id).await,
+        CommitMode::Operation => read_instance(deps, id).await,
+    };
+    if let Ok(instance) = read {
         for endpoint in instance.endpoints() {
             let Endpoint::Ip(ip) = endpoint else { continue };
             let Some(port) = ip.effective_port() else {
@@ -1204,8 +1224,9 @@ async fn apply_policy(
     let now = deps.platform.clock().now();
     match decision {
         RestartDecision::Retry { delay, .. } => {
+            let mut recorded = ExitRecord::Nothing;
             let committed = commit_instance(sup, id, None, mode, |changes| {
-                apply_event(
+                recorded = apply_exit(
                     changes,
                     LifecycleEvent::Crashed {
                         will_retry: true,
@@ -1217,13 +1238,15 @@ async fn apply_policy(
             })
             .await;
             match committed {
-                Ok(()) => Next::Retry(delay),
+                Ok(()) if recorded == ExitRecord::Crashed => Next::Retry(delay),
+                Ok(()) => Next::Settled,
                 Err(error) => Next::Final(error),
             }
         }
         RestartDecision::Exhausted { crashes } => {
+            let mut recorded = ExitRecord::Nothing;
             let committed = commit_instance(sup, id, None, mode, |changes| {
-                apply_event(
+                recorded = apply_exit(
                     changes,
                     LifecycleEvent::Crashed {
                         will_retry: false,
@@ -1238,11 +1261,14 @@ async fn apply_policy(
                 state.restart_status = restart_status(&deps.config, crashes, None, true);
             });
             match committed {
-                Ok(()) => Next::Final(SupervisorError::RetryBudgetExhausted {
-                    attempts: crashes,
-                    last_exit_code: None,
-                    last_signal: None,
-                }),
+                Ok(()) if recorded == ExitRecord::Crashed => {
+                    Next::Final(SupervisorError::RetryBudgetExhausted {
+                        attempts: crashes,
+                        last_exit_code: None,
+                        last_signal: None,
+                    })
+                }
+                Ok(()) => Next::Settled,
                 Err(error) => Next::Final(error),
             }
         }

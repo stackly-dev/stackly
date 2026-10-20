@@ -19,7 +19,8 @@ use tokio::sync::watch;
 
 use super::Supervisor;
 use super::actor::InstanceActor;
-use super::persist::{CommitMode, apply_event, blocking, commit_instance, read_instance};
+use super::error::SupervisorError;
+use super::persist::{CommitMode, apply_exit, blocking, commit_instance, read_instance_actor};
 use super::respawn::schedule_respawn;
 use super::startup::{Next, after_unrequested_exit};
 use crate::secret::delivery::remove_secret_material;
@@ -79,9 +80,9 @@ pub(crate) async fn handle_exit(
             .process
             .as_ref()
             .filter(|slot| slot.generation == generation)
-            .map(|slot| (slot.group, state.stopping, Arc::clone(&slot.drain)))
+            .map(|slot| (slot.group, Arc::clone(&slot.drain)))
     });
-    let Some((group, stopping, drain)) = info else {
+    let Some((group, drain)) = info else {
         return;
     };
     actor.update(deps, |state| {
@@ -94,57 +95,54 @@ pub(crate) async fn handle_exit(
     remove_material(sup, actor).await;
     let leftover = leftover_members(sup, group, notice.pid).await;
 
-    let next = settle(sup, actor.id, stopping, notice).await;
+    let next = settle(sup, actor.id, notice).await;
     finish_process(sup, actor, generation, leftover);
     match next {
         Some(Next::Retry(delay)) => schedule_respawn(sup, actor.id, delay),
         Some(Next::Final(error)) => {
             tracing::info!(instance = %actor.id, %error, "the instance is not restarted");
         }
-        None => {}
+        Some(Next::Settled) | None => {}
     }
 }
 
-/// Records what the exit means for the lifecycle. A stop asked for it:
-/// `exited`. Otherwise, with desired `running`, it is a crash and the restart
-/// policy decides (spec 0010, *Restart policy*); with any other desired
-/// state the instance ends `failed` with the reason, and nothing respawns.
-async fn settle(
-    sup: &Supervisor,
-    id: InstanceId,
-    stopping: bool,
-    notice: &ExitNotice,
-) -> Option<Next> {
+/// Records what the exit means for the lifecycle, from the aggregate as the
+/// registry holds it now: the memory of the actor is never the basis (a stop
+/// can land at any moment) and a refused read is never an answer (AC-22).
+/// With desired `running` and a running lifecycle it is a crash and the
+/// restart policy decides (spec 0010, *Restart policy*). A stop in progress,
+/// or a desired `stopped`, ends the instance `stopped`.
+async fn settle(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Option<Next> {
     let deps = sup.deps();
-    let instance = read_instance(deps, id).await;
-    let stop_asked = stopping
-        || instance
-            .as_ref()
-            .is_ok_and(|instance| instance.lifecycle() == InstanceLifecycle::Stopping);
-    if !stop_asked
-        && instance.as_ref().is_ok_and(|instance| {
-            instance.desired() == DesiredState::Running
-                && matches!(
-                    instance.lifecycle(),
-                    InstanceLifecycle::Starting
-                        | InstanceLifecycle::Running
-                        | InstanceLifecycle::Recovering
-                )
-        })
-    {
-        return Some(after_unrequested_exit(sup, id, notice, CommitMode::Actor).await);
-    }
-    let now = deps.platform.clock().now();
-    let event = if stop_asked {
-        LifecycleEvent::Exited
-    } else {
-        LifecycleEvent::Crashed {
-            will_retry: false,
-            reason: crash_reason(notice.status),
+    let instance = match read_instance_actor(sup, id).await {
+        Ok(instance) => instance,
+        // The instance is gone: nothing to record.
+        Err(SupervisorError::NotFound(_)) => return None,
+        Err(error) => {
+            tracing::warn!(instance = %id, %error, "the exit of a process could not be recorded");
+            return Some(Next::Final(error));
         }
     };
+    if instance.desired() == DesiredState::Running
+        && matches!(
+            instance.lifecycle(),
+            InstanceLifecycle::Starting
+                | InstanceLifecycle::Running
+                | InstanceLifecycle::Recovering
+        )
+    {
+        return match after_unrequested_exit(sup, id, notice, CommitMode::Actor).await {
+            Next::Settled => None,
+            next => Some(next),
+        };
+    }
+    let now = deps.platform.clock().now();
+    let crash = LifecycleEvent::Crashed {
+        will_retry: false,
+        reason: crash_reason(notice.status),
+    };
     let committed = commit_instance(sup, id, None, CommitMode::Actor, |changes| {
-        apply_event(changes, event.clone(), now)?;
+        apply_exit(changes, crash.clone(), now)?;
         Ok(Vec::new())
     })
     .await;

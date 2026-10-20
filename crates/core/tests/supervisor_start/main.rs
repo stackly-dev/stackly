@@ -4,6 +4,7 @@
 //! reconciliation after a daemon restart, over `FakeProcessSupervision`, `FakeRegistry`, and the real dummy
 //! server for the probes.
 
+mod actor_commit;
 mod common;
 mod init;
 mod reconcile;
