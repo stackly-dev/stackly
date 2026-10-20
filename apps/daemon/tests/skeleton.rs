@@ -167,6 +167,16 @@ impl Rig {
             .join("data")
     }
 
+    /// The `secrets/` folder of the instance in the runtime root, where the
+    /// sensitive fake config lives while the instance runs (spec 0009
+    /// AC-20).
+    fn secrets_dir(&self, id: &str) -> PathBuf {
+        let id: stackly_domain::InstanceId = id.parse().expect("the instance ID parses");
+        daemon_paths(&self.root)
+            .layout
+            .instance_secrets_dir(id.short_key())
+    }
+
     /// Fake servers in `serve` mode for the instance, by its data folder.
     fn servers(&self, id: &str) -> Vec<u32> {
         let data = self.data_dir(id).display().to_string();
@@ -255,10 +265,10 @@ impl Rig {
 
     /// Every file a secret value must stay out of, as lossy text: the
     /// daemon log and stderr, the registry with its `-wal` and `-shm`, the
-    /// runtime root (spool files, not the `secrets/` folders the daemon
-    /// makes for the init helper), and the instance manifests. The config
-    /// and data folders are left out, since the template writes the token to
-    /// `fake.json`.
+    /// runtime root (spool files, not the `secrets/` folders, which hold the
+    /// sensitive config while an instance runs), and every file under
+    /// `instances/<id>/` in the data root (the instance manifest, `config/`,
+    /// `data/`, and `temp/`).
     fn scanned_files(&self) -> Vec<(String, String)> {
         let paths = daemon_paths(&self.root);
         let layout = &paths.layout;
@@ -283,12 +293,16 @@ impl Rig {
                 }
             }
         }
-        for entry in std::fs::read_dir(layout.instances_dir())
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
-            files.push(entry.path().join("instance-manifest.json"));
+        let mut pending = vec![layout.instances_dir()];
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else {
+                    files.push(path);
+                }
+            }
         }
         let log_dir = layout.daemon_log_dir();
         for entry in std::fs::read_dir(&log_dir).into_iter().flatten().flatten() {
@@ -650,7 +664,7 @@ fn the_fixture_credential_reaches_the_init_helper_and_leaves_no_trace_anywhere_e
     let ev = evidence!(
         covers = ["AC-016", "REQ-016"],
         kind = Kind::Fixture,
-        expected = "a fixture credential sent through --secret authToken=stdin on create reaches the init helper (token.sha256 is its SHA-256) and its prefix is in no daemon log, stderr file, registry file with its WAL, spool, instance manifest, or CLI output of the run",
+        expected = "a fixture credential sent through --secret authToken=stdin on create reaches the init helper (token.sha256 is its SHA-256) and its prefix is in no daemon log, stderr file, registry file with its WAL, spool, file under the instance folder of the data root, or CLI output of the run, and after stop the secrets folder of the instance in the runtime root is gone",
     );
     let rig = Rig::new();
     let credential = FixtureCredential::new();
@@ -678,8 +692,19 @@ fn the_fixture_credential_reaches_the_init_helper_and_leaves_no_trace_anywhere_e
     );
     let (code, started) = rig.json(&["instance", "start", &id, "--wait"]);
     assert_eq!(code, Some(0), "{started}");
+    let secret_config = rig.secrets_dir(&id).join("fake.json");
+    let rendered = std::fs::read_to_string(&secret_config)
+        .expect("the running instance has its sensitive config in the secrets folder");
+    assert!(
+        rendered.contains(credential.value()),
+        "the sensitive config holds the token while the instance runs"
+    );
     let (code, stopped) = rig.json(&["instance", "stop", &id, "--wait"]);
     assert_eq!(code, Some(0), "{stopped}");
+    assert!(
+        !rig.secrets_dir(&id).exists(),
+        "the stop removed the secrets folder of the instance"
+    );
 
     credential.assert_absent(&rig.transcript.borrow(), "the CLI output");
     let files = rig.scanned_files();
