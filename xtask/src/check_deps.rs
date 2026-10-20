@@ -70,6 +70,11 @@ const SECURITY_FRAMEWORK: [&str; 2] = ["security-framework", "security-framework
 /// The terminal password reader, which only the CLI may depend on
 /// (spec 0011).
 const RPASSWORD: &str = "rpassword";
+/// The archive and object file readers of the runtime extractor, which
+/// only core and xtask take as direct dependencies (spec 0018); the fuzz
+/// workspace is outside this check.
+const ARCHIVE_CRATES: [&str; 4] = ["tar", "flate2", "zip", "object"];
+const ARCHIVE_USERS: [&str; 2] = ["stackly-core", "xtask"];
 const CLI: &str = "stackly-cli";
 /// Crates that run or open other programs, which `stackly-cli` never takes
 /// as a normal dependency (spec 0008, BR-011). Dev dependencies may.
@@ -232,6 +237,9 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
     }
     if name == RPASSWORD && package != CLI {
         deny("only stackly-cli reads a secret from the terminal (spec 0011)");
+    }
+    if ARCHIVE_CRATES.contains(&name) && !ARCHIVE_USERS.contains(&package) {
+        deny("only stackly-core and xtask read archives and Mach-O files (spec 0018)");
     }
     if package == CLI && dependency.kind == DependencyKind::Normal && CLI_SPAWN_DEPS.contains(&name)
     {
@@ -927,6 +935,29 @@ mod tests {
                         "{package} has a {label} dependency on rpassword: {RPASSWORD_RULE}"
                     )]
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn archive_readers_belong_to_core_and_xtask() {
+        const RULE: &str = "only stackly-core and xtask read archives and Mach-O files (spec 0018)";
+        for name in ARCHIVE_CRATES {
+            for package in ARCHIVE_USERS {
+                assert!(
+                    violations(package, name, None).is_empty(),
+                    "{package} {name}"
+                );
+            }
+            for package in ["stackly-platform", MACOS_ADAPTER, TESTKIT, "stacklyd", CLI] {
+                for (kind, label) in [(None, "normal"), (Some("dev"), "dev")] {
+                    assert_eq!(
+                        violations(package, name, kind),
+                        [format!(
+                            "{package} has a {label} dependency on {name}: {RULE}"
+                        )]
+                    );
+                }
             }
         }
     }
