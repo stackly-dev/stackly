@@ -443,6 +443,8 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead membawanya 
 
 #### Spec 0009 (provider engine dan manifest schema)
 
+Diterapkan di spec 0009 pada 2026-10-20 (sesi `upd-0009`).
+
 1. *Manifest `stackly/v1alpha1`*, tabel field. Sisipkan sesudah:
 
    ```text
