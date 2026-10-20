@@ -11,7 +11,7 @@ use stackly_core::PreparedLayout;
 use stackly_core::secret::{Redactor, SecretService};
 use stackly_core::supervisor::{
     LogSink, ReconcilePhase, ReconcileReport, RegistryMode, SinkSet, Supervisor, SupervisorConfig,
-    SupervisorDeps, SupervisorError, SupervisorEvents,
+    SupervisorDeps, SupervisorError, SupervisorEvents, WeakSupervisor,
 };
 use stackly_domain::{Instance, InstanceId, Registry, ResourceRevision};
 use stackly_platform::Platform;
@@ -74,7 +74,7 @@ pub struct BuildInput<'a> {
 pub struct Supervision {
     slot: Mutex<Slot>,
     report: Arc<Mutex<Report>>,
-    events: OnceLock<Arc<BusSupervisorEvents>>,
+    events: Mutex<Option<Arc<BusSupervisorEvents>>>,
 }
 
 impl std::fmt::Debug for Supervision {
@@ -88,7 +88,7 @@ impl Default for Supervision {
         Self {
             slot: Mutex::new(Slot::Waiting),
             report: Arc::new(Mutex::new(Report::default())),
-            events: OnceLock::new(),
+            events: Mutex::new(None),
         }
     }
 }
@@ -117,8 +117,8 @@ impl Supervision {
         deps.events = Arc::clone(&events) as Arc<dyn SupervisorEvents>;
         deps.config = input.config;
         let supervisor = Supervisor::new(deps);
-        let _ = handle.set(supervisor.clone());
-        let _ = self.events.set(events);
+        let _ = handle.set(supervisor.downgrade());
+        *self.lock_events() = Some(events);
         *self.lock() = Slot::Reconciling(supervisor.clone());
         supervisor
     }
@@ -126,7 +126,7 @@ impl Supervision {
     /// The events the supervisor publishes, once it is built.
     #[must_use]
     pub fn events(&self) -> Option<Arc<BusSupervisorEvents>> {
-        self.events.get().cloned()
+        self.lock_events().clone()
     }
 
     /// Reconciles what the last daemon left running (spec 0010,
@@ -224,10 +224,15 @@ impl Supervision {
         }
     }
 
-    /// Lets go of the supervisor at the end of the stop, so the registry
-    /// handle it holds closes.
+    /// Lets go of the supervisor and its event sink at the end of the
+    /// stop, so the registry handle it holds closes.
     pub fn close(&self) {
         *self.lock() = Slot::Unavailable("the daemon stopped");
+        *self.lock_events() = None;
+    }
+
+    fn lock_events(&self) -> MutexGuard<'_, Option<Arc<BusSupervisorEvents>>> {
+        self.events.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn lock(&self) -> MutexGuard<'_, Slot> {
@@ -244,7 +249,9 @@ impl Supervision {
 /// flag.
 pub struct BusSupervisorEvents {
     bus: Arc<EventBus>,
-    supervisor: Arc<OnceLock<Supervisor>>,
+    /// Weak, because the supervisor holds this sink: a strong handle would
+    /// be a cycle that keeps the registry open past the stop.
+    supervisor: Arc<OnceLock<WeakSupervisor>>,
     report: Arc<Mutex<Report>>,
 }
 
@@ -266,7 +273,7 @@ impl BusSupervisorEvents {
 
 impl SupervisorEvents for BusSupervisorEvents {
     fn instance_changed(&self, instance: &Instance) {
-        let Some(supervisor) = self.supervisor.get() else {
+        let Some(supervisor) = self.supervisor.get().and_then(WeakSupervisor::upgrade) else {
             return;
         };
         let status = supervisor.status(instance.id());
@@ -334,4 +341,68 @@ impl SupervisorEvents for BusSupervisorEvents {
 #[must_use]
 pub fn supervisor_error(error: &SupervisorError) -> ErrorBody {
     crate::ipc::operation::operation_error_body(error)
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use stackly_core::prepare_layout;
+    use stackly_platform_macos::MacosPlatform;
+    use stackly_storage::{OpenOptions, RegistryOpen};
+    use stackly_testkit::TestRoot;
+    use uuid::Uuid;
+
+    use super::*;
+    use crate::secrets::Secrets;
+
+    /// A supervisor built on a registry the test can watch: the returned
+    /// weak handle upgrades only while something still holds the registry.
+    fn built(supervision: &Supervision) -> (TestRoot, Supervisor, std::sync::Weak<dyn Registry>) {
+        let root = TestRoot::new().expect("a test root can be created");
+        let platform = MacosPlatform::with_roots(root.roots());
+        let prepared = prepare_layout(&platform).expect("a fresh test root prepares");
+        let RegistryOpen::Ready { registry, .. } = OpenOptions::new()
+            .open(&platform, prepared.layout(), "0.1.0")
+            .expect("a fresh registry opens")
+        else {
+            panic!("a fresh registry opens ready");
+        };
+        let bus = Arc::new(EventBus::new(Uuid::now_v7(), platform.shared_clock()));
+        let redactor = Arc::new(Redactor::new());
+        let secrets = Secrets::new(None).build(
+            registry.clone(),
+            &platform,
+            &prepared,
+            Arc::clone(&redactor),
+            &bus,
+        );
+        let handle: Arc<dyn Registry> = Arc::new(registry);
+        let watch = Arc::downgrade(&handle);
+        let supervisor = supervision.build(BuildInput {
+            registry: handle,
+            platform: &platform,
+            prepared: &prepared,
+            secrets,
+            redactor,
+            bus: &bus,
+            extra_sinks: &[],
+            config: SupervisorConfig::default(),
+        });
+        (root, supervisor, watch)
+    }
+
+    #[test]
+    fn closing_the_supervision_lets_go_of_the_registry_the_supervisor_held() {
+        let supervision = Supervision::default();
+        let (_root, supervisor, registry) = built(&supervision);
+        assert!(registry.upgrade().is_some(), "the supervisor holds it");
+
+        supervision.shutdown();
+        supervision.close();
+        drop(supervisor);
+
+        assert!(
+            registry.upgrade().is_none(),
+            "nothing held the registry past the close"
+        );
+    }
 }

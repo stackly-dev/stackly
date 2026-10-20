@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 
 use stackly_domain::{Instance, InstanceId, Registry, ResourceRevision};
 use stackly_platform::Platform;
@@ -164,6 +164,29 @@ impl fmt::Debug for Supervisor {
     }
 }
 
+/// A handle to a [`Supervisor`] that does not keep it alive. Whatever the
+/// supervisor itself holds, such as its event sink, keeps one of these
+/// instead of a [`Supervisor`], so no strong cycle holds the registry open
+/// past the daemon's stop.
+#[derive(Clone)]
+pub struct WeakSupervisor {
+    shared: Weak<Shared>,
+}
+
+impl fmt::Debug for WeakSupervisor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WeakSupervisor").finish_non_exhaustive()
+    }
+}
+
+impl WeakSupervisor {
+    /// Returns the supervisor while some strong handle keeps it alive.
+    #[must_use]
+    pub fn upgrade(&self) -> Option<Supervisor> {
+        self.shared.upgrade().map(|shared| Supervisor { shared })
+    }
+}
+
 impl Supervisor {
     /// Creates a supervisor with no actors yet.
     #[must_use]
@@ -177,6 +200,14 @@ impl Supervisor {
                 pending: Mutex::new(Vec::new()),
                 recheck_running: AtomicBool::new(false),
             }),
+        }
+    }
+
+    /// Returns a handle that does not keep the supervisor alive.
+    #[must_use]
+    pub fn downgrade(&self) -> WeakSupervisor {
+        WeakSupervisor {
+            shared: Arc::downgrade(&self.shared),
         }
     }
 
