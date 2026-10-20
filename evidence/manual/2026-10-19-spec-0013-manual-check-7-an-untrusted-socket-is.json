@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15654-0bf7-7593-a52e-617c3ed06cbe",
+  "covers": [
+    "AC-070"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 manual check 7: an untrusted socket is refused",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "With the daemon socket replaced by a 0666 socket or by a symbolic link, the app shows the untrusted banner Stackly didn’t connect to stacklyd. with the reason, and stacklyd's log records no connection from the app.",
+  "actual": "Stackly shows the critical banner `Stackly didn’t connect to stacklyd.` / `The socket failed a security check: other users can access the socket. Nothing was sent.` and the footer `stacklyd untrusted`; the daemon's debug log, which records every opened connection, stayed at 19 lines, so the app never connected",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 7818bea with a clean tree, `cargo xtask build-app` (Debug) and `cargo build -p stacklyd -p stackly-cli`; STACKLY_ROOT is the private folder /private/tmp/stk-gui-check (mode 0700)",
+    "Claude Code drove Stackly through the macOS accessibility API (System Events menu clicks, the window's close button, Dock item clicks, AX row selection and sizes) and captured only the Stackly window with `screencapture -l <window id>`; synthetic keystrokes do not reach apps on this Mac, so no step uses the keyboard",
+    "start `STACKLY_ROOT=/private/tmp/stk-gui-check STACKLY_LOG=debug stacklyd` (log in stacklyd.log), let Stackly connect, then quit Stackly",
+    "`chmod 0666` the daemon socket at 2026-10-19T22:48:05Z (it stays 0666; the daemon's socket check does not rebind for a mode change), note the log length (19 lines), open Stackly again and capture it 13 s later",
+    "check the log length again, then restore the socket to 0600"
+  ],
+  "reviewer": "ojiepermana, reviewing the screenshots and logs Claude Code (Claude Opus 5.5) took while it drove the app",
+  "startedAt": "2026-10-19T22:41:51.094568Z",
+  "finishedAt": "2026-10-20T02:15:03.849824Z",
+  "evidencePath": "evidence/manual/files/01a15654-0bf7-7593-a52e-617c3ed06cbe/",
+  "context": {
+    "sourceCommit": "7818bea186bae7048a8b5eeee71e03eb932e6a76",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

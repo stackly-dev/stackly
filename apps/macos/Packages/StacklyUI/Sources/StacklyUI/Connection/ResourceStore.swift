@@ -41,6 +41,16 @@ public enum StoreEffect<Item: Identifiable & Sendable> {
     case ignore
 }
 
+/// A change a store applied, for an owner that derives more from the items.
+enum StoreChange<Item: Identifiable> {
+    /// The item was added or changed, after the revision rule let it in.
+    case changed(Item)
+    /// The item was removed.
+    case removed(Item.ID)
+    /// A snapshot replaced the items.
+    case reloaded
+}
+
 /// The last known state of one kind of resource, kept by snapshots plus
 /// events (spec 0013, *Sinkronisasi snapshot plus cursor*).
 ///
@@ -77,6 +87,9 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
     /// Events held while a snapshot runs.
     @ObservationIgnored private var buffer: [Event]?
     @ObservationIgnored private var bufferOverflowed = false
+    /// Called after every change the store applied, so an owner such as
+    /// ``OperationCenter`` can follow the items.
+    @ObservationIgnored var didApply: ((StoreChange<Item>) -> Void)?
 
     @ObservationIgnored let kinds: [String]
     @ObservationIgnored private let fetchPage: (PageToken?) async throws(ClientError) -> Page<Item>
@@ -223,6 +236,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         loadedAt = now()
         error = nil
         isRefreshing = false
+        didApply?(.reloaded)
     }
 
     /// Ends a snapshot that failed: the old data stays, the held events
@@ -266,11 +280,10 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
             change(&item)
             items[id] = item
             revisions[id] = newRevision
+            didApply?(.changed(item))
         case .delete(let id, let newRevision):
             guard newRevision > floor(of: id) else { return }
-            items[id] = nil
-            revisions[id] = nil
-            tombstones[id] = newRevision
+            remove(id, revision: newRevision)
         case .refetch(let id, let newRevision):
             refetch(id, revision: newRevision)
         case .ignore:
@@ -284,6 +297,30 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         items[item.id] = item
         revisions[item.id] = itemRevision
         tombstones[item.id] = nil
+        didApply?(.changed(item))
+    }
+
+    /// Removes an item at `revision` and keeps the revision as a tombstone, so
+    /// an older change cannot bring it back.
+    private func remove(_ id: Item.ID, revision newRevision: UInt64) {
+        items[id] = nil
+        revisions[id] = nil
+        tombstones[id] = newRevision
+        didApply?(.removed(id))
+    }
+
+    /// Applies an item fetched outside a snapshot, under the revision rule.
+    func offer(_ item: Item) {
+        upsert(item)
+    }
+
+    /// Drops a held item without telling the owner, keeping its revision as a
+    /// tombstone. ``OperationCenter`` moves an ended operation out this way.
+    func evict(_ id: Item.ID) {
+        guard let held = revisions[id] else { return }
+        items[id] = nil
+        revisions[id] = nil
+        tombstones[id] = held
     }
 
     /// The revision a change must be above: the held one or the tombstone's.
@@ -304,9 +341,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
             guard let fetched else {
                 // Gone: the change it announced was a delete.
                 if newRevision > floor(of: id) {
-                    items[id] = nil
-                    revisions[id] = nil
-                    tombstones[id] = newRevision
+                    remove(id, revision: newRevision)
                 }
                 return
             }

@@ -114,6 +114,9 @@ public struct AppShell: View {
             )
             // A new banner is a new view, so a new critical banner is announced again.
             .id(banner.title)
+            // The split view also measures the banner at a tiny width, where its text would
+            // wrap one character per line and push the columns out of the window.
+            .frame(minWidth: Self.contentMinWidth - 2 * Spacing.pageHorizontal)
             .padding(.horizontal, Spacing.pageHorizontal)
             .padding(.vertical, Spacing.s12)
             .background(StacklyColor.surfaceWindow)
@@ -140,7 +143,10 @@ public struct AppShell: View {
             UnbuiltScrollPage(section: .runtimes)
         case .operations:
             // provisional: F35
-            UnbuiltScrollPage(section: .operations)
+            UnbuiltScrollPage(
+                section: .operations,
+                subtitle: OperationCenter.subtitle(running: counts.runningOperations)
+            )
         case .diagnostics:
             DiagnosticsPage(
                 diagnostics: diagnostics,
@@ -152,15 +158,17 @@ public struct AppShell: View {
     }
 }
 
-/// An unbuilt page in a scroll view, with the section title in the toolbar.
+/// An unbuilt page in a scroll view, with the section title in the toolbar and, for
+/// Operations, the subtitle the operation center gives.
 private struct UnbuiltScrollPage: View {
     let section: SidebarSection
+    var subtitle: String?
 
     var body: some View {
         ScrollView {
             UnbuiltPage(section: section)
         }
-        .pageChrome(title: section.title)
+        .pageChrome(title: section.title, subtitle: subtitle)
     }
 }
 
