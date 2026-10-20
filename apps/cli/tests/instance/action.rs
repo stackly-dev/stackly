@@ -426,3 +426,35 @@ fn a_bad_instance_id_or_key_exits_2_without_connecting() {
     }
     assert_eq!(daemon.connections(), 0);
 }
+
+#[test]
+fn already_in_state_with_a_succeeded_no_op_operation_waits_for_nothing() {
+    let root = TestRoot::new().expect("a test root is made");
+    let mut reply = data::accepted(
+        op(OperationKind::StartInstance, OperationState::Succeeded, 2),
+        false,
+    );
+    reply.already_in_state = true;
+    let daemon = ScriptedDaemon::serve(
+        &root,
+        data::scripted(
+            Reply::InstanceStart(Box::new(reply)),
+            Vec::new(),
+            Some(data::instance("")),
+        ),
+    );
+
+    let text = run(root.path(), &["instance", "start", ID, "--wait"]);
+    let json = run(root.path(), &["instance", "start", ID, "--json"]);
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    assert_eq!(text.stdout, "already running\n");
+    assert_eq!(text.stderr, "");
+    assert_eq!(json.code, Some(0), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(value["result"]["operation"]["state"], "succeeded");
+    assert_eq!(value["result"]["instance"]["lifecycle"], "running");
+    assert_eq!(gets(&daemon), 2, "one instance.get per run");
+    assert!(!daemon.methods().contains(&"events.subscribe".to_owned()));
+    assert!(!daemon.methods().contains(&"operation.get".to_owned()));
+}

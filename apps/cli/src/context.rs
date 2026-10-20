@@ -166,13 +166,14 @@ impl Context {
             operation: accepted.operation,
             idempotency_key,
             replayed: accepted.replayed,
+            already_in_state: accepted.already_in_state,
             waited: false,
             failure: None,
         };
         let Some(operation) = submission.operation.clone() else {
             return Ok(submission);
         };
-        if !args.wait.wait {
+        if !args.wait.wait || submission.already_in_state {
             return Ok(submission);
         }
         submission.waited = true;
