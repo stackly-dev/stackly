@@ -176,3 +176,11 @@ Update `/architect` yang menyelaraskan spec ini dengan keputusan lead foundation
 | Follow-up dan usulan | usulan spec 0010, 0004, dan 0006 ditandai sudah di main; usulan spec 0013 ditandai sebagian digantikan K16 dan K17; baris fitur 20 menunjuk ke langkah 12 spec 0010 dan langkah 16 spec 0013 | semua butir di atas |
 
 Teks copy untuk dua kode kegagalan baru adalah pilihan spec ini, karena spec 0018 hanya menetapkan pesan error wire nya. Tidak ada keputusan yang dibiarkan terbuka; tidak ada konflik dengan keputusan K yang perlu dikembalikan ke lead.
+
+## Perbaikan pasca penyelarasan 2026-10-20
+
+Dari `docs/scope/coordination/post-alignment/post-0022.md` (workflow lead `wf_fa323a0b-69e`), teks saja, tanpa perubahan ID AC atau nomor langkah:
+
+- *Navigasi* (butir 1): perilaku fitur 22 dikembalikan, yaitu `openInstance(_ id:)` sama dengan `.instances(filter: .all, select: id)` (`// provisional: F21`). Case `.instance(UUID)`, `instanceRequest`, `NavigationStack [InstanceRoute]`, dan `openInstance` sebagai `.instance(id)` ditandai "ditambah langkah 10 spec 0021", `instanceRequest` masuk daftar member, dan langkah 6 tidak membangun case dan request itu. Tidak ada siklus prasyarat, karena milestone 3 spec ini tidak butuh fitur 21.
+- *Value sourcing* (butir 2): baris "waktu relatif readiness" diganti "teks readiness" lewat `ReadinessText` spec 0021 tanpa umur, sama dengan tabel inspector.
+- Turunan butir 2: `ReadinessText` dibangun langkah 9 spec 0021, yang datang setelah milestone 3 spec ini. Kalau langkah 9 spec 0021 belum di merge, langkah 7 spec ini membangunnya dengan aturan dan lokasi spec 0021, dan langkah 9 spec 0021 memakainya ulang. Runner up: inspector memakai teks readiness sendiri lalu diganti fitur 21, yang membuat dua aturan teks untuk satu nilai.
