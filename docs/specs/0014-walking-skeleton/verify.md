@@ -16,18 +16,18 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 
 ### UI / manual
 
-- [ ] `cargo build -p stackly-fake-server -p stacklyd --example skeleton_seed`, lalu `R="$(mktemp -d /tmp/stackly-seed.XXXXXX)"` dan `target/debug/examples/skeleton_seed --root "$R"` → empat baris `root`, `runtime`, `provider`, `next`; `next` adalah satu perintah `STACKLY_ROOT=<R> stackly instance create demo --runtime <uuid> --provider testing/fake --revision 0.1.0 --wait` → AC-1
-- [ ] Ulangi perintah yang sama → output identik (runtime ID sama) dan `find "$R/data/runtimes" "$R/data/providers"` tidak berubah → AC-1
-- [ ] `target/debug/examples/skeleton_seed` tanpa argumen → pesan clap dan exit 2; `--root relatif` dan `--root "$R/tidak-ada"` → satu baris `error: ...` dan exit 1 → AC-2
+- [x] `cargo build -p stackly-fake-server -p stacklyd --example skeleton_seed`, lalu `R="$(mktemp -d /tmp/stackly-seed.XXXXXX)"` dan `target/debug/examples/skeleton_seed --root "$R"` → empat baris `root`, `runtime`, `provider`, `next`; `next` adalah satu perintah `STACKLY_ROOT=<R> stackly instance create demo --runtime <uuid> --provider testing/fake --revision 0.1.0 --wait` → AC-1
+- [x] Ulangi perintah yang sama → output identik (runtime ID sama) dan `find "$R/data/runtimes" "$R/data/providers"` tidak berubah → AC-1
+- [x] `target/debug/examples/skeleton_seed` tanpa argumen → pesan clap dan exit 2; `--root relatif` dan `--root "$R/tidak-ada"` → satu baris `error: ...` dan exit 1 → AC-2
 
 ### Commands
 
-- [ ] `cargo test -p stackly-core --test fixture_seed` → root kosong (satu commit, tiga record), ulang tanpa tulisan, runtime saja, provider saja, folder tanpa baris (`Leftover` runtime dan provider), kedua `Conflict` → AC-1, AC-2
-- [ ] `cargo test -p stacklyd --test instance_create_secrets` → create tanpa `secrets[]` membuat reference `local:instance/<id>/<purpose>` berstatus `present` dengan asal `generated` (32 karakter, tidak ada di log daemon), create dengan `secrets[]` eksplisit memakai nilai yang dikirim → AC-1
-- [ ] `cargo test -p stacklyd --test skeleton_seed` → seed lewat binary example (JSON, teks, idempoten), perintah `createCommand` yang dicetak dijalankan dengan `stackly` dan `succeeded`, tanpa `--root` exit 2, root relatif atau tidak ada, daemon yang hidup, binary fake yang tidak ada (pesan `cargo build -p stackly-fake-server`), folder tanpa baris registry, dan binary lain untuk versi yang sama; setelah setiap penolakan folder runtime dan paket serta jumlah baris sama → AC-1, AC-2
-- [ ] `cargo tree -p stacklyd -p stackly-cli --edges features,no-dev -i stackly-core` → graph hanya memuat fitur `default`, tanpa `fixture` → AC-3
-- [ ] `cargo xtask check-deps` → 13 crate lulus dengan example dan dependency dev `fixture` di tempatnya → AC-3
-- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core`, dan `cargo xtask evidence check` → lulus → AC-1 sampai AC-3
+- [x] `cargo test -p stackly-core --test fixture_seed` → root kosong (satu commit, tiga record), ulang tanpa tulisan, runtime saja, provider saja, folder tanpa baris (`Leftover` runtime dan provider), kedua `Conflict` → AC-1, AC-2
+- [x] `cargo test -p stacklyd --test instance_create_secrets` → create tanpa `secrets[]` membuat reference `local:instance/<id>/<purpose>` berstatus `present` dengan asal `generated` (32 karakter, tidak ada di log daemon), create dengan `secrets[]` eksplisit memakai nilai yang dikirim → AC-1
+- [x] `cargo test -p stacklyd --test skeleton_seed` → seed lewat binary example (JSON, teks, idempoten), perintah `createCommand` yang dicetak dijalankan dengan `stackly` dan `succeeded`, tanpa `--root` exit 2, root relatif atau tidak ada, daemon yang hidup, binary fake yang tidak ada (pesan `cargo build -p stackly-fake-server`), folder tanpa baris registry, dan binary lain untuk versi yang sama; setelah setiap penolakan folder runtime dan paket serta jumlah baris sama → AC-1, AC-2
+- [x] `cargo tree -p stacklyd -p stackly-cli --edges features,no-dev -i stackly-core` → graph hanya memuat fitur `default`, tanpa `fixture` → AC-3
+- [x] `cargo xtask check-deps` → 13 crate lulus dengan example dan dependency dev `fixture` di tempatnya → AC-3
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core`, dan `cargo xtask evidence check` → lulus → AC-1 sampai AC-3
 
 ### Acceptance-criteria coverage
 
