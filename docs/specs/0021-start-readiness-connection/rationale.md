@@ -384,3 +384,7 @@ Diterapkan atas permintaan lead scope 02 dari `docs/scope/coordination/post-alig
 Tidak diterapkan di sini: kalimat untuk spec 0019 (temuan 6, "paket langkah 4 belum membawa blok `connection` sampai langkah 2 spec 0021") milik pemilik spec 0019, dan baris scope 02 milik lead.
 
 Tambahan lead pada putaran yang sama (2026-10-20): cek Dynamic Type di AC-16 dan langkah 10 diganti cek teks besar spec 0012 (`#Preview` lebar sempit 640 pt, karena text style macOS 27 tidak ikut `dynamicTypeSize`), seperti spec 0012, 0015, 0018, dan 0020; aturan D2 kini pasti lewat spec 0017 (issue catalog hanya sampai ke wire di `ProviderDetail.issues`), jadi kunci wire `reason`, `ItemSpec`, dan kenaikan minor milik langkah 1 spec ini tanpa syarat, dan *Consequences* menyebut dua kenaikan minor; langkah 9 memakai ulang `ReadinessText` kalau langkah 7 spec 0022 sudah membangunnya dengan aturan dan lokasi spec ini.
+
+## Folder run sentinel (2026-10-20)
+
+Folder run sentinel di AC-1 menjadi `/stackly sentinel/run`, bukan `/tmp/stackly sentinel/run`, karena `cargo xtask check-deps` menolak path mesin seperti `/tmp` di crate library; folder baru ada di bawah basis `/stackly` yang sama dengan render sample spec 0009 dan tetap memuat spasi, jadi nilai token yang tidak di encode tetap terdeteksi (dibangun langkah 1, commit e6c747f).
