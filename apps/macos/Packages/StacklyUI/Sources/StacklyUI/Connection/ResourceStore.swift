@@ -37,6 +37,11 @@ public enum StoreEffect<Item: Identifiable & Sendable> {
     case delete(Item.ID, revision: UInt64)
     /// The item changed at `revision` in a way only a fetch shows.
     case refetch(Item.ID, revision: UInt64)
+    /// A status observation without a revision (spec 0010, `statusSeq`). For a held
+    /// item, `apply` runs and says whether the item changed; the held revision and the
+    /// tombstones never move. For an item the store does not hold, it is a `refetch` at
+    /// `revision`, so a deleted item is not brought back.
+    case observe(Item.ID, revision: UInt64, apply: (inout Item) -> Bool)
     /// The event does not concern this store.
     case ignore
 }
@@ -96,6 +101,9 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
     @ObservationIgnored private let fetchOne: (Item.ID) async throws(ClientError) -> Item?
     @ObservationIgnored private let revision: (Item) -> UInt64
     @ObservationIgnored private let reduce: (Event) -> StoreEffect<Item>
+    @ObservationIgnored private let merge: (_ held: Item, _ incoming: Item) -> Item
+    @ObservationIgnored private let isGone: (Item) -> Bool
+    @ObservationIgnored private let resetObservations: ((inout Item) -> Void)?
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let sleep: (Duration) async throws -> Void
 
@@ -108,6 +116,15 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
     ///   - fetchOne: Fetches one item, or `nil` when it is gone.
     ///   - revision: The revision of an item.
     ///   - reduce: What an event does to the store.
+    ///   - merge: Joins a whole item that arrives (an upsert, a refetch, an offer, or a
+    ///     held event applied after a snapshot) with the held one. The default takes the
+    ///     incoming item. A snapshot replaces items as they are.
+    ///   - isGone: Whether an item that arrives is a removal in disguise, such as a
+    ///     retained instance. Such an item never enters the store: it deletes the held
+    ///     one at its revision.
+    ///   - resetObservations: Forgets the observation bound of a held item, called for
+    ///     every item when the daemon restarted (`server_restarted`), so the counters of
+    ///     the new run are not taken for old ones.
     ///   - now: The wall clock for ``loadedAt``.
     ///   - sleep: Waits; tests inject one that does not.
     public init(
@@ -116,6 +133,9 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         fetchOne: @escaping (Item.ID) async throws(ClientError) -> Item?,
         revision: @escaping (Item) -> UInt64,
         reduce: @escaping (Event) -> StoreEffect<Item>,
+        merge: @escaping (_ held: Item, _ incoming: Item) -> Item = { _, incoming in incoming },
+        isGone: @escaping (Item) -> Bool = { _ in false },
+        resetObservations: ((inout Item) -> Void)? = nil,
         now: @escaping () -> Date = { Date() },
         sleep: @escaping (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
@@ -124,6 +144,9 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         self.fetchOne = fetchOne
         self.revision = revision
         self.reduce = reduce
+        self.merge = merge
+        self.isGone = isGone
+        self.resetObservations = resetObservations
         self.now = now
         self.sleep = sleep
     }
@@ -219,7 +242,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
     private func complete(_ snapshot: [Item]) {
         var fresh: [Item.ID: Item] = [:]
         var freshRevisions: [Item.ID: UInt64] = [:]
-        for item in snapshot {
+        for item in snapshot where isGone(item) == false {
             let itemRevision = revision(item)
             if let tombstone = tombstones[item.id], tombstone >= itemRevision { continue }
             fresh[item.id] = item
@@ -286,18 +309,47 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
             remove(id, revision: newRevision)
         case .refetch(let id, let newRevision):
             refetch(id, revision: newRevision)
+        case .observe(let id, let newRevision, let change):
+            guard var item = items[id] else {
+                refetch(id, revision: newRevision)
+                return
+            }
+            // Neither the revision nor a tombstone moves: an observation is not a
+            // change of the row, so a state change at the same revision still applies.
+            if change(&item) {
+                items[id] = item
+                didApply?(.changed(item))
+            }
         case .ignore:
             break
         }
     }
 
-    private func upsert(_ item: Item) {
-        let itemRevision = revision(item)
-        guard itemRevision > floor(of: item.id) else { return }
+    private func upsert(_ incoming: Item) {
+        let itemRevision = revision(incoming)
+        guard itemRevision > floor(of: incoming.id) else { return }
+        if isGone(incoming) {
+            remove(incoming.id, revision: itemRevision)
+            return
+        }
+        let item = items[incoming.id].map { merge($0, incoming) } ?? incoming
         items[item.id] = item
         revisions[item.id] = itemRevision
         tombstones[item.id] = nil
         didApply?(.changed(item))
+    }
+
+    /// Tells the store the daemon restarted: items forget their observation bound, so the
+    /// first observation of the new run applies even when its counter is below the old
+    /// one. A snapshot follows; this matters when that snapshot fails and the old data
+    /// stays.
+    func serverRestarted() {
+        guard let resetObservations else { return }
+        items = items.mapValues { held in
+            var item = held
+            resetObservations(&item)
+            return item
+        }
     }
 
     /// Removes an item at `revision` and keeps the revision as a tombstone, so
