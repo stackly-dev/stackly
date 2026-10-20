@@ -11,13 +11,14 @@ use stackly_core::operation::{
     WorkError, WorkOutcome, WorkResult, codes,
 };
 use stackly_domain::{
-    CreatedRecord, CreatedState, DetailKey, ErrorCodeName, JournalPayload, LockKey, OperationKind,
-    OperationResource, OperationState, Registry, RegistryError, RuntimeId, StepState,
+    CreatedRecord, CreatedState, DetailKey, ErrorCodeName, FailureError, FailureItem,
+    JournalPayload, LockKey, OperationKind, OperationResource, OperationState, Registry,
+    RegistryError, Rule, RuntimeId, StepState,
 };
 use stackly_platform::SecretValue;
 use stackly_testkit::FakeRegistry;
 
-use crate::common::{Harness, TestError, manager_request, request, wait_state};
+use crate::common::{Harness, TestError, fast, manager_request, request, wait_state};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_panicking_work_is_compensated_and_failed_and_the_engine_keeps_running() {
@@ -523,4 +524,225 @@ async fn a_journal_over_its_limits_fails_with_its_own_catalog_code() {
             ]
         )
     );
+}
+
+fn key(text: &str) -> DetailKey {
+    text.parse().expect("a detail key")
+}
+
+fn item(kind: &str, fields: &[(&str, &str)]) -> FailureItem {
+    FailureItem::new(
+        kind.parse().expect("a reason code"),
+        fields
+            .iter()
+            .map(|(name, value)| (key(name), (*value).to_owned()))
+            .collect(),
+    )
+    .expect("a valid item")
+}
+
+/// Fails a manager operation at its one step with `items`, `rule`, and
+/// `details`, and returns the failed operation.
+async fn failed_with(
+    harness: &Harness,
+    details: Vec<(DetailKey, String)>,
+    items: Vec<FailureItem>,
+    rule: Option<Rule>,
+) -> FailureError {
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new()
+                .step("check")
+                .fail("provider.invalid_settings", false)
+                .failing_with(details, items, rule)
+                .boxed(),
+        ))
+        .await;
+    wait_state(&harness.engine, id, OperationState::Failed)
+        .await
+        .view
+        .journal
+        .failure_error()
+        .cloned()
+        .expect("the failure error is journaled")
+}
+
+fn pairs(error: &FailureError) -> Vec<(&str, &str)> {
+    error
+        .details()
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_failed_step_keeps_its_items_and_rule_and_a_restarted_engine_reads_them_back() {
+    let harness = Harness::new().await;
+    let items = vec![
+        item("issue", &[("path", "/port"), ("detail", "out of range")]),
+        item("issue", &[]),
+    ];
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new()
+                .step("check")
+                .fail("provider.invalid_settings", false)
+                .failing_with(
+                    vec![(key("provider"), "official/postgresql".to_owned())],
+                    items.clone(),
+                    Some(Rule::Br002),
+                )
+                .boxed(),
+        ))
+        .await;
+    let failed = wait_state(&harness.engine, id, OperationState::Failed).await;
+
+    let error = failed.view.journal.failure_error().expect("an error");
+    assert_eq!(error.items(), items.as_slice());
+    assert_eq!(error.rule(), Some(Rule::Br002));
+    assert_eq!(pairs(error), [("provider", "official/postgresql")]);
+
+    let (restarted, _) = harness.restarted(fast());
+    restarted.recover().await.expect("the registry recovers");
+    let again = restarted.get(id).await.unwrap().expect("the operation");
+    assert_eq!(
+        again.view.journal.failure_error(),
+        failed.view.journal.failure_error(),
+        "the same error after a restart"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_error_without_items_or_rule_stores_none_and_engine_errors_never_carry_any() {
+    let harness = Harness::new().await;
+
+    let plain = failed_with(&harness, Vec::new(), Vec::new(), None).await;
+    assert!(plain.items().is_empty() && plain.rule().is_none());
+    assert!(
+        plain.details().is_empty(),
+        "no omitted detail without a drop"
+    );
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new().step("stage").panics().boxed(),
+        ))
+        .await;
+    let panicked = wait_state(&harness.engine, id, OperationState::Failed).await;
+    let error = panicked.view.journal.failure_error().expect("an error");
+    assert_eq!(error.code().as_str(), "internal.unexpected");
+    assert!(error.items().is_empty() && error.rule().is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_error_with_101_items_keeps_100_and_counts_one_omitted() {
+    let harness = Harness::new().await;
+    let items: Vec<FailureItem> = (0..101)
+        .map(|n| item("issue", &[("path", &format!("/field{n}"))]))
+        .collect();
+
+    let error = failed_with(&harness, Vec::new(), items.clone(), None).await;
+
+    assert_eq!(error.items(), &items[..100]);
+    assert_eq!(pairs(&error), [("omitted", "1")]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn omitted_from_the_engine_adds_to_the_omitted_the_work_reported() {
+    let harness = Harness::new().await;
+    let items: Vec<FailureItem> = (0..102).map(|_| item("issue", &[])).collect();
+
+    let error = failed_with(
+        &harness,
+        vec![(key("omitted"), "5".to_owned())],
+        items,
+        None,
+    )
+    .await;
+
+    assert_eq!(error.items().len(), 100);
+    assert_eq!(pairs(&error), [("omitted", "7")]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn items_over_65536_stored_bytes_are_dropped_from_the_back_and_counted() {
+    let harness = Harness::new().await;
+    let big = "v".repeat(512);
+    let fields: Vec<(String, String)> = (0..8).map(|n| (format!("f{n}"), big.clone())).collect();
+    let refs: Vec<(&str, &str)> = fields
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    let items: Vec<FailureItem> = (0..100).map(|_| item("issue", &refs)).collect();
+
+    let error = failed_with(&harness, Vec::new(), items, None).await;
+
+    let kept = error.items().len();
+    assert!((1..100).contains(&kept), "kept {kept}");
+    let omitted = 100 - kept;
+    assert_eq!(pairs(&error), [("omitted", omitted.to_string().as_str())]);
+    let stored = |count: usize| -> usize {
+        let rows: Vec<serde_json::Value> = error.items()[..1]
+            .iter()
+            .cycle()
+            .take(count)
+            .map(|item| {
+                serde_json::json!({
+                    "kind": item.kind().as_str(),
+                    "fields": item.fields().iter()
+                        .map(|(name, value)| serde_json::json!({"key": name.as_str(), "value": value}))
+                        .collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        serde_json::to_string(&rows).expect("rows encode").len()
+    };
+    assert!(stored(kept) <= 65_536, "{} bytes", stored(kept));
+    assert!(stored(kept + 1) > 65_536, "one more item would not fit");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn item_values_go_through_the_redactor_and_never_reach_the_registry() {
+    let harness = Harness::new().await;
+    harness
+        .redactor
+        .learn(&SecretValue::new(LEAKED.to_owned()).expect("a valid fixture value"));
+    let items = vec![item(
+        "issue",
+        &[("detail", &format!("password {LEAKED} rejected"))],
+    )];
+
+    let error = failed_with(&harness, Vec::new(), items, None).await;
+
+    assert_eq!(error.items()[0].fields()[0].1, "password **** rejected");
+    assert!(!format!("{error:?}").contains(LEAKED));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn items_and_rule_of_a_step_that_fails_after_the_point_of_no_return_are_kept() {
+    let harness = Harness::new().await;
+    let items = vec![item("reference", &[("name", "db-password")])];
+    let mut begin = request(
+        OperationKind::InstallRuntime,
+        OperationResource::Runtime(RuntimeId::generate()),
+        ScriptedWork::new()
+            .step("fetch")
+            .irreversible()
+            .step("verify")
+            .fail("provider.invalid_settings", false)
+            .failing_with(Vec::new(), items.clone(), Some(Rule::Br018))
+            .boxed(),
+    );
+    begin.creates_resource = true;
+
+    let id = harness.begin(begin).await;
+    let stuck = wait_state(&harness.engine, id, OperationState::NeedsRecovery).await;
+
+    let error = stuck.view.journal.failure_error().expect("an error");
+    assert_eq!(error.items(), items.as_slice());
+    assert_eq!(error.rule(), Some(Rule::Br018));
 }

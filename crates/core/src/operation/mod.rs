@@ -11,6 +11,7 @@
 pub mod codes;
 mod compensation;
 mod context;
+mod failure;
 pub mod limits;
 mod lock;
 mod precheck;

@@ -8,9 +8,9 @@ use std::sync::atomic::Ordering;
 
 use jiff::Timestamp;
 use stackly_domain::{
-    CreatedState, ErrorCodeName, FailureCode, FailureError, OperationEvent, OperationFailure,
-    OperationId, OperationState, Outcome, RecoveryCause, RegistryError, ResourceRef, StepState,
-    WriteOp,
+    CreatedState, ErrorCodeName, FailureCode, FailureError, FailureItem, OperationEvent,
+    OperationFailure, OperationId, OperationState, Outcome, RecoveryCause, RegistryError,
+    ResourceRef, Rule, StepState, WriteOp,
 };
 use tokio::time::Instant;
 
@@ -35,6 +35,8 @@ pub(crate) enum Cause {
         code: ErrorCodeName,
         message: String,
         details: Vec<(stackly_domain::DetailKey, String)>,
+        items: Vec<FailureItem>,
+        rule: Option<Rule>,
         retryable: bool,
     },
     /// The engine failed, or a bug in the work.
@@ -52,6 +54,8 @@ impl Cause {
             code,
             message: error.to_string(),
             details: vec![pair(first.0, first.1), pair("max", max)],
+            items: Vec::new(),
+            rule: None,
             retryable: false,
         };
         match error {
@@ -99,8 +103,16 @@ impl Cause {
                 code,
                 message,
                 details,
+                items,
+                rule,
                 ..
-            } => inner.failure_error(code.clone(), message, details.clone()),
+            } => inner.failure_error_with(
+                code.clone(),
+                message,
+                details.clone(),
+                items.clone(),
+                *rule,
+            ),
             Self::Engine(message) => {
                 inner.failure_error(codes::INTERNAL_UNEXPECTED, message, Vec::new())
             }
@@ -389,6 +401,8 @@ async fn settle(inner: &Arc<Inner>, handle: &Arc<OpHandle>, ended: Ended) {
                 code: error.code(),
                 message: error.to_string(),
                 details: error.details(),
+                items: error.items(),
+                rule: error.rule(),
                 retryable: error.retryable(),
             };
             fail(inner, handle, &mut record, cause).await;
@@ -686,6 +700,8 @@ async fn succeed(inner: &Inner, handle: &OpHandle, record: &mut OpRecord, outcom
                     code: error.code(),
                     message: error.to_string(),
                     details: error.details(),
+                    items: error.items(),
+                    rule: error.rule(),
                     retryable: error.retryable(),
                 };
                 fail(inner, handle, record, cause).await;
@@ -742,6 +758,8 @@ async fn succeed(inner: &Inner, handle: &OpHandle, record: &mut OpRecord, outcom
                     code: codes::REVISION_MISMATCH,
                     message: format!("{resource} is at revision {actual}, not {expected}"),
                     details: vec![pair("expected", expected), pair("actual", actual)],
+                    items: Vec::new(),
+                    rule: None,
                     retryable: true,
                 };
                 fail(inner, handle, record, cause).await;

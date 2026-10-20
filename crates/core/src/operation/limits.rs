@@ -29,6 +29,9 @@ pub const RESULT_MAX: usize = OperationJournal::RESULT_MAX;
 pub const CHECKPOINT_MAX: usize = JournalStep::CHECKPOINT_MAX;
 /// The longest custom item payload, in bytes.
 pub const CUSTOM_PAYLOAD_MAX: usize = CreatedRecord::PAYLOAD_MAX;
+/// The most bytes the stored form of a failure's items takes (the
+/// `failure_items` column), measured as compact JSON.
+pub const FAILURE_ITEMS_MAX_BYTES: usize = 65_536;
 
 /// The limits one engine runs with. [`EngineLimits::default`] holds the
 /// constants of this module.
