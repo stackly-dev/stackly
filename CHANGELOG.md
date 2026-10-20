@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `stackly` now reads `STACKLY_ROOT` once at startup, with the same rules as the daemon (see spec 0006).
 - Open enums in the contract read a value from a newer daemon as `unrecognized` instead of failing, in Rust and in Swift (see spec 0006).
+- The test only `testing/fake` provider package is now at revision 0.3.0 and writes its config to the instance's `secrets` folder, so development roots and `stackly instance create` for it use `--revision 0.3.0` (see specs 0009 and 0014).
 
 ### Security
 
@@ -70,3 +71,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Operation journals, the request fingerprint, events, and the daemon log never hold a secret value; a byte scan of the registry files and the log after an operation with a secret in its params finds none (see spec 0007).
 - Every log line, error envelope, and event the daemon sends passes a redactor that masks each known secret value, also when the JSON log format escapes the key, and an error message is redacted before it is cut to 200 characters. Code reads a secret value only in the modules `cargo xtask check-deps` allows, and every reveal writes one audit line without the value (see spec 0011).
 - The CLI never takes a secret value as an argument, and Ctrl+C at the hidden prompt restores the terminal (see spec 0011).
+- A config file marked `sensitive` must be rendered into the instance's `secrets` folder: a provider package that puts one anywhere else is refused with `token_not_allowed_here`, and a sensitive config that init renders is removed when init ends. A secret in a config file therefore never stays in the data root or a cold backup, and the folder is gone once the instance stops (see specs 0009 and 0014).
