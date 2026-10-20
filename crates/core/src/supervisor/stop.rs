@@ -347,6 +347,10 @@ async fn run_stop(
         return Err(failed(SupervisorError::IdentityUnproven { pid: None }));
     }
 
+    // The pause before a respawn holds no operation, so the stop has the
+    // lock; it ends the pause.
+    actor.cancel_respawn(deps);
+
     ctx.begin_step(StepSpec::new(StageName::JOURNAL).irreversible())
         .await?;
     ctx.set_stage(StageName::JOURNAL).await?;

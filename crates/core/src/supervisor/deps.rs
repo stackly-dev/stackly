@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use stackly_domain::{Instance, InstanceId, Registry, ResourceRevision};
 use stackly_platform::Platform;
@@ -13,6 +13,7 @@ use super::sink::{LogSink, SinkSet, TailSink};
 use super::status::InstanceStatus;
 use super::{PortProbe, SupervisorConfig};
 use crate::layout::PreparedLayout;
+use crate::operation::OperationEngine;
 use crate::secret::{Redactor, SecretService};
 
 /// Receives what a client can see change, in commit order for each
@@ -125,6 +126,10 @@ impl fmt::Debug for SupervisorDeps {
 pub(crate) struct Shared {
     pub(crate) deps: SupervisorDeps,
     actors: Mutex<HashMap<InstanceId, Arc<InstanceActor>>>,
+    /// The engine the actors begin their own operations through (a
+    /// respawn after a crash, a start after reconciliation); set once by
+    /// the daemon.
+    operations: OnceLock<OperationEngine>,
 }
 
 /// The process supervisor: one actor per instance, and the operations that
@@ -151,8 +156,27 @@ impl Supervisor {
             shared: Arc::new(Shared {
                 deps,
                 actors: Mutex::new(HashMap::new()),
+                operations: OnceLock::new(),
             }),
         }
+    }
+
+    /// Hands the supervisor the operation engine its actors start system
+    /// operations through: the respawn that follows a crash (trigger
+    /// `restart_policy`) and the starts of reconciliation. The engine is
+    /// built after the supervisor, because its operation works hold a
+    /// clone of it, so the daemon calls this once, before the engine
+    /// starts. Until then a crashed instance stays `recovering` with
+    /// nothing scheduled, and the supervisor logs a warning. A second call
+    /// changes nothing.
+    pub fn attach_operations(&self, engine: OperationEngine) {
+        if self.shared.operations.set(engine).is_err() {
+            tracing::warn!("the supervisor already has an operation engine");
+        }
+    }
+
+    pub(crate) fn operations(&self) -> Option<&OperationEngine> {
+        self.shared.operations.get()
     }
 
     pub(crate) fn deps(&self) -> &SupervisorDeps {

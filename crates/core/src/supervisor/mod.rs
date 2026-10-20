@@ -6,7 +6,10 @@
 //!   [`Classification::Unproven`], never a signal.
 //! - [`RestartHistory`] and [`backoff_delay`] hold the restart policy: 1
 //!   second doubling with jitter, 5 respawns in a sliding 5 minute window,
-//!   and a reset after 60 seconds of continuous `ready`.
+//!   and a reset after 60 seconds of continuous `ready`. The actor applies
+//!   it to a crash outside any operation: a timer holds the pause, then a
+//!   system `start_instance` operation respawns the process
+//!   ([`Supervisor::attach_operations`] gives the actors their engine).
 //! - [`InstanceChanges`] and [`ActorCommitRetry`] are the commit rules: one
 //!   `UpdateInstance` per mutation, and how an actor commit retries.
 //! - [`PortProbe`] tells whether an endpoint's port is free, with the
@@ -47,6 +50,7 @@ mod prepare;
 pub mod probe;
 mod readiness;
 mod reload;
+mod respawn;
 mod restart;
 mod secrets;
 mod sink;

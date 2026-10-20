@@ -94,6 +94,9 @@ pub(crate) struct ActorState {
     pub(crate) op_owns_exit: bool,
     /// The next [`ProcessSlot::generation`].
     pub(crate) next_generation: u64,
+    /// Flips to `true` to cancel the pause before a respawn the actor's
+    /// timer waits out; `None` when no pause is pending.
+    pub(crate) respawn: Option<watch::Sender<bool>>,
     seq: u64,
     published: InstanceStatus,
 }
@@ -219,6 +222,7 @@ impl InstanceActor {
             stopping: false,
             op_owns_exit: false,
             next_generation: 1,
+            respawn: None,
             seq: 0,
             published: placeholder(now),
         };
@@ -276,6 +280,21 @@ impl InstanceActor {
     pub(crate) fn release_exit(&self, deps: &SupervisorDeps) {
         self.update(deps, |state| state.op_owns_exit = false);
         self.released.notify_one();
+    }
+
+    /// Cancels the pause before a respawn, if one is pending, and clears
+    /// the time it showed. A respawn that already began is not touched: it
+    /// is an operation then.
+    pub(crate) fn cancel_respawn(&self, deps: &SupervisorDeps) {
+        self.update(deps, |state| {
+            if let Some(cancel) = state.respawn.take() {
+                cancel.send_replace(true);
+                let attempts = state
+                    .restart
+                    .crashes_in_window(tokio::time::Instant::now(), &deps.config);
+                state.restart_status = restart_status(&deps.config, attempts, None, false);
+            }
+        });
     }
 
     /// Notes the revision a commit left the instance at.

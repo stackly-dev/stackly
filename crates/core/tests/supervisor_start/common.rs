@@ -419,6 +419,7 @@ impl Rig {
         );
         engine.recover().await.expect("an empty registry recovers");
         engine.start();
+        sup.attach_operations(engine.clone());
 
         let package = install_package(&layout, &patch, &schema_patch);
         let runtime = install_runtime(&layout, &package);
@@ -695,6 +696,28 @@ impl Rig {
             );
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+    }
+
+    /// Every operation of `kind` on `id`, newest first, with its journal
+    /// input.
+    pub async fn operations_of(
+        &self,
+        id: InstanceId,
+        kind: OperationKind,
+    ) -> Vec<stackly_core::operation::OperationView> {
+        self.engine
+            .list(stackly_domain::OperationQuery {
+                active_only: false,
+                resource: Some(OperationResource::Instance(id)),
+                limit: 100,
+                before: None,
+            })
+            .await
+            .expect("the operations list")
+            .items
+            .into_iter()
+            .filter(|view| view.operation.kind() == kind)
+            .collect()
     }
 
     /// The code of a failed operation's error.

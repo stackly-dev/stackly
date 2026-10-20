@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use stackly_domain::{
-    DesiredState, Endpoint, EndpointName, FailureCode, InstanceFilter, InstanceId,
+    DesiredState, Endpoint, EndpointName, FailureCode, Instance, InstanceFilter, InstanceId,
     InstanceLifecycle, IpEndpoint, LifecycleEvent, Port, PortRequest, ProcessIdentity,
     ProcessObservation, ResourceRef, StageName, WriteOp, endpoints_conflict,
 };
@@ -35,6 +35,7 @@ use super::lock::{guard_last_observation, take_lock};
 use super::persist::{CommitMode, apply_event, blocking, commit_instance, read_instance};
 use super::prepare::{Checks, Prepared, prepare};
 use super::readiness::spawn_probes;
+use super::respawn::show_pause;
 use super::restart::{JitterFactor, RestartDecision};
 use super::steps::{command_parts, run_render};
 use super::{
@@ -69,6 +70,9 @@ pub struct StartRequest {
     pub instance: InstanceId,
     /// Who asks.
     pub trigger: StartTrigger,
+    /// A respawn the actor's timer began after a crash: the instance is
+    /// `recovering`, so there is no `journal` and no `start_begin`.
+    pub(crate) respawn: bool,
 }
 
 impl StartRequest {
@@ -78,6 +82,7 @@ impl StartRequest {
         Self {
             instance,
             trigger: StartTrigger::User(caller),
+            respawn: false,
         }
     }
 
@@ -87,6 +92,21 @@ impl StartRequest {
         Self {
             instance,
             trigger: StartTrigger::Background,
+            respawn: false,
+        }
+    }
+
+    /// The respawn of an instance that crashed and waits `recovering`,
+    /// begun by the actor when its pause ends (trigger `restart_policy`).
+    /// It repeats `lock` to `readiness` with no dialog and no
+    /// `start_begin`, and does nothing when the instance is no longer
+    /// `recovering` with desired `running`.
+    #[must_use]
+    pub(crate) const fn respawn(instance: InstanceId) -> Self {
+        Self {
+            instance,
+            trigger: StartTrigger::Background,
+            respawn: true,
         }
     }
 }
@@ -176,6 +196,9 @@ async fn run_start(
 
     enter(&mut ctx, StageName::VALIDATE, true, false).await?;
     let instance = read_instance(deps, id).await.map_err(failed)?;
+    if request.respawn {
+        return run_respawn(sup, request, ctx, &instance).await;
+    }
     match instance.lifecycle() {
         InstanceLifecycle::Starting
         | InstanceLifecycle::Running
@@ -249,7 +272,31 @@ async fn run_start(
         }
     };
 
-    let result = after_journal(sup, request, &mut ctx, armed).await;
+    let result = after_journal(sup, request, &mut ctx, Some(armed), false).await;
+    match result {
+        Err(WorkError::Cancelled) => cancel_cleanup(sup, &ctx, id).await,
+        other => other,
+    }
+}
+
+/// The respawn of a crashed instance (spec 0010, *Restart policy*): the
+/// instance is `recovering`, so the attempt starts at `lock` with no
+/// `journal`, and a deadline of `recovery_deadline`. When the instance is
+/// no longer `recovering` with desired `running` (a stop came first), there
+/// is nothing to respawn and the operation ends without effect.
+async fn run_respawn(
+    sup: &Supervisor,
+    request: &StartRequest,
+    mut ctx: OperationContext,
+    instance: &Instance,
+) -> WorkResult {
+    let id = request.instance;
+    if instance.lifecycle() != InstanceLifecycle::Recovering
+        || instance.desired() != DesiredState::Running
+    {
+        return Ok(success(id));
+    }
+    let result = after_journal(sup, request, &mut ctx, None, true).await;
     match result {
         Err(WorkError::Cancelled) => cancel_cleanup(sup, &ctx, id).await,
         other => other,
@@ -562,35 +609,41 @@ enum AttemptEnd {
     Failed(SupervisorError),
 }
 
-/// What happens after an attempt that did not end the operation.
-enum Next {
-    /// Respawn after this pause.
+/// What happens after a process that exited without being asked to.
+pub(crate) enum Next {
+    /// Respawn after this pause; the lifecycle is `recovering`.
     Retry(Duration),
-    /// The operation fails with this error.
+    /// No respawn; the lifecycle is `failed` (or the commit failed, which
+    /// the error says). The operation, if one runs, fails with this error.
     Final(SupervisorError),
 }
 
+/// Runs the attempts of a start after its `journal`: `first` holds what the
+/// checks before the journal prepared, or is `None` for a `recovery`
+/// respawn, whose first attempt makes its own checks. `recovery` also sets
+/// the readiness deadline of every attempt to `recovery_deadline`.
 async fn after_journal(
     sup: &Supervisor,
     request: &StartRequest,
     ctx: &mut OperationContext,
-    first: Armed,
+    first: Option<Armed>,
+    recovery: bool,
 ) -> WorkResult {
     let id = request.instance;
     let mut attempt: u32 = 1;
-    let mut armed = Some(first);
+    let mut armed = first;
     loop {
         let end = match armed.take() {
-            Some(ready) => run_attempt(sup, ctx, ready, attempt).await?,
+            Some(ready) => run_attempt(sup, ctx, ready, attempt, recovery).await?,
             None => {
                 // A respawn repeats the checks, and never shows a dialog.
                 let background = SecretCaller::background().in_operation(ctx.id());
-                match gate(sup, ctx, &background, false).await {
-                    Ok(ready) => run_attempt(sup, ctx, ready, attempt).await?,
+                match gate(sup, ctx, &background, attempt == 1).await {
+                    Ok(ready) => run_attempt(sup, ctx, ready, attempt, recovery).await?,
                     Err(Gate::Work(error)) => return Err(error),
                     // A lock still held counts as a failed attempt.
                     Err(Gate::Error(SupervisorError::DataInUse { .. })) => {
-                        match on_lock_held(sup, id).await {
+                        match on_lock_held(sup, id, CommitMode::Operation).await {
                             Next::Retry(delay) => {
                                 wait_to_respawn(sup, ctx, delay).await?;
                                 attempt += 1;
@@ -600,7 +653,8 @@ async fn after_journal(
                         }
                     }
                     Err(Gate::Error(error)) => {
-                        fail_lifecycle(sup, id, &error_failure_code(&error)).await;
+                        fail_lifecycle(sup, id, &error_failure_code(&error), CommitMode::Operation)
+                            .await;
                         AttemptEnd::Failed(error)
                     }
                 }
@@ -664,15 +718,7 @@ async fn wait_to_respawn(
 ) -> Result<(), WorkError> {
     let deps = sup.deps();
     let actor = sup.actor(ctx_instance(ctx));
-    actor.update(deps, |state| {
-        let next_at = jiff::SignedDuration::try_from(delay)
-            .ok()
-            .and_then(|pause| deps.platform.clock().now().checked_add(pause).ok());
-        let attempts = state
-            .restart
-            .crashes_in_window(Instant::now(), &deps.config);
-        state.restart_status = restart_status(&deps.config, attempts, next_at, false);
-    });
+    actor.update(deps, |state| show_pause(deps, state, delay));
     tokio::select! {
         () = tokio::time::sleep(delay) => {}
         () = ctx.stopped() => {}
@@ -701,9 +747,9 @@ fn error_failure_code(error: &SupervisorError) -> FailureCode {
 /// Records that the start failed: `start_failed` while `starting`, and the
 /// final `crashed` while the instance already runs or recovers. Best
 /// effort: the operation fails with the original error either way.
-async fn fail_lifecycle(sup: &Supervisor, id: InstanceId, reason: &FailureCode) {
+async fn fail_lifecycle(sup: &Supervisor, id: InstanceId, reason: &FailureCode, mode: CommitMode) {
     let now = sup.deps().platform.clock().now();
-    let committed = commit_instance(sup, id, None, CommitMode::Operation, |changes| {
+    let committed = commit_instance(sup, id, None, mode, |changes| {
         let event = match changes.instance().lifecycle() {
             InstanceLifecycle::Starting => LifecycleEvent::StartFailed {
                 reason: reason.clone(),
@@ -729,7 +775,7 @@ async fn fail(
     reason: FailureCode,
     error: SupervisorError,
 ) -> AttemptEnd {
-    fail_lifecycle(sup, id, &reason).await;
+    fail_lifecycle(sup, id, &reason, CommitMode::Operation).await;
     AttemptEnd::Failed(error)
 }
 
@@ -830,6 +876,7 @@ async fn run_attempt(
     ctx: &mut OperationContext,
     armed: Armed,
     attempt: u32,
+    recovery: bool,
 ) -> Result<AttemptEnd, WorkError> {
     let deps = sup.deps();
     let id = ctx_instance(ctx);
@@ -1010,7 +1057,7 @@ async fn run_attempt(
     drop(lock);
     drop(secrets);
     let resumed_at = Instant::now();
-    let deadline = if first {
+    let deadline = if first && !recovery {
         plan.readiness.deadline
     } else {
         plan.recovery_deadline
@@ -1061,8 +1108,9 @@ async fn discard(sup: &Supervisor, child: stackly_platform::SuspendedChild) {
     }
 }
 
-/// A process that exited before it was ready: the early exit check of the
-/// endpoints (spec 0010 K2), then the restart policy.
+/// A process that exited before it was ready: its spools are read to the
+/// end, its secret material removed, then the early exit check of the
+/// endpoints (spec 0010 K2) and the restart policy.
 async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next {
     let deps = sup.deps();
     let actor = sup.actor(id);
@@ -1090,9 +1138,23 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
             .unwrap_or_default();
         finish_process(sup, &actor, generation, leftover);
     }
+    after_unrequested_exit(sup, id, notice, CommitMode::Operation).await
+}
 
-    // The port may have been taken by someone else: that is not a crash of
-    // the provider and uses no budget.
+/// Decides what follows a process that exited without being asked to, and
+/// records it. The port may have been taken by someone else: that is not a
+/// crash of the provider and uses no budget (`endpoint_in_use`). Otherwise
+/// the restart policy runs: `crashed { will_retry: true }` and a pause, or
+/// `crashed { will_retry: false, reason: crash_loop }` when the budget is
+/// spent. `mode` is how the commit reacts to a registry refusal: an
+/// operation decides on it, an actor retries.
+pub(crate) async fn after_unrequested_exit(
+    sup: &Supervisor,
+    id: InstanceId,
+    notice: &ExitNotice,
+    mode: CommitMode,
+) -> Next {
+    let deps = sup.deps();
     if let Ok(instance) = read_instance(deps, id).await {
         for endpoint in instance.endpoints() {
             let Endpoint::Ip(ip) = endpoint else { continue };
@@ -1106,7 +1168,7 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
                 == BindOutcome::InUse
             {
                 let reason = FailureCode::ENDPOINT_IN_USE;
-                fail_lifecycle(sup, id, &reason).await;
+                fail_lifecycle(sup, id, &reason, mode).await;
                 return Next::Final(SupervisorError::EndpointInUse(EndpointFault {
                     endpoint: ip.name().to_string(),
                     address: ip.address().to_string(),
@@ -1115,18 +1177,23 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
             }
         }
     }
-    apply_policy(sup, id, crash_reason(notice.status)).await
+    apply_policy(sup, id, crash_reason(notice.status), mode).await
 }
 
 /// A respawn whose instance lock was still held counts as a failed attempt
 /// with the reason `data_in_use`.
-async fn on_lock_held(sup: &Supervisor, id: InstanceId) -> Next {
-    apply_policy(sup, id, FailureCode::DATA_IN_USE).await
+async fn on_lock_held(sup: &Supervisor, id: InstanceId, mode: CommitMode) -> Next {
+    apply_policy(sup, id, FailureCode::DATA_IN_USE, mode).await
 }
 
 /// Records a crash in the history and decides: respawn after a pause, or
 /// stop trying with `crash_loop`.
-async fn apply_policy(sup: &Supervisor, id: InstanceId, reason: FailureCode) -> Next {
+async fn apply_policy(
+    sup: &Supervisor,
+    id: InstanceId,
+    reason: FailureCode,
+    mode: CommitMode,
+) -> Next {
     let deps = sup.deps();
     let actor = sup.actor(id);
     let decision = actor.update(deps, |state| {
@@ -1137,7 +1204,7 @@ async fn apply_policy(sup: &Supervisor, id: InstanceId, reason: FailureCode) -> 
     let now = deps.platform.clock().now();
     match decision {
         RestartDecision::Retry { delay, .. } => {
-            let committed = commit_instance(sup, id, None, CommitMode::Operation, |changes| {
+            let committed = commit_instance(sup, id, None, mode, |changes| {
                 apply_event(
                     changes,
                     LifecycleEvent::Crashed {
@@ -1150,12 +1217,12 @@ async fn apply_policy(sup: &Supervisor, id: InstanceId, reason: FailureCode) -> 
             })
             .await;
             match committed {
-                Ok(_) => Next::Retry(delay),
+                Ok(()) => Next::Retry(delay),
                 Err(error) => Next::Final(error),
             }
         }
         RestartDecision::Exhausted { crashes } => {
-            let committed = commit_instance(sup, id, None, CommitMode::Operation, |changes| {
+            let committed = commit_instance(sup, id, None, mode, |changes| {
                 apply_event(
                     changes,
                     LifecycleEvent::Crashed {
@@ -1171,7 +1238,7 @@ async fn apply_policy(sup: &Supervisor, id: InstanceId, reason: FailureCode) -> 
                 state.restart_status = restart_status(&deps.config, crashes, None, true);
             });
             match committed {
-                Ok(_) => Next::Final(SupervisorError::RetryBudgetExhausted {
+                Ok(()) => Next::Final(SupervisorError::RetryBudgetExhausted {
                     attempts: crashes,
                     last_exit_code: None,
                     last_signal: None,
