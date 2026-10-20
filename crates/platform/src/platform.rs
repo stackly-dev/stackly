@@ -1,6 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use crate::agent::{BackgroundAgent, UnsupportedBackgroundAgent};
 use crate::clock::Clock;
 use crate::fs::Filesystem;
 use crate::identity::UserIdentity;
@@ -28,14 +29,17 @@ pub struct Platform {
     info: Arc<dyn PlatformInfo>,
     secrets: Arc<dyn SecretStore>,
     processes: Arc<dyn ProcessSupervision>,
+    background_agent: Arc<dyn BackgroundAgent>,
 }
 
 impl Platform {
     /// Bundles the five ports. The secret store starts as an
     /// [`UnsupportedSecretStore`] and process supervision as an
-    /// [`UnsupportedProcessSupervision`] for the OS `info` reports; install
-    /// real ones with [`with_secrets`](Self::with_secrets) and
-    /// [`with_processes`](Self::with_processes).
+    /// [`UnsupportedProcessSupervision`], and the background agent an
+    /// [`UnsupportedBackgroundAgent`], for the OS `info` reports; install
+    /// real ones with [`with_secrets`](Self::with_secrets),
+    /// [`with_processes`](Self::with_processes), and
+    /// [`with_background_agent`](Self::with_background_agent).
     #[must_use]
     pub fn new(
         directories: Arc<dyn DirectoryResolver>,
@@ -47,6 +51,7 @@ impl Platform {
         let os = info.target().os();
         let secrets = Arc::new(UnsupportedSecretStore::new(os));
         let processes = Arc::new(UnsupportedProcessSupervision::new(os));
+        let background_agent = Arc::new(UnsupportedBackgroundAgent::new(os));
         Self {
             directories,
             fs,
@@ -55,6 +60,7 @@ impl Platform {
             info,
             secrets,
             processes,
+            background_agent,
         }
     }
 
@@ -70,6 +76,13 @@ impl Platform {
     #[must_use]
     pub fn with_processes(mut self, processes: Arc<dyn ProcessSupervision>) -> Self {
         self.processes = processes;
+        self
+    }
+
+    /// Returns a copy with `agent` as the background agent port (spec 0015).
+    #[must_use]
+    pub fn with_background_agent(mut self, agent: Arc<dyn BackgroundAgent>) -> Self {
+        self.background_agent = agent;
         self
     }
 
@@ -127,6 +140,12 @@ impl Platform {
     #[must_use]
     pub fn processes(&self) -> &dyn ProcessSupervision {
         &*self.processes
+    }
+
+    /// Returns the background agent port.
+    #[must_use]
+    pub fn background_agent(&self) -> &dyn BackgroundAgent {
+        &*self.background_agent
     }
 }
 

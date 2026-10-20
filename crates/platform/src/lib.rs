@@ -20,8 +20,11 @@
 //! process that ran, except a helper's group (spec 0010).
 //!
 //! [`bundle`] names the app bundle that carries the daemon and the CLI, with
-//! the temporary identifiers of spec 0015.
+//! the temporary identifiers of spec 0015, and the background agent port
+//! ([`BackgroundAgent`]) reads and changes the registration of the daemon's
+//! LaunchAgent.
 
+mod agent;
 pub mod bundle;
 mod capability;
 mod clock;
@@ -37,6 +40,10 @@ mod secret;
 mod tree;
 mod unsupported;
 
+pub use agent::{
+    AgentOp, AgentOsErrorKind, AgentProbe, AgentRegistration, BackgroundAgent,
+    BackgroundAgentError, LaunchContext, UnsupportedBackgroundAgent,
+};
 pub use bundle::AppBundle;
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 pub use clock::{Clock, SystemClock};
