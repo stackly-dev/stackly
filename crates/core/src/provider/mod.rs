@@ -6,6 +6,7 @@
 //! writes a file, or resolves a secret; every side effect happens in the
 //! executor of spec 0010, from a validated plan.
 
+mod connection;
 mod digest;
 #[doc(hidden)]
 pub mod fuzzing;
@@ -26,6 +27,9 @@ mod timeouts;
 mod validate;
 mod versions;
 
+pub use connection::{
+    CONNECTION_ENTRIES_MAX, CONNECTION_TEMPLATE_MAX, CONNECTION_TITLE_MAX, ConnectionSpec,
+};
 pub use interpolate::{EndpointTransport, InstanceDir};
 pub use issue::{Issue, IssueCode, Location, MAX_ISSUES};
 #[cfg(feature = "json-schema")]

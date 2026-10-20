@@ -288,12 +288,13 @@ area! {
 
 area! {
     /// Provider package codes (spec 0009, *Kode error di wire*). Each issue
-    /// is one `issue` item; an issue message never holds a settings text
-    /// value or a secret.
+    /// is one `issue` item, with a `reason` field only when the issue code
+    /// declares reasons (spec 0021); an issue message never holds a
+    /// settings text value or a secret.
     pub mod manifest = "manifest", owner "spec 0009" {
         INVALID = "manifest.invalid", InvalidInput, retryable false,
             details ["package", "issueCount", "omitted"],
-            items { kind "issue", fields ["file", "location", "code", "message"], max 100 },
+            items { kind "issue", fields ["file", "location", "code", "message", "reason"], max 100 },
             "a provider package cannot be read or breaks the manifest schema, and items lists each issue";
     }
 }
@@ -304,7 +305,7 @@ area! {
     pub mod provider = "provider", owner "spec 0009" {
         INVALID_SETTINGS = "provider.invalid_settings", InvalidInput, retryable false,
             details ["issueCount", "omitted"],
-            items { kind "issue", fields ["file", "location", "code", "message"], max 100 },
+            items { kind "issue", fields ["file", "location", "code", "message", "reason"], max 100 },
             "the settings do not match the provider's settings schema, and items lists each issue";
         UNSUPPORTED_CAPABILITY = "provider.unsupported_capability", Unsupported, retryable false,
             details ["capability"], "the provider lacks the capability the action needs";
@@ -995,7 +996,7 @@ mod tests {
     fn manifest_and_provider_codes_match_the_spec_0009_table() {
         let issue = Some(ItemSpec {
             kind: "issue",
-            fields: &["file", "location", "code", "message"],
+            fields: &["file", "location", "code", "message", "reason"],
             max: 100,
         });
         let table: Vec<_> = manifest::ALL

@@ -75,7 +75,7 @@ struct ProviderErrorContractTests {
         for code in ["manifest.invalid", "provider.invalid_settings"] {
             let items = try #require(codes.first { $0.code == code }?.items, "\(code)")
             #expect(items.kind == "issue")
-            #expect(items.fields == ["file", "location", "code", "message"])
+            #expect(items.fields == ["file", "location", "code", "message", "reason"])
             #expect(items.max == 100)
         }
     }
