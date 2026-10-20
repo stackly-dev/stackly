@@ -18,7 +18,11 @@
 //! processes suspended until their identity is recorded, checks a
 //! process's identity again before every signal, and has no way to kill a
 //! process that ran, except a helper's group (spec 0010).
+//!
+//! [`bundle`] names the app bundle that carries the daemon and the CLI, with
+//! the temporary identifiers of spec 0015.
 
+pub mod bundle;
 mod capability;
 mod clock;
 mod error;
@@ -32,6 +36,7 @@ mod process;
 mod secret;
 mod unsupported;
 
+pub use bundle::AppBundle;
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 pub use clock::{Clock, SystemClock};
 pub use error::PlatformError;
