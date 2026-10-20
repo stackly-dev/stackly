@@ -121,7 +121,7 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 
 ## Milestone 4: GUI and AC-001
 
-Langkah build 9. Test Swift `SkeletonEndToEndTests` memakai binary seed dan `stacklyd` asli, dengan koneksi `StacklyClient` kedua (noninteractive) yang membuat perubahan. Langkah build 10 (record manual dengan CLI yang mengubah, AC-16) menunggu Milestone 2 dan 3 di main dan belum dikerjakan.
+Langkah build 9. Test Swift `SkeletonEndToEndTests` memakai binary seed dan `stacklyd` asli, dengan koneksi `StacklyClient` kedua (noninteractive) yang membuat perubahan. Langkah build 10 menambah record manual `NOT_RUN` untuk AC-16 (CLI yang mengubah, GUI yang menampilkan); reviewer menjalankannya dengan tangan dan mengisi hasilnya.
 
 Keputusan kecil yang diambil saat membangun, karena spec diam:
 
@@ -134,6 +134,9 @@ Keputusan kecil yang diambil saat membangun, karena spec diam:
 
 - [ ] Buka `apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Support/ProcessRunner.swift` → tidak ada `waitUntilExit()`; exit datang lewat `terminationHandler`, dan watchdog mengirim SIGKILL setelah batas waktu → AC-14, AC-15
 - [ ] Setelah `swift test` selesai, jalankan `ps -axww -o pid=,args= | grep stk-ui-` → tidak ada `stackly-fake-server` atau `stacklyd` dengan root `/private/tmp/stk-ui-*` yang tersisa → AC-14, AC-15
+- [ ] Buka `evidence/manual/2026-10-20-walking-skeleton-through-the-cli-and-gui.json` → `covers` AC-001, AC-013, AC-029, `kind` `fixture`, `method` `manual`, `status` `NOT_RUN`, dan 15 `steps` bernomor (bangun, seed, `stacklyd`, app, create, start, tutup jendela, ⌘Q, Ctrl+C daemon, `kill -9` daemon, init gagal, create terputus, stop, bersih, isi record) → AC-16
+- [ ] Jalankan langkah record itu di Mac ini pada root sementara (`export R="$(mktemp -d /tmp/stk-skel.XXXXXX)"`; seed `target/debug/examples/skeleton_seed --root "$R"`; `STACKLY_ROOT="$R" target/debug/stacklyd`; app `STACKLY_ROOT="$R" target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly`; CLI `STACKLY_ROOT="$R" target/debug/stackly instance ...`) → baris `demo` muncul, berubah ke Running dan siap, dan Stopped tanpa klik atau refresh; PID sama setelah tutup jendela, ⌘Q, Ctrl+C dan `kill -9` daemon (`adopted`); tepat satu proses `serve` dan satu baris `demo`; `slow` dan `broken` Failed; tidak ada proses fake setelah stop → AC-16
+- [ ] Isi `steps`, `actual`, `status`, `reviewer`, dan `finishedAt` di record, lalu `cargo xtask evidence check` → lulus; `status` `PASS` hanya kalau setiap hasil di atas terlihat sendiri oleh reviewer → AC-16
 
 ### Commands
 
@@ -143,11 +146,12 @@ Keputusan kecil yang diambil saat membangun, karena spec diam:
 - [ ] `swift test --package-path apps/macos/Packages/StacklyUI --skip "NativeTests\."` → seluruh suite `StacklyUI` hijau, termasuk aturan sumber yang tidak memindai `Tests/` → AC-14, AC-15
 - [ ] `cargo xtask evidence run --kind fixture -- sh -c 'cargo build --locked -p stacklyd -p stackly-fake-server && cargo build --locked -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI --skip "NativeTests\."'` lalu `cargo xtask evidence check` → record `fixture` untuk kedua test dengan `covers` AC-001 dan AC-029 (AC-14) serta AC-001 (AC-15) lulus → AC-14, AC-15
 - [ ] `xcrun swift-format lint --strict` pada ketiga file baru, lalu `cargo xtask build-app` → lulus → AC-14, AC-15
+- [ ] `cargo xtask evidence check` → record manual AC-16 diterima dengan status `NOT_RUN` atau final → AC-16
 
 ### Acceptance-criteria coverage
 
 - AC-14 · `theInstanceStoreFollowsChangesAnotherClientMakes`
 - AC-15 · `quittingTheGUIKeepsThreeInstancesRunningForTheNextModel`
-- AC-16 · belum, milik langkah build 10 (record manual, menunggu Milestone 2 dan 3 di main)
+- AC-16 · record manual `2026-10-20-walking-skeleton-through-the-cli-and-gui.json` (langkah build 10), `NOT_RUN` sampai reviewer menjalankannya dan mengisi hasilnya; langkah otomatisnya (seed, `stacklyd`, `instance create`, `start`, `get`, `stop`, Ctrl+C dan `kill -9` daemon, init gagal, create terputus) sudah dicoba pada commit ini terhadap binary asli, hanya bagian yang butuh mata reviewer (jendela Stackly, notice, Dock, ⌘Q) yang belum
 - AC-1 sampai AC-13 · milik Milestone 1 sampai 3
 - AC-17 sampai AC-19 · belum, milik Milestone 5
