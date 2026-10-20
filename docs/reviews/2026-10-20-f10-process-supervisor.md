@@ -4,6 +4,33 @@
 **Scope**: 61 file, rentang `4311e5c^..8fe3a27` dibatasi ke path fitur 10 (worktree di `main` `a0537aa`, yang sudah memuat rentang itu). Daftar file dari `git diff --name-only 4311e5c^..8fe3a27 --` path di brief, ditambah `crates/domain/src/supervisor.rs` (tipe domain supervisor dari `4311e5c`, tidak tercakup pola `crates/domain/src/process*`). `crates/protocol/src/codes.rs` hanya bagian kode `supervisor`, `process`, dan `instance`; `xtask/src/check_deps*` hanya aturan process, `SIGKILL`, dan `fixture`.
 **Verdict**: Changes requested (4 Major, tanpa Blocker)
 **Status setelah fix** (`036a9b8..fa6d6a1`): Changes requested. Major 2, 3, dan 4 tertutup; Major 1 masih terbuka untuk satu urutan kejadian yang belum ditangani; dua Minor dan tiga Nit baru dari diff fix. Rincian di *Konfirmasi fix* di bawah.
+**Status setelah fix putaran 2** (`d34e762..b2c7fae`): Approve with nits. Keempat Major tertutup, tanpa Blocker atau Major yang terbuka; dua Minor dari putaran 1 tertutup; satu Nit baru dan satu Nit putaran 1 (flag `degraded` tunggal) tetap terbuka. Rincian di *Konfirmasi fix putaran 2*.
+
+## Konfirmasi fix putaran 2 (d34e762..b2c7fae)
+
+**Dikonfirmasi oleh**: Claude Opus 5.5 (sesi `chk-f10-review`), inline. Commit fix `a2f3710` ditulis Claude Sonnet 5.5, jadi reviewer beda family. Worktree di `git merge main` (memuat `b2c7fae`); diff dibaca dengan `git diff d34e762..b2c7fae` (9 file kode, 4 file test). Tidak ada build atau test di sesi ini; gate lead di `main` (fmt, clippy, check-deps, cek Windows, core 16 target, `stacklyd` 19 target, evidence, tanpa proses yatim) dipakai sebagai bukti test baru lulus.
+
+| Butir putaran 1 | Hasil | Bukti |
+| --- | --- | --- |
+| Major 1, urutan yang tersisa | tertutup | `stop.rs:161`, test `a_stop_whose_process_exit_was_handled_before_its_journal_still_ends_stopped` |
+| Minor, loop baca `respawn` dan `pending` | tertutup | `respawn.rs:109`, `pending.rs:100`, test `reconcile::a_registry_read_that_fails_for_a_pending_run_is_tried_again_and_the_respawn_goes_on` |
+| Minor, task exit dan recheck memegang `Supervisor` kuat | tertutup | `exit.rs:38`, `recheck.rs:31`, test core `a_shut_down_supervisor_lets_go_of_the_registry_though_it_adopted_a_live_process` dan test daemon yang kini menjalankan `Supervision::reconcile` |
+| Nit, crash fantom di riwayat restart | tertutup, dengan sisa kecil | `startup.rs:1288` (`forget_last_crash`), test `a_crash_taken_back_uses_no_budget`; lihat Nit baru |
+| Nit, `Next::Settled` di start menjadi `internal.unexpected` | tertutup | `startup.rs:702`, kini `supervisor.instance_stopping` (sudah di katalog) |
+| Celah test, cancel untuk Major 3 | tertutup | test `a_cancel_after_the_render_and_before_any_process_runs_removes_the_secret_material` |
+| Nit, flag `degraded` tunggal | masih terbuka | tidak dikerjakan; developer mengusulkan pekerjaan terpisah. Tidak menahan merge |
+
+**Major 1**: `signal_and_wait` kini mengembalikan `StopEnd::Stopped` bila slot proses sudah kosong (`stop.rs:161`), dan `stop_process` lalu menjalankan `settle_stopping`, yang menulis `Exited` untuk `stopping`. Saya cek kedua pemanggil `stop_process` (`run_stop` di `stop.rs:423` dan `cancel_cleanup` di `startup.rs:1312`) hanya sampai di sana setelah melihat proses: `run_stop` lebih dulu menolak `has_process == false` untuk `starting`, `running`, dan `stopping`, dan `cancel_cleanup` hanya memanggilnya bila `has_process`. Slot kosong di titik itu berarti handler exit sudah selesai (slot baru dikosongkan `finish_process`, sesudah commit exit), jadi `settle_stopping` membaca aggregate yang final. Respawn tidak bisa mengisi slot di antaranya, karena operasi stop memegang lock instance dan respawn memakai `BusyPolicy::Reject`; jeda respawn yang dijadwalkan sesudah `cancel_respawn` membaca `stopped` dan berhenti. Test baru menahan stop di tahap `journal` (`FaultyRegistry::hold_stage`), membiarkan handler exit selesai penuh (`recovering`, slot kosong), lalu melepasnya, persis urutan yang saya laporkan; developer menyebut test ini gagal di kode putaran 1. Hasilnya operasi `succeeded` dan instance `stopped` dengan desired `stopped`.
+
+**Minor loop baca**: kedua tempat kini memakai `read_instance_actor`, jadi jadwal (`Busy` dengan jeda berlipat, `NoSpace`, `Unavailable`, dan `Io` tiap `REGISTRY_RETRY_INTERVAL`), flag `degraded`, dan aturan menyerah sama dengan commit actor. Error permanen kini menghentikan respawn atau run tertunda dengan satu `warn`, tidak lagi mengulang tiap detik. Test baru untuk `pending::run_one` mengakui sendiri bahwa ia cakupan, bukan regresi; itu cukup untuk Minor.
+
+**Minor handle `Supervisor`**: task exit (`exit.rs:38`) dan recheck (`recheck.rs:31`) kini memegang `WeakSupervisor` dan baru `upgrade` saat exit tiba atau saat bangun, jadi setelah `shutdown()` dan `close()`, handle kuat terakhir ada di tangan daemon. Test core memeriksa jumlah handle registry kembali seperti semula setelah supervisor kedua mengadopsi proses hidup lalu dimatikan; test daemon kini menjalankan rekonsiliasi (task recheck) sebelum `close()`.
+
+### Temuan baru putaran 2
+
+- ⚪ `crates/core/src/supervisor/startup.rs:1267`, di cabang `Exhausted`, `restart_status` diisi `exhausted` sebelum hasil commit diketahui. Bila commit menghasilkan `stopped` (stop mendarat tepat di crash keenam), `forget_crash` mengembalikan budget, tetapi status restart instance tetap terbaca `exhausted` pada instance `stopped` sampai status itu dihitung ulang. Isi status hanya untuk hasil `Crashed`, atau hitung ulang setelah `forget_crash`.
+
+Tidak ada temuan Blocker, Major, atau Minor baru di diff putaran 2. Tindak lanjut di luar kode yang tetap berlaku: spec 0010 *Asumsi lintas spec* perlu diperbarui lewat `/architect` agar menyebut keputusan exit di dalam commit actor dengan CAS revision, dan stop yang menemukan prosesnya sudah keluar menutup `stopping` sendiri, menggantikan kalimat tentang `LockTable::holder` dan `try_lock_internal`.
 
 ## Konfirmasi fix (036a9b8..fa6d6a1)
 
