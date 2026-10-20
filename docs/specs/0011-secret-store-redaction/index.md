@@ -369,7 +369,7 @@ Area `secret` milik spec ini (spec 0006). Semua kode store memakai awalan `secre
 | `secret.conflict` | `conflict` | `reference`, `reason` (`already_exists` atau `in_use`), `omitted` | `use`: `resourceKind`, `resourceId`, `field` (saat `in_use`) | `create` pada item yang ada, atau delete reference yang masih dipakai |
 | `secret.confirmation_required` | `invalid_input` | `reference`, `omitted` | `effect`: `resourceKind`, `resourceId`, `field`, `effect` | `stored_only` tanpa `confirmStoredOnly` |
 | `secret.invalid_reference` | `invalid_input` | `reference`, `reason` | | segmen pertama `stackly` (dicadangkan) untuk reference yang belum terdaftar |
-| `secret.invalid_value` | `invalid_input` | `field`, `minLength`, `maxLength`, `reason` (`length` atau `control_characters`, selalu ada) | | nilai di luar batas panjang secret field, atau berisi karakter kontrol pada field `printableOnly`, dari `secret.set`, create instance, atau restore |
+| `secret.invalid_value` | `invalid_input` | `field`, `minLength`, `maxLength`, `reason` (`length` atau `control_characters`, selalu ada), `omitted` | | nilai di luar batas panjang secret field, atau berisi karakter kontrol pada field `printableOnly`, dari `secret.set`, create instance, atau restore |
 | `secret.delivery_rejected` | `failed` | `reason` | | `ensure_not_in_argv` menolak argumen sebelum spawn |
 | `secret.store_locked` | `unavailable` | | | Keychain terkunci, termasuk tulisan reference target saat create (AC-23) |
 | `secret.store_access_denied` | `unauthorized` | `byUser` | | dialog ditolak atau ACL tidak mempercayai proses |
@@ -379,6 +379,8 @@ Area `secret` milik spec ini (spec 0006). Semua kode store memakai awalan `secre
 | `secret.store_backend` | `failed` | `code` | | `OSStatus` lain |
 
 Batas `items` setiap kode adalah 100 item; sisanya dihitung di `details.omitted`, supaya frame error tetap di bawah `CONTROL_FRAME_MAX`. Nilai field `generateAllowed` ditulis `true` atau `false`.
+
+`secret.invalid_value` boleh membawa `fields` (`ErrorBody.fields` spec 0006, paling banyak 32, sisanya di `details.omitted`) dan tidak pernah membawa `items`, mengikuti aturan spec 0006 bahwa kode yang membawa `fields` mendaftar `omitted` dan tanpa `items`; create spec 0020 memakainya untuk menunjuk field secret yang ditolak (keputusan lead D7, 2026-10-20). `secret.needs_secret` tidak pernah membawa `fields`: daftar reference nya selalu di `items`.
 
 ### Permukaan API
 

@@ -421,6 +421,8 @@ Catatan lead yang ikut diterapkan: langkah yang mendaftarkan job atau agent di M
 
 Alasannya sama dengan spec 0016: dua layar (Diagnostics dan onboarding) menampilkan state yang sama, jadi state, teks, dan helper nya cukup satu, dan aturan AC-11 (pendaftaran hanya lewat aksi pengguna) tetap dijaga oleh model milik spec ini.
 
+**Perbaikan pasca penyelarasan (2026-10-20).** Dari `docs/scope/coordination/post-alignment/post-0015.md`: `classify` di GUI membaca `DaemonModel.rootOverrideActive` (keputusan K18: Bool baca saja dari `ShellBootstrap.assemble`, tanpa parameter baru, dan dibuat oleh langkah mana pun yang lebih dulu memakainya, langkah 10 spec ini atau langkah 2 spec 0016), dan AC-13 serta langkah 11 memakai cek teks besar spec 0012 (lebar sempit 640 pt) alih alih Dynamic Type, karena text style macOS 27 tidak ikut `dynamicTypeSize`.
+
 ## References
 
 **Project sources**:

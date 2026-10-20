@@ -805,3 +805,7 @@ Sumber, menurut urutan prioritas: keputusan lead foundation K8 dan K13 sampai K1
 - **Spec 0021**: `RevealableSecretText(references:compose:)` untuk satu atau lebih reference, semua atau tidak sama sekali (AC-24).
 - **Konflik usulan 4** (detail probe native spec 0023): aturan redaksi runner probe tetap satu satunya aturan; kalimat spec 0023 dibaca sebagai "probe native tidak menambah redaksi sendiri".
 - **Tidak diterapkan sekarang**: centang bagian fitur 20 di Follow-up fitur 20, 46, dan 51, serta penulisan ulang Follow-up fitur 20 tentang preflight, karena usulan menjadwalkannya untuk `/sync` setelah build fitur 20. Teks Follow-up fitur 20, 46, dan 51 hanya diselaraskan dengan pemetaan kegagalan K14.
+
+## Perubahan 2026-10-20 (D7, kode yang membawa `fields`)
+
+Keputusan lead D7: kode yang membawa `fields` (spec 0006) mendaftar `omitted` dan tidak punya `items`. `secret.invalid_value` mendapat kunci `details` `omitted` supaya create spec 0020 bisa melampirkan `fields` untuk field secret yang ditolak; `secret.needs_secret` tidak pernah membawa `fields`, karena daftar reference nya selalu di `items`. Hanya teks; nomor langkah dan AC tidak berubah, dan kunci baru ikut katalog `codes::secret` di langkah 5.

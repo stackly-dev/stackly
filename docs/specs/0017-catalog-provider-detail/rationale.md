@@ -527,3 +527,12 @@ Spec ini diselaraskan dengan update spec foundation di `main` (0001, 0004, 0005,
 - **K18**: milestone 3 sekarang menyebut rantai prasyarat lengkap (fitur 13 milestone 4 sampai langkah 16, yang menunggu fitur 10 milestone 2 dan langkah 12). `CatalogStore` tidak punya event maupun observasi, jadi bukan pemilik aturan umum observasi dengan revision yang sama di `ResourceStore`.
 - **Sumber nilai fase 02**: `installedSize` dan `dependencies` merujuk field core `ArtifactStatus::Available.unpacked.bytes` dan `ArtifactStatus::Available.dependencies` spec 0009.
 - Tidak ditemukan kalimat lain di spec ini yang bertentangan dengan spec foundation di `main`; tidak ada konflik yang perlu keputusan.
+
+## Perbaikan pasca penyelarasan 2026-10-20
+
+Dari `docs/scope/coordination/post-alignment/post-0017.md` dengan keputusan lead di `post-decisions.md` (D2, D3, D4) yang menang atas teks perbaikan. ID AC, Status, dan nomor langkah tidak berubah.
+
+- **Lokasi bundle (item 1 dan 3, D4)**: cabang `CatalogLocation::Bundled` dari `DaemonDeps.bundle` (spec 0015 langkah 4) hanya dibangun milestone 4 langkah 11. Langkah 6 menangani `STACKLY_CATALOG_DIR` dan `NotConfigured` saja, dengan penanda `// provisional: F17 step 11` di tempat cabang itu, jadi milestone 1 tidak butuh fitur 15 dan tidak ada dua sesi yang membangun lokasi bundle.
+- **Test di dalam proses (item 2, D4)**: `Site` di `apps/daemon/tests/server/common.rs` memasang `CatalogOverride::Preloaded(Catalog::for_tests(&[]))` secara default, supaya assert `Ready` yang ada tidak berubah menjadi `Degraded` karena `NotConfigured`. `Catalog::for_tests` sekarang menerima slice entri dengan meta test tetap, ditambah `for_tests_with_meta`, dan `Preloaded` memegang `Catalog` (daemon membungkusnya dalam `Arc`) supaya ekspresi keputusan lead berlaku apa adanya.
+- **`CatalogOverride` (D3)**: tipe milik spec ini dengan varian `Location` dan `Preloaded`, dan spec ini menyebut bahwa spec 0006 dan 0018 memakai nama yang sama.
+- **`Issue.reason` (D2)**: field core dibangun milestone 1 langkah 3 bersama pemakai pertamanya, `catalog_limit`. Jawaban untuk pertanyaan D2: issue catalog sampai ke wire hanya lewat DTO `CatalogIssue` di `ProviderDetail.issues`, tidak pernah sebagai `ErrorBody.items` ber `kind` `issue`, karena tidak ada kode `catalog.*` yang membawa `items`. Langkah 5 menambah `reason` ke `CatalogIssue` di dalam kenaikan minor fitur ini; kunci `reason` item `issue`, perubahan `ItemSpec`, dan minor nya tetap milik spec 0021 milestone 1 langkah 1.
