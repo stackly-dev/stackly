@@ -82,6 +82,39 @@ _Hasil `/check verify` 2026-10-19 (cabang `claude/f7-daemon-closeout-7fb5d1` di 
 - AC-19 · baris request method pemula dan method yang menyebut operasi membawa `operation_id`; transisi state di level info dengan `operation_id` dan `kind`; baris di task operasi membawa span `operation_id` dan `kind`; params dan secret tidak pernah tercatat
 - AC-20 · paging, cursor, `activeOnly`, `resource`, potongan 900 KiB, `resource.not_found`
 
+## Milestone 5: Item dan rule kegagalan, dan replay
+
+_Langkah 16 build plan (keputusan 28 dan 29). Dibangun 2026-10-20 di cabang `claude/dev-f11-m4-s5-b32aac`; belum dijalankan `/check verify`._
+
+### UI / manual
+
+- [ ] Buka `crates/storage/migrations/0004_operation_failure.sql` → dua `ALTER TABLE operation_journal ADD COLUMN` (`failure_items` default `'[]'` dan `failure_rule`), CHECK kolom: `failure_items` array JSON, paling banyak 65 536, `'[]'` bila `failure_error_code` kosong; `failure_rule` NULL atau `BR-NNN` dengan `failure_error_code` terisi; tidak ada tabel yang dibangun ulang, migrasi 0002 dan 0003 tidak berubah (`git diff main -- crates/storage/migrations/0002_operation_journal.sql crates/storage/migrations/0003_secret_references.sql` kosong) → AC-17
+- [ ] Buka `crates/storage/tests/fixtures/registry-v4.sql` dan `seed/v4.sql` → satu operasi `failed` dengan dua item dan rule `BR-002`, satu operasi `failed` tanpa keduanya; `registry-v4.sql` tercatat di `FIXTURE_SHA256` entri 4 dan fixture v1 sampai v3 tidak berubah (`git diff main --stat -- crates/storage/tests/fixtures/registry-v1.sql crates/storage/tests/fixtures/registry-v2.sql crates/storage/tests/fixtures/registry-v3.sql` kosong) → AC-17
+- [ ] Buka `crates/domain/src/operation/journal.rs` → `FailureError` tidak punya field `hint`; `new` tetap tiga argumen; `with_items` menolak lebih dari 100 item; `FailureItem::new` menolak lebih dari 8 field → AC-16
+- [ ] Buka `crates/core/src/operation/scheduler.rs` → `replay` dan `begin` memanggil `check_phase` yang sama dan `replay` memanggil `lookup` yang sama; `replay` tidak mengambil `begin_gate`, tidak memanggil `precheck`, tidak memanggil `commit`, dan tidak menerbitkan event → AC-21
+- [ ] Buka `apps/daemon/src/ipc/operation.rs` → `start_operation` dan `replay_operation` sama sama memakai `request_parts` (pemeriksaan key, `RequestOrigin`, akses engine) dan `begin_error`; `failure_body` dan `rejected` sama sama memakai `dto::catalog_body` → AC-16, AC-21
+
+### Commands
+
+- [ ] `cargo test --locked -p stackly-domain` → unit test batas lulus: `a_failure_item_holds_at_most_eight_short_fields`, `a_failure_error_keeps_up_to_one_hundred_items_and_a_rule`, `rule_ids_parse_back_and_unknown_ids_are_rejected` → AC-16
+- [ ] `cargo test --locked -p stackly-storage --test open` → migrasi maju dari fixture v3 (`failure::migrating_v3_gives_old_rows_no_items_and_no_rule_and_keeps_the_data`), baca fixture v4 (`the_v4_fixture_items_and_rule_read_back_through_the_registry`), test CHECK (`the_checks_refuse_items_or_a_rule_without_an_error_and_bad_shapes`), rule yang tidak dikenal menjadi `Corrupt` (`a_rule_id_the_domain_does_not_know_is_a_corrupt_row`), `schema::every_table_and_column_matches_the_data_model`, dan `fixture::*` lulus → AC-17
+- [ ] `cargo test --locked -p stackly-storage --test registry` dan `cargo test --locked -p stackly-testkit` → `registry_conformance` lulus di `FakeRegistry` dan `SqliteRegistry`, termasuk round trip item dan rule serta pengosongan error → AC-16, AC-17
+- [ ] `cargo test --locked -p stackly-core --test operation_engine failures` → keempat kasus kegagalan lulus: item dan rule dengan restart, 101 item menjadi 100 dengan `omitted` 1 (dan dijumlah dengan `omitted` dari pekerjaan), item di atas 65 536 byte dibuang dari belakang dan dihitung, sentinel secret di nilai item diredaksi, item dan rule bertahan pada `needs_recovery` → AC-16
+- [ ] `cargo test --locked -p stackly-core --test operation_engine flow::replay` → tujuh test lulus: hit setelah `Created` dan paritas dengan `begin`, hit `NoOp` tercatat, key belum terikat (generation dan event tidak berubah), `KeyReused` untuk method lain dan sidik jari lain (sama dengan `begin`), operasi latar tidak ditemukan, `NotReady` sebelum dan selama `recover` serta `ShuttingDown` setelah shutdown, dan `replay` kembali selagi `begin` lain menahan gerbang dengan precheck yang ditahan → AC-21
+- [ ] `cargo test --locked -p stacklyd --lib ipc::operation` → peta `catalog_body` (item, rule, `omitted`, item di luar entri katalog dibuang), penolakan precheck dengan item dan rule, key hilang dan rusak lewat `request_key`, serta peta hasil `replay_result` untuk hit `Replayed`, hit `NoOp`, meleset, dan varian yang tidak mungkin lulus → AC-16, AC-21
+- [ ] `cargo test --locked -p stacklyd --test operations flow::` → `a_failed_operation_carries_its_items_rule_and_omitted_count_on_get_event_and_after_a_restart` dan `items_past_the_stored_size_limit_are_cut_by_the_engine_before_sqlite_checks_them` lulus di atas `SqliteRegistry` nyata dan client IPC nyata → AC-16, AC-17
+- [ ] `cargo test --locked -p stackly-protocol --test ipc_fixtures` dan `swift test --package-path clients/swift --filter OperationContractTests` → fixture `frame-response-operation-get-failed-items.json` ter-decode dan roundtrip di Rust dan Swift → AC-16, AC-18
+- [ ] `cargo xtask codegen --check` → "19 generated files are up to date" tanpa kenaikan minor (`ProtocolVersion::CURRENT` tidak berubah di cabang ini: `git diff main -- crates/protocol/src` kosong) → AC-18
+- [ ] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` dan `cargo xtask check-deps` → lulus → AC-16
+
+### Acceptance-criteria coverage
+
+- AC-16 · item dan rule: domain, core (empat kasus kegagalan), peta `stacklyd`, dan lewat wire (`get`, event, restart); `hint` tidak pernah disimpan
+- AC-17 · migrasi `0004_operation_failure.sql`, fixture beku `registry-v4.sql`, migrasi maju dari v3, CHECK, dan conformance di fake dan SQLite
+- AC-18 · fixture `frame-response-operation-get-failed-items.json` di Rust dan Swift; kontrak tidak berubah (tanpa kenaikan minor)
+- AC-21 · `OperationEngine::replay` (core) dan `replay_operation` (`stacklyd`); belum ada method kontrak yang memanggilnya, jadi test lewat wire menunggu `runtime.install` di spec 0018 langkah 11
+- AC-22 · bukan langkah ini; dibangun spec 0020 milestone 1 langkah 3
+
 ## Ringkasan AC
 
 - AC-1 sampai AC-20 · semua terpenuhi dengan bukti di atas
