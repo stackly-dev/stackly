@@ -128,3 +128,13 @@ Cross check model lain (Sonnet 5.5, read only) atas update ini membenarkan bahwa
 
 - Folder `secrets/` instance juga bisa dipindai, atau test bisa menegaskan folder itu tidak ada lagi: test sentinel memindai setelah create, start, dan stop, jadi folder itu seharusnya sudah dihapus `remove_secret_material`, dan cek ini akan membuktikan celah F11 sampai ujung. Rekomendasi: tambahkan cek "folder `secrets/` instance tidak ada setelah stop" ke AC-18 bila user setuju.
 - Folder log instance di root log (`<logs>/instances/<id>/`) tidak disebut AC-18. Fake tidak menulis `logs.files`, jadi folder itu kosong; menyebutnya eksplisit hanya memperjelas.
+
+## Update 2026-10-21 (folder secrets instance setelah stop)
+
+Keputusan user (dikutip lead) atas saran cross check update sebelumnya: "Ya: AC-18 spec 0014 juga menegaskan folder secrets instance tidak ada lagi atau ikut dipindai setelah stop. Saya setujui perubahan teks AC itu." Saran pertama di bagian update 2026-10-20 di atas kini diterapkan; ID tetap AC-18.
+
+| Pilihan | Keputusan | Alasan |
+| --- | --- | --- |
+| Folder `secrets/` instance setelah `instance stop --wait` | test menegaskan folder itu tidak ada (`instance_secrets_dir(short key)`), dan pindaian setelah stop tidak lagi mengecualikan folder apa pun | handler exit (`crates/core/src/supervisor/exit.rs`, `handle_exit`) menjalankan `remove_material` (yang memanggil `remove_secret_material`, `remove_owned_tree` atas seluruh folder) sebelum `settle` dan `finish_process`, jadi sebelum operasi stop selesai; spec 0010 *Stop* langkah 5 menyatakan urutan yang sama. Setelah `--wait` folder itu pasti tidak ada, dan kegagalan hapus hari ini hanya `warn!`, jadi cek ketiadaan membuktikan penghapusan benar benar terjadi. Runner up: memindai isi folder itu. Pindaian atas folder yang sudah hilang lolos tanpa membuktikan apa pun, dan folder yang tertinggal tanpa sentinel (misalnya file kosong) juga lolos, padahal itu tanda penghapusan gagal |
+
+Dibangun spec 0009 langkah 21 bersama perluasan pindaian. Teks langkah 12, Follow-up, baris *Value sourcing*, catatan build di `verify.md`, dan langkah manual AC-18 di `verify.md` ikut disesuaikan; centang tidak berubah. Cross check dilewati atas izin lead, karena perubahannya satu kalimat AC yang sudah disetujui user.
