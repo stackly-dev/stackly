@@ -12,7 +12,7 @@ Langkah 1, 2, 2a, 3, dan 4 di Build plan (sudah di `main`): spike, port `Process
 
 - [x] Buka `evidence/manual/2026-10-18-spec-0010-spike-*.json` → lima belas record spike (spawn tertahan, `getsid`, boot ID, flock yang diwariskan, `kqueue`, `PROC_PIDTBSDINFO` untuk proses sendiri dan milik user lain, `proc_pidpath`, anggota group, sinyal dan reap, spool `O_RDONLY` yang ditolak dan spool `O_RDWR` dengan satuan halaman, cek fd lewat device dan inode) masing masing dengan hasil yang sama dengan *Hasil spike* di spec → AC-1, AC-2, AC-9, AC-12 (bukti kelayakan)
 - [x] Buka `crates/platform-macos/src/process/` → `unsafe` hanya di crate ini dan tiap blok punya `// SAFETY:`; token `SIGKILL` hanya di `kill.rs`; deklarasi lokal di `sys.rs` punya `const` assert ukuran dan offset; tidak ada `std::process::Command` atau `tokio::process` di `crates/core` dan `apps/` → AC-1, AC-5, AC-15
-- [ ] **BLOCKED** (pemilik: pengguna, butuh reboot Mac ini) Baris Boot setelah reboot: `kern.bootsessionuuid` berbeda setelah reboot dan observasi dari boot lama menjadi `Gone(boot_changed)`. Spike menyiapkan record nya; tidak bisa dijalankan sampai Mac ini di reboot → AC-9, AC-11 (bagian boot)
+- [x] (PASS setelah reboot 2026-10-21, record `evidence/manual/2026-10-20-spec-0010-kern-bootsessionuuid-differs-after-a-r.json`; sebelumnya BLOCKED, pemilik pengguna) Baris Boot setelah reboot: `kern.bootsessionuuid` berbeda setelah reboot dan observasi dari boot lama menjadi `Gone(boot_changed)`. Spike menyiapkan record nya; tidak bisa dijalankan sampai Mac ini di reboot → AC-9, AC-11 (bagian boot)
 
 ### Commands
 

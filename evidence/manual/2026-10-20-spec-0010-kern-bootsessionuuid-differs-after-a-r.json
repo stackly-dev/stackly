@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15b92-fd05-7035-83a7-224bfe6c92ba",
+  "covers": [
+    "AC-013",
+    "REQ-013"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0010 kern.bootsessionuuid differs after a reboot of this Mac",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "after this Mac reboots, sysctl kern.bootsessionuuid differs from the value recorded before the reboot, so an observation from the old boot classifies as gone with reason boot_changed (spec 0010 AC-9, AC-11, Adapter macOS row Boot)",
+  "actual": "after the reboot kern.bootsessionuuid is 4564385D-AE91-4FF6-A971-DDD132DA291C, different from 5E52ED28-4032-431E-9E64-B599BA083C49 before; the adapter reads the new value and the reconcile fixture classifies an old boot observation as gone with reason boot_changed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "The user rebooted this Mac on 2026-10-21 (local time, UTC+7); `sysctl -n kern.boottime` reads sec 1792537434, which is 2026-10-20T23:03:54Z.",
+    "Ran `sysctl -n kern.bootsessionuuid` after the reboot and compared it with the value the spike recorded before (record 01a14e57-f8c5-74d4-bf48-20f1fef1a381: 5E52ED28-4032-431E-9E64-B599BA083C49, boot at 2026-10-12 12:13:01).",
+    "Ran `cargo test -p stackly-platform-macos --test process the_boot_id_is_the_kernel_boot_session_uuid` on this boot: the adapter's boot id equals the sysctl value (1 passed).",
+    "Ran `cargo test -p stackly-core --test supervisor_start reconcile::a_new_boot` (a_new_boot_confirms_stopped_and_never_starts_the_instance): an observation whose boot id differs from the current one reconciles as gone with reason boot_changed, confirms stopped, and never starts the instance (1 passed). The unit test in crates/core/src/supervisor/classify.rs asserts GoneReason::BootChanged for the same case.",
+    "No instance was running before the reboot, so no registry held a real observation from the old boot; the boot_changed classification is proven by the fixture tests above on top of the native boot id change."
+  ],
+  "reviewer": "Claude Opus 5.5 (lead session, for ojiepermana, who did the reboot)",
+  "startedAt": "2026-10-20T23:08:42.116674Z",
+  "finishedAt": "2026-10-20T23:08:58Z",
+  "evidencePath": "evidence/manual/2026-10-20-spec-0010-kern-bootsessionuuid-differs-after-a-r.json",
+  "context": {
+    "sourceCommit": "237771b4f336f5567d9b75b25efcc87582f127ce",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

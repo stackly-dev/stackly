@@ -1,0 +1,61 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15b93-00a8-7059-9324-fdd2db166e6a",
+  "covers": [
+    "REQ-047"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "macOS 27 empties the user temporary folder at a reboot",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "after a reboot of this Mac the user temporary folder from confstr _CS_DARWIN_USER_TEMP_DIR holds no entry older than the boot, so the runtime root and socket under it must be created again (spec 0004 Follow-up for feature 6, reboot part only)",
+  "actual": "after the reboot the user temporary folder held 127 top level entries and 0 of them were older than the boot, so a runtime root and socket left there before a reboot are gone and stacklyd must create them again, which the daemon already does at start and at each socket check",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "The user rebooted this Mac; the boot time is 2026-10-20T23:03:54Z (`sysctl -n kern.boottime`, sec 1792537434).",
+    "Ran `getconf DARWIN_USER_TEMP_DIR`: /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/. The folder itself is the same one (birth 2026-07-14 12:30:34 local), so macOS keeps the folder and removes what is inside.",
+    "Listed its top level about an hour after the boot: 127 entries, and `find <temp> -maxdepth 1 -mindepth 1 ! -newermt @1792537434` finds 0 entries older than the boot; every entry was created after login.",
+    "No marker file was left before the reboot, so this record proves only that nothing from before the boot survived at the top level; the multi day idle cleanup with stacklyd running stays open in record 2026-10-19-when-macos-27-cleans-the-user-temporary-folder-t.json."
+  ],
+  "reviewer": "Claude Opus 5.5 (lead session, for ojiepermana, who did the reboot)",
+  "startedAt": "2026-10-20T23:08:43.047915Z",
+  "finishedAt": "2026-10-20T23:08:58Z",
+  "evidencePath": "evidence/manual/2026-10-20-macos-27-empties-the-user-temporary-folder-at-a.json",
+  "context": {
+    "sourceCommit": "237771b4f336f5567d9b75b25efcc87582f127ce",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
