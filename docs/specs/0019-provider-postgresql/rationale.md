@@ -445,3 +445,22 @@ Diterapkan sesi `upd-0019-0022-0023` dari *Usulan update spec lain* spec 0021 (s
 
 AC dan status spec ini tidak berubah.
 
+
+## Penyelarasan 2026-10-20 (keputusan K foundation)
+
+Spec ini diselaraskan dengan keputusan lead foundation K1 sampai K18 dan update spec foundation di `main` (0001 sampai 0006, 0009, 0010, 0011, dan 0012). Status, nomor AC, dan nomor langkah tetap.
+
+| Keputusan | Isi | Perubahan di spec ini |
+| --- | --- | --- |
+| K3 | runner probe memberi reason `check_failed` untuk exit `exec` di luar `successExitCodes`, dengan format detail spec ini, dan `timeout` untuk percobaan yang melewati batas; dibangun langkah 6 spec 0010 | *Readiness dan health*, tabel perubahan core baris 5, dan langkah 5 (hanya menyesuaikan kalau langkah 6 spec 0010 memakai bentuk lain) |
+| K5 | kait log test adalah field biasa `DaemonConfig.extra_log_sinks` tanpa feature gate, dan `pin_package` tinggal di fitur `fixture` core; keduanya dibangun langkah 13 spec 0010 | AC-13, API surface, skenario happy path, dan langkah 6 (memakai, tidak membangun); ini menggantikan kait perekam bersyarat dari cross check pertama (rationale *Cross check* baris 5) |
+| K8 | `Stdin::Text` dikirim executor init (langkah 7 spec 0010) sebagai `StdinSource::Bytes(SecretValue::new(text))`; karena teks plan bukan newtype tervalidasi, `SecretValue::new` yang gagal menjadi `init_step_failed`, tidak pernah `config_render_failed` | AC-3, tabel perubahan core baris 3, API surface, dan langkah 5 |
+| K13 | flag `printable_only`, pemeriksaan di `put` lewat `secret::redact`, `reason` di setiap `secret.invalid_value`, dan bump minor nya milik langkah 4a dan 5 spec 0011; spec ini memegang field `x-stackly.printableOnly` di model settings dan pengisian `from_setting`; evidence AC-4 baru dicatat setelah pengisian itu ada | AC-4, tabel perubahan core baris 4, paragraf kunci `reason`, langkah 3, prasyarat milestone 1, dan skenario printable only |
+| K1, K14 | create sementara spec 0010: `provider.revision` wajib terisi, `field` dari `from_setting`, `classify_create_failure`, dan init yang gagal membuat operasi `needs_recovery` dengan instance `failed` sampai abandon | AC-5, *Edge cases* (folder data tidak kosong, daemon mati saat init), skenario happy path dan init gagal, dan baris Assumed spec 0010 dan 0011 |
+| K9 | nomor minor protocol diambil saat merge, tidak dipesan lebih dulu | paragraf kunci `reason` |
+
+Juga diselaraskan karena teks foundation di `main` berubah:
+
+- **`runtime.versionCheck`**: spec 0009 dan 0018 kini menetapkan pencarian per baris stdout lalu stderr, tanpa pembungkus `\A…\z`. Pattern PostgreSQL menjadi `^postgres \(PostgreSQL\) ([0-9]+\.[0-9]+)$` (dicek pada keluaran nyata 17.11 dan 18.6), dan `\n?` yang dulu menjaga semua aturan yang mungkin dibuang (AC-15, manifest, skenario, baris Assumed spec 0018).
+- **Follow-up update spec 0009, 0010, dan 0011** dicentang: ketiganya sudah diterapkan di `main`.
+- **Catatan untuk lead**: tabel tambahan spec 0009 masih menulis executor init `Stdin::Text` di "fitur 19 langkah 5", padahal spec 0010 (K8) menaruhnya di langkah 7 nya. Spec ini mengikuti spec 0010; baris spec 0009 itu perlu diselaraskan pemiliknya.
