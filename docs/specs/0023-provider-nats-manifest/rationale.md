@@ -378,3 +378,7 @@ Update `architect (update)` atas permintaan lead scope 02, setelah keputusan K1 
 | 7 | Blok *Usulan update spec 0009* dan *Usulan update spec 0010* ditandai diterapkan, Follow-up keduanya dicentang, dan baris Assumed spec 0009, 0010, dan 0019 diselaraskan | spec 0009 dan 0010 di `main` | |
 
 Tidak diterapkan: tidak ada. Keputusan K lain (K4, K6 sampai K18) tidak menyentuh isi spec ini; K18 (milestone GUI fase 02 menunggu fitur 10 milestone 2 sampai fitur 13 langkah 16) berlaku lewat prasyarat fitur 20 dan 21 di milestone 3.
+
+## Perbaikan pasca penyelarasan 2026-10-20
+
+Diterapkan atas permintaan lead scope 02 dari `docs/scope/coordination/post-alignment/post-0023.md` dan keputusan lead D1: AC-13 dan langkah 10 memakai `stackly instance inspect <nama> --json` (readiness dari `result.instance`, bentuk hasil spec 0021), bukan `stackly instance get --json`, karena `get` hanya alias opsional fitur 14 (spec 0010) dan spec 0022; langkah 2 menyebut blok `connection` NATS (spec 0021) yang hanya ditulis langkah ini, di commit yang sama dengan blok `readiness` (D1). ID AC, status, dan nomor langkah tidak berubah.
