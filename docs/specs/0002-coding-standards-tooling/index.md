@@ -156,10 +156,14 @@ evidence/                           # masuk git
 ├── manual/
 │   ├── <yyyy-mm-dd>-<slug>.json    # record manual lengkap, dengan context
 │   └── files/<id>/                 # screenshot atau file bukti manual, opsional
-└── runtime/<runId>/                # bukti G0 runtime, ditulis `cargo xtask runtime record` (spec 0003)
-    ├── report.json                 # RunReport yang difilter ke record PASS dan FAIL dari target test native_runtime
-    ├── output.log                  # salinan output.log run itu yang sudah disanitasi (lihat spec 0003)
-    └── artifacts/<id>/spike-result.json
+├── runtime/<runId>/                # bukti G0 runtime, ditulis `cargo xtask runtime record` (spec 0003)
+│   ├── report.json                 # RunReport yang difilter ke record PASS dan FAIL dari target test native_runtime
+│   ├── output.log                  # salinan output.log run itu yang sudah disanitasi (lihat spec 0003)
+│   └── artifacts/<id>/spike-result.json
+└── compatibility/<runId>/          # compatibility record, ditulis `cargo xtask runtime compat-record` (spec 0018, ditambah fase 02)
+    ├── report.json                 # RunReport yang difilter ke record PASS dan FAIL yang covers nya memuat BR-025
+    ├── output.log                  # salinan output.log run itu yang sudah disanitasi
+    └── artifacts/<id>/compatibility.json   # stackly.compatibility-evidence/v1
 schemas/evidence/                   # hasil codegen, plus contoh bersama yang ditulis tangan
 ├── record.schema.json
 ├── run-context.schema.json
@@ -170,7 +174,7 @@ schemas/evidence/                   # hasil codegen, plus contoh bersama yang di
 
 Setiap file ditulis atomik (tulis ke `<nama>.tmp` di folder yang sama, lalu rename), jadi pembaca tidak pernah melihat file setengah jadi. Wrapper mengabaikan file `*.tmp` di `records/`.
 
-`evidence/runtime/` adalah satu satunya evidence otomatis yang masuk git. Isinya bukti G0 untuk spec 0003, bukan bukti rilis, dan hanya `cargo xtask runtime record` yang menulisnya. `cargo xtask evidence check` tidak membaca folder ini; `cargo xtask runtime check` (spec 0003) yang memvalidasinya.
+`evidence/runtime/` dan `evidence/compatibility/` adalah satu satunya evidence otomatis di git, ditulis hanya oleh `runtime record` (`runtime/`) dan `runtime compat-record` (`compatibility/`), divalidasi `runtime check` (spec 0003; folder kedua ditambah fase 02, 2026-10-20, spec 0018). `evidence/runtime/` berisi bukti G0 untuk spec 0003, dan `evidence/compatibility/` berisi compatibility record per provider (BR-025); keduanya bukan bukti rilis. `cargo xtask evidence check` tidak membaca kedua folder ini.
 
 ### Report run `stackly.evidence-report/v1`
 
@@ -336,6 +340,8 @@ Semua perintah dijalankan dengan tangan di Mac ini (macOS 27, Apple Silicon), da
 - Run native butuh sesi login GUI yang aktif di Mac ini, karena spike runtime spec 0003 memakai domain launchd `gui/<uid>`. Tanpa sesi itu, test runtime tercatat `BLOCKED`, bukan `FAIL`.
 - Urutan run native: `cargo xtask runtime spike --cleanup`; kalau pembersihan itu gagal, kedua run native tidak dijalankan. Lalu run native Rust, lalu run native Swift walau run Rust gagal (satu record `FAIL` sudah membuat exit code bukan 0). Terakhir `cargo xtask runtime spike --cleanup` lagi, juga saat run sebelumnya gagal atau dibatalkan.
 - Pembersihan kedua menangkap proses yang lepas saat run native dibatalkan, karena worker LaunchAgent bukan child dari perintah test. `--cleanup` keluar dengan kode 0 walau domain GUI tidak ada, dan tidak pernah menyentuh cache unduhan. Cache spike (`~/Library/Caches/dev.stackly.xtask/runtime/`) menetap di antara run.
+- *Ditambah fase 02 (2026-10-20, spec 0015 dan 0018):* `--cleanup` juga (a) mencabut semua job `dev.stackly.test.agent.*` di `gui/<uid>` (agent test LaunchAgent spec 0015), tanpa lock spike, dan melewatinya kalau domain GUI tidak ada; dan (b) mengirim TERM lalu KILL ke proses milik user ini yang argv nya memuat `/stackly-test-` (proses sisa test native spec 0018). Karena (b) juga mengenai run test yang sedang berjalan, `--cleanup` hanya dijalankan di titik urutan run native di atas, tidak di tengah run. Semantik lock dan urutan resminya ada di spec 0003 (*Mekanisme LaunchAgent dan pembersihan*). Run native Rust di atas ikut menjalankan test LaunchAgent spec 0015 (`apps/daemon/tests/native_launchd.rs`), karena semua test ignored berjalan di sana; spec 0015 menganggap run native yang kamu mulai sebagai persetujuan untuk test itu.
+- *Ditambah fase 02 (2026-10-20, spec 0018):* test native yang mengunduh dari jaringan (`nats_installs_from_the_network`) hanya jalan dengan `STACKLY_NATIVE_NETWORK=1`; tanpa variabel itu test tersebut `BLOCKED` dengan alasan `network run not approved`. Variabel itu diset hanya setelah persetujuan kamu untuk run itu.
 - Perintah `--cleanup` dibangun di milestone 2 spec 0003, bukan di build spec ini.
 - Cabang Linux yang masih ada (probe `uname -r` di context run, juga path cache Linux dan perintah `runtime` yang jalan di OS apa pun di spec 0003) tetap dipertahankan, tetapi tidak ada lagi yang menjalankannya di Linux; yang menguji kode itu hanya unit test di Mac ini. `cargo deny check` hanya memeriksa graph dependency untuk `aarch64-apple-darwin` dan `aarch64-pc-windows-msvc`.
 
@@ -346,7 +352,7 @@ Argumen diparse dengan tangan seperti task `xtask` lain, tanpa clap.
 | Perintah | Yang dikerjakan |
 | --- | --- |
 | `cargo xtask evidence run --kind <fixture\|native> [--out <folder>] -- <perintah>` | menolak jalan kalau `STACKLY_EVIDENCE_DIR` sudah terisi (tidak ada run bersarang); membuat folder run (default `<target directory dari cargo metadata>/evidence/<runId>/`); menulis `run.json`; menjalankan perintah dengan kedua variabel environment, sambil menyalin stdout dan stderr ke terminal dan `output.log`; mengumpulkan `records/`; melengkapi `context` dan path file; memvalidasi; memindai fixture credential; menulis `report.json` lalu mencetak `evidence report: <path absolut report.json>` sebagai baris terakhir stderr |
-| `cargo xtask evidence check` | memvalidasi `evidence/manual/*.json` dan `evidence/baseline-host.json`; memindai source Rust dan Swift dengan aturan di bawah; tidak membaca `evidence/runtime/`, yang divalidasi `cargo xtask runtime check` (spec 0003) |
+| `cargo xtask evidence check` | memvalidasi `evidence/manual/*.json` dan `evidence/baseline-host.json`; memindai source Rust dan Swift dengan aturan di bawah; tidak membaca `evidence/runtime/` dan `evidence/compatibility/`, yang keduanya divalidasi `cargo xtask runtime check` (spec 0003, spec 0018) |
 | `cargo xtask evidence new ...` | membuat record manual `NOT_RUN` (lihat Record manual) |
 | `cargo xtask evidence baseline` | menulis `evidence/baseline-host.json` dari Mac tempat perintah dijalankan (lihat Baseline benchmark) |
 | `cargo xtask codegen` | juga menulis empat schema evidence |
@@ -386,7 +392,7 @@ Aturan pindaian `evidence check`:
 ### Invariant
 
 - Hanya wrapper yang mengisi variabel environment evidence.
-- Record final tidak pernah diubah; run atau review baru menulis record baru. Menyalin ke `evidence/runtime/` hanya boleh membuang record utuh dan menghitung ulang `summary`; isi record yang disalin tetap sama di setiap field yang dikenal; field yang tidak dikenal tidak ikut tersalin.
+- Record final tidak pernah diubah; run atau review baru menulis record baru. Menyalin ke `evidence/runtime/` atau `evidence/compatibility/` hanya boleh membuang record utuh dan menghitung ulang `summary`; isi record yang disalin tetap sama di setiap field yang dikenal; field yang tidak dikenal tidak ikut tersalin.
 - Record fixture tidak pernah dihitung sebagai bukti native.
 - Hasil yang tidak teramati tetap `NOT_RUN`, tidak pernah `PASS`.
 - Evidence tidak pernah berisi credential asli, dan run gagal kalau prefix fixture credential muncul di outputnya.
@@ -426,7 +432,7 @@ Aturan pindaian `evidence check`:
 
 **Positive**:
 
-- Fitur 65 membaca satu format dari empat tempat (`report.json` setiap run, `evidence/manual/`, `evidence/baseline-host.json`, dan `evidence/runtime/` dari spec 0003, yang hanya berlaku sebagai bukti G0) dan bisa membedakan fixture dari native tanpa menebak.
+- Fitur 65 membaca satu format dari lima tempat (`report.json` setiap run, `evidence/manual/`, `evidence/baseline-host.json`, `evidence/runtime/` dari spec 0003, yang hanya berlaku sebagai bukti G0, dan `evidence/compatibility/` dari spec 0018, bukti kompatibilitas BR-025 dan bukan bukti rilis, ditambah fase 02 2026-10-20) dan bisa membedakan fixture dari native tanpa menebak.
 - Crash, abort, timeout, atau test yang di cancel tidak pernah terbaca sebagai `PASS`.
 - Test native tidak pernah jalan tanpa sengaja di laptop.
 - Bocornya fixture credential ke log atau artifact membuat run gagal.
@@ -447,7 +453,7 @@ Aturan pindaian `evidence check`:
 
 **Neutral**:
 
-- Folder baru `evidence/`, `schemas/evidence/`, dan `crates/evidence/`, serta target baru `StacklyTestSupport`. Spec 0003 menambah `evidence/runtime/` dengan format report yang sama.
+- Folder baru `evidence/`, `schemas/evidence/`, dan `crates/evidence/`, serta target baru `StacklyTestSupport`. Spec 0003 menambah `evidence/runtime/` dengan format report yang sama, dan spec 0018 menambah `evidence/compatibility/` (fase 02).
 - `cargo-nextest` tetap tidak dipakai. Laporan JUnit-nya bisa menambah data untuk test tanpa PRD ID nanti, tanpa mengubah format record.
 
 ## Follow-up

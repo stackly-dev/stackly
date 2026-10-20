@@ -389,6 +389,18 @@ Saat `/check verify` langkah 12, halaman Releases `stackly-dev/stackly` memberi 
 
 Release runtime selalu prerelease: `gh release create` di API surface mendapat `--prerelease` (tetap dengan `--latest=false`), AC-19 menyebut unggahan sebagai prerelease, dan verify langkah 12 memeriksa bahwa tidak ada release runtime berlabel Latest. Harganya badge `Pre-release` pada artefak yang sudah diuji, yang hanya label di halaman GitHub; `runtime verify`, test native, dan nanti fitur 18 membaca URL `releases/download/runtime/<id>/...` yang sama untuk prerelease. Tidak ada kode xtask yang berubah, karena unggahan bukan perintah xtask.
 
+## Update 2026-10-20: ditambah fase 02 (spec 0015 dan 0018)
+
+Dari inventaris `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md` bagian *Spec 0003*; semua resolusi yang direkomendasikan diambil (keputusan lead scope 02 atas nama user). Keputusan spec ini tidak berubah.
+
+- Field inventaris `stable`, `unpacked_size`, dan `entry_count`, aturan `runtime check` 10 sampai 12, `pin` dan `verify` yang memakai `stackly_core::runtime::archive::scan`, dan perintah `runtime compat-record` (spec 0018). Nilai `stable` diisi runtime maintainer; rekomendasinya line terbaru yang punya evidence native (PostgreSQL 18, MySQL 9.7) dan satu satunya line untuk provider lain. Contoh inventaris tidak diubah, karena nilainya selalu dari `runtime pin`.
+- `--cleanup` ditulis ulang sekali dengan urutan tetap: pencabutan agent test `dev.stackly.test.agent.*` tanpa lock (spec 0015, aman karena tidak pernah menyentuh proses spike), lalu lock, lalu sweep lama ditambah TERM dan KILL untuk proses yang argv nya memuat `/stackly-test-` (spec 0018), dengan catatan bahwa sweep itu juga mematikan run `cargo test` yang sedang berjalan.
+- Pola `/stackly-test-` diterima apa adanya, tanpa menambah awalan `/tmp/skt-` (folder run pendek `TestRoot`): proses instance provider dari test selalu membawa path data `TestRoot` (`stackly-test-`) di argv nya (`stacklyd` test menerima root lewat environment, jadi tidak ikut tercocokkan), dan pola spike `/tmp/sk-` sengaja tidak mencakup `skt-`.
+- Parser signing spike pindah ke `MacosCodeSigning` (spec 0018), dicatat di Neutral.
+- Yang tidak diubah di sini: keempat Follow-up fitur 18 dibiarkan untuk `/sync` lead setelah milestone 1 langkah 3 sampai 5 dan milestone 3 spec 0018 mendarat; jawaban spec 0019 (`scram-sha-256` tanpa `trust`) tidak butuh edit karena spec ini sudah membatasi `trust` untuk spike; urutan langkah di spec 0018 (`pin` dan `verify` memakai `scan` di langkah 1, sedangkan `scan` baru dibangun di langkah 3) diserahkan ke pemilik spec 0018.
+
+Perubahan ini dibaca model lain (Sonnet 5.5, baca saja) sebelum commit. Semua butir inventaris dinilai sudah diterapkan dengan benar; perbaikan kata yang diusulkannya ikut diterapkan (urutan `--cleanup` dipisah dari *Rutin pembersihan* yang dipakai driver, nilai aturan 11 mengikuti spec 0018, dan baris Value sourcing serta *Perubahan `pin`* untuk kedua field baru).
+
 ## Landscape scan 2026-10-17
 
 Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum terkonfirmasi" dikonfirmasi saat `runtime pin`.

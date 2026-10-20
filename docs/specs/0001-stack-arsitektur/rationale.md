@@ -147,6 +147,19 @@ Rekonsiliasi dengan spec yang diterima sesudah scaffold. Keputusan di spec ini t
 
 Rekonsiliasi dengan spec 0007, 0008, 0010, dan 0013: baris *Batas keputusan* fitur 7, 8, 10, dan 13 menunjuk spec pemiliknya; core mendapat tokio, tracing, dan fitur `fixture`; protocol mendapat `sha2`; CLI mendapat `anstream`, `anstyle`, `unicode-width`, dan dependency lain spec 0008; aturan `check-deps` untuk proses di core dan daemon, `SIGKILL`, dan larangan spawn serta print di CLI; arah dependency Swift, product `StacklyTestSupport`, scene shell, larangan spawn dan jaringan di GUI; folder fixture `layout/` dan `endpoint/` serta `ContractNames.swift`.
 
+### Perubahan 2026-10-20 (ditambah fase 02)
+
+Rekonsiliasi dengan spec fase 02 (0015, 0017, 0018, 0020), dari inventaris `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md` bagian *Spec 0001*. Keputusan spec ini tidak berubah; semua resolusi yang direkomendasikan di inventaris itu diambil (keputusan lead scope 02 atas nama user):
+
+- *Batas keputusan*: baris fitur 15 menunjuk spec 0015 (bundle, `SMAppService.agent`, assembly dan signing di `cargo xtask build-app`, hardened runtime tanpa entitlement, identifier sementara), dan baris fitur 18 menunjuk spec 0018 (`ureq` 3 di port `Fetcher`, extractor di atas `tar`, `flate2`, `zip`, Mach-O lewat `object`). Setelan Xcode (signing ad hoc, hardened runtime, perintah `build-app`) disamakan dengan spec 0015.
+- *Peta crate* dan daftar `[workspace.dependencies]`: `socket2` (spec 0020) dan `tar`, `flate2`, `zip`, `object` (spec 0018) di `stackly-core`, digabung dalam satu edit di baris yang sama; `objc2`, `objc2-foundation`, `objc2-service-management` (spec 0015) dan `ureq` (spec 0018) di `stackly-platform-macos`; `clap_complete` dan `clap_mangen` (spec 0015) di `stackly-cli`; subcommand `catalog` dan flag baru `build-app` di baris `xtask`. `Cargo.toml` tidak diubah di sini; setiap crate masuk di langkah build fitur pemiliknya.
+- *Aturan arah dependency*: letak crate baru di atas; kalimat literal path menyebut daftar `MACHINE_PATHS` ditambah aturan `/usr/bin/codesign` di modul `codesign` (spec 0018); aturan tanpa nama atau ID provider di kode create Rust dan Swift (spec 0020), dicatat sebagai satu satunya aturan `check-deps` yang memindai Swift, karena spec 0020 AC-21 dan Consequences nya memang menaruhnya di `check-deps`.
+- *Pengecualian CLI ke core*: `stackly-cli` boleh memakai `stackly-core` hanya sebagai dependency dev dengan `features = ["test-support"]` untuk `CatalogBuilder` (spec 0017 langkah 7, juga test NATS spec 0023). Runner up yang tidak dipakai: test CLI memakai folder catalog yang dibangun `cargo xtask catalog build` lewat `STACKLY_CATALOG_DIR`, tanpa mengubah aturan.
+- *Audit dependency*: izin lisensi `ISC` (ring, rustls, untrusted) dari spec 0018.
+- Drift kecil yang ikut dirapikan: layout repo (`providers/catalog.toml`, `providers/catalog-revisions.json`, `evidence/compatibility/`), newtype `SignedSafeInteger` dipetakan ke `Int64` (spec 0020), dan `repository` workspace ke `stackly-dev/stackly` (Follow-up spec 0003; `Cargo.toml` menyusul di Follow-up).
+
+Perubahan ini dibaca model lain (Sonnet 5.5, baca saja) sebelum commit. Semua butir inventaris dinilai sudah diterapkan dengan benar; perbaikan kata yang diusulkannya ikut diterapkan (aturan `SignedSafeInteger` dipersempit ke integer settings, dan fitur crate `test-support` dicatat di baris core).
+
 ## References
 
 **Project sources**:
