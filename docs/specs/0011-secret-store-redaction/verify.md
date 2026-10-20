@@ -122,11 +122,12 @@ _Build step 9 (`StacklyClient` dan `StacklyTestSupport`) dan step 10 (`StacklyUI
 ### UI / manual
 
 - [ ] Buka preview `Secret field`, `Secret field, dark`, `Secret entry sheet`, dan `Revealable secret text` di Xcode (`StacklyUI`, folder `Secrets/`) → Enter memakai field tersembunyi dengan tombol Show; Tab menjangkau picker, field, Show, dan Save; baris yang disimpan menampilkan Saved; teks tersamar berlabel `Password, hidden`; tampilan terbaca di light dan dark → AC-19
-- [ ] Bukti alur GUI sungguhan (SecretEntrySheet dan RevealableSecretText dengan fixture credential) dicatat step 11 sebagai record manual → AC-16, AC-19
+- [ ] Step 11, record manual alur GUI: `evidence/manual/2026-10-20-spec-0011-step-11-secret-entry-and-reveal-flows.json` → ikuti `steps` di record itu di Mac ini: `stacklyd` sungguhan dengan `STACKLY_ROOT` sementara (keychain file), app Debug dari `cargo xtask build-app`, halaman **Secrets** di jendela Window > Design Gallery (hanya build Debug, tersambung ke `DaemonLink` sungguhan). Isi nilai lewat `SecretEntrySheet` dengan fixture credential (batas panjang menahan Save, Replace muncul bila nilai sudah ada), Show menyembunyikan lagi setelah 30 detik, lewat Hide, saat jendela ditutup, dan saat app tidak aktif, Copy mengosongkan pasteboard setelah 90 detik kecuali sudah berubah, VoiceOver membaca `Password, hidden`, semua kontrol terjangkau dan bisa dipakai dari keyboard, dan pemindaian `grep` atas root, log daemon, dan log app tidak menemukan prefix fixture; lalu isi `actual`, `status`, `reviewer`, `finishedAt` → AC-16, AC-19, AC-24 (REQ-016)
+- [ ] Konfirmasi `stored_only` lewat sheet tidak bisa dipicu dari halaman Secrets (reference `local:debug/...` tidak dipakai resource mana pun); dialognya dibuktikan `SecretEntryModelTests` dan pratinjau, dan layar produk pertama yang punya reference milik instance (fitur 20 atau 21) membuktikannya di GUI → AC-19
 
 ### Acceptance-criteria coverage
 
 - AC-18 · `SecretsClientTests`, `RevealedSecretTests`, `FixtureCredentialTests`
 - AC-19 · `SecretLimitsTests`, `SecretDraftTests`, `SecretNeedTests`, `SecretEntryModelTests`, `RevealModelTests` (30 detik), `ConcealedPasteboardTests` (90 detik), `SecretViewsAccessibilityTests`; AC-24 · `RevealModelTests` (semua atau tidak sama sekali)
-- Menunggu step 11: bukti GUI manual untuk AC-16 dan AC-19; daemon sungguhan tidak dipakai test step 9 dan 10 (semua lewat `SecretsClient` palsu)
+- Step 11: record manual `NOT_RUN` menunggu dijalankan di Mac ini untuk AC-16, AC-19, dan AC-24 terhadap daemon sungguhan; test step 9 dan 10 memakai `SecretsClient` palsu dan tidak menyentuh daemon
 - Catatan: prefix `FixtureCredential` dicek terhadap konstanta Rust lewat teks `credential.rs`, karena belum ada fixture prefix di `protocols/fixtures/` (spec *Sisi Swift fixture credential* menyebut satu fixture; folder itu bukan milik sesi ini)

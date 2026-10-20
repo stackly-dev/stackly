@@ -1,4 +1,5 @@
 #if DEBUG
+    import StacklyClient
     import SwiftUI
 
     /// The design gallery of spec 0012: every token, status, state, and confirmation of
@@ -10,9 +11,15 @@
     public struct DesignGallery: View {
         @State private var selection: GalleryTopic? = .tokens
         @State private var isNarrow = false
+        private let secrets: SecretsClient?
 
         /// Creates the gallery.
-        public init() {}
+        ///
+        /// - Parameter secrets: The secret methods over the app's real daemon link, for the
+        ///   Secrets page (spec 0011, step 11). Without it that page says there is no link.
+        public init(secrets: SecretsClient? = nil) {
+            self.secrets = secrets
+        }
 
         /// The gallery's content.
         public var body: some View {
@@ -23,7 +30,7 @@
                 .navigationSplitViewColumnWidth(min: 170, ideal: 190)
             } detail: {
                 let topic = selection ?? .tokens
-                topic.page
+                topic.page(secrets: secrets)
                     .frame(maxWidth: isNarrow ? GalleryLayout.narrowWidth : .infinity)
                     .frame(maxWidth: .infinity)
                     .navigationTitle(topic.title)
@@ -47,6 +54,7 @@
         case status
         case states
         case confirmation
+        case secrets
 
         var id: Self { self }
 
@@ -57,6 +65,7 @@
             case .status: "Status"
             case .states: "States"
             case .confirmation: "Confirmation"
+            case .secrets: "Secrets"
             }
         }
 
@@ -67,16 +76,18 @@
             case .status: "circle.badge.checkmark"
             case .states: "rectangle.stack"
             case .confirmation: "exclamationmark.bubble"
+            case .secrets: "key"
             }
         }
 
         /// The page view.
-        @ViewBuilder var page: some View {
+        @ViewBuilder func page(secrets: SecretsClient?) -> some View {
             switch self {
             case .tokens: TokensGalleryPage()
             case .status: StatusGalleryPage()
             case .states: StatesGalleryPage()
             case .confirmation: ConfirmationGalleryPage()
+            case .secrets: SecretsGalleryPage(client: secrets)
             }
         }
     }
