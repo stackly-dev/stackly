@@ -170,8 +170,11 @@ async fn a_crash_loop_after_a_ready_run_spawns_six_times_in_all_then_fails_crash
         rig.processes()
             .exit(spawn.pid, Some(ExitStatus::Exited(70)));
     }
-    wait_for("the instance fails", || {
+    wait_for("the instance fails with its budget shown as spent", || {
+        let restart = rig.sup.status(id).restart;
         rig.instance_row(id).lifecycle() == InstanceLifecycle::Failed
+            && restart.exhausted
+            && restart.attempts == 6
     })
     .await;
 
@@ -184,11 +187,17 @@ async fn a_crash_loop_after_a_ready_run_spawns_six_times_in_all_then_fails_crash
     let restart = rig.sup.status(id).restart;
     assert!(restart.exhausted);
     assert_eq!(restart.attempts, 6);
-    let respawns = rig.operations_of(id, OperationKind::StartInstance).await;
-    let failed = respawns
-        .iter()
-        .find(|view| view.operation.state() == OperationState::Failed)
-        .expect("the respawn operation fails when the budget is spent");
+    // The operation ends a moment after the lifecycle: wait for it.
+    let failed = loop {
+        let respawns = rig.operations_of(id, OperationKind::StartInstance).await;
+        if let Some(view) = respawns
+            .into_iter()
+            .find(|view| view.operation.state() == OperationState::Failed)
+        {
+            break view;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    };
     let detail = rig
         .engine
         .get(failed.operation.id())

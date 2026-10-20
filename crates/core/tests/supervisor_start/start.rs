@@ -787,13 +787,7 @@ async fn ac_8_a_cancel_before_the_journal_leaves_no_side_effect() {
         rig.processes().count(ProcessOp::Resume) == 0
             && rig.processes().count(ProcessOp::Discard) == 0
     );
-    assert_eq!(
-        rig.processes()
-            .probe_lock(&rig.paths(id).lock)
-            .expect("the lock can be probed"),
-        stackly_platform::LockState::Free,
-        "the instance lock was released"
-    );
+    rig.wait_lock_free(id).await;
 }
 
 #[tokio::test]

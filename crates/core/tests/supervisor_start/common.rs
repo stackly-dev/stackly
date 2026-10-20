@@ -651,6 +651,31 @@ impl Rig {
         identity
     }
 
+    /// Waits until nobody holds the instance lock of `id`.
+    ///
+    /// The executor drops its handle when an action ends, but a real child
+    /// another test of this process forks at that moment (the dummy
+    /// server) shares the open lock file until it has exec'd, so the lock
+    /// can read `Held` for a moment longer under load. A handle the
+    /// executor leaked would stay held and fail here after the wait.
+    pub async fn wait_lock_free(&self, id: InstanceId) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            let state = self
+                .processes()
+                .probe_lock(&self.paths(id).lock)
+                .expect("the lock can be probed");
+            if state == stackly_platform::LockState::Free {
+                return;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the instance lock of {id} was never released"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
     /// Takes the instance lock of `id` and returns it; dropping it frees
     /// the lock.
     pub fn take_lock(&self, id: InstanceId) -> stackly_platform::InstanceLock {
