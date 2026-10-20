@@ -1,0 +1,104 @@
+// Throwaway LaunchAgent program for the spec 0015 step 0 spike (AC-21). Never part of the repo.
+// Logs one JSON line per event to LOG_PATH, spawns two bounded /bin/sleep children
+// (one in its own session, one in the agent's process group), then waits.
+// Control files in CONTROL_DIR: `stop` exits 0, `exit75` exits 75.
+// The agent exits 0 on its own after MAX_LIFETIME seconds, so it never outlives the spike.
+import Darwin
+import Foundation
+
+let LOG_PATH = "@SPIKE_DIR@/logs/agent.log"
+let CONTROL_DIR = "@SPIKE_DIR@/control"
+let MAX_LIFETIME: Double = 20 * 60
+
+func nowMs() -> Int64 { Int64((Date().timeIntervalSince1970 * 1000).rounded()) }
+
+func log(_ event: String, _ extra: [String: Any] = [:]) {
+    var line: [String: Any] = extra
+    line["event"] = event
+    line["ms"] = nowMs()
+    line["time"] = ISO8601DateFormatter.string(from: Date(), timeZone: TimeZone(identifier: "UTC")!, formatOptions: [.withInternetDateTime, .withFractionalSeconds])
+    line["pid"] = Int(getpid())
+    guard let data = try? JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]) else { return }
+    let fd = open(LOG_PATH, O_WRONLY | O_APPEND | O_CREAT, 0o600)
+    if fd < 0 { return }
+    data.withUnsafeBytes { _ = write(fd, $0.baseAddress, $0.count) }
+    _ = write(fd, "\n", 1)
+    close(fd)
+}
+
+func spawnSleep(_ seconds: String, ownSession: Bool) -> Int32 {
+    var attr: posix_spawnattr_t?
+    posix_spawnattr_init(&attr)
+    if ownSession {
+        posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETSID))
+    }
+    var pid: pid_t = 0
+    let argv: [UnsafeMutablePointer<CChar>?] = [strdup("/bin/sleep"), strdup(seconds), nil]
+    let rc = posix_spawn(&pid, "/bin/sleep", nil, &attr, argv, nil)
+    posix_spawnattr_destroy(&attr)
+    return rc == 0 ? pid : -rc
+}
+
+var exe = [CChar](repeating: 0, count: 4096)
+var exeSize: UInt32 = 4096
+_ = _NSGetExecutablePath(&exe, &exeSize)
+let env = ProcessInfo.processInfo.environment
+log("start", [
+    "ppid": Int(getppid()),
+    "pgid": Int(getpgrp()),
+    "sid": Int(getsid(0)),
+    "uid": Int(getuid()),
+    "XPC_SERVICE_NAME": env["XPC_SERVICE_NAME"] ?? NSNull(),
+    "envKeys": env.keys.sorted(),
+    "PATH": env["PATH"] ?? NSNull(),
+    "TMPDIR": env["TMPDIR"] ?? NSNull(),
+    "HOME": env["HOME"] ?? NSNull(),
+    "XPC_FLAGS": env["XPC_FLAGS"] ?? NSNull(),
+    "cwd": FileManager.default.currentDirectoryPath,
+    "executable": String(cString: exe),
+    "bundleMainPath": Bundle.main.bundlePath,
+    "isatty0": isatty(0) == 1,
+    "build": "@BUILD@",
+])
+// 901 s in its own session (like a Stackly instance), 902 s in the agent's group.
+let ownSessionChild = spawnSleep("901", ownSession: true)
+let groupChild = spawnSleep("902", ownSession: false)
+log("children", ["ownSessionChild": Int(ownSessionChild), "groupChild": Int(groupChild)])
+
+signal(SIGTERM, SIG_IGN)
+let term = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+term.setEventHandler {
+    log("sigterm")
+    exit(0)
+}
+term.resume()
+signal(SIGINT, SIG_IGN)
+let intr = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+intr.setEventHandler {
+    log("sigint")
+    exit(0)
+}
+intr.resume()
+
+let started = Date()
+let timer = DispatchSource.makeTimerSource(queue: .main)
+timer.schedule(deadline: .now() + 0.1, repeating: 0.1)
+timer.setEventHandler {
+    let fm = FileManager.default
+    if fm.fileExists(atPath: CONTROL_DIR + "/stop") {
+        try? fm.removeItem(atPath: CONTROL_DIR + "/stop")
+        log("exit", ["code": 0, "why": "control stop"])
+        exit(0)
+    }
+    if fm.fileExists(atPath: CONTROL_DIR + "/exit75") {
+        try? fm.removeItem(atPath: CONTROL_DIR + "/exit75")
+        log("exit", ["code": 75, "why": "control exit75"])
+        exit(75)
+    }
+    if Date().timeIntervalSince(started) > MAX_LIFETIME {
+        log("exit", ["code": 0, "why": "max lifetime"])
+        exit(0)
+    }
+}
+timer.resume()
+dispatchMain()

@@ -1,0 +1,67 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15762-d108-760d-9ace-c2c5809a8ef8",
+  "covers": [
+    "REQ-014"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0015 spike: ad hoc SMAppService agent on this Mac (AC-21)",
+    "file": null,
+    "line": null
+  },
+  "status": "FAIL",
+  "expected": "an ad hoc signed throwaway app registers its bundled LaunchAgent with SMAppService and every assumption spec 0015 rests on holds, exactly as written: a never-registered bundle reads notRegistered, the tool in Contents/MacOS and the symlink to it see the bundle through NSBundle.mainBundle, unregister then register starts the job again without new approval, XPC_SERVICE_NAME equals the label, unregister stops a running job, and switching the item off in Login Items makes status read requiresApproval (spec 0015 AC-21, Port BackgroundAgent, State background agent)",
+  "actual": "Ad hoc registration works, but four results contradict spec 0015 as written. (1) A bundle that was never registered reads notFound (raw 3) from every path, not notRegistered; notRegistered (0) appears only after an unregister. classify maps NotFound to not_found, and AC-8 registers only from not_registered, so a fresh install could never be turned on. (2) Through the symlink outside the bundle, NSBundle.mainBundle is the symlink's folder and bundleIdentifier is nil, yet SMAppService answers for the real bundle: status enabled, and relaunch through the symlink restarted the job from the real bundle (new pid 264 ms later). The adapter's NSBundle.mainBundle identifier gate would turn every call from ~/.local/bin/stackly into NotBundled. (3) Switching the item off in Login Items changed nothing observable on this ad hoc build: status stayed enabled from all three paths, the running job was not stopped (it exited at its own 20 min limit at 02:46:04Z), launchctl print-disabled kept enabled, backgroundtaskmanagementd logged no change for the item, and a relaunch with the switch off started the job in 84 ms with status enabled. requiresApproval, and so disabled, could not be produced. (4) After the agent binary was replaced by a new ad hoc build (new cdhash) while registered, KeepAlive respawn after exit 75 failed (launchctl: job state spawn failed, last exit 78 EX_CONFIG, properties needs LWCR update), status still enabled; only relaunch started the new build. Confirmed: register from Contents/MacOS/spikectl (not CFBundleExecutable) returned ok in 141 ms, status enabled at once with no approval prompt, and the job started 0.5 s after the call returned; register while enabled is ok and does not restart the job. relaunch (unregister then register) starts the job 0.08 to 1.0 s later in every case tried (running, stopped by exit 0, launched under 10 s ago, through the symlink, on a background thread, with the Login Items switch off), with no throttle and no new approval. The job has ppid 1, XPC_SERVICE_NAME dev.stackly.test.agent.spike (the label), its own process group, cwd /, PATH /usr/bin:/bin:/usr/sbin:/sbin, and no STACKLY_ROOT. unregister of a running job sends SIGTERM during the call and status becomes notRegistered; a child in the job's process group dies, a child in its own session survives. exit 0 stays down with status enabled; exit 75 respawns 0.3 s later when the job ran over 10 s, otherwise about 10 s after its launch. Every call also works off the main thread. Other: a plain copy of the tool outside any bundle reads notFound, register fails SMAppServiceErrorDomain 3 (kSMErrorInvalidSignature, codesign -67028) and unregister fails code 22; an identical copy of the bundle at another path reads enabled too, so status follows the bundle identity, not its path. Limits: ad hoc only, bundle in /private/tmp, test identifiers; the first Login Items attempt happened while the disk was full, and I could not see the System Settings UI myself.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "On this Mac (macOS 27.0 build 26A428, arm64), approved by the user through the lead, worktree spk-f15-step0 at 2c7428a (clean). Nothing from the spike entered the repo except the copies in this record's files folder.",
+    "Built a throwaway bundle by hand in the session scratchpad (/private/tmp), with build.sh.txt: StacklyTestAgentSpike.app, bundle id dev.stackly.test.agent.spikeapp, main executable StacklyTestAgentSpike and a second tool Contents/MacOS/spikectl (the same Swift code, spikectl.swift.txt, calling SMAppService.agent(plistName:) status, register, unregister, and relaunch = unregister then register), a test agent Contents/MacOS/spike-agent (spike-agent.swift.txt, logs its start environment and exits on command or after 20 min), and Contents/Library/LaunchAgents/dev.stackly.test.agent.spike.plist with the production plist keys of spec 0015 (BundleProgram, AssociatedBundleIdentifiers, RunAtLoad, KeepAlive SuccessfulExit false, ThrottleInterval 10, ExitTimeOut 30, ProcessType Standard) and the test label. Test identifiers instead of com.ojiepermana.stackly, so no production registration was touched. Signed ad hoc with hardened runtime, inside out; codesign --verify --strict passed. Also a symlink bin/spikectl to Contents/MacOS/spikectl and an ad hoc signed plain copy bin/spikectl-copy outside any bundle.",
+    "Read status from the main executable, the second tool, a background thread, the symlink, and the plain copy before any registration (02-baseline).",
+    "Check 1: register from Contents/MacOS/spikectl; read the agent's start log and launchctl list; read status from every path (03-register). Then register again while enabled, unregister while the job runs, and register again (04).",
+    "Check 3: relaunch while the job runs, after it stopped with exit 0, and within 10 s of its launch (05); exit 0 and exit 75 behaviour under KeepAlive (06).",
+    "Check 2: relaunch through the symlink and on a background thread; register and unregister from the plain copy; status from an identical copy of the bundle at another path (07, 08).",
+    "Extra: replaced spike-agent with a new ad hoc build (new cdhash) while registered, made the job exit 75, read launchctl print, then relaunch (09, 10).",
+    "Check 5: the user switched StacklyTestAgentSpike off in System Settings > General > Login Items & Extensions. First attempt at about 02:26Z while the data volume was full (117 MiB free); the user then looked again at about 03:30Z, switched it off, and it stayed off in the UI. After each: status from three paths, the agent log, ps, launchctl print, launchctl print-disabled gui/502, and backgroundtaskmanagementd in the unified log (/usr/bin/log show, read only) (11 to 18). Then relaunch with the switch off (19).",
+    "Cleanup: unregister (status notRegistered from both paths), launchctl list showed no dev.stackly.test.agent.* job to boot out, killed the one leftover /bin/sleep child the agent had started in its own session, deleted the bundle, the symlink, the copy, and the build objects, and showed launchctl print reports no such service and no process is left (20, 21). launchctl print-disabled still lists dev.stackly.test.agent.spike => enabled; that is launchd's override table and was left as it is.",
+    "Files: run.log (every step's commands and output, scratch paths replaced by <spike> and other apps' names by <other app>), calls.jsonl (every SMAppService call with timings), agent.jsonl (the test agent's own log), and the spike sources as .txt."
+  ],
+  "reviewer": "Claude Opus 5.5 (session spk-f15-step0, for ojiepermana)",
+  "startedAt": "2026-10-20T02:21:00Z",
+  "finishedAt": "2026-10-20T03:36:48Z",
+  "evidencePath": "evidence/manual/files/01a15762-d108-760d-9ace-c2c5809a8ef8/",
+  "context": {
+    "sourceCommit": "2c7428a5635a10f24badb769bdde8e95d31ebcec",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

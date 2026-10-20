@@ -1,0 +1,93 @@
+#!/bin/zsh
+# Builds the throwaway ad hoc signed bundle for the spec 0015 step 0 spike (AC-21).
+set -euo pipefail
+S=${0:A:h:h}
+APP=$S/build/StacklyTestAgentSpike.app
+C=$APP/Contents
+rm -rf $APP
+mkdir -p $C/MacOS $C/Library/LaunchAgents $S/obj
+sed "s|@SPIKE_DIR@|$S|g" $S/src/spike-agent.swift > $S/obj/spike-agent.swift
+
+xcrun swiftc -O -swift-version 5 -target arm64-apple-macosx27.0 -o $S/obj/spikectl $S/src/spikectl.swift
+xcrun swiftc -O -swift-version 5 -target arm64-apple-macosx27.0 -o $S/obj/spike-agent $S/obj/spike-agent.swift
+
+cp $S/obj/spikectl $C/MacOS/StacklyTestAgentSpike
+cp $S/obj/spikectl $C/MacOS/spikectl
+cp $S/obj/spike-agent $C/MacOS/spike-agent
+chmod 0755 $C/MacOS/*
+
+cat > $C/Info.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>dev.stackly.test.agent.spikeapp</string>
+	<key>CFBundleName</key>
+	<string>StacklyTestAgentSpike</string>
+	<key>CFBundleDisplayName</key>
+	<string>StacklyTestAgentSpike</string>
+	<key>CFBundleExecutable</key>
+	<string>StacklyTestAgentSpike</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.1</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>27.0</string>
+	<key>LSUIElement</key>
+	<true/>
+</dict>
+</plist>
+EOF
+
+# Same keys and values as the production plist in spec 0015, with the test label and program.
+cat > $C/Library/LaunchAgents/dev.stackly.test.agent.spike.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>dev.stackly.test.agent.spike</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/spike-agent</string>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>dev.stackly.test.agent.spikeapp</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ExitTimeOut</key>
+	<integer>30</integer>
+	<key>ProcessType</key>
+	<string>Standard</string>
+</dict>
+</plist>
+EOF
+plutil -lint $C/Info.plist $C/Library/LaunchAgents/dev.stackly.test.agent.spike.plist
+
+# Inside out: nested Mach-Os first, then the bundle (which signs the main executable).
+codesign --force --sign - --options runtime --timestamp=none --identifier dev.stackly.test.agent.spike-agent $C/MacOS/spike-agent
+codesign --force --sign - --options runtime --timestamp=none --identifier dev.stackly.test.agent.spikectl $C/MacOS/spikectl
+codesign --force --sign - --options runtime --timestamp=none $APP
+codesign --verify --strict --deep --verbose=2 $APP
+for f in $C/MacOS/spike-agent $C/MacOS/spikectl $APP; do
+  echo "== $f"
+  codesign -dv $f 2>&1 | grep -E 'Identifier|Format|CodeDirectory|Signature|TeamIdentifier|Runtime'
+  codesign -d -r- $f 2>&1 | grep designated
+done
+ln -sfn $C/MacOS/spikectl $S/bin/spikectl
+cp $S/obj/spikectl $S/bin/spikectl-copy
+codesign --force --sign - --options runtime --timestamp=none --identifier dev.stackly.test.agent.spikectl-copy $S/bin/spikectl-copy
+echo "built $APP"
