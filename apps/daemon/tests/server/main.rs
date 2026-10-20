@@ -9,3 +9,4 @@ mod events;
 mod handshake;
 mod lifecycle;
 mod limits;
+mod secret;

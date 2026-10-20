@@ -159,10 +159,12 @@ mod imp {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use stackly_core::secret::{Redactor, SecretWorker, WorkerConfig};
     use stackly_core::{daemon_info, prepare_layout};
-    use stackly_platform::{DirectoryLayout, Platform, UserId};
-    use stackly_platform_macos::MacosPlatform;
+    use stackly_platform::{DirectoryLayout, Platform, SecretStore, UserId};
+    use stackly_platform_macos::{KeychainTarget, MacosPlatform, MacosSecretStore};
     use stackly_protocol::events::ShutdownReason;
+    use stackly_protocol::secret::SecretStoreTarget;
     use stackly_protocol::{CONTRACT_DIGEST, ProtocolVersion, Timestamp};
     use tracing_subscriber::EnvFilter;
     use uuid::Uuid;
@@ -171,7 +173,7 @@ mod imp {
         EXIT_LOCK_HELD, EXIT_START_FAILED, StartConfig, parse_catalog_dir, parse_log_filter,
     };
     use crate::lock::{DaemonLock, LockError, LockOwner};
-    use crate::log_sink::{LOG_CONTROL_TIMEOUT, LogSink, LogSinkConfig};
+    use crate::log_sink::{LOG_CONTROL_TIMEOUT, LogSink, LogSinkConfig, RedactingMakeWriter};
     use crate::map::StartFacts;
     use crate::server::{self, DaemonDeps};
     use crate::shutdown::StopSignals;
@@ -196,10 +198,17 @@ mod imp {
             Ok(filter) => (filter, None),
             Err(invalid) => (EnvFilter::new("info"), Some(invalid)),
         };
+        // The one redactor of the run: every log line passes it after it was
+        // formatted, and the daemon hands the same one to the secret
+        // service, the error bodies, and the events (spec 0011 AC-13).
+        let redactor = Arc::new(Redactor::new());
         let installed = tracing_subscriber::fmt()
             .json()
             .with_env_filter(active)
-            .with_writer(sink.make_writer())
+            .with_writer(RedactingMakeWriter::new(
+                sink.make_writer(),
+                Arc::clone(&redactor),
+            ))
             .try_init();
         let code = match (installed, invalid) {
             (Err(error), _) => {
@@ -211,7 +220,7 @@ mod imp {
                 tracing::error!(error = %invalid, "cannot start stacklyd");
                 EXIT_START_FAILED
             }
-            (Ok(()), None) => start(&sink, config),
+            (Ok(()), None) => start(&sink, &redactor, config),
         };
         // Shutdown step 7: the queue gets at most a second to drain.
         let _ = sink.flush(LOG_CONTROL_TIMEOUT);
@@ -219,7 +228,7 @@ mod imp {
     }
 
     /// Steps 3 to 8, then the server until it stops.
-    fn start(sink: &Arc<LogSink>, config: StartConfig) -> u8 {
+    fn start(sink: &Arc<LogSink>, redactor: &Arc<Redactor>, config: StartConfig) -> u8 {
         let info = daemon_info();
         let has_override = config.root_override.is_some();
 
@@ -310,6 +319,37 @@ mod imp {
             "stacklyd started",
         );
 
+        // The secret store: the login Keychain for the default root, a file
+        // keychain under the data root for `STACKLY_ROOT` (spec 0011,
+        // *Adapter Keychain macOS*). It is set up after the lock, since it
+        // writes to the data root, and a store that cannot be set up stops
+        // the daemon instead of running with one that is silently locked.
+        let (keychain, secret_target) = if has_override {
+            (
+                KeychainTarget::in_dir(&layout.keychain_dir()),
+                SecretStoreTarget::File,
+            )
+        } else {
+            (KeychainTarget::Login, SecretStoreTarget::Login)
+        };
+        let store = match MacosSecretStore::new(keychain) {
+            Ok(store) => store,
+            Err(error) => {
+                tracing::error!(error = %error, "cannot set up the secret store");
+                release(lock);
+                return EXIT_START_FAILED;
+            }
+        };
+        let worker = match SecretWorker::spawn(Arc::new(store), WorkerConfig::default()) {
+            Ok(worker) => worker,
+            Err(error) => {
+                tracing::error!(error = %error, "cannot start the secret store thread");
+                release(lock);
+                return EXIT_START_FAILED;
+            }
+        };
+        let platform = platform.with_secrets(Arc::clone(&worker) as Arc<dyn SecretStore>);
+
         // Signals are caught from here on, so a stop request while the
         // socket binds or the registry opens still stops the daemon cleanly.
         let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -339,7 +379,10 @@ mod imp {
 
         let facts = StartFacts::new(server_instance_id, started_at, has_override, pid);
         let deps = DaemonDeps::new(platform, prepared, facts, Arc::clone(sink))
-            .with_catalog_location(catalog);
+            .with_catalog_location(catalog)
+            .with_redactor(Arc::clone(redactor))
+            .with_secret_target(Some(secret_target))
+            .with_secret_worker(worker);
         let code = runtime.block_on(serve(deps, &mut signals));
         // Blocking tasks (a registry close, a prune) get a moment to end.
         runtime.shutdown_timeout(RUNTIME_SHUTDOWN);

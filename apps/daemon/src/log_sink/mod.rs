@@ -14,6 +14,7 @@
 //! the count. Any drop or file failure in the last minute marks the
 //! `log_sink` subsystem degraded.
 
+mod redacting;
 mod rotating;
 mod window;
 
@@ -31,6 +32,7 @@ use stackly_protocol::daemon::{SubsystemHealth, SubsystemStatus, subsystem};
 use stackly_protocol::{Count, Timestamp};
 use tracing_subscriber::fmt::MakeWriter;
 
+pub use redacting::{RedactingMakeWriter, RedactingWriter};
 pub use rotating::RotatingFile;
 use window::ProblemWindow;
 

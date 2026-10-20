@@ -1,8 +1,10 @@
 //! Maps platform and domain values to the DTOs of `stackly-protocol`.
 //! Boundaries carry DTOs only, so this is the one place that knows both.
-//! [`catalog`] maps the catalog read model.
+//! [`catalog`] maps the catalog read model and [`redact`] hides secret values
+//! in what the daemon sends.
 
 pub mod catalog;
+pub mod redact;
 
 use std::path::Path;
 
