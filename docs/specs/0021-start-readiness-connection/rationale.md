@@ -367,3 +367,18 @@ Dijalankan 2026-10-20 oleh model lain (Sonnet, read only) atas draft `4e9de0c`, 
 | S10 | Ada inti yang lebih sederhana | render di atas `PlanContext` dan resolver plan, tanpa settings (Keputusan 1) |
 | S11 | Kategori dan konflik flag CLI | `cli.connection_unavailable` menjadi `conflict`; `conflicts_with` clap; `--show-password` untuk entri tanpa secret; `inspect` membandingkan revision |
 | S12 | Pemicu muat ulang belum lengkap untuk config dan environment | dicatat sebagai milik fitur 29 dan 44 sampai 47 (Follow-up) |
+
+## Perbaikan pasca penyelarasan 2026-10-20
+
+Diterapkan atas permintaan lead scope 02 dari `docs/scope/coordination/post-alignment/post-0021.md` (tujuh temuan minor, ditinjau dua reviewer), dengan keputusan lead D1, D2, D5, dan D6 di `post-decisions.md` yang menang bila berbeda dengan teks perbaikan. ID AC, status, dan nomor langkah tidak berubah.
+
+| No | Perubahan | Sumber |
+| --- | --- | --- |
+| 1 | `Issue.reason` di langkah 1, *Kode error*, baris usulan spec 0009, dan *Consequences*: field core dari spec 0017 langkah 3; kunci wire `reason`, `ItemSpec`, dan kenaikan minor ikut langkah build pertama yang mengirim issue ber reason lewat wire (langkah 5 spec 0017, selain itu langkah 1 spec ini); "detail `reason`" menjadi "reason di `Issue.reason`" | temuan 1, D2 |
+| 2 | Blok `connection` NATS ditulis hanya langkah 2 spec 0023; langkah 2 dan AC-1 spec ini menulis blok PostgreSQL dan fake, dan golden NATS tetap dicek di sini | temuan 2, 5, dan 6, D1 |
+| 3 | Milestone 4 butuh fitur 19 milestone 3 langkah 9 (PostgreSQL sebagai `[[provider]]`); test daemon sebelum itu boleh memakai catalog `CatalogBuilder` | temuan 3, D6 |
+| 4 | Usulan baru untuk spec 0013: `ShellSync.events(kindPrefix:) -> AsyncStream<Event>` untuk pengamat tanpa store, dibangun langkah 9; disebut di *Tab Summary* dan langkah 9; spec 0013 dikeluarkan dari kalimat "Tidak ada update"; Follow-up baru untuk membawanya ke pemilik spec 0013 | temuan 4 |
+| 5 | Milestone 1 tidak lagi menunggu update spec yang sudah ada di `main`; blok usulan spec 0004 dan 0011 ditandai diterapkan; Follow-up lead dicentang | temuan 7 |
+| 6 | Prasyarat paket PostgreSQL langkah 2 menjadi fitur 19 langkah 4 | D5 |
+
+Tidak diterapkan di sini: kalimat untuk spec 0019 (temuan 6, "paket langkah 4 belum membawa blok `connection` sampai langkah 2 spec 0021") milik pemilik spec 0019, dan baris scope 02 milik lead.
