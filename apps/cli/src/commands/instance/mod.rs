@@ -114,6 +114,8 @@ pub struct InstanceAction {
     /// null otherwise, and null when that read failed.
     pub instance: Option<InstanceSummary>,
     #[serde(skip)]
+    already: bool,
+    #[serde(skip)]
     verb: Verb,
     #[serde(skip)]
     instance_id: Option<Uuid>,
@@ -121,7 +123,7 @@ pub struct InstanceAction {
 
 impl Render for InstanceAction {
     fn render(&self, out: &mut HumanWriter) {
-        let Some(operation) = &self.operation else {
+        let Some(operation) = self.operation.as_ref().filter(|_| !self.already) else {
             let lifecycle = self.instance.as_ref().map_or_else(
                 || self.verb.already().to_owned(),
                 |i| wire_name(&i.lifecycle),
@@ -181,6 +183,7 @@ fn accepted(reply: &InstanceActionAccepted) -> Accepted {
             .accepted
             .as_ref()
             .is_some_and(|accepted| accepted.replayed),
+        already_in_state: reply.already_in_state,
     }
 }
 
@@ -218,6 +221,7 @@ async fn conclude(
         operation: submission.operation,
         idempotency_key: submission.idempotency_key,
         instance,
+        already: submission.already_in_state,
         verb,
         instance_id,
     };

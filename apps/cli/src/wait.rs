@@ -78,6 +78,10 @@ pub struct Accepted {
     /// True when the idempotency key named an operation an earlier request
     /// started.
     pub replayed: bool,
+    /// True when the daemon said the resource was already in the asked
+    /// state. It may still carry an operation (a succeeded `no_op` that
+    /// stored the desired state), which is not waited for.
+    pub already_in_state: bool,
 }
 
 /// How a submitted request ended, before the command shapes its result.
@@ -91,6 +95,8 @@ pub struct Submission {
     /// True when the daemon answered with an operation an earlier request
     /// with this key started.
     pub replayed: bool,
+    /// The daemon said the resource was already in the asked state.
+    pub already_in_state: bool,
     /// `--wait` was given and the request started an operation.
     pub waited: bool,
     /// The failure the wait ended with, `None` for exit 0.
@@ -103,6 +109,9 @@ impl Submission {
     /// read the resource again.
     #[must_use]
     pub fn finished(&self) -> bool {
+        if self.already_in_state {
+            return true;
+        }
         match &self.operation {
             None => true,
             Some(operation) => self.waited && settled(operation.state),
@@ -115,7 +124,7 @@ impl Submission {
     pub fn wait_hint(&self) -> Option<String> {
         self.operation
             .as_ref()
-            .filter(|operation| !settled(operation.state))
+            .filter(|operation| !self.already_in_state && !settled(operation.state))
             .map(|operation| {
                 format!(
                     "wait with: stackly operation inspect {} --wait",
@@ -596,6 +605,7 @@ mod tests {
             operation: operation.map(|state| detail(state, false).operation),
             idempotency_key: "k-1".to_owned(),
             replayed: false,
+            already_in_state: false,
             waited,
             failure: None,
         }
