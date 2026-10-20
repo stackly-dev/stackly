@@ -101,3 +101,27 @@ Langkah 5 sampai 8 di Build plan: logika murni (`classify`, restart policy, `Sup
 
 - AC-12 · bagian core (langkah 10): pemotongan baris, redaksi baris utuh sebelum dipotong, `LogSink` yang `Busy`, `release_below` ke ujung baris yang diterima, backlog dengan penanda truncation, resume dengan penanda `resumed`, `TailSink` untuk `lastFailure.excerpt`. Pembacaan oleh actor setiap `SPOOL_DRAIN_INTERVAL`, pembacaan terakhir saat exit, dan pembacaan spool lama sebelum respawn sudah terpasang (`supervisor/drain.rs`, `exit.rs`, `startup.rs`). Yang menunggu: sampel `st_blocks` di bawah 2 MiB selama 60 detik dengan `logLinesPerSecond` 2000 (butuh adapter macOS yang benar benar punch hole dan dummy server, jalan bersama test daemon), dan `resume` saat adopsi (langkah 11, `Opening::Resumed`)
 - AC-9, AC-21, AC-22 · bagian spool dan redaksi log bergantung pada titik panggil actor dan rekonsiliasi; belum
+
+## Milestone 4: Daemon, IPC, and end to end proof
+
+Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-deps` (sesi `dev-f10-m4-s15`). Pengukuran NFR-003 dari langkah 15 (AC-20) menunggu langkah 13 dan 14, jadi belum ada barisnya di sini.
+
+### Langkah 15, aturan `check-deps`
+
+#### UI / manual
+
+- [ ] Buka `xtask/src/check_deps/source_scan.rs` → aturan *process* hanya berlaku untuk `stackly-core`, `stacklyd`, dan `stackly-platform-macos` (di crate terakhir hanya modul `process` dan `codesign` yang boleh), aturan `SIGKILL` berlaku untuk setiap crate dan hanya `stackly-platform-macos` modul `process::kill` yang diizinkan (`SIGKILL_ALLOWED`); `codesign` adalah satu satunya pengecualian bernama (K9); aturan `ChildRole::RuntimeCheck` (K6) sengaja belum ditambahkan karena variannya belum ada di kode dan `codesign` (K9) mungkin menyebutnya, jadi daftar tempat yang diizinkan belum bisa dipastikan → AC-15
+- [ ] Buka `xtask/src/check_deps.rs` → aturan `fixture` mengikuti rumusan *Aturan fitur `fixture`* spec 0014: dependency `stackly-core` yang menyalakan `fixture` hanya lewat `[dev-dependencies]` (juga per target, juga lewat nama lain), tidak ada entri `[features]` yang memuat `stackly-core/fixture` atau `stackly-core?/fixture`, `stackly-core` tidak memuat `fixture` di `default` atau fitur lain, dan `[workspace.dependencies]` tidak menyalakannya → spec 0014 AC-3
+
+#### Commands
+
+- [ ] `cargo xtask check-deps` → lulus di workspace ini: `check-deps: 13 crates follow the dependency, unsafe, and source rules`; fitur `fixture` belum ada di `stackly-core` (langkah 13), dan aturannya sudah menegakkan semua larangan begitu fitur itu muncul → AC-15
+- [ ] `cargo test -p xtask source_scan` → test baru lulus: cakupan `Rules::for_crate` untuk aturan process dan `SIGKILL`; core dan daemon tidak menyebut path spawn (`std::process::Command`, `tokio::process`, `std::os::unix::process`, `use std::process as p` dan glob nya, `posix_spawn`, `execve`, `fork`, `vfork` sebagai identifier, juga lewat `use ... as`), sambil `exit`, `ExitCode`, `id`, doc comment, string, dan kode test lolos; adapter macOS hanya spawn di `process` dan `codesign`; `SIGKILL` (juga lewat `use`, `assert_eq!`) hanya lolos di `process::kill` → AC-15
+- [ ] `cargo test -p xtask check_deps` → test baru lulus: `only_a_dev_dependency_may_turn_on_the_core_fixture_feature` (normal, build, dan per target ditolak; dev lolos), crate fixture `a_fixture_workspace_that_turns_on_core_fixture_outside_a_dev_dependency_is_rejected` (dependency normal, build, per target, dan `package = "stackly-core"` ditolak; entri `[features]` biasa, opsional `?`, dan lewat nama lain ditolak; `default` dan `extra` di core ditolak; dev dependency, juga per target, lolos), crate fixture `a_fixture_workspace_table_that_turns_on_core_fixture_is_rejected_even_when_inherited` (dua kunci `[workspace.dependencies]` ditolak dan anggota yang mewarisi sebagai dependency normal ditolak, entri bersih lolos), dan crate fixture `a_fixture_workspace_that_breaks_the_process_and_sigkill_rules_fails_with_file_and_line` (pelanggaran dengan file dan baris di core, daemon, dan adapter macOS) → AC-15, spec 0014 AC-3
+- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings` dan `cargo fmt --all --check` → keduanya lulus
+
+#### Acceptance-criteria coverage
+
+- AC-15 · bagian aturan: `SIGKILL` hanya di `process::kill` dan tidak ada process API di core dan daemon ditegakkan `check-deps` (sebelum langkah ini hanya diklaim di Milestone 1, kode aturannya baru ada di sini); TERM lalu KILL pada group pembantu dibuktikan Milestone 1 dan 2
+- AC-20 · belum: pengukuran NFR-003 (10 instance fake idle selama 5 menit) menunggu langkah 13 dan 14
+- Spec 0014 AC-3 · bagian aturan `check-deps` lengkap untuk keempat butir rumusan; bagian `cargo tree` dan build rilis menunggu spec 0014

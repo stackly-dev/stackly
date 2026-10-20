@@ -1,4 +1,4 @@
-//! The source scan of `cargo xtask check-deps`. Five rule sets:
+//! The source scan of `cargo xtask check-deps`. Seven rule sets:
 //!
 //! - Library rules (spec 0004, "Peta modul dan dependency"): library crates
 //!   never read environment variables and never hardcode a machine path.
@@ -20,6 +20,18 @@
 //! - CLI code rule (spec 0008, AC-14), for every crate but `stackly-cli`
 //!   and `stackly-protocol`: no path names `codes::cli`, so the daemon never
 //!   sends a code of the `cli` area.
+//! - Process rule (spec 0010, AC-15, step 15), for `stackly-core`,
+//!   `stacklyd`, and `stackly-platform-macos`: no `std::process` item other
+//!   than `exit`, `ExitCode`, and `id`, no `tokio::process`, no
+//!   `std::os::unix::process`, and no libc spawn or `exec` call
+//!   ([`SPAWN_NAMES`]). Core and the daemon never spawn. The macOS adapter
+//!   spawns only in [`PROCESS_ALLOWED_MODULES`], which holds `process` and
+//!   the one named exception `codesign` (the codesign helper of spec 0004,
+//!   feature 18, shares the helper spawn of `process`).
+//! - `SIGKILL` rule (spec 0010, AC-15, step 15), for every crate: the token
+//!   is named only in [`SIGKILL_ALLOWED`], so a signal that cannot be
+//!   caught reaches a process only through a `HelperHandle` or
+//!   `SuspendedChild::discard`.
 //!
 //! Each crate is read along its module tree, starting at its lib and bin
 //! targets, so `tests/` and a file only a `#[cfg(test)] mod` loads are never
@@ -62,6 +74,8 @@ const SOCKET_NAMES: [&str; 4] = ["TcpListener", "TcpStream", "TcpSocket", "UdpSo
 const SOCKET_RULE: &str = "no tcp or udp sockets (spec 0006)";
 /// The expose rule's message.
 const EXPOSE_RULE: &str = "secret expose outside the allowlist";
+/// The macOS adapter, the one crate that spawns processes.
+const MACOS_ADAPTER: &str = "stackly-platform-macos";
 /// The crate the CLI rules scan.
 const CLI_CRATE: &str = "stackly-cli";
 /// The crates that may name `codes::cli`.
@@ -70,6 +84,32 @@ const CLI_CODES_ALLOWED: [&str; 2] = [CLI_CRATE, "stackly-protocol"];
 pub const SPAWN_RULE: &str = "the cli never spawns processes (spec 0008, BR-011)";
 /// The `std::process` items the CLI may name.
 const PROCESS_ALLOWED: [&str; 3] = ["exit", "ExitCode", "id"];
+/// The libc names that start a program. Naming one outside the allowed
+/// modules breaks the process rule.
+const SPAWN_NAMES: [&str; 13] = [
+    "posix_spawn",
+    "posix_spawnp",
+    "fork",
+    "vfork",
+    "forkpty",
+    "execv",
+    "execve",
+    "execvp",
+    "execvpe",
+    "execl",
+    "execle",
+    "execlp",
+    "fexecve",
+];
+/// The macOS adapter modules that may spawn (spec 0010, step 15): the
+/// `process` module, and `codesign` as the one named exception (K9).
+const PROCESS_ALLOWED_MODULES: [&str; 2] = ["process", "codesign"];
+/// The process rule's message.
+const PROCESS_RULE: &str = "only stackly-platform-macos process and codesign start programs; core and the daemon never spawn (spec 0010, step 15)";
+/// The modules that may name `SIGKILL`, each with its submodules.
+pub const SIGKILL_ALLOWED: [(&str, &[&str]); 1] = [("stackly-platform-macos", &["process::kill"])];
+/// The `SIGKILL` rule's message.
+const SIGKILL_RULE: &str = "SIGKILL is named only in stackly-platform-macos process::kill, which hands it to a helper handle or a discarded suspended child (spec 0010, AC-15)";
 /// The print macros the CLI never calls.
 const PRINT_MACROS: [&str; 4] = ["print", "println", "eprint", "eprintln"];
 /// The CLI print rule's message.
@@ -115,6 +155,12 @@ pub struct Rules {
     pub cli: bool,
     /// The CLI code rule: no path naming `codes::cli`.
     pub no_cli_codes: bool,
+    /// The process rule: `Some(modules)` bans every process spawning path
+    /// outside the modules listed; `None` leaves the crate alone.
+    pub process_allowed: Option<&'static [&'static str]>,
+    /// The `SIGKILL` rule: `Some(modules)` bans the token outside the
+    /// modules listed; `None` leaves the crate alone.
+    pub sigkill_allowed: Option<&'static [&'static str]>,
 }
 
 impl Rules {
@@ -130,6 +176,17 @@ impl Rules {
                 .map_or(&[], |(_, modules)| *modules),
             cli: name == CLI_CRATE,
             no_cli_codes: !CLI_CODES_ALLOWED.contains(&name),
+            process_allowed: match name {
+                "stackly-core" | "stacklyd" => Some(&[]),
+                MACOS_ADAPTER => Some(&PROCESS_ALLOWED_MODULES),
+                _ => None,
+            },
+            sigkill_allowed: Some(
+                SIGKILL_ALLOWED
+                    .iter()
+                    .find(|(crate_name, _)| *crate_name == name)
+                    .map_or(&[], |(_, modules)| *modules),
+            ),
         }
     }
 }
@@ -295,6 +352,18 @@ impl Scan {
 
     /// Reports a TCP or UDP socket name, once per line.
     fn check_ident(&mut self, ident: &proc_macro2::Ident) {
+        if let Some(allowed) = self.rules.sigkill_allowed
+            && ident == "SIGKILL"
+            && !self.in_modules(allowed)
+        {
+            self.report_once(ident.span(), SIGKILL_RULE);
+        }
+        if let Some(allowed) = self.rules.process_allowed
+            && SPAWN_NAMES.iter().any(|name| ident == name)
+            && !self.in_modules(allowed)
+        {
+            self.report_once(ident.span(), PROCESS_RULE);
+        }
         if !self.rules.sockets || !SOCKET_NAMES.iter().any(|socket| ident == socket) {
             return;
         }
@@ -308,19 +377,25 @@ impl Scan {
         }
     }
 
-    /// Reports a call to `expose` outside the allowed modules, once per
-    /// line.
-    fn expose_call(&mut self, span: proc_macro2::Span) {
+    /// True when the node being scanned sits in one of `modules` (`a::b`
+    /// paths from the crate root) or below it.
+    fn in_modules(&self, modules: &[&str]) -> bool {
         let current: Vec<&str> = self
             .module_path
             .iter()
             .chain(&self.inline)
             .map(String::as_str)
             .collect();
-        let allowed = self.rules.expose_allowed.iter().any(|module| {
+        modules.iter().any(|module| {
             let module: Vec<&str> = module.split("::").collect();
             current.starts_with(&module)
-        });
+        })
+    }
+
+    /// Reports a call to `expose` outside the allowed modules, once per
+    /// line.
+    fn expose_call(&mut self, span: proc_macro2::Span) {
+        let allowed = self.in_modules(self.rules.expose_allowed);
         let line = span.start().line;
         if !allowed
             && !self
@@ -428,6 +503,9 @@ impl Scan {
         if self.rules.cli && spawns(segments) {
             self.report_once(span, SPAWN_RULE);
         }
+        if self.denies_process(segments) {
+            self.report_once(span, PROCESS_RULE);
+        }
         if self.rules.no_cli_codes && names_cli_codes(segments) {
             self.report_once(span, CLI_CODES_RULE);
         }
@@ -440,10 +518,18 @@ impl Scan {
         }
     }
 
+    /// True when the process rule applies here and `segments` reach a
+    /// process spawning API.
+    fn denies_process(&self, segments: &[String]) -> bool {
+        self.rules
+            .process_allowed
+            .is_some_and(|allowed| spawns(segments) && !self.in_modules(allowed))
+    }
+
     /// Reads a macro body for paths (`a :: b :: c` runs of identifiers)
     /// and print macro calls (`println !`), for the CLI rules.
     fn check_token_paths(&mut self, tokens: TokenStream) {
-        if !self.rules.cli && !self.rules.no_cli_codes {
+        if !self.rules.cli && !self.rules.no_cli_codes && self.rules.process_allowed.is_none() {
             return;
         }
         let tokens: Vec<TokenTree> = tokens.into_iter().collect();
@@ -518,6 +604,14 @@ impl Scan {
     fn check_use_target(&mut self, span: proc_macro2::Span, full: &[String]) {
         if self.rules.cli && (spawns(full) || imports_process_module(full)) {
             self.report_once(span, SPAWN_RULE);
+        }
+        if self.denies_process(full)
+            || self
+                .rules
+                .process_allowed
+                .is_some_and(|allowed| imports_process_module(full) && !self.in_modules(allowed))
+        {
+            self.report_once(span, PROCESS_RULE);
         }
         if self.rules.no_cli_codes && names_cli_codes(full) {
             self.report_once(span, CLI_CODES_RULE);
@@ -1086,6 +1180,8 @@ mod tests {
                 expose_allowed: &[],
                 cli: false,
                 no_cli_codes: true,
+                process_allowed: None,
+                sigkill_allowed: Some(&[]),
             }
         );
         assert_eq!(
@@ -1096,6 +1192,8 @@ mod tests {
                 expose_allowed: &[],
                 cli: false,
                 no_cli_codes: true,
+                process_allowed: None,
+                sigkill_allowed: Some(&[]),
             }
         );
     }
@@ -1401,5 +1499,158 @@ mod tests {
                 "stackly-platform-macos",
             ]
         );
+    }
+    #[test]
+    fn the_process_and_sigkill_rules_cover_core_the_daemon_and_the_macos_adapter() {
+        assert_eq!(
+            Rules::for_crate("stackly-core").process_allowed,
+            Some(&[][..])
+        );
+        assert_eq!(Rules::for_crate("stacklyd").process_allowed, Some(&[][..]));
+        assert_eq!(
+            Rules::for_crate("stackly-platform-macos").process_allowed,
+            Some(&["process", "codesign"][..])
+        );
+        for name in ["stackly-testkit", "xtask", "stackly-cli", "stackly-storage"] {
+            assert_eq!(Rules::for_crate(name).process_allowed, None, "{name}");
+        }
+        assert_eq!(
+            Rules::for_crate("stackly-platform-macos").sigkill_allowed,
+            Some(&["process::kill"][..])
+        );
+        for name in ["stackly-core", "stacklyd", "stackly-testkit", "xtask"] {
+            assert_eq!(
+                Rules::for_crate(name).sigkill_allowed,
+                Some(&[][..]),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn core_and_the_daemon_never_name_a_process_spawning_path() {
+        let source = "use std::process::Command;\n\
+             pub fn a() { let _ = std::process::Command::new(\"x\"); }\n\
+             use std::process as p;\n\
+             use std::process::*;\n\
+             pub fn b() { let _ = tokio::process::Command::new(\"x\"); }\n\
+             use std::os::unix::process::CommandExt;\n\
+             pub fn c() { let _ = format!(\"{:?}\", std::process::Stdio::null()); }\n\
+             pub fn d() { unsafe { libc::posix_spawn(); libc::execve(); libc::fork(); } }\n\
+             use libc::{vfork as v};\n";
+        for name in ["stackly-core", "stacklyd"] {
+            let found = scan_as(name, &[("src/lib.rs", source)]);
+            assert_eq!(
+                lines_of(&found, PROCESS_RULE),
+                [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                "{name}: {found:?}"
+            );
+            assert_eq!(found.len(), 9, "{name}: {found:?}");
+        }
+    }
+
+    #[test]
+    fn core_may_exit_name_exit_code_and_read_its_own_pid_and_tests_may_spawn() {
+        let found = scan(&[(
+            "src/lib.rs",
+            "//! Never `std::process::Command` or `libc::SIGKILL`; see posix_spawn.\n\
+             use std::process::{ExitCode, exit};\n\
+             pub fn a() -> ExitCode { if false { exit(2) } ExitCode::SUCCESS }\n\
+             pub fn b() -> u32 { std::process::id() }\n\
+             pub const NOTE: &str = \"std::process::Command and SIGKILL and fork\";\n\
+             #[cfg(test)]\n\
+             mod tests {\n\
+             \x20   #[test]\n\
+             \x20   fn t() { let _ = std::process::Command::new(\"x\"); let _ = libc::SIGKILL; }\n\
+             }\n\
+             #[cfg(test)]\n\
+             fn only_in_tests() { let _ = tokio::process::Command::new(\"x\"); }\n",
+        )]);
+
+        assert_eq!(found, Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_macos_adapter_spawns_only_in_process_and_codesign() {
+        let spawn = "pub fn go() {\n\
+             \x20   let _ = std::process::Command::new(\"x\");\n\
+             \x20   let _ = unsafe { libc::posix_spawn() };\n\
+             }\n";
+        let mut found = scan_as(
+            "stackly-platform-macos",
+            &[
+                (
+                    "src/lib.rs",
+                    "mod process;\nmod codesign;\nmod fs;\nmod secret;\n",
+                ),
+                ("src/process.rs", "mod spawn;\nmod kill;\n"),
+                ("src/process/spawn.rs", spawn),
+                (
+                    "src/process/kill.rs",
+                    "pub fn k() { let _ = libc::SIGKILL; }\n",
+                ),
+                ("src/codesign.rs", spawn),
+                ("src/fs.rs", spawn),
+                (
+                    "src/secret.rs",
+                    "pub mod inline { pub fn go() { let _ = libc::fork(); } }\n\
+                     pub fn id() -> u32 { std::process::id() }\n",
+                ),
+            ],
+        );
+
+        found.sort();
+
+        assert_eq!(
+            found,
+            [
+                format!("stackly-platform-macos src/fs.rs:2: {PROCESS_RULE}"),
+                format!("stackly-platform-macos src/fs.rs:3: {PROCESS_RULE}"),
+                format!("stackly-platform-macos src/secret.rs:1: {PROCESS_RULE}"),
+            ]
+        );
+    }
+
+    #[test]
+    fn sigkill_is_named_only_in_the_macos_process_kill_module() {
+        let found = scan_as(
+            "stackly-platform-macos",
+            &[
+                ("src/lib.rs", "mod process;\nmod codesign;\n"),
+                ("src/process.rs", "mod spawn;\nmod kill;\n"),
+                (
+                    "src/process/kill.rs",
+                    "pub fn k() { let _ = libc::SIGKILL; }\n",
+                ),
+                (
+                    "src/process/spawn.rs",
+                    "/// Never SIGKILL.\nuse libc::SIGKILL;\npub fn s() { let _ = libc::SIGKILL; }\n",
+                ),
+                (
+                    "src/codesign.rs",
+                    "pub fn c() { assert_eq!(f(), libc::SIGKILL); let _ = \"SIGKILL\"; }\n",
+                ),
+            ],
+        );
+
+        assert_eq!(
+            found,
+            [
+                format!("stackly-platform-macos src/codesign.rs:1: {SIGKILL_RULE}"),
+                format!("stackly-platform-macos src/process/spawn.rs:2: {SIGKILL_RULE}"),
+                format!("stackly-platform-macos src/process/spawn.rs:3: {SIGKILL_RULE}"),
+            ]
+        );
+        for name in ["stackly-core", "stacklyd", "stackly-testkit", "xtask"] {
+            let found = scan_as(
+                name,
+                &[("src/lib.rs", "pub fn k() { let _ = libc::SIGKILL; }\n")],
+            );
+            assert_eq!(
+                found,
+                [format!("{name} src/lib.rs:1: {SIGKILL_RULE}")],
+                "{name}"
+            );
+        }
     }
 }

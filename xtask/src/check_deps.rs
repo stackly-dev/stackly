@@ -10,7 +10,9 @@
 //! `stackly-cli`, and no `codes::cli` outside the CLI and the protocol, and
 //! the crate placement rules from spec 0015: the Objective-C bindings only
 //! in `stackly-platform-macos`, and the clap completion and man page crates
-//! only in `stackly-cli`.
+//! only in `stackly-cli`, and the step 15 rules from spec 0010: the process
+//! API and `SIGKILL` source rules, and the `fixture` feature of
+//! `stackly-core` (spec 0014), which only a dev dependency may turn on.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
 //! build). Transitive dependencies are left alone: portability is proven by
@@ -85,6 +87,12 @@ const CLAP_DOCS: [&str; 2] = ["clap_complete", "clap_mangen"];
 const ARCHIVE_CRATES: [&str; 4] = ["tar", "flate2", "zip", "object"];
 const ARCHIVE_USERS: [&str; 2] = ["stackly-core", "xtask"];
 const CLI: &str = "stackly-cli";
+/// The core crate and its feature for the fake runtime and the fake
+/// provider packages (spec 0014).
+const CORE: &str = "stackly-core";
+const FIXTURE_FEATURE: &str = "fixture";
+/// The `fixture` rule's message (spec 0010 step 15, spec 0014).
+const FIXTURE_RULE: &str = "the fixture feature of stackly-core turns on only through a dev dependency, never a normal or build dependency, a [features] entry, or [workspace.dependencies]";
 /// Crates that run or open other programs, which `stackly-cli` never takes
 /// as a normal dependency (spec 0008, BR-011). Dev dependencies may.
 const CLI_SPAWN_DEPS: [&str; 7] = [
@@ -107,7 +115,7 @@ pub fn run(root: &Path) -> Result<()> {
         eprintln!("  {violation}");
     }
     bail!(
-        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, 0008, 0009, and 0011",
+        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, 0008, 0009, 0010, 0011, and 0014",
         violations.len()
     )
 }
@@ -123,10 +131,12 @@ fn find_violations(root: &Path) -> Result<(usize, Vec<String>)> {
     let packages = metadata.workspace_packages();
 
     let mut violations = check_workspace_lints(root)?;
+    violations.extend(check_workspace_fixture(root)?);
     for package in &packages {
         for dependency in &package.dependencies {
             check_dependency(package.name.as_str(), dependency, &mut violations);
         }
+        check_fixture_features(package, &mut violations);
         check_lints_inherited(package, &mut violations)?;
         if !UNSAFE_ALLOWED.contains(&package.name.as_str()) {
             check_unsafe_opt_out(package, &mut violations)?;
@@ -263,6 +273,76 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
     if name == STORAGE && BINARIES.contains(&package) && package != "stacklyd" {
         deny("of the binaries, only stacklyd uses the registry");
     }
+    if name == CORE
+        && dependency.kind != DependencyKind::Development
+        && dependency.features.iter().any(|f| f == FIXTURE_FEATURE)
+    {
+        deny(FIXTURE_RULE);
+    }
+}
+
+/// The `[features]` rules for `fixture`: no crate lists
+/// `stackly-core/fixture` (or `stackly-core?/fixture`, or the same through
+/// a renamed dependency), and `stackly-core` itself lists `fixture` under
+/// no other feature, `default` included.
+fn check_fixture_features(package: &Package, violations: &mut Vec<String>) {
+    let aliases: Vec<&str> = package
+        .dependencies
+        .iter()
+        .filter(|dependency| dependency.name == CORE)
+        .map(|dependency| dependency.rename.as_deref().unwrap_or(CORE))
+        .chain([CORE])
+        .collect();
+    for (feature, members) in &package.features {
+        for member in members {
+            let enables_core_fixture =
+                member.split_once('/').is_some_and(|(dependency, enabled)| {
+                    enabled == FIXTURE_FEATURE
+                        && aliases.contains(&dependency.trim_end_matches('?'))
+                });
+            if enables_core_fixture {
+                violations.push(format!(
+                    "{} feature {feature} lists {member}: {FIXTURE_RULE}",
+                    package.name
+                ));
+            }
+            if package.name == CORE && feature != FIXTURE_FEATURE && member == FIXTURE_FEATURE {
+                violations.push(format!(
+                    "{CORE} feature {feature} lists {FIXTURE_FEATURE}: {FIXTURE_RULE}"
+                ));
+            }
+        }
+    }
+}
+
+/// `[workspace.dependencies]` never turns on `fixture`, because a member
+/// that inherits the entry would carry it into a normal dependency.
+fn check_workspace_fixture(root: &Path) -> Result<Vec<String>> {
+    let manifest = read_manifest(&root.join("Cargo.toml"))?;
+    let Some(table) = manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(toml::Value::as_table)
+    else {
+        return Ok(Vec::new());
+    };
+    Ok(table
+        .iter()
+        .filter(|(key, value)| {
+            let package = value
+                .get("package")
+                .and_then(toml::Value::as_str)
+                .unwrap_or(key);
+            let features = value.get("features").and_then(toml::Value::as_array);
+            package == CORE
+                && features.is_some_and(|features| {
+                    features.iter().any(|f| f.as_str() == Some(FIXTURE_FEATURE))
+                })
+        })
+        .map(|(key, _)| {
+            format!("workspace Cargo.toml [workspace.dependencies] {key}: {FIXTURE_RULE}")
+        })
+        .collect())
 }
 
 /// The workspace lint table must keep `unsafe_code` denied.
@@ -1231,6 +1311,8 @@ mod tests {
                 expose_allowed: &[],
                 cli: false,
                 no_cli_codes: false,
+                process_allowed: None,
+                sigkill_allowed: None,
             };
             let calls = source_scan::scan_package(root, package, nothing_allowed).unwrap();
             for module in modules {
@@ -1241,5 +1323,329 @@ mod tests {
                 );
             }
         }
+    }
+    /// A dependency on `stackly-core` that turns on `features`, in a
+    /// manifest table of `kind` and optional `target`.
+    fn core_dependency(kind: Option<&str>, features: &[&str], target: Option<&str>) -> Dependency {
+        serde_json::from_value(serde_json::json!({
+            "name": CORE,
+            "source": null,
+            "req": "*",
+            "kind": kind,
+            "optional": false,
+            "uses_default_features": true,
+            "features": features,
+            "target": target,
+            "rename": null,
+            "registry": null,
+            "path": null,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn only_a_dev_dependency_may_turn_on_the_core_fixture_feature() {
+        for (kind, label) in [(None, "normal"), (Some("build"), "build")] {
+            for target in [None, Some("cfg(unix)")] {
+                let mut found = Vec::new();
+                let dependency = core_dependency(kind, &["test-support", "fixture"], target);
+                check_dependency("stacklyd", &dependency, &mut found);
+                assert_eq!(
+                    found,
+                    [format!(
+                        "stacklyd has a {label} dependency on stackly-core: {FIXTURE_RULE}"
+                    )],
+                    "{kind:?} {target:?}"
+                );
+            }
+        }
+        for target in [None, Some("cfg(unix)")] {
+            let mut found = Vec::new();
+            let dev = core_dependency(Some("dev"), &["fixture"], target);
+            check_dependency("stacklyd", &dev, &mut found);
+            let plain = core_dependency(None, &["test-support", "json-schema"], target);
+            check_dependency("xtask", &plain, &mut found);
+            assert!(found.is_empty(), "{target:?}: {found:?}");
+        }
+    }
+
+    /// A manifest for a fixture crate that depends on `../core`.
+    fn fixture_manifest(name: &str, body: &str) -> String {
+        format!(
+            "[package]\nname = \"{name}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+             {body}\n[lints]\nworkspace = true\n"
+        )
+    }
+
+    #[test]
+    fn a_fixture_workspace_that_turns_on_core_fixture_outside_a_dev_dependency_is_rejected() {
+        let ev = stackly_evidence::evidence!(
+            covers = ["AC-013"],
+            kind = stackly_evidence::Kind::Fixture,
+            expected = "(spec 0014 AC-3) check-deps rejects the stackly-core fixture feature in a normal, build, target specific, or renamed dependency, in a [features] entry (plain, optional, or renamed), and in a feature of stackly-core itself, while dev dependencies, also per target, pass",
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let members = [
+            "core", "normal", "build", "target", "renamed", "listed", "aliased", "dev",
+        ];
+        let members_list = members.map(|m| format!("\"{m}\"")).join(", ");
+        write_file(
+            root,
+            "Cargo.toml",
+            &format!(
+                "[workspace]\nresolver = \"3\"\nmembers = [{members_list}]\n\n\
+                 [workspace.lints.rust]\nunsafe_code = \"deny\"\n"
+            ),
+        );
+        let core = "{ path = \"../core\", features = [\"fixture\"] }";
+        write_file(
+            root,
+            "core/Cargo.toml",
+            &fixture_manifest(
+                "stackly-core",
+                "[features]\ndefault = [\"fixture\"]\nfixture = []\nextra = [\"fixture\", \"test-support\"]\n\
+                 test-support = []\nclean = [\"test-support\"]\n",
+            ),
+        );
+        write_file(
+            root,
+            "normal/Cargo.toml",
+            &fixture_manifest(
+                "normal",
+                &format!("[dependencies]\nstackly-core = {core}\n"),
+            ),
+        );
+        write_file(
+            root,
+            "build/Cargo.toml",
+            &fixture_manifest(
+                "build",
+                &format!("[build-dependencies]\nstackly-core = {core}\n"),
+            ),
+        );
+        write_file(
+            root,
+            "target/Cargo.toml",
+            &fixture_manifest(
+                "target",
+                &format!(
+                    "[target.'cfg(unix)'.dependencies]\nstackly-core = {core}\n\n\
+                     [target.'cfg(windows)'.build-dependencies]\nstackly-core = {core}\n"
+                ),
+            ),
+        );
+        write_file(
+            root,
+            "renamed/Cargo.toml",
+            &fixture_manifest(
+                "renamed",
+                "[dependencies]\ncore2 = { package = \"stackly-core\", path = \"../core\", features = [\"fixture\"] }\n",
+            ),
+        );
+        write_file(
+            root,
+            "listed/Cargo.toml",
+            &fixture_manifest(
+                "listed",
+                "[dependencies]\nstackly-core = { path = \"../core\", optional = true }\n\n\
+                 [features]\nplain = [\"stackly-core/fixture\"]\nweak = [\"stackly-core?/fixture\"]\n\
+                 safe = [\"dep:stackly-core\", \"stackly-core/test-support\"]\n",
+            ),
+        );
+        write_file(
+            root,
+            "aliased/Cargo.toml",
+            &fixture_manifest(
+                "aliased",
+                "[dependencies]\nengine = { package = \"stackly-core\", path = \"../core\", optional = true }\n\n\
+                 [features]\nthrough = [\"engine/fixture\"]\n",
+            ),
+        );
+        write_file(
+            root,
+            "dev/Cargo.toml",
+            &fixture_manifest(
+                "dev",
+                &format!(
+                    "[dependencies]\nstackly-core = {{ path = \"../core\" }}\n\n\
+                     [dev-dependencies]\nstackly-core = {core}\n\n\
+                     [target.'cfg(unix)'.dev-dependencies]\nstackly-core = {core}\n"
+                ),
+            ),
+        );
+        for member in members {
+            write_file(root, &format!("{member}/src/lib.rs"), "//! Fixture.\n");
+        }
+
+        let (crates, mut found) = find_violations(root).unwrap();
+        found.sort();
+
+        assert_eq!(crates, 8);
+        assert_eq!(
+            found,
+            [
+                format!("aliased feature through lists engine/fixture: {FIXTURE_RULE}"),
+                format!("build has a build dependency on stackly-core: {FIXTURE_RULE}"),
+                format!("listed feature plain lists stackly-core/fixture: {FIXTURE_RULE}"),
+                format!("listed feature weak lists stackly-core?/fixture: {FIXTURE_RULE}"),
+                format!("normal has a normal dependency on stackly-core: {FIXTURE_RULE}"),
+                format!("renamed has a normal dependency on stackly-core: {FIXTURE_RULE}"),
+                format!("stackly-core feature default lists fixture: {FIXTURE_RULE}"),
+                format!("stackly-core feature extra lists fixture: {FIXTURE_RULE}"),
+                format!("target has a build dependency on stackly-core: {FIXTURE_RULE}"),
+                format!("target has a normal dependency on stackly-core: {FIXTURE_RULE}"),
+            ]
+        );
+        ev.pass();
+    }
+
+    #[test]
+    fn a_fixture_workspace_table_that_turns_on_core_fixture_is_rejected_even_when_inherited() {
+        let ev = stackly_evidence::evidence!(
+            covers = ["AC-013"],
+            kind = stackly_evidence::Kind::Fixture,
+            expected = "(spec 0014 AC-3) check-deps rejects [workspace.dependencies] entries that turn on the stackly-core fixture feature, under any key, and a member that inherits one as a normal dependency, while a clean entry and a dev dependency that inherits a clean entry pass",
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_file(
+            root,
+            "Cargo.toml",
+            "[workspace]\nresolver = \"3\"\nmembers = [\"core\", \"inherits\", \"clean\"]\n\n\
+             [workspace.lints.rust]\nunsafe_code = \"deny\"\n\n\
+             [workspace.dependencies]\n\
+             stackly-core = { path = \"core\", features = [\"fixture\"] }\n\
+             engine = { package = \"stackly-core\", path = \"core\", features = [\"fixture\"] }\n\
+             plain = { package = \"stackly-core\", path = \"core\" }\n",
+        );
+        write_file(
+            root,
+            "core/Cargo.toml",
+            &fixture_manifest("stackly-core", "[features]\nfixture = []\n"),
+        );
+        write_file(
+            root,
+            "inherits/Cargo.toml",
+            &fixture_manifest(
+                "inherits",
+                "[dependencies]\nstackly-core = { workspace = true }\n",
+            ),
+        );
+        write_file(
+            root,
+            "clean/Cargo.toml",
+            &fixture_manifest(
+                "clean",
+                "[dev-dependencies]\nplain = { workspace = true }\n",
+            ),
+        );
+        for member in ["core", "inherits", "clean"] {
+            write_file(root, &format!("{member}/src/lib.rs"), "//! Fixture.\n");
+        }
+
+        let (crates, mut found) = find_violations(root).unwrap();
+        found.sort();
+
+        assert_eq!(crates, 3);
+        assert_eq!(
+            found,
+            [
+                format!("inherits has a normal dependency on stackly-core: {FIXTURE_RULE}"),
+                format!("workspace Cargo.toml [workspace.dependencies] engine: {FIXTURE_RULE}"),
+                format!(
+                    "workspace Cargo.toml [workspace.dependencies] stackly-core: {FIXTURE_RULE}"
+                ),
+            ]
+        );
+        ev.pass();
+    }
+
+    #[test]
+    fn a_fixture_workspace_that_breaks_the_process_and_sigkill_rules_fails_with_file_and_line() {
+        let ev = stackly_evidence::evidence!(
+            covers = ["REQ-011"],
+            kind = stackly_evidence::Kind::Fixture,
+            expected = "check-deps rejects process spawning paths and libc spawn calls in core, the daemon, and the macOS adapter outside its process and codesign modules, and SIGKILL outside the adapter's process::kill, with file and line, while exit, ExitCode, id, doc comments, strings, and test code pass",
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_file(
+            root,
+            "Cargo.toml",
+            "[workspace]\nresolver = \"3\"\n\
+             members = [\"crates/core\", \"crates/platform-macos\", \"apps/daemon\"]\n\n\
+             [workspace.lints.rust]\nunsafe_code = \"deny\"\n",
+        );
+        write_crate(root, "crates/core", "stackly-core", "", false);
+        write_file(
+            root,
+            "crates/core/src/lib.rs",
+            "//! Fixture. Never `std::process::Command`, never SIGKILL.\n\
+             use std::process::Command;\n\
+             pub fn a() { let _ = Command::new(\"x\"); }\n\
+             pub fn b() -> u32 { std::process::id() }\n\
+             pub const NOTE: &str = \"SIGKILL and posix_spawn\";\n\
+             pub fn c() { let _ = libc::SIGKILL; }\n\
+             #[cfg(test)]\n\
+             mod tests {\n\
+             \x20   #[test]\n\
+             \x20   fn t() { let _ = std::process::Command::new(\"x\"); let _ = libc::SIGKILL; }\n\
+             }\n",
+        );
+        write_crate(root, "apps/daemon", DAEMON, "", true);
+        write_file(
+            root,
+            "apps/daemon/src/main.rs",
+            "//! Fixture.\n\
+             use std::os::unix::process::CommandExt;\n\
+             fn main() -> std::process::ExitCode {\n\
+             \x20   let _ = tokio::process::Command::new(\"x\");\n\
+             \x20   std::process::ExitCode::SUCCESS\n\
+             }\n",
+        );
+        write_crate(root, "crates/platform-macos", MACOS_ADAPTER, "", false);
+        write_file(
+            root,
+            "crates/platform-macos/src/lib.rs",
+            "//! Fixture.\nmod codesign;\nmod fs;\nmod process;\n",
+        );
+        let spawn = "pub fn go() {\n    let _ = std::process::Command::new(\"x\");\n    let _ = libc::posix_spawn;\n}\n";
+        write_file(
+            root,
+            "crates/platform-macos/src/process.rs",
+            "mod kill;\nmod spawn;\n",
+        );
+        write_file(root, "crates/platform-macos/src/process/spawn.rs", spawn);
+        write_file(
+            root,
+            "crates/platform-macos/src/process/kill.rs",
+            "pub fn k() { let _ = libc::SIGKILL; let _ = libc::SIGTERM; }\n",
+        );
+        write_file(root, "crates/platform-macos/src/codesign.rs", spawn);
+        write_file(
+            root,
+            "crates/platform-macos/src/fs.rs",
+            "pub fn go() {\n    let _ = std::process::Command::new(\"x\");\n    let _ = libc::SIGKILL;\n}\n",
+        );
+
+        let (crates, mut found) = find_violations(root).unwrap();
+        found.sort();
+
+        assert_eq!(crates, 3);
+        let process = "only stackly-platform-macos process and codesign start programs; core and the daemon never spawn (spec 0010, step 15)";
+        let sigkill = "SIGKILL is named only in stackly-platform-macos process::kill, which hands it to a helper handle or a discarded suspended child (spec 0010, AC-15)";
+        assert_eq!(
+            found,
+            [
+                format!("stackly-core crates/core/src/lib.rs:2: {process}"),
+                format!("stackly-core crates/core/src/lib.rs:6: {sigkill}"),
+                format!("stackly-platform-macos crates/platform-macos/src/fs.rs:2: {process}"),
+                format!("stackly-platform-macos crates/platform-macos/src/fs.rs:3: {sigkill}"),
+                format!("stacklyd apps/daemon/src/main.rs:2: {process}"),
+                format!("stacklyd apps/daemon/src/main.rs:4: {process}"),
+            ]
+        );
+        ev.pass();
     }
 }
