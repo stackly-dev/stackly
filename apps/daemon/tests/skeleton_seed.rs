@@ -8,28 +8,20 @@ mod common;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-use std::time::Duration;
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
 
-use common::{daemon_paths, start_daemon, uid};
+use common::{daemon_paths, start_daemon};
 use serde_json::Value;
 use stackly_core::{daemon_info, prepare_layout};
 use stackly_domain::Registry;
-use stackly_ipc::{CallOptions, Client, ConnectPolicy};
 use stackly_platform_macos::MacosPlatform;
-use stackly_protocol::handshake::{ClientInfo, ClientKind};
-use stackly_protocol::instance::{
-    CreateInstanceParams, ProviderSelector, SecretFieldInput, SettingsDocument,
-};
-use stackly_protocol::operation::{GetOperationParams, OperationState};
-use stackly_protocol::secret::{SecretInput, SecretText};
-use stackly_protocol::{Call, Reply};
 use stackly_storage::{RegistryOpen, open_registry};
-use stackly_testkit::{TestRoot, cargo_example, fake_server};
+use stackly_testkit::{TestRoot, cargo_bin, cargo_example, fake_server};
 use uuid::Uuid;
 
-/// How long the create may take.
-const PATIENCE: Duration = Duration::from_secs(30);
+/// How long the printed command gets before the test kills it and fails.
+const CLI_LIMIT: Duration = Duration::from_secs(90);
 
 fn seed_with(args: &[&std::ffi::OsStr]) -> Output {
     Command::new(cargo_example("stacklyd", "skeleton_seed"))
@@ -160,8 +152,8 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-#[tokio::test]
-async fn seeding_an_empty_root_prints_ids_and_values_the_daemon_accepts() {
+#[test]
+fn seeding_an_empty_root_prints_ids_and_a_command_the_daemon_accepts() {
     let root = TestRoot::new().expect("a test root");
 
     let seeded = seed_json(&root);
@@ -192,70 +184,50 @@ async fn seeding_an_empty_root_prints_ids_and_values_the_daemon_accepts() {
     )));
 
     let daemon = start_daemon(&root);
-    let client = Client::connect(
-        daemon.socket(),
-        ConnectPolicy::same_user(uid()),
-        ClientInfo {
-            kind: ClientKind::Cli,
-            version: "0.1.0".to_owned(),
-            pid: Some(std::process::id()),
-            interactive: Some(false),
-        },
-    )
-    .await
-    .expect("the daemon accepts a client")
-    .0;
-    // The CLI sends no secret yet (spec 0014 milestone 5), so the test
-    // gives the token the package requires.
-    let params = CreateInstanceParams {
-        name: "demo".to_owned(),
-        display_name: None,
-        provider: ProviderSelector {
-            name: "testing/fake".to_owned(),
-            revision: Some(revision.to_owned()),
-        },
-        runtime_id,
-        endpoints: Vec::new(),
-        settings: SettingsDocument::new(serde_json::Map::new()),
-        secrets: vec![SecretFieldInput {
-            field: "authToken".to_owned(),
-            input: SecretInput::Value(SecretText::new("fixture-token-for-the-seed".to_owned())),
-        }],
-    };
-    let Reply::InstanceCreate(accepted) = client
-        .call_detailed(
-            Call::InstanceCreate(params),
-            CallOptions::default().with_idempotency_key("seed-create-demo"),
-        )
-        .await
-        .expect("the create is accepted")
-    else {
-        panic!("not a create reply");
-    };
-    let operation = accepted
-        .accepted
-        .expect("a create starts an operation")
-        .operation
-        .id;
-    let deadline = tokio::time::Instant::now() + PATIENCE;
-    loop {
-        let Ok(Reply::OperationGet(detail)) = client
-            .call(Call::OperationGet(GetOperationParams {
-                operation_id: operation,
-            }))
-            .await
-        else {
-            panic!("operation.get failed");
-        };
-        if detail.operation.state == OperationState::Succeeded {
-            break;
+    let created = run_printed_command(&root, command);
+    assert_eq!(
+        created["result"]["operation"]["state"], "succeeded",
+        "{created}"
+    );
+    daemon.stop().expect("the daemon stops");
+}
+
+/// Runs the command the seed printed with the real `stackly` binary, noninteractive,
+/// with `--timeout` and `--json` added, and returns the envelope.
+fn run_printed_command(root: &TestRoot, command: &str) -> Value {
+    let words: Vec<&str> = command.split(' ').collect();
+    assert!(
+        words[0].starts_with("STACKLY_ROOT=") && words[1] == "stackly",
+        "{command}"
+    );
+    assert!(!command.contains('\''), "no quoting expected: {command}");
+    let mut child = Command::new(cargo_bin("stackly-cli", "stackly"))
+        .args(&words[2..])
+        .args(["--timeout", "60s", "--json"])
+        .env("STACKLY_ROOT", root.path())
+        .env("STACKLY_NO_INPUT", "1")
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("stackly runs");
+    let deadline = Instant::now() + CLI_LIMIT;
+    while child.try_wait().expect("stackly can be polled").is_none() {
+        if Instant::now() > deadline {
+            child.kill().expect("stackly can be killed");
+            panic!("{command} did not finish in {CLI_LIMIT:?}");
         }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "the create did not succeed: {detail:?}"
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        std::thread::sleep(Duration::from_millis(20));
     }
+    let output = child.wait_with_output().expect("stackly output reads");
+    assert!(
+        output.status.success(),
+        "{command} failed: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).expect("stackly prints JSON")
 }
 
 #[test]

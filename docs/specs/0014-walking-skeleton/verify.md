@@ -12,7 +12,7 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 - Registry hanya mencari provider revision lewat kunci lengkap (nama, revision, digest), jadi `Conflict` untuk "nama dan revision sama, digest berbeda" dideteksi dari folder pinned: ada folder digest lain di bawah folder revision yang sama. Runtime dibandingkan lewat `runtimes()` (software `fake`, versi sama) dengan SHA-256 binary.
 - Penolakan root (`validate_root_override`, lock yang dipegang `stacklyd`, registry recovery) terjadi sebelum `seed_fake`, dan `Leftover` serta `Conflict` terjadi sebelum tulisan apa pun; `prepare_layout` dan pembukaan registry tetap boleh membuat folder layout dan registry kosong di root yang lolos pemeriksaan.
 - `--json` mencetak `root` sebagai path canonical dari `--root`.
-- `createCommand` memakai `demo` sebagai nama instance dan tidak memuat `--secret`. Daemon saat ini belum memakai `generate` untuk secret field yang tidak dikirim (`settings.authToken` wajib di skema paket fake), jadi create dari perintah itu gagal `instance.settings_invalid` sampai `--secret` (Milestone 5) atau default `generate` di daemon ada. Test AC-1 memberi `authToken` lewat client IPC.
+- `createCommand` memakai `demo` dan tidak memuat `--secret`. Untuk itu `instance.create` di daemon memakai `generate` bagi setiap secret field paket yang tidak ada di `secrets[]` (spec 0011 AC-6, dikoreksi di `apps/daemon/src/ipc/instance/create.rs`; dicakup `apps/daemon/tests/instance_create_secrets.rs`), dan test AC-1 menjalankan perintah yang dicetak dengan binary `stackly` apa adanya.
 
 ### UI / manual
 
@@ -23,7 +23,8 @@ Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua 
 ### Commands
 
 - [ ] `cargo test -p stackly-core --test fixture_seed` → root kosong (satu commit, tiga record), ulang tanpa tulisan, runtime saja, provider saja, folder tanpa baris (`Leftover` runtime dan provider), kedua `Conflict` → AC-1, AC-2
-- [ ] `cargo test -p stacklyd --test skeleton_seed` → seed lewat binary example (JSON, teks, idempoten), create lewat daemon asli `succeeded`, tanpa `--root` exit 2, root relatif atau tidak ada, daemon yang hidup, binary fake yang tidak ada (pesan `cargo build -p stackly-fake-server`), folder tanpa baris registry, dan binary lain untuk versi yang sama; setelah setiap penolakan folder runtime dan paket serta jumlah baris sama → AC-1, AC-2
+- [ ] `cargo test -p stacklyd --test instance_create_secrets` → create tanpa `secrets[]` membuat reference `local:instance/<id>/<purpose>` berstatus `present` dengan asal `generated` (32 karakter, tidak ada di log daemon), create dengan `secrets[]` eksplisit memakai nilai yang dikirim → AC-1
+- [ ] `cargo test -p stacklyd --test skeleton_seed` → seed lewat binary example (JSON, teks, idempoten), perintah `createCommand` yang dicetak dijalankan dengan `stackly` dan `succeeded`, tanpa `--root` exit 2, root relatif atau tidak ada, daemon yang hidup, binary fake yang tidak ada (pesan `cargo build -p stackly-fake-server`), folder tanpa baris registry, dan binary lain untuk versi yang sama; setelah setiap penolakan folder runtime dan paket serta jumlah baris sama → AC-1, AC-2
 - [ ] `cargo tree -p stacklyd -p stackly-cli --edges features,no-dev -i stackly-core` → graph hanya memuat fitur `default`, tanpa `fixture` → AC-3
 - [ ] `cargo xtask check-deps` → 13 crate lulus dengan example dan dependency dev `fixture` di tempatnya → AC-3
 - [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core`, dan `cargo xtask evidence check` → lulus → AC-1 sampai AC-3
