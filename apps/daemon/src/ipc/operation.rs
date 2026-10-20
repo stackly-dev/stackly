@@ -489,16 +489,14 @@ fn rejected(error: &dyn stackly_core::operation::OperationError) -> ErrorBody {
             "the request was refused for a reason this daemon cannot name",
         );
     };
-    let mut body = ErrorBody::new(spec, error.to_string());
-    for (key, value) in error.details() {
-        if spec.details.contains(&key.as_str()) {
-            body = body.with_detail(key.as_str(), value);
-        }
-    }
-    match error.rule() {
-        Some(rule) => body.with_rule(rule),
-        None => body,
-    }
+    dto::catalog_body(
+        spec,
+        &error.to_string(),
+        &error.details(),
+        &error.items(),
+        error.rule(),
+        None,
+    )
 }
 
 /// `daemon.starting` naming the subsystem the method waits for.
@@ -680,8 +678,8 @@ mod tests {
             ]
         }
 
-        fn rule(&self) -> Option<&'static str> {
-            Some("BR-008")
+        fn rule(&self) -> Option<stackly_domain::Rule> {
+            Some(stackly_domain::Rule::Br008)
         }
     }
 
@@ -825,6 +823,52 @@ mod tests {
         assert_eq!(body.rule(), Some("BR-008"));
         assert_eq!(body.detail("operationId"), Some("x"));
         assert_eq!(body.detail("notInCatalog"), None);
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("the settings are not valid")]
+    struct Listed;
+
+    impl stackly_core::operation::OperationError for Listed {
+        fn code(&self) -> ErrorCodeName {
+            "provider.invalid_settings".parse().unwrap()
+        }
+
+        fn retryable(&self) -> bool {
+            false
+        }
+
+        fn details(&self) -> Vec<(DetailKey, String)> {
+            vec![("issueCount".parse().unwrap(), "1".to_owned())]
+        }
+
+        fn items(&self) -> Vec<stackly_domain::FailureItem> {
+            vec![
+                stackly_domain::FailureItem::new(
+                    "issue".parse().unwrap(),
+                    vec![("location".parse().unwrap(), "/port".to_owned())],
+                )
+                .unwrap(),
+            ]
+        }
+
+        fn rule(&self) -> Option<stackly_domain::Rule> {
+            Some(stackly_domain::Rule::Br002)
+        }
+    }
+
+    #[test]
+    fn a_precheck_refusal_keeps_its_items_and_rule_through_the_stored_error_mapping() {
+        let refused = Rejection::new(Box::new(Listed));
+
+        let body = begin_error(&BeginError::Rejected(refused), "environment.create");
+
+        assert_eq!(checked(&body).code(), "provider.invalid_settings");
+        assert_eq!(body.rule(), Some("BR-002"));
+        assert_eq!(body.detail("issueCount"), Some("1"));
+        assert_eq!(body.items().len(), 1);
+        assert_eq!(body.items()[0].field("location"), Some("/port"));
+        assert_eq!(body.operation_id(), None, "a refusal has no operation");
     }
 
     #[test]

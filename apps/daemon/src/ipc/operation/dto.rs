@@ -8,10 +8,10 @@ use stackly_core::operation::{
     OperationView, PartialOutcome as CorePartial, RecoveryAction as CoreAction,
 };
 use stackly_domain::{
-    CreatedRecord, FailureCode, FailureError, JournalStep, OperationId, OperationResource,
-    OperationState as DomainState, Progress, ResourceRevision,
+    CreatedRecord, DetailKey, FailureCode, FailureError, FailureItem, JournalStep, OperationId,
+    OperationResource, OperationState as DomainState, Progress, ResourceRevision, Rule,
 };
-use stackly_protocol::codes::{self, internal, operation};
+use stackly_protocol::codes::{self, ErrorSpec, internal, operation};
 use stackly_protocol::handshake::ClientKind;
 use stackly_protocol::operation::{
     CancelDisposition, CountedProgress, CreatedItemInfo, OperationDetail, OperationFailureInfo,
@@ -19,7 +19,9 @@ use stackly_protocol::operation::{
     OperationSummary, OperationTriggerInfo, PartialItem, PartialOutcome, RecoveryAction,
     RecoveryInfo,
 };
-use stackly_protocol::{Count, ErrorBody, ResourceKind, ResourceRef, Revision, Timestamp};
+use stackly_protocol::{
+    Count, ErrorBody, ErrorItem, ResourceKind, ResourceRef, Revision, Timestamp,
+};
 
 use crate::map;
 
@@ -156,20 +158,84 @@ pub fn failure_body(error: &FailureError, operation_id: OperationId) -> ErrorBod
         )
         .with_operation_id(operation_id.as_uuid());
     };
-    let mut body = ErrorBody::new(spec, error.message()).with_operation_id(operation_id.as_uuid());
-    for (key, value) in error.details() {
+    catalog_body(
+        spec,
+        error.message(),
+        error.details(),
+        error.items(),
+        error.rule(),
+        Some(operation_id),
+    )
+}
+
+/// An [`ErrorBody`] for the catalog entry `spec`, the one mapping behind a
+/// stored error ([`failure_body`]) and a precheck refusal (spec 0007,
+/// *Kegagalan dan error*). The order is fixed so `omitted` from the engine
+/// and from the entry's item limit end up in one detail: `operationId`
+/// (stored errors only), the details the entry lists, the items the entry
+/// allows, then the rule. A detail key or an item the entry does not allow
+/// is a bug of the code that raised it: each is dropped with an error log,
+/// before `with_items`, which asserts in debug builds. The hint is not set
+/// here; the area that owns a code adds its own.
+#[must_use]
+pub fn catalog_body(
+    spec: &'static ErrorSpec,
+    message: &str,
+    details: &[(DetailKey, String)],
+    items: &[FailureItem],
+    rule: Option<Rule>,
+    operation_id: Option<OperationId>,
+) -> ErrorBody {
+    let mut body = ErrorBody::new(spec, message);
+    if let Some(id) = operation_id {
+        body = body.with_operation_id(id.as_uuid());
+    }
+    for (key, value) in details {
         if spec.details.contains(&key.as_str()) {
             body = body.with_detail(key.as_str(), value.as_str());
         } else {
             tracing::error!(
-                operation_id = %operation_id,
-                code,
+                code = spec.code,
                 key = key.as_str(),
-                "an operation stored a detail its catalog entry does not list; it was dropped",
+                "an error carried a detail its catalog entry does not list; it was dropped",
             );
         }
     }
-    body
+    let allowed = allowed_items(spec, items);
+    if !allowed.is_empty() {
+        body = body.with_items(allowed);
+    }
+    match rule {
+        Some(rule) => body.with_rule(rule.id()),
+        None => body,
+    }
+}
+
+/// The items `spec` allows, as wire items; the rest are logged and left out.
+fn allowed_items(spec: &ErrorSpec, items: &[FailureItem]) -> Vec<ErrorItem> {
+    let mut kept = Vec::new();
+    for item in items {
+        let allowed = spec.items.as_ref().is_some_and(|rule| {
+            item.kind().as_str() == rule.kind
+                && item
+                    .fields()
+                    .iter()
+                    .all(|(key, _)| rule.fields.contains(&key.as_str()))
+        });
+        if !allowed {
+            tracing::error!(
+                code = spec.code,
+                kind = item.kind().as_str(),
+                "an error carried an item its catalog entry does not allow; it was dropped",
+            );
+            continue;
+        }
+        kept.push(item.fields().iter().fold(
+            ErrorItem::new(item.kind().as_str()),
+            |wire, (key, value)| wire.with_field(key.as_str(), value.as_str()),
+        ));
+    }
+    kept
 }
 
 /// The failure of a `failed` operation. An operation closed before the
@@ -394,6 +460,103 @@ mod tests {
         assert_eq!(body.operation_id(), Some(id.as_uuid()));
         assert_eq!(body.detail("lockKey"), Some("manager:self"));
         assert_eq!(body.message(), "operation x needs recovery");
+    }
+
+    fn stored_item(kind: &str, fields: &[(&str, &str)]) -> FailureItem {
+        FailureItem::new(
+            kind.parse().unwrap(),
+            fields
+                .iter()
+                .map(|(key, value)| (key.parse().unwrap(), (*value).to_owned()))
+                .collect(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_stored_error_carries_its_items_rule_and_omitted_count_to_the_wire() {
+        let id = OperationId::generate();
+        let error = FailureError::new(
+            "provider.invalid_settings".parse().unwrap(),
+            "the settings are not valid",
+            vec![
+                ("issueCount".parse().unwrap(), "102".to_owned()),
+                ("omitted".parse().unwrap(), "2".to_owned()),
+            ],
+        )
+        .unwrap()
+        .with_items(vec![
+            stored_item("issue", &[("location", "/port"), ("reason", "too large")]),
+            stored_item("issue", &[]),
+        ])
+        .unwrap()
+        .with_rule(Rule::Br002);
+
+        let body = failure_body(&error, id);
+
+        assert_eq!(body.code(), "provider.invalid_settings");
+        assert_eq!(body.rule(), Some("BR-002"));
+        assert_eq!(body.operation_id(), Some(id.as_uuid()));
+        assert_eq!(body.detail("omitted"), Some("2"));
+        assert_eq!(body.detail("issueCount"), Some("102"));
+        assert_eq!(body.items().len(), 2);
+        assert_eq!(body.items()[0].kind(), "issue");
+        assert_eq!(body.items()[0].field("location"), Some("/port"));
+        assert_eq!(body.items()[0].field("reason"), Some("too large"));
+        assert!(body.items()[1].fields().is_empty());
+        assert_eq!(body.hint(), None, "a hint is never stored");
+    }
+
+    #[test]
+    fn items_the_catalog_entry_does_not_allow_are_dropped_instead_of_tripping_the_assert() {
+        let wrong_field = stored_item("issue", &[("location", "/a"), ("nope", "x")]);
+        let wrong_kind = stored_item("reference", &[]);
+        let kept = stored_item("issue", &[("code", "c")]);
+        let listed = FailureError::new(
+            "provider.invalid_settings".parse().unwrap(),
+            "the settings are not valid",
+            Vec::new(),
+        )
+        .unwrap()
+        .with_items(vec![wrong_field.clone(), wrong_kind.clone(), kept])
+        .unwrap();
+        let unlisted = FailureError::new(
+            "operation.queue_full".parse().unwrap(),
+            "the queue is full",
+            Vec::new(),
+        )
+        .unwrap()
+        .with_items(vec![wrong_field, wrong_kind])
+        .unwrap();
+
+        let with_one = failure_body(&listed, OperationId::generate());
+        let with_none = failure_body(&unlisted, OperationId::generate());
+
+        assert_eq!(with_one.items().len(), 1);
+        assert_eq!(with_one.items()[0].field("code"), Some("c"));
+        assert!(
+            with_none.items().is_empty(),
+            "a code without items keeps none"
+        );
+    }
+
+    #[test]
+    fn a_rule_alone_reaches_the_wire_and_a_missing_rule_stays_missing() {
+        let make = |rule: Option<Rule>| {
+            let error = FailureError::new(
+                "operation.queue_full".parse().unwrap(),
+                "the queue is full",
+                Vec::new(),
+            )
+            .unwrap();
+            failure_body(
+                &rule.map_or(error.clone(), |rule| error.with_rule(rule)),
+                OperationId::generate(),
+            )
+        };
+
+        assert_eq!(make(Some(Rule::Br025)).rule(), Some("BR-025"));
+        assert_eq!(make(None).rule(), None);
     }
 
     #[test]
