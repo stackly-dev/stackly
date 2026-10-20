@@ -69,7 +69,13 @@ fn a_reveal_that_fails_writes_a_failed_row_with_the_error_code() {
         .service
         .reveal(&target, RevealPurpose::Show, &user())
         .unwrap_err();
-    assert_eq!(err, SecretError::Store(SecretStoreError::Locked));
+    assert_eq!(
+        err,
+        SecretError::Store {
+            reference: target.clone(),
+            error: SecretStoreError::Locked
+        }
+    );
     assert_eq!(failed_code().as_deref(), Some("secret.store_locked"));
     harness.store().unlock();
 
@@ -80,7 +86,10 @@ fn a_reveal_that_fails_writes_a_failed_row_with_the_error_code() {
         .unwrap_err();
     assert_eq!(
         err,
-        SecretError::Store(SecretStoreError::AccessDenied { by_user: true })
+        SecretError::Store {
+            reference: target.clone(),
+            error: SecretStoreError::AccessDenied { by_user: true }
+        }
     );
     assert_eq!(failed_code().as_deref(), Some("secret.store_access_denied"));
 
@@ -181,7 +190,10 @@ fn a_store_that_fails_to_delete_gets_the_row_back_with_its_revision_up_by_one() 
 
     assert_eq!(
         err,
-        SecretError::Store(SecretStoreError::Backend { code: -25291 })
+        SecretError::Store {
+            reference: target.clone(),
+            error: SecretStoreError::Backend { code: -25291 }
+        }
     );
     let after = harness.view(&target).unwrap();
     let mut expected = before.record.clone();
