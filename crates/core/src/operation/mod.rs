@@ -738,6 +738,28 @@ impl OperationEngine {
             })
     }
 
+    /// Finds the operation `begin` would replay for `origin`, so a handler
+    /// can answer a repeated request before it does expensive work or
+    /// reads state that has changed since the first request. It runs the
+    /// phase check and the idempotency key lookup of `begin`, through the
+    /// same function, and nothing else: no begin gate, no precheck, no
+    /// write, and no event. A hit is [`BeginOutcome::Replayed`], or
+    /// [`BeginOutcome::NoOp`] with `replayed` true for an answer without
+    /// an operation that was recorded; `None` means no operation holds the
+    /// key. `begin` stays authoritative and looks the key up again inside
+    /// its gate, so a miss here followed by another request with the same
+    /// key still ends in one operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BeginError::NotReady`] while `recover` has not finished,
+    /// [`BeginError::ShuttingDown`] once shutdown began,
+    /// [`BeginError::KeyReused`] when the key names another request, and
+    /// [`BeginError::Registry`] when the registry cannot be read.
+    pub async fn replay(&self, origin: &RequestOrigin) -> Result<Option<BeginOutcome>, BeginError> {
+        scheduler::replay(&self.inner, origin).await
+    }
+
     /// Returns an operation with its steps and created items.
     ///
     /// # Errors

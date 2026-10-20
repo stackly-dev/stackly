@@ -288,15 +288,33 @@ async fn answer_no_op(
     }))
 }
 
+/// The phase check that opens `begin` and `replay`: requests are refused
+/// until `recover` finished and after shutdown began.
+fn check_phase(inner: &Inner) -> Result<(), BeginError> {
+    match inner.phase() {
+        Phase::Created | Phase::Recovering => Err(BeginError::NotReady),
+        Phase::ShuttingDown => Err(BeginError::ShuttingDown),
+        Phase::Ready | Phase::Started => Ok(()),
+    }
+}
+
+/// Reads what `begin` would replay for `origin`, without the begin gate, a
+/// precheck, a write, or an event: the phase check of `begin`, then the
+/// same key lookup. It runs in the caller's task, since it writes nothing
+/// that a cancelled caller could leave half done.
+pub(crate) async fn replay(
+    inner: &Inner,
+    origin: &super::RequestOrigin,
+) -> Result<Option<BeginOutcome>, BeginError> {
+    check_phase(inner)?;
+    lookup(inner, origin).await
+}
+
 pub(crate) async fn begin(
     inner: &Arc<Inner>,
     mut request: BeginRequest,
 ) -> Result<BeginOutcome, BeginError> {
-    match inner.phase() {
-        Phase::Created | Phase::Recovering => return Err(BeginError::NotReady),
-        Phase::ShuttingDown => return Err(BeginError::ShuttingDown),
-        Phase::Ready | Phase::Started => {}
-    }
+    check_phase(inner)?;
     if request.creates_resource && request.expected_revision.is_some() {
         return Err(BeginError::InvalidRequest {
             reason: "a new resource has no revision to expect",
