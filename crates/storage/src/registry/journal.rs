@@ -12,7 +12,7 @@
 use rusqlite::{Connection, params};
 use serde_json::{Map, Value};
 use stackly_domain::{
-    CreatedItem, CreatedRecord, CreatedSeq, DetailKey, FailureError, IdempotencyKey,
+    CreatedItem, CreatedRecord, CreatedSeq, DetailKey, FailureError, FailureItem, IdempotencyKey,
     JournalPayload, JournalStep, JournalView, LockKey, Operation, OperationId, OperationJournal,
     OperationTrigger, RegistryError, ResourceRef, StepSeq, StoredCreatedRecord, StoredJournal,
     StoredStep, WriteOp,
@@ -24,7 +24,7 @@ use super::read::{OPERATION_COLUMNS, stored_operation};
 const JOURNAL_COLUMNS: &str = "operation_id, method, request_fingerprint, trigger_origin, \
      trigger_client, trigger_interactive, resumable, input, expected_revision, waiting_on, \
      point_of_no_return_at, cancel_requested_at, compensation_started_at, recovery_cause, \
-     failure_error_code, failure_message, failure_details, result";
+     failure_error_code, failure_message, failure_details, failure_items, failure_rule, result";
 
 const STEP_COLUMNS: &str = "seq, name, repeatable, reversible, state, attempts, checkpoint, \
      error_code, started_at, finished_at";
@@ -84,6 +84,7 @@ pub(super) fn write_journal(
         || Ok("[]".to_owned()),
         |error| details_text(error.details()),
     )?;
+    let items = error.map_or_else(|| Ok("[]".to_owned()), |error| items_text(error.items()))?;
     let values = params![
         id.to_string(),
         journal.method().map(|method| method.as_str()),
@@ -105,6 +106,8 @@ pub(super) fn write_journal(
         error.map(|error| error.code().as_str()),
         error.map(FailureError::message),
         details,
+        items,
+        error.and_then(FailureError::rule).map(|rule| rule.id()),
         journal.result().map(JournalPayload::as_str),
     ];
     let sql = if update {
@@ -112,15 +115,16 @@ pub(super) fn write_journal(
          trigger_client = ?5, trigger_interactive = ?6, resumable = ?7, input = ?8, \
          expected_revision = ?9, waiting_on = ?10, point_of_no_return_at = ?11, \
          cancel_requested_at = ?12, compensation_started_at = ?13, recovery_cause = ?14, \
-         failure_error_code = ?15, failure_message = ?16, failure_details = ?17, result = ?18 \
+         failure_error_code = ?15, failure_message = ?16, failure_details = ?17, \
+         failure_items = ?18, failure_rule = ?19, result = ?20 \
          WHERE operation_id = ?1"
     } else {
         "INSERT INTO operation_journal (operation_id, method, request_fingerprint, \
          trigger_origin, trigger_client, trigger_interactive, resumable, input, \
          expected_revision, waiting_on, point_of_no_return_at, cancel_requested_at, \
          compensation_started_at, recovery_cause, failure_error_code, failure_message, \
-         failure_details, result) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, \
-         ?13, ?14, ?15, ?16, ?17, ?18)"
+         failure_details, failure_items, failure_rule, result) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, \
+         ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)"
     };
     conn.execute(sql, values).map_err(sql_error)?;
     Ok(())
@@ -129,7 +133,26 @@ pub(super) fn write_journal(
 /// The stored form of failure details: `[{"key": ..., "value": ...}]`, in
 /// order.
 fn details_text(details: &[(DetailKey, String)]) -> Result<String, RegistryError> {
-    let rows: Vec<Value> = details
+    encode("failure_details", &pairs_json(details))
+}
+
+/// The stored form of failure items:
+/// `[{"kind": ..., "fields": [{"key": ..., "value": ...}]}]`, in order.
+fn items_text(items: &[FailureItem]) -> Result<String, RegistryError> {
+    let rows: Vec<Value> = items
+        .iter()
+        .map(|item| {
+            let mut row = Map::new();
+            row.insert("kind".to_owned(), Value::String(item.kind().to_string()));
+            row.insert("fields".to_owned(), Value::Array(pairs_json(item.fields())));
+            Value::Object(row)
+        })
+        .collect();
+    encode("failure_items", &rows)
+}
+
+fn pairs_json(pairs: &[(DetailKey, String)]) -> Vec<Value> {
+    pairs
         .iter()
         .map(|(key, value)| {
             let mut row = Map::new();
@@ -137,9 +160,12 @@ fn details_text(details: &[(DetailKey, String)]) -> Result<String, RegistryError
             row.insert("value".to_owned(), Value::String(value.clone()));
             Value::Object(row)
         })
-        .collect();
-    serde_json::to_string(&rows).map_err(|err| RegistryError::Integrity {
-        detail: format!("cannot encode failure_details: {err}"),
+        .collect()
+}
+
+fn encode(column: &str, rows: &[Value]) -> Result<String, RegistryError> {
+    serde_json::to_string(rows).map_err(|err| RegistryError::Integrity {
+        detail: format!("cannot encode {column}: {err}"),
     })
 }
 
@@ -423,10 +449,14 @@ fn stored_journal(cells: Cells<'_, '_>) -> Result<OperationJournal, RegistryErro
         (None, None) => None,
         (Some(code), Some(message)) => {
             let details = stored_details(cells)?;
-            Some(
-                FailureError::new(code, message, details)
-                    .map_err(|err| cells.corrupt("failure_message", err))?,
-            )
+            let items = stored_items(cells)?;
+            let mut error = FailureError::new(code, message, details)
+                .and_then(|error| error.with_items(items))
+                .map_err(|err| cells.corrupt("failure_message", err))?;
+            if let Some(rule) = cells.opt_parse("failure_rule")? {
+                error = error.with_rule(rule);
+            }
+            Some(error)
         }
         _ => {
             return Err(cells.corrupt(
@@ -435,6 +465,14 @@ fn stored_journal(cells: Cells<'_, '_>) -> Result<OperationJournal, RegistryErro
             ));
         }
     };
+    if failure_error.is_none()
+        && (cells.text("failure_items")? != "[]" || cells.opt_text("failure_rule")?.is_some())
+    {
+        return Err(cells.corrupt(
+            "failure_items",
+            "or failure_rule is set without failure_error_code",
+        ));
+    }
     let stored = StoredJournal {
         operation_id: cells.parse("operation_id")?,
         method: cells.opt_parse("method")?,
@@ -466,11 +504,47 @@ fn stored_journal(cells: Cells<'_, '_>) -> Result<OperationJournal, RegistryErro
 }
 
 fn stored_details(cells: Cells<'_, '_>) -> Result<Vec<(DetailKey, String)>, RegistryError> {
-    let malformed = || cells.corrupt("failure_details", "is not a list of key and value objects");
-    let text = cells.text("failure_details")?;
-    let Value::Array(rows) = serde_json::from_str(&text).map_err(|_| malformed())? else {
-        return Err(malformed());
-    };
+    let rows = json_rows(cells, "failure_details")?;
+    pairs_from_rows(cells, "failure_details", rows)
+}
+
+fn stored_items(cells: Cells<'_, '_>) -> Result<Vec<FailureItem>, RegistryError> {
+    let malformed = || cells.corrupt("failure_items", "is not a list of kind and fields objects");
+    json_rows(cells, "failure_items")?
+        .into_iter()
+        .map(|row| {
+            let Value::Object(mut row) = row else {
+                return Err(malformed());
+            };
+            match (row.remove("kind"), row.remove("fields")) {
+                (Some(Value::String(kind)), Some(Value::Array(fields))) if row.is_empty() => {
+                    let kind = kind
+                        .parse()
+                        .map_err(|err| cells.corrupt("failure_items", err))?;
+                    let fields = pairs_from_rows(cells, "failure_items", fields)?;
+                    FailureItem::new(kind, fields)
+                        .map_err(|err| cells.corrupt("failure_items", err))
+                }
+                _ => Err(malformed()),
+            }
+        })
+        .collect()
+}
+
+fn json_rows(cells: Cells<'_, '_>, column: &'static str) -> Result<Vec<Value>, RegistryError> {
+    let text = cells.text(column)?;
+    match serde_json::from_str(&text) {
+        Ok(Value::Array(rows)) => Ok(rows),
+        _ => Err(cells.corrupt(column, "is not a JSON array")),
+    }
+}
+
+fn pairs_from_rows(
+    cells: Cells<'_, '_>,
+    column: &'static str,
+    rows: Vec<Value>,
+) -> Result<Vec<(DetailKey, String)>, RegistryError> {
+    let malformed = || cells.corrupt(column, "is not a list of key and value objects");
     rows.into_iter()
         .map(|row| {
             let Value::Object(mut row) = row else {
@@ -478,9 +552,7 @@ fn stored_details(cells: Cells<'_, '_>) -> Result<Vec<(DetailKey, String)>, Regi
             };
             match (row.remove("key"), row.remove("value")) {
                 (Some(Value::String(key)), Some(Value::String(value))) if row.is_empty() => {
-                    let key = key
-                        .parse()
-                        .map_err(|err| cells.corrupt("failure_details", err))?;
+                    let key = key.parse().map_err(|err| cells.corrupt(column, err))?;
                     Ok((key, value))
                 }
                 _ => Err(malformed()),

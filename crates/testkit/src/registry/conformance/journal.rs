@@ -9,10 +9,11 @@ use std::time::Duration;
 
 use jiff::Timestamp;
 use stackly_domain::{
-    BatchError, CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, IdempotencyKey,
-    InstanceId, JournalPayload, JournalStep, JournalView, LockKey, NewJournal, NewStep, Operation,
-    OperationId, OperationJournal, OperationState, OperationTrigger, RecoveryCause, RecoveryHint,
-    RegistryError, ResourceRef, RetentionPolicy, RuntimeId, StepSeq, WriteBatch, WriteOp,
+    BatchError, CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, FailureItem,
+    IdempotencyKey, InstanceId, JournalPayload, JournalStep, JournalView, LockKey, NewJournal,
+    NewStep, Operation, OperationId, OperationJournal, OperationState, OperationTrigger,
+    RecoveryCause, RecoveryHint, RegistryError, ResourceRef, RetentionPolicy, Rule, RuntimeId,
+    StepSeq, WriteBatch, WriteOp,
 };
 use stackly_platform::Clock;
 
@@ -193,7 +194,23 @@ fn round_trip(suite: &Suite<'_>) {
     journal.mark_cancel_requested(shifted(t, 5));
     journal.mark_compensation_started(shifted(t, 6));
     journal.set_recovery_cause(Some(RecoveryCause::CompensationFailed));
-    journal.set_failure_error(Some(domain(
+    let items = vec![
+        domain(
+            CHECK,
+            FailureItem::new(
+                parse(CHECK, "issue"),
+                vec![
+                    (parse(CHECK, "path"), "/port".to_owned()),
+                    (parse(CHECK, "detail"), "tab\t \"quoted\" é".to_owned()),
+                ],
+            ),
+        ),
+        domain(
+            CHECK,
+            FailureItem::new(parse(CHECK, "reference"), Vec::new()),
+        ),
+    ];
+    let error = domain(
         CHECK,
         FailureError::new(
             parse(CHECK, "operation.compensation_failed"),
@@ -202,8 +219,11 @@ fn round_trip(suite: &Suite<'_>) {
                 (parse(CHECK, "item"), "instance_tree".to_owned()),
                 (parse(CHECK, "detail"), "permission_denied".to_owned()),
             ],
-        ),
-    )));
+        )
+        .and_then(|error| error.with_items(items)),
+    )
+    .with_rule(Rule::Br002);
+    journal.set_failure_error(Some(error));
     domain(
         CHECK,
         journal.set_result(Some(payload(CHECK, r#"{"resources":[]}"#))),
@@ -253,6 +273,20 @@ fn round_trip(suite: &Suite<'_>) {
             vec![instance, custom],
             sorted_locks,
         )),
+    );
+    let mut cleared = view(suite, "read the journal again", operation.id())
+        .unwrap_or_else(|| fail(CHECK, "the journal vanished"))
+        .journal;
+    cleared.set_failure_error(None);
+    suite.commit(
+        "clear the stored error, as resume does",
+        vec![WriteOp::UpdateJournal(cleared)],
+    );
+    expect_eq(
+        &format!("{CHECK}: clearing the error clears its items and rule"),
+        view(suite, "read the cleared journal", operation.id())
+            .and_then(|stored| stored.journal.failure_error().cloned()),
+        None,
     );
     expect_eq(
         &format!("{CHECK}: the recovery hint round trips"),

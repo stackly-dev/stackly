@@ -287,6 +287,8 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("failure_message", "TEXT", false, 0),
             ("failure_details", "TEXT", true, 0),
             ("result", "TEXT", false, 0),
+            ("failure_items", "TEXT", true, 0),
+            ("failure_rule", "TEXT", false, 0),
         ],
     ),
     (

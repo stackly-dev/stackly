@@ -7,6 +7,7 @@
 mod common;
 mod create;
 mod detect;
+mod failure;
 mod fixture;
 mod journal;
 mod migrate;
