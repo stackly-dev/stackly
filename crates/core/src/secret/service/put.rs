@@ -6,14 +6,14 @@ use stackly_domain::{
     SecretReferenceId, SecretReferenceRecord, SecretReferenceView, SecretStatus, WriteBatch,
     WriteOp,
 };
-use stackly_platform::{SCRUB_MIN_LEN, SecretPresence, SecretStoreError, SecretValue, WriteMode};
+use stackly_platform::{SCRUB_MIN_LEN, SecretPresence, SecretValue, WriteMode};
 
 use super::audit::SET;
 use super::{SecretCaller, SecretChange, SecretService};
 use crate::secret::error::{ConflictReason, SecretError};
 use crate::secret::generate::{GENERATED_LEN, generate_password};
-use crate::secret::redact::char_count;
-use crate::secret::rules::{Bounds, EffectKind, SecretEffect, SecretFieldRule};
+use crate::secret::redact::{char_count, has_control_character};
+use crate::secret::rules::{Bounds, EffectKind, InvalidValueReason, SecretEffect, SecretFieldRule};
 
 /// Where `put` stores the value.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,8 +34,9 @@ pub enum PutTarget {
         owner: SecretOwner,
         /// The purpose of its field.
         purpose: SecretPurpose,
-        /// The secret field it is made for, whose bounds the value must
-        /// fit.
+        /// The secret field it is made for, whose rules the value must
+        /// keep: set for create instance and restore, empty for env up.
+        /// With a field, a bind reads the bound value once to check it.
         field: Option<FieldContext>,
     },
 }
@@ -72,7 +73,9 @@ pub enum SecretInput {
     CopyFrom(SecretRef),
     /// No value: the new resource uses this registered reference. Valid
     /// only with [`PutTarget::New`], whose reference, owner, and purpose it
-    /// replaces; nothing is written, and the caller records the use.
+    /// replaces; nothing is written, and the caller records the use. With
+    /// the target's field, the bound value is read once and checked against
+    /// the field's rules (AC-23); without one, the store is not touched.
     Bind(SecretRef),
 }
 
@@ -178,25 +181,33 @@ impl SecretService {
     ///
     /// In order: the registry and `expected_revision` (a conflict stops
     /// before the store is touched); the value, learned by the redactor at
-    /// once; a probe of the store and the mode against it, reading the old
-    /// value for a replace; the `stored_only` confirmation; the store
-    /// write; and one registry commit that writes the row (status
-    /// `present`, revision up by exactly 1, or 1 for a new row) with its
-    /// audit row. When that commit fails, the old value goes back into the
-    /// store (or the new item is deleted). Every failure after step 1
+    /// once and checked against the rules of every field that uses the
+    /// reference, length first and then control characters (a `Value`
+    /// that breaks them never reaches the store); a probe of the store and
+    /// the mode against it, reading the old value for a replace; the
+    /// `stored_only` confirmation; the store write; and one registry
+    /// commit that writes the row (status `present`, revision up by
+    /// exactly 1, or 1 for a new row) with its audit row. When that commit
+    /// fails, the old value goes back into the store (or the new item is
+    /// deleted). A bind writes nothing; with a field, it reads the bound
+    /// value once, learns it, and checks it. Every failure after step 1
     /// writes a `failed` audit row of its own. The reference is held for
     /// the whole call, and the change is reported after it is released.
     ///
     /// # Errors
     ///
     /// Returns [`SecretError::NotFound`] for an unregistered instance
-    /// reference, a registered row missing where `replace` needs it, or a
-    /// copy source without a value; [`SecretError::InvalidReference`] for
-    /// an unregistered reference under `stackly`;
+    /// reference, a registered row missing where `replace` needs it, or an
+    /// unregistered copy or bind source; [`SecretError::InvalidReference`]
+    /// for an unregistered reference under `stackly`;
     /// [`SecretError::RevisionMismatch`]; [`SecretError::Conflict`] for
     /// `create` on an existing value or a new resource naming a registered
-    /// reference; [`SecretError::InvalidValue`];
-    /// [`SecretError::ConfirmationRequired`]; [`SecretError::Store`];
+    /// reference; [`SecretError::InvalidValue`] with its reason;
+    /// [`SecretError::ConfirmationRequired`]; [`SecretError::Store`] with
+    /// the reference whose store call failed (a registered source the
+    /// store holds no value for is a `NotFound` store error, which
+    /// [`classify_create_failure`](crate::secret::classify_create_failure)
+    /// tells apart from an unregistered one);
     /// [`SecretError::WriteBackFailed`]; and [`SecretError::Registry`].
     pub fn put(
         &self,
@@ -237,7 +248,7 @@ impl SecretService {
         } = request;
         if let SecretInput::Bind(bound) = input {
             return self
-                .bind(&target, &bound, expected_revision)
+                .bind(&target, &bound, expected_revision, caller)
                 .map(|outcome| (outcome, None));
         }
         // Steps 1 and 2: the registry row and the revision.
@@ -250,7 +261,11 @@ impl SecretService {
         let (value, origin) = self.prepare(input, &bounds, caller)?;
         // Step 4: the store and the mode.
         let interaction = caller.interaction;
-        let presence = self.store().probe(&reference).map_err(SecretError::Store)?;
+        let at_target = |error| SecretError::Store {
+            reference: reference.clone(),
+            error,
+        };
+        let presence = self.store().probe(&reference).map_err(at_target)?;
         let old = match (mode, presence) {
             (WriteMode::Create, SecretPresence::Present) => {
                 return Err(SecretError::Conflict {
@@ -266,7 +281,7 @@ impl SecretService {
                 let old = self
                     .store()
                     .read(&reference, interaction)
-                    .map_err(SecretError::Store)?;
+                    .map_err(at_target)?;
                 self.deps.redactor.learn(&old);
                 Some(old)
             }
@@ -289,7 +304,7 @@ impl SecretService {
         };
         self.store()
             .write(&reference, &value, write_mode, interaction)
-            .map_err(SecretError::Store)?;
+            .map_err(at_target)?;
         // Step 7: one registry commit for the row and its audit row.
         let now = self.now();
         let store_key = self.store_key(&reference)?;
@@ -478,24 +493,19 @@ impl SecretService {
     }
 
     /// Step 3: the value and where it came from, learned at once and
-    /// checked against the bounds of every field that uses the reference.
+    /// checked against the rules of every field that uses the reference.
+    /// A generated value always keeps them, once its length is clamped.
     fn prepare(
         &self,
         input: SecretInput,
         bounds: &Bounds,
         caller: &SecretCaller,
     ) -> Result<(SecretValue, SecretOrigin), SecretError> {
-        let invalid =
-            |(field, rule): &(SecretFieldName, SecretFieldRule)| SecretError::InvalidValue {
-                field: field.clone(),
-                min_length: rule.min_length,
-                max_length: rule.max_length,
-            };
         let (value, origin) = match input {
             SecretInput::Generate => {
                 let length = bounds
                     .clamp(u64::try_from(GENERATED_LEN).unwrap_or(u64::MAX))
-                    .map_err(invalid)?;
+                    .map_err(|broken| invalid(broken, InvalidValueReason::Length))?;
                 let length = usize::try_from(length).map_err(|_| SecretError::Internal {
                     reason: "a generated length does not fit this platform".to_owned(),
                 })?;
@@ -510,15 +520,13 @@ impl SecretService {
                 if registered.is_none() {
                     return Err(SecretError::NotFound { reference: source });
                 }
-                let value =
-                    self.store()
-                        .read(&source, caller.interaction)
-                        .map_err(|err| match err {
-                            SecretStoreError::NotFound => SecretError::NotFound {
-                                reference: source.clone(),
-                            },
-                            other => SecretError::Store(other),
-                        })?;
+                let value = self
+                    .store()
+                    .read(&source, caller.interaction)
+                    .map_err(|error| SecretError::Store {
+                        reference: source.clone(),
+                        error,
+                    })?;
                 (value, SecretOrigin::Copied)
             }
             SecretInput::Bind(_) => {
@@ -529,28 +537,31 @@ impl SecretService {
         };
         self.deps.redactor.learn(&value);
         if origin != SecretOrigin::Generated {
-            let chars = u64::try_from(char_count(&value)).unwrap_or(u64::MAX);
-            if let Some(broken) = bounds.broken_by(chars) {
-                return Err(invalid(broken));
-            }
+            check(bounds, &value)?;
         }
         Ok((value, origin))
     }
 
     /// A bind: the new resource uses a registered reference, and nothing
-    /// is written.
+    /// is written. With the target's field, the bound value is read once
+    /// with the caller's interaction, learned, and checked against the
+    /// field's rules; it is an internal read, so no reveal is audited.
     fn bind(
         &self,
         target: &PutTarget,
         bound: &SecretRef,
         expected: Option<ResourceRevision>,
+        caller: &SecretCaller,
     ) -> Result<PutOutcome, Failed> {
-        if matches!(target, PutTarget::Existing(_)) {
-            return Err(SecretError::Internal {
-                reason: "bind is only for a new resource".to_owned(),
+        let field = match target {
+            PutTarget::New { field, .. } => field.as_ref(),
+            PutTarget::Existing(_) => {
+                return Err(SecretError::Internal {
+                    reason: "bind is only for a new resource".to_owned(),
+                }
+                .into());
             }
-            .into());
-        }
+        };
         let view = Self::read(self.registry().secret_reference(bound))?.ok_or_else(|| {
             SecretError::NotFound {
                 reference: bound.clone(),
@@ -566,10 +577,45 @@ impl SecretService {
             }
             .into());
         }
+        if let Some(field) = field {
+            let value = self
+                .store()
+                .read(bound, caller.interaction)
+                .map_err(|error| SecretError::Store {
+                    reference: bound.clone(),
+                    error,
+                })?;
+            self.deps.redactor.learn(&value);
+            check(&Bounds::single(field.name.clone(), field.rule), &value)?;
+        }
         Ok(PutOutcome {
             reference: view,
             warnings: Vec::new(),
             effects: Vec::new(),
         })
+    }
+}
+
+/// Checks a value against the rules of every field in `bounds`, in order,
+/// each by its length first and then its control characters (AC-22).
+fn check(bounds: &Bounds, value: &SecretValue) -> Result<(), SecretError> {
+    let chars = u64::try_from(char_count(value)).unwrap_or(u64::MAX);
+    match bounds.broken_by(chars, has_control_character(value)) {
+        Some((broken, reason)) => Err(invalid(broken, reason)),
+        None => Ok(()),
+    }
+}
+
+/// The error for a value that breaks the rules of `field` for `reason`. It
+/// names the field and its bounds, never the value.
+fn invalid(
+    (field, rule): &(SecretFieldName, SecretFieldRule),
+    reason: InvalidValueReason,
+) -> SecretError {
+    SecretError::InvalidValue {
+        field: field.clone(),
+        min_length: rule.min_length,
+        max_length: rule.max_length,
+        reason,
     }
 }

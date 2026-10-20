@@ -1,0 +1,51 @@
+   Compiling stackly-fuzz v0.0.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/eager-roentgen-3863a9/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.86s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+     Running `fuzz/target/aarch64-apple-darwin/release/provider_manifest -artifact_prefix=fuzz/artifacts/provider_manifest/ -max_len=262144 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_manifest fuzz/seeds/provider_manifest`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3321754317
+INFO: Loaded 1 modules   (303597 inline 8-bit counters): 303597 [0x103c57220, 0x103ca140d), 
+INFO: Loaded 1 PC tables (303597 PCs): 303597 [0x103ca1410,0x1041432e0), 
+INFO:        0 files found in fuzz/corpus/provider_manifest
+INFO:        4 files found in fuzz/seeds/provider_manifest
+INFO: seed corpus: files: 4 min: 1358b max: 3056b total: 8283b rss: 51Mb
+#6	INITED cov: 10631 ft: 15747 corp: 4/8283b exec/s: 0 rss: 65Mb
+#7	NEW    cov: 10631 ft: 15752 corp: 5/10584b lim: 3056 exec/s: 0 rss: 67Mb L: 2301/3056 MS: 1 ChangeASCIIInt-
+#8	NEW    cov: 10639 ft: 15847 corp: 6/11943b lim: 3056 exec/s: 0 rss: 68Mb L: 1359/3056 MS: 1 InsertByte-
+	NEW_FUNC[1/16]: 0x0001027ce27c in _RINvMsx_NtNtCs89ihjnFx7T6_4core3str7patternNtB6_14TwoWaySearcher9next_backNtB6_9MatchOnlyECsiC0AsM8BhA0_12stackly_core+0x0 (provider_manifest:arm64+0x10002627c)
+	NEW_FUNC[2/16]: 0x00010288d0a0 in _RINvNtCs89ihjnFx7T6_4core3ptr9drop_glueNtNtCsks3hQDEpept_13serde_yaml_ng5error9ErrorImplECsiC0AsM8BhA0_12stackly_core+0x0 (provider_manifest:arm64+0x1000e50a0)
+#9	NEW    cov: 10780 ft: 16548 corp: 7/14135b lim: 3056 exec/s: 0 rss: 69Mb L: 2192/3056 MS: 1 CrossOver-
+#10	NEW    cov: 10780 ft: 16549 corp: 8/16Kb lim: 3056 exec/s: 0 rss: 70Mb L: 3056/3056 MS: 1 ChangeByte-
+#11	NEW    cov: 10789 ft: 16569 corp: 9/18Kb lim: 3056 exec/s: 0 rss: 71Mb L: 1568/3056 MS: 1 ChangeASCIIInt-
+	NEW_FUNC[1/23]: 0x0001027aca00 in _RINvMs0_NtNtCsiC0AsM8BhA0_12stackly_core8provider5issueNtB6_5Issue3newReNtNtCsgysSR5XEJuO_5alloc6string6StringEBa_+0x0 (provider_manifest:arm64+0x100004a00)
+... (NEW, REDUCE, and pulse progress lines cut) ...
+"\023\000\000\000\000\000\000\000" # Uses: 422
+"v\000\000\000" # Uses: 398
+"\005\000\000\000" # Uses: 371
+"i\000\000\000" # Uses: 409
+"\011\000" # Uses: 404
+"\000\000\000\000\000\000\000\002" # Uses: 373
+"\001\000" # Uses: 343
+"m\000" # Uses: 384
+"\002\231\231\231\231\231\231\232" # Uses: 306
+"\000\000\000\000" # Uses: 309
+"\001\000\000\000\000\000\000\014" # Uses: 299
+"\377\377\377+" # Uses: 295
+"r\000\000\000" # Uses: 288
+"\005\000" # Uses: 262
+"\013\000" # Uses: 236
+"\377\377\377r" # Uses: 177
+"d\000\000\000" # Uses: 131
+"f\000" # Uses: 117
+"\000\000\000\000\000\000\000K" # Uses: 107
+"\001\000\000\000\000\000\000\001" # Uses: 40
+"d\000" # Uses: 33
+###### End of recommended dictionary. ######
+Done 958658 runs in 601 second(s)
+stat::number_of_executed_units: 958658
+stat::average_exec_per_sec:     1595
+stat::new_units_added:          9459
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              462
+fuzz run: provider_manifest ran for 600 s without a crash
+      604.03 real       559.66 user         9.40 sys

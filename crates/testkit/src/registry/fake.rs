@@ -9,12 +9,13 @@ use std::time::Duration;
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
-    AuditPage, AuditQuery, AuditResult, BackupId, BatchError, Committed, CreatedRecord, CreatedSeq,
-    Environment, EnvironmentId, Generation, IdempotencyKey, InstallMode, Instance, InstanceFilter,
-    InstanceId, InstanceName, InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter,
-    LeaseHolder, LeaseId, LeaseState, LockKey, Operation, OperationCursor, OperationId,
-    OperationJournal, OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
-    PlatformStoreKey, ProviderRevisionKey, ProviderRevisionRecord, PruneReport, Registry,
+    AuditPage, AuditQuery, AuditResult, BackupId, BatchError, Committed, ConfigRevisionId,
+    ConfigRevisionRecord, CreatedRecord, CreatedSeq, Environment, EnvironmentId, Generation,
+    IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId, InstanceName,
+    InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder, LeaseId,
+    LeaseState, LockKey, Operation, OperationCursor, OperationId, OperationJournal, OperationPage,
+    OperationQuery, OperationResource, OperationState, Ownership, PlatformStoreKey,
+    ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord, PruneReport, Registry,
     RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime, RuntimeId,
     RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
     SecretReferenceView, SecretStatus, SecretUse, SecretUser, Sha256Digest, StepSeq, Versioned,
@@ -22,11 +23,14 @@ use stackly_domain::{
 };
 use stackly_platform::{Clock, instance_path_entries};
 
-use super::seed::{BackupSeed, RegistrySeed};
+use super::seed::{BackupSeed, RegistrySeed, seeded_observation};
 use super::stored_instance;
 
 /// The action of a seeded audit row (spec 0005, "Fake dan conformance").
 pub(crate) const SEEDED_AUDIT_ACTION: AuditAction = AuditAction::from_static("test.seed");
+/// The lengths of `executable_identity` the column's check accepts, in
+/// characters, as SQLite's `length()` counts them.
+const EXECUTABLE_CHARS: std::ops::RangeInclusive<usize> = 1..=1024;
 
 /// When the registry stamped a row with the commit time, for the columns
 /// that have no field in the domain (spec 0005, "Pemetaan aggregate").
@@ -51,7 +55,8 @@ pub struct WrittenAt {
 /// `daemon_restarted`, observed at `loaded_at`. Both pass
 /// [`registry_conformance`](crate::registry_conformance), the operation
 /// journal tables of spec 0007 included, whose rows prune deletes with
-/// their operation.
+/// their operation, and the process observations and config revisions of
+/// feature 10.
 ///
 /// ```
 /// use std::sync::Arc;
@@ -245,6 +250,35 @@ impl Registry for FakeRegistry {
 
     fn known_instance_ids(&self) -> Result<Versioned<Vec<InstanceId>>, RegistryError> {
         self.read(|state| Ok(state.instances.keys().copied().collect()))
+    }
+
+    fn latest_process_observation(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ProcessObservation>>, RegistryError> {
+        self.read(|state| {
+            state.expect_instance(instance)?;
+            Ok(state
+                .observations
+                .iter()
+                .filter(|row| row.observation.instance == instance)
+                .max_by_key(|row| row.id)
+                .map(|row| row.observation.clone()))
+        })
+    }
+
+    fn active_config_revision(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ConfigRevisionRecord>>, RegistryError> {
+        self.read(|state| {
+            state.expect_instance(instance)?;
+            Ok(state
+                .active_config
+                .get(&instance)
+                .and_then(|id| state.config_revisions.get(id))
+                .cloned())
+        })
     }
 
     fn instance_paths(
@@ -536,23 +570,16 @@ impl RegistrySeed for FakeRegistry {
             "seeded observations belong to an instance the registry holds"
         );
         for _ in 0..count {
-            state.next_observation += 1;
-            let id = state.next_observation;
-            state.observations.push(ObservationRow {
-                id,
-                instance,
-                observed_at: at,
-            });
+            state.push_observation(seeded_observation(instance, at));
         }
     }
 }
 
-/// One seeded process observation; `id` grows like SQLite's rowid.
-#[derive(Debug, Clone, Copy)]
+/// One process observation; `id` grows like SQLite's rowid.
+#[derive(Debug, Clone)]
 struct ObservationRow {
     id: u64,
-    instance: InstanceId,
-    observed_at: Timestamp,
+    observation: ProcessObservation,
 }
 
 /// Everything the fake holds. A commit applies its ops to a copy.
@@ -575,6 +602,10 @@ struct State {
     audit_events: Vec<AuditEventRecord>,
     observations: Vec<ObservationRow>,
     next_observation: u64,
+    config_revisions: BTreeMap<ConfigRevisionId, ConfigRevisionRecord>,
+    /// The `instances.config_revision_id` column, which the instance
+    /// aggregate does not carry.
+    active_config: BTreeMap<InstanceId, ConfigRevisionId>,
     secret_references: BTreeMap<SecretRef, SecretReferenceRecord>,
     secret_uses: BTreeSet<SecretUse>,
     written: HashMap<ResourceRef, WrittenAt>,
@@ -600,6 +631,8 @@ impl State {
             audit_events: Vec::new(),
             observations: Vec::new(),
             next_observation: 0,
+            config_revisions: BTreeMap::new(),
+            active_config: BTreeMap::new(),
             secret_references: BTreeMap::new(),
             secret_uses: BTreeSet::new(),
             written: HashMap::new(),
@@ -676,6 +709,8 @@ impl State {
                 self.audit_events.push(record);
                 Ok(())
             }
+            WriteOp::RecordProcessObservation(observation) => self.record_observation(observation),
+            WriteOp::InsertConfigRevision(record) => self.insert_config_revision(record),
             other => panic!(
                 "FakeRegistry has no case for the op on {}; add one with the spec 0005 change \
                  that added it",
@@ -1184,6 +1219,92 @@ impl State {
         Ok(())
     }
 
+    /// Fails with `NotFound` when the instance does not exist, as the
+    /// instance reads of feature 10 do.
+    fn expect_instance(&self, instance: InstanceId) -> Result<(), RegistryError> {
+        if self.instances.contains_key(&instance) {
+            Ok(())
+        } else {
+            Err(RegistryError::NotFound {
+                resource: ResourceRef::Instance(instance),
+            })
+        }
+    }
+
+    /// Stores an observation with the next row ID.
+    fn push_observation(&mut self, observation: ProcessObservation) {
+        self.next_observation += 1;
+        self.observations.push(ObservationRow {
+            id: self.next_observation,
+            observation,
+        });
+    }
+
+    /// `RecordProcessObservation`: the instance exists, then the
+    /// `executable_identity` length check SQLite runs last.
+    fn record_observation(&mut self, observation: ProcessObservation) -> Result<(), RegistryError> {
+        if !self.instances.contains_key(&observation.instance) {
+            return Err(RegistryError::MissingReference {
+                resource: ResourceRef::Instance(observation.instance),
+            });
+        }
+        let chars = observation
+            .identity
+            .executable
+            .to_str()
+            .map_or(0, |path| path.chars().count());
+        if !EXECUTABLE_CHARS.contains(&chars) {
+            return Err(RegistryError::Integrity {
+                detail: "CHECK constraint failed: length(executable_identity) BETWEEN 1 AND 1024"
+                    .to_owned(),
+            });
+        }
+        self.push_observation(observation);
+        Ok(())
+    }
+
+    /// `InsertConfigRevision`: a new ID; the instance and `previous` exist,
+    /// `previous` of the same instance; no active revision unless
+    /// `previous` names one. The revision becomes the active one.
+    fn insert_config_revision(
+        &mut self,
+        record: ConfigRevisionRecord,
+    ) -> Result<(), RegistryError> {
+        if self.config_revisions.contains_key(&record.id) {
+            return Err(RegistryError::DuplicateResource {
+                resource: ResourceRef::ConfigRevision(record.id),
+            });
+        }
+        if !self.instances.contains_key(&record.instance) {
+            return Err(RegistryError::MissingReference {
+                resource: ResourceRef::Instance(record.instance),
+            });
+        }
+        match record.previous {
+            Some(previous) => {
+                let same_instance = self
+                    .config_revisions
+                    .get(&previous)
+                    .is_some_and(|stored| stored.instance == record.instance);
+                if !same_instance {
+                    return Err(RegistryError::MissingReference {
+                        resource: ResourceRef::ConfigRevision(previous),
+                    });
+                }
+            }
+            None => {
+                if let Some(active) = self.active_config.get(&record.instance) {
+                    return Err(RegistryError::DuplicateResource {
+                        resource: ResourceRef::ConfigRevision(*active),
+                    });
+                }
+            }
+        }
+        self.active_config.insert(record.instance, record.id);
+        self.config_revisions.insert(record.id, record);
+        Ok(())
+    }
+
     /// The journal of an operation with its rows, or `None` without one.
     fn journal_view(&self, id: OperationId) -> Option<JournalView> {
         let journal = self.journals.get(&id)?.clone();
@@ -1281,8 +1402,8 @@ impl State {
             let rows = self
                 .observations
                 .iter()
-                .filter(|row| row.instance == instance)
-                .map(|row| (row.observed_at, row.id))
+                .filter(|row| row.observation.instance == instance)
+                .map(|row| (row.observation.observed_at, row.id))
                 .collect();
             doomed.extend(beyond_retention(
                 rows,

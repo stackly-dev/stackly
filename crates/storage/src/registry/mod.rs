@@ -10,6 +10,7 @@ mod journal;
 mod prune;
 mod read;
 mod secret;
+mod supervision;
 mod write;
 
 use std::fmt;
@@ -20,13 +21,13 @@ use std::thread::JoinHandle;
 use jiff::Timestamp;
 use rusqlite::{Connection, Transaction};
 use stackly_domain::{
-    ArtifactRecord, AuditPage, AuditQuery, BatchError, Committed, Environment, EnvironmentId,
-    IdempotencyKey, Instance, InstanceFilter, InstanceId, InstanceName, InstancePathEntry,
-    JournalView, Lease, LeaseFilter, Operation, OperationId, OperationJournal, OperationPage,
-    OperationQuery, ProviderRevisionKey, ProviderRevisionRecord, PruneReport, Registry,
-    RegistryError, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretRef,
-    SecretReferenceFilter, SecretReferenceView, SecretUse, SecretUser, Sha256Digest, Versioned,
-    WriteBatch,
+    ArtifactRecord, AuditPage, AuditQuery, BatchError, Committed, ConfigRevisionRecord,
+    Environment, EnvironmentId, IdempotencyKey, Instance, InstanceFilter, InstanceId, InstanceName,
+    InstancePathEntry, JournalView, Lease, LeaseFilter, Operation, OperationId, OperationJournal,
+    OperationPage, OperationQuery, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
+    PruneReport, Registry, RegistryError, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences,
+    SecretRef, SecretReferenceFilter, SecretReferenceView, SecretUse, SecretUser, Sha256Digest,
+    Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
@@ -202,6 +203,20 @@ impl Registry for SqliteRegistry {
 
     fn known_instance_ids(&self) -> Result<Versioned<Vec<InstanceId>>, RegistryError> {
         self.read(|tx| read::known_instance_ids(tx))
+    }
+
+    fn latest_process_observation(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ProcessObservation>>, RegistryError> {
+        self.read(move |tx| supervision::latest_observation(tx, instance))
+    }
+
+    fn active_config_revision(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ConfigRevisionRecord>>, RegistryError> {
+        self.read(move |tx| supervision::active_config_revision(tx, instance))
     }
 
     fn instance_paths(

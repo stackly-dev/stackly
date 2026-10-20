@@ -206,6 +206,32 @@ struct DaemonLinkTests {
         await link.stop()
     }
 
+    @Test func stopNowClosesTheSocketSendsNothingAndNeverTriesAgain() async throws {
+        let server = try FakeDaemonServer(path: root.endpoint.socketPath)
+        server.serve { session in
+            try session.startAsDaemon()
+        }
+        let link = makeLink()
+        var states = StateWatcher(link)
+        await link.start()
+        _ = await states.next { if case .connected = $0 { true } else { false } }
+        let beforeQuit = server.bytesReceived
+        link.stopNow()
+        await server.waitForFinishedConnections(1)
+        #expect(server.bytesReceived == beforeQuit)
+        // Every wait passes and Reconnect is pressed: no new attempt, no new status.
+        clock.advance(by: .seconds(30))
+        await link.retryNow()
+        for _ in 0..<50 { await Task.yield() }
+        guard case .connected = link.currentState else {
+            let state = String(describing: link.currentState)
+            Issue.record("the link published \(state) after stopNow")
+            return
+        }
+        #expect(server.scriptFailures.isEmpty)
+        await link.stop()
+    }
+
     @Test func aCallWhileNotConnectedIsNotSent() async throws {
         let link = makeLink()
         var states = StateWatcher(link)

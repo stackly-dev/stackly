@@ -7,16 +7,24 @@
 //! on the connection rather than on a use case. Whether a method is served
 //! in recovery mode is its `methods!` table line in `stackly-protocol`
 //! ([`Call::allowed_in_recovery`](stackly_protocol::Call::allowed_in_recovery)).
+//! The operation methods (spec 0007) live in [`crate::ipc::operation`].
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Instant;
 
 use stackly_ipc::PeerCred;
 use stackly_protocol::ErrorBody;
 use stackly_protocol::daemon::{Capabilities, DaemonHealth, DaemonInfo};
 use stackly_protocol::handshake::ClientInfo;
+use stackly_protocol::operation::{
+    AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
+    ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
+    ResumeOperationParams,
+};
 
+use crate::ipc::operation::{self, TestStartingMethod};
 use crate::map;
 use crate::state::DaemonCore;
 
@@ -89,6 +97,82 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, Capabilities> {
         let _ = context;
         get_capabilities(core)
+    }
+
+    /// `operation.get`.
+    fn get_operation<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetOperationParams,
+    ) -> HandlerFuture<'a, OperationDetail> {
+        let _ = context;
+        operation::get(core, params)
+    }
+
+    /// `operation.list`.
+    fn list_operations<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ListOperationsParams,
+    ) -> HandlerFuture<'a, OperationPage> {
+        let _ = context;
+        operation::list(core, params)
+    }
+
+    /// `operation.cancel`.
+    fn cancel_operation<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: CancelOperationParams,
+    ) -> HandlerFuture<'a, CancelReply> {
+        let _ = context;
+        operation::cancel(core, params)
+    }
+
+    /// `operation.resume`.
+    fn resume_operation<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ResumeOperationParams,
+    ) -> HandlerFuture<'a, OperationSummary> {
+        let _ = context;
+        operation::resume(core, params)
+    }
+
+    /// `operation.abandon`.
+    fn abandon_operation<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: AbandonOperationParams,
+    ) -> HandlerFuture<'a, AbandonReply> {
+        let _ = context;
+        operation::abandon(core, params)
+    }
+
+    /// `operation.get_stats`.
+    fn get_operation_stats<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, OperationStats> {
+        let _ = context;
+        operation::get_stats(core)
+    }
+
+    /// A method outside the contract that starts an operation, which only
+    /// tests register; the daemon serves none. No contract method starts an
+    /// operation before feature 10, so this is how the integration tests
+    /// reach [`operation::start_operation`] over the socket (spec 0007 build
+    /// step 15). provisional: F10 (the first contract method that starts
+    /// an operation replaces it, and its tests move there)
+    #[doc(hidden)]
+    fn test_starting_method(&self) -> Option<Arc<dyn TestStartingMethod>> {
+        None
     }
 }
 

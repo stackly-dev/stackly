@@ -769,6 +769,10 @@ Untuk pemilik fitur lain:
 - [ ] Fitur 46: operasi environment tidak boleh menunggu operasi lain sambil memegang slot berjalan (risiko deadlock di batas 8); desain operasi anak diputuskan di sana.
 - [ ] Fitur 63: review keamanan blok `unsafe` `remove_tree` dan test balapan.
 - [ ] Fitur 64: benchmark boleh menyetel ulang `MAX_RUNNING_OPERATIONS`, `MAX_QUEUED_OPERATIONS`, dan `PROGRESS_COMMIT_INTERVAL` lewat update spec ini.
+- [ ] Fitur 10: method kontrak pertama yang memulai operasi masuk ke `STARTING_METHODS` dan memanggil `ipc::operation::start_operation`; method khusus test `Handlers::test_starting_method` (`test.start_operation`, `provisional: F10`) dihapus dan test nya di `apps/daemon/tests/operations/` pindah ke method itu.
+- [ ] Spec 0011 langkah 5: `stacklyd` mendaftarkan kompensator `secret_ref` di atas use case hapus secret dan memberi engine `Redactor` bersama daemon, menggantikan `Redactor` sendiri di `apps/daemon/src/operations.rs` (`provisional: F11`).
+- [ ] Keputusan (`/architect`, dari review 2026-10-20): *Model domain* memberi `FailureError` field `hint` dan `items`, dan *Kegagalan dan error* meminta `rule` di `ErrorBody`, tetapi tabel `operation_journal` tidak punya kolomnya dan implementasi hanya menyimpan `code`, `message`, dan `details`. Putuskan apakah disimpan (perlu migrasi) atau dicabut dari spec, lalu selaraskan `OperationError`, journal, dan peta `ErrorBody` di `stacklyd`.
+- [ ] Fitur 64: `LockTable::release_with` menahan mutex tabel lock selama commit akhir (fsync), sehingga `begin` dan dispatcher menunggu di thread async; ukur dan, bila perlu, ganti dengan tanda "sedang melepas" tanpa melepas invariant pelepasan atomik (review 2026-10-20).
 
 ## Rationale
 

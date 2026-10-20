@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15654-0148-70d7-901b-ca177b552681",
+  "covers": [
+    "REQ-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 manual check 5: window sizes and wrapping at the narrowest content",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "The window stops shrinking at 900 by 600 pt of content, the sidebar stays between 200 and 260 pt, and at a 640 pt content width the banner and every Diagnostics value, the socket path included, wrap without being cut.",
+  "actual": "the window stayed at 900 by 652 (600 pt of content under the 52 pt toolbar); the sidebar clamped to 200 for 100 and to 260 for 400; at 640 pt of content the banner `Can’t connect to stacklyd.` / `Showing the last known state from 5.46. Actions are disabled until the daemon is reachable.` shows whole, and in Diagnostics the socket path and the stacklyd line wrap onto a second line with nothing cut or ellipsized",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 7818bea with a clean tree, `cargo xtask build-app` (Debug) and `cargo build -p stacklyd -p stackly-cli`; STACKLY_ROOT is the private folder /private/tmp/stk-gui-check (mode 0700)",
+    "Claude Code drove Stackly through the macOS accessibility API (System Events menu clicks, the window's close button, Dock item clicks, AX row selection and sizes) and captured only the Stackly window with `screencapture -l <window id>`; synthetic keystrokes do not reach apps on this Mac, so no step uses the keyboard",
+    "with Stackly connected, set the window size to 500 by 400 through the accessibility API and read it back; set the sidebar splitter to 100, 400, and 260 and read the sidebar width (check5-sizes.txt)",
+    "stop stacklyd with SIGTERM so the offline banner shows with the last known time, capture Overview at the 640 pt content width (900 pt window minus the 260 pt sidebar), then select Diagnostics and capture it"
+  ],
+  "reviewer": "ojiepermana, reviewing the screenshots and logs Claude Code (Claude Opus 5.5) took while it drove the app",
+  "startedAt": "2026-10-19T22:41:48.359704Z",
+  "finishedAt": "2026-10-20T02:15:03.849824Z",
+  "evidencePath": "evidence/manual/files/01a15654-0148-70d7-901b-ca177b552681/",
+  "context": {
+    "sourceCommit": "7818bea186bae7048a8b5eeee71e03eb932e6a76",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

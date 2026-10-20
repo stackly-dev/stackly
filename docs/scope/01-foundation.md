@@ -138,11 +138,12 @@ Mesin operasi async yang dipakai semua mutasi: journal, idempotency key, lock pe
   - [x] Journal di registry: tipe journal di domain, `Operation::touch`, `Outcome::Failed`, tambahan port `Registry`, `FakeRegistry`, migrasi `operation_journal` (key ganda, unique index, backfill), dan conformance di `SqliteRegistry` (spec 0007 AC-2, AC-10, AC-11, AC-17; build steps 1 to 3; langkah 1 dan 2 butuh spec 0005 milestone 2, langkah 3 butuh milestone 3)
   - [x] Primitive hapus aman: `Filesystem::remove_tree`, `FakeFilesystem`, adapter macOS berbasis file descriptor dengan test balapan dan `CrossesDevice`, dan `remove_owned_tree` (spec 0007 AC-8, AC-9; build steps 4 to 6; bisa mulai sekarang sebagai sesi paralel)
   - [x] Engine dari ujung ke ujung di atas fake: lock dan antrian FIFO, `begin` dengan idempotency, runner dengan langkah dan progress, cancel, kompensasi, `recover`, resume, abandon, shutdown, dan skenario AC-054 dengan evidence (spec 0007 AC-1 to AC-8, AC-10 to AC-16; build steps 7 to 12; butuh langkah 1 dan 2, kompensasi butuh langkah 4)
-  - [ ] Kontrak wire dan daemon: DTO, event, kode, sidik jari, fixture dan test Swift, lalu wiring engine di `stacklyd`, enam method, subsystem `operations`, hook shutdown, dan test integrasi daemon (spec 0007 AC-1, AC-3, AC-5, AC-6, AC-10, AC-11, AC-13, AC-14, AC-16, AC-18 to AC-20; build steps 13 to 15; langkah 13 bisa paralel dengan milestone engine setelah spec 0006 milestone 1, langkah 14 dan 15 butuh spec 0006 milestone 4)
-- [ ] Verify it: `/check verify operation engine`
-- [ ] Test it: `/test operation engine`
-- [ ] Review it (fresh model): `/check review operation engine`
-- [ ] Document it: `/document operation engine`
+  - [x] Kontrak wire dan daemon: DTO, event, kode, sidik jari, fixture dan test Swift, lalu wiring engine di `stacklyd`, enam method, subsystem `operations`, hook shutdown, dan test integrasi daemon (spec 0007 AC-1, AC-3, AC-5, AC-6, AC-10, AC-11, AC-13, AC-14, AC-16, AC-18 to AC-20; build steps 13 to 15; langkah 13 bisa paralel dengan milestone engine setelah spec 0006 milestone 1, langkah 14 dan 15 butuh spec 0006 milestone 4)
+  - [ ] Failure items, rule, and replay: `FailureError` keeps `items` and `rule` (not `hint`) in a new migration with its frozen fixture, `OperationEngine::replay` as a read only lookup before `begin`, and the stacklyd mapping, plus a scoped `/check verify`, `/test`, `/check review`, and `/document` for this step (spec 0007 build step 16; decisions K11 and K12 with the scope 02 lead; before spec 0010 step 13, spec 0011 step 7 and steps 9 to 11, and spec 0018 step 6)
+- [x] Verify it: `/check verify operation engine`
+- [x] Test it: `/test operation engine`
+- [x] Review it (fresh model): `/check review operation engine`
+- [x] Document it: `/document operation engine`
 
 ### 8. CLI client & kontrak output · in-progress
 
@@ -218,7 +219,7 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
 - [ ] Build it: `/develop secret store & redaction`
   - [x] Secret port, references, and Keychain adapter: `SecretRef`, `SecretStore`, `FakeSecretStore`, and `MacosSecretStore` with the `OSStatus` spike (spec 0011 AC-1 to AC-4, AC-6, AC-7; build steps 1 to 3; needs features 4 and 5)
   - [x] Secret registry and core service: the secret migration and the registry ops spec 0005 designs for this feature (reference insert, update, observe, delete, and restore, `ReplaceSecretUses`, `InsertAuditEvent`, and the secret and audit reads), then `SecretWorker`, `put`, reveal, delete, `resolve_for_start`, `Redactor`, delivery rules, and the `check-deps` allowlist (spec 0011 AC-4 to AC-6, AC-8 to AC-13, AC-15, AC-20; build steps 0, 4, and 6; does not need feature 6; step 0 needs step 1 and never runs at the same time as spec 0010 step 2a, in either order, because both touch the same registry files; step 4 needs steps 0 and 2; step 6 can run as its own session)
-  - [ ] Phase 02 core rules: `printable_only` on `SecretFieldRule`, `reason` on `secret.invalid_value`, `put(Bind)` with a field that reads and checks, store errors that carry their reference, and `classify_create_failure` (spec 0011 AC-22, AC-23; build step 4a; in the step 5 session or its own core session, always before spec 0010 step 13 and spec 0020 milestone 1 step 3)
+  - [x] Phase 02 core rules: `printable_only` on `SecretFieldRule`, `reason` on `secret.invalid_value`, `put(Bind)` with a field that reads and checks, store errors that carry their reference, and `classify_create_failure` (spec 0011 AC-22, AC-23; build step 4a; in the step 5 session or its own core session, always before spec 0010 step 13 and spec 0020 milestone 1 step 3)
   - [ ] Secret service through the daemon: IPC handlers, `codes::secret` and the error mapping, the redacting log writer, `Redactor` on envelopes and events, and the daemon sentinel suite (spec 0011 AC-3, AC-5, AC-7, AC-8, AC-9, AC-11, AC-13, AC-14, AC-16, AC-21, AC-22; build steps 5 and 7; needs feature 6 and the two milestones above)
   - [ ] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
   - [ ] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19, AC-24; build steps 9 to 11; needs features 12 and 13)
@@ -231,7 +232,7 @@ _Catatan:_ fitur 12 (Design system & UI foundation) dan 13 (App shell SwiftUI & 
 
 ## Skeleton
 
-### 14. Walking skeleton
+### 14. Walking skeleton · in-progress
 
 Satu irisan tipis yang membuktikan stack sudah tersambung: fake provider dibuat, dijalankan, dan dihentikan lewat CLI, statusnya tampil di GUI, dan registry mencatatnya. Belum ada download runtime atau provider nyata.
 
@@ -239,4 +240,14 @@ Satu irisan tipis yang membuktikan stack sudah tersambung: fake provider dibuat,
 
 **Trace:** AC-001 (awal), AC-013 (awal), AC-029 (awal), fixture dummy server di PRD bagian 32.3
 
+**Pointer:** spec [0014](../specs/0014-walking-skeleton/index.md) · code in `crates/core/src/supervisor/fixture.rs`, `apps/daemon/examples/`, `apps/daemon/tests/`, `apps/cli/src/commands/instance/`, `crates/testkit/`, `crates/fake-server/`, `providers/fake/`, `apps/macos/Packages/StacklyUI/Tests/`
+
+- [x] Design it (spec): `/architect walking skeleton`
 - [ ] Build it: `/develop walking skeleton`
+  - [ ] Development root seed: `seed_fake` in core's `fixture` feature, `cargo_example` in the testkit, the `skeleton_seed` example of `stacklyd` with its root refusals, and its binary test (spec 0014 AC-1 to AC-3; build steps 1 and 2; needs feature 10 build through spec 0010 step 13 for `install_fake`, `pin_package`, and the `fixture` feature; spec 0010 step 15 encodes the `fixture` rule from spec 0014 and may land before or after; can run in parallel with the next milestone)
+  - [ ] CLI instance commands: `IdempotencyKeyArg`, `AsyncArgs`, `Context::submit`, and `stackly instance create`, `start`, `stop`, and `get` with `--wait` and `--json`, goldens, and exit code matrix rows against the scripted daemon (spec 0014 AC-5 to AC-8; build steps 3 and 4; needs feature 8 build and spec 0010 step 12 for the instance DTOs; touches `apps/cli/` only)
+  - [ ] Through the real daemon and restart: the fake init delay (`initDelayMs`, fake revision 0.2.0), `ProcessTable` and the CLI runner in the testkit, then the happy path, init failure with abandon, no Keychain prompt, restart after `SIGKILL` and `SIGTERM` without a duplicate instance or orphan process, and the interrupted create, with fixture evidence for AC-013 and AC-029 (spec 0014 AC-4, AC-9 to AC-13; build steps 5 to 8; after the two milestones above and spec 0010 step 14, which brings spec 0011 step 5 and feature 7 step 16 with it; step 5 runs alone on `providers/fake/`)
+  - [ ] GUI and AC-001: `SkeletonEndToEndTests` in `StacklyUI` with the real seed and daemon binaries and a second client connection making the changes (events in `InstanceStore`, close and reopen with three instances), then the manual fixture record that you review, where the CLI makes the changes (spec 0014 AC-14 to AC-16; build steps 9 and 10; step 9 needs the first milestone and spec 0013 step 16 in `ui-macos.md`, step 10 needs the second and third milestones and spec 0013 step 15)
+  - [ ] Secrets end to end: `--secret <field>=<source>` on create through `secret_input`, the fixture credential sentinel, and a locked file keychain giving `needsSecret` in the CLI and `InstanceStore` (spec 0014 AC-17 to AC-19; build steps 11 to 13; after the third milestone and spec 0011 step 8; step 13 after step 9)
+- [ ] Verify it: `/check verify walking skeleton`
+- [ ] Test it: `/test walking skeleton`

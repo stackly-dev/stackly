@@ -1,9 +1,10 @@
 //! Replays fuzz inputs on the stable toolchain (spec 0006, *Fuzzing*, and
-//! spec 0009, *Fuzz target*): every input that ever crashed a provider
-//! target, kept in `tests/fuzz_regressions/<target>/`, and the committed
-//! seeds in `fuzz/seeds/<target>/`. The folder name picks the harness in
-//! `stackly_core::provider::fuzzing`, the same function the cargo-fuzz
-//! target calls, so a crash found on nightly fails `cargo test` here.
+//! specs 0009 and 0023, *Fuzz target*): every input that ever crashed a
+//! target of this crate, kept in `tests/fuzz_regressions/<target>/`, and
+//! the committed seeds in `fuzz/seeds/<target>/`. The folder name picks the
+//! harness in `stackly_core::provider::fuzzing`, the same function the
+//! cargo-fuzz target calls, so a crash found on nightly fails `cargo test`
+//! here.
 
 use std::fs;
 use std::panic;
@@ -16,11 +17,12 @@ use stackly_core::provider::fuzzing;
 type Harness = fn(&[u8]);
 
 /// Every fuzz target of this crate and its harness.
-const TARGETS: [(&str, Harness); 4] = [
+const TARGETS: [(&str, Harness); 5] = [
     ("provider_manifest", fuzzing::manifest),
     ("provider_template", fuzzing::template),
     ("provider_interpolation", fuzzing::interpolation),
     ("provider_settings_schema", fuzzing::settings_schema),
+    ("nats_readiness_protocol", fuzzing::nats_readiness_protocol),
 ];
 
 fn regressions_dir() -> PathBuf {

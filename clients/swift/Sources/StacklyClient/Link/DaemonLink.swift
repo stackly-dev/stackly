@@ -39,6 +39,8 @@ public actor DaemonLink {
     private let opener: Opener
     private let broadcast = StateBroadcast<ConnectionState>()
     private let active = Mutex<DaemonConnection?>(nil)
+    /// Set by ``stopNow()``: the app quits, so the link never tries again.
+    private let terminated = Mutex(false)
     private let logger = Logger(subsystem: "com.ojiepermana.stackly", category: "client")
 
     private var connected: (connection: DaemonConnection, daemon: ConnectedDaemon)?
@@ -153,9 +155,16 @@ public actor DaemonLink {
     }
 
     /// Closes the socket synchronously from any thread, for app termination.
-    /// Nothing is sent to the daemon.
+    /// Nothing is sent to the daemon: the link never makes another attempt and
+    /// publishes no status after it.
     public nonisolated func stopNow() {
+        terminated.withLock { $0 = true }
         active.withLock { $0 }?.closeNow()
+    }
+
+    /// Whether ``stopNow()`` ended the link.
+    private nonisolated var isTerminated: Bool {
+        terminated.withLock { $0 }
     }
 
     /// Sends `call` on the open connection.
@@ -212,11 +221,11 @@ public actor DaemonLink {
     // MARK: - Attempts
 
     private func run() async {
-        while stopped == false {
+        while stopped == false, isTerminated == false {
             attempt += 1
             broadcast.publish(.connecting(attempt: attempt))
             let delay = await attemptOnce()
-            guard stopped == false else { break }
+            guard stopped == false, isTerminated == false else { break }
             await waitForRetry(delay)
         }
     }
@@ -231,9 +240,10 @@ public actor DaemonLink {
         do throws(ClientError) {
             (connection, accepted) = try await opener(endpoint, policy, client, options)
         } catch {
+            guard isTerminated == false else { return .zero }
             return fail(error)
         }
-        guard stopped == false else {
+        guard stopped == false, isTerminated == false else {
             await connection.close()
             return .zero
         }
@@ -244,6 +254,8 @@ public actor DaemonLink {
         let reason = await stayConnected(connection, accepted: accepted)
         active.withLock { $0 = nil }
         connected = nil
+        // The app quits: the lost connection is its own doing, not news.
+        guard isTerminated == false else { return .zero }
         lastError = reason
         logger.info("lost stacklyd: \(reason.code, privacy: .public)")
         return failUnreachable(reason)

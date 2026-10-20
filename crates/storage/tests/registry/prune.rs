@@ -64,7 +64,9 @@ fn seed_lease(conn: &Connection, instance: InstanceId, state: &str, changed_at: 
 fn seed_observation(conn: &Connection, instance: InstanceId, observed_at: &str) {
     conn.execute(
         "INSERT INTO process_observations (instance_id, pid, start_identity, \
-         executable_identity, observed_at) VALUES (?1, 4242, 'start', '/opt/pg/bin/postgres', ?2)",
+         executable_identity, boot_id, session_id, observed_at) VALUES (?1, 4242, \
+         '1700000000.000000', '/opt/pg/bin/postgres', '00000000-0000-4000-8000-000000004242', \
+         '4242', ?2)",
         (instance.to_string(), observed_at),
     )
     .expect("an observation can be seeded");

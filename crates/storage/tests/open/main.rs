@@ -12,3 +12,4 @@ mod journal;
 mod migrate;
 mod schema;
 mod secret;
+mod supervision;

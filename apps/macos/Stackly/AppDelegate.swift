@@ -3,16 +3,20 @@ import StacklyUI
 
 /// The AppKit hooks of the app (spec 0013, Shell jendela).
 ///
-/// The app stays alive after its last window closes, a Dock click opens the main window
-/// again, and Quit is marked before any window closes, so the close notice never shows
-/// while quitting. Checked on macOS 27; see `apps/macos/design.md`, App shell.
+/// It builds the shell once at launch and keeps it for the whole launch, so closing the
+/// main window stops nothing: the connection, the daemon, and every instance keep
+/// running. The app stays alive after its last window closes, a Dock click opens the main
+/// window again, and Quit is marked before any window closes, so the close notice never
+/// shows while quitting. Quit only closes the socket; nothing is sent to the daemon.
+/// Checked on macOS 27; see `apps/macos/design.md`, App shell.
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// When the app launched: the start of the first connection attempt.
-    let launchedAt = Date()
-    /// Opens the main window again; `AppShell` captures its action.
-    let windowOpener = WindowOpener()
-    /// The notice shown the first time the main window closes in this launch.
-    let closeNotice = CloseNotice()
+    /// The shell: the daemon model, the window opener, the close notice, and the
+    /// lifecycle hooks. `STACKLY_ROOT` and the bundle version are read once, here.
+    let runtime = ShellBootstrap.live(
+        rootOverride: ProcessInfo.processInfo.environment["STACKLY_ROOT"],
+        clientVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+            as? String ?? ""
+    )
     /// Whether the app is quitting. Set before any window closes.
     private(set) var isTerminating = false
 
@@ -25,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     {
         // A minimized window counts as visible, and AppKit restores it by itself.
         guard flag == false else { return true }
-        return windowOpener.openMain() == false
+        return runtime.windowOpener.openMain() == false
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -34,12 +38,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // provisional: F13 (milestone 4 calls ShellRuntime.willTerminate() here, which
-        // closes the daemon socket synchronously)
+        // Closes the daemon socket synchronously; the link never tries again.
+        runtime.willTerminate()
     }
 
     /// Shows the close notice when the main window closes, unless the app is quitting.
     func mainWindowWillClose(_ window: NSWindow) {
-        closeNotice.mainWindowWillClose(isTerminating: isTerminating, screen: window.screen)
+        runtime.mainWindowWillClose(isTerminating: isTerminating, screen: window.screen)
     }
 }
