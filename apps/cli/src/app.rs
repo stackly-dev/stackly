@@ -14,6 +14,7 @@ use stackly_protocol::ProtocolVersion;
 
 use crate::commands::daemon::DaemonCommand;
 use crate::commands::operation::OperationCommand;
+use crate::commands::secret::SecretCommand;
 use crate::context::Context;
 use crate::env;
 use crate::exit::{EXIT_SUCCESS, EXIT_TABLE, EXIT_USAGE};
@@ -111,6 +112,9 @@ pub enum Command {
     /// List, inspect, cancel, resume, or abandon operations
     #[command(subcommand, arg_required_else_help = true)]
     Operation(OperationCommand),
+    /// Store, inspect, reveal, or delete secrets in the Keychain
+    #[command(subcommand, arg_required_else_help = true)]
+    Secret(SecretCommand),
 }
 
 impl Command {
@@ -119,6 +123,7 @@ impl Command {
         match self {
             Self::Daemon(command) => command.run(cx).await,
             Self::Operation(command) => command.run(cx).await,
+            Self::Secret(command) => command.run(cx).await,
         }
     }
 }

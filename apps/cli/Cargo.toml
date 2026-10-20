@@ -17,6 +17,7 @@ anstream.workspace = true
 anstyle.workspace = true
 clap = { workspace = true, features = ["string"] }
 jiff.workspace = true
+rpassword.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 stackly-ipc.workspace = true
@@ -31,6 +32,7 @@ stackly-platform-macos.workspace = true
 
 [dev-dependencies]
 regex.workspace = true
+tempfile.workspace = true
 serde_json.workspace = true
 stackly-evidence.workspace = true
 stackly-testkit.workspace = true

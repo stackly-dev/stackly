@@ -73,10 +73,6 @@ impl Context {
     /// # Errors
     ///
     /// `cli.input_required` in noninteractive mode.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "spec 0011 step 8 asks for secrets through it")
-    )]
     pub fn require_prompt(&self, input: &str) -> Result<(), CliFailure> {
         if self.prompt_allowed() {
             Ok(())

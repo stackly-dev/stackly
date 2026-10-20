@@ -40,10 +40,6 @@ pub enum RequestTimeout {
     Control,
     /// 200 seconds (the 180 second `SecretWorker` queue of spec 0011 plus a
     /// margin), for a call that sends `AllowPrompt`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "spec 0011 step 8 sends AllowPrompt calls with it")
-    )]
     Interactive,
 }
 

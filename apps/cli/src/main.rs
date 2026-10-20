@@ -22,6 +22,7 @@ mod failure;
 mod output;
 mod panic;
 mod progress;
+mod secret_input;
 mod session;
 mod wait;
 
