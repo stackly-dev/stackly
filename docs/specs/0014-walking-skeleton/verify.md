@@ -151,3 +151,40 @@ Keputusan kecil yang diambil saat membangun, karena spec diam:
 - AC-16 · belum, milik langkah build 10 (record manual, menunggu Milestone 2 dan 3 di main)
 - AC-1 sampai AC-13 · milik Milestone 1 sampai 3
 - AC-17 sampai AC-19 · belum, milik Milestone 5
+
+## Milestone 5: Secrets end to end
+
+Langkah build 11 sampai 13. `--secret` di `instance create` diuji terhadap daemon skrip; sentinel dan keychain terkunci berjalan dengan `stacklyd`, `stackly`, dan `stackly-fake-server` asli pada `TestRoot` (keychain file root itu, tanpa login Keychain); langkah 13 ada di `SkeletonEndToEndTests`.
+
+Keputusan kecil yang diambil saat membangun, karena spec diam atau menyebut dua hal:
+
+- `--secret` memakai `secret_input::field_source` apa adanya sebagai `value_parser`, jadi `expect(dead_code)` di `field_source` dan `SecretSource::Bind` dicabut. Sumber dibaca di `run` sebelum panggilan pertama ke daemon, jadi sumber yang ditolak (`cli.usage`, `cli.input_required`) tidak pernah menghubungi daemon.
+- Field yang muncul lebih dari sekali memakai kemunculan terakhir (urutan field mengikuti kemunculan pertama), sama dengan `--set`. `stdin` dihitung setelah penggabungan itu; lebih dari satu field dengan `stdin` ditolak `cli.usage` dengan `kind` `secret_stdin_twice` sebelum stdin dibaca.
+- Tidak ada file golden baru untuk `--secret`: teks dan `--json` create tidak berubah karena flag ini, jadi `instance_create.*` tetap golden nya. Yang diuji adalah params yang dikirim dan bahwa tidak ada output yang memuat nilai.
+- Pemindaian sentinel membaca `stacklyd.log` (level debug), semua file di folder log daemon, file `.stderr` daemon, registry beserta `-wal` dan `-shm`, semua file di runtime root kecuali folder `secrets/`, dan `instance-manifest.json` tiap instance. `fake.json` dan folder data tidak dipindai (template menulis token ke config); sebagai gantinya test memeriksa `token.sha256` sama dengan SHA-256 nilai tanpa newline.
+- Test keychain terkunci di `skeleton.rs` berhenti `BLOCKED` kalau sesi tidak punya GUI login (`launchctl managername` bukan `Aqua`), sama dengan test sentinel spec 0011. Test Swift tidak punya penjaga itu; ia hanya menjalankan `security lock-keychain` di root test.
+- Di test Swift, daemon distart ulang lewat `SkeletonRig.restartDaemon()` (SIGTERM, lalu start pada root yang sama) dan koneksi kedua test diganti; model GUI tidak diubah dan menyambung ulang sendiri.
+
+### UI / manual
+
+- [ ] `target/debug/stackly instance create --help` → `--secret <FIELD=SOURCE>` muncul dengan keenam sumber (`generate`, `prompt`, `stdin`, `file:PATH`, `env:NAME`, `copy:REF`, `bind:REF`) → AC-17
+- [ ] Dengan root development dan `stacklyd` hidup: `printf '%s\n' "$(uuidgen)" | STACKLY_ROOT="$R" target/debug/stackly instance create s1 --runtime <id> --provider testing/fake --revision 0.2.0 --secret authToken=stdin --wait`, lalu `grep -r` nilai itu di `$R` dan folder runtime root (kecuali `fake.json` dan `secrets/`) → tidak ditemukan → AC-17, AC-18
+- [ ] Hentikan instance, `security lock-keychain "$R/data/keychain/stackly.keychain-db"`, lalu `instance start <id> --wait` tanpa TTY → gagal `secret.needs_secret` tanpa dialog, `instance get <id>` menunjukkan `Blocker` `needs secret`, dan baris di app (STACKLY_ROOT=$R) tetap Stopped; hentikan dan jalankan lagi `stacklyd`, ulangi start → berhasil → AC-19
+
+### Commands
+
+- [ ] `cargo test -p stackly-cli --test instance secrets::` → enam test: setiap sumber (`generate`, `stdin` tanpa newline, `file:`, `env:`, `copy:`, `bind:`) menjadi `secrets[]` dalam urutan kemunculan pertama dengan kemunculan terakhir menang dan nilai tidak ada di stdout atau stderr; create tanpa `--secret` mengirim `secrets: []`; teks tanpa `--json` juga bersih; `--secret` salah bentuk, `stdin` dua kali, variabel tidak ada, stdin kosong, dan file tidak ada keluar 2 sebelum `instance.create`; `prompt` tanpa terminal keluar 2 `cli.input_required` segera; `--help` memuat flag → AC-17
+- [ ] `cargo test -p stackly-cli` → seluruh suite CLI hijau (tidak ada test lama yang berubah) → AC-17
+- [ ] `cargo build --locked -p stacklyd -p stackly-cli -p stackly-fake-server && cargo build --locked -p stacklyd --example skeleton_seed && cargo test -p stacklyd --test skeleton` → tujuh test, dua di antaranya baru: `the_fixture_credential_reaches_the_init_helper_and_leaves_no_trace_anywhere_else` (create dengan `--secret authToken=stdin`, `token.sha256` sama dengan SHA-256 nilai, lalu start dan stop; prefix kredensial tidak ada di semua file yang dipindai maupun di transkrip seluruh CLI) dan `a_locked_file_keychain_blocks_the_start_with_needs_secret_until_the_daemon_restarts` (start gagal `secret.needs_secret`, lifecycle `stopped`, `get` `blocker.type` `needsSecret`; setelah daemon distart ulang start berhasil dan `blocker` null) → AC-18, AC-19
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter SkeletonEndToEndTests` (binary dibangun lebih dulu seperti Milestone 4) → tiga test lulus; yang baru, `aLockedKeychainShowsTheNeedsSecretBlockerInTheStore`, mengunci keychain file root, start lewat koneksi kedua noninteractive ditolak `secret.needs_secret`, item `InstanceStore` berhenti `stopped` dengan blocker `needsSecret`, dan setelah daemon distart ulang start berhasil dan blocker hilang di store → AC-19
+- [ ] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test skeleton --locked --no-fail-fast` dan `cargo xtask evidence check` → record `fixture` untuk kedua test baru (`covers` AC-016, REQ-016) lulus → AC-18, AC-19
+- [ ] `ps -axww -o pid=,args= | grep stackly-fake-server` setelah semua suite → tidak ada proses dari root test yang tersisa → AC-17 sampai AC-19
+- [ ] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `xcrun swift-format lint --strict` pada file Swift yang berubah → lulus → AC-17 sampai AC-19
+
+### Acceptance-criteria coverage
+
+- AC-17 · `instance secrets::` (semua sumber, aturan baca, tidak ada nilai di output) dan `--help`
+- AC-18 · `skeleton::the_fixture_credential_reaches_the_init_helper_and_leaves_no_trace_anywhere_else` (evidence `AC-016`, `REQ-016`)
+- AC-19 · `skeleton::a_locked_file_keychain_blocks_the_start_with_needs_secret_until_the_daemon_restarts` dan `SkeletonEndToEndTests.aLockedKeychainShowsTheNeedsSecretBlockerInTheStore`
+- AC-16 · belum, milik langkah build 10 (record manual)
+- AC-1 sampai AC-15 · milik Milestone 1 sampai 4
