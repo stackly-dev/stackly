@@ -540,3 +540,147 @@ fn abandon_is_a_destructive_confirmation_and_shows_the_leftovers() {
     assert!(declined.stderr.contains("code: cli.confirmation_declined"));
     ev.pass();
 }
+
+#[test]
+fn verbose_names_the_method_and_request_id_but_never_the_params_it_sent() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "AC-13: -v on operation list writes `-> operation.list <requestId>` and `<- ok <ms> ms` and never the cursor or the resource id the params carried, also together with -q",
+    );
+    let root = TestRoot::new().unwrap();
+    let daemon = daemon(&root);
+    let resource = format!("instance:{}", dto::INSTANCE);
+
+    for quiet in [false, true] {
+        let mut args = vec![
+            "operation",
+            "list",
+            "--before",
+            NEXT,
+            "--resource",
+            &resource,
+            "-v",
+        ];
+        if quiet {
+            args.push("-q");
+        }
+        let listed = run(root.path(), &args);
+        assert_eq!(listed.code, Some(0), "{listed:?}");
+        let list_id = daemon
+            .log()
+            .into_iter()
+            .rev()
+            .find(|logged| logged.method == "operation.list")
+            .map(|logged| logged.request_id)
+            .expect("the daemon saw operation.list");
+        let lines: Vec<&str> = listed.stderr.lines().collect();
+        assert!(
+            lines.contains(&format!("-> operation.list {list_id}").as_str()),
+            "quiet {quiet}: {}",
+            listed.stderr
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.starts_with("<- ok ") && line.ends_with(" ms")),
+            "quiet {quiet}: {}",
+            listed.stderr
+        );
+        // The page footer is the command's own hint, not a -v line.
+        for line in lines
+            .iter()
+            .filter(|line| line.starts_with("-> ") || line.starts_with("<- "))
+        {
+            for params in [NEXT, dto::INSTANCE.to_string().as_str()] {
+                assert!(!line.contains(params), "-v leaked {params}: {line}");
+            }
+        }
+    }
+    ev.pass();
+}
+
+#[test]
+fn a_timeout_without_wait_or_out_of_range_is_refused_before_connecting() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "AC-8: --timeout without --wait, below one second, above 168 hours, or not a duration exits 2 with cli.usage and nothing reaches the daemon, for inspect and for cancel",
+    );
+    let root = TestRoot::new().unwrap();
+    let daemon = daemon(&root);
+    let id = id();
+
+    for verb in ["inspect", "cancel"] {
+        for args in [
+            &["--timeout", "5s"][..],
+            &["--wait", "--timeout", "0"],
+            &["--wait", "--timeout", "0s"],
+            &["--wait", "--timeout", "169h"],
+            &["--wait", "--timeout", "soon"],
+            &["--wait", "--timeout", "-5s"],
+        ] {
+            let mut all = vec!["operation", verb, id.as_str(), "--json"];
+            all.extend_from_slice(args);
+            let refused = run(root.path(), &all);
+            assert_eq!(refused.code, Some(2), "{verb} {args:?}: {refused:?}");
+            let value = envelope(&refused);
+            assert_eq!(value["error"]["code"], "cli.usage", "{verb} {args:?}");
+            assert_eq!(value["command"], "", "{verb} {args:?}");
+        }
+    }
+    assert!(daemon.methods().is_empty(), "{:?}", daemon.methods());
+    ev.pass();
+}
+
+#[test]
+fn an_abandon_answered_no_or_cut_off_exits_9_and_sends_nothing() {
+    let ev = evidence!(
+        covers = ["REQ-054", "REQ-028"],
+        kind = Kind::Fixture,
+        expected = "AC-5, AC-15: on a terminal, an abandon answered n, anything else, or end of input fails cli.confirmation_declined with exit 9 and operation.abandon never reaches the daemon; only y or yes in any case goes on",
+    );
+    let root = TestRoot::new().unwrap();
+    let daemon = recovering(&root);
+    let tty = PtyOptions {
+        stdin_tty: true,
+        ..PtyOptions::default()
+    };
+
+    for input in ["n\n", "maybe\n", "\u{4}"] {
+        let declined = run_in_pty(
+            root.path(),
+            &["operation", "abandon", &id()],
+            &PtyOptions {
+                input: Some(input),
+                ..tty.clone()
+            },
+        );
+        assert_eq!(declined.code, Some(9), "{input:?}: {declined:?}");
+        assert!(
+            declined.stderr.contains("code: cli.confirmation_declined"),
+            "{input:?}: {}",
+            declined.stderr
+        );
+        assert_eq!(declined.stdout, "", "{input:?}");
+    }
+    assert!(
+        !daemon
+            .methods()
+            .iter()
+            .any(|method| method == "operation.abandon"),
+        "{:?}",
+        daemon.methods()
+    );
+
+    let upper = run_in_pty(
+        root.path(),
+        &["operation", "abandon", &id()],
+        &PtyOptions {
+            input: Some("YES\n"),
+            ..tty
+        },
+    );
+    assert_eq!(upper.code, Some(0), "{upper:?}");
+    ev.pass();
+}
