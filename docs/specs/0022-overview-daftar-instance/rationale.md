@@ -155,3 +155,24 @@ Diterapkan sesi `upd-0019-0022-0023` dari *Usulan update spec lain* spec 0021 (s
 
 ID AC dan status spec ini tidak berubah.
 
+
+## Penyelarasan 2026-10-20 (keputusan K foundation)
+
+Update `/architect` yang menyelaraskan spec ini dengan keputusan lead foundation K1 sampai K18 (`foundation-k-decisions.md`) dan update spec foundation yang sudah di main (0004, 0006, dan 0010), dari daftar lead `docs/scope/coordination/02-instalasi-pertama.penyelarasan-k.md` (bagian *0022* dan *Cross-cutting*). Ini perubahan teks saja; ID AC, status `Proposed`, dan nomor langkah build tidak berubah.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Field instance | `ownership` dan `initialized` kini dibangun langkah 12 spec 0010 (dengan default, nilai asing, dan fixture) dan diisi langkah 13 spec itu; AC-12, langkah 3, langkah 4, milestone 1, test kontrak, *Kepemilikan*, *Batas*, *Consequences*, dan *Usulan update spec lain* tidak lagi menambahkannya | K4 butir 2 dan 3; spec 0010 di main |
+| Versi protokol | minor diambil sebagai `CURRENT` di main ditambah 1 saat merge, codegen diulang saat rebase | K4 butir 1 |
+| Prasyarat milestone | milestone 1 hanya butuh langkah 12 spec 0010 (DTO), karena pemetaan field pindah ke langkah 13; milestone 2 kini menyebut langkah 13 spec 0010 sendiri (handler instance dan `install_fake` untuk binary test) | turunan K4 |
+| `InstanceStore` | aturan K16 (efek observasi `statusSeq` tanpa revision, reset batas saat `server_restarted`, penyaringan retained di `fetchPage`, `fetchOne`, dan `reduce`, `limit` 200, pemetaan `instance.removed`) milik langkah 16 spec 0013; kata `.patch` dengan revision sama diganti; langkah 6 tidak lagi membangun penyaringan retained dan `limit` 200; `itemFailures` dan `retry` datang setelah langkah 16 karena sama sama mengubah `ResourceStore.swift`, dan retry yang `fetchOne` nya nil menjadi delete | K16 (a), (b), (c), SEQ 4, 6, dan 7, risiko `statusSeq` per run |
+| `NewInstanceAction` | langkah 16 spec 0013 tidak mendefinisikannya; yang lebih dulu di merge di antara langkah 6 spec ini dan langkah 14 milestone 3 spec 0020 mendefinisikan environment key nya | K17 |
+| `MainWindowRoot` | `AppShell` tetap membuat `ShellNavigator`; langkah 6 tidak berjalan bersamaan dengan langkah 2 milestone 1 spec 0016 | K18 |
+| Rantai GUI | catatan bahwa milestone 3 menunggu langkah 16 spec 0013, yang menunggu milestone 2 fitur 10; aturan observasi per jenis yang umum milik store fase 02 pertama yang mengirim observasi seperti itu (`CatalogStore` atau `RuntimeStore`), bukan spec ini | risiko K18 (*Cross-cutting* lead) |
+| `volume_space` | error `PlatformError` (bukan `FsError`); `available_space` spec 0018 adalah provided method di atasnya dan `volume_facts` spec 0020 berbagi helper `statfs`, jadi yang pertama di merge membangun helper dan `volume_space`, dan langkah 1 hanya menambah yang belum ada | spec 0004 di main |
+| Area `storage` | tercatat di tabel area spec 0006; aturan hint `codes::<area>::hint` sudah berlaku | spec 0006 di main |
+| Copy kegagalan | baris `quarantined` dan `binary_rejected_by_os` untuk `FailureCode` baru fitur 18 | K7 butir 5; spec 0010 di main |
+| Capability | Start, Stop, dan Retry tidak bergantung capability, jadi spec ini tidak menambah capability ke `InstanceSummary` | spec 0012 di main (capability instance lewat `InstanceSummary` fitur 21 atau 22 saat dibutuhkan) |
+| Follow-up dan usulan | usulan spec 0010, 0004, dan 0006 ditandai sudah di main; usulan spec 0013 ditandai sebagian digantikan K16 dan K17; baris fitur 20 menunjuk ke langkah 12 spec 0010 dan langkah 16 spec 0013 | semua butir di atas |
+
+Teks copy untuk dua kode kegagalan baru adalah pilihan spec ini, karena spec 0018 hanya menetapkan pesan error wire nya. Tidak ada keputusan yang dibiarkan terbuka; tidak ada konflik dengan keputusan K yang perlu dikembalikan ke lead.
