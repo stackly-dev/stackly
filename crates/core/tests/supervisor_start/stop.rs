@@ -6,7 +6,9 @@
 use std::time::Duration;
 
 use stackly_core::supervisor::codes;
-use stackly_domain::{DesiredState, InstanceId, InstanceLifecycle, OperationState, Pid};
+use stackly_domain::{
+    DesiredState, InstanceId, InstanceLifecycle, OperationKind, OperationState, Pid,
+};
 use stackly_platform::{ChildRole, ExitStatus, ProcessFacts, ProviderSignal};
 use stackly_testkit::ProcessOp;
 use stackly_testkit::evidence::{Kind, evidence};
@@ -118,6 +120,44 @@ async fn a_stop_past_its_budget_fails_keeps_stopping_and_the_exit_ends_it_later(
             .calls()
             .iter()
             .all(|call| call.force != Some(true))
+    );
+}
+
+#[tokio::test]
+async fn a_stop_that_finds_its_process_already_gone_after_the_lock_ends_stopped() {
+    let rig = Rig::patched(|text| replace(text, "stopSeconds: 10", "stopSeconds: 1")).await;
+    let id = rig.instance(&Spec::default());
+    let spawn = running(&rig, id).await;
+    let first = rig.stop(id).await;
+    let detail = rig.wait_state(first, OperationState::Failed).await;
+    assert_eq!(Rig::failure_code(&detail), codes::STOP_TIMEOUT.to_string());
+    assert_eq!(
+        rig.instance_row(id).lifecycle(),
+        InstanceLifecycle::Stopping
+    );
+    // The second stop has read the instance `stopping` when it waits at the
+    // door of its `lock` stage; the process exits and its exit is handled
+    // to the end while it waits.
+    let door = rig.registry.hold_stage(OperationKind::StopInstance, "lock");
+    let second = rig.stop(id).await;
+    wait_for("the second stop reaches the lock stage", || door.entered()).await;
+
+    rig.kill_servers();
+    rig.processes().exit(spawn.pid, Some(ExitStatus::Exited(0)));
+    wait_for("the exit is handled to the end", || {
+        rig.instance_row(id).lifecycle() == InstanceLifecycle::Stopped
+            && rig.sup.status(id).process.is_none()
+    })
+    .await;
+    door.release();
+
+    rig.wait_state(second, OperationState::Succeeded).await;
+    assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(rig.instance_row(id).desired(), DesiredState::Stopped);
+    assert_eq!(
+        rig.processes().signals(spawn.pid),
+        [ProviderSignal::Term],
+        "the second stop signalled nothing"
     );
 }
 
