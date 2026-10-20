@@ -11,7 +11,8 @@ use stackly_protocol::instance::{
     EndpointPortMode, InstanceDesired, InstanceHealthState, InstanceLifecycle,
     InstanceReadinessState,
 };
-use stackly_protocol::operation::OperationState;
+use stackly_protocol::operation::{ListOperationsParams, OperationState};
+use stackly_protocol::{Call, Reply};
 use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::support::{Site, TOKEN};
@@ -51,6 +52,20 @@ async fn a_fake_instance_is_created_started_until_ready_and_stopped() {
     let id = api
         .create_ready("orders", json!({ "greeting": "hello from the test" }))
         .await;
+    let operations = api
+        .client
+        .call(Call::OperationList(ListOperationsParams::default()))
+        .await
+        .expect("the operations can be listed");
+    let Reply::OperationList(page) = operations else {
+        panic!("not an operation list");
+    };
+    let create = api.operation(page.items[0].id).await;
+    let create_stages: Vec<&str> = create.steps.iter().map(|step| step.name.as_str()).collect();
+    assert_eq!(
+        create_stages,
+        ["validate", "secrets", "layout", "register", "init"]
+    );
     let created = api.get(id).await.expect("the created instance can be read");
     assert_eq!(created.lifecycle, InstanceLifecycle::Stopped);
     assert_eq!(created.desired, InstanceDesired::Stopped);
@@ -84,6 +99,28 @@ async fn a_fake_instance_is_created_started_until_ready_and_stopped() {
         .wait_state(accepted.operation.id, OperationState::Succeeded)
         .await;
     assert_eq!(finished.operation.state, OperationState::Succeeded);
+    // The stages of the startup transaction, each a step of the operation.
+    let stages: Vec<&str> = finished
+        .steps
+        .iter()
+        .map(|step| step.name.as_str())
+        .collect();
+    assert_eq!(
+        stages,
+        [
+            "validate",
+            "lock",
+            "verify",
+            "endpoints",
+            "journal",
+            "render",
+            "spawn",
+            "identity",
+            "readiness",
+            "publish",
+            "complete"
+        ]
+    );
     let running = api
         .wait_instance(id, "ready", |summary| {
             summary.readiness.state == InstanceReadinessState::Ready

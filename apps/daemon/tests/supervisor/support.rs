@@ -13,7 +13,9 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 use stackly_core::supervisor::fixture::install_fake;
+use stackly_core::supervisor::{LogBatch, LogSink as SupervisorLogSink, SinkOutcome};
 use stackly_core::{PreparedLayout, daemon_info, prepare_layout};
+use stackly_domain::InstanceId;
 use stackly_domain::{Registry, WriteBatch, WriteOp};
 use stackly_ipc::{CallOptions, Client, ConnectPolicy};
 use stackly_platform::{Clock, Platform, SystemClock, UserId};
@@ -372,6 +374,26 @@ impl Api {
         }
     }
 
+    /// `instance.stop` that waits out `resource.busy`: the start operation
+    /// the daemon began after reconciliation may still hold the instance
+    /// for a moment after the instance reads ready.
+    pub async fn stop_when_free(&self, id: Uuid) -> InstanceActionAccepted {
+        let deadline = tokio::time::Instant::now() + PATIENCE;
+        loop {
+            match self.stop(id).await {
+                Ok(accepted) => return accepted,
+                Err(error) if error.code() == "resource.busy" => {
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "the instance stayed busy"
+                    );
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                Err(error) => panic!("the stop is refused: {error:?}"),
+            }
+        }
+    }
+
     /// `instance.get`.
     pub async fn get(&self, id: Uuid) -> Result<InstanceSummary, Box<ErrorBody>> {
         match self
@@ -535,4 +557,44 @@ pub fn shutdown_server(port: u16) {
     .expect("the request is written");
     let mut text = String::new();
     let _ = stream.read_to_string(&mut text);
+}
+
+/// A log sink that records every batch it is given (spec 0010 K5).
+#[derive(Default)]
+pub struct LogRecorder {
+    batches: std::sync::Mutex<Vec<(InstanceId, LogBatch)>>,
+}
+
+impl LogRecorder {
+    /// The number of lines recorded for the instance `id`.
+    pub fn lines_of(&self, id: Uuid) -> usize {
+        self.batches
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|(instance, _)| instance.as_uuid() == id)
+            .map(|(_, batch)| batch.lines.len())
+            .sum()
+    }
+
+    /// The text of every line recorded for the instance `id`.
+    pub fn text_of(&self, id: Uuid) -> Vec<String> {
+        self.batches
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|(instance, _)| instance.as_uuid() == id)
+            .flat_map(|(_, batch)| batch.lines.iter().map(|line| line.text.clone()))
+            .collect()
+    }
+}
+
+impl SupervisorLogSink for LogRecorder {
+    fn accept(&self, instance: InstanceId, batch: LogBatch) -> SinkOutcome {
+        self.batches
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((instance, batch));
+        SinkOutcome::Accepted
+    }
 }
