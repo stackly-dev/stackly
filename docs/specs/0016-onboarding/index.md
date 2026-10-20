@@ -48,9 +48,9 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang.
 | Bagian | Pemilik |
 | --- | --- |
 | Lima langkah, model dan record onboarding, `MainWindowRoot`, item menu Help, copy, kontrol Command Line di onboarding, `CommandLineToolPrompts` | spec ini |
-| `BackgroundAgentModel`, state agent, `AgentActionError`, `AgentTiming`, `CommandLineTool`, banner dan Diagnostics agent | spec 0015 (dipakai; tambahan kecil di *Usulan untuk spec lain*) |
+| `BackgroundAgentModel` (dengan `unavailableDetail`), state agent, `AgentActionError`, `AgentTiming`, `CommandLineTool`, `CommandLineToolModel`, `CommandLineToolPrompts` (teks dari spec ini), `UserHome`, banner dan Diagnostics agent | spec 0015 (dipakai) |
 | `CatalogStore`, `CatalogInfo`, teks nilai asing catalog | spec 0017 (dipakai apa adanya) |
-| Jendela utama, `ShellRuntime`, `DaemonModel`, presence, footer, `WindowOpener`, `MainWindowAccessor`, `@SceneStorage("shell.section")` | spec 0013 (dipakai; jendela utama kini bisa berisi onboarding) |
+| Jendela utama, `ShellRuntime`, `ShellBootstrap.live` dan `assemble`, `DaemonModel`, presence, footer, `WindowOpener`, `MainWindowAccessor`, `@SceneStorage("shell.section")` | spec 0013 (dipakai; `MainWindowRoot` menggantikan `LiveShell` sebagai isi jendela utama mulai langkah 2 spec ini, K18) |
 | Token, text style, `StatusLabel`, `DelayedProgress`, konfirmasi, `announce(_:)` | spec 0012 (dipakai apa adanya) |
 | Komponen umpan balik setelah aksi, komponen dasar lain | fitur 67 (opsional, dipakai kalau sudah ada) |
 | Snapshot dan audit aksesibilitas otomatis | fitur 68 |
@@ -70,7 +70,7 @@ Tidak ada schema, tidak ada DTO baru, dan tidak ada perubahan protokol. Satu pre
 
 - `OnboardingRecordStore` (protocol, `@MainActor`): `var isFinished: Bool { get }`, `func markFinished()`. `UserDefaultsOnboardingRecordStore` untuk produksi, `InMemoryOnboardingRecordStore` untuk test dan preview. Untuk run manual, argumen launch `-onboarding.finished NO` (domain argumen `UserDefaults`) menampilkan onboarding lagi tanpa menghapus apa pun.
 - `OnboardingStep` (enum `Int`, `CaseIterable`): `welcome`, `backgroundAgent`, `storage`, `catalogTrust`, `commandLine`, dengan `label` dari tabel *Copy*.
-- `OnboardingModel` (`@MainActor @Observable`, dimiliki `ShellRuntime`): `isPresented: Bool`, `step: OnboardingStep`, `next()`, `back()`, `go(to:)`, `present()`, `finish(_ reason: OnboardingFinish)` dengan `OnboardingFinish` `getStarted` atau `skipped`. Dibuat dengan `isPresented = !store.isFinished` dan `step = .welcome`. Store disuntik lewat `ShellRuntime.init(model:closeNotice:onboardingStore:)` dan `ShellBootstrap.live(rootOverride:clientVersion:now:onboardingStore:)`, keduanya dengan default `UserDefaultsOnboardingRecordStore()`; test memberi `InMemoryOnboardingRecordStore`.
+- `OnboardingModel` (`@MainActor @Observable`, dimiliki `ShellRuntime`): `isPresented: Bool`, `step: OnboardingStep`, `next()`, `back()`, `go(to:)`, `present()`, `finish(_ reason: OnboardingFinish)` dengan `OnboardingFinish` `getStarted` atau `skipped`. Dibuat dengan `isPresented = !store.isFinished` dan `step = .welcome`. Store disuntik lewat `ShellRuntime.init(model:closeNotice:onboardingStore:)`, `ShellBootstrap.live(rootOverride:clientVersion:now:onboardingStore:)`, dan `ShellBootstrap.assemble(...onboardingStore:)`, semuanya dengan default `UserDefaultsOnboardingRecordStore()`; test memberi `InMemoryOnboardingRecordStore`. `ShellRuntime` memegang `onboarding: OnboardingModel`.
 - `OnboardingFooter.primaryLabel(step: OnboardingStep, agentState: BackgroundAgentState?) -> String` (murni): "Get Started" untuk `commandLine`, "Not Now" untuk `backgroundAgent` saat `agentState` nil atau bukan `enabled`, selain itu "Continue". View memberi `BackgroundAgentModel.assessment?.state`; di milestone 1, sebelum model itu ada, nilainya nil.
 
 ### State onboarding
@@ -88,7 +88,8 @@ launch ──store.isFinished true──▶ hidden
 
 ### Tampilan di jendela utama
 
-- `MainWindowRoot` (`StacklyUI/Onboarding/`) menjadi isi `Window("Stackly", id: WindowOpener.mainWindowID)`: `OnboardingFlow` kalau `onboarding.isPresented`, selain itu `AppShell`, dengan `StacklyMotion.crossfade` spec 0012 (tetap dipakai saat Reduce Motion, sesuai aturan motion spec itu). `MainWindowAccessor`, penangkapan `@Environment(\.openWindow)` ke `WindowOpener`, pelaporan `windowWillClose`, dan `.frame(minWidth: 900, minHeight: 600)` pindah dari `AppShell` ke `MainWindowRoot`, supaya notice tutup jendela spec 0013 dan ukuran minimum tetap berlaku selama onboarding (dengan `.windowResizability(.contentMinSize)`). `@SceneStorage("shell.section")` tetap di `AppShell`.
+- `MainWindowRoot(runtime: ShellRuntime, windowWillClose: (NSWindow) -> Void)` (`StacklyUI/Onboarding/`) menggantikan `LiveShell` sebagai isi `Window("Stackly", id: WindowOpener.mainWindowID)` di `StacklyApp` (keputusan K18 foundation): `OnboardingFlow` kalau `runtime.onboarding.isPresented`, selain itu `AppShell`, dengan `StacklyMotion.crossfade` spec 0012 (tetap dipakai saat Reduce Motion, sesuai aturan motion spec itu). `MainWindowRoot` mengambil alih wiring `LiveShell` (presentation, diagnostics, `sidebarCounts`, `reconnect()`, dan `refreshDiagnostics()` dari `runtime.model` ke `AppShell`, plus `.environment(runtime.model)`), lalu `LiveShell` dihapus.
+- `MainWindowAccessor`, penangkapan `@Environment(\.openWindow)` ke `runtime.windowOpener`, pelaporan `windowWillClose`, dan `.frame(minWidth: 900, minHeight: 600)` pindah dari `AppShell` ke `MainWindowRoot`, supaya notice tutup jendela spec 0013 dan ukuran minimum tetap berlaku selama onboarding (dengan `.windowResizability(.contentMinSize)`). Init `AppShell` kehilangan parameter `windowOpener` dan `windowWillClose`. `AppShell.minimumSize` tetap ada dan `MainWindowRoot` memakainya untuk frame, sehingga `ShellLayoutTests` (penjaga layout `35f6bf6`) tetap meng host `AppShell` tanpa diubah. `@SceneStorage("shell.section")` tetap di `AppShell`.
 - `OnboardingFlow`: latar `StacklyColor.surfaceWindow`, kolom isi 520 pt di tengah dengan jarak antar elemen 14 pt, di dalam `ScrollView` vertikal supaya tidak terpotong di 900 × 600 pt, dan footer di bawah garis pemisah dengan titik, teks langkah, Back, dan tombol utama (`.borderedProminent`, `.keyboardShortcut(.defaultAction)`). Toolbar dan judul jendela disembunyikan (`.toolbar(removing: .title)`, `.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)`), jadi hanya tombol lampu lalu lintas yang terlihat seperti di mockup.
 - Judul Welcome `.largeTitle.bold()`, judul langkah lain `.title.bold()`, subjudul `.body` dengan `textSecondary` (baris tipografi spec 0012), judul baris `.body.weight(.semibold)`, teks kecil `.callout`, path dan perintah `.stacklyCode()`. Kartu dan daftar baris memakai `.cardSurface()`.
 - Item menu: `CommandGroup(after: .help) { Button("Welcome to Stackly") { … } }` di `StacklyApp`, memanggil `onboarding.present()` lalu `WindowOpener.openMain()`. Tanpa shortcut sampai fitur 69 memutuskan peta nya.
@@ -99,7 +100,7 @@ launch ──store.isFinished true──▶ hidden
 
 ### Langkah Welcome
 
-Ikon app dari `NSApplication.shared.applicationIconImage` 112 pt (dekoratif, `accessibilityHidden(true)`), judul, subjudul, lalu baris fitur dalam urutan Isolated instances, Verified runtimes (kalau tampil), No account needed. Ikon baris adalah tile 34 pt dengan `toneSurface(.neutral)` spec 0012 (tanpa token baru) berisi simbol: Isolated instances `SectionIcon(.instances)` dengan warna bagiannya, Verified runtimes `SectionIcon(.runtimes)`, No account needed simbol `laptopcomputer` dengan `textSecondary`. Semua ikon baris dekoratif.
+Ikon app dari `NSApplication.shared.applicationIconImage` 112 pt (dekoratif, `accessibilityHidden(true)`), judul, subjudul, lalu baris fitur dalam urutan Isolated instances, Verified runtimes (kalau tampil), No account needed. Ikon baris adalah tile 34 pt dengan `toneSurface(.neutral, on: .window, strength: .badge, in: RoundedRectangle(cornerRadius: Radius.small.value))` spec 0012 (fill 16% seperti mockup, tanpa token baru) berisi simbol: Isolated instances `SectionIcon(.instances)` dengan warna bagiannya, Verified runtimes `SectionIcon(.runtimes)`, No account needed simbol `laptopcomputer` dengan `textSecondary`. Semua ikon baris dekoratif.
 
 ### Fitur yang belum ada
 
@@ -117,7 +118,7 @@ Copy hanya menyebut kemampuan yang ada di build itu. Kalau kemampuan pemilik sud
 
 Satu kartu `.cardSurface()` dengan ikon status, judul, detail, dan aksi di kanan, dipilih dari baris pertama yang cocok. Fungsi murni `BackgroundAgentStepContent.make(assessment:unavailableDetail:status:connectionErrorCode:now:lastError:isWorking:)` menghasilkan isinya, dengan masukan:
 
-- `assessment`, `unavailableDetail`, `lastError`, `isWorking` dari `BackgroundAgentModel` (spec 0015; `unavailableDetail` adalah tambahan yang diusulkan di *Usulan untuk spec lain*).
+- `assessment`, `unavailableDetail`, `lastError`, `isWorking` dari `BackgroundAgentModel` (spec 0015, termasuk `unavailableDetail` yang ditambahkan di sana dari spec ini).
 - `status` dari `ShellPresentation.status` spec 0013 (`ShellStatus`, yang membawa `.unreachable(lastKnownAt:since:)`), sehingga `since` punya sumber.
 - `connectionErrorCode` dari `DaemonModel.lastError?.code` (spec 0013).
 - `now` dari jam yang disuntik. Kartu dibungkus `TimelineView(.explicit([since + AgentTiming.startGrace]))` selama status `.unreachable`, supaya baris berganti tepat di detik ke 15 tanpa menunggu polling 5 detik.
@@ -158,8 +159,8 @@ Satu kartu `.cardSurface()` dengan ikon status, judul, detail, dan aksi di kanan
 | tanpa override, selain itu (`roots` nil, atau `roots.rootOverride` true dari daemon lain) | Data `~/Library/Application Support/Stackly`, Cache `~/Library/Caches/Stackly`, Logs `~/Library/Logs/Stackly` dari `StorageLocations.defaults(home:)`, Secrets "Login Keychain" |
 | override aktif | subjudul varian override; satu baris "Folders" dengan teks "STACKLY_ROOT is set, so stacklyd keeps data, cache, and logs inside that folder.", lalu Secrets "A keychain file inside that folder" (spec 0011 AC-2) |
 
-- `home` dari `UserHome.current()` (`StacklyUI/Agent/`, `getpwuid_r(getuid())`, tidak pernah `HOME`), helper yang juga dipakai `LaunchRecordReader` dan `CommandLineTool` (diusulkan ke spec 0015). Path ditulis dengan `~` hanya kalau sama dengan home (menjadi `~`) atau diawali home ditambah `/` (awalan itu menjadi `~/`); path lain, termasuk `/Users/ab/…` untuk home `/Users/a`, ditulis utuh. Nilai path bisa dipilih (`textSelection(.enabled)`) dan dibungkus tanpa terpotong.
-- `roots` dari `DaemonModel.lastDaemon?.info?.roots` (daemon terakhir yang diketahui, spec 0013). `rootOverride` dari nilai yang sudah diteruskan target app ke `ShellBootstrap` (spec 0013).
+- `home` dari `UserHome.current()` (spec 0015, `StacklyUI/Agent/`, `getpwuid_r(getuid())`, tidak pernah `HOME`), dan penulisan `~` lewat `UserHome.tildePath(_:home:)` spec 0015: `~` hanya kalau path sama dengan home (menjadi `~`) atau diawali home ditambah `/` (awalan itu menjadi `~/`); path lain, termasuk `/Users/ab/…` untuk home `/Users/a`, ditulis utuh. Kalau `UserHome` belum ada saat langkah 3 dibangun (milestone 3 fitur 15 belum masuk), langkah 3 membuatnya persis seperti spec 0015 dan fitur 15 memakainya. Nilai path bisa dipilih (`textSelection(.enabled)`) dan dibungkus tanpa terpotong.
+- `roots` dari `DaemonModel.lastDaemon?.info?.roots` (daemon terakhir yang diketahui, spec 0013). `rootOverride` dari `runtime.model.rootOverrideActive`: Bool baca saja di `DaemonModel` yang diisi `ShellBootstrap.assemble` sekali dari argumen `rootOverride` yang sudah ada (`rootOverride != nil`), tanpa parameter baru di `live` atau `assemble` (K18). `BackgroundAgentModel` memakai Bool yang sama untuk `classify`, dan Bool itu masuk di milestone mana pun yang memakainya lebih dulu (milestone 3 fitur 15 atau langkah 2 spec ini). `StacklyUI` tidak pernah membaca `ProcessInfo.environment`, dan nilainya tidak pernah tampil.
 
 ### Baris Catalog Trust
 
@@ -178,11 +179,11 @@ Satu kartu `.cardSurface()` dengan ikon status, judul, detail, dan aksi di kanan
 - `{tanggal}` gaya `.abbreviated` locale dan zona waktu sistem, sama dengan subjudul Catalog spec 0017.
 - `runtimeInstallAvailable` adalah konstanta build di `OnboardingCopy` (lihat *Fitur yang belum ada*), bukan pemeriksaan saat berjalan.
 - Judul langkah "Catalog sources", subjudul "Providers describe how to install and run each server. Only trusted sources appear in the catalog.", dan catatan trust di bawah baris dari tabel *Copy*.
-- Data dari `CatalogStore` milik `DaemonModel` (spec 0017); langkah ini tidak memanggil method apa pun sendiri.
+- Data dari `CatalogStore` milik `DaemonModel` (spec 0017); langkah ini tidak memanggil method apa pun sendiri. Ia hanya membaca `CatalogStore.info`, `error`, dan `unsupported`, jadi tidak bergantung pada aturan observasi untuk revision yang sama; aturan itu milik store fase 02 pertama yang menerbitkan observasi seperti itu (K18), bukan fitur ini.
 
 ### Kontrol Command Line
 
-State langkah ini ada di `CommandLineToolModel` (`@MainActor @Observable`, `StacklyUI/Agent/`, dimiliki `ShellRuntime`, dipakai juga oleh `CommandLineToolSection` spec 0015; diusulkan di *Usulan untuk spec lain*): `status`, `bundledTool: URL?` (dari `CommandLineTool.bundledTool`, nil kalau `<bundle>/Contents/MacOS/stackly` tidak ada atau bukan file executable), `lastError`, `isWorking`, `pendingPrompt: ConfirmationRequest?`, dan `refresh()`, `requestInstall()`, `requestRepair()`, `requestRemove()` yang hanya mengisi `pendingPrompt`. Hanya tombol aksi di prompt yang memanggil `CommandLineTool`. `refresh()` dipanggil saat langkah muncul, setelah setiap aksi, dan dari `ShellRuntime.didBecomeActive()`.
+State langkah ini ada di `CommandLineToolModel` (`@MainActor @Observable`, `StacklyUI/Agent/`, dimiliki `ShellRuntime`, dipakai juga oleh `CommandLineToolSection`; didefinisikan di spec 0015): `status`, `bundledTool: URL?` (dari `CommandLineTool.bundledTool`, nil kalau `<bundle>/Contents/MacOS/stackly` tidak ada atau bukan file executable), `lastError`, `isWorking`, `pendingPrompt: ConfirmationRequest?`, dan `refresh()`, `requestInstall()`, `requestRepair()`, `requestRemove()` yang hanya mengisi `pendingPrompt`. Hanya tombol aksi di prompt yang memanggil `CommandLineTool`. `refresh()` dipanggil saat langkah muncul, setelah setiap aksi, dan dari `ShellRuntime.didBecomeActive()`.
 
 `CommandLineStepContent.make(status:bundledTool:lastError:)` (murni). Status menentukan baris; `bundledTool` nil hanya menonaktifkan Install dan Repair dengan alasan "This build doesn’t include the stackly command. Build the app with cargo xtask build-app.", sedangkan toggle tetap menunjukkan status sebenarnya dan Remove tetap bisa.
 
@@ -239,7 +240,7 @@ Semua teks di `OnboardingCopy.swift`. Teks kartu, baris catalog, dan kontrol Com
 | `OnboardingModel.present()`, `next()`, `back()`, `go(to:)`, `finish(_:)` | method model | langkah, alasan selesai | `isPresented`, `step` | `MainWindowRoot`, menu Help | tidak ada |
 | `OnboardingRecordStore.isFinished`, `markFinished()` | protocol | | Bool | `OnboardingModel` | tidak ada (`UserDefaults` tidak melempar) |
 | `OnboardingFooter.primaryLabel(step:agentState:)`, `BackgroundAgentStepContent.make`, `StorageContent.make`, `CatalogTrustContent.make`, `CommandLineStepContent.make`, `StorageLocations.defaults(home:)` | fungsi murni | state dari model lain | label dan isi tampilan | view langkah, test | tidak ada |
-| `CommandLineToolModel.refresh()`, `requestInstall()`, `requestRepair()`, `requestRemove()` | method model (usulan ke spec 0015) | | `status`, `pendingPrompt`, `lastError` | langkah Command Line, `CommandLineToolSection`, `ShellRuntime` | error `CommandLineTool` di `lastError` |
+| `CommandLineToolModel.refresh()`, `requestInstall()`, `requestRepair()`, `requestRemove()` | method model (spec 0015) | | `status`, `pendingPrompt`, `lastError` | langkah Command Line, `CommandLineToolSection`, `ShellRuntime` | error `CommandLineTool` di `lastError` |
 | Tombol kartu Background Agent | aksi pengguna | | memanggil `BackgroundAgentModel` | pengguna | `AgentActionError` di bawah kartu |
 | Toggle dan Repair Command Line | aksi pengguna lewat konfirmasi | | tombol prompt memanggil `CommandLineTool` | pengguna | error `CommandLineTool` di bawah baris |
 | Menu Help "Welcome to Stackly" | perintah menu | | onboarding tampil | pengguna | tidak ada |
@@ -258,19 +259,19 @@ Tidak ada method IPC, event, kode error wire, atau perintah CLI baru.
 | kartu agent | presence dan `since` | `ShellPresentation.status` (`ShellStatus.unreachable(lastKnownAt:since:)`, spec 0013) |
 | kartu agent | kode error koneksi | `DaemonModel.lastError?.code` (spec 0013) |
 | kartu agent | ambang 15 detik dan saat berganti | `AgentTiming.startGrace` (spec 0015), lewat `TimelineView(.explicit(...))` |
-| kartu agent | teks `{detail}` | `BackgroundAgentModel.unavailableDetail` (usulan ke spec 0015, aturan banner `unavailable` lain) |
+| kartu agent | teks `{detail}` | `BackgroundAgentModel.unavailableDetail` (spec 0015) |
 | kartu agent | status daemon | `ShellPresentation.footer` (spec 0013) |
 | kartu agent | Last error, sedang bekerja | `BackgroundAgentModel.lastError`, `isWorking` |
 | Storage | path daemon | `DaemonModel.lastDaemon?.info?.roots` |
 | Storage | path default | `StorageLocations.defaults(home:)`, tabel macOS default spec 0004 |
-| Storage | home dan `~` | `UserHome.current()` (usulan ke spec 0015), batas komponen path |
-| Storage | override aktif, nilai Secrets dan subjudul | `rootOverride` yang diteruskan target app ke `ShellBootstrap` (spec 0013); keychain file dari spec 0011 AC-2 |
+| Storage | home dan `~` | `UserHome.current()` dan `UserHome.tildePath(_:home:)` (spec 0015) |
+| Storage | override aktif, nilai Secrets dan subjudul | `DaemonModel.rootOverrideActive`, diisi `ShellBootstrap.assemble` dari `rootOverride != nil` (K18); keychain file dari spec 0011 AC-2 |
 | Catalog Trust | sumber, trust, revision, tanggal, outdated | `CatalogStore.info` (`CatalogInfo`, spec 0017) |
 | Catalog Trust | error dan unsupported | `CatalogStore.error`, `CatalogStore.unsupported` (spec 0017) |
 | Catalog Trust | format tanggal | `.abbreviated`, locale dan zona waktu sistem, seperti spec 0017 |
 | Catalog Trust, Welcome | kalimat runtime terverifikasi | konstanta build `OnboardingCopy.runtimeInstallAvailable` (*Fitur yang belum ada*) |
-| Command Line | status, prompt, error | `CommandLineToolModel` (usulan ke spec 0015) di atas `CommandLineTool.status()` |
-| Command Line | CLI di bundle ada | `CommandLineTool.bundledTool` (usulan ke spec 0015) |
+| Command Line | status, prompt, error | `CommandLineToolModel` (spec 0015) di atas `CommandLineTool.status()` |
+| Command Line | CLI di bundle ada | `CommandLineTool.bundledTool` (spec 0015) |
 | Command Line | path bundle | `Bundle.main.bundleURL` |
 | Command Line | baris PATH | konstanta spec 0015 |
 | Command Line | contoh perintah | `OnboardingCopy.commandExamples` |
@@ -337,33 +338,31 @@ Dicatat sebagai evidence manual (spec 0002), kind `native`, status awal `NOT_RUN
 
 ### Usulan untuk spec lain
 
-Spec ini tidak mengedit spec lain. Teks berikut adalah usulan untuk pemilik masing masing lewat `/architect` update atau `/sync`, sebaiknya di commit yang sama dengan langkah build yang mengubah perilakunya.
+Spec ini tidak mengedit spec lain. Baris di bawah adalah usulan untuk pemilik masing masing lewat `/architect` update atau `/sync`. Baris 0013 yang bertanda K18 ditulis oleh build fitur ini di commit langkah 2, karena di commit itulah perilakunya berubah; update 0013 yang dijalankan lead setelah f13-wiring di-merge hanya menulis `LiveShell` dan `ShellBootstrap.assemble` seperti yang dibangun.
 
 | Spec | Bagian | Usulan |
 | --- | --- | --- |
-| 0013 | *Shell jendela* | isi `Window` utama menjadi `MainWindowRoot` (fitur 16), yang menampilkan onboarding atau `AppShell`; `MainWindowAccessor`, penangkapan `openWindow`, `windowWillClose`, dan `.frame(minWidth: 900, minHeight: 600)` pindah ke `MainWindowRoot`; item menu Help "Welcome to Stackly" |
-| 0013 | *Model shell di main actor* | `ShellRuntime.init(model:closeNotice:onboardingStore:)` dan `ShellBootstrap.live(rootOverride:clientVersion:now:onboardingStore:)` dengan default `UserDefaultsOnboardingRecordStore()`; `ShellRuntime` memegang `OnboardingModel` dan `CommandLineToolModel`, dan `didBecomeActive()` juga memanggil `CommandLineToolModel.refresh()` |
-| 0013 | *Model data* dan *Key invariants* | kalimat "Fitur ini tidak menyimpan state ke disk" dan invariant bahwa shell dan client tidak menulis state ke disk ditambah pengecualian: fitur 16 menyimpan satu preferensi `onboarding.finished` di `UserDefaults` |
-| 0015 | *GUI*, `BackgroundAgentModel` | properti `unavailableDetail: String?` ("timed out" untuk `Failed { code: None }`, "error {code}" untuk kode yang ada, "unknown status {value}" untuk `Unrecognized`, nil selain itu), dipakai banner `unavailable` lain dan kartu onboarding, supaya `{detail}` punya satu sumber |
-| 0015 | *GUI*, `CommandLineToolSection` | state dari `CommandLineToolModel` (`@MainActor @Observable`, `StacklyUI/Agent/`, dimiliki `ShellRuntime`: `status`, `bundledTool`, `lastError`, `isWorking`, `pendingPrompt`, `refresh()`, `requestInstall()`, `requestRepair()`, `requestRemove()`); konfirmasi memakai `CommandLineToolPrompts` dari spec 0016; penanda menjadi `// provisional: F32` |
-| 0015 | *Instalasi CLI* | `CommandLineTool.bundledTool: URL?` (nil kalau `<bundle>/Contents/MacOS/stackly` tidak ada atau bukan executable); di Diagnostics juga, nil hanya menonaktifkan Install dan Repair dengan alasan, dan Remove tetap bisa |
-| 0015 | *GUI* dan *Instalasi CLI* | `UserHome.current()` di `StacklyUI/Agent/` (`getpwuid_r(getuid())`) sebagai satu helper home untuk `LaunchRecordReader`, `CommandLineTool`, dan langkah Storage |
+| 0013 | *Shell jendela* (K18: teks ini ditulis di commit langkah 2 spec ini, bukan di update 0013 setelah f13-wiring) | `MainWindowRoot(runtime:windowWillClose:)` menggantikan `LiveShell` sebagai isi `Window` utama dan menampilkan onboarding atau `AppShell`; `MainWindowAccessor`, penangkapan `openWindow`, `windowWillClose`, dan `.frame(minWidth: 900, minHeight: 600)` pindah ke `MainWindowRoot`; init `AppShell` tanpa `windowOpener` dan `windowWillClose`, `AppShell.minimumSize` tetap; item menu Help "Welcome to Stackly" |
+| 0013 | *Model shell di main actor* (K18: ditulis di commit langkah 2) | `ShellRuntime.init(model:closeNotice:onboardingStore:)`, `ShellBootstrap.live(rootOverride:clientVersion:now:onboardingStore:)`, dan `assemble(...onboardingStore:)` dengan default `UserDefaultsOnboardingRecordStore()`; `ShellRuntime` memegang `OnboardingModel` dan `CommandLineToolModel`, dan `didBecomeActive()` juga memanggil `CommandLineToolModel.refresh()`; `DaemonModel.rootOverrideActive` (Bool baca saja dari `rootOverride != nil` di `assemble`, tanpa parameter baru), kalau milestone 3 fitur 15 belum menambahkannya |
+| 0013 | *Model data* dan *Key invariants* (K18: ditulis di commit langkah 2) | kalimat "Fitur ini tidak menyimpan state ke disk" dan invariant bahwa shell dan client tidak menulis state ke disk ditambah pengecualian: fitur 16 menyimpan satu preferensi `onboarding.finished` di `UserDefaults` |
+| 0013 | *Batas dengan fitur lain* (update 0013 oleh lead setelah f13-wiring) | baris `MainWindowRoot` milik spec 0016, berlaku mulai langkah 2 spec ini; update itu sendiri hanya menulis `LiveShell` dan `ShellBootstrap.assemble` seperti yang dibangun |
+| 0015 | *GUI* dan *Instalasi CLI* | sudah diterapkan di spec 0015 di `main` (2026-10-20): `BackgroundAgentModel.unavailableDetail`, `CommandLineToolModel`, `CommandLineToolPrompts`, `CommandLineTool.bundledTool`, `UserHome.current()` dan `UserHome.tildePath(_:home:)`, dan penanda `CommandLineToolSection` `// provisional: F32`; tidak ada usulan 0015 yang tersisa |
 | 0015 | *Follow-up* | baris fitur 16 dijawab spec 0016 |
 
 ## Build plan
 
-Urutan mengikuti pendekatan Journey: onboarding adalah langkah pertama JOURNEY-01, jadi kerangka dan langkah yang tidak bergantung pada fitur lain dibangun lengkap lebih dulu, lalu tiga langkah yang memakai model fitur 15 dan 17 dibangun begitu model itu ada, dan bukti manual menutupnya. Semua milestone memakai token dan komponen fitur 12 (sudah dibangun, `ui-macos.md`). Milestone 1 butuh milestone "Wiring, instances, and operations" fitur 13 (`ui-macos.md`). Milestone 2 butuh milestone 3 fitur 15 (GUI dan instalasi CLI, spec 0015 langkah 10 sampai 12) dan langkah build 7 spec 0017 (`stackly provider list`, untuk blok contoh). Milestone 3 butuh `CatalogStore` dari langkah build 8 spec 0017. Milestone 2 dan 3 bisa berjalan sebagai dua sesi paralel karena tidak menyentuh file yang sama (kecuali `OnboardingCopy.swift`, yang dibagi per bagian dan digabung di milestone 4). Komponen fitur 67 dipakai kalau sudah ada, tidak ditunggu. Tambahan ke kode fitur 15 dan 13 (`unavailableDetail`, `CommandLineToolModel`, `bundledTool`, `UserHome.current()`, `onboardingStore`) dibangun di milestone fitur ini hanya setelah usulan nya diterima pemilik spec itu.
+Urutan mengikuti pendekatan Journey: onboarding adalah langkah pertama JOURNEY-01, jadi kerangka dan langkah yang tidak bergantung pada fitur lain dibangun lengkap lebih dulu, lalu tiga langkah yang memakai model fitur 15 dan 17 dibangun begitu model itu ada, dan bukti manual menutupnya. Semua milestone memakai token dan komponen fitur 12 (sudah dibangun, `ui-macos.md`). Milestone 1 butuh milestone "Wiring, instances, and operations" fitur 13 (`ui-macos.md`), dan langkah 2 baru dimulai setelah langkah 16 fitur 13 di-merge, karena keduanya mengubah `AppShell.swift`, `LiveShell.swift`, `StacklyApp.swift`, dan `ShellRuntime.swift` (K18); lewat langkah 16 itu, milestone 1 juga menunggu milestone 2 fitur 10 (`01-foundation.md`). Milestone 2 butuh milestone 3 fitur 15 (GUI dan instalasi CLI, spec 0015 langkah 10 sampai 12, yang sudah memuat `unavailableDetail`, `CommandLineToolModel`, `CommandLineToolPrompts`, `bundledTool`, dan `UserHome`) dan langkah build 7 spec 0017 (`stackly provider list`, untuk blok contoh). Milestone 3 butuh `CatalogStore` dari langkah build 9 spec 0017 (milestone 3 fitur 17). Milestone 2 dan 3 bisa berjalan sebagai dua sesi paralel karena tidak menyentuh file yang sama (kecuali `OnboardingCopy.swift`, yang dibagi per bagian dan digabung di milestone 4). Komponen fitur 67 dipakai kalau sudah ada, tidak ditunggu.
 
 **Milestone 1: kerangka onboarding, Welcome, dan Storage**
 
 1. `OnboardingStep`, `OnboardingRecordStore` dengan implementasi `UserDefaults` dan memori, `OnboardingModel`, `OnboardingFooter.primaryLabel` (dengan `agentState` nil), dan test model. Memenuhi **AC-1**, **AC-2**, **AC-3**.
-2. `MainWindowRoot`, pemindahan `MainWindowAccessor`, penangkapan `openWindow`, dan frame minimum dari `AppShell`, `onboardingStore` di `ShellRuntime` dan `ShellBootstrap`, `StacklyApp` memakai `MainWindowRoot`, item menu Help, Escape dan aksi escape VoiceOver, titik langkah, fokus dan pengumuman per langkah. Memenuhi **AC-1**, **AC-2**, **AC-3**, **AC-10**.
-3. `OnboardingFlow` dengan footer, langkah Welcome (dengan `runtimeInstallAvailable` sesuai *Fitur yang belum ada*), langkah Storage (`UserHome.current()`, `StorageLocations`, `StorageContent`, varian override), placeholder untuk tiga langkah lain yang hanya menampilkan judul dan subjudul langkahnya, `OnboardingCopy` untuk bagian ini, test copy, pindaian frasa terlarang, dan aturan sumber jaringan. Memenuhi **AC-4**, **AC-6**, **AC-9**, **AC-10**, **AC-11**.
+2. `MainWindowRoot(runtime:windowWillClose:)` menggantikan `LiveShell` di `StacklyApp` dan mengambil alih wiring nya (`LiveShell` dihapus), pemindahan `MainWindowAccessor`, penangkapan `openWindow`, dan frame minimum dari `AppShell` (init `AppShell` tanpa `windowOpener` dan `windowWillClose`, `AppShell.minimumSize` tetap sehingga `ShellLayoutTests` tetap lulus), `onboardingStore` di `ShellRuntime`, `live`, dan `assemble`, `DaemonModel.rootOverrideActive` kalau fitur 15 belum menambahkannya, item menu Help, Escape dan aksi escape VoiceOver, titik langkah, fokus dan pengumuman per langkah, plus teks spec 0013 bertanda K18 di *Usulan untuk spec lain* di commit yang sama. Memenuhi **AC-1**, **AC-2**, **AC-3**, **AC-10**.
+3. `OnboardingFlow` dengan footer, langkah Welcome (dengan `runtimeInstallAvailable` sesuai *Fitur yang belum ada*), langkah Storage (`StorageLocations`, `StorageContent`, varian override, dan `UserHome` dari spec 0015, dibuat di sini kalau milestone 3 fitur 15 belum masuk), placeholder untuk tiga langkah lain yang hanya menampilkan judul dan subjudul langkahnya, `OnboardingCopy` untuk bagian ini, test copy, pindaian frasa terlarang, dan aturan sumber jaringan. Memenuhi **AC-4**, **AC-6**, **AC-9**, **AC-10**, **AC-11**.
 
 **Milestone 2: Background Agent dan Command Line**
 
-4. `BackgroundAgentModel.unavailableDetail`, `BackgroundAgentStepContent` dan kartunya dengan `TimelineView`, label Not Now dari `assessment` nyata, test per baris dengan `FakeBackgroundAgentController`, kode error koneksi, dan jam yang disuntik. Memenuhi **AC-2**, **AC-5**.
-5. `CommandLineTool.bundledTool`, `CommandLineToolModel` (dimiliki `ShellRuntime`, dibaca ulang di `didBecomeActive()`), `CommandLineToolPrompts` (dipakai juga oleh `CommandLineToolSection`, penandanya menjadi `// provisional: F32`), `CommandLineStepContent`, toggle dengan konfirmasi, Repair, catatan PATH dengan Copy, blok contoh, dan test di home sementara. Memenuhi **AC-8**.
+4. `BackgroundAgentStepContent` dan kartunya dengan `TimelineView`, memakai `BackgroundAgentModel.unavailableDetail` dari fitur 15, label Not Now dari `assessment` nyata, test per baris dengan `FakeBackgroundAgentController`, kode error koneksi, dan jam yang disuntik. Memenuhi **AC-2**, **AC-5**.
+5. `CommandLineStepContent` di atas `CommandLineToolModel`, `CommandLineTool.bundledTool`, dan `CommandLineToolPrompts` dari fitur 15 (teks prompt dari tabel di spec ini), toggle dengan konfirmasi, Repair, catatan PATH dengan Copy, blok contoh, dan test di home sementara. Memenuhi **AC-8**.
 
 **Milestone 3: Catalog Trust**
 
@@ -394,18 +393,18 @@ Sesi paralel: langkah 1 dan 3 bisa dimulai bersamaan (3 memakai model dari 1 lew
 - Toggle yang bekerja lewat konfirmasi sedikit tidak biasa: toggle tidak langsung berubah saat diklik, baru setelah konfirmasi.
 - Copy berbeda dari mockup di beberapa tempat (isolasi, catalog, CLI, Environments), jadi mockup perlu catatan selisih sampai diperbarui.
 - `OnboardingCopy.commandExamples`, `runtimeInstallAvailable`, dan baris Welcome bergantung pada fitur lain menambah atau menyalakan barisnya; kalau fitur itu lupa, onboarding tetap jujur tetapi lebih sedikit isinya.
-- Beberapa tambahan kecil di kode fitur 13 dan 15 (`unavailableDetail`, `CommandLineToolModel`, `bundledTool`, `UserHome.current()`, `onboardingStore`) harus diterima pemilik spec itu dulu, jadi milestone 1 dan 2 bisa menunggu keputusan di luar spec ini.
+- Langkah 2 berbagi empat file dengan langkah 16 fitur 13, jadi milestone 1 menunggu langkah itu dan, lewat langkah itu, milestone 2 fitur 10 (K18); onboarding tidak bisa dibangun lebih awal dari shell yang lengkap.
 - Path Storage saat daemon belum pernah berjalan dihitung GUI dari aturan spec 0004 tanpa fixture bersama; kalau aturan itu berubah, dua tempat harus diubah.
 
 **Neutral**:
 
-- Jendela utama kini punya akar `MainWindowRoot`; `AppShell` tidak lagi memegang accessor jendela.
+- Jendela utama kini punya akar `MainWindowRoot`; `LiveShell` dihapus, dan `AppShell` tidak lagi memegang accessor jendela, `windowOpener`, atau `windowWillClose`.
 - Satu key `UserDefaults` baru di domain app.
 - Item menu Help ditambah sekarang dan dipindah ke peta perintah saat fitur 69 dibangun.
 
 ## Follow-up
 
-- [ ] Terapkan *Usulan untuk spec lain* (spec 0013 dan 0015) lewat pemilik masing masing saat langkah build terkait masuk.
+- [ ] Spec 0013: baris bertanda K18 di *Usulan untuk spec lain* ditulis di commit langkah 2; baris *Batas dengan fitur lain* lewat update 0013 lead setelah f13-wiring di-merge. Usulan untuk spec 0015 sudah diterapkan di `main`.
 - [ ] `docs/scope/ui-macos.md` *Selisih yang sudah diketahui* (lewat `/scope`), selisih mockup onboarding yang disengaja: Welcome memakai ikon app, bukan tile accent; baris "Isolated instances" memakai teks isolasi logis spec 0016, bukan "never touching each other’s data"; Catalog Trust berjudul "Catalog sources", tanpa toggle community dan tanpa "Signed manifests"; baris "Environments as files" serta contoh `stackly env up` dan `stackly doctor` (juga `stackly instance list`) belum tampil sampai fiturnya ada, dan "No account needed" mengisi tempatnya; toggle Command Line bekerja langsung lewat konfirmasi, bukan saat Get Started; tidak ada tombol Skip yang terlihat (Escape melewati).
 - [ ] Fitur 18: saat milestone 3 spec 0018 masuk, set `OnboardingCopy.runtimeInstallAvailable` ke true (baris Welcome "Verified runtimes" dan kalimat digest di Catalog Trust), kalau build fitur 16 sudah lebih dulu.
 - [ ] Fitur 22: tambahkan `stackly instance list` ke `OnboardingCopy.commandExamples` saat perintah itu dibangun.
