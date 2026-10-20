@@ -1,0 +1,50 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000505",
+    "reply": {
+      "type": "catalog.list_providers",
+      "content": {
+        "catalog": {
+          "revision": 1,
+          "publishedAt": "2026-10-20T01:26:00.000Z",
+          "loadedAt": "2026-10-20T02:00:00.000Z",
+          "contentSha256": "96901e019736132c739ccc054277190a935811e66cce3bc2e26caea1a7cb24f3",
+          "source": "registry",
+          "trust": "community",
+          "host": {
+            "os": "plan9",
+            "arch": "riscv64"
+          },
+          "outdated": false,
+          "invalidCount": 2
+        },
+        "items": [
+          {
+            "provider": "official/nats",
+            "revision": 1,
+            "displayName": "NATS Server",
+            "software": "nats",
+            "category": "observability",
+            "description": "NATS messaging server with JetStream, one server per instance.",
+            "state": "teleported",
+            "stateReason": "moon_phase",
+            "stateNote": null,
+            "providerRevision": "1.0.0",
+            "publisher": "Stackly",
+            "trust": "community",
+            "versions": [
+              "2.15.1"
+            ],
+            "versionCount": 1,
+            "licenses": [
+              "Apache-2.0"
+            ],
+            "mark": "Na",
+            "tile": "magenta"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000506",
+    "error": {
+      "code": "catalog.unavailable",
+      "category": "unavailable",
+      "message": "the provider catalog is not available",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "run stacklyd from Stackly.app or set STACKLY_CATALOG_DIR",
+      "details": [
+        {
+          "key": "reason",
+          "value": "not_configured"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

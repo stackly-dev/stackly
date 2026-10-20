@@ -1,0 +1,40 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000508",
+    "error": {
+      "code": "catalog.not_installable",
+      "category": "unsupported",
+      "message": "official/intelonly 2.15.1 can't be installed on macos-aarch64",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "builds exist only for the targets in availableTargets, and Stackly never runs another architecture",
+      "details": [
+        {
+          "key": "provider",
+          "value": "official/intelonly"
+        },
+        {
+          "key": "version",
+          "value": "2.15.1"
+        },
+        {
+          "key": "target",
+          "value": "macos-aarch64"
+        },
+        {
+          "key": "availableTargets",
+          "value": "macos-x86_64"
+        },
+        {
+          "key": "reason",
+          "value": "no_build_for_arch"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}
