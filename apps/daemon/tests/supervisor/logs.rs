@@ -15,6 +15,11 @@ use crate::support::{LogRecorder, Site, fast};
 /// The most a spool may hold in blocks at any sample (AC-12).
 const SPOOL_BLOCKS_MAX: u64 = 2 * 1024 * 1024;
 
+/// Logical size of the file at `path`, 0 when it does not exist.
+fn logical(path: &std::path::Path) -> u64 {
+    std::fs::metadata(path).map_or(0, |metadata| metadata.len())
+}
+
 /// Allocated bytes of the file at `path`, 0 when it does not exist.
 fn allocated(path: &std::path::Path) -> u64 {
     std::fs::metadata(path).map_or(0, |metadata| metadata.blocks() * 512)
@@ -48,9 +53,11 @@ async fn a_chatty_process_reaches_the_sink_and_its_spools_stay_under_2_mib() {
     // 25 seconds write more than 2 MiB to each spool.
     let started = Instant::now();
     let mut worst = 0;
+    let mut written = [0_u64; 2];
     while started.elapsed() < Duration::from_secs(25) {
-        for spool in &spools {
+        for (spool, written) in spools.iter().zip(&mut written) {
             worst = worst.max(allocated(spool));
+            *written = (*written).max(logical(spool));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
@@ -69,6 +76,12 @@ async fn a_chatty_process_reaches_the_sink_and_its_spools_stay_under_2_mib() {
     assert!(
         worst < SPOOL_BLOCKS_MAX,
         "a spool held {worst} bytes in blocks"
+    );
+    // The bound only means something when each spool really passed it: the
+    // logical size keeps growing while punch holes free the blocks.
+    assert!(
+        written.iter().all(|size| *size > SPOOL_BLOCKS_MAX),
+        "each spool must have been written past the bound, logical sizes {written:?}"
     );
     let lines = recorder.lines_of(id);
     assert!(lines > 40_000, "the sink saw {lines} lines");
