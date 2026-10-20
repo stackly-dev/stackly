@@ -1,0 +1,4 @@
+ÿINFO {"server_id":"NAW4DL7ZBBQAJHDOQGELAD2XI64N7QZQFOHC3FGJPWZ4OGUHRUANKT4I","server_name":"golden","version":"2.15.1","proto":1,"git_commit":"b2fd3ef","go":"go1.27.2","host":"127.0.0.1","port":56610,"headers":true,"max_payload":1048576,"jetstream":true,"client_id":6,"client_ip":"127.0.0.1","api_lvl":5,"xkey":"XBCD4DUNEBXI7NLGLAYPA2AZTQPVCCQBKOARHPZYVTPYYVWUEOARH2DZ"} 
+PONG
+MSG _INBOX.stackly.00112233445566778899aabbccddeeff 1 145
+{"type":"io.nats.jetstream.api.v1.account_info_response","error":{"code":503,"err_code":10039,"description":"JetStream not enabled for account"}}

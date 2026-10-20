@@ -425,7 +425,7 @@ impl Exchange {
 
     /// `SUB <inbox> 1` and `PUB $JS.API.INFO <inbox> 0` with its empty
     /// payload.
-    fn jetstream_request(&self) -> Vec<u8> {
+    pub(crate) fn jetstream_request(&self) -> Vec<u8> {
         format!(
             "SUB {inbox} 1\r\nPUB {JETSTREAM_INFO_SUBJECT} {inbox} 0\r\n\r\n",
             inbox = self.inbox

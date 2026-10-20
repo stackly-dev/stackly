@@ -1,6 +1,6 @@
 {
   "schema": "stackly.nats-transcripts/v1",
-  "source": "Recorded 2026-10-20 by the spec 0023 step 0 spike from nats-server 2.15.1 (nats-2.15.1-macos-aarch64, sha256 ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd, from the xtask runtime cache) on loopback, after sending the exact nats-readiness CONNECT and PING and, for JetStream, the SUB and PUB of $JS.API.INFO to _INBOX.stackly.00112233445566778899aabbccddeeff. Each file holds every byte the server sent on that connection.",
+  "source": "Recorded 2026-10-20 by the spec 0023 step 0 spike from nats-server 2.15.1 (nats-2.15.1-macos-aarch64, sha256 ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd, from the xtask runtime cache) on loopback, after sending the exact nats-readiness CONNECT and PING and, for JetStream, the SUB and PUB of $JS.API.INFO to _INBOX.stackly.00112233445566778899aabbccddeeff. Each file holds every byte the server sent on that connection. The synthetic-*.bin files are written by hand from those bytes (spec 0023 step 4) to seed the paths no recording reached: PING, +OK, and a later INFO in the middle, a $JS.API.INFO error reply, tls_required, and -ERR.",
   "transcripts": [
     {
       "file": "real-js-on.bin",
@@ -57,6 +57,38 @@
       "jetstream": false,
       "inbox": "00112233445566778899aabbccddeeff",
       "reason": "lame_duck"
+    },
+    {
+      "file": "synthetic-ping-ok-info.bin",
+      "server": "synthetic",
+      "serverName": "golden",
+      "jetstream": true,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": null
+    },
+    {
+      "file": "synthetic-js-api-error.bin",
+      "server": "synthetic",
+      "serverName": "golden",
+      "jetstream": true,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": "jetstream_unavailable"
+    },
+    {
+      "file": "synthetic-tls-required.bin",
+      "server": "synthetic",
+      "serverName": "golden",
+      "jetstream": false,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": "tls_required"
+    },
+    {
+      "file": "synthetic-unknown-operation.bin",
+      "server": "synthetic",
+      "serverName": "golden",
+      "jetstream": false,
+      "inbox": "00112233445566778899aabbccddeeff",
+      "reason": "protocol_error"
     }
   ]
 }

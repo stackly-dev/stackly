@@ -116,6 +116,49 @@ fn to_pong(jetstream: bool) -> String {
     format!("{}PONG\r\n", good_info(jetstream))
 }
 
+/// One transcript of `transcripts.json` after its replay.
+struct Replayed {
+    file: String,
+    jetstream: bool,
+    outcome: Outcome,
+}
+
+/// Replays every transcript in `transcripts.json` whose file name starts
+/// with `prefix` against its expectation, and checks its recorded result.
+fn replay_transcripts(prefix: &str) -> Vec<Replayed> {
+    let index: Value = serde_json::from_slice(
+        &fs::read(fixtures_dir().join("transcripts.json")).expect("transcripts.json"),
+    )
+    .expect("transcripts.json is JSON");
+    let transcripts = index["transcripts"].as_array().expect("transcripts list");
+    let mut replayed = Vec::new();
+    for entry in transcripts {
+        let file = entry["file"].as_str().expect("file");
+        if !file.starts_with(prefix) {
+            continue;
+        }
+        let jetstream = entry["jetstream"].as_bool().expect("jetstream");
+        assert_eq!(entry["serverName"], "golden");
+        assert_eq!(entry["inbox"], "00112233445566778899aabbccddeeff");
+        let bytes = fs::read(fixtures_dir().join(file)).expect("transcript file");
+        let outcome = run(&expect(jetstream), &bytes);
+        match entry["reason"].as_str() {
+            None => assert_ready(&outcome),
+            Some(reason) => assert_eq!(
+                failure(&outcome).0,
+                reason,
+                "{file} with jetstream {jetstream}"
+            ),
+        }
+        replayed.push(Replayed {
+            file: file.to_owned(),
+            jetstream,
+            outcome,
+        });
+    }
+    replayed
+}
+
 #[test]
 fn real_transcripts_from_nats_2_15_1_give_the_recorded_results() {
     let ev = evidence!(
@@ -123,38 +166,46 @@ fn real_transcripts_from_nats_2_15_1_give_the_recorded_results() {
         kind = Kind::Fixture,
         expected = "every byte nats-server 2.15.1 sent in the step 0 spike gives the recorded nats-readiness result, fed whole and in any chunk size",
     );
-    let index: Value = serde_json::from_slice(
-        &fs::read(fixtures_dir().join("transcripts.json")).expect("transcripts.json"),
-    )
-    .expect("transcripts.json is JSON");
-    let transcripts = index["transcripts"].as_array().expect("transcripts list");
-    assert_eq!(transcripts.len(), 7);
-    for entry in transcripts {
-        let file = entry["file"].as_str().expect("file");
-        let jetstream = entry["jetstream"].as_bool().expect("jetstream");
-        assert_eq!(entry["serverName"], "golden");
-        assert_eq!(entry["inbox"], "00112233445566778899aabbccddeeff");
-        let bytes = fs::read(fixtures_dir().join(file)).expect("transcript file");
-        let outcome = run(&expect(jetstream), &bytes);
-        match entry["reason"].as_str() {
-            None => {
-                assert_ready(&outcome);
-                let mut sent = connect_bytes();
-                if jetstream {
-                    sent.extend_from_slice(&jetstream_request());
-                }
-                assert_eq!(outcome.0, sent, "{file} with jetstream {jetstream}");
+    let replayed = replay_transcripts("real-");
+    assert_eq!(replayed.len(), 7);
+    for Replayed {
+        file,
+        jetstream,
+        outcome,
+    } in replayed
+    {
+        if outcome.1 == Some(Ok(())) {
+            let mut sent = connect_bytes();
+            if jetstream {
+                sent.extend_from_slice(&jetstream_request());
             }
-            Some(reason) => {
-                assert_eq!(
-                    failure(&outcome).0,
-                    reason,
-                    "{file} with jetstream {jetstream}"
-                );
-            }
+            assert_eq!(outcome.0, sent, "{file} with jetstream {jetstream}");
         }
     }
     ev.pass();
+}
+
+#[test]
+fn synthetic_seed_transcripts_give_their_recorded_results() {
+    let replayed = replay_transcripts("synthetic-");
+    assert_eq!(replayed.len(), 4);
+    let ping = replayed
+        .iter()
+        .find(|replay| replay.file == "synthetic-ping-ok-info.bin")
+        .expect("the PING transcript");
+    let mut sent = connect_bytes();
+    sent.extend_from_slice(b"PONG\r\n");
+    sent.extend_from_slice(&jetstream_request());
+    sent.extend_from_slice(b"PONG\r\n");
+    assert_eq!(ping.outcome.0, sent);
+    let error = replayed
+        .iter()
+        .find(|replay| replay.file == "synthetic-js-api-error.bin")
+        .expect("the API error transcript");
+    assert_eq!(
+        failure(&error.outcome).1,
+        "$JS.API.INFO error 503: JetStream not enabled for account"
+    );
 }
 
 #[test]
