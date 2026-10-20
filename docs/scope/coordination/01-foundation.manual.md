@@ -1,6 +1,6 @@
 # Langkah manual untuk user: `01-foundation`
 
-Empat langkah manual menahan F11 milestone 4 dan 6, serta F14 milestone 4 dan 5. Jalankan dari root repo di checkout utama (`main` ≥ `cdd1434`), di Terminal sungguhan dengan sesi GUI. Kirim hasilnya ke sesi lead. Lead meneruskannya ke sub sesi yang mengisi record di `evidence/manual/`.
+Lima langkah manual menahan F11 milestone 4 dan 6, serta F14 milestone 4 dan 5. Jalankan dari root repo di checkout utama (`main` ≥ `cdd1434`), di Terminal sungguhan dengan sesi GUI. Kirim hasilnya ke sesi lead. Lead meneruskannya ke sub sesi yang mengisi record di `evidence/manual/`.
 
 ## A. Deny dan Cancel di login Keychain (F11 langkah 7)
 
@@ -101,3 +101,13 @@ Satu baris di `docs/specs/0014-walking-skeleton/verify.md` Milestone 5 (bagian U
 4. Hentikan `stacklyd` (Ctrl+C di Terminal B), jalankan lagi, lalu ulangi start tanpa `</dev/null`. Start sekarang harus berhasil, dan baris `demo` di app menjadi Running.
 
 Yang dikirim: apakah baris app tetap Stopped di langkah 3, dan apakah start di langkah 4 berhasil.
+
+## E. Preview komponen secret di Xcode (F11 milestone 6, AC-19)
+
+Satu butir UI di `docs/specs/0011-secret-store-redaction/verify.md` Milestone 6.
+
+1. Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Secrets/SecretPreviews.swift` di Xcode.
+2. Lihat keempat `#Preview`: Secret field, Secret field dark, Secret entry sheet, dan Revealable secret text.
+3. Untuk tiap preview, catat apakah tampilannya terbaca di light dan dark, apakah status tidak hanya dibedakan lewat warna, dan apakah ada teks yang terpotong.
+
+Yang dikirim: catatan per preview, atau "semua baik".
