@@ -15,6 +15,7 @@
 
 mod common;
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -25,7 +26,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use stackly_protocol::instance::ListInstancesParams;
 use stackly_protocol::{Call, Reply};
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{FixtureCredential, Kind, evidence};
 use stackly_testkit::{
     CliOutput, CliRunner, ProcessTable, ReapGuard, SpawnedDaemon, TestRoot, cargo_bin,
     cargo_example, fake_server,
@@ -44,6 +45,8 @@ struct Rig {
     cli: CliRunner,
     runtime_id: String,
     revision: String,
+    /// Everything every CLI run of this rig wrote to stdout and stderr.
+    transcript: RefCell<String>,
     root: TestRoot,
 }
 
@@ -61,13 +64,32 @@ impl Rig {
             cli,
             runtime_id,
             revision,
+            transcript: RefCell::new(String::new()),
             root,
         }
     }
 
     /// Runs the CLI and returns its output; a hung run fails the test.
     fn run(&self, args: &[&str]) -> CliOutput {
-        self.cli.run(args).expect("stackly runs to the end")
+        let output = self.cli.run(args).expect("stackly runs to the end");
+        self.record(&output);
+        output
+    }
+
+    /// Runs the CLI with `stdin` and returns its output.
+    fn run_with_stdin(&self, args: &[&str], stdin: &[u8]) -> CliOutput {
+        let output = self
+            .cli
+            .run_with_stdin(args, stdin)
+            .expect("stackly runs to the end");
+        self.record(&output);
+        output
+    }
+
+    fn record(&self, output: &CliOutput) {
+        let mut transcript = self.transcript.borrow_mut();
+        transcript.push_str(&output.stdout);
+        transcript.push_str(&output.stderr);
     }
 
     /// Runs the CLI and returns the envelope.
@@ -86,6 +108,16 @@ impl Rig {
 
     /// `instance create <name> ...` with exactly the extra arguments.
     fn create_with(&self, name: &str, extra: &[&str]) -> (Option<i32>, Value) {
+        self.create_piped(name, extra, None)
+    }
+
+    /// [`create_with`](Self::create_with) with bytes on stdin.
+    fn create_piped(
+        &self,
+        name: &str,
+        extra: &[&str],
+        stdin: Option<&[u8]>,
+    ) -> (Option<i32>, Value) {
         let mut args = vec![
             "instance",
             "create",
@@ -100,7 +132,12 @@ impl Rig {
             "http=auto",
         ];
         args.extend_from_slice(extra);
-        self.json(&args)
+        let Some(stdin) = stdin else {
+            return self.json(&args);
+        };
+        let output = self.run_with_stdin(&args, stdin);
+        let envelope = output.json().expect("stackly writes one JSON envelope");
+        (output.code(), envelope)
     }
 
     fn get(&self, id: &str) -> Value {
@@ -214,6 +251,73 @@ impl Rig {
             );
             std::thread::sleep(Duration::from_millis(100));
         }
+    }
+
+    /// Every file a secret value must stay out of, as lossy text: the
+    /// daemon log and stderr, the registry with its `-wal` and `-shm`, the
+    /// runtime root (spool files, not the `secrets/` folders the daemon
+    /// makes for the init helper), and the instance manifests. The config
+    /// and data folders are left out, since the template writes the token to
+    /// `fake.json`.
+    fn scanned_files(&self) -> Vec<(String, String)> {
+        let paths = daemon_paths(&self.root);
+        let layout = &paths.layout;
+        let mut files = vec![layout.daemon_log_dir().join("stacklyd.log")];
+        let registry = layout.registry_db();
+        for suffix in ["", "-wal", "-shm"] {
+            let mut name = registry.clone().into_os_string();
+            name.push(suffix);
+            files.push(PathBuf::from(name));
+        }
+        files.extend(self.stderr_files());
+        let mut pending = vec![paths.runtime.clone()];
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if path.file_name().is_some_and(|name| name != "secrets") {
+                        pending.push(path);
+                    }
+                } else {
+                    files.push(path);
+                }
+            }
+        }
+        for entry in std::fs::read_dir(layout.instances_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            files.push(entry.path().join("instance-manifest.json"));
+        }
+        let log_dir = layout.daemon_log_dir();
+        for entry in std::fs::read_dir(&log_dir).into_iter().flatten().flatten() {
+            files.push(entry.path());
+        }
+        files.sort();
+        files.dedup();
+        files
+            .into_iter()
+            .filter(|path| path.is_file())
+            .map(|path| {
+                let bytes = std::fs::read(&path).unwrap_or_default();
+                (
+                    path.display().to_string(),
+                    String::from_utf8_lossy(&bytes).into_owned(),
+                )
+            })
+            .collect()
+    }
+
+    /// The `.stderr` files `SpawnedDaemon` left in the test root.
+    fn stderr_files(&self) -> Vec<PathBuf> {
+        std::fs::read_dir(self.root.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "stderr"))
+            .collect()
     }
 
     fn keychain_file(&self) -> PathBuf {
@@ -526,5 +630,121 @@ fn a_create_cut_off_by_sigkill_ends_needing_recovery_with_one_instance_and_no_st
         "{:?}",
         rig.processes_under_root()
     );
+    ev.pass();
+}
+
+#[test]
+fn the_fixture_credential_reaches_the_init_helper_and_leaves_no_trace_anywhere_else() {
+    let ev = evidence!(
+        covers = ["AC-016", "REQ-016"],
+        kind = Kind::Fixture,
+        expected = "a fixture credential sent through --secret authToken=stdin on create reaches the init helper (token.sha256 is its SHA-256) and its prefix is in no daemon log, stderr file, registry file with its WAL, spool, instance manifest, or CLI output of the run",
+    );
+    let rig = Rig::new();
+    let credential = FixtureCredential::new();
+    let mut piped = credential.value().as_bytes().to_vec();
+    piped.push(b'\n');
+
+    let (code, created) = rig.create_piped(
+        "secret",
+        &["--wait", "--secret", "authToken=stdin"],
+        Some(&piped),
+    );
+
+    assert_eq!(code, Some(0), "{created}");
+    let id = instance_id(&created);
+    let expected: String = Sha256::digest(credential.value().as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let recorded = std::fs::read_to_string(rig.data_dir(&id).join("token.sha256"))
+        .expect("the init helper wrote token.sha256");
+    assert_eq!(
+        recorded.trim(),
+        expected,
+        "the init helper recorded the digest of the token it was given"
+    );
+    let (code, started) = rig.json(&["instance", "start", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{started}");
+    let (code, stopped) = rig.json(&["instance", "stop", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{stopped}");
+
+    credential.assert_absent(&rig.transcript.borrow(), "the CLI output");
+    let files = rig.scanned_files();
+    assert!(
+        files.iter().any(|(name, _)| name.ends_with("stacklyd.log")),
+        "the daemon log is scanned: {:?}",
+        files.iter().map(|(name, _)| name).collect::<Vec<_>>()
+    );
+    assert!(
+        files
+            .iter()
+            .any(|(name, _)| name.ends_with("stackly.sqlite"))
+    );
+    for (name, text) in &files {
+        credential.assert_absent(text, name);
+    }
+    ev.pass_with(&format!("{} files scanned", files.len()));
+}
+
+/// `/usr/bin/security lock-keychain <file>`.
+fn lock_keychain(file: &Path) {
+    let output = Command::new("/usr/bin/security")
+        .arg("lock-keychain")
+        .arg(file)
+        .output()
+        .expect("security runs");
+    assert!(
+        output.status.success(),
+        "security lock-keychain failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn a_locked_file_keychain_blocks_the_start_with_needs_secret_until_the_daemon_restarts() {
+    let ev = evidence!(
+        covers = ["AC-016", "REQ-016"],
+        kind = Kind::Fixture,
+        expected = "with the file keychain of the root locked by security lock-keychain, a start through stackly without a terminal fails secret.needs_secret without a dialog, the instance stays stopped and get shows a needsSecret blocker, and after the daemon restarts the start succeeds and the blocker is gone",
+    );
+    let manager = Command::new("launchctl")
+        .arg("managername")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .unwrap_or_default();
+    if manager != "Aqua" {
+        ev.blocked(
+            &format!(
+                "no GUI login session (launchd manager `{manager}`), which locking a keychain needs"
+            ),
+            "the user of this Mac, logged in to a GUI session",
+        );
+        return;
+    }
+    let mut rig = Rig::new();
+    let (code, created) = rig.create("locked", &[]);
+    assert_eq!(code, Some(0), "{created}");
+    let id = instance_id(&created);
+    lock_keychain(&rig.keychain_file());
+
+    let (code, blocked) = rig.json(&["instance", "start", &id, "--wait"]);
+
+    assert_ne!(code, Some(0), "{blocked}");
+    assert_eq!(blocked["error"]["code"], "secret.needs_secret", "{blocked}");
+    let instance = rig.get(&id);
+    assert_eq!(instance["lifecycle"], "stopped", "{instance}");
+    assert_eq!(instance["blocker"]["type"], "needsSecret", "{instance}");
+    assert!(rig.servers(&id).is_empty());
+
+    rig.restart(Stop::Term);
+
+    let (code, started) = rig.json(&["instance", "start", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{started}");
+    assert_eq!(started["result"]["instance"]["lifecycle"], "running");
+    let instance = rig.get(&id);
+    assert!(instance["blocker"].is_null(), "{instance}");
+    let (code, stopped) = rig.json(&["instance", "stop", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{stopped}");
     ev.pass();
 }
