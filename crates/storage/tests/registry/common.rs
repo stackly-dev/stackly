@@ -20,7 +20,9 @@ use stackly_domain::{
 };
 use stackly_platform::{Clock, DirectoryLayout};
 use stackly_storage::{OpenOptions, OpenSummary, RegistryOpen, SqliteRegistry};
-use stackly_testkit::{BackupSeed, FakeClock, FakePlatform, RegistrySeed, TestRoot};
+use stackly_testkit::{
+    BackupSeed, FakeClock, FakePlatform, RegistrySeed, TestRoot, seeded_observation,
+};
 
 /// The app version the registry is opened with.
 const APP_VERSION: &str = "0.1.0-test";
@@ -397,13 +399,28 @@ impl RegistrySeed for SideSeed {
     }
 
     fn seed_observations(&self, instance: InstanceId, count: u32, at: Timestamp) {
+        let seeded = seeded_observation(instance, at);
+        let identity = &seeded.identity;
+        let executable = identity
+            .executable
+            .to_str()
+            .expect("the seeded executable is UTF-8")
+            .to_owned();
         self.run("process observations", |conn| {
             for _ in 0..count {
                 conn.execute(
                     "INSERT INTO process_observations (instance_id, pid, start_identity, \
-                     executable_identity, observed_at) VALUES (?1, 4242, 'start-1', \
-                     '/opt/stackly/bin/postgres', ?2)",
-                    (instance.to_string(), format!("{at:.9}")),
+                     executable_identity, boot_id, session_id, observed_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    (
+                        instance.to_string(),
+                        identity.pid.get(),
+                        identity.start.to_string(),
+                        &executable,
+                        identity.boot.to_string(),
+                        identity.session.to_string(),
+                        format!("{at:.9}"),
+                    ),
                 )?;
             }
             Ok(())

@@ -11,6 +11,8 @@ use crate::id::OperationId;
 use crate::instance::Instance;
 use crate::lease::Lease;
 use crate::operation::{CreatedRecord, JournalStep, LockKey, Operation, OperationJournal};
+use crate::process::ProcessObservation;
+use crate::registry::config::ConfigRevisionRecord;
 use crate::registry::error::{RegistryError, ResourceRef};
 use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord};
 use crate::registry::secret::{
@@ -122,7 +124,10 @@ pub enum WriteOp {
     /// Records an instance, its endpoints, and its seven paths, which the
     /// registry derives from the ID.
     InsertInstance(Instance),
-    /// Rewrites an instance and its endpoints; its paths never change.
+    /// Rewrites an instance and its endpoints; its paths and its active
+    /// config revision never change. Several updates of one instance may
+    /// follow each other in a batch, each `expected` the revision the op
+    /// before it wrote.
     UpdateInstance {
         /// The instance after the change.
         instance: Instance,
@@ -243,6 +248,19 @@ pub enum WriteOp {
     /// Records an audit row. Fails with `DuplicateResource` when its ID
     /// exists; the resource is not checked, so history outlives it.
     InsertAuditEvent(AuditEventRecord),
+    /// Records one observation of an instance's process (spec 0010), with
+    /// no revision. Fails with `NotUtf8Path` for an executable path that
+    /// is not UTF-8, and `MissingReference` when the instance does not
+    /// exist (an earlier op of the same batch counts).
+    RecordProcessObservation(ProcessObservation),
+    /// Records a config revision and makes it the instance's active one,
+    /// without raising the instance's revision. Fails with
+    /// `DuplicateResource` when its ID exists; `MissingReference` when the
+    /// instance does not exist (an earlier op of the same batch counts) or
+    /// `previous` is not a revision of the same instance; and
+    /// `DuplicateResource` with the active revision when `previous` is
+    /// empty but the instance already has one.
+    InsertConfigRevision(ConfigRevisionRecord),
 }
 
 impl WriteOp {
@@ -288,6 +306,10 @@ impl WriteOp {
                 SecretUser::Environment(id) => ResourceRef::Environment(*id),
             },
             Self::InsertAuditEvent(record) => ResourceRef::AuditEvent(record.id),
+            Self::RecordProcessObservation(observation) => {
+                ResourceRef::Instance(observation.instance)
+            }
+            Self::InsertConfigRevision(record) => ResourceRef::ConfigRevision(record.id),
         }
     }
 
@@ -341,7 +363,9 @@ impl WriteOp {
             | Self::ObserveSecretReference { .. }
             | Self::DeleteSecretReference { .. }
             | Self::ReplaceSecretUses { .. }
-            | Self::InsertAuditEvent(_) => None,
+            | Self::InsertAuditEvent(_)
+            | Self::RecordProcessObservation(_)
+            | Self::InsertConfigRevision(_) => None,
         }
     }
 
@@ -362,8 +386,8 @@ impl WriteOp {
     /// commit, before anything is read: the aggregate's revision (1 for an
     /// insert, `expected + 1` for an update, at least 2 for a restored
     /// secret reference), then every path to store being UTF-8, lock keys
-    /// included. Fakes and the SQLite registry both call it, so they fail
-    /// the same way.
+    /// and a process's executable included. Fakes and the SQLite registry
+    /// both call it, so they fail the same way.
     ///
     /// # Errors
     ///
@@ -402,6 +426,13 @@ impl WriteOp {
             && keys.iter().any(|key| key.to_text().is_none())
         {
             return Err(RegistryError::NotUtf8Path { field: "lock_key" });
+        }
+        if let Self::RecordProcessObservation(observation) = self
+            && observation.identity.executable.to_str().is_none()
+        {
+            return Err(RegistryError::NotUtf8Path {
+                field: "executable_identity",
+            });
         }
         Ok(())
     }

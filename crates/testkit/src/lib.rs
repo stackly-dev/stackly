@@ -85,7 +85,8 @@ pub use port::allocate_port;
 #[cfg(unix)]
 pub use registry::{
     BackupSeed, EnvironmentBuilder, FakeRegistry, InstanceBuilder, LeaseBuilder, OperationBuilder,
-    ProviderRevisionBuilder, RegistrySeed, RuntimeBuilder, WrittenAt, registry_conformance,
+    ProviderRevisionBuilder, RegistrySeed, RuntimeBuilder, SEEDED_EXECUTABLE, WrittenAt,
+    registry_conformance, seeded_observation,
 };
 #[cfg(unix)]
 pub use spawned_daemon::{DAEMON_START_TIMEOUT, DAEMON_STOP_TIMEOUT, SpawnedDaemon};

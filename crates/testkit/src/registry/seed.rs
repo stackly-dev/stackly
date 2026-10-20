@@ -1,7 +1,47 @@
 //! Seeding the registry tables that no `WriteOp` covers yet, for tests.
 
 use jiff::Timestamp;
-use stackly_domain::{BackupId, InstanceId, RuntimeId};
+use stackly_domain::{
+    BackupId, InstanceId, Pid, ProcessIdentity, ProcessObservation, ProcessStart, RuntimeId,
+};
+
+/// The process ID and session ID of a seeded observation.
+const SEEDED_PID: u32 = 4242;
+/// When the process of a seeded observation started, in Unix seconds.
+const SEEDED_START_SECONDS: u64 = 1_700_000_000;
+/// The executable of a seeded observation.
+pub const SEEDED_EXECUTABLE: &str = "/opt/stackly/bin/postgres";
+/// The boot of a seeded observation.
+const SEEDED_BOOT: &str = "00000000-0000-4000-8000-000000004242";
+
+/// Returns the observation [`RegistrySeed::seed_observations`] writes for
+/// `instance` at `at`: process 4242, started at `1700000000.000000`, in
+/// session 4242, running [`SEEDED_EXECUTABLE`], in a fixed boot. Every
+/// seeding implementation writes these values, so
+/// [`latest_process_observation`](stackly_domain::Registry::latest_process_observation)
+/// reads the same record from the fake and from SQLite.
+///
+/// # Panics
+///
+/// Never in practice: the fixed values are valid.
+#[must_use]
+pub fn seeded_observation(instance: InstanceId, at: Timestamp) -> ProcessObservation {
+    let pid = Pid::new(SEEDED_PID).expect("the seeded process ID is between 1 and i32::MAX");
+    ProcessObservation {
+        instance,
+        identity: ProcessIdentity {
+            pid,
+            start: ProcessStart::new(SEEDED_START_SECONDS, 0)
+                .expect("the seeded start has no microseconds past a second"),
+            executable: SEEDED_EXECUTABLE.into(),
+            session: pid,
+            boot: SEEDED_BOOT
+                .parse()
+                .expect("the seeded boot ID is a hyphenated UUID"),
+        },
+        observed_at: at,
+    }
+}
 
 /// Writes rows into registry tables that have no
 /// [`WriteOp`](stackly_domain::WriteOp) yet, so tests can set up what reads
@@ -24,8 +64,8 @@ pub trait RegistrySeed {
     /// on every registry.
     fn seed_audit_events(&self, count: u32, at: Timestamp);
 
-    /// Writes `count` `process_observations` rows for `instance`, each
-    /// observed at `at`.
+    /// Writes `count` `process_observations` rows for `instance`, each the
+    /// record [`seeded_observation`] returns for `at`.
     fn seed_observations(&self, instance: InstanceId, count: u32, at: Timestamp);
 }
 
