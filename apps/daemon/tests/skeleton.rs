@@ -79,6 +79,13 @@ impl Rig {
 
     /// `instance create <name> ... --wait` with the extra arguments.
     fn create(&self, name: &str, extra: &[&str]) -> (Option<i32>, Value) {
+        let mut args = vec!["--wait"];
+        args.extend_from_slice(extra);
+        self.create_with(name, &args)
+    }
+
+    /// `instance create <name> ...` with exactly the extra arguments.
+    fn create_with(&self, name: &str, extra: &[&str]) -> (Option<i32>, Value) {
         let mut args = vec![
             "instance",
             "create",
@@ -91,7 +98,6 @@ impl Rig {
             &self.revision,
             "--port",
             "http=auto",
-            "--wait",
         ];
         args.extend_from_slice(extra);
         self.json(&args)
@@ -181,12 +187,50 @@ impl Rig {
         .expect("the list thread ends")
     }
 
+    /// Stops the daemon the way `how` says, starts a new one on the same
+    /// root, and waits until its supervisor finished the reconciliation.
+    fn restart(&mut self, how: Stop) {
+        let daemon = self.daemon.take().expect("a daemon runs");
+        match how {
+            Stop::Kill => daemon.kill().expect("the daemon is killed"),
+            Stop::Term => daemon.stop().expect("the daemon stops"),
+        };
+        self.daemon = Some(start_daemon(&self.root));
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            let (_, status) = self.json(&["daemon", "status"]);
+            let supervisor_ok = status["result"]["health"]["subsystems"]
+                .as_array()
+                .is_some_and(|all| {
+                    all.iter()
+                        .any(|part| part["name"] == "supervisor" && part["status"] == "ok")
+                });
+            if supervisor_ok {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the supervisor did not settle: {status}"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     fn keychain_file(&self) -> PathBuf {
         daemon_paths(&self.root)
             .layout
             .keychain_dir()
             .join("stackly.keychain-db")
     }
+}
+
+/// How a daemon ends before the next one starts.
+#[derive(Clone, Copy)]
+enum Stop {
+    /// `SIGKILL`: no chance to clean up.
+    Kill,
+    /// `SIGTERM`: a normal stop, which leaves instances running.
+    Term,
 }
 
 /// Seeds `root` with the example and returns the runtime ID and revision.
@@ -349,4 +393,138 @@ fn secrets_go_to_the_file_keychain_of_the_root_without_any_prompt() {
     );
     let (code, started) = rig.json(&["instance", "start", &instance_id(&created), "--wait"]);
     assert_eq!(code, Some(0), "{started}");
+}
+
+#[test]
+fn a_running_instance_survives_sigkill_and_sigterm_of_the_daemon_with_the_same_process() {
+    let ev = evidence!(
+        covers = ["AC-013"],
+        kind = Kind::Fixture,
+        expected = "after a killed and a stopped stacklyd the instance is the same adopted process, there is one instance and one fake server, its data is unchanged, and a start answers alreadyInState",
+    );
+    let mut rig = Rig::new();
+    let (code, created) = rig.create("demo", &[]);
+    assert_eq!(code, Some(0), "{created}");
+    let id = instance_id(&created);
+    let (code, started) = rig.json(&["instance", "start", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{started}");
+    let before = rig.get(&id);
+    let process = before["process"].clone();
+    let pid = u32::try_from(process["pid"].as_u64().expect("a pid")).expect("a pid fits");
+    let data = data_digest(&rig.data_dir(&id));
+    assert!(data.contains_key("token.sha256"), "{data:?}");
+
+    for how in [Stop::Kill, Stop::Term] {
+        rig.restart(how);
+
+        let after = rig.get_until(&id, |instance| instance["readiness"]["state"] == "ready");
+        assert_eq!(after["lifecycle"], "running");
+        assert_eq!(after["process"]["pid"], process["pid"]);
+        assert_eq!(after["process"]["startedAt"], process["startedAt"]);
+        assert_eq!(after["process"]["adopted"], true);
+        assert_eq!(rig.listed_names(), ["demo"]);
+        assert_eq!(rig.servers(&id), [pid]);
+        assert_eq!(data_digest(&rig.data_dir(&id)), data);
+        let (code, again) = rig.json(&["instance", "start", &id, "--wait"]);
+        assert_eq!(code, Some(0), "{again}");
+        assert!(again["result"]["operation"].is_null(), "{again}");
+        assert_eq!(rig.servers(&id), [pid], "a start spawns nothing new");
+    }
+
+    let (code, stopped) = rig.json(&["instance", "stop", &id, "--wait"]);
+    assert_eq!(code, Some(0), "{stopped}");
+    assert!(rig.servers(&id).is_empty());
+    assert!(
+        rig.processes_under_root().is_empty(),
+        "{:?}",
+        rig.processes_under_root()
+    );
+    ev.pass();
+}
+
+#[test]
+fn a_create_cut_off_by_sigkill_ends_needing_recovery_with_one_instance_and_no_stray_process() {
+    let ev = evidence!(
+        covers = ["AC-013"],
+        kind = Kind::Fixture,
+        expected = "a stacklyd killed during the init of a create comes back with the operation in needs_recovery, one failed instance with that name, the same operation for the same key, name_taken for another key, an init helper nobody signalled, and no process left after the abandon",
+    );
+    let mut rig = Rig::new();
+    let args = [
+        "--set-json",
+        "initDelayMs=15000",
+        "--idempotency-key",
+        "cut-off-key",
+    ];
+    let (code, accepted) = rig.create_with("demo", &args);
+    assert_eq!(code, Some(0), "{accepted}");
+    let operation_id = accepted["result"]["operation"]["id"]
+        .as_str()
+        .expect("an operation ID")
+        .to_owned();
+    let id = accepted["result"]["operation"]["resource"]["id"]
+        .as_str()
+        .expect("the operation names the instance")
+        .to_owned();
+    let data = rig.data_dir(&id).display().to_string();
+    let helper = [data.as_str(), "stackly-fake-server init"];
+    ProcessTable::wait_for(&helper, Duration::from_secs(20), |rows| !rows.is_empty())
+        .expect("the init helper starts");
+
+    rig.restart(Stop::Kill);
+
+    let alive_before = !ProcessTable::snapshot()
+        .expect("the process table reads")
+        .containing_all(&helper)
+        .is_empty();
+    let instance = rig.get(&id);
+    let alive_after = !ProcessTable::snapshot()
+        .expect("the process table reads")
+        .containing_all(&helper)
+        .is_empty();
+    assert_eq!(instance["lifecycle"], "failed", "{instance}");
+    assert_eq!(instance["lastFailure"]["code"], "interrupted", "{instance}");
+    if alive_before && alive_after {
+        assert_eq!(instance["blocker"]["type"], "dataInUse", "{instance}");
+    }
+    let (_, inspected) = rig.json(&["operation", "inspect", &operation_id]);
+    assert_eq!(inspected["result"]["operation"]["state"], "needs_recovery");
+    assert_eq!(rig.listed_names(), ["demo"]);
+    if alive_after {
+        assert!(
+            !ProcessTable::snapshot()
+                .expect("the process table reads")
+                .containing_all(&helper)
+                .is_empty(),
+            "the new daemon never signals the helper while it is checking"
+        );
+    }
+
+    let (code, replay) = rig.create_with("demo", &args);
+    assert_eq!(code, Some(0), "{replay}");
+    assert_eq!(replay["result"]["operation"]["id"], operation_id.as_str());
+    let (code, other) = rig.create_with("demo", &["--idempotency-key", "another-key"]);
+    assert_ne!(code, Some(0), "{other}");
+    assert_eq!(other["error"]["code"], "instance.name_taken");
+    assert!(other["result"].is_null() || other["result"]["operation"].is_null());
+    assert_eq!(rig.listed_names(), ["demo"]);
+
+    let (code, abandoned) = rig.json(&["operation", "abandon", &operation_id, "--yes"]);
+    assert_eq!(code, Some(0), "{abandoned}");
+    assert_eq!(abandoned["result"]["operation"]["state"], "failed");
+    assert_eq!(
+        abandoned["result"]["operation"]["failure"]["error"]["code"],
+        "operation.abandoned"
+    );
+    let (code, start) = rig.json(&["instance", "start", &id, "--wait"]);
+    assert_ne!(code, Some(0), "{start}");
+    assert_eq!(start["error"]["code"], "supervisor.not_initialized");
+    ProcessTable::wait_for(&helper, Duration::from_secs(25), |rows| rows.is_empty())
+        .expect("the helper ends on its own after its delay");
+    assert!(
+        rig.processes_under_root().is_empty(),
+        "{:?}",
+        rig.processes_under_root()
+    );
+    ev.pass();
 }
