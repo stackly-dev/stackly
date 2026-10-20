@@ -33,6 +33,7 @@
 | `dev-f17-m1` (sesi `arc-f17-spec` dipakai ulang) | `developer` | 17 · Catalog from repo to daemon (spec 0017 milestone 1, langkah 1 sampai 6; langkah 1 di-merge lebih dulu untuk F18) | `02-instalasi-pertama.md` | lihat brief: domain, `core::catalog`, xtask catalog, protocol `catalog`, stacklyd catalog, testkit | `claude/arc-f17-spec-5e714b` | `opus` | `aktif` |
 | `dev-f19-m1-s1s2` (sesi `arc-f19-spec` dipakai ulang) | `developer` | 19 · milestone 1 langkah 1 dan 2 (format template, `Stdin::Text` plan) | `02-instalasi-pertama.md` | `crates/core/src/provider/` template, raw, validate, plan; golden; harness fuzz `provider_template` | `claude/arc-f19-spec-b5bcbf` | `opus` | `aktif` |
 | `dev-f23-m1-s034` (sesi `arc-f23-spec` dipakai ulang) | `developer` | 23 · milestone 1 langkah 0, 3, 4 (spike, `Exchange`, fuzz) | `02-instalasi-pertama.md` | `crates/core/src/provider/probe/`, harness fuzz baru, `fuzz/`, `xtask/src/fuzz.rs`, `evidence/` | `claude/eager-roentgen-3863a9` | `opus` | `aktif` |
+| `dev-f18-m1` (sesi `arc-f18-spec` dipakai ulang) | `developer` | 18 · Catalog data, safe extractor, and fuzz (spec 0018 milestone 1, langkah 2, 3 tanpa scanner, 4, lalu 1 setelah F19 langkah 1 dan 2 merge, scanner langkah 3, lalu 5) | `02-instalasi-pertama.md` | platform (`Filesystem`, `TreeWriter`), adapter fs platform-macos, fake testkit, `core::runtime`, `versionCheck`, xtask runtime, inventaris, fuzz target runtime | `claude/arc-f18-spec-634bf8` | `opus` | `aktif` |
 
 ## Keputusan
 
