@@ -75,11 +75,34 @@ public final class ConcealedPasteboard {
     /// Whether a clear is still waiting.
     var hasPendingClear: Bool { writtenChangeCount != nil }
 
+    /// The pasteboard's change count now. Read it when a copy starts and pass it to
+    /// ``copy(_:unlessChangedSince:)`` when the value arrives.
+    public var changeCount: Int { pasteboard.changeCount }
+
     /// Copies `text` and arms the clear. A second copy replaces the first and restarts the
     /// delay.
     ///
     /// - Parameter text: The secret.
     public func copy(_ text: String) {
+        write(text)
+    }
+
+    /// Copies `text` only when the pasteboard is still at `changeCount`, so a copy that
+    /// finishes late never overwrites something the person copied after asking for it.
+    ///
+    /// - Parameters:
+    ///   - text: The secret.
+    ///   - changeCount: The pasteboard's ``changeCount`` when the copy was asked for.
+    /// - Returns: `true` when the text was written, `false` when the pasteboard had changed
+    ///   and was left alone.
+    @discardableResult
+    public func copy(_ text: String, unlessChangedSince changeCount: Int) -> Bool {
+        guard pasteboard.changeCount == changeCount else { return false }
+        write(text)
+        return true
+    }
+
+    private func write(_ text: String) {
         clearTask?.cancel()
         _ = pasteboard.prepareForNewContents(with: .currentHostOnly)
         _ = pasteboard.setString(text, forType: .string)

@@ -330,4 +330,24 @@ struct RevealModelTests {
         #expect(pasteboard.holds(credential.value))
         #expect(model.shownText == nil)
     }
+
+    @Test func aCopyThatArrivesAfterTheClipboardChangedLeavesItAlone() async {
+        let gate = Gate()
+        let pasteboard = FakePasteboard()
+        let model = Self.gated(gate, value: "fixture-secret-0018", pasteboard: pasteboard)
+
+        let copying = Task { await model.copy() }
+        await gate.waitUntilWaiting()
+        // The person copies something else while the Keychain dialog is still open.
+        _ = pasteboard.clearContents()
+        _ = pasteboard.setString("something else", forType: .string)
+        gate.open()
+        await copying.value
+
+        #expect(pasteboard.strings[.string] == "something else")
+        #expect(!pasteboard.holds("fixture-secret-0018"))
+        #expect(
+            model.phase
+                == .failed("Not copied because the clipboard changed. Press Copy to try again."))
+    }
 }

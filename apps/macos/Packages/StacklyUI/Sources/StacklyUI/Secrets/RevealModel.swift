@@ -115,14 +115,20 @@ public final class RevealModel {
     /// ``ConcealedPasteboard``. Nothing is copied when any reveal or the composition fails.
     ///
     /// Hide, the 30 second limit, and the app becoming inactive do not cancel a Copy that
-    /// waits for the daemon: it shows nothing, so there is nothing to conceal.
+    /// waits for the daemon: it shows nothing, so there is nothing to conceal. When the person
+    /// copied something else after pressing Copy, the late value is not written and the phase
+    /// is ``Phase/failed(_:)``.
     public func copy() async {
         guard phase != .working else { return }
         phase = .working
         let flight = begin(.copy)
         defer { end(flight) }
+        let asked = pasteboard.changeCount
         guard let text = await gather(purpose: .copy, generation: nil) else { return }
-        pasteboard.copy(text)
+        guard pasteboard.copy(text, unlessChangedSince: asked) else {
+            phase = .failed("Not copied because the clipboard changed. Press Copy to try again.")
+            return
+        }
         phase = .copied
     }
 
