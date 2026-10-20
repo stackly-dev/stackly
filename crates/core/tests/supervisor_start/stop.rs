@@ -7,8 +7,9 @@ use std::time::Duration;
 
 use stackly_core::supervisor::codes;
 use stackly_domain::{DesiredState, InstanceId, InstanceLifecycle, OperationState, Pid};
-use stackly_platform::{ExitStatus, ProcessFacts, ProviderSignal};
+use stackly_platform::{ChildRole, ExitStatus, ProcessFacts, ProviderSignal};
 use stackly_testkit::ProcessOp;
+use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::{Rig, Spec, replace};
 
@@ -213,4 +214,141 @@ async fn a_stop_of_a_stopped_instance_only_stores_the_desired_state() {
     assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
     assert_eq!(instance.desired(), DesiredState::Stopped);
     assert!(rig.processes().calls().is_empty(), "nothing was signalled");
+}
+
+/// provider.yaml of the fake with a stop command in place of the signal.
+fn with_stop_command(text: &str, stop_seconds: u32) -> String {
+    let text = replace(
+        text,
+        "  stop: { strategy: gracefulProcess, signal: term }\n",
+        "  stop:\n    strategy: command\n    command:\n      executable: \"${runtime.executable}\"\n      args: [shutdown, \"--port=${endpoint.http.port}\"]\n    successExitCodes: [0]\n",
+    );
+    replace(
+        &text,
+        "stopSeconds: 10",
+        &format!("stopSeconds: {stop_seconds}"),
+    )
+}
+
+#[tokio::test]
+async fn ac_5_a_stop_command_past_its_timeout_fails_with_stop_timeout_and_the_instance_stays_stopping()
+ {
+    let ev = evidence!(
+        covers = ["AC-011", "REQ-011"],
+        kind = Kind::Fixture,
+        expected = "a provider stop command that hangs past stopSeconds gets TERM then KILL to its own group only, the operation fails with supervisor.stop_timeout, no signal reaches the main process, the instance stays stopping and watched, and the exit of the main process ends it stopped",
+    );
+    let rig = Rig::patched(|text| with_stop_command(text, 1)).await;
+    let id = rig.instance(&Spec::default());
+    let spawn = running(&rig, id).await;
+
+    let op = rig.stop(id).await;
+    // The command hangs: it gets TERM, then KILL after the grace, and only
+    // then does its exit arrive.
+    let command = rig.helper_spawn(ChildRole::StopCommand, 0).await;
+    assert!(
+        command.args.first().is_some_and(|arg| arg == "shutdown"),
+        "the provider's stop command ran: {:?}",
+        command.args
+    );
+    wait_for("the helper rule runs", || {
+        rig.processes()
+            .calls()
+            .into_iter()
+            .filter(|call| call.op == ProcessOp::TerminateHelperGroup)
+            .map(|call| call.force)
+            .collect::<Vec<_>>()
+            == [Some(false), Some(true)]
+    })
+    .await;
+    rig.processes()
+        .exit(command.pid, Some(ExitStatus::Signaled(9)));
+    let detail = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(Rig::failure_code(&detail), codes::STOP_TIMEOUT.to_string());
+    assert_eq!(
+        rig.instance_row(id).lifecycle(),
+        InstanceLifecycle::Stopping
+    );
+    assert!(
+        rig.processes().signals(spawn.pid).is_empty(),
+        "a command strategy sends no signal to the main process"
+    );
+    assert!(
+        rig.sup.status(id).process.is_some(),
+        "the process is still watched"
+    );
+
+    // The exit of the main process ends the stop through the one handler.
+    rig.kill_servers();
+    rig.processes().exit(spawn.pid, Some(ExitStatus::Exited(0)));
+    wait_for("the instance stops", || {
+        rig.instance_row(id).lifecycle() == InstanceLifecycle::Stopped
+    })
+    .await;
+    assert!(rig.sup.status(id).process.is_none());
+    ev.pass();
+}
+
+#[tokio::test]
+async fn ac_5_a_stop_command_that_succeeds_waits_for_the_exit_without_any_signal() {
+    let rig = Rig::patched(|text| with_stop_command(text, 10)).await;
+    let id = rig.instance(&Spec::default());
+    let spawn = running(&rig, id).await;
+
+    let op = rig.stop(id).await;
+    let command = rig.helper_spawn(ChildRole::StopCommand, 0).await;
+    rig.processes()
+        .exit(command.pid, Some(ExitStatus::Exited(0)));
+    // The command alone does not end the stop: the process must exit.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(
+        rig.instance_row(id).lifecycle(),
+        InstanceLifecycle::Stopping
+    );
+    assert!(
+        !rig.engine
+            .get(op)
+            .await
+            .unwrap()
+            .unwrap()
+            .view
+            .operation
+            .state()
+            .is_final()
+    );
+    rig.kill_servers();
+    rig.processes().exit(spawn.pid, Some(ExitStatus::Exited(0)));
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    assert!(rig.processes().signals(spawn.pid).is_empty());
+    assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Stopped);
+    assert!(
+        rig.processes()
+            .calls()
+            .iter()
+            .all(|call| call.force != Some(true)),
+        "no SIGKILL to anything"
+    );
+}
+
+#[tokio::test]
+async fn ac_5_a_stop_command_that_exits_with_another_code_fails_and_signals_nothing() {
+    let rig = Rig::patched(|text| with_stop_command(text, 10)).await;
+    let id = rig.instance(&Spec::default());
+    let spawn = running(&rig, id).await;
+
+    let op = rig.stop(id).await;
+    let command = rig.helper_spawn(ChildRole::StopCommand, 0).await;
+    rig.processes()
+        .exit(command.pid, Some(ExitStatus::Exited(2)));
+    let detail = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(
+        Rig::failure_code(&detail),
+        codes::STOP_COMMAND_FAILED.to_string()
+    );
+    assert!(rig.processes().signals(spawn.pid).is_empty());
+    assert!(rig.sup.status(id).process.is_some());
+    rig.kill_servers();
 }

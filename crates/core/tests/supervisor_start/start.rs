@@ -747,3 +747,87 @@ async fn only_the_first_attempt_may_show_a_keychain_dialog_and_every_respawn_nev
         "the user's interaction applies to the first attempt only"
     );
 }
+
+#[tokio::test]
+async fn ac_8_a_cancel_before_the_journal_leaves_no_side_effect() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&Spec::default());
+    let before = rig.instance_row(id).revision();
+    // The `endpoints` stage waits at the registry read, before `journal`.
+    let hold = rig.registry.hold_instances();
+
+    let op = rig.start(id).await;
+    wait_for("the start reaches the endpoints stage", || hold.entered()).await;
+    rig.engine.cancel(op).await.unwrap();
+    hold.release();
+    let detail = rig.wait_final(op).await;
+
+    assert_eq!(detail.view.operation.state(), OperationState::Cancelled);
+    let stages: Vec<_> = detail
+        .steps
+        .iter()
+        .map(|step| step.name().as_str())
+        .collect();
+    assert!(
+        !stages.contains(&"journal"),
+        "the cancel came before the journal: {stages:?}"
+    );
+    let instance = rig.instance_row(id);
+    assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(instance.desired(), DesiredState::Stopped);
+    assert_eq!(
+        instance.revision(),
+        before,
+        "the registry row never changed"
+    );
+    assert!(rig.processes().spawns().is_empty(), "nothing was spawned");
+    assert!(
+        rig.processes().count(ProcessOp::Resume) == 0
+            && rig.processes().count(ProcessOp::Discard) == 0
+    );
+    assert_eq!(
+        rig.processes()
+            .probe_lock(&rig.paths(id).lock)
+            .expect("the lock can be probed"),
+        stackly_platform::LockState::Free,
+        "the instance lock was released"
+    );
+}
+
+#[tokio::test]
+async fn ac_3_a_secret_value_in_an_argument_is_refused_before_the_journal_and_nothing_spawns() {
+    // The label setting reaches argv as `--label=<value>`; here it holds the
+    // secret's value, so `ensure_not_in_argv` must refuse the dry run.
+    let rig = Rig::new().await;
+    let id = rig.instance(&Spec {
+        settings: serde_json::json!({ "label": crate::common::TOKEN }),
+        ..Spec::default()
+    });
+    let before = rig.instance_row(id).revision();
+
+    let op = rig.start(id).await;
+    let detail = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(
+        Rig::failure_code(&detail),
+        stackly_core::secret::codes::DELIVERY_REJECTED.to_string()
+    );
+    let stages: Vec<_> = detail
+        .steps
+        .iter()
+        .map(|step| step.name().as_str())
+        .collect();
+    assert!(
+        !stages.contains(&"journal"),
+        "the dry run fails before the journal: {stages:?}"
+    );
+    let instance = rig.instance_row(id);
+    assert_eq!(instance.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(instance.revision(), before);
+    assert!(rig.processes().spawns().is_empty(), "no spawn happened");
+    let failure = format!("{:?}", detail.view.journal.failure_error());
+    assert!(
+        !failure.contains(crate::common::TOKEN),
+        "the refusal never repeats the secret value"
+    );
+}

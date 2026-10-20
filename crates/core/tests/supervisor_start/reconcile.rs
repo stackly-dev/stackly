@@ -661,3 +661,51 @@ async fn a_commit_the_registry_refuses_is_retried_and_nothing_respawns_meanwhile
     );
     assert!(!rig.sup.status(id).pending_commit);
 }
+
+#[tokio::test]
+async fn ac_11_reconciliation_learns_the_secrets_of_a_running_instance_so_its_adopted_log_stays_redacted()
+ {
+    let rig =
+        Rig::with_config(|config| config.spool_drain_interval = Duration::from_millis(20)).await;
+    let live = rig.instance(&spec(InstanceLifecycle::Stopped, DesiredState::Stopped));
+    let stopped = rig.instance(&Spec {
+        token: Some("the-secret-of-a-stopped-one"),
+        ..spec(InstanceLifecycle::Stopped, DesiredState::Stopped)
+    });
+    let spawn = running(&rig, live).await;
+    rig.sup.shutdown();
+
+    // A daemon that started again knows no secret value yet.
+    let (next, redactor) = rig.reborn_forgetting_secrets();
+    assert_eq!(redactor.redact(crate::common::TOKEN), crate::common::TOKEN);
+    next.reconcile(RegistryMode::Ready).await.unwrap();
+
+    assert_eq!(redactor.redact(crate::common::TOKEN), "****");
+    assert_eq!(
+        redactor.redact("the-secret-of-a-stopped-one"),
+        "the-secret-of-a-stopped-one",
+        "the value of an instance that does not run is not learned"
+    );
+    rig.processes()
+        .write_output(
+            spawn.pid,
+            stackly_platform::OutputStream::Stdout,
+            format!("auth with {}\n", crate::common::TOKEN).as_bytes(),
+        )
+        .unwrap();
+    wait_for("the adopted log goes on", || {
+        rig.logs
+            .lines_of(live)
+            .iter()
+            .any(|line| line.starts_with("auth with"))
+    })
+    .await;
+    let lines = rig.logs.lines_of(live);
+    assert!(lines.contains(&"auth with ****".to_owned()), "{lines:?}");
+    assert!(
+        lines
+            .iter()
+            .all(|line| !line.contains(crate::common::TOKEN))
+    );
+    let _ = stopped;
+}

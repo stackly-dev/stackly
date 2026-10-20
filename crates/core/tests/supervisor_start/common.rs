@@ -224,9 +224,55 @@ pub struct FaultyRegistry {
     refuse_observation: Mutex<bool>,
     /// Errors the next commits answer with, one each, oldest first.
     commit_faults: Mutex<Vec<stackly_domain::RegistryError>>,
+    /// Holds every `instances` read until the test opens it.
+    hold: Mutex<Option<Arc<Hold>>>,
+}
+
+/// A closed door in front of the registry's `instances` read, which the
+/// `endpoints` stage makes before the `journal`.
+pub struct Hold {
+    entered: AtomicBool,
+    open: Mutex<bool>,
+    opened: std::sync::Condvar,
+}
+
+impl Hold {
+    /// Whether a read is waiting at the door.
+    pub fn entered(&self) -> bool {
+        self.entered.load(Ordering::SeqCst)
+    }
+
+    /// Opens the door for the waiting read and every later one.
+    pub fn release(&self) {
+        *self.open.lock().unwrap_or_else(PoisonError::into_inner) = true;
+        self.opened.notify_all();
+    }
+
+    fn pass(&self) {
+        self.entered.store(true, Ordering::SeqCst);
+        let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        while !*open {
+            open = self
+                .opened
+                .wait(open)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
 }
 
 impl FaultyRegistry {
+    /// Closes a door in front of the `instances` read: the `endpoints`
+    /// stage waits there, before the `journal`, until the hold is released.
+    pub fn hold_instances(&self) -> Arc<Hold> {
+        let hold = Arc::new(Hold {
+            entered: AtomicBool::new(false),
+            open: Mutex::new(false),
+            opened: std::sync::Condvar::new(),
+        });
+        *self.hold.lock().unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&hold));
+        hold
+    }
+
     /// Makes the next commits fail with `errors`, one error per commit.
     pub fn fail_commits(&self, errors: Vec<stackly_domain::RegistryError>) {
         *self
@@ -258,7 +304,6 @@ impl Registry for FaultyRegistry {
         runtime_references(id: stackly_domain::RuntimeId) -> Result<stackly_domain::Versioned<stackly_domain::RuntimeReferences>, stackly_domain::RegistryError>;
         instance(id: InstanceId) -> Result<stackly_domain::Versioned<Option<Instance>>, stackly_domain::RegistryError>;
         instance_by_name(name: &stackly_domain::InstanceName) -> Result<stackly_domain::Versioned<Option<Instance>>, stackly_domain::RegistryError>;
-        instances(filter: stackly_domain::InstanceFilter) -> Result<stackly_domain::Versioned<Vec<Instance>>, stackly_domain::RegistryError>;
         known_instance_ids() -> Result<stackly_domain::Versioned<Vec<InstanceId>>, stackly_domain::RegistryError>;
         latest_process_observation(instance: InstanceId) -> Result<stackly_domain::Versioned<Option<stackly_domain::ProcessObservation>>, stackly_domain::RegistryError>;
         active_config_revision(instance: InstanceId) -> Result<stackly_domain::Versioned<Option<ConfigRevisionRecord>>, stackly_domain::RegistryError>;
@@ -277,6 +322,21 @@ impl Registry for FaultyRegistry {
         secret_uses_by(user: SecretUser) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretUse>>, stackly_domain::RegistryError>;
         audit_events(query: stackly_domain::AuditQuery) -> Result<stackly_domain::Versioned<stackly_domain::AuditPage>, stackly_domain::RegistryError>;
         prune(policy: &stackly_domain::RetentionPolicy, now: jiff::Timestamp) -> Result<stackly_domain::PruneReport, stackly_domain::RegistryError>;
+    }
+
+    fn instances(
+        &self,
+        filter: stackly_domain::InstanceFilter,
+    ) -> Result<stackly_domain::Versioned<Vec<Instance>>, stackly_domain::RegistryError> {
+        let hold = self
+            .hold
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        if let Some(hold) = hold {
+            hold.pass();
+        }
+        self.inner.instances(filter)
     }
 
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
@@ -427,6 +487,7 @@ impl Rig {
             inner,
             refuse_observation: Mutex::new(false),
             commit_faults: Mutex::new(Vec::new()),
+            hold: Mutex::new(None),
         });
         let redactor = Arc::new(Redactor::new());
         let secrets = Arc::new(SecretService::new(SecretDeps {
@@ -522,6 +583,25 @@ impl Rig {
         let sup = Supervisor::new(self.deps.clone());
         sup.attach_operations(self.engine.clone());
         sup
+    }
+
+    /// Like [`reborn`](Self::reborn), but the new daemon also lost what the
+    /// old one knew about secret values: its redactor and secret service
+    /// are new, over the same registry and secret store.
+    pub fn reborn_forgetting_secrets(&self) -> (Supervisor, Arc<Redactor>) {
+        let redactor = Arc::new(Redactor::new());
+        let mut deps = self.deps.clone();
+        deps.secrets = Arc::new(SecretService::new(SecretDeps {
+            registry: Arc::clone(&self.registry) as Arc<dyn Registry>,
+            platform: Arc::clone(&self.platform),
+            redactor: Arc::clone(&redactor),
+            fields: Arc::new(Rules),
+            events: Arc::new(NoSecretEvents),
+        }));
+        deps.redactor = Arc::clone(&redactor);
+        let sup = Supervisor::new(deps);
+        sup.attach_operations(self.engine.clone());
+        (sup, redactor)
     }
 
     /// Plants a process the fake did not spawn as the last recorded process
