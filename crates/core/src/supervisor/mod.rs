@@ -11,12 +11,18 @@
 //!   `UpdateInstance` per mutation, and how an actor commit retries.
 //! - [`PortProbe`] tells whether an endpoint's port is free, with the
 //!   socket options the server uses.
+//! - [`probe`] runs one attempt of a `tcp`, `http`, or `exec` probe and
+//!   reports a [`ProbeOutcome`](probe::ProbeOutcome) with a redacted
+//!   detail.
 //! - [`SupervisorConfig`] holds every constant, shrinkable in tests.
 
 mod classify;
 mod commit;
 mod config;
+mod helper;
+mod http;
 mod ports;
+pub mod probe;
 mod restart;
 
 use stackly_domain::ObservationDetail;
