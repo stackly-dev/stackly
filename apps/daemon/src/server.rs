@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
+use stackly_core::operation::{EngineError, OperationEngine};
 use stackly_core::{PreparedLayout, daemon_info};
 use stackly_domain::{PruneReport, Registry, RegistryError, RetentionPolicy};
 use stackly_ipc::{Accepted, BindState, IpcError, Listener};
@@ -32,7 +33,7 @@ use crate::log_sink::LogSink;
 use crate::map::{self, StartFacts};
 use crate::shutdown::{SHUTDOWN_DRAIN, SHUTDOWN_FLUSH};
 use crate::startup::EXIT_START_FAILED;
-use crate::state::{DaemonCore, RegistryState};
+use crate::state::{DaemonCore, Phase, RegistryState};
 
 /// How many connections are served at once; the next one gets
 /// `ipc.too_many_connections`.
@@ -242,7 +243,7 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
     let accept = tokio::spawn(accept_loop(
         listener,
         Arc::clone(&core),
-        handlers,
+        Arc::clone(&handlers),
         config.socket_check_interval,
     ));
 
@@ -251,6 +252,7 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
     let slot = tokio::spawn(start_slot(
         Arc::clone(&core),
         Arc::clone(&tasks),
+        handlers,
         version,
         config,
     ));
@@ -312,14 +314,20 @@ impl DaemonHandle {
     ///    this daemon's), and drop the listener;
     /// 2. move to `stopping` and publish `daemon.shutting_down`;
     /// 3. from here new requests get `daemon.shutting_down`;
-    /// 4. wait up to [`SHUTDOWN_DRAIN`] for running requests;
+    /// 4. wait up to [`SHUTDOWN_DRAIN`] for running requests, and give the
+    ///    operation engine its
+    ///    [`OPERATION_SHUTDOWN_GRACE`](stackly_core::operation::limits::OPERATION_SHUTDOWN_GRACE)
+    ///    at the same time (spec 0007, *Shutdown*);
     /// 5. give every connection [`SHUTDOWN_FLUSH`] to send what it holds,
     ///    then close it.
     ///
-    /// When `interrupt` resolves first (a second signal), the drain and the
-    /// flush are cut short. Either way the background tasks end and the
-    /// registry closes before this returns; releasing the lock is the
-    /// caller's next step.
+    /// When `interrupt` resolves first (a second signal), the drain, the
+    /// engine's grace, and the flush are cut short: operations still
+    /// running stay `running` in the registry for the next start's
+    /// `recover`. Either way the background tasks end and the daemon's
+    /// registry handle closes before this returns (an operation task the
+    /// stop cut short holds its own until the runtime drops it); releasing
+    /// the lock is the caller's next step.
     pub async fn shutdown(
         mut self,
         reason: ShutdownReason,
@@ -344,6 +352,9 @@ impl DaemonHandle {
             slot.abort();
             let _ = slot.await;
         }
+        // The engine's tasks have ended, unless the stop was forced; its
+        // last handle goes here, so its registry handle goes with it.
+        core.operations().close();
         let prune = self
             .tasks
             .prune
@@ -380,13 +391,16 @@ async fn stop_gracefully(
     let shutting_down = core
         .bus()
         .publish_daemon(EventKind::DaemonShuttingDown(ShuttingDown { reason }));
-    // Step 4.
-    if timeout(SHUTDOWN_DRAIN, core.drain().idle()).await.is_err() {
-        tracing::warn!(
-            running = core.drain().running(),
-            "requests still ran when the drain ended",
-        );
-    }
+    // Step 4, with the operation engine's grace at the same time.
+    let drain = async {
+        if timeout(SHUTDOWN_DRAIN, core.drain().idle()).await.is_err() {
+            tracing::warn!(
+                running = core.drain().running(),
+                "requests still ran when the drain ended",
+            );
+        }
+    };
+    let ((), _) = tokio::join!(drain, core.operations().shutdown());
     // Step 5.
     core.connections()
         .close_all(SHUTDOWN_FLUSH, shutting_down)
@@ -515,10 +529,14 @@ fn check_socket(listener: &mut Listener, core: &DaemonCore) {
     }
 }
 
-/// Steps 11 and 12: the start slot, then `ready`.
+/// Steps 11 and 12: the start slot, then `ready`. Once the registry is
+/// ready, the operation engine recovers the last run's operations before
+/// `ready` and opens its dispatcher after it (spec 0007, *Start daemon dan
+/// pemulihan*).
 async fn start_slot(
     core: Arc<DaemonCore>,
     tasks: Arc<Tasks>,
+    handlers: Arc<dyn Handlers>,
     version: String,
     config: DaemonConfig,
 ) {
@@ -532,6 +550,7 @@ async fn start_slot(
         &config.registry_locked_retries,
     )
     .await;
+    let mut recovered = None;
     match opened {
         Some(Ok(RegistryOpen::Ready { registry, summary })) => {
             let pruned = prune_once(&core, &registry).await;
@@ -559,10 +578,13 @@ async fn start_slot(
                     RegistryState::Ready {
                         schema_version: summary.schema_version,
                     },
-                    Some(registry),
+                    Some(registry.clone()),
                 );
                 let prune = tokio::spawn(prune_loop(Arc::clone(&core), config.prune_interval));
                 *tasks.prune.lock().unwrap_or_else(PoisonError::into_inner) = Some(prune);
+                recovered = recover_operations(&core, registry, handlers.as_ref()).await;
+                // Spec 0010's reconciliation runs here, between `recover`
+                // and `ready` (feature 10).
             }
         }
         Some(Ok(RegistryOpen::Recovery(report))) => {
@@ -578,21 +600,90 @@ async fn start_slot(
                 },
                 None,
             );
+            core.operations().unavailable("registry in recovery");
         }
         Some(Err(error)) => {
             tracing::error!(error = %error, "cannot open the registry");
             core.set_registry(RegistryState::Failed, None);
+            core.operations().unavailable(REGISTRY_FAILED);
             core.fail(EXIT_START_FAILED);
         }
         None => {
             core.set_registry(RegistryState::Failed, None);
+            core.operations().unavailable(REGISTRY_FAILED);
             core.fail(EXIT_START_FAILED);
         }
     }
     core.mark_ready();
+    // A stop that began during the start slot leaves the dispatcher closed:
+    // what `recover` queued runs at the next start.
+    if let Some(engine) = recovered
+        && core.phase() == Phase::Ready
+    {
+        engine.start();
+    }
     tasks.started.send_replace(true);
     let health = core.health(std::time::Instant::now());
     tracing::info!(status = ?health.status, "stacklyd finished its start steps");
+}
+
+/// The `operations` detail when the registry broke.
+const REGISTRY_FAILED: &str = "the registry stopped working";
+/// The waits before each new try when the operation engine cannot read
+/// the last run's operations.
+pub const OPERATION_RECOVER_RETRIES: [Duration; 3] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+];
+
+/// Creates the operation engine on the ready registry and recovers what
+/// the last run left unfinished, trying again after each wait of
+/// [`OPERATION_RECOVER_RETRIES`]. Returns the engine to start once the
+/// daemon is ready, or `None` when recovery failed: a registry that
+/// stopped working is fatal, and any other failure leaves the engine
+/// serving reads only, with the `operations` subsystem unavailable.
+async fn recover_operations(
+    core: &DaemonCore,
+    registry: SqliteRegistry,
+    handlers: &dyn Handlers,
+) -> Option<OperationEngine> {
+    let engine = core
+        .operations()
+        .create(registry, core.platform(), core.prepared(), core.bus());
+    if let Some(starting) = handlers.test_starting_method() {
+        starting.register(&engine);
+    }
+    let mut waits = OPERATION_RECOVER_RETRIES.iter();
+    loop {
+        match engine.recover().await {
+            Ok(_) => {
+                core.operations().recovered();
+                return Some(engine);
+            }
+            Err(EngineError::Registry(RegistryError::Unavailable)) => {
+                registry_failed(core);
+                core.operations().unavailable(REGISTRY_FAILED);
+                return None;
+            }
+            Err(error) => {
+                // A failed read leaves the engine as it was, so it may try
+                // again.
+                if let Some(wait) = waits.next() {
+                    tracing::warn!(
+                        error = %error,
+                        retry_in_seconds = wait.as_secs(),
+                        "cannot recover the operations of the last run; trying again",
+                    );
+                    tokio::time::sleep(*wait).await;
+                    continue;
+                }
+                tracing::error!(error = %error, "cannot recover the operations of the last run");
+                core.operations().recovery_failed();
+                return None;
+            }
+        }
+    }
 }
 
 /// Opens the registry, trying again while another process holds it.

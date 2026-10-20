@@ -7,16 +7,9 @@ struct StacklyApp: App {
 
     var body: some Scene {
         Window("Stackly", id: WindowOpener.mainWindowID) {
-            // provisional: F13 (milestone 4 wires the live connection model; until then the
-            // shell shows its first connection attempt)
-            let status = ShellStatus.connecting(slow: false, since: appDelegate.launchedAt)
-            AppShell(
-                presentation: ShellPresentation(status: status),
-                diagnostics: ConnectionDiagnostics(status: status, appProtocol: nil),
-                windowOpener: appDelegate.windowOpener,
-                windowWillClose: { appDelegate.mainWindowWillClose($0) },
-                reconnect: {},
-                refreshDiagnostics: {}
+            LiveShell(
+                runtime: appDelegate.runtime,
+                windowWillClose: { appDelegate.mainWindowWillClose($0) }
             )
         }
         .defaultSize(width: 1280, height: 800)

@@ -17,6 +17,9 @@ public struct LinkHandle: Sendable {
     public var refresh: @Sendable () async -> Void
     /// Closes the socket synchronously.
     public var stopNow: @Sendable () -> Void
+    /// The link's status right now, which may be ahead of what ``states`` has
+    /// delivered; `nil` when unknown.
+    public var currentState: @Sendable () -> ConnectionState?
 
     /// Creates a handle from closures.
     public init(
@@ -25,7 +28,8 @@ public struct LinkHandle: Sendable {
         retryNow: @escaping @Sendable () async -> Void,
         call: @escaping @Sendable (Call, String?, CallOptions) async throws(ClientError) -> Reply,
         refresh: @escaping @Sendable () async -> Void,
-        stopNow: @escaping @Sendable () -> Void
+        stopNow: @escaping @Sendable () -> Void,
+        currentState: @escaping @Sendable () -> ConnectionState? = { nil }
     ) {
         self.states = states
         self.start = start
@@ -33,6 +37,7 @@ public struct LinkHandle: Sendable {
         self.call = call
         self.refresh = refresh
         self.stopNow = stopNow
+        self.currentState = currentState
     }
 
     /// The handle of a real ``DaemonLink``.
@@ -45,7 +50,8 @@ public struct LinkHandle: Sendable {
                 try await link.call(call, idempotencyKey: key, options: options)
             },
             refresh: { await link.refreshDaemon() },
-            stopNow: { link.stopNow() }
+            stopNow: { link.stopNow() },
+            currentState: { link.currentState }
         )
     }
 }
@@ -81,6 +87,8 @@ public final class DaemonModel {
 
     /// The shell's stores.
     public let sync: ShellSync
+    /// The operations that have not ended, for the Operations badge and subtitle.
+    public let operations: OperationCenter
 
     @ObservationIgnored private let link: LinkHandle
     @ObservationIgnored private let signals: AsyncStream<SyncSignal>?
@@ -91,7 +99,11 @@ public final class DaemonModel {
     @ObservationIgnored private let announcer: (String) -> Void
     @ObservationIgnored private var inputs = DaemonPresence.Inputs()
     @ObservationIgnored private var statusBeforeConnect: ShellStatus
-    @ObservationIgnored private var roundsAtConnect: Int?
+    /// The connection the stores refresh for, and the snapshot rounds completed
+    /// before its first round started. Set by whichever comes first: the model
+    /// handling `connected`, or the first snapshot signal of that connection,
+    /// since the two arrive on separate streams.
+    @ObservationIgnored private var roundStart: (connectedAt: Date, rounds: Int)?
     @ObservationIgnored private var refreshedOnce = false
     @ObservationIgnored private var lostSinceRefresh = false
     @ObservationIgnored private var manualRetry = false
@@ -130,11 +142,22 @@ public final class DaemonModel {
         let first = ShellStatus.connecting(slow: false, since: launchedAt)
         statusBeforeConnect = first
         presentation = ShellPresentation(status: first)
+        operations = OperationCenter(
+            call: { call throws(ClientError) in try await link.call(call, nil, .standard) },
+            now: now)
+        sync.register(operations.store)
     }
 
     /// Whether mutations can run, from the presentation.
     public var mutationAvailability: MutationAvailability {
         presentation.mutationAvailability
+    }
+
+    /// The counts behind the sidebar badges, each `nil` until its store loaded a
+    /// snapshot. The instance count comes with the instance store (milestone 4,
+    /// step 16).
+    public var sidebarCounts: SidebarCounts {
+        SidebarCounts(instances: nil, runningOperations: operations.runningCount)
     }
 
     /// Starts the link, the signal loop, and the one second timer of the
@@ -296,7 +319,7 @@ public final class DaemonModel {
                 if inputs.refreshed { lastKnownAt = now() }
             } else {
                 statusBeforeConnect = presentation.status
-                roundsAtConnect = sync.completedRounds
+                noteRoundStart(for: daemon.connectedAt)
                 lastConnectedAt = daemon.connectedAt
                 manualRetry = false
             }
@@ -320,6 +343,16 @@ public final class DaemonModel {
     }
 
     func receive(_ signal: SyncSignal) {
+        switch signal {
+        case .resnapshot, .caughtUp:
+            // The signal belongs to the link's current connection, which the
+            // states stream may not have delivered yet.
+            if case .connected(let daemon) = link.currentState() {
+                noteRoundStart(for: daemon.connectedAt)
+            }
+        case .event, .lastFrameAt:
+            break
+        }
         sync.handle(signal)
         if case .lastFrameAt(let date) = signal, inputs.refreshed {
             lastKnownAt = date
@@ -327,12 +360,21 @@ public final class DaemonModel {
         update()
     }
 
+    /// Records the rounds completed before the first round of the connection
+    /// made at `connectedAt`, once per connection.
+    private func noteRoundStart(for connectedAt: Date) {
+        guard roundStart?.connectedAt != connectedAt else { return }
+        roundStart = (connectedAt, sync.completedRounds)
+    }
+
     /// Recomputes the presence and the presentation, and announces a
     /// transition once.
     func update() {
         let wasRefreshed = inputs.refreshed
-        if let rounds = roundsAtConnect, case .connected = inputs.stable {
-            inputs.refreshed = sync.isSettled && sync.completedRounds > rounds
+        if let start = roundStart, case .connected(let daemon) = inputs.stable,
+            start.connectedAt == daemon.connectedAt
+        {
+            inputs.refreshed = sync.isSettled && sync.completedRounds > start.rounds
         } else {
             inputs.refreshed = false
         }
@@ -364,7 +406,9 @@ public final class DaemonModel {
         case (_, .unreachable):
             lostSinceRefresh = true
             announcer(Announcement.unreachable)
-        case (.refreshing, .connected) where lostSinceRefresh:
+        case (_, .connected) where lostSinceRefresh:
+            // Usually from refreshing; straight from the loss when the snapshot
+            // finished before the model saw the connection.
             lostSinceRefresh = false
             announcer(Announcement.reconnected)
         default:

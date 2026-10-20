@@ -22,9 +22,10 @@ serde_json.workspace = true
 serde_path_to_error.workspace = true
 serde_yaml_ng.workspace = true
 sha2.workspace = true
+socket2.workspace = true
 tar.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros", "net", "io-util"] }
 tracing.workspace = true
 zip.workspace = true
 
@@ -40,7 +41,16 @@ test-support = []
 stackly-core = { workspace = true, features = ["test-support"] }
 stackly-evidence.workspace = true
 stackly-testkit.workspace = true
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "macros", "test-util"] }
+tokio = { workspace = true, features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+    "macros",
+    "net",
+    "io-util",
+    "test-util",
+] }
 
 [lints]
 workspace = true

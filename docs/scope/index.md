@@ -51,7 +51,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 11 | Secret store & redaction | Foundation | planned |
 | 12 | Design system & UI foundation | Foundation | planned |
 | 13 | App shell SwiftUI & Swift client | Foundation | planned |
-| 14 | Walking skeleton | Skeleton | planned |
+| 14 | Walking skeleton | Skeleton | in-progress |
 | 15 | Background agent & CLI install | Instalasi pertama | in-progress |
 | 16 | Onboarding | Instalasi pertama | in-progress |
 | 17 | Catalog & provider detail | Instalasi pertama | in-progress |

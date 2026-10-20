@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15653-f4b2-71b2-9127-d004929e5e57",
+  "covers": [
+    "AC-024",
+    "REQ-024"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 manual check 1: the app opens without stacklyd",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "With no stacklyd for its STACKLY_ROOT, the Debug app opens its window, the footer says stacklyd unavailable, the banner says Can’t connect to stacklyd. with no time, no instance shows with any status (the provisional list comes with step 16), and the banner and footer do not flicker across several retries.",
+  "actual": "window open; footer `stacklyd unavailable` with a red dot; banner `Can’t connect to stacklyd.` / `Actions are disabled until the daemon is reachable.` with Reconnect and Open Diagnostics and no time; the same texts at 5, 10, 15, 20, and 25 s and five pixel identical captures (check1-captures.md5), so nothing flickered across the retries; Instances shows only the `Coming in a later build.` placeholder, no instance with any status",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 7818bea with a clean tree, `cargo xtask build-app` (Debug) and `cargo build -p stacklyd -p stackly-cli`; STACKLY_ROOT is the private folder /private/tmp/stk-gui-check (mode 0700)",
+    "Claude Code drove Stackly through the macOS accessibility API (System Events menu clicks, the window's close button, Dock item clicks, AX row selection and sizes) and captured only the Stackly window with `screencapture -l <window id>`; synthetic keystrokes do not reach apps on this Mac, so no step uses the keyboard",
+    "with no stacklyd running and the root emptied, open the app with `open -n --env STACKLY_ROOT=/private/tmp/stk-gui-check Stackly.app` at 2026-10-19T22:42:10Z and bring it to the front",
+    "every 5 s for 25 s, capture the window and read the footer and banner texts through the accessibility tree (about seven connection retries in that time)",
+    "select Instances in the sidebar and capture it"
+  ],
+  "reviewer": "ojiepermana, reviewing the screenshots and logs Claude Code (Claude Opus 5.5) took while it drove the app",
+  "startedAt": "2026-10-19T22:41:45.137758Z",
+  "finishedAt": "2026-10-20T02:15:03.849824Z",
+  "evidencePath": "evidence/manual/files/01a15653-f4b2-71b2-9127-d004929e5e57/",
+  "context": {
+    "sourceCommit": "7818bea186bae7048a8b5eeee71e03eb932e6a76",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

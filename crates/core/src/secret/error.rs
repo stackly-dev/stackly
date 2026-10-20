@@ -1,13 +1,14 @@
-//! What the secret service fails with, and the catalog code of each
-//! failure (spec 0011, *Kode error di wire*).
+//! What the secret service fails with, the catalog code of each failure
+//! (spec 0011, *Kode error di wire*), and how a create maps a failed
+//! `put` ([`classify_create_failure`], AC-23).
 
 use stackly_domain::{
-    DetailKey, ErrorCodeName, NeedsSecretItem, RegistryError, ResourceRevision, SecretFieldName,
-    SecretRef, SecretUse,
+    DetailKey, ErrorCodeName, NeedsSecretItem, NeedsSecretReason, RegistryError, ResourceRevision,
+    SecretFieldName, SecretRef, SecretUse,
 };
 use stackly_platform::SecretStoreError;
 
-use super::rules::SecretEffect;
+use super::rules::{InvalidValueReason, SecretEffect};
 use crate::operation::OperationError;
 
 /// The catalog codes the secret service reports. `stacklyd` looks each one
@@ -134,9 +135,10 @@ pub enum SecretError {
         /// The effect of the replace on every use.
         effects: Vec<SecretEffect>,
     },
-    /// The value is outside the `minLength` and `maxLength` of a secret
-    /// field that uses the reference.
-    #[error("the value does not fit secret field {field}")]
+    /// The value breaks the rules of a secret field that uses the
+    /// reference: it is outside the field's `minLength` and `maxLength`,
+    /// or holds a control character the field refuses (AC-22).
+    #[error("the value does not fit secret field {field}: {reason}")]
     InvalidValue {
         /// The field.
         field: SecretFieldName,
@@ -144,6 +146,8 @@ pub enum SecretError {
         min_length: u64,
         /// Its most characters.
         max_length: Option<u64>,
+        /// Which rule the value breaks.
+        reason: InvalidValueReason,
     },
     /// The row is not at the revision the request read.
     #[error("secret reference {reference} is at revision {actual}, not {expected}")]
@@ -161,9 +165,15 @@ pub enum SecretError {
         /// Which and why.
         needs: NeedsSecret,
     },
-    /// The store failed.
-    #[error("{0}")]
-    Store(SecretStoreError),
+    /// The store failed on a reference: the source of a copy or a bind,
+    /// or the target a put reads or writes (AC-23).
+    #[error("{error} ({reference})")]
+    Store {
+        /// The reference whose store call failed.
+        reference: SecretRef,
+        /// How it failed.
+        error: SecretStoreError,
+    },
     /// The registry failed after the store changed, and putting the store
     /// back failed too, so what the store holds is unknown until a probe.
     #[error("the secret store change could not be undone after the registry failed")]
@@ -207,7 +217,7 @@ impl SecretError {
             Self::InvalidValue { .. } => codes::INVALID_VALUE,
             Self::RevisionMismatch { .. } => crate::operation::codes::REVISION_MISMATCH,
             Self::NeedsSecret { .. } => codes::NEEDS_SECRET,
-            Self::Store(error) => store_code(*error),
+            Self::Store { error, .. } => store_code(*error),
             Self::WriteBackFailed { .. } => codes::STORE_OUTCOME_UNKNOWN,
             Self::Registry(error) => registry_code(error),
             Self::Internal { .. } => crate::operation::codes::INTERNAL_UNEXPECTED,
@@ -313,6 +323,7 @@ impl OperationError for SecretError {
                 field,
                 min_length,
                 max_length,
+                reason,
             } => {
                 let mut details = vec![
                     (key("field"), field.to_string()),
@@ -321,6 +332,7 @@ impl OperationError for SecretError {
                 if let Some(max) = max_length {
                     details.push((key("maxLength"), max.to_string()));
                 }
+                details.push((key("reason"), reason.as_code().to_owned()));
                 details
             }
             Self::RevisionMismatch {
@@ -333,22 +345,92 @@ impl OperationError for SecretError {
                 (key("count"), needs.references.len().to_string()),
                 (key("omitted"), omitted(needs.references.len())),
             ],
-            Self::Store(SecretStoreError::AccessDenied { by_user }) => {
-                vec![(key("byUser"), by_user.to_string())]
-            }
-            Self::Store(SecretStoreError::Backend { code }) => {
-                vec![(key("code"), code.to_string())]
-            }
+            Self::Store {
+                reference: r,
+                error: SecretStoreError::NotFound,
+            } => vec![reference(r)],
+            Self::Store {
+                error: SecretStoreError::AccessDenied { by_user },
+                ..
+            } => vec![(key("byUser"), by_user.to_string())],
+            Self::Store {
+                error: SecretStoreError::Backend { code },
+                ..
+            } => vec![(key("code"), code.to_string())],
             Self::Registry(RegistryError::RevisionConflict {
                 expected, actual, ..
             }) => vec![
                 (key("expected"), expected.to_string()),
                 (key("actual"), actual.to_string()),
             ],
-            Self::Store(_)
+            Self::Store { .. }
             | Self::WriteBackFailed { .. }
             | Self::Registry(_)
             | Self::Internal { .. } => Vec::new(),
         }
+    }
+}
+
+/// Maps the failure of a `put` that a create or restore runs for one secret
+/// field to what the create reports (AC-23). Create minimal (spec 0010)
+/// and create (spec 0020) both call it.
+///
+/// A store failure on a registered source reference (the reference of a
+/// `bind` or a `copyFrom`, so not `target`) that the user can fix becomes
+/// one `secret.needs_secret` item: `Locked` is `store_locked`,
+/// `AccessDenied` is `access_denied`, `Busy` is `store_busy`, and a source
+/// the store holds no value for is `missing`. The item never offers a
+/// generated value, since the create asked for the source's own value.
+/// Every other failure stays as it is: a failed write or read of `target`
+/// is its `secret.store_*` code, `NotSupported` on either reference is
+/// `secret.store_unsupported`, `OutcomeUnknown` and `Backend` keep their
+/// codes, and a source that is not registered stays `secret.not_found`.
+///
+/// ```
+/// use stackly_core::secret::{SecretError, classify_create_failure};
+/// use stackly_domain::{NeedsSecretReason, SecretRef};
+/// use stackly_platform::SecretStoreError;
+///
+/// let target = SecretRef::parse("local:instance/0199f000-0000-7000-8000-000000000001/admin-password")?;
+/// let source = SecretRef::parse("local:shared/postgres/admin")?;
+///
+/// let from_source = classify_create_failure(
+///     SecretError::Store { reference: source.clone(), error: SecretStoreError::Locked },
+///     &target,
+/// );
+/// let SecretError::NeedsSecret { needs } = &from_source else { panic!("{from_source:?}") };
+/// assert_eq!(needs.references[0].reference, source);
+/// assert_eq!(needs.references[0].reason, NeedsSecretReason::StoreLocked);
+///
+/// let on_target = classify_create_failure(
+///     SecretError::Store { reference: target.clone(), error: SecretStoreError::Locked },
+///     &target,
+/// );
+/// assert_eq!(on_target.code().as_str(), "secret.store_locked");
+/// # Ok::<(), stackly_domain::SecretRefError>(())
+/// ```
+#[must_use]
+pub fn classify_create_failure(error: SecretError, target: &SecretRef) -> SecretError {
+    let SecretError::Store {
+        reference,
+        error: store,
+    } = &error
+    else {
+        return error;
+    };
+    if reference == target {
+        return error;
+    }
+    let reason = match store {
+        SecretStoreError::Locked => NeedsSecretReason::StoreLocked,
+        SecretStoreError::AccessDenied { .. } => NeedsSecretReason::AccessDenied,
+        SecretStoreError::Busy => NeedsSecretReason::StoreBusy,
+        SecretStoreError::NotFound => NeedsSecretReason::Missing,
+        _ => return error,
+    };
+    SecretError::NeedsSecret {
+        needs: NeedsSecret {
+            references: vec![NeedsSecretItem::new(reference.clone(), reason, false)],
+        },
     }
 }

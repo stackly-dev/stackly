@@ -6,10 +6,10 @@ use std::fmt;
 use crate::id::{EnvironmentId, InstanceId, LeaseId, OperationId, RuntimeId, ShortKey};
 use crate::operation::StepSeq;
 use crate::provider::ProviderRevisionKey;
-use crate::registry::AuditEventId;
 use crate::registry::batch::Generation;
 use crate::registry::path::{LogicalRoot, RelativePath};
 use crate::registry::secret::SecretUse;
+use crate::registry::{AuditEventId, ConfigRevisionId};
 use crate::secret::SecretRef;
 use crate::value::{IdempotencyKey, InstanceName, ResourceRevision, Sha256Digest, SoftwareName};
 
@@ -38,6 +38,9 @@ pub enum ResourceRef {
     SecretReference(SecretRef),
     /// An audit row.
     AuditEvent(AuditEventId),
+    /// A config revision of an instance (feature 10). It has no resource
+    /// kind on the wire.
+    ConfigRevision(ConfigRevisionId),
 }
 
 impl fmt::Display for ResourceRef {
@@ -59,6 +62,7 @@ impl fmt::Display for ResourceRef {
             Self::OperationStep(id, seq) => write!(f, "step {seq} of operation {id}"),
             Self::SecretReference(reference) => write!(f, "secret reference {reference}"),
             Self::AuditEvent(id) => write!(f, "audit event {id}"),
+            Self::ConfigRevision(id) => write!(f, "config revision {id}"),
         }
     }
 }

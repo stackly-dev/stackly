@@ -400,19 +400,18 @@ pub(crate) async fn begin(
             _ => Err(begin_registry_error(error)),
         };
     }
-    let record = OpRecord {
-        operation,
-        journal,
-        steps: Vec::new(),
-        created: Vec::new(),
-        locks: keys,
-    };
+    let record = OpRecord::new(operation, journal, Vec::new(), Vec::new(), keys);
     let handle = OpHandle::new(record.clone());
-    inner.ops().insert(id, Arc::clone(&handle));
-    if let Some(entry) = inner.sched().queue.iter_mut().find(|entry| entry.id == id) {
-        entry.pending = false;
+    {
+        // Held until `queued` is reported and the entry may start, so no
+        // cancel or start can commit and report a later revision first.
+        let _writer = handle.record.lock().await;
+        inner.ops().insert(id, Arc::clone(&handle));
+        inner.report_created(&handle, &record);
+        if let Some(entry) = inner.sched().queue.iter_mut().find(|entry| entry.id == id) {
+            entry.pending = false;
+        }
     }
-    inner.report_created(&handle, &record);
     inner.wake.notify_one();
     Ok(BeginOutcome::Created(inner.view(&record, Some(&handle))))
 }

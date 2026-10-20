@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15653-f815-75ea-bafa-ed6ce0387d72",
+  "covers": [
+    "AC-024",
+    "REQ-024"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 manual check 2: the app connects once stacklyd starts",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "After stacklyd starts with the same STACKLY_ROOT, the banner goes away within 5 seconds without any click and the footer says stacklyd running.",
+  "actual": "stacklyd started at 22:44:00.558Z and the app's handshake was accepted at 22:44:04.091Z (3.5 s later), followed by get_info, get_health, events.subscribe, and operation.list by 22:44:04.106Z; the capture shows the banner gone and the footer `stacklyd running`, with no click. Note: in an earlier unrecorded try with Stackly hidden behind other windows the handshake came 9 to 12 s after the start, as macOS slows the timers of hidden apps",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 7818bea with a clean tree, `cargo xtask build-app` (Debug) and `cargo build -p stacklyd -p stackly-cli`; STACKLY_ROOT is the private folder /private/tmp/stk-gui-check (mode 0700)",
+    "Claude Code drove Stackly through the macOS accessibility API (System Events menu clicks, the window's close button, Dock item clicks, AX row selection and sizes) and captured only the Stackly window with `screencapture -l <window id>`; synthetic keystrokes do not reach apps on this Mac, so no step uses the keyboard",
+    "continue from check 1 with Stackly in front and unreachable; wait 8 s so the retry that activation starts is over, capture the window (check2-before.png)",
+    "start `STACKLY_ROOT=/private/tmp/stk-gui-check STACKLY_LOG=debug stacklyd` (log in stacklyd.log), touch nothing in Stackly, capture the window 7 s later (check2-after.png)",
+    "read the daemon start time and the first `client_kind: gui` lines from the debug log"
+  ],
+  "reviewer": "ojiepermana, reviewing the screenshots and logs Claude Code (Claude Opus 5.5) took while it drove the app",
+  "startedAt": "2026-10-19T22:41:46.005051Z",
+  "finishedAt": "2026-10-20T02:15:03.849824Z",
+  "evidencePath": "evidence/manual/files/01a15653-f815-75ea-bafa-ed6ce0387d72/",
+  "context": {
+    "sourceCommit": "7818bea186bae7048a8b5eeee71e03eb932e6a76",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0",
+      "osBuild": "26A428",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": true
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

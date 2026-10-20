@@ -34,6 +34,8 @@ public final class ShellSync {
     public private(set) var completedRounds = 0
     /// When the last frame arrived on a subscription.
     public private(set) var lastFrameAt: Date?
+    /// Why the stores last loaded a full snapshot, or `nil` before the first.
+    public private(set) var lastResnapshot: ResnapshotReason?
     /// Called after a snapshot round settled, so the daemon model can update.
     @ObservationIgnored var onChange: (() -> Void)?
 
@@ -68,7 +70,8 @@ public final class ShellSync {
     /// Applies one signal.
     func handle(_ signal: SyncSignal) {
         switch signal {
-        case .resnapshot:
+        case .resnapshot(let reason):
+            lastResnapshot = reason
             generation += 1
             pending = Set(stores.map(ObjectIdentifier.init))
             isSettled = pending.isEmpty

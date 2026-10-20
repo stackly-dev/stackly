@@ -126,7 +126,7 @@ fn a_backend_error_wins_over_needs_secret() {
         &[("adminPassword", &missing), ("replicaPassword", &broken)],
     );
     *store.fail_reads_of.lock().unwrap() =
-        Some((broken, SecretStoreError::Backend { code: -26276 }));
+        Some((broken.clone(), SecretStoreError::Backend { code: -26276 }));
 
     let err = harness
         .service
@@ -135,7 +135,10 @@ fn a_backend_error_wins_over_needs_secret() {
 
     assert_eq!(
         err,
-        SecretError::Store(SecretStoreError::Backend { code: -26276 })
+        SecretError::Store {
+            reference: broken,
+            error: SecretStoreError::Backend { code: -26276 }
+        }
     );
     assert_eq!(err.code().as_str(), "secret.store_backend");
 }

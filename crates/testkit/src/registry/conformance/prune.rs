@@ -6,12 +6,16 @@ use std::time::Duration;
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
-    Lease, LeaseFilter, Operation, OperationState, PruneReport, RetentionPolicy, WriteOp,
+    Lease, LeaseFilter, Operation, OperationState, Pid, ProcessObservation, PruneReport,
+    RetentionPolicy, WriteOp,
 };
 use stackly_platform::Clock;
 
-use super::{DAY, Suite, expect_eq, fail, shifted};
-use crate::registry::{LeaseBuilder, OperationBuilder};
+use super::{DAY, Suite, domain, expect_eq, fail, shifted};
+use crate::registry::{LeaseBuilder, OperationBuilder, seeded_observation};
+
+/// Observations the default policy keeps per instance (spec 0005 AC-14).
+const KEPT_OBSERVATIONS: u32 = 20;
 
 /// How far the suite moves the clock before it prunes, so every row it
 /// writes is far from what earlier scenarios wrote.
@@ -190,6 +194,68 @@ pub(super) fn prune(suite: &Suite<'_>) {
         &format!("{CHECK}: active, suppressed, and recently released leases stay"),
         leases,
         kept_leases,
+    );
+    expect_eq(
+        &format!("{CHECK}: the newest observation survives prune"),
+        suite.value(
+            "read the newest observation after prune",
+            suite.registry.latest_process_observation(busy.id()),
+        ),
+        Some(seeded_observation(busy.id(), hour_ago)),
+    );
+
+    keeps_twenty_observations(suite, &stack, hour_ago, now);
+}
+
+/// The default policy keeps the 20 newest observations of each instance,
+/// and the newest stays readable.
+fn keeps_twenty_observations(
+    suite: &Suite<'_>,
+    stack: &super::Stack,
+    from: Timestamp,
+    now: Timestamp,
+) {
+    const CHECK: &str = "the default retention keeps 20 observations per instance";
+    let watched = Suite::instance(stack).build();
+    let recorded: Vec<ProcessObservation> = (0..KEPT_OBSERVATIONS + 2)
+        .map(|index| {
+            let mut observation = seeded_observation(watched.id(), shifted(from, index.into()));
+            observation.identity.pid = domain("make a process ID", Pid::new(5000 + index));
+            observation
+        })
+        .collect();
+    let mut ops = vec![WriteOp::InsertInstance(watched.clone())];
+    ops.extend(
+        recorded
+            .iter()
+            .cloned()
+            .map(WriteOp::RecordProcessObservation),
+    );
+    suite.commit("record more observations than the default keeps", ops);
+
+    let report = run(suite, CHECK, &RetentionPolicy::DEFAULT, now);
+    expect_eq(
+        &format!("{CHECK}: the two oldest go"),
+        (report.process_observations, report.total()),
+        (2, 2),
+    );
+    expect_eq(
+        &format!("{CHECK}: the newest observation stays"),
+        suite.value(
+            "read the newest of the watched instance",
+            suite.registry.latest_process_observation(watched.id()),
+        ),
+        recorded.last().cloned(),
+    );
+    let nineteen = RetentionPolicy {
+        observations_per_instance: KEPT_OBSERVATIONS - 1,
+        ..RetentionPolicy::DEFAULT
+    };
+    let report = run(suite, "prune to one observation fewer", &nineteen, now);
+    expect_eq(
+        &format!("{CHECK}: exactly 20 stayed"),
+        (report.process_observations, report.total()),
+        (1, 1),
     );
 }
 

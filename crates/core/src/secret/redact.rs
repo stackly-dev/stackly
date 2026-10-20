@@ -85,9 +85,9 @@ struct Known {
 /// Returns a second value equal to `value`, wiped from memory when it
 /// drops like the first. The redactor keeps such a copy of every value it
 /// learns, and the secret worker keeps one for a write it runs after its
-/// caller may have stopped waiting. These two copies and
-/// [`char_count`] are the only places outside matching and delivery that
-/// read a value.
+/// caller may have stopped waiting. These two copies, [`char_count`], and
+/// [`has_control_character`] are the only places outside matching and
+/// delivery that read a value.
 pub(crate) fn copy_value(value: &SecretValue) -> SecretValue {
     SecretValue::new(value.expose().to_owned())
         .expect("a secret value stays valid when it is copied")
@@ -97,6 +97,13 @@ pub(crate) fn copy_value(value: &SecretValue) -> SecretValue {
 /// `minLength` and `maxLength` of a secret field count (spec 0009).
 pub(crate) fn char_count(value: &SecretValue) -> usize {
     value.expose().chars().count()
+}
+
+/// Returns whether `value` holds a control character, one that
+/// `char::is_control` accepts (U+0000 to U+001F and U+007F to U+009F),
+/// which a `printableOnly` secret field refuses (AC-22).
+pub(crate) fn has_control_character(value: &SecretValue) -> bool {
+    value.expose().chars().any(char::is_control)
 }
 
 impl Redactor {
@@ -524,5 +531,31 @@ mod tests {
         let seam: &dyn Redact = &redactor;
 
         assert_eq!(seam.redact(&format!("failed: {LONG}")), "failed: ****");
+    }
+
+    #[test]
+    fn a_control_character_is_one_that_char_is_control_accepts() {
+        for text in [
+            "line\nbreak",
+            "tab\there",
+            "carriage\rreturn",
+            "unit\u{1f}separator",
+            "delete\u{7f}",
+            "\u{80}padding",
+            "next\u{85}line",
+            "end\u{9f}",
+        ] {
+            assert!(has_control_character(&value(text)), "{text:?}");
+        }
+        for text in [
+            "plain-ascii-0123",
+            "spaces ' \" and \\ stay",
+            "no\u{a0}break space",
+            "ééé日本語🔑",
+            "line\u{2028}separator",
+            "zero\u{200b}width",
+        ] {
+            assert!(!has_control_character(&value(text)), "{text:?}");
+        }
     }
 }

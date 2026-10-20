@@ -60,6 +60,8 @@ struct Tree {
     plant: Option<PathBuf>,
     /// Write a manifest naming another operation.
     foreign_manifest: bool,
+    /// Write a manifest that cannot be read instead of a valid one.
+    broken_manifest: bool,
     /// Also create the instance's run folder.
     run_dir: bool,
     /// Decline the item as already existing, and make the folder anyway.
@@ -118,12 +120,17 @@ impl OperationWork for CreateTree {
                 } else {
                     ctx.id()
                 };
-                write_instance_manifest(
-                    ctx.platform(),
-                    &paths,
-                    &manifest(ctx.platform(), id, owner),
-                )
-                .expect("test instance manifest can be written");
+                if tree.broken_manifest {
+                    std::fs::write(&paths.manifest, b"{ not json")
+                        .expect("a broken manifest can be written");
+                } else {
+                    write_instance_manifest(
+                        ctx.platform(),
+                        &paths,
+                        &manifest(ctx.platform(), id, owner),
+                    )
+                    .expect("test instance manifest can be written");
+                }
                 ctx.confirm_created(created).await?;
             }
             ctx.finish_step(None).await?;
@@ -562,4 +569,78 @@ async fn the_marker_compensator_passes_the_compensator_conformance_check() {
     .await;
 
     assert!(!harness.root.path().join("owned").exists());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_tree_whose_manifest_cannot_be_read_is_left_and_its_compensation_fails() {
+    // BR-023: ownership that cannot be proven is never assumed, so nothing
+    // of the tree is removed.
+    let harness = Harness::new().await;
+    let tree = Tree {
+        broken_manifest: true,
+        ..Tree::default()
+    };
+    let made = Arc::clone(&tree.made);
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::CreateInstance,
+            Box::new(CreateTree(tree)),
+        ))
+        .await;
+    let stuck = wait_state(&harness.engine, id, OperationState::NeedsRecovery).await;
+
+    let instance = made.lock().unwrap().unwrap();
+    let paths = harness.layout.layout().instance_paths(instance);
+    assert!(paths.data.join("PG_VERSION").is_file());
+    assert_eq!(stuck.created[0].state(), CreatedState::CompensationFailed);
+    assert_eq!(
+        stuck.created[0].detail().map(|detail| detail.as_str()),
+        Some("manifest_unreadable")
+    );
+}
+
+/// Claims its resource's folders, as a create would.
+struct Claims;
+
+impl OperationWork for Claims {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("claim".parse().expect("a step name")))
+                .await?;
+            ctx.claim_resource().await?;
+            ctx.finish_step(None).await?;
+            Ok(stackly_core::operation::WorkOutcome {
+                result: OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn claim_resource_refuses_an_instance_the_registry_already_holds() {
+    // BR-023: an operation on an existing instance never records its tree
+    // as its own, so a failure never compensates the user's data.
+    let harness = Harness::new().await;
+    let existing = crate::common::instance(&harness);
+
+    let id = harness
+        .begin(crate::common::request(
+            OperationKind::RenameInstance,
+            stackly_domain::OperationResource::Instance(existing),
+            Box::new(Claims),
+        ))
+        .await;
+    let failed = wait_state(&harness.engine, id, OperationState::Failed).await;
+
+    assert!(failed.created.is_empty());
+    assert_eq!(
+        failed
+            .view
+            .journal
+            .failure_error()
+            .map(|error| error.code().as_str()),
+        Some("internal.unexpected")
+    );
 }

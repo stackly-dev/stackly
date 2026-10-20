@@ -64,6 +64,7 @@ serde_path_to_error = "0.1"
 serde_yaml_ng = "0.10"
 sha2 = "0.11"
 signal-hook = "0.4"
+socket2 = "0.6"
 syn = { version = "3.0", features = ["full", "visit"] }
 # Read only: no xattr restore, no unpack (spec 0018).
 tar = { version = "0.4", default-features = false }
