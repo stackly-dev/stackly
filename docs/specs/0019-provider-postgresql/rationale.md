@@ -457,10 +457,19 @@ Spec ini diselaraskan dengan keputusan lead foundation K1 sampai K18 dan update 
 | K8 | `Stdin::Text` dikirim executor init (langkah 7 spec 0010) sebagai `StdinSource::Bytes(SecretValue::new(text))`; karena teks plan bukan newtype tervalidasi, `SecretValue::new` yang gagal menjadi `init_step_failed`, tidak pernah `config_render_failed` | AC-3, tabel perubahan core baris 3, API surface, dan langkah 5 |
 | K13 | flag `printable_only`, pemeriksaan di `put` lewat `secret::redact`, `reason` di setiap `secret.invalid_value`, dan bump minor nya milik langkah 4a dan 5 spec 0011; spec ini memegang field `x-stackly.printableOnly` di model settings dan pengisian `from_setting`; evidence AC-4 baru dicatat setelah pengisian itu ada | AC-4, tabel perubahan core baris 4, paragraf kunci `reason`, langkah 3, prasyarat milestone 1, dan skenario printable only |
 | K1, K14 | create sementara spec 0010: `provider.revision` wajib terisi, `field` dari `from_setting`, `classify_create_failure`, dan init yang gagal membuat operasi `needs_recovery` dengan instance `failed` sampai abandon | AC-5, *Edge cases* (folder data tidak kosong, daemon mati saat init), skenario happy path dan init gagal, dan baris Assumed spec 0010 dan 0011 |
-| K9 | nomor minor protocol diambil saat merge, tidak dipesan lebih dulu | paragraf kunci `reason` |
+| K4 (dengan aturan di K9) | nomor minor protocol diambil saat merge, tidak dipesan lebih dulu | paragraf kunci `reason` |
 
 Juga diselaraskan karena teks foundation di `main` berubah:
 
 - **`runtime.versionCheck`**: spec 0009 dan 0018 kini menetapkan pencarian per baris stdout lalu stderr, tanpa pembungkus `\A…\z`. Pattern PostgreSQL menjadi `^postgres \(PostgreSQL\) ([0-9]+\.[0-9]+)$` (dicek pada keluaran nyata 17.11 dan 18.6), dan `\n?` yang dulu menjaga semua aturan yang mungkin dibuang (AC-15, manifest, skenario, baris Assumed spec 0018).
 - **Follow-up update spec 0009, 0010, dan 0011** dicentang: ketiganya sudah diterapkan di `main`.
-- **Catatan untuk lead**: tabel tambahan spec 0009 masih menulis executor init `Stdin::Text` di "fitur 19 langkah 5", padahal spec 0010 (K8) menaruhnya di langkah 7 nya. Spec ini mengikuti spec 0010; baris spec 0009 itu perlu diselaraskan pemiliknya.
+- **Catatan untuk lead** (sudah selesai): tabel tambahan spec 0009 dulu menulis executor init `Stdin::Text` di "fitur 19 langkah 5"; sudah diselaraskan di spec 0009 (sekitar baris 82 dan 510) dengan langkah 7 spec 0010.
+
+## Perbaikan setelah penyelarasan 2026-10-20
+
+Tiga temuan minor dari reviewer lintas dokumen, dengan keputusan lead D1, D5, dan D9 di atas teks perbaikannya:
+
+- Blok `connection` milik spec 0021: catatan manifest baru menjelaskan bahwa paket pertama di langkah 4 belum menulisnya dan langkah 2 milestone 1 spec 0021 yang menambahkannya, sebelum langkah 11 (D1, D5).
+- Rujukan basi: catatan tentang tabel spec 0009 dihapus dari Follow-up dan ditandai selesai di sini, dan nomor minor protocol dirujuk ke K4 (keputusan) alih alih K9 (risiko).
+- Prasyarat langkah 9 menjadi fitur 17 milestone 1 (langkah 2: `providers/catalog.toml` dan ledger nya), bukan seluruh build fitur 17.
+- D9: test init gagal AC-5 diperbarui langkah 9 spec 0020 menjadi operasi `failed` dengan kompensasi penuh, dengan kegagalan `initdb` dipaksa lewat kait test sesudah pemeriksaan isi spec 0020 atau lewat jalur init fake (AC-5, *Edge cases*, skenario init gagal).
