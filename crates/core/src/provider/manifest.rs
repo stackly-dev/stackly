@@ -156,10 +156,19 @@ pub(crate) enum InitStepSpec {
     },
     RunExecutable {
         command: CommandSpec,
-        stdin: Option<SettingName>,
+        stdin: Option<StdinSpec>,
         timeout: Option<u64>,
         success: Vec<u8>,
     },
+}
+
+/// The stdin of a `runExecutable` step.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum StdinSpec {
+    /// The exact bytes of a secret field.
+    Secret(SettingName),
+    /// Literal manifest text, written exactly (spec 0019).
+    Text(String),
 }
 
 /// The signal of a graceful stop.

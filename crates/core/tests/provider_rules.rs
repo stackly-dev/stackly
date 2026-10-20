@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
     EnvValue, InitStep, IssueCode, Location, NameCheck, PackageError, PackageFiles, PlanContext,
-    PlanError, ResolvedEndpoint, RuntimeContext, SettingClass, ValidatedPackage, read_package,
+    PlanError, ResolvedEndpoint, RuntimeContext, SettingClass, Stdin, ValidatedPackage,
+    read_package,
 };
 use stackly_core::secret::ResolvedSecrets;
 use stackly_domain::{EndpointName, InstanceId, Port};
@@ -596,6 +597,111 @@ fn a_whole_secret_env_value_is_accepted_only_where_secrets_resolve() {
         IssueCode::SecretNotAllowedHere,
     );
     ev.pass();
+}
+
+/// The literal stdin line of the `fake-command` init step, as written in
+/// its `provider.yaml`.
+const STDIN_TEXT_LINE: &str =
+    r#"text: "first line ü 空\n\tsecond line with $(touch pwned) and 'quotes'\n""#;
+
+#[test]
+fn stdin_text_is_literal_one_key_bounded_and_free_of_tokens_and_most_control_characters() {
+    let yaml = "provider.yaml";
+    let at = "lifecycle.initialize[4].stdin";
+    let with_text =
+        |text: &str| Edit::fake_command().replace(yaml, STDIN_TEXT_LINE, &format!("text: {text}"));
+    assert!(with_text(r#""a\tb\nc""#).validate().is_ok());
+    assert_manifest_issue(
+        with_text(r#""home is ${HOME}""#),
+        &format!("{at}.text"),
+        IssueCode::TokenNotAllowedHere,
+    );
+    assert_manifest_issue(
+        with_text(r#""""#),
+        &format!("{at}.text"),
+        IssueCode::InvalidValue,
+    );
+    assert_manifest_issue(
+        with_text(&format!("\"{}\"", "x".repeat(16 * 1024 + 1))),
+        &format!("{at}.text"),
+        IssueCode::InvalidValue,
+    );
+    assert!(
+        with_text(&format!("\"{}\"", "x".repeat(16 * 1024)))
+            .validate()
+            .is_ok()
+    );
+    for control in [r"\r", r"\u0000", r"\u007f", r"\u0085"] {
+        assert_manifest_issue(
+            with_text(&format!("\"a{control}b\"")),
+            &format!("{at}.text"),
+            IssueCode::InvalidValue,
+        );
+    }
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            STDIN_TEXT_LINE,
+            &format!("{STDIN_TEXT_LINE}\n        secret: authToken"),
+        ),
+        at,
+        IssueCode::InvalidValue,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            &format!("stdin:\n        {STDIN_TEXT_LINE}"),
+            "stdin: {}",
+        ),
+        at,
+        IssueCode::InvalidValue,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "      args: [version]\n  failureThreshold",
+            "      args: [version]\n      stdin: { text: x }\n  failureThreshold",
+        ),
+        "health.probe.command.stdin",
+        IssueCode::UnknownField,
+    );
+}
+
+#[test]
+fn stdin_text_reaches_the_plan_exactly_and_changes_the_digest() {
+    let package = Edit::fake_command()
+        .validate()
+        .expect("the fixture is valid");
+    let init = package
+        .init_plan(&context_for(
+            &package,
+            serde_json::json!({ "authToken": SECRET_REF }),
+            "/Volumes/T",
+        ))
+        .expect("the init plan builds");
+    let run = init
+        .steps
+        .iter()
+        .find_map(|step| match step {
+            InitStep::Run(run) => Some(run),
+            _ => None,
+        })
+        .expect("the init step runs");
+
+    assert_eq!(
+        run.stdin,
+        Stdin::Text("first line ü 空\n\tsecond line with $(touch pwned) and 'quotes'\n".into())
+    );
+    assert!(format!("{:?}", run.stdin).contains("second line"));
+
+    let changed = Edit::fake_command()
+        .replace("provider.yaml", "second line with", "second line wiTh")
+        .validate()
+        .expect("still valid");
+    assert_ne!(
+        package.key().manifest_sha256(),
+        changed.key().manifest_sha256()
+    );
 }
 
 #[test]

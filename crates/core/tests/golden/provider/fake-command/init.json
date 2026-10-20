@@ -111,7 +111,8 @@
           ]
         },
         "stdin": {
-          "type": "null"
+          "type": "text",
+          "content": "first line ü 空\n\tsecond line with $(touch pwned) and 'quotes'\n"
         },
         "timeout": "20s",
         "successExitCodes": [

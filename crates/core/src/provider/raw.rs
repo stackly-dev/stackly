@@ -219,9 +219,15 @@ pub(crate) struct RawStep {
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[cfg_attr(feature = "json-schema", schemars(rename = "Stdin"))]
+#[cfg_attr(
+    feature = "json-schema",
+    schemars(rename = "Stdin", extend("minProperties" = 1, "maxProperties" = 1))
+)]
 pub(crate) struct RawStdin {
-    pub(crate) secret: String,
+    /// A secret field whose exact bytes go to stdin.
+    pub(crate) secret: Option<String>,
+    /// Literal text written to stdin exactly (spec 0019).
+    pub(crate) text: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
