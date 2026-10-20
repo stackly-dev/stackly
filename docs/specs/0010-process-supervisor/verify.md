@@ -195,7 +195,7 @@ Bagian ini ditambah per langkah. Sejauh ini: langkah 15 bagian aturan `check-dep
 #### UI / manual
 
 - [x] Buka `apps/daemon/tests/supervisor/` → satu file per kelompok skenario (`lifecycle`, `create`, `actions`, `process`, `restart`, `logs`, `budget`) dan `support.rs`; setiap test memakai `TestRoot` sendiri, dan test yang membunuh daemon memakai binary `stacklyd` lewat `SpawnedDaemon` → AC-9
-- [ ] Buka `evidence/` setelah `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test supervisor` → satu record `fixture` per test dengan `covers` REQ-011, REQ-012, REQ-013, REQ-016, BR-010, AC-010, AC-011, AC-012, AC-013, AC-029, AC-055, AC-067, AC-068, NFR-006 → AC-3 sampai AC-12
+- [x] Buka `evidence/` setelah `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test supervisor` → satu record `fixture` per test dengan `covers` REQ-011, REQ-012, REQ-013, REQ-016, BR-010, AC-010, AC-011, AC-012, AC-013, AC-029, AC-055, AC-067, AC-068, NFR-006 → AC-3 sampai AC-12
 
 #### Commands
 
