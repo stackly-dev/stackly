@@ -7,9 +7,11 @@
 
 mod assemble;
 mod index;
+mod install;
 mod load;
 mod model;
 mod rules;
+mod status;
 #[cfg(feature = "test-support")]
 pub mod testing;
 
@@ -23,6 +25,7 @@ pub use index::{
     IndexPlanned, IndexPlatformNote, IndexProvider, content_sha256, package_dir, provider_entry,
     versions_sha256,
 };
+pub use install::{Installability, NotInstallableReason, VersionNotFound, installability};
 pub use load::load_catalog;
 pub use model::{
     CATALOG_OUTDATED_AFTER, Catalog, CatalogEntry, CatalogLocation, CatalogMeta, CatalogOptions,
@@ -36,4 +39,8 @@ pub use rules::{
     SUMMARY_VERSIONS_MAX, TESTING_NAMESPACE, TileColor, category_code, category_from_code,
     check_note, default_mark, index_problems, is_mark, namespace_allowed, package_limits,
     platform_note_problems,
+};
+pub use status::{
+    CellStatus, EntryState, EntryStatus, MATRIX_OSES, SupportReason, TargetSupport, entry_status,
+    host_cell_status, version_support,
 };
