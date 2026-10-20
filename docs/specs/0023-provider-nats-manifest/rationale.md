@@ -318,7 +318,7 @@ Diputuskan saat menulis spec, masing masing dengan pilihan yang direkomendasikan
 - **Inbox acak per percobaan** (`_INBOX.stackly.<32 hex>`), walau satu probe per instance pada satu waktu, supaya client pengguna yang kebetulan memakai inbox yang sama tidak bertabrakan. Runner up: inbox tetap.
 - **`protocol: 1`, `echo: false`, `headers: false`, `no_responders: false`, `verbose: false`** di CONNECT: tanpa `+OK` per perintah, tanpa pesan sendiri yang kembali, dan tanpa header; nama client `stackly-readiness` supaya terlihat di monitoring (seperti `PGAPPNAME` di spec 0019).
 - **Tanpa pelacakan `server_id` antar percobaan** (server id baru menandakan proses lain), karena identitas proses sudah tugas spec 0010 dan probe tetap tanpa state. Runner up: probe yang menyimpan `server_id` pertama.
-- **Detail tanpa `Redactor`**, karena tidak ada secret di jalur ini; fitur 39 meninjau ulang saat auth masuk.
+- **Detail tanpa `Redactor`**, karena tidak ada secret di jalur ini; fitur 39 meninjau ulang saat auth masuk. *Diganti 2026-10-20 (K3)*: runner spec 0010 menyamarkan setiap detail probe, termasuk probe native, lewat `Redactor`.
 - **Batas baca 16 KiB per baris, 64 KiB per payload, 128 KiB total**: INFO server tunggal sekitar 600 byte dan account info sekitar 500 byte, jadi batas ini longgar untuk server sah dan kecil untuk server jahat.
 - **Interval, timeout percobaan, dan timeout lain tetap default**, dan `health` tidak ditulis, karena NATS siap dalam ratusan milidetik dan belum ada ukuran yang menuntut nilai lain. Runner up: `recoverySeconds` 120 untuk store JetStream besar.
 - **`metadata.revision` tetap `1.0.0`**, karena NATS belum pernah terbit di catalog (selama ini `planned`); `manifest_sha256` tetap membedakan isi. Runner up: `1.1.0`.
@@ -328,7 +328,7 @@ Diputuskan saat menulis spec, masing masing dengan pilihan yang direkomendasikan
 - **Spike lokal sebagai langkah 0**, karena sesi architect tidak menjalankan binary NATS; nama field INFO, balasan API, dan `/varz` di spec ini berasal dari dokumentasi protokol NATS dan harus dibuktikan pada 2.15.1 sebelum runner dibangun.
 - **Catatan platform `linux` dan `windows` `planned`** di entri catalog, karena keduanya ada di Deferred proyek dan upstream punya build nya; tanpa catatan, catalog menulis `unsupported` `no_build`, yang terdengar final. Runner up: hanya `windows` seperti contoh spec 0017.
 - **Test native di `apps/daemon/tests/nats.rs` dan test journey di `apps/cli/tests/nats_journey.rs`**, mengikuti pola `postgresql.rs` spec 0019; runner diuji terhadap server asing di file daemon yang sama karena binary nya sudah terpasang di sana.
-- **`pin_package` dipakai bersama dengan spec 0019**, dibuat oleh fitur mana pun yang dibangun lebih dulu dengan signature spec 0019.
+- **`pin_package` dipakai bersama dengan spec 0019**, dibuat oleh fitur mana pun yang dibangun lebih dulu dengan signature spec 0019. *Diganti 2026-10-20 (K5)*: `pin_package` dan `DaemonConfig.extra_log_sinks` dibangun spec 0010 langkah 13.
 - **`SIGSTOP` untuk membuktikan readiness jujur**, karena kernel tetap menyelesaikan connect TCP lewat backlog sementara server tidak menjawab apa pun; ini persis kasus "port terbuka bukan berarti ready". Runner up: lame duck lewat `SIGUSR2`, yang menutup listener sehingga connect gagal dan tidak membedakan probe ini dari probe `tcp`.
 - **`nats-readiness` di blok `readiness`, health mewarisinya**, berbeda dengan contoh PRD 21.2 yang menaruhnya di `health` (`type: providerProbe`): di v1alpha1 readiness wajib dan health tanpa probe memakai probe readiness, jadi satu deklarasi melayani keduanya dengan satu percobaan per 10 detik. Runner up: deklarasi terpisah di `health`.
 - **State machine di `provider::probe::nats`, driver di `supervisor::probe::native`**, supaya state machine dan fuzz nya bisa dibangun tanpa menunggu supervisor fitur 10 (cross check S4), dan supaya kode supervisor hanya menambah satu cabang `match` yang menyebut NATS.
@@ -362,3 +362,19 @@ Diterapkan sesi `upd-0019-0022-0023` dari *Usulan update spec lain* spec 0021 (s
 
 ID AC dan status spec ini tidak berubah.
 
+
+## Penyelarasan 2026-10-20 (keputusan K foundation)
+
+Update `architect (update)` atas permintaan lead scope 02, setelah keputusan K1 sampai K18 lead foundation dan update spec foundation masuk ke `main` (0001 sampai 0006, 0009, 0010, 0011, dan 0012). Sumber nya butir *0023 (provider NATS)* di `docs/scope/coordination/02-instalasi-pertama.penyelarasan-k.md`, dicek terhadap spec 0010 dan 0011 di `main`. ID AC, status, dan nomor langkah build tidak berubah.
+
+| No | Perubahan di spec ini | Sumber | Catatan |
+| --- | --- | --- | --- |
+| 1 | Detail probe native lewat `Redactor` di runner spec 0010, bukan tanpa redaksi | K3, spec 0010 *Hasil runner*, spec 0011 (detail observasi lewat `Redactor`) | keputusan kecil lama ditandai diganti |
+| 2 | *Hasil probe dan loop supervisor*: `ProbeOutcome` dan reason milik spec 0010, termasuk `unexpected_status` (`http`) dan `check_failed` (`exec`), yang tidak dipakai probe native; syarat "kalau spec 0010 belum punya" dihapus | K3 | |
+| 3 | Arm `ProbeSpec::Native` di match `supervisor::probe` ditambah langkah 1 dengan `native::run` sementara (`// provisional: F23 langkah 5`), dan langkah 5 menggantinya; langkah 1 kini butuh langkah 6 spec 0010 | K3 (spec 0010: "arm match native ditambah langkah 1 spec 0023, dan driver nya dibangun langkah 5 dan 6") | prasyarat milestone 1 berubah; teks scope baru dikirim ke lead |
+| 4 | `pin_package` dan `LogSink` perekam lewat `DaemonConfig.extra_log_sinks` dari spec 0010 langkah 13; baris 4 RISK-07 tidak lagi dibangun di sini | K5 | prasyarat milestone 2 menyebut langkah 13 spec 0010 dan tidak lagi spec 0019 langkah 6 |
+| 5 | Test create memakai create sementara spec 0010 dengan `provider.revision` dari record `pin_package` | K1 | |
+| 6 | Kasus tepi port `Fixed`: listener wildcard pengguna tidak lagi menghalangi start; cek identitas probe yang menjaga | K2 | |
+| 7 | Blok *Usulan update spec 0009* dan *Usulan update spec 0010* ditandai diterapkan, Follow-up keduanya dicentang, dan baris Assumed spec 0009, 0010, dan 0019 diselaraskan | spec 0009 dan 0010 di `main` | |
+
+Tidak diterapkan: tidak ada. Keputusan K lain (K4, K6 sampai K18) tidak menyentuh isi spec ini; K18 (milestone GUI fase 02 menunggu fitur 10 milestone 2 sampai fitur 13 langkah 16) berlaku lewat prasyarat fitur 20 dan 21 di milestone 3.
