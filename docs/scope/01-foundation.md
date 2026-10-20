@@ -202,7 +202,7 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
   - [x] Daemon, IPC, and end to end proof: protocol DTOs, events, and error codes with fixtures and Swift contract tests, `stacklyd` start slot and shutdown step, `instance.create`, `start`, `stop`, `get`, and `list`, `install_fake`, daemon integration tests with evidence, `check-deps` rules, and the NFR-003 measurement (spec 0010 AC-3 to AC-12, AC-15 to AC-17, AC-20, AC-21, AC-23; build steps 12 to 15; needs the spec 0006 daemon server, the spec 0005 SQLite registry, and `ReplaceSecretUses` from spec 0011 step 0 for create; protocol and `check-deps` can run as parallel sessions)
 - [ ] Verify it: `/check verify process supervisor`
 - [x] Test it: `/test process supervisor`
-- [ ] Review it (fresh model): `/check review process supervisor`
+- [x] Review it (fresh model): `/check review process supervisor`
 - [ ] Document it: `/document process supervisor`
 
 ### 11. Secret store & redaction · in-progress · GA
