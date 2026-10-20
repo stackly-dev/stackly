@@ -382,3 +382,5 @@ Tidak diterapkan: tidak ada. Keputusan K lain (K4, K6 sampai K18) tidak menyentu
 ## Perbaikan pasca penyelarasan 2026-10-20
 
 Diterapkan atas permintaan lead scope 02 dari `docs/scope/coordination/post-alignment/post-0023.md` dan keputusan lead D1: AC-13 dan langkah 10 memakai `stackly instance inspect <nama> --json` (readiness dari `result.instance`, bentuk hasil spec 0021), bukan `stackly instance get --json`, karena `get` hanya alias opsional fitur 14 (spec 0010) dan spec 0022; langkah 2 menyebut blok `connection` NATS (spec 0021) yang hanya ditulis langkah ini, di commit yang sama dengan blok `readiness` (D1). ID AC, status, dan nomor langkah tidak berubah.
+
+Tambahan lead pada putaran yang sama (2026-10-20): *Hasil runner* spec 0010 kini memakai satu urutan untuk setiap runner, termasuk probe native: menyamarkan teks mentah lewat `Redactor`, memotong 256 karakter, lalu membuat `ObservationDetail`. Karena itu `NativeProbeFailure.detail` adalah `String` mentah, bukan `ObservationDetail`; `Exchange` tetap memotong nilai dari server ke 64 karakter dan mengganti karakter kontrol, dan AC-5 serta *Hasil gagal* menyebut urutan itu.
