@@ -292,14 +292,19 @@ pub fn registry_error(error: &RegistryError) -> ErrorBody {
 const ISSUE_ITEM: &str = "issue";
 
 /// The `issue` item of one provider issue: its file, location, code, and
-/// message. Core promises an issue message never holds a settings text
-/// value or a secret.
+/// message, plus its reason when the code declares reasons (spec 0021).
+/// Core promises an issue message never holds a settings text value or a
+/// secret.
 fn issue_item(issue: &Issue) -> ErrorItem {
-    ErrorItem::new(ISSUE_ITEM)
+    let item = ErrorItem::new(ISSUE_ITEM)
         .with_field("file", issue.file.as_str())
         .with_field("location", issue.location.to_string())
         .with_field("code", issue.code.as_code())
-        .with_field("message", issue.message.as_str())
+        .with_field("message", issue.message.as_str());
+    match issue.reason {
+        Some(reason) => item.with_field("reason", reason),
+        None => item,
+    }
 }
 
 /// `body` with the `issueCount` detail and one `issue` item per issue, at
@@ -568,6 +573,23 @@ mod tests {
         assert_eq!(first.field("file"), Some(error.issues[0].file.as_str()));
         assert_eq!(first.field("code"), Some(error.issues[0].code.as_code()));
         assert_eq!(body.category(), ErrorCategory::InvalidInput);
+    }
+
+    #[test]
+    fn an_issue_with_a_reason_carries_it_as_the_last_item_field() {
+        let issue = stackly_core::provider::Issue::new(
+            "provider.yaml",
+            stackly_core::provider::Location::Field("connection[0].template".to_owned()),
+            stackly_core::provider::IssueCode::ConnectionInvalid,
+            "the template does not render to an absolute uri",
+        )
+        .with_reason("not_a_uri");
+
+        let item = issue_item(&issue);
+
+        let keys: Vec<_> = item.fields().iter().map(|field| field.key()).collect();
+        assert_eq!(keys, ["file", "location", "code", "message", "reason"]);
+        assert_eq!(item.field("reason"), Some("not_a_uri"));
     }
 
     #[test]

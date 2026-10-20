@@ -802,6 +802,84 @@ pub(crate) fn check_socket_name(
     })
 }
 
+/// Checks a `connection.template` (spec 0021): text and integer tokens
+/// limited to endpoint addresses and ports, the instance name and ID, the
+/// provider ID and revision, and the runtime version; the socket path and
+/// socket folder of a unix endpoint; and `secret.<field>`. Every other
+/// token, `endpoint.<n>.host` and any `settings.*` included, is refused
+/// with `token_not_allowed_here`.
+pub(crate) fn check_connection_template(
+    text: &str,
+    env: &TypeEnv<'_>,
+    issues: &mut FileIssues<'_>,
+    path: &str,
+) -> Option<Interp> {
+    let raw = match parse(text) {
+        Ok(raw) => raw,
+        Err(message) => {
+            issues.at(path, IssueCode::UnknownToken, message);
+            return None;
+        }
+    };
+    let mut ok = true;
+    let mut pieces = Vec::new();
+    for piece in raw {
+        let segments = match piece {
+            RawPiece::Literal(text) => {
+                pieces.push(Piece::Literal(text));
+                continue;
+            }
+            RawPiece::Token(segments) => segments,
+        };
+        if segments.first().map(String::as_str) == Some("settings") {
+            issues.at(
+                path,
+                IssueCode::TokenNotAllowedHere,
+                format!(
+                    "{} cannot be used in a connection template",
+                    segments.join(".")
+                ),
+            );
+            ok = false;
+            continue;
+        }
+        match resolve(&segments, env) {
+            Ok((token, _)) if connection_allows(&token) => pieces.push(Piece::Token(token)),
+            Ok((token, _)) => {
+                issues.at(
+                    path,
+                    IssueCode::TokenNotAllowedHere,
+                    format!("{token} cannot be used in a connection template"),
+                );
+                ok = false;
+            }
+            Err((code, message)) => {
+                issues.at(path, code, message);
+                ok = false;
+            }
+        }
+    }
+    ok.then_some(Interp { pieces })
+}
+
+/// Whether a connection template may use the token (the `connection.template`
+/// row of the position matrix, spec 0009).
+const fn connection_allows(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::EndpointAddress(_)
+            | Token::EndpointPort(_)
+            | Token::EndpointSocket(_)
+            | Token::EndpointSocketDir(_)
+            | Token::InstanceName
+            | Token::InstanceId
+            | Token::ProviderId
+            | Token::ProviderRevision
+            | Token::RuntimeVersion
+            | Token::Secret(_)
+    )
+}
+
 /// Checks a literal-only position such as an HTTP probe path, returning
 /// the text with `$${` unescaped.
 pub(crate) fn check_literal(text: &str, issues: &mut FileIssues<'_>, path: &str) -> Option<String> {
