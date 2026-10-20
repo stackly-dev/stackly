@@ -698,6 +698,82 @@ Resumable: install runtime, start, stop, restart, reload, env up dan down, backu
 
 - Setiap panic atau disk penuh butuh tangan pengguna.
 
+### Keputusan 28: isi `FailureError` yang disimpan (2026-10-20)
+
+Review fresh model 2026-10-20 (temuan Minor "`FailureError` membuang `hint`, `items`, dan `rule`") menemukan tiga bagian spec yang tidak cocok: *Model domain* memberi `FailureError` field `hint` dan `items`, *Kegagalan dan error* meminta `rule` di `ErrorBody`, tetapi tabel `operation_journal` (migrasi `0002_operation_journal.sql`) hanya punya `failure_error_code`, `failure_message`, dan `failure_details`. Kode mengikuti tabel: `FailureError` domain hanya menyimpan kode, pesan, dan details, `settle` tidak pernah membaca `OperationError::rule()`, dan `failure_body` di `stacklyd` tidak punya apa pun untuk `with_hint`, `with_items`, atau `with_rule`. Bukan bug hari ini, karena belum ada pekerjaan nyata yang gagal dengan item atau rule, tetapi spec 0011 AC-11 dan spec 0020 AC-7 butuh `secret.needs_secret` dengan satu item per reference dari operasi start dan create, dan spec 0006 *Hint* sudah menetapkan bahwa hint selalu teks statis dari `codes::<area>::hint(code, details)`.
+
+Fakta rilis: belum ada rilis app atau daemon Stackly; satu satunya rilis GitHub adalah tiga pre release artefak runtime (`runtime/postgresql-17.11-r2-macos-aarch64`, `runtime/postgresql-18.6-r2-macos-aarch64`, `runtime/valkey-9.1.2-r2-macos-aarch64`). Tetapi migrasi 0003 sudah dibangun di atas 0002, fixture beku `registry-v2.sql` dan `registry-v3.sql` tercatat di `FIXTURE_SHA256`, dan test `frozen_fixtures_are_unchanged` memperlakukan setiap fixture yang sudah di merge sebagai rilis.
+
+#### Option 1: Simpan `items` dan `rule` di dua kolom baru lewat migrasi 4, hint dihitung saat dipetakan
+
+`failure_items` (JSON array, paling banyak 65 536 byte) dan `failure_rule` (`BR-NNN`) ditambah lewat `0004_operation_failure.sql`; `hint` dicabut dari `FailureError`, dan `stacklyd` memanggil fungsi hint area yang sama dengan error langsung.
+
+**Pros**:
+
+- Tidak ada yang hilang: kode, pesan, details, item, dan rule semuanya selamat melewati restart, dan hint bisa dihitung ulang karena ia fungsi murni dari kode dan details yang tersimpan.
+- Satu sumber hint untuk error langsung dan error tersimpan, dan teks hint yang diperbaiki berlaku juga untuk operasi lama.
+- Mengikuti aturan spec 0005 (migrasi baru, sidik jari baru, fixture beku baru) dan preseden migrasi 3; migrasi 0002 dan fixture v1 sampai v3 tidak disentuh.
+- Kolom bertipe dengan CHECK sendiri, sehingga SQL tetap menjadi penjaga terakhir untuk bentuk item dan pola rule.
+
+**Cons**:
+
+- Satu migrasi dan satu fixture beku lagi, dan nomornya harus diatur dengan migrasi spec 0018 (K11: 0004 di sini, 0005 di sana).
+- Ringkasan operasi `failed` bisa membesar sampai sekitar 64 KiB, yang ikut terkirim di setiap `get`, event, dan halaman `list`.
+
+#### Option 2: Satu kolom JSON `failure_extra` berisi hint, item, dan rule
+
+Saran alternatif review: satu objek JSON untuk semua tambahan, lewat migrasi yang sama.
+
+**Pros**:
+
+- Field tambahan berikutnya tidak butuh migrasi.
+
+**Cons**:
+
+- CHECK SQL hanya bisa memeriksa bahwa isinya objek; pola rule dan bentuk item pindah seluruhnya ke Rust.
+- Menyimpan hint menduplikasi teks yang sudah ditentukan katalog, dan teks itu basi saat katalog diperbaiki.
+- Tetap butuh migrasi dan fixture baru, jadi keunggulannya hanya untuk field yang belum ada.
+
+#### Option 3: Edit migrasi 0002 di tempat
+
+Karena app belum pernah dirilis, kolom ditambah langsung ke `CREATE TABLE operation_journal`.
+
+**Pros**:
+
+- Tidak ada migrasi baru, dan nomor 4 tetap bebas untuk spec 0018.
+
+**Cons**:
+
+- Melanggar aturan spec 0005 dan test fixture beku: `registry-v2.sql`, `registry-v3.sql`, dan kedua sha256 nya harus ditulis ulang.
+- Registry yang sudah dibuka build lama di Mac ini mencatat checksum 0002 yang lama dan masuk recovery mode `migration_history_mismatch`.
+- Merusak asumsi sesi paralel yang sudah memesan v4 dan v5 (spec 0018, spec 0020).
+
+#### Option 4: Rule diturunkan dari katalog, bukan disimpan
+
+`ErrorSpec` mendapat field rule, dan `stacklyd` mengisinya dari kode.
+
+**Pros**:
+
+- Tidak ada kolom `failure_rule`.
+
+**Cons**:
+
+- Mengubah katalog, jadi digest kontrak berubah dan minor protokol naik, padahal `ErrorBody` sudah punya `with_rule`.
+- Satu kode bisa ditegakkan lebih dari satu aturan; error domain dan core sudah membawa `rule()` per error (`Option<Rule>`), dan informasi itu hilang.
+
+#### Option 5: Cabut hint, item, dan rule dari spec
+
+`FailureError` tetap kode, pesan, dan details.
+
+**Pros**:
+
+- Tidak ada pekerjaan dan tidak ada migrasi.
+
+**Cons**:
+
+- `secret.needs_secret` dari operasi kehilangan daftar reference nya, jadi spec 0011 AC-11 dan spec 0020 AC-7 tidak bisa dipenuhi lewat operasi.
+- Error dari jalur sinkron dan jalur operasi berbeda isi untuk kode yang sama.
+
 ## Rationale
 
 Pilihan di setiap keputusan berangkat dari dua bahaya di Context: efek ganda dan hapus yang salah sasaran. Idempotency key wajib dengan sidik jari, lock di memori dengan antrian FIFO, CAS, dan satu commit akhir yang atomik saling menutup celah: key mencegah pengulangan dari client, lock mencegah dua operasi menyentuh resource yang sama, CAS menangkap keadaan yang berubah di antara baca dan tulis, dan commit akhir membuat hasil terlihat sekaligus atau tidak sama sekali. Lock tidak pernah ditulis sebagai mutex di SQLite, dan registry tidak punya transaksi yang dibuka pemanggil (spec 0005), jadi REQ-048 terpenuhi karena konstruksi, bukan karena disiplin.
@@ -705,6 +781,8 @@ Pilihan di setiap keputusan berangkat dari dua bahaya di Context: efek ganda dan
 Untuk hapus, keputusan terpentingnya adalah "milik karena konstruksi": kompensasi tidak pernah mempercayai path yang tersimpan, melainkan menghitung ulang path dari ID yang dibuat operasi itu sendiri, dan menghapusnya lewat primitive yang tidak mengikuti symlink di komponen mana pun. Pola niat dulu memastikan crash di antara buat dan catat tidak meninggalkan sisa yang tidak dikenal, dan karena ID itu baru, catatan niat tidak pernah menunjuk sesuatu milik orang lain. Kompensasi otomatis berhenti di titik tak bisa dibalik, karena setelah itu dunia nyata sudah setengah berubah dan pembersihan buta bisa menghapus satu satunya salinan (misalnya data lama di staging restore). Di sana keputusan diserahkan ke pengguna lewat `needs_recovery`, dengan resume dan abandon sebagai jalan keluar yang selalu ada.
 
 Sisanya memilih yang paling sederhana yang tetap jujur ke pengguna. Retensi ikut spec 0005, event membawa snapshot lengkap supaya client tidak perlu request tambahan, progress satu kali per detik sesuai asumsi spec 0005, batas 8 dan 64 cukup untuk enam service sekaligus, dan cancel yang terlambat dilaporkan apa adanya. API engine dibuat eksplisit dan sempit (begin, langkah bertanda, catatan dibuat, finalize, kompensator, factory, lock internal) karena spec 0010 dan fitur 18, 20, 49, 51 dibangun di atasnya secara paralel.
+
+Keputusan 28 (2026-10-20) memilih Option 1, sama dengan jawaban K11 lead foundation. Yang menentukan adalah perbedaan antara data dan turunan: item dan rule adalah fakta tentang satu kegagalan yang tidak bisa dibangun ulang setelah restart, sedangkan hint adalah fungsi murni dari kode dan details (spec 0006 *Hint*), jadi menyimpannya hanya menambah salinan yang bisa basi. Kolom baru lewat migrasi 4, bukan edit 0002, karena aturan fixture beku sudah berlaku untuk v2 dan v3 walau app belum dirilis, dan karena registry di Mac pengembang yang sudah membuka 0002 akan masuk recovery mode kalau checksum nya berubah. Batas 65 536 byte untuk `failure_items` dipilih supaya satu ringkasan `failed` tetap jauh di bawah frame kontrol 1 MiB di `get` dan event, yang tidak punya anggaran halaman seperti `list`, sementara 100 item dengan beberapa field pendek, kasus nyata `secret.needs_secret` dan issue manifest, muat dengan longgar; yang terpotong tetap terhitung di `omitted`, mekanisme yang sudah dipakai `ErrorBody::with_items`. `OperationError::rule()` menjadi `Option<Rule>` seperti `rule()` di error domain dan core, karena satu satunya override hari ini adalah test daemon, dan tipe domain membuat CHECK `BR-NNN` dan baca ulang dari registry pasti cocok. Fungsi peta bersama untuk `failure_body` dan `rejected()` menutup risiko kode yang sama membawa hint atau item di satu jalur (sinkron) tetapi tidak di jalur lain (tersimpan), dan urutan details, item, rule membuat `omitted` dari engine dan dari `ItemSpec.max` menyatu tanpa logika khusus.
 
 ### Keputusan kecil
 
@@ -763,3 +841,7 @@ Pengecekan silang dengan spec 0008, 0010, dan 0013 dan keputusan engineer di pas
 | Asumsi `remove_file` dan `remove_empty_dir` | `remove_tree` satu satunya primitive (spec 0004) | keputusan engineer ronde 2 |
 
 Cross check model lain atas ronde 2 menambah, atas persetujuan engineer: untuk jenis `CloseInterrupted`, titik tak bisa dibalik hanya menahan kompensasi (kegagalan selesai `failed`, cancel tetap sampai ke pekerjaan), shutdown tidak menunggu runner nya, `recover` menutup yang `cancel_requested` sebagai `cancelled` dan mengosongkan `waiting_on` operasi antri, hook `precheck` di `BeginRequest` (`Reject`, `NoOp`, `Proceed`) dengan baris operasi `succeeded` tanpa langkah untuk `NoOp` yang menulis sesuatu, `NotReady` sampai `start()`, dan filter `manager`.
+
+## Perubahan 2026-10-20 (keputusan 28)
+
+Menutup baris keputusan di Follow-up dari review 2026-10-20. Bagian [index.md](index.md) yang berubah: AC-16, AC-17, AC-18; *Peta modul* (storage); *Model domain* (`FailureError` tanpa `hint`, dengan `rule`, dan baris `FailureItem` baru dengan `kind` bertipe `ReasonCode`); *Model data* (kolom `failure_items` dan `failure_rule`, dua CHECK, paragraf migrasi `0004_operation_failure.sql`); *Port registry*; *API engine* (`OperationError::items()` dan `rule()` bertipe `Option<Rule>`); *Kegagalan dan error* (penyimpanan, pemangkasan, dan fungsi peta bersama di `stacklyd`); *Batas*; asumsi spec 0011; *Value sourcing*; *Critical test scenarios*; *Build plan* milestone 5 langkah 16; *Consequences*; dan *Follow-up* (baris keputusan dicentang, baris baru untuk spec 0005, 0006, 0011, dan sisa antrian update spec ini). Tidak ada perubahan di `crates/protocol`: `ErrorBody` sudah punya `with_hint`, `with_items`, dan `with_rule`.
