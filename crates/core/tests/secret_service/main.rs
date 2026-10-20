@@ -8,6 +8,7 @@
 mod access;
 mod common;
 mod create_failure;
+mod effects;
 mod engine;
 mod printable_only;
 mod put;
