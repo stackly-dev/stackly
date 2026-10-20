@@ -1,0 +1,1474 @@
+From 7e7ea961e8d25af706aefc97f4aa1f8596ef69e4 Mon Sep 17 00:00:00 2001
+From: ojiepermana <me@ojiepermana.com>
+Date: Tue, 20 Oct 2026 09:24:37 +0700
+Subject: [PATCH 2/3] feat(platform): spec 0015 step 2, BackgroundAgent port,
+ classify, and fake
+
+Add the BackgroundAgent port (status, register, unregister, relaunch) with AgentProbe, AgentRegistration, AgentOp, AgentOsErrorKind, BackgroundAgentError, and UnsupportedBackgroundAgent; Platform::with_background_agent and background_agent(); classify with the six product states, unavailable reasons, and recovery steps of spec 0015; LaunchContext::detect; DirectoryLayout::agent_launch_record(). testkit gets FakeBackgroundAgent, installed by FakePlatform, whose capability now reports supported.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ crates/platform/src/agent.rs          | 784 ++++++++++++++++++++++++++
+ crates/platform/src/layout/mod.rs     |  20 +
+ crates/platform/src/lib.rs            |  10 +-
+ crates/platform/src/platform.rs       |  25 +-
+ crates/testkit/src/fake_agent.rs      | 367 ++++++++++++
+ crates/testkit/src/fake_platform.rs   |  22 +-
+ crates/testkit/src/lib.rs             |   2 +
+ crates/testkit/tests/fake_platform.rs |  18 +-
+ 8 files changed, 1239 insertions(+), 9 deletions(-)
+ create mode 100644 crates/platform/src/agent.rs
+ create mode 100644 crates/testkit/src/fake_agent.rs
+
+diff --git a/crates/platform/src/agent.rs b/crates/platform/src/agent.rs
+new file mode 100644
+index 0000000..a33959b
+--- /dev/null
++++ b/crates/platform/src/agent.rs
+@@ -0,0 +1,784 @@
++//! The background agent port and the agent state model (spec 0015).
++//!
++//! [`BackgroundAgent`] reads and changes the OS registration of the daemon's
++//! LaunchAgent. Only `stackly-cli` calls it, and only from explicit user
++//! actions (`daemon install`, `daemon start`); `stacklyd` installs it so its
++//! capability report stays honest and never calls it.
++//!
++//! [`classify`] turns what a client knows (the OS registration, a root
++//! override, the launch record) into one of six product states with a
++//! recovery step. The Swift app has the same table, and both are checked
++//! against one shared fixture.
++//!
++//! [`LaunchContext::detect`] tells the daemon whether launchd started it.
++
++use std::ffi::OsStr;
++use std::fmt;
++use std::path::PathBuf;
++
++use stackly_domain::Os;
++
++use crate::bundle::{DAEMON_LABEL, TEST_AGENT_LABEL_PREFIX};
++use crate::capability::PlatformCapability;
++
++/// Reads and changes the registration of the daemon's LaunchAgent.
++///
++/// Every method is sync and may block on the OS service that keeps
++/// background items, so async callers run it through `spawn_blocking` with
++/// a time limit.
++pub trait BackgroundAgent: Send + Sync {
++    /// Reads the registration from the OS. Never prompts and never changes
++    /// it.
++    ///
++    /// # Errors
++    ///
++    /// Returns [`BackgroundAgentError::NotSupported`] without an adapter and
++    /// [`BackgroundAgentError::Os`] when the OS call fails.
++    fn status(&self) -> Result<AgentProbe, BackgroundAgentError>;
++
++    /// Registers the agent. The result may need the user's approval in
++    /// System Settings.
++    ///
++    /// # Errors
++    ///
++    /// Returns [`BackgroundAgentError::NotSupported`] without an adapter and
++    /// [`BackgroundAgentError::Os`] when the OS refuses.
++    fn register(&self) -> Result<AgentProbe, BackgroundAgentError>;
++
++    /// Unregisters the agent, so launchd stops launching it.
++    ///
++    /// # Errors
++    ///
++    /// Returns [`BackgroundAgentError::NotSupported`] without an adapter and
++    /// [`BackgroundAgentError::Os`] when the OS refuses.
++    fn unregister(&self) -> Result<AgentProbe, BackgroundAgentError>;
++
++    /// Asks the OS to start the registered job now. On macOS this
++    /// unregisters, then registers again, so `RunAtLoad` starts it; the one
++    /// way to start, so the mechanism can change in the adapter alone.
++    ///
++    /// # Errors
++    ///
++    /// Returns [`BackgroundAgentError::NotSupported`] without an adapter and
++    /// [`BackgroundAgentError::Os`] when the OS refuses either step.
++    fn relaunch(&self) -> Result<AgentProbe, BackgroundAgentError>;
++}
++
++/// What the OS reported about the agent, or why it could not be asked.
++#[derive(Debug, Clone, PartialEq, Eq, Hash)]
++#[non_exhaustive]
++pub enum AgentProbe {
++    /// The OS answered for the bundle at `bundle`.
++    Registration {
++        /// The registration state the OS reported.
++        registration: AgentRegistration,
++        /// The bundle the OS used (the process's main bundle).
++        bundle: PathBuf,
++    },
++    /// The process does not run from inside the Stackly app bundle, so the
++    /// OS cannot be asked.
++    NotBundled {
++        /// The executable path the process runs from.
++        executable: PathBuf,
++    },
++    /// The process runs from a Stackly bundle that lacks the LaunchAgent
++    /// property list or `stacklyd`, such as a build from the Xcode IDE.
++    HelperMissing {
++        /// The bundle folder.
++        bundle: PathBuf,
++    },
++}
++
++/// A registration state of the agent as the OS reports it.
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++pub enum AgentRegistration {
++    /// Registered and allowed to run.
++    Enabled,
++    /// Registered, but the user has not allowed it (or switched it off) in
++    /// System Settings.
++    RequiresApproval,
++    /// Not registered.
++    NotRegistered,
++    /// The OS could not find the service for this bundle.
++    NotFound,
++    /// A status value this build does not know.
++    Unrecognized(i64),
++}
++
++impl AgentRegistration {
++    /// Returns the stable snake_case code, for example `requires_approval`.
++    /// An unknown OS value is `unrecognized`.
++    #[must_use]
++    pub const fn as_code(self) -> &'static str {
++        match self {
++            Self::Enabled => "enabled",
++            Self::RequiresApproval => "requires_approval",
++            Self::NotRegistered => "not_registered",
++            Self::NotFound => "not_found",
++            Self::Unrecognized(_) => "unrecognized",
++        }
++    }
++}
++
++/// A call on the [`BackgroundAgent`] port, as named in errors.
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++pub enum AgentOp {
++    /// [`BackgroundAgent::status`].
++    Status,
++    /// [`BackgroundAgent::register`].
++    Register,
++    /// [`BackgroundAgent::unregister`].
++    Unregister,
++    /// [`BackgroundAgent::relaunch`].
++    Relaunch,
++}
++
++impl AgentOp {
++    /// Returns the stable snake_case code, for example `register`.
++    #[must_use]
++    pub const fn as_code(self) -> &'static str {
++        match self {
++            Self::Status => "status",
++            Self::Register => "register",
++            Self::Unregister => "unregister",
++            Self::Relaunch => "relaunch",
++        }
++    }
++}
++
++impl fmt::Display for AgentOp {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        f.write_str(self.as_code())
++    }
++}
++
++/// The kind of an OS error, from the table *Hasil pendaftaran* of spec 0015.
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++pub enum AgentOsErrorKind {
++    /// The agent was already registered; callers read the status again.
++    AlreadyRegistered,
++    /// The user denied the launch in System Settings.
++    LaunchDenied,
++    /// The job must be enabled by the user first.
++    MustBeEnabled,
++    /// The OS rejected the bundle's code signature.
++    InvalidSignature,
++    /// The OS could not find the job or its property list.
++    NotFound,
++    /// Any other error.
++    Other,
++}
++
++impl AgentOsErrorKind {
++    /// Returns the stable snake_case code, for example `launch_denied`.
++    #[must_use]
++    pub const fn as_code(self) -> &'static str {
++        match self {
++            Self::AlreadyRegistered => "already_registered",
++            Self::LaunchDenied => "launch_denied",
++            Self::MustBeEnabled => "must_be_enabled",
++            Self::InvalidSignature => "invalid_signature",
++            Self::NotFound => "not_found",
++            Self::Other => "other",
++        }
++    }
++}
++
++/// A failure of the [`BackgroundAgent`] port.
++#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
++#[non_exhaustive]
++pub enum BackgroundAgentError {
++    /// The OS has no background agent adapter.
++    #[error("the {capability} capability is not supported on {os}")]
++    NotSupported {
++        /// Always [`PlatformCapability::BackgroundAgent`].
++        capability: PlatformCapability,
++        /// The OS that lacks it.
++        os: Os,
++    },
++    /// The OS call failed.
++    #[error("{op} failed with {domain} {code}: {message}")]
++    Os {
++        /// The call that failed.
++        op: AgentOp,
++        /// The kind of the error.
++        kind: AgentOsErrorKind,
++        /// The OS error domain, for example `SMAppServiceErrorDomain`.
++        domain: String,
++        /// The OS error code.
++        code: i64,
++        /// The OS error description, safe to show (it names no secret).
++        message: String,
++    },
++}
++
++/// The port of an OS without a background agent adapter: every method
++/// answers [`BackgroundAgentError::NotSupported`].
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct UnsupportedBackgroundAgent {
++    os: Os,
++}
++
++impl UnsupportedBackgroundAgent {
++    /// Creates the port for `os`.
++    #[must_use]
++    pub const fn new(os: Os) -> Self {
++        Self { os }
++    }
++
++    const fn not_supported(&self) -> BackgroundAgentError {
++        BackgroundAgentError::NotSupported {
++            capability: PlatformCapability::BackgroundAgent,
++            os: self.os,
++        }
++    }
++}
++
++impl BackgroundAgent for UnsupportedBackgroundAgent {
++    fn status(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        Err(self.not_supported())
++    }
++
++    fn register(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        Err(self.not_supported())
++    }
++
++    fn unregister(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        Err(self.not_supported())
++    }
++
++    fn relaunch(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        Err(self.not_supported())
++    }
++}
++
++/// The outcome of asking for the agent's status, as [`classify`] takes it.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum ProbeOutcome {
++    /// The OS was not asked, which happens only with a root override.
++    NotChecked,
++    /// The OS has no background agent adapter.
++    Unsupported,
++    /// The status call failed: with the OS code, or `None` for a time out.
++    Failed {
++        /// The OS error code, or `None` when the call timed out.
++        code: Option<i64>,
++    },
++    /// The OS answered.
++    Probe(AgentProbe),
++}
++
++/// Everything [`classify`] needs.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct AgentInput {
++    /// Whether `STACKLY_ROOT` is set; the agent only ever serves the default
++    /// root.
++    pub root_override: bool,
++    /// What the OS reported.
++    pub probe: ProbeOutcome,
++    /// Whether the launch record of the default root exists, which proves
++    /// the agent ran under launchd before.
++    pub launch_record: bool,
++    /// Whether the probe comes from a registration made in the same user
++    /// action.
++    pub just_registered: bool,
++}
++
++/// One of the six product states of the background agent.
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++pub enum BackgroundAgentState {
++    /// Registered and allowed to run.
++    Enabled,
++    /// Waiting for the user's approval in Login Items.
++    RequiresApproval,
++    /// Switched off in Login Items after it ran before.
++    Disabled,
++    /// Not registered.
++    NotRegistered,
++    /// The OS cannot find the service for this copy of the app.
++    NotFound,
++    /// The state cannot be known here; [`UnavailableReason`] says why.
++    Unavailable,
++}
++
++impl BackgroundAgentState {
++    /// Returns the stable snake_case code, for example `requires_approval`.
++    #[must_use]
++    pub const fn as_code(self) -> &'static str {
++        match self {
++            Self::Enabled => "enabled",
++            Self::RequiresApproval => "requires_approval",
++            Self::Disabled => "disabled",
++            Self::NotRegistered => "not_registered",
++            Self::NotFound => "not_found",
++            Self::Unavailable => "unavailable",
++        }
++    }
++}
++
++/// Why the state is [`BackgroundAgentState::Unavailable`].
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++pub enum UnavailableReason {
++    /// `STACKLY_ROOT` is set.
++    RootOverride,
++    /// The OS has no background agent adapter.
++    UnsupportedOs,
++    /// The status call failed or timed out.
++    StatusFailed,
++    /// The process does not run from inside the Stackly app bundle.
++    NotBundled,
++    /// The bundle lacks the LaunchAgent property list or `stacklyd`.
++    HelperMissing,
++    /// The OS reported a status value this build does not know.
++    StatusUnrecognized,
++}
++
++impl UnavailableReason {
++    /// Returns the stable snake_case code, for example `root_override`.
++    #[must_use]
++    pub const fn as_code(self) -> &'static str {
++        match self {
++            Self::RootOverride => "root_override",
++            Self::UnsupportedOs => "unsupported_os",
++            Self::StatusFailed => "status_failed",
++            Self::NotBundled => "not_bundled",
++            Self::HelperMissing => "helper_missing",
++            Self::StatusUnrecognized => "status_unrecognized",
++        }
++    }
++}
++
++/// The next step a client offers for a state.
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++pub enum RecoveryStep {
++    /// Nothing to do.
++    None,
++    /// Start the daemon; [`classify`] never returns it, a caller that knows
++    /// the daemon is unreachable uses it for [`BackgroundAgentState::Enabled`].
++    Start,
++    /// Register the agent.
++    Register,
++    /// Allow Stackly in System Settings > General > Login Items & Extensions.
++    ApproveInLoginItems,
++    /// Turn Stackly on again in Login Items.
++    EnableInLoginItems,
++    /// Move the app to the Applications folder or install it again.
++    MoveOrReinstallApp,
++    /// Use the `stackly` inside `Stackly.app`, or start `stacklyd` by hand.
++    UseBundledCli,
++    /// Start `stacklyd` by hand for the root override.
++    ManualDaemonForOverride,
++    /// Build the app with `cargo xtask build-app`.
++    BuildWithXtask,
++    /// Check again.
++    CheckAgain,
++}
++
++impl RecoveryStep {
++    /// Returns the stable snake_case code, for example
++    /// `approve_in_login_items`.
++    #[must_use]
++    pub const fn as_code(self) -> &'static str {
++        match self {
++            Self::None => "none",
++            Self::Start => "start",
++            Self::Register => "register",
++            Self::ApproveInLoginItems => "approve_in_login_items",
++            Self::EnableInLoginItems => "enable_in_login_items",
++            Self::MoveOrReinstallApp => "move_or_reinstall_app",
++            Self::UseBundledCli => "use_bundled_cli",
++            Self::ManualDaemonForOverride => "manual_daemon_for_override",
++            Self::BuildWithXtask => "build_with_xtask",
++            Self::CheckAgain => "check_again",
++        }
++    }
++}
++
++/// The result of [`classify`].
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++pub struct AgentAssessment {
++    /// The product state.
++    pub state: BackgroundAgentState,
++    /// Why the state is unavailable, set only for
++    /// [`BackgroundAgentState::Unavailable`].
++    pub reason: Option<UnavailableReason>,
++    /// The next step to offer.
++    pub recovery: RecoveryStep,
++}
++
++impl AgentAssessment {
++    const fn of(state: BackgroundAgentState, recovery: RecoveryStep) -> Self {
++        Self {
++            state,
++            reason: None,
++            recovery,
++        }
++    }
++
++    const fn unavailable(reason: UnavailableReason, recovery: RecoveryStep) -> Self {
++        Self {
++            state: BackgroundAgentState::Unavailable,
++            reason: Some(reason),
++            recovery,
++        }
++    }
++}
++
++/// Maps what a client knows to a product state, with the rows of the table
++/// *State background agent* in spec 0015, evaluated from the top.
++///
++/// `classify` does not know whether the daemon answers; a caller that knows
++/// it does not and gets [`BackgroundAgentState::Enabled`] offers
++/// [`RecoveryStep::Start`].
++#[must_use]
++pub fn classify(input: &AgentInput) -> AgentAssessment {
++    use AgentAssessment as A;
++    use BackgroundAgentState as S;
++    use RecoveryStep as R;
++    use UnavailableReason as U;
++
++    if input.root_override {
++        return A::unavailable(U::RootOverride, R::ManualDaemonForOverride);
++    }
++    match &input.probe {
++        ProbeOutcome::Unsupported => A::unavailable(U::UnsupportedOs, R::None),
++        ProbeOutcome::Failed { .. } | ProbeOutcome::NotChecked => {
++            A::unavailable(U::StatusFailed, R::CheckAgain)
++        }
++        ProbeOutcome::Probe(AgentProbe::NotBundled { .. }) => {
++            A::unavailable(U::NotBundled, R::UseBundledCli)
++        }
++        ProbeOutcome::Probe(AgentProbe::HelperMissing { .. }) => {
++            A::unavailable(U::HelperMissing, R::BuildWithXtask)
++        }
++        ProbeOutcome::Probe(AgentProbe::Registration { registration, .. }) => match registration {
++            AgentRegistration::Unrecognized(_) => {
++                A::unavailable(U::StatusUnrecognized, R::CheckAgain)
++            }
++            AgentRegistration::Enabled => A::of(S::Enabled, R::None),
++            AgentRegistration::NotRegistered => A::of(S::NotRegistered, R::Register),
++            AgentRegistration::NotFound => A::of(S::NotFound, R::MoveOrReinstallApp),
++            AgentRegistration::RequiresApproval => {
++                if !input.launch_record || input.just_registered {
++                    A::of(S::RequiresApproval, R::ApproveInLoginItems)
++                } else {
++                    A::of(S::Disabled, R::EnableInLoginItems)
++                }
++            }
++        },
++    }
++}
++
++/// Who started the daemon process.
++#[derive(Debug, Clone, PartialEq, Eq, Hash)]
++pub enum LaunchContext {
++    /// launchd, as the job with `label`.
++    Launchd {
++        /// The job label, the production label or a test agent label.
++        label: String,
++    },
++    /// Anything else: a terminal, a test, or a process that was orphaned to
++    /// launchd without being its job.
++    Manual,
++}
++
++impl LaunchContext {
++    /// Detects the context from `XPC_SERVICE_NAME` and the parent PID, both
++    /// read once in `main`.
++    ///
++    /// It is [`LaunchContext::Launchd`] only when the parent is launchd
++    /// (PID 1) and `XPC_SERVICE_NAME` is the production label or starts with
++    /// the test agent prefix: a process started from Terminal inherits
++    /// Terminal's `XPC_SERVICE_NAME`, and an orphaned one has parent PID 1,
++    /// so neither alone is enough.
++    #[must_use]
++    pub fn detect(xpc_service_name: Option<&OsStr>, parent_pid: u32) -> Self {
++        if parent_pid != 1 {
++            return Self::Manual;
++        }
++        match xpc_service_name.and_then(OsStr::to_str) {
++            Some(label)
++                if label == DAEMON_LABEL
++                    || (label.starts_with(TEST_AGENT_LABEL_PREFIX)
++                        && label.len() > TEST_AGENT_LABEL_PREFIX.len()) =>
++            {
++                Self::Launchd {
++                    label: label.to_owned(),
++                }
++            }
++            _ => Self::Manual,
++        }
++    }
++
++    /// Returns the job label under launchd, or `None` for a manual start.
++    #[must_use]
++    pub fn label(&self) -> Option<&str> {
++        match self {
++            Self::Launchd { label } => Some(label),
++            Self::Manual => None,
++        }
++    }
++
++    /// Returns whether launchd started the production agent, the only
++    /// context that writes the launch record.
++    #[must_use]
++    pub fn is_production_agent(&self) -> bool {
++        self.label() == Some(DAEMON_LABEL)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn registered(registration: AgentRegistration) -> ProbeOutcome {
++        ProbeOutcome::Probe(AgentProbe::Registration {
++            registration,
++            bundle: PathBuf::from("/Applications/Stackly.app"),
++        })
++    }
++
++    fn input(probe: ProbeOutcome) -> AgentInput {
++        AgentInput {
++            root_override: false,
++            probe,
++            launch_record: false,
++            just_registered: false,
++        }
++    }
++
++    fn assess(input: &AgentInput) -> (&'static str, Option<&'static str>, &'static str) {
++        let a = classify(input);
++        (
++            a.state.as_code(),
++            a.reason.map(UnavailableReason::as_code),
++            a.recovery.as_code(),
++        )
++    }
++
++    #[test]
++    fn a_root_override_wins_over_every_os_answer() {
++        let mut i = input(registered(AgentRegistration::Enabled));
++        i.root_override = true;
++        assert_eq!(
++            assess(&i),
++            (
++                "unavailable",
++                Some("root_override"),
++                "manual_daemon_for_override"
++            )
++        );
++    }
++
++    #[test]
++    fn a_root_override_without_an_os_call_is_unavailable() {
++        let mut i = input(ProbeOutcome::NotChecked);
++        i.root_override = true;
++        assert_eq!(classify(&i).reason, Some(UnavailableReason::RootOverride));
++    }
++
++    #[test]
++    fn not_checked_without_a_root_override_counts_as_a_failed_status() {
++        assert_eq!(
++            assess(&input(ProbeOutcome::NotChecked)),
++            ("unavailable", Some("status_failed"), "check_again")
++        );
++    }
++
++    #[test]
++    fn an_unsupported_os_has_no_recovery() {
++        assert_eq!(
++            assess(&input(ProbeOutcome::Unsupported)),
++            ("unavailable", Some("unsupported_os"), "none")
++        );
++    }
++
++    #[test]
++    fn a_timed_out_status_asks_to_check_again() {
++        assert_eq!(
++            assess(&input(ProbeOutcome::Failed { code: None })),
++            ("unavailable", Some("status_failed"), "check_again")
++        );
++    }
++
++    #[test]
++    fn a_cli_outside_the_bundle_points_to_the_bundled_cli() {
++        let probe = ProbeOutcome::Probe(AgentProbe::NotBundled {
++            executable: PathBuf::from("/work/target/debug/stackly"),
++        });
++        assert_eq!(
++            assess(&input(probe)),
++            ("unavailable", Some("not_bundled"), "use_bundled_cli")
++        );
++    }
++
++    #[test]
++    fn a_bundle_without_the_helper_points_to_build_app() {
++        let probe = ProbeOutcome::Probe(AgentProbe::HelperMissing {
++            bundle: PathBuf::from("/DerivedData/Stackly.app"),
++        });
++        assert_eq!(
++            assess(&input(probe)),
++            ("unavailable", Some("helper_missing"), "build_with_xtask")
++        );
++    }
++
++    #[test]
++    fn an_unknown_os_status_is_unavailable() {
++        assert_eq!(
++            assess(&input(registered(AgentRegistration::Unrecognized(9)))),
++            ("unavailable", Some("status_unrecognized"), "check_again")
++        );
++    }
++
++    #[test]
++    fn enabled_has_no_recovery() {
++        assert_eq!(
++            assess(&input(registered(AgentRegistration::Enabled))),
++            ("enabled", None, "none")
++        );
++    }
++
++    #[test]
++    fn not_registered_offers_to_register() {
++        assert_eq!(
++            assess(&input(registered(AgentRegistration::NotRegistered))),
++            ("not_registered", None, "register")
++        );
++    }
++
++    #[test]
++    fn not_found_offers_to_move_or_reinstall() {
++        assert_eq!(
++            assess(&input(registered(AgentRegistration::NotFound))),
++            ("not_found", None, "move_or_reinstall_app")
++        );
++    }
++
++    #[test]
++    fn requires_approval_without_a_launch_record_waits_for_approval() {
++        assert_eq!(
++            assess(&input(registered(AgentRegistration::RequiresApproval))),
++            ("requires_approval", None, "approve_in_login_items")
++        );
++    }
++
++    #[test]
++    fn requires_approval_with_a_launch_record_is_disabled() {
++        let mut i = input(registered(AgentRegistration::RequiresApproval));
++        i.launch_record = true;
++        assert_eq!(assess(&i), ("disabled", None, "enable_in_login_items"));
++    }
++
++    #[test]
++    fn a_registration_in_the_same_action_is_never_disabled() {
++        let mut i = input(registered(AgentRegistration::RequiresApproval));
++        i.launch_record = true;
++        i.just_registered = true;
++        assert_eq!(
++            assess(&i),
++            ("requires_approval", None, "approve_in_login_items")
++        );
++    }
++
++    #[test]
++    fn only_the_unavailable_state_carries_a_reason() {
++        for registration in [
++            AgentRegistration::Enabled,
++            AgentRegistration::RequiresApproval,
++            AgentRegistration::NotRegistered,
++            AgentRegistration::NotFound,
++        ] {
++            assert_eq!(classify(&input(registered(registration))).reason, None);
++        }
++    }
++
++    #[test]
++    fn the_unsupported_port_answers_not_supported_for_its_os() {
++        let port = UnsupportedBackgroundAgent::new(Os::Windows);
++        let expected = BackgroundAgentError::NotSupported {
++            capability: PlatformCapability::BackgroundAgent,
++            os: Os::Windows,
++        };
++        assert_eq!(port.status(), Err(expected.clone()));
++        assert_eq!(port.register(), Err(expected.clone()));
++        assert_eq!(port.unregister(), Err(expected.clone()));
++        assert_eq!(port.relaunch(), Err(expected));
++    }
++
++    #[test]
++    fn errors_print_in_lowercase_without_a_period() {
++        let error = BackgroundAgentError::Os {
++            op: AgentOp::Register,
++            kind: AgentOsErrorKind::Other,
++            domain: "SMAppServiceErrorDomain".to_owned(),
++            code: 2,
++            message: "internal failure".to_owned(),
++        };
++        assert_eq!(
++            error.to_string(),
++            "register failed with SMAppServiceErrorDomain 2: internal failure"
++        );
++        let unsupported = UnsupportedBackgroundAgent::new(Os::Linux)
++            .status()
++            .expect_err("unsupported");
++        assert_eq!(
++            unsupported.to_string(),
++            "the background_agent capability is not supported on linux"
++        );
++    }
++
++    #[test]
++    fn launchd_with_the_production_label_is_the_production_agent() {
++        let context = LaunchContext::detect(Some(OsStr::new(DAEMON_LABEL)), 1);
++        assert_eq!(context.label(), Some(DAEMON_LABEL));
++        assert!(context.is_production_agent());
++    }
++
++    #[test]
++    fn launchd_with_a_test_label_is_launchd_but_not_the_production_agent() {
++        let context = LaunchContext::detect(Some(OsStr::new("dev.stackly.test.agent.42-1")), 1);
++        assert_eq!(context.label(), Some("dev.stackly.test.agent.42-1"));
++        assert!(!context.is_production_agent());
++    }
++
++    #[test]
++    fn a_terminal_start_with_an_inherited_service_name_is_manual() {
++        let context =
++            LaunchContext::detect(Some(OsStr::new("application.com.apple.Terminal.1234")), 1);
++        assert_eq!(context, LaunchContext::Manual);
++    }
++
++    #[test]
++    fn the_production_label_with_another_parent_is_manual() {
++        assert_eq!(
++            LaunchContext::detect(Some(OsStr::new(DAEMON_LABEL)), 4242),
++            LaunchContext::Manual
++        );
++    }
++
++    #[test]
++    fn no_service_name_is_manual() {
++        assert_eq!(LaunchContext::detect(None, 1), LaunchContext::Manual);
++    }
++
++    #[test]
++    fn the_bare_test_prefix_is_not_a_label() {
++        assert_eq!(
++            LaunchContext::detect(Some(OsStr::new(TEST_AGENT_LABEL_PREFIX)), 1),
++            LaunchContext::Manual
++        );
++    }
++
++    #[test]
++    fn codes_are_stable_snake_case() {
++        assert_eq!(AgentRegistration::Unrecognized(7).as_code(), "unrecognized");
++        assert_eq!(AgentOp::Relaunch.as_code(), "relaunch");
++        assert_eq!(
++            AgentOsErrorKind::AlreadyRegistered.as_code(),
++            "already_registered"
++        );
++        assert_eq!(BackgroundAgentState::Disabled.as_code(), "disabled");
++        assert_eq!(RecoveryStep::Start.as_code(), "start");
++    }
++}
+diff --git a/crates/platform/src/layout/mod.rs b/crates/platform/src/layout/mod.rs
+index df68626..4340efe 100644
+--- a/crates/platform/src/layout/mod.rs
++++ b/crates/platform/src/layout/mod.rs
+@@ -36,6 +36,8 @@ const INSTANCE_CONFIG_HISTORY_DIR: &str = "config-history";
+ const INSTANCE_TEMP_DIR: &str = "temp";
+ /// Folder under the data root that holds the registry.
+ const REGISTRY_DIR: &str = "registry";
++/// The launch record in the data root (spec 0015).
++const AGENT_LAUNCH_RECORD_FILE: &str = "background-agent.json";
+ /// Folder under the data root that holds the file keychain of a root
+ /// override (spec 0011).
+ const KEYCHAIN_DIR: &str = "keychain";
+@@ -118,6 +120,14 @@ impl DirectoryLayout {
+         self.roots.data().join("stacklyd.lock")
+     }
+ 
++    /// Returns the launch record `<data>/background-agent.json`, which only
++    /// the daemon writes, and only when launchd started the production agent
++    /// for the default root (spec 0015).
++    #[must_use]
++    pub fn agent_launch_record(&self) -> PathBuf {
++        self.roots.data().join(AGENT_LAUNCH_RECORD_FILE)
++    }
++
+     /// Returns the folder that holds the registry database.
+     #[must_use]
+     pub fn registry_dir(&self) -> PathBuf {
+@@ -546,6 +556,16 @@ mod tests {
+         assert_eq!(retained.run, active.run);
+     }
+ 
++    #[test]
++    fn the_agent_launch_record_is_a_file_in_the_data_root() {
++        let layout = layout();
++
++        assert_eq!(
++            layout.agent_launch_record(),
++            layout.roots().data().join("background-agent.json")
++        );
++    }
++
+     #[test]
+     fn daemon_lock_is_in_the_data_root_and_socket_in_the_runtime_root() {
+         let layout = layout();
+diff --git a/crates/platform/src/lib.rs b/crates/platform/src/lib.rs
+index a5cf685..4ce4cff 100644
+--- a/crates/platform/src/lib.rs
++++ b/crates/platform/src/lib.rs
+@@ -20,8 +20,11 @@
+ //! process that ran, except a helper's group (spec 0010).
+ //!
+ //! [`bundle`] names the app bundle that carries the daemon and the CLI, with
+-//! the temporary identifiers of spec 0015.
++//! the temporary identifiers of spec 0015, and the background agent port
++//! ([`BackgroundAgent`]) reads and changes the registration of the daemon's
++//! LaunchAgent; [`classify`] maps what a client knows to a product state.
+ 
++mod agent;
+ pub mod bundle;
+ mod capability;
+ mod clock;
+@@ -36,6 +39,11 @@ mod process;
+ mod secret;
+ mod unsupported;
+ 
++pub use agent::{
++    AgentAssessment, AgentInput, AgentOp, AgentOsErrorKind, AgentProbe, AgentRegistration,
++    BackgroundAgent, BackgroundAgentError, BackgroundAgentState, LaunchContext, ProbeOutcome,
++    RecoveryStep, UnavailableReason, UnsupportedBackgroundAgent, classify,
++};
+ pub use bundle::AppBundle;
+ pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
+ pub use clock::{Clock, SystemClock};
+diff --git a/crates/platform/src/platform.rs b/crates/platform/src/platform.rs
+index b02c252..6be54dc 100644
+--- a/crates/platform/src/platform.rs
++++ b/crates/platform/src/platform.rs
+@@ -1,6 +1,7 @@
+ use std::fmt;
+ use std::sync::Arc;
+ 
++use crate::agent::{BackgroundAgent, UnsupportedBackgroundAgent};
+ use crate::clock::Clock;
+ use crate::fs::Filesystem;
+ use crate::identity::UserIdentity;
+@@ -28,14 +29,17 @@ pub struct Platform {
+     info: Arc<dyn PlatformInfo>,
+     secrets: Arc<dyn SecretStore>,
+     processes: Arc<dyn ProcessSupervision>,
++    background_agent: Arc<dyn BackgroundAgent>,
+ }
+ 
+ impl Platform {
+     /// Bundles the five ports. The secret store starts as an
+     /// [`UnsupportedSecretStore`] and process supervision as an
+-    /// [`UnsupportedProcessSupervision`] for the OS `info` reports; install
+-    /// real ones with [`with_secrets`](Self::with_secrets) and
+-    /// [`with_processes`](Self::with_processes).
++    /// [`UnsupportedProcessSupervision`], and the background agent an
++    /// [`UnsupportedBackgroundAgent`], for the OS `info` reports; install
++    /// real ones with [`with_secrets`](Self::with_secrets),
++    /// [`with_processes`](Self::with_processes), and
++    /// [`with_background_agent`](Self::with_background_agent).
+     #[must_use]
+     pub fn new(
+         directories: Arc<dyn DirectoryResolver>,
+@@ -47,6 +51,7 @@ impl Platform {
+         let os = info.target().os();
+         let secrets = Arc::new(UnsupportedSecretStore::new(os));
+         let processes = Arc::new(UnsupportedProcessSupervision::new(os));
++        let background_agent = Arc::new(UnsupportedBackgroundAgent::new(os));
+         Self {
+             directories,
+             fs,
+@@ -55,6 +60,7 @@ impl Platform {
+             info,
+             secrets,
+             processes,
++            background_agent,
+         }
+     }
+ 
+@@ -73,6 +79,13 @@ impl Platform {
+         self
+     }
+ 
++    /// Returns a copy with `agent` as the background agent port (spec 0015).
++    #[must_use]
++    pub fn with_background_agent(mut self, agent: Arc<dyn BackgroundAgent>) -> Self {
++        self.background_agent = agent;
++        self
++    }
++
+     /// Returns the directory resolver.
+     #[must_use]
+     pub fn directories(&self) -> &dyn DirectoryResolver {
+@@ -128,6 +141,12 @@ impl Platform {
+     pub fn processes(&self) -> &dyn ProcessSupervision {
+         &*self.processes
+     }
++
++    /// Returns the background agent port.
++    #[must_use]
++    pub fn background_agent(&self) -> &dyn BackgroundAgent {
++        &*self.background_agent
++    }
+ }
+ 
+ impl fmt::Debug for Platform {
+diff --git a/crates/testkit/src/fake_agent.rs b/crates/testkit/src/fake_agent.rs
+new file mode 100644
+index 0000000..54d5891
+--- /dev/null
++++ b/crates/testkit/src/fake_agent.rs
+@@ -0,0 +1,367 @@
++use std::collections::VecDeque;
++use std::path::PathBuf;
++use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
++
++use stackly_platform::{
++    AgentOp, AgentProbe, AgentRegistration, BackgroundAgent, BackgroundAgentError,
++};
++
++/// The bundle path a [`FakeBackgroundAgent`] reports until a test sets
++/// another one.
++pub const FAKE_AGENT_BUNDLE: &str = "/Applications/Stackly.app";
++
++/// A background agent in memory that the test scripts, and that logs every
++/// call (spec 0015).
++///
++/// It starts [`AgentRegistration::NotRegistered`] inside
++/// [`FAKE_AGENT_BUNDLE`]. Each change call moves the registration to the
++/// state the test set for it, so a test decides whether `register` ends
++/// `Enabled` (the default) or `RequiresApproval`. A queued failure answers
++/// the next call of that kind and leaves the state as it was. Clones share
++/// the state, so a test keeps one handle while the code under test holds the
++/// port.
++///
++/// ```
++/// use stackly_platform::{AgentOp, AgentProbe, AgentRegistration, BackgroundAgent};
++/// use stackly_testkit::FakeBackgroundAgent;
++///
++/// let agent = FakeBackgroundAgent::new();
++/// agent.on_register(AgentRegistration::RequiresApproval);
++///
++/// let probe = agent.register()?;
++/// assert!(matches!(
++///     probe,
++///     AgentProbe::Registration { registration: AgentRegistration::RequiresApproval, .. }
++/// ));
++/// assert_eq!(agent.calls(), vec![AgentOp::Register]);
++/// # Ok::<(), stackly_platform::BackgroundAgentError>(())
++/// ```
++#[derive(Debug, Clone, Default)]
++pub struct FakeBackgroundAgent {
++    state: Arc<Mutex<State>>,
++}
++
++#[derive(Debug)]
++struct State {
++    probe: Probe,
++    bundle: PathBuf,
++    after_register: AgentRegistration,
++    after_unregister: AgentRegistration,
++    after_relaunch: AgentRegistration,
++    failures: VecDeque<(AgentOp, BackgroundAgentError)>,
++    calls: Vec<AgentOp>,
++}
++
++/// What the fake reports, apart from the bundle path.
++#[derive(Debug, Clone)]
++enum Probe {
++    Registration(AgentRegistration),
++    NotBundled(PathBuf),
++    HelperMissing,
++}
++
++impl Default for State {
++    fn default() -> Self {
++        Self {
++            probe: Probe::Registration(AgentRegistration::NotRegistered),
++            bundle: PathBuf::from(FAKE_AGENT_BUNDLE),
++            after_register: AgentRegistration::Enabled,
++            after_unregister: AgentRegistration::NotRegistered,
++            after_relaunch: AgentRegistration::Enabled,
++            failures: VecDeque::new(),
++            calls: Vec::new(),
++        }
++    }
++}
++
++impl FakeBackgroundAgent {
++    /// Creates an agent that is not registered.
++    #[must_use]
++    pub fn new() -> Self {
++        Self::default()
++    }
++
++    /// Creates an agent that already reports `registration`.
++    #[must_use]
++    pub fn with_registration(registration: AgentRegistration) -> Self {
++        let agent = Self::new();
++        agent.set_registration(registration);
++        agent
++    }
++
++    /// Sets the registration the next call reports.
++    pub fn set_registration(&self, registration: AgentRegistration) {
++        self.lock().probe = Probe::Registration(registration);
++    }
++
++    /// Sets the bundle path the OS reports with a registration.
++    pub fn set_bundle(&self, bundle: impl Into<PathBuf>) {
++        self.lock().bundle = bundle.into();
++    }
++
++    /// Makes every call answer [`AgentProbe::NotBundled`] for `executable`,
++    /// as for a CLI built by cargo.
++    pub fn set_not_bundled(&self, executable: impl Into<PathBuf>) {
++        self.lock().probe = Probe::NotBundled(executable.into());
++    }
++
++    /// Makes every call answer [`AgentProbe::HelperMissing`] for the
++    /// bundle, as for a build from the Xcode IDE.
++    pub fn set_helper_missing(&self) {
++        self.lock().probe = Probe::HelperMissing;
++    }
++
++    /// Sets the registration that [`register`](BackgroundAgent::register)
++    /// leaves.
++    pub fn on_register(&self, registration: AgentRegistration) {
++        self.lock().after_register = registration;
++    }
++
++    /// Sets the registration that
++    /// [`unregister`](BackgroundAgent::unregister) leaves.
++    pub fn on_unregister(&self, registration: AgentRegistration) {
++        self.lock().after_unregister = registration;
++    }
++
++    /// Sets the registration that [`relaunch`](BackgroundAgent::relaunch)
++    /// leaves.
++    pub fn on_relaunch(&self, registration: AgentRegistration) {
++        self.lock().after_relaunch = registration;
++    }
++
++    /// Queues `error` for the next call of `op`; queued failures for the
++    /// same call answer in order.
++    pub fn fail_next(&self, op: AgentOp, error: BackgroundAgentError) {
++        self.lock().failures.push_back((op, error));
++    }
++
++    /// Returns every call so far, in the order they ran.
++    #[must_use]
++    pub fn calls(&self) -> Vec<AgentOp> {
++        self.lock().calls.clone()
++    }
++
++    /// Returns how many times `op` was called.
++    #[must_use]
++    pub fn count(&self, op: AgentOp) -> usize {
++        self.lock().calls.iter().filter(|call| **call == op).count()
++    }
++
++    /// Returns whether a call that changes the registration ran, which a
++    /// test of a read only path asserts never happens.
++    #[must_use]
++    pub fn changed_registration(&self) -> bool {
++        self.lock()
++            .calls
++            .iter()
++            .any(|call| !matches!(call, AgentOp::Status))
++    }
++
++    fn lock(&self) -> MutexGuard<'_, State> {
++        self.state.lock().unwrap_or_else(PoisonError::into_inner)
++    }
++
++    fn answer(&self, op: AgentOp) -> Result<AgentProbe, BackgroundAgentError> {
++        let mut state = self.lock();
++        state.calls.push(op);
++        if let Some(index) = state.failures.iter().position(|(queued, _)| *queued == op)
++            && let Some((_, error)) = state.failures.remove(index)
++        {
++            return Err(error);
++        }
++        if let Probe::Registration(_) = state.probe {
++            let next = match op {
++                AgentOp::Status => None,
++                AgentOp::Register => Some(state.after_register),
++                AgentOp::Unregister => Some(state.after_unregister),
++                AgentOp::Relaunch => Some(state.after_relaunch),
++            };
++            if let Some(next) = next {
++                state.probe = Probe::Registration(next);
++            }
++        }
++        Ok(match &state.probe {
++            Probe::Registration(registration) => AgentProbe::Registration {
++                registration: *registration,
++                bundle: state.bundle.clone(),
++            },
++            Probe::NotBundled(executable) => AgentProbe::NotBundled {
++                executable: executable.clone(),
++            },
++            Probe::HelperMissing => AgentProbe::HelperMissing {
++                bundle: state.bundle.clone(),
++            },
++        })
++    }
++}
++
++impl BackgroundAgent for FakeBackgroundAgent {
++    fn status(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        self.answer(AgentOp::Status)
++    }
++
++    fn register(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        self.answer(AgentOp::Register)
++    }
++
++    fn unregister(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        self.answer(AgentOp::Unregister)
++    }
++
++    fn relaunch(&self) -> Result<AgentProbe, BackgroundAgentError> {
++        self.answer(AgentOp::Relaunch)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use stackly_platform::AgentOsErrorKind;
++
++    use super::*;
++
++    fn registration_of(probe: Result<AgentProbe, BackgroundAgentError>) -> AgentRegistration {
++        match probe {
++            Ok(AgentProbe::Registration { registration, .. }) => registration,
++            other => panic!("expected a registration, got {other:?}"),
++        }
++    }
++
++    #[test]
++    fn a_new_agent_is_not_registered_in_the_default_bundle() {
++        let agent = FakeBackgroundAgent::new();
++        assert_eq!(
++            agent.status(),
++            Ok(AgentProbe::Registration {
++                registration: AgentRegistration::NotRegistered,
++                bundle: PathBuf::from(FAKE_AGENT_BUNDLE),
++            })
++        );
++    }
++
++    #[test]
++    fn register_leaves_enabled_by_default() {
++        let agent = FakeBackgroundAgent::new();
++        assert_eq!(
++            registration_of(agent.register()),
++            AgentRegistration::Enabled
++        );
++        assert_eq!(registration_of(agent.status()), AgentRegistration::Enabled);
++    }
++
++    #[test]
++    fn register_leaves_the_state_the_test_set() {
++        let agent = FakeBackgroundAgent::new();
++        agent.on_register(AgentRegistration::RequiresApproval);
++        assert_eq!(
++            registration_of(agent.register()),
++            AgentRegistration::RequiresApproval
++        );
++    }
++
++    #[test]
++    fn unregister_and_relaunch_leave_the_states_the_test_set() {
++        let agent = FakeBackgroundAgent::with_registration(AgentRegistration::Enabled);
++        assert_eq!(
++            registration_of(agent.unregister()),
++            AgentRegistration::NotRegistered
++        );
++        agent.on_relaunch(AgentRegistration::RequiresApproval);
++        assert_eq!(
++            registration_of(agent.relaunch()),
++            AgentRegistration::RequiresApproval
++        );
++    }
++
++    #[test]
++    fn a_queued_failure_answers_once_and_keeps_the_state() {
++        let agent = FakeBackgroundAgent::new();
++        let error = BackgroundAgentError::Os {
++            op: AgentOp::Register,
++            kind: AgentOsErrorKind::InvalidSignature,
++            domain: "SMAppServiceErrorDomain".to_owned(),
++            code: 3,
++            message: "invalid signature".to_owned(),
++        };
++        agent.fail_next(AgentOp::Register, error.clone());
++        assert_eq!(agent.register(), Err(error));
++        assert_eq!(
++            registration_of(agent.status()),
++            AgentRegistration::NotRegistered
++        );
++        assert_eq!(
++            registration_of(agent.register()),
++            AgentRegistration::Enabled
++        );
++    }
++
++    #[test]
++    fn a_failure_queued_for_another_call_does_not_answer_status() {
++        let agent = FakeBackgroundAgent::new();
++        agent.fail_next(
++            AgentOp::Relaunch,
++            BackgroundAgentError::Os {
++                op: AgentOp::Relaunch,
++                kind: AgentOsErrorKind::Other,
++                domain: "d".to_owned(),
++                code: 1,
++                message: "m".to_owned(),
++            },
++        );
++        assert!(agent.status().is_ok());
++    }
++
++    #[test]
++    fn a_not_bundled_agent_answers_the_executable_and_never_changes() {
++        let agent = FakeBackgroundAgent::new();
++        agent.set_not_bundled("/work/target/debug/stackly");
++        let expected = AgentProbe::NotBundled {
++            executable: PathBuf::from("/work/target/debug/stackly"),
++        };
++        assert_eq!(agent.register(), Ok(expected.clone()));
++        assert_eq!(agent.status(), Ok(expected));
++    }
++
++    #[test]
++    fn a_helper_missing_agent_answers_its_bundle() {
++        let agent = FakeBackgroundAgent::new();
++        agent.set_bundle("/DerivedData/Stackly.app");
++        agent.set_helper_missing();
++        assert_eq!(
++            agent.status(),
++            Ok(AgentProbe::HelperMissing {
++                bundle: PathBuf::from("/DerivedData/Stackly.app"),
++            })
++        );
++    }
++
++    #[test]
++    fn the_call_log_records_every_call_in_order() {
++        let agent = FakeBackgroundAgent::new();
++        let _ = agent.status();
++        let _ = agent.relaunch();
++        let _ = agent.status();
++        assert_eq!(
++            agent.calls(),
++            vec![AgentOp::Status, AgentOp::Relaunch, AgentOp::Status]
++        );
++        assert_eq!(agent.count(AgentOp::Status), 2);
++        assert!(agent.changed_registration());
++    }
++
++    #[test]
++    fn status_alone_never_counts_as_a_change() {
++        let agent = FakeBackgroundAgent::new();
++        let _ = agent.status();
++        let _ = agent.status();
++        assert!(!agent.changed_registration());
++    }
++
++    #[test]
++    fn clones_share_the_state() {
++        let agent = FakeBackgroundAgent::new();
++        let port: Arc<dyn BackgroundAgent> = Arc::new(agent.clone());
++        let _ = port.register();
++        assert_eq!(agent.calls(), vec![AgentOp::Register]);
++        assert_eq!(registration_of(agent.status()), AgentRegistration::Enabled);
++    }
++}
+diff --git a/crates/testkit/src/fake_platform.rs b/crates/testkit/src/fake_platform.rs
+index 35311ed..d85f692 100644
+--- a/crates/testkit/src/fake_platform.rs
++++ b/crates/testkit/src/fake_platform.rs
+@@ -7,7 +7,9 @@ use stackly_platform::{
+     PlatformCapability, PlatformError, PlatformInfo, RootSet, UserId, UserIdentity,
+ };
+ 
+-use crate::{FakeFilesystem, FakeProcessSupervision, FakeSecretStore, TestRoot};
++use crate::{
++    FakeBackgroundAgent, FakeFilesystem, FakeProcessSupervision, FakeSecretStore, TestRoot,
++};
+ 
+ /// Where [`FakeClock`] starts: 2026-01-01T00:00:00Z.
+ const FAKE_CLOCK_START: Timestamp = Timestamp::constant(1_767_225_600, 0);
+@@ -97,8 +99,9 @@ impl UserIdentity for FakeIdentity {
+ 
+ /// Platform facts the test controls: `macos-aarch64` with the capability
+ /// statuses of `MacosPlatform` by default, except that process supervision
+-/// is supported, because [`FakePlatform`] installs a working fake of it
+-/// (`MacosPlatform` turns it on with spec 0010 build step 3).
++/// and the background agent are supported, because [`FakePlatform`] installs
++/// a working fake of each (`MacosPlatform` turns them on with spec 0010
++/// build step 3 and spec 0015 build step 5).
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct FakePlatformInfo {
+     target: Target,
+@@ -130,7 +133,7 @@ impl FakePlatformInfo {
+                 )
+                 .with(
+                     PlatformCapability::BackgroundAgent,
+-                    not_built("not built yet (feature 15)"),
++                    CapabilityStatus::Supported,
+                 )
+                 .with(
+                     PlatformCapability::ProcessMetrics,
+@@ -206,6 +209,7 @@ pub struct FakePlatform {
+     info: Arc<FakePlatformInfo>,
+     secrets: FakeSecretStore,
+     processes: FakeProcessSupervision,
++    background_agent: FakeBackgroundAgent,
+ }
+ 
+ impl FakePlatform {
+@@ -220,6 +224,7 @@ impl FakePlatform {
+             info: Arc::new(FakePlatformInfo::new()),
+             secrets: FakeSecretStore::new(),
+             processes: FakeProcessSupervision::new(root),
++            background_agent: FakeBackgroundAgent::new(),
+         }
+     }
+ 
+@@ -251,6 +256,7 @@ impl FakePlatform {
+         )
+         .with_secrets(Arc::new(self.secrets.clone()))
+         .with_processes(Arc::new(self.processes.clone()))
++        .with_background_agent(Arc::new(self.background_agent.clone()))
+     }
+ 
+     /// Returns the fake filesystem, to inject faults or read its logs.
+@@ -286,4 +292,12 @@ impl FakePlatform {
+     pub fn processes(&self) -> &FakeProcessSupervision {
+         &self.processes
+     }
++
++    /// Returns the fake background agent, to script its registration and
++    /// read its call log (spec 0015). Every platform this fake hands out
++    /// shares it.
++    #[must_use]
++    pub fn background_agent(&self) -> &FakeBackgroundAgent {
++        &self.background_agent
++    }
+ }
+diff --git a/crates/testkit/src/lib.rs b/crates/testkit/src/lib.rs
+index 3c86426..6a40a1f 100644
+--- a/crates/testkit/src/lib.rs
++++ b/crates/testkit/src/lib.rs
+@@ -45,6 +45,7 @@ mod cargo_bin;
+ mod conformance;
+ #[cfg(target_os = "macos")]
+ mod disk_image;
++mod fake_agent;
+ #[cfg(unix)]
+ mod fake_fs;
+ #[cfg(unix)]
+@@ -70,6 +71,7 @@ pub use conformance::fs_conformance;
+ pub use conformance::{CrossDevice, fs_cross_device_conformance};
+ #[cfg(target_os = "macos")]
+ pub use disk_image::DiskImage;
++pub use fake_agent::{FAKE_AGENT_BUNDLE, FakeBackgroundAgent};
+ #[cfg(unix)]
+ pub use fake_fs::{FakeFilesystem, Fault, FsOp, Mutation};
+ #[cfg(unix)]
+diff --git a/crates/testkit/tests/fake_platform.rs b/crates/testkit/tests/fake_platform.rs
+index 5ff5497..af906c8 100644
+--- a/crates/testkit/tests/fake_platform.rs
++++ b/crates/testkit/tests/fake_platform.rs
+@@ -4,7 +4,7 @@
+ 
+ use jiff::{SignedDuration, Timestamp};
+ use stackly_domain::{Arch, Os, Target};
+-use stackly_platform::{CapabilityStatus, PlatformCapability, UserId};
++use stackly_platform::{AgentOp, CapabilityStatus, PlatformCapability, UserId};
+ use stackly_testkit::{FakeClock, FakePlatform, FakePlatformInfo, TestRoot};
+ 
+ #[test]
+@@ -38,6 +38,21 @@ fn fake_platform_shares_its_clock_and_identity_with_the_bundle() {
+     assert_ne!(owner, UserId::Unix(4242));
+ }
+ 
++#[test]
++fn fake_platform_shares_its_background_agent_with_the_bundle() {
++    let root = TestRoot::new().unwrap();
++    let fake = FakePlatform::new(&root);
++    let platform = fake.platform();
++
++    platform.background_agent().status().unwrap();
++    platform.background_agent().register().unwrap();
++
++    assert_eq!(
++        fake.background_agent().calls(),
++        vec![AgentOp::Status, AgentOp::Register]
++    );
++}
++
+ #[test]
+ fn fake_identity_starts_as_the_owner_of_the_test_root() {
+     use std::os::unix::fs::MetadataExt;
+@@ -76,6 +91,7 @@ fn fake_platform_info_reports_macos_capabilities_and_takes_overrides() {
+         PlatformCapability::UserIdentity,
+         PlatformCapability::SecretStore,
+         PlatformCapability::ProcessSupervision,
++        PlatformCapability::BackgroundAgent,
+     ] {
+         assert!(caps.status(supported).is_supported(), "{supported}");
+     }
+-- 
+2.54.0 (Apple Git-157)
+
