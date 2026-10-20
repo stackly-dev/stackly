@@ -17,6 +17,7 @@ use stackly_core::operation::{EngineError, OperationEngine};
 use stackly_core::secret::{
     Redactor, SECRET_REF_COMPENSATOR, SecretRefCompensator, SecretService, SecretWorker,
 };
+use stackly_core::supervisor::{LogSink as SupervisorLogSink, Supervisor, SupervisorConfig};
 use stackly_core::{PreparedLayout, daemon_info};
 use stackly_domain::{PruneReport, Registry, RegistryError, RetentionPolicy};
 use stackly_ipc::{Accepted, BindState, IpcError, Listener};
@@ -41,6 +42,7 @@ use crate::secrets;
 use crate::shutdown::{SHUTDOWN_DRAIN, SHUTDOWN_FLUSH};
 use crate::startup::EXIT_START_FAILED;
 use crate::state::{DaemonCore, Phase, RegistryState};
+use crate::supervisor::BuildInput;
 
 /// How many connections are served at once; the next one gets
 /// `ipc.too_many_connections`.
@@ -64,7 +66,7 @@ pub const REGISTRY_LOCKED_RETRIES: [Duration; 3] = [
 
 /// Tunables of the server. The daemon uses [`DaemonConfig::default`];
 /// tests shorten the intervals or hold the start slot.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[non_exhaustive]
 pub struct DaemonConfig {
     /// How often the socket is checked.
@@ -86,6 +88,26 @@ pub struct DaemonConfig {
     /// daemon's choice, loads the folder of the start configuration
     /// (spec 0017).
     pub catalog: Option<CatalogOverride>,
+    /// More sinks for the redacted lines of the processes the supervisor
+    /// runs, besides the tail it keeps itself; empty by default. Tests
+    /// give a recording sink here (spec 0010 K5).
+    pub extra_log_sinks: Vec<Arc<dyn SupervisorLogSink>>,
+    /// The constants of the supervisor; tests shrink them so pauses,
+    /// probes, and graces take milliseconds.
+    pub supervisor: SupervisorConfig,
+}
+
+impl std::fmt::Debug for DaemonConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DaemonConfig")
+            .field("socket_check_interval", &self.socket_check_interval)
+            .field("prune_interval", &self.prune_interval)
+            .field("registry_locked_retries", &self.registry_locked_retries)
+            .field("start_gate", &self.start_gate.is_some())
+            .field("peer_uid", &self.peer_uid)
+            .field("extra_log_sinks", &self.extra_log_sinks.len())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for DaemonConfig {
@@ -98,6 +120,8 @@ impl Default for DaemonConfig {
             start_gate: None,
             peer_uid: None,
             catalog: None,
+            extra_log_sinks: Vec::new(),
+            supervisor: SupervisorConfig::default(),
         }
     }
 }
@@ -423,7 +447,9 @@ impl DaemonHandle {
         }
         // The engine's tasks have ended, unless the stop was forced; its
         // last handle goes here, so its registry handle goes with it.
+        core.supervision().shutdown();
         core.operations().close();
+        core.supervision().close();
         core.secrets().close();
         let prune = self
             .tasks
@@ -471,6 +497,10 @@ async fn stop_gracefully(
         }
     };
     let ((), _) = tokio::join!(drain, core.operations().shutdown());
+    // The engine left the operations of the instances as they are; now the
+    // actors, probes, spool readers, and exit handling end, with no
+    // signal to an instance and no commit (spec 0010 AC-21).
+    core.supervision().shutdown();
     // Step 5.
     core.connections()
         .close_all(SHUTDOWN_FLUSH, shutting_down)
@@ -623,12 +653,14 @@ async fn start_slot(
     )
     .await;
     let mut recovered = None;
+    let mut reconciled: Option<Supervisor> = None;
     match opened {
         Some(Ok(RegistryOpen::Ready { registry, summary })) => {
             let pruned = prune_once(&core, &registry).await;
             if matches!(pruned, Err(RegistryError::Unavailable)) {
                 registry_failed(&core);
                 core.secrets().unavailable();
+                core.supervision().unavailable(REGISTRY_FAILED);
                 core.set_registry(RegistryState::Failed, Some(registry));
             } else {
                 if let Err(error) = &pruned {
@@ -661,6 +693,7 @@ async fn start_slot(
                 let service = core.secrets().build(
                     registry.clone(),
                     core.platform(),
+                    core.prepared(),
                     Arc::clone(core.redactor()),
                     core.bus(),
                 );
@@ -683,9 +716,28 @@ async fn start_slot(
                     });
                 }
                 secrets::probe_all(Arc::clone(&service)).await;
-                recovered = recover_operations(&core, registry, handlers.as_ref(), service).await;
+                let supervisor = core.supervision().build(BuildInput {
+                    registry: Arc::new(registry.clone()) as Arc<dyn Registry>,
+                    platform: core.platform(),
+                    prepared: core.prepared(),
+                    secrets: Arc::clone(&service),
+                    redactor: Arc::clone(core.redactor()),
+                    bus: core.bus(),
+                    extra_sinks: &config.extra_log_sinks,
+                    config: config.supervisor.clone(),
+                });
+                recovered =
+                    recover_operations(&core, registry, handlers.as_ref(), service, &supervisor)
+                        .await;
                 // Spec 0010's reconciliation runs here, between `recover`
-                // and `ready` (feature 10).
+                // and `ready`; what it decided to run again starts once
+                // the engine does.
+                if recovered.is_some() {
+                    core.supervision().reconcile(&supervisor).await;
+                    reconciled = Some(supervisor);
+                } else {
+                    core.supervision().unavailable(OPERATIONS_UNAVAILABLE);
+                }
             }
         }
         Some(Ok(RegistryOpen::Recovery(report))) => {
@@ -702,18 +754,21 @@ async fn start_slot(
                 None,
             );
             core.operations().unavailable("registry in recovery");
+            core.supervision().unavailable("registry in recovery");
             core.secrets().unavailable();
         }
         Some(Err(error)) => {
             tracing::error!(error = %error, "cannot open the registry");
             core.set_registry(RegistryState::Failed, None);
             core.operations().unavailable(REGISTRY_FAILED);
+            core.supervision().unavailable(REGISTRY_FAILED);
             core.secrets().unavailable();
             core.fail(EXIT_START_FAILED);
         }
         None => {
             core.set_registry(RegistryState::Failed, None);
             core.operations().unavailable(REGISTRY_FAILED);
+            core.supervision().unavailable(REGISTRY_FAILED);
             core.secrets().unavailable();
             core.fail(EXIT_START_FAILED);
         }
@@ -730,6 +785,9 @@ async fn start_slot(
         && core.phase() == Phase::Ready
     {
         engine.start();
+        if let Some(supervisor) = &reconciled {
+            supervisor.start_reconciled();
+        }
     }
     tasks.started.send_replace(true);
     let health = core.health(std::time::Instant::now());
@@ -738,6 +796,9 @@ async fn start_slot(
 
 /// The `operations` detail when the registry broke.
 const REGISTRY_FAILED: &str = "the registry stopped working";
+/// The `supervisor` detail when the operation engine could not recover:
+/// nothing can start an operation, so the supervisor stays down.
+const OPERATIONS_UNAVAILABLE: &str = "the operations are not available";
 /// The waits before each new try when the operation engine cannot read
 /// the last run's operations.
 pub const OPERATION_RECOVER_RETRIES: [Duration; 3] = [
@@ -757,6 +818,7 @@ async fn recover_operations(
     registry: SqliteRegistry,
     handlers: &dyn Handlers,
     secrets: Arc<SecretService>,
+    supervisor: &Supervisor,
 ) -> Option<OperationEngine> {
     let engine = core.operations().create(
         registry,
@@ -769,6 +831,9 @@ async fn recover_operations(
         SECRET_REF_COMPENSATOR,
         Arc::new(SecretRefCompensator::new(secrets)),
     );
+    // The actors begin their own operations (a respawn, the starts of
+    // reconciliation) through this engine.
+    supervisor.attach_operations(engine.clone());
     if let Some(starting) = handlers.test_starting_method() {
         starting.register(&engine);
     }

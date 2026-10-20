@@ -20,6 +20,10 @@ use stackly_protocol::ErrorBody;
 use stackly_protocol::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use stackly_protocol::daemon::{Capabilities, DaemonHealth, DaemonInfo};
 use stackly_protocol::handshake::ClientInfo;
+use stackly_protocol::instance::{
+    CreateInstanceParams, GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceSummary,
+    ListInstancesParams, StartInstanceParams, StopInstanceParams,
+};
 use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
@@ -30,7 +34,9 @@ use stackly_protocol::secret::{
     RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
 };
 
-use crate::ipc::operation::{self, TestStartingMethod};
+use crate::ipc::instance;
+use crate::ipc::operation;
+use crate::ipc::operation::TestStartingMethod;
 use crate::ipc::secret;
 use crate::state::DaemonCore;
 use crate::{catalog, map};
@@ -49,6 +55,8 @@ pub struct RequestContext {
     pub peer: PeerCred,
     /// The client, from the handshake.
     pub client: ClientInfo,
+    /// The request's `idempotencyKey`, if it sent one.
+    pub idempotency_key: Option<String>,
 }
 
 impl RequestContext {
@@ -65,7 +73,15 @@ impl RequestContext {
             request_id,
             peer,
             client,
+            idempotency_key: None,
         }
+    }
+
+    /// Returns the context with the request's `idempotencyKey`.
+    #[must_use]
+    pub fn with_idempotency_key(mut self, key: Option<String>) -> Self {
+        self.idempotency_key = key;
+        self
     }
 }
 
@@ -244,12 +260,67 @@ pub trait Handlers: Send + Sync + 'static {
         secret::delete(core, context, params)
     }
 
+    /// `instance.create`.
+    fn create_instance<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: CreateInstanceParams,
+    ) -> HandlerFuture<'a, InstanceActionAccepted> {
+        instance::create(core, context, params)
+    }
+
+    /// `instance.start`.
+    fn start_instance<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: StartInstanceParams,
+    ) -> HandlerFuture<'a, InstanceActionAccepted> {
+        instance::start(core, context, params)
+    }
+
+    /// `instance.stop`.
+    fn stop_instance<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: StopInstanceParams,
+    ) -> HandlerFuture<'a, InstanceActionAccepted> {
+        instance::stop(core, context, params)
+    }
+
+    /// `instance.get`.
+    fn get_instance<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetInstanceParams,
+    ) -> HandlerFuture<'a, InstanceSummary> {
+        let _ = context;
+        instance::get(core, params)
+    }
+
+    /// `instance.list`.
+    fn list_instances<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ListInstancesParams,
+    ) -> HandlerFuture<'a, InstancePage> {
+        let _ = context;
+        instance::list(core, params)
+    }
+
     /// A method outside the contract that starts an operation, which only
-    /// tests register; the daemon serves none. No contract method starts an
-    /// operation before feature 10, so this is how the integration tests
-    /// reach [`operation::start_operation`] over the socket (spec 0007 build
-    /// step 15). provisional: F10 (the first contract method that starts
-    /// an operation replaces it, and its tests move there)
+    /// tests register; the daemon serves none. The engine tests need work
+    /// they can script (hold, fail, count steps), which no contract method
+    /// offers, so this is how they reach
+    /// [`operation::start_operation`] over the socket (spec 0007 build step
+    /// 15). The daemon never registers one. It stays in the library
+    /// because the integration tests are separate crates and `cargo xtask
+    /// check-deps` forbids the crate a dev dependency on itself, which a
+    /// feature gate would need.
     #[doc(hidden)]
     fn test_starting_method(&self) -> Option<Arc<dyn TestStartingMethod>> {
         None

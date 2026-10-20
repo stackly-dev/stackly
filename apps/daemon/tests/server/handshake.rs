@@ -20,6 +20,8 @@ async fn a_client_of_major_1_is_accepted_whatever_its_minor() {
     );
     let site = Site::new();
     let daemon = site.start().await;
+    // The start slot published the two `daemon.reconciling` events.
+    let base = daemon.bus().head().sequence.get();
 
     for minor in [0, 99] {
         let mut raw = Raw::connect(&site.socket()).await;
@@ -43,7 +45,7 @@ async fn a_client_of_major_1_is_accepted_whatever_its_minor() {
         assert_eq!(accepted["contractDigest"], CONTRACT_DIGEST);
         assert_eq!(accepted["contractDrift"], false);
         assert_eq!(accepted["limits"]["maxFrameBytes"], 1_048_576);
-        assert_eq!(accepted["head"]["sequence"], 0);
+        assert_eq!(accepted["head"]["sequence"], base);
     }
     ev.pass();
 }

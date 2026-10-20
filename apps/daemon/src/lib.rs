@@ -5,7 +5,8 @@
 //! [`log_sink`] writes every log line without ever blocking the daemon,
 //! [`server`] binds the socket and serves [`connection`]s through the
 //! [`dispatch`] handlers, whose operation methods live in [`ipc`],
-//! [`operations`] holds the operation engine, [`secrets`] the secret service, [`events`] is the event bus,
+//! [`operations`] holds the operation engine, [`secrets`] the secret service, [`supervisor`] the process
+//! supervisor, [`events`] is the event bus,
 //! [`state`] holds the health, [`catalog`] the provider catalog, and
 //! [`shutdown`] the stop order's pieces. No other crate depends on this
 //! library.
@@ -37,6 +38,8 @@ pub mod shutdown;
 pub mod startup;
 #[cfg(unix)]
 pub mod state;
+#[cfg(unix)]
+pub mod supervisor;
 
 pub use startup::{
     CATALOG_DIR_ENV, EXIT_LOCK_HELD, EXIT_START_FAILED, LOG_FILTER_ENV, StartConfig,

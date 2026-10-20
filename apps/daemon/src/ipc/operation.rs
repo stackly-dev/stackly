@@ -202,7 +202,7 @@ pub fn get_stats(core: &DaemonCore) -> HandlerFuture<'_, OperationStats> {
 /// The connection sends its request through the same admission, recovery
 /// mode check, [`start_operation`], and request log line as a contract
 /// method, and writes its reply as a raw response frame whose reply `type`
-/// is the method. provisional: F10
+/// is the method.
 #[doc(hidden)]
 pub trait TestStartingMethod: Send + Sync + 'static {
     /// The method name, never one of the contract's.
@@ -223,7 +223,7 @@ pub trait TestStartingMethod: Send + Sync + 'static {
     fn prepare(&self, params: Option<&serde_json::Value>) -> Result<TestStart, Box<ErrorBody>>;
 }
 
-/// What a [`TestStartingMethod`] prepared. provisional: F10
+/// What a [`TestStartingMethod`] prepared.
 #[doc(hidden)]
 pub struct TestStart {
     /// The request's fingerprint.
@@ -505,7 +505,7 @@ pub fn begin_error(error: &BeginError, method: &str) -> ErrorBody {
         .with_detail("operationId", existing.to_string())
         .with_detail("method", method)
         .with_hint("send the request again with a new idempotency key"),
-        BeginError::Rejected(rejection) => rejected(rejection.error()),
+        BeginError::Rejected(rejection) => operation_error_body(rejection.error()),
         BeginError::ResourceNotFound => {
             ErrorBody::new(&resource::NOT_FOUND, "the resource does not exist")
         }
@@ -582,8 +582,10 @@ pub fn engine_error(error: &EngineError) -> ErrorBody {
     }
 }
 
-/// A feature's precheck refusal, through the catalog like a stored error.
-fn rejected(error: &dyn stackly_core::operation::OperationError) -> ErrorBody {
+/// A feature's error as an error body, through the catalog like a stored
+/// error: a precheck refusal, or an error a method answers itself.
+#[must_use]
+pub fn operation_error_body(error: &dyn stackly_core::operation::OperationError) -> ErrorBody {
     let code = error.code();
     let Some(spec) = stackly_protocol::codes::lookup(code.as_str()) else {
         tracing::error!(

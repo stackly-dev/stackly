@@ -7,13 +7,16 @@
 //! and is handed in here, so a value the service learns is hidden by the
 //! log writer, the error bodies, and the events at once.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use stackly_core::PreparedLayout;
+use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
 use stackly_core::secret::{
     ChangeStatus, ProbeReport, Redactor, SecretChange, SecretDeps, SecretEvents, SecretFieldRule,
     SecretFieldRules, SecretService, StoreStatus,
 };
-use stackly_domain::{Instance, Registry, SecretFieldName};
+use stackly_domain::{Instance, ProviderRevisionKey, Registry, SecretFieldName};
 use stackly_platform::{Platform, SecretBackend, StoreState};
 use stackly_protocol::codes::registry;
 use stackly_protocol::events::EventKind;
@@ -70,6 +73,7 @@ impl Secrets {
         &self,
         registry: SqliteRegistry,
         platform: &Platform,
+        prepared: &PreparedLayout,
         redactor: Arc<Redactor>,
         bus: &Arc<EventBus>,
     ) -> Arc<SecretService> {
@@ -77,9 +81,7 @@ impl Secrets {
             registry: Arc::new(registry) as Arc<dyn Registry>,
             platform: Arc::new(platform.clone()),
             redactor,
-            // provisional: F10 (the provider packages give the rules of a
-            // secret field once an instance can exist)
-            fields: Arc::new(NoFieldRules),
+            fields: Arc::new(PackageFieldRules::new(platform.clone(), prepared.clone())),
             events: Arc::new(BusSecretEvents::new(Arc::clone(bus))),
         }));
         *self.lock() = Slot::Ready(Arc::clone(&service));
@@ -223,15 +225,47 @@ impl SecretEvents for BusSecretEvents {
     }
 }
 
-/// The rules of a secret field when no provider package is loaded: none
-/// are known, so `put` checks no bounds for an instance's field. No
-/// instance exists before feature 10, so nothing asks yet.
-/// provisional: F10
-#[derive(Debug, Clone, Copy)]
-struct NoFieldRules;
+/// The rules of a secret field of an instance, read from the pinned
+/// package of its provider revision (spec 0009, `x-stackly` rules of the
+/// settings schema). A package is read once; one that cannot be read or
+/// does not name the field gives no rules, so `put` then checks no bounds.
+struct PackageFieldRules {
+    platform: Platform,
+    prepared: PreparedLayout,
+    packages: Mutex<HashMap<ProviderRevisionKey, Option<Arc<ValidatedPackage>>>>,
+}
 
-impl SecretFieldRules for NoFieldRules {
-    fn rules(&self, _instance: &Instance, _field: &SecretFieldName) -> Option<SecretFieldRule> {
-        None
+impl PackageFieldRules {
+    fn new(platform: Platform, prepared: PreparedLayout) -> Self {
+        Self {
+            platform,
+            prepared,
+            packages: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn package(&self, key: &ProviderRevisionKey) -> Option<Arc<ValidatedPackage>> {
+        let mut packages = self.packages.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(found) = packages.get(key) {
+            return found.clone();
+        }
+        let dir = self.prepared.layout().provider_revision_dir(key);
+        let package = read_package(self.platform.fs(), &dir)
+            .ok()
+            .and_then(|files| ValidatedPackage::from_files(files, NameCheck::Skip).ok())
+            .filter(|package| package.key() == key)
+            .map(Arc::new);
+        packages.insert(key.clone(), package.clone());
+        package
+    }
+}
+
+impl SecretFieldRules for PackageFieldRules {
+    fn rules(&self, instance: &Instance, field: &SecretFieldName) -> Option<SecretFieldRule> {
+        let package = self.package(instance.provider_revision())?;
+        package
+            .settings_schema()
+            .field(field.as_str())
+            .and_then(SecretFieldRule::from_setting)
     }
 }

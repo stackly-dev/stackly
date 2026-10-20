@@ -171,7 +171,7 @@ async fn blocking<T: Send + 'static>(
 
 /// Who asks, from the request's context: a client request is the user's,
 /// and only an interactive client may see a Keychain dialog (AC-4).
-fn caller(context: &RequestContext) -> SecretCaller {
+pub(crate) fn caller(context: &RequestContext) -> SecretCaller {
     SecretCaller::client(
         super::operation::client_code(context.client.kind),
         context.peer.uid,
@@ -261,6 +261,22 @@ pub fn secret_value(text: &SecretText) -> SecretValue {
 #[must_use]
 pub fn secret_text(value: &SecretValue) -> SecretText {
     SecretText::new(value.expose().to_owned())
+}
+
+/// The input of a secret field of `instance.create`, as the service takes
+/// it: the one place a wire secret of a create turns into a platform value
+/// (K15). `bind` is valid here, unlike for `secret.set`.
+///
+/// # Errors
+///
+/// Returns `request.invalid_params` for a reference that does not parse.
+pub(crate) fn create_input(input: &SecretInput) -> Result<CoreInput, Box<ErrorBody>> {
+    Ok(match input {
+        SecretInput::Value(text) => CoreInput::Value(secret_value(text)),
+        SecretInput::Generate => CoreInput::Generate,
+        SecretInput::CopyFrom(source) => CoreInput::CopyFrom(parse_reference(source)?),
+        SecretInput::Bind(reference) => CoreInput::Bind(parse_reference(reference)?),
+    })
 }
 
 fn set_reply(outcome: &PutOutcome) -> SetSecretReply {
