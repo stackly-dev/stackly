@@ -1,9 +1,15 @@
 {
   "steps": [
     {
+      "type": "ensureDirectories",
+      "content": [
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets"
+      ]
+    },
+    {
       "type": "writeFile",
       "content": {
-        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/fake.json",
+        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/fake.json",
         "content": {
           "configFile": "fakeConfig",
           "segments": [

@@ -31,7 +31,7 @@ fn base() -> Vec<&'static str> {
         "--provider",
         "fake",
         "--revision",
-        "0.2.0",
+        "0.3.0",
     ]
 }
 
@@ -109,7 +109,7 @@ fn create_sends_one_call_with_the_params_the_flags_map_to() {
         json!({
             "name": "demo",
             "displayName": "Demo 数据库",
-            "provider": { "name": "fake", "revision": "0.2.0" },
+            "provider": { "name": "fake", "revision": "0.3.0" },
             "runtimeId": RUNTIME,
             "endpoints": [
                 { "name": "http", "port": { "type": "auto" } },
@@ -407,7 +407,7 @@ fn arguments_with_a_wrong_shape_exit_2_without_connecting() {
             "--provider",
             "fake",
             "--revision",
-            "0.2.0",
+            "0.3.0",
         ];
         if !extra.contains(&"--runtime") {
             args.extend(["--runtime", RUNTIME]);
@@ -427,7 +427,7 @@ fn arguments_with_a_wrong_shape_exit_2_without_connecting() {
         for (flag, value) in [
             ("--runtime", RUNTIME),
             ("--provider", "fake"),
-            ("--revision", "0.2.0"),
+            ("--revision", "0.3.0"),
         ] {
             if flag != missing {
                 args.extend([flag, value]);

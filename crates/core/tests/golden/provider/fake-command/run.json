@@ -4,7 +4,8 @@
       "type": "ensureDirectories",
       "content": [
         "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
-        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf"
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/conf"
       ]
     },
     {
@@ -26,7 +27,7 @@
     {
       "type": "writeFile",
       "content": {
-        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf/server.json",
+        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/conf/server.json",
         "content": {
           "configFile": "serverConfig",
           "segments": [
@@ -58,7 +59,7 @@
     },
     "args": [
       "serve",
-      "--config=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf/server.json",
+      "--config=/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/conf/server.json",
       "--data=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
       "--port=14000",
       "--label=quiet"

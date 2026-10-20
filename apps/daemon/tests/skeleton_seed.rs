@@ -560,7 +560,7 @@ fn the_fake_package_declares_the_init_delay_and_passes_it_to_init() {
     )
     .expect("the schema is JSON");
 
-    assert!(manifest.contains("revision: \"0.2.0\""), "{manifest}");
+    assert!(manifest.contains("revision: \"0.3.0\""), "{manifest}");
     let init = manifest
         .split("lifecycle:")
         .nth(1)

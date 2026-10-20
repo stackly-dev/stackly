@@ -32,7 +32,7 @@ configFiles:
   serverConfig:
     template: templates/server.json.tmpl
     format: yaml
-    destination: "${instance.config}/conf/server.json"
+    destination: "${instance.secrets}/conf/server.json"
     sensitive: true
   peers:
     template: templates/peers.yaml.tmpl
@@ -57,7 +57,7 @@ lifecycle:
     executable: "${runtime.executable}"
     args:
       - serve
-      - "--config=${instance.config}/conf/server.json"
+      - "--config=${instance.secrets}/conf/server.json"
       - "--data=${instance.data}"
       - "--port=${endpoint.http.port}"
       - "--label=${settings.mode}"

@@ -45,7 +45,7 @@ fn base() -> Vec<&'static str> {
         "--provider",
         "fake",
         "--revision",
-        "0.2.0",
+        "0.3.0",
         "--idempotency-key",
         KEY,
     ]

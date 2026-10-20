@@ -41,7 +41,7 @@ pub const PATIENCE: Duration = Duration::from_secs(30);
 /// The provider of the fake package and its revision.
 pub const PROVIDER: &str = "testing/fake";
 /// The revision of the fake package.
-pub const REVISION: &str = "0.2.0";
+pub const REVISION: &str = "0.3.0";
 /// The auth token every test gives `authToken`.
 pub const TOKEN: &str = "fixture-token-for-the-fake-provider";
 

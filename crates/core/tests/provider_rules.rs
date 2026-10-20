@@ -1360,7 +1360,7 @@ fn provider_ids_and_revisions_follow_val_002() {
         assert_manifest_issue(
             Edit::fake().replace(
                 "provider.yaml",
-                "revision: \"0.2.0\"",
+                "revision: \"0.3.0\"",
                 &format!("revision: {revision}"),
             ),
             "metadata.revision",

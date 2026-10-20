@@ -269,7 +269,7 @@ fn the_fake_package_reads_without_writes_and_validates() {
 
     let key = package.key();
     assert_eq!(key.provider().as_str(), "testing/fake");
-    assert_eq!(key.revision().as_str(), "0.2.0");
+    assert_eq!(key.revision().as_str(), "0.3.0");
     assert_eq!(package.software().as_str(), "fake");
     assert_eq!(
         package

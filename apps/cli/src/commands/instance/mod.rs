@@ -39,7 +39,7 @@ pub enum InstanceCommand {
     // provisional: F20 (--runtime takes software@version, --provider and
     // --revision turn optional, --set follows the field kind)
     #[command(
-        after_help = "Examples:\n  stackly instance create demo --runtime 0192f3a5-0000-7000-8000-0000000000a1 --provider fake --revision 0.2.0 --wait\n  stackly instance create demo --runtime 0192f3a5-0000-7000-8000-0000000000a1 --provider fake --revision 0.2.0 --port http=auto --set-json readyDelayMs=1500 --json"
+        after_help = "Examples:\n  stackly instance create demo --runtime 0192f3a5-0000-7000-8000-0000000000a1 --provider fake --revision 0.3.0 --wait\n  stackly instance create demo --runtime 0192f3a5-0000-7000-8000-0000000000a1 --provider fake --revision 0.3.0 --port http=auto --set-json readyDelayMs=1500 --json"
     )]
     Create(CreateArgs),
     /// Start an instance

@@ -20,13 +20,14 @@
     {
       "type": "ensureDirectories",
       "content": [
-        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf"
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/conf"
       ]
     },
     {
       "type": "writeFile",
       "content": {
-        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/conf/server.json",
+        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/conf/server.json",
         "content": {
           "configFile": "serverConfig",
           "segments": [
@@ -123,6 +124,7 @@
   ],
   "deadline": "60s",
   "cleanup": [
-    "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/token"
+    "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/token",
+    "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/conf"
   ]
 }
