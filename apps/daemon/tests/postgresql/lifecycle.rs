@@ -3,11 +3,13 @@
 
 use std::sync::Arc;
 
-use stackly_protocol::instance::{InstanceDesired, InstanceLifecycle, InstanceReadinessState};
+use stackly_protocol::instance::{
+    InstanceDesired, InstanceHealthState, InstanceLifecycle, InstanceReadinessState,
+};
 use stackly_protocol::operation::OperationState;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, Via, create_instance};
+use crate::harness::{PG18, Site, Via, create_instance, stop_and_shutdown};
 use crate::support::LogRecorder;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -16,7 +18,7 @@ async fn postgresql_18_is_created_started_served_and_stopped_through_the_daemon(
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
-        expected = "a PostgreSQL 18 instance is created with a generated superuser password, starts to ready, answers queries over the socket and TCP, keeps a row over a stop and a start, and stops",
+        expected = "a PostgreSQL 18 instance is created with its superuser password, initialized with data.initializedLine 18, starts to ready, shows lifecycle, desired, readiness, health, and process apart, answers queries over the socket and TCP, sends UTC stamped log lines to the sink, keeps a row over a stop and a start, and stops",
     );
     let Some(site) = Site::open(&ev, PG18) else {
         return;
@@ -33,42 +35,97 @@ async fn postgresql_18_is_created_started_served_and_stopped_through_the_daemon(
 
     let made = create_instance(&site, &api, "pg18").await;
     let paths = site.instance_paths(made.id);
-    let manifest = std::fs::read_to_string(&paths.manifest).expect("the manifest is written");
-    println!("{manifest}");
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&paths.manifest).expect("the manifest is written"),
+    )
+    .expect("the manifest is JSON");
+    assert_eq!(manifest["data"]["initializedLine"], PG18.major);
+    assert_eq!(manifest["runtime"]["line"], PG18.major);
     assert!(
         !site
             .run_dir(made.id)
             .join("secrets/superuser-password")
-            .exists()
+            .exists(),
+        "the password file outlived the init"
     );
+    let created = api.get(made.id).await.expect("the instance can be read");
+    assert_eq!(created.lifecycle, InstanceLifecycle::Stopped);
+    assert_eq!(created.initialized, Some(true));
 
     let running = api.start_ready(made.id).await;
     assert_eq!(running.lifecycle, InstanceLifecycle::Running);
     assert_eq!(running.desired, InstanceDesired::Running);
     assert_eq!(running.readiness.state, InstanceReadinessState::Ready);
-    println!("{running:#?}");
+    assert!(
+        running
+            .process
+            .as_ref()
+            .is_some_and(|process| !process.adopted),
+        "{running:?}"
+    );
+    api.wait_instance(made.id, "healthy", |summary| {
+        summary.health.state == InstanceHealthState::Healthy
+    })
+    .await;
 
     let psql = site.psql(made.id, made.port);
     let version = psql.scalar(&made.password, "SHOW server_version");
+    assert_eq!(version, PG18.version);
     site.subject(&ev, &version);
-    println!("{version}");
-    let ran = psql.run(
-        Via::Tcp,
-        "postgres",
-        Some(&made.password),
-        "postgres",
-        "SELECT 1",
+    for via in [Via::Socket, Via::Tcp] {
+        let ran = psql.run(
+            via,
+            "postgres",
+            Some(&made.password),
+            "postgres",
+            "SELECT 1",
+        );
+        assert!(ran.ok, "{via:?}: {ran:?}");
+    }
+    let wrote = psql.admin(
+        &made.password,
+        "CREATE TABLE kept (note text); INSERT INTO kept VALUES ('before the stop')",
     );
-    assert!(ran.ok, "{ran:?}");
+    assert!(wrote.ok, "{wrote:?}");
+
+    let first_run = recorder.text_of(made.id);
+    assert!(
+        first_run
+            .iter()
+            .any(|line| line.contains("database system is ready to accept connections")),
+        "{first_run:#?}"
+    );
+    assert!(
+        first_run.iter().any(|line| line.contains(" UTC [")),
+        "no UTC stamped line: {first_run:#?}"
+    );
 
     let accepted = api
         .stop_when_free(made.id)
         .await
         .accepted
-        .expect("a stop operation");
+        .expect("a stop starts an operation");
     api.wait_state(accepted.operation.id, OperationState::Succeeded)
         .await;
-    println!("{:#?}", recorder.text_of(made.id));
-    daemon.shutdown().await;
-    ev.pass_with("created, started, queried, stopped");
+    let stopped = api.get(made.id).await.expect("the instance can be read");
+    assert_eq!(stopped.lifecycle, InstanceLifecycle::Stopped);
+    assert!(stopped.process.is_none());
+
+    let running = api.start_ready(made.id).await;
+    assert_eq!(running.readiness.state, InstanceReadinessState::Ready);
+    assert_eq!(
+        psql.scalar(&made.password, "SELECT note FROM kept"),
+        "before the stop"
+    );
+    let both = recorder.text_of(made.id);
+    assert!(both.len() > first_run.len());
+    assert!(
+        both.starts_with(&first_run),
+        "the lines of the first run are still read after the second start"
+    );
+
+    stop_and_shutdown(&api, daemon, made.id).await;
+    ev.pass_with(&format!(
+        "PostgreSQL {version} created, ran twice, kept its row, and stopped"
+    ));
 }

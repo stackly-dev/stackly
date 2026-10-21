@@ -90,8 +90,8 @@ pub fn cached_artifact(sha256: &str) -> Option<PathBuf> {
 
 /// Reads and validates the package under test.
 #[must_use]
-pub fn package(platform: &Platform) -> ValidatedPackage {
-    let files = read_package(platform.fs(), &package_dir()).expect("the package reads");
+pub fn package(platform: &Platform, dir: &Path) -> ValidatedPackage {
+    let files = read_package(platform.fs(), dir).expect("the package reads");
     ValidatedPackage::from_files(files, NameCheck::Skip).expect("the package validates")
 }
 
@@ -140,10 +140,16 @@ impl Site {
     /// package. Notes `evidence` as `BLOCKED` and returns `None` when the
     /// cache does not hold the artifact, so the test ends there.
     pub fn open(evidence: &Evidence, pg: Pg) -> Option<Self> {
+        Self::open_package(evidence, pg, &package_dir())
+    }
+
+    /// [`Site::open`] with the package in `dir`, a copy of the package under
+    /// test that a test changed.
+    pub fn open_package(evidence: &Evidence, pg: Pg, dir: &Path) -> Option<Self> {
         let root = TestRoot::new().expect("a test root can be created");
         let secrets = Arc::new(FakeSecretStore::new());
         let platform = platform_of(&root, &secrets);
-        let package = package(&platform);
+        let package = package(&platform, dir);
         let sha256 = artifact_sha256(pg);
         let Some(cache_file) = cached_artifact(&sha256) else {
             evidence.blocked(
@@ -176,8 +182,8 @@ impl Site {
             &cache_file,
         )
         .expect("the cached artifact installs, exec check included");
-        let revision = pin_package(&platform, prepared.layout(), &package_dir())
-            .expect("the package can be pinned");
+        let revision =
+            pin_package(&platform, prepared.layout(), dir).expect("the package can be pinned");
         registry
             .commit(WriteBatch::new(vec![WriteOp::InsertProviderRevision(
                 revision,
@@ -312,7 +318,29 @@ impl Site {
     /// A typed client of the binary daemon.
     pub async fn binary_api(&self, daemon: &BinaryDaemon) -> Api {
         let (client, _) = common::client(&daemon.socket).await;
-        Api::new(client, self.runtime_id)
+        let api = Api::new(client, self.runtime_id);
+        // The socket answers a handshake while the supervisor still
+        // reconciles, and the instance methods say `daemon.starting` until
+        // it is done.
+        let deadline = tokio::time::Instant::now() + PATIENCE;
+        loop {
+            match api
+                .client
+                .call(stackly_protocol::Call::InstanceList(Default::default()))
+                .await
+            {
+                Ok(_) => break,
+                Err(error) if error.code() == "daemon.starting" => {
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "the daemon stayed in starting"
+                    );
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                Err(error) => panic!("instance.list: {error:?}"),
+            }
+        }
+        api
     }
 
     /// `psql` of the runtime against the instance `id`.
@@ -571,7 +599,7 @@ pub fn free_port() -> u16 {
 pub fn create_params(
     site: &Site,
     name: &str,
-    port: u16,
+    port: PortRequest,
     password: &str,
     settings: serde_json::Value,
 ) -> CreateInstanceParams {
@@ -590,7 +618,7 @@ pub fn create_params(
         runtime_id: site.runtime_id,
         endpoints: vec![EndpointRequest {
             name: "client".to_owned(),
-            port: PortRequest::Fixed(port),
+            port,
         }],
         settings: SettingsDocument::new(map),
         secrets: vec![SecretFieldInput {
@@ -666,9 +694,15 @@ pub async fn start_create(
     password: &str,
     settings: serde_json::Value,
 ) -> InstanceActionAccepted {
-    api.create(create_params(site, name, port, password, settings))
-        .await
-        .expect("the create is accepted")
+    api.create(create_params(
+        site,
+        name,
+        PortRequest::Fixed(port),
+        password,
+        settings,
+    ))
+    .await
+    .expect("the create is accepted")
 }
 
 /// How long a test waits for the server to do something slow.
@@ -681,4 +715,93 @@ pub async fn eventually(what: &str, limit: Duration, mut done: impl FnMut() -> b
         assert!(tokio::time::Instant::now() < deadline, "no {what} in time");
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+}
+
+/// A fresh fixture password.
+#[must_use]
+pub fn new_password() -> String {
+    stackly_testkit::evidence::FixtureCredential::new()
+        .value()
+        .to_owned()
+}
+
+/// Creates an instance whose `client` port the daemon picks, and waits until
+/// the create succeeded. Returns the instance and its password.
+pub async fn create_auto(site: &Site, api: &Api, name: &str) -> (Uuid, String) {
+    let password = new_password();
+    let accepted = api
+        .create(create_params(
+            site,
+            name,
+            PortRequest::Auto,
+            &password,
+            json!({}),
+        ))
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let id = accepted
+        .operation
+        .resource
+        .as_ref()
+        .map(|resource| resource.id.parse::<Uuid>().expect("an instance id"))
+        .expect("the operation names the instance");
+    api.wait_state(
+        accepted.operation.id,
+        stackly_protocol::operation::OperationState::Succeeded,
+    )
+    .await;
+    (id, password)
+}
+
+/// Stops the instance and the daemon, so nothing outlives the test.
+pub async fn stop_and_shutdown(api: &Api, daemon: InProcess, id: Uuid) {
+    let accepted = api
+        .stop_when_free(id)
+        .await
+        .accepted
+        .expect("a stop starts an operation");
+    api.wait_state(
+        accepted.operation.id,
+        stackly_protocol::operation::OperationState::Succeeded,
+    )
+    .await;
+    daemon.shutdown().await;
+}
+
+/// Runs `command` with `args` and returns its standard output.
+#[must_use]
+pub fn output_of(command: &str, args: &[&str]) -> String {
+    let output = Command::new(command)
+        .args(args)
+        .output()
+        .unwrap_or_else(|error| panic!("{command} runs: {error}"));
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+/// Every regular file under `dir` whose bytes hold `needle`.
+#[must_use]
+pub fn files_holding(dir: &Path, needle: &str) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&next) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                pending.push(entry.path());
+            } else if kind.is_file()
+                && std::fs::read(entry.path())
+                    .is_ok_and(|bytes| bytes.windows(needle.len()).any(|w| w == needle.as_bytes()))
+            {
+                found.push(entry.path());
+            }
+        }
+    }
+    found
 }
