@@ -16,6 +16,7 @@
 
 mod artifact_format;
 mod capability;
+pub mod capacity;
 mod catalog;
 mod code;
 mod endpoint;
@@ -42,6 +43,7 @@ mod value;
 
 pub use artifact_format::ArtifactFormat;
 pub use capability::{Capability, CapabilitySet};
+pub use capacity::CapacityLevel;
 pub use catalog::SupportStatus;
 pub use endpoint::{
     Endpoint, IpEndpoint, PortRequest, Transport, UnixEndpoint, endpoints_conflict, resolve_port,

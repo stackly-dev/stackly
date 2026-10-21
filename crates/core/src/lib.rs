@@ -19,6 +19,7 @@ mod ownership;
 pub mod provider;
 pub mod runtime;
 pub mod secret;
+pub mod storage;
 pub mod supervisor;
 #[cfg(all(test, unix))]
 mod test_support;
