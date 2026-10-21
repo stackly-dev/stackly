@@ -432,6 +432,49 @@ struct DaemonModelTests {
         #expect(model.copyDiagnostics().contains("Status: stacklyd unavailable"))
     }
 
+    @Test func reconnectingClearsTheLastErrorAndItsHint() async throws {
+        let untrusted = ClientErrorCatalog.endpointUntrusted(
+            path: "/t/stackly/stacklyd.sock", reason: .groupOrOtherAccess)
+        let failures: [ConnectionState] = [
+            Self.unreachable(5),
+            .untrusted(
+                untrusted, since: Self.launch.addingTimeInterval(5),
+                nextAttempt: Self.launch.addingTimeInterval(5.5)),
+        ]
+        for failure in failures {
+            let fixture = Fixture()
+            let model = fixture.model!
+            try await fixture.push(failure)
+            #expect(model.lastError != nil)
+            #expect(Self.rows(model)["What to do"] != nil)
+            try await fixture.push(.connected(Self.daemon(.ready, at: 20)))
+            #expect(model.lastError == nil)
+            let values = Self.rows(model)
+            #expect(values["Last error"] == "None")
+            #expect(values["What to do"] == nil)
+            #expect(model.copyDiagnostics().contains("Last error: None"))
+            #expect(model.copyDiagnostics().contains("What to do") == false)
+            #expect(values["Last connected"] != "Never")
+        }
+    }
+
+    @Test func aLossAfterReconnectingShowsTheNewError() async throws {
+        let fixture = Fixture()
+        let model = fixture.model!
+        try await fixture.push(Self.unreachable(5))
+        try await fixture.push(.connected(Self.daemon(.ready, at: 20)))
+        try await fixture.push(Self.unreachable(40))
+        #expect(model.lastError?.code == "ipc.endpoint_missing")
+        #expect(Self.rows(model)["Last error"]?.hasPrefix("ipc.endpoint_missing") == true)
+    }
+
+    static func rows(_ model: DaemonModel) -> [String: String] {
+        let rows = model.diagnostics.rows(
+            calendar: Calendar(identifier: .gregorian), locale: Locale(identifier: "en_US"),
+            timeZone: .gmt)
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.label, $0.value) })
+    }
+
     @Test func anUnansweredHandshakeIsUnreachableWithTheFiveSecondHint() async throws {
         let fixture = Fixture()
         let model = fixture.model!
