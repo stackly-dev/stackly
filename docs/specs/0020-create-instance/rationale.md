@@ -580,3 +580,11 @@ Update `/architect` (sesi `align-0020`) yang menerapkan `docs/scope/coordination
 - **Cari revision pinned (temuan 7)**: `gather` mendaftar folder `<revision>/` dengan `read_dir`, lalu memastikan satu kandidat dengan `Registry::provider_revision(key)` dan `read_package`, sama dengan jalur disk spec 0010.
 - **Serialisasi file shell (temuan 9)**: catatan sesi paralel milestone 3 kini melarang langkah 14 berjalan bersamaan dengan langkah 6 dan 7 spec 0022 dan langkah 2 milestone 1 spec 0016. Daftar di spec 0022 bukan milik spec ini, jadi dicatat sebagai Follow-up untuk lead.
 - **Bukti PostgreSQL (D6)**: milestone 4 butuh langkah 9 milestone 3 spec 0019 (PostgreSQL sebagai `[[provider]]` di catalog); test daemon sebelum itu memakai catalog `CatalogBuilder` yang memuat `official/postgresql`.
+
+## Update 2026-10-21 dari spec 0067, 0068, dan 0069
+
+- **Komponen dari spec 0067.** Fitur 67 kini satu satunya pembangun komponen dasar, jadi sheet, checklist preflight, progress, dan perintah setara memakai `StacklySheet`, `CheckList`, `StagedProgress`, dan `ConsoleBlock`. Versi sementara di `CreateInstance/` tidak dibuat lagi, dan tabel status preflight diganti tabel *Status checklist* spec 0067 dengan kata dan simbol yang sama.
+- **Copy alasan Create.** Spec 0067 meminta spec ini menulis `disabledReason` Create. Urutannya dari yang paling bisa diperbaiki pengguna: pilih runtime, perbaiki error, jalankan ulang preflight yang gagal, lalu tunggu preflight. Alasan gate tidak diulang karena footer `StacklySheet` sudah menampilkannya. Ini rekomendasi update ini, dilaporkan ke lead.
+- **Cancel di mode progress.** Aturan spec 0067 bahwa judul aksi yang dikonfirmasi diakhiri "…" membuat tombol itu "Cancel…"; label tombol konfirmasi "Stop" mengikuti aturan copy spec 0012 (kata kerja dari judul).
+- **Umpan balik setelah create.** Mockup tidak punya toast create. Spec 0067 meminta hasil create dikirim ke `FeedbackCenter` oleh layar pemilik sheet, jadi `AppShell` menampilkan "“{name}” created." atau "“{name}” created. Starting it now." Gagal create tetap di dalam sheet, sehingga kartu hanya untuk hasil yang menutup sheet.
+- **⌘N.** Teks AC-20 tidak diubah: tambahan "nonaktif saat jendela utama bukan key window atau onboarding tampil" dari spec 0069 ditulis di *Titik masuk* saja, dan perubahan teks AC-20 menunggu persetujuan user lewat lead.
