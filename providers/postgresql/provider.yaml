@@ -14,6 +14,10 @@ compatibility:
 runtime:
   executable: bin/postgres
   executionMode: foreground
+  versionCheck:
+    args: ["--version"]
+    pattern: '^postgres \(PostgreSQL\) ([0-9]+\.[0-9]+)$'
+    timeoutSeconds: 10
 capabilities:
   reload: true
   multiInstance: true
