@@ -104,8 +104,8 @@ public enum CheckListLayout {
 ///
 /// A screen wraps it in a ``CardSection``, for example titled "Preflight". The symbol
 /// shape differs per status, so Differentiate Without Color changes nothing. A `pending`
-/// row shows a small spinner only after 300 ms, so a quick check does not flash. VoiceOver
-/// reads each row as one element and its action as its own.
+/// row shows a small spinner only after 300 ms (or `loadingDelay`), so a quick check does not
+/// flash. VoiceOver reads each row as one element and its action as its own.
 public struct CheckList: View {
     private let items: [CheckItem]
     private let layout: CheckListLayout
@@ -190,14 +190,30 @@ private struct CheckRow: View {
 
 /// The symbol of a status, or a delayed spinner for `pending`, in a box of fixed width so
 /// titles line up.
-private struct CheckSymbol: View {
+///
+/// The delay is `loadingDelay` when the environment sets one, as for ``StateView``, and
+/// 300 ms otherwise. With a zero delay the spinner is part of the first frame, with no
+/// task and no transition: a spinner inserted after the first frame keeps changing in a
+/// snapshot window, so a snapshot of it would never settle (spec 0068).
+struct CheckSymbol: View {
     /// The width of the symbol box at the default text size.
     static let width: CGFloat = 18
 
     @ScaledMetric(relativeTo: .callout) private var width: CGFloat = Self.width
-    @State private var visibility = DelayedVisibility()
+    @Environment(\.loadingDelay) private var loadingDelay
+    @State private var delayElapsed = false
 
     let status: CheckStatus
+
+    /// How long a `pending` row waits before its spinner shows.
+    ///
+    /// - Parameter loadingDelay: The `loadingDelay` of the environment.
+    /// - Returns: `loadingDelay`, or 300 ms when it is `nil`.
+    static func spinnerDelay(loadingDelay: Duration?) -> Duration {
+        loadingDelay ?? DelayedVisibility.defaultDelay
+    }
+
+    private var delay: Duration { Self.spinnerDelay(loadingDelay: loadingDelay) }
 
     var body: some View {
         ZStack {
@@ -206,7 +222,7 @@ private struct CheckSymbol: View {
                     .stacklySymbol(size: 15, relativeTo: .callout)
                     .foregroundStyle(status.tone.fill)
                     .transition(StacklyMotion.crossfade)
-            } else if visibility.isVisible {
+            } else if delay == .zero || delayElapsed {
                 ProgressView()
                     .controlSize(.small)
                     .transition(StacklyMotion.crossfade)
@@ -215,9 +231,11 @@ private struct CheckSymbol: View {
         .frame(width: width)
         .accessibilityHidden(true)
         .task(id: status) {
-            if status == .pending {
-                await visibility.run()
-            }
+            delayElapsed = false
+            guard status == .pending, delay != .zero else { return }
+            let visibility = DelayedVisibility(delay: delay)
+            await visibility.run()
+            delayElapsed = visibility.isVisible
         }
     }
 }

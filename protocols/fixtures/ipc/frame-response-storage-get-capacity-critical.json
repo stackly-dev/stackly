@@ -1,0 +1,16 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000802",
+    "reply": {
+      "type": "storage.get_capacity",
+      "content": {
+        "checkedAt": "2026-10-21T08:01:00.000Z",
+        "totalBytes": 3221225472,
+        "availableBytes": 1500000000,
+        "usedPercent": 53,
+        "level": "critical"
+      }
+    }
+  }
+}
