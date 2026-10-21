@@ -321,3 +321,44 @@ pub(crate) fn materialize_secret(
     SecretFile::create(&deps.platform, &deps.layout, prepared.key, file_name, value)
         .map_err(|error| error.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    fn none() -> ResolvedSecrets {
+        ResolvedSecrets::new(BTreeMap::new())
+    }
+
+    #[test]
+    fn stdin_text_reaches_the_child_as_its_exact_bytes() {
+        let text = "CREATE ROLE a;\nALTER ROLE a SET x = 'ü 空';\n";
+
+        let value = stdin_value(&Stdin::Text(text.to_owned()), &none())
+            .expect("valid text is a stdin value")
+            .expect("text is written");
+
+        assert_eq!(stdin_payload(&value), text.as_bytes());
+    }
+
+    #[test]
+    fn no_stdin_gives_no_value() {
+        assert!(stdin_value(&Stdin::Null, &none()).unwrap().is_none());
+    }
+
+    #[test]
+    fn stdin_text_a_secret_value_cannot_hold_fails_with_a_reason_and_without_the_text() {
+        for text in ["", "a\0b"] {
+            let reason = stdin_value(&Stdin::Text(text.to_owned()), &none())
+                .expect_err("the text is refused");
+
+            assert!(
+                reason.starts_with("the stdin text cannot be written"),
+                "{reason}"
+            );
+            assert!(!reason.contains('\0'));
+        }
+    }
+}
