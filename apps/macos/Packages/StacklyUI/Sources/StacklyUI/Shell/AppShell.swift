@@ -21,6 +21,7 @@ public struct AppShell: View {
     static let contentIdealWidth: CGFloat = 1044
 
     @SceneStorage("shell.section") private var section: SidebarSection = .overview
+    @State private var windowKey = MainWindowKey()
     @Environment(\.openWindow) private var openWindow
 
     private let presentation: ShellPresentation
@@ -31,6 +32,9 @@ public struct AppShell: View {
     private let windowWillClose: (NSWindow) -> Void
     private let reconnect: @MainActor () -> Void
     private let refreshDiagnostics: @MainActor () -> Void
+    private let onReselect: @MainActor (SidebarSection) -> Void
+    /// Called with what the shell publishes to the menu bar; a test reads the host's gate.
+    var onPublishCommands: (@MainActor (PublishedCommands) -> Void)?
 
     /// Creates the shell.
     ///
@@ -44,6 +48,8 @@ public struct AppShell: View {
     ///   - windowWillClose: Called with the main window right before it closes.
     ///   - reconnect: Tries to connect now (banner, Diagnostics).
     ///   - refreshDiagnostics: Asks the connected daemon for its info and health again.
+    ///   - onReselect: Called when the section that already shows is chosen again, from the
+    ///     sidebar or a command. Nothing by default; a page that has a way back fills it.
     public init(
         presentation: ShellPresentation,
         diagnostics: ConnectionDiagnostics,
@@ -52,7 +58,8 @@ public struct AppShell: View {
         windowOpener: WindowOpener,
         windowWillClose: @escaping (NSWindow) -> Void,
         reconnect: @escaping @MainActor () -> Void,
-        refreshDiagnostics: @escaping @MainActor () -> Void
+        refreshDiagnostics: @escaping @MainActor () -> Void,
+        onReselect: @escaping @MainActor (SidebarSection) -> Void = { _ in }
     ) {
         self.presentation = presentation
         self.diagnostics = diagnostics
@@ -62,6 +69,7 @@ public struct AppShell: View {
         self.windowWillClose = windowWillClose
         self.reconnect = reconnect
         self.refreshDiagnostics = refreshDiagnostics
+        self.onReselect = onReselect
     }
 
     /// The shell's content.
@@ -94,11 +102,19 @@ public struct AppShell: View {
                 )
         }
         .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
-        // The host reads the gate from the environment it sits in, so it goes before
-        // (inside) the line that sets it.
+        // The commands read the host, and the host reads the gate from the environment it
+        // sits in, so each goes before (inside) the line that sets what it reads: spec 0069.
+        .modifier(
+            PublishCommandsModifier(
+                level: .shell, actions: shellActions, checked: [],
+                onPublish: onPublishCommands)
+        )
         .actionHost()
         .environment(\.mutationAvailability, presentation.mutationAvailability)
-        .background(MainWindowAccessor(windowWillClose: windowWillClose))
+        .environment(\.mainWindowKey, windowKey)
+        .background(
+            MainWindowAccessor(windowKey: windowKey, windowWillClose: windowWillClose)
+        )
         .onAppear {
             windowOpener.capture(openWindow)
         }
@@ -110,9 +126,29 @@ public struct AppShell: View {
             section
         } set: { newValue in
             if let newValue {
-                section = newValue
+                select(newValue)
             }
         }
+    }
+
+    /// Shows `newSection`. The one way to change the section: the sidebar, the commands
+    /// ⌘1 to ⌘7, and Open Diagnostics in the banner all come here. Choosing the section that
+    /// already shows calls ``onReselect`` instead.
+    func select(_ newSection: SidebarSection) {
+        if newSection == section {
+            onReselect(newSection)
+        } else {
+            section = newSection
+        }
+    }
+
+    /// The actions the shell publishes to the menu bar.
+    private var shellActions: [CommandID: StacklyAction] {
+        Self.shellActions(
+            presentation: presentation,
+            select: { select($0) },
+            reconnect: reconnect
+        )
     }
 
     @ViewBuilder private var bannerArea: some View {
@@ -121,7 +157,7 @@ public struct AppShell: View {
                 banner,
                 isReconnecting: presentation.isReconnecting,
                 reconnect: reconnect,
-                openDiagnostics: { section = .diagnostics }
+                openDiagnostics: { select(.diagnostics) }
             )
             // A new banner is a new view, so a new critical banner is announced again.
             .id(banner.title)
@@ -148,7 +184,7 @@ public struct AppShell: View {
                     waiting: presentation.pageFailure,
                     hasConnection: presentation.hasConnection,
                     reconnect: reconnect,
-                    openDiagnostics: { section = .diagnostics }
+                    openDiagnostics: { select(.diagnostics) }
                 )
             } else {
                 UnbuiltScrollPage(section: .instances)

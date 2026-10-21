@@ -30,7 +30,7 @@ extension CommandShortcut {
 
 extension CommandEntry {
     /// The shortcut of the row as SwiftUI takes it, or `nil` when the row has none.
-    var keyboardShortcut: KeyboardShortcut? {
+    public var keyboardShortcut: KeyboardShortcut? {
         shortcut?.keyboardShortcut
     }
 }

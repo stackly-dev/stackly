@@ -529,7 +529,70 @@ Filled by milestone 4.
 
 ## Commands and shortcuts
 
-The menu bar, `CommandMap`, and the keyboard shortcuts of spec 0069. `CommandMap` (`StacklyUI/Commands/CommandMap.swift`) is the only place a shortcut is written down, and `SystemShortcuts` (`Commands/SystemShortcuts.swift`) holds the macOS shortcuts a row may not use; the unit tests refuse a clash. The map table and the rules for adding a command join this section when milestone 2 builds the menus.
+The menu bar, `CommandMap`, and the keyboard shortcuts of spec 0069. `CommandMap` (`StacklyUI/Commands/CommandMap.swift`) is the only place a shortcut is written down, and `SystemShortcuts` (`Commands/SystemShortcuts.swift`) holds the macOS shortcuts a row may not use; the unit tests refuse a clash. The tables below are the map, the macOS shortcuts a row may not use, and the rules for adding a command. The probe results come after them.
+
+### Menu structure
+
+Where Stackly puts its items. The order of the system items (About, Services, Hide, Undo to Select All, AutoFill, Dictation, Emoji and Symbols, Full Screen, Minimize, Zoom, Move & Resize, Bring All to Front, the window list, the Help search field) belongs to macOS and SwiftUI; the Probe results below record it.
+
+| Menu | Stackly items |
+| --- | --- |
+| Stackly | Reconnect to stacklyd, after Settings… ⌘, and before Services |
+| File | New Instance… ⌘N (planned, spec 0020), then the system Close ⌘W. `CommandGroup(replacing: .newItem)` removes New Window |
+| Edit | the system items, then Find ▸ Find… ⌘F. `CommandGroup(replacing: .textEditing)` removes the Spelling and Grammar, Substitutions, Transformations, and Speech submenus |
+| View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; Back, Show or Hide Inspector, and Sort Instances By follow with the Instances page |
+| Instance | Open, Start, Stop, Restart, Reload, Copy Connection String, Duplicate…, Remove… (planned; `CommandMenu("Instance")` appears between View and Window with the first built row) |
+| Window | the system items, then Stackly ⌘0 (the shortcut sits on the main `Window` scene) and, in Debug, Design Gallery |
+| Help | the system search field; Welcome to Stackly (planned, spec 0016) and Stackly Help ⌘? (planned, feature 66). `CommandGroup(replacing: .help)` removes the item that opens nothing |
+
+An item is never hidden because of state: one that does not apply is disabled. A disabled item with a reason of its own shows the reason as a disabled item under it (`MenuReasonPath.current`, `Components/Actions/ActionMenu.swift`); the mutation gate gives no reason because the window banner writes it. Only `planned` rows are left out.
+
+### Command map
+
+`CommandMap` holds one row per `CommandID`; the table lists them in declaration order. Group is the divider group inside a menu (`CommandMap.layout` draws a divider only between built groups). Status `built` means a `CommandItem` renders it; `planned` rows reserve the shortcut and render nothing until the owner feature builds them.
+
+| Command | Menu | Grp | Title | Shortcut | Scope | Owner | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `reconnect` | Stackly | 1 | Reconnect to stacklyd | | shell | 69 | built |
+| `newInstance` | File | 1 | New Instance… | ⌘N | shell | 20 | planned |
+| `find` | Edit ▸ Find | 1 | Find… | ⌘F | page (all) | 69 | built |
+| `showOverview` to `showDiagnostics` | View | 1 | Overview, Instances, Environments, Catalog, Runtimes, Operations, Diagnostics | ⌘1 to ⌘7 | shell | 69 | built |
+| `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | planned |
+| `toggleInspector` | View | 3 | Show Inspector or Hide Inspector | ⌥⌘I | page (Instances) | 22 | planned |
+| `sortInstancesBy…` and `sortInstancesAscending`, `sortInstancesDescending` | View ▸ Sort Instances By | 1 and 2 | Name, Provider, Version, Endpoints, Status, then Ascending, Descending | | page (Instances) | 22 | planned |
+| `openInstance` | Instance | 1 | Open | ⌘O | page (Instances) | 21 | planned |
+| `startInstance`, `stopInstance` | Instance | 2 | Start, Stop | ⌘R, ⇧⌘R | page (Instances) | 22 | planned |
+| `restartInstance`, `reloadInstance` | Instance | 2 | Restart, Reload | ⌥⌘R, none | page (Instances) | 26 | planned |
+| `copyConnectionString` | Instance | 3 | Copy Connection String | ⇧⌘C | page (Instances) | 21 | planned |
+| `duplicateInstance` | Instance | 4 | Duplicate… | ⌘D | page (Instances) | 24 | planned |
+| `removeInstance` | Instance | 4 | Remove… | none | page (Instances) | 54 | planned |
+| `stacklyHelp` | Help | 1 | Stackly Help | ⌘? | app | 66 | planned |
+| `welcome` | Help | 2 | Welcome to Stackly | | app | 16 | planned |
+| `showMainWindow` | Window | | Stackly (system item of the `Window` scene) | ⌘0 | app | 69 | built |
+
+Three shortcuts reuse a macOS shortcut with another meaning, each with a written reason in the map: ⌘R (Show Ruler, no Format menu), ⇧⌘C (Show Colors, no Format menu), and ⌘0 (Actual Size, no zoom).
+
+### Shortcuts macOS owns
+
+`SystemShortcuts` holds these as data, and the unit tests refuse a clash. Table A may never be used. Table B may be used for the same meaning only, or with a written reason. Table C may be used only with a written reason. Rules D and E cannot be waived.
+
+| Table | Shortcuts | Meaning |
+| --- | --- | --- |
+| A, blocked | ⌘Q ⌘H ⌥⌘H ⌘, ⌥⌘Q, ⌘. , ⌘W ⌥⌘W ⌘M ⌥⌘M, ⌘\` ⇧⌘\` ⌘Tab ⇧⌘Tab, Spotlight and input source keys, screenshots ⇧⌘3 to ⇧⌘6, ⌥⌘Esc ⌃⌘Q ⇧⌘Q ⌥⇧⌘Q, ⌥⌘D ⌃⌘D ⌃⌘Space, ⌃⌘F ⌃⌘S ⌥⌘T, ⌘Z ⇧⌘Z ⌘X ⌘C ⌘V ⌥⇧⌘V ⌘A, ⌘; ⌘:, ⌃F1 to ⌃F8 and ⌃ arrows | quit, hide, settings, cancel, windows, system, edit, full screen, sidebar, toolbar, focus and Spaces |
+| B, standard meaning | ⌘N ⌘O ⌘D ⌘F ⌘G ⇧⌘G ⌘E ⌘J ⌘[ ⌘] ⌘? ⌘S ⇧⌘S ⌘P ⇧⌘P ⌘+ ⌘- ⌘0 | new, open, duplicate, find, find next and previous, use selection, jump, back, forward, help, save, print, zoom, actual size |
+| C, formatting | ⌘B ⌘I ⌘U ⌘T ⇧⌘C ⌘R ⌥⌘C ⌥⌘V ⌘{ ⌘} ⌘\| | Format menu items |
+| D, text editing keys | arrows and Delete with ⌘ or ⌥, ⌃ with a letter and no ⌘, Return, Escape, Tab, Space | a menu key equivalent runs before the text field sees the key |
+| E, 🌐 | any shortcut with the globe key | `CommandModifiers` has no such modifier |
+
+### Adding a command
+
+1. The main action stays a button in the window (toolbar, inspector, row) built on `StacklyAction`. The menu command is the second way to it, never the only one.
+2. Place it: new or imported things in File; navigation, view, and order in View; actions on the selected instance in Instance; app level actions (daemon, update) in Stackly; documentation in Help. Another object (environment, runtime, operation) gets no menu of its own until it has at least three actions on a common selection.
+3. Give it a shortcut only if people use it often and it never destroys data (not Remove, Purge, Force Stop, Stop All Services, Overwrite). Prefer ⌘ with a letter that means the thing, then ⇧⌘ for the opposite, then ⌥⌘ for a variant. Table A, rule D, and rule E never; table B only with the same meaning; table C only with a reason written in the map.
+4. Register it: add or change the row in `CommandMap` (set `status: .built`), add one `CommandItem(.id, context:)` in `StacklyCommands`, publish a `StacklyAction` from the page with `.publishesCommands(.page(section), …)` (or from `AppShell` for the shell scope), and update the tables above. The map tests and the source rules run by themselves.
+5. The menus inside the window (More, context menus) use the same action and title without a shortcut, and a toolbar button's tooltip comes from `CommandMap.helpText(for:)`.
+
+A command is on exactly when the window that published it is the key window and `action.availability(gate:)` is `.enabled`. Settings, the design gallery, a sheet, an alert, and onboarding switch the shell and page commands off by construction; the `app` scope items stay on.
 
 ### Probe results (macOS 27.0.1 26A434, Xcode 27.0 27A266a, 2026-10-21)
 
@@ -537,7 +600,7 @@ Run with the accessibility API (`AXMenuItemCmdChar`, `AXMenuItemCmdModifiers`) a
 
 | Probe | Result | Effect |
 | --- | --- | --- |
-| P1 menu bar of the current app | No two items share a key equivalent. Beyond the table A of spec 0069 the system adds ⌥⌘Q (Quit and Keep Windows) and a family of 🌐 equivalents: 🌐D (Start Dictation…), 🌐E (Emoji & Symbols), 🌐F (Enter Full Screen), and, in Window, 🌐⌃F (Fill), 🌐⌃C (Center), 🌐⌃R (Return to Previous Size). AX reports the 🌐 modifier as bit 16 of `AXMenuItemCmdModifiers`. The Edit menu also gets Writing Tools and AutoFill (no shortcuts). ⌥⌘W (Close All) and ⌥⌘M (Minimize All) show up as the table says. | ⌥⌘Q joins table A; the 🌐 family is covered by rule E and is not listed. |
+| P1 menu bar of the current app | No two items share a key equivalent. Beyond the table A of spec 0069 the system adds ⌥⌘Q (Quit and Keep Windows) and a family of 🌐 equivalents: 🌐D (Start Dictation…), 🌐E (Emoji & Symbols), 🌐F (Enter Full Screen), and, in Window, 🌐⌃F (Fill), 🌐⌃C (Center), 🌐⌃R (Return to Previous Size), and the 🌐⌃ arrow items of Window > Move & Resize (Left, Right, Top, Bottom and the corners and halves). AX reports the 🌐 modifier as bit 16 of `AXMenuItemCmdModifiers`. The Edit menu also gets Writing Tools and AutoFill (no shortcuts). ⌥⌘W (Close All) and ⌥⌘M (Minimize All) show up as the table says. | ⌥⌘Q joins table A; the 🌐 family is covered by rule E and is not listed. |
 | P2 `Window(...).keyboardShortcut("0", .command)` | Window > Probe ⌘0 appears. It reopens the window after it is closed (menu click and the key), and restores it from the Dock after Minimize. | Passes: `showMainWindow` stays a `system` row with the shortcut on the scene. |
 | P3 `CommandGroup(replacing:)` | `.newItem` leaves File with New Probe…, Close ⌘W, and Close All, and no "New Window". `.textEditing` leaves Writing Tools, AutoFill, Start Dictation, and Emoji & Symbols in Edit and removes nothing else that was there. `.help` keeps the system search field and puts Welcome to Probe below it. `CommandMenu("Instance")` lands between View and Window. | Passes. |
 | P3b default `.textEditing` group | With the default group left in place the Edit menu has no Find item at all, with a focused text field or without one, and ⌘F does not focus the toolbar search field. The Spelling and Grammar, Substitutions, Transformations, and Speech submenus do not appear either. | The fallback does not apply: Stackly's own `replacing: .textEditing` with Find… stays the plan. |

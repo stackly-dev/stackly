@@ -14,6 +14,9 @@ struct StacklyApp: App {
         }
         .defaultSize(width: 1280, height: 800)
         .windowResizability(.contentMinSize)
+        // The one menu bar of the app (spec 0069); the shortcut comes from the command map.
+        .commands { StacklyCommands(runtime: appDelegate.runtime) }
+        .keyboardShortcut(CommandMap.entry(for: .showMainWindow).keyboardShortcut)
 
         Settings {
             // provisional: F32

@@ -351,7 +351,7 @@ nonisolated public enum CommandMap {
         case .reconnect:
             CommandEntry(
                 id, menu: .app, group: 1, title: "Reconnect to stacklyd",
-                scope: .shell, requirements: [.noConnection], owner: 69)
+                scope: .shell, requirements: [.noConnection], owner: 69, status: .built)
         case .newInstance:
             CommandEntry(
                 id, menu: .file, group: 1, title: "New Instance…",
@@ -362,7 +362,7 @@ nonisolated public enum CommandMap {
                 id, menu: .edit, submenu: .find, group: 1, title: "Find…",
                 shortcut: CommandShortcut("f", .command), needsInput: true,
                 scope: .page(Set(SidebarSection.allCases)), requirements: [.search],
-                owner: 69, standardMeaning: .find)
+                owner: 69, status: .built, standardMeaning: .find)
         case .showOverview:
             showSection(id, title: "Overview", key: "1")
         case .showInstances:
@@ -459,6 +459,7 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .window, group: 0, kind: .system, title: "Stackly",
                 shortcut: CommandShortcut("0", .command), scope: .app, owner: 69,
+                status: .built,
                 exception:
                     "⌘0 is Actual Size; Stackly has no zoom, and Mail uses ⌘0 for its main window")
         }
@@ -514,7 +515,8 @@ nonisolated public enum CommandMap {
     private static func showSection(_ id: CommandID, title: String, key: String) -> CommandEntry {
         CommandEntry(
             id, menu: .view, group: 1, title: title,
-            shortcut: CommandShortcut(key, .command), scope: .shell, owner: 69)
+            shortcut: CommandShortcut(key, .command), scope: .shell, owner: 69,
+            status: .built)
     }
 
     /// A View > Sort Instances By > column row.
