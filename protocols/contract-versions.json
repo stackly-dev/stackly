@@ -44,6 +44,11 @@
       "major": 1,
       "minor": 8,
       "digest": "2eccd79e67cade8b9797b1495437fd2a14a5e1e34a34cb63ba3062890aacc194"
+    },
+    {
+      "major": 1,
+      "minor": 9,
+      "digest": "9831beea9d5114c4bfc8b1247064bc469909dc33ece2f3daa50616fbc41c6429"
     }
   ]
 }

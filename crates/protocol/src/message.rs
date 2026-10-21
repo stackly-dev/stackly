@@ -20,7 +20,7 @@ use serde_json::value::RawValue;
 use typeshare::typeshare;
 
 use crate::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
-use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo};
+use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo, ShutdownAccepted, ShutdownParams};
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
@@ -74,6 +74,9 @@ pub enum Call {
     /// Platform capabilities, methods, and event kinds the daemon knows.
     #[serde(rename = "daemon.get_capabilities")]
     DaemonGetCapabilities,
+    /// Stops the daemon, or stops it so launchd starts it again.
+    #[serde(rename = "daemon.shutdown")]
+    DaemonShutdown(ShutdownParams),
     /// Starts an event subscription.
     #[serde(rename = "events.subscribe")]
     EventsSubscribe(SubscribeParams),
@@ -154,6 +157,9 @@ pub enum Reply {
     /// What the daemon supports.
     #[serde(rename = "daemon.get_capabilities")]
     DaemonGetCapabilities(Capabilities),
+    /// The daemon accepted the request and now runs the stop order.
+    #[serde(rename = "daemon.shutdown")]
+    DaemonShutdown(ShutdownAccepted),
     /// The subscription started; its events follow.
     #[serde(rename = "events.subscribe")]
     EventsSubscribe(Subscribed),
@@ -288,6 +294,7 @@ methods! {
     "daemon.get_info" => DaemonGetInfo, recovery allowed;
     "daemon.get_health" => DaemonGetHealth, recovery allowed;
     "daemon.get_capabilities" => DaemonGetCapabilities, recovery allowed;
+    "daemon.shutdown" => DaemonShutdown(ShutdownParams), recovery allowed;
     "events.subscribe" => EventsSubscribe(SubscribeParams), recovery allowed;
     "events.unsubscribe" => EventsUnsubscribe(UnsubscribeParams), recovery allowed;
     "operation.get" => OperationGet(GetOperationParams), recovery refused;
@@ -363,6 +370,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
+    use crate::daemon::ShutdownMode;
 
     #[test]
     fn every_method_in_the_table_is_the_serde_tag_of_a_call_and_a_reply() {
@@ -413,6 +421,9 @@ mod tests {
             Call::DaemonGetInfo,
             Call::DaemonGetHealth,
             Call::DaemonGetCapabilities,
+            Call::DaemonShutdown(ShutdownParams {
+                mode: ShutdownMode::Stop,
+            }),
             Call::EventsSubscribe(SubscribeParams::default()),
             Call::EventsUnsubscribe(UnsubscribeParams { subscription_id: 1 }),
             Call::CatalogListProviders,

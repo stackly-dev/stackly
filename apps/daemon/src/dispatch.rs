@@ -18,7 +18,11 @@ use std::time::Instant;
 use stackly_ipc::PeerCred;
 use stackly_protocol::ErrorBody;
 use stackly_protocol::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
-use stackly_protocol::daemon::{Capabilities, DaemonHealth, DaemonInfo};
+use stackly_protocol::codes::daemon;
+use stackly_protocol::daemon::{
+    Capabilities, DaemonHealth, DaemonInfo, LaunchContextKind, ShutdownAccepted, ShutdownMode,
+    ShutdownParams,
+};
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::{
     CreateInstanceParams, GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceSummary,
@@ -120,6 +124,17 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, Capabilities> {
         let _ = context;
         get_capabilities(core)
+    }
+
+    /// `daemon.shutdown`.
+    fn shutdown<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ShutdownParams,
+    ) -> HandlerFuture<'a, ShutdownAccepted> {
+        let _ = context;
+        shutdown(core, params)
     }
 
     /// `catalog.list_providers`.
@@ -337,6 +352,52 @@ impl Handlers for DefaultHandlers {}
 /// registry schema once the registry opened ready.
 pub fn get_info(core: &DaemonCore) -> HandlerFuture<'_, DaemonInfo> {
     Box::pin(async move { Ok(core.info()) })
+}
+
+/// The real `daemon.shutdown` (spec 0015): records the mode, which wakes
+/// the loop in `startup` that runs the stop order. `restart` is refused for
+/// a daemon that launchd did not start, because nothing would start it
+/// again. Only the first request counts; a later one gets
+/// `daemon.shutting_down`.
+pub fn shutdown(core: &DaemonCore, params: ShutdownParams) -> HandlerFuture<'_, ShutdownAccepted> {
+    Box::pin(async move {
+        let mode = params.mode;
+        if mode == ShutdownMode::Restart {
+            let context = core
+                .start_info()
+                .launch
+                .as_ref()
+                .map_or(LaunchContextKind::Manual, |launch| launch.context);
+            if context != LaunchContextKind::Launchd {
+                return Err(Box::new(
+                    ErrorBody::new(
+                        &daemon::RESTART_UNAVAILABLE,
+                        "the daemon was not started by launchd, so a restart would not start it again",
+                    )
+                    .with_detail("launchContext", launch_context_code(context)),
+                ));
+            }
+        }
+        if !core.request_shutdown(mode) {
+            return Err(Box::new(ErrorBody::new(
+                &daemon::SHUTTING_DOWN,
+                "the daemon is already stopping",
+            )));
+        }
+        Ok(ShutdownAccepted {
+            server_instance_id: core.start_info().server_instance_id,
+            mode,
+        })
+    })
+}
+
+/// The wire code of a launch context, for error details.
+const fn launch_context_code(context: LaunchContextKind) -> &'static str {
+    match context {
+        LaunchContextKind::Launchd => "launchd",
+        LaunchContextKind::Manual => "manual",
+        LaunchContextKind::Unrecognized => "unrecognized",
+    }
 }
 
 /// The real `daemon.get_health`: the state right now.

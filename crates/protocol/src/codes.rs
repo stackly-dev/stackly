@@ -208,6 +208,8 @@ area! {
             details ["subsystem"], "the method needs a subsystem that is not ready while the daemon starts";
         SHUTTING_DOWN = "daemon.shutting_down", Unavailable, retryable true,
             details [], "the request arrived while the daemon stops";
+        RESTART_UNAVAILABLE = "daemon.restart_unavailable", Unsupported, retryable false,
+            details ["launchContext"], "a restart was asked of a daemon that launchd did not start, so nothing would start it again";
         LOCK_HELD = "daemon.lock_held", Conflict, retryable false,
             details ["pid", "serverInstanceId", "version", "startedAt"], "another daemon holds the lock, only ever printed to stderr";
     }

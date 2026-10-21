@@ -922,6 +922,70 @@
       "type": "Request",
       "expect": "reject",
       "code": "request.invalid_params"
+    },
+    {
+      "file": "request-shutdown-stop.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-shutdown-restart.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-get-info-launchd.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-get-info-manual.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-get-info-unknown-launch-context.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-shutdown-stop.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-shutdown-restart.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-shutdown-unknown-mode.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-error-daemon-restart-unavailable.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-shutting-down-restart-requested.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-shutting-down-unknown-reason.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "reject-shutdown-unrecognized-mode.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
     }
   ]
 }

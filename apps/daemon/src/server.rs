@@ -25,7 +25,7 @@ use stackly_platform::bundle::AppBundle;
 use stackly_platform::{LaunchContext, Platform, PlatformError};
 use stackly_protocol::ErrorBody;
 use stackly_protocol::codes::ipc;
-use stackly_protocol::daemon::{DaemonHealth, DaemonInfo};
+use stackly_protocol::daemon::{DaemonHealth, DaemonInfo, ShutdownMode};
 use stackly_protocol::events::{EventKind, ShutdownReason, ShuttingDown};
 use stackly_protocol::secret::SecretStoreTarget;
 use stackly_storage::{OpenOptions, RecoveryReason, RegistryOpen, SqliteRegistry, StorageError};
@@ -328,7 +328,8 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         .map_err(StartError::Identity)?;
     let uid = map::unix_uid(&user).ok_or(StartError::NotUnix)?;
     let layout = prepared.layout().clone();
-    let info = map::daemon_info(&facts, &layout, Some(uid), &version);
+    let mut info = map::daemon_info(&facts, &layout, Some(uid), &version);
+    info.launch = Some(map::daemon_launch(&launch, bundle.as_ref()));
     let bus = Arc::new(EventBus::new(
         facts.server_instance_id,
         platform.shared_clock(),
@@ -419,6 +420,15 @@ impl DaemonHandle {
     pub async fn started(&self) {
         let mut started = self.tasks.started.subscribe();
         let _ = started.wait_for(|started| *started).await;
+    }
+
+    /// Resolves with the mode once a client's `daemon.shutdown` request was
+    /// accepted (spec 0015). The caller then runs [`DaemonHandle::shutdown`]
+    /// with [`ShutdownReason::Requested`] for `stop` or
+    /// [`ShutdownReason::RestartRequested`] for `restart`, and exits 0 or
+    /// [`EXIT_RESTART`](crate::startup::EXIT_RESTART).
+    pub async fn stop_requested(&self) -> ShutdownMode {
+        self.core.shutdown_requested().await
     }
 
     /// Resolves with the exit code once a fatal error means the daemon

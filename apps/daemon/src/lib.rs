@@ -44,6 +44,6 @@ pub mod state;
 pub mod supervisor;
 
 pub use startup::{
-    CATALOG_DIR_ENV, EXIT_LOCK_HELD, EXIT_START_FAILED, LOG_FILTER_ENV, StartConfig,
+    CATALOG_DIR_ENV, EXIT_LOCK_HELD, EXIT_RESTART, EXIT_START_FAILED, LOG_FILTER_ENV, StartConfig,
     parse_catalog_dir, parse_log_filter, run,
 };

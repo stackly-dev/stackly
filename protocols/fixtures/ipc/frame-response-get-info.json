@@ -24,7 +24,8 @@
         },
         "socketPath": "/var/folders/xy/T/stackly-1a2b3c4d/stacklyd.sock",
         "registrySchema": 1,
-        "secretStore": null
+        "secretStore": null,
+        "launch": null
       }
     }
   }

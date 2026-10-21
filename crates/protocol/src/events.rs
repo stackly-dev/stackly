@@ -178,6 +178,8 @@ pub enum ShutdownReason {
     Signal,
     /// A client asked it to stop.
     Requested,
+    /// A client asked it to stop so launchd starts it again (spec 0015).
+    RestartRequested,
     /// A reason this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,

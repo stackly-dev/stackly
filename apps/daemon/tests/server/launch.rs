@@ -18,14 +18,14 @@ use uuid::Uuid;
 
 use crate::common::{Site, client, config};
 
-fn launchd(label: &str) -> LaunchContext {
+pub fn launchd(label: &str) -> LaunchContext {
     LaunchContext::Launchd {
         label: label.to_owned(),
     }
 }
 
 /// Deps for `site` with the given override flag and launch facts.
-fn deps(
+pub fn deps(
     site: &Site,
     root_override: bool,
     launch: LaunchContext,
@@ -49,7 +49,7 @@ fn deps(
     .with_launch(launch, bundle)
 }
 
-async fn stop(handle: DaemonHandle) {
+pub async fn stop(handle: DaemonHandle) {
     handle
         .shutdown(ShutdownReason::Requested, std::future::pending())
         .await;

@@ -10,15 +10,17 @@ use std::path::Path;
 
 use stackly_core::provider::{Issue, PackageError, PlanError, SettingsError};
 use stackly_domain::{RegistryError, ResourceRef as DomainResource};
+use stackly_platform::bundle::AppBundle;
 use stackly_platform::{
-    CapabilityStatus, DirectoryLayout, PlatformCapability, PlatformInfo, UserId,
+    CapabilityStatus, DirectoryLayout, LaunchContext, PlatformCapability, PlatformInfo, UserId,
 };
 use stackly_protocol::codes::{
     PlanInvalidReason, RenderFailedReason, internal, manifest, operation, provider, registry,
     resource,
 };
 use stackly_protocol::daemon::{
-    Capabilities, DaemonInfo, DaemonRoots, PlatformCapabilityStatus, RegistryRecovery,
+    Capabilities, DaemonInfo, DaemonLaunch, DaemonRoots, LaunchContextKind,
+    PlatformCapabilityStatus, RegistryRecovery,
 };
 use stackly_protocol::events::EventKind;
 use stackly_protocol::{
@@ -103,6 +105,21 @@ pub fn daemon_info(
         socket_path: path_text(&layout.daemon_socket()),
         registry_schema: None,
         secret_store: None,
+        launch: None,
+    }
+}
+
+/// `DaemonInfo.launch` from who started the daemon and the bundle it
+/// runs from (spec 0015).
+#[must_use]
+pub fn daemon_launch(context: &LaunchContext, bundle: Option<&AppBundle>) -> DaemonLaunch {
+    DaemonLaunch {
+        context: match context {
+            LaunchContext::Launchd { .. } => LaunchContextKind::Launchd,
+            LaunchContext::Manual => LaunchContextKind::Manual,
+        },
+        label: context.label().map(str::to_owned),
+        bundle_path: bundle.map(|bundle| path_text(bundle.root())),
     }
 }
 

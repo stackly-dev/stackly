@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 use uuid::Uuid;
 
+use crate::error::FieldError;
+use crate::json::{FieldCode, Validate};
 use crate::secret::SecretStoreStatus;
 use crate::version::ProtocolVersion;
 use crate::wire::{Count, Timestamp};
@@ -43,6 +45,88 @@ pub struct DaemonInfo {
     /// older daemon (spec 0011).
     #[serde(default)]
     pub secret_store: Option<SecretStoreStatus>,
+    /// Who started this daemon run, or null from an older daemon
+    /// (spec 0015).
+    #[serde(default)]
+    pub launch: Option<DaemonLaunch>,
+}
+
+/// Who started the daemon and from which app bundle (spec 0015).
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DaemonLaunch {
+    /// How the process was started.
+    pub context: LaunchContextKind,
+    /// The launchd job label for a `launchd` start, else null.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// The canonical app bundle folder the daemon runs from, or null when
+    /// it runs outside a bundle, as lossy UTF-8 text.
+    #[serde(default)]
+    pub bundle_path: Option<String>,
+}
+
+/// How a daemon process was started. Open: newer daemons may add values.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LaunchContextKind {
+    /// launchd started it as a LaunchAgent job.
+    Launchd,
+    /// Anything else: a terminal, a test, or an orphaned process.
+    Manual,
+    /// A context this build does not know. The daemon never sends it.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// Params of `daemon.shutdown`.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ShutdownParams {
+    /// Whether the daemon only stops or stops so launchd starts it again.
+    pub mode: ShutdownMode,
+}
+
+impl Validate for ShutdownParams {
+    /// Refuses a mode this build does not know with `mode`
+    /// (`request.invalid_params`).
+    fn validate(&self) -> Vec<FieldError> {
+        if self.mode == ShutdownMode::Unrecognized {
+            vec![FieldError::new("mode", FieldCode::UnknownValue)]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+/// What `daemon.shutdown` asks for. Open: newer daemons may add values.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ShutdownMode {
+    /// Stop and stay stopped; the process exits 0.
+    Stop,
+    /// Stop so launchd starts the daemon again; the process exits 75. Only
+    /// a `launchd` daemon accepts it.
+    Restart,
+    /// A mode this build does not know. A client never sends it.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// Reply of `daemon.shutdown`, queued before the first step of the stop
+/// order so it is flushed with the connections.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ShutdownAccepted {
+    /// The daemon run that accepted the request.
+    pub server_instance_id: Uuid,
+    /// The mode it accepted.
+    pub mode: ShutdownMode,
 }
 
 /// The daemon's resolved (not canonical) roots, as lossy UTF-8 text.
@@ -284,5 +368,34 @@ mod tests {
         let json = serde_json::to_value(DaemonCounters::default()).unwrap();
         assert_eq!(json["logLinesDropped"], 0);
         assert_eq!(json["socketRebinds"], 0);
+    }
+
+    #[test]
+    fn an_unknown_shutdown_mode_decodes_as_unrecognized_and_fails_validation() {
+        let params: ShutdownParams = serde_json::from_str(r#"{"mode":"pause"}"#).unwrap();
+        assert_eq!(params.mode, ShutdownMode::Unrecognized);
+        let fields = params.validate();
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].path(), "mode");
+        assert_eq!(fields[0].code(), "unknown_value");
+        for mode in [ShutdownMode::Stop, ShutdownMode::Restart] {
+            assert!(ShutdownParams { mode }.validate().is_empty());
+        }
+    }
+
+    #[test]
+    fn a_launch_context_this_build_does_not_know_decodes_as_unrecognized() {
+        let launch: DaemonLaunch =
+            serde_json::from_str(r#"{"context":"systemd","label":null,"bundlePath":null}"#)
+                .unwrap();
+        assert_eq!(launch.context, LaunchContextKind::Unrecognized);
+        let json = serde_json::to_value(DaemonLaunch {
+            context: LaunchContextKind::Launchd,
+            label: Some("com.ojiepermana.stackly.daemon".to_owned()),
+            bundle_path: None,
+        })
+        .unwrap();
+        assert_eq!(json["context"], "launchd");
+        assert_eq!(json["bundlePath"], serde_json::Value::Null);
     }
 }

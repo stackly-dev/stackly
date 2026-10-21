@@ -262,6 +262,16 @@
       "summary": "another daemon holds the lock, only ever printed to stderr"
     },
     {
+      "code": "daemon.restart_unavailable",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "launchContext"
+      ],
+      "items": null,
+      "summary": "a restart was asked of a daemon that launchd did not start, so nothing would start it again"
+    },
+    {
       "code": "daemon.shutting_down",
       "category": "unavailable",
       "retryable": true,

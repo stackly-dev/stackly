@@ -27,6 +27,9 @@ pub const LOG_FILTER_ENV: &str = "STACKLY_LOG";
 pub const CATALOG_DIR_ENV: &str = "STACKLY_CATALOG_DIR";
 /// Exit code when the daemon cannot start.
 pub const EXIT_START_FAILED: u8 = 1;
+/// Exit code of a stop that asked launchd to start the daemon again
+/// (`daemon.shutdown` with mode `restart`, `EX_TEMPFAIL`).
+pub const EXIT_RESTART: u8 = 75;
 /// Exit code when another daemon holds the lock for the same data root.
 pub const EXIT_LOCK_HELD: u8 = 3;
 
@@ -190,6 +193,7 @@ mod imp {
     use stackly_platform::bundle::AppBundle;
     use stackly_platform::{DirectoryLayout, LaunchContext, Platform, SecretStore, UserId};
     use stackly_platform_macos::{KeychainTarget, MacosPlatform, MacosSecretStore};
+    use stackly_protocol::daemon::ShutdownMode;
     use stackly_protocol::events::ShutdownReason;
     use stackly_protocol::secret::SecretStoreTarget;
     use stackly_protocol::{CONTRACT_DIGEST, ProtocolVersion, Timestamp};
@@ -197,7 +201,8 @@ mod imp {
     use uuid::Uuid;
 
     use super::{
-        EXIT_LOCK_HELD, EXIT_START_FAILED, StartConfig, parse_catalog_dir, parse_log_filter,
+        EXIT_LOCK_HELD, EXIT_RESTART, EXIT_START_FAILED, StartConfig, parse_catalog_dir,
+        parse_log_filter,
     };
     use crate::lock::{DaemonLock, LockError, LockOwner};
     use crate::log_sink::{LOG_CONTROL_TIMEOUT, LogSink, LogSinkConfig, RedactingMakeWriter};
@@ -451,6 +456,16 @@ mod imp {
                 tracing::info!(signal, "stacklyd stopping");
                 (ShutdownReason::Signal, 0)
             }
+            mode = handle.stop_requested() => match mode {
+                ShutdownMode::Restart => {
+                    tracing::info!("stacklyd stopping for a restart that a client asked for");
+                    (ShutdownReason::RestartRequested, EXIT_RESTART)
+                }
+                _ => {
+                    tracing::info!("stacklyd stopping at a client's request");
+                    (ShutdownReason::Requested, 0)
+                }
+            },
             code = handle.fatal() => {
                 tracing::error!(exit_code = code, "stacklyd stopping after a fatal error");
                 (ShutdownReason::Requested, code)

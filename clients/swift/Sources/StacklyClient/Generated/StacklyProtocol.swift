@@ -1439,6 +1439,33 @@ public struct SecretStoreStatus: Codable, Sendable, Equatable {
 	}
 }
 
+/// How a daemon process was started. Open: newer daemons may add values.
+public enum LaunchContextKind: String, Codable, Sendable, Equatable {
+	/// launchd started it as a LaunchAgent job.
+	case launchd
+	/// Anything else: a terminal, a test, or an orphaned process.
+	case manual
+	/// A context this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Who started the daemon and from which app bundle (spec 0015).
+public struct DaemonLaunch: Codable, Sendable, Equatable {
+	/// How the process was started.
+	public let context: LaunchContextKind
+	/// The launchd job label for a `launchd` start, else null.
+	public let label: String?
+	/// The canonical app bundle folder the daemon runs from, or null when
+	/// it runs outside a bundle, as lossy UTF-8 text.
+	public let bundlePath: String?
+
+	public init(context: LaunchContextKind, label: String?, bundlePath: String?) {
+		self.context = context
+		self.label = label
+		self.bundlePath = bundlePath
+	}
+}
+
 /// Reply of `daemon.get_info`: who the daemon is and where it keeps things.
 public struct DaemonInfo: Codable, Sendable, Equatable {
 	/// The daemon's version.
@@ -1466,8 +1493,11 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 	/// The secret store and the keychain chosen at start, or null from an
 	/// older daemon (spec 0011).
 	public let secretStore: SecretStoreStatus?
+	/// Who started this daemon run, or null from an older daemon
+	/// (spec 0015).
+	public let launch: DaemonLaunch?
 
-	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?, secretStore: SecretStoreStatus?) {
+	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?, secretStore: SecretStoreStatus?, launch: DaemonLaunch?) {
 		self.version = version
 		self.protocol = `protocol`
 		self.contractDigest = contractDigest
@@ -1479,6 +1509,7 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 		self.socketPath = socketPath
 		self.registrySchema = registrySchema
 		self.secretStore = secretStore
+		self.launch = launch
 	}
 }
 
@@ -2992,6 +3023,8 @@ public enum Call: Codable, Sendable, Equatable {
 	case daemonGetHealth
 	/// Platform capabilities, methods, and event kinds the daemon knows.
 	case daemonGetCapabilities
+	/// Stops the daemon, or stops it so launchd starts it again.
+	case daemonShutdown(ShutdownParams)
 	/// Starts an event subscription.
 	case eventsSubscribe(SubscribeParams)
 	/// Ends an event subscription.
@@ -3039,6 +3072,7 @@ public enum Call: Codable, Sendable, Equatable {
 			daemonGetInfo = "daemon.get_info",
 			daemonGetHealth = "daemon.get_health",
 			daemonGetCapabilities = "daemon.get_capabilities",
+			daemonShutdown = "daemon.shutdown",
 			eventsSubscribe = "events.subscribe",
 			eventsUnsubscribe = "events.unsubscribe",
 			operationGet = "operation.get",
@@ -3083,6 +3117,11 @@ public enum Call: Codable, Sendable, Equatable {
 			case .daemonGetCapabilities:
 				self = .daemonGetCapabilities
 				return
+			case .daemonShutdown:
+				if let content = try? container.decode(ShutdownParams.self, forKey: .content) {
+					self = .daemonShutdown(content)
+					return
+				}
 			case .eventsSubscribe:
 				if let content = try? container.decode(SubscribeParams.self, forKey: .content) {
 					self = .eventsSubscribe(content)
@@ -3196,6 +3235,9 @@ public enum Call: Codable, Sendable, Equatable {
 			try container.encode(CodingKeys.daemonGetHealth, forKey: .type)
 		case .daemonGetCapabilities:
 			try container.encode(CodingKeys.daemonGetCapabilities, forKey: .type)
+		case .daemonShutdown(let content):
+			try container.encode(CodingKeys.daemonShutdown, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .eventsSubscribe(let content):
 			try container.encode(CodingKeys.eventsSubscribe, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -3287,6 +3329,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case daemonGetHealth(DaemonHealth)
 	/// What the daemon supports.
 	case daemonGetCapabilities(Capabilities)
+	/// The daemon accepted the request and now runs the stop order.
+	case daemonShutdown(ShutdownAccepted)
 	/// The subscription started; its events follow.
 	case eventsSubscribe(Subscribed)
 	/// The subscription ended.
@@ -3333,6 +3377,7 @@ public enum Reply: Codable, Sendable, Equatable {
 			daemonGetInfo = "daemon.get_info",
 			daemonGetHealth = "daemon.get_health",
 			daemonGetCapabilities = "daemon.get_capabilities",
+			daemonShutdown = "daemon.shutdown",
 			eventsSubscribe = "events.subscribe",
 			eventsUnsubscribe = "events.unsubscribe",
 			operationGet = "operation.get",
@@ -3381,6 +3426,11 @@ public enum Reply: Codable, Sendable, Equatable {
 			case .daemonGetCapabilities:
 				if let content = try? container.decode(Capabilities.self, forKey: .content) {
 					self = .daemonGetCapabilities(content)
+					return
+				}
+			case .daemonShutdown:
+				if let content = try? container.decode(ShutdownAccepted.self, forKey: .content) {
+					self = .daemonShutdown(content)
 					return
 				}
 			case .eventsSubscribe:
@@ -3500,6 +3550,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .daemonGetCapabilities(let content):
 			try container.encode(CodingKeys.daemonGetCapabilities, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .daemonShutdown(let content):
+			try container.encode(CodingKeys.daemonShutdown, forKey: .type)
 			try container.encode(content, forKey: .content)
 		case .eventsSubscribe(let content):
 			try container.encode(CodingKeys.eventsSubscribe, forKey: .type)
@@ -3773,12 +3826,49 @@ public struct SetSecretReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// What `daemon.shutdown` asks for. Open: newer daemons may add values.
+public enum ShutdownMode: String, Codable, Sendable, Equatable {
+	/// Stop and stay stopped; the process exits 0.
+	case stop
+	/// Stop so launchd starts the daemon again; the process exits 75. Only
+	/// a `launchd` daemon accepts it.
+	case restart
+	/// A mode this build does not know. A client never sends it.
+	case unrecognized
+}
+
+/// Reply of `daemon.shutdown`, queued before the first step of the stop
+/// order so it is flushed with the connections.
+public struct ShutdownAccepted: Codable, Sendable, Equatable {
+	/// The daemon run that accepted the request.
+	public let serverInstanceId: UUID
+	/// The mode it accepted.
+	public let mode: ShutdownMode
+
+	public init(serverInstanceId: UUID, mode: ShutdownMode) {
+		self.serverInstanceId = serverInstanceId
+		self.mode = mode
+	}
+}
+
+/// Params of `daemon.shutdown`.
+public struct ShutdownParams: Codable, Sendable, Equatable {
+	/// Whether the daemon only stops or stops so launchd starts it again.
+	public let mode: ShutdownMode
+
+	public init(mode: ShutdownMode) {
+		self.mode = mode
+	}
+}
+
 /// Why the daemon stops. Open: newer daemons may add values.
 public enum ShutdownReason: String, Codable, Sendable, Equatable {
 	/// SIGTERM or SIGINT.
 	case signal
 	/// A client asked it to stop.
 	case requested
+	/// A client asked it to stop so launchd starts it again (spec 0015).
+	case restartRequested = "restart_requested"
 	/// A reason this build does not know. The daemon never sends it.
 	case unrecognized
 }

@@ -820,6 +820,18 @@
           "description": "The daemon's contract digest.",
           "type": "string"
         },
+        "launch": {
+          "description": "Who started this daemon run, or null from an older daemon\n(spec 0015).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonLaunch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "pid": {
           "description": "The daemon's process ID.",
           "type": "integer",
@@ -894,6 +906,35 @@
         "startedAt",
         "roots",
         "socketPath"
+      ]
+    },
+    "DaemonLaunch": {
+      "description": "Who started the daemon and from which app bundle (spec 0015).",
+      "type": "object",
+      "properties": {
+        "bundlePath": {
+          "description": "The canonical app bundle folder the daemon runs from, or null when\nit runs outside a bundle, as lossy UTF-8 text.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "context": {
+          "description": "How the process was started.",
+          "$ref": "#/$defs/LaunchContextKind"
+        },
+        "label": {
+          "description": "The launchd job label for a `launchd` start, else null.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "context"
       ]
     },
     "DaemonReconciling": {
@@ -2555,6 +2596,26 @@
         "logsUnavailable"
       ]
     },
+    "LaunchContextKind": {
+      "description": "How a daemon process was started. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "launchd started it as a LaunchAgent job.",
+          "type": "string",
+          "const": "launchd"
+        },
+        {
+          "description": "Anything else: a terminal, a test, or an orphaned process.",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "A context this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "Limits": {
       "description": "The limits a daemon enforces, as sent in `HandshakeAccepted`.",
       "type": "object",
@@ -4042,6 +4103,23 @@
           ]
         },
         {
+          "description": "The daemon accepted the request and now runs the stop order.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ShutdownAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.shutdown"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "The subscription started; its events follow.",
           "type": "object",
           "properties": {
@@ -4937,6 +5015,45 @@
         "summary"
       ]
     },
+    "ShutdownAccepted": {
+      "description": "Reply of `daemon.shutdown`, queued before the first step of the stop\norder so it is flushed with the connections.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "The mode it accepted.",
+          "$ref": "#/$defs/ShutdownMode"
+        },
+        "serverInstanceId": {
+          "description": "The daemon run that accepted the request.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "serverInstanceId",
+        "mode"
+      ]
+    },
+    "ShutdownMode": {
+      "description": "What `daemon.shutdown` asks for. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "Stop and stay stopped; the process exits 0.",
+          "type": "string",
+          "const": "stop"
+        },
+        {
+          "description": "Stop so launchd starts the daemon again; the process exits 75. Only\na `launchd` daemon accepts it.",
+          "type": "string",
+          "const": "restart"
+        },
+        {
+          "description": "A mode this build does not know. A client never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "ShutdownReason": {
       "description": "Why the daemon stops. Open: newer daemons may add values.",
       "oneOf": [
@@ -4949,6 +5066,11 @@
           "description": "A client asked it to stop.",
           "type": "string",
           "const": "requested"
+        },
+        {
+          "description": "A client asked it to stop so launchd starts it again (spec 0015).",
+          "type": "string",
+          "const": "restart_requested"
         },
         {
           "description": "A reason this build does not know. The daemon never sends it.",

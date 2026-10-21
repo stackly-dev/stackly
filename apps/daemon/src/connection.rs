@@ -901,6 +901,14 @@ async fn dispatch(
                 .map(Reply::DaemonGetCapabilities),
             None,
         ),
+        Call::DaemonShutdown(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.shutdown(c, x, p)
+            })
+            .await
+            .map(Reply::DaemonShutdown),
+            None,
+        ),
         Call::EventsSubscribe(params) => match conn.subscribe(core, params) {
             Ok(subscription) => {
                 let subscribed = Subscribed {
