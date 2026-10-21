@@ -510,7 +510,19 @@ Filled by milestone 2.
 
 ### Inspector
 
-Filled by milestone 3.
+`.stacklyInspector(isPresented:help:content:)` goes on the page content inside the detail column of the split view, the content that fills the column (not on a view inside a `ScrollView`: the container of `.inspector` has no height of its own there, and its content is drawn over the neighbouring views instead of in the scroll flow, checked in the design gallery). It is the only place in the app that calls `.inspector(`, and it puts an `InspectorToggle` in the toolbar (`.primaryAction`).
+
+- **Column.** The native column is 240 pt at the least, 280 pt by default, and 360 pt at the most (`.inspectorColumnWidth`, spec 0022). Its content is a `ScrollView` with 16 pt of padding and 16 pt between views, on `StacklyColor.surfaceWindow`, opaque, so text on it stays in the P1 and P2 pairs of spec 0012. The column is never glass. The content is at least as tall as the column, so an `InspectorPlaceholder` (which fills the height) sits in the middle.
+- **Content.** Build it from `InspectorHeader` (a 40 pt tile, `.title2.weight(.semibold)` title, subtitle, `StatusLabel` in the `.standard` context, and an optional row of `ActionButton`s that stack when they do not fit side by side), `CardSection` with `.labeledContentStyle(.stackly)`, `StateBanner`, and `InspectorPlaceholder` ("No Selection" by default) when nothing is selected. Texts wrap and are never cut, so a screen never sets a `lineLimit` in the inspector.
+- **Toggle.** The label is "Show Inspector" or "Hide Inspector" for the binding, the symbol is `sidebar.trailing`, the help is `help ?? label` (a page passes the text with the shortcut from `CommandMap.helpText(for:)` of spec 0069), and the identifier is `inspector.toggle`. The toolbar gives it a 44 × 52 pt target.
+- **State.** Every page that has an inspector keeps its binding in `@SceneStorage("<page>.inspector") private var showsInspector = true`, with `<page>` the lowercase page name (`instances.inspector`, `runtimes.inspector`). It is open by default, restored per window by the system, and never shared between pages. Spec 0069 binds View > Show/Hide Inspector to the same binding.
+
+Checked on macOS 27.0.1 on 2026-10-21 (spec 0067 rationale, *Temuan langkah 14*) with a probe window of a `NavigationSplitView` (sidebar 200 to 260 pt, 236 by default, and the page column at least 640 pt) and `.stacklyInspector` on the page, in light and dark, through the accessibility API and window captures:
+
+- **Opaque background joins.** `surfaceWindow` on the `ScrollView` fills the whole column: up under the toolbar to the top edge of the window, down to the window's rounded corner, and to the divider. No glass shows through and there is no seam inside the column. The toolbar band above the page column is the system's own, so it is not the same tone as the page; this is the same as before there was an inspector.
+- **Column widths hold.** Setting the inspector divider to extreme values with the accessibility API clamps the column at 240 and 360 pt. At 900 pt it opens at 280 pt.
+- **900 pt window, sidebar and inspector open.** The sidebar takes 236 pt, the inspector 280, and the page content **384 pt**, not 640: `navigationSplitViewColumnWidth(min: 640)` is met by the whole detail column, which holds the inspector too (664 pt). So a page that can show an inspector has to work at 384 pt wide: tables and cards wrap and scroll, and no text is cut. In the inspector nothing is cut at 240 pt: the header title and subtitle wrap, two actions stack, and a long path in a card row drops under its label and wraps. The open question for spec 0013 (the content minimum with an inspector) is in the rationale.
+- **Toggle in the accessibility tree.** `AXButton` with `AXDescription` and `AXHelp` "Hide Inspector", `AXIdentifier` `inspector.toggle`; after pressing it, "Show Inspector". The header is an `AXHeading`, its status reads "Status: Running", and the actions are separate buttons. A card row reads "Software, PostgreSQL 17.4".
 
 ### Log
 
