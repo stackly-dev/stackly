@@ -176,9 +176,12 @@ Sudah dijalankan Claude lewat accessibility API pada 2026-10-21 (`a6baa41`): bag
    - `STACKLY_ROOT="$R" $S instance start $ID` (atau stop) mengubah status barisnya tanpa memuat ulang daftar.
    - VoiceOver membaca satu elemen per baris, misalnya "demo, (nama provider), Status: Running".
    - Bagian "instance yang dihapus hilang dari daftar" dilewati dulu, karena CLI belum punya perintah hapus.
-5. Matikan VoiceOver, lalu bersihkan seperti langkah D.5.
+5. Diagnostics dengan VoiceOver (setelah perbaikan `dev-f13-fix` masuk): matikan `stacklyd`, buka halaman Diagnostics, lalu nyalakan `stacklyd` lagi. Setelah tersambung, VoiceOver membaca nilai baru di setiap baris (Status, Last connected, pid stacklyd, Last error "None"), bukan nilai sebelum tersambung.
+6. Pilihan sidebar diingat (AC-13): pilih Operations di sidebar, keluar dengan ⌘Q, lalu buka app lagi; pilihan Operations kembali. Bila System Settings › Desktop & Dock › "Close windows when quitting an application" menyala, pilihan tidak diingat oleh macOS; catat setting itu bersama hasilmu (jangan diubah hanya untuk cek ini kecuali kamu mau).
+7. Klik ikon Stackly di Dock setelah jendela ditutup dengan ⌘W: jendela utama terbuka lagi.
+8. Matikan VoiceOver, lalu bersihkan seperti langkah D.5.
 
-**Yang dikirim:** versi macOS, plus nomor dan apa yang terlihat untuk setiap butir yang tidak sesuai, atau "semua sesuai".
+**Yang dikirim:** versi macOS, plus nomor dan apa yang terlihat untuk setiap butir yang tidak sesuai, atau "semua sesuai", dan keadaan setting "Close windows when quitting an application".
 
 ## I. Setting aksesibilitas sistem di Design Gallery
 
