@@ -374,3 +374,323 @@ fn a_registry_that_cannot_write_the_source_is_an_error() {
 
     assert_eq!(result, Err(RegistryError::Busy));
 }
+
+// A pin that runs at the same time as another pin of the same revision.
+//
+// Another pin that found a file missing renames its own copy over it (the
+// same bytes, a new inode). A `Filesystem` may then report that read as
+// `NotARegularFile`, as `FakeFilesystem` does when the inode it opened is
+// not the one it checked. `Swapping` reproduces that one event on purpose,
+// so the race runs the same way every time.
+
+/// What `Swapping` does when the pinned `provider.yaml` is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Swap {
+    /// The first read: another pin renames the same bytes over the file.
+    SameBytesOnce,
+    /// Every read: another pin keeps renaming the same bytes over it.
+    SameBytesAlways,
+    /// The first read: the file is swapped for a symlink to `outside`.
+    SymlinkOnce,
+}
+
+/// The fake filesystem with one file that is replaced while it is read.
+struct Swapping {
+    inner: stackly_testkit::FakeFilesystem,
+    swap: Swap,
+    target: std::sync::Mutex<Option<PathBuf>>,
+    outside: PathBuf,
+    fired: std::sync::atomic::AtomicUsize,
+}
+
+impl Swapping {
+    /// Renames a copy with the bytes of `path` over it, as a concurrent
+    /// `write_file_atomic` of the same file does.
+    fn rename_same_bytes(path: &Path) {
+        let bytes = fs::read(path).expect("the pinned file reads");
+        let temp = path.with_file_name(".provider.yaml.tmp-swap");
+        fs::write(&temp, &bytes).expect("the copy writes");
+        fs::rename(&temp, path).expect("the copy replaces the file");
+    }
+}
+
+impl stackly_platform::Filesystem for Swapping {
+    fn canonicalize(&self, path: &Path) -> Result<PathBuf, stackly_platform::PlatformError> {
+        self.inner.canonicalize(path)
+    }
+
+    fn symlink_metadata(
+        &self,
+        path: &Path,
+    ) -> Result<Option<stackly_platform::FileInfo>, stackly_platform::PlatformError> {
+        self.inner.symlink_metadata(path)
+    }
+
+    fn create_dir_private(&self, path: &Path) -> Result<(), stackly_platform::PlatformError> {
+        self.inner.create_dir_private(path)
+    }
+
+    fn read_dir(
+        &self,
+        path: &Path,
+    ) -> Result<Vec<stackly_platform::DirEntryInfo>, stackly_platform::PlatformError> {
+        self.inner.read_dir(path)
+    }
+
+    fn read_file_limited(
+        &self,
+        path: &Path,
+        max_len: u64,
+    ) -> Result<Vec<u8>, stackly_platform::PlatformError> {
+        let target = self
+            .target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if target.as_deref() == Some(path) {
+            let first = self.fired.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0;
+            let replaced = match self.swap {
+                Swap::SameBytesOnce if first => {
+                    Self::rename_same_bytes(path);
+                    true
+                }
+                Swap::SameBytesAlways => {
+                    Self::rename_same_bytes(path);
+                    true
+                }
+                Swap::SymlinkOnce if first => {
+                    fs::remove_file(path).expect("the pinned file goes");
+                    symlink(&self.outside, path).expect("the symlink is planted");
+                    true
+                }
+                _ => false,
+            };
+            if replaced {
+                return Err(stackly_platform::PlatformError::NotARegularFile {
+                    path: path.to_path_buf(),
+                });
+            }
+        }
+        self.inner.read_file_limited(path, max_len)
+    }
+
+    fn write_file_atomic(
+        &self,
+        path: &Path,
+        bytes: &[u8],
+    ) -> Result<(), stackly_platform::PlatformError> {
+        self.inner.write_file_atomic(path, bytes)
+    }
+
+    fn remove_tree(
+        &self,
+        root: &Path,
+        relative: &Path,
+    ) -> Result<stackly_platform::RemoveReport, stackly_platform::PlatformError> {
+        self.inner.remove_tree(root, relative)
+    }
+
+    fn open_read(
+        &self,
+        path: &Path,
+    ) -> Result<Box<dyn stackly_platform::ReadSeekFile>, stackly_platform::PlatformError> {
+        self.inner.open_read(path)
+    }
+
+    fn open_append(
+        &self,
+        path: &Path,
+    ) -> Result<Box<dyn stackly_platform::AppendFile>, stackly_platform::PlatformError> {
+        self.inner.open_append(path)
+    }
+
+    fn rename_no_replace(
+        &self,
+        from: &Path,
+        to: &Path,
+    ) -> Result<(), stackly_platform::PlatformError> {
+        self.inner.rename_no_replace(from, to)
+    }
+
+    fn open_tree_writer(
+        &self,
+        root: &Path,
+    ) -> Result<Box<dyn stackly_platform::TreeWriter>, stackly_platform::PlatformError> {
+        self.inner.open_tree_writer(root)
+    }
+
+    fn volume_space(
+        &self,
+        path: &Path,
+    ) -> Result<stackly_platform::VolumeSpace, stackly_platform::PlatformError> {
+        self.inner.volume_space(path)
+    }
+
+    fn volume_facts(
+        &self,
+        path: &Path,
+    ) -> Result<stackly_platform::VolumeFacts, stackly_platform::PlatformError> {
+        self.inner.volume_facts(path)
+    }
+}
+
+/// A site whose filesystem replaces the pinned `provider.yaml` as `swap`
+/// says, once its path is armed.
+struct SwapSite {
+    root: TestRoot,
+    platform: Platform,
+    prepared: PreparedLayout,
+    entry: ProviderEntry,
+    fs: Arc<Swapping>,
+}
+
+impl SwapSite {
+    fn new(swap: Swap) -> Self {
+        let root = TestRoot::new().expect("a test root can be made");
+        let fs = Arc::new(Swapping {
+            inner: stackly_testkit::FakeFilesystem::new(&root),
+            swap,
+            target: std::sync::Mutex::new(None),
+            outside: root.path().join("outside-file"),
+            fired: std::sync::atomic::AtomicUsize::new(0),
+        });
+        fs::write(&fs.outside, b"keep").expect("the outside file writes");
+        let platform = Platform::new(
+            Arc::new(root.resolver()),
+            Arc::clone(&fs) as Arc<dyn stackly_platform::Filesystem>,
+            Arc::new(stackly_testkit::FakeClock::new()),
+            Arc::new(stackly_testkit::FakeIdentity::new(&root)),
+            Arc::new(stackly_testkit::FakePlatformInfo::new()),
+        );
+        let prepared = prepare_layout(&platform).expect("the fake roots prepare");
+        let copy = root.path().join("input/nats");
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/nats"),
+            &copy,
+        );
+        let files = read_package(platform.fs(), &copy).expect("the package reads");
+        let package =
+            Arc::new(ValidatedPackage::from_files(files, NameCheck::Skip).expect("it validates"));
+        Self {
+            root,
+            platform,
+            prepared,
+            entry: ProviderEntry {
+                package,
+                tile: TileHint {
+                    mark: "N".to_owned(),
+                    tile: TileColor::Cyan,
+                },
+                notes: Vec::new(),
+            },
+            fs,
+        }
+    }
+
+    fn manifest(&self) -> PathBuf {
+        self.prepared
+            .layout()
+            .provider_revision_dir(self.entry.package.key())
+            .join("provider.yaml")
+    }
+
+    /// Makes the next reads of the pinned `provider.yaml` replace it.
+    fn arm(&self) {
+        *self
+            .fs
+            .target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(self.manifest());
+    }
+
+    fn fired(&self) -> usize {
+        self.fs.fired.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn pin(&self) -> Result<stackly_core::catalog::PinnedRevision, PinError> {
+        pin_revision(
+            &self.platform,
+            &self.prepared,
+            &self.entry,
+            ProviderSourceId::generate(),
+        )
+    }
+}
+
+#[test]
+fn a_file_another_pin_replaces_while_the_compare_reads_it_is_read_again() {
+    let ev = evidence!(
+        covers = ["REQ-008"],
+        kind = Kind::Fixture,
+        expected = "when another pin of the same revision renames its copy over a file while this pin reads it to compare, the read reports a file that is not regular, and the pin reads it again and succeeds instead of failing unsafe_path",
+    );
+    let site = SwapSite::new(Swap::SameBytesOnce);
+    site.pin().expect("the first pin works");
+    let before = fs::read(site.manifest()).expect("it reads");
+    site.arm();
+
+    let again = site.pin();
+
+    assert!(again.is_ok(), "{again:?}");
+    assert_eq!(
+        site.fired(),
+        3,
+        "the swapped compare read, the compare read again, then the read back"
+    );
+    assert_eq!(fs::read(site.manifest()).expect("it reads"), before);
+    ev.pass();
+}
+
+#[test]
+fn a_file_another_pin_replaces_while_it_is_read_back_is_read_again() {
+    let site = SwapSite::new(Swap::SameBytesOnce);
+    site.arm();
+
+    let pinned = site.pin();
+
+    assert!(pinned.is_ok(), "{pinned:?}");
+    assert_eq!(site.fired(), 2, "the swapped read back, then one more read");
+}
+
+#[test]
+fn a_file_that_keeps_being_replaced_ends_as_an_io_error_not_unsafe_path() {
+    let site = SwapSite::new(Swap::SameBytesAlways);
+    site.arm();
+
+    let error = site.pin().expect_err("a file that never settles fails");
+
+    assert_eq!(error.reason(), "io", "{error:?}");
+    assert!(site.fired() > 1, "the read was tried again");
+    assert!(
+        fs::symlink_metadata(site.manifest())
+            .expect("it stats")
+            .is_file()
+    );
+}
+
+#[test]
+fn a_file_swapped_for_a_symlink_while_it_is_read_is_still_unsafe_path() {
+    let site = SwapSite::new(Swap::SymlinkOnce);
+    site.pin().expect("the first pin works");
+    site.arm();
+
+    let error = site.pin().expect_err("a symlink is refused");
+
+    assert_eq!(
+        error,
+        PinError::UnsafePath {
+            path: site.manifest()
+        }
+    );
+    assert_eq!(site.fired(), 1, "a symlink is never read again");
+    assert!(
+        fs::symlink_metadata(site.manifest())
+            .expect("it stats")
+            .is_symlink(),
+        "the symlink is left as it is"
+    );
+    assert_eq!(
+        fs::read(site.root.path().join("outside-file")).expect("it reads"),
+        b"keep"
+    );
+}

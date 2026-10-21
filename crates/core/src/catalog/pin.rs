@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use stackly_domain::{ProviderRevisionRecord, ProviderSourceId};
-use stackly_platform::{FileKind, Platform, PlatformError};
+use stackly_platform::{FileKind, Filesystem, Platform, PlatformError};
 
 use super::model::ProviderEntry;
 use crate::provider::{NameCheck, PackageFiles, VERSIONS_MAX_LEN, ValidatedPackage};
@@ -22,6 +22,11 @@ const MAX_VERSIONS_LEN: u64 = VERSIONS_MAX_LEN;
 const SCHEMA_VERSION: &str = "stackly/v1alpha1";
 /// The publisher of every package in the catalogs this build loads.
 const PUBLISHER: &str = "Stackly";
+/// How often a file is read when another pin keeps replacing it. A pin
+/// replaces a file only when it found the file missing, so each file is
+/// replaced at most once per pin that started before the first copy
+/// landed, and the engine runs at most 8 operations at once.
+const READ_ATTEMPTS: usize = 16;
 
 /// What [`pin_revision`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,9 +205,7 @@ pub fn pin_revision(
             Some(_) if path == VERSIONS_FILE => {}
             Some(info) => {
                 let max = info.len.max(bytes.len() as u64);
-                let stored = fs
-                    .read_file_limited(&target, max)
-                    .map_err(|e| platform_error("read file", &target, &e))?;
+                let stored = read_pinned(fs, "read file", &target, max)?;
                 if stored != bytes {
                     return Err(PinError::ExistingDiffers { path: target });
                 }
@@ -216,9 +219,7 @@ pub fn pin_revision(
     for (path, bytes) in package.files().iter() {
         let target = dir.join(path);
         let max = (bytes.len() as u64).max(MAX_VERSIONS_LEN);
-        let read = fs
-            .read_file_limited(&target, max)
-            .map_err(|e| platform_error("read back file", &target, &e))?;
+        let read = read_pinned(fs, "read back file", &target, max)?;
         stored.insert(path.to_owned(), read);
     }
     let read_back = ValidatedPackage::from_files(
@@ -239,6 +240,43 @@ pub fn pin_revision(
     Ok(PinnedRevision {
         record,
         wrote_files,
+    })
+}
+
+/// Reads one file of the pinned folder.
+///
+/// Another pin of the same revision that found the file missing renames
+/// its own copy over it, with the same bytes and a new inode, and a
+/// `Filesystem` may report a read that meets that replace as
+/// [`PlatformError::NotARegularFile`]. When the path still holds a regular
+/// file afterwards, the read runs again, at most [`READ_ATTEMPTS`] times;
+/// a symlink or anything else there is [`PinError::UnsafePath`], and a file
+/// that never settles is [`PinError::Io`].
+fn read_pinned(
+    fs: &dyn Filesystem,
+    op: &'static str,
+    path: &Path,
+    max: u64,
+) -> Result<Vec<u8>, PinError> {
+    for _ in 0..READ_ATTEMPTS {
+        match fs.read_file_limited(path, max) {
+            Ok(bytes) => return Ok(bytes),
+            Err(PlatformError::NotARegularFile { .. }) => match fs.symlink_metadata(path) {
+                Ok(Some(info)) if info.kind == FileKind::File => {}
+                Ok(_) => {
+                    return Err(PinError::UnsafePath {
+                        path: path.to_path_buf(),
+                    });
+                }
+                Err(error) => return Err(platform_error(op, path, &error)),
+            },
+            Err(error) => return Err(platform_error(op, path, &error)),
+        }
+    }
+    Err(PinError::Io {
+        op,
+        path: path.to_path_buf(),
+        message: "the file kept being replaced while it was read".to_owned(),
     })
 }
 
