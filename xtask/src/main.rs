@@ -9,6 +9,7 @@ mod fuzz;
 mod provider;
 mod runtime;
 mod snapshot;
+mod ui_test;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -56,6 +57,9 @@ Tasks:
   snapshot review [--base <rev>]
                        Write target/snapshot-review/index.html with the old and new
                        snapshot PNGs since the merge base with <rev> (default main)
+  ui-test [--only <Class>[/<method>]]
+                       Run the XCUITest target on fixture scenarios (macOS, needs
+                       Automation Mode on and an unlocked screen; exit 2 otherwise)
   runtime check        Check runtimes/inventory.toml and evidence/runtime/
   runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]
                        Download a runtime and print its pinned inventory values
@@ -100,6 +104,7 @@ fn run() -> Result<ExitCode> {
         ["fuzz", rest @ ..] => done(fuzz::run(&root, rest)),
         ["runtime", rest @ ..] => runtime::run(&root, rest),
         ["snapshot", rest @ ..] => snapshot::run(&root, rest),
+        ["ui-test", rest @ ..] => ui_test::run(&root, rest),
         ["provider", rest @ ..] => provider::run(&root, rest),
         ["catalog", rest @ ..] => catalog::run(&root, rest),
         ["help" | "--help" | "-h"] => {

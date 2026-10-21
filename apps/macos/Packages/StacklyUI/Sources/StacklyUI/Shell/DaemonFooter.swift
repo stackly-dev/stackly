@@ -19,6 +19,7 @@ public struct DaemonFooter: View {
         HStack(spacing: Spacing.s8) {
             StatusLabel(status, context: .row)
                 .font(.callout)
+                .accessibilityIdentifier(AccessibilityID.DaemonFooter.status)
                 .frame(maxWidth: .infinity, alignment: .leading)
             SettingsLink {
                 Label("Settings", systemImage: "slider.horizontal.3")

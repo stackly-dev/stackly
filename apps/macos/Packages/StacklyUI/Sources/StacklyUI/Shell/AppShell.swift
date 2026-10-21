@@ -285,6 +285,7 @@ private struct SidebarRow: View {
         }
         .badge(badge?.count ?? 0)
         .badgeProminence(badge?.isProminent == true ? .increased : .standard)
+        .accessibilityIdentifier(AccessibilityID.Sidebar.row(section))
         if let badge {
             label.accessibilityValue(badge.spokenValue)
         } else {

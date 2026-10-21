@@ -3,8 +3,40 @@
 /// only a stable data key, never display text, and an identifier never changes a
 /// VoiceOver label or order.
 ///
-/// Feature 68 adds the scopes of the screens next to these.
+/// Feature 68 adds the scopes of the screens next to these: the sidebar, the daemon
+/// footer and banner, and the design gallery, which its UI tests read (spec 0068).
 nonisolated public enum AccessibilityID {
+    /// The main window's sidebar.
+    public enum Sidebar {
+        /// The row of `section`, such as `sidebar.row.instances`. The key is the raw
+        /// value of `SidebarSection`.
+        public static func row(_ section: SidebarSection) -> String {
+            "sidebar.row.\(section.rawValue)"
+        }
+    }
+
+    /// The daemon footer in the sidebar.
+    public enum DaemonFooter {
+        /// The status label, read as "Status: <text>".
+        public static let status = "daemonFooter.status"
+    }
+
+    /// The daemon banner above the pages. Its label is the banner title and its buttons
+    /// are found by their titles, so only the container has an identifier.
+    public enum DaemonBanner {
+        /// The banner.
+        public static let container = "daemonBanner.container"
+    }
+
+    /// The design gallery window.
+    public enum Gallery {
+        /// The sidebar row of the topic with the lowercase name `topic`, such as
+        /// `gallery.topic.status`.
+        public static func topic(_ topic: String) -> String {
+            "gallery.topic.\(topic)"
+        }
+    }
+
     /// The feedback card.
     public enum Feedback {
         /// The card.

@@ -792,3 +792,52 @@ Checked on macOS 27.0 (26A428) with Xcode 27.0 (27A266a), in the Debug app drive
 
 `CloseNotice` shows once per launch, on the first close of the main window that is not part of quitting: a borderless, non activating `NSPanel` at the bottom center of the window's screen with an opaque `.cardSurface(radius: .large)` card, "Stackly is still running" and "Closing the window doesn’t stop stacklyd or your instances. Click Stackly in the Dock to reopen it." (provisional until feature 32). It fades in and out with the 0.2 s crossfade, stays 4 seconds or until clicked, and its text is announced to VoiceOver. It is AppKit because SwiftUI has no presentation that outlives its window.
 
+
+## Testing views
+
+Every page and shell piece is checked from fixture data, with no `stacklyd` running (spec 0068). Three layers, from cheapest to most real: fixtures, snapshot tests, and XCUITest.
+
+### Fixtures
+
+- Everything lives in `StacklyUI/Sources/StacklyUI/Fixtures/`, and every file starts with `#if DEBUG`. Data is built only from the generated `StacklyClient` DTOs through the `.fixture(...)` builders in `FixtureBuilders.swift`; there is no second model of daemon data. Times come from `FixtureClock`, IDs from `FixtureID.uuid(kind:number:)`, and a secret is only ever a reference.
+- A **case** is one DTO in a scenario, such as an instance in one state. Add it in `FixtureScenario+Cases.swift` with the next number for its `kind`, so its UUID never changes, and add its row to the case table of the spec that owns the screen. Add the test that maps it to its label, tone, and detail next to the existing ones in `FixtureScenarioTests`.
+- A **scenario** is a whole daemon world named by a `FixtureScenario.ID` (kebab case raw value). Add the `case`, build it in `FixtureScenario+Cases.swift` with its connection script and `expectedPresence`, and the catalog test picks it up. The same raw value is what `STACKLY_UI_SCENARIO` takes, so the Debug app and the UI tests play it unchanged.
+- A feature that adds a DTO, a screen, or a gallery page adds its cases, scenario, snapshot suite, and UI test in the same commit. A call the scenario does not answer fails as `notSent` with `ipc.not_connected`, like the real app offline.
+- Only `Fixtures/FixtureAppearance.swift` and the test folders may set an underscored environment value (`_colorSchemeContrast`, `_accessibility…`). Time-relative views read `fixtureNow` and `loadingDelay` from the environment, never `Date.now`.
+
+### Snapshot suites
+
+- A suite is an extension of `SnapshotTests` in `Tests/StacklyUITests/SnapshotTests/`, so snapshots never run at the same time:
+
+  ```swift
+  extension SnapshotTests {
+      struct ExampleSnapshotTests {
+          @Test(.evidence(covers: ["REQ-027"], expected: "The page renders in every variant"))
+          func examplePage() async throws {
+              try await assertSnapshot(ExamplePage(), named: "example-page")
+          }
+      }
+  }
+  ```
+
+- `assertSnapshot` renders five files per name: `light`, `dark`, `hc-light`, `hc-dark`, and `narrow` (640 pt). Reduce Transparency must equal `light` unless the call passes `systemMaterial: true`. Use `.fitting(width: 1044, narrowWidth: 640)` for a page that has its own height and `.page` for one that fills the window. A page that needs a model renders from `settledRuntime(_:)`, never from a runtime that is still loading.
+- Every top level `struct <Name>Page: View` outside `Gallery/` must be named in a file of `SnapshotTests/`; `SourceRuleTests` fails otherwise. Give a gallery page its content as a separate view so the suite renders it without the outer `ScrollView`.
+- The reference PNGs sit in `SnapshotTests/__Snapshots__/<SuiteFile>/<name>.<variant>.png` and are committed. A PNG over 1 MB is refused.
+- To record: run the suite with `STACKLY_SNAPSHOT_RECORD=1`. A missing reference is written and the test fails with "recorded <path>, review and commit"; a changed one is rewritten and the test still fails with "re-recorded". Run it again without the variable and it passes. A run under `cargo xtask evidence run` never writes a reference.
+- To review: `cargo xtask snapshot review [--base <rev>]` writes `target/snapshot-review/index.html` and prints its path. It lists every PNG added, changed, or deleted since the merge base, with the old and new image and, for a failed run, the `actual` and `diff` images from `target/snapshot-failures/`. Look at every changed image before you commit it.
+- Snapshots stop as `BLOCKED` (owner: user) without a login session or while Increase Contrast, Reduce Transparency, Differentiate Without Color, or Reduce Motion is on in System Settings, because AppKit controls follow those settings. Turn the setting off for the run.
+
+### UI tests
+
+- `StacklyAppUITests` (XCTest, because only a UI test bundle can drive `XCUIApplication` and run the Apple audit) launches the Debug app on a scenario: `launch(.connectedMixed, appearance: .dark)` sets `STACKLY_UI_SCENARIO` and `STACKLY_UI_APPEARANCE` and starts with `-ApplePersistenceIgnoreState YES`. The app reads both only in `AppDelegate`, under `#if DEBUG`; an unknown scenario name exits 64.
+- Find an element by `accessibilityIdentifier` (`<scope>.<part>[.<key>]`, constants in `Accessibility/AccessibilityID.swift`) or by its label. A menu item is found by its title from `CommandMap`, because SwiftUI does not pass identifiers to menu items. A test class is `final class <Area>UITests: XCTestCase` marked `@MainActor`; the target's default isolation is `nonisolated`, since XCTest's initializers are not main actor. Its first line is `try evidence(covers:expected:)`, and a test never calls `XCTSkip` itself; `cargo xtask evidence check` rejects it.
+- Attach a screenshot of the window after the assertions with `attachScreenshot(of:scenario:appearance:part:)`. It is for people to look at; nothing compares it.
+- Run it with `cargo xtask ui-test [--only <Class>[/<method>]]`, or as evidence with `cargo xtask evidence run --kind fixture -- cargo xtask ui-test`. The run needs Automation Mode, which only you can turn on (a system setting with an administrator password), and an unlocked screen, and it takes over the mouse and keyboard. Without Automation Mode the task exits 2 and the tests are recorded `BLOCKED`. Results go to `target/ui-tests/<UTC time>/`: `result.xcresult` and `attachments/` with the screenshots.
+- The audit tests (`AuditUITests`) call `performAccessibilityAudit` for contrast, element detection, hit region, element description, action, and parent/child. To accept an issue, add a row to `AuditExceptions.swift` with the audit type, the element (an identifier, or text its label contains), the reason, and the spec that accepts it. The list starts empty; a row needs the lead's approval first, so fix the view if you can.
+
+### Limits
+
+- Snapshots draw page content and the shell pieces that render on their own (banner, footer). The sidebar, toolbar, and glass are not captured; the window frame is only in the UI test screenshots.
+- Increase Contrast and Reduce Transparency in snapshots are pinned through underscored environment values that Apple does not document. A guard test fails when an SDK stops honoring them, and then the checks fall back to the manual list. System colors bridged from AppKit and text in `List` and `Table` rows keep their normal color in the HC variants.
+- XCUITest on macOS cannot read keyboard focus or key equivalents, so Tab order, Space on a focused button, and duplicate shortcuts stay manual (duplicates are checked by spec 0069's own tests). The real system settings and the VoiceOver voice are manual too.
+- The UI tests do not compare screenshots pixel by pixel, and an audit of text over glass depends on the wallpaper.
