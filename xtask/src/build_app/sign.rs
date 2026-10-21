@@ -186,7 +186,7 @@ fn parse_details(report: &str, requirement: &str) -> Details {
         .unwrap_or_else(|| "ad hoc".to_owned());
     let requirement = requirement
         .lines()
-        .find_map(|line| line.strip_prefix("designated => "))
+        .find_map(|line| line.trim_start_matches("# ").strip_prefix("designated => "))
         .unwrap_or("no designated requirement")
         .to_owned();
     Details {
@@ -217,7 +217,7 @@ mod tests {
         let report = "Executable=/x/stacklyd\nIdentifier=com.ojiepermana.stackly.daemon\nFormat=Mach-O thin (arm64)\nSignature=adhoc\nTeamIdentifier=not set\n";
         let details = parse_details(
             report,
-            "Executable=/x/stacklyd\ndesignated => cdhash H\"abc\"\n",
+            "Executable=/x/stacklyd\n# designated => cdhash H\"abc\"\n",
         );
         assert_eq!(details.identifier, "com.ojiepermana.stackly.daemon");
         assert_eq!(details.team, "ad hoc");
