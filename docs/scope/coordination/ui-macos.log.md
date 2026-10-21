@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `bef659e`
 - **Wave aktif:** `5` (satu architect update spec 0013 dan 0068 dari usulan spec 0015, disetujui user `2026-10-22`; wave 4 selesai)
-- **Diperbarui:** `2026-10-22 06:12`
+- **Diperbarui:** `2026-10-22 06:37`
 
 ## Sub sesi wave `1`
 
@@ -41,7 +41,7 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `arc-f1368-0015` | architect (update) | spec 0013 dan 0068 dari *Usulan update untuk spec lain* spec 0015 (baris 0013 dan 0068), centang Follow-up G1 sampai G3 spec 0013, pilihan skenario per state agent, plus butir log: `loadingDelay` untuk semua spinner tertunda, aturan `FixtureContract`, `.caughtUp` di tabel `SyncSignal`, tiga Follow-up 0068 yang mungkin sudah selesai | `ui-macos.md`, `02-instalasi-pertama.md` | `index.md` dan `rationale.md` 0013 dan 0068, baris `verify.md` 0013 dan 0068 yang usang atau baru, catatan "seperti yang dibangun" di `index.md` 0067; tanpa spec 0015 (penanda "diterapkan" dikirim lewat lead ke lead scope 02) | `claude/arc-f1368-update-ceebb3` (sesi `arc-f1368-update` dipakai ulang) | `opus-5-5 · xhigh` | `aktif` |
+| `arc-f1368-0015` | architect (update) | spec 0013 dan 0068 dari *Usulan update untuk spec lain* spec 0015 (baris 0013 dan 0068), centang Follow-up G1 sampai G3 spec 0013, pilihan skenario per state agent, plus butir log: `loadingDelay` untuk semua spinner tertunda, aturan `FixtureContract`, `.caughtUp` di tabel `SyncSignal`, tiga Follow-up 0068 yang mungkin sudah selesai | `ui-macos.md`, `02-instalasi-pertama.md` | `index.md` dan `rationale.md` 0013 dan 0068, baris `verify.md` 0013 dan 0068 yang usang atau baru, catatan "seperti yang dibangun" di `index.md` 0067; tanpa spec 0015 (penanda "diterapkan" dikirim lewat lead ke lead scope 02) | `claude/arc-f1368-update-ceebb3` (sesi `arc-f1368-update` dipakai ulang) | `opus-5-5 · xhigh` | `merged` (`36bce94`) |
 
 ## Sub sesi wave `4`
 
@@ -141,13 +141,19 @@
 | `2026-10-22` | Lead scope 02 memulai `dev-f17-m3` (halaman Catalog, spec 0017 langkah 8 sampai 10) dengan aturan ui-macos di brief nya (suite `CatalogSnapshotTests`, rekam ulang `ShellSnapshotTests` hanya yang diubah Catalog, komponen `Components/` saja, Find lewat `.publishesCommands` dan baris `CommandMap`, kolom 384 pt dan inspector 280 pt, di `Fixtures/` hanya satu baris jawaban `catalog.list_providers` plus file baru). Lead menambah: baris Find mengikuti *Menambah perintah* spec 0069 dengan baris `design.md`, `CommandMapTests` dan `CommandSourceRuleTests` lulus, dan XCUITest menu AC-16 spec 0068 `NOT_RUN` sampai Automation Mode. Saat mendarat: centang Follow-up fitur 17 spec 0013 lewat `/sync` dan periksa ulang F69 milestone 3. | `lead` |
 | `2026-10-22` | Lead scope 03 (fitur 24, 25) ikut memakai checkout utama dengan aturan yang sama (beri tahu sebelum merge, tanpa commit selama MERGE_HEAD lead lain, commit pathspec). Spec 0024 *Selisih mockup yang disengaja* (sheet duplicate) meminta lima baris di `ui-macos.md` *Selisih yang sudah diketahui* lewat `/scope`; diajukan ke user sebelum diterapkan, lalu commit nya dikirim ke lead scope 03 untuk Follow-up spec 0024. | `lead` |
 
+| `2026-10-22` | `arc-f1368-0015` (`a6f17d3`, `5809c19`, `aed61c2`): spec 0013 mendapat titik sambung shell untuk agent spec 0015 (parameter `agent:`, `unreachableCode`, `bannerContent(now:)`, `DaemonBanner.ticksEverySecond`, `agentHint` hanya selama `unreachable`, `ShellRuntime.init(model:closeNotice:commandLineTool:)`, `didResignActive()`, teardown), semuanya berlaku mulai F15 milestone 3 langkah 10 sampai 12, plus `SyncSignal.caughtUp` seperti yang dibangun; Follow-up G1 sampai G3 dicentang. Spec 0068 mendapat *Kontrak fixture* (`FixtureContract`), aturan spinner `loadingDelay`, agent `.fresh` dan banner `not_registered`, Command Line fixture di memori, dan *Skenario agent* K14. Tiga Follow-up 0068 dicentang dengan bukti (`c4c0bfe`, `9a02771`, `c6f6ae7`). Cross check (Sonnet): 16 temuan, 8 gap keputusan dijawab lead "apply all" (bagian 0013 dan 0068 ditulis, bagian 0015 menjadi 14 usulan untuk lead scope 02). Gerbang lead: 7 file di ownership, tepat dua baris AC berubah sesuai teks yang disetujui, tanpa penanda konflik, `main` tidak mengubah file spec itu sejak merge base. Merge `36bce94`. | `lead` |
+| `2026-10-22` | User memilih K14 Option A (`AgentBannerMatrix` plus lima skenario agent runtime dengan XCUITest dan tiga alur, `diagnostics-agent-disabled`, dibangun F15 milestone 3 langkah 11 dan 12) dan menyetujui dua klarifikasi teks AC: spec 0013 AC-10 (menambah "atau sampai reconnect menyusul tanpa snapshot lewat `.caughtUp`") dan spec 0068 AC-14 (judul dan aksi banner lewat `daemonBanner.container`, plus baris *Banner per state* spec 0015 mulai F15 milestone 3 langkah 11). | `user` |
+| `2026-10-22` | User meminta disk dikosongkan: setiap worktree yang selesai di-merge lalu dihapus. Delapan worktree ui-macos sudah di-merge dan bersih, jadi tidak ada yang perlu di-merge; sesi nya diarsipkan (worktree ke pool app, branch tetap). Cache build worktree `arc-f15-update` milik lead scope 02 (15,6 GB, branch di `1b30f56`, bersih, tanpa proses) dihapus, disetujui lead scope 02 setelahnya. `nice-banach` (chk-f12-verify, satu commit belum di `main`, menunggu cek user) dan `arc-f1368-update` dibiarkan. Worktree besar lain milik lead scope 02 dan masih aktif. Disk 37 GB menjadi 60 GB bebas. | `user` |
+
 ## Blocker terbuka
 
 - (selesai) Test flaky `SkeletonEndToEndTests.theInstanceStoreFollowsChangesAnotherClientMakes` diperbaiki `dbg-f14-trail` (`edd197d`).
 - (selesai) Referensi Diagnostics berubah di setiap kenaikan protokol: dipaku `dev-f68-fix` (`dc88025`).
 - (selesai) Flake spinner `CheckList` di `GallerySnapshotTests` `components-sheet`: diperbaiki `dev-f68-fix` (`386f512`); gerbang lead scope 02 tidak lagi memakai pengecualian flake itu.
-- Update spec 0013 dan 0068 dari *Usulan update untuk spec lain* spec 0015: `arc-f1368-0015` berjalan (wave 5); teks AC dan pilihan skenario menunggu user; harus di-merge sebelum F15 milestone 3.
-- Lima baris *Selisih* spec 0024 (sheet duplicate) untuk `ui-macos.md`: menunggu persetujuan user untuk `/scope`.
+- (selesai) Update spec 0013 dan 0068 dari usulan spec 0015: di-merge `36bce94`; F15 milestone 3 boleh mulai. 14 usulan untuk spec 0015, teks penanda, dan catatan scope F15 dikirim ke lead scope 02.
+- (selesai) Lima baris *Selisih* spec 0024 (sheet duplicate): disetujui user, `2b1e4f3`.
+- Follow-up 0068 di luar wave 5: identifier galeri `daemonFooter.settings`, `gallery.confirmation.*`, `gallery.states.*` di *UI test* tidak ada di `AccessibilityID.swift`.
+- Graph dokumen untuk wave 3 sampai 5 (spec 0013, 0067, 0068, scope, log) belum diperbarui; dikumpulkan dan dijalankan lewat subagent.
 - Usulan `/scope` dari spec 0067, 0068, 0069 dan teks AC-11 spec 0016 disetujui user 2026-10-21; `/scope` diterapkan lead, AC-11 lewat architect update spec 0016 (setelah F67 milestone 1 di-merge).
 - F12 `Verify it`: empat cek setting sistem asli menunggu user (`docs/manual.md` bagian I).
 - F68 milestone 3: UI test menunggu Automation Mode dan layar tidak terkunci (`docs/manual.md` bagian K, owner user).
