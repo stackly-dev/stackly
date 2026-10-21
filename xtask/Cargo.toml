@@ -19,7 +19,9 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 stackly-core = { workspace = true, features = ["json-schema"] }
+stackly-domain.workspace = true
 stackly-evidence.workspace = true
+stackly-platform.workspace = true
 stackly-protocol.workspace = true
 syn.workspace = true
 tempfile.workspace = true
@@ -31,7 +33,6 @@ stackly-platform-macos.workspace = true
 
 [dev-dependencies]
 regex.workspace = true
-stackly-domain.workspace = true
 stackly-testkit.workspace = true
 
 [lints]

@@ -52,7 +52,13 @@ fn version_check(pattern: &str, timeout_seconds: u64) -> VersionCheckSpec {
         );
     }
     let manifest = String::from_utf8(files["provider.yaml"].clone()).expect("utf-8");
-    let patched = manifest.replace(
+    // The package declares its own check; this test swaps in its own.
+    let own_check = "  versionCheck:\n    args: [\"version\"]\n    pattern: '^stackly-fake-server ([0-9]+\\.[0-9]+\\.[0-9]+)$'\n    timeoutSeconds: 10\n";
+    assert!(
+        manifest.contains(own_check),
+        "the fake package declares its version check"
+    );
+    let patched = manifest.replace(own_check, "").replace(
         "  executionMode: foreground\n",
         &format!(
             "  executionMode: foreground\n  versionCheck:\n    args: [\"version\"]\n    pattern: '{pattern}'\n    timeoutSeconds: {timeout_seconds}\n"

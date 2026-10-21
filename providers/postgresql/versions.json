@@ -28,6 +28,8 @@
       ],
       "stable": true,
       "build": 2,
+      "unpackedSize": 80668813,
+      "entryCount": 2030,
       "dependencies": [
         {
           "name": "libSystem.B.dylib",
@@ -193,6 +195,8 @@
         "bin/pg_dump"
       ],
       "build": 2,
+      "unpackedSize": 79682757,
+      "entryCount": 1988,
       "dependencies": [
         {
           "name": "libSystem.B.dylib",

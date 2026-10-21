@@ -1,7 +1,8 @@
 //! `cargo xtask runtime verify [--id <id>]`: downloads every `available`
 //! artifact again from each of its URLs and checks that the bytes still
 //! have the pinned `sha256` and `size` and the magic number its `format`
-//! names, then checks the upstream checksum file by its kind and, when
+//! names and, measured with the extractor's scan, the pinned
+//! `unpacked_size` and `entry_count`, then checks the upstream checksum file by its kind and, when
 //! `gpg` is on PATH, the upstream signature (spec 0003). Prints `OK`,
 //! `FAIL <reason>`, or `SKIP gpg` per artifact.
 
@@ -14,6 +15,7 @@ use super::cache::{Cache, SIDE_FILE_MAX_SIZE, TooLarge, sha512_file};
 use super::checksum::{base_name, expected_digest, gpg_available, parse_sums, verify_gpg};
 use super::inventory::{Artifact, Inventory};
 use super::macho::{check_format, file_kind};
+use super::scan;
 
 /// The result for one artifact.
 #[derive(Debug, PartialEq, Eq)]
@@ -144,6 +146,9 @@ fn verify(
     if let Some(outcome) = format_outcome(format, &stored)? {
         return Ok(outcome);
     }
+    if let Some(outcome) = scan_outcome(artifact, format, &stored)? {
+        return Ok(outcome);
+    }
     let names: Vec<&str> = urls.iter().map(|url| base_name(url)).collect();
 
     if let Some(checksum) = &artifact.upstream_checksum {
@@ -205,6 +210,38 @@ fn format_outcome(format: &str, stored: &Path) -> Result<Option<Outcome>> {
     Ok(check_format(format, file_kind(stored)?)
         .err()
         .map(|err| Outcome::Fail(err.to_string())))
+}
+
+/// A `FAIL` when the scan of the stored download measures another
+/// `unpacked_size` or `entry_count` than the inventory holds, with the same
+/// extractor the install uses (spec 0018, AC-21). An artifact the extractor
+/// rejects fails with its reason.
+fn scan_outcome(artifact: &Artifact, format: &str, stored: &Path) -> Result<Option<Outcome>> {
+    let (Some(unpacked), Some(entries)) = (artifact.unpacked_size, artifact.entry_count) else {
+        return Ok(Some(Outcome::Fail(
+            "unpacked_size and entry_count are missing (rule 11)".to_owned(),
+        )));
+    };
+    let measured = match scan::measure(
+        stored,
+        scan::parse_format(format)?,
+        artifact.archive_root.as_deref(),
+        artifact.executables.as_deref().unwrap_or_default(),
+    ) {
+        Ok(measured) => measured,
+        Err(err) => return Ok(Some(Outcome::Fail(format!("{err:#}")))),
+    };
+    for (name, inventory, scanned) in [
+        ("unpacked_size", unpacked, measured.unpacked_size),
+        ("entry_count", entries, measured.entry_count),
+    ] {
+        if u64::try_from(inventory) != Ok(scanned) {
+            return Ok(Some(Outcome::Fail(format!(
+                "{name} mismatch: the archive measures {scanned}, the inventory says {inventory}"
+            ))));
+        }
+    }
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -269,6 +306,62 @@ upstream_signature = { kind = "none" }
             "clickhouse-26.9.1.1-macos-aarch64 is blocked, so there is nothing to download"
         );
         assert!(run(root.path(), &["--id"]).is_err());
+    }
+
+    /// The artifact of an inventory entry that holds only what the scan
+    /// compare reads.
+    fn scanned_artifact(extra: &str) -> Artifact {
+        let text = format!(
+            "schema_version = 1\n\n[[artifact]]\nid = \"clickhouse-26.8.30.8-macos-aarch64\"\nformat = \"zip\"\narchive_root = \"pkg\"\nexecutables = [\"bin/tool\"]\n{extra}\n"
+        );
+        Inventory::parse(&text).unwrap().artifacts.remove(0)
+    }
+
+    // covers: AC-21
+    #[test]
+    fn the_scan_of_the_download_must_match_the_inventory_numbers() {
+        use super::super::test_zip::{dir, file, stored};
+        let tmp = tempfile::tempdir().unwrap();
+        let zip = tmp.path().join("a.zip");
+        std::fs::write(
+            &zip,
+            stored(&[
+                dir("pkg"),
+                dir("pkg/bin"),
+                file("pkg/bin/tool", 0o755, b"12345"),
+            ]),
+        )
+        .unwrap();
+
+        let ok = scanned_artifact("unpacked_size = 5\nentry_count = 2");
+        assert_eq!(scan_outcome(&ok, "zip", &zip).unwrap(), None);
+        let size = scanned_artifact("unpacked_size = 6\nentry_count = 2");
+        assert_eq!(
+            scan_outcome(&size, "zip", &zip).unwrap(),
+            Some(Outcome::Fail(
+                "unpacked_size mismatch: the archive measures 5, the inventory says 6".to_owned()
+            ))
+        );
+        let entries = scanned_artifact("unpacked_size = 5\nentry_count = 3");
+        assert_eq!(
+            scan_outcome(&entries, "zip", &zip).unwrap(),
+            Some(Outcome::Fail(
+                "entry_count mismatch: the archive measures 2, the inventory says 3".to_owned()
+            ))
+        );
+        let missing = scanned_artifact("");
+        assert_eq!(
+            scan_outcome(&missing, "zip", &zip).unwrap(),
+            Some(Outcome::Fail(
+                "unpacked_size and entry_count are missing (rule 11)".to_owned()
+            ))
+        );
+        let bad = tmp.path().join("bad.zip");
+        std::fs::write(&bad, stored(&[file("../x", 0o644, b"x")])).unwrap();
+        let Some(Outcome::Fail(reason)) = scan_outcome(&ok, "zip", &bad).unwrap() else {
+            panic!("an artifact the extractor rejects fails");
+        };
+        assert!(reason.contains("bad.zip cannot be extracted"), "{reason}");
     }
 
     #[test]

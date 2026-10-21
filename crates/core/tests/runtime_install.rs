@@ -89,12 +89,6 @@ fn package_of(archive: &[u8], sha256: &Sha256Digest, version: &str, url: &str) -
         )
     })
     .collect();
-    let manifest = String::from_utf8(files["provider.yaml"].clone()).expect("utf-8");
-    let manifest = manifest.replace(
-        "  executionMode: foreground\n",
-        "  executionMode: foreground\n  versionCheck:\n    args: [\"--version\"]\n    pattern: '^nats-server: v([0-9.]+)$'\n    timeoutSeconds: 5\n",
-    );
-    files.insert("provider.yaml".to_owned(), manifest.into_bytes());
     let versions = format!(
         r#"{{ "schema": "stackly.provider-versions/v1", "software": "nats", "artifacts": [
         {{ "id": "nats-{version}-macos-aarch64", "line": "2.15", "version": "{version}", "os": "macos",

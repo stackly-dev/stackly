@@ -16,6 +16,10 @@ compatibility:
 runtime:
   executable: stackly-fake-server
   executionMode: foreground
+  versionCheck:
+    args: ["version"]
+    pattern: '^stackly-fake-server ([0-9]+\.[0-9]+\.[0-9]+)$'
+    timeoutSeconds: 10
 capabilities:
   reload: true
   multiInstance: true

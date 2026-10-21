@@ -19,6 +19,7 @@ mod macho;
 mod pin;
 mod ports;
 mod record;
+mod scan;
 mod spike;
 #[cfg(test)]
 mod test_zip;

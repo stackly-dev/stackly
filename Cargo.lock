@@ -2152,6 +2152,7 @@ dependencies = [
  "stackly-core",
  "stackly-domain",
  "stackly-evidence",
+ "stackly-platform",
  "stackly-platform-macos",
  "stackly-protocol",
  "stackly-testkit",
