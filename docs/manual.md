@@ -186,11 +186,12 @@ Untuk F12 (spec 0012 `Verify it`: empat baris setting sistem asli; AC-5, AC-6, A
 
 1. Di checkout utama jalankan `cargo xtask build-app`, lalu buka app Debug dengan root sementara: `STACKLY_ROOT="$(mktemp -d)" target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly`. Jendela utama boleh menyebut stacklyd tidak tersedia. Buka **Window › Design Gallery**.
 2. Nyalakan setting **satu per satu**, lihat halaman galeri yang disebut, lalu matikan lagi sebelum setting berikutnya. Cek 1 sampai 3 ada di **System Settings › Accessibility › Display**, cek 4 di **Accessibility › Motion**.
-   - **I.1 Differentiate without color.** Halaman Status: titik warna di kolom Standard dan di baris berganti simbol, setiap `ToneBadge` menampilkan simbol tone, label teks tetap ada. Halaman Components: tone di kartu umpan balik, checklist, dan baris diff selalu berpasangan dengan simbol atau kata.
-   - **I.2 Increase contrast.** Halaman Status: badge Operation Status bergaris tepi 1 pt warna tone, teks detail oranye dan merah lebih gelap. Tokens: kartu bergaris tepi abu abu 1 pt. States: banner bergaris tepi 1 pt. Components: kartu, banner, dan baris bertint mendapat garis tepi 1 pt. Opsional: ulangi sekilas dalam mode Dark.
-   - **I.3 Reduce transparency.** Sidebar dan toolbar galeri menjadi opak; kartu, banner, badge, sheet demo, dan inspector demo terlihat sama persis seperti sebelumnya.
-   - **I.4 Reduce motion.** States › Shape Changes: klik Loaded, Loading, Empty, Failed, Loaded; setiap pergantian hanya memudar, spinner muncul sekitar sepertiga detik kemudian dan tetap berputar. Tokens › Motion: Show Banner dan Hide Banner memudar tanpa gerak. Components: kartu umpan balik hanya crossfade. **Selama Reduce Motion masih menyala**, jalankan di Terminal kedua `swift test --package-path apps/macos/Packages/StacklyUI --filter GallerySnapshotTests`; test snapshot harus tercatat BLOCKED dengan alasan "system accessibility setting on: Reduce Motion", bukan gagal.
-3. Kembalikan keempat setting ke keadaan semula dan tutup app dengan ⌘Q.
+   - **I.1 Differentiate without color.** Halaman Status: titik warna di kolom Standard dan di baris berganti simbol, setiap `ToneBadge` menampilkan simbol tone, label teks tetap ada. Halaman Components: tone di kartu umpan balik, checklist, baris diff, dan tingkat baris log selalu berpasangan dengan simbol atau kata.
+   - **I.2 Increase contrast.** Halaman Status: badge Operation Status bergaris tepi 1 pt warna tone, teks detail oranye dan merah lebih gelap. Tokens: kartu bergaris tepi abu abu 1 pt. States: banner bergaris tepi 1 pt. Components: kartu, banner, dan baris bertint mendapat garis tepi 1 pt. Inspector demo: header dan kartu tetap terbaca. Opsional: ulangi sekilas dalam mode Dark.
+   - **I.3 Reduce transparency.** Sidebar dan toolbar galeri menjadi opak; kartu, banner, badge, sheet demo, dan inspector demo terlihat sama persis seperti sebelumnya. Blok konsol dan view log tetap opak.
+   - **I.4 Reduce motion.** States › Shape Changes: klik Loaded, Loading, Empty, Failed, Loaded; setiap pergantian hanya memudar, spinner muncul sekitar sepertiga detik kemudian dan tetap berputar. Tokens › Motion: Show Banner dan Hide Banner memudar tanpa gerak. Components: kartu umpan balik hanya crossfade. Components: bar `StagedProgress` melompat ke nilai baru tanpa animasi, dan inspector demo membuka dan menutup tanpa gerak selain crossfade bawaan. **Selama Reduce Motion masih menyala**, jalankan di Terminal kedua `swift test --package-path apps/macos/Packages/StacklyUI --filter GallerySnapshotTests`; test snapshot harus tercatat BLOCKED dengan alasan "system accessibility setting on: Reduce Motion", bukan gagal.
+3. Tanpa setting apa pun, ganti tampilan sistem ke Dark (System Settings › Appearance) dan kembali ke Light: halaman Components, sheet demo (Open Sheet), dan inspector demo (Open Inspector Demo) terbaca di keduanya, tanpa teks hilang atau kontras rendah.
+4. Kembalikan keempat setting dan tampilan ke keadaan semula, lalu tutup app dengan ⌘Q.
 
 **Yang dikirim:** versi macOS, lalu per butir I.1 sampai I.4 "sesuai" atau nomor dan yang terlihat, plus hasil test snapshot di I.4 (BLOCKED atau tidak).
 
@@ -202,12 +203,17 @@ Untuk F67 (spec 0067 milestone 1 sampai 4: Tab, Space, fokus yang menahan umpan 
 2. Keyboard:
    - Tab mencapai dan Space menjalankan setiap tombol komponen: Copy, tombol aksi, More beserta itemnya, Dismiss dan aksi kartu umpan balik, Open Sheet (lalu Cancel dan aksi utama di sheet), tombol aksi baris checklist, dan toggle inspector.
    - Tampilkan kartu umpan balik positive, lalu Tab ke tombol Dismiss-nya dan biarkan fokus di sana: kartu tidak hilang selama fokus di Dismiss, dan hilang sekitar 4 detik setelah fokus pindah.
+   - Di bagian Log: Tab mencapai Add Line dan Follow dan Space menjalankannya; teks satu baris log bisa dipilih.
+   - Dengan mouse atau trackpad (bukan keyboard): gulir view log ke atas saat Follow menyala; Follow mati sendiri, dan baris baru dari Add Line tidak menggulir ke bawah sampai Follow dinyalakan lagi (AC-16).
 3. VoiceOver di halaman Components:
    - Baris key value dibaca "{label}, {value}"; tombol Copy "Copy {what}" dan setelah ditekan terdengar "{What} copied." sekali; blok konsol dibaca label lalu perintah; tombol sibuk dibaca dengan nilai "In progress"; umpan balik diumumkan sekali (pesan lalu detail).
    - Baris checklist dibaca "{title}, {status}: {detail}" dengan tombol aksinya sebagai elemen sendiri; `StagedProgress` dibaca "Progress" dengan nilainya.
    - Toggle inspector dibaca "Hide Inspector" atau "Show Inspector"; header inspector dibaca judul sebagai heading, lalu "Status: Running", lalu tombol aksinya.
    - Baris diff dibaca dengan "Added" atau "Removed".
    - Menu More: item nonaktif dibaca bersama alasannya (baris alasan di bawah item).
+   - Sheet demo (Open Sheet): saat aksi utama nonaktif, alasan di footer ikut dibaca; `StagedProgress` dengan pengumuman tahap mengumumkan tahap baru sekali saat berganti.
+   - Inspector demo tanpa pilihan: `InspectorPlaceholder` dibaca sebagai satu kelompok (judul lalu pesan).
+   - View log: setiap baris dibaca waktu, sumber, tingkat, lalu teks.
 4. VoiceOver di menu bar (F69): tekan ⌃F2, buka menu Stackly, File, Edit, View, dan Window; setiap item terbaca dengan judul, shortcut, dan "dimmed" saat nonaktif (misalnya ⌘1 sampai ⌘7 saat Design Gallery di depan).
 5. Matikan VoiceOver dan Keyboard navigation bila tadinya mati, lalu tutup app.
 
