@@ -1,0 +1,58 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15c8e-519e-716b-be58-af6374c5151e",
+  "covers": [
+    "AC-027",
+    "REQ-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0069 manual check 3: onboarding switches the shell commands off and keeps Settings and Window Stackly",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "While onboarding shows (Help, Welcome to Stackly) Command 1 and Command N are disabled, Command comma and Command 0 still work, and after onboarding the shell commands are on again.",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-21T03:43:13.310387Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-21-spec-0069-manual-check-3-onboarding-switches-the.json",
+  "context": {
+    "sourceCommit": "9d19e4a775a6b30c65e74eb665d84dcda964329a",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
