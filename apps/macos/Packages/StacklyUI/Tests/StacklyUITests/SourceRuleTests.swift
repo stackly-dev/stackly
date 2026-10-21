@@ -1,7 +1,8 @@
 import Foundation
 import Testing
 
-/// The source rules of spec 0012 (AC-2, AC-3, AC-6, AC-15): forbidden patterns in
+/// The source rules of spec 0012 (AC-2, AC-3, AC-6, AC-15) and spec 0067 (AC-4, AC-18,
+/// AC-21): forbidden patterns in
 /// `StacklyUI` and the app target, each with an explicit list of allowed places.
 ///
 /// The scan is text based. Line comments are skipped; anything else that matches,
@@ -106,6 +107,35 @@ struct SourceRuleTests {
                 "let alert = NSAlert()",
             ],
             allowedExamples: [".stacklyConfirmation(item: $request)"]
+        ),
+        Rule(
+            name: "pasteboard outside the copy helpers (spec 0067 AC-4)",
+            patterns: [#"\bNSPasteboard\b"#],
+            allowed: [
+                stacklyUI + "Components/Copy/PlainPasteboard.swift",
+                stacklyUI + "Secrets/ConcealedPasteboard.swift",
+            ],
+            forbiddenExamples: [
+                "NSPasteboard.general.clearContents()",
+                "let pasteboard: NSPasteboard = .general",
+            ],
+            allowedExamples: [
+                "PlainPasteboard.write(text)",
+                "ConcealedPasteboard.shared.copy(secret)",
+            ]
+        ),
+        Rule(
+            name: "inspector outside the inspector components (spec 0067 AC-18)",
+            patterns: [#"\.inspector\("#],
+            allowed: [stacklyUI + "Components/Inspector/"],
+            forbiddenExamples: [
+                ".inspector(isPresented: $shown) { Text(\"a\") }",
+                "content.inspector(isPresented: binding) {}",
+            ],
+            allowedExamples: [
+                ".stacklyInspector(isPresented: $shown) {}",
+                "InspectorToggle(isPresented: $shown)",
+            ]
         ),
     ]
 

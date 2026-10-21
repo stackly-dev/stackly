@@ -440,6 +440,52 @@ Checked in build step 17 on macOS 27.0 (26A428) with Xcode 27.0 (27A266a), in th
 
 So the modifier builds the `NSAlert` itself: for a destructive request, Cancel takes Return as its key equivalent and the modifier maps a plain Escape to Cancel with a local key monitor while the alert is open. Setting the window's `defaultButtonCell` instead does not work: it overwrites Cancel's Escape key equivalent with Return. A replaced request closes the old alert and shows a new one. With this path the check passed: destructive Return and Escape cancel without running the action, standard Return runs it and Escape cancels, and a replaced request shows its own title. `ConfirmationTests` pins the alert's buttons, order, styles, and key equivalents; `/check verify` repeats the key check and the Tab and Space check with Keyboard navigation on.
 
+## Components
+
+Shared views in `Packages/StacklyUI/Sources/StacklyUI/Components/` ([spec 0067](../../docs/specs/0067-komponen-dasar-stackly/index.md)). They sit on the tokens, status, state, and confirmation helpers above and add no glass, no new contrast pair, and no second version in a screen folder. A screen assembles its page from these parts. Every component has `#Preview`s in light, dark, and at 640 pt, built from `ComponentSamples`, and a section on the **Components** page of the Design Gallery.
+
+### Tile
+
+### Key value
+
+### Copy and console
+
+### Actions
+
+### Menus
+
+Actions in a menu come from `StacklyAction` through `ActionMenu` (the More menu in a toolbar) and `ActionMenuItems` (a `.contextMenu`). The reason an item is disabled never lives only in a tooltip, so it is written in the menu.
+
+macOS 27.0.1 was checked with a probe app on 2026-10-21 (spec 0067 rationale, *Temuan langkah 1*): a disabled `Button` with two `Text` children becomes an `NSMenuItem` with a subtitle in a toolbar `Menu`, a `.contextMenu`, and a main menu `CommandMenu`, and the subtitle is drawn under the title in all three. But the accessibility tree of the item holds only its title: there is no description, help, or value, and `.accessibilityHint`, `.accessibilityLabel`, `.accessibilityValue`, and `.help` do not change it. So a spoken reason cannot be proven, and VoiceOver itself was not tried (a manual step, `NOT_RUN`).
+
+The path in use is therefore the spec's fallback: **a disabled extra item with the reason as its title, right under the item.** The reason is a menu item of its own, so it is both visible and spoken. The switch is one constant, `MenuReasonPath.current` in `Components/Actions/`: if VoiceOver reads the subtitle, change it to `.subtitle`, and the menus get shorter without any API change. Spec 0069 uses the same path for the main menu.
+
+### Feedback
+
+### Sheet
+
+Filled by milestone 2.
+
+### Checklist
+
+Filled by milestone 2.
+
+### Staged progress
+
+Filled by milestone 2.
+
+### Inspector
+
+Filled by milestone 3.
+
+### Log
+
+Filled by milestone 4.
+
+### Diff
+
+Filled by milestone 4.
+
 ## Motion
 
 - `StacklyMotion.crossfade` is the only transition in Stackly's own views: `.opacity` with `StacklyMotion.crossfadeAnimation` (ease in out, 0.2 s). Use it for status changes, banners appearing, and changes of `ViewState` shape, in every setting, including Reduce Motion.

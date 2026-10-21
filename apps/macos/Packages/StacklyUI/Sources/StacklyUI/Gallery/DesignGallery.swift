@@ -55,6 +55,7 @@
         case states
         case confirmation
         case secrets
+        case components
 
         var id: Self { self }
 
@@ -66,6 +67,7 @@
             case .states: "States"
             case .confirmation: "Confirmation"
             case .secrets: "Secrets"
+            case .components: "Components"
             }
         }
 
@@ -77,6 +79,7 @@
             case .states: "rectangle.stack"
             case .confirmation: "exclamationmark.bubble"
             case .secrets: "key"
+            case .components: "square.grid.2x2"
             }
         }
 
@@ -88,6 +91,7 @@
             case .states: StatesGalleryPage()
             case .confirmation: ConfirmationGalleryPage()
             case .secrets: SecretsGalleryPage(client: secrets)
+            case .components: ComponentsGalleryPage()
             }
         }
     }
