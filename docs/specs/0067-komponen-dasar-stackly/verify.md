@@ -158,6 +158,14 @@ Catatan (bukan FAIL): toggle di halaman demo galeri (bukan di toolbar) berukuran
 
 Belum dijalankan (`NOT_RUN`), tidak bisa lewat API accessibility di Mac ini: Tab dan Space pada toggle (Keyboard navigation dimatikan; AC-19), VoiceOver pada toggle, placeholder, dan header (AC-18, AC-19), serta Increase Contrast, Reduce Transparency, dan Reduce Motion pada inspector asli (AC-19). Di luar lingkup: layar fitur 22, 18, dan 21 (belum dibangun) dan *Tambahan langkah 14* (batas lebar inspector 280 pt di bawah jendela 1000 pt; dibangun `dev-f67-m3-s14a`).
 
+### Hasil `/check verify` tambahan langkah 14 (chk-f67-m3, 2026-10-21): PASS untuk yang bisa dijalankan, satu langkah `NOT_RUN`
+
+_Dijalankan setelah merge `main` yang memuat `ec9d4f8` (`StacklyInspectorWidth`, `stacklyWindowWidth` dari `AppShell`)._
+
+- `swift test --package-path apps/macos/Packages/StacklyUI --filter "InspectorTests|ShellStructureTests"` → 31 test di 2 suite lulus (`StacklyInspectorWidth.maxWidth` 280 pt di bawah 1000 pt, 360 pt dari 1000 pt dan untuk `nil`; sumber `AppShell` memasang `onGeometryChange` dan `.environment(\.stacklyWindowWidth, ...)`) → AC-18. Log: `scratchpad/m3b-filtered.log`.
+- `swift test --package-path apps/macos/Packages/StacklyUI` (dengan `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN` dari checkout utama) → 607 test di 65 suite lulus, 10 known issues, tanpa kegagalan (`SkeletonEndToEndTests` tidak gagal kali ini). Log: `scratchpad/m3b-full.log`.
+- Langkah hidup (`NOT_RUN`): jendela 1000 pt atau lebih dengan pembagi di 360 pt, dikecilkan ke 900 pt → inspector dijepit ke 280 pt dan kolom halaman 384 pt. Alasan: layar Mac terkunci (`CGSSessionScreenIsLocked` dan `IOConsoleLocked` bernilai `true` di `ioreg`, dicek berulang selama sekitar 100 detik), sehingga pohon accessibility probe kosong (`AXWindows` tidak memuat jendela) dan ukuran jendela serta pembagi tidak bisa diatur. Probe di scratchpad sudah dibangun dengan `onGeometryChange` dan `stacklyWindowWidth` seperti `AppShell` dan berjalan; ulangi saat layar terbuka. Angka buka per lebar jendela (900, 999, 1000, 1300 pt) tetap hasil `dev-f67-m3-s14a`, tidak saya ulang.
+
 ## Milestone 4: Log and diff views
 
 _Dibangun 2026-10-21 oleh `dev-f67-m1` (dipakai ulang sebagai `dev-f67-m4`) di branch sendiri (langkah Build plan 15 sampai 17). App Debug diperiksa lewat pohon accessibility (API AX) dengan root sementara, dan scroll oleh program lewat nilai scrollbar AX. Hasil yang sudah dijalankan dicentang; `NOT_RUN` menunggu user atau `/check verify`. Scroll sungguhan oleh pengguna (mouse atau trackpad) tidak bisa dikirim dari sesi ini tanpa menyentuh app lain, jadi `NOT_RUN`. VoiceOver tidak dinyalakan dan System Settings tidak diubah._
