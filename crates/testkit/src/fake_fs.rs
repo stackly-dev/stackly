@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use stackly_platform::{
     AppendFile, DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, REMOVE_TREE_MAX_DEPTH,
-    ReadSeekFile, RemoveReport, TreeWriter, VolumeSpace, remove_tree_names,
+    ReadSeekFile, RemoveReport, TreeWriter, VolumeFacts, VolumeSpace, remove_tree_names,
 };
 
 use crate::TestRoot;
@@ -48,6 +48,8 @@ pub enum FsOp {
     /// [`Filesystem::volume_space`], and through it
     /// [`Filesystem::available_space`].
     VolumeSpace,
+    /// [`Filesystem::volume_facts`].
+    VolumeFacts,
     /// [`TreeWriter::create_dir`], matched against the root joined with
     /// the entry path.
     TreeCreateDir,
@@ -79,6 +81,7 @@ impl FsOp {
             Self::RenameNoReplace => "rename_no_replace",
             Self::OpenTreeWriter => "open_tree_writer",
             Self::VolumeSpace => "volume_space",
+            Self::VolumeFacts => "volume_facts",
             Self::TreeCreateDir => "create_dir",
             Self::TreeCreateFile => "create_file",
             Self::TreeCreateSymlink => "create_symlink",
@@ -132,8 +135,8 @@ pub struct Mutation {
     pub path: PathBuf,
 }
 
-/// The size and the space left that [`FakeFilesystem::volume_space`]
-/// answers for paths below one prefix.
+/// The size, the space left, and the kind that [`FakeFilesystem::volume_space`]
+/// and [`FakeFilesystem::volume_facts`] answer for paths below one prefix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct FakeVolume {
@@ -141,17 +144,34 @@ pub struct FakeVolume {
     pub total: u64,
     /// The bytes left, in bytes.
     pub available: u64,
+    /// The filesystem type name [`Filesystem::volume_facts`] reports.
+    pub fs_type: &'static str,
+    /// Whether [`Filesystem::volume_facts`] reports the volume as local.
+    pub local: bool,
 }
 
 impl FakeVolume {
-    /// The volume every path lies on until a test sets another: 1 TiB,
-    /// half of it free.
+    /// The volume every path lies on until a test sets another: a local
+    /// `apfs` volume of 1 TiB, half of it free.
     pub const DEFAULT: Self = Self::new(1 << 40, 1 << 39);
 
-    /// A volume of `total` bytes with `available` bytes left.
+    /// A local `apfs` volume of `total` bytes with `available` bytes left.
     #[must_use]
     pub const fn new(total: u64, available: u64) -> Self {
-        Self { total, available }
+        Self {
+            total,
+            available,
+            fs_type: "apfs",
+            local: true,
+        }
+    }
+
+    /// This volume with another filesystem type name and locality.
+    #[must_use]
+    pub const fn with_kind(mut self, fs_type: &'static str, local: bool) -> Self {
+        self.fs_type = fs_type;
+        self.local = local;
+        self
     }
 }
 
@@ -297,6 +317,19 @@ impl FakeFilesystem {
         let mut state = self.state();
         state.volumes.retain(|(existing, _)| *existing != prefix);
         state.volumes.push((prefix, volume));
+    }
+
+    /// The volume table entry for `path`, which must exist: the longest
+    /// matching prefix, else [`FakeVolume::DEFAULT`].
+    fn volume_of(&self, op: &'static str, path: &Path) -> Result<FakeVolume, PlatformError> {
+        fs::metadata(path).map_err(|err| PlatformError::from_io(op, path, &err))?;
+        let state = self.state();
+        Ok(state
+            .volumes
+            .iter()
+            .filter(|(prefix, _)| path.starts_with(prefix))
+            .max_by_key(|(prefix, _)| prefix.components().count())
+            .map_or(FakeVolume::DEFAULT, |(_, volume)| *volume))
     }
 
     fn state(&self) -> MutexGuard<'_, State> {
@@ -468,15 +501,14 @@ impl Filesystem for FakeFilesystem {
 
     fn volume_space(&self, path: &Path) -> Result<VolumeSpace, PlatformError> {
         self.enter(FsOp::VolumeSpace, path)?;
-        fs::metadata(path).map_err(|err| PlatformError::from_io("volume_space", path, &err))?;
-        let state = self.state();
-        let volume = state
-            .volumes
-            .iter()
-            .filter(|(prefix, _)| path.starts_with(prefix))
-            .max_by_key(|(prefix, _)| prefix.components().count())
-            .map_or(FakeVolume::DEFAULT, |(_, volume)| *volume);
+        let volume = self.volume_of("volume_space", path)?;
         Ok(VolumeSpace::new(volume.total, volume.available))
+    }
+
+    fn volume_facts(&self, path: &Path) -> Result<VolumeFacts, PlatformError> {
+        self.enter(FsOp::VolumeFacts, path)?;
+        let volume = self.volume_of("volume_facts", path)?;
+        Ok(VolumeFacts::new(volume.fs_type, volume.local))
     }
 }
 

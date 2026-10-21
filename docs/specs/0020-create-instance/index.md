@@ -1,7 +1,7 @@
 # 0020. Create instance
 
 **Date**: 2026-10-20
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

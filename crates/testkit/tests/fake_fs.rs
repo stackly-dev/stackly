@@ -8,7 +8,9 @@ use std::path::Path;
 
 use std::io::Write;
 
-use stackly_platform::{EntryPath, Filesystem, PlatformError, RemoveReport, VolumeSpace};
+use stackly_platform::{
+    EntryPath, Filesystem, PlatformError, RemoveReport, VolumeFacts, VolumeSpace,
+};
 use stackly_testkit::{FakeFilesystem, FakeVolume, Fault, FsOp, TestRoot, fs_conformance};
 
 fn fake() -> (TestRoot, FakeFilesystem) {
@@ -388,6 +390,41 @@ fn volume_space_answers_from_the_longest_matching_prefix() {
         fs.volume_space(&outer.join("missing")),
         Err(PlatformError::NotFound { .. })
     ));
+}
+
+#[test]
+fn volume_facts_answer_from_the_longest_matching_prefix_and_default_to_local_apfs() {
+    let (root, fs) = fake();
+    let share = root.path().join("share");
+    std::fs::create_dir_all(&share).unwrap();
+    fs.set_volume(
+        &share,
+        FakeVolume::new(1_000, 600).with_kind("smbfs", false),
+    );
+
+    assert_eq!(
+        fs.volume_facts(root.path()).unwrap(),
+        VolumeFacts::new("apfs", true)
+    );
+    assert_eq!(
+        fs.volume_facts(&share).unwrap(),
+        VolumeFacts::new("smbfs", false)
+    );
+    assert_eq!(
+        fs.volume_space(&share).unwrap(),
+        VolumeSpace::new(1_000, 600)
+    );
+    assert!(matches!(
+        fs.volume_facts(&share.join("missing")),
+        Err(PlatformError::NotFound { .. })
+    ));
+
+    fs.fail_next(FsOp::VolumeFacts, Fault::PermissionDenied);
+    assert!(matches!(
+        fs.volume_facts(root.path()),
+        Err(PlatformError::PermissionDenied { .. })
+    ));
+    assert!(fs.volume_facts(root.path()).is_ok(), "fail_next fires once");
 }
 
 #[test]

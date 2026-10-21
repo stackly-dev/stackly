@@ -127,7 +127,7 @@ impl Harness {
 
     /// A new instance on `base`, created now.
     pub fn instance(&self, base: &Base, name: &str) -> Instance {
-        Instance::new(NewInstance {
+        let created = Instance::new(NewInstance {
             id: InstanceId::generate(),
             name: name.parse().expect("a valid instance name"),
             display_name: Some("Main database".parse().expect("a valid display name")),
@@ -136,11 +136,17 @@ impl Harness {
             runtime_id: base.runtime.id(),
             data_line: "17".parse().expect("a valid line"),
             data_version: "17.6".parse().expect("a valid version"),
-            endpoints: endpoints(),
+            endpoints: unbound(endpoints()),
             startup: StartupPolicy::Manual,
             created_at: self.now(),
             created_by: OperationId::generate(),
         })
+        .expect("the fixture endpoints are valid for a new instance");
+        // `Instance::new` refuses a bound endpoint, so the fixture that
+        // stores bound ports restores the instance instead.
+        let mut stored = stored(&created);
+        stored.endpoints = endpoints();
+        Instance::restore(stored, self.now()).expect("the fixture record is consistent")
     }
 
     /// A new operation on `resource`, created now.
@@ -277,6 +283,23 @@ pub fn endpoints() -> Vec<Endpoint> {
             ".s.PGSQL.5432".parse().expect("a valid socket name"),
         )),
     ]
+}
+
+/// `endpoints` as a new instance gets them: nothing bound yet.
+fn unbound(endpoints: Vec<Endpoint>) -> Vec<Endpoint> {
+    endpoints
+        .into_iter()
+        .map(|endpoint| match endpoint {
+            Endpoint::Ip(ip) => Endpoint::Ip(IpEndpoint::new(
+                ip.name().clone(),
+                ip.transport(),
+                ip.address(),
+                ip.request(),
+                None,
+            )),
+            unix @ Endpoint::Unix(_) => unix,
+        })
+        .collect()
 }
 
 /// Every stored field of `instance`, for building variants of it.
