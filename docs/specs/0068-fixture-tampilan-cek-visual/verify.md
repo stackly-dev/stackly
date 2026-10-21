@@ -2,6 +2,42 @@
 
 _Langkah diturunkan dari acceptance criteria spec 0068. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27._
 
+## Milestone 1: Fixtures, snapshot harness, and base suites
+
+### UI / manual
+
+- [ ] Buka satu PNG referensi, misalnya `apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/__Snapshots__/ShellSnapshotTests/daemon-status-matrix.light.png` dan `.hc-dark.png` → satu baris per presence tabel *Tampilan status daemon* spec 0013 (nama presence, footer 236 pt, banner atau "no banner"); teks terbaca, tidak terpotong, banner `informative`, `caution`, dan `critical` berbeda nada, dan waktu "5:01AM" sama di setiap run → AC-8
+- [ ] Buka `diagnostics-daemon-offline.dark.png` → bagian Connection dengan waktu UTC tetap ("Oct 18, 2026 at 5:06:45 AM"), error `ipc.connection_refused`, dan placeholder Diagnostics → AC-3, AC-8
+- [ ] Ubah satu nilai token warna di `Tokens/StacklyColor.swift`, jalankan `swift test --package-path apps/macos/Packages/StacklyUI --filter GallerySnapshotTests`, lalu `cargo xtask snapshot review --base main` dan buka path `index.html` yang dicetak → baris untuk gambar yang berubah menampilkan gambar lama dan baru, dan gambar `actual` dan `diff` (piksel beda merah) dari `target/snapshot-failures/`; kembalikan token sesudahnya → AC-6, AC-9
+- [ ] Nyalakan salah satu setting aksesibilitas sistem (misalnya Reduce Motion) dan jalankan `swift test --package-path apps/macos/Packages/StacklyUI --filter SnapshotTests` → test snapshot yang memakai `.evidence` berakhir dibatalkan dengan alasan "system accessibility setting on: Reduce Motion" (tercatat `BLOCKED`, owner user dalam run evidence), bukan gagal; matikan lagi sesudahnya → AC-4
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter RenderProbeTests` → 6 test lulus: kontrol `List`, `Table`, `TextField`, dan `ProgressView` tergambar di jendela yang tidak pernah tampil pada skala 1; dua render identik; `.task` dan `onAppear` berjalan; perubahan model `@Observable` setelah dipasang ikut tergambar; view yang terus berubah gagal "snapshot did not settle"; dan test penjaga setter bergaris bawah (`_colorSchemeContrast`, `_accessibilityReduceTransparency`) membuktikan view membaca `.increased` dan `true` → AC-4, AC-5
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "FixtureScenarioTests|FixtureShellTests"` → lulus: 16 nama skenario tetap, ID `FixtureID`, round trip `StacklyJSON` semua DTO, 11 kasus instance ke label, tone, dan detail tabel, 4 kasus operasi, 3 kasus provider, setiap skenario daemon settle di `expectedPresence` dengan judul banner spec 0013, `daemon-offline` menampilkan 11 instance terakhir dengan mutasi `blocked`, mutasi tanpa balasan skenario gagal `notSent` dengan `ipc.not_connected`, `SecretsClient.fixture` tidak pernah mengungkap secret → AC-1, AC-2, AC-3
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter SnapshotHelperTests` → lulus: selisih kanal 2 lolos dan 3 gagal, referensi hilang ditulis lalu gagal "recorded <path>, review and commit", run evidence tidak pernah menulis referensi, satu piksel beda menulis `actual` dan `diff` dengan jumlah piksel dan selisih terbesar, ukuran beda gagal, mode rekam menulis ulang hanya yang berubah ("re-recorded"), PNG di atas 1 MB tidak pernah ditulis dan referensi sebesar itu gagal, RT harus identik dengan light atau menyebut `systemMaterial`, artefak lama dihapus di awal, nama hanya huruf kecil ASCII, angka, dan `-`, tinggi fitting nol atau di atas 4000 pt gagal, lingkungan render tetap (UTC, `en_US`, `fixtureNow`, `loadingDelay` nol, empat setting terpaku), dan satu jalur penuh `assertSnapshot` (rekam, cocok, gagal dengan artefak, artefak dihapus) → AC-4, AC-5, AC-6
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "GallerySnapshotTests|ShellSnapshotTests|DiagnosticsSnapshotTests"` → lulus dengan 85 referensi di git: halaman Tokens, Status, Confirmation, Secrets (dengan `SecretsClient.fixture`), States (empat kelompok) dan Components (empat kelompok) di `.fitting(width: 1044, narrowWidth: 640)`, `DaemonStatusMatrix`, `UnbuiltPage(section: .overview)`, dan `DiagnosticsPage` di `connected-mixed`, `daemon-offline`, dan `daemon-untrusted`; tiap nama punya lima file `light`, `dark`, `hc-light`, `hc-dark`, `narrow` dan RT identik dengan light → AC-5, AC-8
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter SourceRuleTests` → lulus: setter `_colorSchemeContrast` dan `_accessibility*` hanya di `Fixtures/FixtureAppearance.swift`, setiap file `Fixtures/` diawali `#if DEBUG`, `STACKLY_UI_SCENARIO` dan `STACKLY_UI_APPEARANCE` hanya di `AppDelegate.swift` dan di dalam `#if DEBUG`, setiap `struct <Nama>Page: View` yang tidak private di luar `Gallery/` (`UnbuiltPage`, `DiagnosticsPage`) disebut di `SnapshotTests/`, tetapi `private struct UnbuiltScrollPage` tidak diminta → AC-7
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` (dengan `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN` bila perlu) → semua lulus (603 test), dua kali berturut turut tanpa mengubah referensi → AC-4, AC-6, AC-8
+- [ ] `swift build -c release --package-path apps/macos/Packages/StacklyUI` → selesai tanpa error; folder `Fixtures/` dan galeri tidak masuk build Release (semua file `Fixtures/` diawali `#if DEBUG`; dua kunci environment `fixtureNow` dan `loadingDelay` masuk dengan nilai nil) → AC-1
+- [ ] `cargo test -p xtask snapshot` → 10 test lulus: hanya PNG di `__Snapshots__` yang dihitung, keluaran `git diff --name-status --no-renames -z`, file untracked, urutan path, path cermin `base/` `current/` `actual/` `diff/`, escape HTML dan URL, repo git sementara dengan file diubah, ditambah, dihapus (juga yang sudah di commit sesudah merge base), tanpa perubahan tidak ada halaman, dan rev yang tidak ada gagal dengan pesan git → AC-9
+- [ ] `cargo xtask snapshot review` → mencetak path absolut `target/snapshot-review/index.html`; `cargo xtask snapshot review --base tidak-ada` → keluar 1 dengan pesan `git merge-base tidak-ada HEAD failed`; di pohon tanpa PNG yang berubah → "no snapshot changes" dan keluar 0 → AC-9
+- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask evidence check`, dan `xcrun swift-format lint --strict` pada file Swift yang berubah → hijau → AC-7, AC-9
+- [ ] `cargo xtask build-app` → app Debug terbangun (kunci environment baru tidak mengubah perilaku app) → AC-1
+
+### Acceptance-criteria coverage
+
+- AC-1: `FixtureScenarioTests` (round trip), `swift build -c release` (tanpa Fixtures di Release) · pemeriksaan `strings` pada bundle `cargo xtask build-app --release` untuk `FixtureScenario`, `STACKLY_UI_SCENARIO`, dan `fixtureAppearance` menunggu milestone 3 (`AppDelegate` dan `StacklyApp`)
+- AC-2: `FixtureScenarioTests` (kasus instance, operasi, provider) dan `FixtureShellTests` (presence dan judul banner)
+- AC-3: `FixtureShellTests` (`settledRuntime`, `daemon-offline`, mutasi `notSent`, `SecretsClient.fixture`)
+- AC-4: `RenderProbeTests`, `SnapshotHelperTests` (render, stabil, fitting tidak sah, lingkungan, preflight BLOCKED)
+- AC-5: `RenderProbeTests` (test penjaga), `SnapshotHelperTests`, dan lima gambar per nama di `__Snapshots__`
+- AC-6: `SnapshotHelperTests`
+- AC-7: `SourceRuleTests` · bagian `AppDelegate` baru bermakna setelah milestone 3 membaca variabel itu
+- AC-8: `GallerySnapshotTests`, `ShellSnapshotTests`, `DiagnosticsSnapshotTests`
+- AC-9: `cargo test -p xtask snapshot` dan cek manual `snapshot review`
+- AC-12 sampai AC-19: menunggu milestone 3; AC-10 dan AC-11: milestone 2
+
 ## Milestone 2: XCTest evidence helper
 
 ### UI / manual

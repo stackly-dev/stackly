@@ -60,6 +60,11 @@ public struct DelayedProgress: View {
         self.init(visibility: DelayedVisibility())
     }
 
+    /// Creates a delayed spinner that waits `delay` before it shows.
+    init(delay: Duration) {
+        self.init(visibility: DelayedVisibility(delay: delay))
+    }
+
     init(visibility: DelayedVisibility) {
         _visibility = State(initialValue: visibility)
     }

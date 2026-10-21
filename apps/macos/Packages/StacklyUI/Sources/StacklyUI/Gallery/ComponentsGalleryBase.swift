@@ -188,7 +188,7 @@
                     }
                     .environment(
                         \.mutationAvailability,
-                        .blocked(reason: ComponentSamples.gateReason, since: .now)
+                        .blocked(reason: ComponentSamples.gateReason, since: FixtureClock.now)
                     )
                 }
             }

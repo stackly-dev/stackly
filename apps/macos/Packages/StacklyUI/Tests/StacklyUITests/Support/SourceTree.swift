@@ -68,6 +68,43 @@ struct SourceFile {
             .map { Self.removingLineComment(from: String($0)) }
     }
 
+    /// Whether the first line of code (comments and blank lines skipped) is `#if DEBUG`.
+    var startsWithIfDebug: Bool {
+        guard let first = codeLines.first(where: { $0.trimmingCharacters(in: .whitespaces) != "" })
+        else { return false }
+        return first.trimmingCharacters(in: .whitespaces) == "#if DEBUG"
+    }
+
+    /// The numbers of the lines that contain `text`; with `outsideIfDebug` only those
+    /// outside every `#if DEBUG` branch. The `#else` branch of `#if DEBUG` is outside; any
+    /// other `#if` keeps the state of the code around it.
+    func lineNumbers(matching text: String, outsideIfDebug: Bool) -> [Int] {
+        // One entry per open `#if`: whether its current branch is the `#if DEBUG` branch,
+        // and whether the lines inside it are debug only.
+        var stack: [(isDebugConditional: Bool, isDebugOnly: Bool)] = []
+        var numbers: [Int] = []
+        for (index, line) in codeLines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed == "#if DEBUG" {
+                stack.append((true, true))
+            } else if trimmed.hasPrefix("#if ") {
+                stack.append((false, stack.last?.isDebugOnly ?? false))
+            } else if trimmed == "#else" || trimmed.hasPrefix("#elseif") {
+                if let top = stack.popLast() {
+                    stack.append(
+                        (top.isDebugConditional, top.isDebugConditional ? false : top.isDebugOnly))
+                }
+            } else if trimmed == "#endif" {
+                _ = stack.popLast()
+            } else if line.contains(text) {
+                if outsideIfDebug == false || (stack.last?.isDebugOnly ?? false) == false {
+                    numbers.append(index + 1)
+                }
+            }
+        }
+        return numbers
+    }
+
     /// Cuts `line` at the first `//` that is outside a string literal.
     static func removingLineComment(from line: String) -> String {
         var isInString = false

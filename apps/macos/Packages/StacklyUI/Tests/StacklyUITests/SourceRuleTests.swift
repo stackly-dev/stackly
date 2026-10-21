@@ -141,6 +141,32 @@ struct SourceRuleTests {
             ]
         ),
         Rule(
+            name: "underscored environment setter outside FixtureAppearance (spec 0068 AC-7)",
+            patterns: [#"\b_colorSchemeContrast\b"#, #"\b_accessibility[A-Za-z]*"#],
+            allowed: [stacklyUI + "Fixtures/FixtureAppearance.swift"],
+            forbiddenExamples: [
+                ".environment(\\._colorSchemeContrast, .increased)",
+                ".environment(\\._accessibilityReduceTransparency, true)",
+                "env._accessibilityDifferentiateWithoutColor = true",
+                ".environment(\\._accessibilityInvertColors, true)",
+            ],
+            allowedExamples: [
+                ".environment(\\.accessibilityReduceTransparency, false)",
+                "@Environment(\\.colorSchemeContrast) private var contrast",
+                "accessibilityLabel(\"a\")",
+            ]
+        ),
+        Rule(
+            name: "fixture scenario variables outside the app delegate (spec 0068 AC-7)",
+            patterns: [#"\bSTACKLY_UI_SCENARIO\b"#, #"\bSTACKLY_UI_APPEARANCE\b"#],
+            allowed: ["apps/macos/Stackly/AppDelegate.swift"],
+            forbiddenExamples: [
+                "environment[\"STACKLY_UI_SCENARIO\"]",
+                "let name = \"STACKLY_UI_APPEARANCE\"",
+            ],
+            allowedExamples: ["environment[\"STACKLY_ROOT\"]"]
+        ),
+        Rule(
             name: "inspector outside the inspector components (spec 0067 AC-18)",
             patterns: [#"\.inspector\("#],
             allowed: [stacklyUI + "Components/Inspector/"],
@@ -190,6 +216,114 @@ struct SourceRuleTests {
                 "allowed file \(path) is missing; update the rule"
             )
         }
+    }
+
+    @Test func everyFixtureFileStartsWithIfDebug() throws {
+        let fixtures = try SourceTree.swiftFiles().filter {
+            $0.path.hasPrefix(Self.stacklyUI + "Fixtures/")
+        }
+        #expect(fixtures.isEmpty == false, "no files under Fixtures/")
+        for file in fixtures {
+            #expect(
+                file.startsWithIfDebug,
+                "\(file.path) must start with #if DEBUG so it never reaches a Release build"
+            )
+        }
+    }
+
+    @Test func theIfDebugCheckSeesTheFirstCodeLine() {
+        #expect(SourceFile(path: "a", text: "#if DEBUG\nimport A\n#endif\n").startsWithIfDebug)
+        #expect(SourceFile(path: "a", text: "// c\n\n#if DEBUG\n#endif\n").startsWithIfDebug)
+        #expect(
+            SourceFile(path: "a", text: "import A\n#if DEBUG\n#endif\n").startsWithIfDebug == false)
+        #expect(SourceFile(path: "a", text: "#if os(macOS)\n#endif\n").startsWithIfDebug == false)
+    }
+
+    @Test func scenarioVariablesAreReadOnlyInsideIfDebug() throws {
+        let delegate = try SourceTree.swiftFiles().filter {
+            $0.path == "apps/macos/Stackly/AppDelegate.swift"
+        }
+        #expect(delegate.count == 1)
+        for file in delegate {
+            for number in file.lineNumbers(matching: "STACKLY_UI_", outsideIfDebug: true) {
+                Issue.record("\(file.path):\(number) reads a fixture variable outside #if DEBUG")
+            }
+        }
+    }
+
+    @Test func theIfDebugScanKnowsNestingAndElse() {
+        let text = """
+            let a = "STACKLY_UI_X"
+            #if DEBUG
+            let b = "STACKLY_UI_X"
+            #if os(macOS)
+            let c = "STACKLY_UI_X"
+            #endif
+            #else
+            let d = "STACKLY_UI_X"
+            #endif
+            let e = "STACKLY_UI_X"
+            """
+        let file = SourceFile(path: "a", text: text)
+        #expect(file.lineNumbers(matching: "STACKLY_UI_", outsideIfDebug: true) == [1, 8, 10])
+    }
+
+    // MARK: - Every page has a snapshot suite (spec 0068 AC-7)
+
+    /// The names of the top level `struct <Name>Page: View` declarations in `lines` that are
+    /// not `private` or `fileprivate`.
+    nonisolated static func pageNames(in lines: [String]) -> [String] {
+        let declaration =
+            #/^\s*(?:(?:public|internal|package|final)\s+)*struct\s+(\w+Page)\s*:\s*View\b/#
+        return lines.compactMap { line in
+            line.firstMatch(of: declaration).map { String($0.output.1) }
+        }
+    }
+
+    /// The pages in `pages` that no line of `testLines` names as a whole word.
+    nonisolated static func unsnapshotted(pages: [String], testLines: [String]) throws -> [String] {
+        try pages.filter { page in
+            let word = try Regex("\\b\(page)\\b").wordBoundaryKind(.simple)
+            return testLines.contains { $0.contains(word) } == false
+        }
+    }
+
+    @Test func everyPageOutsideTheGalleryHasASnapshotSuite() throws {
+        let sources = try SourceTree.swiftFiles().filter {
+            $0.path.hasPrefix(Self.stacklyUI)
+                && $0.path.hasPrefix(Self.stacklyUI + "Gallery/") == false
+        }
+        let pages = sources.flatMap { Self.pageNames(in: $0.codeLines) }
+        #expect(pages.isEmpty == false, "no page found; the scan is broken")
+        let testFolder = "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests"
+        let testLines = try SourceTree.files(under: testFolder)
+            .filter { $0.hasSuffix(".swift") }
+            .flatMap { path in
+                SourceFile(
+                    path: path,
+                    text: try String(contentsOf: SourceTree.url(of: path), encoding: .utf8)
+                ).codeLines
+            }
+        for page in try Self.unsnapshotted(pages: pages, testLines: testLines) {
+            Issue.record("\(page) has no snapshot suite: name it in a file under \(testFolder)")
+        }
+    }
+
+    @Test func thePageScanSkipsPrivatePagesAndNamesOnlyWholeWords() throws {
+        let lines = [
+            "public struct UnbuiltPage: View {",
+            "private struct UnbuiltScrollPage: View {",
+            "    fileprivate struct HiddenPage: View {",
+            "struct DiagnosticsPage: View {",
+            "final class NotAPage: View {",
+            "struct Overview: View {",
+            "struct PageHelper: View {",
+        ]
+        #expect(Self.pageNames(in: lines) == ["UnbuiltPage", "DiagnosticsPage"])
+        let tests = ["UnbuiltPage(section: .overview)", "DiagnosticsPageHelper()"]
+        #expect(
+            try Self.unsnapshotted(pages: ["UnbuiltPage", "DiagnosticsPage"], testLines: tests)
+                == ["DiagnosticsPage"])
     }
 
     @Test func lineCommentsAreSkippedButStringsAreKept() {

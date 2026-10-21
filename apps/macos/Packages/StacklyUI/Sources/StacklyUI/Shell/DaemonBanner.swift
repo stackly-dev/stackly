@@ -7,6 +7,7 @@ import SwiftUI
 /// environment, and updates every minute. Reconnect shows a small spinner while an
 /// attempt runs. No action is gated, because none changes data.
 public struct DaemonBanner: View {
+    @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.calendar) private var calendar
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
@@ -42,7 +43,7 @@ public struct DaemonBanner: View {
                 tone: content.tone,
                 title: content.title,
                 message: content.message(
-                    now: context.date,
+                    now: fixtureNow ?? context.date,
                     calendar: calendar,
                     locale: locale,
                     timeZone: timeZone

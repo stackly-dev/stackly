@@ -6,6 +6,8 @@ import SwiftUI
 ///
 /// The content is never dimmed or replaced by a spinner during a refresh.
 public struct StateView<Value, Content: View>: View {
+    @Environment(\.loadingDelay) private var loadingDelay
+
     private let state: ViewState<Value>
     private let retry: @MainActor () -> Void
     private let openDiagnostics: @MainActor () -> Void
@@ -36,7 +38,7 @@ public struct StateView<Value, Content: View>: View {
         ZStack {
             switch state {
             case .loading:
-                DelayedProgress()
+                DelayedProgress(delay: loadingDelay ?? DelayedVisibility.defaultDelay)
                     .transition(StacklyMotion.crossfade)
             case .empty(let empty, let notes):
                 ScrollView {
@@ -102,6 +104,7 @@ private struct ContentNotesBanners: View {
 /// and Retry, which is disabled with a small spinner while a refresh runs. The time
 /// follows the clock, the calendar, the locale, and the time zone of the environment.
 struct StaleBanner: View {
+    @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.calendar) private var calendar
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
@@ -115,13 +118,13 @@ struct StaleBanner: View {
             StateBanner(
                 tone: .caution,
                 title: note.bannerTitle(
-                    now: context.date,
+                    now: fixtureNow ?? context.date,
                     calendar: calendar,
                     locale: locale,
                     timeZone: timeZone
                 ),
                 message: note.bannerMessage(
-                    now: context.date,
+                    now: fixtureNow ?? context.date,
                     calendar: calendar,
                     locale: locale,
                     timeZone: timeZone
@@ -139,4 +142,16 @@ struct StaleBanner: View {
     ) -> StateAction {
         StateAction(title: "Retry", mutates: false, isBusy: isRefreshing, perform: retry)
     }
+}
+
+extension EnvironmentValues {
+    /// The moment views treat as now when they show a time relative to it, or `nil` for
+    /// the real clock. Fixtures and snapshots set it so a rendered time never moves; the
+    /// running app leaves it `nil` (spec 0068).
+    @Entry public var fixtureNow: Date? = nil
+
+    /// How long ``StateView`` waits before it shows its spinner, or `nil` for the default
+    /// 300 ms. Fixtures and snapshots set it to zero so a loading state always shows the
+    /// spinner (spec 0068).
+    @Entry public var loadingDelay: Duration? = nil
 }

@@ -49,11 +49,12 @@ nonisolated enum TestAppearance: CaseIterable, CustomTestStringConvertible, Send
         isHighContrast ? 7 : 4.5
     }
 
-    /// The SwiftUI environment for this appearance. `colorSchemeContrast` cannot be set
-    /// on `EnvironmentValues`, so only light and dark resolve correctly through it.
+    /// The SwiftUI environment for this appearance: the color scheme and, through the
+    /// underscored setter that tests may use (spec 0068), the contrast.
     var environment: EnvironmentValues {
         var environment = EnvironmentValues()
         environment.colorScheme = scheme
+        environment._colorSchemeContrast = contrast
         return environment
     }
 

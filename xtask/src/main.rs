@@ -8,6 +8,7 @@ mod evidence;
 mod fuzz;
 mod provider;
 mod runtime;
+mod snapshot;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -52,6 +53,9 @@ Tasks:
   fuzz seed            Rebuild fuzz/seeds/ from the shared fixtures
   fuzz run <target> [--time <seconds>]
                        Fuzz one target, 300 seconds by default
+  snapshot review [--base <rev>]
+                       Write target/snapshot-review/index.html with the old and new
+                       snapshot PNGs since the merge base with <rev> (default main)
   runtime check        Check runtimes/inventory.toml and evidence/runtime/
   runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]
                        Download a runtime and print its pinned inventory values
@@ -95,6 +99,7 @@ fn run() -> Result<ExitCode> {
         ["evidence", rest @ ..] => evidence::run(&root, rest),
         ["fuzz", rest @ ..] => done(fuzz::run(&root, rest)),
         ["runtime", rest @ ..] => runtime::run(&root, rest),
+        ["snapshot", rest @ ..] => snapshot::run(&root, rest),
         ["provider", rest @ ..] => provider::run(&root, rest),
         ["catalog", rest @ ..] => catalog::run(&root, rest),
         ["help" | "--help" | "-h"] => {
