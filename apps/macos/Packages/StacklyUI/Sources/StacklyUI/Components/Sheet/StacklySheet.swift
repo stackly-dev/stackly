@@ -120,6 +120,9 @@ private struct SheetLayout<Content: View>: View {
                     content
                 }
                 .frame(maxWidth: .infinity)
+                .padding(.top, Spacing.s12)
+                .padding(.horizontal, Spacing.s22)
+                .padding(.bottom, Spacing.s16)
                 .onGeometryChange(for: CGFloat.self) {
                     $0.size.height
                 } action: {
@@ -134,7 +137,7 @@ private struct SheetLayout<Content: View>: View {
     private var bodyHeight: CGFloat {
         let screen = NSApp.keyWindow?.screen ?? NSScreen.main
         return SheetMetrics.bodyHeight(
-            content: contentHeight + Spacing.s12 + Spacing.s16,
+            content: contentHeight,
             visibleScreen: screen?.visibleFrame.height ?? 800
         )
     }
