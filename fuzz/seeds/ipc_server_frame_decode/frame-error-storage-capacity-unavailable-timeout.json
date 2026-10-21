@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000804",
+    "error": {
+      "code": "storage.capacity_unavailable",
+      "category": "unavailable",
+      "message": "disk space for the data folder is unavailable",
+      "retryable": true,
+      "resource": null,
+      "fields": [],
+      "hint": "The disk that holds Stackly data didn’t answer. Check that it is still connected.",
+      "details": [
+        {
+          "key": "reason",
+          "value": "timeout"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

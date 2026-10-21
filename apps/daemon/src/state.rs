@@ -26,6 +26,7 @@ use crate::log_sink::LogSink;
 use crate::operations::Operations;
 use crate::secrets::Secrets;
 use crate::shutdown::Drain;
+use crate::storage::Storage;
 use crate::supervisor::Supervision;
 
 /// Where the daemon is in its life.
@@ -132,6 +133,7 @@ pub struct DaemonCore {
     supervision: Supervision,
     redactor: Arc<Redactor>,
     secrets: Secrets,
+    storage: Storage,
     next_connection_id: AtomicU64,
     stop: watch::Sender<bool>,
     fatal: watch::Sender<Option<u8>>,
@@ -179,6 +181,7 @@ impl DaemonCore {
             supervision: Supervision::default(),
             redactor,
             secrets: Secrets::new(secret_target),
+            storage: Storage::default(),
             next_connection_id: AtomicU64::new(1),
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
@@ -269,6 +272,12 @@ impl DaemonCore {
     #[must_use]
     pub const fn secrets(&self) -> &Secrets {
         &self.secrets
+    }
+
+    /// The single flight slot of `storage.get_capacity` (spec 0022).
+    #[must_use]
+    pub const fn storage(&self) -> &Storage {
+        &self.storage
     }
 
     /// A new connection ID: a counter per run, from 1.

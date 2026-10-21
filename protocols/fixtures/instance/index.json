@@ -1,0 +1,16 @@
+{
+  "fixtures": [
+    {
+      "file": "groups.json",
+      "type": "GroupCases"
+    },
+    {
+      "file": "list-mixed.json",
+      "type": "InstancePage"
+    },
+    {
+      "file": "attention-operations.json",
+      "type": "OperationPage"
+    }
+  ]
+}
