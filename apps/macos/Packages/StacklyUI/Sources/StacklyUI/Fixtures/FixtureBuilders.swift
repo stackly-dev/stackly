@@ -203,10 +203,10 @@
     nonisolated extension HandshakeAccepted {
         /// The handshake every connected fixture daemon answered.
         public static let fixture = HandshakeAccepted(
-            protocol: ContractInfo.protocolVersion,
+            protocol: FixtureContract.protocolVersion,
             serverInstanceId: FixtureID.uuid(kind: FixtureID.daemon, number: 1),
             daemon: DaemonIdentity(version: "0.0.0-fixture", pid: 4242),
-            contractDigest: ContractInfo.digest,
+            contractDigest: FixtureContract.digest,
             contractDrift: false,
             limits: Limits(
                 maxFrameBytes: 1_048_576, maxLogBatchBytes: 65_536, maxJsonDepth: 32,
@@ -220,8 +220,8 @@
         /// The daemon facts every connected fixture daemon reports.
         public static let fixture = DaemonInfo(
             version: "0.0.0-fixture",
-            protocol: ContractInfo.protocolVersion,
-            contractDigest: ContractInfo.digest,
+            protocol: FixtureContract.protocolVersion,
+            contractDigest: FixtureContract.digest,
             serverInstanceId: FixtureID.uuid(kind: FixtureID.daemon, number: 1),
             pid: 4242,
             uid: 501,
