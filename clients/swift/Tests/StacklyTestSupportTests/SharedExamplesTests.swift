@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import StacklyEvidenceCore
 @testable import StacklyTestSupport
 
 /// The shared examples in `schemas/evidence/examples/`, the contract the Rust

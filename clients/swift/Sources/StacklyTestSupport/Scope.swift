@@ -1,4 +1,5 @@
 import Foundation
+import StacklyEvidenceCore
 import Synchronization
 import Testing
 
@@ -28,23 +29,9 @@ final class Scope: Sendable {
         /// issue means `FAIL`, then a cancelled test stays `NOT_RUN`, and only
         /// then is it `PASS`.
         func finished(cancelled: Bool, at now: Date) -> Record? {
-            var record = record
-            if let blocked {
-                record.status = .blocked
-                record.actual = nil
-                record.reason = blocked.reason
-                record.owner = blocked.owner
-            } else if let failure = failures.first {
-                record.status = .fail
-                record.actual = failure
-            } else if cancelled {
-                return nil
-            } else {
-                record.status = .pass
-                record.actual = actual ?? Record.defaultActual
-            }
-            record.finishedAt = now
-            return record
+            record.finished(
+                blocked: blocked, firstFailure: failures.first, unobserved: cancelled,
+                actual: actual, at: now)
         }
     }
 
@@ -171,30 +158,5 @@ final class Scope: Sendable {
             }
         }
         return (finished, escaped)
-    }
-}
-
-/// Writes raw records to `records/<id>.json` in a run folder.
-enum RecordFile {
-    /// The name of the raw record file of `id`, with a lowercase UUID like the
-    /// Rust guard writes.
-    static func name(of id: UUID) -> String {
-        "\(id.uuidString.lowercased()).json"
-    }
-
-    /// Writes `record` atomically: to `<id>.json.tmp` in the same folder
-    /// first, then renamed, so the wrapper never reads a half written file.
-    static func write(_ record: Record, into runDirectory: URL) throws {
-        let records = runDirectory.appending(path: "records", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: records, withIntermediateDirectories: true)
-        let file = records.appending(path: name(of: record.id))
-        let temporary = records.appending(path: name(of: record.id) + ".tmp")
-        try record.jsonData().write(to: temporary)
-        let handle = try FileHandle(forWritingTo: temporary)
-        try handle.synchronize()
-        try handle.close()
-        guard rename(temporary.path, file.path) == 0 else {
-            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-        }
     }
 }

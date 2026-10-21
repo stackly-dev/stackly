@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import StacklyEvidenceCore
 @testable import StacklyTestSupport
 
 /// What the trait decides from its arguments and the evidence environment.

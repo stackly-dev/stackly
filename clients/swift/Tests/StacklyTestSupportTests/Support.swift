@@ -2,6 +2,7 @@ import Foundation
 import Synchronization
 import Testing
 
+@testable import StacklyEvidenceCore
 @testable import StacklyTestSupport
 
 /// A fresh folder under the system temporary folder, never Application

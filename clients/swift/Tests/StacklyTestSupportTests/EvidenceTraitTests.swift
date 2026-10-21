@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import StacklyEvidenceCore
 @testable import StacklyTestSupport
 
 /// The evidence trait and its scope: one record per test function, with an
