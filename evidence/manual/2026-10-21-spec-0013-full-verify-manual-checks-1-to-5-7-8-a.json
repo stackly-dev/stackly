@@ -1,0 +1,72 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15e5f-4c60-76e4-932e-482b105c7ed5",
+  "covers": [
+    "AC-024",
+    "REQ-024",
+    "AC-070",
+    "REQ-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 full verify: manual checks 1 to 5, 7, 8 and step 16 on the merged shell",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "On the main branch with features 67 to 69 merged, the shell still meets checks 1, 2, 3, 4, 5, 7, 8 and step 16 of spec 0013 in the Debug app with a real stacklyd.",
+  "actual": "Check 1: with no stacklyd the window opened, footer `stacklyd unavailable`, banner `Can’t connect to stacklyd.` with `Actions are disabled until the daemon is reachable.`, Reconnect and Open Diagnostics, Instances `Waiting for stacklyd` with `ipc.endpoint_missing`, Retry, and Open Diagnostics; 25 samples over 25 s identical. Check 2: the GUI handshake came 2.2 s after stacklyd started (`client_kind` gui, `client_version` 0.1.0, `interactive` true), the banner went away without a click, footer `stacklyd degraded` (the dev daemon has no catalog outside an app bundle, so health is degraded, not ready). Daemon lost after a snapshot: banner `Showing the last known state from 19.04. Actions are disabled until the daemon is reachable.` (locale en_ID, WIB), 16 samples identical; Diagnostics `stacklyd unavailable`, Next attempt, and the stacklyd row with `(last known)`. Check 4: closing the window showed one opaque 360 × 78 panel `Stackly is still running` with the Dock sentence for about 4 s; app and stacklyd stayed (`stackly daemon status` degraded); a reopen event (`open` on the app bundle, standing in for the Dock click) brought the window back in the same process; a second close showed no panel; Quit Stackly closed the app with no panel and the daemon log gained only `connection closed`. Check 5: resizing to 600 × 400 stopped at 900 × 652 with the sidebar at 260 and content 640; banner and Diagnostics values (socket path included) wrap. Check 7: socket at 0666 gave footer `stacklyd untrusted`, banner `Stackly didn’t connect to stacklyd.` with `other users can access the socket`, and zero new daemon log lines. Check 8: empty STACKLY_ROOT gave footer `Stackly misconfigured`, banner `STACKLY_ROOT is invalid.`, no Unix socket open in the app (lsof), and Reconnect disabled with `Relaunch Stackly after fixing the problem.` Step 16 and check 3: three fake instances made zeta, alpha, orders-db showed alpha, orders-db, zeta, one AX element per row (`alpha, Fake 0.1.0, Status: Stopped`), subtitle and badge `3 instances`; `stackly instance start` turned alpha Running within 1 s with one `instance.list` in the daemon log; after SIGTERM alpha stayed Running, badge `3 instances, last known`; after restart the state refreshed with no click. Settings opened one General tab with `Coming in a later build.`; unbuilt pages show the neutral placeholder and Operations has the subtitle `No running operations`.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 2239e01 with a clean tree: `cargo build -p stacklyd -p stackly-cli -p stackly-fake-server`, `cargo xtask build-app` (Debug), a temporary STACKLY_ROOT under the session scratchpad, and the app started from target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly with that root",
+    "Claude Code read and pressed elements with a small AXUIElement tool (tree dump, AXPress on buttons and menu items, AXSelected on sidebar rows, AXSize on the window) and took window screenshots with `screencapture -l`; no keystrokes were sent",
+    "check 1: launch with no stacklyd, sample footer and banner once a second for 25 s, select Instances",
+    "check 2: start stacklyd with the same root, sample every 0.5 s until the banner is gone, read the daemon debug log",
+    "with the state loaded, SIGTERM stacklyd and sample once a second for 16 s on Instances and Diagnostics",
+    "check 4: AXPress the close button, list the app windows every 0.8 s, `stackly daemon status`, `open` the app bundle, close again, Stackly › Quit Stackly, diff the daemon log",
+    "check 5: AXSize 600 × 400 on the main window, read the window size and splitter, screenshot Diagnostics online and offline",
+    "check 7: `chmod 666` the live socket, launch, read banner and footer, count daemon log lines",
+    "check 8: launch with `STACKLY_ROOT=` (empty), read banner, footer, Diagnostics, and `lsof -p` for Unix sockets",
+    "step 16 and check 3: `cargo run -q -p stacklyd --example skeleton_seed -- --root <R>`, `stackly instance create` zeta, alpha, orders-db, launch, `stackly instance start <alpha id> --wait`, SIGTERM stacklyd, start it again; afterwards `stackly instance stop` and every process stopped",
+    "not covered here: Keyboard navigation and VoiceOver (check 6, record 2026-10-19 check 6 stays NOT_RUN), a real Dock click, scene restoration across Quit (system setting), and removing an instance (no CLI command yet)"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5) as the checker of the full verify session chk-f13-verify drove the app through the accessibility API and read the screenshots and daemon logs it took; the user has not reviewed this record",
+  "startedAt": "2026-10-21T12:01:30.000000Z",
+  "finishedAt": "2026-10-21T12:10:30.000000Z",
+  "evidencePath": "evidence/manual/2026-10-21-spec-0013-full-verify-manual-checks-1-to-5-7-8-a.json",
+  "context": {
+    "sourceCommit": "2239e0155b31a87ec8377a42e4cf23829c601707",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

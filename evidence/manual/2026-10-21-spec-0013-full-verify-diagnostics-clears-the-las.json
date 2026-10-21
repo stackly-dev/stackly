@@ -1,0 +1,64 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15e5f-48ee-7058-978f-d28a229bab3a",
+  "covers": [
+    "AC-024",
+    "REQ-024"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 full verify: Diagnostics clears the last error after reconnecting",
+    "file": null,
+    "line": null
+  },
+  "status": "FAIL",
+  "expected": "After Stackly reconnects to stacklyd, the Diagnostics Connection section shows Last error None and no What to do hint, as it does when it connects on the first try.",
+  "actual": "After reconnecting, Diagnostics kept the error from before the connection. Status and footer read `stacklyd degraded` (connected; the dev daemon has no catalog), but Last error still read `ipc.endpoint_missing · unavailable · no socket at the daemon path` and What to do read `stacklyd isn’t running. Start it with stacklyd, then click Reconnect.`; Copy Details copied the same lines. The same happened after an untrusted socket: once connected, What to do still read `Other users can access the socket. Stackly sent nothing to this socket.` A launch with stacklyd already running showed `Last error: None` and no What to do row. DaemonModel sets lastError on unreachable, untrusted, and incompatible and never clears it on connected.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 2239e01 with a clean tree: `cargo build -p stacklyd -p stackly-cli -p stackly-fake-server`, `cargo xtask build-app` (Debug), a temporary STACKLY_ROOT under the session scratchpad, and the app started from target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly with that root",
+    "Claude Code read and pressed elements with a small AXUIElement tool (tree dump, AXPress on buttons and menu items, AXSelected on sidebar rows, AXSize on the window) and took window screenshots with `screencapture -l`; no keystrokes were sent",
+    "launch with no stacklyd, open Diagnostics: Last error `ipc.endpoint_missing`, What to do `stacklyd isn’t running…`",
+    "start `target/debug/stacklyd` with the same root; the app connected by itself within 8 s; read the Connection rows and pressed Copy Details (clipboard saved and restored around the read)",
+    "stop stacklyd with SIGTERM, start it again, press Stackly › Reconnect to stacklyd: same stale rows",
+    "relaunch with stacklyd running and its socket at mode 0666 (banner `Stackly didn’t connect to stacklyd.`), `chmod 600` the socket, press Reconnect in the banner: connected, What to do still names the untrusted socket"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5) as the checker of the full verify session chk-f13-verify drove the app through the accessibility API and read the screenshots and daemon logs it took; the user has not reviewed this record",
+  "startedAt": "2026-10-21T12:01:30.000000Z",
+  "finishedAt": "2026-10-21T12:08:40.000000Z",
+  "evidencePath": "evidence/manual/2026-10-21-spec-0013-full-verify-diagnostics-clears-the-las.json",
+  "context": {
+    "sourceCommit": "2239e0155b31a87ec8377a42e4cf23829c601707",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
