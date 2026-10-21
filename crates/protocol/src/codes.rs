@@ -613,6 +613,8 @@ area! {
             details [], "fallback for an operation that was cancelled, which carries no error";
         OPERATION_NEEDS_RECOVERY = "cli.operation_needs_recovery", Failed, retryable false,
             details [], "fallback for an operation that needs recovery without an error in its summary";
+        INSTANCE_NOT_FOUND = "cli.instance_not_found", NotFound, retryable false,
+            details ["name"], "no instance has the name the command was given";
         PANIC = "cli.panic", Internal, retryable false,
             details [], "the cli panicked, and the panic message is never shown";
         AGENT_ROOT_OVERRIDE = "cli.agent_root_override", InvalidInput, retryable false,
@@ -1121,6 +1123,7 @@ mod tests {
             ("cli.operation_failed", ErrorCategory::Failed, &[]),
             ("cli.operation_cancelled", ErrorCategory::Cancelled, &[]),
             ("cli.operation_needs_recovery", ErrorCategory::Failed, &[]),
+            ("cli.instance_not_found", ErrorCategory::NotFound, &["name"]),
             ("cli.panic", ErrorCategory::Internal, &[]),
             (
                 "cli.agent_root_override",

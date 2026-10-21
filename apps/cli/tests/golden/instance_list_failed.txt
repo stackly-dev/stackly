@@ -1,0 +1,6 @@
+NAME            PROVIDER             VERSION  ENDPOINTS                  LIFECYCLE  READINESS  HEALTH                  OWNERSHIP
+broken-db       official/postgresql  17.2.0   postgresql=127.0.0.1:5405  failed     -          unhealthy (crash_loop)  manual
+half-made       official/mysql       8.4.3    mysql=127.0.0.1:5406       failed     -          -                       manual
+double-trouble  official/postgresql  17.2.0   postgresql=127.0.0.1:5420  failed     -          -                       manual
+
+20 instances: 4 running, 4 stopped, 3 failed, 8 not ready, 1 unknown

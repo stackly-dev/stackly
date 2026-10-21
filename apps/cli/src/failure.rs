@@ -230,6 +230,19 @@ impl CliFailure {
         ))
     }
 
+    /// `cli.instance_not_found`: no instance has the name `name`.
+    #[must_use]
+    pub fn instance_not_found(name: &str) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::INSTANCE_NOT_FOUND,
+                format!("no instance named {name}"),
+            )
+            .with_detail("name", name)
+            .with_hint("list instances with stackly instance list"),
+        )
+    }
+
     /// `cli.panic`: the CLI panicked. The panic message is never shown.
     #[must_use]
     pub fn panic() -> Self {
@@ -508,6 +521,7 @@ mod tests {
             CliFailure::operation_failed(OPERATION),
             CliFailure::operation_cancelled(OPERATION),
             CliFailure::operation_needs_recovery(OPERATION),
+            CliFailure::instance_not_found("orders-db"),
             CliFailure::panic(),
             CliFailure::agent_root_override(),
             CliFailure::agent_not_bundled("/work/target/debug/stackly"),

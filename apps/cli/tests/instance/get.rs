@@ -132,7 +132,7 @@ fn an_unknown_instance_exits_10_and_a_bad_id_exits_2() {
     });
 
     let missing = run(root.path(), &["instance", "get", ID, "--json"]);
-    let bad = run(root.path(), &["instance", "get", "orders-db", "--json"]);
+    let bad = run(root.path(), &["instance", "get", "", "--json"]);
 
     assert_eq!(missing.code, Some(10), "{missing:?}");
     assert_eq!(envelope(&missing)["error"]["code"], "resource.not_found");
