@@ -285,6 +285,9 @@ fn execute(
     })
 }
 
+/// Spec 0068, AC-13: the task stops with exit 1 outside macOS or for a relative evidence folder,
+/// with exit 2 when Automation Mode is not enabled or the screen is locked, and otherwise builds
+/// the `xcodebuild` command line without retries.
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;

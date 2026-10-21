@@ -312,6 +312,8 @@ fn git_text(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&git_bytes(root, args)?).into_owned())
 }
 
+/// Spec 0068, AC-9: the review lists the PNGs that changed since the merge base, mirrors the old
+/// and new images, escapes the page, and exits 0 without changes or 1 for an unknown revision.
 #[cfg(test)]
 mod tests {
     use super::*;
