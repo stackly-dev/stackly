@@ -114,6 +114,10 @@ nonisolated struct SnapshotImage: Equatable, Sendable {
     /// A pixel differs when any RGBA channel differs by more than `tolerance`.
     func difference(from other: SnapshotImage, tolerance: Int = 2) -> Difference {
         precondition(width == other.width && height == other.height, "sizes must match")
+        // Identical bytes are the common case, and this compare is much faster than the loop.
+        if pixels == other.pixels {
+            return Difference(pixelCount: 0, largest: 0, mask: [])
+        }
         var count = 0
         var largest = 0
         var mask = [Bool](repeating: false, count: width * height)

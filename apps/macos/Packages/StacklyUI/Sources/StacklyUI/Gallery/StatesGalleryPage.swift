@@ -5,20 +5,47 @@
     /// `ViewState.resolve`, live shape changes with the delayed spinner, placeholders,
     /// banners per tone, and the mutation gate, with sample data from the mockup.
     struct StatesGalleryPage: View {
+        /// A group of sections of the page. The snapshot suites render the groups one by
+        /// one, because the whole page is taller than a snapshot may be (spec 0068).
+        enum Part: CaseIterable {
+            /// The controls and every `ViewState` shape.
+            case shapes
+            /// The live shape changes with the delayed spinner.
+            case live
+            /// The placeholders.
+            case placeholders
+            /// The banners per tone and the mutation gate.
+            case banners
+        }
+
         @State private var isDaemonUnreachable = false
         @State private var isRefreshing = false
+        private let parts: Set<Part>
+
+        /// Creates the page with the sections of `parts`; every part by default.
+        init(parts: Set<Part> = Set(Part.allCases)) {
+            self.parts = parts
+        }
 
         var body: some View {
             GalleryPageLayout {
-                ControlsSection(
-                    isDaemonUnreachable: $isDaemonUnreachable,
-                    isRefreshing: $isRefreshing
-                )
-                ShapesSection(isRefreshing: isRefreshing)
-                LiveSection()
-                PlaceholderSection()
-                BannerSection()
-                GateSection()
+                if parts.contains(.shapes) {
+                    ControlsSection(
+                        isDaemonUnreachable: $isDaemonUnreachable,
+                        isRefreshing: $isRefreshing
+                    )
+                    ShapesSection(isRefreshing: isRefreshing)
+                }
+                if parts.contains(.live) {
+                    LiveSection()
+                }
+                if parts.contains(.placeholders) {
+                    PlaceholderSection()
+                }
+                if parts.contains(.banners) {
+                    BannerSection()
+                    GateSection()
+                }
             }
             .environment(\.mutationAvailability, availability)
         }

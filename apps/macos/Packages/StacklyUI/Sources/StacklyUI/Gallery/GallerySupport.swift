@@ -40,21 +40,37 @@
         }
     }
 
+    extension EnvironmentValues {
+        /// Whether ``GalleryPageLayout`` wraps a page in a scroll view; the snapshot suites
+        /// turn it off so a page renders at its full height (spec 0068).
+        @Entry var galleryScrollsPage = true
+    }
+
     /// The scrolling frame of a gallery page: sections on ``StacklyColor/surfaceWindow``
-    /// with the page inset.
+    /// with the page inset. Without scrolling (``EnvironmentValues/galleryScrollsPage``)
+    /// the page is the same column at its full height.
     struct GalleryPageLayout<Content: View>: View {
+        @Environment(\.galleryScrollsPage) private var scrolls
         @ViewBuilder let content: Content
 
         var body: some View {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.sectionGap) {
-                    content
+            Group {
+                if scrolls {
+                    ScrollView { column }
+                } else {
+                    column
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Spacing.pageHorizontal)
-                .padding(.vertical, Spacing.s22)
             }
             .background(StacklyColor.surfaceWindow)
+        }
+
+        private var column: some View {
+            VStack(alignment: .leading, spacing: Spacing.sectionGap) {
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Spacing.pageHorizontal)
+            .padding(.vertical, Spacing.s22)
         }
     }
 
