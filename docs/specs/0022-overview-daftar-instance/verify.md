@@ -28,7 +28,7 @@ _Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalan
 ### Value sourcing
 
 - [x] `level` dan `usedPercent` dihitung `stackly_domain::capacity` dari `total` dan `available`; variasikan volume palsu di setiap batas level (langkah `cargo test -p stacklyd --test server storage`) → AC-4
-- [ ] `checkedAt` datang dari clock platform saat pembacaan selesai; majukan `FakeClock` di antara dua call dan bandingkan → AC-4
+- [x] `checkedAt` datang dari clock platform saat pembacaan selesai; majukan `FakeClock` di antara dua call dan bandingkan → AC-4
 - [x] `total` dan `available` datang dari `Filesystem::volume_space` pada root data `RootSet` (`PreparedLayout::canonical_root(Data)`), bukan root runtime, log, atau cache → AC-4
 
 ### Acceptance-criteria coverage

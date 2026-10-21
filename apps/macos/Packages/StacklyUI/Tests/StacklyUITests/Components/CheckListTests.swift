@@ -112,4 +112,46 @@ struct CheckListTests {
             height(of: CheckList([withAction], layout: .single), width: 400)
                 > height(of: CheckList([plain], layout: .single), width: 400))
     }
+
+    // MARK: - pending spinner
+
+    @Test func theSpinnerWaitsForLoadingDelayAndDefaultsTo300Milliseconds() {
+        #expect(CheckSymbol.spinnerDelay(loadingDelay: nil) == .milliseconds(300))
+        #expect(CheckSymbol.spinnerDelay(loadingDelay: .zero) == .zero)
+        #expect(CheckSymbol.spinnerDelay(loadingDelay: .seconds(2)) == .seconds(2))
+    }
+
+    /// The first frame of a pending row under `loadingDelay`, captured before any task ran.
+    @MainActor
+    private func firstFrameOfAPendingRow(loadingDelay: Duration?) throws -> SnapshotImage {
+        let view = CheckList([CheckItem(id: "r", status: .pending, title: "Checking")])
+            .environment(\.loadingDelay, loadingDelay)
+            .padding(8)
+            .background(Color.white)
+        let host = NSHostingView(rootView: view)
+        let window = SnapshotWindow(size: CGSize(width: 240, height: 48))
+        window.contentView = host
+        defer { window.close() }
+        window.setContentSize(CGSize(width: 240, height: 48))
+        host.frame = CGRect(x: 0, y: 0, width: 240, height: 48)
+        host.layoutSubtreeIfNeeded()
+        return try SnapshotImage.capture(host)
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected: "Spec 0067 AC-13: a zero loadingDelay draws the pending spinner at once"
+        )
+    )
+    @MainActor
+    func aZeroLoadingDelayShowsThePendingSpinnerInTheFirstFrame() throws {
+        let immediate = try firstFrameOfAPendingRow(loadingDelay: .zero)
+        let defaulted = try firstFrameOfAPendingRow(loadingDelay: nil)
+        let slow = try firstFrameOfAPendingRow(loadingDelay: .seconds(3600))
+        #expect(immediate.difference(from: defaulted).pixelCount > 0, "the spinner is drawn")
+        #expect(
+            defaulted.difference(from: slow).pixelCount == 0,
+            "no delay but zero shows the spinner in the first frame")
+    }
 }

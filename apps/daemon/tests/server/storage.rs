@@ -178,6 +178,42 @@ async fn the_level_follows_every_boundary_of_the_volume_the_data_root_lies_on() 
 }
 
 #[tokio::test]
+async fn checked_at_is_the_clock_when_the_read_finishes_not_when_it_starts() {
+    let ev = evidence!(
+        covers = ["REQ-033"],
+        kind = Kind::Fixture,
+        expected = "a clock moved inside the volume read is the time storage.get_capacity stamps, because checkedAt is read when the read finishes",
+    );
+    let site = FakeSite::new();
+    let _daemon = site.start().await;
+    site.set_volume(20 * GB, 10 * GB);
+    let started = site.fake.clock().now();
+    let step = jiff::SignedDuration::from_secs(60);
+    // The clock moves inside the volume read, so only a stamp taken once the
+    // read is over can show it.
+    let clock = site.fake.clock().clone();
+    site.fake
+        .fs()
+        .run_on_next(FsOp::VolumeSpace, move || clock.advance(step));
+
+    let client = site.client().await;
+    let call = client.call(Call::StorageGetCapacity);
+    let Reply::StorageGetCapacity(report) = call.await.expect("the volume reads") else {
+        panic!("not a capacity reply");
+    };
+
+    assert_eq!(
+        report.checked_at,
+        Timestamp::from_jiff(
+            started
+                .checked_add(step)
+                .expect("a minute later is in range")
+        ),
+    );
+    ev.pass();
+}
+
+#[tokio::test]
 async fn available_above_total_is_held_to_total() {
     let site = FakeSite::new();
     let _daemon = site.start().await;
