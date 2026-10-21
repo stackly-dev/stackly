@@ -35,6 +35,7 @@ pub mod limits;
 pub mod message;
 pub mod operation;
 pub mod secret;
+pub mod storage;
 mod version;
 pub mod wire;
 
