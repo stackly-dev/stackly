@@ -4,17 +4,15 @@ use std::os::unix::fs::PermissionsExt;
 
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, create_instance};
+use crate::harness::{PG17, PG18, Pg, Site, create_instance};
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path() {
+async fn never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
         expected = "with decoy psql, initdb, and postgres first on the daemon's PATH, create, start, readiness, and stop work and no decoy ever runs",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let decoys = site.root.path().join("decoys");
@@ -58,4 +56,16 @@ async fn postgresql_18_never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemo
         std::fs::read_to_string(&marker).unwrap_or_default()
     );
     ev.pass_with("create, start, readiness, and stop ran with decoys first on PATH and none ran");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path() {
+    never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path() {
+    never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(PG18).await;
 }

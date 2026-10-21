@@ -9,18 +9,19 @@ use stackly_protocol::instance::{
 use stackly_protocol::operation::OperationState;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, Via, create_instance, stop_and_shutdown};
+use crate::harness::{PG17, PG18, Pg, Site, Via, create_instance, stop_and_shutdown};
 use crate::support::LogRecorder;
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_is_created_started_served_and_stopped_through_the_daemon() {
+async fn is_created_started_served_and_stopped_through_the_daemon(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
-        expected = "a PostgreSQL 18 instance is created with its superuser password, initialized with data.initializedLine 18, starts to ready, shows lifecycle, desired, readiness, health, and process apart, answers queries over the socket and TCP, sends UTC stamped log lines to the sink, keeps a row over a stop and a start, and stops",
+        expected = &format!(
+            "a PostgreSQL {} instance is created with its superuser password, initialized with data.initializedLine {}, starts to ready, shows lifecycle, desired, readiness, health, and process apart, answers queries over the socket and TCP, sends UTC stamped log lines to the sink, keeps a row over a stop and a start, and stops",
+            pg.major, pg.major
+        ),
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let recorder = Arc::new(LogRecorder::default());
@@ -33,14 +34,14 @@ async fn postgresql_18_is_created_started_served_and_stopped_through_the_daemon(
         .await;
     let api = site.api().await;
 
-    let made = create_instance(&site, &api, "pg18").await;
+    let made = create_instance(&site, &api, &format!("pg{}", pg.major)).await;
     let paths = site.instance_paths(made.id);
     let manifest: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(&paths.manifest).expect("the manifest is written"),
     )
     .expect("the manifest is JSON");
-    assert_eq!(manifest["data"]["initializedLine"], PG18.major);
-    assert_eq!(manifest["runtime"]["line"], PG18.major);
+    assert_eq!(manifest["data"]["initializedLine"], pg.major);
+    assert_eq!(manifest["runtime"]["line"], pg.major);
     assert!(
         !site
             .run_dir(made.id)
@@ -70,7 +71,7 @@ async fn postgresql_18_is_created_started_served_and_stopped_through_the_daemon(
 
     let psql = site.psql(made.id, made.port);
     let version = psql.scalar(&made.password, "SHOW server_version");
-    assert_eq!(version, PG18.version);
+    assert_eq!(version, pg.version);
     site.subject(&ev, &version);
     for via in [Via::Socket, Via::Tcp] {
         let ran = psql.run(
@@ -128,4 +129,16 @@ async fn postgresql_18_is_created_started_served_and_stopped_through_the_daemon(
     ev.pass_with(&format!(
         "PostgreSQL {version} created, ran twice, kept its row, and stopped"
     ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_is_created_started_served_and_stopped_through_the_daemon() {
+    is_created_started_served_and_stopped_through_the_daemon(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_is_created_started_served_and_stopped_through_the_daemon() {
+    is_created_started_served_and_stopped_through_the_daemon(PG18).await;
 }
