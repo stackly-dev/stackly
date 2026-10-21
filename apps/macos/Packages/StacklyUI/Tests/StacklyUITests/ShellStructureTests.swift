@@ -159,6 +159,18 @@ struct ShellStructureTests {
         #expect(host.lowerBound < gate.lowerBound, "the host sits inside the gate it reads")
     }
 
+    @Test func theShellFillsTheWindowWidthForTheInspector() throws {
+        let code = try shellCode("AppShell.swift")
+        let measure = try #require(code.range(of: ".onGeometryChange(for: CGFloat.self)"))
+        let width = try #require(code.range(of: "$0.size.width"))
+        let environment = try #require(
+            code.range(of: ".environment(\\.stacklyWindowWidth, windowWidth)"))
+        let gate = try #require(code.range(of: ".environment(\\.mutationAvailability"))
+        #expect(measure.lowerBound < width.lowerBound, "it reads the width of the geometry")
+        #expect(width.lowerBound < environment.lowerBound, "and then sets it in the environment")
+        #expect(environment.lowerBound < gate.lowerBound, "which the gate and the host sit inside")
+    }
+
     @Test func theLiveShellCreatesOneFeedbackCenterAndPutsItInTheEnvironment() throws {
         let code = try shellCode("LiveShell.swift")
         #expect(code.components(separatedBy: "FeedbackCenter()").count == 2, "exactly one")

@@ -107,11 +107,11 @@ Data contoh dari mockup UI dijadikan fixture Swift untuk Xcode Previews dan snap
 
 **Trace:** REQ-024, REQ-027, NFR-012, AC-027, PRD bagian 28
 
-**Pointer:** spec [0068](../specs/0068-fixture-tampilan-cek-visual/index.md) · code in `clients/swift/Sources/StacklyEvidenceCore/`, `clients/swift/Sources/StacklyXCTestSupport/`, `xtask/src/evidence/`
+**Pointer:** spec [0068](../specs/0068-fixture-tampilan-cek-visual/index.md) · code in `clients/swift/Sources/StacklyEvidenceCore/`, `clients/swift/Sources/StacklyXCTestSupport/`, `xtask/src/evidence/`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Fixtures/`, `apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/`, `xtask/src/snapshot.rs`
 
 - [x] Design it (spec): `/architect fixture tampilan & cek visual`
 - [ ] Build it: `/develop fixture tampilan & cek visual`
-  - [ ] Fixtures, snapshot harness, and base suites: render probe and the underscored setter guard, `FixtureAppearance`, the `fixtureNow` and `loadingDelay` keys, `Fixtures/` with every scenario and case, `ShellBootstrap.fixture` and `settledRuntime`, the snapshot helper with its source rules, the gallery, `DaemonStatusMatrix`, Diagnostics and `UnbuiltPage` suites, and `cargo xtask snapshot review` (spec 0068 AC-1 to AC-9; needs feature 12 milestones 1 to 4 and feature 13 milestone 3, both on main; the Components gallery suite after feature 67)
+  - [x] Fixtures, snapshot harness, and base suites: render probe and the underscored setter guard, `FixtureAppearance`, the `fixtureNow` and `loadingDelay` keys, `Fixtures/` with every scenario and case, `ShellBootstrap.fixture` and `settledRuntime`, the snapshot helper with its source rules, the gallery, `DaemonStatusMatrix`, Diagnostics and `UnbuiltPage` suites, and `cargo xtask snapshot review` (spec 0068 AC-1 to AC-9; needs feature 12 milestones 1 to 4 and feature 13 milestone 3, both on main; the Components gallery suite after feature 67)
   - [x] XCTest evidence helper: internal target `StacklyEvidenceCore`, product `StacklyXCTestSupport`, and the new `evidence check` scan rule (spec 0068 AC-10, AC-11; can run in parallel with milestone 1)
   - [ ] XCUITest and audits: target `StacklyAppUITests`, the Debug scenario mode in `AppDelegate` and `StacklyApp`, `cargo xtask ui-test`, the shell, gallery, menu and audit tests with screenshots, and the Testing views section in design.md (spec 0068 AC-12 to AC-19; after milestones 1 and 2; the menu test after spec 0069 `CommandMap` is on main; running needs Automation Mode enabled by the user)
 - [ ] Verify it: `/check verify fixture tampilan & cek visual`

@@ -104,6 +104,8 @@ _Dibangun 2026-10-21 oleh `dev-f67-m3` di branch sendiri (langkah Build plan 14)
 - [ ] `NOT_RUN` · nyalakan VoiceOver di halaman Components → toggle dibacakan "Hide Inspector" atau "Show Inspector"; placeholder dibaca satu kelompok, judul lalu pesan; header dibaca judul sebagai heading, status "Status: Running", lalu tombol aksi satu per satu → AC-18, AC-19
 - [ ] `NOT_RUN` · Increase Contrast, Reduce Transparency, Reduce Motion, light dan dark pada inspector asli → latar tetap opak dan tidak berubah saat Reduce Transparency, tidak ada gerak selain crossfade bawaan sistem → AC-19
 - [ ] `NOT_RUN` · di jendela 900 pt dengan sidebar dan inspector terbuka di layar fitur 22 atau 18 (setelah milestone fitur itu dibangun) → tidak ada teks terpotong di kolom halaman 384 pt maupun di inspector → AC-18
+- [x] Tambahan langkah 14 · di macOS 27.0.1 buka app probe (`NavigationSplitView`, `onGeometryChange` dan `stacklyWindowWidth` seperti `AppShell`, inspector `ideal: 340` dan `max: StacklyInspectorWidth.maxWidth(windowWidth:)`) pada jendela 900, 999, 1000, dan 1300 pt → inspector terbuka 280, 280, 340, dan 340 pt; kolom halaman di 900 pt 384 pt; `.stacklyInspector` asli di 900 pt: inspector 280 pt, kolom halaman 384 pt → AC-18 _Hasil `dev-f67-m3-s14a` 2026-10-21: angka dibaca dari teks yang dirender probe di screenshot scratchpad `ideal-{900,999,1000,1300}.png`_
+- [ ] `NOT_RUN` · di app Debug atau probe, jendela 1000 pt atau lebih dengan pembagi inspector diseret ke 360 pt, lalu jendela dikecilkan ke 900 pt → inspector dijepit ke 280 pt dan kolom halaman tetap 384 pt → AC-18 (sesi ini tidak bisa menyeret pembagi atau mengubah ukuran jendela hidup: drag sintetis tidak menggerakkan pembagi dan API AX tidak membuka jendela probe; yang terbukti hanya lebar buka per lebar jendela)
 
 ### Commands
 
@@ -113,6 +115,7 @@ _Dibangun 2026-10-21 oleh `dev-f67-m3` di branch sendiri (langkah Build plan 14)
 - [x] `cargo xtask build-app` → `BUILD SUCCEEDED`
 - [x] `xcrun swift-format lint --strict` atas file Swift milestone ini → tanpa peringatan
 - [x] `cargo xtask evidence check` → 39 catatan manual, baseline valid, 577 file Rust dan 237 file Swift mengikuti aturan; lead menjalankannya lagi setelah merge
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter InspectorTests` dan `--filter ShellStructureTests` (tambahan langkah 14) → `StacklyInspectorWidth.maxWidth` 280 pt di 900 dan 999 pt, 360 pt di 1000 dan 1280 pt dan di `nil`; `compactWindowWidth` 1000; `stacklyWindowWidth` bawaan `nil`; kolom halaman di jendela minimum dengan sidebar 236 pt 384 pt; sumber `AppShell` memasang `onGeometryChange` lalu `.environment(\.stacklyWindowWidth, windowWidth)` di dalam gerbang dan host aksi → AC-18
 
 ### Acceptance-criteria coverage
 
@@ -120,6 +123,40 @@ _Dibangun 2026-10-21 oleh `dev-f67-m3` di branch sendiri (langkah Build plan 14)
 - AC-19 · target toggle 44 × 52 pt dari toolbar dan label di pohon AX (langkah 14); Tab, Space, VoiceOver, dan setting sistem `NOT_RUN`
 - AC-20 · bagian Inspector di galeri Components dan tiga `#Preview` per komponen (`InspectorHeader`, `InspectorPlaceholder`, `InspectorToggle` dengan `.stacklyInspector`); dicocokkan `/check verify` dengan tabel *State di galeri*
 - AC-21 · aturan `.inspector(` di `SourceRuleTests` (dibangun di milestone 1) lulus untuk kode milestone ini
+
+### Hasil `/check verify` (chk-f67-m3, 2026-10-21): PASS untuk lingkup milestone 3
+
+_Semua langkah `[x]` di atas dijalankan ulang di macOS 27.0.1 dan tetap lulus. App Debug (`target/xcode/Build/Products/Debug/Stackly.app`) dibuka dengan `STACKLY_ROOT` sementara, dikendalikan lewat API accessibility (tanpa Keyboard navigation, VoiceOver, atau perubahan System Settings), lalu ditutup dan rootnya dihapus. Probe `NavigationSplitView` ditulis ulang di scratchpad sesi (di luar repo) dengan `StacklyUI` lewat path, karena belum ada layar sungguhan dengan `.stacklyInspector`._
+
+Commands (log di scratchpad sesi):
+
+- `swift test --package-path apps/macos/Packages/StacklyUI` dengan `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN` dari checkout utama → 540 test di 57 suite lulus (angka 493 di atas dari sebelum milestone 4 masuk `main`)
+- `--filter InspectorTests` → 11 test lulus; `--filter SourceRuleTests` → 15 test di 2 suite lulus (aturan `.inspector(` ikut)
+- `cargo xtask build-app` → `BUILD SUCCEEDED`; `xcrun swift-format lint --strict` atas file Inspector, galeri, dan `InspectorTests.swift` → tanpa peringatan
+- `cargo xtask evidence check` → 44 catatan manual, baseline valid, 577 file Rust dan 265 file Swift mengikuti aturan
+
+Galeri Components (AC-20, dicocokkan dengan tabel *State di galeri*, baris Inspector):
+
+- Bagian `InspectorHeader`: kolom 280 pt dengan tile Pg, "pg17-dev", "PostgreSQL 17.4", "Status: Running", aksi Stop dan Remove… berjajar, dan satu `CardSection` "Summary" (Software, Endpoint, Created); kolom 280 pt tanpa aksi ("Status: Stopped"); kolom 240 pt dengan judul `pg17-analytics-replica-eu-central-staging` yang membungkus jadi dua baris, subjudul dua baris, dan aksi Start dan Copy Connection String bertumpuk. Tidak ada teks terpotong.
+- Bagian `InspectorPlaceholder`: pohon AX `inspector.placeholder` bernilai "No Selection, Select an instance to see its details." dan "Nothing to Show" (satu elemen per placeholder).
+- Bagian `stacklyInspector and InspectorToggle`: tombol "Open Inspector Demo". Tiap komponen punya tiga `#Preview` (Light, Dark, Narrow width): 3, 3, 3 di `InspectorHeader`, `InspectorPlaceholder`, `InspectorToggle`.
+- Evidence: `scratchpad/components-ax.txt`, `gallery-scrolled.png`, `gallery-placeholder-live.png`.
+
+Sheet demo dengan inspector asli (AC-18, AC-19):
+
+- Terbuka dengan toggle `inspector.toggle`, `AXHelp` dan `AXAttributedDescription` "Hide Inspector", dan inspector 280 pt (tile, "pg17-dev", "Status: Running", "Summary"). Setelah `AXPress` inspector menutup, sheet menyempit ke 720 pt, dan label serta help menjadi "Show Inspector"; `AXPress` lagi membukanya kembali.
+- Pembagi lewat nilai AX: kolom terjepit di 360 pt (maksimum) dan 240 pt (minimum), 340 dan 290 pt di antaranya; menariknya jauh ke ujung menutup inspector dan label menjadi "Show Inspector". Pada 240 pt tidak ada teks terpotong; baris "Created" turun di bawah labelnya. Evidence: `sheet-ax-open.txt`, `sheet-ax-closed.txt`, `divider-clamp.txt`, `demo-sheet-open.png`, `demo-sheet-240.png`.
+
+Probe di jendela 900 pt, sidebar dan inspector terbuka (langkah 14 diulang; log `probe-divider.txt`, tangkapan `probe-dark-280.png`, `probe-dark-240.png`, `probe-light-280.png`, `probe-light-240.png`):
+
+- Jendela tetap 900 × 652 pt di semua lebar inspector. Sidebar 236 pt. Inspector terbuka di 280 pt, dijepit 240 pt (pembagi di 700) dan 360 pt (pembagi di 300 dan 450); menariknya ke 800 menutup inspector.
+- Lebar kolom halaman yang terlihat sesuai keputusan user 2026-10-21: 384 pt dengan inspector 280 pt, 424 pt dengan 240 pt, dan 304 pt dengan 360 pt (angka terakhir hanya dicatat). Tidak ditandai FAIL.
+- Latar `surfaceWindow` mengisi kolom inspector tanpa sambungan, terang (`NSApp.appearance = .aqua` di probe) dan gelap. Di 240 dan 280 pt tidak ada teks terpotong (judul header membungkus, jalur panjang di baris kartu membungkus). Lebar 360 pt tidak ditangkap layar.
+- Toggle di toolbar: `AXButton` `inspector.toggle`, `AXDescription` dan `AXHelp` "Hide Inspector", target 44 × 52 pt; menjadi "Show Inspector" saat inspector tertutup dan "Hide Inspector" lagi setelah `AXPress`.
+
+Catatan (bukan FAIL): toggle di halaman demo galeri (bukan di toolbar) berukuran 43 × 22 pt, yaitu tombol bergaya bawaan di dalam halaman; target toolbar asli 44 × 52 pt memenuhi 24 × 24 pt AC-19. Bila toggle dipasang di tempat lain selain toolbar, tingginya perlu diperiksa terhadap 24 pt.
+
+Belum dijalankan (`NOT_RUN`), tidak bisa lewat API accessibility di Mac ini: Tab dan Space pada toggle (Keyboard navigation dimatikan; AC-19), VoiceOver pada toggle, placeholder, dan header (AC-18, AC-19), serta Increase Contrast, Reduce Transparency, dan Reduce Motion pada inspector asli (AC-19). Di luar lingkup: layar fitur 22, 18, dan 21 (belum dibangun) dan *Tambahan langkah 14* (batas lebar inspector 280 pt di bawah jendela 1000 pt; dibangun `dev-f67-m3-s14a`).
 
 ## Milestone 4: Log and diff views
 

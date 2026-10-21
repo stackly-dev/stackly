@@ -22,6 +22,7 @@ public struct AppShell: View {
 
     @SceneStorage("shell.section") private var section: SidebarSection = .overview
     @State private var windowKey = MainWindowKey()
+    @State private var windowWidth: CGFloat?
     @Environment(\.openWindow) private var openWindow
 
     private let presentation: ShellPresentation
@@ -102,6 +103,13 @@ public struct AppShell: View {
                 )
         }
         .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
+        // The inspector's widest column depends on the window width (spec 0067, AC-18).
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.width
+        } action: {
+            windowWidth = $0
+        }
+        .environment(\.stacklyWindowWidth, windowWidth)
         // The commands read the host, and the host reads the gate from the environment it
         // sits in, so each goes before (inside) the line that sets what it reads: spec 0069.
         .modifier(

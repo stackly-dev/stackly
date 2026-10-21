@@ -13,11 +13,43 @@ nonisolated enum InspectorMetrics {
     static let padding = Spacing.s16
 }
 
+/// The widest the inspector column can be for a window width (spec 0067, AC-18).
+///
+/// At the smallest window (900 pt) with the sidebar (236 pt) and the inspector open, the
+/// page column is 384 pt wide when the inspector is 280 pt. Below 1000 pt the column is
+/// therefore capped at 280 pt, so 384 pt stays the narrowest the page column gets; from
+/// 1000 pt up it can be dragged to 360 pt.
+nonisolated public enum StacklyInspectorWidth {
+    /// The window width below which the inspector is capped at its ideal width.
+    public static let compactWindowWidth: CGFloat = 1000
+
+    /// The widest the inspector column can be at `windowWidth`.
+    ///
+    /// - Parameter windowWidth: The width of the window, or `nil` when it is not known
+    ///   (gallery, previews, sheets), which allows the full width.
+    /// - Returns: 280 pt below ``compactWindowWidth``, otherwise 360 pt.
+    public static func maxWidth(windowWidth: CGFloat?) -> CGFloat {
+        guard let windowWidth, windowWidth < compactWindowWidth else {
+            return InspectorMetrics.maxWidth
+        }
+        return InspectorMetrics.idealWidth
+    }
+}
+
+extension EnvironmentValues {
+    /// The width of the window the view is in. The root view of the window sets it from
+    /// its geometry; `nil` (the default) means the window is not known and the inspector
+    /// may be 360 pt wide.
+    @Entry public var stacklyWindowWidth: CGFloat?
+}
+
 extension View {
     /// Shows a native inspector column on the right of this view (spec 0067, AC-18) and
     /// puts an ``InspectorToggle`` in the toolbar.
     ///
-    /// The column is 240 pt wide at the least, 280 pt by default, and 360 pt at the most.
+    /// The column is 240 pt wide at the least, 280 pt by default, and 360 pt at the most
+    /// in a window 1000 pt wide or more, 280 pt at the most in a narrower one
+    /// (``StacklyInspectorWidth``, from the window width in the environment).
     /// Its content scrolls on the opaque ``StacklyColor/surfaceWindow``, with 16 pt of
     /// padding and 16 pt between the views. Put it on the page content of the detail
     /// column, the content that fills the column: the inspector's container takes the
@@ -51,6 +83,7 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
     let help: String?
     let inspector: Inspector
 
+    @Environment(\.stacklyWindowWidth) private var windowWidth
     @State private var viewportHeight: CGFloat = 0
 
     func body(content: Content) -> some View {
@@ -76,7 +109,7 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
                 .inspectorColumnWidth(
                     min: InspectorMetrics.minWidth,
                     ideal: InspectorMetrics.idealWidth,
-                    max: InspectorMetrics.maxWidth
+                    max: StacklyInspectorWidth.maxWidth(windowWidth: windowWidth)
                 )
             }
             .toolbar {
