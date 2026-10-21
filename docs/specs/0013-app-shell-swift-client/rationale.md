@@ -550,3 +550,46 @@ Update `/architect` setelah branch `claude/f13-wiring-7b3a78` di merge (cdad419)
 **Keputusan kecil yang diambil update ini.** `.observe` membawa revision event, yang hanya dipakai untuk id yang tidak dipegang: refetch butuh revision supaya aturan tombstone tetap menolak instance yang sudah dihapus (contoh K16 tanpa revision tidak bisa membedakannya). `instance.state_changed` dengan revision yang tidak lebih besar dilewati seluruhnya, karena daemon menaikkan revision di setiap batch yang mengirim event ini, sehingga summary lain pada revision yang sama tidak pernah membawa `statusSeq` yang lebih kecil. Snapshot mengganti item apa adanya tanpa `merge`, karena snapshot selalu lebih baru dari item yang dipegang sebelum snapshot itu dimulai.
 
 **Belum diterapkan (dihentikan lead):** usulan fase 02 lain di inventaris `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md` bagian *Spec 0013* (P1 sampai P13, P16, P17, P19, P20, dan butir gabungan 1 sampai 9, 11 sampai 13 yang bukan K16 sampai K18): banner dan seksi agent spec 0015 (AC-7, AC-9, `ConnectionHint`, aturan sumber), registrasi `CatalogStore` dan `RuntimeStore`, `ShellNavigator`, `ShellDestination`, `newInstanceAction` sebagai API shell, `ResourceStore.itemFailures` dan `retry`, `CapacityModel`, `ShellSync.events(kindPrefix:)` spec 0021, `ShellPresentation.status`, `.commands` ⌘N, dan pemecahan Follow-up. Semuanya additive dan masih tertulis di spec pemiliknya.
+
+## Perubahan 2026-10-21 (update gabungan wave 3 ui-macos)
+
+Update `/architect` sesi `arc-f1368-update` setelah verify penuh fitur 13 (`chk-f13-verify`, perbaikan `106cb49`) dan setelah fitur 67, 68, dan 69 dibangun. Prinsipnya: spec menggambarkan shell seperti yang sudah dibangun dan diputuskan. Butir yang sudah ada di kode ditulis seperti yang dibangun dengan rujukan ke spec pemiliknya; butir fase 02 yang belum dibangun ditulis sebagai batas atau catatan *Tambahan fase 02* dengan fitur dan langkah pemiliknya. Langkah Build plan 1 sampai 18 dan penomorannya tidak berubah, dan tidak ada langkah baru; ID AC tetap.
+
+**Perubahan teks AC, disetujui user lewat lead (2026-10-21).** Empat teks AC diubah persis seperti usulan yang dikirim ke lead; satu usulan sengaja tidak mengubah AC.
+
+| AC | Perubahan | Sumber |
+| --- | --- | --- |
+| AC-7 | "GUI tidak pernah menjalankan `stacklyd` atau binary lain" menjadi "sebagai prosesnya sendiri", dan meminta launchd menjalankan agent terdaftar lewat `SMAppService` (spec 0015) diizinkan; invariant yang sama di *Key invariants* diselaraskan | usulan fondasi butir 6 |
+| AC-9 | banner untuk `ipc.endpoint_missing` dan `ipc.connection_refused` mengikuti tabel *Banner per state* spec 0015 mulai fitur 15 milestone 3; footer, gate, dan placeholder halaman tetap | usulan fondasi butir 7, konflik 1 |
+| AC-14 | jaminan kolom konten 640 pt berlaku untuk halaman tanpa inspector terbuka; kolom halaman 384 pt (424 pt dengan inspector 240 pt) dengan inspector terbuka di jendela 900 pt | keputusan user 2026-10-21 atas temuan langkah 14 spec 0067 |
+| AC-21 | pengumuman transisi ke tidak terjangkau untuk kedua kode itu memakai judul banner agent spec 0015 sebagai ganti "Can’t connect to stacklyd.", supaya satu transisi tetap satu pengumuman | usulan fondasi konflik 1 |
+| AC-23 | tidak diubah: aturan `import ServiceManagement` dan API tulis file ditulis di *Aksesibilitas* sebagai milik spec 0015 (AC-11 dan *Instalasi CLI*), supaya tidak ada AC ganda | usulan fondasi butir 11 |
+
+**Perubahan teks lain.**
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Batas dengan fitur lain | baris fitur 67, 68, 69 menyebut bagian yang mereka bangun di shell; baris baru untuk agent (spec 0015), `MainWindowRoot` dan onboarding (spec 0016), `ShellNavigator`, `ShellDestination`, `newInstanceAction` (spec 0022), dan `CatalogStore`, `RuntimeStore`, `CapacityModel`, `itemFailures`, `retry`, `ShellSync.events(kindPrefix:)`; urutan doctor fitur 34 di bawah seksi agent | usulan fondasi butir 1; spec 0067 baris :72; spec 0069 butir 1; catatan tambahan usulan fondasi |
+| Peta package | `Components/`, `Accessibility/`, `Commands/`, `Fixtures/` (dengan `ShellPreviewSamples`), `AppShell+Commands.swift` sebagai yang dibangun; `Agent/` dan `Onboarding/` sebagai tambahan fase 02; `AppDelegate.makeRuntime()` dan `.commands` di target app | spec 0067 :87, spec 0068 (a) dan (d), spec 0069 butir 4 |
+| Model data | `ShellStatus` dan `ShellPresentation` seperti di kode (`status`, `footer`, `banner`, `mutationAvailability`, `pageFailure`, `isReconnecting`); pengecualian `onboarding.finished` dan symlink CLI; `lastError` dihapus saat `.connected` | usulan fondasi butir 2, 3, P19; perbaikan verify `106cb49` |
+| `ResourceStore` | `itemFailures`, `ItemFailure`, `retry(_:)` sebagai tambahan fitur 22; pengecualian retained tetap lewat closure `InstanceStore` | usulan fondasi butir 4, konflik 6 dan 7 |
+| `ShellSync` dan API surface | `events(kindPrefix:)` milik fitur 21 | usulan spec 0021 untuk spec 0013 (Follow-up spec 0021, tercatat "belum diterapkan" di perubahan 2026-10-20) |
+| Model shell | hook `mainWindowWillClose(isTerminating:screen:)` dan `systemRetry()` seperti di kode; `ShellBootstrap.fixture` (Debug); tambahan fase 02 untuk `onboardingStore`, `OnboardingModel`, `CommandLineToolModel`, `BackgroundAgentModel`, `CatalogStore`, `RuntimeStore`, `CapacityModel`, dan jadwal `refresh` | usulan fondasi butir 5; spec 0068 (a) |
+| Tampilan status daemon | baris agent spec 0015 untuk dua kode itu dengan footer, gate, placeholder, dan kalimat waktu tetap; aksi banner baru `mutates: false`; aturan pengumuman | usulan fondasi butir 7 |
+| Shell jendela | snippet scene seperti di kode (`.commands { StacklyCommands(runtime:) }`, `.keyboardShortcut` Show Main Window, `.fixtureWindow()`, `DesignGallery(secrets:)`); `FeedbackCenter` di `LiveShell`; `.feedbackPresenter()`, `.actionHost()` dan urutan modifier; `MainWindowKey` dan `track(_:)`; `AppShell.select(_:)` dan `onReselect`; perintah shell; `stacklyWindowWidth`; tooltip Settings; jalur fixture Debug; tambahan `MainWindowRoot` | spec 0067 *Shell jendela*; spec 0068 (a); spec 0069 butir 2 sampai 5; usulan fondasi butir 8, K18 |
+| `.commands` | `StacklyCommands` satu satunya `.commands`, tanpa `CommandGroup` sementara; usulan `.commands` ⌘N bertanda `// provisional: F69` tidak dipakai | spec 0069 butir 4 menggantikan usulan fondasi butir 8 dan P20 |
+| Diagnostics koneksi | Copy Details lewat `PlainPasteboard`; satu elemen aksesibilitas terkini per baris; petunjuk hanya untuk masalah yang masih berlaku; tambahan seksi agent dan Command Line serta petunjuk agent | spec 0067 *Diagnostics koneksi*; perbaikan verify `106cb49`; usulan fondasi butir 9 |
+| Jalur mutasi | penunjuk ke `Feedback.outcome` spec 0067 | spec 0067 :399 |
+| Asumsi lintas spec | penghapusan instance lewat `instance.removed` | usulan fondasi butir 12 |
+| Cek manual | cek 1, 2, 5 (ukuran minimum), dan 8 juga dibuktikan spec 0068 AC-14; cek 1 mengikuti baris agent setelah fitur 15 milestone 3 | spec 0068 (c); usulan fondasi butir 7 |
+| Build plan | blok *Tambahan dari spec 0067 sampai 0069 dan usulan fase 02* yang menunjuk langkah pemilik setiap tambahan, tanpa langkah baru | prinsip update ini |
+| Consequences | bukti GUI manual kini dijawab spec 0068; kolom halaman 384 pt; urutan merge file shell bersama | spec 0068 (b); keputusan user 2026-10-21 |
+| Follow-up | fitur 15 diberi jawaban spec 0015 (tanda tangan peer ke fitur 60 dan 63), baris halaman yang belum dibangun dipecah per fitur, baris `/sync` untuk `design.md` | usulan fondasi butir 13; spec 0069 butir 5 |
+
+**Keputusan kecil yang diambil update ini.**
+
+- Butir fase 02 yang belum dibangun ditulis di tempat yang akan diubah fiturnya, dengan penanda *Tambahan fase 02* dan langkah pemiliknya, bukan di satu bagian terpisah. Pembaca bagian itu langsung melihat apa yang akan berubah, dan teks lengkapnya tetap di spec pemilik. Runner up: satu bagian "Fase 02" di akhir desain, yang lebih mudah dihapus nanti tetapi terlewat saat membaca bagian yang terdampak.
+- `itemFailures` dihapus lewat callback `didApply` yang sudah ada (`.changed`, `.reloaded`), tanpa hook baru, sesuai konflik 7 usulan fondasi.
+- AC-23 tidak diubah: aturan sumber agent sudah punya AC di spec 0015 (AC-11), dan spec 0013 hanya menunjuknya.
+
+**Ditunda atau tidak diterapkan.** Usulan fondasi butir 10 dan K16 sampai K18 sudah diterapkan 2026-10-20 (`99b9b2b`). Usulan `.commands` sementara (butir 8 bagian `.commands`, P20) digantikan spec 0069 butir 4. Tidak ada butir sumber lain yang ditunda.
