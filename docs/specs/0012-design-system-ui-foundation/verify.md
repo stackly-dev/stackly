@@ -1,20 +1,20 @@
 # Verify: Design system dan fondasi UI · spec 0012
 
-**Dijalankan**: 2026-10-18, macOS 27.0 (26A428), Xcode 27.0 (27A266a), build Debug `target/xcode/Build/Products/Debug/Stackly.app` dari branch `claude/f12-verify-test-cfb188`.
+**Dijalankan**: 2026-10-18, macOS 27.0 (26A428), Xcode 27.0 (27A266a), build Debug `target/xcode/Build/Products/Debug/Stackly.app` dari branch `claude/f12-verify-test-cfb188`. Dijalankan ulang 2026-10-21 di macOS 27.0.1 (26A434), Xcode 27.0 (27A266a), dari `main` `d1338e4` (branch `claude/nice-banach-103b7f`): semua baris `## Commands`, plus langkah UI yang jalurnya berubah sejak 2026-10-18. Yang berubah hanya cangkang galeri (halaman Secrets spec 0011 di `DesignGallery.swift`, bantuan Narrow Width dan `GalleryLayout.narrowWidth` final di `GallerySupport.swift`), `StacklyApp.swift` (jendela utama spec 0013, galeri menerima runtime daemon), dan `design.md` (bagian App shell). Kode `Tokens/`, `Status/`, `State/`, dan `Confirmation/` tidak berubah, jadi langkah lainnya tidak diulang. App Debug dijalankan dengan `STACKLY_ROOT` ke folder sementara, tidak pernah ke Application Support asli. Bukti ulang ada di folder catatan bersama session koordinator wave 1 (`chk-f12-verify-evidence/`).
 
-**Hasil**: BLOCKED. Semua cek yang bisa dijalankan lulus, tapi empat cek yang butuh setting sistem asli (Increase Contrast, Reduce Transparency, Differentiate Without Color, Reduce Motion) dilewati atas keputusan pengguna. Karena itu kotak Verify it di scope belum dicentang.
+**Hasil**: BLOCKED. Semua cek yang bisa dijalankan lulus, juga pada jalan ulang 2026-10-21. Empat cek yang butuh setting sistem asli (Increase Contrast, Reduce Transparency, Differentiate Without Color, Reduce Motion) dijalankan pengguna sendiri (keputusan pengguna 2026-10-21) dan hasilnya belum masuk. Karena itu kotak Verify it di scope belum dicentang.
 
 **Cara menjalankan**: app Debug dibuka sebagai instance kedua, lalu dikendalikan lewat pohon aksesibilitas (AX) dan tombol keyboard nyata (CGEvent), dengan tangkapan jendela (`screencapture -l`) dan rekaman layar pendek (`screencapture -v`) yang frame nya dianalisis. Skrip pemeriksa dan bukti mentah ada di folder catatan bersama session koordinator (`feature-12-verify-harness.swift` dan `feature-12-verify-evidence/`), bukan di repo. Appearance light dipaksa per app dengan argumen `-NSRequiresAquaSystemAppearance YES`; argumen `-AppleInterfaceStyle` tidak berpengaruh di macOS 27.
 
 ## UI / manual
 
-- [x] Menu Window di app Debug berisi "Design Gallery", dan perintahnya membuka jendela galeri dengan halaman Tokens, Status, States, Confirmation → AC-18
+- [x] Menu Window di app Debug berisi "Design Gallery", dan perintahnya membuka jendela galeri dengan halaman Tokens, Status, States, Confirmation → AC-18 · ulang 2026-10-21: lulus; sidebar galeri sekarang Tokens, Status, States, Confirmation, Secrets (halaman Secrets milik spec 0011, di luar AC-18)
 - [x] Halaman Tokens menampilkan setiap token warna (empat token kustom plus `decorative`), lima tone, dua belas peran tipografi dengan text style dan ukuran macOS nya, skala spacing, radius, ukuran berskala, dan motion → AC-18
 - [x] Halaman Status menampilkan `StatusLabel` untuk ketujuh belas contoh tabel Status instance dalam konteks standard dan row, kolom tampilan Differentiate Without Color, `ToneBadge` untuk kedelapan state operasi, dan ketujuh ikon bagian, di light dan dark → AC-4, AC-5, AC-18, AC-19
-- [x] VoiceOver (pohon AX): setiap `StatusLabel` adalah satu elemen "Status: <label>" ditambah ", <detail>" (misalnya "Status: Starting…, Waiting for probe"); 51 elemen untuk 17 contoh dalam tiga kolom → AC-5, AC-17
+- [x] VoiceOver (pohon AX): setiap `StatusLabel` adalah satu elemen "Status: <label>" ditambah ", <detail>" (misalnya "Status: Starting…, Waiting for probe"); 51 elemen untuk 17 contoh dalam tiga kolom → AC-5, AC-17 · ulang 2026-10-21: 51 elemen, 17 label unik
 - [x] Ikon bagian tidak muncul di pohon AX, hanya labelnya (Overview sampai Diagnostics) → AC-19
 - [x] Konteks row: label dan detail memakai warna utama; baris terpilih di daftar yang difokus (seleksi biru) membuat titik dan simbol status ikut putih → AC-5
-- [x] Narrow Width (640 pt): tidak ada label status yang terpotong, detail terpotong lebih dulu dengan "…", teks catatan membungkus; di keempat halaman → AC-5, AC-18
+- [x] Narrow Width (640 pt): tidak ada label status yang terpotong, detail terpotong lebih dulu dengan "…", teks catatan membungkus; di keempat halaman → AC-5, AC-18 · ulang 2026-10-21: lulus, area halaman 640 pt lebar (AX), bantuan tombol "Show the page at 640 pt, the minimum content width"
 - [x] Halaman States menampilkan setiap bentuk: loading, empty no data (dua aksi), empty no results ("No Results for “mysql-legacy-archive”" dengan Clear Filters), failed (judul, pesan daemon, kode monospace, Open Diagnostics, Retry), unsupported (judul, alasan, tanpa tombol), loaded, loaded stale, empty stale outdated, dan loaded partial → AC-8, AC-10, AC-11, AC-12, AC-13, AC-14
 - [x] Placeholder dan banner adalah satu grup AX yang labelnya judul; banner per tone tampil dengan simbol dan judul → AC-11, AC-17
 - [x] Aksi utama placeholder tampil `.borderedProminent` (biru saat jendela aktif) dan aksi sekunder `.bordered`; jendela galeri tidak punya tombol default (`AXDefaultButton` none) → AC-10
@@ -32,19 +32,19 @@
 - [x] Menekan tombol Remove menjalankan aksi → AC-15
 - [x] Tab lalu Space: di dialog destructive Tab memindahkan fokus dari Cancel ke Remove dan Space menjalankannya; di dialog standard Tab memindahkan fokus dari Cancel ke Bring Down dan Space menjalankannya → AC-15, AC-17
 - [x] Jalur tanpa jendela (`runModal()`, `ConfirmationPresenter` tanpa anchor, dicek dengan test sementara): alert tampil app modal dengan judul dan pesan request; Return dan Escape memberi jawaban yang benar untuk kedua role saat alert aktif; klik Remove mengonfirmasi; `close()` mengakhiri modal tanpa jawaban → AC-15
-- [ ] Differentiate Without Color dengan setting sistem asli: titik berganti simbol di semua `StatusLabel`, simbol tone di `ToneBadge` → AC-5, AC-18 · **BLOCKED** (pengguna melewati cek setting; tampilan yang sama sudah terlihat lewat kolom galeri yang memaksanya)
-- [ ] Increase Contrast dengan setting sistem asli: teks HC, border 1 pt di kartu, banner, dan badge → AC-7 · **BLOCKED** (dilewati; appearance HC milik AppKit di jendela test tidak mengubah `colorSchemeContrast`, jadi tidak bisa diganti cara lain)
-- [ ] Reduce Transparency dengan setting sistem asli: permukaan kustom tidak berubah, glass sistem opak → AC-6, AC-7 · **BLOCKED** (dilewati)
-- [ ] Reduce Motion dengan setting sistem asli: tidak ada gerak, crossfade tetap, progress tanpa animasi → AC-16 · **BLOCKED** (dilewati)
+- [ ] Differentiate Without Color dengan setting sistem asli: titik berganti simbol di semua `StatusLabel`, simbol tone di `ToneBadge` → AC-5, AC-18 · **BLOCKED** (2026-10-18 dilewati; tampilan yang sama sudah terlihat lewat kolom galeri yang memaksanya). 2026-10-21: dijalankan pengguna sendiri, hasil belum masuk
+- [ ] Increase Contrast dengan setting sistem asli: teks HC, border 1 pt di kartu, banner, dan badge → AC-7 · **BLOCKED** (2026-10-18 dilewati; appearance HC milik AppKit di jendela test tidak mengubah `colorSchemeContrast`, jadi tidak bisa diganti cara lain). 2026-10-21: dijalankan pengguna sendiri, hasil belum masuk
+- [ ] Reduce Transparency dengan setting sistem asli: permukaan kustom tidak berubah, glass sistem opak → AC-6, AC-7 · **BLOCKED** (2026-10-18 dilewati). 2026-10-21: dijalankan pengguna sendiri, hasil belum masuk
+- [ ] Reduce Motion dengan setting sistem asli: tidak ada gerak, crossfade tetap, progress tanpa animasi → AC-16 · **BLOCKED** (2026-10-18 dilewati). 2026-10-21: dijalankan pengguna sendiri, hasil belum masuk
 
 ## Commands
 
-- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → 99 test di 13 suite lulus (kontras, status, state, konfirmasi, aturan sumber, tipografi) → AC-2, AC-3, AC-4, AC-6, AC-8, AC-9, AC-12, AC-15
-- [x] `cargo xtask build-app` → BUILD SUCCEEDED (Debug) → AC-18
-- [x] `cargo xtask build-app --release`, lalu `strings` pada setiap file di bundle Release → 0 string "Design Gallery" atau `design-gallery` (Debug: 2) → AC-18
-- [x] `grep '^## ' apps/macos/design.md` → Typography, Color, Spacing and radius, Materials, Status, State patterns, Confirmation, Motion, Accessibility → AC-1
-- [x] `AccentColor.colorset/Contents.json` → hanya `idiom` universal, tanpa nilai warna → AC-6
-- [x] `grep -c '#Preview'` pada keempat file halaman galeri → 3 per halaman (Light, Dark, Narrow width) → AC-18
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → 2026-10-21: 315 test di 38 suite lulus, seluruh paket (2026-10-18: 99 test di 13 suite); keempat belas suite F12 lulus: ColorTokenTests, ConfirmationPresentationTests, ConfirmationTests, ContrastTests, DelayedVisibilityTests, LayoutTokenTests, SourceRuleTests, StaleNoteTests, StateViewPartsTests, StatusAppearanceTests, StatusViewTests, ToneTests, TypographyTests, ViewStateTests → AC-2, AC-3, AC-4, AC-6, AC-8, AC-9, AC-12, AC-15
+- [x] `cargo xtask build-app` → BUILD SUCCEEDED (Debug), juga 2026-10-21 → AC-18
+- [x] `cargo xtask build-app --release`, lalu `strings` pada setiap file di bundle Release → 0 string "Design Gallery" atau `design-gallery` (Debug: 2), sama pada 2026-10-21 → AC-18
+- [x] `grep '^## ' apps/macos/design.md` → Typography, Color, Spacing and radius, Materials, Status, State patterns, Confirmation, Motion, Accessibility → AC-1 · 2026-10-21: kesembilan bagian itu ada, ditambah App shell (spec 0013) di akhir
+- [x] `AccentColor.colorset/Contents.json` → hanya `idiom` universal, tanpa nilai warna → AC-6 · sama pada 2026-10-21
+- [x] `grep -c '#Preview'` pada keempat file halaman galeri → 3 per halaman (Light, Dark, Narrow width) → AC-18 · sama pada 2026-10-21 (halaman Secrets spec 0011 punya 1, di luar AC-18)
 
 ## Acceptance-criteria coverage
 
