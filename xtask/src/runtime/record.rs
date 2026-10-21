@@ -35,7 +35,7 @@ pub fn run(repo: &Path, report_path: &Path) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn git_head(repo: &Path) -> Result<String> {
+pub(super) fn git_head(repo: &Path) -> Result<String> {
     let output = Command::new("git")
         .current_dir(repo)
         .args(["rev-parse", "HEAD"])
@@ -162,17 +162,17 @@ fn holds_spike_result(run_dir: &Path, evidence_path: &str) -> bool {
 
 /// Cleans `output.log` of the workspace, the home folder, and every spike
 /// root before it goes into git.
-struct Sanitizer {
+pub(super) struct Sanitizer {
     /// The workspace root, as given and resolved.
-    workspace: Vec<String>,
+    pub(super) workspace: Vec<String>,
     /// The home folder.
-    home: String,
+    pub(super) home: String,
     /// The OS user name.
-    user: String,
+    pub(super) user: String,
 }
 
 impl Sanitizer {
-    fn from_env(repo: &Path) -> Result<Self> {
+    pub(super) fn from_env(repo: &Path) -> Result<Self> {
         let mut workspace = vec![repo.to_string_lossy().into_owned()];
         if let Ok(real) = repo.canonicalize() {
             workspace.insert(0, real.to_string_lossy().into_owned());
@@ -194,7 +194,7 @@ impl Sanitizer {
         })
     }
 
-    fn clean(&self, text: &str) -> Result<String> {
+    pub(super) fn clean(&self, text: &str) -> Result<String> {
         let mut out = replace_spike_roots(text);
         for workspace in &self.workspace {
             if workspace.len() > 1 {

@@ -105,7 +105,7 @@ fn a_successful_status_has_a_null_error_and_the_result_in_struct_order() {
     let result = &line[line.find("\"result\":").unwrap() + 9..line.find(",\"error\":").unwrap()];
     assert_eq!(
         crate::common::key_order(result),
-        ["info", "health", "client"]
+        ["info", "health", "client", "agent"]
     );
     crate::common::golden::check("daemon_status.json", &run.stdout);
 }

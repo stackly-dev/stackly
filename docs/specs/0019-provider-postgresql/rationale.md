@@ -473,3 +473,84 @@ Tiga temuan minor dari reviewer lintas dokumen, dengan keputusan lead D1, D5, da
 - Rujukan basi: catatan tentang tabel spec 0009 dihapus dari Follow-up dan ditandai selesai di sini, dan nomor minor protocol dirujuk ke K4 (keputusan) alih alih K9 (risiko).
 - Prasyarat langkah 9 menjadi fitur 17 milestone 1 (langkah 2: `providers/catalog.toml` dan ledger nya), bukan seluruh build fitur 17.
 - D9: test init gagal AC-5 diperbarui langkah 9 spec 0020 menjadi operasi `failed` dengan kompensasi penuh, dengan kegagalan `initdb` dipaksa lewat kait test sesudah pemeriksaan isi spec 0020 atau lewat jalur init fake (AC-5, *Edge cases*, skenario init gagal).
+
+## Update AC-6: koneksi replication (2026-10-22)
+
+Developer dan checker milestone 2 menemukan bahwa AC-6 dan *Critical test scenarios* menjanjikan sesuatu yang tidak dilakukan PostgreSQL: koneksi `replication=database` ditolak. Brief `arc-f19-update` dari lead meminta keputusan atas teks yang benar.
+
+### Yang diamati
+
+Probe lokal dengan artefak 18.6 dari cache runtime, `pg_hba.conf.tmpl` dan `pg_ident.conf.tmpl` paket ini apa adanya, role `stackly_readiness` persis seperti di manifest, dan satu role `repl` ber atribut `REPLICATION` yang dibuat superuser:
+
+| Koneksi | Hasil |
+| --- | --- |
+| superuser dengan password, `replication=database`, socket dan TCP | diterima, `IDENTIFY_SYSTEM` berhasil |
+| superuser dengan password salah, `replication=database` | `password authentication failed` |
+| superuser dan `repl`, `replication=database`, `BASE_BACKUP` | diterima, stream tar `base.tar` dimulai |
+| superuser, `replication=database`, `CREATE_REPLICATION_SLOT ... LOGICAL pgoutput` | `logical decoding requires "wal_level" >= "logical"` (`wal_level` bawaan `replica`) |
+| superuser dengan password, `replication=true`, socket dan TCP | `no pg_hba.conf entry for replication connection` |
+| tool `pg_basebackup` dengan `dbname=postgres`, dengan atau tanpa `replication=database` di connection string | `no pg_hba.conf entry for replication connection` (tool itu selalu memakai `replication=true`) |
+| `stackly_readiness`, `replication=database`, socket | peer lolos, lalu `permission denied to start WAL sender` (`NOREPLICATION`) |
+| `stackly_readiness`, `replication=database`, TCP | `pg_hba.conf rejects connection` |
+| role buatan pengguna dengan password (bawaan `NOREPLICATION`), `replication=database` | `permission denied to start WAL sender` |
+| semua koneksi replication dengan `max_wal_senders = 0` | `number of requested standby connections exceeds "max_wal_senders" (currently 0)` |
+
+Penyebabnya: kata kunci `replication` di kolom database `pg_hba.conf` hanya mencocokkan koneksi `replication=true`, dan PostgreSQL mencocokkan walsender `replication=database` dengan baris database nya, seperti koneksi biasa (dokumentasi PostgreSQL, bab *The pg_hba.conf File*). Walsender itu menerima perintah replication lengkap, termasuk `BASE_BACKUP`, jadi jalurnya tidak terbatas pada replication logical. Tidak ada baris `pg_hba.conf` yang bisa menolak walsender `replication=database` saja. Yang menjaganya adalah login biasa (SCRAM) ditambah syarat walsender: superuser atau atribut `REPLICATION`, yang hanya bisa diberikan superuser.
+
+### Opsi
+
+#### Option 1: Koreksi teks (dipilih)
+
+AC-6 menjanjikan yang benar dan bisa diuji: koneksi `replication=true` ditolak, dan `stackly_readiness` tidak bisa membuka koneksi `replication=database`. Walsender `replication=database` milik superuser atau role ber atribut `REPLICATION` mengikuti aturan database biasa, dan itu dicatat di *Template config* dan *Security model*.
+
+**Pros**:
+
+- Tidak ada perubahan kode, paket, golden, atau `manifest_sha256`, jadi evidence native milestone 2 tetap berlaku; test `security` sudah memeriksa dua janji itu.
+- Pengguna yang sengaja ingin replication logical (tool CDC, `pg_recvlogical`) tetap bisa menyalakannya sendiri lewat `ALTER SYSTEM SET wal_level = logical` dan restart, karena Stackly tidak memegang `wal_level`.
+
+**Cons**:
+
+- Pemegang password superuser, dan role yang ia beri `REPLICATION`, bisa membuka walsender dan menarik `BASE_BACKUP` tanpa baris `pg_hba.conf` khusus. Pembaca spec harus memahami jalur ini.
+- Pesan error yang dikutip baru diamati di 18.6; untuk 17 dikonfirmasi oleh test milestone 3.
+
+#### Option 2: `max_wal_senders = 0` sebagai parameter milik Stackly
+
+Menambahkan `-c max_wal_senders=0` ke argv start, sehingga semua walsender ditolak dan `ALTER SYSTEM` tidak bisa mengubahnya.
+
+**Pros**:
+
+- Janji "koneksi replication ditolak" menjadi benar untuk semua role dan semua bentuk, termasuk `BASE_BACKUP` lewat `replication=database` oleh role ber atribut `REPLICATION`.
+
+**Cons**:
+
+- Tidak ada hak superuser yang dijaga: superuser sudah bisa membaca semua data lewat SQL dan menjalankan perintah sebagai user OS lewat `COPY ... TO PROGRAM`. Role `REPLICATION` hanya ada kalau superuser sengaja membuatnya, dan PostgreSQL memang mendefinisikan atribut itu sebagai hak membaca seluruh cluster.
+- Mengubah paket di milestone 2: manifest, golden `run_plan`, `manifest_sha256`, test baru, dan run ulang evidence native.
+- Menutup semua walsender sampai spec ini diubah lagi, termasuk replication logical yang pengguna nyalakan sendiri dan fitur backup kelak yang mungkin butuh walsender.
+
+#### Option 3: Baris `reject` eksplisit di `pg_hba.conf`
+
+Tidak bisa dilakukan: baris `replication ... reject` hanya mengenai koneksi `replication=true`, yang sudah ditolak karena tidak ada baris yang cocok. Baris `reject` per database akan ikut menolak login biasa.
+
+### Alasan
+
+Kekuatan yang menentukan adalah model ancaman di *Security model*: yang dijaga adalah login tanpa password dan role tanpa hak yang naik hak. Walsender `replication=database` selalu butuh login yang sah ditambah superuser atau atribut `REPLICATION`, dan di cluster baru hanya superuser yang punya keduanya. Menolaknya tidak mengurangi apa pun yang bisa dilakukan pemegang password superuser, dan role `REPLICATION` buatan pengguna adalah pemberian hak yang disengaja. Biaya Option 2 adalah perubahan paket di tengah milestone dan jalur yang tertutup. Runner up tetap Option 2, yang layak dipertimbangkan lagi lewat update spec ini kalau kelak ada kebutuhan nyata untuk menutup walsender (misalnya bind LAN).
+
+### Cross check
+
+Cross check model lain (read only) atas draft pertama. Temuan yang diterapkan:
+
+| No | Temuan | Perbaikan |
+| --- | --- | --- |
+| 1 | Walsender `replication=database` menerima `BASE_BACKUP`, jadi "replication fisik selalu ditolak" terlalu luas | diprobe: `BASE_BACKUP` diterima untuk superuser dan role `REPLICATION`; teks memakai "koneksi `replication=true`" dan residual risk menyebut kedua role |
+| 2 | Option 2 dulu disebut menutup `pg_basebackup`, padahal tool itu sudah ditolak `pg_hba.conf` | Cons Option 2 diganti; tool `pg_basebackup` masuk tabel pengamatan (klaim reviewer bahwa tool itu memakai `replication=database` bila `dbname` diberikan tidak terbukti) |
+| 3 | Pengguna bisa menyalakan replication logical sendiri lewat `wal_level`, bukan terhalang `pg_hba.conf` | Pros Option 1 dan catatan *Template config* diperbaiki |
+| 4 | Superuser lolos syarat walsender tanpa atribut `REPLICATION` | catatan *Template config* menyebut "superuser atau atribut `REPLICATION`" |
+| 5 | Pesan error hanya diamati di 18.6 | catatan *Template config* dan Cons Option 1 menyebutnya |
+| 6 | "replication" di *Batas fitur* bisa dibaca sebagai semua walsender | diperjelas menjadi replication yang disiapkan Stackly |
+
+Temuan untuk peran lain (dikirim ke lead): test `security` hanya memeriksa jalur socket dan hanya `!ok` untuk `stackly_readiness`, dan teks `expected` dan `pass_with` evidence nya masih berbunyi "replication is refused" dan "no replication"; `verify.md` baris coverage AC-6 dan catatan penyimpangan replication sudah basi.
+
+### Perubahan
+
+- AC-6, *Batas fitur*, catatan *Template config*, *Security model* (residual risk), dan skenario *Tanpa `trust`* di `index.md`. ID AC, status, keputusan lain, dan langkah build plan tetap.
+- Usulan teks `verify.md` (milik `/develop` dan checker) dan teks evidence test dikirim ke lead.

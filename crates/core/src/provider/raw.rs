@@ -569,6 +569,46 @@ pub(crate) struct RawArtifact {
     pub(crate) unpacked_size: Option<u64>,
     pub(crate) entry_count: Option<u64>,
     pub(crate) dependencies: Option<Vec<RawDependency>>,
+    #[cfg_attr(feature = "json-schema", schemars(length(max = 32)))]
+    pub(crate) compatibility: Option<Vec<RawCompatibilityRecord>>,
+}
+
+/// One compatibility record of an available artifact (spec 0018,
+/// *Compatibility record*), written by `cargo xtask codegen` from native
+/// evidence. The catalog does not read the records yet.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "CompatibilityRecord"))]
+pub(crate) struct RawCompatibilityRecord {
+    pub(crate) scope: String,
+    pub(crate) result: String,
+    pub(crate) provider_revision: Option<RawProviderRevision>,
+    pub(crate) os: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 16)))]
+    pub(crate) os_version: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 32)))]
+    pub(crate) os_build: Option<String>,
+    pub(crate) arch: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(max = 64)))]
+    pub(crate) checks: Vec<String>,
+    #[cfg_attr(feature = "json-schema", schemars(length(max = 64)))]
+    pub(crate) known_limitations: Vec<String>,
+    #[cfg_attr(feature = "json-schema", schemars(length(max = 256)))]
+    pub(crate) summary: Option<String>,
+    pub(crate) tested_at: String,
+    pub(crate) evidence: String,
+}
+
+/// The provider package a `provider` record was tested with.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "ProviderRevision"))]
+pub(crate) struct RawProviderRevision {
+    pub(crate) id: String,
+    pub(crate) revision: String,
+    pub(crate) manifest_sha256: String,
 }
 
 /// One library an available artifact links (spec 0009, fase 02 fields).

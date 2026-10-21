@@ -145,11 +145,13 @@ pub(super) fn conflicts_with_instances(
 pub struct PortFacts {
     /// Step 4: the exact address, with `SO_REUSEADDR`.
     pub exact: BindOutcome,
-    /// Step 5: the wildcard of the same family; run only when step 4 was
-    /// free.
+    /// Step 5: the wildcard of the same family, with `SO_REUSEADDR` like
+    /// the server; run only when step 4 was free.
     pub wildcard: Option<BindOutcome>,
-    /// Step 6: the loopback of the other family; run only when step 4 was
-    /// free and the endpoint is on loopback.
+    /// Step 6: the first result that is not free of the loopback and then
+    /// the wildcard of the other family (the wildcard is bound only when the
+    /// loopback was free), or free; run only when step 4 was free and the
+    /// endpoint is on loopback.
     pub other_loopback: Option<BindOutcome>,
     /// The first free port after the requested one that passes steps 2 to
     /// 6 without error or caution, only searched when step 3 or 4 failed.
@@ -189,24 +191,33 @@ fn probe(probe: &dyn PortProbe, slot: &Slot, port: Port) -> PortFacts {
     let wildcard = probe.try_bind(
         slot.transport,
         wildcard_addr,
-        BindOptions {
-            reuse_addr: false,
-            v6only: wildcard_addr.is_ipv6(),
-        },
+        BindOptions::like_server(wildcard_addr),
     );
     let other_loopback = slot.host.is_loopback().then(|| {
-        let other_host = match slot.host {
-            IpAddr::V4(_) => IpAddr::V6(Ipv6Addr::LOCALHOST),
-            IpAddr::V6(_) => IpAddr::V4(Ipv4Addr::LOCALHOST),
+        let (other_host, other_wildcard) = match slot.host {
+            IpAddr::V4(_) => (
+                IpAddr::V6(Ipv6Addr::LOCALHOST),
+                IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+            ),
+            IpAddr::V6(_) => (
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            ),
         };
         let other_addr = SocketAddr::new(other_host, port.get());
-        probe.try_bind(
+        let loopback = probe.try_bind(
             slot.transport,
             other_addr,
-            BindOptions {
-                reuse_addr: false,
-                v6only: other_addr.is_ipv6(),
-            },
+            BindOptions::like_server(other_addr),
+        );
+        if loopback != BindOutcome::Free {
+            return loopback;
+        }
+        let other_wildcard_addr = SocketAddr::new(other_wildcard, port.get());
+        probe.try_bind(
+            slot.transport,
+            other_wildcard_addr,
+            BindOptions::like_server(other_wildcard_addr),
         )
     });
     PortFacts {

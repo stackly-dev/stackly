@@ -232,7 +232,7 @@
                 rootOverride: false),
             socketPath: FixturePaths.socket,
             registrySchema: 3,
-            secretStore: nil)
+            secretStore: nil, launch: nil)
     }
 
     nonisolated extension DaemonHealth {

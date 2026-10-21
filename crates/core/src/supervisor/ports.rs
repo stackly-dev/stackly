@@ -7,8 +7,12 @@
 //! uses ([`BindOptions::like_server`]): `SO_REUSEADDR`, so a leftover
 //! `TIME_WAIT` and another process's wildcard listener on the same port
 //! count as free, and `IPV6_V6ONLY` for an IPv6 address. Only a listener on
-//! the exact address counts as in use. Picking a candidate binds `:0`
-//! without `SO_REUSEADDR` ([`PortProbe::ephemeral_port`]).
+//! the exact address counts as in use. The create preflight (spec 0020,
+//! steps 5 and 6) binds the wildcard of both families and the loopback of
+//! the other family with the same options, so it finds the listeners that
+//! share the port with the endpoint without a connected socket, such as a
+//! `TIME_WAIT` leftover, counting. Picking a candidate binds `:0` without
+//! `SO_REUSEADDR` ([`PortProbe::ephemeral_port`]).
 
 use std::fmt;
 use std::io;
@@ -23,7 +27,8 @@ pub enum BindOutcome {
     /// The bind worked: the port is free for a server with the same
     /// options.
     Free,
-    /// Another socket is bound to the exact address and port.
+    /// Another unconnected socket is bound to the exact address and port.
+    /// Binding the IPv4 wildcard also finds a dual stack `[::]` listener.
     InUse,
     /// The OS refused the bind (`EACCES` or `EPERM`).
     Denied,
@@ -74,7 +79,8 @@ pub struct BindOptions {
 impl BindOptions {
     /// The options a server binds with: `SO_REUSEADDR`, and `IPV6_V6ONLY`
     /// when `addr` is IPv6. Every check of a `Fixed` port, a stored `Auto`
-    /// port, a candidate, and the early exit check uses them.
+    /// port, a candidate, and the early exit check uses them, and so do the
+    /// trial binds of steps 5 and 6 of the create preflight (spec 0020).
     #[must_use]
     pub const fn like_server(addr: SocketAddr) -> Self {
         Self {

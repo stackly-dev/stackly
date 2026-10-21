@@ -8,6 +8,8 @@
 
 use std::time::Duration;
 
+use stackly_platform::bundle::DAEMON_LABEL;
+use stackly_platform::{AgentOp, ROOT_OVERRIDE_ENV};
 use stackly_protocol::codes::{cli, internal, ipc};
 use stackly_protocol::{ErrorBody, ResourceKind, ResourceRef};
 use uuid::Uuid;
@@ -250,6 +252,186 @@ impl CliFailure {
         ))
     }
 
+    /// `cli.agent_root_override`: an agent command was asked while
+    /// `STACKLY_ROOT` is set (spec 0015).
+    #[must_use]
+    pub fn agent_root_override() -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_ROOT_OVERRIDE,
+                "the background agent only serves the default root, and STACKLY_ROOT is set",
+            )
+            .with_detail("variable", ROOT_OVERRIDE_ENV),
+        )
+    }
+
+    /// `cli.agent_not_bundled`: the executable `executable` is not inside
+    /// the Stackly app bundle.
+    #[must_use]
+    pub fn agent_not_bundled(executable: &str) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_NOT_BUNDLED,
+                "this stackly does not run from inside the Stackly app bundle",
+            )
+            .with_detail("executable", executable),
+        )
+    }
+
+    /// `cli.agent_helper_missing`: the bundle at `bundle_path` lacks the
+    /// LaunchAgent property list or `stacklyd`.
+    #[must_use]
+    pub fn agent_helper_missing(bundle_path: &str) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_HELPER_MISSING,
+                "the app bundle lacks the LaunchAgent property list or stacklyd",
+            )
+            .with_detail("bundlePath", bundle_path),
+        )
+    }
+
+    /// `cli.agent_not_registered`: nothing registered the background agent.
+    #[must_use]
+    pub fn agent_not_registered() -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_NOT_REGISTERED,
+                "the background agent is not registered",
+            )
+            .with_detail("label", DAEMON_LABEL),
+        )
+    }
+
+    /// `cli.agent_requires_approval`: macOS waits for the user's approval.
+    #[must_use]
+    pub fn agent_requires_approval() -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_REQUIRES_APPROVAL,
+                "the background agent waits for your approval in Login Items",
+            )
+            .with_detail("label", DAEMON_LABEL),
+        )
+    }
+
+    /// `cli.agent_disabled`: the user switched the agent off in Login Items.
+    #[must_use]
+    pub fn agent_disabled() -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_DISABLED,
+                "the background agent is switched off in Login Items",
+            )
+            .with_detail("label", DAEMON_LABEL),
+        )
+    }
+
+    /// `cli.agent_not_found`: macOS cannot find the service of the bundle at
+    /// `bundle_path` right after the registration.
+    #[must_use]
+    pub fn agent_not_found(bundle_path: &str) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_NOT_FOUND,
+                "macOS cannot find the background service of this copy of the app",
+            )
+            .with_detail("label", DAEMON_LABEL)
+            .with_detail("bundlePath", bundle_path),
+        )
+    }
+
+    /// `cli.agent_invalid_signature`: macOS rejected the signature of this
+    /// build; `os_code` is the `SMAppService` error code.
+    #[must_use]
+    pub fn agent_invalid_signature(os_code: i64) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_INVALID_SIGNATURE,
+                "macOS rejected the code signature of this build",
+            )
+            .with_detail("label", DAEMON_LABEL)
+            .with_detail("osCode", os_code.to_string()),
+        )
+    }
+
+    /// `cli.agent_os_error`: the call `op` failed in macOS with `os_domain`
+    /// and `os_code`; both are left out when macOS answered but did not keep
+    /// the registration.
+    #[must_use]
+    pub fn agent_os_error(
+        op: AgentOp,
+        message: &str,
+        os_domain: Option<&str>,
+        os_code: Option<i64>,
+    ) -> Self {
+        let mut body =
+            ErrorBody::new(&cli::AGENT_OS_ERROR, message).with_detail("op", op.as_code());
+        if let Some(domain) = os_domain {
+            body = body.with_detail("osDomain", domain);
+        }
+        if let Some(code) = os_code {
+            body = body.with_detail("osCode", code.to_string());
+        }
+        Self::local(body)
+    }
+
+    /// `cli.agent_status_unavailable`: the agent status cannot be read or
+    /// is a value this build does not know.
+    #[must_use]
+    pub fn agent_status_unavailable(op: AgentOp, message: &str, os_code: Option<i64>) -> Self {
+        let mut body =
+            ErrorBody::new(&cli::AGENT_STATUS_UNAVAILABLE, message).with_detail("op", op.as_code());
+        if let Some(code) = os_code {
+            body = body.with_detail("osCode", code.to_string());
+        }
+        Self::local(body)
+    }
+
+    /// `cli.agent_call_timeout`: the macOS call `op` took longer than
+    /// `limit`.
+    #[must_use]
+    pub fn agent_call_timeout(op: AgentOp, limit: Duration) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_CALL_TIMEOUT,
+                format!("macOS did not answer the {op} call in time"),
+            )
+            .with_detail("op", op.as_code())
+            .with_detail("seconds", limit.as_secs().to_string()),
+        )
+    }
+
+    /// `cli.daemon_wait_timeout`: the daemon did not appear (`start`,
+    /// `install`, `restart`) or disappear (`stop`, `restart`) within
+    /// `limit`.
+    #[must_use]
+    pub fn daemon_wait_timeout(action: &str, limit: Duration) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::DAEMON_WAIT_TIMEOUT,
+                format!("the daemon did not finish the {action} in time"),
+            )
+            .with_detail("action", action)
+            .with_detail("seconds", limit.as_secs().to_string()),
+        )
+    }
+
+    /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
+    /// (`waiting_for_daemon`, or `agent_call` after a macOS call that
+    /// Ctrl+C had to wait for), which changes nothing by itself. Exits 130.
+    #[must_use]
+    pub fn interrupted_at(state: &str) -> Self {
+        Self {
+            body: Box::new(
+                ErrorBody::new(&cli::INTERRUPTED, "stopped before the command finished")
+                    .with_detail("state", state),
+            ),
+            request_id: None,
+            exit_override: Some(EXIT_INTERRUPTED),
+        }
+    }
+
     /// `ipc.call_timeout` (spec 0006): the CLI stopped waiting for `method`
     /// after `limit`, so the request may have run.
     #[must_use]
@@ -341,6 +523,18 @@ mod tests {
             CliFailure::operation_needs_recovery(OPERATION),
             CliFailure::instance_not_found("orders-db"),
             CliFailure::panic(),
+            CliFailure::agent_root_override(),
+            CliFailure::agent_not_bundled("/work/target/debug/stackly"),
+            CliFailure::agent_helper_missing("/Applications/Stackly.app"),
+            CliFailure::agent_not_registered(),
+            CliFailure::agent_requires_approval(),
+            CliFailure::agent_disabled(),
+            CliFailure::agent_not_found("/Applications/Stackly.app"),
+            CliFailure::agent_invalid_signature(3),
+            CliFailure::agent_os_error(AgentOp::Register, "macOS refused", Some("D"), Some(2)),
+            CliFailure::agent_status_unavailable(AgentOp::Status, "cannot read", None),
+            CliFailure::agent_call_timeout(AgentOp::Relaunch, Duration::from_secs(10)),
+            CliFailure::daemon_wait_timeout("start", Duration::from_secs(30)),
         ]
     }
 

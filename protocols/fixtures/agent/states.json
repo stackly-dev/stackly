@@ -1,0 +1,438 @@
+{
+  "schema": 1,
+  "rows": [
+    {
+      "name": "enabled without a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "enabled"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "enabled",
+        "reason": null,
+        "recovery": "none"
+      }
+    },
+    {
+      "name": "enabled without a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "enabled"
+      },
+      "launchRecord": false,
+      "justRegistered": true,
+      "expect": {
+        "state": "enabled",
+        "reason": null,
+        "recovery": "none"
+      }
+    },
+    {
+      "name": "enabled with a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "enabled"
+      },
+      "launchRecord": true,
+      "justRegistered": false,
+      "expect": {
+        "state": "enabled",
+        "reason": null,
+        "recovery": "none"
+      }
+    },
+    {
+      "name": "enabled with a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "enabled"
+      },
+      "launchRecord": true,
+      "justRegistered": true,
+      "expect": {
+        "state": "enabled",
+        "reason": null,
+        "recovery": "none"
+      }
+    },
+    {
+      "name": "requires approval without a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "requires_approval"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "requires_approval",
+        "reason": null,
+        "recovery": "approve_in_login_items"
+      }
+    },
+    {
+      "name": "requires approval without a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "requires_approval"
+      },
+      "launchRecord": false,
+      "justRegistered": true,
+      "expect": {
+        "state": "requires_approval",
+        "reason": null,
+        "recovery": "approve_in_login_items"
+      }
+    },
+    {
+      "name": "requires approval with a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "requires_approval"
+      },
+      "launchRecord": true,
+      "justRegistered": false,
+      "expect": {
+        "state": "disabled",
+        "reason": null,
+        "recovery": "enable_in_login_items"
+      }
+    },
+    {
+      "name": "requires approval with a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "requires_approval"
+      },
+      "launchRecord": true,
+      "justRegistered": true,
+      "expect": {
+        "state": "requires_approval",
+        "reason": null,
+        "recovery": "approve_in_login_items"
+      }
+    },
+    {
+      "name": "not registered without a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "not_registered"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "not_registered",
+        "reason": null,
+        "recovery": "register"
+      }
+    },
+    {
+      "name": "not registered without a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "not_registered"
+      },
+      "launchRecord": false,
+      "justRegistered": true,
+      "expect": {
+        "state": "not_registered",
+        "reason": null,
+        "recovery": "register"
+      }
+    },
+    {
+      "name": "not registered with a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "not_registered"
+      },
+      "launchRecord": true,
+      "justRegistered": false,
+      "expect": {
+        "state": "not_registered",
+        "reason": null,
+        "recovery": "register"
+      }
+    },
+    {
+      "name": "not registered with a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "not_registered"
+      },
+      "launchRecord": true,
+      "justRegistered": true,
+      "expect": {
+        "state": "not_registered",
+        "reason": null,
+        "recovery": "register"
+      }
+    },
+    {
+      "name": "not found without a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "not_found"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "not_registered",
+        "reason": null,
+        "recovery": "register"
+      }
+    },
+    {
+      "name": "not found without a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "not_found"
+      },
+      "launchRecord": false,
+      "justRegistered": true,
+      "expect": {
+        "state": "not_found",
+        "reason": null,
+        "recovery": "move_or_reinstall_app"
+      }
+    },
+    {
+      "name": "not found with a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "not_found"
+      },
+      "launchRecord": true,
+      "justRegistered": false,
+      "expect": {
+        "state": "not_registered",
+        "reason": null,
+        "recovery": "register"
+      }
+    },
+    {
+      "name": "not found with a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "not_found"
+      },
+      "launchRecord": true,
+      "justRegistered": true,
+      "expect": {
+        "state": "not_found",
+        "reason": null,
+        "recovery": "move_or_reinstall_app"
+      }
+    },
+    {
+      "name": "unrecognized without a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "unrecognized",
+        "raw": 9
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "status_unrecognized",
+        "recovery": "check_again"
+      }
+    },
+    {
+      "name": "unrecognized without a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "unrecognized",
+        "raw": 9
+      },
+      "launchRecord": false,
+      "justRegistered": true,
+      "expect": {
+        "state": "unavailable",
+        "reason": "status_unrecognized",
+        "recovery": "check_again"
+      }
+    },
+    {
+      "name": "unrecognized with a launch record",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "unrecognized",
+        "raw": 9
+      },
+      "launchRecord": true,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "status_unrecognized",
+        "recovery": "check_again"
+      }
+    },
+    {
+      "name": "unrecognized with a launch record, just registered",
+      "rootOverride": false,
+      "probe": {
+        "type": "registration",
+        "registration": "unrecognized",
+        "raw": 9
+      },
+      "launchRecord": true,
+      "justRegistered": true,
+      "expect": {
+        "state": "unavailable",
+        "reason": "status_unrecognized",
+        "recovery": "check_again"
+      }
+    },
+    {
+      "name": "status failed with a code",
+      "rootOverride": false,
+      "probe": {
+        "type": "failed",
+        "code": 1
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "status_failed",
+        "recovery": "check_again"
+      }
+    },
+    {
+      "name": "status failed by time out",
+      "rootOverride": false,
+      "probe": {
+        "type": "failed",
+        "code": null
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "status_failed",
+        "recovery": "check_again"
+      }
+    },
+    {
+      "name": "not checked without a root override",
+      "rootOverride": false,
+      "probe": {
+        "type": "not_checked"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "status_failed",
+        "recovery": "check_again"
+      }
+    },
+    {
+      "name": "unsupported os",
+      "rootOverride": false,
+      "probe": {
+        "type": "unsupported"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "unsupported_os",
+        "recovery": "none"
+      }
+    },
+    {
+      "name": "not bundled",
+      "rootOverride": false,
+      "probe": {
+        "type": "not_bundled"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "not_bundled",
+        "recovery": "use_bundled_cli"
+      }
+    },
+    {
+      "name": "helper missing",
+      "rootOverride": false,
+      "probe": {
+        "type": "helper_missing"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "helper_missing",
+        "recovery": "build_with_xtask"
+      }
+    },
+    {
+      "name": "root override with no os call",
+      "rootOverride": true,
+      "probe": {
+        "type": "not_checked"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "root_override",
+        "recovery": "manual_daemon_for_override"
+      }
+    },
+    {
+      "name": "root override over an enabled agent",
+      "rootOverride": true,
+      "probe": {
+        "type": "registration",
+        "registration": "enabled"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "root_override",
+        "recovery": "manual_daemon_for_override"
+      }
+    },
+    {
+      "name": "root override over a cli outside the bundle",
+      "rootOverride": true,
+      "probe": {
+        "type": "not_bundled"
+      },
+      "launchRecord": false,
+      "justRegistered": false,
+      "expect": {
+        "state": "unavailable",
+        "reason": "root_override",
+        "recovery": "manual_daemon_for_override"
+      }
+    }
+  ]
+}

@@ -121,17 +121,31 @@ fn status_without_a_daemon_names_the_socket_and_exits_6() {
     let json = status(root.path(), true);
 
     assert_eq!(text.code, Some(6), "{text:?}");
-    assert_eq!(text.stdout, "");
+    // The agent block is written even though no daemon answered; the tests
+    // run with STACKLY_ROOT set, which the agent never serves.
+    assert_eq!(
+        text.stdout,
+        "Status  not running\nAgent   unavailable (root_override)\nApp     -\nNext    start stacklyd yourself for STACKLY_ROOT\n"
+    );
     assert_eq!(
         text.stderr,
         format!(
-            "error: daemon is not running (no socket at {})\n  code: ipc.endpoint_missing\n  hint: start it with stacklyd\n",
+            "error: daemon is not running (no socket at {})\n  code: ipc.endpoint_missing\n  hint: start it with stackly daemon start\n",
             paths.socket.display()
         )
     );
     assert_eq!(json.code, Some(6));
     let value = envelope(&json);
     assert_eq!(value["error"]["code"], "ipc.endpoint_missing");
+    assert_eq!(value["result"]["info"], serde_json::Value::Null);
+    assert_eq!(value["result"]["health"], serde_json::Value::Null);
+    assert_eq!(value["result"]["client"], serde_json::Value::Null);
+    assert_eq!(value["result"]["agent"]["state"], "unavailable");
+    assert_eq!(value["result"]["agent"]["reason"], "root_override");
+    assert_eq!(
+        value["result"]["agent"]["recovery"],
+        "manual_daemon_for_override"
+    );
     assert_eq!(
         detail(&value["error"], "path"),
         Some(paths.socket.display().to_string())

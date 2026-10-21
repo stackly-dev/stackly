@@ -12,6 +12,8 @@ use crate::common::{Site, auto, error_codes, fixed, has_row, paths, row};
 
 const V4: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 const V6: IpAddr = IpAddr::V6(Ipv6Addr::LOCALHOST);
+const V4_ANY: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+const V6_ANY: IpAddr = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
 
 fn addr(host: IpAddr, port: u16) -> SocketAddr {
     SocketAddr::new(host, port)
@@ -40,11 +42,11 @@ fn an_endpoint_without_a_request_is_auto_and_is_not_probed() {
 }
 
 #[test]
-fn a_free_fixed_port_runs_steps_four_to_six_on_the_exact_address_wildcard_and_other_loopback() {
+fn a_free_fixed_port_runs_steps_four_to_six_on_the_exact_address_wildcards_and_other_loopback() {
     let ev = evidence!(
         covers = ["VAL-006"],
         kind = Kind::Fixture,
-        expected = "a free fixed port is bound once on 127.0.0.1 with SO_REUSEADDR, then on 0.0.0.0 and [::1] without it, and shows ok",
+        expected = "a free fixed port is bound with SO_REUSEADDR on 127.0.0.1, 0.0.0.0, [::1], and then [::], and shows ok",
     );
     let site = Site::new();
     let mut draft = site.draft("orders");
@@ -60,8 +62,9 @@ fn a_free_fixed_port_runs_steps_four_to_six_on_the_exact_address_wildcard_and_ot
         site.probe.asked(),
         [
             (addr(V4, 20000), true),
-            (addr(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 20000), false),
-            (addr(V6, 20000), false),
+            (addr(V4_ANY, 20000), true),
+            (addr(V6, 20000), true),
+            (addr(V6_ANY, 20000), true),
         ]
     );
     ev.pass();
@@ -78,11 +81,8 @@ fn a_port_the_exact_address_holds_is_in_use_with_a_suggestion_that_skips_taken_p
     site.probe.answer(addr(V4, 20000), true, BindOutcome::InUse);
     site.probe.answer(addr(V4, 20001), true, BindOutcome::InUse);
     // A wildcard holder makes 20002 a caution, which a suggestion skips.
-    site.probe.answer(
-        addr(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 20002),
-        false,
-        BindOutcome::InUse,
-    );
+    site.probe
+        .answer(addr(V4_ANY, 20002), true, BindOutcome::InUse);
     let mut draft = site.draft("orders");
     draft.endpoints = vec![fixed("http", 20000)];
 
@@ -138,52 +138,183 @@ fn a_bind_the_os_refuses_is_endpoint_unavailable_with_its_reason() {
     assert_eq!(reason, "unavailable");
 }
 
+const ALL_ADDRESSES: &str =
+    "Also in use on all addresses of this Mac; clients may reach that server";
+const UNCHECKED: &str = "Couldn’t check this port";
+
+/// The status, detail, and error of the `http` row of a draft that asks
+/// `port` on `site`, with `answers` set on its probe first.
+fn judge_with(
+    site: &Site,
+    port: u16,
+    answers: &[(IpAddr, BindOutcome)],
+) -> (CheckStatus, String, Vec<&'static str>) {
+    for (host, outcome) in answers {
+        site.probe.answer(addr(*host, port), true, *outcome);
+    }
+    let mut draft = site.draft("orders");
+    draft.endpoints = vec![fixed("http", port)];
+    let evaluation = site.evaluate(&draft);
+    let http = row(&evaluation, "endpoint.http");
+    (http.status, http.detail.clone(), error_codes(&evaluation))
+}
+
 #[test]
 fn another_address_of_the_port_is_a_caution_never_an_error_and_never_ok() {
     let ev = evidence!(
         covers = ["VAL-006"],
         kind = Kind::Fixture,
-        expected = "a wildcard or other loopback holder of a fixed port is a caution with a note, a probe the OS refuses on those is a caution that the port could not be checked, and none is an error",
+        expected = "a wildcard or other loopback holder of a fixed port, found by binds with SO_REUSEADDR, is a caution with a note, a probe the OS refuses on those is a caution that the port could not be checked, and none is an error",
     );
+    let draft_port = 20000;
+
+    let (status, detail, errors) =
+        judge_with(&Site::new(), draft_port, &[(V4_ANY, BindOutcome::InUse)]);
+    assert_eq!((status, errors), (CheckStatus::Caution, Vec::new()));
+    assert_eq!(detail, ALL_ADDRESSES);
+
     let site = Site::new();
+    let (status, detail, errors) = judge_with(&site, draft_port, &[(V6, BindOutcome::InUse)]);
+    assert_eq!((status, errors), (CheckStatus::Caution, Vec::new()));
+    assert_eq!(
+        detail,
+        "Also in use on [::1]:20000; clients that connect to localhost may reach that server"
+    );
+
+    let (status, detail, errors) =
+        judge_with(&Site::new(), draft_port, &[(V4_ANY, BindOutcome::Denied)]);
+    assert_eq!((status, errors), (CheckStatus::Caution, Vec::new()));
+    assert_eq!(detail, UNCHECKED);
+    ev.pass();
+}
+
+#[test]
+fn the_other_family_wildcard_is_bound_after_a_free_loopback_and_is_a_loopback_caution() {
+    let site = Site::new();
+
+    let (status, detail, errors) = judge_with(&site, 20000, &[(V6_ANY, BindOutcome::InUse)]);
+
+    assert_eq!((status, errors), (CheckStatus::Caution, Vec::new()));
+    assert_eq!(
+        detail,
+        "Also in use on [::1]:20000; clients that connect to localhost may reach that server"
+    );
+    assert_eq!(
+        site.probe.asked().last(),
+        Some(&(addr(V6_ANY, 20000), true)),
+        "the [::] bind runs after [::1] was free"
+    );
+}
+
+#[test]
+fn an_unavailable_other_loopback_is_unchecked_and_the_other_wildcard_is_not_bound() {
+    let site = Site::new();
+
+    let (status, detail, errors) = judge_with(&site, 20000, &[(V6, BindOutcome::Unavailable)]);
+
+    assert_eq!((status, errors), (CheckStatus::Caution, Vec::new()));
+    assert_eq!(detail, UNCHECKED);
+    assert!(
+        !site
+            .probe
+            .asked()
+            .iter()
+            .any(|(bound, _)| *bound == addr(V6_ANY, 20000)),
+        "no [::] bind after [::1] could not be checked"
+    );
+}
+
+#[test]
+fn a_denied_other_wildcard_after_a_free_loopback_is_unchecked() {
+    let site = Site::new();
+
+    let (status, detail, errors) = judge_with(&site, 20000, &[(V6_ANY, BindOutcome::Denied)]);
+
+    assert_eq!((status, errors), (CheckStatus::Caution, Vec::new()));
+    assert_eq!(detail, UNCHECKED);
+}
+
+#[test]
+fn a_holder_found_by_a_later_step_beats_an_earlier_step_that_could_not_be_checked() {
+    let ev = evidence!(
+        covers = ["VAL-006"],
+        kind = Kind::Fixture,
+        expected = "the caution text prefers a step 5 holder, then a step 6 holder, over a bind the OS refused",
+    );
+    // Step 5 refused and step 6 found a holder: the holder is the text.
+    let (_, detail, _) = judge_with(
+        &Site::new(),
+        20000,
+        &[(V4_ANY, BindOutcome::Denied), (V6, BindOutcome::InUse)],
+    );
+    assert_eq!(
+        detail,
+        "Also in use on [::1]:20000; clients that connect to localhost may reach that server"
+    );
+
+    // Step 5 and step 6 both hold the port: step 5 is the text.
+    let (_, detail, _) = judge_with(
+        &Site::new(),
+        20000,
+        &[(V4_ANY, BindOutcome::InUse), (V6, BindOutcome::InUse)],
+    );
+    assert_eq!(detail, ALL_ADDRESSES);
+
+    // Step 5 holds and step 6 was refused: step 5 is the text.
+    let (_, detail, _) = judge_with(
+        &Site::new(),
+        20000,
+        &[(V4_ANY, BindOutcome::InUse), (V6, BindOutcome::Denied)],
+    );
+    assert_eq!(detail, ALL_ADDRESSES);
+    ev.pass();
+}
+
+#[test]
+fn an_ipv6_loopback_endpoint_binds_its_exact_address_wildcard_and_the_ipv4_loopback_and_wildcard() {
+    let ev = evidence!(
+        covers = ["VAL-006"],
+        kind = Kind::Fixture,
+        expected = "an endpoint on ::1 is bound on [::1], [::], 127.0.0.1, and 0.0.0.0 with SO_REUSEADDR, and a holder of 0.0.0.0 is a caution on 127.0.0.1",
+    );
+    let ipv6_host = |dir: &std::path::Path| {
+        let manifest = dir.join("provider.yaml");
+        let text = std::fs::read_to_string(&manifest).expect("the manifest reads");
+        std::fs::write(
+            &manifest,
+            text.replace("defaultHost: \"127.0.0.1\"", "defaultHost: \"::1\""),
+        )
+        .expect("the manifest writes");
+    };
+    let site = Site::with_provider_edit("fake", ipv6_host);
     let mut draft = site.draft("orders");
     draft.endpoints = vec![fixed("http", 20000)];
 
-    site.probe.answer(
-        addr(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 20000),
-        false,
-        BindOutcome::InUse,
-    );
     let evaluation = site.evaluate(&draft);
-    assert!(evaluation.ready());
-    let http = row(&evaluation, "endpoint.http");
-    assert_eq!(http.status, CheckStatus::Caution);
-    assert_eq!(http.detail, "In use on another address of this Mac");
-    assert!(http.suggested_port.is_none());
 
-    let site = Site::new();
+    let http = row(&evaluation, "endpoint.http");
+    assert_eq!(http.title, "Endpoint ::1:20000");
+    assert_eq!(http.status, CheckStatus::Ok, "{http:?}");
+    assert_eq!(
+        site.probe.asked(),
+        [
+            (addr(V6, 20000), true),
+            (addr(V6_ANY, 20000), true),
+            (addr(V4, 20000), true),
+            (addr(V4_ANY, 20000), true),
+        ]
+    );
+
+    let site = Site::with_provider_edit("fake", ipv6_host);
     site.probe
-        .answer(addr(V6, 20000), false, BindOutcome::InUse);
+        .answer(addr(V4_ANY, 20000), true, BindOutcome::InUse);
     let evaluation = site.evaluate(&draft);
     let http = row(&evaluation, "endpoint.http");
     assert_eq!(http.status, CheckStatus::Caution);
     assert_eq!(
         http.detail,
-        "Also in use on [::1]:20000; clients that connect to localhost may reach that server"
+        "Also in use on 127.0.0.1:20000; clients that connect to localhost may reach that server"
     );
-
-    let site = Site::new();
-    site.probe.answer(
-        addr(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 20000),
-        false,
-        BindOutcome::Denied,
-    );
-    let http = site.evaluate(&draft);
-    assert_eq!(
-        row(&http, "endpoint.http").detail,
-        "Couldn’t check this port"
-    );
-    assert_eq!(row(&http, "endpoint.http").status, CheckStatus::Caution);
     ev.pass();
 }
 

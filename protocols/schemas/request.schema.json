@@ -108,6 +108,23 @@
           ]
         },
         {
+          "description": "Stops the daemon, or stops it so launchd starts it again.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ShutdownParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.shutdown"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "Starts an event subscription.",
           "type": "object",
           "properties": {
@@ -1225,6 +1242,39 @@
       "required": [
         "reference",
         "input",
+        "mode"
+      ]
+    },
+    "ShutdownMode": {
+      "description": "What `daemon.shutdown` asks for. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "Stop and stay stopped; the process exits 0.",
+          "type": "string",
+          "const": "stop"
+        },
+        {
+          "description": "Stop so launchd starts the daemon again; the process exits 75. Only\na `launchd` daemon accepts it.",
+          "type": "string",
+          "const": "restart"
+        },
+        {
+          "description": "A mode this build does not know. A client never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ShutdownParams": {
+      "description": "Params of `daemon.shutdown`.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Whether the daemon only stops or stops so launchd starts it again.",
+          "$ref": "#/$defs/ShutdownMode"
+        }
+      },
+      "required": [
         "mode"
       ]
     },

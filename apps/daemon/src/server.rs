@@ -21,10 +21,11 @@ use stackly_core::supervisor::{LogSink as SupervisorLogSink, Supervisor, Supervi
 use stackly_core::{PreparedLayout, daemon_info};
 use stackly_domain::{PruneReport, Registry, RegistryError, RetentionPolicy};
 use stackly_ipc::{Accepted, BindState, IpcError, Listener};
-use stackly_platform::{Platform, PlatformError};
+use stackly_platform::bundle::AppBundle;
+use stackly_platform::{LaunchContext, Platform, PlatformError};
 use stackly_protocol::ErrorBody;
 use stackly_protocol::codes::ipc;
-use stackly_protocol::daemon::{DaemonHealth, DaemonInfo};
+use stackly_protocol::daemon::{DaemonHealth, DaemonInfo, ShutdownMode};
 use stackly_protocol::events::{EventKind, ShutdownReason, ShuttingDown};
 use stackly_protocol::secret::SecretStoreTarget;
 use stackly_storage::{OpenOptions, RecoveryReason, RegistryOpen, SqliteRegistry, StorageError};
@@ -36,6 +37,7 @@ use crate::catalog::{self, CatalogOverride};
 use crate::connection;
 use crate::dispatch::{DefaultHandlers, Handlers};
 use crate::events::EventBus;
+use crate::launch::{self, writes_launch_record};
 use crate::log_sink::LogSink;
 use crate::map::{self, StartFacts};
 use crate::secrets;
@@ -144,6 +146,8 @@ pub struct DaemonDeps {
     redactor: Arc<Redactor>,
     secret_target: Option<SecretStoreTarget>,
     secret_worker: Option<Arc<SecretWorker>>,
+    launch: LaunchContext,
+    bundle: Option<AppBundle>,
 }
 
 impl std::fmt::Debug for DaemonDeps {
@@ -177,7 +181,20 @@ impl DaemonDeps {
             redactor: Arc::new(Redactor::new()),
             secret_target: None,
             secret_worker: None,
+            launch: LaunchContext::Manual,
+            bundle: None,
         }
+    }
+
+    /// Records who started the daemon and the app bundle it runs from.
+    /// Only a [`LaunchContext::Launchd`] start for the production label,
+    /// without `STACKLY_ROOT`, writes the launch record (spec 0015); the
+    /// default is a manual start outside a bundle.
+    #[must_use]
+    pub fn with_launch(mut self, launch: LaunchContext, bundle: Option<AppBundle>) -> Self {
+        self.launch = launch;
+        self.bundle = bundle;
+        self
     }
 
     /// Shares `redactor` with the daemon, so the log writer that already
@@ -307,6 +324,8 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         redactor,
         secret_target,
         secret_worker,
+        launch,
+        bundle,
     } = deps;
     let user = platform
         .identity()
@@ -314,7 +333,8 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         .map_err(StartError::Identity)?;
     let uid = map::unix_uid(&user).ok_or(StartError::NotUnix)?;
     let layout = prepared.layout().clone();
-    let info = map::daemon_info(&facts, &layout, Some(uid), &version);
+    let mut info = map::daemon_info(&facts, &layout, Some(uid), &version);
+    info.launch = Some(map::daemon_launch(&launch, bundle.as_ref()));
     let bus = Arc::new(EventBus::new(
         facts.server_instance_id,
         platform.shared_clock(),
@@ -330,6 +350,13 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
     ));
     core.storage()
         .set_read_timeout(config.capacity_read_timeout);
+
+    // The launch record comes after the lock and before the socket, so a
+    // client that connects has a record to read (spec 0015). A failure is
+    // logged once and never stops the start.
+    if writes_launch_record(&launch, facts.root_override) {
+        write_launch_record(core.platform(), &layout, bundle.as_ref(), &version);
+    }
 
     // Step 9.
     let socket = layout.daemon_socket();
@@ -400,6 +427,15 @@ impl DaemonHandle {
     pub async fn started(&self) {
         let mut started = self.tasks.started.subscribe();
         let _ = started.wait_for(|started| *started).await;
+    }
+
+    /// Resolves with the mode once a client's `daemon.shutdown` request was
+    /// accepted (spec 0015). The caller then runs [`DaemonHandle::shutdown`]
+    /// with [`ShutdownReason::Requested`] for `stop` or
+    /// [`ShutdownReason::RestartRequested`] for `restart`, and exits 0 or
+    /// [`EXIT_RESTART`](crate::startup::EXIT_RESTART).
+    pub async fn stop_requested(&self) -> ShutdownMode {
+        self.core.shutdown_requested().await
     }
 
     /// Resolves with the exit code once a fatal error means the daemon
@@ -957,4 +993,18 @@ fn registry_failed(core: &DaemonCore) {
     tracing::error!("the registry stopped working; stacklyd stops");
     core.mark_registry_failed();
     core.fail(EXIT_START_FAILED);
+}
+
+/// Writes the launch record of the default root; logs a failure once.
+fn write_launch_record(
+    platform: &Platform,
+    layout: &stackly_platform::DirectoryLayout,
+    bundle: Option<&AppBundle>,
+    version: &str,
+) {
+    let now = stackly_protocol::Timestamp::from_jiff(platform.clock().now());
+    let path = layout.agent_launch_record();
+    if let Err(error) = launch::write_launch_record(platform.fs(), &path, now, bundle, version) {
+        tracing::warn!(error = %error, path = %path.display(), "cannot write the launch record");
+    }
 }

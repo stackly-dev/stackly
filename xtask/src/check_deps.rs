@@ -86,6 +86,10 @@ const CLAP_DOCS: [&str; 2] = ["clap_complete", "clap_mangen"];
 /// workspace is outside this check.
 const ARCHIVE_CRATES: [&str; 4] = ["tar", "flate2", "zip", "object"];
 const ARCHIVE_USERS: [&str; 2] = ["stackly-core", "xtask"];
+/// The HTTP client of the download port, which only the macOS adapter takes
+/// as a direct dependency (spec 0018).
+const UREQ: &str = "ureq";
+const UREQ_RULE: &str = "only stackly-platform-macos downloads over HTTP (spec 0018)";
 const CLI: &str = "stackly-cli";
 /// The core crate and its feature for the fake runtime and the fake
 /// provider packages (spec 0014).
@@ -265,6 +269,9 @@ fn check_dependency(package: &str, dependency: &Dependency, violations: &mut Vec
     }
     if ARCHIVE_CRATES.contains(&name) && !ARCHIVE_USERS.contains(&package) {
         deny("only stackly-core and xtask read archives and Mach-O files (spec 0018)");
+    }
+    if name == UREQ && package != MACOS_ADAPTER {
+        deny(UREQ_RULE);
     }
     if package == CLI && dependency.kind == DependencyKind::Normal && CLI_SPAWN_DEPS.contains(&name)
     {
@@ -1078,6 +1085,30 @@ mod tests {
     }
 
     #[test]
+    fn ureq_belongs_to_the_macos_adapter() {
+        for (kind, _) in [(None, "normal"), (Some("dev"), "dev")] {
+            assert!(violations(MACOS_ADAPTER, UREQ, kind).is_empty());
+        }
+        for package in [
+            "stackly-platform",
+            "stackly-core",
+            TESTKIT,
+            "stacklyd",
+            CLI,
+            "xtask",
+        ] {
+            for (kind, label) in [(None, "normal"), (Some("dev"), "dev")] {
+                assert_eq!(
+                    violations(package, UREQ, kind),
+                    [format!(
+                        "{package} has a {label} dependency on {UREQ}: {UREQ_RULE}"
+                    )]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn archive_readers_belong_to_core_and_xtask() {
         const RULE: &str = "only stackly-core and xtask read archives and Mach-O files (spec 0018)";
         for name in ARCHIVE_CRATES {
@@ -1313,6 +1344,7 @@ mod tests {
                 no_cli_codes: false,
                 process_allowed: None,
                 sigkill_allowed: None,
+                system_paths_allowed: None,
             };
             let calls = source_scan::scan_package(root, package, nothing_allowed).unwrap();
             for module in modules {

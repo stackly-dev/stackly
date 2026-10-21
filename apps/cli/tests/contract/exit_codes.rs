@@ -54,7 +54,10 @@ fn every_category_exits_with_its_code_in_text_and_json_whatever_the_code() {
             "{category}: {}",
             text.stderr
         );
-        assert_eq!(text.stdout, "", "{category}");
+        assert!(
+            text.stdout.starts_with("Status  not running\nAgent "),
+            "{category}"
+        );
         assert_eq!(json.code, Some(code), "{category}: {json:?}");
         let value = envelope(&json);
         assert_eq!(value["error"]["code"], format!("test.{category}"));

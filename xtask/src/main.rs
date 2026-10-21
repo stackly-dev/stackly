@@ -39,8 +39,11 @@ Tasks:
                        Check providers/catalog.toml, its packages, and the revision
                        ledger; --update records the revision, --amend rewrites one
                        not yet on main
-  build-app            Build the macOS app with xcodebuild (scheme Stackly, Debug)
-  build-app --release  Same, with the Release configuration
+  build-app [--release] [--identity <identity>] [--install [<dir>]]
+                       Build Stackly.app (stacklyd, stackly, the LaunchAgent plist,
+                       man pages) under target/app/<Config>, signed ad hoc unless
+                       --identity or STACKLY_SIGN_IDENTITY names one; --install copies
+                       it to <dir> (default ~/Applications)
   evidence run --kind <fixture|native> [--out <folder>] -- <command>
                        Run a test command as evidence and write report.json
   evidence check       Check manual records, the baseline, and the native test markers
@@ -96,9 +99,8 @@ fn run() -> Result<ExitCode> {
         ["codegen", "--check"] => done(codegen::run(&root, codegen::Mode::Check)),
         ["codegen", "--amend"] => done(codegen::run(&root, codegen::Mode::Write { amend: true })),
         ["check-deps"] => done(check_deps::run(&root)),
-        ["build-app"] => done(build_app::run(&root, build_app::Configuration::Debug)),
-        ["build-app", "--release"] => {
-            done(build_app::run(&root, build_app::Configuration::Release))
+        ["build-app", rest @ ..] => {
+            done(build_app::parse_args(rest).and_then(|options| build_app::run(&root, &options)))
         }
         ["evidence", rest @ ..] => evidence::run(&root, rest),
         ["fuzz", rest @ ..] => done(fuzz::run(&root, rest)),

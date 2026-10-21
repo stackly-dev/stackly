@@ -1,4 +1,4 @@
-//! The source scan of `cargo xtask check-deps`. Seven rule sets:
+//! The source scan of `cargo xtask check-deps`. Eight rule sets:
 //!
 //! - Library rules (spec 0004, "Peta modul dan dependency"): library crates
 //!   never read environment variables and never hardcode a machine path.
@@ -28,6 +28,11 @@
 //!   spawns only in [`PROCESS_ALLOWED_MODULES`], which holds `process` and
 //!   the one named exception `codesign` (the codesign helper of spec 0004,
 //!   feature 18, shares the helper spawn of `process`).
+//! - System path rule (spec 0018, *Aturan `check-deps` baru*), for
+//!   `stackly-platform-macos`: a string literal that starts with
+//!   [`SYSTEM_PATH_PREFIXES`] is `/usr/bin/codesign` and sits in the
+//!   `codesign` module, nothing else. It completes the machine paths of the
+//!   library rules.
 //! - `SIGKILL` rule (spec 0010, AC-15, step 15), for every crate: the token
 //!   is named only in [`SIGKILL_ALLOWED`], so a signal that cannot be
 //!   caught reaches a process only through a `HelperHandle` or
@@ -108,6 +113,15 @@ const PROCESS_ALLOWED_MODULES: [&str; 2] = ["process", "codesign"];
 const PROCESS_RULE: &str = "only stackly-platform-macos process and codesign start programs; core and the daemon never spawn (spec 0010, step 15)";
 /// The modules that may name `SIGKILL`, each with its submodules.
 pub const SIGKILL_ALLOWED: [(&str, &[&str]); 1] = [("stackly-platform-macos", &["process::kill"])];
+/// The prefixes of the system program paths the macOS adapter names only
+/// as [`CODESIGN_PATH`] (spec 0018).
+const SYSTEM_PATH_PREFIXES: [&str; 4] = ["/usr/bin/", "/usr/sbin/", "/bin/", "/Library/Developer/"];
+/// The one system program path the macOS adapter may name.
+const CODESIGN_PATH: &str = "/usr/bin/codesign";
+/// The macOS adapter module that may name [`CODESIGN_PATH`].
+const CODESIGN_MODULES: [&str; 1] = ["codesign"];
+/// The system path rule's message.
+const SYSTEM_PATH_RULE: &str = "stackly-platform-macos names only /usr/bin/codesign among the system program paths, and only in its codesign module (spec 0018)";
 /// The `SIGKILL` rule's message.
 const SIGKILL_RULE: &str = "SIGKILL is named only in stackly-platform-macos process::kill, which hands it to a helper handle or a discarded suspended child (spec 0010, AC-15)";
 /// The print macros the CLI never calls.
@@ -161,6 +175,10 @@ pub struct Rules {
     /// The `SIGKILL` rule: `Some(modules)` bans the token outside the
     /// modules listed; `None` leaves the crate alone.
     pub sigkill_allowed: Option<&'static [&'static str]>,
+    /// The system path rule: `Some(modules)` limits the string literals
+    /// that start with a system program folder to [`CODESIGN_PATH`] inside
+    /// the modules listed; `None` leaves the crate alone.
+    pub system_paths_allowed: Option<&'static [&'static str]>,
 }
 
 impl Rules {
@@ -187,6 +205,7 @@ impl Rules {
                     .find(|(crate_name, _)| *crate_name == name)
                     .map_or(&[], |(_, modules)| *modules),
             ),
+            system_paths_allowed: (name == MACOS_ADAPTER).then_some(&CODESIGN_MODULES[..]),
         }
     }
 }
@@ -324,6 +343,14 @@ impl Scan {
     }
 
     fn check_text(&mut self, span: proc_macro2::Span, text: &str) {
+        if let Some(modules) = self.rules.system_paths_allowed
+            && SYSTEM_PATH_PREFIXES
+                .iter()
+                .any(|prefix| text.starts_with(prefix))
+            && (text != CODESIGN_PATH || !self.in_modules(modules))
+        {
+            self.report_once(span, SYSTEM_PATH_RULE);
+        }
         if !self.rules.library {
             return;
         }
@@ -1182,6 +1209,7 @@ mod tests {
                 no_cli_codes: true,
                 process_allowed: None,
                 sigkill_allowed: Some(&[]),
+                system_paths_allowed: None,
             }
         );
         assert_eq!(
@@ -1194,6 +1222,7 @@ mod tests {
                 no_cli_codes: true,
                 process_allowed: None,
                 sigkill_allowed: Some(&[]),
+                system_paths_allowed: None,
             }
         );
     }
@@ -1652,5 +1681,43 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn the_macos_adapter_names_only_codesign_among_the_system_paths() {
+        let mut found = scan_as(
+            "stackly-platform-macos",
+            &[
+                ("src/lib.rs", "mod codesign;\nmod process;\n"),
+                (
+                    "src/codesign.rs",
+                    "const A: &str = \"/usr/bin/codesign\";\n\
+                     const B: &str = \"/usr/bin/xattr\";\n\
+                     const C: &str = \"/Library/Developer/CommandLineTools\";\n",
+                ),
+                (
+                    "src/process.rs",
+                    "const A: &str = \"/usr/bin/codesign\";\n\
+                     const B: &str = \"/bin/sh\";\n\
+                     const C: &str = \"/usr/sbin/sysctl\";\n\
+                     const D: &str = \"/usr/binary\";\n\
+                     const E: &str = \"not /usr/bin/x\";\n\
+                     #[cfg(test)]\nmod tests { const T: &str = \"/bin/sh\"; }\n",
+                ),
+            ],
+        );
+
+        found.sort();
+
+        assert_eq!(
+            found,
+            [
+                format!("stackly-platform-macos src/codesign.rs:2: {SYSTEM_PATH_RULE}"),
+                format!("stackly-platform-macos src/codesign.rs:3: {SYSTEM_PATH_RULE}"),
+                format!("stackly-platform-macos src/process.rs:1: {SYSTEM_PATH_RULE}"),
+                format!("stackly-platform-macos src/process.rs:2: {SYSTEM_PATH_RULE}"),
+                format!("stackly-platform-macos src/process.rs:3: {SYSTEM_PATH_RULE}"),
+            ]
+        );
     }
 }
