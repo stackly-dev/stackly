@@ -583,11 +583,34 @@ Filled by milestone 3.
 
 ### Log
 
-Filled by milestone 4.
+`LogView(_:follow:accessibilityLabel:timeTemplate:sourceTemplate:)` shows `LogLine`s in a lazy list on the console surface. The screen sets its height; feature 27 owns the data, the filters, Load Earlier, and the cap on lines.
+
+- **Row.** The time and source columns are `.callout.monospaced()` in `textSecondary`, then the level symbol, then the text in `.callout.monospaced()`. Each column is at least as wide as its hidden template (`timeTemplate`, default `00:00:00.000`; `sourceTemplate`, default `stderr`), so rows line up; a longer source shows in full and pushes the text of its own line. A column is drawn only when at least one line has that part, so a log without sources does not waste the space. Text wraps and is selectable per line (a SwiftUI limit); copying several lines is an action of feature 27.
+- **Levels.**
+
+| `LogLevel` | Symbol | Text | VoiceOver word |
+| --- | --- | --- | --- |
+| `normal` | none, an empty box as wide as a symbol | `.primary` | none |
+| `warning` | `exclamationmark.triangle.fill` in the `caution` fill | `Tone.caution.text` | Warning |
+| `error` | `xmark.circle.fill` in the `critical` fill | `Tone.critical.text` | Error |
+
+- **Surface.** `.consoleSurface()` is the background of the scroll view, clipped to its shape, so the lines run edge to edge with 14 pt at the sides and 2 pt above and below each line; the 12 pt above the first line and below the last one are scroll content margins, so scrolling to the end shows them. Tone text on `surfaceConsole` is pair P2 of spec 0012, so there is no new pair.
+- **Follow.** `follow` is the screen's binding. A new last line scrolls to the end without animation while `follow` is on; turning `follow` on scrolls to the end. A scroll by the user that ends (scroll phase from interacting or decelerating to idle) more than 24 pt above the bottom turns `follow` off. A scroll by the program never does, and scrolling back to the bottom does not turn it on again: the toggle of feature 27 does.
+- **VoiceOver.** The list is one element labeled `accessibilityLabel` (identifier `log.list`), and each line is one element, "{time}, {source}, {Error | Warning}: {text}", with an empty part and the normal level left out ("12:04:31.118, stdout: ready", "Error: text" when only the level is known).
 
 ### Diff
 
-Filled by milestone 4.
+`DiffView(_:emptyText:)` shows `DiffLine`s in a `.cardSurface()` (an ordinary card, not the console surface; the mockup used the console). Feature 29 owns where the lines come from.
+
+| `DiffKind` | Sign column | Text | Row background | VoiceOver |
+| --- | --- | --- | --- | --- |
+| `added` | “+” in `Tone.positive.text` | `.primary` | `toneSurface(.positive, on: .card, strength: .banner)` | “Added: {text}” |
+| `removed` | “−” (U+2212) in `Tone.critical.text` | `.primary` | `toneSurface(.critical, on: .card, strength: .banner)` | “Removed: {text}” |
+| `unchanged` | empty, same width | `textSecondary` | none | “Unchanged: {text}” |
+
+- The sign column is always there and one monospace character wide, so a change is never only a color and the text lines up. Rows are `.callout.monospaced()`, wrap, and are selectable; the card has 8 pt padding and rows sit 2 pt apart with 3 pt above and below the text. The tint corners are `Radius.small`.
+- Tone text on its own tint is pair P3 and primary text on a tint is pair P4 of spec 0012, so there is no new pair.
+- Without lines the view shows `emptyText` in `.callout` `textSecondary`; the copy comes from the screen. The container carries the identifier `diff.list`.
 
 ## Motion
 
