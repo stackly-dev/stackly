@@ -531,6 +531,9 @@ fn package_at_limits(nats: &PackageFiles, name: &str) -> ValidatedPackage {
             artifact["line"] = format!("2.{n}").into();
             artifact["license"] = filled(&format!("License-{n}-"), LICENSE_MAX_LEN).into();
             artifact["licenseUrl"] = filled("https://example.com/", LICENSE_URL_MAX_LEN).into();
+            // The records the template carries are not in any catalog reply
+            // yet, so they add nothing to the frame budget; fill them to
+            // their limit when step 10 of spec 0018 puts them on the wire.
             if n > 0 {
                 artifact
                     .as_object_mut()
@@ -553,6 +556,7 @@ fn package_at_limits(nats: &PackageFiles, name: &str) -> ValidatedPackage {
                     "unpackedSize",
                     "entryCount",
                     "dependencies",
+                    "compatibility",
                 ] {
                     object.remove(field);
                 }
