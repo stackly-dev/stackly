@@ -3,12 +3,18 @@
 //! `secret.invalid_value` with a `reason` that names neither the value nor
 //! touches the store for a `Value`.
 
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+
 use stackly_core::operation::OperationError;
+use stackly_core::provider::{NameCheck, PackageFiles, ValidatedPackage};
 use stackly_core::secret::{
     FieldContext, InvalidValueReason, PutRequest, PutTarget, SecretError, SecretFieldRule,
     SecretInput,
 };
 use stackly_domain::{InstanceId, SecretOwner, SecretRef, SecretUser};
+use stackly_evidence::{Kind, evidence};
 use stackly_platform::WriteMode;
 use stackly_testkit::SecretOp;
 
@@ -254,4 +260,118 @@ fn an_existing_reference_a_printable_only_field_uses_refuses_control_characters_
         harness.store().stored_value(&shared).as_deref(),
         Some("the-second-shared-value")
     );
+}
+
+/// The rule `SecretFieldRule::from_setting` reads from the secret field
+/// `authToken` of `providers/fake`, whose schema `x-stackly` object is
+/// `x_stackly` instead of the committed one.
+fn rule_of_the_fake_token(x_stackly: &str) -> SecretFieldRule {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake");
+    let mut files = BTreeMap::new();
+    for path in [
+        "provider.yaml",
+        "versions.json",
+        "schemas/settings.schema.json",
+    ] {
+        files.insert(
+            path.to_owned(),
+            fs::read(dir.join(path)).expect("fake package file"),
+        );
+    }
+    for entry in fs::read_dir(dir.join("templates")).expect("templates folder") {
+        let entry = entry.expect("template entry");
+        let name = entry.file_name().into_string().expect("UTF-8 name");
+        files.insert(
+            format!("templates/{name}"),
+            fs::read(entry.path()).expect("template"),
+        );
+    }
+    let schema = String::from_utf8(files["schemas/settings.schema.json"].clone())
+        .expect("UTF-8 schema")
+        .replacen(
+            r#""x-stackly": { "apply": "immutableAfterInit", "secret": true }"#,
+            x_stackly,
+            1,
+        );
+    files.insert(
+        "schemas/settings.schema.json".to_owned(),
+        schema.into_bytes(),
+    );
+    let package = ValidatedPackage::from_files(
+        PackageFiles::new("fake".to_owned(), files),
+        NameCheck::FolderName,
+    )
+    .expect("the edited fake package is valid");
+    let field = package
+        .settings_schema()
+        .field("authToken")
+        .expect("the fake package has an authToken field");
+    SecretFieldRule::from_setting(field).expect("authToken is a secret text field")
+}
+
+#[test]
+fn from_setting_fills_printable_only_from_the_settings_schema() {
+    let ev = evidence!(
+        covers = ["REQ-035"],
+        kind = Kind::Fixture,
+        expected = "SecretFieldRule::from_setting sets printable_only exactly when the secret \
+                    field has x-stackly.printableOnly true",
+    );
+    let plain =
+        rule_of_the_fake_token(r#""x-stackly": { "apply": "immutableAfterInit", "secret": true }"#);
+    let printable = rule_of_the_fake_token(
+        r#""x-stackly": { "apply": "immutableAfterInit", "secret": true, "printableOnly": true }"#,
+    );
+    let explicit_false = rule_of_the_fake_token(
+        r#""x-stackly": { "apply": "immutableAfterInit", "secret": true, "printableOnly": false }"#,
+    );
+
+    assert!(!plain.printable_only);
+    assert!(printable.printable_only);
+    assert!(!explicit_false.printable_only);
+    ev.pass();
+}
+
+#[test]
+fn create_with_a_schema_printable_only_field_refuses_control_characters() {
+    let ev = evidence!(
+        covers = ["REQ-035"],
+        kind = Kind::Fixture,
+        expected = "a put into a printableOnly field of a settings schema refuses control \
+                    characters with secret.invalid_value before any store call, and accepts \
+                    spaces, quotes, and backslashes",
+    );
+    let rule = rule_of_the_fake_token(
+        r#""x-stackly": { "apply": "immutableAfterInit", "secret": true, "printableOnly": true }"#,
+    );
+    let harness = Harness::new();
+    let instance = harness.instance(false);
+
+    let err = harness
+        .put(new_field(
+            instance,
+            "from-schema",
+            rule,
+            SecretInput::Value(value("pass\nword-with-newline")),
+        ))
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        SecretError::InvalidValue {
+            reason: InvalidValueReason::ControlCharacters,
+            ..
+        }
+    ));
+    assert_eq!(err.code().as_str(), "secret.invalid_value");
+    assert!(harness.store().calls().is_empty());
+    harness
+        .put(new_field(
+            instance,
+            "from-schema",
+            rule,
+            SecretInput::Value(value("pass word's \"quoted\" \\ ok")),
+        ))
+        .unwrap();
+    ev.pass();
 }

@@ -1024,6 +1024,18 @@ fn the_settings_dialect_rejects_keywords_and_rules_outside_it() {
         &Edit::fake()
             .replace(
                 schema,
+                "\"x-stackly\": { \"apply\": \"restart\" }\n    },\n    \"readyDelayMs\"",
+                "\"x-stackly\": { \"apply\": \"restart\", \"printableOnly\": true }\n    },\n    \"readyDelayMs\"",
+            )
+            .issues(),
+        file,
+        "properties.label.x-stackly.printableOnly",
+        IssueCode::SettingsSchemaRule,
+    );
+    assert_issue(
+        &Edit::fake()
+            .replace(
+                schema,
                 "\"default\": \"fake\"",
                 &format!("\"default\": \"{}\"", "x".repeat(257)),
             )
