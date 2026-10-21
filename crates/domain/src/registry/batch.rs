@@ -7,14 +7,14 @@ use std::fmt;
 use jiff::Timestamp;
 
 use crate::environment::Environment;
-use crate::id::OperationId;
+use crate::id::{InstanceId, OperationId};
 use crate::instance::Instance;
 use crate::lease::Lease;
 use crate::operation::{CreatedRecord, JournalStep, LockKey, Operation, OperationJournal};
 use crate::process::ProcessObservation;
 use crate::registry::config::ConfigRevisionRecord;
 use crate::registry::error::{RegistryError, ResourceRef};
-use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord};
+use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord, ProviderSourceRecord};
 use crate::registry::secret::{
     AuditEventRecord, PlatformStoreKey, SecretFieldName, SecretReferenceRecord, SecretUser,
 };
@@ -261,6 +261,22 @@ pub enum WriteOp {
     /// `DuplicateResource` with the active revision when `previous` is
     /// empty but the instance already has one.
     InsertConfigRevision(ConfigRevisionRecord),
+    /// Records a provider source at revision 1 (feature 20). Fails with
+    /// `DuplicateResource` when its ID, or its kind and location, exist.
+    InsertProviderSource(ProviderSourceRecord),
+    /// Deletes an instance the operation `operation` created, with its
+    /// endpoints, paths, config revisions, and secret uses: the undo of a
+    /// create that fails (spec 0020). Fails with `NotFound`,
+    /// `RevisionConflict`, and `NotDeletable` while the instance was
+    /// created by another operation or may be running.
+    DeleteInstanceCreatedBy {
+        /// The instance.
+        id: InstanceId,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+        /// The `create_instance` operation being compensated.
+        operation: OperationId,
+    },
 }
 
 impl WriteOp {
@@ -310,6 +326,8 @@ impl WriteOp {
                 ResourceRef::Instance(observation.instance)
             }
             Self::InsertConfigRevision(record) => ResourceRef::ConfigRevision(record.id),
+            Self::InsertProviderSource(record) => ResourceRef::ProviderSource(record.id),
+            Self::DeleteInstanceCreatedBy { id, .. } => ResourceRef::Instance(*id),
         }
     }
 
@@ -350,6 +368,7 @@ impl WriteOp {
             Self::InsertSecretReference(record)
             | Self::UpdateSecretReference { record, .. }
             | Self::RestoreSecretReference(record) => Some(record.revision),
+            Self::InsertProviderSource(record) => Some(record.revision),
             Self::InsertProviderRevision(_)
             | Self::InsertArtifact(_)
             | Self::InsertLease(_)
@@ -365,7 +384,8 @@ impl WriteOp {
             | Self::ReplaceSecretUses { .. }
             | Self::InsertAuditEvent(_)
             | Self::RecordProcessObservation(_)
-            | Self::InsertConfigRevision(_) => None,
+            | Self::InsertConfigRevision(_)
+            | Self::DeleteInstanceCreatedBy { .. } => None,
         }
     }
 

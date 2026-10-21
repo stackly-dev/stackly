@@ -30,7 +30,7 @@ use super::plan::{
 };
 use super::probe::NativeProbeFailure;
 use super::probe::nats::{self, Exchange, Expectation, connect_bytes};
-use super::raw::{RawSettingsSchema, decode_json, parse_json};
+use super::raw::{RawSettingsSchema, decode_json_text, parse_json};
 use super::settings::{SettingsSchema, parse_schema};
 use super::validate::{ValidatedPackage, sample_context};
 use crate::secret::ResolvedSecrets;
@@ -602,10 +602,10 @@ fn assert_inside(context: &PlanContext, path: &Path) {
 /// Parses settings schema text in the dialect, as the validator does.
 fn parse_settings(text: &str, issues: &mut Issues) -> Option<SettingsSchema> {
     let file = "settings.schema.json";
-    let value = parse_json(file, text)
+    parse_json(file, text)
         .map_err(|issue| issues.push(issue))
         .ok()?;
-    let raw = decode_json::<RawSettingsSchema>(file, value, IssueCode::SettingsSchemaKeyword)
+    let raw = decode_json_text::<RawSettingsSchema>(file, text, IssueCode::SettingsSchemaKeyword)
         .map_err(|issue| issues.push(issue))
         .ok()?;
     parse_schema(raw, &mut FileIssues::new(file, issues))

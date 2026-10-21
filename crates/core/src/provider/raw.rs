@@ -420,7 +420,7 @@ pub(crate) struct RawSettingsSchema {
     #[serde(rename = "additionalProperties")]
     pub(crate) additional_properties: bool,
     #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::MANIFEST_NAME }, "maxProperties" = 64)))]
-    pub(crate) properties: BTreeMap<String, RawSettingField>,
+    pub(crate) properties: Ordered<RawSettingField>,
     #[serde(default)]
     pub(crate) required: Vec<String>,
 }
@@ -465,7 +465,7 @@ pub(crate) struct RawItems {
     #[serde(rename = "additionalProperties")]
     pub(crate) additional_properties: bool,
     #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::MANIFEST_NAME }, "maxProperties" = 16)))]
-    pub(crate) properties: BTreeMap<String, RawItemField>,
+    pub(crate) properties: Ordered<RawItemField>,
     #[serde(default)]
     pub(crate) required: Vec<String>,
 }
@@ -889,6 +889,27 @@ pub(crate) fn decode_yaml<T: DeserializeOwned>(
     })
 }
 
+/// Decodes JSON text into a raw type, reporting the first problem with its
+/// field path, for the types that keep the order of an object
+/// ([`Ordered`]), which a [`serde_json::Value`] would sort away. The text
+/// must already have passed [`parse_json`], so it is valid and has no
+/// repeated key. Unknown fields get `unknown_code`.
+pub(crate) fn decode_json_text<T: DeserializeOwned>(
+    file: &str,
+    text: &str,
+    unknown_code: IssueCode,
+) -> Result<T, Issue> {
+    let mut deserializer = serde_json::Deserializer::from_str(text);
+    serde_path_to_error::deserialize(&mut deserializer).map_err(|err| {
+        path_issue(
+            file,
+            &err.path().to_string(),
+            &strip_position(&err.inner().to_string()),
+            unknown_code,
+        )
+    })
+}
+
 /// Decodes a JSON value into a raw type, reporting the first problem with
 /// its field path. Unknown fields get `unknown_code`.
 pub(crate) fn decode_json<T: DeserializeOwned>(
@@ -962,6 +983,90 @@ fn strip_position(message: &str) -> String {
 /// Makes a serde message follow the issue style: no trailing period.
 fn clean_message(message: &str) -> String {
     message.trim_end_matches('.').to_owned()
+}
+
+/// The entries of a JSON object in the order the document wrote them, which
+/// the settings schema keeps as its declaration order (spec 0009).
+#[derive(Debug)]
+pub(crate) struct Ordered<T>(Vec<(String, T)>);
+
+impl<T> Ordered<T> {
+    /// Returns how many entries there are.
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns the keys, in document order.
+    pub(crate) fn keys(&self) -> impl Iterator<Item = &String> {
+        self.0.iter().map(|(key, _)| key)
+    }
+}
+
+impl<T> IntoIterator for Ordered<T> {
+    type Item = (String, T);
+    type IntoIter = std::vec::IntoIter<(String, T)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Ordered<T> {
+    type Item = (&'a String, &'a T);
+    type IntoIter = std::iter::Map<
+        std::slice::Iter<'a, (String, T)>,
+        fn(&'a (String, T)) -> (&'a String, &'a T),
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter().map(|(key, value)| (key, value))
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Ordered<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct OrderedVisitor<T>(std::marker::PhantomData<T>);
+
+        impl<'de, T: Deserialize<'de>> Visitor<'de> for OrderedVisitor<T> {
+            type Value = Ordered<T>;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("an object")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut entries: Vec<(String, T)> = Vec::new();
+                while let Some(key) = map.next_key::<String>()? {
+                    if entries.iter().any(|(seen, _)| *seen == key) {
+                        return Err(de::Error::custom(format!("duplicate field `{key}`")));
+                    }
+                    entries.push((key, map.next_value()?));
+                }
+                Ok(Ordered(entries))
+            }
+        }
+
+        deserializer.deserialize_map(OrderedVisitor(std::marker::PhantomData))
+    }
+}
+
+#[cfg(feature = "json-schema")]
+impl<T: schemars::JsonSchema> schemars::JsonSchema for Ordered<T> {
+    fn inline_schema() -> bool {
+        <BTreeMap<String, T>>::inline_schema()
+    }
+
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        <BTreeMap<String, T>>::schema_name()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        <BTreeMap<String, T>>::schema_id()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        <BTreeMap<String, T>>::json_schema(generator)
+    }
 }
 
 /// A JSON value decoded with duplicate keys rejected.

@@ -18,9 +18,9 @@ use stackly_domain::{
     IpEndpoint, Lease, LeaseFilter, LeaseHolder, LeaseState, LineCompatibility, LogicalRoot,
     Operation, OperationCursor, OperationFailure, OperationId, OperationPage, OperationQuery,
     OperationResource, Ownership, PortRequest, Progress, ProviderRevision, ProviderRevisionKey,
-    ProviderRevisionRecord, RegistryError, RelativePath, ResourceRef, Runtime, RuntimeId,
-    RuntimeLine, RuntimeReferences, Sha256Digest, StoredEnvironment, StoredInstance, StoredLease,
-    StoredOperation, StoredRuntime, Target, Transport, UnixEndpoint,
+    ProviderRevisionRecord, ProviderSourceId, RegistryError, RelativePath, ResourceRef, Runtime,
+    RuntimeId, RuntimeLine, RuntimeReferences, Sha256Digest, StoredEnvironment, StoredInstance,
+    StoredLease, StoredOperation, StoredRuntime, Target, Transport, UnixEndpoint,
 };
 
 use super::column::{Cells, collect, corrupt, exists, first, inconsistent, sql_error, ts};
@@ -59,7 +59,7 @@ pub(super) fn provider_revision(
     first(
         conn,
         "SELECT provider, revision, manifest_sha256, software, schema_version, publisher, \
-         capabilities, line_compatibility, approval FROM provider_revisions \
+         capabilities, line_compatibility, approval, source_id FROM provider_revisions \
          WHERE provider = ?1 AND revision = ?2 AND manifest_sha256 = ?3",
         (
             key.provider().as_str(),
@@ -79,12 +79,16 @@ pub(super) fn provider_revision(
                 capabilities(cells)?,
                 line_compatibility(cells)?,
             );
-            Ok(ProviderRevisionRecord::new(
+            let record = ProviderRevisionRecord::new(
                 revision,
                 cells.opt_text("schema_version")?,
                 cells.opt_text("publisher")?,
                 cells.opt_text("approval")?,
-            ))
+            );
+            Ok(match cells.opt_parse::<ProviderSourceId>("source_id")? {
+                Some(source) => record.with_source_id(source),
+                None => record,
+            })
         },
     )
 }

@@ -38,6 +38,7 @@ use stackly_domain::{
 use stackly_platform::{Platform, PlatformError};
 use tokio::sync::Notify;
 
+pub(crate) use compensation::check_instance_lock;
 pub use compensation::{
     CompensationError, CompensationResult, CompensationScope, Compensator,
     ENVIRONMENT_TREE_COMPENSATOR, INSTANCE_TREE_COMPENSATOR,

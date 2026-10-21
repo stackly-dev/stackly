@@ -108,6 +108,26 @@ pub(crate) fn has_control_character(value: &SecretValue) -> bool {
     value.expose().chars().any(char::is_control)
 }
 
+/// The two facts about a secret value the create check needs, so the value
+/// itself never leaves the module that holds it (spec 0020, *Evaluator
+/// create*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SecretValueShape {
+    /// The number of Unicode characters.
+    pub chars: u64,
+    /// Whether it holds a control character.
+    pub has_control: bool,
+}
+
+/// Returns the [`SecretValueShape`] of `value`.
+#[must_use]
+pub fn value_shape(value: &SecretValue) -> SecretValueShape {
+    SecretValueShape {
+        chars: char_count(value) as u64,
+        has_control: has_control_character(value),
+    }
+}
+
 impl Redactor {
     /// Returns a redactor that knows no value yet.
     #[must_use]

@@ -10,6 +10,7 @@ mod journal;
 mod prune;
 mod read;
 mod secret;
+mod source;
 mod supervision;
 mod write;
 
@@ -25,9 +26,9 @@ use stackly_domain::{
     Environment, EnvironmentId, IdempotencyKey, Instance, InstanceFilter, InstanceId, InstanceName,
     InstancePathEntry, JournalView, Lease, LeaseFilter, Operation, OperationId, OperationJournal,
     OperationPage, OperationQuery, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
-    PruneReport, Registry, RegistryError, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences,
-    SecretRef, SecretReferenceFilter, SecretReferenceView, SecretUse, SecretUser, Sha256Digest,
-    Versioned, WriteBatch,
+    ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry, RegistryError,
+    RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretRef, SecretReferenceFilter,
+    SecretReferenceView, SecretUse, SecretUser, Sha256Digest, Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
@@ -151,6 +152,15 @@ impl Registry for SqliteRegistry {
     ) -> Result<Versioned<Option<ProviderRevisionRecord>>, RegistryError> {
         let key = key.clone();
         self.read(move |tx| read::provider_revision(tx, &key))
+    }
+
+    fn provider_source_by_location(
+        &self,
+        kind: ProviderSourceKind,
+        location: &str,
+    ) -> Result<Versioned<Option<ProviderSourceRecord>>, RegistryError> {
+        let location = location.to_owned();
+        self.read(move |tx| source::by_location(tx, kind, &location))
     }
 
     fn artifact(
