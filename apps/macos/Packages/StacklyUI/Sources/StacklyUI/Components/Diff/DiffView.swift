@@ -81,7 +81,11 @@ private struct DiffRow: View {
     }
 
     private var textStyle: AnyShapeStyle {
-        line.kind == .unchanged ? AnyShapeStyle(StacklyColor.textSecondary) : AnyShapeStyle(.primary)
+        if line.kind == .unchanged {
+            AnyShapeStyle(StacklyColor.textSecondary)
+        } else {
+            AnyShapeStyle(.primary)
+        }
     }
 }
 
