@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-21 14:30`
+- **Diperbarui:** `2026-10-21 15:10`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -150,6 +150,7 @@
 | `2026-10-21` | Rekonsiliasi: tidak ada sesi atau branch hidup dari wave 1 sampai 3; patch F15 dan F8 tetap di `held-patches/`. Update spec 0007 (K10, K12, blok 0020) sudah di `main` (Follow-up 0007 dicentang foundation), jadi langkah 3 F20 tidak lagi terblokir. Kotak F17 milestone 1 dicentang saat program dihentikan tanpa checker verify (`verify.md` 0017 Milestone 1: 0 dari 22 langkah), jadi `chk-f17-m1` masuk antrian. Spec 0067, 0068, 0069 sudah menambah paragraf 2026-10-21 di spec 0016 sampai 0022. | `lead` |
 | `2026-10-21` | Checkout utama dipakai bersama lead `ui-macos` ("macOS UI scope documentation"): kedua lead commit dengan pathspec saja dan saling memberi tahu sebelum merge kode. Lead ini merge `--no-ff --no-commit` langsung di checkout utama (pengganti worktree integrasi wave 3) hanya saat tidak ada `MERGE_HEAD`, dan `graphify update .` tidak dijalankan saat lead lain sedang memperbarui graph. Lead `ui-macos` memiliki satu update gabungan spec 0013 (`arc-f1368-update`) yang memuat usulan fase 02 bagian "Spec 0013" di `02-instalasi-pertama.usulan-fondasi.md`; lead ini tidak mengedit spec 0013 dan mengirim butir 0013 tambahan ke sana. | `lead` |
 | `2026-10-21` | Ownership file bersama wave 4: `crates/protocol/`, `protocols/fixtures/`, `protocols/contract-versions.json`, dan `clients/swift/Sources/StacklyClient/Generated/` hanya milik `dev-f22-m1`; `schemas/provider/provider.v1alpha1.schema.json` milik `dev-f23-m1`; `schemas/provider/settings.v1alpha1.schema.json` milik `dev-f19-m1`; `providers/*/versions.json` dan `fuzz/seeds/` adalah hasil generator, jadi konflik di sana diselesaikan lead dengan menjalankan generatornya lagi saat merge. Urutan di dalam wave: langkah 6 spec 0018 sebelum langkah 2 spec 0020 (`WriteOp` registry); langkah 3 spec 0019 sebelum langkah 4 spec 0020 (`core::provider::settings`); langkah 1 spec 0020 sebelum langkah 1 spec 0022 (`Filesystem`, adapter volume); baris `versionCheck` NATS dari `dev-f18-m1` sebelum langkah 2 spec 0023 (`providers/nats/provider.yaml`); milestone 1 spec 0022 sebelum langkah 3 spec 0021 (`crates/protocol/`). Langkah yang menjadi prasyarat sesi lain dilaporkan untuk merge awal. | `lead` |
+| `2026-10-21` | Merge awal langkah 3 spec 0019 dari `dev-f19-m1` (`db7c5e2`, `cc3e129` → `055b36d`): `x-stackly.printableOnly` di model settings dan JSON Schema settings, `SecretFieldRule::from_setting` mengisi `printable_only`, test `provider_rules` dan `secret_service/printable_only`. Pengecualian ownership yang lead setujui sebelum dikerjakan: satu field additive `printable_only` di `RawXStackly` (`crates/core/src/provider/raw.rs`), seperti diantisipasi *Sesi paralel* spec 0019. Gate di `main`: fmt, clippy workspace, test core (775 lulus), check-deps, codegen --check, cek Windows lulus. Langkah 4 spec 0020 terbuka (`dev-f20-m1` diberi tahu). | `lead` |
 
 ## Blocker terbuka
 
