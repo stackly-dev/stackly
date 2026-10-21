@@ -104,6 +104,8 @@ _Dibangun 2026-10-21 oleh `dev-f67-m3` di branch sendiri (langkah Build plan 14)
 - [ ] `NOT_RUN` · nyalakan VoiceOver di halaman Components → toggle dibacakan "Hide Inspector" atau "Show Inspector"; placeholder dibaca satu kelompok, judul lalu pesan; header dibaca judul sebagai heading, status "Status: Running", lalu tombol aksi satu per satu → AC-18, AC-19
 - [ ] `NOT_RUN` · Increase Contrast, Reduce Transparency, Reduce Motion, light dan dark pada inspector asli → latar tetap opak dan tidak berubah saat Reduce Transparency, tidak ada gerak selain crossfade bawaan sistem → AC-19
 - [ ] `NOT_RUN` · di jendela 900 pt dengan sidebar dan inspector terbuka di layar fitur 22 atau 18 (setelah milestone fitur itu dibangun) → tidak ada teks terpotong di kolom halaman 384 pt maupun di inspector → AC-18
+- [x] Tambahan langkah 14 · di macOS 27.0.1 buka app probe (`NavigationSplitView`, `onGeometryChange` dan `stacklyWindowWidth` seperti `AppShell`, inspector `ideal: 340` dan `max: StacklyInspectorWidth.maxWidth(windowWidth:)`) pada jendela 900, 999, 1000, dan 1300 pt → inspector terbuka 280, 280, 340, dan 340 pt; kolom halaman di 900 pt 384 pt; `.stacklyInspector` asli di 900 pt: inspector 280 pt, kolom halaman 384 pt → AC-18 _Hasil `dev-f67-m3-s14a` 2026-10-21: angka dibaca dari teks yang dirender probe di screenshot scratchpad `ideal-{900,999,1000,1300}.png`_
+- [ ] `NOT_RUN` · di app Debug atau probe, jendela 1000 pt atau lebih dengan pembagi inspector diseret ke 360 pt, lalu jendela dikecilkan ke 900 pt → inspector dijepit ke 280 pt dan kolom halaman tetap 384 pt → AC-18 (sesi ini tidak bisa menyeret pembagi atau mengubah ukuran jendela hidup: drag sintetis tidak menggerakkan pembagi dan API AX tidak membuka jendela probe; yang terbukti hanya lebar buka per lebar jendela)
 
 ### Commands
 
@@ -113,6 +115,7 @@ _Dibangun 2026-10-21 oleh `dev-f67-m3` di branch sendiri (langkah Build plan 14)
 - [x] `cargo xtask build-app` → `BUILD SUCCEEDED`
 - [x] `xcrun swift-format lint --strict` atas file Swift milestone ini → tanpa peringatan
 - [x] `cargo xtask evidence check` → 39 catatan manual, baseline valid, 577 file Rust dan 237 file Swift mengikuti aturan; lead menjalankannya lagi setelah merge
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter InspectorTests` dan `--filter ShellStructureTests` (tambahan langkah 14) → `StacklyInspectorWidth.maxWidth` 280 pt di 900 dan 999 pt, 360 pt di 1000 dan 1280 pt dan di `nil`; `compactWindowWidth` 1000; `stacklyWindowWidth` bawaan `nil`; kolom halaman di jendela minimum dengan sidebar 236 pt 384 pt; sumber `AppShell` memasang `onGeometryChange` lalu `.environment(\.stacklyWindowWidth, windowWidth)` di dalam gerbang dan host aksi → AC-18
 
 ### Acceptance-criteria coverage
 
