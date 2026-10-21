@@ -58,7 +58,7 @@ Fitur 12 membangun lapisan fondasi `StacklyUI` (token, palet status, `StatusLabe
 | `ViewState`, `StateView`, `StatePlaceholder`, `InlineEmptyRow`, `StateBanner`, `DelayedProgress`, `MutationAvailability`, `.mutationGated()`, `.disabled(reason:)`, `DisabledReasonText` | 12 |
 | `ConfirmationRequest` dan `.stacklyConfirmation(item:)` | 12 |
 | Galeri desain dan jendela Debug "Design Gallery" | 12 |
-| Komponen lain: tile provider, key value, sheet dengan footer, umpan balik setelah aksi, progress bertahap, checklist preflight, view log, view diff, menu aksi, inspector | 67, memakai ulang milik 12. *Catatan fase 02 (2026-10-20):* sebelum fitur 67 ada, spec 0017 (`ProviderTile`), 0020 (`PreflightSection`, footer sheet, `CreateProgressSection`), dan 0022 (`ActionFeedbackBanner`, `// provisional: F67`) membangun versi sementara yang nanti diadopsi fitur 67 |
+| Komponen lain: tile provider, key value, sheet dengan footer, umpan balik setelah aksi, progress bertahap, checklist preflight, view log, view diff, menu aksi, inspector | 67, memakai ulang milik 12. *Diperbarui 2026-10-21:* fitur 67 membangun versi pertama setiap komponen ini ([spec 0067](../0067-komponen-dasar-stackly/index.md)); spec fase 02 tidak membuat versi sementara |
 | Banner daemon tidak terjangkau, pengisian `MutationAvailability`, status koneksi, adapter DTO ke enum UI, pemasangan `SectionIcon` di sidebar, lebar minimum jendela | 13 |
 | Snapshot, XCUITest, dan audit aksesibilitas per layar | 68 |
 | Setting Appearance (System, Light, Dark) | 32 |
@@ -106,7 +106,7 @@ Token kustom (`ColorToken`, empat nilai sRGB per token: light, dark, high contra
 | `surfaceConsole` | `--console` | #FFFFFF | #18181A | #FFFFFF | #18181A |
 | `textSecondary` | `--text2` | #606065 | #AEAEB3 | #4E4E52 | #C0C0C4 |
 
-- `surfaceWindow` adalah latar area konten untuk halaman yang dirakit dari kartu kustom (Overview, Summary, Diagnostics, dan sejenisnya), supaya kartu selalu lebih terang dari latarnya di dark mode seperti mockup. Halaman yang memakai `Table`, `List`, atau `Form` native tetap memakai latar sistem.
+- `surfaceWindow` adalah latar area konten untuk halaman yang dirakit dari kartu kustom (Overview, Summary, Diagnostics, dan sejenisnya), supaya kartu selalu lebih terang dari latarnya di dark mode seperti mockup. Halaman yang memakai `Table`, `List`, atau `Form` native tetap memakai latar sistem. *Pengecualian (2026-10-21, spec 0067):* sheet lewat `StacklySheet` dan isi inspector lewat `.stacklyInspector` memakai `surfaceWindow` opak, juga saat isinya `Form` native, supaya teks di atasnya tetap di pasangan P1 dan P2.
 - `.cardSurface(radius: Radius = .medium)` menggambar `surfaceCard`, sudut `radius`, dan garis tepi hairline `separatorColor` (mockup: ring 0,5 px) yang menjadi 1 pt saat Increase Contrast.
 - Implementasi: `ColorToken` adalah tabel murni dengan fungsi `value(scheme: ColorScheme, contrast: ColorSchemeContrast) -> Color` dan conform ke `ShapeStyle` lewat `resolve(in:)` yang membaca `colorScheme` dan `colorSchemeContrast` dari environment. Satu sumber ini dipakai teks, latar, dan border, jadi semuanya sepakat juga saat Appearance dipaksa lewat `preferredColorScheme` (fitur 32). Test mengecek tabel lewat `value(scheme:contrast:)` dan mengecek `resolve(in:)` untuk light dan dark lewat `EnvironmentValues`; `NSAppearance` hanya dipakai test untuk me resolve warna sistem. Tidak ada accessor `NSColor` untuk token kustom.
 - Pencampuran tint dihitung di ruang sRGB dengan gamma (sama dengan CSS `color-mix(in srgb, ...)` di mockup): `hasil = fill × a + dasar × (1 − a)`.
@@ -223,7 +223,7 @@ Copy label di luar lima label mockup (Running, Stopped, Starting…, Stopping…
 - Glass hanya dari kontainer dan kontrol native: sidebar `NavigationSplitView`, item toolbar, sheet, popover, menu, dialog, dan inspector. Tinted atau clear, Reduce Transparency, dan Increase Contrast untuk glass ini diurus macOS mengikuti System Settings.
 - Tidak ada `.glassEffect`, `GlassEffectContainer`, gaya tombol glass, atau `Material` kustom di konten. Semua permukaan kustom opak (`surfaceWindow`, `surfaceCard`, `surfaceConsole`, `toneSurface`).
 - Latar jendela tembus pandang di mockup (`--win-glass`, wallpaper) tidak ditiru; jendela memakai perilaku standar macOS.
-- Overlay yang di mockup memakai glass (toast, dialog konfirmasi, menu More) diganti presentasi native: dialog lewat `.stacklyConfirmation`, menu lewat `Menu`, dan umpan balik setelah aksi oleh fitur 67 dengan permukaan opak atau presentasi sistem.
+- Overlay yang di mockup memakai glass (toast, dialog konfirmasi, menu More) diganti presentasi native: dialog lewat `.stacklyConfirmation`, menu lewat `Menu`, dan umpan balik setelah aksi menjadi kartu umpan balik opak spec 0067 di bawah kolom detail lewat `.safeAreaInset(edge: .bottom)`, bukan overlay (2026-10-21).
 
 ### Motion
 
@@ -319,11 +319,12 @@ extension View {
 - Kembali ke `confirmationDialog` hanya lewat `/architect`, setelah cek Return, Escape, dan Tab lalu Space yang sama lulus di versi macOS yang baru.
 - Konfirmasi wajib untuk aksi yang menghapus atau menimpa data, menghapus record atau runtime, mematikan proses tanpa stop yang wajar, atau mengganggu pemilik lain. Role destructive: remove instance (54), purge data (54), remove runtime (55), restore overwrite (52), force stop (26), stop instance yang dipakai lease environment atau shared (26, 47), Stop All Services (32). Role standard: bring down environment (47), karena hanya menghentikan instance yang tidak dibutuhkan pihak lain dan data tetap ada. Tanpa konfirmasi: start, stop, dan restart tanpa dependen, reload, copy, cancel operasi, dan clean up cache yang bisa diunduh ulang. Fitur lain menerapkan aturan yang sama dan menambah baris di design.md.
 - Copy: judul pertanyaan dengan nama objek dalam kutip lengkung ("Stop “mysql-erp”?"), pesan satu atau dua kalimat yang menyebut akibat lalu apa yang aman ("Data is kept."), label tombol kata kerja dari judul. Copy contoh dari mockup.
-- Aksi dijalankan lewat jalur mutasi spec 0013. Kalau daemon tidak terjangkau saat tombol ditekan, tidak ada yang dikirim dan umpan balik fitur 67 menampilkan "stacklyd is unavailable. Nothing was sent." (mockup).
+- Aksi dijalankan lewat jalur mutasi spec 0013. Kalau daemon tidak terjangkau saat tombol ditekan, tidak ada yang dikirim dan umpan balik fitur 67 menampilkan "stacklyd is unavailable. Nothing was sent." (mockup), lewat kartu umpan balik spec 0067 (`Feedback.outcome`).
 
 ### Galeri desain
 
 - `StacklyUI/Gallery/` berisi `DesignGallery` dengan empat halaman: Tokens, Status, States, Confirmation. Setiap halaman punya `#Preview` light, dark, dan lebar sempit 640 pt (cek teks besar, lihat Tipografi), dengan data contoh dari mockup tanpa kredensial nyata. Seluruh folder dibungkus `#if DEBUG`, jadi tidak ikut build Release.
+- *Ditambah 2026-10-21 (spec 0068):* setiap halaman galeri memberi isi halamannya sebagai view terpisah (`content`) yang dipakai `GalleryPage` dan suite snapshot spec 0068, dan sampel galeri tidak memakai `Date.now`; waktu contoh datang dari `FixtureClock` (misalnya `FixtureClock.minutesAgo(18)`), supaya render bisa diulang persis.
 - Build Debug target app menambah scene `Window("Design Gallery", id: "design-gallery")` dengan perintah di menu Window, di dalam `#if DEBUG`.
 
 ### Pasangan kontras
@@ -336,6 +337,8 @@ extension View {
 | P4 | `labelColor`, `textSecondary` | `toneSurface` setiap tone, `.banner`, di atas `.card` dan `.window` | 4,5:1 | 4,5:1 |
 
 Batas normal berlaku di appearance light dan dark, batas HC di appearance high contrast light dan dark. Warna sistem di resolve per `NSAppearance` di test. Teks dalam konteks `.row` memakai `.primary` sistem dan tidak masuk tabel. Hitungan awal ada di rationale.md, bagian *Bukti kontras*.
+
+Tabel ini satu satunya tabel kontras (2026-10-21, spec 0068). Layar journey yang butuh pasangan baru mengusulkannya sebagai baris baru di tabel ini lewat *Usulan update untuk spec lain* spec layar itu, supaya `ContrastTests` mencakupnya sebelum layar di merge. Spec 0067 dan 0068 tidak menambah pasangan.
 
 Kalau di macOS 27 warna sistem yang di resolve membuat satu pasangan gagal, nilai token digeser seminimal mungkin sampai lolos, design.md mencatat nilai baru, dan spec ini diperbarui lewat `/architect`.
 
@@ -352,7 +355,7 @@ Bagian yang tidak bisa dibuktikan `swift test` dicek di jendela Design Gallery a
 - VoiceOver: "Status: Running", kelompok placeholder dan banner, pengumuman failed (AC-5, AC-11, AC-17).
 - Lebar sempit 640 pt, cara teks besar dari langkah 4 (AC-5, AC-18).
 
-XCUITest untuk cek ini adalah urusan fitur 68.
+XCUITest untuk cek ini ada di [spec 0068](../0068-fixture-tampilan-cek-visual/index.md) (2026-10-21): AC-14 (shell), AC-15 (galeri desain: label status, Return dan Escape di dialog, Show All, gate offline), dan AC-17 (audit aksesibilitas). Setting sistem asli (Differentiate Without Color, Increase Contrast, Reduce Transparency, Reduce Motion), fokus Tab dan Space, dan suara VoiceOver tetap dicek manual.
 
 ### Asumsi lintas spec
 
@@ -388,6 +391,8 @@ XCUITest untuk cek ini adalah urusan fitur 68.
 | `.disabled(reason:)`, `DisabledReasonText` | modifier, view | `String?` | nonaktif plus `.help` | |
 | `ConfirmationRequest`, `.stacklyConfirmation(item:)` | struct, modifier | binding opsional | dialog native | satu satunya konfirmasi |
 | `DesignGallery` | view, Debug saja | | empat halaman | |
+| `EnvironmentValues.fixtureNow` | kunci environment | `Date?` | waktu acuan teks "Showing the last known state from …" di `StateView` dan `DaemonBanner` | nil di app nyata; diisi fixture dan snapshot spec 0068 (2026-10-21) |
+| `EnvironmentValues.loadingDelay` | kunci environment | `Duration?` | jeda `DelayedProgress` di `StateView` | nil di app nyata (`DelayedVisibility.defaultDelay`); `.zero` di fixture dan snapshot spec 0068 (2026-10-21) |
 
 Kesalahan tidak dilempar oleh API ini; semuanya view dan nilai. Error datang dari daemon lewat `FailureContent` dan `StaleNote`.
 
@@ -432,6 +437,7 @@ Kesalahan tidak dilempar oleh API ini; semuanya view dan nilai. Error datang dar
 
 - Status tidak pernah hanya warna: setiap `StatusLabel` punya teks, setiap banner punya simbol dan judul, setiap `ToneBadge` punya label.
 - Tidak ada glass kustom dan tidak ada permukaan kustom yang tembus pandang.
+- *Ditambah 2026-10-21 (spec 0067):* komponen spec 0067 tidak menambah token atau pasangan kontras. `.consoleSurface()` hanya menyusun `surfaceConsole`, `Radius.medium`, dan hairline `.cardSurface()` yang sudah ada. Dua warna di luar token adalah dekorasi: putih untuk mark tile provider dan hitam transparan untuk bayangan kartu umpan balik. Simbol yang membawa arti memakai fill tone atau `textSecondary`, tidak pernah `StacklyColor.decorative` (WCAG 1.4.11).
 - Teks tone hanya di atas permukaan polos di tabel Pasangan kontras atau di atas tint tone yang sama; di baris, sidebar, menu, dan popover, teks status memakai `.primary`.
 - Accent tidak pernah menjadi warna teks kustom, dan warna sekunder sistem tidak dipakai langsung.
 - Empty tidak pernah tampil sebelum ada load yang berhasil; failed tidak pernah tampil kalau masih ada data terakhir.

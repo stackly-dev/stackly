@@ -89,14 +89,14 @@ Aturan subject:
 
 Identitas sebuah test adalah `(language, package, target, name)`. Identitas yang sama dua kali dalam satu run adalah masalah `duplicate_test`.
 
-| Field | Rust | Swift | Manual |
-| --- | --- | --- | --- |
-| `language` | `rust` | `swift` | `manual` |
-| `package` | `env!("CARGO_PKG_NAME")` | null (nama modul sudah unik dalam satu build) | null |
-| `target` | `env!("CARGO_CRATE_NAME")` (nama target test) | `test.sourceLocation.moduleName` | null |
-| `name` | nama thread libtest, yaitu path test di dalam target (`tests::stop_never_sends_sigkill`). Kalau thread tidak bernama atau bernama `main`, pakai `module_path!()` ditambah `:` dan nomor baris | `test.id` tanpa awalan modul dan tanpa akhiran lokasi file, misalnya `InstanceListTests/clientRefusesAnotherProtocolMajor()` | `--title` |
-| `file` | `file!()` | `test.sourceLocation.filePath` | null |
-| `line` | `line!()` dari pemanggilan makro | `test.sourceLocation.line` | null |
+| Field | Rust | Swift | XCTest (spec 0068) | Manual |
+| --- | --- | --- | --- | --- |
+| `language` | `rust` | `swift` | `swift` | `manual` |
+| `package` | `env!("CARGO_PKG_NAME")` | null (nama modul sudah unik dalam satu build) | null | null |
+| `target` | `env!("CARGO_CRATE_NAME")` (nama target test) | `test.sourceLocation.moduleName` | nama modul bundle test dari `String(reflecting: type(of: self))`, misalnya `StacklyAppUITests` | null |
+| `name` | nama thread libtest, yaitu path test di dalam target (`tests::stop_never_sends_sigkill`). Kalau thread tidak bernama atau bernama `main`, pakai `module_path!()` ditambah `:` dan nomor baris | `test.id` tanpa awalan modul dan tanpa akhiran lokasi file, misalnya `InstanceListTests/clientRefusesAnotherProtocolMajor()` | `<Kelas>/<method>()` dari `name` XCTest (`-[<Kelas> <selector>]`), selector tanpa `:` di akhir dan tanpa akhiran `AndReturnError` atau `WithCompletionHandler` | `--title` |
+| `file` | `file!()` | `test.sourceLocation.filePath` | `#filePath` dari pemanggilan `evidence(covers:expected:)` | null |
+| `line` | `line!()` dari pemanggilan makro | `test.sourceLocation.line` | `#line` dari pemanggilan itu | null |
 
 Wrapper mengubah setiap `file` absolut menjadi path relatif terhadap root workspace (dari `cargo metadata`) saat menulis `report.json`. `stackly-evidence` punya satu test penjaga yang memastikan nama hasil turunan sama dengan path test-nya sendiri, jadi kalau libtest berhenti menamai thread, test itu langsung merah.
 
@@ -262,6 +262,8 @@ fn postgres_18_reaches_ready_from_a_managed_runtime() {
 
 Sejak fitur 13 (spec 0013), `StacklyTestSupport` adalah product package `clients/swift`, sehingga test `StacklyUI` juga memakai trait `.evidence`. Integration test Swift yang butuh `stacklyd` membaca path binary dari variabel `STACKLY_DAEMON_BIN`; kalau variabel itu tidak di set atau binary nya tidak ada, test memanggil `Evidence.blocked(reason:owner:)` dengan reason yang menyebut variabel itu dan owner fitur pemilik test, jadi test tercatat `BLOCKED`, bukan `FAIL`. Test tanpa evidence memakai pola yang sama lewat `Test.cancel`.
 
+*Ditambah fase 02 (2026-10-21, spec 0068):* format record, aturan argumen, dan penulis record pindah ke target internal `StacklyEvidenceCore` (akses `package`). `StacklyTestSupport` kini bergantung padanya tanpa perubahan API publik, dan product `StacklyXCTestSupport` untuk XCTest memakai target yang sama, jadi kedua jalur menulis record yang persis sama (lihat *Exceptions*).
+
 ```swift
 import StacklyTestSupport
 import Testing
@@ -333,9 +335,12 @@ Semua perintah dijalankan dengan tangan di Mac ini (macOS 27, Apple Silicon), da
 | run fixture Swift | `cargo xtask evidence run --kind fixture -- swift test --package-path clients/swift --skip 'NativeTests\.'` |
 | run native Rust | `cargo xtask evidence run --kind native -- cargo test --workspace --locked --no-fail-fast --tests -- --ignored` |
 | run native Swift | `cargo xtask evidence run --kind native -- swift test --package-path clients/swift --filter 'NativeTests\.'` |
+| run fixture StacklyUI | `cargo xtask evidence run --kind fixture -- swift test --package-path apps/macos/Packages/StacklyUI` (spec 0068) |
+| run fixture UI | `cargo xtask evidence run --kind fixture -- cargo xtask ui-test` (spec 0068) |
 | cek | `cargo xtask evidence check`, lalu `cargo xtask runtime check` (spec 0003) |
 
 - Setiap `cargo test` dan `swift test` yang menjadi bukti berjalan lewat wrapper, termasuk package Swift lain (`StacklyUI`) saat mulai punya test. `cargo xtask codegen --check` dan `cargo deny check` tidak menulis evidence, karena keduanya cek tooling tanpa PRD ID.
+- *Ditambah fase 02 (2026-10-21, spec 0068):* run fixture StacklyUI menjalankan suite snapshot, yang butuh sesi login GUI dan empat setting aksesibilitas sistem mati. Run fixture UI butuh Automation Mode yang diaktifkan user sendiri dan layar yang tidak terkunci; tanpa itu `cargo xtask ui-test` keluar 2 tanpa menjalankan `xcodebuild`, dan langkah UI test tercatat `BLOCKED`. `cargo xtask ui-test` meneruskan variabel evidence ke runner lewat awalan `TEST_RUNNER_`.
 - `--no-fail-fast` dipakai di setiap `cargo test`, supaya biner test berikutnya tetap jalan dan menulis record setelah satu biner gagal.
 - Run native butuh sesi login GUI yang aktif di Mac ini, karena spike runtime spec 0003 memakai domain launchd `gui/<uid>`. Tanpa sesi itu, test runtime tercatat `BLOCKED`, bukan `FAIL`.
 - Urutan run native: `cargo xtask runtime spike --cleanup`; kalau pembersihan itu gagal, kedua run native tidak dijalankan. Lalu run native Rust, lalu run native Swift walau run Rust gagal (satu record `FAIL` sudah membuat exit code bukan 0). Terakhir `cargo xtask runtime spike --cleanup` lagi, juga saat run sebelumnya gagal atau dibatalkan.
@@ -367,6 +372,7 @@ Aturan pindaian `evidence check`:
 - Source Rust di `crates/`, `apps/`, dan `xtask/` (melewati `target/`) diparse dengan `syn` (fitur `full` dan `visit`, memakai major `syn` yang sudah ada di `Cargo.lock` supaya tidak menambah duplikat di `deny.toml`). Gagal kalau: `#[ignore]` tanpa alasan berawalan `native: `; ada `cfg_attr` yang berisi `ignore`; fungsi `#[ignore]` tanpa `evidence!` berisi `Kind::Native`; atau `evidence!` berisi `Kind::Native` di fungsi tanpa `#[ignore]`.
 - Pesan pelanggaran Rust menyebut file dan nama fungsi, bukan nomor baris, karena `syn` tanpa fitur `span-locations` di `proc-macro2` tidak memberi nomor baris.
 - Source Swift di `clients/` dan `apps/macos/` dipindai sebagai teks, dengan atribut `@Test(...)` dibaca sampai kurung penutupnya walau terpecah beberapa baris. Baris komentar `//` (termasuk `///`) dilewati. Gagal kalau: `@Test` di folder target `*NativeTests` tanpa `kind: .native`; `kind: .native` di luar folder seperti itu; atau file yang memakai `.evidence(` memanggil `Test.cancel(` langsung.
+- *Ditambah fase 02 (2026-10-21, spec 0068 AC-11):* file di `apps/macos/` yang namanya berakhiran `UITests` dan memanggil `evidence(covers:` gagal kalau ia juga memanggil `XCTSkip(`, `XCTSkipIf(`, atau `XCTSkipUnless(` langsung, atau menulis `kind:` di argumen `evidence`. Baris komentar `//` dilewati, sama seperti pindaian Swift di atas.
 - Test yang dibuat makro lain tidak terlihat oleh pindaian ini; karena itu test native wajib berupa fungsi `#[test]` biasa.
 
 ### Baseline benchmark
