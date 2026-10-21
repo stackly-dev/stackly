@@ -7,6 +7,7 @@ mod catalog;
 mod common;
 mod events;
 mod handshake;
+mod launch;
 mod lifecycle;
 mod limits;
 mod secret;

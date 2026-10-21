@@ -29,7 +29,7 @@ mod platform;
 mod process;
 mod secret;
 
-pub use agent::MacosBackgroundAgent;
+pub use agent::{MacosBackgroundAgent, parent_pid};
 pub use fs::MacosFilesystem;
 pub use identity::MacosIdentity;
 pub use info::MacosPlatformInfo;

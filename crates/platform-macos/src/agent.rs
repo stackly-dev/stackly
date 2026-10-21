@@ -146,6 +146,18 @@ impl BackgroundAgent for MacosBackgroundAgent {
     }
 }
 
+/// Returns the parent process ID of this process, which
+/// `LaunchContext::detect` compares with 1 (launchd). It lives here because
+/// the daemon may not name `std::os::unix::process` (`cargo xtask
+/// check-deps`, spec 0010 step 15).
+#[must_use]
+pub fn parent_pid() -> u32 {
+    // SAFETY: `getppid` takes no arguments, never fails, and only reads the
+    // process table entry of the caller.
+    let pid = unsafe { libc::getppid() };
+    u32::try_from(pid).unwrap_or(0)
+}
+
 /// Returns whether the bundle at `root` holds the LaunchAgent property list
 /// and the daemon executable.
 fn helper_present(root: &Path) -> bool {

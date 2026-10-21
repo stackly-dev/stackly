@@ -6,7 +6,7 @@
 //! [`server`] binds the socket and serves [`connection`]s through the
 //! [`dispatch`] handlers, whose operation methods live in [`ipc`],
 //! [`operations`] holds the operation engine, [`secrets`] the secret service, [`supervisor`] the process
-//! supervisor, [`events`] is the event bus,
+//! supervisor, [`events`] is the event bus, [`launch`] the launch record of the background agent,
 //! [`state`] holds the health, [`catalog`] the provider catalog, and
 //! [`shutdown`] the stop order's pieces. No other crate depends on this
 //! library.
@@ -21,6 +21,8 @@ pub mod dispatch;
 pub mod events;
 #[cfg(unix)]
 pub mod ipc;
+#[cfg(unix)]
+pub mod launch;
 #[cfg(unix)]
 pub mod lock;
 #[cfg(unix)]
