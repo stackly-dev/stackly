@@ -216,6 +216,28 @@ Each state has its own symbol shape, so Stopped and Retained stay apart without 
 
 The mockup has five of these labels (Running, Stopped, Starting…, Stopping…, Failed) and the detail "Waiting for probe". Every other label is new copy from spec 0012.
 
+### Catalog status
+
+`CatalogAppearance.appearance(of: SupportStatus)` and `CatalogAppearance.appearance(of: CatalogEntryState)` (spec 0017, AC-12). The daemon computes every status, reason, and install verdict; the GUI only shows them. Catalog statuses show as a `ToneBadge` (a card, a matrix cell) or a `StatusLabel` (the detail header), always with the label written. Unsupported is `neutral` because it is a fact about the build, not a failure; blocked is `caution` because it waits for a maintainer, not for the user; `supported` is labeled Tested after the mockup.
+
+| Value | Label | Tone | Status symbol | Note |
+| --- | --- | --- | --- | --- |
+| `SupportStatus.supported` | Tested | `positive` | `checkmark.circle.fill` | the CLI writes `supported` |
+| `SupportStatus.experimental` | Experimental | `caution` | `exclamationmark.triangle.fill` | |
+| `SupportStatus.unverified` | Unverified | `neutral` | `questionmark.circle.fill` | "not tested" in the tone table |
+| `SupportStatus.planned` | Planned | `neutral` | `clock.fill` | |
+| `SupportStatus.unsupported` | Unsupported | `neutral` | `minus.circle.fill` | the reason is written under the matrix |
+| `SupportStatus.blocked` | Blocked | `caution` | `lock.circle.fill` | |
+| `SupportStatus.unrecognized` | Unrecognized State | `caution` | `questionmark.diamond.fill` | detail "Update Stackly to see this state" (`caution`) |
+| `CatalogEntryState.available` | Available | `neutral` | `arrow.down.circle.fill` | the mockup uses blue; `informative` is for work in progress |
+| `CatalogEntryState.blocked` | Blocked | `caution` | `lock.circle.fill` | |
+| `CatalogEntryState.unsupported` | Unsupported | `neutral` | `minus.circle.fill` | |
+| `CatalogEntryState.planned` | Planned | `neutral` | `clock.fill` | |
+| `CatalogEntryState.invalid` | Invalid | `critical` | `xmark.circle.fill` | the package failed validation |
+| `CatalogEntryState.unrecognized` | Unrecognized State | `caution` | `questionmark.diamond.fill` | same as the `SupportStatus` row |
+
+Another open enum of the catalog shows as neutral text and is never guessed into a value: a category is "Other" (only under All), trust is "Unknown trust", the source is "Unknown source", a capability is "Unknown capability", an OS or architecture is "Unknown", and a reason is "Reason not recognized by this version of Stackly." (`CatalogCopy`).
+
 ### StatusLabel
 
 `StatusLabel(_ appearance: StatusAppearance, context: StatusContext = .standard)` draws a dot, the label, and the optional detail (mockup: a 7 px dot, a 6 px gap, the label, then " · " and the readiness text).
