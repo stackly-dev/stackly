@@ -183,6 +183,17 @@ struct State {
     mutations: Vec<Mutation>,
     volumes: Vec<(PathBuf, FakeVolume)>,
     delays: Vec<(FsOp, Duration)>,
+    hooks: Vec<(FsOp, Hook)>,
+}
+
+/// A closure run once by the next call of an operation; see
+/// [`FakeFilesystem::run_on_next`].
+struct Hook(Box<dyn FnOnce() + Send>);
+
+impl std::fmt::Debug for Hook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Hook(..)")
+    }
 }
 
 /// The fault and mutation state, shared with the handles and tree writers
@@ -312,6 +323,16 @@ impl FakeFilesystem {
         }
     }
 
+    /// Runs `hook` once, on the calling thread of the next call of `op`,
+    /// before the call does anything else (its delay included, so the hook
+    /// has run by the time a delayed read touches the volume). The hook runs
+    /// without any lock of this filesystem held, so it may use it. Use it to
+    /// move a [`FakeClock`](crate::FakeClock) or flip a flag at an exact
+    /// point of a read, with no wall clock sequencing.
+    pub fn run_on_next(&self, op: FsOp, hook: impl FnOnce() + Send + 'static) {
+        self.state().hooks.push((op, Hook(Box::new(hook))));
+    }
+
     /// Returns every directory created, file written, and tree removed so
     /// far, in order. A removal counts when it removed at least one entry,
     /// even if it then failed. An append file counts once, when it is
@@ -352,6 +373,14 @@ impl FakeFilesystem {
     /// Checks confinement, then injected faults (except for writes, whose
     /// fault fires before the rename).
     fn enter(&self, op: FsOp, path: &Path) -> Result<(), PlatformError> {
+        let hook = {
+            let mut state = self.state();
+            let index = state.hooks.iter().position(|(hooked, _)| *hooked == op);
+            index.map(|index| state.hooks.remove(index).1)
+        };
+        if let Some(Hook(hook)) = hook {
+            hook();
+        }
         let delay = self
             .state()
             .delays

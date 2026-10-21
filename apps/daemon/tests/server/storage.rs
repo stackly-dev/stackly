@@ -182,29 +182,23 @@ async fn checked_at_is_the_clock_when_the_read_finishes_not_when_it_starts() {
     let ev = evidence!(
         covers = ["REQ-033"],
         kind = Kind::Fixture,
-        expected = "a clock moved while a delayed volume read is in flight is the time storage.get_capacity stamps, because checkedAt is read when the read finishes",
+        expected = "a clock moved inside the volume read is the time storage.get_capacity stamps, because checkedAt is read when the read finishes",
     );
     let site = FakeSite::new();
     let _daemon = site.start().await;
     site.set_volume(20 * GB, 10 * GB);
+    let started = site.fake.clock().now();
+    let step = jiff::SignedDuration::from_secs(60);
+    // The clock moves inside the volume read, so only a stamp taken once the
+    // read is over can show it.
+    let clock = site.fake.clock().clone();
     site.fake
         .fs()
-        .set_delay(FsOp::VolumeSpace, Duration::from_millis(600));
-    let started = site.fake.clock().now();
+        .run_on_next(FsOp::VolumeSpace, move || clock.advance(step));
 
-    let call = tokio::spawn({
-        let client = site.client().await;
-        async move { client.call(Call::StorageGetCapacity).await }
-    });
-    // Well inside the 600 ms the fake volume read sleeps.
-    tokio::time::sleep(Duration::from_millis(150)).await;
-    let step = jiff::SignedDuration::from_secs(60);
-    site.fake.clock().advance(step);
-    let Reply::StorageGetCapacity(report) = call
-        .await
-        .expect("the call task ends")
-        .expect("the volume reads")
-    else {
+    let client = site.client().await;
+    let call = client.call(Call::StorageGetCapacity);
+    let Reply::StorageGetCapacity(report) = call.await.expect("the volume reads") else {
         panic!("not a capacity reply");
     };
 
