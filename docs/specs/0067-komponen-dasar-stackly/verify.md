@@ -90,3 +90,36 @@ _Dibangun 2026-10-21 oleh `dev-f67-m1` (dipakai ulang sebagai `dev-f67-m2`) di b
 - AC-20 (galeri) · bagian StacklySheet, CheckList, StagedProgress dan tiga `#Preview` per komponen; bagian milestone 3 dan 4 menunggu
 - AC-1 · bagian "Components" di `design.md` kini memuat Sheet, Checklist (*Status checklist*), dan Staged progress (*Pemetaan operasi ke tahap*, *Teks progress*, *State tahap*); subbagian Inspector, Log, dan Diff menunggu milestone 3 dan 4
 - AC-21 · `SourceRuleTests` (aturan `.secondary` diperbaiki di commit terpisah)
+
+## Milestone 4: Log and diff views
+
+_Dibangun 2026-10-21 oleh `dev-f67-m1` (dipakai ulang sebagai `dev-f67-m4`) di branch sendiri (langkah Build plan 15 sampai 17). App Debug diperiksa lewat pohon accessibility (API AX) dengan root sementara, dan scroll oleh program lewat nilai scrollbar AX. Hasil yang sudah dijalankan dicentang; `NOT_RUN` menunggu user atau `/check verify`. Scroll sungguhan oleh pengguna (mouse atau trackpad) tidak bisa dikirim dari sesi ini tanpa menyentuh app lain, jadi `NOT_RUN`. VoiceOver tidak dinyalakan dan System Settings tidak diubah._
+
+### UI / manual
+
+- [x] Di app Debug (`STACKLY_ROOT` sementara) Window › Design Gallery › Components → halaman memuat bagian LogView (satu log statis berisi baris normal, warning, error, baris panjang, sumber panjang, baris tanpa waktu dan sumber; satu log live dengan tombol Add Line dan toggle Follow) dan bagian DiffView (tambah, hapus, tidak berubah; baris panjang; kosong) → AC-20 _Hasil `dev-f67-m4` 2026-10-21: pohon AX halaman Components memuat dua `log.list` (label "Log" dan "Live log") dan tiga `diff.list`; cocok dengan tabel *State di galeri_
+- [x] Baca pohon AX log statis → setiap baris satu elemen berlabel "12:04:31.118, stdout: database system is ready to accept connections", "12:04:31.402, stderr, Warning: …", "12:04:32.077, stderr, Error: …", baris sumber panjang "12:04:33.540, supervisor/restart-policy: …", dan baris kosong "a line with neither time nor source: …" tanpa koma sisa → AC-16, AC-19 _Hasil `dev-f67-m4` 2026-10-21: label di pohon AX persis seperti itu_
+- [x] Baca pohon AX diff → "Unchanged: …", "Removed: …", "Added: …" per baris, tanda "+" dan "−" tersembunyi dari VoiceOver (kata sudah ada di label), dan diff kosong menampilkan teks `emptyText` di dalam `diff.list` → AC-17, AC-19 _Hasil `dev-f67-m4` 2026-10-21: tiga `diff.list`, label per baris sesuai; setelah perbaikan container, diff kosong membawa `diff.list` sebagai grup berisi teks_
+- [x] Di log live tekan Add Line 15 kali dengan Follow menyala → scrollbar log tetap 1 (di dasar) dan baris terakhir di pohon AX adalah baris terbaru; scroll oleh program (nilai scrollbar 0.3) tidak mematikan Follow, dan Add Line berikutnya menggulir kembali ke dasar → AC-16 _Hasil `dev-f67-m4` 2026-10-21: scrollbar 1 setelah 15 dan 3 baris tambahan; Follow tetap menyala setelah scrollbar diset 0.3. Sebelum perbaikan, padding bawah di dalam isi scroll membuat scrollbar berhenti di 0.968; kini padding itu `contentMargins`_
+- [ ] `NOT_RUN` · di log live gulir ke atas dengan mouse atau trackpad lebih dari 24 pt dari dasar lalu lepas → toggle Follow mati dan Add Line tidak menggulir; menggulir kembali ke dasar tidak menyalakannya; menyalakan Follow menggulir ke dasar → AC-16 (aturannya sendiri, `LogFollow`, dites di `LogViewTests`; event scroll sungguhan tidak dikirim dari sesi ini)
+- [ ] `NOT_RUN` · nyalakan Keyboard navigation di System Settings → kontrol di galeri (Add Line, Follow) bisa difokus dengan Tab dan dijalankan dengan Space; teks log dan diff dapat dipilih per baris → AC-19 (butuh setting dari user)
+- [ ] `NOT_RUN` · nyalakan VoiceOver → setiap baris log dibaca "{waktu}, {sumber}, {Error | Warning}: {teks}" dan setiap baris diff "Added/Removed/Unchanged: {teks}" → AC-16, AC-17, AC-19 (yang terbukti lewat AX: labelnya)
+- [ ] `NOT_RUN` · Increase Contrast, Reduce Transparency, Reduce Motion, Differentiate Without Color, light dan dark pada halaman Components → simbol warning dan error selalu tampil, tanda "+" dan "−" selalu tampil, kartu diff mendapat border 1 pt saat Increase Contrast, permukaan konsol opak → AC-16, AC-17, AC-19
+- [ ] `NOT_RUN` · aktifkan Narrow Width (640 pt) di jendela galeri → baris log dan diff membungkus tanpa terpotong → AC-16, AC-17, AC-19 (pembungkusan baris dites di `LogViewTests` dan `DiffViewTests`)
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter LogViewTests` → tabel level (tone, simbol, kata), bentuk simbol warning dan error berbeda, teks VoiceOver baris (waktu, sumber, level, bagian kosong, baris normal, baris kosong), identifier `log.list`, aturan follow (toleransi 24 pt, gulir pengguna berakhir di atas toleransi mematikan follow, di dasar tidak, gulir program tidak, fase yang bukan idle tidak), baris panjang membungkus, tinggi baris sama dengan dan tanpa simbol, sumber lebih panjang → AC-16, AC-19
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter DiffViewTests` → tabel jenis (tanda, tone, kata; tanda hapus adalah U+2212 bukan tanda hubung), teks VoiceOver baris, `id` baris sama dengan posisi, identifier `diff.list`, baris panjang membungkus, lebih banyak baris lebih tinggi, teks kosong tampil dan membungkus → AC-17, AC-19
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (dengan `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN` menunjuk `target/debug/stacklyd` dan `target/debug/examples/skeleton_seed` dari checkout utama) → 482 test di 52 suite lulus, termasuk aturan sumber spec 0012 untuk `Components/`
+- [x] `cargo xtask build-app` → `BUILD SUCCEEDED`, `target/xcode/Build/Products/Debug/Stackly.app` → AC-20
+- [x] `xcrun swift-format lint --strict` untuk file Swift yang berubah → tanpa peringatan
+
+### Acceptance-criteria coverage
+
+- AC-16 (view log) · `LogViewTests` (tabel level, teks VoiceOver, aturan follow, tata letak), galeri (follow dengan Add Line); gulir sungguhan oleh pengguna dan VoiceOver `NOT_RUN`
+- AC-17 (view diff) · `DiffViewTests`, galeri; VoiceOver `NOT_RUN`
+- AC-19 (aksesibilitas) · untuk komponen milestone ini lewat test sumber dan pohon AX; Tab, Space, VoiceOver, dan setting sistem `NOT_RUN`
+- AC-20 (galeri) · bagian LogView dan DiffView dan tiga `#Preview` per komponen; dengan milestone 1 dan 2 halaman memuat semua kecuali Inspector (milestone 3)
+- AC-1 · bagian "Components" di `design.md` kini memuat Log (tabel level, aturan follow) dan Diff (tabel jenis)
+- Penyimpangan kecil dari spec, tercatat di `design.md`: kolom waktu dan sumber hanya digambar bila ada baris yang memilikinya; padding horizontal 14 baris log datang dari `.consoleSurface()` yang dipasang sebagai latar `ScrollView` (padding atas dan bawah 12 lewat `contentMargins`), bukan sebagai padding tambahan per baris
