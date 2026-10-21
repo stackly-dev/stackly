@@ -77,7 +77,7 @@ _Langkah diturunkan dari acceptance criteria spec 0068. `/check verify` menjalan
 
 ## Milestone 3: XCUITest and audits
 
-_Semua UI test menunggu satu baris di `Shell/AppShell.swift` (`SidebarRow` memberi `.accessibilityIdentifier(AccessibilityID.Sidebar.row(section))`): `launch()` menunggu `sidebar.row.overview`. Baris itu ditambah setelah `dev-f67-m3-s14a` di merge ke `main`; sampai itu, langkah UI test di bawah tidak bisa lulus walau Automation Mode menyala. Identifier di `DaemonFooter`, `DaemonBanner`, dan `DesignGallery` tidak mengubah referensi snapshot (suite snapshot tetap lulus tanpa rekam ulang)._
+_`launch()` menunggu `sidebar.row.overview`, yang dipasang `SidebarRow` di `Shell/AppShell.swift` (`AccessibilityID.Sidebar.row(section)`). Identifier ini, juga yang di `DaemonFooter`, `DaemonBanner`, dan `DesignGallery`, tidak mengubah referensi snapshot._
 
 _Mengaktifkan Automation Mode adalah langkah user; sampai itu dilakukan semua langkah yang menjalankan UI test tercatat `BLOCKED` dengan reason "Automation Mode is disabled on this Mac" dan owner user. Sesi Claude tidak pernah menjalankan perintah pengaktifannya._
 
