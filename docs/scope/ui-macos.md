@@ -107,12 +107,12 @@ Data contoh dari mockup UI dijadikan fixture Swift untuk Xcode Previews dan snap
 
 **Trace:** REQ-024, REQ-027, NFR-012, AC-027, PRD bagian 28
 
-**Pointer:** spec [0068](../specs/0068-fixture-tampilan-cek-visual/index.md)
+**Pointer:** spec [0068](../specs/0068-fixture-tampilan-cek-visual/index.md) · code in `clients/swift/Sources/StacklyEvidenceCore/`, `clients/swift/Sources/StacklyXCTestSupport/`, `xtask/src/evidence/`
 
 - [x] Design it (spec): `/architect fixture tampilan & cek visual`
 - [ ] Build it: `/develop fixture tampilan & cek visual`
   - [ ] Fixtures, snapshot harness, and base suites: render probe and the underscored setter guard, `FixtureAppearance`, the `fixtureNow` and `loadingDelay` keys, `Fixtures/` with every scenario and case, `ShellBootstrap.fixture` and `settledRuntime`, the snapshot helper with its source rules, the gallery, `DaemonStatusMatrix`, Diagnostics and `UnbuiltPage` suites, and `cargo xtask snapshot review` (spec 0068 AC-1 to AC-9; needs feature 12 milestones 1 to 4 and feature 13 milestone 3, both on main; the Components gallery suite after feature 67)
-  - [ ] XCTest evidence helper: internal target `StacklyEvidenceCore`, product `StacklyXCTestSupport`, and the new `evidence check` scan rule (spec 0068 AC-10, AC-11; can run in parallel with milestone 1)
+  - [x] XCTest evidence helper: internal target `StacklyEvidenceCore`, product `StacklyXCTestSupport`, and the new `evidence check` scan rule (spec 0068 AC-10, AC-11; can run in parallel with milestone 1)
   - [ ] XCUITest and audits: target `StacklyAppUITests`, the Debug scenario mode in `AppDelegate` and `StacklyApp`, `cargo xtask ui-test`, the shell, gallery, menu and audit tests with screenshots, and the Testing views section in design.md (spec 0068 AC-12 to AC-19; after milestones 1 and 2; the menu test after spec 0069 `CommandMap` is on main; running needs Automation Mode enabled by the user)
 - [ ] Verify it: `/check verify fixture tampilan & cek visual`
 - [ ] Test it: `/test fixture tampilan & cek visual`
@@ -125,11 +125,11 @@ Menu Stackly, File, Edit, View, Window, dan Help beserta peta shortcut, supaya s
 
 **Trace:** REQ-027, AC-027, NFR-012
 
-**Pointer:** spec [0069](../specs/0069-menu-aplikasi-perintah-shortcut/index.md)
+**Pointer:** spec [0069](../specs/0069-menu-aplikasi-perintah-shortcut/index.md) · code in `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Commands/`
 
 - [x] Design it (spec): `/architect menu aplikasi, perintah & shortcut keyboard`
 - [ ] Build it: `/develop menu aplikasi, perintah & shortcut keyboard`
-  - [ ] Command map and probe: macOS 27 menu probe (P1 to P7, P3b), `CommandMap`, `SystemShortcuts`, map tests, and source rules (spec 0069 AC-1, AC-2; needs feature 13 milestone 3, done; can run in parallel with feature 67 milestone 1)
+  - [x] Command map and probe: macOS 27 menu probe (P1 to P7, P3b), `CommandMap`, `SystemShortcuts`, map tests, and source rules (spec 0069 AC-1, AC-2; needs feature 13 milestone 3, done; can run in parallel with feature 67 milestone 1)
   - [ ] Shell commands: `PublishedCommands`, `.publishesCommands`, per window `MainWindowKey`, `CommandItemState` with the run guard, `StacklyCommands` with Reconnect, New Instance, Find, ⌘1 to ⌘7, ⌘0, and Help, `AppShell.select(_:)`, moving every `// provisional: F69` group into the map, the `design.md` section, and manual evidence (spec 0069 AC-3 to AC-10, AC-13, AC-16; after milestone 1; needs feature 67 milestone 1 (`StacklyAction`, `ActionHost`, `.actionHost()` in `AppShell`, menu subtitle check) in `ui-macos.md`; after feature 16 milestone 1 step 2 and feature 20 milestone 3 step 14 in `02-instalasi-pertama.md` when either is running, since they share `StacklyApp.swift` and `AppShell.swift`)
   - [ ] Page and instance commands: the Instance menu, Instances page commands (Open, Start, Stop, Copy Connection String, Back, inspector, sort, Find), Catalog Find, removal of `InstancesCommands`, and keyboard and VoiceOver evidence for PRD AC-027 (spec 0069 AC-10 to AC-12, AC-14, AC-15; after milestone 2; needs feature 22 milestone 3, feature 21 milestone 3, and feature 17 milestone 3 in `02-instalasi-pertama.md`, and feature 67 milestone 3 in `ui-macos.md`; pages merged after milestone 2 register their own commands)
 - [ ] Verify it: `/check verify menu aplikasi, perintah & shortcut keyboard`
