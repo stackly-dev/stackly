@@ -6,9 +6,12 @@ import SwiftUI
 ///
 /// It also puts the model in the environment, so the pages that later features build can
 /// read the daemon's state and send calls. ``AppShell`` sets ``MutationAvailability`` from
-/// the model's presentation. The runtime, not the window, owns the model, so closing the
-/// window stops nothing.
+/// the model's presentation. It also creates the window's one ``FeedbackCenter`` and puts
+/// it in the environment, where ``AppShell`` shows its card. The runtime, not the window,
+/// owns the model, so closing the window stops nothing.
 public struct LiveShell: View {
+    @State private var feedbackCenter = FeedbackCenter()
+
     private let runtime: ShellRuntime
     private let windowWillClose: (NSWindow) -> Void
 
@@ -36,5 +39,6 @@ public struct LiveShell: View {
             refreshDiagnostics: { model.refreshDiagnostics() }
         )
         .environment(model)
+        .environment(\.feedbackCenter, feedbackCenter)
     }
 }

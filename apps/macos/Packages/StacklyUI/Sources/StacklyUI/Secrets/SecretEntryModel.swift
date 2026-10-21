@@ -134,8 +134,8 @@ public final class SecretEntryModel {
                 return .needsConfirmation(effects: effects(in: body))
             default:
                 return .failed(
-                    RevealModel.sentence(body.message)
-                        + (body.hint.map { " " + RevealModel.sentence($0) } ?? ""))
+                    DaemonText.sentence(body.message)
+                        + (body.hint.map { " " + DaemonText.sentence($0) } ?? ""))
             }
         }
     }

@@ -1,7 +1,8 @@
 import Foundation
 import Testing
 
-/// The source rules of spec 0012 (AC-2, AC-3, AC-6, AC-15): forbidden patterns in
+/// The source rules of spec 0012 (AC-2, AC-3, AC-6, AC-15) and spec 0067 (AC-4, AC-18,
+/// AC-21): forbidden patterns in
 /// `StacklyUI` and the app target, each with an explicit list of allowed places.
 ///
 /// The scan is text based. Line comments are skipped; anything else that matches,
@@ -52,7 +53,10 @@ struct SourceRuleTests {
         Rule(
             name: "secondary, tertiary, or accent text color outside the token file (AC-3)",
             patterns: [
-                #"\.secondary\b"#,
+                // A member after `(`, a word, or `?` is a color or style; `prominence: .secondary`
+                // and `= .secondary` name the prominence of an action button.
+                #"[(\w]\.secondary\b"#,
+                #"\?\s*\.secondary\b"#,
                 #"\.tertiary\b"#,
                 #"\bsecondaryLabelColor\b"#,
                 #"\btertiaryLabelColor\b"#,
@@ -67,8 +71,12 @@ struct SourceRuleTests {
                 "Color(nsColor: .tertiaryLabelColor)",
                 ".foregroundStyle(Color.accentColor)",
                 ".foregroundStyle(.tint)",
+                "Color.secondary",
+                ".foregroundStyle(isOn ? .secondary : .primary)",
             ],
             allowedExamples: [
+                "ActionButton(action, prominence: .secondary)",
+                "prominence: ActionProminence = .secondary,",
                 ".foregroundStyle(StacklyColor.textSecondary)",
                 ".tint(.red)",
                 "ToolbarItem(placement: .secondaryAction) {}",
@@ -106,6 +114,35 @@ struct SourceRuleTests {
                 "let alert = NSAlert()",
             ],
             allowedExamples: [".stacklyConfirmation(item: $request)"]
+        ),
+        Rule(
+            name: "pasteboard outside the copy helpers (spec 0067 AC-4)",
+            patterns: [#"\bNSPasteboard\b"#],
+            allowed: [
+                stacklyUI + "Components/Copy/PlainPasteboard.swift",
+                stacklyUI + "Secrets/ConcealedPasteboard.swift",
+            ],
+            forbiddenExamples: [
+                "NSPasteboard.general.clearContents()",
+                "let pasteboard: NSPasteboard = .general",
+            ],
+            allowedExamples: [
+                "PlainPasteboard.write(text)",
+                "ConcealedPasteboard.shared.copy(secret)",
+            ]
+        ),
+        Rule(
+            name: "inspector outside the inspector components (spec 0067 AC-18)",
+            patterns: [#"\.inspector\("#],
+            allowed: [stacklyUI + "Components/Inspector/"],
+            forbiddenExamples: [
+                ".inspector(isPresented: $shown) { Text(\"a\") }",
+                "content.inspector(isPresented: binding) {}",
+            ],
+            allowedExamples: [
+                ".stacklyInspector(isPresented: $shown) {}",
+                "InspectorToggle(isPresented: $shown)",
+            ]
         ),
     ]
 

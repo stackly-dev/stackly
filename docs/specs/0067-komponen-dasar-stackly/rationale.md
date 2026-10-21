@@ -249,6 +249,14 @@ Diff, inspector, dan sheet (Keputusan 6, 10, 13) memilih permukaan yang kontrasn
 - **arc-f68-spec (spec 0068), 2026-10-21:** setuju data contoh komponen di `ComponentSamples` (bukan fixture kontrak), halaman galeri "Components" sebagai daftar state yang dirender snapshot, konvensi `<scope>.<part>[.<key>]` di `AccessibilityID.swift` (F67 membuat file nya kalau membangun lebih dulu), dan scope komponen checklist bernama `checklist`.
 - **arc-f69-spec, setelah cross check:** signature final `StacklyAction`, `ActionRole`, `ActionAvailability`, `invoke(gate:present:)`, dan `ActionHost` dengan `gate` sendiri dikirim persis seperti bagian *Signature Swift* di index.md.
 
+### Temuan langkah 1
+
+Dicek 2026-10-21 di macOS 27.0.1 (26A434) dengan Xcode 27.0 (SDK 27.0), memakai app probe kecil di luar repo: `Button { Text(judul); Text(alasan) }` yang nonaktif di tiga tempat, `Menu` di toolbar jendela, `.contextMenu`, dan `CommandMenu` di menu utama. Menu dibuka lewat accessibility API dan tangkapan jendela menu (tanpa mengubah System Settings dan tanpa VoiceOver).
+
+- **Tampil:** di ketiganya SwiftUI mengubah `Text` kedua menjadi subtitle `NSMenuItem` (`item.subtitle` terisi, dibaca langsung dari `NSApp.mainMenu`). Judul tampil redup karena item nonaktif, subtitle tampil di bawahnya dengan huruf lebih kecil dan juga redup. Tampil benar di mode gelap, tanpa `CommandMenu` yang membuangnya.
+- **Dibacakan:** tidak terbukti. Pohon AX item (`AXMenuItem`) hanya memuat `AXTitle` (judul tanpa alasan); tidak ada `AXDescription`, `AXHelp`, atau `AXValue`, baik saat menu tertutup maupun saat terbuka, dan `.accessibilityHint`, `.accessibilityLabel`, `.accessibilityValue`, dan `.help` di tombolnya tidak mengubah pohon AX item menu. Jadi tidak ada cara dari SwiftUI untuk menaruh alasan ke jalur yang dibaca VoiceOver, dan VoiceOver sungguhan belum diuji (langkah manual user, `NOT_RUN`).
+- **Keputusan jalur:** karena AC-8 mensyaratkan alasan terlihat dan dibacakan, dan bukti AX menunjukkan subtitle tidak ada di pohon AX, build memakai jalur cadangan spec: item nonaktif tambahan berisi teks alasan tepat di bawah item (judul `AXMenuItem` itu sendiri adalah alasannya, jadi dibacakan). Pilihan ini satu konstanta (`MenuReasonPath.current` di `Components/Actions/`); kalau user mengecek dengan VoiceOver dan subtitle ternyata dibacakan, ganti ke `.subtitle` dan menu menjadi lebih pendek, tanpa mengubah API. Spec 0069 memakai jalur yang sama untuk menu utama.
+
 ## Cross check
 
 Dijalankan 2026-10-21 oleh model lain (Sonnet 5.5) sebagai pembacaan read only atas index.md dan rationale.md, dengan rujukan ke spec 0012, 0013, 0016 sampai 0022, kode `StacklyUI`, dan tipe hasil generate `StacklyClient`. Semua rujukan baris di *Usulan update untuk spec lain* tepat, kecuali dua klaim spec 0018 yang dibetulkan. Lead menerima cross check ini dan semua perbaikan yang direkomendasikan atas delegasi user (2026-10-21, "apply + accept"). Yang diterapkan:

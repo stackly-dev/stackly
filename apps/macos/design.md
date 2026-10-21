@@ -440,6 +440,86 @@ Checked in build step 17 on macOS 27.0 (26A428) with Xcode 27.0 (27A266a), in th
 
 So the modifier builds the `NSAlert` itself: for a destructive request, Cancel takes Return as its key equivalent and the modifier maps a plain Escape to Cancel with a local key monitor while the alert is open. Setting the window's `defaultButtonCell` instead does not work: it overwrites Cancel's Escape key equivalent with Return. A replaced request closes the old alert and shows a new one. With this path the check passed: destructive Return and Escape cancel without running the action, standard Return runs it and Escape cancels, and a replaced request shows its own title. `ConfirmationTests` pins the alert's buttons, order, styles, and key equivalents; `/check verify` repeats the key check and the Tab and Space check with Keyboard navigation on.
 
+## Components
+
+Shared views in `Packages/StacklyUI/Sources/StacklyUI/Components/` ([spec 0067](../../docs/specs/0067-komponen-dasar-stackly/index.md)). They sit on the tokens, status, state, and confirmation helpers above and add no glass, no new contrast pair, and no second version in a screen folder. A screen assembles its page from these parts. Every component has `#Preview`s in light, dark, and at 640 pt, built from `ComponentSamples`, and a section on the **Components** page of the Design Gallery.
+
+### Tile
+
+`ProviderTile(mark:tile:name:size:)` or `ProviderTile(_:size:)` with a `TileSpec` draws a rounded square (continuous corners, radius `size × 0.27`) in a system color with a bold white mark. It is decoration: hidden from VoiceOver, never counted in the contrast table, and always next to the provider name in text. The fill comes from the catalog `TileColor`; a missing or unrecognized color is gray.
+
+| `TileColor` | Fill |
+| --- | --- |
+| `blue`, `cyan`, `teal`, `green`, `yellow`, `orange`, `red`, `brown`, `indigo` | `systemBlue`, `systemCyan`, `systemTeal`, `systemGreen`, `systemYellow`, `systemOrange`, `systemRed`, `systemBrown`, `systemIndigo` |
+| `gray`, `unrecognized`, none | `systemGray` |
+
+The mark is the catalog mark. When there is none, `ProviderMark.defaultMark(for:)` takes the first two ASCII letters or digits of the name, the first in upper case and the second in lower case ("PostgreSQL" gives "Po", "9front" gives "9f"), or "?" when there are none. The font is `.stacklyTileMark(tileSize:)`, bold at `size × 0.37`, one line, shrinking to half before it is cut; it is the only fixed font size besides the symbol helper. Sizes: `smallSize` 18 (Instances table), `rowSize` 26 (Overview rows, Installing rows), `mediumSize` 40 (Catalog cards, sheet header, inspector header), `largeSize` 52 (Catalog detail panel). Other mockup sizes (20, 22, 28) pass `size` directly.
+
+### Key value
+
+`CardSection` draws an optional `.headline` title with an accessory on its right, then one `.cardSurface()` card in which every subview of the content is a row, then an optional footer (`.footnote` `textSecondary`; a `String` or any view, such as `DisabledReasonText`). Rows have 11 pt above and below, 14 pt at the sides, at least `ScaledSize.rowMinHeight` high, and a divider inset 14 pt from the left. A `ForEach` makes one row per element; a row of several views is wrapped in an `HStack` or `VStack` by the screen.
+
+`.labeledContentStyle(.stackly)` draws the label in `.body` primary text and the value in `.body` `textSecondary`, selectable. When both fit, they are one line with the value flush right; otherwise the label sits above and the value wraps below it, flush left, never cut. A screen may give the value its own font (`.callout.monospaced()` for an endpoint, a path, or a digest); the color stays `textSecondary`. VoiceOver reads the row as one element, "{label}, {value}": selectable text makes `.combine` read the label only (seen in the accessibility tree of the running Debug app), so the style builds the spoken element with `.accessibilityRepresentation` from the same label and value. A row's own button, such as `CopyButton`, stands next to the `LabeledContent` in an `HStack`, never inside it.
+
+Put the style on a `CardSection` whose rows are all read only, on an inspector, or on one read only row inside a `Form`. **Never on a `Form` itself.** Checked on macOS 27.0.1 by rendering a grouped `Form` with a `TextField`, a `Picker`, a `Toggle`, and a read only row three ways: the style on the read only row leaves the field, picker, and toggle exactly as they are without it; the style on the `Form` turns the field's value gray and regular instead of primary and bold and shifts the row heights.
+
+### Copy and console
+
+`CopyButton(_:what:style:announcement:key:)` copies plain text to the general pasteboard **only when pressed**, through `PlainPasteboard.write(_:)` (`clearContents()` then a plain string; `NSPasteboard` appears only there and in `ConcealedPasteboard`, a source rule guards it). For two seconds afterwards it shows "Copied" with a `checkmark` (the icon style: only the checkmark) and then goes back to "Copy" or `doc.on.doc`; the width is reserved for the longer label, so the row does not move. Every press writes again and starts the two seconds over. VoiceOver reads "Copy {what}" and, after the write, says the announcement once ("{What} copied." unless the screen gives its own copy, such as "Address copied." or "Command copied."). The text style is a small bordered button; the icon style is borderless with a 24 × 24 pt click area. The checkmark carries the tone fill `positive`; the resting icon is `textSecondary`. A copy button is never gated by `MutationAvailability`, it never copies a secret (a secret copy is always `RevealableSecretText` and `ConcealedPasteboard`), and a screen's own key goes into the identifier `copy.button.<key>`.
+
+`ConsoleBlock` draws `.callout.monospaced()` primary text on `.consoleSurface()`: `surfaceConsole`, `Radius.medium`, a hairline `separatorColor` border (1 pt under Increase Contrast), and 12 pt above and below and 14 pt at the sides. Text is selectable and wraps, with no horizontal scroll. `ConsoleBlock(command:)` puts "$ " in `textSecondary` before the command and a Copy button on the right that copies the command without the "$ ". `ConsoleBlock(text:accessibilityLabel:copy:)` shows several lines, with an optional Copy button at the top right. VoiceOver reads the text as one element, the screen's label with the text as its value (the command without "$ "), and the Copy button as its own element. A failure snippet inside a `StateBanner` keeps the banner's own code block.
+
+### Actions
+
+`StacklyAction` is the one description of an action that shows as a button, a menu item, or a command (feature 69): `id`, `title`, `symbol`, `role`, `mutates`, `disabledReason`, `isBusy`, `perform`. A screen builds it once.
+
+- **Availability**, in this order: the action's own `disabledReason` (visible: `.disabled(reason:showsReason: true)`), then the mutation gate for a `mutates` action while the daemon cannot be reached (`.disabled(reason:showsReason: false)`, because the window banner writes it), then `isBusy` (`.busy`), else `.enabled`. `invoke(gate:present:)` does nothing unless the action is `.enabled`.
+- **Role and confirmation.** `ActionRole.standard(confirmation:)` has a confirmation only when the action interrupts work; `ActionRole.destructive` always carries an `ActionConfirmation`, so a destructive action without a dialog cannot be written. The copy follows the Confirmation rules above, and the title of an action that confirms ends with "…" (an `assert` guards it). `invoke` builds the `ConfirmationRequest` and hands it to the host.
+- **One host.** `.actionHost()` holds one confirmation per window or sheet, reads `mutationAvailability` where it sits, and fills the `actionHost` environment value. `AppShell` sets it at its root inside `.environment(\.mutationAvailability, …)`, every `StacklySheet` sets its own, and the menu bar popover (feature 32) will too. A button, a menu item, and a command run through `ActionHost.run(_:)`. Without a host an action with no confirmation still runs; one that confirms asserts and runs nothing.
+- **`ActionButton`.** Primary is `.borderedProminent`, secondary is `.bordered`; a destructive action is `role: .destructive` and `.bordered`, never prominent and never the default. A disabled action keeps its button, with the reason as help and, with `showsReason`, as `DisabledReasonText` right under it; a toolbar button passes `showsReason: false` and the page writes the same `DisabledReasonText` in its content, a section footer, or the item's banner. Gate-blocked: disabled, gate reason as help only. Busy: disabled, the title stays, a small spinner stands next to it, and VoiceOver reads the value "In progress". A capability the provider lacks is never hidden. No keyboard shortcut is set here; feature 69 owns them. The identifier is `action.button.<id>`.
+
+### Menus
+
+Actions in a menu come from `StacklyAction` through `ActionMenu` (the More menu in a toolbar) and `ActionMenuItems` (a `.contextMenu`). The reason an item is disabled never lives only in a tooltip, so it is written in the menu.
+
+macOS 27.0.1 was checked with a probe app on 2026-10-21 (spec 0067 rationale, *Temuan langkah 1*): a disabled `Button` with two `Text` children becomes an `NSMenuItem` with a subtitle in a toolbar `Menu`, a `.contextMenu`, and a main menu `CommandMenu`, and the subtitle is drawn under the title in all three. But the accessibility tree of the item holds only its title: there is no description, help, or value, and `.accessibilityHint`, `.accessibilityLabel`, `.accessibilityValue`, and `.help` do not change it. So a spoken reason cannot be proven, and VoiceOver itself was not tried (a manual step, `NOT_RUN`).
+
+The path in use is therefore the spec's fallback: **a disabled extra item with the reason as its title, right under the item.** The reason is a menu item of its own, so it is both visible and spoken. The switch is one constant, `MenuReasonPath.current` in `Components/Actions/`: if VoiceOver reads the subtitle, change it to `.subtitle`, and the menus get shorter without any API change. Spec 0069 uses the same path for the main menu.
+
+### Feedback
+
+Feedback is the result of something the person did, shown as an opaque card under the page. A `Feedback` has a tone, a message, an optional detail and code, and at most one action. The window's `FeedbackCenter` (created by the root view of the window, `LiveShell` today, in the `feedbackCenter` environment value) holds the one that is on screen; `.feedbackPresenter()` on the detail column draws it in a bottom safe area inset, so content scrolls above it and a focused control is never covered. Without a center (a preview) nothing is drawn.
+
+- **Card.** Centered, 16 pt from the bottom, at most 520 pt wide with 22 pt at the sides: the tone symbol (tone fill), the message in `.body`, the detail in `.callout` `textSecondary`, the code in `.callout.monospaced()` `textSecondary` (selectable), at most one small `ActionButton`, and Dismiss (`xmark`, label "Dismiss", at least 24 × 24 pt). The surface is `toneSurface(tone, on: .card, strength: .banner)` with `Radius.large` corners and a soft shadow. It appears and goes with the crossfade only. It never takes focus when it appears; its buttons are reachable with Tab.
+- **Announcement.** `FeedbackCenter.show` announces the message and then the detail, once, when the feedback is sent (not the code). Nothing else announces the same result, so a screen does not call `announce` for it.
+- **How long.** `positive`, `informative`, and `neutral` feedback without an action goes away after `visibleDuration`: `min(10, max(4, ceil(characters / 15)))` seconds, counting the message and the detail. The wait runs only while the card is visible, the window is active, the pointer is not over the card, and keyboard focus is not in it, and starts from the beginning each time that is true again (`FeedbackHold`). `caution`, `critical`, and any feedback with an action stay until Dismiss or until something replaces them. New feedback replaces the one on screen, except that transient feedback never replaces persistent feedback: it is only announced.
+- **From a mutation.** `Feedback.outcome(_:success:showOperations:)` maps a `MutationOutcome`: `completed` gives the screen's success feedback (or none); `rejected` gives `critical` with the daemon's message and hint as sentences (`DaemonText.sentence`) and the error code; `notSent` gives `caution` "stacklyd is unavailable. Nothing was sent."; `outcomeUnknown` gives `caution` with the lost connection copy and, when the screen can open Operations, the "Show Operations" action. `Feedback.failure(_:)` gives the same `critical` feedback for the `ErrorBody` of a failed operation.
+- **When to use it.** Only for the result of an action the person took, never for a change that happens by itself. Good news whose result also shows on the screen may be skipped (a Start that is accepted is enough with its status and announcement). A failure is always also visible where it happened (Needs Attention, the item's banner, Operations), so the card is never the only record. A view inside a sheet never sends to the center: the sheet shows its result with a `StateBanner`, and the screen that owns the sheet sends feedback after the sheet closes.
+
+### Sheet
+
+Filled by milestone 2.
+
+### Checklist
+
+Filled by milestone 2.
+
+### Staged progress
+
+Filled by milestone 2.
+
+### Inspector
+
+Filled by milestone 3.
+
+### Log
+
+Filled by milestone 4.
+
+### Diff
+
+Filled by milestone 4.
+
 ## Motion
 
 - `StacklyMotion.crossfade` is the only transition in Stackly's own views: `.opacity` with `StacklyMotion.crossfadeAnimation` (ease in out, 0.2 s). Use it for status changes, banners appearing, and changes of `ViewState` shape, in every setting, including Reduce Motion.

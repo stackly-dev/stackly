@@ -18,6 +18,17 @@ extension View {
     }
 }
 
+extension View {
+    /// The font of the mark in a ``ProviderTile``: bold, `tileSize × 0.37` points, one
+    /// line, shrinking down to half before it is cut. The only fixed font size besides
+    /// the symbol helper below; a tile has a fixed size, so its mark does not scale.
+    public func stacklyTileMark(tileSize: CGFloat) -> some View {
+        font(.system(size: tileSize * 0.37, weight: .bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+    }
+}
+
 extension Image {
     /// Sizes an SF Symbol at `size` points, scaled relative to `textStyle` with
     /// `@ScaledMetric`. Use it only for `Image(systemName:)` that needs its own size;

@@ -1,7 +1,7 @@
 # 0067. Komponen dasar Stackly
 
 **Date**: 2026-10-21
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
