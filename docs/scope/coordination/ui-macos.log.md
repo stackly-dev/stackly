@@ -1,8 +1,8 @@
 # Log koordinasi: `ui-macos`
 
 - **Scope:** `docs/scope/ui-macos.md`
-- **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `72b8d9d`
-- **Wave aktif:** `2`, mulai `2026-10-21`
+- **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `0605c50`
+- **Wave aktif:** `3`, diajukan `2026-10-21` (menunggu persetujuan user)
 - **Diperbarui:** `2026-10-21 07:51`
 
 ## Sub sesi wave `1`
@@ -143,5 +143,6 @@
 ## Riwayat wave
 
 - Wave `1` (`2026-10-21` sampai `2026-10-21`, hash awal `ff6e626`, akhir `72b8d9d`): selesai. Merge: `chk-f13-m4` (`a6baa41`), spec 0069 (`2e194db`), spec 0067 (`6fe69a8`), spec 0068 (`67ea52d`). Dicentang: F67, F68, F69 `Design it` (ketiganya `in-progress`, `ui-macos.md` kini 5 in-progress), tiga baris `/scope` dari Follow-up 0012 dan 0013. `/sync` (`72b8d9d`): `apps/macos/AGENTS.md`, `clients/swift/AGENTS.md`, dan root `AGENTS.md` mendapat Follow-up `/sync` 0012 dan 0013; tujuh baris Follow-up 0012 dan 0013 dicentang; Status spec 0067 sampai 0069 tetap `Proposed` sampai developer mulai (konvensi langkah 6). Graph dokumen wave ini diperbarui subagent untuk 17 file Markdown (semua menghasilkan output, tanpa chunk gagal): 22.239 → 22.614 node, 50.707 → 51.363 edge, 980 community; manifest hanya berubah di 17 baris itu; `build_merge` dengan `dedup=False` dan 30 node rujukan silang dibuang supaya tidak menimpa node file spec lain; biaya sekitar 808 ribu token subagent. Terbuka dan dibawa ke wave 2: F12 `Verify it` (`chk-f12-verify`, kartu `task_3b56a0a5`, empat cek setting sistem oleh user), F13 milestone 4 (cek 6 oleh user), F13 `Build it`, `Verify it`, `Test it`, semua `Build it` F67, F68, F69. Kotak di scope lain yang terbuka karena wave ini: tidak ada yang tercentang; F16 M1, F17 M3, F22 M3 (`02-instalasi-pertama.md`) kini menunggu F67 milestone 1 sesuai spec 0067.
+- Wave `2` (`2026-10-21` sampai `2026-10-21`, hash awal `72b8d9d`, akhir `0605c50`): selesai sejauh yang tidak menunggu user. Merge kode: F68 M2 `cbe326c`, F69 M1 `524ec3f`, F67 M1 `b9514a6`, perbaikan `.secondary` dan F67 M2 `67b216c`, F67 M4 `ceaf77d`, F67 M3 `825b859`, F69 M2 `e2a8ce4`, F68 M1 `ad7dcf9`, batas inspector `63c62bc`, F68 M3 `d7e32b5`, test F67 `fe7e882`, perbaikan test flaky F14 `439ff54`, perbaikan Diagnostics F13 `106cb49`, test F13 `4f82602`, test F68 `dc7b60d`; spec update fase 02 dan fondasi `46ed33d` dan `45d65ea`. Dicentang: F67 M1 sampai M4 dan `Test it`, F68 M1 dan M2, F69 M1 dan M2, F13 `Test it`. Menunggu user (`docs/manual.md`): F12 `Verify it` (bagian I), F13 milestone 4, `Build it`, `Verify it` (bagian F), F67 `Build it` dan `Verify it` (bagian I, J, plus cek hidup penyusutan jendela saat layar tidak terkunci; empat langkah fase 02 sudah disetujui BLOCKED), F68 milestone 3, `Build it`, `Verify it`, `Test it` (bagian K, Automation Mode). Menunggu fitur lain: F69 milestone 3 (F17, F21, F22 milestone 3 di `02-instalasi-pertama.md`). `/sync` `0605c50`. Graph dokumen 32 file wave ini diperbarui subagent di latar belakang. Kotak di scope lain yang terbuka karena wave ini: tidak ada yang dicentang di file lain, tetapi F16 M1, F17 M3, F18 M4, F20 M3, F21 M3, F22 M3 (`02-instalasi-pertama.md`) kini punya komponen F67, fixture F68, dan peta perintah F69 di `main`.
 
 ## Penutupan
