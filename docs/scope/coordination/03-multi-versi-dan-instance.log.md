@@ -10,7 +10,7 @@
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `arc-f24-spec` | `architect` | 24. Instance kedua dari runtime yang sama · spec untuk `Build it` yang ada (spec 0024) | `03-multi-versi-dan-instance.md` | `docs/specs/0024-instance-kedua-runtime-sama/` | `claude/arc-f24-spec-b9ee1e` | `opus-5-5 · xhigh` | `merged` (`d3cc52c` → `002c9fe`) |
-| `arc-f25-spec` | `architect` | 25. PostgreSQL 17 & 18 berdampingan · spec untuk `Build it` yang ada (spec 0025) | `03-multi-versi-dan-instance.md` | `docs/specs/0025-postgresql-17-18-berdampingan/` | `claude/arc-f25-spec-20a08d` | `opus-5-5 · xhigh` | `aktif` |
+| `arc-f25-spec` | `architect` | 25. PostgreSQL 17 & 18 berdampingan · spec untuk `Build it` yang ada (spec 0025) | `03-multi-versi-dan-instance.md` | `docs/specs/0025-postgresql-17-18-berdampingan/` | `claude/arc-f25-spec-20a08d` | `opus-5-5 · xhigh` | `merged` (`c5ed8ca` → `0afcd9b`) |
 
 ## Keputusan
 
@@ -42,5 +42,6 @@
 ## Dicentang pada wave ini
 
 - `24` · Pointer dan milestone di bawah `Build it: /develop instance kedua dari runtime yang sama` (spec untuk kotak `Build it` tanpa Pointer) · laporan `arc-f24-spec` STATUS done (`d3cc52c`) · `claude/arc-f24-spec-b9ee1e` → `002c9fe` · diff hanya `docs/specs/0024-instance-kedua-runtime-sama/` (`index.md`, `rationale.md`), Requirements AC-1 sampai AC-14, Decision, Build plan, Consequences, Status `Proposed`, tanpa penanda konflik, link relatif ada · commit `docs(scope): link the feature 24 spec and milestones`
+- `25` · Pointer dan milestone di bawah `Build it: /develop PostgreSQL 17 & 18 berdampingan` (spec untuk kotak `Build it` tanpa Pointer) · laporan `arc-f25-spec` STATUS done (`c5ed8ca`) · `claude/arc-f25-spec-20a08d` → `0afcd9b` · diff hanya `docs/specs/0025-postgresql-17-18-berdampingan/` (`index.md`, `rationale.md`), Requirements AC-1 sampai AC-10, Decision, Build plan, Consequences, Status `Proposed`, tanpa penanda konflik, link relatif ada · commit `docs(scope): link the feature 25 spec and milestones`
 
 ## Riwayat wave
