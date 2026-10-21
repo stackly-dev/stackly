@@ -4,6 +4,7 @@ import Foundation
 /// durations asked for are recorded.
 actor ManualSleeps {
     private var waiters: [CheckedContinuation<Void, any Error>] = []
+    private var watchers: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
     private(set) var durations: [Duration] = []
 
     /// How many sleeps wait now.
@@ -12,7 +13,12 @@ actor ManualSleeps {
     /// Waits until released; throws when released with ``cancelAll()``.
     func sleep(_ duration: Duration) async throws {
         durations.append(duration)
-        try await withCheckedThrowingContinuation { waiters.append($0) }
+        try await withCheckedThrowingContinuation { continuation in
+            waiters.append(continuation)
+            let ready = watchers.filter { $0.count <= waiters.count }
+            watchers.removeAll { $0.count <= waiters.count }
+            for watcher in ready { watcher.continuation.resume() }
+        }
     }
 
     /// Lets every waiting sleep finish normally.
@@ -35,13 +41,10 @@ actor ManualSleeps {
         for waiter in all { waiter.resume(throwing: CancellationError()) }
     }
 
-    /// Yields until `count` sleeps wait, so a test continues only once the code under test
-    /// has reached its wait.
+    /// Suspends until `count` sleeps wait, so a test continues only once the code under test
+    /// has reached its wait, however busy the machine is.
     func waitUntilWaiting(_ count: Int) async {
-        var tries = 0
-        while waiters.count < count && tries < 10_000 {
-            tries += 1
-            await Task.yield()
-        }
+        guard waiters.count < count else { return }
+        await withCheckedContinuation { watchers.append((count, $0)) }
     }
 }

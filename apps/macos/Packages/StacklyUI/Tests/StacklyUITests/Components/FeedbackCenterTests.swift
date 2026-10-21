@@ -67,7 +67,8 @@ struct FeedbackCenterTests {
         center.show(good)
         let task = Task { await center.countdown(good.id) }
         await sleeps.waitUntilWaiting(1)
-        #expect(await sleeps.durations == [good.visibleDuration])
+        let durations = await sleeps.durations
+        #expect(durations == [good.visibleDuration])
         #expect(center.current != nil)
         await sleeps.releaseAll()
         await task.value

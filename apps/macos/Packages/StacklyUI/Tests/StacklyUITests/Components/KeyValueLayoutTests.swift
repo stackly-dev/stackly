@@ -69,4 +69,16 @@ struct KeyValueLayoutTests {
         let full = CardSection("Title", footer: "Footer") { Text("a") }
         #expect(height(of: full, width: 400) > height(of: bare, width: 400))
     }
+
+    @Test func voiceOverReadsTheRowAsOneElementBuiltFromLabelAndValue() throws {
+        let path =
+            "apps/macos/Packages/StacklyUI/Sources/StacklyUI/Components/KeyValue/StacklyLabeledContentStyle.swift"
+        let code = SourceFile(
+            path: path, text: try String(contentsOf: SourceTree.url(of: path), encoding: .utf8)
+        )
+        .codeLines.joined(separator: "\n")
+        #expect(code.contains(".accessibilityRepresentation {"))
+        #expect(code.contains(".accessibilityElement(children: .combine)"))
+        #expect(code.contains(".textSelection(.enabled)"))
+    }
 }

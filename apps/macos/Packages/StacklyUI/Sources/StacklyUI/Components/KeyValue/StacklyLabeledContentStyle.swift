@@ -5,7 +5,8 @@ import SwiftUI
 ///
 /// The row is one line with the value flush right when both fit. Otherwise the label sits
 /// above and the value wraps below it, flush left, never cut. VoiceOver reads the row as
-/// one element, "{label}, {value}".
+/// one element, "{label}, {value}" (checked in the running app, because a selectable value
+/// alone makes VoiceOver read the label only).
 ///
 /// Apply it to a ``CardSection`` whose rows are all read only, to an inspector, or to a
 /// single read only row inside a `Form`. Never apply it to a `Form` itself: the controls
@@ -37,7 +38,15 @@ public struct StacklyLabeledContentStyle: LabeledContentStyle {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .accessibilityElement(children: .combine)
+        // Selectable text breaks `.combine` (VoiceOver would read the label only), so the
+        // spoken element is built from the same label and value without the selection.
+        .accessibilityRepresentation {
+            HStack {
+                configuration.label
+                configuration.content
+            }
+            .accessibilityElement(children: .combine)
+        }
     }
 
     private func label(_ configuration: Configuration) -> some View {

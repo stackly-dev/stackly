@@ -53,7 +53,10 @@ struct SourceRuleTests {
         Rule(
             name: "secondary, tertiary, or accent text color outside the token file (AC-3)",
             patterns: [
-                #"\.secondary\b"#,
+                // A member after `(`, a word, or `?` is a color or style; `prominence: .secondary`
+                // and `= .secondary` name the prominence of an action button.
+                #"[(\w]\.secondary\b"#,
+                #"\?\s*\.secondary\b"#,
                 #"\.tertiary\b"#,
                 #"\bsecondaryLabelColor\b"#,
                 #"\btertiaryLabelColor\b"#,
@@ -68,8 +71,12 @@ struct SourceRuleTests {
                 "Color(nsColor: .tertiaryLabelColor)",
                 ".foregroundStyle(Color.accentColor)",
                 ".foregroundStyle(.tint)",
+                "Color.secondary",
+                ".foregroundStyle(isOn ? .secondary : .primary)",
             ],
             allowedExamples: [
+                "ActionButton(action, prominence: .secondary)",
+                "prominence: ActionProminence = .secondary,",
                 ".foregroundStyle(StacklyColor.textSecondary)",
                 ".tint(.red)",
                 "ToolbarItem(placement: .secondaryAction) {}",

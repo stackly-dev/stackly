@@ -90,6 +90,13 @@
                                 announcement: "Address copied.")
                         }
                     }
+                    CardSection(
+                        "Backups",
+                        accessory: { EmptyView() },
+                        footer: { DisabledReasonText(ComponentSamples.backupReason) }
+                    ) {
+                        LabeledContent("Last backup", value: "Never")
+                    }
                     CardSection("Storage", footer: ComponentSamples.keyValueFooter) {
                         LabeledContent(ComponentSamples.longValueRow.label) {
                             Text(ComponentSamples.longValueRow.value)
