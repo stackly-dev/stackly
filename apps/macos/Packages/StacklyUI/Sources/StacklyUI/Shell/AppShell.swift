@@ -29,6 +29,7 @@ public struct AppShell: View {
     private let diagnostics: ConnectionDiagnostics
     private let counts: SidebarCounts
     private let instances: InstanceStore?
+    private let catalog: CatalogStore?
     private let windowOpener: WindowOpener
     private let windowWillClose: (NSWindow) -> Void
     private let reconnect: @MainActor () -> Void
@@ -45,6 +46,8 @@ public struct AppShell: View {
     ///   - counts: The counts behind the sidebar badges.
     ///   - instances: The instance store behind the Instances page, or `nil` to show the
     ///     placeholder (previews).
+    ///   - catalog: The catalog store behind the Catalog page, or `nil` to show the
+    ///     placeholder (previews).
     ///   - windowOpener: Receives the scene's `openWindow` action.
     ///   - windowWillClose: Called with the main window right before it closes.
     ///   - reconnect: Tries to connect now (banner, Diagnostics).
@@ -56,6 +59,7 @@ public struct AppShell: View {
         diagnostics: ConnectionDiagnostics,
         counts: SidebarCounts = SidebarCounts(),
         instances: InstanceStore? = nil,
+        catalog: CatalogStore? = nil,
         windowOpener: WindowOpener,
         windowWillClose: @escaping (NSWindow) -> Void,
         reconnect: @escaping @MainActor () -> Void,
@@ -66,6 +70,7 @@ public struct AppShell: View {
         self.diagnostics = diagnostics
         self.counts = counts
         self.instances = instances
+        self.catalog = catalog
         self.windowOpener = windowOpener
         self.windowWillClose = windowWillClose
         self.reconnect = reconnect
@@ -201,8 +206,17 @@ public struct AppShell: View {
             // provisional: F44
             UnbuiltScrollPage(section: .environments)
         case .catalog:
-            // provisional: F17
-            UnbuiltScrollPage(section: .catalog)
+            if let catalog {
+                CatalogPage(
+                    catalog: catalog,
+                    waiting: presentation.pageFailure,
+                    hasConnection: presentation.hasConnection,
+                    reconnect: reconnect,
+                    openDiagnostics: { select(.diagnostics) }
+                )
+            } else {
+                UnbuiltScrollPage(section: .catalog)
+            }
         case .runtimes:
             // provisional: F18
             UnbuiltScrollPage(section: .runtimes)
