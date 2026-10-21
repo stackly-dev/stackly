@@ -457,3 +457,65 @@ Update `/architect` sesi `arc-f1368-update` setelah milestone 1 dan 2 dibangun d
 **Cross check update ini (2026-10-21, model lain: Sonnet 5.5, baca saja).** Diperbaiki langsung: halaman Secrets memegang `ScrollView` sendiri dan tidak membaca `galleryScrollsPage`; jendela fixture dibuat tidak restorable oleh `FixtureWindowSettings` lewat `.fixtureWindow()`, bukan oleh `MainWindowAccessor`; `ShellBootstrap.fixture` memakai `.fixture(link)` dengan `FixtureLink(scenario)`; angka putaran `ResponsiveTimer` (10 ms dengan batas 60 ms untuk `settledRuntime`, 50 ms dengan batas 100 ms untuk render). Kalimat AC-8 tentang halaman galeri Components tetap, karena syaratnya kini terpenuhi dan suite nya sudah ada.
 
 **Keputusan lead (2026-10-22).** Cross check Sonnet dan perbaikannya diterima lead atas delegasi user, dan spec ini diterima tanpa perubahan Status (`In Progress`).
+
+## Perubahan 2026-10-22 (update dari usulan spec 0015, wave 5)
+
+Update `/architect` sesi `arc-f1368-0015`. Sumbernya baris 0068 di *Usulan update untuk spec lain* spec 0015 (*Skenario* dan harapan banner fixture 2026-10-22) dan paragraf **Fixture (spec 0068)** di spec 0015 *GUI*, ditambah tiga butir log lead: aturan spinner `loadingDelay` (perbaikan `9180a9a`, merge `386f512`), `FixtureContract` (merge `dc88025`), dan tiga Follow-up yang mungkin sudah selesai. Perilaku agent ditulis sebagai yang berlaku mulai langkah 11 dan 12 milestone 3 fitur 15. ID AC tetap dan teks AC tidak diubah (lihat *Teks AC* di bawah).
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Batas dengan spec lain | baris spec 0015 untuk `AgentBanner`, model, dan kedua fake | spec 0015 *GUI* |
+| Model data | `FixtureContract`, `FixtureAgent`, `FixtureClock.secondsAgo(_:)`, `FixtureScenario.agent`, `AgentBannerMatrix`; `DaemonStatusMatrix` tidak berubah | spec 0015 paragraf **Fixture**; K14 di bawah; merge `dc88025` |
+| Katalog skenario | agent `.fresh` di setiap skenario dan banner jendela `not_registered` untuk `daemon-offline` dan `daemon-unreachable`; *Skenario agent* (usulan K14) | spec 0015 baris 0068 |
+| Nilai skenario | `HandshakeAccepted` dan `DaemonInfo` dari `FixtureContract` (dulu tertulis `ContractInfo`); nilai agent dan Command Line di runtime fixture | kode `FixtureBuilders.swift` di `main`; spec 0015 paragraf **Fixture** |
+| Kasus yang menunggu DTO | fitur pemilik memakai `HandshakeAccepted.fixture` dan `DaemonInfo.fixture`, tidak pernah `ContractInfo` | butir log lead 2 |
+| *Kontrak fixture* (subbagian baru) | aturan pin 1.8, `pinningFixtureContract()`, dan test penjaga nya | merge `dc88025` |
+| Fixture di app Debug | fake agent dan Command Line, assessment awal sinkron, jam `DaemonModel`, tanpa `SMAppService` dan tanpa file pengguna | spec 0015 paragraf **Fixture** |
+| Kunci environment | `fixtureNow` juga untuk jam 15 detik agent; aturan `loadingDelay` untuk setiap spinner tertunda dan spinner di frame pertama untuk delay nol | butir log lead 1 |
+| UI test | identifier banner seperti yang dibangun: hanya `daemonBanner.container`, judul dari label nya, aksi dari judul tombol | kode `AccessibilityID.swift` dan `ShellUITests.swift` di `main` |
+| API surface, Value sourcing, Key invariants, Critical test scenarios | baris untuk kontrak fixture, agent, jam 15 detik, dan spinner | turunan |
+| Build plan | tanpa langkah baru; langkah 11 dan 12 fitur 15 membangun bagian agent | *Key invariants* (fitur pemilik setelah milestone dibangun) |
+| Usulan update untuk spec lain | butir spec 0015 (seam fake, launch record, jam, `bundledTool`, teks langkah 11 dan 12, selisih 10 dan 12 detik) dan spec 0067 (diterapkan) | turunan |
+| Follow-up | tiga butir dicentang dengan bukti; dua butir baru | `c4c0bfe`, `9a02771`, `c6f6ae7` |
+
+### Keputusan K14: skenario per state agent (usulan, menunggu keputusan lead)
+
+Spec 0015 menyerahkan skenario tambahan per state agent untuk snapshot dan XCUITest ke spec ini. Yang harus diputuskan: state mana yang jadi skenario runtime, apa yang masuk snapshot dan apa yang masuk XCUITest, siapa yang membangun, dan bagaimana ambang 15 detik dibuat deterministik.
+
+Fakta yang membatasi pilihan: `AgentBanner.content(_:now:)` adalah fungsi murni dengan `now` sebagai input; `DaemonBanner` tanpa `DaemonModel` di environment menggambar konten yang diberikan; runtime fixture memakai `FixtureClock.now` sebagai jam model dan `fixtureNow` jendela; `since` datang dari naskah koneksi skenario; `justRegistered` selalu mulai false di model baru (spec 0015), jadi `not_found` hanya bisa dicapai lewat aksi Turn On; dan `rootOverrideActive` selalu false di fixture.
+
+#### Option A: matriks murni untuk semua baris banner, ditambah lima skenario runtime untuk alur (direkomendasikan)
+
+- `AgentBannerMatrix` (satu nama snapshot, lima PNG) memuat setiap baris *Banner per state*, termasuk `enabled` di detik 14 dan 15 dan dengan `isStarting`, semua alasan `unavailable`, dan baris dengan awalan waktu.
+- Lima skenario runtime (`agent-requires-approval`, `agent-disabled`, `agent-enabled`, `agent-not-found`, `agent-unavailable`) untuk XCUITest seperti AC-14 dan tiga alur (Turn On ke `requires_approval`, Turn On ke `not_found`, Start stacklyd ke "starting"), plus satu snapshot Diagnostics baru (`diagnostics-agent-disabled`).
+- Jam: matriks memakai `secondsAgo(14)` dan `secondsAgo(15)` dengan `now` tetap; runtime memakai `since` tetap dari naskah, jadi tidak ada jam nyata.
+- Dibangun langkah 11 dan 12 milestone 3 fitur 15 di commit yang sama dengan perubahan banner.
+- Kelebihan: setiap baris terlihat di satu gambar yang mudah direview, ambang 15 detik dibuktikan piksel tanpa menunggu, tombol baru dicoba di app sungguhan (label VoiceOver, aktif atau tidak), dan tidak ada seam fixture yang melanggar aturan `justRegistered`. Kekurangan: lima nama skenario baru (katalog 21), dan baris `root_override` serta `enabled` di bawah 15 detik hanya ada di matriks.
+
+#### Option B: satu skenario runtime per baris banner, tanpa matriks
+
+- Sekitar sembilan skenario (termasuk `enabled` sebelum 15 detik, `not_found`, dan tiga alasan `unavailable`), masing masing dengan snapshot Diagnostics dan XCUITest.
+- Butuh seam fixture untuk mengisi `justRegistered` true (melanggar aturan spec 0015 bahwa model baru selalu mulai false) dan `rootOverrideActive` true di fixture, sekitar 45 PNG Diagnostics, dan XCUITest yang lebih lama.
+- Kelebihan: setiap state terlihat di app sungguhan tanpa aksi. Kekurangan: banyak gambar yang isinya hampir sama, seam khusus fixture yang mengubah aturan spec 0015, dan biaya rekam ulang lebih besar setiap kali teks berubah.
+
+#### Option C: matriks saja, tanpa skenario runtime baru
+
+- `AgentBannerMatrix` ditambah harapan baru `daemon-offline` dan `daemon-unreachable`; alur aksi hanya dibuktikan test model spec 0015.
+- Kelebihan: paling murah, katalog tetap 16. Kekurangan: Open Login Items, Check Again, dan Start stacklyd tidak pernah tampil di app yang diuji XCUITest dan audit, jadi label VoiceOver dan status aktif tombol itu hanya dicek manual.
+
+**Rekomendasi: Option A.** Ia membuktikan setiap baris secara piksel dengan biaya satu gambar, membuat jam 15 detik deterministik tanpa seam baru, dan tetap mencoba setiap tombol baru di app sungguhan. Option B menambah seam yang bertentangan dengan spec 0015 untuk hasil yang sebagian besar sudah ditangkap matriks; Option C meninggalkan tombol baru tanpa XCUITest.
+
+**Siapa yang membangun.** Langkah 11 dan 12 milestone 3 fitur 15 (milik scope 02), karena *Key invariants* spec ini menyerahkan suite bagian yang di merge sesudah milestone spec ini ke fitur pemilik, dan spec 0015 meminta harapan fixture, XCUITest, dan referensi Diagnostics diperbarui di commit yang sama dengan perubahan banner. Runner up: langkah 16 baru di fitur 68 sesudah langkah 11, yang membuat `FixtureShellTests` dan `ShellUITests` merah di antara dua commit itu.
+
+### Teks AC
+
+Tidak ada teks AC yang diubah. AC-2 tetap benar karena ia memetakan skenario ke presence dan `presentation.banner`, yang tidak berubah oleh fitur 15. AC-3 tetap benar karena fake agent dan Command Line ada di memori. AC-8 menyebut suite yang dibangun spec ini, dan suite agent dibangun fitur 15 sesuai *Key invariants*. AC-14 dibaca dengan tabel *Tampilan status daemon* spec 0013 beserta butir *Tambahan fase 02* di bawah nya (yang sejak AC-9 spec 0013 menunjuk tabel spec 0015 untuk kedua kode), dan dengan cara mencari banner seperti yang dibangun (label `daemonBanner.container`, tombol lewat judul). Karena teks AC-14 masih menyebut `daemonBanner.title` dan `daemonBanner.action.*`, yang tidak dibangun, satu klarifikasi teks AC-14 yang opsional dikirim ke lead.
+
+**Keputusan kecil yang diambil update ini.**
+
+- Skenario agent memakai `ipc.endpoint_missing`, sedangkan `daemon-offline` dan `daemon-unreachable` memakai `ipc.connection_refused`, supaya kedua kode yang memicu baris agent sama sama dicoba. Runner up: satu kode untuk semua.
+- `FixtureAgent.fresh` menjawab `register()` dengan `requiresApproval` (cabang B AC-17 spec 0015 untuk build bertanda tangan), supaya Turn On di skenario dasar punya hasil yang terlihat dan tidak menyalakan daemon yang tidak ada. Runner up: `enabled`, yang hanya memberi "stacklyd is starting…" lalu "isn’t running" setelah 30 detik.
+- Aturan spinner ditulis untuk spinner baru, dan `DelayedProgress` di `StateView` dibiarkan seperti yang dibangun karena stabil di semua suite; kalau suatu saat tidak stabil, ia diselaraskan, bukan diberi retry.
+- Selisih identifier di luar banner (`daemonFooter.settings`, `gallery.confirmation.*`, `gallery.states.*` tidak ada di `AccessibilityID.swift`) dicatat sebagai Follow-up, karena di luar lingkup update ini.
+
+**Cross check update ini (2026-10-22, model lain: Sonnet 5.5, baca saja).** Diperbaiki langsung: `ShellBootstrap.fixture` membangun model agent dan Command Line sendiri tanpa `assemble`; nilai awal yang diisi sinkron adalah hasil probe (bukan hanya assessment), supaya `unavailableDetail` ikut terisi di `agent-unavailable`; kalimat "baris dengan awalan waktu hanya ada di matriks" bertentangan dengan `daemon-offline` dan diperbaiki; bagian yang bergantung pada K14 diberi tanda *(K14)*; *Kontrak fixture* tidak lagi mengklaim kenaikan protokol tidak mengubah apa pun, karena pesan banner `majorMismatch` sisi app masih membaca `ContractInfo` (belum ada referensi yang menampilkannya). Dikirim ke lead sebagai gap keputusan bersama rekomendasi: nilai Command Line fixture yang tetap (home, halaman man, baris yang tampil), `afterRegister` untuk `agent-unavailable` dan skenario untuk `diagnostics-agent-disabled`, perilaku tombol `AgentBannerMatrix` tanpa model, dan butir jam dan teardown yang dicatat di rationale spec 0013.

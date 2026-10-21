@@ -111,3 +111,18 @@ _Mengaktifkan Automation Mode adalah langkah user; sampai itu dilakukan semua la
 - AC-14 sampai AC-17: kode ditulis dan terbangun (`ShellUITests`, `GalleryUITests`, `MenuUITests`, `AuditUITests`); hasil menunggu Automation Mode (BLOCKED, owner user). `onboarding` ditambah ke `MenuUITests` bersama fitur 16
 - AC-18: helper `attachScreenshot` dipakai di setiap test; lampiran diekspor `cargo xtask ui-test`; dilihat manusia setelah run pertama
 - AC-19: bagian "Testing views" di `design.md`
+
+## Setelah langkah 11 dan 12 milestone 3 fitur 15 (ditambah 2026-10-22, `NOT_RUN`)
+
+_Langkah dari update spec 2026-10-22 (*Skenario agent*, menunggu keputusan lead atas K14). Jalankan setelah langkah 11 dan 12 milestone 3 fitur 15 di merge. Tiga baris lama menjadi usang setelah langkah 11: `FixtureScenarioTests` "16 nama skenario tetap" (menjadi 21), harapan banner `daemon-offline` dan `daemon-unreachable` di `ShellUITests` (menjadi baris `not_registered` spec 0015), dan jumlah method `ShellUITests` di langkah run UI test milestone 3._
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "FixtureScenarioTests|FixtureShellTests"` → lulus: 21 nama skenario; setiap skenario settle di `expectedPresence` dengan assessment agent yang sudah ada; `presentation.banner` tetap baris spec 0013; `bannerContent(now: FixtureClock.now)` memberi baris `not_registered` untuk `daemon-offline` dan `daemon-unreachable` dan baris tabel *Skenario agent* untuk kelima skenario agent; fake tidak pernah memanggil `SMAppService` dan launch record datang dari `FixtureAgent.launchedAt` → AC-1, AC-2, AC-3
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "ShellSnapshotTests|DiagnosticsSnapshotTests"` → lulus dengan `agent-banner-matrix` (lima PNG, 15 baris, `enabled` 14 detik "starting" dan 15 detik "isn’t running"), `diagnostics-agent-disabled`, dan referensi Diagnostics yang direkam ulang dengan seksi Background Agent dan Command Line; `daemon-status-matrix` tidak berubah → AC-5, AC-8
+- [ ] `cargo xtask snapshot review --base main` → halaman review menampilkan PNG baru dan PNG Diagnostics yang berubah; tidak ada PNG lain yang berubah → AC-9
+- [ ] Dua kali berturut turut `swift test --package-path apps/macos/Packages/StacklyUI --filter SnapshotTests` tanpa mengubah referensi → snapshot agent stabil tanpa jam nyata → AC-4, AC-6
+
+### UI / manual
+
+- [ ] `cargo xtask evidence run --kind fixture -- cargo xtask ui-test --only ShellUITests` (setelah Automation Mode menyala; sebelum itu `BLOCKED`, owner user) → kelima skenario agent dan `daemon-offline` serta `daemon-unreachable` lulus dengan footer, judul, dan aksi baris nya; tiga alur (Turn On ke `requires_approval`, Turn On ke `not_found`, Start stacklyd ke "stacklyd is starting…") lulus → AC-14, AC-18
