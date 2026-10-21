@@ -7,7 +7,8 @@ use crate::capability::{CapabilityStatus, PlatformCapabilities, PlatformCapabili
 use crate::clock::SystemClock;
 use crate::error::PlatformError;
 use crate::fs::{
-    AppendFile, DirEntryInfo, FileInfo, Filesystem, ReadSeekFile, RemoveReport, VolumeSpace,
+    AppendFile, DirEntryInfo, FileInfo, Filesystem, ReadSeekFile, RemoveReport, VolumeFacts,
+    VolumeSpace,
 };
 use crate::identity::{UserId, UserIdentity};
 use crate::info::PlatformInfo;
@@ -112,6 +113,10 @@ impl Filesystem for UnsupportedPlatform {
     fn volume_space(&self, _path: &Path) -> Result<VolumeSpace, PlatformError> {
         Err(self.not_supported(PlatformCapability::Filesystem))
     }
+
+    fn volume_facts(&self, _path: &Path) -> Result<VolumeFacts, PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
 }
 
 impl UserIdentity for UnsupportedPlatform {
@@ -202,6 +207,7 @@ mod tests {
         assert!(is_not_supported(fs.rename_no_replace(path, path), Fs));
         assert!(is_not_supported(fs.open_tree_writer(path).map(drop), Fs));
         assert!(is_not_supported(fs.volume_space(path), Fs));
+        assert!(is_not_supported(fs.volume_facts(path), Fs));
         assert!(is_not_supported(fs.available_space(path), Fs));
         assert!(is_not_supported(
             platform.identity().current_user(),

@@ -30,7 +30,8 @@ mod runtime_files;
 /// `open_append` creates mode 0600, appends, truncates without growing,
 /// and refuses the same kinds; that `rename_no_replace` moves a file, a
 /// folder, and a symlink as itself and refuses any existing target; that
-/// `volume_space` and `available_space` read the test volume; and that a
+/// `volume_space` and `available_space` read the test volume; that
+/// `volume_facts` reads it as a local volume with a type name; and that a
 /// tree writer creates folders 0700 and files 0600, sets modes without
 /// following a symlink, refuses existing entries and every symlink or file
 /// on the way, and opens only an empty, non symlinked root with mode 0700.
@@ -59,6 +60,7 @@ pub fn fs_conformance(fs: &dyn Filesystem, root: &TestRoot) {
     runtime_files::check_open_append(fs, &base);
     runtime_files::check_rename_no_replace(fs, &base);
     runtime_files::check_volume_space(fs, &base);
+    runtime_files::check_volume_facts(fs, &base);
     runtime_files::check_tree_writer(fs, &base);
 }
 

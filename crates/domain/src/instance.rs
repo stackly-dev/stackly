@@ -5,7 +5,7 @@
 use jiff::Timestamp;
 
 use crate::code::code_enum;
-use crate::endpoint::{Endpoint, PortRequest};
+use crate::endpoint::{Endpoint, PortRequest, endpoints_conflict};
 use crate::error::{DomainError, InvariantDetail, InvariantError, Machine, TransitionError};
 use crate::id::{InstanceId, OperationId, RuntimeId};
 use crate::observation::{
@@ -235,6 +235,56 @@ pub struct Instance {
     blocker: Option<InstanceBlocker>,
 }
 
+/// Checks the endpoints of a new instance, see [`Instance::new`].
+fn check_new_endpoints(endpoints: &[Endpoint]) -> Result<(), InvariantError> {
+    for (index, endpoint) in endpoints.iter().enumerate() {
+        if endpoints[..index]
+            .iter()
+            .any(|earlier| earlier.name() == endpoint.name())
+        {
+            return Err(InvariantDetail::DuplicateEndpoint {
+                endpoint: endpoint.name().clone(),
+            }
+            .into());
+        }
+    }
+    for endpoint in endpoints {
+        if let Endpoint::Ip(ip) = endpoint
+            && ip.bound().is_some()
+        {
+            return Err(InvariantDetail::BoundOnNew {
+                endpoint: ip.name().clone(),
+            }
+            .into());
+        }
+    }
+    for (index, endpoint) in endpoints.iter().enumerate() {
+        if let Endpoint::Unix(unix) = endpoint
+            && endpoints[..index].iter().any(|earlier| {
+                matches!(earlier, Endpoint::Unix(other) if other.socket() == unix.socket())
+            })
+        {
+            return Err(InvariantDetail::DuplicateSocket {
+                socket: unix.socket().clone(),
+            }
+            .into());
+        }
+    }
+    for (index, endpoint) in endpoints.iter().enumerate() {
+        if let Some(earlier) = endpoints[..index]
+            .iter()
+            .find(|earlier| endpoints_conflict(earlier, endpoint))
+        {
+            return Err(InvariantDetail::EndpointSelfConflict {
+                first: earlier.name().clone(),
+                second: endpoint.name().clone(),
+            }
+            .into());
+        }
+    }
+    Ok(())
+}
+
 /// Every stored field of an [`Instance`], for [`Instance::restore`].
 /// Readiness and health are never stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -282,9 +332,20 @@ pub struct StoredInstance {
 impl Instance {
     /// Creates an instance: `uninitialized`, desired `stopped`, readiness
     /// and health `unknown` with reason `never_observed`, revision 1.
-    #[must_use]
-    pub fn new(new: NewInstance) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvariantError`] with [`InvariantDetail::DuplicateEndpoint`]
+    /// when two endpoints share a name, [`InvariantDetail::BoundOnNew`] when
+    /// an IP endpoint already has a bound port (build one that ran with
+    /// [`Instance::restore`]), [`InvariantDetail::DuplicateSocket`] (BR-004)
+    /// when two Unix endpoints name the same socket, and
+    /// [`InvariantDetail::EndpointSelfConflict`] (BR-004) when two IP
+    /// endpoints conflict by their fixed ports. The checks run in that
+    /// order and the first failure wins.
+    pub fn new(new: NewInstance) -> Result<Self, InvariantError> {
+        check_new_endpoints(&new.endpoints)?;
+        Ok(Self {
             id: new.id,
             name: new.name,
             display_name: new.display_name,
@@ -307,7 +368,7 @@ impl Instance {
             retained_at: None,
             retained_by: None,
             blocker: None,
-        }
+        })
     }
 
     /// Rebuilds an instance the registry stored, with readiness and health
@@ -838,6 +899,7 @@ mod tests {
             created_at: at("2026-01-01T00:00:00Z"),
             created_by: OperationId::generate(),
         })
+        .expect("a valid test instance")
     }
 
     fn failure(code: &str) -> FailureCode {

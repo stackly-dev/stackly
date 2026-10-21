@@ -52,7 +52,8 @@ pub use error::{
     TransitionError, ValueError, ValueKind,
 };
 pub use id::{
-    BackupId, EnvironmentId, InstanceId, InvalidId, LeaseId, OperationId, RuntimeId, ShortKey,
+    BackupId, EnvironmentId, InstanceId, InvalidId, LeaseId, OperationId, ProviderSourceId,
+    RuntimeId, ShortKey,
 };
 pub use instance::{
     DesiredState, Instance, InstanceLifecycle, LifecycleEvent, NewInstance, StartupPolicy,

@@ -52,7 +52,7 @@ pub use error::PlatformError;
 pub use fetch::StopFlag;
 pub use fs::{
     AppendFile, DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
-    ReadSeekFile, RemoveReport, VolumeSpace, is_same_or_inside, remove_tree_names,
+    ReadSeekFile, RemoveReport, VolumeFacts, VolumeSpace, is_same_or_inside, remove_tree_names,
 };
 pub use identity::{UserId, UserIdentity};
 pub use info::{PlatformInfo, host_target};
