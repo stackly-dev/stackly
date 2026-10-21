@@ -535,7 +535,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikann
 
 ## Follow-up
 
-- [ ] `/architect (update)` spec 0013, 0016, 0017, 0020, 0021, dan 0022 dengan *Usulan update untuk spec lain* (untuk 0013, digabung ke update fase 02 yang masih terbuka).
+- [x] `/architect (update)` spec 0013, 0016, 0017, 0020, 0021, dan 0022 dengan *Usulan update untuk spec lain* (untuk 0013, digabung ke update fase 02 yang masih terbuka). Diterapkan (2026-10-21 dan 2026-10-22): 0016, 0017, 0020, 0021, 0022 lewat `arc-f6769-update` (`46ed33d`, `45d65ea`), 0013 lewat `arc-f1368-update` (`c23568a`).
 - [ ] `docs/scope/ui-macos.md` *Selisih yang sudah diketahui* (lewat `/scope`): menu bar mendapat menu Instance di antara View dan Window, di luar enam menu yang digambar mockup; Help tidak berisi Stackly Help sampai fitur 66.
 - [ ] Fitur 24, 26, dan 54: ubah baris `duplicateInstance`, `restartInstance`, `reloadInstance`, dan `removeInstance` menjadi built, tambah `CommandItem`, dan terbitkan action dari halaman Instances; Remove dan Force Stop lewat konfirmasi tanpa shortcut.
 - [ ] Fitur 66: putuskan tujuan dokumentasi (Help Book atau URL), lalu ubah baris `stacklyHelp` (⌘?) menjadi built sebagai item pertama Help.

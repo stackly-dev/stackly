@@ -821,7 +821,7 @@ Pendekatan proyek adalah Journey, tapi fitur 67 adalah fondasi tanpa journey sen
 
 ## Follow-up
 
-- [ ] Lead: jadikan *Usulan update untuk spec lain* item `architect (update)` untuk spec 0012, 0013 (digabung dengan update fase 02 yang terbuka), 0016, 0017, 0018, 0020, 0021, dan 0022; teks AC-11 spec 0016 butuh persetujuan user.
+- [x] Lead: jadikan *Usulan update untuk spec lain* item `architect (update)` untuk spec 0012, 0013 (digabung dengan update fase 02 yang terbuka), 0016, 0017, 0018, 0020, 0021, dan 0022; teks AC-11 spec 0016 butuh persetujuan user. Diterapkan (2026-10-21 dan 2026-10-22): `arc-f6769-update` (`46ed33d`, `45d65ea`) untuk 0012, 0016, 0017, 0018, 0020, 0021, 0022, dan `arc-f1368-update` (`c23568a`) untuk 0013.
 - [ ] `/scope`: catat di `docs/scope/ui-macos.md` bagian *Selisih yang sudah diketahui* bahwa toast mockup menjadi kartu umpan balik opak di bawah area konten (error dan pesan beraksi tetap sampai ditutup), view diff memakai kartu biasa (bukan latar konsol), inspector memakai latar opak, dan detail checklist membungkus (bukan elipsis).
 - [x] `/sync` setelah build: folder `Components/` dan `Accessibility/` di tabel Key files `apps/macos/AGENTS.md`, spec 0067 di Related specs, dan aturan "aksi lewat `StacklyAction`, umpan balik lewat `FeedbackCenter`, copy lewat `CopyButton`" di Conventions. Diterapkan lewat `/sync` (2026-10-21).
 - [x] `/sync`: centang Follow-up spec 0012 :532, 0013 :652 (fitur 67), 0016 :416, 0020 :1106, dan 0022 :560 (fitur 67) yang dijawab spec ini. Diterapkan lewat `/sync` (2026-10-21): 0012, 0016, 0020, 0022 sudah dicentang sebelumnya, 0013 :652 dicentang sekarang.
