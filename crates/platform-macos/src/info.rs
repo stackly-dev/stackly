@@ -32,6 +32,11 @@ const CAPABILITIES: PlatformCapabilities = PlatformCapabilities::none("")
     .with(
         PlatformCapability::ProcessMetrics,
         not_built("not built yet (feature 28)"),
+    )
+    .with(PlatformCapability::NetworkFetch, CapabilityStatus::Supported)
+    .with(
+        PlatformCapability::CodeSigning,
+        not_built("not built yet (feature 18, spec 0018 step 8)"),
     );
 
 const fn not_built(reason: &'static str) -> CapabilityStatus {

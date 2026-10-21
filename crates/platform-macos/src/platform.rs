@@ -8,6 +8,7 @@ use stackly_platform::{
 };
 
 use crate::dirs::{CACHE_DIR, DATA_DIR, LOGS_DIR, darwin_user_temp_dir, home_dir};
+use crate::fetch::MacosFetcher;
 use crate::fs::MacosFilesystem;
 use crate::identity::MacosIdentity;
 use crate::info::MacosPlatformInfo;
@@ -71,8 +72,8 @@ impl MacosPlatform {
     }
 
     /// Assembles the platform with roots the caller chose, without the
-    /// default resolver, and with [`MacosProcessSupervision`] as its process
-    /// port. Integration tests use it with a test root, so no
+    /// default resolver, with [`MacosProcessSupervision`] as its process
+    /// port, and with [`MacosFetcher`] as its download port. Integration tests use it with a test root, so no
     /// folder is left in the real user temporary directory.
     #[must_use]
     pub fn with_roots(roots: RootSet) -> Platform {
@@ -84,5 +85,6 @@ impl MacosPlatform {
             Arc::new(MacosPlatformInfo),
         )
         .with_processes(Arc::new(MacosProcessSupervision::new()))
+        .with_fetcher(Arc::new(MacosFetcher::new()))
     }
 }

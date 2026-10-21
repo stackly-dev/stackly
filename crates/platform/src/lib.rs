@@ -49,7 +49,10 @@ pub use bundle::AppBundle;
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 pub use clock::{Clock, SystemClock};
 pub use error::PlatformError;
-pub use fetch::StopFlag;
+pub use fetch::{
+    FetchError, FetchRequest, FetchResponse, FetchSink, FetchSummary, Fetcher, HTTPS_URL_MAX_LEN,
+    HttpsUrl, HttpsUrlError, ResponseKind, Resume, SinkError, StopFlag, UnsupportedFetcher,
+};
 pub use fs::{
     AppendFile, DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
     ReadSeekFile, RemoveReport, VolumeSpace, is_same_or_inside, remove_tree_names,

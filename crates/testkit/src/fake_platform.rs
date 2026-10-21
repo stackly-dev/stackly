@@ -8,7 +8,8 @@ use stackly_platform::{
 };
 
 use crate::{
-    FakeBackgroundAgent, FakeFilesystem, FakeProcessSupervision, FakeSecretStore, TestRoot,
+    FakeBackgroundAgent, FakeFetcher, FakeFilesystem, FakeProcessSupervision, FakeSecretStore,
+    TestRoot,
 };
 
 /// Where [`FakeClock`] starts: 2026-01-01T00:00:00Z.
@@ -138,6 +139,14 @@ impl FakePlatformInfo {
                 .with(
                     PlatformCapability::ProcessMetrics,
                     not_built("not built yet (feature 28)"),
+                )
+                .with(
+                    PlatformCapability::NetworkFetch,
+                    CapabilityStatus::Supported,
+                )
+                .with(
+                    PlatformCapability::CodeSigning,
+                    not_built("not built yet (feature 18, spec 0018 step 8)"),
                 ),
         }
     }
@@ -210,6 +219,7 @@ pub struct FakePlatform {
     secrets: FakeSecretStore,
     processes: FakeProcessSupervision,
     background_agent: FakeBackgroundAgent,
+    fetcher: FakeFetcher,
 }
 
 impl FakePlatform {
@@ -225,6 +235,7 @@ impl FakePlatform {
             secrets: FakeSecretStore::new(),
             processes: FakeProcessSupervision::new(root),
             background_agent: FakeBackgroundAgent::new(),
+            fetcher: FakeFetcher::new(),
         }
     }
 
@@ -257,6 +268,7 @@ impl FakePlatform {
         .with_secrets(Arc::new(self.secrets.clone()))
         .with_processes(Arc::new(self.processes.clone()))
         .with_background_agent(Arc::new(self.background_agent.clone()))
+        .with_fetcher(Arc::new(self.fetcher.clone()))
     }
 
     /// Returns the fake filesystem, to inject faults or read its logs.
@@ -299,5 +311,13 @@ impl FakePlatform {
     #[must_use]
     pub fn background_agent(&self) -> &FakeBackgroundAgent {
         &self.background_agent
+    }
+
+    /// Returns the fake fetcher, to serve bytes, script failures, and read
+    /// its request log (spec 0018). Every platform this fake hands out
+    /// shares it.
+    #[must_use]
+    pub fn fetcher(&self) -> &FakeFetcher {
+        &self.fetcher
     }
 }

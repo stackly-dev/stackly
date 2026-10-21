@@ -56,6 +56,9 @@ object = { version = "0.40", default-features = false, features = ["read_core", 
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 regex = "1.13"
 rpassword = "7.5"
+# A TLS server for the fetcher test that refuses an unknown certificate
+# (spec 0018); the same version ureq already uses.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
 schemars = "1.2"
 security-framework = "3.7"
@@ -77,6 +80,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json"] }
 typeshare = "1.0"
 unicode-width = "0.2"
+# HTTPS client for runtime downloads: rustls with the macOS trust store, no
+# automatic decompression, no cookies (spec 0018).
+ureq = { version = "3.4", default-features = false, features = ["rustls", "platform-verifier"] }
 uuid = { version = "1.28", features = ["v7", "serde"] }
 zeroize = "1.9"
 # Stored and deflate entries only, decompressed through flate2 (spec 0018).
