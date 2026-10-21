@@ -1,5 +1,6 @@
 //! `stackly instance create`, `start`, `stop`, and `get` (spec 0014,
-//! *CLI*, AC-5 to AC-8). They only talk to the daemon: the CLI never reads
+//! *CLI*, AC-5 to AC-8), and `list` and `inspect` (spec 0022, AC-10 and
+//! AC-11). They only talk to the daemon: the CLI never reads
 //! a provider package or starts a process.
 //!
 //! `create`, `start`, and `stop` start an operation through
@@ -10,7 +11,11 @@
 mod action;
 mod create;
 mod get;
+pub mod group;
+mod inspect;
+mod list;
 pub mod render;
+pub mod resolve;
 
 use clap::{Args, Subcommand};
 use serde::Serialize;
@@ -22,6 +27,8 @@ use uuid::Uuid;
 use self::action::{StartArgs, StopArgs};
 use self::create::CreateArgs;
 use self::get::GetArgs;
+use self::inspect::InspectArgs;
+use self::list::ListArgs;
 use crate::args::InstanceIdArg;
 use crate::context::Context;
 use crate::failure::CliFailure;
@@ -52,9 +59,19 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001 --wait --json"
     )]
     Stop(StopArgs),
-    /// Show one instance with its status and endpoints
+    /// List instances with their status and endpoints
     #[command(
-        after_help = "Examples:\n  stackly instance get 0192f3a5-0000-7000-8000-000000000001\n  stackly instance get 0192f3a5-0000-7000-8000-000000000001 --json"
+        after_help = "Examples:\n  stackly instance list\n  stackly instance list --status running --json"
+    )]
+    List(ListArgs),
+    /// Show one instance, by name or ID, with its status and endpoints
+    #[command(
+        after_help = "Examples:\n  stackly instance inspect orders-db\n  stackly instance inspect 0192f3a5-0000-7000-8000-000000000001 --json"
+    )]
+    Inspect(InspectArgs),
+    /// Show one instance; the same as inspect
+    #[command(
+        after_help = "Examples:\n  stackly instance get orders-db\n  stackly instance get 0192f3a5-0000-7000-8000-000000000001 --json"
     )]
     Get(GetArgs),
 }
@@ -66,6 +83,8 @@ impl InstanceCommand {
             Self::Create(args) => execute(args, cx).await,
             Self::Start(args) => execute(args, cx).await,
             Self::Stop(args) => execute(args, cx).await,
+            Self::List(args) => execute(args, cx).await,
+            Self::Inspect(args) => execute(args, cx).await,
             Self::Get(args) => execute(args, cx).await,
         }
     }

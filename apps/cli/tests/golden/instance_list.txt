@@ -1,0 +1,23 @@
+NAME            PROVIDER             VERSION  ENDPOINTS                  LIFECYCLE      READINESS                   HEALTH                      OWNERSHIP
+orders-db       official/postgresql  17.2.0   postgresql=127.0.0.1:5432  running        ready                       healthy                     manual
+analytics-db    official/postgresql  17.2.0   postgresql=127.0.0.1:5402  running        not_ready (awaiting_probe)  unknown (awaiting_probe)    manual
+cache           official/valkey      9.0.0    valkey=127.0.0.1:5403      running        not_ready (probe_failed)    unknown (awaiting_probe)    manual
+queue           official/nats        2.15.1   nats=127.0.0.1:5404        stopped        -                           -                           manual
+broken-db       official/postgresql  17.2.0   postgresql=127.0.0.1:5405  failed         -                           unhealthy (crash_loop)      manual
+half-made       official/mysql       8.4.3    mysql=127.0.0.1:5406       failed         -                           -                           manual
+mystery         official/clickhouse  17.2.0   clickhouse=127.0.0.1:5407  unknown        unknown (daemon_restarted)  unknown (daemon_restarted)  manual
+locked-db       official/postgresql  17.2.0   postgresql=127.0.0.1:5408  stopped        -                           -                           manual
+secretive       official/postgresql  17.2.0   postgresql=127.0.0.1:5409  stopped        -                           -                           manual
+sick-db         official/postgresql  17.2.0   postgresql=127.0.0.1:5410  running        ready                       unhealthy (probe_failed)    manual
+flapping        official/nats        17.2.0   nats=127.0.0.1:5411        recovering     -                           -                           manual
+slow-db         official/postgresql  17.2.0   postgresql=127.0.0.1:5412  running        ready                       degraded (probe_slow)       manual
+quiet-db        official/postgresql  17.2.0   postgresql=127.0.0.1:5413  running        unknown (stale)             unknown (stale)             manual
+stray-db        official/postgresql  17.2.0   postgresql=127.0.0.1:5414  running        ready                       healthy                     manual
+starting-db     official/postgresql  17.2.0   postgresql=127.0.0.1:5415  starting       -                           -                           manual
+stopping-db     official/postgresql  17.2.0   postgresql=127.0.0.1:5416  stopping       -                           -                           manual
+fresh-db        official/postgresql  17.2.0   postgresql=127.0.0.1:5417  initializing   -                           -                           manual
+raw-db          official/postgresql  17.2.0   postgresql=127.0.0.1:5418  uninitialized  -                           -                           manual
+restarted-db    official/postgresql  17.2.0   postgresql=127.0.0.1:5419  running        unknown (daemon_restarted)  unknown (daemon_restarted)  manual
+double-trouble  official/postgresql  17.2.0   postgresql=127.0.0.1:5420  failed         -                           -                           manual
+
+20 instances: 4 running, 4 stopped, 3 failed, 8 not ready, 1 unknown

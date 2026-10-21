@@ -159,6 +159,16 @@
       "summary": "a prompt is needed while the cli runs noninteractive"
     },
     {
+      "code": "cli.instance_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "name"
+      ],
+      "items": null,
+      "summary": "no instance has the name the command was given"
+    },
+    {
       "code": "cli.interrupted",
       "category": "cancelled",
       "retryable": false,
