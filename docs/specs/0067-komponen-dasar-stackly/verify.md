@@ -91,6 +91,36 @@ _Dibangun 2026-10-21 oleh `dev-f67-m1` (dipakai ulang sebagai `dev-f67-m2`) di b
 - AC-1 · bagian "Components" di `design.md` kini memuat Sheet, Checklist (*Status checklist*), dan Staged progress (*Pemetaan operasi ke tahap*, *Teks progress*, *State tahap*); subbagian Inspector, Log, dan Diff menunggu milestone 3 dan 4
 - AC-21 · `SourceRuleTests` (aturan `.secondary` diperbaiki di commit terpisah)
 
+## Milestone 3: Inspector
+
+_Dibangun 2026-10-21 oleh `dev-f67-m3` di branch sendiri (langkah Build plan 14). Hasil yang sudah dijalankan dicentang; `NOT_RUN` menunggu user atau `/check verify`. Catatan: app diperiksa lewat pohon accessibility (API AX atas proses probe dan app) dan tangkapan jendela per ID jendela, tanpa VoiceOver dan tanpa mengubah System Settings._
+
+### UI / manual
+
+- [x] Langkah 14 · di macOS 27.0.1 buka app probe dengan `NavigationSplitView` dan `.stacklyInspector` di kolom halaman, jendela 900 pt, terang dan gelap → latar `surfaceWindow` mengisi seluruh kolom inspector tanpa sambungan; inspector 280 pt dibuka, kolom halaman 384 pt, tidak ada teks terpotong; pembagi inspector dijepit 240 dan 360 pt lewat AX; toggle `AXButton` "Hide Inspector" dengan help sama dan identifier `inspector.toggle`, menjadi "Show Inspector" setelah `AXPress` → AC-18, AC-19 (catatan di `rationale.md` *Temuan langkah 14* dan `design.md` Inspector)
+- [x] Jalankan app Debug (`STACKLY_ROOT` sementara), Window › Design Gallery › Components → halaman memuat InspectorHeader (kolom 280 pt dengan tile, status, dua aksi, dan satu CardSection; kolom 280 pt tanpa aksi; kolom 240 pt dengan judul dan subjudul panjang yang membungkus dan dua aksi yang bertumpuk), InspectorPlaceholder (judul bawaan dengan pesan, "Nothing to Show"), dan bagian `.stacklyInspector` dengan tombol "Open Inspector Demo"; pohon AX memuat `inspector.placeholder` ("No Selection, Select an instance to see its details.") → AC-20
+- [x] Di bagian `.stacklyInspector` tekan "Open Inspector Demo" → sheet dengan halaman dan inspector asli (tile, "pg17-dev", "Status: Running" dan CardSection) terbuka; tekan toggle `inspector.toggle` ("Hide Inspector") → inspector menutup dan label menjadi "Show Inspector" → AC-18
+- [ ] `NOT_RUN` · nyalakan Keyboard navigation di System Settings, fokuskan toggle inspector dengan Tab dan tekan Space → inspector terbuka dan tertutup → AC-19 (butuh setting sistem dari user)
+- [ ] `NOT_RUN` · nyalakan VoiceOver di halaman Components → toggle dibacakan "Hide Inspector" atau "Show Inspector"; placeholder dibaca satu kelompok, judul lalu pesan; header dibaca judul sebagai heading, status "Status: Running", lalu tombol aksi satu per satu → AC-18, AC-19
+- [ ] `NOT_RUN` · Increase Contrast, Reduce Transparency, Reduce Motion, light dan dark pada inspector asli → latar tetap opak dan tidak berubah saat Reduce Transparency, tidak ada gerak selain crossfade bawaan sistem → AC-19
+- [ ] `NOT_RUN` · di jendela 900 pt dengan sidebar dan inspector terbuka di layar fitur 22 atau 18 (setelah milestone fitur itu dibangun) → tidak ada teks terpotong di kolom halaman 384 pt maupun di inspector → AC-18
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter InspectorTests` → lebar kolom 240, 280, 360 dan padding 16; label toggle mengikuti binding; help bawaan label dan help dari layar; simbol `sidebar.trailing` ada; identifier `inspector.toggle` dan `inspector.placeholder`; judul dan subjudul panjang membungkus di kolom 240 pt; tile menambah tinggi header; aksi lebar bertumpuk di 240 pt dan berjajar di 480 pt; header tanpa aksi lebih pendek; placeholder bawaan "No Selection" tanpa pesan dan pesan panjang membungkus → AC-18, AC-19
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter SourceRuleTests` → aturan `.inspector(` di luar `Components/Inspector/` lulus untuk seluruh sumber, termasuk `StacklyInspector.swift` → AC-21
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (dengan `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN` menunjuk `target/debug/stacklyd` dan `target/debug/examples/skeleton_seed` dari checkout utama) → 493 test di 53 suite lulus
+- [x] `cargo xtask build-app` → `BUILD SUCCEEDED`
+- [x] `xcrun swift-format lint --strict` atas file Swift milestone ini → tanpa peringatan
+- [x] `cargo xtask evidence check` → 39 catatan manual, baseline valid, 577 file Rust dan 237 file Swift mengikuti aturan; lead menjalankannya lagi setelah merge
+
+### Acceptance-criteria coverage
+
+- AC-18 · `InspectorTests`, langkah 14 (probe), galeri; kolom 900 pt di layar sungguhan menunggu fitur 22, 18, dan 21; VoiceOver `NOT_RUN`
+- AC-19 · target toggle 44 × 52 pt dari toolbar dan label di pohon AX (langkah 14); Tab, Space, VoiceOver, dan setting sistem `NOT_RUN`
+- AC-20 · bagian Inspector di galeri Components dan tiga `#Preview` per komponen (`InspectorHeader`, `InspectorPlaceholder`, `InspectorToggle` dengan `.stacklyInspector`); dicocokkan `/check verify` dengan tabel *State di galeri*
+- AC-21 · aturan `.inspector(` di `SourceRuleTests` (dibangun di milestone 1) lulus untuk kode milestone ini
+
 ## Milestone 4: Log and diff views
 
 _Dibangun 2026-10-21 oleh `dev-f67-m1` (dipakai ulang sebagai `dev-f67-m4`) di branch sendiri (langkah Build plan 15 sampai 17). App Debug diperiksa lewat pohon accessibility (API AX) dengan root sementara, dan scroll oleh program lewat nilai scrollbar AX. Hasil yang sudah dijalankan dicentang; `NOT_RUN` menunggu user atau `/check verify`. Scroll sungguhan oleh pengguna (mouse atau trackpad) tidak bisa dikirim dari sesi ini tanpa menyentuh app lain, jadi `NOT_RUN`. VoiceOver tidak dinyalakan dan System Settings tidak diubah._
