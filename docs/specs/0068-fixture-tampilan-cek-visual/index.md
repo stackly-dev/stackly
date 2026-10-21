@@ -424,7 +424,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikann
 - [ ] Lead: tambah langkah "aktifkan Automation Mode dan beri izin runner UI test" ke `docs/manual.md` setelah spec ini di merge.
 - [ ] `/architect` update spec 0001, 0002, 0012, 0013, 0014, 0016, 0017, 0020, 0021, dan 0022 dengan butir *Usulan update untuk spec lain*.
 - [ ] Fitur 16, 17, 18, 20, 21, 22, 29, 44, dan 56: tambah kasus fixture, skenario, suite snapshot, dan XCUITest layar masing masing di atas harness ini.
-- [ ] `/sync` setelah build: `cargo xtask snapshot review`, `cargo xtask ui-test`, dan `swift test --package-path apps/macos/Packages/StacklyUI` dengan mode rekam di baris Commands `AGENTS.md`; target `StacklyAppUITests`, folder `Fixtures/`, dan `SnapshotTests/__Snapshots__/` di `apps/macos/AGENTS.md`; product `StacklyXCTestSupport` di `clients/swift/AGENTS.md`.
+- [x] `/sync` setelah build: `cargo xtask snapshot review`, `cargo xtask ui-test`, dan `swift test --package-path apps/macos/Packages/StacklyUI` dengan mode rekam di baris Commands `AGENTS.md`; target `StacklyAppUITests`, folder `Fixtures/`, dan `SnapshotTests/__Snapshots__/` di `apps/macos/AGENTS.md`; product `StacklyXCTestSupport` di `clients/swift/AGENTS.md`. Diterapkan lewat `/sync` (2026-10-21).
 - [ ] Ganti komentar `TestAppearance.environment` ("`colorSchemeContrast` cannot be set on `EnvironmentValues`") saat langkah 2, karena `_colorSchemeContrast` ternyata bisa diisi (rationale, *Bukti probe*).
 - [ ] Kalau test penjaga setter gagal di SDK baru: `/architect` update spec ini untuk pengganti varian HC dan RT.
 

@@ -14,6 +14,12 @@ The native macOS GUI: the `Stackly` app target plus the local `StacklyUI` packag
 | `Packages/StacklyUI/Sources/StacklyUI/Shell/` | Main window shell: `AppShell`, `LiveShell`, sidebar, footer, daemon banner, page chrome, close notice (spec 0013) |
 | `Packages/StacklyUI/Sources/StacklyUI/Connection/` | `DaemonModel`, `ResourceStore`, `ShellSync`, `ShellRuntime`, and `MutationPath`, the only way a screen reads or mutates (spec 0013) |
 | `Packages/StacklyUI/Sources/StacklyUI/Tokens/`, `Status/`, `State/`, `Confirmation/` | Design tokens, status labels, state patterns, and confirmations (spec 0012) |
+| `Packages/StacklyUI/Sources/StacklyUI/Components/` | Shared components for every screen: tile, key value, copy and console, actions and menus, feedback, sheet, checklist, staged progress, inspector, log, diff (spec 0067) |
+| `Packages/StacklyUI/Sources/StacklyUI/Commands/` | `CommandMap` (the only place a shortcut is written), `SystemShortcuts`, published commands, and `StacklyCommands` (spec 0069) |
+| `Packages/StacklyUI/Sources/StacklyUI/Fixtures/` | `#if DEBUG` fixture scenarios built from the generated DTOs, `ShellBootstrap.fixture`, and `FixtureClock`, used by previews, snapshots, and the UI tests (spec 0068) |
+| `Packages/StacklyUI/Sources/StacklyUI/Accessibility/AccessibilityID.swift` | Accessibility identifiers, `<scope>.<part>[.<key>]` |
+| `Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/` | Snapshot suites; reference PNGs in `__Snapshots__` (spec 0068) |
+| `StacklyAppUITests/` | XCUITest target for the shell, gallery, menus, and accessibility audits, run by `cargo xtask ui-test` (spec 0068) |
 | `design.md` | Design system: typography, color, spacing, materials, status, state patterns, confirmation, motion, accessibility (spec 0012) |
 | `../../docs/mockups/Stackly.dc.html` | UI reference for layout, copy, flows, and every state; sample data in `stackly-data.js` |
 | `../../docs/scope/ui-macos.md` | Fidelity rules, known mockup gaps, and which feature owns each screen |
@@ -24,6 +30,9 @@ The native macOS GUI: the `Stackly` app target plus the local `StacklyUI` packag
 cargo xtask build-app   # from the repo root, runs xcodebuild for scheme Stackly into target/xcode
 cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed   # before swift test; without them SkeletonEndToEndTests end as BLOCKED
 swift test --package-path apps/macos/Packages/StacklyUI
+STACKLY_SNAPSHOT_RECORD=1 swift test --package-path apps/macos/Packages/StacklyUI --filter <Suite>   # rewrite changed snapshot references, then review them
+cargo xtask snapshot review   # old and new PNGs side by side in target/snapshot-review/index.html
+cargo xtask ui-test           # XCUITest; needs Automation Mode turned on by the user, and an unlocked screen
 ```
 
 ## Conventions
@@ -38,6 +47,9 @@ swift test --package-path apps/macos/Packages/StacklyUI
 - The app target gets its default isolation from the build setting `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (with `SWIFT_APPROACHABLE_CONCURRENCY = YES`); the packages use `.defaultIsolation(MainActor.self)` instead.
 - Where the mockup imitates a macOS control in HTML (table, picker, toggle, sheet, popover, menu), use the native SwiftUI control. UI copy is English and comes from the mockup.
 - Design system: build all UI to `design.md`; colors, status, state patterns, and confirmations come from its tokens and helpers in `StacklyUI` (`Tokens/`, `Status/`, `State/`, `Confirmation/`), never a literal color or a new pattern on a screen (spec 0012).
+- Build screens from `Components/` (spec 0067); never a screen-local tile, feedback toast, sheet footer, checklist, progress, inspector, log, or diff view. Actions go through `StacklyAction` and the window's `ActionHost`, feedback through `FeedbackCenter`, and copy through `CopyButton`; a disabled action shows its reason, and a destructive action always confirms.
+- Shortcuts live only in `CommandMap`; screens publish actions through `.publishesCommands`, and menus inside a window set no shortcut. To add a command, follow *Menambah perintah* in spec 0069 and the "Commands and shortcuts" section of `design.md`.
+- Every page has a snapshot suite on the spec 0068 harness (a source rule checks it). Underscored SwiftUI setters (`_colorSchemeContrast`, `_accessibilityReduceTransparency`) are allowed only in tests and `#if DEBUG` code. The UI test target uses `SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated` with `@MainActor` test classes, because `XCTestCase` initializers are nonisolated.
 - `StacklyUI` depends on the `StacklyClient` product, and its tests also on `StacklyTestSupport`. Screens read stores registered through `ShellSync` and mutate only through `MutationPath`, gated by `MutationAvailability` (spec 0013).
 
 ## Gotchas

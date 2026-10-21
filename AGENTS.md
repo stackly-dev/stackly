@@ -37,6 +37,8 @@ cargo xtask check-deps       # crate dependency direction and unsafe rules
 cargo xtask fuzz list        # fuzz targets; also seed, build, and run <target> [--time <s>] (300 s default)
 cargo xtask fuzz seed        # rewrite fuzz/seeds/ from protocols/fixtures/ after a fixture change
 cargo xtask build-app        # xcodebuild, scheme Stackly
+cargo xtask snapshot review [--base <rev>]   # target/snapshot-review/index.html with the old and new snapshot PNGs since the merge base (spec 0068)
+cargo xtask ui-test [--only <Class>[/<method>]]   # XCUITest target StacklyAppUITests; needs Automation Mode, which only the user turns on (docs/manual.md section K), else exit 2
 swift test --package-path clients/swift
 swift test --package-path apps/macos/Packages/StacklyUI   # Swift integration tests need cargo build -p stacklyd -p stackly-fake-server and the skeleton_seed example first (or STACKLY_DAEMON_BIN), else they end as BLOCKED
 cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core

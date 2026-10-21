@@ -15,6 +15,8 @@ The Swift side of the IPC contract: DTOs generated from `stackly-protocol`, plus
 | `Sources/StacklyClient/Endpoint/`, `Transport/`, `Wire/`, `Connection/` | Socket path and endpoint checks, framing over `DispatchIO`, three stage frame decode, and `DaemonConnection` with handshake, calls, and subscribe (spec 0013) |
 | `Sources/StacklyClient/Link/`, `Sync/` | `DaemonLink` with reconnect and heartbeat, and `SyncEngine` with snapshot plus cursor (spec 0013) |
 | `Sources/StacklyTestSupport/` | Product for test targets only: the `.evidence` trait and records (spec 0002) and `FixtureCredential` (spec 0011) |
+| `Sources/StacklyEvidenceCore/` | Internal target (no product, `package` access) that writes evidence records for both helpers (spec 0068) |
+| `Sources/StacklyXCTestSupport/` | Product for XCTest targets: `XCTestCase.evidence(covers:expected:)`, `XCTEvidence.actual` and `.blocked` (spec 0068) |
 | `Tests/StacklyClientTests/Support/` | `FakeDaemonServer`, `SpawnedDaemon`, `ManualClock`, and `RepoPaths` for transport and integration tests |
 | `Sources/StacklyClient/StacklyJSON.swift` | `StacklyJSON.decoder()` and `encoder()`: millisecond UTC timestamps (`yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`) for every contract read and write |
 | `../../protocols/fixtures/` | Shared JSON fixtures, one file per case, read by both Rust and Swift tests |

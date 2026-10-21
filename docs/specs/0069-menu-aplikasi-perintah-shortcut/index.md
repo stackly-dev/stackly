@@ -542,7 +542,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikann
 - [ ] Fitur 32: Stop All Services… dan Check for Updates… (fitur 61) di menu Stackly tanpa shortcut bila ditambahkan ke menu utama; popover menu bar memakai judul dan shortcut dari peta ("Settings… ⌘,", "Close Window ⌘W").
 - [ ] Fitur 27, 34, 35, 37, 44, 46, 47, 52, 56: putuskan perintah menu masing masing dengan aturan *Menambah perintah* dan usulan tempat di spec ini.
 - [ ] Fitur 68: XCUITest menu berulang membaca `CommandMap` (baris built ada di menu dengan judul benar, aktif per skenario `connected-empty`, `connected-mixed`, `daemon-offline`, `onboarding`), plus smoke `typeKey` untuk ⌘,, ⌘N, ⌘1.
-- [ ] `/sync` setelah build: folder `Commands/` dan aturan *Menambah perintah* di `apps/macos/AGENTS.md`.
+- [x] `/sync` setelah build: folder `Commands/` dan aturan *Menambah perintah* di `apps/macos/AGENTS.md`. Diterapkan lewat `/sync` (2026-10-21).
 
 ## Rationale
 
