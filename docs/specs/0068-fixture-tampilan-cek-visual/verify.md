@@ -70,3 +70,36 @@ _Langkah diturunkan dari acceptance criteria spec 0068. `/check verify` menjalan
 - `swift test --package-path clients/swift`: 154 Swift Testing dan 28 XCTest lulus; filter `XCTEvidenceMappingTests` 18, `XCTEvidenceRunTests` 5, `XCTEvidenceTrackerTests` 5, semua lulus.
 - `cargo test -p xtask evidence::swift_scan` 13 lulus; `cargo test -p xtask` 349 plus integrasi lulus; `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo xtask evidence check` (193 file Swift), dan `cargo xtask check-deps` hijau; `swift test --package-path apps/macos/Packages/StacklyUI` 315 lulus.
 - Dua keputusan developer sesuai AC: "namanya berakhiran UITests" dibaca sebagai nama file (stem), sejalan dengan nama kelas `<Area>UITests` di bagian design; jalur gagal tidak diuji end to end dalam `swift test` tetapi dicakup test pemetaan (18), `RunPlanTests` (mismatch kind native), dan probe hidup di atas. Catatan kecil, bukan temuan: jalur kind native di helper XCTest (`XCTFail` dari mismatch) hanya dibuktikan oleh probe hidup dan `RunPlanTests`, tidak oleh test otomatis di `StacklyXCTestSupportTests`.
+
+## Milestone 3: XCUITest and audits
+
+_Mengaktifkan Automation Mode adalah langkah user; sampai itu dilakukan semua langkah yang menjalankan UI test tercatat `BLOCKED` dengan reason "Automation Mode is disabled on this Mac" dan owner user. Sesi Claude tidak pernah menjalankan perintah pengaktifannya._
+
+### UI / manual
+
+- [ ] **Prasyarat (user, sekali per Mac).** Jalankan `automationmodetool` tanpa argumen → harus mencetak "Automation Mode is enabled". Kalau mencetak "disabled", aktifkan sendiri (setting sistem dengan password admin: `automationmodetool enable-automationmode-without-authentication`, atau System Settings › Privacy & Security › Developer Tools), lalu beri izin yang diminta macOS untuk runner UI test saat run pertama. Buka layar (tidak terkunci) dan jangan pakai mouse atau keyboard selama run → AC-13
+- [ ] `cargo xtask evidence run --kind fixture -- cargo xtask ui-test` → app Stackly Debug membuka dan menutup berkali kali di atas fixture, `xcodebuild` selesai dengan exit 0, dan report evidence berisi record XCTest `PASS` untuk `ShellUITests`, `GalleryUITests`, `MenuUITests`, dan `AuditUITests` (kelas `ShellUITests` 18 method, `GalleryUITests` 5, `MenuUITests` 4, `AuditUITests` 8) → AC-10, AC-13 sampai AC-17
+- [ ] Buka `target/ui-tests/<run>/attachments/` (folder `<run>` dicetak sebagai "attachments: …") → ada screenshot jendela per test bernama `<method>-<skenario>-<appearance>-<bagian>`; sidebar, toolbar, banner, dan footer tampil benar di light dan dark untuk setiap skenario daemon, dan jendela galeri tampil untuk setiap topik → AC-18
+- [ ] **Spinner tanpa akhir (langkah 10).** Di run di atas, `testSlowFirstAttemptShowsTheConnectingBanner` (`daemon-connecting`) dan `testRefreshingShowsTheFooterAndKeepsNoBanner` (`daemon-refreshing`) harus selesai dalam beberapa detik. Kalau salah satu menunggu sampai timeout karena XCUITest menunggu app idle, catat di sini dan beri tahu lead: kedua skenario itu lalu dicek hanya lewat snapshot dan test model, dan AC-14 mengecualikannya dengan catatan di `design.md` → AC-12, AC-14
+- [ ] Buka `apps/macos/design.md`, bagian "Testing views" → menjelaskan menambah kasus dan skenario fixture, menulis suite snapshot, merekam dan mereview referensi, `cargo xtask ui-test`, baris `AuditExceptions.swift`, dan batas yang tercatat → AC-19
+- [ ] Setting sistem asli (Increase Contrast, Reduce Transparency, Differentiate Without Color, Reduce Motion), urutan fokus Tab, Space pada Show All, dan suara VoiceOver dicek dengan tangan seperti *Cek manual di /check verify* spec 0068 butir 5 → AC-15
+
+### Commands
+
+- [x] `xcodebuild -list -project apps/macos/Stackly.xcodeproj` → target `Stackly` dan `StacklyAppUITests` → AC-12
+- [x] `cargo xtask build-app` lalu `xcodebuild build-for-testing -project apps/macos/Stackly.xcodeproj -scheme Stackly -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath target/xcode` → `** TEST BUILD SUCCEEDED **` (target UI test, referensi paket `clients/swift`, Testables scheme `Stackly`) → AC-12
+- [x] `STACKLY_UI_SCENARIO=tidak-ada target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly; echo $?` → mencetak `unknown STACKLY_UI_SCENARIO tidak-ada` ke stderr dan keluar 64 → AC-12
+- [x] `cargo xtask build-app --release`, lalu `strings -a` pada setiap file di `target/xcode/Build/Products/Release/Stackly.app` untuk `FixtureScenario`, `STACKLY_UI_SCENARIO`, dan `fixtureAppearance` → nol hasil (kontrol positif: "Stackly is still running" ada di `Contents/MacOS/Stackly`) → AC-1, AC-12
+- [x] `cargo xtask ui-test` dengan Automation Mode mati → mencetak keluaran `automationmodetool` dan bahwa user harus mengaktifkannya sendiri, tanpa menjalankan `xcodebuild`, keluar 2; `STACKLY_EVIDENCE_DIR=relatif cargo xtask ui-test` → keluar 1 dengan pesan "must be an absolute path" → AC-13
+- [x] `cargo test -p xtask ui_test` → lulus: Mac siap, bukan macOS (exit 1), folder evidence relatif (exit 1), setiap pembacaan `automationmodetool` selain "Automation Mode is enabled" (exit 2, tool tidak ada, teks lain, kosong), layar terkunci dari plist `ioreg` (exit 2), argumen `xcodebuild` (project, scheme, Debug, destination, derivedDataPath, resultBundlePath, `-parallel-testing-enabled NO`, `-only-testing`, tanpa retry), penerusan `TEST_RUNNER_STACKLY_EVIDENCE_DIR` dan `…_KIND` hanya bila terisi, argumen `--only`, dan nama folder run dari waktu UTC → AC-13
+- [x] `cargo xtask evidence check` → lulus: aturan `*UITests.swift` tidak menemukan `XCTSkip` atau `kind:` di `apps/macos/StacklyAppUITests/` → AC-11, AC-14 sampai AC-17
+- [x] `cargo fmt --all --check`, `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `xcrun swift-format lint --strict` pada file Swift yang berubah → hijau
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` dan `swift test --package-path clients/swift` → lulus (aturan sumber AC-7 kini juga memindai `AppDelegate.swift`)
+
+### Acceptance-criteria coverage
+
+- AC-12: target dan scheme (`xcodebuild -list`, `build-for-testing`), exit 64 untuk skenario tidak dikenal, `strings` Release; jendela fixture tidak restorable dicek kode (`FixtureWindowSettings` di `StacklyApp.swift`) dan oleh `-ApplePersistenceIgnoreState YES` di helper peluncuran; perilaku nyata menunggu run UI test
+- AC-13: test xtask dan dua jalan keluar (exit 1 dan 2) dijalankan nyata; run `xcodebuild` sungguhan menunggu Automation Mode (owner user)
+- AC-14 sampai AC-17: kode ditulis dan terbangun (`ShellUITests`, `GalleryUITests`, `MenuUITests`, `AuditUITests`); hasil menunggu Automation Mode (BLOCKED, owner user). `onboarding` ditambah ke `MenuUITests` bersama fitur 16
+- AC-18: helper `attachScreenshot` dipakai di setiap test; lampiran diekspor `cargo xtask ui-test`; dilihat manusia setelah run pertama
+- AC-19: bagian "Testing views" di `design.md`
