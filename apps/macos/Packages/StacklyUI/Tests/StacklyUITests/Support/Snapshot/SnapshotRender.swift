@@ -39,14 +39,14 @@ enum SnapshotRender {
         window.contentView = hosting
         defer { window.close() }
 
-        let clock = ContinuousClock()
-        let start = clock.now
+        var timer = ResponsiveTimer(maxCharge: interval + .milliseconds(50))
         var previous: SnapshotImage?
         while true {
             try size(window, hosting: hosting, width: width, height: height)
             hosting.layoutSubtreeIfNeeded()
             let image = try SnapshotImage.capture(hosting)
-            let elapsed = clock.now - start
+            timer.lap()
+            let elapsed = timer.counted
             if elapsed >= minimumSettle, let previous, previous == image {
                 return image
             }
