@@ -215,6 +215,7 @@ Option 1 di Keputusan 3 dan 4 dipilih karena JOURNEY-03 adalah urutan, bukan kea
 
 - `arc-f24-spec` (spec 0024), 2026-10-22: sepakat pembagian bukti AC-009. Spec 0024 memiliki dua PostgreSQL 17 dari runtime yang sama (create biasa dan duplicate config), helper `SentinelCluster` di `apps/daemon/tests/postgresql/sentinel.rs` (`new`, `write`, `read`, `system_identifier`, `assert_isolated`, koneksi TCP lewat `Psql` harness), dan `two_postgresql_17_instances(site, api) -> TwoPostgres17 { dev, test, runtime_id }` di `apps/daemon/tests/postgresql/same_runtime.rs`, di milestone 4 langkah 8 dan 9. Evidence spec 0024 menulis AC-009 sebagai bagian dua PostgreSQL 17; spec ini menutup AC-009 dengan mayor 18. Duplicate config dikunci ke runtime sumber, jadi duplicate lintas mayor di luar kedua spec. Lokasi helper dipindah dari `apps/daemon/tests/support/` ke `postgresql/` setelah merge `main` membawa harness PostgreSQL (nama modul `support` sudah dipakai).
 - Lead (Scope 03), 2026-10-22: `main` maju dengan milestone 2 spec 0019 dan update spec 0020; worktree spec ini di merge `main` sebelum Build plan ditulis, dan versi protokol tidak disebut dengan angka.
+- Lead (Scope 03), 2026-10-22: spec diterima atas delegasi user, dengan rekomendasi gap G1 sampai G5 seperti tertulis dan G6 tanpa perubahan teks Done when scope. Status tetap `Proposed`. Usulan update spec 0010, 0009, 0019, dan 0004 dibawa lead sebagai item `architect (update)`.
 
 ## Cross check
 
@@ -226,18 +227,18 @@ Cross check 2026-10-22 oleh model lain (Sonnet, hanya membaca), 20 temuan (5 hig
 | 2 | hint dibatasi 200 karakter (spec 0006 *Hint*), kedua teks lebih panjang | diterapkan: teks dipendekkan (181 dan 192 byte) dan test panjang ditambah |
 | 3 | `unknown` tidak bisa dicapai lewat fungsi yang selalu memberi line tercatat | diterapkan: AC-8 menguji empat hasil |
 | 4 | digest pohon `pg17-dev` yang berjalan tidak stabil | diterapkan: digest hanya untuk instance yang berhenti, `pg17-dev` lewat identitas proses |
-| 5 | penulisan registry khusus test spec 0019 tanpa kontrak | gap, rekomendasi diterapkan: `Site::bind_runtime` didefinisikan di spec ini (menunggu keputusan lead) |
-| 6 | catalog dan pencegahan jaringan untuk `runtime.install` in process tidak disebut | gap, rekomendasi diterapkan: catalog override `providers/`, `FakeFetcher` kosong, entri di `downloads_dir()` (menunggu keputusan lead) |
+| 5 | penulisan registry khusus test spec 0019 tanpa kontrak | gap, rekomendasi diterapkan: `Site::bind_runtime` didefinisikan di spec ini (G1 sampai G5, diterima lead 2026-10-22) |
+| 6 | catalog dan pencegahan jaringan untuk `runtime.install` in process tidak disebut | gap, rekomendasi diterapkan: catalog override `providers/`, `FakeFetcher` kosong, entri di `downloads_dir()` (G1 sampai G5, diterima lead 2026-10-22) |
 | 7 | `InstallRuntimeReply` tidak membawa `runtimeId` | diterapkan: ID dari `result.resources[0].id` operasi |
 | 8 | tanda tangan `check` di AC beda dengan desain | diterapkan |
-| 9 | alasan butuh migrasi di jalur rebind tidak terbukti | gap, rekomendasi diterapkan: `RebindCheckError` mengimplementasikan `OperationError` dan AC-6 serta AC-7 memeriksa hint (menunggu keputusan lead) |
+| 9 | alasan butuh migrasi di jalur rebind tidak terbukti | gap, rekomendasi diterapkan: `RebindCheckError` mengimplementasikan `OperationError` dan AC-6 serta AC-7 memeriksa hint (G1 sampai G5, diterima lead 2026-10-22) |
 | 10 | kode area `instance` di core berupa string literal; `mod prepare` privat | diterapkan |
 | 11 | tempat pemasangan hint: fallback spec 0006 milik langkah 11 spec 0018, dan precheck start tidak pernah menolak `data_incompatible` | diterapkan: fallback spec 0006, jalur `catalog_body` tidak diubah |
 | 12 | keadaan akhir AC-4 tidak disebut | diterapkan: operasi `failed` di `verify` sebelum `start_begin`, instance tetap `stopped`, `support::serving` kosong, adopsi ditunggu |
-| 13 | adopsi lintas restart daemon in process belum pernah dibuktikan | gap, rekomendasi diterapkan: test memeriksa adopsi, `BinaryDaemon` boleh dipakai kalau tidak andal (menunggu keputusan lead) |
+| 13 | adopsi lintas restart daemon in process belum pernah dibuktikan | gap, rekomendasi diterapkan: test memeriksa adopsi, `BinaryDaemon` boleh dipakai kalau tidak andal (G1 sampai G5, diterima lead 2026-10-22) |
 | 14 | `runtimeVersion` diisi dari versi data | diterapkan: AC-2 menjelaskannya, bukti versi server lewat `SHOW server_version` |
-| 15 | Done when scope "rebind biasa ditolak" sementara spec hanya memberi pemeriksaan core | diteruskan ke lead: rekomendasi tanpa ubah teks scope, sifat bagian dicatat di `expected` dan spec |
-| 16 | hint `incompatible` tanpa bukti fixture | gap, rekomendasi diterapkan: kasus runtime fake kedua ber line `0.2` (menunggu keputusan lead) |
+| 15 | Done when scope "rebind biasa ditolak" sementara spec hanya memberi pemeriksaan core | G6, diputuskan lead 2026-10-22: teks Done when scope tidak diubah; sifat bagian AC-043 dicatat di spec dan di `expected` evidence |
+| 16 | hint `incompatible` tanpa bukti fixture | gap, rekomendasi diterapkan: kasus runtime fake kedua ber line `0.2` (G1 sampai G5, diterima lead 2026-10-22) |
 | 17 | `Site::subject` hanya untuk runtime `Site` | diterapkan |
 | 18 | detail harness (bentuk kembalian, `Api` baru per restart, perbandingan registry, folder log yang belum ada) | diterapkan di *Lingkungan test native* |
 | 19 | klaim bahwa belum ada test start untuk `data_incompatible` | sebagian keliru: `a_start_checks_the_package_the_folder_the_marker_and_the_runtime_first` sudah menguji `marker_mismatch`; kasus hasil lain ditambah. `rule()` BR-009 tidak ditambah (mengubah wire start di luar kebutuhan Done when) |
