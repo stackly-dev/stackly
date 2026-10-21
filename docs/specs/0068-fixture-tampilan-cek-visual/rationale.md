@@ -439,3 +439,21 @@ Dijalankan 2026-10-21 oleh model lain (Sonnet 5.5), read only, atas draft pertam
 | S12 | 140 PNG status daemon | `DaemonStatusMatrix`, lima PNG |
 
 Nitpick yang diterapkan langsung: satu parameter `sourceLocation`, nama `XCTEvidenceObserver` seragam, tinggi `.page` pasti 748 pt, UUID disebut "berbentuk v7", cek manual 6 merujuk AC-1 dan AC-12.
+
+## Perubahan 2026-10-21 (update wave 3)
+
+Update `/architect` sesi `arc-f1368-update` setelah milestone 1 dan 2 dibangun dan diverifikasi (`chk-f68-m1`). Spec kini menggambarkan helper seperti yang dibangun. ID AC tetap, dan langkah Build plan tidak berubah selain satu catatan di langkah 5.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| AC-3, AC-4 | batas tunggu 3 detik (dan 250 ms di AC-4) dihitung sebagai waktu responsif `ResponsiveTimer`: hanya waktu saat main actor responsif, tidak pernah lebih dari waktu dinding. Teks AC disetujui user lewat lead (2026-10-21) | penyimpangan developer `dev-f68-m1` yang diterima checker `chk-f68-m1`, dengan saran klarifikasi kata "3 detik" |
+| *Helper snapshot*, *Value sourcing*, *Key invariants* | cara `ResponsiveTimer` menghitung waktu, dan bahwa batas di AC-3 dan AC-4 adalah batas waktu ini | sama |
+| *Helper snapshot*, langkah 5 | "isi halaman galeri sebagai view terpisah" ditulis seperti yang dibangun: kunci environment `galleryScrollsPage` di `GalleryPageLayout`, dan halaman States serta Components yang melebihi batas fitting 4000 pt dirender per kelompok | kode `GallerySupport.swift` dan `GallerySnapshotTests` |
+| `verify.md` milestone 1, langkah perubahan token | menyebut `STACKLY_SNAPSHOT_RECORD=1` sebelum `snapshot review`, karena tanpa rekam ulang referensi di git tidak berubah dan review mencetak "no snapshot changes" | catatan checker di langkah itu |
+| *Usulan update untuk spec lain* dan *Follow-up* | butir spec 0013 diterapkan di spec 0013 (update gabungan wave 3), jadi Follow-up `/architect` update dicentang | update spec 0013 di sesi yang sama |
+
+**Kenapa waktu responsif, bukan waktu dinding.** Di run penuh, test lain bisa menahan main actor beberapa detik (misalnya run loop alert modal). Batas waktu dinding akan menggagalkan test fixture atau snapshot karena jeda yang tidak ia sebabkan, padahal view nya stabil. Setiap putaran polling menambah paling banyak sedikit di atas jedanya, jadi jeda panjang dihitung sebagai satu putaran. Aturan "tanpa retry dan tanpa sleep tetap" tetap berlaku: view yang benar benar tidak stabil tetap gagal setelah 3 detik waktu responsif. Runner up: batas waktu dinding yang lebih panjang, yang menutupi masalah tanpa menghilangkan kegagalan palsu di Mac yang sibuk.
+
+**Cross check update ini (2026-10-21, model lain: Sonnet 5.5, baca saja).** Diperbaiki langsung: halaman Secrets memegang `ScrollView` sendiri dan tidak membaca `galleryScrollsPage`; jendela fixture dibuat tidak restorable oleh `FixtureWindowSettings` lewat `.fixtureWindow()`, bukan oleh `MainWindowAccessor`; `ShellBootstrap.fixture` memakai `.fixture(link)` dengan `FixtureLink(scenario)`; angka putaran `ResponsiveTimer` (10 ms dengan batas 60 ms untuk `settledRuntime`, 50 ms dengan batas 100 ms untuk render). Kalimat AC-8 tentang halaman galeri Components tetap, karena syaratnya kini terpenuhi dan suite nya sudah ada.
+
+**Keputusan lead (2026-10-22).** Cross check Sonnet dan perbaikannya diterima lead atas delegasi user, dan spec ini diterima tanpa perubahan Status (`In Progress`).
