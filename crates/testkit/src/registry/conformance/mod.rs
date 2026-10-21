@@ -2,6 +2,7 @@
 //! implementation passes, so the fake and the SQLite registry cannot drift
 //! apart unnoticed (spec 0005, AC-8 to AC-11, AC-14, AC-16).
 
+mod creates;
 mod journal;
 mod prune;
 mod races;
@@ -38,7 +39,9 @@ use crate::FakeClock;
 /// the four journal reads, and prune with cascade), the secret reference,
 /// use, and audit ops and reads of feature 11 (spec 0005 "Tambahan fitur
 /// 11"), the process observations, config revisions, and chained instance
-/// updates of feature 10 (spec 0005 "Tambahan fitur 10"), retention with
+/// updates of feature 10 (spec 0005 "Tambahan fitur 10"), the provider
+/// sources, `source_id`, and `DeleteInstanceCreatedBy` of feature 20 (spec 0005
+/// "Tambahan fitur 20"), retention with
 /// the 20 observations kept per instance, and three races of 16 threads (same name, same
 /// artifact, same revision).
 ///
@@ -89,6 +92,8 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     writes::software(&suite);
     writes::environments(&suite);
     writes::leases(&suite);
+    creates::provider_sources(&suite);
+    creates::delete_created_instance(&suite);
     reads::round_trip(&suite);
     reads::lists(&suite);
     reads::stored_paths(&suite);
@@ -136,6 +141,11 @@ impl Suite<'_> {
             provider: record.revision,
             runtime: built,
         }
+    }
+
+    /// The time on the suite's clock.
+    fn clock_now(&self) -> Timestamp {
+        self.clock.now()
     }
 
     /// Starts an instance of `stack`.

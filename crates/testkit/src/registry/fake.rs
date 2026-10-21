@@ -11,11 +11,12 @@ use stackly_domain::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
     AuditPage, AuditQuery, AuditResult, BackupId, BatchError, Committed, ConfigRevisionId,
     ConfigRevisionRecord, CreatedRecord, CreatedSeq, Environment, EnvironmentId, Generation,
-    IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId, InstanceName,
-    InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder, LeaseId,
-    LeaseState, LockKey, Operation, OperationCursor, OperationId, OperationJournal, OperationPage,
-    OperationQuery, OperationResource, OperationState, Ownership, PlatformStoreKey,
-    ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord, PruneReport, Registry,
+    IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
+    InstanceName, InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder,
+    LeaseId, LeaseState, LockKey, NotDeletableReason, Operation, OperationCursor, OperationId,
+    OperationJournal, OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
+    PlatformStoreKey, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
+    ProviderSourceId, ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry,
     RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime, RuntimeId,
     RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
     SecretReferenceView, SecretStatus, SecretUse, SecretUser, Sha256Digest, StepSeq, Versioned,
@@ -152,6 +153,20 @@ impl Registry for FakeRegistry {
         key: &ProviderRevisionKey,
     ) -> Result<Versioned<Option<ProviderRevisionRecord>>, RegistryError> {
         self.read(|state| Ok(state.provider_revisions.get(key).cloned()))
+    }
+
+    fn provider_source_by_location(
+        &self,
+        kind: ProviderSourceKind,
+        location: &str,
+    ) -> Result<Versioned<Option<ProviderSourceRecord>>, RegistryError> {
+        self.read(|state| {
+            Ok(state
+                .provider_sources
+                .values()
+                .find(|source| source.kind == kind && source.location == location)
+                .cloned())
+        })
     }
 
     fn artifact(
@@ -586,6 +601,7 @@ struct ObservationRow {
 #[derive(Debug, Clone)]
 struct State {
     generation: Generation,
+    provider_sources: BTreeMap<ProviderSourceId, ProviderSourceRecord>,
     provider_revisions: BTreeMap<ProviderRevisionKey, ProviderRevisionRecord>,
     artifacts: BTreeMap<Sha256Digest, ArtifactRecord>,
     runtimes: BTreeMap<RuntimeId, Runtime>,
@@ -615,6 +631,7 @@ impl State {
     fn new() -> Self {
         Self {
             generation: Generation::ZERO,
+            provider_sources: BTreeMap::new(),
             provider_revisions: BTreeMap::new(),
             artifacts: BTreeMap::new(),
             runtimes: BTreeMap::new(),
@@ -711,6 +728,12 @@ impl State {
             }
             WriteOp::RecordProcessObservation(observation) => self.record_observation(observation),
             WriteOp::InsertConfigRevision(record) => self.insert_config_revision(record),
+            WriteOp::InsertProviderSource(record) => self.insert_provider_source(record, now),
+            WriteOp::DeleteInstanceCreatedBy {
+                id,
+                expected,
+                operation,
+            } => self.delete_instance_created_by(id, expected, operation),
             other => panic!(
                 "FakeRegistry has no case for the op on {}; add one with the spec 0005 change \
                  that added it",
@@ -729,8 +752,98 @@ impl State {
         if self.provider_revisions.contains_key(&key) {
             return Err(RegistryError::DuplicateResource { resource });
         }
+        if let Some(source) = record.source_id
+            && !self.provider_sources.contains_key(&source)
+        {
+            return Err(RegistryError::MissingReference {
+                resource: ResourceRef::ProviderSource(source),
+            });
+        }
         self.stamp(resource, None, now);
         self.provider_revisions.insert(key, record);
+        Ok(())
+    }
+
+    /// `InsertProviderSource`: the ID and the kind with its location are
+    /// both unique, and a duplicate names the row that holds them.
+    fn insert_provider_source(
+        &mut self,
+        record: ProviderSourceRecord,
+        _now: Timestamp,
+    ) -> Result<(), RegistryError> {
+        let holder = self.provider_sources.get(&record.id).or_else(|| {
+            self.provider_sources
+                .values()
+                .find(|other| other.kind == record.kind && other.location == record.location)
+        });
+        if let Some(holder) = holder {
+            return Err(RegistryError::DuplicateResource {
+                resource: ResourceRef::ProviderSource(holder.id),
+            });
+        }
+        self.provider_sources.insert(record.id, record);
+        Ok(())
+    }
+
+    /// `DeleteInstanceCreatedBy`: the instance and everything that goes
+    /// with it, only while the operation created it and nothing may run.
+    fn delete_instance_created_by(
+        &mut self,
+        id: InstanceId,
+        expected: ResourceRevision,
+        operation: OperationId,
+    ) -> Result<(), RegistryError> {
+        let resource = ResourceRef::Instance(id);
+        let Some(instance) = self.instances.get(&id) else {
+            return Err(RegistryError::NotFound { resource });
+        };
+        if instance.revision() != expected {
+            return Err(RegistryError::RevisionConflict {
+                resource,
+                expected,
+                actual: instance.revision(),
+            });
+        }
+        let reason = if instance.created_by() != operation {
+            Some(NotDeletableReason::CreatedByOtherOperation)
+        } else if matches!(
+            instance.lifecycle(),
+            InstanceLifecycle::Starting
+                | InstanceLifecycle::Running
+                | InstanceLifecycle::Stopping
+                | InstanceLifecycle::Recovering
+                | InstanceLifecycle::Unknown
+        ) {
+            Some(NotDeletableReason::Active)
+        } else {
+            None
+        };
+        if let Some(reason) = reason {
+            return Err(RegistryError::NotDeletable { resource, reason });
+        }
+        if let Some(environment) = self
+            .environments
+            .values()
+            .find(|environment| environment.members().iter().any(|m| m.instance_id() == id))
+        {
+            return Err(RegistryError::Integrity {
+                detail: format!(
+                    "environment_instances: instance {id} is a member of environment {}",
+                    environment.id()
+                ),
+            });
+        }
+        self.instances.remove(&id);
+        self.paths.remove(&id);
+        self.active_config.remove(&id);
+        self.config_revisions
+            .retain(|_, revision| revision.instance != id);
+        self.observations
+            .retain(|row| row.observation.instance != id);
+        self.leases.retain(|_, lease| lease.instance_id() != id);
+        self.secret_uses
+            .retain(|used| used.user != SecretUser::Instance(id));
+        self.written.remove(&ResourceRef::Instance(id));
         Ok(())
     }
 

@@ -21,7 +21,7 @@ use stackly_platform::instance_path_entries;
 use super::column::{corrupt, exists, first, int, opt_ts, sql_error, ts};
 use super::journal;
 use super::read::{self, resource_columns};
-use super::{secret, supervision};
+use super::{secret, source, supervision};
 
 /// Applies `batch` in one transaction stamped `now`: all of it, or none.
 pub(super) fn commit(
@@ -192,6 +192,12 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
         WriteOp::InsertConfigRevision(record) => {
             supervision::insert_config_revision(conn, record, op)
         }
+        WriteOp::InsertProviderSource(record) => source::insert(conn, record),
+        WriteOp::DeleteInstanceCreatedBy {
+            id,
+            expected,
+            operation,
+        } => source::delete_instance_created_by(conn, *id, *expected, *operation),
         _ => Err(RegistryError::Integrity {
             detail: "the SQLite registry does not support this write op yet".to_owned(),
         }),
@@ -281,6 +287,9 @@ fn insert_provider_revision(
             resource: ResourceRef::ProviderRevision(Box::new(key.clone())),
         });
     }
+    if let Some(source) = record.source_id {
+        source::require(conn, source)?;
+    }
     let mut capabilities: Vec<&str> = record
         .revision
         .capabilities()
@@ -305,8 +314,8 @@ fn insert_provider_revision(
         .collect();
     conn.execute(
         "INSERT INTO provider_revisions (provider, revision, manifest_sha256, software, \
-         schema_version, publisher, capabilities, line_compatibility, approval, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         schema_version, publisher, capabilities, line_compatibility, approval, source_id, \
+         created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             key.provider().as_str(),
             key.revision().as_str(),
@@ -317,6 +326,7 @@ fn insert_provider_revision(
             json_text(&capabilities)?,
             json_text(&lines)?,
             record.approval,
+            record.source_id.map(|source| source.to_string()),
             now,
         ],
     )

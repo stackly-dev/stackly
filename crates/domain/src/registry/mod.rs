@@ -36,14 +36,17 @@ use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
 
 pub use batch::{Committed, Generation, Versioned, WriteBatch, WriteOp};
 pub use config::{ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson};
-pub use error::{BatchError, RegistryError, ResourceRef};
+pub use error::{BatchError, NotDeletableReason, RegistryError, ResourceRef};
 pub use install::{
     CODES_MAX, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope,
     DependencyManifestJson, SignatureInfoJson,
 };
 pub use path::{InstancePathEntry, InstancePathKind, LogicalRoot, RelativePath};
 pub use query::{InstanceFilter, LeaseFilter, OperationCursor, OperationPage, OperationQuery};
-pub use record::{ArtifactRecord, InstallDetails, ProviderRevisionRecord};
+pub use record::{
+    ArtifactRecord, InstallDetails, ProviderRevisionRecord, ProviderSourceKind,
+    ProviderSourceRecord, ProviderSourceStatus,
+};
 pub use retention::{PruneReport, RetentionPolicy};
 pub use secret::{
     AuditAction, AuditActor, AuditCursor, AuditEventRecord, AuditPage, AuditQuery, AuditResource,
@@ -114,6 +117,18 @@ pub trait Registry: Send + Sync {
         &self,
         key: &ProviderRevisionKey,
     ) -> Result<Versioned<Option<ProviderRevisionRecord>>, RegistryError>;
+
+    /// Returns the provider source with this kind and location, the place
+    /// the loaded catalog came from (spec 0020, K-2 of spec 0017).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn provider_source_by_location(
+        &self,
+        kind: ProviderSourceKind,
+        location: &str,
+    ) -> Result<Versioned<Option<ProviderSourceRecord>>, RegistryError>;
 
     /// Returns an artifact by its digest.
     ///
