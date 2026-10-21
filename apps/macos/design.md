@@ -506,6 +506,14 @@ Checked on macOS 27.0.1 with a probe sheet and real key events (spec 0067 ration
 - `.presentationBackground` draws the sheet opaque, with nothing of the window behind it showing through.
 - Not checked (manual): Tab and Space with Keyboard navigation on, and VoiceOver.
 
+`StacklySheet(title:subtitle:tile:primary:cancel:minWidth:content:)` draws the opaque `surfaceWindow` background, a header, a body, and a fixed footer.
+
+- **Header.** An optional `ProviderTile` at `mediumSize` (40 pt), the title in `.title3.weight(.semibold)`, and the subtitle in `.callout` `textSecondary`. Padding: 20 above, 22 at the sides, 6 below.
+- **Body.** A `ScrollView` with 12 pt above, 22 pt at the sides, 16 pt below, and 16 pt between children. Its height is the height of its content, at most the visible screen height minus 160 pt, so a short sheet does not scroll and a long one scrolls without cutting text. A screen that puts a `Form` in the body sets `.scrollContentBackground(.hidden)` so the sheet background shows and the rows keep their native background.
+- **Footer.** Outside the scroll area: the reason on the left, then Cancel, then the primary action (12 pt above, 22 at the sides, 18 below). The reason is the `DisabledReasonText` of the primary action when it is disabled with a reason, or the gate's reason when the primary action `mutates` and the gate is `.blocked`, because the sheet covers the window banner. When the primary action is busy the footer shows a small spinner next to it and VoiceOver reads the value "In progress".
+- **Buttons.** The primary action is `.borderedProminent` with `.keyboardShortcut(.defaultAction)`; a destructive primary action is `.bordered`, `role: .destructive`, with no shortcut, so Return does nothing there. A disabled or busy primary action does not run on Return. Cancel is `.bordered` with `.keyboardShortcut(.cancelAction)` and stays enabled while the primary action is busy. These are the only two shortcuts the components set. With no `cancel` given, "Cancel" closes the sheet; a screen gives its own `cancel` when it means something else, such as cancelling an operation behind a confirmation. Identifiers: `sheet.cancel` and `sheet.primary`.
+- **Host.** The sheet sets its own `.actionHost()`, so a confirmation raised from inside shows on top of this sheet. A view inside a sheet never sends to the window's `FeedbackCenter`: it shows its result with a `StateBanner`, and the screen that owns the sheet sends feedback after the sheet closed.
+
 ### Checklist
 
 `CheckList(_:layout:)` shows `CheckItem`s: a symbol, the title in `.callout` primary text, the detail in `.subheadline` `textSecondary` wrapped in full (never an ellipsis), and an optional `ActionButton` under the text. A screen wraps it in a `CardSection` (for example "Preflight") and maps its own result (a preflight check, a doctor result) to a `CheckStatus`. This table replaces the preflight status table of spec 0020.
