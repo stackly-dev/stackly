@@ -178,6 +178,48 @@ async fn the_level_follows_every_boundary_of_the_volume_the_data_root_lies_on() 
 }
 
 #[tokio::test]
+async fn checked_at_is_the_clock_when_the_read_finishes_not_when_it_starts() {
+    let ev = evidence!(
+        covers = ["REQ-033"],
+        kind = Kind::Fixture,
+        expected = "a clock moved while a delayed volume read is in flight is the time storage.get_capacity stamps, because checkedAt is read when the read finishes",
+    );
+    let site = FakeSite::new();
+    let _daemon = site.start().await;
+    site.set_volume(20 * GB, 10 * GB);
+    site.fake
+        .fs()
+        .set_delay(FsOp::VolumeSpace, Duration::from_millis(600));
+    let started = site.fake.clock().now();
+
+    let call = tokio::spawn({
+        let client = site.client().await;
+        async move { client.call(Call::StorageGetCapacity).await }
+    });
+    // Well inside the 600 ms the fake volume read sleeps.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    let step = jiff::SignedDuration::from_secs(60);
+    site.fake.clock().advance(step);
+    let Reply::StorageGetCapacity(report) = call
+        .await
+        .expect("the call task ends")
+        .expect("the volume reads")
+    else {
+        panic!("not a capacity reply");
+    };
+
+    assert_eq!(
+        report.checked_at,
+        Timestamp::from_jiff(
+            started
+                .checked_add(step)
+                .expect("a minute later is in range")
+        ),
+    );
+    ev.pass();
+}
+
+#[tokio::test]
 async fn available_above_total_is_held_to_total() {
     let site = FakeSite::new();
     let _daemon = site.start().await;

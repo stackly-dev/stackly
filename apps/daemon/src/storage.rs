@@ -137,18 +137,21 @@ fn spawn_read(
 }
 
 fn read_now(platform: &Platform, data_root: &std::path::Path) -> Outcome {
-    let now = platform.clock().now();
-    capacity(platform.fs(), data_root, now)
-        .map(|reading| report(&reading))
+    // The core copies `now` into the reading unchanged, so the stamp it
+    // carries is the start of the read. `checkedAt` is the end of it (spec
+    // 0022, value sourcing): `report` takes a second reading of the clock.
+    let started = platform.clock().now();
+    capacity(platform.fs(), data_root, started)
+        .map(|reading| report(&reading, Timestamp::from_jiff(platform.clock().now())))
         .map_err(|error| match error {
             CapacityError::Io { kind } => Failure::Io(kind),
             _ => Failure::NoSize,
         })
 }
 
-fn report(reading: &CapacityReading) -> CapacityReport {
+fn report(reading: &CapacityReading, checked_at: Timestamp) -> CapacityReport {
     CapacityReport {
-        checked_at: Timestamp::from_jiff(reading.checked_at),
+        checked_at,
         total_bytes: Count::saturating(reading.total_bytes),
         available_bytes: Count::saturating(reading.available_bytes),
         used_percent: reading.used_percent,
