@@ -1050,6 +1050,8 @@ impl Judge<'_> {
                             subject,
                             CreateError::SecretInvalidValue {
                                 field: field.clone(),
+                                min_length: rule.min_length,
+                                max_length: rule.max_length,
                                 reason,
                             },
                         );
@@ -1069,7 +1071,7 @@ impl Judge<'_> {
                         (Some(SourceFact::Invalid) | None, _) | (_, None) => Some((
                             format!("{text} is not a secret reference."),
                             CreateError::SecretInvalidReference {
-                                field: field.clone(),
+                                reference: text.clone(),
                             },
                         )),
                         (Some(SourceFact::Unregistered), Some(reference)) => Some((

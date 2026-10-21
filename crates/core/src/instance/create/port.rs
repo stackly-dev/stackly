@@ -25,6 +25,17 @@ pub(super) struct Slot {
 }
 
 impl Slot {
+    /// The slot an IP endpoint of an instance occupies.
+    pub(super) fn of(endpoint: &IpEndpoint) -> Self {
+        Self {
+            name: endpoint.name().clone(),
+            transport: endpoint.transport(),
+            host: endpoint.address(),
+            purpose: EndpointPurpose::Client,
+            default_port: None,
+        }
+    }
+
     /// The endpoint as a new instance would hold it with `request`.
     pub(super) fn endpoint(&self, request: PortRequest) -> Endpoint {
         Endpoint::Ip(IpEndpoint::new(

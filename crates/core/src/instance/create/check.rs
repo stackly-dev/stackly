@@ -246,8 +246,8 @@ pub enum CreateError {
     SecretStoreUnsupported,
     /// A source reference does not parse (`secret.invalid_reference`).
     SecretInvalidReference {
-        /// The secret field.
-        field: String,
+        /// The text of the reference.
+        reference: String,
     },
     /// A source reference is not registered (`secret.not_found`).
     SecretNotFound {
@@ -263,6 +263,10 @@ pub enum CreateError {
     SecretInvalidValue {
         /// The secret field.
         field: String,
+        /// Its fewest characters.
+        min_length: u64,
+        /// Its most characters.
+        max_length: Option<u64>,
         /// Which rule.
         reason: InvalidValueReason,
     },

@@ -301,7 +301,10 @@ fn remove_failed(error: &CoreError) -> CompensationError {
 /// skipped; the ordinary path (a create that stopped before `init`) never
 /// calls `probe_lock`. An error from either call is `lock_probe_failed`, and
 /// anything but `Free` is `instance_locked`; both leave the tree alone.
-fn check_instance_lock(platform: &Platform, lock: &Path) -> Result<(), CompensationError> {
+pub(crate) fn check_instance_lock(
+    platform: &Platform,
+    lock: &Path,
+) -> Result<(), CompensationError> {
     let probe_failed =
         |error: &dyn fmt::Display| CompensationError::new(LOCK_PROBE_FAILED, error.to_string());
     match platform.fs().symlink_metadata(lock) {

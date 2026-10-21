@@ -78,6 +78,8 @@ fn a_value_that_breaks_the_rules_of_its_field_is_secret_invalid_value() {
         evaluation.first_error().cloned(),
         Some(CreateError::SecretInvalidValue {
             field: "authToken".to_owned(),
+            min_length: 1,
+            max_length: Some(256),
             reason: InvalidValueReason::Length
         })
     );
@@ -101,6 +103,8 @@ fn a_value_that_breaks_the_rules_of_its_field_is_secret_invalid_value() {
         evaluation.first_error().cloned(),
         Some(CreateError::SecretInvalidValue {
             field: "superuserPassword".to_owned(),
+            min_length: 8,
+            max_length: Some(128),
             reason: InvalidValueReason::ControlCharacters
         })
     );

@@ -230,6 +230,9 @@ pub struct FaultyRegistry {
     read_faults: Mutex<Vec<stackly_domain::RegistryError>>,
     /// Holds the next commit that records a crash until the test opens it.
     crash_hold: Mutex<Option<Arc<Hold>>>,
+    /// How many commits that insert an instance still answer a generation
+    /// conflict.
+    insert_conflicts: Mutex<usize>,
     /// Holds the next commit that moves an operation of a kind to a stage.
     stage_hold: Mutex<Option<(stackly_domain::OperationKind, &'static str, Arc<Hold>)>>,
 }
@@ -331,6 +334,17 @@ impl FaultyRegistry {
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = Some((kind, stage, Arc::clone(&hold)));
         hold
+    }
+
+    /// Makes the next `count` commits that insert an instance fail with a
+    /// generation conflict. Only the `create_operation` tests, which share
+    /// this file, call it.
+    #[allow(dead_code)]
+    pub fn conflict_instance_inserts(&self, count: usize) {
+        *self
+            .insert_conflicts
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = count;
     }
 
     pub fn refuse_process_observations(&self, refuse: bool) {
@@ -437,6 +451,30 @@ impl Registry for FaultyRegistry {
         };
         if let Some((_, _, hold)) = held_stage {
             hold.pass();
+        }
+        if batch
+            .ops
+            .iter()
+            .any(|op| matches!(op, WriteOp::InsertInstance(_)))
+        {
+            let mut left = self
+                .insert_conflicts
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if *left > 0 {
+                *left -= 1;
+                let actual = self
+                    .inner
+                    .known_instance_ids()
+                    .map(|known| known.generation)
+                    .unwrap_or(stackly_domain::Generation::ZERO);
+                return Err(BatchError::batch(
+                    stackly_domain::RegistryError::GenerationConflict {
+                        expected: batch.expected_generation.unwrap_or(actual),
+                        actual,
+                    },
+                ));
+            }
         }
         if records_crash {
             let hold = self
@@ -598,6 +636,7 @@ impl Rig {
             hold: Mutex::new(None),
             read_faults: Mutex::new(Vec::new()),
             crash_hold: Mutex::new(None),
+            insert_conflicts: Mutex::new(0),
             stage_hold: Mutex::new(None),
         });
         let redactor = Arc::new(Redactor::new());
