@@ -39,7 +39,7 @@ _Dijalankan ulang oleh `chk-f67-m1` (checker, bukan penulis kode) pada 2026-10-2
 - [x] `swift test --package-path clients/swift` → 48 test `StacklyTestSupportTests` (satu known issue lama) dan 154 test `StacklyClientTests` lulus → tidak ada regresi (diulang checker: 154 test di 24 suite lulus)
 - [x] `cargo xtask build-app` → `BUILD SUCCEEDED`, `target/xcode/Build/Products/Debug/Stackly.app` → AC-20 (diulang checker dengan `CARGO_INCREMENTAL=0`: lulus)
 - [x] `xcrun swift-format lint --recursive apps/macos/Packages/StacklyUI` → tanpa peringatan (diulang checker: exit 0)
-- [ ] `NOT_RUN` · `cargo xtask evidence check` → dijalankan lead setelah merge
+- [x] `cargo xtask evidence check` → dijalankan lead setelah merge _Hasil `chk-f67-verify` 2026-10-21 di `main` `f3e80b5`: `evidence check: 44 manual record(s), baseline valid, 579 Rust and 300 Swift file(s) follow the rules`, exit 0_
 
 ### Acceptance-criteria coverage
 
@@ -198,3 +198,44 @@ _Dibangun 2026-10-21 oleh `dev-f67-m1` (dipakai ulang sebagai `dev-f67-m4`) di b
 - AC-20 (galeri) · bagian LogView dan DiffView dan tiga `#Preview` per komponen; dengan milestone 1 dan 2 halaman memuat semua kecuali Inspector (milestone 3)
 - AC-1 · bagian "Components" di `design.md` kini memuat Log (tabel level, aturan follow) dan Diff (tabel jenis)
 - Penyimpangan kecil dari spec, tercatat di `design.md`: kolom waktu dan sumber hanya digambar bila ada baris yang memilikinya; padding horizontal 14 baris log datang dari `.consoleSurface()` yang dipasang sebagai latar `ScrollView` (padding atas dan bawah 12 lewat `contentMargins`), bukan sebagai padding tambahan per baris
+
+## Hasil `/check verify` penuh (chk-f67-verify, 2026-10-21): BLOCKED, tanpa FAIL
+
+_Verify penuh fitur 67 (`Build it` dan `Verify it`) di `main` `f3e80b5`, setelah F68 milestone 1 dan 3 serta F69 milestone 2 masuk. Semua langkah yang bisa dijalankan tanpa layar lulus, dan tidak ada langkah yang gagal. Verdict BLOCKED karena langkah UI hidup tidak bisa diulang (layar Mac terkunci), langkah manual menunggu user, dan beberapa langkah menunggu layar fase 02. Log di scratchpad sesi `chk-f67-verify`._
+
+Commands (dijalankan ulang di branch ini):
+
+- `swift test --package-path apps/macos/Packages/StacklyUI` dengan `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN` dari checkout utama → 607 test di 65 suite lulus, 10 known issues, tanpa kegagalan; `SkeletonEndToEndTests` tidak gagal kali ini. Termasuk `ShellStructureTests` (kabel `AppShell` tetap: `.feedbackPresenter()` di `AppShell.swift:99`, `onGeometryChange` dan `.environment(\.stacklyWindowWidth` di `:107` dan `:112`, `.actionHost()` di `:120` tepat sebelum `.environment(\.mutationAvailability` di `:121`; `LiveShell.swift:13` membuat satu `FeedbackCenter`) dan `GallerySnapshotTests` (`componentsBasePage`, `componentsSheetPage`, `componentsInspectorPage`, `componentsLogPage` lulus terhadap referensi F68). Log: `full-ui.log`.
+- `swift test --package-path clients/swift` → 48 test di 6 suite (satu known issue lama) dan 154 test di 24 suite lulus. Log: `client.log`.
+- `cargo xtask build-app` → `BUILD SUCCEEDED`, `target/xcode/Build/Products/Debug/Stackly.app`. Log: `build-app.log`.
+- `cargo xtask evidence check` → 44 catatan manual, baseline valid, 579 file Rust dan 300 file Swift mengikuti aturan. Log: `evidence.log`.
+- `xcrun swift-format lint --strict` atas `Components/`, `Shell/`, dan file StacklyUI yang berubah sejak `9f0928d` → tanpa peringatan.
+- Cek sumber AC-1 dan AC-20: bagian "Components" di `apps/macos/design.md` punya dua belas subbagian (Tile sampai Diff) dengan tabel *Status checklist*, *Pemetaan operasi ke tahap*, dan *Teks progress*, tanpa sisa "Filled by milestone"; tidak ada `provisional: F67` di sumber; lima belas file komponen masing masing punya tiga `#Preview`; `AccessibilityID.swift` memuat setiap nilai di tabel *Accessibility identifier*.
+
+Perubahan di jalur langkah yang sudah `[x]` setelah dicentang: F68 mengubah galeri (`GalleryPageLayout` dengan `galleryScrollsPage`, bawaan `true`; tanggal sampel ke `FixtureClock.now`; identifier topik galeri) dan `AppShell.swift` (identifier baris sidebar). Tidak ada yang mengubah isi halaman Components atau kabel umpan balik dan inspector di app. Langkah UI galeri tidak bisa diulang hidup: layar Mac terkunci (`CGSSessionScreenIsLocked` dan `IOConsoleLocked` `true`, diawasi 15 menit), app Debug yang dibuka dengan `STACKLY_ROOT` sementara tidak punya jendela di pohon AX (`AXWindows` hanya berisi elemen `AXApplication`), lalu ditutup. Centang lama dipertahankan berdasarkan bukti di atas (snapshot keempat bagian Components lulus, kabel shell lulus test sumber).
+
+BLOCKED dengan `reason` dan `owner`:
+
+- Tambahan langkah 14, cek hidup menyusutkan jendela dari 1000 pt atau lebih ke 900 pt dengan inspector 360 pt · reason: layar Mac terkunci selama sesi · owner: lead (ulangi saat layar terbuka; probe di scratchpad `chk-f67-m3` bisa dipakai lagi).
+- Milestone 1, daemon dimatikan lalu aksi mutasi ditekan memunculkan kartu `caution` di layar sungguhan · reason: belum ada layar yang memakai `Feedback.outcome` · owner: fitur 22 (aksi di Instances), juga 18 dan 20.
+- Milestone 1, penempatan kartu umpan balik di jendela utama `LiveShell` · reason: sama · owner: fitur 22.
+- Milestone 2, sheet yang isinya lebih tinggi dari layar dikurangi 160 pt · reason: galeri tidak punya isi sepanjang itu · owner: fitur 20 (sheet create).
+- Milestone 3, jendela 900 pt dengan sidebar dan inspector terbuka di layar sungguhan · reason: layar belum dibangun · owner: fitur 22, 18, dan 21.
+
+`NOT_RUN` milik user, tercakup `docs/manual.md`:
+
+- I.1 sampai I.4: Differentiate Without Color, Increase Contrast, Reduce Transparency, dan Reduce Motion di halaman Components (milestone 1 sampai 4, AC-19).
+- J.2: Tab dan Space ke setiap tombol komponen, sheet, checklist, dan toggle inspector; fokus di Dismiss menahan kartu `positive` (separuh fokus langkah hold milestone 1).
+- J.3: VoiceOver untuk key value, Copy, konsol, tombol sibuk, umpan balik, checklist, progress, toggle dan header inspector, diff, dan alasan di menu More.
+
+`NOT_RUN` yang belum tercakup `docs/manual.md` bagian I atau J (usulan tambahan untuk lead):
+
+- Milestone 1: VoiceOver membacakan subtitle setelah `MenuReasonPath.current` diubah ke `.subtitle` (butuh ubah kode sementara; AC-8 sudah terpenuhi lewat jalur item nonaktif tambahan, jadi langkah ini opsional).
+- Milestone 1 sampai 4: light dan dark pada halaman Components dan sheet atau inspector asli (I.2 hanya menyebut Dark sebagai opsional, tidak untuk Components).
+- Milestone 2: Reduce Motion, nilai bar `StagedProgress` tidak dianimasikan (I.4 hanya menyebut kartu umpan balik).
+- Milestone 2: VoiceOver membacakan alasan di footer sheet, dan `announcesStages` mengucapkan judul tahap sekali saat berganti (tidak saat view pertama muncul).
+- Milestone 2: Narrow Width 640 pt, pembungkusan tahap dan checklist adaptif turun ke satu kolom tidak terlihat karena kartu sampel galeri tetap 560 pt; hanya terbukti lewat `StagedProgressTests` dan `CheckListTests`. Ini bukan langkah user; perlu keputusan lead (terima lewat test, atau sampel galeri yang lebih sempit).
+- Milestone 3: VoiceOver membaca `InspectorPlaceholder` sebagai satu kelompok (judul lalu pesan); Reduce Motion dan Increase Contrast pada inspector asli (I.3 hanya menyebut Reduce Transparency).
+- Milestone 4: gulir sungguhan dengan mouse atau trackpad di log live mematikan Follow (AC-16); Tab dan Space ke Add Line dan Follow serta teks log dan diff bisa dipilih per baris; VoiceOver membaca baris log "{waktu}, {sumber}, {Error | Warning}: {teks}"; Differentiate Without Color untuk simbol warning dan error di log (I.1 hanya menyebut kartu umpan balik, checklist, dan diff) dan permukaan konsol opak saat Reduce Transparency.
+
+Cakupan AC: AC-1 sampai AC-21 masing masing tercakup minimal satu langkah yang lulus (test, pohon AX, atau galeri); bagian yang hanya bisa dibuktikan lewat Keyboard navigation, VoiceOver, setting sistem, atau layar fase 02 tercatat di atas.
