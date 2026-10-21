@@ -97,7 +97,7 @@ Kumpulan view SwiftUI yang dipakai ulang oleh semua layar journey, supaya tiap l
   - [x] Inspector: the macOS 27 inspector check, `.stacklyInspector`, `InspectorToggle`, `InspectorHeader`, and `InspectorPlaceholder`, plus the inspector width cap below a 1000 pt window (spec 0067 AC-18 to AC-20; build step 14 and its 2026-10-21 addition; after milestone 1; needed by feature 18 milestone 4, feature 21 milestone 3, and feature 22 milestone 3 in `02-instalasi-pertama.md`, and by the feature 69 inspector command; can run in parallel with milestones 2 and 4)
   - [x] Log and diff views: `LogView` with follow and `DiffView` (spec 0067 AC-16, AC-17, AC-19, AC-20; build steps 15 to 17; after milestone 1; needed by features 27 and 29 in `04-kerja-harian.md`; can run in parallel with milestones 2 and 3)
 - [ ] Verify it: `/check verify komponen dasar Stackly`
-- [ ] Test it: `/test komponen dasar Stackly`
+- [x] Test it: `/test komponen dasar Stackly`
 
 ### 68. Fixture tampilan & cek visual · in-progress
 
