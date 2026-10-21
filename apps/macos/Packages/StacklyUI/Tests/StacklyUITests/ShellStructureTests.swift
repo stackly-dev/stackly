@@ -131,4 +131,38 @@ struct ShellStructureTests {
         )
         #expect(CloseNotice.displayDuration == .seconds(4))
     }
+
+    // MARK: - Feedback and actions (spec 0067, AC-11)
+
+    /// The code of a shell file, as one string, with line comments cut off.
+    private func shellCode(_ name: String) throws -> String {
+        let path = "apps/macos/Packages/StacklyUI/Sources/StacklyUI/Shell/" + name
+        return SourceFile(
+            path: path, text: try String(contentsOf: SourceTree.url(of: path), encoding: .utf8)
+        )
+        .codeLines.joined(separator: "\n")
+    }
+
+    @Test func theShellShowsTheFeedbackCardInTheDetailColumn() throws {
+        let code = try shellCode("AppShell.swift")
+        let detail = try #require(code.range(of: "} detail: {"))
+        let presenter = try #require(code.range(of: ".feedbackPresenter()"))
+        let width = try #require(code.range(of: "min: Self.contentMinWidth"))
+        #expect(detail.lowerBound < presenter.lowerBound, "the presenter is in the detail column")
+        #expect(presenter.lowerBound < width.lowerBound, "and before the column width modifier")
+    }
+
+    @Test func theShellHoldsTheActionHostInsideTheGateItReads() throws {
+        let code = try shellCode("AppShell.swift")
+        let host = try #require(code.range(of: ".actionHost()"))
+        let gate = try #require(code.range(of: ".environment(\\.mutationAvailability"))
+        #expect(host.lowerBound < gate.lowerBound, "the host sits inside the gate it reads")
+    }
+
+    @Test func theLiveShellCreatesOneFeedbackCenterAndPutsItInTheEnvironment() throws {
+        let code = try shellCode("LiveShell.swift")
+        #expect(code.components(separatedBy: "FeedbackCenter()").count == 2, "exactly one")
+        #expect(code.contains("@State private var feedbackCenter = FeedbackCenter()"))
+        #expect(code.contains(".environment(\\.feedbackCenter, feedbackCenter)"))
+    }
 }

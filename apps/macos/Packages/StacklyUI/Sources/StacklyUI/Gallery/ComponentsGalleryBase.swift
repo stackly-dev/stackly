@@ -12,6 +12,7 @@
             ConsoleGallerySection()
             ActionButtonGallerySection()
             ActionMenuGallerySection()
+            FeedbackGallerySection()
         }
     }
 
@@ -209,6 +210,68 @@
                 }
             }
             .actionHost()
+        }
+    }
+
+    // MARK: - Feedback
+
+    /// The FeedbackCard section: a card per tone, with detail and code, with an action, and
+    /// with a long message, then a live demo of the presenter.
+    struct FeedbackGallerySection: View {
+        var body: some View {
+            GallerySection(
+                "FeedbackCard",
+                note: "An opaque card under the page. Caution, critical, and any card with an "
+                    + "action stay until dismissed; the others go after a few seconds, but not "
+                    + "while the pointer is over the card, keyboard focus is in it, or the app "
+                    + "is in the background."
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.s8) {
+                    ForEach(ComponentSamples.feedbacks) { feedback in
+                        FeedbackCard(feedback: feedback, center: FeedbackCenter())
+                    }
+                    FeedbackLiveDemo()
+                }
+            }
+            .actionHost()
+        }
+    }
+
+    /// Buttons that send feedback to a center of their own, and a small area with the
+    /// presenter, to try the timing, hover, and focus rules by hand.
+    private struct FeedbackLiveDemo: View {
+        @State private var center = FeedbackCenter()
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: Spacing.s8) {
+                HStack(spacing: Spacing.s8) {
+                    Button("Success") { center.show(.success("Instance started.")) }
+                    Button("Started") { center.show(.started("Installing PostgreSQL 18.1.")) }
+                    Button("Not Sent") {
+                        center.show(
+                            Feedback.outcome(
+                                .notSent(ClientErrorCatalog.notConnected()), success: nil,
+                                showOperations: nil) ?? .neutral(""))
+                    }
+                    Button("Unknown Outcome") {
+                        center.show(
+                            Feedback.outcome(
+                                .outcomeUnknown(ClientErrorCatalog.notConnected(), key: "k"),
+                                success: nil, showOperations: {}) ?? .neutral(""))
+                    }
+                }
+                Color.clear
+                    .frame(height: 150)
+                    .environment(\.feedbackCenter, center)
+                    .feedbackPresenter()
+                    .background(StacklyColor.surfaceWindow)
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.medium.value))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: Radius.medium.value)
+                            .strokeBorder(Color(nsColor: .separatorColor))
+                    }
+            }
+            .environment(\.feedbackCenter, center)
         }
     }
 #endif

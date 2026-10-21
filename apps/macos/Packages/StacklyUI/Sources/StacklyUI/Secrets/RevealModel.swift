@@ -226,14 +226,8 @@ public final class RevealModel {
         case .notSent: "Couldn’t reach stacklyd. Nothing was revealed."
         case .outcomeUnknown: "stacklyd didn’t answer in time. Nothing is shown."
         case .rejected(let body):
-            sentence(body.message) + (body.hint.map { " " + sentence($0) } ?? "")
+            DaemonText.sentence(body.message)
+                + (body.hint.map { " " + DaemonText.sentence($0) } ?? "")
         }
-    }
-
-    /// `text` with a capital first letter and a final period.
-    static func sentence(_ text: String) -> String {
-        guard let first = text.first else { return text }
-        let capitalized = first.uppercased() + text.dropFirst()
-        return capitalized.hasSuffix(".") ? capitalized : capitalized + "."
     }
 }

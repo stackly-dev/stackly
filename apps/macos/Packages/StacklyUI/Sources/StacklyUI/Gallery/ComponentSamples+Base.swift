@@ -129,5 +129,31 @@
             [busyAction, unsupportedAction],
             [removeAction],
         ]
+
+        // MARK: - Feedback
+
+        /// One feedback per tone (mockup copy), then a failure with detail and code, one
+        /// with an action, and one with a long message.
+        static let feedbacks: [Feedback] = [
+            .success("PostgreSQL 17.4 installed and verified."),
+            .started("Installing PostgreSQL 18.1. Staged, verified, then committed."),
+            .neutral("Install cancelled."),
+            Feedback(tone: .caution, message: MutationFeedback.notSent),
+            .failure(
+                ErrorBody(
+                    code: "instance.port_in_use", category: .conflict,
+                    message: "port 5432 is already in use", retryable: false, resource: nil,
+                    fields: nil, hint: "choose another port or stop the process that holds it",
+                    details: nil, operationId: nil, rule: nil, items: nil)),
+            Feedback(
+                tone: .caution, message: MutationFeedback.outcomeUnknown,
+                action: StacklyAction(
+                    id: "gallery.showOperations", title: "Show Operations", mutates: false,
+                    perform: {})),
+            .success(
+                "Backup of “pg17-dev” finished. The archive holds the data directory and the "
+                    + "configuration, and its digest was verified against the manifest.",
+                detail: "Find it under Backups in the instance, or copy its path from the row."),
+        ]
     }
 #endif

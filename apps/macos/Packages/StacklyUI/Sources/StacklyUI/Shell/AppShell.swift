@@ -4,10 +4,12 @@ import SwiftUI
 /// The main window's content: the sidebar with its sections, badges, and daemon footer,
 /// the one daemon banner above every page, and the selected page.
 ///
-/// It sets ``MutationAvailability`` for everything inside from the presentation, captures
-/// the scene's `openWindow` action into the ``WindowOpener``, and reports when the main
-/// window is about to close. The sidebar selection is restored per window by the system
-/// (`@SceneStorage`), Overview by default.
+/// It sets ``MutationAvailability`` for everything inside from the presentation, holds the
+/// one ``ActionHost`` of the window (so a confirmation shows once), shows the feedback card
+/// of the window's ``FeedbackCenter`` under the page, captures the scene's `openWindow`
+/// action into the ``WindowOpener``, and reports when the main window is about to close. The
+/// sidebar selection is restored per window by the system (`@SceneStorage`), Overview by
+/// default.
 public struct AppShell: View {
     /// The smallest window content size (spec 0013).
     static let minimumSize = CGSize(width: 900, height: 600)
@@ -85,12 +87,16 @@ public struct AppShell: View {
                 .safeAreaInset(edge: .top, spacing: 0) {
                     bannerArea
                 }
+                .feedbackPresenter()
                 .navigationSplitViewColumnWidth(
                     min: Self.contentMinWidth,
                     ideal: Self.contentIdealWidth
                 )
         }
         .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
+        // The host reads the gate from the environment it sits in, so it goes before
+        // (inside) the line that sets it.
+        .actionHost()
         .environment(\.mutationAvailability, presentation.mutationAvailability)
         .background(MainWindowAccessor(windowWillClose: windowWillClose))
         .onAppear {
