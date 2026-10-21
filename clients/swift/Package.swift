@@ -12,10 +12,15 @@ let package = Package(
     targets: [
         // No MainActor default isolation: socket IO runs off the main actor.
         .target(name: "StacklyClient"),
+        // The record format, argument rules, and record writer shared by the Swift Testing
+        // trait and the XCTest helper (spec 0068). Internal: no product exposes it.
+        .target(name: "StacklyEvidenceCore"),
         // Evidence records for Swift tests (spec 0002). Only test targets depend on it.
-        .target(name: "StacklyTestSupport"),
+        .target(name: "StacklyTestSupport", dependencies: ["StacklyEvidenceCore"]),
         .testTarget(
             name: "StacklyClientTests", dependencies: ["StacklyClient", "StacklyTestSupport"]),
-        .testTarget(name: "StacklyTestSupportTests", dependencies: ["StacklyTestSupport"]),
+        .testTarget(
+            name: "StacklyTestSupportTests",
+            dependencies: ["StacklyTestSupport", "StacklyEvidenceCore"]),
     ]
 )

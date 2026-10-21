@@ -1,29 +1,31 @@
 import Foundation
 
-extension Evidence {
-    /// Whether a test needs only fakes and fixtures, or a real provider runtime
-    /// or something only a macOS 27 Mac has.
-    public enum Kind: String, Codable, Sendable {
-        /// Fakes, mocks, dummy servers, fake providers, or contract fixtures.
-        case fixture
-        /// A real provider binary, or something only a macOS 27 Mac has. Only
-        /// test targets whose name ends with `NativeTests` use it.
-        case native
-    }
+/// Whether a test needs only fakes and fixtures, or a real provider runtime
+/// or something only a macOS 27 Mac has.
+///
+/// `EvidenceKind` in `StacklyTestSupport` is this type.
+public enum EvidenceKind: String, Codable, Sendable {
+    /// Fakes, mocks, dummy servers, fake providers, or contract fixtures.
+    case fixture
+    /// A real provider binary, or something only a macOS 27 Mac has. Only
+    /// test targets whose name ends with `NativeTests` use it.
+    case native
+}
 
-    /// Where a provider or runtime under test came from.
-    public enum Source: String, Codable, Sendable {
-        /// A runtime Stackly installs and owns.
-        case managed
-        /// A runtime found on the system, such as a Homebrew one.
-        case external
-        /// A fake or fixture. A native test never uses it.
-        case fixture
-    }
+/// Where a provider or runtime under test came from.
+///
+/// `EvidenceSource` in `StacklyTestSupport` is this type.
+public enum EvidenceSource: String, Codable, Sendable {
+    /// A runtime Stackly installs and owns.
+    case managed
+    /// A runtime found on the system, such as a Homebrew one.
+    case external
+    /// A fake or fixture. A native test never uses it.
+    case fixture
 }
 
 /// The status of a record (PRD section 28).
-enum Status: String, Codable, Sendable {
+package enum Status: String, Codable, Sendable {
     case notRun = "NOT_RUN"
     case pass = "PASS"
     case fail = "FAIL"
@@ -32,13 +34,13 @@ enum Status: String, Codable, Sendable {
 }
 
 /// Whether a record comes from a test run or from a reviewer.
-enum Method: String, Codable, Sendable {
+package enum Method: String, Codable, Sendable {
     case automated
     case manual
 }
 
 /// The language a test is written in, or `manual` for a review.
-enum Language: String, Codable, Sendable {
+package enum Language: String, Codable, Sendable {
     case rust
     case swift
     case manual
@@ -46,17 +48,30 @@ enum Language: String, Codable, Sendable {
 
 /// The identity of a test, `(language, package, target, name)`, plus where it
 /// lives. A Swift test has no package.
-struct TestIdentity: Codable, Equatable, Sendable {
-    var language: Language
-    var package: String?
-    var target: String?
-    var name: String
-    var file: String?
-    var line: Int?
+package struct TestIdentity: Codable, Equatable, Sendable {
+    package var language: Language
+    package var package: String?
+    package var target: String?
+    package var name: String
+    package var file: String?
+    package var line: Int?
+
+    /// Creates the identity of a test.
+    package init(
+        language: Language, package: String?, target: String?, name: String, file: String?,
+        line: Int?
+    ) {
+        self.language = language
+        self.package = package
+        self.target = target
+        self.name = name
+        self.file = file
+        self.line = line
+    }
 
     /// Writes every field, with `null` for a missing value, the same shape the
     /// Rust writer produces.
-    func encode(to encoder: any Encoder) throws {
+    package func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(language, forKey: .language)
         try container.encode(package, forKey: .package)
@@ -68,14 +83,22 @@ struct TestIdentity: Codable, Equatable, Sendable {
 }
 
 /// One provider or runtime a test ran against.
-struct Subject: Codable, Equatable, Sendable {
-    var provider: String
-    var version: String
-    var digest: String?
-    var source: Evidence.Source
+package struct Subject: Codable, Equatable, Sendable {
+    package var provider: String
+    package var version: String
+    package var digest: String?
+    package var source: EvidenceSource
+
+    /// Creates a subject.
+    package init(provider: String, version: String, digest: String?, source: EvidenceSource) {
+        self.provider = provider
+        self.version = version
+        self.digest = digest
+        self.source = source
+    }
 
     /// Writes every field, with `null` for a missing digest.
-    func encode(to encoder: any Encoder) throws {
+    package func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(provider, forKey: .provider)
         try container.encode(version, forKey: .version)
@@ -90,31 +113,57 @@ struct Subject: Codable, Equatable, Sendable {
 /// shared examples in `schemas/evidence/examples/` keep this hand written
 /// `Codable` in step with them. Unknown fields, such as the `context` of a
 /// report record, are ignored when decoding.
-struct Record: Codable, Equatable, Sendable {
+package struct Record: Codable, Equatable, Sendable {
     /// The `schema` value of every record.
-    static let schemaName = "stackly.evidence/v1"
+    package static let schemaName = "stackly.evidence/v1"
     /// `actual` of a Swift `PASS` when the test set no observed value.
-    static let defaultActual = "all expectations passed"
+    package static let defaultActual = "all expectations passed"
     /// `evidencePath` of an automated Swift record, relative to the run folder.
-    static let outputLog = "output.log"
+    package static let outputLog = "output.log"
 
-    var schema: String
-    var id: UUID
-    var covers: [String]
-    var kind: Evidence.Kind
-    var method: Method
-    var test: TestIdentity
-    var status: Status
-    var expected: String
-    var actual: String?
-    var reason: String?
-    var owner: String?
-    var subjects: [Subject]
-    var steps: [String]?
-    var reviewer: String?
-    var startedAt: Date
-    var finishedAt: Date?
-    var evidencePath: String
+    package var schema: String
+    package var id: UUID
+    package var covers: [String]
+    package var kind: EvidenceKind
+    package var method: Method
+    package var test: TestIdentity
+    package var status: Status
+    package var expected: String
+    package var actual: String?
+    package var reason: String?
+    package var owner: String?
+    package var subjects: [Subject]
+    package var steps: [String]?
+    package var reviewer: String?
+    package var startedAt: Date
+    package var finishedAt: Date?
+    package var evidencePath: String
+
+    /// Creates a record from every field.
+    package init(
+        schema: String, id: UUID, covers: [String], kind: EvidenceKind, method: Method,
+        test: TestIdentity, status: Status, expected: String, actual: String?, reason: String?,
+        owner: String?, subjects: [Subject], steps: [String]?, reviewer: String?,
+        startedAt: Date, finishedAt: Date?, evidencePath: String
+    ) {
+        self.schema = schema
+        self.id = id
+        self.covers = covers
+        self.kind = kind
+        self.method = method
+        self.test = test
+        self.status = status
+        self.expected = expected
+        self.actual = actual
+        self.reason = reason
+        self.owner = owner
+        self.subjects = subjects
+        self.steps = steps
+        self.reviewer = reviewer
+        self.startedAt = startedAt
+        self.finishedAt = finishedAt
+        self.evidencePath = evidencePath
+    }
 
     private enum CodingKeys: String, CodingKey {
         case schema, id, covers, kind, method, test, status, expected, actual, reason, owner
@@ -126,12 +175,12 @@ extension Record {
     /// Reads a record written by Rust, Swift, or a reviewer. Missing optional
     /// fields read as null and missing `subjects` as an empty list, like the
     /// serde defaults on the Rust side.
-    init(from decoder: any Decoder) throws {
+    package init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schema = try container.decode(String.self, forKey: .schema)
         id = try container.decode(UUID.self, forKey: .id)
         covers = try container.decode([String].self, forKey: .covers)
-        kind = try container.decode(Evidence.Kind.self, forKey: .kind)
+        kind = try container.decode(EvidenceKind.self, forKey: .kind)
         method = try container.decode(Method.self, forKey: .method)
         test = try container.decode(TestIdentity.self, forKey: .test)
         status = try container.decode(Status.self, forKey: .status)
@@ -149,7 +198,7 @@ extension Record {
 
     /// Writes every field in camelCase, with `null` for a missing value, a
     /// lowercase UUID like Rust writes, and RFC 3339 UTC timestamps.
-    func encode(to encoder: any Encoder) throws {
+    package func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(schema, forKey: .schema)
         try container.encode(id.uuidString.lowercased(), forKey: .id)
@@ -172,7 +221,7 @@ extension Record {
 
     /// Encodes the record as pretty JSON with a final newline, the way it is
     /// written to `records/<id>.json`.
-    func jsonData() throws -> Data {
+    package func jsonData() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         var data = try encoder.encode(self)
@@ -182,7 +231,7 @@ extension Record {
 }
 
 /// RFC 3339 timestamps in UTC, such as `2026-10-18T08:21:40.112Z`.
-enum RFC3339 {
+package enum RFC3339 {
     private static let parser = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static let wholeSeconds = Date.ISO8601FormatStyle()
 
@@ -190,7 +239,7 @@ enum RFC3339 {
     ///
     /// `ISO8601FormatStyle` truncates the fraction, and a parsed `.112` is
     /// stored as slightly less than that, so it would come back as `.111`.
-    static func string(from date: Date) -> String {
+    package static func string(from date: Date) -> String {
         let milliseconds = (date.timeIntervalSince1970 * 1000).rounded()
         let seconds = (milliseconds / 1000).rounded(.down)
         let fraction = Int(milliseconds - seconds * 1000)
@@ -199,12 +248,12 @@ enum RFC3339 {
     }
 
     /// Parses a UTC timestamp with or without fractional seconds.
-    static func date(from text: String) -> Date? {
+    package static func date(from text: String) -> Date? {
         try? parser.parse(text)
     }
 
     /// Decodes the timestamp stored under `key`.
-    static func decode<Key: CodingKey>(
+    package static func decode<Key: CodingKey>(
         forKey key: Key, in container: KeyedDecodingContainer<Key>
     ) throws -> Date {
         let text = try container.decode(String.self, forKey: key)
@@ -218,7 +267,7 @@ enum RFC3339 {
 
     /// Decodes the timestamp stored under `key`, or nil when it is null or
     /// missing.
-    static func decodeIfPresent<Key: CodingKey>(
+    package static func decodeIfPresent<Key: CodingKey>(
         forKey key: Key, in container: KeyedDecodingContainer<Key>
     ) throws -> Date? {
         guard container.contains(key), try !container.decodeNil(forKey: key) else {
@@ -231,7 +280,7 @@ enum RFC3339 {
 extension UUID {
     /// A version 7 UUID: the Unix time in milliseconds in the first 48 bits,
     /// then random bits, so IDs sort by creation time like the Rust ones.
-    static func version7(at date: Date = Date()) -> UUID {
+    package static func version7(at date: Date = Date()) -> UUID {
         let milliseconds = UInt64(max(0, date.timeIntervalSince1970 * 1000))
         // Start from a random version 4 UUID: its variant bits are already
         // the RFC 9562 ones, and its other bits stay random.

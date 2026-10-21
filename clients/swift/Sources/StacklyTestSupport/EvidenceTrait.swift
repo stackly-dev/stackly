@@ -1,4 +1,5 @@
 import Foundation
+import StacklyEvidenceCore
 public import Testing
 
 /// The evidence trait of a test that proves PRD IDs. Create it with the

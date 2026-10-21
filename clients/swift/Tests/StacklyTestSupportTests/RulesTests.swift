@@ -1,5 +1,6 @@
 import Testing
 
+@testable import StacklyEvidenceCore
 @testable import StacklyTestSupport
 
 /// The same pattern checks the Rust rules in `stackly-evidence` apply.

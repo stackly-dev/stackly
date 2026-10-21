@@ -1,12 +1,12 @@
 /// The pattern checks the Rust rules in `stackly-evidence` also apply, so a
 /// wrong argument fails the test on a laptop instead of only in a run.
-enum Rules {
+package enum Rules {
     /// The prefixes a PRD ID may carry.
     private static let prdPrefixes: Set<Substring> = ["AC", "REQ", "NFR", "VAL", "BR"]
 
     /// True when `id` matches `^(AC|REQ|NFR|VAL|BR)-[0-9]{3}$`, for example
     /// `AC-011` or `NFR-005`.
-    static func isPRDID(_ id: String) -> Bool {
+    package static func isPRDID(_ id: String) -> Bool {
         guard let dash = id.firstIndex(of: "-") else {
             return false
         }
@@ -18,7 +18,7 @@ enum Rules {
     /// True when `version` is exact, matching
     /// `^[0-9]+(\.[0-9]+)+([+-][0-9A-Za-z.]+)?$`: `17.4` and `8.4.6+build.1`
     /// pass, selectors such as `17`, `@17`, or `^17` do not.
-    static func isExactVersion(_ version: String) -> Bool {
+    package static func isExactVersion(_ version: String) -> Bool {
         let bytes = Array(version.utf8)
         let split = bytes.firstIndex { $0 == UInt8(ascii: "+") || $0 == UInt8(ascii: "-") }
         let core = bytes[..<(split ?? bytes.endIndex)]
@@ -35,14 +35,14 @@ enum Rules {
 
     /// True when `digest` is a SHA-256 written as 64 lowercase hex characters
     /// with no prefix, the same form as `sha256` in the runtime inventory.
-    static func isSHA256Hex(_ digest: String) -> Bool {
+    package static func isSHA256Hex(_ digest: String) -> Bool {
         digest.utf8.count == 64
             && digest.utf8.allSatisfy { isASCIIDigit($0) || (0x61...0x66).contains($0) }
     }
 
     /// Every rule `covers` and `expected` break: at least one ID, every ID a
     /// PRD ID, no ID twice, and a non empty expected sentence.
-    static func argumentViolations(covers: [String], expected: String) -> [String] {
+    package static func argumentViolations(covers: [String], expected: String) -> [String] {
         var violations: [String] = []
         if covers.isEmpty {
             violations.append("covers must list at least one PRD ID")
@@ -64,7 +64,7 @@ enum Rules {
     }
 
     /// True when `text` holds nothing but whitespace.
-    static func isBlank(_ text: String) -> Bool {
+    package static func isBlank(_ text: String) -> Bool {
         text.allSatisfy(\.isWhitespace)
     }
 

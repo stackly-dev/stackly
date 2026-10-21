@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import StacklyEvidenceCore
 @testable import StacklyTestSupport
 
 /// The hand written `Codable` writes the `stackly.evidence/v1` shape, and

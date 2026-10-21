@@ -1,21 +1,32 @@
 import Foundation
 
 /// The run folder and run kind that `cargo xtask evidence run` set.
-struct RunTarget: Equatable, Sendable {
+package struct RunTarget: Equatable, Sendable {
     /// The absolute run folder; records go to its `records/` folder.
-    var directory: URL
+    package var directory: URL
     /// The kind of the run.
-    var kind: Evidence.Kind
+    package var kind: EvidenceKind
+
+    /// Creates a run target.
+    package init(directory: URL, kind: EvidenceKind) {
+        self.directory = directory
+        self.kind = kind
+    }
 }
 
 /// A broken evidence argument or environment, which fails the test.
-struct EvidenceSetupError: Error, CustomStringConvertible {
+package struct EvidenceSetupError: Error, CustomStringConvertible {
     /// What is wrong, as a lowercase sentence without a trailing period.
-    var description: String
+    package var description: String
+
+    /// Creates the error.
+    package init(description: String) {
+        self.description = description
+    }
 }
 
 /// What the evidence trait does before the test body runs.
-enum RunPlan: Equatable {
+package enum RunPlan: Equatable {
     /// The arguments or the environment are wrong: record an issue and skip
     /// the body, writing nothing.
     case reject(String)
@@ -27,15 +38,15 @@ enum RunPlan: Equatable {
     case run(target: RunTarget?, mismatch: String?)
 
     /// The absolute path of the run folder. Only the wrapper sets it.
-    static let directoryVariable = "STACKLY_EVIDENCE_DIR"
+    package static let directoryVariable = "STACKLY_EVIDENCE_DIR"
     /// `fixture` or `native`, the kind of the run. Only the wrapper sets it.
-    static let kindVariable = "STACKLY_EVIDENCE_KIND"
+    package static let kindVariable = "STACKLY_EVIDENCE_KIND"
 
     /// Decides what a test with these trait arguments does, given the process
     /// environment. Tests pass their own dictionary; they never set
     /// environment variables.
-    static func make(
-        covers: [String], kind: Evidence.Kind, expected: String, environment: [String: String]
+    package static func make(
+        covers: [String], kind: EvidenceKind, expected: String, environment: [String: String]
     ) -> RunPlan {
         let violations = Rules.argumentViolations(covers: covers, expected: expected)
         if !violations.isEmpty {
@@ -48,7 +59,7 @@ enum RunPlan: Equatable {
             return .reject(error.description)
         }
         let runKind =
-            target?.kind ?? environment[kindVariable].flatMap { Evidence.Kind(rawValue: $0) }
+            target?.kind ?? environment[kindVariable].flatMap { EvidenceKind(rawValue: $0) }
         switch (kind, runKind) {
         case (.native, .native):
             return .run(target: target, mismatch: nil)
@@ -71,7 +82,7 @@ enum RunPlan: Equatable {
     ///
     /// - Throws: `EvidenceSetupError` when the folder is set but relative or
     ///   missing, or the kind is not `fixture` or `native`.
-    static func runTarget(in environment: [String: String]) throws(EvidenceSetupError)
+    package static func runTarget(in environment: [String: String]) throws(EvidenceSetupError)
         -> RunTarget?
     {
         guard let path = environment[directoryVariable] else {
@@ -88,7 +99,7 @@ enum RunPlan: Equatable {
             throw EvidenceSetupError(
                 description: "\(directoryVariable) points at `\(path)`, which is not a folder")
         }
-        guard let kind = environment[kindVariable].flatMap({ Evidence.Kind(rawValue: $0) }) else {
+        guard let kind = environment[kindVariable].flatMap({ EvidenceKind(rawValue: $0) }) else {
             throw EvidenceSetupError(
                 description:
                     "\(kindVariable) must be `fixture` or `native` when \(directoryVariable) is set"

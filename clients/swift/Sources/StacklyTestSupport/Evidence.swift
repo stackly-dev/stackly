@@ -1,3 +1,4 @@
+public import StacklyEvidenceCore
 public import Testing
 
 /// Evidence records for Swift tests that prove PRD IDs (spec 0002).
@@ -21,6 +22,14 @@ public import Testing
 /// missing prerequisite ends the test with `Evidence.blocked`, never with a
 /// direct cancel.
 public enum Evidence {
+    /// Whether a test needs only fakes and fixtures, or a real provider runtime
+    /// or something only a macOS 27 Mac has. A native test lives in a test
+    /// target whose name ends with `NativeTests`.
+    public typealias Kind = EvidenceKind
+
+    /// Where a provider or runtime under test came from.
+    public typealias Source = EvidenceSource
+
     /// The scope of the test that is running, set by the evidence trait.
     @TaskLocal static var current: Scope?
 
