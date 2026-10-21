@@ -35,9 +35,11 @@ public struct StacklyCommands: Commands {
 
     /// The commands.
     public var body: some Commands {
-        CommandGroup(after: .appSettings) {
-            Divider()
+        // Before Services, not after the Settings group: AX shows the Settings… item the
+        // scene adds comes after a group placed after `.appSettings` (macOS 27.0.1).
+        CommandGroup(before: .systemServices) {
             CommandItem(.reconnect, context: context)
+            Divider()
         }
         // Replaced so New Window goes away; File > New Instance… joins with spec 0020.
         CommandGroup(replacing: .newItem) {}
