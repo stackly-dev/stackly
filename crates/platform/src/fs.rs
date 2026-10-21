@@ -174,6 +174,16 @@ pub trait Filesystem: Send + Sync {
     /// Returns [`PlatformError::NotFound`] when the path does not exist,
     /// and other variants when the volume cannot be read.
     fn volume_space(&self, path: &Path) -> Result<VolumeSpace, PlatformError>;
+
+    /// Returns the filesystem type and whether the volume is local, for the
+    /// volume that holds `path`, following symlinks to find it (spec 0004,
+    /// *Port platform*).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::NotFound`] when the path does not exist,
+    /// and other variants when the volume cannot be read.
+    fn volume_facts(&self, path: &Path) -> Result<VolumeFacts, PlatformError>;
 }
 
 /// A regular file opened by [`Filesystem::open_read`].
@@ -231,6 +241,28 @@ impl VolumeSpace {
     #[must_use]
     pub const fn new(total: u64, available: u64) -> Self {
         Self { total, available }
+    }
+}
+
+/// What kind of volume holds a path ([`Filesystem::volume_facts`]).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct VolumeFacts {
+    /// The filesystem type name, for example `apfs`.
+    pub fs_type: String,
+    /// True when the volume is attached to this machine, not a network
+    /// share.
+    pub local: bool,
+}
+
+impl VolumeFacts {
+    /// Bundles the two facts an adapter read.
+    #[must_use]
+    pub fn new(fs_type: impl Into<String>, local: bool) -> Self {
+        Self {
+            fs_type: fs_type.into(),
+            local,
+        }
     }
 }
 

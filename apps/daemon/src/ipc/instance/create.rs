@@ -719,7 +719,8 @@ async fn run_create(work: CreateWork, mut ctx: OperationContext) -> WorkResult {
         startup: StartupPolicy::Manual,
         created_at: now,
         created_by: ctx.id(),
-    });
+    })
+    .map_err(|error| failed(SupervisorError::internal(error.to_string())))?;
     let values = ConfigValuesJson::new(plan.values.to_string())
         .map_err(|error| failed(SupervisorError::internal(error.to_string())))?;
     let revision = ConfigRevisionRecord::first(

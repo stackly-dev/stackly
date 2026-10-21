@@ -62,6 +62,7 @@ fn instance() -> Instance {
         created_at: at(0),
         created_by: OperationId::generate(),
     })
+    .expect("a valid test instance")
 }
 
 /// Returns an instance whose data initialized, in `stopped`.

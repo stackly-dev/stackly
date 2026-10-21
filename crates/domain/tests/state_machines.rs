@@ -378,6 +378,7 @@ fn instance() -> Instance {
         created_at: at(0),
         created_by: OperationId::generate(),
     })
+    .expect("a valid test instance")
 }
 
 fn probe() -> ReasonCode {

@@ -280,6 +280,13 @@
             "null"
           ]
         },
+        "printableOnly": {
+          "description": "Whether a secret value must hold no control character (spec 0019).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "secret": {
           "type": [
             "boolean",

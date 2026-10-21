@@ -255,6 +255,7 @@ pub struct SettingField {
     apply: Option<ApplyClass>,
     visibility: Visibility,
     secret: bool,
+    printable_only: bool,
     managed: Option<String>,
 }
 
@@ -306,6 +307,13 @@ impl SettingField {
     #[must_use]
     pub const fn is_secret(&self) -> bool {
         self.secret
+    }
+
+    /// Returns whether a secret value must hold no control character
+    /// (`x-stackly.printableOnly`).
+    #[must_use]
+    pub const fn is_printable_only(&self) -> bool {
+        self.printable_only
     }
 
     /// Returns the interpolation that computes a managed field.
@@ -1169,6 +1177,7 @@ fn parse_field(
         apply: None,
         visibility: None,
         secret: None,
+        printable_only: None,
         managed: None,
         key: None,
     });
@@ -1200,6 +1209,14 @@ fn parse_field(
         }
     };
     let secret = x.secret.unwrap_or(false);
+    let printable_only = x.printable_only.unwrap_or(false);
+    if printable_only && !secret {
+        issues.at(
+            join_path(&x_path, "printableOnly"),
+            rule,
+            "printableOnly applies only to secret fields",
+        );
+    }
     let managed = x.managed;
     if managed.is_none() && x.apply.is_none() {
         issues.at(
@@ -1293,6 +1310,7 @@ fn parse_field(
         apply,
         visibility,
         secret,
+        printable_only,
         managed,
     })
 }

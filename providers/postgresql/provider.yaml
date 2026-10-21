@@ -1,0 +1,125 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: official/postgresql
+  software: postgresql
+  displayName: PostgreSQL
+  revision: "1.0.0"
+  category: database
+  description: PostgreSQL relational database. Each instance is its own cluster with a password protected superuser, a loopback port, and a private Unix socket.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+  dataMarker: { file: PG_VERSION, pattern: "([0-9]+)" }
+runtime:
+  executable: bin/postgres
+  executionMode: foreground
+capabilities:
+  reload: true
+  multiInstance: true
+  persistence: true
+  backup: [cold]
+resources:
+  endpoints:
+    client: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 5432 }
+    socket: { transport: unix, purpose: client, socketName: ".s.PGSQL.${endpoint.client.port}" }
+configFiles:
+  pgHba:
+    template: templates/pg_hba.conf.tmpl
+    format: plain
+    destination: "${instance.config}/pg_hba.conf"
+  pgIdent:
+    template: templates/pg_ident.conf.tmpl
+    format: plain
+    destination: "${instance.config}/pg_ident.conf"
+  postgresqlConf:
+    template: templates/postgresql.conf.tmpl
+    format: postgresqlConf
+    destination: "${instance.config}/postgresql.conf"
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+    - { primitive: renderConfig, file: pgHba }
+    - { primitive: renderConfig, file: pgIdent }
+    - { primitive: renderConfig, file: postgresqlConf }
+    - { primitive: materializeSecret, secret: superuserPassword, destination: superuser-password }
+    - primitive: runExecutable
+      executable: "${runtime.executables.initdb}"
+      args:
+        - "--pgdata=${instance.data}"
+        - "-Upostgres"
+        - "--pwfile=${instance.secrets}/superuser-password"
+        - "--auth-local=scram-sha-256"
+        - "--auth-host=scram-sha-256"
+        - "--encoding=UTF8"
+        - "--locale=C"
+        - "--locale-provider=builtin"
+        - "--builtin-locale=C.UTF-8"
+        - "--data-checksums"
+        - "--no-instructions"
+      cwd: "${instance.temp}"
+      timeoutSeconds: 90
+    - primitive: runExecutable
+      executable: "${runtime.executable}"
+      args: ["--single", "-D", "${instance.data}", "-c", "exit_on_error=on", "template1"]
+      cwd: "${instance.temp}"
+      timeoutSeconds: 30
+      stdin:
+        text: |
+          CREATE ROLE stackly_readiness WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3;
+          ALTER ROLE stackly_readiness SET default_transaction_read_only = on;
+          ALTER ROLE stackly_readiness SET statement_timeout = '2s';
+          COMMENT ON ROLE stackly_readiness IS 'Stackly readiness probe. Dropping or changing this role stops the instance from becoming ready.';
+  start:
+    executable: "${runtime.executable}"
+    args:
+      - "-D"
+      - "${instance.data}"
+      - "--config-file=${instance.config}/postgresql.conf"
+      - "--hba-file=${instance.config}/pg_hba.conf"
+      - "--ident-file=${instance.config}/pg_ident.conf"
+      - "--listen-addresses=${endpoint.client.host}"
+      - "--port=${endpoint.client.port}"
+      - "--unix-socket-directories=${endpoint.socket.socketDir}"
+      - "--unix-socket-permissions=0700"
+      - "--logging-collector=off"
+      - "--log-destination=stderr"
+    cwd: "${instance.data}"
+  stop: { strategy: gracefulProcess, signal: int }
+  reload:
+    render: [pgHba, pgIdent, postgresqlConf]
+    action: signal
+    signal: hup
+    verify: readiness
+readiness:
+  probe:
+    type: exec
+    command:
+      executable: "${runtime.executables.psql}"
+      args:
+        - "--no-psqlrc"
+        - "--no-password"
+        - "--quiet"
+        - "--tuples-only"
+        - "--no-align"
+        - "--set=ON_ERROR_STOP=1"
+        - "--host=${endpoint.socket.socketDir}"
+        - "--port=${endpoint.client.port}"
+        - "--username=stackly_readiness"
+        - "--command=SELECT 1"
+      cwd: "${instance.temp}"
+      env: { PGDATABASE: postgres, PGCONNECT_TIMEOUT: "2", PGAPPNAME: stackly-readiness }
+    successExitCodes: [0]
+  intervalMilliseconds: 500
+  attemptTimeoutMilliseconds: 3000
+health:
+  intervalSeconds: 10
+  attemptTimeoutMilliseconds: 3000
+  failureThreshold: 3
+timeouts: { initSeconds: 180, readinessSeconds: 120, recoverySeconds: 300, stopSeconds: 60, reloadSeconds: 30 }
+backup:
+  cold: { paths: [data] }
+permissions:
+  managedFilesystem: [data, config, temp, run]
+  executeRuntimeBinary: true
+  additionalExecutables: { initdb: bin/initdb, psql: bin/psql }

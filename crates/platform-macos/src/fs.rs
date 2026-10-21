@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use stackly_platform::{
     AppendFile, DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, ReadSeekFile,
-    RemoveReport, TreeWriter, VolumeSpace,
+    RemoveReport, TreeWriter, VolumeFacts, VolumeSpace,
 };
 
 mod fd;
@@ -140,6 +140,10 @@ impl Filesystem for MacosFilesystem {
 
     fn volume_space(&self, path: &Path) -> Result<VolumeSpace, PlatformError> {
         volume::volume_space(path)
+    }
+
+    fn volume_facts(&self, path: &Path) -> Result<VolumeFacts, PlatformError> {
+        volume::volume_facts(path)
     }
 }
 

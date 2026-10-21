@@ -223,6 +223,21 @@ pub(super) fn check_volume_space(fs: &dyn Filesystem, base: &Path) {
     );
 }
 
+pub(super) fn check_volume_facts(fs: &dyn Filesystem, base: &Path) {
+    let facts = must("volume_facts reads the test volume", fs.volume_facts(base));
+    if facts.fs_type.is_empty() || !facts.local {
+        fail(
+            "volume_facts reports the test root as a local volume with a type name",
+            &format!("{facts:?}"),
+        );
+    }
+    expect_err(
+        "volume_facts reports a missing path",
+        fs.volume_facts(&base.join("missing")),
+        |err| matches!(err, PlatformError::NotFound { .. }),
+    );
+}
+
 pub(super) fn check_tree_writer(fs: &dyn Filesystem, base: &Path) {
     let dir = base.join("tree-writer");
     must("create the tree writer folder", fs.create_dir_private(&dir));

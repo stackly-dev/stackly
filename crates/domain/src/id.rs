@@ -117,6 +117,12 @@ uuid_id! {
     BackupId
 }
 
+uuid_id! {
+    /// Stable identifier of a provider source (a catalog the daemon loads),
+    /// always a UUID version 7.
+    ProviderSourceId
+}
+
 impl InstanceId {
     /// Returns the short key of this instance: the last 8 hex characters of
     /// its text form, which come from the random part of the UUID.

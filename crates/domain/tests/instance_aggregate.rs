@@ -2,13 +2,15 @@
 //! born, the init guard, rebind limits, and the revision counter, plus the
 //! needs secret blocker observation of spec 0011 AC-11.
 
+use std::net::IpAddr;
+
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
-    DesiredState, FailureCode, Health, HealthState, Ignored, Instance, InstanceBlocker, InstanceId,
-    InstanceLifecycle, InvariantDetail, LifecycleEvent, LineCompatibility, NeedsSecretItem,
-    NeedsSecretReason, NewInstance, ObservationOutcome, OperationId, ProviderRevisionKey,
-    Readiness, ReadinessState, ReasonCode, ResourceRevision, Rule, RuntimeId, SecretRef,
-    StartupPolicy,
+    DesiredState, Endpoint, FailureCode, Health, HealthState, Ignored, Instance, InstanceBlocker,
+    InstanceId, InstanceLifecycle, InvariantDetail, InvariantError, IpEndpoint, LifecycleEvent,
+    LineCompatibility, NeedsSecretItem, NeedsSecretReason, NewInstance, ObservationOutcome,
+    OperationId, Port, PortRequest, ProviderRevisionKey, Readiness, ReadinessState, ReasonCode,
+    ResourceRevision, Rule, RuntimeId, SecretRef, StartupPolicy, Transport, UnixEndpoint,
 };
 
 /// Returns `2026-01-01T00:00:00Z` plus `seconds`.
@@ -20,6 +22,10 @@ fn at(seconds: i64) -> Timestamp {
 }
 
 fn instance() -> Instance {
+    new_instance(Vec::new()).expect("a valid test instance")
+}
+
+fn new_instance(endpoints: Vec<Endpoint>) -> Result<Instance, InvariantError> {
     Instance::new(NewInstance {
         id: InstanceId::generate(),
         name: "orders-db".parse().expect("orders-db is an instance name"),
@@ -35,11 +41,32 @@ fn instance() -> Instance {
         runtime_id: RuntimeId::generate(),
         data_line: "17".parse().expect("17 is a runtime line"),
         data_version: "17.6".parse().expect("17.6 is an exact version"),
-        endpoints: Vec::new(),
+        endpoints,
         startup: StartupPolicy::Manual,
         created_at: at(0),
         created_by: OperationId::generate(),
     })
+}
+
+fn tcp(name: &str, address: &str, port: u16, bound: Option<u16>) -> Endpoint {
+    Endpoint::Ip(IpEndpoint::new(
+        name.parse().expect("a valid endpoint name"),
+        Transport::Tcp,
+        address.parse::<IpAddr>().expect("a valid address"),
+        PortRequest::Fixed(Port::new(port).expect("a valid port")),
+        bound.map(|port| Port::new(port).expect("a valid port")),
+    ))
+}
+
+fn unix(name: &str, socket: &str) -> Endpoint {
+    Endpoint::Unix(UnixEndpoint::new(
+        name.parse().expect("a valid endpoint name"),
+        socket.parse().expect("a valid socket name"),
+    ))
+}
+
+fn rejection(endpoints: Vec<Endpoint>) -> InvariantError {
+    new_instance(endpoints).expect_err("the endpoints are invalid")
 }
 
 fn apply(instance: &mut Instance, events: Vec<LifecycleEvent>) {
@@ -193,4 +220,78 @@ fn an_older_blocker_observation_is_ignored_and_a_newer_one_replaces_it() {
         ObservationOutcome::Applied
     );
     assert_eq!(instance.blocker(), Some(&latest));
+}
+
+#[test]
+fn a_new_instance_refuses_two_endpoints_with_the_same_name() {
+    let err = rejection(vec![
+        tcp("client", "127.0.0.1", 5432, None),
+        tcp("client", "127.0.0.1", 5433, None),
+    ]);
+
+    assert_eq!(
+        err.detail(),
+        &InvariantDetail::DuplicateEndpoint {
+            endpoint: "client".parse().expect("a valid endpoint name"),
+        }
+    );
+    assert_eq!(err.rule(), None);
+}
+
+#[test]
+fn a_new_instance_refuses_an_endpoint_that_is_already_bound() {
+    let err = rejection(vec![tcp("client", "127.0.0.1", 5432, Some(5432))]);
+
+    assert_eq!(
+        err.detail(),
+        &InvariantDetail::BoundOnNew {
+            endpoint: "client".parse().expect("a valid endpoint name"),
+        }
+    );
+    assert_eq!(err.rule(), None);
+}
+
+#[test]
+fn a_new_instance_refuses_two_unix_endpoints_on_the_same_socket_under_br_004() {
+    let err = rejection(vec![
+        unix("one", ".s.PGSQL.5432"),
+        unix("two", ".s.PGSQL.5432"),
+    ]);
+
+    assert_eq!(
+        err.detail(),
+        &InvariantDetail::DuplicateSocket {
+            socket: ".s.PGSQL.5432".parse().expect("a valid socket name"),
+        }
+    );
+    assert_eq!(err.rule(), Some(Rule::Br004));
+}
+
+#[test]
+fn a_new_instance_refuses_fixed_ip_endpoints_that_conflict_under_br_004() {
+    let err = rejection(vec![
+        tcp("client", "127.0.0.1", 5432, None),
+        tcp("admin", "0.0.0.0", 5432, None),
+    ]);
+
+    assert_eq!(
+        err.detail(),
+        &InvariantDetail::EndpointSelfConflict {
+            first: "client".parse().expect("a valid endpoint name"),
+            second: "admin".parse().expect("a valid endpoint name"),
+        }
+    );
+    assert_eq!(err.rule(), Some(Rule::Br004));
+}
+
+#[test]
+fn a_new_instance_accepts_distinct_names_ports_and_sockets() {
+    let instance = new_instance(vec![
+        tcp("client", "127.0.0.1", 5432, None),
+        tcp("monitoring", "127.0.0.1", 5433, None),
+        unix("socket", ".s.PGSQL.5432"),
+    ])
+    .expect("the endpoints are valid");
+
+    assert_eq!(instance.endpoints().len(), 3);
 }

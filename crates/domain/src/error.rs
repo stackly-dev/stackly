@@ -8,7 +8,9 @@ use crate::operation::OperationState;
 use crate::provider::ProviderRevisionKey;
 use crate::rule::Rule;
 use crate::runtime::RemovalBlocker;
-use crate::value::{EndpointName, MemberAlias, Port, ProviderName, RuntimeLine, SoftwareName};
+use crate::value::{
+    EndpointName, MemberAlias, Port, ProviderName, RuntimeLine, SocketName, SoftwareName,
+};
 
 /// The kind of value type a [`ValueError`] is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -590,6 +592,31 @@ pub enum InvariantDetail {
         /// The lease.
         lease: LeaseId,
     },
+    /// A new instance names two endpoints the same. Not a BR.
+    DuplicateEndpoint {
+        /// The name used more than once.
+        endpoint: EndpointName,
+    },
+    /// A new instance names two Unix endpoints with the same socket, which
+    /// conflict (BR-004).
+    DuplicateSocket {
+        /// The socket name used more than once.
+        socket: SocketName,
+    },
+    /// A new instance carries an endpoint that is already bound; an
+    /// endpoint is bound when its process starts. Not a BR.
+    BoundOnNew {
+        /// The endpoint with a bound port.
+        endpoint: EndpointName,
+    },
+    /// Two IP endpoints of one new instance conflict by their requested
+    /// fixed ports (BR-004).
+    EndpointSelfConflict {
+        /// The first endpoint, in declaration order.
+        first: EndpointName,
+        /// The second endpoint.
+        second: EndpointName,
+    },
     /// A stored record handed to a `restore` constructor breaks an
     /// invariant between its fields. Not a BR: the registry reports it as
     /// corrupt.
@@ -608,6 +635,7 @@ impl InvariantDetail {
     pub const fn rule(&self) -> Option<Rule> {
         match self {
             Self::DataRootOverlap { .. } => Some(Rule::Br002),
+            Self::DuplicateSocket { .. } | Self::EndpointSelfConflict { .. } => Some(Rule::Br004),
             Self::FixedPortConflict { .. }
             | Self::AutoPortUnavailable { .. }
             | Self::FixedPortSubstituted { .. } => Some(Rule::Br005),
@@ -629,6 +657,8 @@ impl InvariantDetail {
             | Self::StartupLeaseWithoutSession { .. }
             | Self::LeaseAlreadyReleased { .. }
             | Self::SuppressNeedsActiveStartupLease { .. }
+            | Self::DuplicateEndpoint { .. }
+            | Self::BoundOnNew { .. }
             | Self::InconsistentRecord { .. } => None,
         }
     }
@@ -734,6 +764,21 @@ impl fmt::Display for InvariantDetail {
                 f,
                 "lease {lease} cannot be suppressed; only an active startup lease can"
             ),
+            Self::DuplicateEndpoint { endpoint } => {
+                write!(f, "endpoint {endpoint} is named more than once")
+            }
+            Self::DuplicateSocket { socket } => {
+                write!(f, "socket {socket} is used by more than one endpoint")
+            }
+            Self::BoundOnNew { endpoint } => {
+                write!(
+                    f,
+                    "endpoint {endpoint} cannot be bound before the instance starts"
+                )
+            }
+            Self::EndpointSelfConflict { first, second } => {
+                write!(f, "endpoints {first} and {second} conflict with each other")
+            }
             Self::InconsistentRecord { resource, reason } => {
                 write!(f, "a stored {resource} is inconsistent: {reason}")
             }

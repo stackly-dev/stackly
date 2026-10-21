@@ -59,7 +59,7 @@ pub use fetch::{
 };
 pub use fs::{
     AppendFile, DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
-    ReadSeekFile, RemoveReport, VolumeSpace, is_same_or_inside, remove_tree_names,
+    ReadSeekFile, RemoveReport, VolumeFacts, VolumeSpace, is_same_or_inside, remove_tree_names,
 };
 pub use identity::{UserId, UserIdentity};
 pub use info::{HostFacts, PlatformInfo, host_target};
