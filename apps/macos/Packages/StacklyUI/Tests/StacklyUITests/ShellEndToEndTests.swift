@@ -211,8 +211,14 @@ struct ShellEndToEndTests {
 
     // MARK: - Closing and quitting
 
-    @Test func closingTheWindowOrQuittingLeavesTheDaemonRunning() async throws {
-        let daemon = try LiveDaemon(recordsEvidence: false)
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "closing the window or quitting the GUI leaves stacklyd running and a new client can still connect"
+        ))
+    func closingTheWindowOrQuittingLeavesTheDaemonRunning() async throws {
+        let daemon = try LiveDaemon(recordsEvidence: true)
         try await daemon.start()
         let parts = Self.shell(for: daemon, announcements: Announcements())
         let runtime = parts.runtime
