@@ -684,66 +684,66 @@ Snapshot dan XCUITest untuk cek ini adalah urusan fitur 68.
 
 Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikannya item `architect (update)` atau `/sync`. Semuanya mengikuti keputusan D2 (fitur 67 satu satunya pembangun) dan D14 (pemasangan di shell). Baris yang mengubah teks AC spec lain ditandai **(teks AC)** dan butuh persetujuan user lewat lead.
 
-- **Spec 0012** (`docs/specs/0012-design-system-ui-foundation/index.md`):
-  - Baris batas :61: ganti catatan fase 02 dengan "Fitur 67 membangun versi pertama setiap komponen ini (spec 0067); spec fase 02 tidak membuat versi sementara."
-  - :109 (`surfaceWindow` untuk halaman kartu, halaman dengan `Table`, `List`, atau `Form` native memakai latar sistem): tambahkan pengecualian "sheet lewat `StacklySheet` dan isi inspector lewat `.stacklyInspector` (spec 0067) memakai `surfaceWindow` opak, supaya teks di atasnya tetap di pasangan P1 dan P2".
-  - :226: overlay toast mockup menjadi kartu umpan balik spec 0067 lewat `.safeAreaInset(edge: .bottom)`, bukan overlay.
-  - :322: tetap; tambahkan penunjuk "kartu umpan balik spec 0067 (`Feedback.outcome`)".
-  - *Key invariants* :433 sampai :440: tidak ada token atau pasangan kontras baru. `.consoleSurface()` spec 0067 hanya menyusun `surfaceConsole`, `Radius.medium`, dan hairline yang sudah ada. Catat dua pengecualian warna dekoratif spec 0067 (putih mark tile, bayangan kartu) dan aturan bahwa simbol yang membawa arti memakai fill tone atau `textSecondary`, bukan `StacklyColor.decorative` (WCAG 1.4.11).
-  - Follow-up :532 terjawab oleh spec 0067 (centang lewat `/sync`).
-- **Spec 0011** (`docs/specs/0011-secret-store-redaction/index.md`): tidak ada perubahan teks. Kode saja: `RevealModel.sentence` pindah ke `DaemonText.sentence`, dan `RevealModel` serta `SecretEntryModel` (`Secrets/SecretEntryModel.swift:137`) memanggilnya.
-- **Spec 0013** (`docs/specs/0013-app-shell-swift-client/index.md`). Gabungkan dengan update fase 02 yang masih terbuka di `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md` bagian *Spec 0013* (butir 1 dan 8 di sana menyentuh baris batas yang sama dan `MainWindowRoot`):
-  - Baris batas :72 "Umpan balik setelah aksi (merender `MutationOutcome`) | 67": tambahkan "`FeedbackCenter` dibuat view akar jendela (`LiveShell`, lalu `MainWindowRoot`), `.feedbackPresenter()` dan `.actionHost()` dipasang di `AppShell` oleh build spec 0067".
-  - Peta package :87: tambahkan folder `Components/` dan `Accessibility/` (spec 0067) di baris `StacklyUI/Sources/StacklyUI/`.
-  - *Shell jendela*: kolom detail `AppShell` mendapat `.feedbackPresenter()` (`.safeAreaInset(edge: .bottom)`), akar `AppShell` mendapat `.actionHost()` di dalam `.environment(\.mutationAvailability, …)`, dan `LiveShell` memegang `@State FeedbackCenter` di environment `feedbackCenter`.
-  - *Diagnostics koneksi*: tombol copy di `ConnectionDiagnosticsSection` menulis lewat `PlainPasteboard` spec 0067.
-  - :399: tambahkan "pemetaan lengkap di `Feedback.outcome` spec 0067".
-  - Follow-up :652 bagian fitur 67 terjawab.
-- **Spec 0016** (`docs/specs/0016-onboarding/index.md`):
-  - **(teks AC)** AC-11 :32: "Setelah Get Started, `FeedbackCenter.show(.success("Setup complete."))` menampilkan kartu umpan balik di shell dan mengumumkannya sekali (pengumuman datang dari `FeedbackCenter`, bukan panggilan `announce` terpisah)." Alasan: dengan komponen fitur 67, panggilan `announce` kedua membuat pengumuman ganda.
-  - Baris batas :55: "Komponen umpan balik dan komponen dasar lain | fitur 67 (spec 0067): `FeedbackCenter`, `CopyButton` (copy PATH, pengumuman "Copied."), `ConsoleBlock` (blok contoh), `CardSection`".
-  - AC-8 :29 dan blok contoh: baris PATH memakai `CopyButton`, blok contoh memakai `ConsoleBlock(text:accessibilityLabel:)`.
-  - Build plan :354: ganti "Komponen fitur 67 dipakai kalau sudah ada, tidak ditunggu" dengan "Milestone 1 needs feature 67 milestone 1 (`ui-macos.md`), atau membangun komponen yang dipakainya menurut spec 0067 (aturan *Siapa membangun versi pertama*)".
-  - Follow-up :416 terjawab.
-- **Spec 0017** (`docs/specs/0017-catalog-provider-detail/index.md`):
-  - :398: hapus `ProviderTile` dari daftar folder `Catalog/` dan kalimat "Kalau fitur 67 sudah menyediakan...". Ganti dengan "Tile, baris key value, dan banner memakai `ProviderTile`, `.labeledContentStyle(.stackly)` dan `CardSection` spec 0067, serta `StateBanner` spec 0012".
-  - :405: kartu memakai `ProviderTile` `mediumSize` (40 pt, mockup); :406: header panel `ProviderTile` `largeSize` (52 pt) dan baris License sampai Trust sebagai `LabeledContent` gaya `.stackly`.
-  - Milestone 3 :599: ganti "memakai komponen fitur 67 kalau sudah ada" dengan "needs feature 67 milestone 1 (`ui-macos.md`) atau membangun `ProviderTile` dan key value menurut spec 0067".
-- **Spec 0018** (`docs/specs/0018-install-runtime-managed/index.md`):
-  - Peta package :84: `InstallingRow` tetap view layar yang memakai `ProviderTile` `rowSize` dan `StagedProgress(.compact)`.
-  - :531: tanda provider memakai `ProviderTile` (`TileSpec` dari `ProviderSummary`, `name` dari `displayName`); label tahap, persen, dan bar dari `StagedProgressValue.from(operation:stages:)` dengan lima `StageDefinition` dari tabel *Alur install*. Rumus persen keseluruhan sama dengan :531; yang baru dari spec 0067 adalah aturan tampil persen (bilangan bulat, dibulatkan ke bawah, paling banyak 99 sebelum `succeeded`). Menu konteks Cancel Install memakai `ActionMenuItems` dengan `disabledReason` "Can’t be cancelled during Commit".
-  - :533: inspector memakai `.stacklyInspector` dan `InspectorHeader`.
-  - :542: hapus `ActionFeedbackBanner` dan `StateBanner` sementara serta penanda `// provisional: F67`. Sukses memulai memakai `FeedbackCenter.show(.started("Installing {name} {version}. Staged, verified, then committed."))`, selesai memakai `.success("{name} {version} installed and verified.")` (pengumuman datang dari `FeedbackCenter`), gagal tetap `StateBanner` critical di panel detail; `notSent` dan `outcomeUnknown` lewat `Feedback.outcome`.
-  - :556: pengumuman perubahan tahap memakai `StagedProgress(announcesStages: true)`.
-  - Milestone 4 :681 (judul tanpa klausa prasyarat): tambahkan klausa "needs feature 67 milestones 1, 2, and 3 (`ui-macos.md`), atau membangun komponen itu menurut spec 0067".
-- **Spec 0020** (`docs/specs/0020-create-instance/index.md`):
-  - Baris batas :107: "Komponen dasar (checklist, sheet dengan footer, progress bertahap, tile, umpan balik) | fitur 67 (spec 0067); `PreflightSection` dan `CreateProgressSection` adalah pembungkus layar di `CreateInstance/` di atas `CheckList` dan `StagedProgress`".
-  - :457: `NewInstanceSheet` memakai `StacklySheet` (lebar 560; `Form` di dalamnya memberi `.scrollContentBackground(.hidden)`); `PreflightSection` memetakan `PreflightCheck` ke `CheckItem` di dalam `CardSection("Preflight")`; `CreateProgressSection` memakai `StagedProgress(.stages)` dengan enam `StageDefinition` create.
-  - :460: header memakai `tile` `StacklySheet`.
-  - Perintah setara :468: `ConsoleBlock(command:)` dengan pengumuman "Command copied.".
-  - Footer :469: aksi utama Create adalah `StacklyAction` dengan `disabledReason` dari aturan Create aktif (copy alasan ditulis spec 0020); Cancel di mode progress (:470) adalah `StacklyAction` dengan `ActionRole.standard(confirmation:)` "Stop creating this instance?".
-  - :499 (status preflight sebagai status set baru): diganti tabel *Status checklist* spec 0067, jadi langkah 14 tidak menambah tabel itu ke design.md.
-  - Selesai :471: hasil create setelah sheet tertutup dikirim ke `FeedbackCenter` oleh layar pemilik sheet.
-  - Milestone 3 :1050: ganti "komponen fitur 67 ... kalau sudah ada" dengan "needs feature 67 milestones 1 and 2 (`ui-macos.md`), atau membangun komponen itu menurut spec 0067".
-  - Follow-up :1106 terjawab.
-- **Spec 0021** (`docs/specs/0021-start-readiness-connection/index.md`):
-  - Baris batas :90 tetap.
-  - *Tab Summary* :228 sampai :237: kartu memakai `CardSection` dan `.labeledContentStyle(.stackly)`; Copy endpoint memakai `CopyButton(style: .icon, announcement: "Address copied.")` di luar `LabeledContent`; Copy Instance ID `CopyButton(announcement: "ID copied.")`; Copy connection tanpa secret `CopyButton(announcement: "{title} copied.")`.
-  - Toolbar :267: menu More memakai `ActionMenu` dengan `StacklyAction` "Copy Connection String" (`mutates` false, `disabledReason` dari copy spec 0021); tombol aksi utama di toolbar memakai `ActionButton(showsReason: false)`, dan alasannya tampil di halaman.
-  - Milestone 3 :722: ganti "memakai komponen fitur 67 ... kalau sudah ada" dengan "needs feature 67 milestones 1 and 3 (`ui-macos.md`)".
-- **Spec 0022** (`docs/specs/0022-overview-daftar-instance/index.md`):
-  - Baris batas :68: `ProviderTile` milik spec 0067 dengan parameter tambahan `name` (atau `TileSpec`).
-  - Baris batas :76: "Umpan balik setelah aksi | fitur 67 (`FeedbackCenter`, `Feedback.outcome`)".
-  - :203: hapus `ActionFeedbackBanner` dari folder `Instances/`.
-  - :227 sampai :229: inspector memakai `.stacklyInspector` (lebar 240, 280, 360 tetap), header memakai `InspectorHeader`, isi memakai `CardSection` dan `.labeledContentStyle(.stackly)`.
-  - Aksi instance: tombol Start, Stop, dan Retry adalah `StacklyAction` lewat `ActionButton`; menu konteks memakai `ActionMenuItems`.
-  - :274: ganti dengan "Umpan balik lewat `FeedbackCenter`: `Feedback.outcome` untuk `rejected`, `notSent`, `outcomeUnknown`, `Feedback.failure` untuk operasi `failed`, dan `Feedback.neutral` dengan copy spec ini untuk `cancelled`".
-  - Langkah 7 :501: hapus `ActionFeedbackBanner` (`// provisional: F67`).
-  - :529: hapus "umpan balik aksi memakai banner sementara".
-  - Usulan :545: signature final `ProviderTile(mark:tile:name:size:)` dan `ProviderTile(_:size:)` dengan `TileSpec`.
-  - Milestone 3 :498: "spec 0017 milestone 3 (`CatalogStore`, `ProviderTile`)" menjadi "spec 0017 milestone 3 (`CatalogStore`)", lalu tambahkan "needs feature 67 milestones 1 and 3 (`ui-macos.md`), atau membangun komponen itu menurut spec 0067".
-  - Follow-up :560 bagian fitur 67 terjawab.
-- **Spec 0068 dan 0069**: tidak ada perubahan teks dari spec ini; kesepakatan di *Asumsi lintas spec* ditulis di spec masing masing oleh architect nya di wave ini.
+- **Spec 0012** (`docs/specs/0012-design-system-ui-foundation/index.md`): Diterapkan di spec 0012 (2026-10-21).
+  - Baris batas :61: ganti catatan fase 02 dengan "Fitur 67 membangun versi pertama setiap komponen ini (spec 0067); spec fase 02 tidak membuat versi sementara." Diterapkan di spec 0012 (2026-10-21).
+  - :109 (`surfaceWindow` untuk halaman kartu, halaman dengan `Table`, `List`, atau `Form` native memakai latar sistem): tambahkan pengecualian "sheet lewat `StacklySheet` dan isi inspector lewat `.stacklyInspector` (spec 0067) memakai `surfaceWindow` opak, supaya teks di atasnya tetap di pasangan P1 dan P2". Diterapkan di spec 0012 (2026-10-21).
+  - :226: overlay toast mockup menjadi kartu umpan balik spec 0067 lewat `.safeAreaInset(edge: .bottom)`, bukan overlay. Diterapkan di spec 0012 (2026-10-21).
+  - :322: tetap; tambahkan penunjuk "kartu umpan balik spec 0067 (`Feedback.outcome`)". Diterapkan di spec 0012 (2026-10-21).
+  - *Key invariants* :433 sampai :440: tidak ada token atau pasangan kontras baru. `.consoleSurface()` spec 0067 hanya menyusun `surfaceConsole`, `Radius.medium`, dan hairline yang sudah ada. Catat dua pengecualian warna dekoratif spec 0067 (putih mark tile, bayangan kartu) dan aturan bahwa simbol yang membawa arti memakai fill tone atau `textSecondary`, bukan `StacklyColor.decorative` (WCAG 1.4.11). Diterapkan di spec 0012 (2026-10-21).
+  - Follow-up :532 terjawab oleh spec 0067 (centang lewat `/sync`). Baris itu sudah tercentang di spec 0012 sebelum update ini. Diterapkan di spec 0012 (2026-10-21).
+- **Spec 0011** (`docs/specs/0011-secret-store-redaction/index.md`): tidak ada perubahan teks. Kode saja: `RevealModel.sentence` pindah ke `DaemonText.sentence`, dan `RevealModel` serta `SecretEntryModel` (`Secrets/SecretEntryModel.swift:137`) memanggilnya. Ditunda: tidak ada perubahan teks, dan spec 0011 di luar lingkup update ini.
+- **Spec 0013** (`docs/specs/0013-app-shell-swift-client/index.md`). Gabungkan dengan update fase 02 yang masih terbuka di `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md` bagian *Spec 0013* (butir 1 dan 8 di sana menyentuh baris batas yang sama dan `MainWindowRoot`): Ditunda: spec 0013 diperbarui terpisah setelah verify penuh F13, digabung dengan update fase 02 yang masih terbuka.
+  - Baris batas :72 "Umpan balik setelah aksi (merender `MutationOutcome`) | 67": tambahkan "`FeedbackCenter` dibuat view akar jendela (`LiveShell`, lalu `MainWindowRoot`), `.feedbackPresenter()` dan `.actionHost()` dipasang di `AppShell` oleh build spec 0067". Ditunda: spec 0013 diperbarui terpisah setelah verify penuh F13, digabung dengan update fase 02 yang masih terbuka.
+  - Peta package :87: tambahkan folder `Components/` dan `Accessibility/` (spec 0067) di baris `StacklyUI/Sources/StacklyUI/`. Ditunda: spec 0013 diperbarui terpisah setelah verify penuh F13, digabung dengan update fase 02 yang masih terbuka.
+  - *Shell jendela*: kolom detail `AppShell` mendapat `.feedbackPresenter()` (`.safeAreaInset(edge: .bottom)`), akar `AppShell` mendapat `.actionHost()` di dalam `.environment(\.mutationAvailability, …)`, dan `LiveShell` memegang `@State FeedbackCenter` di environment `feedbackCenter`. Ditunda: spec 0013 diperbarui terpisah setelah verify penuh F13, digabung dengan update fase 02 yang masih terbuka.
+  - *Diagnostics koneksi*: tombol copy di `ConnectionDiagnosticsSection` menulis lewat `PlainPasteboard` spec 0067. Ditunda: spec 0013 diperbarui terpisah setelah verify penuh F13, digabung dengan update fase 02 yang masih terbuka.
+  - :399: tambahkan "pemetaan lengkap di `Feedback.outcome` spec 0067". Ditunda: spec 0013 diperbarui terpisah setelah verify penuh F13, digabung dengan update fase 02 yang masih terbuka.
+  - Follow-up :652 bagian fitur 67 terjawab. Ditunda: spec 0013 diperbarui terpisah setelah verify penuh F13, digabung dengan update fase 02 yang masih terbuka.
+- **Spec 0016** (`docs/specs/0016-onboarding/index.md`): Diterapkan di spec 0016 (2026-10-21).
+  - **(teks AC)** AC-11 :32: "Setelah Get Started, `FeedbackCenter.show(.success("Setup complete."))` menampilkan kartu umpan balik di shell dan mengumumkannya sekali (pengumuman datang dari `FeedbackCenter`, bukan panggilan `announce` terpisah)." Alasan: dengan komponen fitur 67, panggilan `announce` kedua membuat pengumuman ganda. Disetujui user lewat lead (2026-10-21); kalimat kedua AC-11 (Escape) dan trace PAGE-01 tetap. Diterapkan di spec 0016 (2026-10-21).
+  - Baris batas :55: "Komponen umpan balik dan komponen dasar lain | fitur 67 (spec 0067): `FeedbackCenter`, `CopyButton` (copy PATH, pengumuman "Copied."), `ConsoleBlock` (blok contoh), `CardSection`". Diterapkan di spec 0016 (2026-10-21).
+  - AC-8 :29 dan blok contoh: baris PATH memakai `CopyButton`, blok contoh memakai `ConsoleBlock(text:accessibilityLabel:)`. Ditulis di *Kontrol Command Line*; teks AC-8 tidak berubah karena sudah cocok. Diterapkan di spec 0016 (2026-10-21).
+  - Build plan :354: ganti "Komponen fitur 67 dipakai kalau sudah ada, tidak ditunggu" dengan "Milestone 1 needs feature 67 milestone 1 (`ui-macos.md`), atau membangun komponen yang dipakainya menurut spec 0067 (aturan *Siapa membangun versi pertama*)". Diterapkan di spec 0016 (2026-10-21).
+  - Follow-up :416 terjawab. Diterapkan di spec 0016 (2026-10-21).
+- **Spec 0017** (`docs/specs/0017-catalog-provider-detail/index.md`): Diterapkan di spec 0017 (2026-10-21).
+  - :398: hapus `ProviderTile` dari daftar folder `Catalog/` dan kalimat "Kalau fitur 67 sudah menyediakan...". Ganti dengan "Tile, baris key value, dan banner memakai `ProviderTile`, `.labeledContentStyle(.stackly)` dan `CardSection` spec 0067, serta `StateBanner` spec 0012". Diterapkan di spec 0017 (2026-10-21).
+  - :405: kartu memakai `ProviderTile` `mediumSize` (40 pt, mockup); :406: header panel `ProviderTile` `largeSize` (52 pt) dan baris License sampai Trust sebagai `LabeledContent` gaya `.stackly`. Diterapkan di spec 0017 (2026-10-21).
+  - Milestone 3 :599: ganti "memakai komponen fitur 67 kalau sudah ada" dengan "needs feature 67 milestone 1 (`ui-macos.md`) atau membangun `ProviderTile` dan key value menurut spec 0067". Diterapkan di spec 0017 (2026-10-21).
+- **Spec 0018** (`docs/specs/0018-install-runtime-managed/index.md`): Diterapkan di spec 0018 (2026-10-21).
+  - Peta package :84: `InstallingRow` tetap view layar yang memakai `ProviderTile` `rowSize` dan `StagedProgress(.compact)`. Diterapkan di spec 0018 (2026-10-21).
+  - :531: tanda provider memakai `ProviderTile` (`TileSpec` dari `ProviderSummary`, `name` dari `displayName`); label tahap, persen, dan bar dari `StagedProgressValue.from(operation:stages:)` dengan lima `StageDefinition` dari tabel *Alur install*. Rumus persen keseluruhan sama dengan :531; yang baru dari spec 0067 adalah aturan tampil persen (bilangan bulat, dibulatkan ke bawah, paling banyak 99 sebelum `succeeded`). Menu konteks Cancel Install memakai `ActionMenuItems` dengan `disabledReason` "Can’t be cancelled during Commit". Diterapkan di spec 0018 (2026-10-21).
+  - :533: inspector memakai `.stacklyInspector` dan `InspectorHeader`. Diterapkan di spec 0018 (2026-10-21).
+  - :542: hapus `ActionFeedbackBanner` dan `StateBanner` sementara serta penanda `// provisional: F67`. Sukses memulai memakai `FeedbackCenter.show(.started("Installing {name} {version}. Staged, verified, then committed."))`, selesai memakai `.success("{name} {version} installed and verified.")` (pengumuman datang dari `FeedbackCenter`), gagal tetap `StateBanner` critical di panel detail; `notSent` dan `outcomeUnknown` lewat `Feedback.outcome`. Diterapkan di spec 0018 (2026-10-21).
+  - :556: pengumuman perubahan tahap memakai `StagedProgress(announcesStages: true)`. Diterapkan di spec 0018 (2026-10-21).
+  - Milestone 4 :681 (judul tanpa klausa prasyarat): tambahkan klausa "needs feature 67 milestones 1, 2, and 3 (`ui-macos.md`), atau membangun komponen itu menurut spec 0067". Diterapkan di spec 0018 (2026-10-21).
+- **Spec 0020** (`docs/specs/0020-create-instance/index.md`): Diterapkan di spec 0020 (2026-10-21).
+  - Baris batas :107: "Komponen dasar (checklist, sheet dengan footer, progress bertahap, tile, umpan balik) | fitur 67 (spec 0067); `PreflightSection` dan `CreateProgressSection` adalah pembungkus layar di `CreateInstance/` di atas `CheckList` dan `StagedProgress`". Diterapkan di spec 0020 (2026-10-21).
+  - :457: `NewInstanceSheet` memakai `StacklySheet` (lebar 560; `Form` di dalamnya memberi `.scrollContentBackground(.hidden)`); `PreflightSection` memetakan `PreflightCheck` ke `CheckItem` di dalam `CardSection("Preflight")`; `CreateProgressSection` memakai `StagedProgress(.stages)` dengan enam `StageDefinition` create. Diterapkan di spec 0020 (2026-10-21).
+  - :460: header memakai `tile` `StacklySheet`. Diterapkan di spec 0020 (2026-10-21).
+  - Perintah setara :468: `ConsoleBlock(command:)` dengan pengumuman "Command copied.". Diterapkan di spec 0020 (2026-10-21).
+  - Footer :469: aksi utama Create adalah `StacklyAction` dengan `disabledReason` dari aturan Create aktif (copy alasan ditulis spec 0020); Cancel di mode progress (:470) adalah `StacklyAction` dengan `ActionRole.standard(confirmation:)` "Stop creating this instance?". Diterapkan di spec 0020 (2026-10-21).
+  - :499 (status preflight sebagai status set baru): diganti tabel *Status checklist* spec 0067, jadi langkah 14 tidak menambah tabel itu ke design.md. Diterapkan di spec 0020 (2026-10-21).
+  - Selesai :471: hasil create setelah sheet tertutup dikirim ke `FeedbackCenter` oleh layar pemilik sheet. Diterapkan di spec 0020 (2026-10-21).
+  - Milestone 3 :1050: ganti "komponen fitur 67 ... kalau sudah ada" dengan "needs feature 67 milestones 1 and 2 (`ui-macos.md`), atau membangun komponen itu menurut spec 0067". Diterapkan di spec 0020 (2026-10-21).
+  - Follow-up :1106 terjawab. Diterapkan di spec 0020 (2026-10-21).
+- **Spec 0021** (`docs/specs/0021-start-readiness-connection/index.md`): Diterapkan di spec 0021 (2026-10-21).
+  - Baris batas :90 tetap. Diterapkan di spec 0021 (2026-10-21).
+  - *Tab Summary* :228 sampai :237: kartu memakai `CardSection` dan `.labeledContentStyle(.stackly)`; Copy endpoint memakai `CopyButton(style: .icon, announcement: "Address copied.")` di luar `LabeledContent`; Copy Instance ID `CopyButton(announcement: "ID copied.")`; Copy connection tanpa secret `CopyButton(announcement: "{title} copied.")`. Diterapkan di spec 0021 (2026-10-21).
+  - Toolbar :267: menu More memakai `ActionMenu` dengan `StacklyAction` "Copy Connection String" (`mutates` false, `disabledReason` dari copy spec 0021); tombol aksi utama di toolbar memakai `ActionButton(showsReason: false)`, dan alasannya tampil di halaman. Diterapkan di spec 0021 (2026-10-21).
+  - Milestone 3 :722: ganti "memakai komponen fitur 67 ... kalau sudah ada" dengan "needs feature 67 milestones 1 and 3 (`ui-macos.md`)". Diterapkan di spec 0021 (2026-10-21).
+- **Spec 0022** (`docs/specs/0022-overview-daftar-instance/index.md`): Diterapkan di spec 0022 (2026-10-21).
+  - Baris batas :68: `ProviderTile` milik spec 0067 dengan parameter tambahan `name` (atau `TileSpec`). Diterapkan di spec 0022 (2026-10-21).
+  - Baris batas :76: "Umpan balik setelah aksi | fitur 67 (`FeedbackCenter`, `Feedback.outcome`)". Diterapkan di spec 0022 (2026-10-21).
+  - :203: hapus `ActionFeedbackBanner` dari folder `Instances/`. Diterapkan di spec 0022 (2026-10-21).
+  - :227 sampai :229: inspector memakai `.stacklyInspector` (lebar 240, 280, 360 tetap), header memakai `InspectorHeader`, isi memakai `CardSection` dan `.labeledContentStyle(.stackly)`. Diterapkan di spec 0022 (2026-10-21).
+  - Aksi instance: tombol Start, Stop, dan Retry adalah `StacklyAction` lewat `ActionButton`; menu konteks memakai `ActionMenuItems`. Diterapkan di spec 0022 (2026-10-21).
+  - :274: ganti dengan "Umpan balik lewat `FeedbackCenter`: `Feedback.outcome` untuk `rejected`, `notSent`, `outcomeUnknown`, `Feedback.failure` untuk operasi `failed`, dan `Feedback.neutral` dengan copy spec ini untuk `cancelled`". Diterapkan di spec 0022 (2026-10-21).
+  - Langkah 7 :501: hapus `ActionFeedbackBanner` (`// provisional: F67`). Diterapkan di spec 0022 (2026-10-21).
+  - :529: hapus "umpan balik aksi memakai banner sementara". Diterapkan di spec 0022 (2026-10-21).
+  - Usulan :545: signature final `ProviderTile(mark:tile:name:size:)` dan `ProviderTile(_:size:)` dengan `TileSpec`. Diterapkan di spec 0022 (2026-10-21).
+  - Milestone 3 :498: "spec 0017 milestone 3 (`CatalogStore`, `ProviderTile`)" menjadi "spec 0017 milestone 3 (`CatalogStore`)", lalu tambahkan "needs feature 67 milestones 1 and 3 (`ui-macos.md`), atau membangun komponen itu menurut spec 0067". Diterapkan di spec 0022 (2026-10-21).
+  - Follow-up :560 bagian fitur 67 terjawab. Diterapkan di spec 0022 (2026-10-21).
+- **Spec 0068 dan 0069**: tidak ada perubahan teks dari spec ini; kesepakatan di *Asumsi lintas spec* ditulis di spec masing masing oleh architect nya di wave ini. Ditunda: tidak ada perubahan teks yang diusulkan, dan spec 0068 serta 0069 di luar daftar target update ini.
 
 ## Build plan
 

@@ -45,7 +45,7 @@ Sudah dikunci PRD dan tidak dibahas ulang: Rust untuk core, daemon, dan CLI; Swi
 | Fuzzing | cargo-fuzz di folder `fuzz/` di luar workspace, dengan nightly bertanggal yang dipin hanya di `fuzz/rust-toolchain.toml` (spec 0006) | Toolchain utama tetap stable 1.99.1 |
 | Kebijakan `unsafe` | Dilarang di semua crate kecuali `stackly-platform-macos`. `stackly-storage` tidak memakai `unsafe` (spec 0005). Mekanismenya ada di Konfigurasi workspace. Setiap blok `unsafe` wajib komentar `// SAFETY:` | Area audit keamanan sempit (NFR-009) |
 | Proyek Xcode | `apps/macos/Stackly.xcodeproj` dibuat sekali dari template app macOS di Xcode 27, lalu disimpan di git dengan synchronized folder groups. Setelannya ada di bagian Proyek Xcode dan package Swift | Tanpa tool tambahan, konflik pbxproj jarang |
-| Modul Swift | Target app `Stackly`, package lokal `StacklyClient` (`clients/swift`) dan `StacklyUI` (`apps/macos/Packages/StacklyUI`). Arah dependency: target app → `StacklyUI` → `StacklyClient`; `StacklyClient` tanpa dependency pihak ketiga dan tanpa `MainActor`; product `StacklyTestSupport` dipakai test `StacklyClient` dan `StacklyUI` (spec 0013) | Client dan UI bisa diuji dan dipratinjau tanpa app |
+| Modul Swift | Target app `Stackly`, package lokal `StacklyClient` (`clients/swift`) dan `StacklyUI` (`apps/macos/Packages/StacklyUI`). Arah dependency: target app → `StacklyUI` → `StacklyClient`; `StacklyClient` tanpa dependency pihak ketiga dan tanpa `MainActor`; product `StacklyTestSupport` dipakai test `StacklyClient` dan `StacklyUI` (spec 0013). *Ditambah fase 02 (2026-10-21, spec 0068):* `clients/swift` mendapat target internal `StacklyEvidenceCore` (dipakai `StacklyTestSupport` dan `StacklyXCTestSupport`) dan product `StacklyXCTestSupport`; `Stackly.xcodeproj` mendapat target UI test `StacklyAppUITests` dan referensi paket lokal kedua `../../clients/swift`; arah dependency `StacklyAppUITests` → `StacklyUI`, `StacklyXCTestSupport`. Tidak ada dependency pihak ketiga | Client dan UI bisa diuji dan dipratinjau tanpa app |
 | Test Rust | `cargo test` | Pilihan engineer. Lihat aturan isolasi di Consequences |
 | Test Swift | Swift Testing untuk unit test, XCUITest untuk UI test | Test berparameter cocok untuk fixture kontrak |
 | Format dan lint | rustfmt dan clippy, `swift-format` (`.swift-format`) | Semuanya ikut toolchain |
@@ -131,8 +131,9 @@ stackly/
 │   └── macos/
 │       ├── Stackly.xcodeproj
 │       ├── Stackly/        # target app (synchronized folder)
+│       ├── StacklyAppUITests/  # target UI test XCUITest (synchronized folder, spec 0068)
 │       └── Packages/StacklyUI/
-├── clients/swift/          # package StacklyClient
+├── clients/swift/          # package StacklyClient; product StacklyTestSupport dan StacklyXCTestSupport, target internal StacklyEvidenceCore (spec 0068)
 │   └── Sources/StacklyClient/Generated/  # StacklyProtocol.swift, OpenEnums.swift, ContractInfo.swift (spec 0006)
 ├── protocols/
 │   ├── schemas/            # JSON Schema protokol, hasil codegen
@@ -179,7 +180,7 @@ Integration test Rust berada di folder `tests/` milik masing masing crate. Spec 
 
 ### Proyek Xcode dan package Swift
 
-- **Asal proyek:** `Stackly.xcodeproj` dibuat sekali dari template app macOS di Xcode 27, lalu disimpan di git. Setelah itu, file baru masuk lewat synchronized folder tanpa mengubah pbxproj.
+- **Asal proyek:** `Stackly.xcodeproj` dibuat sekali dari template app macOS di Xcode 27, lalu disimpan di git. Setelah itu, file baru masuk lewat synchronized folder tanpa mengubah pbxproj. *Ditambah fase 02 (2026-10-21, spec 0068):* target `StacklyAppUITests`, referensi paket lokal `../../clients/swift`, dan Testables scheme `Stackly` ditulis tangan sekali di `project.pbxproj` dan `Stackly.xcscheme` dengan meniru bentuk target app (grup sinkron), lalu dicek dengan `xcodebuild -list` dan satu build; file baru di target itu tetap masuk lewat synchronized folder.
 - **Setelan target app yang menyimpang dari template:**
   - `ARCHS = arm64`, supaya build Release tidak menjadi universal binary.
   - `MACOSX_DEPLOYMENT_TARGET = 27.0` dan `PRODUCT_BUNDLE_IDENTIFIER = com.ojiepermana.stackly`.

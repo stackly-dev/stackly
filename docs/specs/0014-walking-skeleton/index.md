@@ -416,7 +416,7 @@ Sesi paralel: milestone 1 dan 2 berjalan bersamaan karena folder nya terpisah (c
 - Revision fake naik ke `0.2.0` dan golden paket berubah, jadi sesi lain yang memakai paket fake perlu rebase setelah langkah 5.
 - Suite ujung ke ujung memanggil `/bin/ps`, membangun beberapa binary, dan menunggu delay init 15 detik, jadi lebih lambat dari test lain dan butuh macOS.
 - Test Swift membuktikan perubahan dari client lain lewat koneksi `StacklyClient` kedua, bukan CLI; gabungan CLI dan GUI hanya dibuktikan record manual.
-- Bukti GUI visual tetap manual sampai fitur 68.
+- Bukti GUI visual tetap manual sampai fitur 68. *Dijawab spec 0068 (2026-10-21):* isi halaman dan bagian shell yang bisa dirender sendiri (banner, footer) dibuktikan suite snapshot spec 0068 di atas fixture, label dan aksi shell oleh XCUITest nya; bingkai jendela (sidebar, toolbar, glass) hanya lewat screenshot XCUITest yang dilihat manusia, dan setting sistem asli tetap manual.
 
 **Neutral**:
 
