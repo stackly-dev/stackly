@@ -388,3 +388,9 @@ Tambahan lead pada putaran yang sama (2026-10-20): cek Dynamic Type di AC-16 dan
 ## Folder run sentinel (2026-10-20)
 
 Folder run sentinel di AC-1 menjadi `/stackly sentinel/run`, bukan `/tmp/stackly sentinel/run`, karena `cargo xtask check-deps` menolak path mesin seperti `/tmp` di crate library; folder baru ada di bawah basis `/stackly` yang sama dengan render sample spec 0009 dan tetap memuat spasi, jadi nilai token yang tidak di encode tetap terdeteksi (dibangun langkah 1, commit e6c747f).
+
+## Update 2026-10-21 dari spec 0067, 0068, dan 0069
+
+- **Komponen.** Kartu Summary memakai `CardSection`, `.labeledContentStyle(.stackly)`, dan `CopyButton` spec 0067; toolbar memakai `ActionButton(showsReason: false)` dan `ActionMenu`, jadi alasan nonaktif aksi utama ditulis di konten halaman (spec 0067 AC-7).
+- **Perintah.** Spec 0069 membuat halaman Instances menerbitkan `openInstance`, `back`, dan `copyConnectionString`, dan klik ulang sidebar lewat hook `onReselect`. Teks AC-15 kini menyebut action yang sama untuk tombol Open dan Copy di inspector, disetujui user lewat lead (2026-10-21). Teks AC-12 belum diubah: usulan menyebut tooltip More lewat `CommandMap.helpText(for:)`, padahal More tidak punya `CommandID`, jadi koreksinya diajukan lagi ke lead.
+- **Snapshot.** Langkah 10 menambah suite `InstanceDetailSnapshotTests` di atas harness spec 0068. Teks AC-16 (cek teks besar lewat `#Preview`) tetap, atas keputusan user.
