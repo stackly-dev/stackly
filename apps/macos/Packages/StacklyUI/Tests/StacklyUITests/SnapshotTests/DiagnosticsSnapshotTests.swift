@@ -12,7 +12,7 @@ extension SnapshotTests {
             let model = runtime.model
             try await assertSnapshot(
                 DiagnosticsPage(
-                    diagnostics: model.diagnostics,
+                    diagnostics: model.diagnostics.pinningFixtureContract(),
                     isReconnecting: model.presentation.isReconnecting,
                     reconnect: {},
                     refresh: {}),
