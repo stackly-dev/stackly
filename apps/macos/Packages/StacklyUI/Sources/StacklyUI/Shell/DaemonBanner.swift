@@ -51,6 +51,7 @@ public struct DaemonBanner: View {
                 actions: content.actions.map(stateAction),
                 base: .window
             )
+            .accessibilityIdentifier(AccessibilityID.DaemonBanner.container)
         }
     }
 

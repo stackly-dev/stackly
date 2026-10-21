@@ -17,22 +17,15 @@ nonisolated public enum AccessibilityID {
 
     /// The daemon footer in the sidebar.
     public enum DaemonFooter {
-        /// The status label.
+        /// The status label, read as "Status: <text>".
         public static let status = "daemonFooter.status"
-        /// The Settings button.
-        public static let settings = "daemonFooter.settings"
     }
 
-    /// The daemon banner above the pages.
+    /// The daemon banner above the pages. Its label is the banner title and its buttons
+    /// are found by their titles, so only the container has an identifier.
     public enum DaemonBanner {
         /// The banner.
         public static let container = "daemonBanner.container"
-        /// The banner title.
-        public static let title = "daemonBanner.title"
-        /// The Reconnect action.
-        public static let reconnect = "daemonBanner.action.reconnect"
-        /// The Open Diagnostics action.
-        public static let openDiagnostics = "daemonBanner.action.openDiagnostics"
     }
 
     /// The design gallery window.
@@ -42,18 +35,6 @@ nonisolated public enum AccessibilityID {
         public static func topic(_ topic: String) -> String {
             "gallery.topic.\(topic)"
         }
-
-        /// The trigger button of the confirmation sample `sample`.
-        public static func confirmationTrigger(_ sample: String) -> String {
-            "gallery.confirmation.trigger.\(sample)"
-        }
-
-        /// The text that says what the last confirmation did.
-        public static let confirmationResult = "gallery.confirmation.result"
-        /// The Show All button of the States page.
-        public static let statesShowAll = "gallery.states.showAll"
-        /// The Daemon Unreachable toggle of the States page.
-        public static let statesDaemonUnreachable = "gallery.states.daemonUnreachable"
     }
 
     /// The feedback card.

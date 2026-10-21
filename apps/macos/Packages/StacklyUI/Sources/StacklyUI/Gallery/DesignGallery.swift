@@ -26,6 +26,8 @@
             NavigationSplitView {
                 List(GalleryTopic.allCases, selection: $selection) { topic in
                     Label(topic.title, systemImage: topic.symbol)
+                        .accessibilityIdentifier(
+                            AccessibilityID.Gallery.topic(String(describing: topic)))
                 }
                 .navigationSplitViewColumnWidth(min: 170, ideal: 190)
             } detail: {
