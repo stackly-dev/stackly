@@ -32,6 +32,7 @@
 | `2026-10-22` | Slot `main` dari lead Scope 02 setelah F15 (`1b30f56`): spec 0024 dan 0025 di-merge (`002c9fe`, `0afcd9b`), Pointer dan milestone fitur 24 dan 25 ditempel (`7d2c3b9`, `d04ebb0`), fitur 24 dan 25 `in-progress` di `index.md`. Graph dokumen dikumpulkan di akhir wave (aturan lintas scope). `start_session` `user_asked` ditolak karena giliran ini dipicu pesan sesi lain, jadi `dev-f24-m1` diajukan sebagai kartu `task_45beff5d` dengan brief lengkap. | `lead` |
 | `2026-10-22` | Disk hampir penuh (1,3 sampai 2,6 GiB kosong): `target/` checkout utama 36G, worktree Scope 02 yang idle atau sudah di-merge sekitar 57G (`arc-f15-update-92bf17`, `nifty-joliot-9c338f`, `dev-f18-m2-f7a13e`, `dev-f19-m1-bf9875`), CDC-ETL sekitar 59G. `dev-f24-m1` gagal mulai karena itu. Lead meminta lead Scope 02 membersihkan `target/` miliknya dan bertanya ke user; antrian Scope 03 berhenti sampai ruang lega. | `lead` |
 | `2026-10-22` | Lead `ui-macos` mencatat lima selisih mockup sheet Duplicate spec 0024 di `docs/scope/ui-macos.md` (`2b1e4f3`, disetujui user mereka); baris Follow-up spec 0024 "Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`" dicentang lewat `/sync` di akhir wave dengan hash itu. | `lead` |
+
 ## Blocker terbuka
 
 - F24 `Build it`: menunggu spec 0024 (wave 1), lalu build fase 02 yang dikoordinasi lead Scope 02 (paling tidak F20 milestone 2 sampai 4, F21, F22); daftar persisnya menyusul dari Build plan spec 0024.
