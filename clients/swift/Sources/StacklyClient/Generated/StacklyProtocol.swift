@@ -709,6 +709,44 @@ public struct CapabilityStatus: Codable, Sendable, Equatable {
 	}
 }
 
+/// How full a volume is. Open: newer daemons may add values.
+public enum CapacityLevel: String, Codable, Sendable, Equatable {
+	/// Plenty of space is left.
+	case ok
+	/// At least 80 percent is used.
+	case filling
+	/// At least 90 percent is used, or under 5 GB is left.
+	case low
+	/// Under 2 GB is left.
+	case critical
+	/// A level this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The space left on the volume that holds the data root, read now. The
+/// daemon computes `level`; clients never apply thresholds themselves.
+public struct CapacityReport: Codable, Sendable, Equatable {
+	/// When the daemon finished reading the volume.
+	public let checkedAt: Date
+	/// The size of the volume, in bytes. Never 0.
+	public let totalBytes: UInt64
+	/// The bytes an unprivileged user can still write, held to
+	/// `totalBytes`.
+	public let availableBytes: UInt64
+	/// The percent of the volume in use, 0 to 100, rounded down.
+	public let usedPercent: UInt8
+	/// How worried the user should be about the space left.
+	public let level: CapacityLevel
+
+	public init(checkedAt: Date, totalBytes: UInt64, availableBytes: UInt64, usedPercent: UInt8, level: CapacityLevel) {
+		self.checkedAt = checkedAt
+		self.totalBytes = totalBytes
+		self.availableBytes = availableBytes
+		self.usedPercent = usedPercent
+		self.level = level
+	}
+}
+
 /// An OS of a target. Open.
 public enum TargetOs: String, Codable, Sendable, Equatable {
 	/// macOS.
@@ -3033,6 +3071,8 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceGet(GetInstanceParams)
 	/// One page of instances, retained ones left out.
 	case instanceList(ListInstancesParams)
+	/// The space left on the volume that holds the data root.
+	case storageGetCapacity
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -3058,7 +3098,8 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceStart = "instance.start",
 			instanceStop = "instance.stop",
 			instanceGet = "instance.get",
-			instanceList = "instance.list"
+			instanceList = "instance.list",
+			storageGetCapacity = "storage.get_capacity"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -3179,6 +3220,9 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instanceList(content)
 					return
 				}
+			case .storageGetCapacity:
+				self = .storageGetCapacity
+				return
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -3254,6 +3298,8 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceList(let content):
 			try container.encode(CodingKeys.instanceList, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .storageGetCapacity:
+			try container.encode(CodingKeys.storageGetCapacity, forKey: .type)
 		}
 	}
 }
@@ -3327,6 +3373,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceGet(InstanceSummary)
 	/// One page of instances.
 	case instanceList(InstancePage)
+	/// The space left, read now.
+	case storageGetCapacity(CapacityReport)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -3352,7 +3400,8 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceStart = "instance.start",
 			instanceStop = "instance.stop",
 			instanceGet = "instance.get",
-			instanceList = "instance.list"
+			instanceList = "instance.list",
+			storageGetCapacity = "storage.get_capacity"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -3481,6 +3530,11 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instanceList(content)
 					return
 				}
+			case .storageGetCapacity:
+				if let content = try? container.decode(CapacityReport.self, forKey: .content) {
+					self = .storageGetCapacity(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -3559,6 +3613,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .instanceList(let content):
 			try container.encode(CodingKeys.instanceList, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .storageGetCapacity(let content):
+			try container.encode(CodingKeys.storageGetCapacity, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

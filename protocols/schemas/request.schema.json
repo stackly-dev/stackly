@@ -438,6 +438,19 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The space left on the volume that holds the data root.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "storage.get_capacity"
+            }
+          },
+          "required": [
+            "type"
+          ]
         }
       ]
     },

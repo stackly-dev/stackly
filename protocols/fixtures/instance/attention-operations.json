@@ -1,0 +1,284 @@
+{
+  "items": [
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000001",
+      "kind": "create_instance",
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000011"
+      },
+      "state": "needs_recovery",
+      "stage": "initdb",
+      "progress": {
+        "type": "indeterminate"
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": null,
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": {
+        "hint": "resume",
+        "cause": "interrupted",
+        "error": null,
+        "actions": [
+          "resume",
+          "abandon"
+        ]
+      },
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:01:00.000Z",
+      "startedAt": "2026-10-20T09:01:01.000Z",
+      "updatedAt": "2026-10-20T09:01:30.000Z",
+      "revision": 4
+    },
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000002",
+      "kind": "install_runtime",
+      "resource": {
+        "kind": "runtime",
+        "id": "0192f3a4-0000-7000-8000-0000000000a1"
+      },
+      "state": "needs_recovery",
+      "stage": "extract",
+      "progress": {
+        "type": "indeterminate"
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": null,
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": {
+        "hint": "abandon",
+        "cause": "step_failed",
+        "error": null,
+        "actions": [
+          "abandon"
+        ]
+      },
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:02:00.000Z",
+      "startedAt": "2026-10-20T09:02:01.000Z",
+      "updatedAt": "2026-10-20T09:02:30.000Z",
+      "revision": 4
+    },
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000003",
+      "kind": "remove_instance",
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000005"
+      },
+      "state": "needs_recovery",
+      "stage": "delete_data",
+      "progress": {
+        "type": "indeterminate"
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": null,
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": {
+        "hint": "manual",
+        "cause": "compensation_failed",
+        "error": null,
+        "actions": []
+      },
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:03:00.000Z",
+      "startedAt": "2026-10-20T09:03:01.000Z",
+      "updatedAt": "2026-10-20T09:03:30.000Z",
+      "revision": 4
+    },
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000004",
+      "kind": "start_instance",
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000002"
+      },
+      "state": "needs_recovery",
+      "stage": "spawn",
+      "progress": {
+        "type": "indeterminate"
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": null,
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": {
+        "hint": "auto_compensate",
+        "cause": "interrupted",
+        "error": null,
+        "actions": []
+      },
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:04:00.000Z",
+      "startedAt": "2026-10-20T09:04:01.000Z",
+      "updatedAt": "2026-10-20T09:04:30.000Z",
+      "revision": 4
+    },
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000005",
+      "kind": "teleport_instance",
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000004"
+      },
+      "state": "needs_recovery",
+      "stage": "beam",
+      "progress": {
+        "type": "indeterminate"
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": null,
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": {
+        "hint": "ask_a_friend",
+        "cause": "cosmic_ray",
+        "error": null,
+        "actions": [
+          "rewind"
+        ]
+      },
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:05:00.000Z",
+      "startedAt": "2026-10-20T09:05:01.000Z",
+      "updatedAt": "2026-10-20T09:05:30.000Z",
+      "revision": 4
+    },
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000006",
+      "kind": "install_runtime",
+      "resource": {
+        "kind": "runtime",
+        "id": "0192f3a4-0000-7000-8000-0000000000a2"
+      },
+      "state": "running",
+      "stage": "downloading",
+      "progress": {
+        "type": "counted",
+        "content": {
+          "done": 1048576,
+          "total": 8388608
+        }
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": null,
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": null,
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:06:00.000Z",
+      "startedAt": "2026-10-20T09:06:01.000Z",
+      "updatedAt": "2026-10-20T09:06:30.000Z",
+      "revision": 4
+    },
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000007",
+      "kind": "start_instance",
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000004"
+      },
+      "state": "queued",
+      "stage": null,
+      "progress": {
+        "type": "indeterminate"
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": null,
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": null,
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:07:00.000Z",
+      "startedAt": null,
+      "updatedAt": "2026-10-20T09:07:30.000Z",
+      "revision": 4
+    },
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000008",
+      "kind": "stop_instance",
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000001"
+      },
+      "state": "cancel_requested",
+      "stage": "signal",
+      "progress": {
+        "type": "indeterminate"
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": "2026-10-20T09:08:10.000Z",
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": null,
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:08:00.000Z",
+      "startedAt": "2026-10-20T09:08:01.000Z",
+      "updatedAt": "2026-10-20T09:08:30.000Z",
+      "revision": 4
+    },
+    {
+      "id": "0192f3a4-0000-7000-8000-000000000009",
+      "kind": "start_instance",
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000001"
+      },
+      "state": "succeeded",
+      "stage": null,
+      "progress": {
+        "type": "indeterminate"
+      },
+      "waitingOn": null,
+      "cancelRequestedAt": null,
+      "pointOfNoReturnAt": null,
+      "failure": null,
+      "recovery": null,
+      "result": null,
+      "trigger": {
+        "origin": "user",
+        "client": "cli"
+      },
+      "createdAt": "2026-10-20T09:09:00.000Z",
+      "startedAt": "2026-10-20T09:09:01.000Z",
+      "updatedAt": "2026-10-20T09:09:30.000Z",
+      "revision": 4
+    }
+  ],
+  "next": null
+}

@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000805",
+    "error": {
+      "code": "storage.capacity_unavailable",
+      "category": "unavailable",
+      "message": "disk space for the data folder is unavailable",
+      "retryable": true,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "reason",
+          "value": "io"
+        },
+        {
+          "key": "kind",
+          "value": "permission_denied"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}
