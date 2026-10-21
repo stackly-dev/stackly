@@ -10,6 +10,7 @@
 pub mod catalog;
 mod daemon;
 mod error;
+pub mod instance;
 mod instance_dir;
 mod inventory;
 mod layout;

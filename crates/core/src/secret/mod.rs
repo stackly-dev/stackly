@@ -27,7 +27,7 @@ pub use error::{
     store_code,
 };
 pub use generate::{GENERATED_LEN, GenerateError, generate_password};
-pub use redact::{MASK, Redactor};
+pub use redact::{MASK, Redactor, SecretValueShape, value_shape};
 pub use resolved::ResolvedSecrets;
 pub use rules::{EffectKind, InvalidValueReason, SecretEffect, SecretFieldRule, SecretFieldRules};
 pub use service::{
