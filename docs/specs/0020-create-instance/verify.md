@@ -6,7 +6,7 @@ _Langkah diturunkan dari acceptance criteria spec 0020. `/check verify` menjalan
 
 ### UI / manual
 
-- [ ] Buka `crates/core/src/instance/create/` → modul `evaluate.rs` tidak menyebut nama atau ID provider mana pun (aturan `check-deps` langkah 11 menunggu Milestone 2); `work.rs` hanya memakai `ValidatedPackage`, `ResolvedCreate`, dan port → AC-21
+- [x] Buka `crates/core/src/instance/create/` → modul `evaluate.rs` tidak menyebut nama atau ID provider mana pun (aturan `check-deps` langkah 11 menunggu Milestone 2); `work.rs` hanya memakai `ValidatedPackage`, `ResolvedCreate`, dan port → AC-21
 - [ ] Buka `docs/specs/0020-create-instance/index.md` bagian *Hasil yang diharapkan* dan jalankan test native TIME_WAIT di bawah → hasil di Mac ini `caution` "In use on another address of this Mac", bukan `ok` seperti tabel (temuan, lihat Commands) → AC-4
 
 ### Commands

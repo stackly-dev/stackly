@@ -42,6 +42,7 @@ use crate::secrets;
 use crate::shutdown::{SHUTDOWN_DRAIN, SHUTDOWN_FLUSH};
 use crate::startup::EXIT_START_FAILED;
 use crate::state::{DaemonCore, Phase, RegistryState};
+use crate::storage::CAPACITY_READ_TIMEOUT;
 use crate::supervisor::BuildInput;
 
 /// How many connections are served at once; the next one gets
@@ -95,6 +96,9 @@ pub struct DaemonConfig {
     /// The constants of the supervisor; tests shrink them so pauses,
     /// probes, and graces take milliseconds.
     pub supervisor: SupervisorConfig,
+    /// How long one `storage.get_capacity` read may take before it answers
+    /// `timeout`; tests shorten it (spec 0022).
+    pub capacity_read_timeout: Duration,
 }
 
 impl std::fmt::Debug for DaemonConfig {
@@ -122,6 +126,7 @@ impl Default for DaemonConfig {
             catalog: None,
             extra_log_sinks: Vec::new(),
             supervisor: SupervisorConfig::default(),
+            capacity_read_timeout: CAPACITY_READ_TIMEOUT,
         }
     }
 }
@@ -323,6 +328,8 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         redactor,
         secret_target,
     ));
+    core.storage()
+        .set_read_timeout(config.capacity_read_timeout);
 
     // Step 9.
     let socket = layout.daemon_socket();

@@ -11,3 +11,4 @@ mod lifecycle;
 mod limits;
 mod secret;
 mod secret_log;
+mod storage;
