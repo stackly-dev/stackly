@@ -30,6 +30,26 @@ struct InspectorTests {
         #expect(InspectorMetrics.padding == 16)
     }
 
+    @Test func maxWidthIs280BelowAThousandPointsAndAfterwards360() {
+        #expect(StacklyInspectorWidth.compactWindowWidth == 1000)
+        #expect(StacklyInspectorWidth.maxWidth(windowWidth: 900) == 280)
+        #expect(StacklyInspectorWidth.maxWidth(windowWidth: 999) == 280)
+        #expect(StacklyInspectorWidth.maxWidth(windowWidth: 1000) == 360)
+        #expect(StacklyInspectorWidth.maxWidth(windowWidth: 1280) == 360)
+    }
+
+    @Test func maxWidthIs360WhenTheWindowIsNotKnown() {
+        #expect(StacklyInspectorWidth.maxWidth(windowWidth: nil) == 360)
+        #expect(EnvironmentValues().stacklyWindowWidth == nil)
+    }
+
+    @Test func pageColumnAtTheSmallestWindowIsNeverBelow384() {
+        let page =
+            AppShell.minimumSize.width - AppShell.sidebarWidth.ideal
+            - StacklyInspectorWidth.maxWidth(windowWidth: AppShell.minimumSize.width)
+        #expect(page == 384)
+    }
+
     // MARK: - Toggle
 
     @Test func toggleLabelFollowsTheBinding() {
