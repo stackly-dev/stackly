@@ -13,6 +13,7 @@ use stackly_domain::{
 use super::connection::ConnectionSpec;
 use super::interpolate::{EndpointTransport, ExecRef, InstanceDir, Interp, PathExpr};
 use super::names::SettingName;
+use super::probe::native::NativeProbeKind;
 use super::settings::Pattern;
 use super::template::TemplateFormat;
 use super::timeouts::Timeouts;
@@ -249,6 +250,24 @@ pub(crate) enum ProbeDef {
         command: CommandSpec,
         success: Vec<u8>,
     },
+    /// A probe from the native registry (spec 0023), with every param the
+    /// descriptor lists, in descriptor order.
+    Native {
+        kind: NativeProbeKind,
+        endpoint: EndpointName,
+        params: Vec<(&'static str, NativeParamDef)>,
+    },
+}
+
+/// A checked param of a native probe, before interpolation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum NativeParamDef {
+    /// Text with its literal parts and tokens.
+    Text(Interp),
+    /// A boolean written as `true` or `false`.
+    Literal(bool),
+    /// A boolean that is exactly one boolean token.
+    Token(Interp),
 }
 
 /// A checked readiness block.

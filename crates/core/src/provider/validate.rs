@@ -22,8 +22,8 @@ use super::interpolate::{
 use super::issue::{FileIssues, Issue, IssueCode, Issues, Location};
 use super::manifest::{
     Category, CommandSpec, ConfigFileSpec, DataMarker, EndpointPurpose, EndpointSpec, HealthSpec,
-    InitStepSpec, ManagedField, Manifest, ProbeDef, ReadinessSpec, ReloadActionSpec, ReloadSpec,
-    StdinSpec, StopSignal, StopSpec,
+    InitStepSpec, ManagedField, Manifest, NativeParamDef, ProbeDef, ReadinessSpec,
+    ReloadActionSpec, ReloadSpec, StdinSpec, StopSignal, StopSpec,
 };
 use super::names::{
     COMPONENT_RULE, NAME_RULE, SettingName, env_key_problem, is_component, is_name,
@@ -34,9 +34,10 @@ use super::package::{
     check_files,
 };
 use super::plan::{PlanContext, ResolvedEndpoint, RuntimeContext};
+use super::probe::native::{NativeParamKind, NativeProbeKind};
 use super::raw::{
-    API_VERSION, KIND, RawCommand, RawManifest, RawProbe, RawSettingsSchema, RawStdin, RawStep,
-    RawVersions, check_yaml_value, decode_json, decode_json_text, decode_yaml, parse_json,
+    API_VERSION, KIND, RawCommand, RawManifest, RawParam, RawProbe, RawSettingsSchema, RawStdin,
+    RawStep, RawVersions, check_yaml_value, decode_json, decode_json_text, decode_yaml, parse_json,
     parse_yaml,
 };
 use super::settings::{ApplyClass, FieldKind, ScalarKind, SettingsSchema, parse_schema};
@@ -1637,6 +1638,8 @@ impl Checker<'_> {
                         ("expectStatus", raw.expect_status.is_some()),
                         ("command", raw.command.is_some()),
                         ("successExitCodes", raw.success_exit_codes.is_some()),
+                        ("name", raw.name.is_some()),
+                        ("params", raw.params.is_some()),
                     ],
                 );
                 endpoint(
@@ -1653,6 +1656,8 @@ impl Checker<'_> {
                     &[
                         ("command", raw.command.is_some()),
                         ("successExitCodes", raw.success_exit_codes.is_some()),
+                        ("name", raw.name.is_some()),
+                        ("params", raw.params.is_some()),
                     ],
                 );
                 let endpoint = endpoint(self, &[EndpointTransport::Tcp], "http");
@@ -1703,6 +1708,8 @@ impl Checker<'_> {
                         ("endpoint", raw.endpoint.is_some()),
                         ("path", raw.path.is_some()),
                         ("expectStatus", raw.expect_status.is_some()),
+                        ("name", raw.name.is_some()),
+                        ("params", raw.params.is_some()),
                     ],
                 );
                 let success = self.success_codes(
@@ -1725,11 +1732,162 @@ impl Checker<'_> {
                 )?;
                 Some(ProbeDef::Exec { command, success })
             }
+            "native" => {
+                self.reject_fields(
+                    path,
+                    "native probes",
+                    &[
+                        ("path", raw.path.is_some()),
+                        ("expectStatus", raw.expect_status.is_some()),
+                        ("command", raw.command.is_some()),
+                        ("successExitCodes", raw.success_exit_codes.is_some()),
+                    ],
+                );
+                self.native_probe(raw, path, env, endpoint)
+            }
             other => {
                 self.at(
                     format!("{path}.type"),
                     IssueCode::UnknownProbe,
-                    format!("unknown probe {other}; use tcp, http, or exec"),
+                    format!("unknown probe {other}; use tcp, http, exec, or native"),
+                );
+                None
+            }
+        }
+    }
+
+    /// Checks the `native` variant of a probe: the name in the registry,
+    /// an endpoint of a transport the descriptor accepts, and every param
+    /// (spec 0023, *Jenis probe native*).
+    fn native_probe(
+        &mut self,
+        raw: &RawProbe,
+        path: &str,
+        env: &TypeEnv<'_>,
+        endpoint: impl FnOnce(&mut Self, &[EndpointTransport], &str) -> Option<EndpointName>,
+    ) -> Option<ProbeDef> {
+        let kind = match raw.name.as_deref() {
+            None => {
+                self.at(
+                    format!("{path}.name"),
+                    IssueCode::MissingField,
+                    "native probes need name",
+                );
+                None
+            }
+            Some(name) => {
+                let kind = NativeProbeKind::from_name(name);
+                if kind.is_none() {
+                    let known: Vec<&str> = NativeProbeKind::ALL
+                        .iter()
+                        .map(|kind| kind.descriptor().name)
+                        .collect();
+                    self.at(
+                        format!("{path}.name"),
+                        IssueCode::UnknownProbe,
+                        format!("unknown native probe {name}; use {}", known.join(", ")),
+                    );
+                }
+                kind
+            }
+        };
+        let kind = kind?;
+        let descriptor = kind.descriptor();
+        let start = self.count();
+        let endpoint = endpoint(self, descriptor.endpoint_transports, "native");
+        let given = raw.params.as_ref();
+        for key in given.into_iter().flat_map(BTreeMap::keys) {
+            if !descriptor.params.iter().any(|param| param.name == key) {
+                self.at(
+                    format!("{path}.params.{key}"),
+                    IssueCode::UnknownField,
+                    format!("{} has no param {key}", descriptor.name),
+                );
+            }
+        }
+        let mut params = Vec::new();
+        for param in descriptor.params {
+            let at = format!("{path}.params.{}", param.name);
+            let Some(value) = given.and_then(|given| given.get(param.name)) else {
+                self.at(
+                    &at,
+                    IssueCode::MissingField,
+                    format!("{} needs param {}", descriptor.name, param.name),
+                );
+                continue;
+            };
+            if let Some(def) = self.native_param(param.kind, value, &at, env) {
+                params.push((param.name, def));
+            }
+        }
+        if self.count() > start {
+            return None;
+        }
+        Some(ProbeDef::Native {
+            kind,
+            endpoint: endpoint?,
+            params,
+        })
+    }
+
+    /// Checks one param of a native probe against its declared kind.
+    fn native_param(
+        &mut self,
+        kind: NativeParamKind,
+        value: &RawParam,
+        at: &str,
+        env: &TypeEnv<'_>,
+    ) -> Option<NativeParamDef> {
+        match (kind, value) {
+            (NativeParamKind::Text { max_bytes }, RawParam::Text(text)) => {
+                let interp =
+                    check_value(text, ValuePosition::ProbeText, env, &mut self.yaml(), at)?;
+                self.record_refs(&interp, at);
+                let mut literal = String::new();
+                let mut whole = true;
+                for piece in &interp.pieces {
+                    match piece {
+                        super::interpolate::Piece::Literal(part) => literal.push_str(part),
+                        super::interpolate::Piece::Token(_) => whole = false,
+                    }
+                }
+                let bad = if literal.chars().any(char::is_control) {
+                    Some("a text param holds no control character")
+                } else if whole && literal.is_empty() {
+                    Some("a text param is not empty")
+                } else if whole && literal.len() > max_bytes {
+                    Some("a text param is longer than the probe allows")
+                } else {
+                    None
+                };
+                if let Some(message) = bad {
+                    self.at(
+                        at,
+                        IssueCode::InvalidValue,
+                        format!("{message} (at most {max_bytes} bytes)"),
+                    );
+                    return None;
+                }
+                Some(NativeParamDef::Text(interp))
+            }
+            (NativeParamKind::Boolean, RawParam::Boolean(flag)) => {
+                Some(NativeParamDef::Literal(*flag))
+            }
+            (NativeParamKind::Boolean, RawParam::Text(text)) => {
+                let interp =
+                    check_value(text, ValuePosition::ProbeBoolean, env, &mut self.yaml(), at)?;
+                self.record_refs(&interp, at);
+                Some(NativeParamDef::Token(interp))
+            }
+            (NativeParamKind::Text { .. }, _) => {
+                self.at(at, IssueCode::InvalidValue, "this param is text");
+                None
+            }
+            (NativeParamKind::Boolean, _) => {
+                self.at(
+                    at,
+                    IssueCode::InvalidValue,
+                    "this param is true, false, or one boolean token",
                 );
                 None
             }

@@ -187,6 +187,8 @@ pub fn interpolation(data: &[u8]) {
         ValuePosition::EnvValue { secrets: false },
         ValuePosition::EnvValue { secrets: true },
         ValuePosition::Managed,
+        ValuePosition::ProbeText,
+        ValuePosition::ProbeBoolean,
     ] {
         let Some(interp) = check_value(text, position, &env, &mut sink, "fuzz") else {
             continue;
@@ -202,6 +204,30 @@ pub fn interpolation(data: &[u8]) {
             );
         } else {
             assert!(!has_secret, "a secret was accepted in a value position");
+        }
+        if matches!(
+            position,
+            ValuePosition::ProbeText | ValuePosition::ProbeBoolean
+        ) {
+            assert!(
+                !interp.tokens().any(|token| matches!(
+                    token,
+                    Token::InstanceSecrets
+                        | Token::InstanceDir(_)
+                        | Token::RuntimeRoot
+                        | Token::RuntimeExecutable
+                        | Token::RuntimeAlias(_)
+                        | Token::EndpointSocket(_)
+                        | Token::EndpointSocketDir(_)
+                )),
+                "a probe param names a folder, the runtime root, or an executable"
+            );
+        }
+        if position == ValuePosition::ProbeBoolean {
+            assert!(
+                matches!(interp.pieces.as_slice(), [Piece::Token(_)]),
+                "a boolean param is not exactly one token"
+            );
         }
         if position == ValuePosition::Managed {
             assert!(

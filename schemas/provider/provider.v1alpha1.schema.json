@@ -550,6 +550,29 @@
             }
           ]
         },
+        "name": {
+          "description": "The registry name of a `native` probe (spec 0023).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 32,
+          "pattern": "^[a-z][a-z0-9-]{0,31}$"
+        },
+        "params": {
+          "description": "The params of a `native` probe, by name.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/ProbeParam"
+          },
+          "maxProperties": 8,
+          "propertyNames": {
+            "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+          }
+        },
         "path": {
           "type": [
             "string",
@@ -575,6 +598,13 @@
       "additionalProperties": false,
       "required": [
         "type"
+      ]
+    },
+    "ProbeParam": {
+      "type": [
+        "string",
+        "boolean",
+        "integer"
       ]
     },
     "Readiness": {

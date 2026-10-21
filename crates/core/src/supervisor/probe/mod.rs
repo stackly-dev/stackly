@@ -1,5 +1,5 @@
 //! The probe runners (spec 0010, *Probe, readiness, dan health*, and K3):
-//! one attempt of a `tcp`, `http`, or `exec` probe from the plan, with one
+//! one attempt of a `tcp`, `http`, `exec`, or `native` probe from the plan, with one
 //! [`ProbeOutcome`] for every kind.
 //!
 //! An attempt never reads a body, never follows a redirect, and talks only
@@ -11,6 +11,7 @@
 
 mod exec;
 mod http;
+mod native;
 mod tcp;
 
 use std::time::Duration;
@@ -140,6 +141,7 @@ pub async fn run(
             .await
         }
         ProbeSpec::Exec(spec) => exec::run(spec, attempt_timeout, context).await,
+        ProbeSpec::Native(spec) => native::run(spec, attempt_timeout, context.redactor).await,
     }
 }
 
