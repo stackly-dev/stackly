@@ -498,27 +498,131 @@ Feedback is the result of something the person did, shown as an opaque card unde
 
 ### Sheet
 
-Filled by milestone 2.
+Checked on macOS 27.0.1 with a probe sheet and real key events (spec 0067 rationale, *Temuan langkah 9*): a footer drawn inside the sheet works, so the footer stays explicit and does not move to toolbar placements.
+
+- **Return** runs the primary action with focus in a `TextField` and in a `Toggle`; a destructive primary action has no shortcut and a disabled one does not run.
+- **Escape** closes a sheet on its own and does not run the Cancel action, even with `.keyboardShortcut(.cancelAction)`. With `.interactiveDismissDisabled()` Escape runs the Cancel action once and the sheet stays open unless that action closes it. A sheet therefore always sets it, because Cancel may mean something other than closing.
+- A confirmation from inside a sheet shows as a second sheet on top of it, and Escape there cancels only the confirmation.
+- `.presentationBackground` draws the sheet opaque, with nothing of the window behind it showing through.
+- Not checked (manual): Tab and Space with Keyboard navigation on, and VoiceOver.
+
+`StacklySheet(title:subtitle:tile:primary:cancel:minWidth:content:)` draws the opaque `surfaceWindow` background, a header, a body, and a fixed footer.
+
+- **Header.** An optional `ProviderTile` at `mediumSize` (40 pt), the title in `.title3.weight(.semibold)`, and the subtitle in `.callout` `textSecondary`. Padding: 20 above, 22 at the sides, 6 below.
+- **Body.** A `ScrollView` with 12 pt above, 22 pt at the sides, 16 pt below, and 16 pt between children. Its height is the height of its content, at most the visible screen height minus 160 pt, so a short sheet does not scroll and a long one scrolls without cutting text. A screen that puts a `Form` in the body sets `.scrollContentBackground(.hidden)` so the sheet background shows and the rows keep their native background.
+- **Footer.** Outside the scroll area: the reason on the left, then Cancel, then the primary action (12 pt above, 22 at the sides, 18 below). The reason is the `DisabledReasonText` of the primary action when it is disabled with a reason, or the gate's reason when the primary action `mutates` and the gate is `.blocked`, because the sheet covers the window banner. When the primary action is busy the footer shows a small spinner next to it and VoiceOver reads the value "In progress".
+- **Buttons.** The primary action is `.borderedProminent` with `.keyboardShortcut(.defaultAction)`; a destructive primary action is `.bordered`, `role: .destructive`, with no shortcut, so Return does nothing there. A disabled or busy primary action does not run on Return. Cancel is `.bordered` with `.keyboardShortcut(.cancelAction)` and stays enabled while the primary action is busy. These are the only two shortcuts the components set. With no `cancel` given, "Cancel" closes the sheet; a screen gives its own `cancel` when it means something else, such as cancelling an operation behind a confirmation. Identifiers: `sheet.cancel` and `sheet.primary`.
+- **Host.** The sheet sets its own `.actionHost()`, so a confirmation raised from inside shows on top of this sheet. A view inside a sheet never sends to the window's `FeedbackCenter`: it shows its result with a `StateBanner`, and the screen that owns the sheet sends feedback after the sheet closed.
 
 ### Checklist
 
-Filled by milestone 2.
+`CheckList(_:layout:)` shows `CheckItem`s: a symbol, the title in `.callout` primary text, the detail in `.subheadline` `textSecondary` wrapped in full (never an ellipsis), and an optional `ActionButton` under the text. A screen wraps it in a `CardSection` (for example "Preflight") and maps its own result (a preflight check, a doctor result) to a `CheckStatus`. This table replaces the preflight status table of spec 0020.
+
+| `CheckStatus` | VoiceOver word | Tone | Symbol |
+| --- | --- | --- | --- |
+| `passed` | Passed | `positive` | `checkmark.circle.fill` |
+| `warning` | Warning | `caution` | `exclamationmark.triangle.fill` |
+| `failed` | Failed | `critical` | `xmark.circle.fill` |
+| `pending` | Checking | `neutral` | a small `ProgressView` after 300 ms, an empty box before that |
+| `unrecognized` | Unrecognized status | `caution` | `questionmark.diamond.fill` |
+
+- The symbol uses the tone's fill (never `StacklyColor.decorative`), and its shape differs per status, so Differentiate Without Color changes nothing. A status change crossfades.
+- **Layout.** `.adaptive` is a grid with columns at least 200 pt wide and 16 pt apart: two columns in a 560 pt sheet (488 pt inside the card), one in a narrow width. `.single` is one column. `pending` shows its spinner only after 300 ms (`DelayedVisibility`), so a fast check does not flash.
+- **VoiceOver.** One element per row, "{title}, {status}: {detail}" (without the detail when there is none), and the row's action is its own element. The row identifier is `checklist.row.<id>`. Announcing a change of status or a summary is the screen's job.
 
 ### Staged progress
 
-Filled by milestone 2.
+`StagedProgressValue.from(operation:stages:)` turns an `OperationSummary` and the `StageDefinition`s of the screen that owns the operation (five for an install, six for create) into the state of every stage, a `fraction` for the bar, a whole `percent`, a `currentTitle`, and an `outcome`. It is a pure function. `i` is the index of `operation.stage` in the stages (from 0) and `n` the number of stages.
+
+| `operation.state` and `stage` | Stages | `runningIndex` | `fraction`, `percent` | `currentTitle` | `outcome` |
+| --- | --- | --- | --- | --- | --- |
+| `queued` | all `pending` | none | none | Queued | `waiting` |
+| `running`, known stage | before `i` `done`, `i` `running`, after `pending` | `i` | the formula below | title of stage `i` | `running` |
+| `cancelRequested`, known stage | as `running` | `i` | the formula below | Cancelling… | `cancelling` |
+| `running` or `cancelRequested`, no stage | first `running`, rest `pending` | 0 | 0, 0 | title of the first stage (or Cancelling…) | `running` (or `cancelling`) |
+| `running` or `cancelRequested`, unknown stage or no stages | all `pending` | none | none | Working… (or Cancelling…) | `running` (or `cancelling`) |
+| `succeeded` | all `done` | none | 1, 100 | Done | `succeeded` |
+| `failed`, known stage | before `i` `done`, `i` `failed`, after `pending` | `i` | none | Failed at {title of stage `i`} | `failed` |
+| `failed`, no or unknown stage, or no stages | all `pending` | none | none | Failed | `failed` |
+| `needsRecovery` | as the two `failed` rows | as `failed` | none | Needs Recovery | `needsRecovery` |
+| `cancelled`, known stage | before `i` `done`, `i` `cancelled`, after `pending` | `i` | none | Cancelled | `cancelled` |
+| `cancelled`, no or unknown stage, or no stages (also cancelled while queued) | all `pending` | none | none | Cancelled | `cancelled` |
+
+The formula: with `counted(done, total)` and `total` above 0, `percent = (i × total + min(done, total)) × 100 / (n × total)`; with `indeterminate` or a `total` of 0, `percent = i × 100 / n`. It is integer division (rounded down) and at most 99 until the operation `succeeded`, so "100%" never shows for work that is not finished. `fraction` is the same numerator over the same denominator as a `Double`. The arithmetic is 128 bit, so byte counts never overflow.
+
+`StagedProgress(_:layout:accessibilityLabel:announcesStages:)` draws it. The bar is a native linear `ProgressView`, shown only while the outcome is `running` or `cancelling`, indeterminate when `fraction` is none. Under Reduce Motion a change of the value is not animated (`StacklyMotion.progress`).
+
+| `outcome` | `.compact` text | Bar | VoiceOver value |
+| --- | --- | --- | --- |
+| `waiting` | Queued | none | Queued |
+| `running` with a percent | {title} · {percent}% | determinate | Stage {k} of {n}, {title}, {percent} percent |
+| `running` without a percent | Working… | indeterminate | Working |
+| `cancelling` | Cancelling… · {percent}% or Cancelling… | as `running` | Cancelling, stage {k} of {n}, {percent} percent, or Cancelling |
+| `succeeded` | `checkmark.circle.fill` (`positive` fill) and Done | none | Done |
+| `failed` | `xmark.circle.fill` (`critical` fill) and the title | none | the title |
+| `needsRecovery` | `xmark.circle.fill` (`critical` fill) and Needs Recovery | none | Needs Recovery |
+| `cancelled` | `minus.circle.fill` (`neutral` fill) and Cancelled | none | Cancelled |
+
+`k` is `runningIndex + 1` (stages count from 1). The compact text is `.callout` `textSecondary` with monospaced digits.
+
+The `.stages` layout draws the same bar, then every stage in a wrapping flow (16 pt across, 6 pt down) with a symbol and its title in `.callout`:
+
+| `StageState` | Symbol | Symbol color | Text |
+| --- | --- | --- | --- |
+| `done` | `checkmark.circle.fill` | `positive` fill | primary |
+| `running` | `circle.inset.filled` | `informative` fill | primary, semibold |
+| `pending` | `circle` | `textSecondary` | `textSecondary` |
+| `failed` | `xmark.circle.fill` | `critical` fill | `critical` text, semibold |
+| `cancelled` | `minus.circle.fill` | `neutral` fill | `textSecondary` |
+
+The whole view is one VoiceOver element: the label is `accessibilityLabel` ("Progress" by default) and the value comes from the table above. With `announcesStages`, each time the running stage changes (not when the view first appears), VoiceOver says "{stage title}." once. The identifier is `progress.view`.
 
 ### Inspector
 
-Filled by milestone 3.
+`.stacklyInspector(isPresented:help:content:)` goes on the page content inside the detail column of the split view, the content that fills the column (not on a view inside a `ScrollView`: the container of `.inspector` has no height of its own there, and its content is drawn over the neighbouring views instead of in the scroll flow, checked in the design gallery). It is the only place in the app that calls `.inspector(`, and it puts an `InspectorToggle` in the toolbar (`.primaryAction`).
+
+- **Column.** The native column is 240 pt at the least, 280 pt by default, and 360 pt at the most (`.inspectorColumnWidth`, spec 0022). Its content is a `ScrollView` with 16 pt of padding and 16 pt between views, on `StacklyColor.surfaceWindow`, opaque, so text on it stays in the P1 and P2 pairs of spec 0012. The column is never glass. The content is at least as tall as the column, so an `InspectorPlaceholder` (which fills the height) sits in the middle.
+- **Content.** Build it from `InspectorHeader` (a 40 pt tile, `.title2.weight(.semibold)` title, subtitle, `StatusLabel` in the `.standard` context, and an optional row of `ActionButton`s that stack when they do not fit side by side), `CardSection` with `.labeledContentStyle(.stackly)`, `StateBanner`, and `InspectorPlaceholder` ("No Selection" by default) when nothing is selected. Texts wrap and are never cut, so a screen never sets a `lineLimit` in the inspector.
+- **Toggle.** The label is "Show Inspector" or "Hide Inspector" for the binding, the symbol is `sidebar.trailing`, the help is `help ?? label` (a page passes the text with the shortcut from `CommandMap.helpText(for:)` of spec 0069), and the identifier is `inspector.toggle`. The toolbar gives it a 44 × 52 pt target.
+- **State.** Every page that has an inspector keeps its binding in `@SceneStorage("<page>.inspector") private var showsInspector = true`, with `<page>` the lowercase page name (`instances.inspector`, `runtimes.inspector`). It is open by default, restored per window by the system, and never shared between pages. Spec 0069 binds View > Show/Hide Inspector to the same binding.
+
+Checked on macOS 27.0.1 on 2026-10-21 (spec 0067 rationale, *Temuan langkah 14*) with a probe window of a `NavigationSplitView` (sidebar 200 to 260 pt, 236 by default, and the page column at least 640 pt) and `.stacklyInspector` on the page, in light and dark, through the accessibility API and window captures:
+
+- **Opaque background joins.** `surfaceWindow` on the `ScrollView` fills the whole column: up under the toolbar to the top edge of the window, down to the window's rounded corner, and to the divider. No glass shows through and there is no seam inside the column. The toolbar band above the page column is the system's own, so it is not the same tone as the page; this is the same as before there was an inspector.
+- **Column widths hold.** Setting the inspector divider to extreme values with the accessibility API clamps the column at 240 and 360 pt. At 900 pt it opens at 280 pt.
+- **900 pt window, sidebar and inspector open.** The sidebar takes 236 pt, the inspector 280, and the page content **384 pt**, not 640: `navigationSplitViewColumnWidth(min: 640)` is met by the whole detail column, which holds the inspector too (664 pt). So a page that can show an inspector has to work at 384 pt wide: tables and cards wrap and scroll, and no text is cut. In the inspector nothing is cut at 240 pt: the header title and subtitle wrap, two actions stack, and a long path in a card row drops under its label and wraps. The open question for spec 0013 (the content minimum with an inspector) is in the rationale.
+- **Toggle in the accessibility tree.** `AXButton` with `AXDescription` and `AXHelp` "Hide Inspector", `AXIdentifier` `inspector.toggle`; after pressing it, "Show Inspector". The header is an `AXHeading`, its status reads "Status: Running", and the actions are separate buttons. A card row reads "Software, PostgreSQL 17.4".
 
 ### Log
 
-Filled by milestone 4.
+`LogView(_:follow:accessibilityLabel:timeTemplate:sourceTemplate:)` shows `LogLine`s in a lazy list on the console surface. The screen sets its height; feature 27 owns the data, the filters, Load Earlier, and the cap on lines.
+
+- **Row.** The time and source columns are `.callout.monospaced()` in `textSecondary`, then the level symbol, then the text in `.callout.monospaced()`. Each column is at least as wide as its hidden template (`timeTemplate`, default `00:00:00.000`; `sourceTemplate`, default `stderr`), so rows line up; a longer source shows in full and pushes the text of its own line. A column is drawn only when at least one line has that part, so a log without sources does not waste the space. Text wraps and is selectable per line (a SwiftUI limit); copying several lines is an action of feature 27.
+- **Levels.**
+
+| `LogLevel` | Symbol | Text | VoiceOver word |
+| --- | --- | --- | --- |
+| `normal` | none, an empty box as wide as a symbol | `.primary` | none |
+| `warning` | `exclamationmark.triangle.fill` in the `caution` fill | `Tone.caution.text` | Warning |
+| `error` | `xmark.circle.fill` in the `critical` fill | `Tone.critical.text` | Error |
+
+- **Surface.** `.consoleSurface()` is the background of the scroll view, clipped to its shape, so the lines run edge to edge with 14 pt at the sides and 2 pt above and below each line; the 12 pt above the first line and below the last one are scroll content margins, so scrolling to the end shows them. Tone text on `surfaceConsole` is pair P2 of spec 0012, so there is no new pair.
+- **Follow.** `follow` is the screen's binding. A new last line scrolls to the end without animation while `follow` is on; turning `follow` on scrolls to the end. A scroll by the user that ends (scroll phase from interacting or decelerating to idle) more than 24 pt above the bottom turns `follow` off. A scroll by the program never does, and scrolling back to the bottom does not turn it on again: the toggle of feature 27 does.
+- **VoiceOver.** The list is one element labeled `accessibilityLabel` (identifier `log.list`), and each line is one element, "{time}, {source}, {Error | Warning}: {text}", with an empty part and the normal level left out ("12:04:31.118, stdout: ready", "Error: text" when only the level is known).
 
 ### Diff
 
-Filled by milestone 4.
+`DiffView(_:emptyText:)` shows `DiffLine`s in a `.cardSurface()` (an ordinary card, not the console surface; the mockup used the console). Feature 29 owns where the lines come from.
+
+| `DiffKind` | Sign column | Text | Row background | VoiceOver |
+| --- | --- | --- | --- | --- |
+| `added` | “+” in `Tone.positive.text` | `.primary` | `toneSurface(.positive, on: .card, strength: .banner)` | “Added: {text}” |
+| `removed` | “−” (U+2212) in `Tone.critical.text` | `.primary` | `toneSurface(.critical, on: .card, strength: .banner)` | “Removed: {text}” |
+| `unchanged` | empty, same width | `textSecondary` | none | “Unchanged: {text}” |
+
+- The sign column is always there and one monospace character wide, so a change is never only a color and the text lines up. Rows are `.callout.monospaced()`, wrap, and are selectable; the card has 8 pt padding and rows sit 2 pt apart with 3 pt above and below the text. The tint corners are `Radius.small`.
+- Tone text on its own tint is pair P3 and primary text on a tint is pair P4 of spec 0012, so there is no new pair.
+- Without lines the view shows `emptyText` in `.callout` `textSecondary`; the copy comes from the screen. The container carries the identifier `diff.list`.
 
 ## Motion
 
@@ -529,7 +633,70 @@ Filled by milestone 4.
 
 ## Commands and shortcuts
 
-The menu bar, `CommandMap`, and the keyboard shortcuts of spec 0069. `CommandMap` (`StacklyUI/Commands/CommandMap.swift`) is the only place a shortcut is written down, and `SystemShortcuts` (`Commands/SystemShortcuts.swift`) holds the macOS shortcuts a row may not use; the unit tests refuse a clash. The map table and the rules for adding a command join this section when milestone 2 builds the menus.
+The menu bar, `CommandMap`, and the keyboard shortcuts of spec 0069. `CommandMap` (`StacklyUI/Commands/CommandMap.swift`) is the only place a shortcut is written down, and `SystemShortcuts` (`Commands/SystemShortcuts.swift`) holds the macOS shortcuts a row may not use; the unit tests refuse a clash. The tables below are the map, the macOS shortcuts a row may not use, and the rules for adding a command. The probe results come after them.
+
+### Menu structure
+
+Where Stackly puts its items. The order of the system items (About, Services, Hide, Undo to Select All, AutoFill, Dictation, Emoji and Symbols, Full Screen, Minimize, Zoom, Move & Resize, Bring All to Front, the window list, the Help search field) belongs to macOS and SwiftUI; the Probe results below record it.
+
+| Menu | Stackly items |
+| --- | --- |
+| Stackly | Reconnect to stacklyd, after Settings… ⌘, and before Services |
+| File | New Instance… ⌘N (planned, spec 0020), then the system Close ⌘W. `CommandGroup(replacing: .newItem)` removes New Window |
+| Edit | the system items, then Find ▸ Find… ⌘F. `CommandGroup(replacing: .textEditing)` removes the Spelling and Grammar, Substitutions, Transformations, and Speech submenus |
+| View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; Back, Show or Hide Inspector, and Sort Instances By follow with the Instances page |
+| Instance | Open, Start, Stop, Restart, Reload, Copy Connection String, Duplicate…, Remove… (planned; `CommandMenu("Instance")` appears between View and Window with the first built row) |
+| Window | the system items, then Stackly ⌘0 (the shortcut sits on the main `Window` scene) and, in Debug, Design Gallery |
+| Help | the system search field; Welcome to Stackly (planned, spec 0016) and Stackly Help ⌘? (planned, feature 66). `CommandGroup(replacing: .help)` removes the item that opens nothing |
+
+An item is never hidden because of state: one that does not apply is disabled. A disabled item with a reason of its own shows the reason as a disabled item under it (`MenuReasonPath.current`, `Components/Actions/ActionMenu.swift`); the mutation gate gives no reason because the window banner writes it. Only `planned` rows are left out.
+
+### Command map
+
+`CommandMap` holds one row per `CommandID`; the table lists them in declaration order. Group is the divider group inside a menu (`CommandMap.layout` draws a divider only between built groups). Status `built` means a `CommandItem` renders it; `planned` rows reserve the shortcut and render nothing until the owner feature builds them.
+
+| Command | Menu | Grp | Title | Shortcut | Scope | Owner | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `reconnect` | Stackly | 1 | Reconnect to stacklyd | | shell | 69 | built |
+| `newInstance` | File | 1 | New Instance… | ⌘N | shell | 20 | planned |
+| `find` | Edit ▸ Find | 1 | Find… | ⌘F | page (all) | 69 | built |
+| `showOverview` to `showDiagnostics` | View | 1 | Overview, Instances, Environments, Catalog, Runtimes, Operations, Diagnostics | ⌘1 to ⌘7 | shell | 69 | built |
+| `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | planned |
+| `toggleInspector` | View | 3 | Show Inspector or Hide Inspector | ⌥⌘I | page (Instances) | 22 | planned |
+| `sortInstancesBy…` and `sortInstancesAscending`, `sortInstancesDescending` | View ▸ Sort Instances By | 1 and 2 | Name, Provider, Version, Endpoints, Status, then Ascending, Descending | | page (Instances) | 22 | planned |
+| `openInstance` | Instance | 1 | Open | ⌘O | page (Instances) | 21 | planned |
+| `startInstance`, `stopInstance` | Instance | 2 | Start, Stop | ⌘R, ⇧⌘R | page (Instances) | 22 | planned |
+| `restartInstance`, `reloadInstance` | Instance | 2 | Restart, Reload | ⌥⌘R, none | page (Instances) | 26 | planned |
+| `copyConnectionString` | Instance | 3 | Copy Connection String | ⇧⌘C | page (Instances) | 21 | planned |
+| `duplicateInstance` | Instance | 4 | Duplicate… | ⌘D | page (Instances) | 24 | planned |
+| `removeInstance` | Instance | 4 | Remove… | none | page (Instances) | 54 | planned |
+| `stacklyHelp` | Help | 1 | Stackly Help | ⌘? | app | 66 | planned |
+| `welcome` | Help | 2 | Welcome to Stackly | | app | 16 | planned |
+| `showMainWindow` | Window | | Stackly (system item of the `Window` scene) | ⌘0 | app | 69 | built |
+
+Three shortcuts reuse a macOS shortcut with another meaning, each with a written reason in the map: ⌘R (Show Ruler, no Format menu), ⇧⌘C (Show Colors, no Format menu), and ⌘0 (Actual Size, no zoom).
+
+### Shortcuts macOS owns
+
+`SystemShortcuts` holds these as data, and the unit tests refuse a clash. Table A may never be used. Table B may be used for the same meaning only, or with a written reason. Table C may be used only with a written reason. Rules D and E cannot be waived.
+
+| Table | Shortcuts | Meaning |
+| --- | --- | --- |
+| A, blocked | ⌘Q ⌘H ⌥⌘H ⌘, ⌥⌘Q, ⌘. , ⌘W ⌥⌘W ⌘M ⌥⌘M, ⌘\` ⇧⌘\` ⌘Tab ⇧⌘Tab, Spotlight and input source keys, screenshots ⇧⌘3 to ⇧⌘6, ⌥⌘Esc ⌃⌘Q ⇧⌘Q ⌥⇧⌘Q, ⌥⌘D ⌃⌘D ⌃⌘Space, ⌃⌘F ⌃⌘S ⌥⌘T, ⌘Z ⇧⌘Z ⌘X ⌘C ⌘V ⌥⇧⌘V ⌘A, ⌘; ⌘:, ⌃F1 to ⌃F8 and ⌃ arrows | quit, hide, settings, cancel, windows, system, edit, full screen, sidebar, toolbar, focus and Spaces |
+| B, standard meaning | ⌘N ⌘O ⌘D ⌘F ⌘G ⇧⌘G ⌘E ⌘J ⌘[ ⌘] ⌘? ⌘S ⇧⌘S ⌘P ⇧⌘P ⌘+ ⌘- ⌘0 | new, open, duplicate, find, find next and previous, use selection, jump, back, forward, help, save, print, zoom, actual size |
+| C, formatting | ⌘B ⌘I ⌘U ⌘T ⇧⌘C ⌘R ⌥⌘C ⌥⌘V ⌘{ ⌘} ⌘\| | Format menu items |
+| D, text editing keys | arrows and Delete with ⌘ or ⌥, ⌃ with a letter and no ⌘, Return, Escape, Tab, Space | a menu key equivalent runs before the text field sees the key |
+| E, 🌐 | any shortcut with the globe key | `CommandModifiers` has no such modifier |
+
+### Adding a command
+
+1. The main action stays a button in the window (toolbar, inspector, row) built on `StacklyAction`. The menu command is the second way to it, never the only one.
+2. Place it: new or imported things in File; navigation, view, and order in View; actions on the selected instance in Instance; app level actions (daemon, update) in Stackly; documentation in Help. Another object (environment, runtime, operation) gets no menu of its own until it has at least three actions on a common selection.
+3. Give it a shortcut only if people use it often and it never destroys data (not Remove, Purge, Force Stop, Stop All Services, Overwrite). Prefer ⌘ with a letter that means the thing, then ⇧⌘ for the opposite, then ⌥⌘ for a variant. Table A, rule D, and rule E never; table B only with the same meaning; table C only with a reason written in the map.
+4. Register it: add or change the row in `CommandMap` (set `status: .built`), add one `CommandItem(.id, context:)` in `StacklyCommands`, publish a `StacklyAction` from the page with `.publishesCommands(.page(section), …)` (or from `AppShell` for the shell scope), and update the tables above. The map tests and the source rules run by themselves.
+5. The menus inside the window (More, context menus) use the same action and title without a shortcut, and a toolbar button's tooltip comes from `CommandMap.helpText(for:)`.
+
+A command is on exactly when the window that published it is the key window and `action.availability(gate:)` is `.enabled`. Settings, the design gallery, a sheet, an alert, and onboarding switch the shell and page commands off by construction; the `app` scope items stay on.
 
 ### Probe results (macOS 27.0.1 26A434, Xcode 27.0 27A266a, 2026-10-21)
 
@@ -537,7 +704,7 @@ Run with the accessibility API (`AXMenuItemCmdChar`, `AXMenuItemCmdModifiers`) a
 
 | Probe | Result | Effect |
 | --- | --- | --- |
-| P1 menu bar of the current app | No two items share a key equivalent. Beyond the table A of spec 0069 the system adds ⌥⌘Q (Quit and Keep Windows) and a family of 🌐 equivalents: 🌐D (Start Dictation…), 🌐E (Emoji & Symbols), 🌐F (Enter Full Screen), and, in Window, 🌐⌃F (Fill), 🌐⌃C (Center), 🌐⌃R (Return to Previous Size). AX reports the 🌐 modifier as bit 16 of `AXMenuItemCmdModifiers`. The Edit menu also gets Writing Tools and AutoFill (no shortcuts). ⌥⌘W (Close All) and ⌥⌘M (Minimize All) show up as the table says. | ⌥⌘Q joins table A; the 🌐 family is covered by rule E and is not listed. |
+| P1 menu bar of the current app | No two items share a key equivalent. Beyond the table A of spec 0069 the system adds ⌥⌘Q (Quit and Keep Windows) and a family of 🌐 equivalents: 🌐D (Start Dictation…), 🌐E (Emoji & Symbols), 🌐F (Enter Full Screen), and, in Window, 🌐⌃F (Fill), 🌐⌃C (Center), 🌐⌃R (Return to Previous Size), and the 🌐⌃ arrow items of Window > Move & Resize (Left, Right, Top, Bottom and the corners and halves). AX reports the 🌐 modifier as bit 16 of `AXMenuItemCmdModifiers`. The Edit menu also gets Writing Tools and AutoFill (no shortcuts). ⌥⌘W (Close All) and ⌥⌘M (Minimize All) show up as the table says. | ⌥⌘Q joins table A; the 🌐 family is covered by rule E and is not listed. |
 | P2 `Window(...).keyboardShortcut("0", .command)` | Window > Probe ⌘0 appears. It reopens the window after it is closed (menu click and the key), and restores it from the Dock after Minimize. | Passes: `showMainWindow` stays a `system` row with the shortcut on the scene. |
 | P3 `CommandGroup(replacing:)` | `.newItem` leaves File with New Probe…, Close ⌘W, and Close All, and no "New Window". `.textEditing` leaves Writing Tools, AutoFill, Start Dictation, and Emoji & Symbols in Edit and removes nothing else that was there. `.help` keeps the system search field and puts Welcome to Probe below it. `CommandMenu("Instance")` lands between View and Window. | Passes. |
 | P3b default `.textEditing` group | With the default group left in place the Edit menu has no Find item at all, with a focused text field or without one, and ⌘F does not focus the toolbar search field. The Spelling and Grammar, Substitutions, Transformations, and Speech submenus do not appear either. | The fallback does not apply: Stackly's own `replacing: .textEditing` with Find… stays the plan. |

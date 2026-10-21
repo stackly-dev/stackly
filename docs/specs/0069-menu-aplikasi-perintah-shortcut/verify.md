@@ -37,3 +37,44 @@ Diperiksa di macOS 27.0.1 (26A434), Xcode 27.0 (27A266a), dari merge `524ec3f`. 
 - AC-1 · bagian peta dan aturan sumber: `CommandMap`, `CommandEntry`, `layout`, `helpText`, dan aturan `.keyboardShortcut`, `CommandGroup`, `CommandMenu`, `.commands`, serta pemakaian `CommandID`; seluruh baris berstatus `planned` karena `CommandItem` dan `StacklyCommands` baru ada di milestone 2, yang juga mengubah status baris menjadi `built` dan menambah cek "tidak ada `provisional: F69`" (AC-16)
 - AC-2 · bagian test unit atas `CommandMap` dan `SystemShortcuts` dan hasil probe P1 di app Stackly saat ini; probe atas menu bar yang sudah memakai peta (setiap baris built tampil dengan shortcut persis peta) menunggu milestone 2 langkah 5
 - AC-3 sampai AC-16 · belum, milik Milestone 2 dan 3 (probe P2 sampai P7 sudah memberi dasarnya untuk AC-3, AC-4, AC-5, AC-10, AC-13)
+
+## Milestone 2: Shell commands
+
+Langkah build 3 sampai 5 dari spec 0069. `newInstance` (menunggu langkah 14 spec 0020) dan `welcome` (menunggu langkah 2 milestone 1 spec 0016) belum built, jadi cek yang bergantung pada keduanya tercatat `NOT_RUN` dan pindah ke saat fitur itu di merge. Record evidence ada di `evidence/manual/2026-10-21-spec-0069-manual-check-*.json` (kind `fixture`: aturan `evidence check` menolak `native` PASS tanpa subject runtime, dan pemeriksaan GUI tidak punya subject).
+
+### UI / manual
+
+- [x] Bangun app Debug (`cargo xtask build-app`), jalankan `target/debug/stacklyd` dengan `STACKLY_ROOT` ke folder sementara dan app dengan root yang sama, dump semua menu lewat accessibility API (`AXMenuItemCmdChar`, `AXMenuItemCmdModifiers`) saat jendela utama key → Stackly berisi About, Settings… ⌘,, Reconnect to stacklyd, Services, Hide, Quit; Edit berisi Find ▸ Find… ⌘F tanpa Spelling, Substitutions, Transformations, atau Speech; View berisi item sidebar lalu Overview ⌘1 sampai Diagnostics ⌘7; Window berisi Stackly ⌘0; Help hanya kolom pencarian sistem; tidak ada "New Window", tidak ada Stackly Help bawaan, tidak ada dua key equivalent yang sama → AC-2, AC-3 (record check 1, PASS; File dan Instance belum tampil karena baris plannednya)
+- [x] Dengan jendela utama key tekan ⌘1 sampai ⌘7 → bagian sidebar berganti satu per satu; ⌘W menutup jendela utama dan notice tampil; ⌘0 membukanya lagi; ⌘M lalu ⌘0 mengembalikannya; ⌘, membuka Settings, lalu ⌘2 tidak melakukan apa pun sampai ⌘0 mengembalikan jendela utama → AC-4, AC-7, AC-13 (record check 2, PASS)
+- [ ] Help > Welcome to Stackly: ⌘1 dan ⌘N nonaktif selama onboarding, ⌘, dan ⌘0 tetap bekerja, dan sesudah onboarding perintah shell aktif lagi → AC-4, AC-13 (record check 3, `NOT_RUN`: baris `welcome` planned sampai langkah 2 milestone 1 spec 0016 di merge)
+- [x] Hentikan `stacklyd` → Reconnect to stacklyd aktif tanpa subtitle dan banner jendela menjelaskan alasannya; jalankan `stacklyd` lagi lalu pilih Reconnect → jendela tersambung dan item nonaktif lagi → AC-5, AC-8 (record check 4, PASS)
+- [ ] Dengan `stacklyd` berhenti, File > New Instance… (⌘N) nonaktif tanpa subtitle; saat onboarding dan saat jendela utama bukan key window juga nonaktif → AC-5, AC-9 (record check 4b, `NOT_RUN`: baris `newInstance` planned sampai langkah 14 spec 0020 di merge)
+- [ ] Ulangi probe P4 (sheet dan `NSAlert` sheet terbuka di jendela utama), P5 (`.searchFocused`), P6 (⌘R, ⇧⌘R, ⌥⌘R, ⌘O, ⌘D, ⌘1, ⌘[ di field pencarian), dan P7 (state berubah sekitar penekanan tombol) di app Stackly → belum bisa: shell belum punya sheet, `.searchable`, atau perintah halaman. Yang sudah diulang di app Stackly: P2 (⌘0 membuka jendela sesudah ⌘W dan dari minimize), P3 (File tanpa New Window, Edit tanpa submenu ejaan, Help tanpa item bawaan, Instance belum tampil), P3b (tidak berlaku, rencana tetap), dan bagian P4 untuk Settings dan jendela lain (⌘2 nonaktif saat Settings key). Sisanya jatuh ke milestone 3 langkah 7 dan ke fitur 20 (sheet) → AC-2, AC-3, AC-10
+- [ ] VoiceOver: buka menu Stackly, View, Edit dan Window dengan ⌃F2 → setiap item terbaca dengan judul, shortcut, dan "dimmed" saat nonaktif (`NOT_RUN`, butuh VoiceOver; langkah user) → AC-15
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CommandItemStateTests` → resolve untuk scope `.shell` dan `.page`, key window true dan false, penerbit ada dan nil, bagian cocok dan tidak, gate blocked, busy, alasan, judul dinamis, centang, `run` lewat host (konfirmasi memanggil `present`, bukan `perform`), dan penjaga yang menolak saat window tidak key lagi → AC-4, AC-5, AC-6
+- [x] `swift test ... --filter MainWindowKeyTests` → `isKey` dan `isKeyNow` mengikuti notifikasi window sendiri saja (key, resign, close), notifikasi window lain tidak mengubahnya, `track` dua kali tidak menggandakan pengamat → AC-4, AC-5
+- [x] `swift test ... --filter ShellCommandsTests` → `AppShell` menerbitkan ⌘1 sampai ⌘7 dengan urutan sidebar untuk setiap baris status daemon, Reconnect hanya tanpa koneksi (busy saat reconnecting, alasan "Relaunch Stackly after fixing the problem." saat misconfigured), tidak ada action yang mengubah data, dan `host.gate` yang diterbitkan sama dengan `presentation.mutationAvailability` untuk setiap baris status daemon pada `AppShell` yang dirender dalam window → AC-5, AC-7, AC-8
+- [x] `swift test ... --filter CommandItemTests` dan `--filter CommandMapTests` → pemisah hanya di antara kelompok built, konversi shortcut (⌘? tampil "⌘?"), status built persis `reconnect`, `find`, `showOverview` sampai `showDiagnostics`, dan `showMainWindow` → AC-1, AC-3
+- [x] `swift test ... --filter CommandSourceRuleTests` → setiap baris built dipakai tepat satu kali oleh `CommandItem` (`showMainWindow` oleh scene), planned tidak dipakai, dan tidak ada `.keyboardShortcut` literal atau `CommandGroup` di luar `Commands/` dan `StacklyApp.swift` → AC-1, AC-16
+- [x] `grep -rn "provisional: F69" apps/` → kosong → AC-16
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (dengan `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN`), `swift test --package-path clients/swift`, `cargo xtask build-app`, `xcrun swift-format lint --strict` atas file yang diubah, dan `cargo xtask evidence check` → semuanya lulus → AC-1 sampai AC-16
+
+### Acceptance-criteria coverage
+
+- AC-1 · `CommandSourceRuleTests`, `CommandMapTests`, dan `CommandItemTests` (milestone 1 dan 2)
+- AC-2 · record check 1 (menu bar app nyata) dan test peta; probe lengkap di app Stackly menunggu milestone 3
+- AC-3 · record check 1 dan `theMenusShowOnlyTheBuiltRows`; File dan Instance tampil sejak baris pertamanya built (fitur 20, 21, 22), Help dengan Welcome sejak spec 0016 dan Stackly Help sejak fitur 66
+- AC-4 · `CommandItemStateTests`, `MainWindowKeyTests`, record check 2; onboarding (check 3) dan sheet menunggu spec 0016 dan 0020
+- AC-5 · `CommandItemStateTests`, `ShellCommandsTests` (gate per status daemon), record check 4; `newInstance` (4b) menunggu spec 0020
+- AC-6 · `CommandItemStateTests` (konfirmasi lewat host palsu); dialog nyata menunggu aksi dengan `ActionConfirmation` (fitur 26, 54)
+- AC-7 · `ShellCommandsTests` dan record check 2; hook `onReselect` ada di `AppShell.select(_:)`, diisi spec 0021
+- AC-8 · `ShellCommandsTests` dan record check 4
+- AC-9 · menunggu langkah 14 spec 0020 (`newInstance` planned)
+- AC-10 · menunggu milestone 3 (belum ada halaman yang menerbitkan `find`; Find… tampil nonaktif)
+- AC-11, AC-12, AC-14 · menunggu milestone 3
+- AC-13 · ⌘0 dan Settings di record check 2; Welcome to Stackly menunggu spec 0016, Stackly Help menunggu fitur 66
+- AC-15 · menunggu milestone 3 langkah 7 dan VoiceOver
+- AC-16 · bagian "Commands and shortcuts" di `design.md` (struktur menu, peta, shortcut sistem, aturan menambah perintah, hasil probe) dan `grep` kosong; tidak ada `CommandGroup` atau `.commands` di luar `Commands/` dan `StacklyApp.swift` (source rule)

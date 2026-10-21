@@ -84,8 +84,18 @@ struct CommandMapTests {
         #expect(CommandMap.entry(for: .showMainWindow).kind == .system)
     }
 
-    @Test func everyRowStartsPlannedUntilItsMenuItemExists() {
-        #expect(CommandMap.entries.allSatisfy { $0.status == .planned })
+    /// The commands whose menu item exists after milestone 2. New Instance… waits for spec
+    /// 0020, Welcome to Stackly for spec 0016, and the rest for their owner features.
+    private static let builtCommands: Set<CommandID> = [
+        .reconnect, .find, .showOverview, .showInstances, .showEnvironments, .showCatalog,
+        .showRuntimes, .showOperations, .showDiagnostics, .showMainWindow,
+    ]
+
+    @Test func aRowIsBuiltExactlyWhenItsMenuItemExists() {
+        for entry in CommandMap.entries {
+            let expected: CommandStatus = Self.builtCommands.contains(entry.id) ? .built : .planned
+            #expect(entry.status == expected, "\(entry.id)")
+        }
     }
 
     // MARK: clashes (AC-2)
@@ -241,14 +251,25 @@ struct CommandMapTests {
 
     // MARK: layout
 
-    @Test func noMenuShowsAnythingWhileEveryRowIsPlanned() {
-        for menu in CommandMenuID.allCases {
-            #expect(CommandMap.layout(menu: menu, submenu: nil).isEmpty, "\(menu)")
+    @Test func theMenusShowOnlyTheBuiltRows() {
+        func ids(_ menu: CommandMenuID, _ submenu: CommandSubmenuID? = nil) -> [[CommandID]] {
+            CommandMap.layout(menu: menu, submenu: submenu).map { $0.map(\.id) }
         }
-        for submenu in CommandSubmenuID.allCases {
-            #expect(CommandMap.layout(menu: .edit, submenu: submenu).isEmpty)
-            #expect(CommandMap.layout(menu: .view, submenu: submenu).isEmpty)
-        }
+        #expect(ids(.app) == [[.reconnect]])
+        #expect(ids(.file).isEmpty)
+        #expect(ids(.edit).isEmpty)
+        #expect(ids(.edit, .find) == [[.find]])
+        #expect(
+            ids(.view) == [
+                [
+                    .showOverview, .showInstances, .showEnvironments, .showCatalog,
+                    .showRuntimes, .showOperations, .showDiagnostics,
+                ]
+            ])
+        #expect(ids(.view, .sortInstancesBy).isEmpty)
+        #expect(ids(.instance).isEmpty)
+        #expect(ids(.help).isEmpty)
+        #expect(ids(.window).isEmpty)
     }
 
     @Test func layoutOfAFullyBuiltMapGroupsRowsInOrder() {

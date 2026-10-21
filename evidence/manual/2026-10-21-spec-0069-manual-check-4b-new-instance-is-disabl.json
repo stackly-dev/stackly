@@ -1,0 +1,58 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15c8e-5854-75b1-9019-2c00d832bfc0",
+  "covers": [
+    "AC-027",
+    "REQ-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0069 manual check 4b: New Instance is disabled while stacklyd is stopped",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "With stacklyd stopped File, New Instance (Command N) is disabled with no subtitle because the mutation gate is blocked, and the window banner gives the reason.",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-21T03:43:15.028127Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-21-spec-0069-manual-check-4b-new-instance-is-disabl.json",
+  "context": {
+    "sourceCommit": "9d19e4a775a6b30c65e74eb665d84dcda964329a",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
