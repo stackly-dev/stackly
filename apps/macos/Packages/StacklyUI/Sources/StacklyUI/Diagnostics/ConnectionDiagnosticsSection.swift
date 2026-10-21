@@ -138,5 +138,14 @@ private struct DiagnosticsRowStyle: LabeledContentStyle {
             configuration.content
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // Selectable text keeps an outer accessibility element with the first value it
+        // showed, so the spoken element is built from the same label and value without it.
+        .accessibilityRepresentation {
+            HStack {
+                configuration.label
+                configuration.content
+            }
+            .accessibilityElement(children: .combine)
+        }
     }
 }
