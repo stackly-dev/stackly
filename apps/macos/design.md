@@ -446,7 +446,22 @@ Shared views in `Packages/StacklyUI/Sources/StacklyUI/Components/` ([spec 0067](
 
 ### Tile
 
+`ProviderTile(mark:tile:name:size:)` or `ProviderTile(_:size:)` with a `TileSpec` draws a rounded square (continuous corners, radius `size × 0.27`) in a system color with a bold white mark. It is decoration: hidden from VoiceOver, never counted in the contrast table, and always next to the provider name in text. The fill comes from the catalog `TileColor`; a missing or unrecognized color is gray.
+
+| `TileColor` | Fill |
+| --- | --- |
+| `blue`, `cyan`, `teal`, `green`, `yellow`, `orange`, `red`, `brown`, `indigo` | `systemBlue`, `systemCyan`, `systemTeal`, `systemGreen`, `systemYellow`, `systemOrange`, `systemRed`, `systemBrown`, `systemIndigo` |
+| `gray`, `unrecognized`, none | `systemGray` |
+
+The mark is the catalog mark. When there is none, `ProviderMark.defaultMark(for:)` takes the first two ASCII letters or digits of the name, the first in upper case and the second in lower case ("PostgreSQL" gives "Po", "9front" gives "9f"), or "?" when there are none. The font is `.stacklyTileMark(tileSize:)`, bold at `size × 0.37`, one line, shrinking to half before it is cut; it is the only fixed font size besides the symbol helper. Sizes: `smallSize` 18 (Instances table), `rowSize` 26 (Overview rows, Installing rows), `mediumSize` 40 (Catalog cards, sheet header, inspector header), `largeSize` 52 (Catalog detail panel). Other mockup sizes (20, 22, 28) pass `size` directly.
+
 ### Key value
+
+`CardSection` draws an optional `.headline` title with an accessory on its right, then one `.cardSurface()` card in which every subview of the content is a row, then an optional footer (`.footnote` `textSecondary`; a `String` or any view, such as `DisabledReasonText`). Rows have 11 pt above and below, 14 pt at the sides, at least `ScaledSize.rowMinHeight` high, and a divider inset 14 pt from the left. A `ForEach` makes one row per element; a row of several views is wrapped in an `HStack` or `VStack` by the screen.
+
+`.labeledContentStyle(.stackly)` draws the label in `.body` primary text and the value in `.body` `textSecondary`, selectable. When both fit, they are one line with the value flush right; otherwise the label sits above and the value wraps below it, flush left, never cut. A screen may give the value its own font (`.callout.monospaced()` for an endpoint, a path, or a digest); the color stays `textSecondary`. VoiceOver reads the row as one element, "{label}, {value}". A row's own button, such as `CopyButton`, stands next to the `LabeledContent` in an `HStack`, never inside it.
+
+Put the style on a `CardSection` whose rows are all read only, on an inspector, or on one read only row inside a `Form`. **Never on a `Form` itself.** Checked on macOS 27.0.1 by rendering a grouped `Form` with a `TextField`, a `Picker`, a `Toggle`, and a read only row three ways: the style on the read only row leaves the field, picker, and toggle exactly as they are without it; the style on the `Form` turns the field's value gray and regular instead of primary and bold and shifts the row heights.
 
 ### Copy and console
 

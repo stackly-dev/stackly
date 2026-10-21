@@ -7,6 +7,7 @@
     struct BaseComponentsSections: View {
         var body: some View {
             TileGallerySection()
+            KeyValueGallerySection()
         }
     }
 
@@ -46,6 +47,46 @@
             HStack(spacing: Spacing.s8) {
                 ProviderTile(sample.spec, size: ProviderTile.mediumSize)
                 Text(sample.name)
+            }
+        }
+    }
+
+    // MARK: - Key value
+
+    /// The CardSection section: plain rows, a monospace value, a value that drops below its
+    /// label, and a text footer.
+    struct KeyValueGallerySection: View {
+        var body: some View {
+            GallerySection(
+                "CardSection and key value",
+                note: "Each subview is one row. The key value style puts the value flush right "
+                    + "when both fit, and under the label otherwise; use the narrow width to "
+                    + "see the long values drop."
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.s22) {
+                    CardSection("Summary") {
+                        ForEach(ComponentSamples.summaryRows) { row in
+                            LabeledContent(row.label) {
+                                if row.isCode {
+                                    Text(row.value).font(.callout.monospaced())
+                                } else {
+                                    Text(row.value)
+                                }
+                            }
+                        }
+                    }
+                    CardSection("Storage", footer: ComponentSamples.keyValueFooter) {
+                        LabeledContent(ComponentSamples.longValueRow.label) {
+                            Text(ComponentSamples.longValueRow.value)
+                                .font(.callout.monospaced())
+                        }
+                        LabeledContent(ComponentSamples.digestRow.label) {
+                            Text(ComponentSamples.digestRow.value)
+                                .font(.callout.monospaced())
+                        }
+                    }
+                }
+                .labeledContentStyle(.stackly)
             }
         }
     }
