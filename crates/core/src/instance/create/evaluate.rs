@@ -1243,43 +1243,44 @@ fn rendered_socket_name(
     text.parse().ok()
 }
 
-/// The status and sentence of a fixed port that step 4 found free.
+/// The status and sentence of a fixed port that step 4 found free: step 5
+/// `InUse`, step 6 `InUse`, then a bind that could not be checked, then ok.
 fn port_notes(
     host: IpAddr,
     port: Port,
     facts: &crate::instance::create::PortFacts,
 ) -> (CheckStatus, String) {
-    match facts.wildcard {
-        Some(BindOutcome::InUse) => {
-            return (
-                CheckStatus::Caution,
-                "In use on another address of this Mac".to_owned(),
-            );
-        }
-        Some(BindOutcome::Denied | BindOutcome::Unavailable) => {
-            return (CheckStatus::Caution, "Couldn’t check this port".to_owned());
-        }
-        _ => {}
+    if facts.wildcard == Some(BindOutcome::InUse) {
+        return (
+            CheckStatus::Caution,
+            "Also in use on all addresses of this Mac; clients may reach that server".to_owned(),
+        );
     }
-    match facts.other_loopback {
-        Some(BindOutcome::InUse) => {
-            let other = if host.is_ipv4() {
-                format!("[::1]:{port}")
-            } else {
-                format!("127.0.0.1:{port}")
-            };
-            (
-                CheckStatus::Caution,
-                format!(
-                    "Also in use on {other}; clients that connect to localhost may reach that server"
-                ),
-            )
-        }
-        Some(BindOutcome::Denied | BindOutcome::Unavailable) => {
-            (CheckStatus::Caution, "Couldn’t check this port".to_owned())
-        }
-        _ if host.is_loopback() => (CheckStatus::Ok, "Free on IPv4 and IPv6 loopback".to_owned()),
-        _ => (CheckStatus::Ok, "Free".to_owned()),
+    if facts.other_loopback == Some(BindOutcome::InUse) {
+        let other = if host.is_ipv4() {
+            format!("[::1]:{port}")
+        } else {
+            format!("127.0.0.1:{port}")
+        };
+        return (
+            CheckStatus::Caution,
+            format!(
+                "Also in use on {other}; clients that connect to localhost may reach that server"
+            ),
+        );
+    }
+    let unchecked = |outcome: Option<BindOutcome>| {
+        matches!(
+            outcome,
+            Some(BindOutcome::Denied | BindOutcome::Unavailable)
+        )
+    };
+    if unchecked(facts.wildcard) || unchecked(facts.other_loopback) {
+        (CheckStatus::Caution, "Couldn’t check this port".to_owned())
+    } else if host.is_loopback() {
+        (CheckStatus::Ok, "Free on IPv4 and IPv6 loopback".to_owned())
+    } else {
+        (CheckStatus::Ok, "Free".to_owned())
     }
 }
 
