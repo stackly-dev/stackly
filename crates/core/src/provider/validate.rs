@@ -36,7 +36,8 @@ use super::package::{
 use super::plan::{PlanContext, ResolvedEndpoint, RuntimeContext};
 use super::raw::{
     API_VERSION, KIND, RawCommand, RawManifest, RawProbe, RawSettingsSchema, RawStdin, RawStep,
-    RawVersions, check_yaml_value, decode_json, decode_yaml, parse_json, parse_yaml,
+    RawVersions, check_yaml_value, decode_json, decode_json_text, decode_yaml, parse_json,
+    parse_yaml,
 };
 use super::settings::{ApplyClass, FieldKind, ScalarKind, SettingsSchema, parse_schema};
 use super::template::{self, Checked, TemplateFormat};
@@ -221,12 +222,12 @@ fn validate(files: &PackageFiles, name_check: NameCheck, issues: &mut Issues) ->
         .get(MANIFEST_FILE)
         .and_then(|text| decode_manifest(text, issues));
     let raw_settings = texts.get(SETTINGS_SCHEMA_FILE).and_then(|text| {
-        let value = parse_json(SETTINGS_ISSUE_FILE, text)
+        parse_json(SETTINGS_ISSUE_FILE, text)
             .map_err(|issue| issues.push(issue))
             .ok()?;
-        decode_json::<RawSettingsSchema>(
+        decode_json_text::<RawSettingsSchema>(
             SETTINGS_ISSUE_FILE,
-            value,
+            text,
             IssueCode::SettingsSchemaKeyword,
         )
         .map_err(|issue| issues.push(issue))

@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use super::settings::SettingsIssueKind;
+
 /// Most issues one validation keeps. Past it, one final
 /// [`IssueCode::TooManyIssues`] issue is added and the rest are dropped.
 pub const MAX_ISSUES: usize = 100;
@@ -213,6 +215,9 @@ pub struct Issue {
     /// of reasons, such as `connection_invalid` (spec 0021) and
     /// `catalog_limit` (spec 0017), and empty for every other code.
     pub reason: Option<&'static str>,
+    /// The fixed kind of a `settings_value` or `unknown_setting` issue
+    /// about a settings document (spec 0009). It is not part of the wire.
+    pub settings_kind: Option<SettingsIssueKind>,
 }
 
 impl Issue {
@@ -230,7 +235,15 @@ impl Issue {
             code,
             message: message.into(),
             reason: None,
+            settings_kind: None,
         }
+    }
+
+    /// Sets the kind of an issue about a settings document.
+    #[must_use]
+    pub const fn with_settings_kind(mut self, kind: SettingsIssueKind) -> Self {
+        self.settings_kind = Some(kind);
+        self
     }
 
     /// Sets the stable reason of a code that declares a list of reasons.

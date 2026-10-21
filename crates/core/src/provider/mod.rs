@@ -52,7 +52,8 @@ pub use preflight::{DATA_MARKER_MAX_LEN, MarkerRead, PreflightOutcome};
 pub use settings::{
     ApplyClass, ArrayRules, BooleanRules, FieldKind, IntegerRules, ItemField, Pattern,
     SETTINGS_DOCUMENT_MAX_LEN, ScalarKind, ScalarValue, SettingClass, SettingField, SettingValue,
-    SettingsError, SettingsItem, SettingsSchema, SettingsValues, TextRules, Visibility,
+    SettingsError, SettingsIssueKind, SettingsItem, SettingsSchema, SettingsValues, TextRules,
+    Visibility,
 };
 pub use template::{OUTPUT_MAX_LEN, TemplateFormat};
 pub use validate::ValidatedPackage;
