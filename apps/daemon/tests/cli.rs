@@ -257,7 +257,7 @@ impl Run {
             .unwrap_or_else(|| panic!("one line on stdout: {self:?}"));
         assert!(!line.contains('\n'), "one line on stdout: {self:?}");
         let value: Value = serde_json::from_str(line).expect("the line is JSON");
-        assert_eq!(value["schemaVersion"], 1);
+        assert_eq!(value["schemaVersion"], 2);
         assert_eq!(value["type"], "result");
         assert_eq!(
             value["error"].is_null(),
