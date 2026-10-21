@@ -1,0 +1,67 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15e88-ee30-726a-b658-0daffacbec6f",
+  "covers": [
+    "AC-024",
+    "REQ-024",
+    "REQ-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 full verify rerun: Diagnostics clears the last error after reconnecting",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "After Stackly reconnects to stacklyd, the Diagnostics Connection section shows Last error None and no What to do hint, and each row's accessibility element carries the current value.",
+  "actual": "With the fixes ad7779c and b54275d on main 015305a, each Diagnostics row is one accessibility element whose value is `label, value` and follows the screen. Launched with no stacklyd: `Status, stacklyd unavailable`, `Last error, ipc.endpoint_missing …`, `What to do, stacklyd isn’t running…`. After stacklyd started the app connected by itself: `Status, stacklyd degraded` (dev daemon without a catalog), `Last error, None`, no What to do row, `Last connected` and the stacklyd row with the new pid; Copy Details held the same lines. After SIGTERM the rows went back to the error with `(last known)`; after stacklyd started again and Stackly › Reconnect to stacklyd was pressed they cleared again with the new pid. With the socket at 0666 the rows read `stacklyd untrusted`, `ipc.endpoint_untrusted … group_or_other_access`, and the untrusted hint, with zero new daemon log lines; after `chmod 600` and Reconnect in the banner: `Last error, None` and no What to do row.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 015305a with a clean tree: `cargo build -p stacklyd -p stackly-cli -p stackly-fake-server`, `cargo xtask build-app` (Debug), a temporary STACKLY_ROOT under the session scratchpad, and the app started from target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly with that root",
+    "Claude Code read and pressed elements with a small AXUIElement tool (tree dump, AXPress on buttons and menu items, AXSelected on sidebar rows) and took window screenshots with `screencapture -l`; no keystrokes were sent",
+    "`swift test --package-path apps/macos/Packages/StacklyUI --filter \"DaemonModelTests|ConnectionDiagnosticsTests|ShellAccessibilityTests\"`: 40 tests in 3 suites pass",
+    "launch with no stacklyd, select Diagnostics, dump the Connection rows; start stacklyd with the same root, wait 8 s, dump the rows, screenshot, press Copy Details (clipboard saved and restored around the read)",
+    "SIGTERM stacklyd, dump the rows, start stacklyd again, press Stackly › Reconnect to stacklyd, dump the rows",
+    "quit, `chmod 666` the live socket, launch, dump the rows and count daemon log lines, `chmod 600`, press Reconnect in the banner, dump the rows, screenshot; afterwards quit and stop stacklyd",
+    "not covered here: VoiceOver itself (check 6 stays with the user)"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5) as the checker of the full verify session chk-f13-verify drove the app through the accessibility API and read the screenshots and logs it took; the user has not reviewed this record",
+  "startedAt": "2026-10-21T12:54:50.000000Z",
+  "finishedAt": "2026-10-21T12:56:30.000000Z",
+  "evidencePath": "evidence/manual/2026-10-21-spec-0013-full-verify-rerun-diagnostics-clears-t.json",
+  "context": {
+    "sourceCommit": "015305a3cb2629c19d2a563cec273d9f9a16790f",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
