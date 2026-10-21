@@ -377,7 +377,12 @@ final class SkeletonRig {
 }
 
 /// Follows one instance in an ``InstanceStore`` and keeps each distinct pair of
-/// lifecycle and readiness it passes through, sampled every 10 ms.
+/// lifecycle and readiness it passes through.
+///
+/// It records from the store's `didApply` hook, in the same turn as each change the store
+/// applies. A sampler on a timer lost states whenever a busy main actor ran the store's
+/// changes and the test's next check back to back: the last state before ``finish()``
+/// above all.
 final class InstanceTrail {
     /// One observed state.
     struct Step: Equatable, CustomStringConvertible {
@@ -389,28 +394,40 @@ final class InstanceTrail {
 
     /// The steps seen, in order, without repeats.
     private(set) var steps: [Step] = []
-    private var task: Task<Void, Never>?
+    private var name = ""
+    private var store: InstanceStore?
+    private var earlierObserver: ((StoreChange<InstanceSummary>) -> Void)?
 
-    /// Starts sampling the instance named `name`.
+    /// Starts following the instance named `name`: records its state now and after every
+    /// change `store` applies. The store's earlier observer still gets every change.
     func follow(_ name: String, in store: InstanceStore) {
-        task = Task {
-            while Task.isCancelled == false {
-                if let item = store.instances.first(where: { $0.name == name }) {
-                    let step = Step(lifecycle: item.lifecycle, readiness: item.readiness.state)
-                    if steps.last != step { steps.append(step) }
-                }
-                try? await Task.sleep(for: .milliseconds(10))
-            }
+        self.name = name
+        self.store = store
+        let earlier = store.store.didApply
+        earlierObserver = earlier
+        store.store.didApply = { [weak self] change in
+            earlier?(change)
+            self?.record()
         }
+        record()
     }
 
-    /// Stops sampling.
+    /// Stops following and gives the store back its earlier observer.
     func finish() {
-        task?.cancel()
+        guard let store else { return }
+        store.store.didApply = earlierObserver
+        self.store = nil
+        earlierObserver = nil
     }
 
     /// The position of the first step that matches, or `nil`.
     func firstIndex(_ lifecycle: InstanceLifecycle, _ readiness: InstanceReadinessState) -> Int? {
         steps.firstIndex(of: Step(lifecycle: lifecycle, readiness: readiness))
+    }
+
+    private func record() {
+        guard let item = store?.instances.first(where: { $0.name == name }) else { return }
+        let step = Step(lifecycle: item.lifecycle, readiness: item.readiness.state)
+        if steps.last != step { steps.append(step) }
     }
 }
