@@ -36,6 +36,14 @@ impl FailureCode {
     pub const INIT_STEP_TIMEOUT: Self = Self::from_static("init_step_timeout");
     /// The init plan ran past its deadline.
     pub const INIT_TIMEOUT: Self = Self::from_static("init_timeout");
+    /// A runtime executable carries the quarantine attribute, so the start
+    /// is refused before the spawn (spec 0018, K7). Stackly never removes
+    /// quarantine.
+    pub const QUARANTINED: Self = Self::from_static("quarantined");
+    /// macOS killed the main process with `SIGKILL`, which the daemon did
+    /// not send, before it was ready, for example for a broken signature
+    /// (spec 0018, K7).
+    pub const BINARY_REJECTED_BY_OS: Self = Self::from_static("binary_rejected_by_os");
 }
 
 impl StageName {
@@ -98,6 +106,8 @@ mod tests {
             FailureCode::INIT_STEP_FAILED,
             FailureCode::INIT_STEP_TIMEOUT,
             FailureCode::INIT_TIMEOUT,
+            FailureCode::QUARANTINED,
+            FailureCode::BINARY_REJECTED_BY_OS,
         ];
 
         let text: Vec<_> = codes.iter().map(FailureCode::as_str).collect();
@@ -118,6 +128,8 @@ mod tests {
                 "init_step_failed",
                 "init_step_timeout",
                 "init_timeout",
+                "quarantined",
+                "binary_rejected_by_os",
             ]
         );
         for code in codes {

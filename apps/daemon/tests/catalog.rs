@@ -139,7 +139,8 @@ fn the_default_spawned_daemon_has_an_ok_empty_catalog() {
 #[test]
 fn a_built_catalog_folder_is_served_as_a_development_catalog() {
     let root = TestRoot::new().unwrap();
-    let platform = MacosPlatform::with_roots(root.roots());
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let nats =
         read_package(platform.fs(), &repo.join("providers/nats")).expect("the NATS package reads");

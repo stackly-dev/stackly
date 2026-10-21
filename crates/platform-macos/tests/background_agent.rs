@@ -60,7 +60,8 @@ fn an_unlocated_agent_answers_not_bundled_with_an_empty_executable() {
 
 #[test]
 fn macos_platform_installs_the_unlocated_agent_and_reports_it_supported() {
-    let platform = MacosPlatform::with_roots(TestRoot::new().expect("test root").roots());
+    let platform = MacosPlatform::with_roots(TestRoot::new().expect("test root").roots())
+        .expect("the platform assembles");
     assert_eq!(
         platform
             .info()

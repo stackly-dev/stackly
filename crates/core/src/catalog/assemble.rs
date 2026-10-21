@@ -6,9 +6,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use jiff::Timestamp;
-use stackly_domain::{Os, OsVersion, ProviderName};
+use stackly_domain::{Os, ProviderName};
 
-use crate::provider::{ArtifactStatus, PackageFiles, ValidatedPackage};
+use crate::provider::{PackageFiles, ValidatedPackage};
 
 use super::index::{CatalogIndex, IndexPlanned, IndexPlatformNote, content_sha256, provider_entry};
 use super::rules::{
@@ -78,9 +78,6 @@ pub struct SourcePlanned {
 pub struct AssembleOptions {
     /// Accept `testing` packages. Only test catalogs set it.
     pub allow_testing: bool,
-    /// Reject artifacts whose `minOs` is above this version, the minimum
-    /// macOS of the app (`cargo xtask catalog build` passes 27.0).
-    pub min_os_ceiling: Option<OsVersion>,
     /// Reject a `published_at` after this instant (the build clock).
     pub not_after: Option<Timestamp>,
 }
@@ -164,18 +161,6 @@ pub fn assemble(
                 "{id}: {} {}: {}",
                 violation.file, violation.location, violation.message
             ));
-        }
-        if let Some(ceiling) = options.min_os_ceiling {
-            for artifact in package.versions().artifacts() {
-                if let ArtifactStatus::Available { min_os, .. } = &artifact.status
-                    && *min_os > ceiling
-                {
-                    problems.push(format!(
-                        "{id}: {} needs macOS {min_os}, above the app minimum {ceiling}",
-                        artifact.id
-                    ));
-                }
-            }
         }
         providers.push(provider_entry(package, mark, tile, notes));
         copies.push((id.clone(), package.files().clone()));
@@ -418,24 +403,6 @@ mod tests {
             )
             .unwrap_err(),
             ["official/other: metadata.id is official/nats"]
-        );
-    }
-
-    #[test]
-    fn artifacts_above_the_app_minimum_are_refused() {
-        let nats = packages(&[("official/nats", "nats")]);
-        let options = |ceiling: &str| AssembleOptions {
-            min_os_ceiling: Some(ceiling.parse().unwrap()),
-            ..AssembleOptions::default()
-        };
-        let source = spec(vec![provider("official/nats")], vec![]);
-
-        assert!(assemble(&source, &nats, options("27.0")).is_ok());
-        assert_eq!(
-            assemble(&source, &nats, options("12.0")).unwrap_err(),
-            [
-                "official/nats: nats-2.15.1-macos-aarch64 needs macOS 13.0, above the app minimum 12.0"
-            ]
         );
     }
 

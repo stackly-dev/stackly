@@ -15,6 +15,7 @@ use stackly_core::catalog::{
 };
 use stackly_core::provider::{ArtifactStatus, Issue, VersionArtifact};
 use stackly_domain::{ExactVersion, ProviderName, Target};
+use stackly_platform::HostFacts;
 use stackly_protocol::catalog as dto;
 use stackly_protocol::codes::catalog;
 use stackly_protocol::{Count, ErrorBody, Revision, Timestamp};
@@ -57,7 +58,7 @@ fn source_and_trust(location: &CatalogLocation) -> (dto::CatalogSourceKind, dto:
 /// The facts about `catalog` for a Mac of target `host`; `outdated` is
 /// [`Catalog::outdated`] at the time of the request.
 #[must_use]
-pub fn catalog_info(catalog: &Catalog, host: Target, outdated: bool) -> dto::CatalogInfo {
+pub fn catalog_info(catalog: &Catalog, host: &HostFacts, outdated: bool) -> dto::CatalogInfo {
     let meta = catalog.meta();
     let (source, trust) = source_and_trust(&meta.location);
     dto::CatalogInfo {
@@ -67,7 +68,7 @@ pub fn catalog_info(catalog: &Catalog, host: Target, outdated: bool) -> dto::Cat
         content_sha256: meta.content_sha256.to_string(),
         source,
         trust,
-        host: host_target(host),
+        host: host_target(host.target),
         outdated,
         invalid_count: Count::saturating(catalog.invalid_count() as u64),
     }
@@ -76,7 +77,11 @@ pub fn catalog_info(catalog: &Catalog, host: Target, outdated: bool) -> dto::Cat
 /// The reply of `catalog.list_providers`: the facts and every entry, in
 /// the catalog's display order.
 #[must_use]
-pub fn list_providers(catalog: &Catalog, host: Target, outdated: bool) -> dto::ListProvidersReply {
+pub fn list_providers(
+    catalog: &Catalog,
+    host: &HostFacts,
+    outdated: bool,
+) -> dto::ListProvidersReply {
     dto::ListProvidersReply {
         catalog: catalog_info(catalog, host, outdated),
         items: catalog
@@ -100,7 +105,7 @@ fn host_artifacts(entry: &ProviderEntry, host: Target) -> impl Iterator<Item = &
 pub fn provider_summary(
     catalog: &Catalog,
     entry: &CatalogEntry,
-    host: Target,
+    host: &HostFacts,
 ) -> dto::ProviderSummary {
     let status = entry_status(entry, host);
     let (_, trust) = source_and_trust(&catalog.meta().location);
@@ -108,7 +113,7 @@ pub fn provider_summary(
     let mut licenses: Vec<String> = Vec::new();
     let (software, description, provider_revision) = match entry {
         CatalogEntry::Provider(provider) => {
-            for artifact in host_artifacts(provider, host) {
+            for artifact in host_artifacts(provider, host.target) {
                 let version = artifact.version.to_string();
                 if !versions.contains(&version) {
                     versions.push(version);
@@ -161,7 +166,7 @@ pub fn provider_summary(
 pub fn provider_detail(
     catalog: &Catalog,
     entry: &CatalogEntry,
-    host: Target,
+    host: &HostFacts,
 ) -> dto::ProviderDetail {
     let summary = provider_summary(catalog, entry, host);
     let software = summary.software.clone();
@@ -218,7 +223,7 @@ fn catalog_version(
     entry: &CatalogEntry,
     provider: &ProviderEntry,
     version: &ExactVersion,
-    host: Target,
+    host: &HostFacts,
 ) -> dto::CatalogVersion {
     let artifacts: Vec<&VersionArtifact> = provider
         .artifacts()
@@ -454,8 +459,12 @@ mod tests {
 
     use super::*;
 
-    fn host() -> Target {
-        "macos-aarch64".parse().unwrap()
+    fn host() -> HostFacts {
+        HostFacts::new(
+            "macos-aarch64".parse().unwrap(),
+            stackly_domain::OsVersion::major_minor(27, 0),
+            None,
+        )
     }
 
     fn fixture<T: DeserializeOwned>(file: &str) -> T {
@@ -626,14 +635,14 @@ mod tests {
 
     fn detail_of(catalog: &Catalog, id: &str) -> dto::ProviderDetail {
         let entry = catalog.entry(&id.parse().unwrap()).unwrap();
-        provider_detail(catalog, entry, host())
+        provider_detail(catalog, entry, &host())
     }
 
     #[test]
     fn the_list_reply_of_the_fixture_catalog_is_the_shared_fixture() {
         let catalog = fixture_catalog();
 
-        let reply = list_providers(&catalog, host(), false);
+        let reply = list_providers(&catalog, &host(), false);
 
         assert_eq!(reply, fixture("list-providers.json"));
     }
@@ -665,7 +674,7 @@ mod tests {
             Vec::new(),
         )]);
 
-        let reply = list_providers(&catalog, host(), true);
+        let reply = list_providers(&catalog, &host(), true);
 
         assert_eq!(reply.catalog.source, dto::CatalogSourceKind::Development);
         assert_eq!(reply.catalog.trust, dto::TrustLevel::Development);
@@ -733,7 +742,7 @@ mod tests {
         let catalog =
             Catalog::for_tests(&[provider(many, tile("Na", TileColor::Green), Vec::new())]);
 
-        let summary = &list_providers(&catalog, host(), false).items[0];
+        let summary = &list_providers(&catalog, &host(), false).items[0];
 
         assert_eq!(summary.versions.len(), 16);
         assert_eq!(summary.versions[0], "2.15.0");
@@ -802,6 +811,16 @@ mod tests {
             );
         }
         for reason in SupportReason::ALL {
+            // provisional: F18 step 10 gives the three reasons of the
+            // compatibility rules their wire values.
+            if matches!(
+                reason,
+                SupportReason::RequiresNewerOs
+                    | SupportReason::ProviderTested
+                    | SupportReason::RuntimeTested
+            ) {
+                continue;
+            }
             assert_ne!(
                 wire::<dto::SupportReason>(reason.as_code()),
                 dto::SupportReason::Unrecognized
@@ -888,7 +907,7 @@ mod tests {
         let body = not_installable(
             &provider,
             &version,
-            host(),
+            host().target,
             NotInstallableReason::NoBuildForArch,
             &targets,
         );

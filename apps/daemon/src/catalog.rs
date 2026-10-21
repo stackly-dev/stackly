@@ -155,7 +155,7 @@ pub fn list_providers(core: &DaemonCore) -> HandlerFuture<'_, ListProvidersReply
         let outdated = catalog.outdated(platform.clock().now());
         Ok(map::catalog::list_providers(
             &catalog,
-            platform.info().target(),
+            &platform.info().host_facts(),
             outdated,
         ))
     })
@@ -179,7 +179,7 @@ pub fn get_provider(
             Some(entry) => Ok(Box::new(map::catalog::provider_detail(
                 &catalog,
                 entry,
-                core.platform().info().target(),
+                &core.platform().info().host_facts(),
             ))),
             None => {
                 let matches = if asked.contains('/') {

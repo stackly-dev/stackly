@@ -1066,6 +1066,12 @@ async fn dispatch(
             .map(|page| Reply::InstanceList(Box::new(page))),
             None,
         ),
+        Call::StorageGetCapacity => (
+            guarded(core, handlers, context, |h, c, x| h.get_capacity(c, x))
+                .await
+                .map(Reply::StorageGetCapacity),
+            None,
+        ),
     }
 }
 

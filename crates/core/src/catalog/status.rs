@@ -5,9 +5,11 @@
 
 use std::collections::BTreeSet;
 
-use stackly_domain::{Arch, ExactVersion, Os, SupportStatus, Target};
+use stackly_domain::{Arch, ExactVersion, Os, SupportStatus};
+use stackly_platform::HostFacts;
 
 use crate::provider::{ArtifactStatus, VersionArtifact};
+use crate::runtime::compatibility::support_status;
 
 use super::install::{Installability, NotInstallableReason, installability};
 use super::model::{CatalogEntry, ProviderEntry};
@@ -38,11 +40,19 @@ pub enum SupportReason {
     ProviderPlanned,
     /// The provider package failed validation.
     PackageInvalid,
+    /// The artifact for this Mac needs a newer macOS than this Mac runs.
+    RequiresNewerOs,
+    /// A passing compatibility record of this provider revision on this
+    /// macOS makes it supported.
+    ProviderTested,
+    /// A passing runtime record on this macOS makes it experimental; the
+    /// provider integration is not tested.
+    RuntimeTested,
 }
 
 impl SupportReason {
     /// Every reason.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 12] = [
         Self::Untested,
         Self::NoBuild,
         Self::NoBuildForArch,
@@ -52,6 +62,9 @@ impl SupportReason {
         Self::FixtureOnly,
         Self::ProviderPlanned,
         Self::PackageInvalid,
+        Self::RequiresNewerOs,
+        Self::ProviderTested,
+        Self::RuntimeTested,
     ];
 
     /// Returns the stable code, such as `no_build_for_arch`.
@@ -67,6 +80,9 @@ impl SupportReason {
             Self::FixtureOnly => "fixture_only",
             Self::ProviderPlanned => "provider_planned",
             Self::PackageInvalid => "package_invalid",
+            Self::RequiresNewerOs => "requires_newer_os",
+            Self::ProviderTested => "provider_tested",
+            Self::RuntimeTested => "runtime_tested",
         }
     }
 }
@@ -150,7 +166,7 @@ pub struct TargetSupport {
 /// Returns the state of an entry for `host`: from the install gate over
 /// every version of a provider entry (spec 0017, *Aturan status*).
 #[must_use]
-pub fn entry_status(entry: &CatalogEntry, host: Target) -> EntryStatus {
+pub fn entry_status(entry: &CatalogEntry, host: &HostFacts) -> EntryStatus {
     let provider = match entry {
         CatalogEntry::Planned(_) => {
             return EntryStatus {
@@ -188,7 +204,7 @@ pub fn entry_status(entry: &CatalogEntry, host: Target) -> EntryStatus {
         .artifacts()
         .iter()
         .find_map(|artifact| match &artifact.status {
-            ArtifactStatus::Blocked { reason, .. } if artifact.target == host => {
+            ArtifactStatus::Blocked { reason, .. } if artifact.target == host.target => {
                 Some(reason.clone())
             }
             _ => None,
@@ -215,7 +231,7 @@ pub fn entry_status(entry: &CatalogEntry, host: Target) -> EntryStatus {
 pub fn version_support(
     entry: &ProviderEntry,
     version: &ExactVersion,
-    host: Target,
+    host: &HostFacts,
 ) -> Vec<TargetSupport> {
     MATRIX_OSES
         .into_iter()
@@ -224,30 +240,29 @@ pub fn version_support(
 }
 
 /// The status of an artifact for the host OS (spec 0017, *Aturan status*
-/// step 3).
-// provisional: F18 (replaced by runtime::compatibility::support_status with HostFacts)
-#[must_use]
-pub fn host_cell_status(artifact: &VersionArtifact, _host: Target) -> CellStatus {
-    match &artifact.status {
-        ArtifactStatus::Blocked { reason, .. } => CellStatus {
-            status: SupportStatus::Blocked,
-            reason: Some(SupportReason::ArtifactBlocked),
-            note: Some(reason.clone()),
-        },
-        ArtifactStatus::Fixture { .. } => CellStatus {
-            status: SupportStatus::Unverified,
-            reason: Some(SupportReason::FixtureOnly),
-            note: None,
-        },
-        ArtifactStatus::Available { .. } => CellStatus {
-            status: SupportStatus::Unverified,
-            reason: Some(SupportReason::Untested),
-            note: None,
-        },
+/// step 3), from [`support_status`].
+///
+/// The catalog does not decode the compatibility records of `versions.json`
+/// yet, so no record is passed and an `available` artifact is `unverified`
+/// until it does (spec 0018 step 13).
+fn host_cell_status(
+    entry: &ProviderEntry,
+    artifact: &VersionArtifact,
+    host: &HostFacts,
+) -> CellStatus {
+    let verdict = support_status(artifact, &[], Some(entry.package.key()), host);
+    let note = match &artifact.status {
+        ArtifactStatus::Blocked { reason, .. } => Some(reason.clone()),
+        _ => None,
+    };
+    CellStatus {
+        status: verdict.status,
+        reason: Some(verdict.reason),
+        note,
     }
 }
 
-fn cell(entry: &ProviderEntry, version: &ExactVersion, os: Os, host: Target) -> TargetSupport {
+fn cell(entry: &ProviderEntry, version: &ExactVersion, os: Os, host: &HostFacts) -> TargetSupport {
     let artifacts: Vec<&VersionArtifact> = entry
         .artifacts()
         .iter()
@@ -276,13 +291,13 @@ fn cell(entry: &ProviderEntry, version: &ExactVersion, os: Os, host: Target) -> 
             None => support(SupportStatus::Unsupported, SupportReason::NoBuild, None),
         };
     }
-    if os == host.os() {
+    if os == host.target.os() {
         return match artifacts
             .iter()
-            .find(|artifact| artifact.target.arch() == host.arch())
+            .find(|artifact| artifact.target.arch() == host.target.arch())
         {
             Some(artifact) => {
-                let cell = host_cell_status(artifact, host);
+                let cell = host_cell_status(entry, artifact, host);
                 TargetSupport {
                     os,
                     arches,
@@ -333,8 +348,12 @@ mod tests {
     use super::*;
     use crate::provider::{Category, NameCheck, PackageFiles, ValidatedPackage};
 
-    fn host() -> Target {
-        "macos-aarch64".parse().unwrap()
+    fn host() -> HostFacts {
+        HostFacts::new(
+            "macos-aarch64".parse().unwrap(),
+            stackly_domain::OsVersion::major_minor(27, 0),
+            None,
+        )
     }
 
     fn tile() -> TileHint {
@@ -434,14 +453,14 @@ mod tests {
 
     fn cells(entry: &ProviderEntry) -> Vec<Cell> {
         let version = entry.versions()[0].clone();
-        version_support(entry, &version, host())
+        version_support(entry, &version, &host())
             .into_iter()
             .map(|cell| (cell.os, cell.arches, cell.status, cell.reason, cell.note))
             .collect()
     }
 
     fn status_of(entry: ProviderEntry) -> EntryStatus {
-        entry_status(&CatalogEntry::Provider(entry), host())
+        entry_status(&CatalogEntry::Provider(entry), &host())
     }
 
     #[test]
@@ -609,14 +628,14 @@ mod tests {
             issues: Vec::new(),
         });
 
-        assert_eq!(entry_status(&planned, host()).state, EntryState::Planned);
+        assert_eq!(entry_status(&planned, &host()).state, EntryState::Planned);
         assert_eq!(
-            entry_status(&planned, host()).reason,
+            entry_status(&planned, &host()).reason,
             Some(SupportReason::ProviderPlanned)
         );
-        assert_eq!(entry_status(&invalid, host()).state, EntryState::Invalid);
+        assert_eq!(entry_status(&invalid, &host()).state, EntryState::Invalid);
         assert_eq!(
-            entry_status(&invalid, host()).reason,
+            entry_status(&invalid, &host()).reason,
             Some(SupportReason::PackageInvalid)
         );
     }

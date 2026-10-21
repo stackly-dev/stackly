@@ -542,6 +542,38 @@ area! {
 }
 
 area! {
+    /// Storage codes (spec 0022). The one code is retryable because
+    /// reading the volume changes nothing.
+    pub mod storage = "storage", owner "spec 0022" {
+        CAPACITY_UNAVAILABLE = "storage.capacity_unavailable", Unavailable, retryable true,
+            details ["reason", "kind"],
+            "the space left on the volume that holds the data folder cannot be read";
+
+        @functions
+
+        /// The static hint of a storage error, chosen from its code and the
+        /// values of its `details`; `None` for a code outside the area or a
+        /// `reason` without a hint.
+        #[must_use]
+        pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
+            if code != CAPACITY_UNAVAILABLE.code {
+                return None;
+            }
+            let reason = details
+                .iter()
+                .find(|detail| detail.key() == "reason")
+                .map(crate::error::ErrorDetail::value)?;
+            match reason {
+                "timeout" => Some(
+                    "The disk that holds Stackly data didn’t answer. Check that it is still connected.",
+                ),
+                _ => None,
+            }
+        }
+    }
+}
+
+area! {
     /// Codes for bugs and broken invariants.
     pub mod internal = "internal", owner "spec 0006" {
         UNEXPECTED = "internal.unexpected", Internal, retryable false,
@@ -627,6 +659,7 @@ pub const AREAS: &[Area] = &[
     supervisor::AREA,
     process::AREA,
     instance::AREA,
+    storage::AREA,
     internal::AREA,
     cli::AREA,
 ];
@@ -998,6 +1031,7 @@ mod tests {
                 "operation.queue_full",
                 "supervisor.endpoint_unavailable",
                 "supervisor.auto_port_unavailable",
+                "storage.capacity_unavailable",
             ]
         );
     }
@@ -1032,6 +1066,7 @@ mod tests {
                 ("supervisor", "spec 0010"),
                 ("process", "spec 0010"),
                 ("instance", "spec 0010"),
+                ("storage", "spec 0022"),
                 ("internal", "spec 0006"),
                 ("cli", "spec 0008"),
             ]

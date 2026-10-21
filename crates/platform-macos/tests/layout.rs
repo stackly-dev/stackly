@@ -170,7 +170,7 @@ fn identity_is_the_uid_that_owns_new_files() {
 
 #[test]
 fn the_built_capabilities_are_supported_and_the_rest_name_their_feature() {
-    let platform = MacosPlatform::with_roots(TestRoot::new().unwrap().roots());
+    let platform = MacosPlatform::with_roots(TestRoot::new().unwrap().roots()).unwrap();
     let info = platform.info();
     let caps = info.capabilities();
 
@@ -185,7 +185,9 @@ fn the_built_capabilities_are_supported_and_the_rest_name_their_feature() {
             | PlatformCapability::ProcessSupervision
             | PlatformCapability::SecretStore
             | PlatformCapability::IpcEndpoint
-            | PlatformCapability::BackgroundAgent => {
+            | PlatformCapability::BackgroundAgent
+            | PlatformCapability::NetworkFetch
+            | PlatformCapability::CodeSigning => {
                 assert_eq!(status, CapabilityStatus::Supported, "{capability}");
             }
             _ => assert!(
@@ -199,7 +201,8 @@ fn the_built_capabilities_are_supported_and_the_rest_name_their_feature() {
 #[test]
 fn prepare_layout_makes_a_private_layout_on_the_real_filesystem() {
     let root = TestRoot::new().unwrap();
-    let platform = MacosPlatform::with_roots(root.roots());
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
 
     let prepared = prepare_layout(&platform).unwrap();
     let again = prepare_layout(&platform).unwrap();
@@ -296,7 +299,8 @@ fn default_root_metadata() -> Vec<(PathBuf, Option<FileInfo>)> {
 fn instances_are_created_and_inventoried_without_touching_the_default_roots() {
     let before = default_root_metadata();
     let root = TestRoot::new().unwrap();
-    let platform = MacosPlatform::with_roots(root.roots());
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
     let prepared = prepare_layout(&platform).unwrap();
     let mut initialized = create(&platform, &prepared);
     let mut retained = create(&platform, &prepared);
@@ -360,7 +364,8 @@ fn instances_are_created_and_inventoried_without_touching_the_default_roots() {
 #[test]
 fn an_existing_folder_and_an_aliased_data_root_are_refused_on_the_real_filesystem() {
     let root = TestRoot::new().unwrap();
-    let platform = MacosPlatform::with_roots(root.roots());
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
     let prepared = prepare_layout(&platform).unwrap();
     let manifest = create(&platform, &prepared);
     let paths = prepared.layout().instance_paths(manifest.instance_id());
@@ -394,7 +399,8 @@ fn an_existing_folder_and_an_aliased_data_root_are_refused_on_the_real_filesyste
 #[test]
 fn unreadable_manifests_are_classified_and_never_opened_on_the_real_filesystem() {
     let root = TestRoot::new().unwrap();
-    let platform = MacosPlatform::with_roots(root.roots());
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
     let prepared = prepare_layout(&platform).unwrap();
     let layout = prepared.layout();
     let mut ids: [InstanceId; 3] = std::array::from_fn(|_| InstanceId::generate());
@@ -442,7 +448,8 @@ fn unreadable_manifests_are_classified_and_never_opened_on_the_real_filesystem()
 #[test]
 fn a_failed_manifest_write_keeps_the_old_target_and_leaves_no_temporary_file() {
     let root = TestRoot::new().unwrap();
-    let platform = MacosPlatform::with_roots(root.roots());
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
     let prepared = prepare_layout(&platform).unwrap();
     let manifest = new_manifest(&platform, InstanceId::generate());
     let paths = prepared.layout().instance_paths(manifest.instance_id());

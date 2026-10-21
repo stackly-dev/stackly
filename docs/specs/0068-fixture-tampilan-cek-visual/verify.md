@@ -28,6 +28,7 @@ _Langkah diturunkan dari acceptance criteria spec 0068. `/check verify` menjalan
 - [x] `cargo xtask snapshot review` → mencetak path absolut `target/snapshot-review/index.html`; `cargo xtask snapshot review --base tidak-ada` → keluar 1 dengan pesan `git merge-base tidak-ada HEAD failed`; di pohon tanpa PNG yang berubah → "no snapshot changes" dan keluar 0 → AC-9
 - [x] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask evidence check`, dan `xcrun swift-format lint --strict` pada file Swift yang berubah → hijau → AC-7, AC-9
 - [x] `cargo xtask build-app` → app Debug terbangun (kunci environment baru tidak mengubah perilaku app) → AC-1
+- [x] Regresi kenaikan protokol (2026-10-22): naikkan sementara `ContractInfo.protocolVersion` di `clients/swift/.../Generated/ContractInfo.swift` ke 1.9, jalankan `swift test --package-path apps/macos/Packages/StacklyUI --filter SnapshotTests`, lalu kembalikan file itu → semua suite snapshot lulus terhadap referensi 1.8 yang ada, tanpa PNG berubah; `FixtureContract` memegang versi dan digest tetap, `FixtureScenarioTests.everyScenarioReportsTheFixtureContractNotTheCurrentOne` dan `pinnedDiagnosticsShowTheFixtureAppProtocol` menjaganya → AC-4, AC-6
 
 ### Acceptance-criteria coverage
 

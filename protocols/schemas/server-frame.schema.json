@@ -237,6 +237,79 @@
         "supported"
       ]
     },
+    "CapacityLevel": {
+      "description": "How full a volume is. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "Plenty of space is left.",
+          "type": "string",
+          "const": "ok"
+        },
+        {
+          "description": "At least 80 percent is used.",
+          "type": "string",
+          "const": "filling"
+        },
+        {
+          "description": "At least 90 percent is used, or under 5 GB is left.",
+          "type": "string",
+          "const": "low"
+        },
+        {
+          "description": "Under 2 GB is left.",
+          "type": "string",
+          "const": "critical"
+        },
+        {
+          "description": "A level this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "CapacityReport": {
+      "description": "The space left on the volume that holds the data root, read now. The\ndaemon computes `level`; clients never apply thresholds themselves.",
+      "type": "object",
+      "properties": {
+        "availableBytes": {
+          "description": "The bytes an unprivileged user can still write, held to\n`totalBytes`.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "checkedAt": {
+          "description": "When the daemon finished reading the volume.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "level": {
+          "description": "How worried the user should be about the space left.",
+          "$ref": "#/$defs/CapacityLevel"
+        },
+        "totalBytes": {
+          "description": "The size of the volume, in bytes. Never 0.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "usedPercent": {
+          "description": "The percent of the volume in use, 0 to 100, rounded down.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "checkedAt",
+        "totalBytes",
+        "availableBytes",
+        "usedPercent",
+        "level"
+      ]
+    },
     "CatalogArtifact": {
       "description": "One artifact of a version.",
       "type": "object",
@@ -4448,6 +4521,23 @@
             "type": {
               "type": "string",
               "const": "instance.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The space left, read now.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CapacityReport"
+            },
+            "type": {
+              "type": "string",
+              "const": "storage.get_capacity"
             }
           },
           "required": [

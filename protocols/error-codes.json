@@ -61,6 +61,10 @@
       "owner": "spec 0010"
     },
     {
+      "name": "storage",
+      "owner": "spec 0022"
+    },
+    {
       "name": "internal",
       "owner": "spec 0006"
     },
@@ -1385,6 +1389,17 @@
       "details": [],
       "items": null,
       "summary": "this OS has no secret store"
+    },
+    {
+      "code": "storage.capacity_unavailable",
+      "category": "unavailable",
+      "retryable": true,
+      "details": [
+        "reason",
+        "kind"
+      ],
+      "items": null,
+      "summary": "the space left on the volume that holds the data folder cannot be read"
     },
     {
       "code": "supervisor.auto_port_unavailable",

@@ -45,6 +45,35 @@ struct FixtureScenarioTests {
         #expect(FixtureClock.daysAgo(2).timeIntervalSince(FixtureClock.now) == -172_800)
     }
 
+    @Test func everyScenarioReportsTheFixtureContractNotTheCurrentOne() {
+        #expect(FixtureContract.protocolVersion == ProtocolVersion(major: 1, minor: 8))
+        #expect(FixtureContract.protocolText == "1.8")
+        #expect(HandshakeAccepted.fixture.protocol == FixtureContract.protocolVersion)
+        #expect(HandshakeAccepted.fixture.contractDigest == FixtureContract.digest)
+        #expect(DaemonInfo.fixture.protocol == FixtureContract.protocolVersion)
+        #expect(DaemonInfo.fixture.contractDigest == FixtureContract.digest)
+        for scenario in FixtureScenario.all {
+            if let handshake = scenario.handshake {
+                #expect(handshake.protocol == FixtureContract.protocolVersion)
+            }
+            for step in scenario.connection {
+                guard case .state(.connected(let daemon)) = step else { continue }
+                #expect(daemon.accepted.protocol == FixtureContract.protocolVersion)
+                #expect(daemon.accepted.contractDigest == FixtureContract.digest)
+                #expect(daemon.info?.protocol == FixtureContract.protocolVersion)
+            }
+        }
+    }
+
+    @Test func pinnedDiagnosticsShowTheFixtureAppProtocol() {
+        let live = ConnectionDiagnostics(
+            status: .unreachable(lastKnownAt: nil, since: FixtureClock.now), socketPath: nil,
+            lastError: nil, nextAttempt: nil,
+            lastConnectedAt: nil, daemon: nil, daemonProtocol: nil, appProtocol: "9.9",
+            contractDrift: nil, health: nil)
+        #expect(live.pinningFixtureContract().appProtocol == FixtureContract.protocolText)
+    }
+
     // MARK: - AC-1: DTOs round trip
 
     private static func roundTrips<Value: Codable & Equatable>(_ value: Value) throws -> Bool {

@@ -924,6 +924,41 @@
       "code": "request.invalid_params"
     },
     {
+      "file": "request-storage-get-capacity.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-storage-get-capacity.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-storage-get-capacity-critical.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-storage-get-capacity-unknown-level.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-error-storage-capacity-unavailable-timeout.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-storage-capacity-unavailable-io.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-storage-capacity-unavailable-no-size.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
       "file": "request-shutdown-stop.json",
       "type": "Request",
       "expect": "roundtrip"

@@ -47,6 +47,7 @@ extension Call {
 		case .instanceStop: "instance.stop"
 		case .instanceGet: "instance.get"
 		case .instanceList: "instance.list"
+		case .storageGetCapacity: "storage.get_capacity"
 		}
 	}
 }
@@ -80,6 +81,7 @@ extension Reply {
 		case .instanceStop: "instance.stop"
 		case .instanceGet: "instance.get"
 		case .instanceList: "instance.list"
+		case .storageGetCapacity: "storage.get_capacity"
 		}
 	}
 }

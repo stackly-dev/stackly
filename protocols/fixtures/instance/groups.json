@@ -1,0 +1,154 @@
+{
+  "cases": [
+    {
+      "lifecycle": "uninitialized",
+      "readiness": "unknown",
+      "group": "stopped"
+    },
+    {
+      "lifecycle": "uninitialized",
+      "readiness": "not_ready",
+      "group": "stopped"
+    },
+    {
+      "lifecycle": "uninitialized",
+      "readiness": "ready",
+      "group": "stopped"
+    },
+    {
+      "lifecycle": "initializing",
+      "readiness": "unknown",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "initializing",
+      "readiness": "not_ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "initializing",
+      "readiness": "ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "stopped",
+      "readiness": "unknown",
+      "group": "stopped"
+    },
+    {
+      "lifecycle": "stopped",
+      "readiness": "not_ready",
+      "group": "stopped"
+    },
+    {
+      "lifecycle": "stopped",
+      "readiness": "ready",
+      "group": "stopped"
+    },
+    {
+      "lifecycle": "starting",
+      "readiness": "unknown",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "starting",
+      "readiness": "not_ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "starting",
+      "readiness": "ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "running",
+      "readiness": "unknown",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "running",
+      "readiness": "not_ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "running",
+      "readiness": "ready",
+      "group": "ready"
+    },
+    {
+      "lifecycle": "stopping",
+      "readiness": "unknown",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "stopping",
+      "readiness": "not_ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "stopping",
+      "readiness": "ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "failed",
+      "readiness": "unknown",
+      "group": "failed"
+    },
+    {
+      "lifecycle": "failed",
+      "readiness": "not_ready",
+      "group": "failed"
+    },
+    {
+      "lifecycle": "failed",
+      "readiness": "ready",
+      "group": "failed"
+    },
+    {
+      "lifecycle": "recovering",
+      "readiness": "unknown",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "recovering",
+      "readiness": "not_ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "recovering",
+      "readiness": "ready",
+      "group": "notReady"
+    },
+    {
+      "lifecycle": "unknown",
+      "readiness": "unknown",
+      "group": "unknown"
+    },
+    {
+      "lifecycle": "unknown",
+      "readiness": "not_ready",
+      "group": "unknown"
+    },
+    {
+      "lifecycle": "unknown",
+      "readiness": "ready",
+      "group": "unknown"
+    },
+    {
+      "lifecycle": "retained",
+      "readiness": "unknown",
+      "group": null
+    },
+    {
+      "lifecycle": "retained",
+      "readiness": "not_ready",
+      "group": null
+    },
+    {
+      "lifecycle": "retained",
+      "readiness": "ready",
+      "group": null
+    }
+  ]
+}

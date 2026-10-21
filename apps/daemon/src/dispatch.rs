@@ -8,7 +8,8 @@
 //! in recovery mode is its `methods!` table line in `stackly-protocol`
 //! ([`Call::allowed_in_recovery`](stackly_protocol::Call::allowed_in_recovery)).
 //! The operation methods (spec 0007) live in [`crate::ipc::operation`] and
-//! the secret methods (spec 0011) in [`crate::ipc::secret`].
+//! the secret methods (spec 0011) in [`crate::ipc::secret`], and the
+//! storage method (spec 0022) in [`crate::storage`].
 
 use std::future::Future;
 use std::pin::Pin;
@@ -37,13 +38,14 @@ use stackly_protocol::secret::{
     DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
     RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
 };
+use stackly_protocol::storage::CapacityReport;
 
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
 use crate::ipc::secret;
 use crate::state::DaemonCore;
-use crate::{catalog, map};
+use crate::{catalog, map, storage};
 
 /// What a handler may know about the request it serves: filled from the
 /// accept and the handshake of its connection, so a handler never guesses
@@ -325,6 +327,16 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, InstancePage> {
         let _ = context;
         instance::list(core, params)
+    }
+
+    /// `storage.get_capacity`.
+    fn get_capacity<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, CapacityReport> {
+        let _ = context;
+        storage::get_capacity(core)
     }
 
     /// A method outside the contract that starts an operation, which only

@@ -5,6 +5,7 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use stackly_platform::{
     AppendFile, DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, REMOVE_TREE_MAX_DEPTH,
@@ -181,6 +182,7 @@ struct State {
     when: Vec<(FsOp, PathBuf, Fault)>,
     mutations: Vec<Mutation>,
     volumes: Vec<(PathBuf, FakeVolume)>,
+    delays: Vec<(FsOp, Duration)>,
 }
 
 /// The fault and mutation state, shared with the handles and tree writers
@@ -299,6 +301,17 @@ impl FakeFilesystem {
         state.when.clear();
     }
 
+    /// Makes every call of `op` sleep for `delay` before it does anything
+    /// else, until another call sets a new delay for `op`; a zero `delay`
+    /// removes it. [`clear_faults`](Self::clear_faults) leaves delays alone.
+    pub fn set_delay(&self, op: FsOp, delay: Duration) {
+        let mut state = self.state();
+        state.delays.retain(|(existing, _)| *existing != op);
+        if !delay.is_zero() {
+            state.delays.push((op, delay));
+        }
+    }
+
     /// Returns every directory created, file written, and tree removed so
     /// far, in order. A removal counts when it removed at least one entry,
     /// even if it then failed. An append file counts once, when it is
@@ -339,6 +352,15 @@ impl FakeFilesystem {
     /// Checks confinement, then injected faults (except for writes, whose
     /// fault fires before the rename).
     fn enter(&self, op: FsOp, path: &Path) -> Result<(), PlatformError> {
+        let delay = self
+            .state()
+            .delays
+            .iter()
+            .find(|(delayed, _)| *delayed == op)
+            .map(|(_, delay)| *delay);
+        if let Some(delay) = delay {
+            std::thread::sleep(delay);
+        }
         self.confine(path)?;
         if op == FsOp::WriteFileAtomic {
             return Ok(());

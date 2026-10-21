@@ -57,7 +57,8 @@ pub struct Site {
 impl Site {
     pub fn new() -> Self {
         let root = TestRoot::new().expect("a test root can be created");
-        let platform = MacosPlatform::with_roots(root.roots());
+        let platform =
+            MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
         let prepared = prepare_layout(&platform).expect("the test root layout can be prepared");
         let owner = LockOwner::new(
             std::process::id(),

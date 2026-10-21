@@ -38,6 +38,7 @@ use crate::secret::{
     DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
     RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
 };
+use crate::storage::CapacityReport;
 
 /// The only frame a client sends.
 #[typeshare]
@@ -138,6 +139,9 @@ pub enum Call {
     /// One page of instances, retained ones left out.
     #[serde(rename = "instance.list")]
     InstanceList(ListInstancesParams),
+    /// The space left on the volume that holds the data root.
+    #[serde(rename = "storage.get_capacity")]
+    StorageGetCapacity,
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -220,6 +224,9 @@ pub enum Reply {
     /// One page of instances.
     #[serde(rename = "instance.list")]
     InstanceList(Box<InstancePage>),
+    /// The space left, read now.
+    #[serde(rename = "storage.get_capacity")]
+    StorageGetCapacity(CapacityReport),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -315,6 +322,7 @@ methods! {
     "instance.stop" => InstanceStop(StopInstanceParams), recovery refused;
     "instance.get" => InstanceGet(GetInstanceParams), recovery refused;
     "instance.list" => InstanceList(ListInstancesParams), recovery refused;
+    "storage.get_capacity" => StorageGetCapacity, recovery allowed;
 }
 
 impl Reply {
@@ -430,6 +438,7 @@ mod tests {
             Call::CatalogGetProvider(GetProviderParams {
                 provider: "official/nats".to_owned(),
             }),
+            Call::StorageGetCapacity,
         ];
         assert!(allowed.iter().all(Call::allowed_in_recovery));
         let operation_id = uuid::Uuid::nil();
