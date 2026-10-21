@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import StacklyTestSupport
 import SwiftUI
 import Testing
 
@@ -26,7 +27,11 @@ struct StacklySheetTests {
         #expect(SheetMetrics.bodyHeight(content: 220, visibleScreen: 900) == 220)
     }
 
-    @Test func aTallBodyStopsAtTheVisibleScreenMinus160() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-12: a tall body stops at the visible screen minus 160 pt"))
+    func aTallBodyStopsAtTheVisibleScreenMinus160() {
         #expect(SheetMetrics.bodyHeight(content: 3000, visibleScreen: 900) == 740)
         #expect(SheetMetrics.bodyHeight(content: 740, visibleScreen: 900) == 740)
     }
@@ -37,12 +42,20 @@ struct StacklySheetTests {
 
     // MARK: - footer reason
 
-    @Test func theFooterWritesTheActionsOwnReason() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected: "Spec 0067 AC-12: the footer writes the primary action's own reason"))
+    func theFooterWritesTheActionsOwnReason() {
         let availability = action(reason: "Fix the errors above.").availability(gate: .available)
         #expect(SheetFooterReason.text(for: availability) == "Fix the errors above.")
     }
 
-    @Test func theFooterWritesTheGateReasonForAMutatingAction() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected: "Spec 0067 AC-12: the footer writes the gate reason for a mutating action"))
+    func theFooterWritesTheGateReasonForAMutatingAction() {
         let availability = action().availability(gate: Self.blocked)
         #expect(SheetFooterReason.text(for: availability) == "stacklyd is unavailable.")
     }
@@ -101,7 +114,11 @@ struct StacklySheetTests {
         return file.codeLines.joined(separator: "\n")
     }
 
-    @Test func theSheetHoldsItsOwnActionHostAndKeepsEscapeForCancel() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected: "Spec 0067 AC-12: the sheet holds its own action host and Escape cancels"))
+    func theSheetHoldsItsOwnActionHostAndKeepsEscapeForCancel() throws {
         let code = try sheetCode()
         #expect(code.contains(".actionHost()"), "a confirmation from inside shows on the sheet")
         #expect(
@@ -117,7 +134,11 @@ struct StacklySheetTests {
         #expect(code.components(separatedBy: ".keyboardShortcut(.defaultAction)").count == 2)
     }
 
-    @Test func aDestructivePrimaryActionHasNoReturnShortcut() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected: "Spec 0067 AC-12: a destructive primary action has no Return shortcut"))
+    func aDestructivePrimaryActionHasNoReturnShortcut() throws {
         let code = try sheetCode()
         let destructive = try #require(code.range(of: "if action.role.isDestructive {"))
         let standard = try #require(

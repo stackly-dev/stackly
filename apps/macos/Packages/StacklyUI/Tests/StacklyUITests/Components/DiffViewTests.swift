@@ -1,4 +1,5 @@
 import AppKit
+import StacklyTestSupport
 import SwiftUI
 import Testing
 
@@ -9,7 +10,11 @@ import Testing
 struct DiffViewTests {
     // MARK: - kind table
 
-    @Test func everyKindHasTheMarkToneAndWordOfTheTable() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026", "NFR-012"],
+            expected: "Spec 0067 AC-17: every kind has the mark, tone, and word of the table"))
+    func everyKindHasTheMarkToneAndWordOfTheTable() {
         let table: [(DiffKind, String?, Tone?, String)] = [
             (.added, "+", .positive, "Added"),
             (.removed, "−", .critical, "Removed"),
@@ -29,7 +34,10 @@ struct DiffViewTests {
 
     // MARK: - spoken line
 
-    @Test func aLineIsReadAsItsKindAndText() {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"], expected: "Spec 0067 AC-17: a line is read as its kind and text"))
+    func aLineIsReadAsItsKindAndText() {
         #expect(
             DiffLine(id: 0, kind: .added, text: "port = 5433").accessibilityLabel
                 == "Added: port = 5433")
@@ -75,7 +83,11 @@ struct DiffViewTests {
                 > height(of: DiffView(one, emptyText: "none"), width: 400))
     }
 
-    @Test func withoutLinesTheViewShowsTheEmptyText() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected: "Spec 0067 AC-17: without lines the view shows the empty text"))
+    func withoutLinesTheViewShowsTheEmptyText() {
         let empty = height(of: DiffView([], emptyText: "No differences."), width: 400)
         #expect(empty > 0)
         let longEmpty = height(

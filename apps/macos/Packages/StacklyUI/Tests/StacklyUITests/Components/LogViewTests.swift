@@ -1,4 +1,5 @@
 import AppKit
+import StacklyTestSupport
 import SwiftUI
 import Testing
 
@@ -9,7 +10,11 @@ import Testing
 struct LogViewTests {
     // MARK: - level table
 
-    @Test func everyLevelHasTheToneSymbolAndWordOfTheTable() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026", "NFR-012"],
+            expected: "Spec 0067 AC-16: every level has the tone, symbol, and word of the table"))
+    func everyLevelHasTheToneSymbolAndWordOfTheTable() {
         let table: [(LogLevel, Tone?, String?, String?)] = [
             (.normal, nil, nil, nil),
             (.warning, .caution, "exclamationmark.triangle.fill", "Warning"),
@@ -28,7 +33,11 @@ struct LogViewTests {
 
     // MARK: - spoken line
 
-    @Test func aLineIsReadAsTimeSourceLevelAndText() {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected: "Spec 0067 AC-16: a line is read as time, source, level, and text"))
+    func aLineIsReadAsTimeSourceLevelAndText() {
         let line = LogLine(
             id: "1", timeText: "12:04:31.118", source: "stderr", text: "disk full", level: .error)
         #expect(line.accessibilityLabel == "12:04:31.118, stderr, Error: disk full")
@@ -67,7 +76,12 @@ struct LogViewTests {
         #expect(!LogFollow.isAtBottom(distance: 24.5))
     }
 
-    @Test func aUserScrollThatEndsAboveTheToleranceStopsFollowing() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected: "Spec 0067 AC-16: a user scroll that ends above the tolerance stops following"
+        ))
+    func aUserScrollThatEndsAboveTheToleranceStopsFollowing() {
         for start in [ScrollPhase.interacting, .decelerating] {
             #expect(
                 LogFollow.shouldStopFollowing(from: start, to: .idle, distanceFromBottom: 25))

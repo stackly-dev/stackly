@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import StacklyClient
+import StacklyTestSupport
 import SwiftUI
 import Testing
 
@@ -57,7 +58,11 @@ struct StagedProgressTests {
         #expect(!queued.showsBar)
     }
 
-    @Test func aRunningKnownStageMarksTheStagesBeforeItDone() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected: "Spec 0067 AC-14: a running known stage marks the stages before it done"))
+    func aRunningKnownStageMarksTheStagesBeforeItDone() {
         let running = value(.running, stage: "extract", progress: counted(50, of: 100))
         #expect(states(running) == [.done, .done, .running, .pending])
         #expect(running.runningIndex == 2)
@@ -167,7 +172,11 @@ struct StagedProgressTests {
 
     // MARK: - percent
 
-    @Test func theFirstOfOneStageReports29Percent() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected: "Spec 0067 AC-14: the first of one stage with 29 of 100 reports 29 percent"))
+    func theFirstOfOneStageReports29Percent() {
         let single = [StageDefinition(key: "only", title: "Only")]
         let running = value(.running, stage: "only", progress: counted(29, of: 100), stages: single)
         #expect(running.percent == 29)
@@ -191,7 +200,12 @@ struct StagedProgressTests {
         #expect(running.fraction == 0.25)
     }
 
-    @Test func thePercentNeverReaches100BeforeTheOperationSucceeded() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected:
+                "Spec 0067 AC-14: the percent never reaches 100 before the operation succeeded"))
+    func thePercentNeverReaches100BeforeTheOperationSucceeded() {
         let last = value(.running, stage: "commit", progress: counted(100, of: 100))
         #expect(last.percent == 99)
         #expect(last.fraction == 1, "the bar uses the same numerator and denominator")
@@ -215,7 +229,13 @@ struct StagedProgressTests {
 
     // MARK: - texts
 
-    @Test func theCompactTextAndSpokenValueOfEveryOutcome() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026", "NFR-012"],
+            expected:
+                "Spec 0067 AC-15: the compact text and spoken value of every outcome follow the table"
+        ))
+    func theCompactTextAndSpokenValueOfEveryOutcome() {
         let queued = value(.queued)
         #expect(queued.compactText == "Queued")
         #expect(queued.accessibilityValue == "Queued")
@@ -253,7 +273,11 @@ struct StagedProgressTests {
 
     // MARK: - announcements
 
-    @Test func aRunningStageIsAnnouncedByItsTitleWithAPeriod() {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected: "Spec 0067 AC-15: a running stage is announced by its title"))
+    func aRunningStageIsAnnouncedByItsTitleWithAPeriod() {
         #expect(value(.running, stage: "verify").stageAnnouncement == "Verify digest.")
     }
 

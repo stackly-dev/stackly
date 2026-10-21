@@ -1,5 +1,6 @@
 import Foundation
 import StacklyClient
+import StacklyTestSupport
 import Testing
 
 @testable import StacklyUI
@@ -32,7 +33,13 @@ struct FeedbackTests {
                 == nil)
     }
 
-    @Test func aRejectedMutationIsCriticalWithTheDaemonsWordsAsSentencesAndItsCode() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-10: a rejected mutation is critical with the daemon's sentences and code"
+        ))
+    func aRejectedMutationIsCriticalWithTheDaemonsWordsAsSentencesAndItsCode() throws {
         let feedback = try #require(
             Feedback.outcome(.rejected(body()), success: .success("ignored"), showOperations: nil))
         #expect(feedback.tone == .critical)
@@ -55,7 +62,13 @@ struct FeedbackTests {
         #expect(feedback.detail == "Retry later.")
     }
 
-    @Test func aMutationThatWasNotSentIsACautionWithTheShellsWords() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-10: a mutation that was not sent is a caution with the shell's words")
+    )
+    func aMutationThatWasNotSentIsACautionWithTheShellsWords() throws {
         let outcome = Feedback.outcome(
             .notSent(body()), success: .success("ignored"), showOperations: {})
         let feedback = try #require(outcome)
@@ -67,7 +80,13 @@ struct FeedbackTests {
         #expect(feedback.action == nil)
     }
 
-    @Test func anUnknownOutcomeOffersShowOperationsOnlyWhenTheScreenCanOpenThem() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-10: an unknown outcome offers Show Operations only when the screen can open them"
+        ))
+    func anUnknownOutcomeOffersShowOperationsOnlyWhenTheScreenCanOpenThem() throws {
         var opened = 0
         let outcome = Feedback.outcome(
             .outcomeUnknown(unknownBody, key: "k"), success: nil,
@@ -88,7 +107,13 @@ struct FeedbackTests {
         #expect(without.action == nil)
     }
 
-    @Test func aFailedOperationGivesTheSameCriticalFeedbackAsARejection() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-10: a failed operation gives the same critical feedback as a rejection"
+        ))
+    func aFailedOperationGivesTheSameCriticalFeedbackAsARejection() {
         let feedback = Feedback.failure(body())
         #expect(feedback.tone == .critical)
         #expect(feedback.message == "Port 5432 is already in use.")
@@ -109,7 +134,12 @@ struct FeedbackTests {
 
     // MARK: - persistence and duration
 
-    @Test func onlyCautionCriticalOrActionableFeedbackIsPersistent() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-9: only caution, critical, or actionable feedback is persistent"
+        ))
+    func onlyCautionCriticalOrActionableFeedbackIsPersistent() {
         for tone in Tone.allCases {
             let expected = tone == .caution || tone == .critical
             #expect(Feedback(tone: tone, message: "m").isPersistent == expected, "\(tone)")
@@ -120,7 +150,13 @@ struct FeedbackTests {
         }
     }
 
-    @Test func visibleDurationFollowsTheReadingSpeedWithinFourAndTenSeconds() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-9: the visible duration follows the text length within four and ten seconds"
+        ))
+    func visibleDurationFollowsTheReadingSpeedWithinFourAndTenSeconds() {
         func seconds(_ message: String, detail: String? = nil) -> Duration {
             Feedback(tone: .positive, message: message, detail: detail).visibleDuration
         }

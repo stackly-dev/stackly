@@ -1,5 +1,6 @@
 import AppKit
 import StacklyClient
+import StacklyTestSupport
 import Testing
 
 @testable import StacklyUI
@@ -30,7 +31,13 @@ struct ProviderTileTests {
         #expect(ProviderMark.defaultMark(for: "Ábc") == "Bc")
     }
 
-    @Test func everyTileColorHasItsSystemFill() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-2: every tile color maps to its system fill, and nil or unrecognized is gray"
+        ))
+    func everyTileColorHasItsSystemFill() {
         let table: [(TileColor?, NSColor)] = [
             (.blue, .systemBlue),
             (.cyan, .systemCyan),
@@ -50,14 +57,23 @@ struct ProviderTileTests {
         }
     }
 
-    @Test func tileSizesMatchTheMockup() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-2: the four tile sizes are the mockup sizes"))
+    func tileSizesMatchTheMockup() {
         #expect(ProviderTile.smallSize == 18)
         #expect(ProviderTile.rowSize == 26)
         #expect(ProviderTile.mediumSize == 40)
         #expect(ProviderTile.largeSize == 52)
     }
 
-    @Test func markTextPrefersTheCatalogMarkAndFallsBackToTheName() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-2: the catalog mark wins and the default mark of the name fills in"))
+    func markTextPrefersTheCatalogMarkAndFallsBackToTheName() {
         let catalog = ProviderTile(mark: "Pg", tile: .blue, name: "Other", size: 40)
         let fallback = ProviderTile(mark: nil, tile: .blue, name: "Valkey", size: 40)
         let empty = ProviderTile(mark: "", tile: .blue, name: "Valkey", size: 40)

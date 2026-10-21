@@ -1,4 +1,5 @@
 import Foundation
+import StacklyTestSupport
 import Testing
 
 @testable import StacklyUI
@@ -22,7 +23,12 @@ struct CopyConfirmationTests {
         )
     }
 
-    @Test func aCopyWritesOnceAnnouncesOnceAndConfirmsForTwoSeconds() async {
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected:
+                "Spec 0067 AC-4: a copy writes once, announces once, and confirms for two seconds"))
+    func aCopyWritesOnceAnnouncesOnceAndConfirmsForTwoSeconds() async {
         let recorder = Recorder()
         let sleeps = ManualSleeps()
         let confirmation = make(recorder, sleeps)
@@ -44,7 +50,11 @@ struct CopyConfirmationTests {
         #expect(recorder.announcements.count == 1)
     }
 
-    @Test func aSecondPressWritesAgainAndStartsTheTwoSecondsOver() async {
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected: "Spec 0067 AC-4: a second press writes again and restarts the two seconds"))
+    func aSecondPressWritesAgainAndStartsTheTwoSecondsOver() async {
         let recorder = Recorder()
         let sleeps = ManualSleeps()
         let confirmation = make(recorder, sleeps)
@@ -66,7 +76,12 @@ struct CopyConfirmationTests {
         #expect(confirmation.isConfirming == false)
     }
 
-    @Test func aCancelledWaitLeavesTheNextCopyInCharge() async {
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected:
+                "Spec 0067 AC-4: a cancelled wait never ends the confirmation of the next copy"))
+    func aCancelledWaitLeavesTheNextCopyInCharge() async {
         let recorder = Recorder()
         let sleeps = ManualSleeps()
         let confirmation = make(recorder, sleeps)
