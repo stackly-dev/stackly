@@ -34,8 +34,8 @@
 
     /// Sample data from the mockup. No real credentials.
     private enum StatesSample {
-        static let lastKnown = Date.now.addingTimeInterval(-18 * 60)
-        static let catalogUpdated = Date.now.addingTimeInterval(-26 * 3600)
+        static let lastKnown = FixtureClock.minutesAgo(18)
+        static let catalogUpdated = FixtureClock.minutesAgo(26 * 60)
         static let offlineReason =
             "stacklyd is unavailable. Actions are disabled until the daemon is reachable."
         static let instances = [

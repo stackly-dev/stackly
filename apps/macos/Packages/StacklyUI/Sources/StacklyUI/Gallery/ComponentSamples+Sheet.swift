@@ -73,8 +73,9 @@
                 id: UUID(), kind: .installRuntime, resource: nil, state: state, stage: stage,
                 progress: progress, waitingOn: nil, cancelRequestedAt: nil,
                 pointOfNoReturnAt: nil, failure: nil, recovery: nil, result: nil,
-                trigger: OperationTriggerInfo(origin: .user, client: .gui), createdAt: .now,
-                startedAt: nil, updatedAt: .now, revision: 1)
+                trigger: OperationTriggerInfo(origin: .user, client: .gui),
+                createdAt: FixtureClock.now,
+                startedAt: nil, updatedAt: FixtureClock.now, revision: 1)
         }
 
         /// The staged progress of an install operation in `state`.

@@ -38,10 +38,10 @@ struct RenderProbeTests {
 
     private static func render<V: View>(
         _ view: V,
-        _ appearance: ProbeAppearance = ProbeAppearance()
+        _ appearance: FixtureAppearance = FixtureAppearance()
     ) async throws -> SnapshotImage {
         try await SnapshotRender.render(
-            view.probeAppearance(appearance),
+            view.fixtureAppearance(appearance),
             width: size.width,
             height: .fixed(size.height),
             scheme: appearance.scheme
@@ -205,14 +205,14 @@ struct RenderProbeTests {
         let sdk = ProcessInfo.processInfo.operatingSystemVersionString
         let highContrast = EnvironmentSpy.Seen()
         _ = try await Self.render(
-            EnvironmentSpy(seen: highContrast), ProbeAppearance(increasedContrast: true))
+            EnvironmentSpy(seen: highContrast), FixtureAppearance(increasedContrast: true))
         #expect(
             highContrast.increased,
             "a view does not read colorSchemeContrast == .increased on \(sdk); _colorSchemeContrast stopped working, go back to /architect"
         )
         let transparent = EnvironmentSpy.Seen()
         _ = try await Self.render(
-            EnvironmentSpy(seen: transparent), ProbeAppearance(reduceTransparency: true))
+            EnvironmentSpy(seen: transparent), FixtureAppearance(reduceTransparency: true))
         #expect(
             transparent.reduceTransparency,
             "a view does not read accessibilityReduceTransparency == true on \(sdk); _accessibilityReduceTransparency stopped working, go back to /architect"
