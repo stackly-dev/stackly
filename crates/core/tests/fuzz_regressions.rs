@@ -2,7 +2,8 @@
 //! specs 0009 and 0023, *Fuzz target*): every input that ever crashed a
 //! target of this crate, kept in `tests/fuzz_regressions/<target>/`, and
 //! the committed seeds in `fuzz/seeds/<target>/`. The folder name picks the
-//! harness in `stackly_core::provider::fuzzing`, the same function the
+//! harness in `stackly_core::provider::fuzzing` or
+//! `stackly_core::runtime::fuzzing`, the same function the
 //! cargo-fuzz target calls, so a crash found on nightly fails `cargo test`
 //! here.
 
@@ -11,18 +12,22 @@ use std::panic;
 use std::path::{Path, PathBuf};
 
 use stackly_core::provider::fuzzing;
+use stackly_core::runtime::fuzzing as runtime_fuzzing;
 
-/// A harness from `stackly_core::provider::fuzzing`; it panics on a
+/// A harness from `stackly_core::provider::fuzzing` or
+/// `stackly_core::runtime::fuzzing`; it panics on a
 /// broken invariant.
 type Harness = fn(&[u8]);
 
 /// Every fuzz target of this crate and its harness.
-const TARGETS: [(&str, Harness); 5] = [
+const TARGETS: [(&str, Harness); 7] = [
     ("provider_manifest", fuzzing::manifest),
     ("provider_template", fuzzing::template),
     ("provider_interpolation", fuzzing::interpolation),
     ("provider_settings_schema", fuzzing::settings_schema),
     ("nats_readiness_protocol", fuzzing::nats_readiness_protocol),
+    ("runtime_archive", runtime_fuzzing::archive),
+    ("runtime_macho", runtime_fuzzing::macho),
 ];
 
 fn regressions_dir() -> PathBuf {
@@ -99,6 +104,34 @@ fn every_committed_seed_passes_its_harness() {
             "{target} crashes on a seed:\n{}",
             failures.join("\n")
         );
+    }
+}
+
+/// The runtime seeds with one byte flipped at a spread of positions still
+/// pass their harness: a stand in for a fuzz run on a toolchain that has no
+/// cargo-fuzz.
+#[test]
+fn runtime_seeds_with_one_flipped_byte_hold_the_invariants() {
+    for (target, harness) in [
+        ("runtime_archive", runtime_fuzzing::archive as Harness),
+        ("runtime_macho", runtime_fuzzing::macho as Harness),
+    ] {
+        for path in inputs(&seeds_dir().join(target)) {
+            let seed = fs::read(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+            let step = (seed.len() / 64).max(1);
+            for at in (0..seed.len()).step_by(step) {
+                for flip in [0x01, 0x80, 0xff] {
+                    let mut input = seed.clone();
+                    input[at] ^= flip;
+                    let outcome = panic::catch_unwind(|| harness(&input));
+                    assert!(
+                        outcome.is_ok(),
+                        "{target}: {} with byte {at} xor {flip:#x} crashes the harness",
+                        path.display()
+                    );
+                }
+            }
+        }
     }
 }
 

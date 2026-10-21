@@ -19,6 +19,8 @@ pub mod compatibility;
 pub mod download;
 #[cfg(feature = "fixture")]
 pub mod fixture;
+#[doc(hidden)]
+pub mod fuzzing;
 pub mod install;
 pub mod launch;
 pub mod macho;

@@ -22,6 +22,8 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
+use stackly_core::runtime::fuzzing as runtime_fuzzing;
+use stackly_core::runtime::samples::{self, MachOBuilder};
 
 /// The dated nightly the fuzz project builds with. It must equal the
 /// channel in `fuzz/rust-toolchain.toml`; change both together.
@@ -71,6 +73,12 @@ const NATS_PROTOCOL_MAX_LEN: usize = 262_144;
 /// The first byte of every `nats_readiness_protocol` seed without its
 /// JetStream bit: chunks of 128 bytes.
 const NATS_CHUNK_SEED: u8 = 0xfe;
+/// The longest `runtime_archive` input: the artifact the extractor reads,
+/// whose limits (1 MiB of files) bound what a larger one adds.
+const RUNTIME_ARCHIVE_MAX_LEN: usize = 1 << 20;
+/// The longest `runtime_macho` input: a header and load commands. The
+/// 4 MiB limit stays reachable through the sizes the header claims.
+const RUNTIME_MACHO_MAX_LEN: usize = 65_536;
 
 const USAGE: &str =
     "cargo xtask fuzz list | build [<target>] | seed | run <target> [--time <seconds>]";
@@ -137,6 +145,18 @@ const TARGETS: &[Target] = &[
         crate_dir: "crates/core",
         max_len: NATS_PROTOCOL_MAX_LEN,
         seeds: nats_readiness_protocol_seeds,
+    },
+    Target {
+        name: "runtime_archive",
+        crate_dir: "crates/core",
+        max_len: RUNTIME_ARCHIVE_MAX_LEN,
+        seeds: runtime_archive_seeds,
+    },
+    Target {
+        name: "runtime_macho",
+        crate_dir: "crates/core",
+        max_len: RUNTIME_MACHO_MAX_LEN,
+        seeds: runtime_macho_seeds,
     },
 ];
 
@@ -392,6 +412,85 @@ fn seeds_are_stale(root: &Path, target: &Target) -> Result<bool> {
     }
     found.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(found != expected)
+}
+
+/// `runtime_archive`: every sample artifact of the extractor tests, after
+/// the selector byte of its format and folder strip (spec 0018, AC-19).
+fn runtime_archive_seeds(_root: &Path) -> Result<Vec<Seed>> {
+    Ok(samples::archive_samples()
+        .into_iter()
+        .map(|sample| {
+            let mut bytes = vec![runtime_fuzzing::archive_selector(
+                sample.format,
+                sample.spec.archive_root.is_some(),
+            )];
+            bytes.extend(sample.bytes);
+            Seed {
+                name: sample.name.to_owned(),
+                bytes,
+            }
+        })
+        .collect())
+}
+
+/// `runtime_macho`: thin and universal Mach-O files with every load
+/// command kind the parser reads.
+fn runtime_macho_seeds(_root: &Path) -> Result<Vec<Seed>> {
+    let system = "/usr/lib/libSystem.B.dylib";
+    let arm = || MachOBuilder::executable().min_os(13, 0).load(system);
+    let x86 = || {
+        MachOBuilder::executable()
+            .x86_64()
+            .min_os(13, 0)
+            .load(system)
+    };
+    let files = [
+        ("thin_executable", arm().build()),
+        ("thin_x86_64", x86().build()),
+        ("thin_arm64e", arm().arm64e().build()),
+        (
+            "thin_dylib",
+            MachOBuilder::dylib("@rpath/libfoo.dylib")
+                .load(system)
+                .build(),
+        ),
+        (
+            "every_library_kind",
+            arm()
+                .weak("/usr/lib/libz.1.dylib")
+                .reexport("@rpath/libre.dylib")
+                .lazy("@rpath/liblazy.dylib")
+                .upward("/usr/lib/libup.dylib")
+                .rpath("@loader_path/../lib")
+                .build(),
+        ),
+        (
+            "version_min_load_command",
+            MachOBuilder::executable()
+                .version_min(12, 0)
+                .load(system)
+                .build(),
+        ),
+        (
+            "other_platform",
+            MachOBuilder::executable().build_version(2, 17, 0).build(),
+        ),
+        (
+            "universal_x86_64_and_arm64",
+            samples::universal(&[x86().build(), arm().build()]),
+        ),
+        (
+            "universal_x86_64_only",
+            samples::universal(&[x86().build()]),
+        ),
+    ];
+    Ok(files
+        .into_iter()
+        .map(|(name, bytes)| Seed {
+            name: name.to_owned(),
+            bytes,
+        })
+        .collect())
 }
 
 /// `ipc_frame_decode`: the bytes of every vector in

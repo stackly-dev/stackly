@@ -77,4 +77,18 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "runtime_archive"
+path = "fuzz_targets/runtime_archive.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "runtime_macho"
+path = "fuzz_targets/runtime_macho.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
