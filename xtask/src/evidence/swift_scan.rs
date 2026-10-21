@@ -352,6 +352,8 @@ struct InstanceListTests {
         assert!(found[0].contains(":1: @Test( has no closing parenthesis"));
     }
 
+    /// A UI test file of spec 0068 (AC-11): the rules below apply to `*UITests.swift` files under
+    /// `apps/macos/` that call `evidence(covers:`.
     const UI_FILE: &str = "apps/macos/StacklyAppUITests/ShellUITests.swift";
 
     #[test]

@@ -9,6 +9,11 @@ import XCTest
 /// set a process environment variable.
 private let probeEnvironment = Mutex<[String: String]>([:])
 
+/// What `Probe.throwsUnexpectedly` throws.
+private enum ProbeError: Error {
+    case unexpected
+}
+
 /// A test case whose methods the tests below run by hand. The names do not
 /// start with `test`, so XCTest never runs them by itself.
 @MainActor
@@ -38,6 +43,50 @@ final class Probe: XCTestCase {
             covers: ["AC-024"], expected: "the probe skips",
             environment: probeEnvironment.withLock { $0 })
         throw XCTSkip("not today")
+    }
+
+    func failsAnExpectation() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "the probe fails",
+            environment: probeEnvironment.withLock { $0 })
+        XCTFail("footer read Status: Stopped")
+    }
+
+    func throwsUnexpectedly() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "the probe throws",
+            environment: probeEnvironment.withLock { $0 })
+        throw ProbeError.unexpected
+    }
+
+    func blocksAfterAFailure() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "the probe blocks",
+            environment: probeEnvironment.withLock { $0 })
+        XCTFail("an expectation failed before the block")
+        try XCTEvidence.blocked(reason: "no GUI login session", owner: "user")
+    }
+
+    func passesAsynchronously() async throws {
+        try evidence(
+            covers: ["AC-024"], expected: "the probe passes",
+            environment: probeEnvironment.withLock { $0 })
+        try await Task.sleep(for: .milliseconds(1))
+    }
+
+    func callsEvidenceTwice() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "the probe passes",
+            environment: probeEnvironment.withLock { $0 })
+        try evidence(
+            covers: ["AC-024"], expected: "the probe passes",
+            environment: probeEnvironment.withLock { $0 })
+    }
+
+    func callsEvidenceWithABadId() throws {
+        try evidence(
+            covers: ["bad"], expected: "the probe passes",
+            environment: probeEnvironment.withLock { $0 })
     }
 
     func callsEvidenceWithoutRun() throws {
@@ -122,6 +171,58 @@ final class XCTEvidenceRunTests: XCTestCase {
         let record = try run(#selector(Probe.skipsWithoutBlocked))
         XCTAssertEqual(record.status, .notRun)
         XCTAssertNil(record.finishedAt)
+    }
+
+    func testAFailedExpectationLeavesAFailRecordWithTheFirstIssueAsActual() throws {
+        let record = try run(#selector(Probe.failsAnExpectation))
+        XCTAssertEqual(record.status, .fail)
+        XCTAssertTrue(
+            record.actual?.contains("footer read Status: Stopped") ?? false,
+            "actual: \(record.actual ?? "nil")")
+        XCTAssertNotNil(record.finishedAt)
+    }
+
+    func testAnUnexpectedThrownErrorLeavesAFailRecord() throws {
+        let record = try run(#selector(Probe.throwsUnexpectedly))
+        XCTAssertEqual(record.status, .fail)
+        XCTAssertNotNil(record.actual)
+    }
+
+    func testBlockedWinsOverAnEarlierFailureInTheRecord() throws {
+        let record = try run(#selector(Probe.blocksAfterAFailure))
+        XCTAssertEqual(record.status, .blocked)
+        XCTAssertEqual(record.reason, "no GUI login session")
+        XCTAssertEqual(record.owner, "user")
+    }
+
+    func testAnAsyncTestKeepsItsNameWithoutTheCompletionHandlerSuffix() throws {
+        let record = try run(#selector(Probe.passesAsynchronously))
+        XCTAssertEqual(record.status, .pass)
+        XCTAssertEqual(record.test.name, "Probe/passesAsynchronously()")
+    }
+
+    func testANativeRunMakesAFixtureTestLeaveAFailRecord() throws {
+        probeEnvironment.withLock { $0[RunPlan.kindVariable] = "native" }
+        let record = try run(#selector(Probe.passes))
+        XCTAssertEqual(record.status, .fail)
+        XCTAssertEqual(record.kind, .fixture)
+        XCTAssertTrue(
+            record.actual?.contains("this test is fixture but the run is native") ?? false,
+            "actual: \(record.actual ?? "nil")")
+    }
+
+    func testABadCoversIdFailsTheTestAndWritesNoRecord() throws {
+        let probe = Probe(selector: #selector(Probe.callsEvidenceWithABadId))
+        probe.run()
+        XCTAssertGreaterThan(probe.testRun?.totalFailureCount ?? 0, 0)
+        let records = try XCTUnwrap(folder).appending(path: "records", directoryHint: .isDirectory)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: records.path))
+    }
+
+    func testASecondEvidenceCallInOneTestFailsIt() throws {
+        let probe = Probe(selector: #selector(Probe.callsEvidenceTwice))
+        probe.run()
+        XCTAssertGreaterThan(probe.testRun?.totalFailureCount ?? 0, 0)
     }
 
     func testWithoutARunNothingIsWritten() throws {
