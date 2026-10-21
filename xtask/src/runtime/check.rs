@@ -1,5 +1,6 @@
-//! `cargo xtask runtime check`: rules 1 to 10 of spec 0003 (*Key
-//! invariants*) on `runtimes/inventory.toml` and `evidence/runtime/`.
+//! `cargo xtask runtime check`: rules 1 to 10 and 12 of spec 0003 (*Key
+//! invariants*) on `runtimes/inventory.toml`, `evidence/runtime/`, and
+//! `evidence/compatibility/`.
 //! Read only; runs on any OS, by hand on this Mac.
 
 use std::fs;
@@ -10,6 +11,7 @@ use std::process::ExitCode;
 use anyhow::{Context, Result};
 use stackly_evidence::{Kind, REPORT_SCHEMA, RunReport, Status, Summary};
 
+use super::compatibility;
 use super::inventory::{Inventory, Violation};
 
 /// Run folders of native runtime evidence, relative to the repository root.
@@ -26,9 +28,11 @@ pub fn run(root: &Path) -> Result<ExitCode> {
     let runs = evidence.runs;
     violations.extend(evidence.violations);
     violations.extend(latest_record_violations(&inventory, &evidence.reports));
+    let (compat_runs, compat_violations) = compatibility::violations(root)?;
+    violations.extend(compat_violations);
     if violations.is_empty() {
         println!(
-            "runtime check: {} artifact(s) and {runs} evidence run(s) follow the rules",
+            "runtime check: {} artifact(s), {runs} evidence run(s), and {compat_runs} compatibility run(s) follow the rules",
             inventory.artifacts.len()
         );
         return Ok(ExitCode::SUCCESS);

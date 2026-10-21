@@ -12,8 +12,8 @@ use super::issue::{FileIssues, Issue, IssueCode, Location};
 use super::names::is_component;
 use super::package::MANIFEST_FILE;
 use super::raw::{
-    RawArtifact, RawDependency, RawMetadata, RawVersions, check_yaml_value, decode_yaml, join_path,
-    parse_yaml,
+    RawArtifact, RawCompatibilityRecord, RawDependency, RawMetadata, RawVersions, check_yaml_value,
+    decode_yaml, join_path, parse_yaml,
 };
 
 /// The only `schema` of `versions.json` this engine reads.
@@ -423,6 +423,7 @@ fn check_artifact(
         ("unpackedSize", artifact.unpacked_size.is_some()),
         ("entryCount", artifact.entry_count.is_some()),
         ("dependencies", artifact.dependencies.is_some()),
+        ("compatibility", artifact.compatibility.is_some()),
     ];
     let (required, forbidden): (&[&str], &[&str]) = match artifact.status.as_str() {
         "available" => (
@@ -454,6 +455,7 @@ fn check_artifact(
                 "unpackedSize",
                 "entryCount",
                 "dependencies",
+                "compatibility",
             ],
         ),
         "fixture" => {
@@ -479,6 +481,7 @@ fn check_artifact(
                     "unpackedSize",
                     "entryCount",
                     "dependencies",
+                    "compatibility",
                 ],
             )
         }
@@ -708,6 +711,9 @@ fn check_phase_02_fields(artifact: &RawArtifact, path: &str, issues: &mut FileIs
         }
         (None, None) => {}
     }
+    if let Some(records) = &artifact.compatibility {
+        check_compatibility(records, path, issues);
+    }
     let Some(dependencies) = &artifact.dependencies else {
         return;
     };
@@ -769,6 +775,170 @@ fn check_phase_02_fields(artifact: &RawArtifact, path: &str, issues: &mut FileIs
             }
         }
     }
+}
+
+/// The most compatibility records an artifact carries, and the most codes
+/// in one `checks` or `knownLimitations` list.
+const RECORDS_MAX: usize = 32;
+const CODES_MAX: usize = 64;
+
+/// Checks the compatibility records of an available artifact (spec 0018,
+/// *Compatibility record*): known scope, result, os, and arch, a provider
+/// revision exactly for scope `provider`, snake case codes, an RFC 3339 UTC
+/// `testedAt`, a relative `evidence` path, and one record per key.
+fn check_compatibility(
+    records: &[RawCompatibilityRecord],
+    path: &str,
+    issues: &mut FileIssues<'_>,
+) {
+    let rule = IssueCode::VersionsRule;
+    if records.len() > RECORDS_MAX {
+        issues.at(
+            format!("{path}.compatibility"),
+            rule,
+            format!("at most {RECORDS_MAX} compatibility records"),
+        );
+    }
+    let mut keys = BTreeSet::new();
+    for (index, record) in records.iter().enumerate() {
+        let at = |field: &str| format!("{path}.compatibility[{index}].{field}");
+        if !matches!(record.scope.as_str(), "runtime" | "provider") {
+            issues.at(
+                at("scope"),
+                IssueCode::InvalidValue,
+                "scope must be runtime or provider",
+            );
+        }
+        if !matches!(record.result.as_str(), "pass" | "fail") {
+            issues.at(
+                at("result"),
+                IssueCode::InvalidValue,
+                "result must be pass or fail",
+            );
+        }
+        if (record.scope == "provider") != record.provider_revision.is_some() {
+            issues.at(
+                at("providerRevision"),
+                rule,
+                "providerRevision is set exactly for scope provider",
+            );
+        }
+        if let Some(revision) = &record.provider_revision {
+            let digest_ok = revision.manifest_sha256.len() == 64
+                && revision
+                    .manifest_sha256
+                    .bytes()
+                    .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+            if revision.id.is_empty() || revision.revision.is_empty() || !digest_ok {
+                issues.at(
+                    at("providerRevision"),
+                    rule,
+                    "providerRevision needs an id, a revision, and a 64 character lowercase hex manifestSha256",
+                );
+            }
+        }
+        if record.os.parse::<Os>().is_err() {
+            issues.at(
+                at("os"),
+                IssueCode::InvalidValue,
+                "os must be a domain code such as macos",
+            );
+        }
+        if record.arch.parse::<Arch>().is_err() {
+            issues.at(
+                at("arch"),
+                IssueCode::InvalidValue,
+                "arch must be a domain code such as aarch64",
+            );
+        }
+        if record.os_version.len() > 16 || record.os_version.parse::<OsVersion>().is_err() {
+            issues.at(
+                at("osVersion"),
+                IssueCode::InvalidValue,
+                "osVersion must be 1 to 3 dotted numbers, at most 16 bytes",
+            );
+        }
+        if record.os_build.as_ref().is_some_and(|build| {
+            build.is_empty()
+                || build.len() > 32
+                || !build.bytes().all(|b| b.is_ascii_alphanumeric())
+        }) {
+            issues.at(
+                at("osBuild"),
+                IssueCode::InvalidValue,
+                "osBuild must be 1 to 32 letters and digits",
+            );
+        }
+        for (field, codes) in [
+            ("checks", &record.checks),
+            ("knownLimitations", &record.known_limitations),
+        ] {
+            if codes.len() > CODES_MAX || !codes.iter().all(|code| is_code(code)) {
+                issues.at(
+                    at(field),
+                    rule,
+                    format!("{field} holds at most {CODES_MAX} snake_case codes"),
+                );
+            }
+        }
+        if record
+            .summary
+            .as_ref()
+            .is_some_and(|text| text.chars().count() > 256 || text.chars().any(char::is_control))
+        {
+            issues.at(
+                at("summary"),
+                rule,
+                "summary is text of at most 256 characters without control characters",
+            );
+        }
+        if !record.tested_at.ends_with('Z') || record.tested_at.parse::<jiff::Timestamp>().is_err()
+        {
+            issues.at(
+                at("testedAt"),
+                IssueCode::InvalidValue,
+                "testedAt must be an RFC 3339 UTC time",
+            );
+        }
+        let evidence_ok = !record.evidence.is_empty()
+            && !record.evidence.starts_with('/')
+            && !record
+                .evidence
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..");
+        if !evidence_ok {
+            issues.at(
+                at("evidence"),
+                rule,
+                "evidence is a relative path under evidence/",
+            );
+        }
+        let major = record.os_version.split('.').next().unwrap_or_default();
+        let key = (
+            record.scope.as_str(),
+            record
+                .provider_revision
+                .as_ref()
+                .map(|revision| (&revision.id, &revision.revision, &revision.manifest_sha256)),
+            major,
+            record.arch.as_str(),
+        );
+        if !keys.insert(key) {
+            issues.at(
+                at("scope"),
+                rule,
+                "one record per scope, provider revision, macOS major, and arch",
+            );
+        }
+    }
+}
+
+/// Whether text is a snake case code of 1 to 64 bytes.
+fn is_code(code: &str) -> bool {
+    let mut bytes = code.bytes();
+    code.len() <= CODES_MAX
+        && bytes.next().is_some_and(|b| b.is_ascii_lowercase())
+        && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
 }
 
 /// The typed form of a dependency that passed its checks.
@@ -1090,6 +1260,123 @@ mod tests {
             [("artifacts[1].stable".to_owned(), IssueCode::VersionsRule)]
         );
         assert!(catalog.is_none());
+    }
+
+    const RUNTIME_RECORD: &str = r#"{ "scope": "runtime", "result": "pass", "providerRevision": null, "os": "macos", "osVersion": "27.0", "osBuild": "26A428", "arch": "aarch64", "checks": ["closure", "launch_agent"], "knownLimitations": ["provider_integration_not_covered"], "summary": "ready in 493 ms", "testedAt": "2026-10-18T11:07:19.973Z", "evidence": "runtime/01a14eb1-694f-7400-b05e-71b9a321b96b/01a14eb1-6c78-7311-bd09-2b75053ea60d" }"#;
+
+    #[test]
+    fn compatibility_records_pass_and_each_broken_rule_is_reported() {
+        let ok = available_with(&format!(r#""compatibility": [{RUNTIME_RECORD}]"#));
+        assert_eq!(check(&versions_with(&[&ok]), false).1, []);
+        let provider = RUNTIME_RECORD
+            .replace(r#""scope": "runtime""#, r#""scope": "provider""#)
+            .replace(
+                r#""providerRevision": null"#,
+                &format!(
+                    r#""providerRevision": {{ "id": "official/nats", "revision": "1", "manifestSha256": "{}" }}"#,
+                    "a".repeat(64)
+                ),
+            );
+        let both = available_with(&format!(
+            r#""compatibility": [{RUNTIME_RECORD}, {provider}]"#
+        ));
+        assert_eq!(check(&versions_with(&[&both]), false).1, []);
+        let blocked = r#"{ "id": "nats-2.16.0-macos-aarch64", "line": "2.16", "version": "2.16.0", "os": "macos", "arch": "aarch64", "status": "blocked", "blocked": { "reason": "not signed", "owner": "maintainer", "since": "2026-10-01" }"#;
+        let with = |from: &str, to: &str| {
+            available_with(&format!(
+                r#""compatibility": [{}]"#,
+                RUNTIME_RECORD.replace(from, to)
+            ))
+        };
+        let cases: Vec<(String, &str, IssueCode)> = vec![
+            (
+                with(r#""scope": "runtime""#, r#""scope": "both""#),
+                "scope",
+                IssueCode::InvalidValue,
+            ),
+            (
+                with(r#""result": "pass""#, r#""result": "ok""#),
+                "result",
+                IssueCode::InvalidValue,
+            ),
+            (
+                with(
+                    r#""providerRevision": null"#,
+                    r#""providerRevision": { "id": "x", "revision": "1", "manifestSha256": "ab" }"#,
+                ),
+                "providerRevision",
+                IssueCode::VersionsRule,
+            ),
+            (
+                with(r#""scope": "runtime""#, r#""scope": "provider""#),
+                "providerRevision",
+                IssueCode::VersionsRule,
+            ),
+            (
+                with(r#""osVersion": "27.0""#, r#""osVersion": "twenty""#),
+                "osVersion",
+                IssueCode::InvalidValue,
+            ),
+            (
+                with(r#""osBuild": "26A428""#, r#""osBuild": "26-A""#),
+                "osBuild",
+                IssueCode::InvalidValue,
+            ),
+            (
+                with(r#""arch": "aarch64""#, r#""arch": "m1""#),
+                "arch",
+                IssueCode::InvalidValue,
+            ),
+            (
+                with(r#""closure""#, r#""Closure""#),
+                "checks",
+                IssueCode::VersionsRule,
+            ),
+            (
+                with("2026-10-18T11:07:19.973Z", "2026-10-18 11:07"),
+                "testedAt",
+                IssueCode::InvalidValue,
+            ),
+            (
+                with("2026-10-18T11:07:19.973Z", "2026-10-18T11:07:19+01:00"),
+                "testedAt",
+                IssueCode::InvalidValue,
+            ),
+            (
+                with(r#""evidence": "runtime/"#, r#""evidence": "/runtime/"#),
+                "evidence",
+                IssueCode::VersionsRule,
+            ),
+            (
+                available_with(&format!(
+                    r#""compatibility": [{RUNTIME_RECORD}, {RUNTIME_RECORD}]"#
+                )),
+                "scope",
+                IssueCode::VersionsRule,
+            ),
+        ];
+        for (artifact, field, code) in cases {
+            let location = format!(
+                "artifacts[0].compatibility[{}].{field}",
+                usize::from(artifact.matches("\"scope\"").count() > 1)
+            );
+            let (catalog, codes) = check(&versions_with(&[&artifact]), false);
+            assert!(
+                codes.contains(&(location.clone(), code)),
+                "{location}: {codes:?}"
+            );
+            assert!(catalog.is_none(), "{location}");
+        }
+        let (_, codes) = check(
+            &versions_with(&[&format!(
+                r#"{blocked}, "compatibility": [{RUNTIME_RECORD}] }}"#
+            )]),
+            false,
+        );
+        assert!(codes.contains(&(
+            "artifacts[0].compatibility".to_owned(),
+            IssueCode::VersionsRule
+        )));
     }
 
     #[test]
