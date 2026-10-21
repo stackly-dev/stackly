@@ -1,6 +1,6 @@
 # Langkah manual yang menunggu kamu
 
-File ini mengumpulkan semua langkah yang hanya bisa kamu kerjakan sendiri di Mac ini. Langkah seperti ini butuh tangan, mata, atau dialog macOS sungguhan. Semua pekerjaan otomatis sudah selesai. Begitu hasil langkah di bawah masuk, F11 dan F14 di [scope/01-foundation.md](scope/01-foundation.md) bisa ditutup.
+File ini mengumpulkan semua langkah yang hanya bisa kamu kerjakan sendiri di Mac ini. Langkah seperti ini butuh tangan, mata, atau dialog macOS sungguhan. Semua pekerjaan otomatis sudah selesai. Begitu hasil langkah di bawah masuk, F11 dan F14 di [scope/01-foundation.md](scope/01-foundation.md) bisa ditutup, dan F12, F13, F67, F68, serta F69 di [scope/ui-macos.md](scope/ui-macos.md) bisa diverifikasi penuh.
 
 Kamu boleh mengerjakannya kapan saja dan tidak harus sekaligus. Setiap bagian berdiri sendiri. Kirim hasilnya ke Claude per bagian. Claude yang mengisi record di `evidence/manual/` dan mencentang `verify.md`, jadi kamu tidak perlu menyunting file apa pun.
 
@@ -14,10 +14,13 @@ Kamu boleh mengerjakannya kapan saja dan tidak harus sekaligus. Setiap bagian be
 | [C. Walking skeleton lewat CLI dan GUI](#c-walking-skeleton-lewat-cli-dan-gui) | F14 milestone 4, AC-001 | 20 menit | wajib untuk F14 |
 | [D. Keychain terkunci terlihat di app](#d-keychain-terkunci-terlihat-di-app) | F14 milestone 5 | 5 menit, tepat sesudah C | wajib untuk F14 |
 | [F. Keyboard dan VoiceOver di shell app](#f-keyboard-dan-voiceover-di-shell-app) | F13 di [scope/ui-macos.md](scope/ui-macos.md) | 15 menit, bisa bersamaan dengan C | di luar 01-foundation |
+| [I. Setting aksesibilitas sistem di Design Gallery](#i-setting-aksesibilitas-sistem-di-design-gallery) | F12 `Verify it`, F67, F68 milestone 1 di [scope/ui-macos.md](scope/ui-macos.md) | 20 menit | wajib untuk F12 dan F67 |
+| [J. Keyboard navigation dan VoiceOver di galeri dan menu](#j-keyboard-navigation-dan-voiceover-di-galeri-dan-menu) | F67 dan F69 di [scope/ui-macos.md](scope/ui-macos.md) | 20 menit, bisa bersamaan dengan F | wajib untuk F67 dan F69 |
+| [K. Automation Mode dan UI test](#k-automation-mode-dan-ui-test) | F68 milestone 3 di [scope/ui-macos.md](scope/ui-macos.md) | 10 menit, butuh password admin | wajib untuk F68 |
 | [G. Dua akun macOS](#g-dua-akun-macos) | F6 (sudah done) | 30 menit, butuh password admin | opsional |
 | [H. Folder temp setelah beberapa hari idle](#h-folder-temp-setelah-beberapa-hari-idle) | F6 (sudah done) | beberapa hari menunggu | opsional |
 
-Urutan yang aku sarankan: E dulu karena paling singkat, lalu A, lalu B. Setelah itu kerjakan C, D, dan F sekali jalan, karena ketiganya memakai root dan jendela app yang sama.
+Urutan yang aku sarankan: E dulu karena paling singkat, lalu A, lalu B. Setelah itu kerjakan C, D, dan F sekali jalan, karena ketiganya memakai root dan jendela app yang sama. Untuk `ui-macos`: F dan J sekali jalan (keduanya menyalakan Keyboard navigation dan VoiceOver), lalu I, lalu K.
 
 ## Persiapan umum
 
@@ -158,6 +161,8 @@ Untuk F11 milestone 6 (AC-19), yaitu satu butir UI di `docs/specs/0011-secret-st
 
 Bagian ini untuk F13 di [scope/ui-macos.md](scope/ui-macos.md) (spec 0013 cek 6, langkah 16, dan cek 3; AC-8, AC-10, AC-13, AC-16, AC-17, AC-21; PRD REQ-027, NFR-012). Record: `evidence/manual/2026-10-19-spec-0013-manual-check-6-keyboard-and-voiceover.json`. Bagian ini bukan bagian dari 01-foundation, tapi paling hemat dikerjakan bersamaan dengan C, saat root `$R`, daemon, dan app masih menyala dengan instance `demo`.
 
+Sudah dijalankan Claude lewat accessibility API pada 2026-10-21 (`a6baa41`): bagian "baris `demo` yang Running tetap Running" di butir 3 dan semua butir 4 kecuali pembacaan VoiceOver per baris. Yang masih butuh kamu: butir 1 sampai 3 (keyboard dan pengumuman VoiceOver) dan baris VoiceOver di butir 4. Keyboard navigation di Mac ini saat ini mati, jadi butir 1 memang perlu dinyalakan.
+
 1. Nyalakan System Settings › Keyboard › Keyboard navigation, lalu VoiceOver (⌘F5).
 2. Di app:
    - Tombol panah memindah pilihan di sidebar.
@@ -174,6 +179,50 @@ Bagian ini untuk F13 di [scope/ui-macos.md](scope/ui-macos.md) (spec 0013 cek 6,
 5. Matikan VoiceOver, lalu bersihkan seperti langkah D.5.
 
 **Yang dikirim:** versi macOS, plus nomor dan apa yang terlihat untuk setiap butir yang tidak sesuai, atau "semua sesuai".
+
+## I. Setting aksesibilitas sistem di Design Gallery
+
+Untuk F12 (spec 0012 `Verify it`: empat baris setting sistem asli; AC-5, AC-6, AC-7, AC-16), F67 (spec 0067 langkah setting sistem milestone 1 sampai 4; AC-19), dan F68 (spec 0068 milestone 1, langkah Reduce Motion; AC-5). Claude tidak mengubah System Settings; kamu yang menyalakan dan mematikannya.
+
+1. Di checkout utama jalankan `cargo xtask build-app`, lalu buka app Debug dengan root sementara: `STACKLY_ROOT="$(mktemp -d)" target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly`. Jendela utama boleh menyebut stacklyd tidak tersedia. Buka **Window › Design Gallery**.
+2. Nyalakan setting **satu per satu**, lihat halaman galeri yang disebut, lalu matikan lagi sebelum setting berikutnya. Cek 1 sampai 3 ada di **System Settings › Accessibility › Display**, cek 4 di **Accessibility › Motion**.
+   - **I.1 Differentiate without color.** Halaman Status: titik warna di kolom Standard dan di baris berganti simbol, setiap `ToneBadge` menampilkan simbol tone, label teks tetap ada. Halaman Components: tone di kartu umpan balik, checklist, dan baris diff selalu berpasangan dengan simbol atau kata.
+   - **I.2 Increase contrast.** Halaman Status: badge Operation Status bergaris tepi 1 pt warna tone, teks detail oranye dan merah lebih gelap. Tokens: kartu bergaris tepi abu abu 1 pt. States: banner bergaris tepi 1 pt. Components: kartu, banner, dan baris bertint mendapat garis tepi 1 pt. Opsional: ulangi sekilas dalam mode Dark.
+   - **I.3 Reduce transparency.** Sidebar dan toolbar galeri menjadi opak; kartu, banner, badge, sheet demo, dan inspector demo terlihat sama persis seperti sebelumnya.
+   - **I.4 Reduce motion.** States › Shape Changes: klik Loaded, Loading, Empty, Failed, Loaded; setiap pergantian hanya memudar, spinner muncul sekitar sepertiga detik kemudian dan tetap berputar. Tokens › Motion: Show Banner dan Hide Banner memudar tanpa gerak. Components: kartu umpan balik hanya crossfade. **Selama Reduce Motion masih menyala**, jalankan di Terminal kedua `swift test --package-path apps/macos/Packages/StacklyUI --filter GallerySnapshotTests`; test snapshot harus tercatat BLOCKED dengan alasan "system accessibility setting on: Reduce Motion", bukan gagal.
+3. Kembalikan keempat setting ke keadaan semula dan tutup app dengan ⌘Q.
+
+**Yang dikirim:** versi macOS, lalu per butir I.1 sampai I.4 "sesuai" atau nomor dan yang terlihat, plus hasil test snapshot di I.4 (BLOCKED atau tidak).
+
+## J. Keyboard navigation dan VoiceOver di galeri dan menu
+
+Untuk F67 (spec 0067 milestone 1 sampai 4: Tab, Space, fokus yang menahan umpan balik, VoiceOver; AC-4, AC-5, AC-7, AC-9, AC-12, AC-13, AC-15, AC-18, AC-19) dan F69 (spec 0069 milestone 2: menu dibaca VoiceOver; AC-15). Paling hemat dikerjakan bersamaan dengan bagian F, karena keduanya menyalakan Keyboard navigation dan VoiceOver. Keyboard navigation di Mac ini saat ini mati.
+
+1. Nyalakan System Settings › Keyboard › Keyboard navigation, lalu VoiceOver (⌘F5). Buka app Debug seperti I.1, lalu **Window › Design Gallery › Components**.
+2. Keyboard:
+   - Tab mencapai dan Space menjalankan setiap tombol komponen: Copy, tombol aksi, More beserta itemnya, Dismiss dan aksi kartu umpan balik, Open Sheet (lalu Cancel dan aksi utama di sheet), tombol aksi baris checklist, dan toggle inspector.
+   - Tampilkan kartu umpan balik positive, lalu Tab ke tombol Dismiss-nya dan biarkan fokus di sana: kartu tidak hilang selama fokus di Dismiss, dan hilang sekitar 4 detik setelah fokus pindah.
+3. VoiceOver di halaman Components:
+   - Baris key value dibaca "{label}, {value}"; tombol Copy "Copy {what}" dan setelah ditekan terdengar "{What} copied." sekali; blok konsol dibaca label lalu perintah; tombol sibuk dibaca dengan nilai "In progress"; umpan balik diumumkan sekali (pesan lalu detail).
+   - Baris checklist dibaca "{title}, {status}: {detail}" dengan tombol aksinya sebagai elemen sendiri; `StagedProgress` dibaca "Progress" dengan nilainya.
+   - Toggle inspector dibaca "Hide Inspector" atau "Show Inspector"; header inspector dibaca judul sebagai heading, lalu "Status: Running", lalu tombol aksinya.
+   - Baris diff dibaca dengan "Added" atau "Removed".
+   - Menu More: item nonaktif dibaca bersama alasannya (baris alasan di bawah item).
+4. VoiceOver di menu bar (F69): tekan ⌃F2, buka menu Stackly, File, Edit, View, dan Window; setiap item terbaca dengan judul, shortcut, dan "dimmed" saat nonaktif (misalnya ⌘1 sampai ⌘7 saat Design Gallery di depan).
+5. Matikan VoiceOver dan Keyboard navigation bila tadinya mati, lalu tutup app.
+
+**Yang dikirim:** versi macOS, plus nomor dan yang terlihat untuk setiap butir yang tidak sesuai, atau "semua sesuai".
+
+## K. Automation Mode dan UI test
+
+Untuk F68 milestone 3 (spec 0068 AC-12 sampai AC-19: XCUITest shell, galeri, menu, dan audit aksesibilitas). Tanpa langkah ini, semua UI test tercatat BLOCKED dengan owner kamu. Claude tidak pernah menyalakan Automation Mode.
+
+1. Di Terminal jalankan `automationmodetool`. Bila keluarannya bukan "Automation Mode is enabled", nyalakan sendiri dengan `automationmodetool enable-automationmode-without-authentication` (meminta password administrator). Bila macOS bertanya, izinkan runner UI test (Xcode Helper atau `StacklyAppUITests-Runner`) di System Settings › Privacy & Security.
+2. Pastikan layar tidak terkunci, tutup app Stackly yang sedang terbuka (daemon dan instance tidak terpengaruh), lalu dari root repo jalankan `cargo xtask evidence run --kind fixture -- cargo xtask ui-test`. Jangan memakai keyboard dan mouse sampai selesai; app akan terbuka dan tertutup berkali kali. Exit 0 berarti semua lulus.
+3. Hasilnya ada di `target/ui-tests/<waktu UTC>/` (`result.xcresult` dan `attachments/`, satu screenshot jendela per test). Buka beberapa screenshot dan lihat apakah sidebar, toolbar, banner, dan footer tampak benar di light dan dark.
+4. Setelah selesai, Automation Mode boleh kamu matikan lagi (perintahnya tercantum di `automationmodetool help`) atau dibiarkan menyala untuk run berikutnya.
+
+**Yang dikirim:** keluaran `automationmodetool`, exit code `ui-test`, nama test yang gagal (bila ada) beserta baris error pertamanya, dan catatanmu tentang screenshot.
 
 ## G. Dua akun macOS
 
@@ -212,6 +261,9 @@ C: <nomor dan yang terlihat> atau "semua sesuai"
 D: baris tetap Stopped ya/tidak · start setelah restart berhasil ya/tidak
 E: <catatan per preview> atau "semua baik"
 F: <nomor dan yang terlihat> atau "semua sesuai"
+I: I.1 <sesuai atau yang terlihat> · I.2 <...> · I.3 <...> · I.4 <...>, snapshot BLOCKED ya/tidak
+J: <nomor dan yang terlihat> atau "semua sesuai"
+K: automationmodetool <keluaran> · ui-test exit <n> · gagal: <test dan error> atau "tidak ada" · screenshot: <catatan>
 G: belum
 H: belum
 ```
