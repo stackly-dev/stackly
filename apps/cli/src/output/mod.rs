@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(code, 0);
         assert_eq!(
             stdout.text(),
-            "{\"schemaVersion\":1,\"type\":\"result\",\"command\":\"test run\",\"result\":\"hello\",\
+            "{\"schemaVersion\":2,\"type\":\"result\",\"command\":\"test run\",\"result\":\"hello\",\
              \"error\":null,\"requestId\":null,\"warnings\":[{\"code\":\"cli.root_override\",\
              \"message\":\"override\"}]}\n"
         );

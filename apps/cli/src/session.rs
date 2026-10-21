@@ -15,6 +15,7 @@ use stackly_protocol::{Call, ErrorBody, Reply};
 use tokio::time::Instant;
 use uuid::Uuid;
 
+use crate::commands::daemon::agent::{LOGIN_ITEMS_TEXT, START_TEXT, recovery_text};
 use crate::failure::CliFailure;
 use crate::output::stderr::StderrSink;
 
@@ -308,8 +309,13 @@ pub fn human_hints(body: &ErrorBody, socket: Option<&Path>) -> HumanHints {
         );
         return HumanHints {
             message: Some(format!("daemon is not running (no socket at {path})")),
-            // provisional: F15 (`stackly daemon start` replaces this hint)
-            hints: vec!["start it with stacklyd".to_owned()],
+            hints: vec![START_TEXT.to_owned()],
+        };
+    }
+    if let Some(hint) = agent_hint(body) {
+        return HumanHints {
+            message: None,
+            hints: vec![hint.to_owned()],
         };
     }
     if body.is(&request::UNKNOWN_METHOD) {
@@ -330,6 +336,39 @@ pub fn human_hints(body: &ErrorBody, socket: Option<&Path>) -> HumanHints {
         };
     }
     HumanHints::default()
+}
+
+/// The hint of an error about the background agent, from the table
+/// *Langkah pemulihan CLI* of spec 0015; `None` for any other code.
+fn agent_hint(body: &ErrorBody) -> Option<&'static str> {
+    use stackly_protocol::codes::cli;
+
+    if body.is(&cli::AGENT_NOT_REGISTERED) {
+        recovery_text("register")
+    } else if body.is(&cli::AGENT_REQUIRES_APPROVAL) || body.is(&cli::AGENT_DISABLED) {
+        Some(LOGIN_ITEMS_TEXT)
+    } else if body.is(&cli::AGENT_NOT_FOUND) {
+        recovery_text("move_or_reinstall_app")
+    } else if body.is(&cli::AGENT_NOT_BUNDLED) {
+        recovery_text("use_bundled_cli")
+    } else if body.is(&cli::AGENT_HELPER_MISSING) {
+        recovery_text("build_with_xtask")
+    } else if body.is(&cli::AGENT_ROOT_OVERRIDE) {
+        recovery_text("manual_daemon_for_override")
+    } else if body.is(&cli::AGENT_INVALID_SIGNATURE) {
+        Some("build the app with a signing identity: cargo xtask build-app --identity <identity>")
+    } else if body.is(&cli::AGENT_CALL_TIMEOUT) && body.detail("op") == Some("relaunch") {
+        Some(
+            "check with stackly daemon status; if it says not registered, run stackly daemon install",
+        )
+    } else if body.is(&cli::AGENT_CALL_TIMEOUT)
+        || body.is(&cli::AGENT_STATUS_UNAVAILABLE)
+        || body.is(&cli::AGENT_OS_ERROR)
+    {
+        recovery_text("check_again")
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -374,7 +413,7 @@ mod tests {
                 hints.message.as_deref(),
                 Some("daemon is not running (no socket at /run/stacklyd.sock)")
             );
-            assert_eq!(hints.hints, ["start it with stacklyd"]);
+            assert_eq!(hints.hints, ["start it with stackly daemon start"]);
             assert_eq!(
                 human_hints(&body, None).message.as_deref(),
                 Some("daemon is not running (no socket at /detail.sock)")

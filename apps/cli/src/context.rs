@@ -11,6 +11,7 @@ use stackly_protocol::operation::OperationDetail;
 use stackly_protocol::{Call, Reply};
 use uuid::Uuid;
 
+use crate::commands::daemon::agent::AgentEnv;
 use crate::failure::CliFailure;
 use crate::output::Output;
 use crate::output::envelope::Warning;
@@ -29,6 +30,9 @@ pub struct Context {
     pub input: Box<dyn BufRead + Send>,
     /// How progress is shown while waiting.
     pub progress: ProgressMode,
+    /// The background agent, the launch record, and the clock, for the
+    /// daemon commands (spec 0015).
+    pub agent: AgentEnv,
     connector: Connector,
     session: Option<Session>,
 }
@@ -53,15 +57,23 @@ impl Context {
         input: Box<dyn BufRead + Send>,
         progress: ProgressMode,
         connector: Connector,
+        agent: AgentEnv,
     ) -> Self {
         Self {
             output,
             interactive,
             input,
             progress,
+            agent,
             connector,
             session: None,
         }
+    }
+
+    /// Where and how this client connects.
+    #[must_use]
+    pub const fn connector(&self) -> &Connector {
+        &self.connector
     }
 
     /// Whether code may ask the person at the terminal anything.
@@ -263,6 +275,13 @@ pub mod testing {
                 uid: 0,
                 interactive,
             },
+            AgentEnv::new(
+                std::sync::Arc::new(stackly_testkit::FakeBackgroundAgent::new()),
+                PathBuf::new(),
+                std::sync::Arc::new(crate::commands::daemon::wait::FileRecords::new(None)),
+                false,
+                std::sync::Arc::new(stackly_platform::SystemClock),
+            ),
         );
         (cx, stderr)
     }

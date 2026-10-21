@@ -1,12 +1,18 @@
-//! `stackly daemon status` (spec 0008, *`stackly daemon status`*), which
-//! replaces the provisional one of spec 0006. Any health status exits 0.
+//! `stackly daemon status` (spec 0008, *`stackly daemon status`*, and spec
+//! 0015, AC-7): which daemon runs for you, its health, versions, and where
+//! it keeps things, plus the background agent block that shows even when no
+//! daemon answers. Any health status exits 0.
 
-use clap::{Args, Subcommand};
+use clap::Args;
 use serde::Serialize;
-use stackly_protocol::daemon::{DaemonHealth, DaemonInfo, SubsystemStatus};
+use stackly_platform::BackgroundAgentState;
+use stackly_protocol::daemon::{
+    DaemonHealth, DaemonInfo, DaemonLaunch, LaunchContextKind, SubsystemStatus,
+};
 use stackly_protocol::{CONTRACT_DIGEST, Call, ProtocolVersion, Reply};
 
-use super::{RunCommand, execute};
+use super::agent::{AgentReport, recovery_text};
+use crate::commands::RunCommand;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
@@ -18,24 +24,6 @@ use crate::session::CallSpec;
 /// The recovery hint of a registry in recovery mode.
 const RECOVERY_HINT: &str = "restore the registry from a snapshot or backup, then restart stacklyd";
 
-/// The verbs of `stackly daemon`.
-#[derive(Debug, Subcommand)]
-pub enum DaemonCommand {
-    /// Show which daemon runs for you, its health, versions, and where it
-    /// keeps things.
-    #[command(after_help = "Examples:\n  stackly daemon status\n  stackly daemon status --json")]
-    Status(StatusArgs),
-}
-
-impl DaemonCommand {
-    /// Runs the verb and returns the exit code.
-    pub async fn run(self, cx: &mut Context) -> u8 {
-        match self {
-            Self::Status(args) => execute(args, cx).await,
-        }
-    }
-}
-
 /// `stackly daemon status` takes no arguments of its own.
 #[derive(Debug, Args)]
 pub struct StatusArgs {}
@@ -44,12 +32,14 @@ pub struct StatusArgs {}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DaemonStatus {
-    /// `daemon.get_info`.
-    pub info: DaemonInfo,
+    /// `daemon.get_info`, null when no daemon answered.
+    pub info: Option<DaemonInfo>,
     /// `daemon.get_health`, null when it failed.
     pub health: Option<DaemonHealth>,
-    /// This client's side of the contract.
-    pub client: ClientContract,
+    /// This client's side of the contract, null when no daemon answered.
+    pub client: Option<ClientContract>,
+    /// The background agent, always read.
+    pub agent: AgentReport,
 }
 
 /// This client's protocol and contract digest, and whether the daemon saw
@@ -69,14 +59,19 @@ impl RunCommand for StatusArgs {
     type Output = DaemonStatus;
 
     async fn run(self, cx: &mut Context) -> CommandOutput<DaemonStatus> {
+        let agent_env = cx.agent.clone();
+        let (_, assessment) = agent_env.status().await;
+        let without_daemon = |up: bool| agent_env.report(&assessment, up);
         let info = match cx.call(Call::DaemonGetInfo, CallSpec::control()).await {
             Ok(Reply::DaemonGetInfo(info)) => info,
-            Ok(_) => return CommandOutput::failed(CliFailure::unexpected_reply(None)),
-            Err(failure) => return CommandOutput::failed(failure),
+            Ok(_) => {
+                return no_daemon(without_daemon(false), CliFailure::unexpected_reply(None));
+            }
+            Err(failure) => return no_daemon(without_daemon(false), failure),
         };
         let drift = match cx.handshake().await {
             Ok(accepted) => accepted.contract_drift,
-            Err(failure) => return CommandOutput::failed(failure),
+            Err(failure) => return no_daemon(without_daemon(false), failure),
         };
         if info.roots.root_override {
             cx.warn(
@@ -97,6 +92,21 @@ impl RunCommand for StatusArgs {
                 ),
             );
         }
+        let agent = without_daemon(true);
+        if let (Some(daemon_bundle), Some(own_bundle)) = (
+            info.launch
+                .as_ref()
+                .and_then(|launch| launch.bundle_path.as_deref()),
+            agent.bundle_path.as_deref(),
+        ) && daemon_bundle != own_bundle
+        {
+            cx.warn(
+                warning::AGENT_BUNDLE_MISMATCH,
+                format!(
+                    "the daemon runs from {daemon_bundle}, but this stackly is from {own_bundle}"
+                ),
+            );
+        }
         let health = match cx.call(Call::DaemonGetHealth, CallSpec::control()).await {
             Ok(Reply::DaemonGetHealth(health)) => Ok(health),
             Ok(_) => Err(CliFailure::unexpected_reply(None)),
@@ -106,13 +116,14 @@ impl RunCommand for StatusArgs {
             .as_ref()
             .is_ok_and(|health| health.recovery.is_some());
         let status = DaemonStatus {
-            info,
+            info: Some(info),
             health: health.as_ref().ok().cloned(),
-            client: ClientContract {
+            client: Some(ClientContract {
                 protocol: ProtocolVersion::CURRENT,
                 contract_digest: CONTRACT_DIGEST,
                 contract_drift: drift,
-            },
+            }),
+            agent,
         };
         let output = match health {
             Ok(_) => CommandOutput::ok(status),
@@ -126,9 +137,27 @@ impl RunCommand for StatusArgs {
     }
 }
 
+/// The result of a status when no daemon answered: only the agent block.
+fn no_daemon(agent: AgentReport, failure: CliFailure) -> CommandOutput<DaemonStatus> {
+    CommandOutput::partial(
+        DaemonStatus {
+            info: None,
+            health: None,
+            client: None,
+            agent,
+        },
+        failure,
+    )
+}
+
 impl Render for DaemonStatus {
     fn render(&self, out: &mut HumanWriter) {
-        let info = &self.info;
+        let Some(info) = &self.info else {
+            let mut rows = vec![("Status", Cell::toned("not running", Tone::Caution))];
+            rows.extend(render_agent_rows(&self.agent, None));
+            out.kv(&rows);
+            return;
+        };
         let status = self.health.as_ref().map_or_else(
             || Cell::toned("unknown", Tone::Caution),
             |health| Cell::toned(&wire_name(&health.status), health_tone(health.status)),
@@ -191,6 +220,47 @@ impl Render for DaemonStatus {
                 "no"
             }),
         ));
+        rows.extend(render_agent_rows(&self.agent, info.launch.as_ref()));
         out.kv(&rows);
     }
+}
+
+/// The tone of an agent state: `enabled` positive; `requires_approval`,
+/// `disabled`, and `not_registered` caution; `not_found` critical;
+/// `unavailable` neutral.
+fn state_tone(state: &str) -> Tone {
+    match state {
+        s if s == BackgroundAgentState::Enabled.as_code() => Tone::Positive,
+        s if s == BackgroundAgentState::NotFound.as_code() => Tone::Critical,
+        s if s == BackgroundAgentState::Unavailable.as_code() => Tone::Neutral,
+        _ => Tone::Caution,
+    }
+}
+
+/// The agent rows every daemon command prints: `Agent`, `Launched` (when
+/// the daemon's launch is known), `App`, and `Next` (when something is left
+/// to do).
+pub fn render_agent_rows(
+    agent: &AgentReport,
+    launch: Option<&DaemonLaunch>,
+) -> Vec<(&'static str, Cell)> {
+    let state = agent.reason.map_or_else(
+        || agent.state.to_owned(),
+        |reason| format!("{} ({reason})", agent.state),
+    );
+    let mut rows = vec![("Agent", Cell::toned(&state, state_tone(agent.state)))];
+    if let Some(launch) = launch {
+        let text = match (launch.context, launch.label.as_deref()) {
+            (LaunchContextKind::Launchd, Some(label)) => format!("launchd ({label})"),
+            (LaunchContextKind::Launchd, None) => "launchd".to_owned(),
+            (LaunchContextKind::Manual, _) => "by hand".to_owned(),
+            (LaunchContextKind::Unrecognized, _) => "unknown".to_owned(),
+        };
+        rows.push(("Launched", Cell::fixed(text)));
+    }
+    rows.push(("App", Cell::optional(agent.bundle_path.as_deref())));
+    if let Some(next) = recovery_text(agent.recovery) {
+        rows.push(("Next", Cell::fixed(next)));
+    }
+    rows
 }

@@ -43,6 +43,8 @@ anstyle = "1.0"
 anyhow = "1.0"
 cargo_metadata = "0.23"
 clap = { version = "4.6", features = ["derive"] }
+clap_complete = "4.6"
+clap_mangen = "0.3"
 core-foundation = "0.10"
 ctrlc = { version = "3.5", features = ["termination"] }
 # Pure Rust deflate (miniz_oxide) for the runtime extractor (spec 0018).

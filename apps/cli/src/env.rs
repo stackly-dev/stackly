@@ -8,16 +8,19 @@
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use stackly_platform::ROOT_OVERRIDE_ENV;
+use stackly_platform::{ROOT_OVERRIDE_ENV, SystemClock};
 
+use crate::commands::daemon::agent::AgentEnv;
+use crate::commands::daemon::wait::FileRecords;
 use crate::failure::CliFailure;
 
 /// The variable that turns noninteractive mode on.
 pub const NO_INPUT_ENV: &str = "STACKLY_NO_INPUT";
 
 /// Where the daemon is, and what the environment asks of the CLI.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Environment {
     /// The daemon socket of the active roots.
     pub socket: PathBuf,
@@ -27,9 +30,13 @@ pub struct Environment {
     pub no_input: bool,
     /// `TERM` is `dumb`.
     pub term_is_dumb: bool,
+    /// The background agent, the launch record, and the clock (spec 0015).
+    pub agent: AgentEnv,
 }
 
-/// Reads the environment of this process.
+/// Reads the environment of this process. `executable` is the canonical
+/// path of the running `stackly`, which `main` read once: it decides which
+/// app bundle the background agent belongs to.
 ///
 /// # Errors
 ///
@@ -37,16 +44,38 @@ pub struct Environment {
 /// or `STACKLY_NO_INPUT` holds an unknown value, and
 /// `cli.platform_unavailable` when the roots or the socket path cannot be
 /// worked out for another reason.
-pub fn read() -> Result<Environment, CliFailure> {
-    let (socket, uid) = platform::endpoint(std::env::var_os(ROOT_OVERRIDE_ENV))?;
+pub fn read(executable: PathBuf) -> Result<Environment, CliFailure> {
+    let root_override = std::env::var_os(ROOT_OVERRIDE_ENV);
+    let has_override = root_override.is_some();
+    let (socket, uid) = platform::endpoint(root_override)?;
     let no_input = parse_no_input(std::env::var_os(NO_INPUT_ENV).as_deref())?;
     let term_is_dumb = std::env::var_os("TERM").is_some_and(|term| term == "dumb");
+    let (port, launch_record) = platform::agent(&executable, has_override)?;
+    let agent = AgentEnv::new(
+        port,
+        executable,
+        Arc::new(FileRecords::new(launch_record)),
+        has_override,
+        Arc::new(SystemClock),
+    );
     Ok(Environment {
         socket,
         uid,
         no_input,
         term_is_dumb,
+        agent,
     })
+}
+
+/// The canonical path of the running executable: `current_exe` resolved
+/// through symlinks; as `current_exe` gave it when that fails (a symlink
+/// then means `NotBundled`); empty when `current_exe` itself fails.
+#[must_use]
+pub fn executable() -> PathBuf {
+    match std::env::current_exe() {
+        Ok(path) => std::fs::canonicalize(&path).unwrap_or(path),
+        Err(_) => PathBuf::new(),
+    }
 }
 
 /// `STACKLY_NO_INPUT`: `1` or `true` in any case turns it on; unset,
@@ -75,10 +104,34 @@ mod platform {
     use std::ffi::OsString;
     use std::path::PathBuf;
 
-    use stackly_platform::{DirectoryLayout, PlatformError, ROOT_OVERRIDE_ENV, UserId};
-    use stackly_platform_macos::MacosPlatform;
+    use std::sync::Arc;
+
+    use stackly_platform::{
+        BackgroundAgent, DirectoryLayout, PlatformError, ROOT_OVERRIDE_ENV, UserId,
+    };
+    use stackly_platform_macos::{MacosBackgroundAgent, MacosPlatform};
 
     use crate::failure::CliFailure;
+
+    /// The background agent of the app bundle around `executable`, and the
+    /// launch record of the default root (none with `STACKLY_ROOT`, since the
+    /// agent only serves the default root).
+    pub(super) fn agent(
+        executable: &std::path::Path,
+        has_override: bool,
+    ) -> Result<(Arc<dyn BackgroundAgent>, Option<PathBuf>), CliFailure> {
+        let port: Arc<dyn BackgroundAgent> =
+            Arc::new(MacosBackgroundAgent::new(executable.to_path_buf()));
+        let record = if has_override {
+            None
+        } else {
+            MacosPlatform::new(None)
+                .ok()
+                .and_then(|platform| platform.directories().roots().ok())
+                .map(|roots| DirectoryLayout::new(roots).agent_launch_record())
+        };
+        Ok((port, record))
+    }
 
     /// The socket path and the uid that must own it, from the same roots
     /// the daemon resolves.
@@ -122,8 +175,22 @@ mod platform {
 mod platform {
     use std::ffi::OsString;
     use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use stackly_platform::BackgroundAgent;
 
     use crate::failure::CliFailure;
+
+    /// Only macOS has a background agent for now.
+    pub(super) fn agent(
+        _executable: &std::path::Path,
+        _has_override: bool,
+    ) -> Result<(Arc<dyn BackgroundAgent>, Option<PathBuf>), CliFailure> {
+        Err(CliFailure::platform_unavailable(
+            "unsupported_os",
+            "the daemon only runs on macos for now",
+        ))
+    }
 
     /// Only macOS has a daemon for now.
     pub(super) fn endpoint(_root_override: Option<OsString>) -> Result<(PathBuf, u32), CliFailure> {

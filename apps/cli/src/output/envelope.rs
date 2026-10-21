@@ -8,7 +8,7 @@ use stackly_protocol::ErrorBody;
 
 /// The envelope version. A breaking change to the envelope or to a result
 /// raises it, together with the spec, the goldens, and the tests.
-pub const CLI_SCHEMA_VERSION: u32 = 1;
+pub const CLI_SCHEMA_VERSION: u32 = 2;
 
 /// The warning codes, a fixed list outside the error catalog.
 pub mod warning {
@@ -19,6 +19,17 @@ pub mod warning {
     /// Writing stdout failed for another reason than a broken pipe. Only
     /// ever written to stderr.
     pub const OUTPUT_FAILED: &str = "cli.output_failed";
+    /// The daemon runs from another copy of the app than this `stackly`
+    /// (spec 0015).
+    pub const AGENT_BUNDLE_MISMATCH: &str = "cli.agent_bundle_mismatch";
+    /// `install` worked, but no daemon answered within 30 seconds.
+    pub const DAEMON_NOT_RUNNING: &str = "cli.daemon_not_running";
+    /// `stop` saw a new daemon run: the daemon exited with an error and
+    /// launchd started it again.
+    pub const DAEMON_RELAUNCHED: &str = "cli.daemon_relaunched";
+    /// `restart` did not see launchd start the daemon again and started it
+    /// through macOS.
+    pub const AGENT_RELAUNCHED: &str = "cli.agent_relaunched";
 }
 
 /// The final record of a command.
@@ -167,7 +178,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             String::from_utf8(line).unwrap(),
-            "{\"schemaVersion\":1,\"type\":\"result\",\"command\":\"daemon status\",\
+            "{\"schemaVersion\":2,\"type\":\"result\",\"command\":\"daemon status\",\
              \"result\":{\"zeta\":1,\"alpha\":\"a\"},\"error\":null,\"requestId\":null,\
              \"warnings\":[{\"code\":\"cli.root_override\",\"message\":\"root\"}]}\n"
         );
@@ -194,7 +205,7 @@ mod tests {
         };
         assert_eq!(
             String::from_utf8(to_line(&item).unwrap()).unwrap(),
-            "{\"schemaVersion\":1,\"type\":\"item\",\"command\":\"instance logs\",\"item\":7}\n"
+            "{\"schemaVersion\":2,\"type\":\"item\",\"command\":\"instance logs\",\"item\":7}\n"
         );
     }
 

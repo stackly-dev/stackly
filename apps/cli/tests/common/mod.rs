@@ -232,7 +232,7 @@ pub fn envelope_of(text: &str) -> Value {
     assert!(!whitespace_outside_strings(line), "compact JSON: {line}");
     assert_eq!(key_order(line), ENVELOPE_KEYS, "{line}");
     let value: Value = serde_json::from_str(line).expect("the line is JSON");
-    assert_eq!(value["schemaVersion"], 1);
+    assert_eq!(value["schemaVersion"], 2);
     assert_eq!(value["type"], "result");
     value
 }

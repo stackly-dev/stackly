@@ -57,6 +57,13 @@ pub const RESOURCES_DIR: &str = "Contents/Resources";
 /// bundle root.
 pub const DAEMON_BUNDLE_PROGRAM: &str = "Contents/MacOS/stacklyd";
 
+/// The `ThrottleInterval` of the LaunchAgent in seconds: launchd starts the
+/// job again no sooner than this after it started. `cargo xtask build-app`
+/// writes it into the property list, and `stackly daemon restart` counts
+/// with it to tell when a respawn is overdue, so the two never differ
+/// (spec 0015).
+pub const LAUNCHD_THROTTLE_INTERVAL_SECS: u64 = 10;
+
 /// The extension of an app bundle folder.
 const APP_EXTENSION: &str = "app";
 
