@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostgreSQL settings",
+  "description": "Superuser password and the few server settings a PostgreSQL instance exposes.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "superuserPassword": {
+      "type": "string",
+      "title": "Superuser password",
+      "description": "Password of the postgres superuser, set once when the cluster is created.",
+      "minLength": 8,
+      "maxLength": 128,
+      "x-stackly": { "apply": "immutableAfterInit", "visibility": "basic", "secret": true, "printableOnly": true }
+    },
+    "maxConnections": {
+      "type": "integer",
+      "title": "Max connections",
+      "description": "Most client connections the server accepts at once.",
+      "minimum": 5,
+      "maximum": 1000,
+      "default": 100,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "sharedBuffersMb": {
+      "type": "integer",
+      "title": "Shared buffers (MB)",
+      "description": "Memory the server reserves for caching data pages.",
+      "minimum": 16,
+      "maximum": 16384,
+      "default": 128,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "logStatement": {
+      "type": "string",
+      "title": "Log statements",
+      "description": "Which SQL statements are written to the instance log. Statements that set passwords are logged as typed.",
+      "enum": ["none", "ddl", "mod", "all"],
+      "default": "none",
+      "x-stackly": { "apply": "reload", "visibility": "basic" }
+    },
+    "logMinDurationStatementMs": {
+      "type": "integer",
+      "title": "Log slow statements (ms)",
+      "description": "Log every statement that runs at least this long; -1 turns it off.",
+      "minimum": -1,
+      "maximum": 3600000,
+      "default": -1,
+      "x-stackly": { "apply": "reload", "visibility": "advanced" }
+    }
+  },
+  "required": ["superuserPassword"]
+}
