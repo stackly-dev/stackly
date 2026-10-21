@@ -646,6 +646,33 @@ Yang tidak diambil: batas tetap `T_eof + 15 detik` (lebih sederhana, tetapi mena
 - Spec 0008: warning `cli.agent_relaunched` ditambah ke usulan.
 - Spec 0004: butir baru di usulan untuk `MacosBackgroundAgent::unlocated()` dan `new(executable)`.
 
+## Update 2026-10-22 (Follow-up spec 0013)
+
+Update gabungan spec 0013 (lead `ui-macos`) menemukan tiga gap milik spec ini dan mencatatnya sebagai Follow-up di spec 0013. Lead meneruskan nya dengan rekomendasi; aturan program berlaku (opsi rekomendasi diambil kecuali mengubah teks AC). Tidak ada teks AC yang berubah: AC-13 sudah meminta banner per state, ambang 15 detik, dan pengumuman lewat `announce(_:)`, dan AC-21 spec 0013 sudah meminta satu pengumuman per transisi.
+
+- **G1, pengumuman transisi tanpa assessment.** Rekomendasi lead diambil: umumkan judul banner agent kalau assessment ada, selain itu tunggu assessment pertama paling lama 10 detik, dan jatuh ke "Can’t connect to stacklyd." kalau lewat; teks per state untuk state yang sama tidak diulang. Yang saya tambahkan supaya bisa dibangun tanpa menebak: "ada" berarti `lastCheckedAt` paling lama 5 detik (`pollInterval`) sebelum transisi, karena tanpa itu assessment dari launch bisa berumur berjam jam saat koneksi putus (runner up: selalu menunggu probe setelah transisi, yang lebih akurat tetapi menunda pengumuman walau assessment segar sudah ada); probe yang ditunggu adalah probe pertama yang selesai setelah transisi, jadi refresh yang sedang berjalan saat launch ikut dihitung; judul banner critical (`not_found`) tidak diumumkan `DaemonModel`, karena `StateBanner` sudah mengumumkan banner critical saat tampil; assessment pertama setelah launch tidak diumumkan sebagai perubahan state, supaya setiap launch tidak berbunyi "Background service is on."; dan teks per state diberi tabel lengkap, termasuk state yang tidak punya teks. Semua pengumuman lewat satu announcer `DaemonModel` (closure `didAssess` dari `BackgroundAgentModel`), supaya aturan "satu transisi, satu pengumuman" ada di satu tempat (runner up: `BackgroundAgentModel` mengumumkan sendiri, yang butuh koordinasi dua announcer).
+- **G2, state agent dan jam ke banner.** Rekomendasi lead diambil: `AgentBanner.content` murni di `Agent/`, dievaluasi `DaemonBanner` di `TimelineView` 1 detik dengan `fixtureNow`, dari `BackgroundAgentModel` lewat `DaemonModel` di environment, dengan aksi ke `turnOn`, `openLoginItems`, `refresh`, dan `start`; `ShellPresentation` tetap murni. Tambahan saya: `DaemonModel` di environment dibaca sebagai opsional supaya preview `AppShell` tanpa model tetap jalan; `.id` pada `StateBanner` memakai judul yang tampil supaya banner critical agent diumumkan; empat aksi memakai `isBusy` dari `isWorking`; `ConnectionHint` memakai fungsi yang sama dan dibangun ulang setiap `lastCheckedAt` berubah; dan mode fixture memakai `FakeBackgroundAgentController` di `notFound` dan home sementara, dengan harapan test fixture yang diperbarui di langkah 11 (runner up: fixture tanpa controller sehingga banner lama tetap, yang menyembunyikan baris agent dari snapshot dan XCUITest).
+- **G3, `CommandLineToolModel` di environment.** Rekomendasi lead diambil: `LiveShell` (nanti `MainWindowRoot`) memasang `.environment(runtime.commandLineTool)`. Nama properti `ShellRuntime.commandLineTool` dan `DaemonModel.agent` ditetapkan di sini.
+
+Usulan untuk spec 0013 (nama, seam, dan environment), spec 0016 (`MainWindowRoot`, pemilik pengumuman, `isStarting`), dan spec 0068 (fixture agent) ditambahkan ke *Usulan update untuk spec lain*.
+
+**Cross check (Sonnet 5.5, baca saja, 2026-10-22).** Putusan: arah nya benar (`AgentBanner` murni, satu announcer, `ShellPresentation` tetap murni), tetapi belum bisa dibangun tanpa menebak. Semua temuan diisi dengan rekomendasi saya:
+
+| No | Temuan | Perbaikan |
+| --- | --- | --- |
+| 1 | seam test dan default tidak ada; test yang ada (`DaemonModelTests`, `ShellEndToEndTests`) mengharapkan "Can’t connect to stacklyd." segera | `DaemonModel.agent` opsional dengan default nil yang memberi perilaku spec 0013, parameter `sleep:`, parameter internal `assemble` dengan default nil, `live` tanpa parameter baru |
+| 2 | baris agent hilang selama `refreshing(after: unreachable)` karena `lastError` dikosongkan saat tersambung | status dibuka dari `refreshing`, dan `DaemonModel.unreachableCode` menyimpan kode kegagalan |
+| 3 | urutan `update()`, pengumuman tertunda saat presence pulih, satu pending, cek ulang kode, batas yang sama dengan timeout probe, urutan `didAssess` | status dihitung dulu; pending diselesaikan saat presence keluar (tetap satu pengumuman per transisi); paling banyak satu; judul jatuh ke teks umum kalau kode berubah; `announceWait` 12 detik; `didAssess` setelah field disimpan |
+| 4 | konkurensi model, `isWorking`, polling, Check Again, app aktif | satu panggilan OS sekaligus, refresh bergabung atau dilewati, `isWorking` sinkron hanya untuk aksi, Check Again adalah `refresh()`, polling milik model, hook `didResignActive()` |
+| 5 | nama field `ConnectionDiagnostics`, awalan pesan, petunjuk tertinggal 5 detik | `agentHint`, tanpa awalan, dihitung saat render di `TimelineView` 1 detik |
+| 6 | fixture dengan home sementara melanggar AC-3 spec 0068 dan aturan sumber; balapan probe async; harapan `FixtureShellTests` | `FakeCommandLineTool` di memori, assessment awal sinkron, `bannerContent(now:)` sebagai harapan test, seksi Diagnostics opsional, snapshot direkam ulang |
+| 7 | spec 0016 butuh baris `MainWindowRoot` dan pemilik pengumuman nya berubah | baris usulan spec 0016 |
+| S3 | `.id` di setiap perubahan state menghilangkan fokus tombol | `.id` hanya untuk banner critical |
+| S4 | `TimelineView` 1 detik terus menerus | 1 detik hanya selama `enabled` di bawah 15 detik |
+| S6 | Turn On beberapa menit setelah launch langsung menawarkan Start stacklyd karena ambang dihitung dari `since` presence | `turnOn()` yang berhasil menunggu daemon seperti `start()`, dan baris `enabled` memakai `isStarting`; ambang AC-13 tetap dari `since` |
+
+Yang tidak diambil: `DaemonBanner(contentAt:...)` yang diisi `LiveShell` (lebih mudah di preview, tetapi menyimpang dari rekomendasi lead yang memakai environment; preview dan snapshot baris agent tetap bisa lewat runtime fixture spec 0068), dan memindahkan ambang 15 detik dari `since` presence ke waktu aksi (mengubah arti AC-13). Teks AC tetap tidak berubah; yang bergeser hanya waktu: pengumuman transisi bisa tertunda sampai probe pertama (biasanya milidetik, paling lama 12 detik), dan baris `enabled` menunggu selama `isStarting`.
+
 ## References
 
 **Project sources**:
