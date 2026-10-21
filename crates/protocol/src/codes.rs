@@ -583,6 +583,30 @@ area! {
             details [], "fallback for an operation that needs recovery without an error in its summary";
         PANIC = "cli.panic", Internal, retryable false,
             details [], "the cli panicked, and the panic message is never shown";
+        AGENT_ROOT_OVERRIDE = "cli.agent_root_override", InvalidInput, retryable false,
+            details ["variable"], "an agent command was asked while STACKLY_ROOT is set, and the agent only serves the default root (spec 0015)";
+        AGENT_NOT_BUNDLED = "cli.agent_not_bundled", Unsupported, retryable false,
+            details ["executable"], "the cli does not run from inside the Stackly app bundle, so macOS cannot be asked about the agent (spec 0015)";
+        AGENT_HELPER_MISSING = "cli.agent_helper_missing", Unavailable, retryable false,
+            details ["bundlePath"], "the app bundle lacks the LaunchAgent property list or stacklyd (spec 0015)";
+        AGENT_NOT_REGISTERED = "cli.agent_not_registered", Unavailable, retryable false,
+            details ["label"], "the background agent is not registered, so there is nothing to start (spec 0015)";
+        AGENT_REQUIRES_APPROVAL = "cli.agent_requires_approval", Unauthorized, retryable false,
+            details ["label"], "the background agent waits for the user's approval in Login Items (spec 0015)";
+        AGENT_DISABLED = "cli.agent_disabled", Unauthorized, retryable false,
+            details ["label"], "the background agent was switched off in Login Items after it ran before (spec 0015)";
+        AGENT_NOT_FOUND = "cli.agent_not_found", Unavailable, retryable false,
+            details ["label", "bundlePath"], "macOS cannot find the service for this copy of the app right after the registration (spec 0015)";
+        AGENT_INVALID_SIGNATURE = "cli.agent_invalid_signature", Unauthorized, retryable false,
+            details ["label", "osCode"], "macOS rejected the code signature of the app bundle (spec 0015)";
+        AGENT_OS_ERROR = "cli.agent_os_error", Failed, retryable false,
+            details ["op", "osDomain", "osCode"], "a register, unregister, or relaunch call failed in macOS (spec 0015)";
+        AGENT_STATUS_UNAVAILABLE = "cli.agent_status_unavailable", Unavailable, retryable false,
+            details ["op", "osCode"], "the agent status cannot be read or holds a value this build does not know (spec 0015)";
+        AGENT_CALL_TIMEOUT = "cli.agent_call_timeout", Timeout, retryable false,
+            details ["op", "seconds"], "a macOS call about the agent took longer than 10 seconds (spec 0015)";
+        DAEMON_WAIT_TIMEOUT = "cli.daemon_wait_timeout", Timeout, retryable false,
+            details ["action", "seconds"], "the daemon did not appear or disappear within the limit of the command (spec 0015)";
     }
 }
 
@@ -1063,6 +1087,66 @@ mod tests {
             ("cli.operation_cancelled", ErrorCategory::Cancelled, &[]),
             ("cli.operation_needs_recovery", ErrorCategory::Failed, &[]),
             ("cli.panic", ErrorCategory::Internal, &[]),
+            (
+                "cli.agent_root_override",
+                ErrorCategory::InvalidInput,
+                &["variable"],
+            ),
+            (
+                "cli.agent_not_bundled",
+                ErrorCategory::Unsupported,
+                &["executable"],
+            ),
+            (
+                "cli.agent_helper_missing",
+                ErrorCategory::Unavailable,
+                &["bundlePath"],
+            ),
+            (
+                "cli.agent_not_registered",
+                ErrorCategory::Unavailable,
+                &["label"],
+            ),
+            (
+                "cli.agent_requires_approval",
+                ErrorCategory::Unauthorized,
+                &["label"],
+            ),
+            (
+                "cli.agent_disabled",
+                ErrorCategory::Unauthorized,
+                &["label"],
+            ),
+            (
+                "cli.agent_not_found",
+                ErrorCategory::Unavailable,
+                &["label", "bundlePath"],
+            ),
+            (
+                "cli.agent_invalid_signature",
+                ErrorCategory::Unauthorized,
+                &["label", "osCode"],
+            ),
+            (
+                "cli.agent_os_error",
+                ErrorCategory::Failed,
+                &["op", "osDomain", "osCode"],
+            ),
+            (
+                "cli.agent_status_unavailable",
+                ErrorCategory::Unavailable,
+                &["op", "osCode"],
+            ),
+            (
+                "cli.agent_call_timeout",
+                ErrorCategory::Timeout,
+                &["op", "seconds"],
+            ),
+            (
+                "cli.daemon_wait_timeout",
+                ErrorCategory::Timeout,
+                &["action", "seconds"],
+            ),
         ];
         assert_eq!(table, expected);
         assert!(
