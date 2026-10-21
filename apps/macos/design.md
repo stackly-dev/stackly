@@ -447,6 +447,27 @@ So the modifier builds the `NSAlert` itself: for a destructive request, Cancel t
 - `StacklyMotion.progress(reduceMotion:)` returns the animation for a change of a progress value, or `nil` while `accessibilityReduceMotion` is on, so the value jumps. A spinner keeps spinning.
 - `announce(_:)` posts one VoiceOver announcement (`AccessibilityNotification.Announcement`). State views call it once when a page turns failed and when a critical banner appears.
 
+## Commands and shortcuts
+
+The menu bar, `CommandMap`, and the keyboard shortcuts of spec 0069. `CommandMap` (`StacklyUI/Commands/CommandMap.swift`) is the only place a shortcut is written down, and `SystemShortcuts` (`Commands/SystemShortcuts.swift`) holds the macOS shortcuts a row may not use; the unit tests refuse a clash. The map table and the rules for adding a command join this section when milestone 2 builds the menus.
+
+### Probe results (macOS 27.0.1 26A434, Xcode 27.0 27A266a, 2026-10-21)
+
+Run with the accessibility API (`AXMenuItemCmdChar`, `AXMenuItemCmdModifiers`) and key events posted to the app's process. P1 ran against the real Debug build of Stackly with a temporary `STACKLY_ROOT`. P2 to P7 ran against a small stand in app (a `Window` plus `Settings` and a second `Window`, a toolbar `.searchable` page, a sheet and an `NSAlert` sheet, and the same `Commands` shapes as spec 0069), because the real shell needs a daemon and a finished `StacklyAction`. The stand in lives outside the repo. Repeat the probes when macOS or Xcode moves.
+
+| Probe | Result | Effect |
+| --- | --- | --- |
+| P1 menu bar of the current app | No two items share a key equivalent. Beyond the table A of spec 0069 the system adds ⌥⌘Q (Quit and Keep Windows) and a family of 🌐 equivalents: 🌐D (Start Dictation…), 🌐E (Emoji & Symbols), 🌐F (Enter Full Screen), and, in Window, 🌐⌃F (Fill), 🌐⌃C (Center), 🌐⌃R (Return to Previous Size). AX reports the 🌐 modifier as bit 16 of `AXMenuItemCmdModifiers`. The Edit menu also gets Writing Tools and AutoFill (no shortcuts). ⌥⌘W (Close All) and ⌥⌘M (Minimize All) show up as the table says. | ⌥⌘Q joins table A; the 🌐 family is covered by rule E and is not listed. |
+| P2 `Window(...).keyboardShortcut("0", .command)` | Window > Probe ⌘0 appears. It reopens the window after it is closed (menu click and the key), and restores it from the Dock after Minimize. | Passes: `showMainWindow` stays a `system` row with the shortcut on the scene. |
+| P3 `CommandGroup(replacing:)` | `.newItem` leaves File with New Probe…, Close ⌘W, and Close All, and no "New Window". `.textEditing` leaves Writing Tools, AutoFill, Start Dictation, and Emoji & Symbols in Edit and removes nothing else that was there. `.help` keeps the system search field and puts Welcome to Probe below it. `CommandMenu("Instance")` lands between View and Window. | Passes. |
+| P3b default `.textEditing` group | With the default group left in place the Edit menu has no Find item at all, with a focused text field or without one, and ⌘F does not focus the toolbar search field. The Spelling and Grammar, Substitutions, Transformations, and Speech submenus do not appear either. | The fallback does not apply: Stackly's own `replacing: .textEditing` with Find… stays the plan. |
+| P4 `focusedSceneValue` | Readable in `Commands` while the main window is key. Nil while Settings or another `Window` is key. Still present while a SwiftUI `.sheet` or an `NSAlert` sheet is open, and then `NSApp.keyWindow` is the sheet window (`SheetPresentationWindow` or the alert's panel) and the main window's `isKeyWindow` and `MainWindowKey.isKey` are false. Key presses sent while a sheet is open do nothing. | Passes: `isWindowKey` decides, not the focused value alone. |
+| P5 `.searchFocused` | ⌘F from the menu focuses the toolbar `.searchable` field. Pressing ⌘F again leaves its text alone. | Passes. |
+| P6 shortcuts in the search field | ⌘R, ⇧⌘R, ⌥⌘R, ⌘O, ⌘D, ⌘1, and ⌘[ run their menu item while the search field is focused and do not change its text. A `Button` whose title changes (Show Inspector to Hide Inspector) changes in the menu. `KeyEquivalent("?")` with ⌘ shows "⌘?" and runs on ⇧⌘/ (`KeyEquivalent("/")` with ⇧⌘ shows "⇧⌘/" and would also match that key). | Passes. |
+| P7 state changes around a key press | A toggle flipped and a key pressed at once, 50 ms, and 300 ms later: the menu item was already disabled or enabled each time, so the stale item never ran (the run guard was never needed). Opening a sheet and pressing ⌘R at once did nothing. With the Instance menu open, an item turned from disabled to enabled after a state change 1.5 s later. | Passes: menus recompute on every published change, also while open. The run guard stays as defence. |
+
+The menu bar order is Stackly, File, Edit, View, Instance, Window, Help. A closed menu answers AX reads with its current state, so a read after a change is a valid check.
+
 ## Accessibility
 
 - **Increase Contrast.** Tone text and `textSecondary` switch to their HC values. `.cardSurface()`, `StateBanner`, and `ToneBadge` get a 1 pt border (`separatorColor` for cards, the tone fill for banners and badges). Text and borders read the same source, `colorSchemeContrast`, so they always agree.
