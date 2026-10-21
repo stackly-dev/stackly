@@ -53,10 +53,11 @@ struct SourceRuleTests {
         Rule(
             name: "secondary, tertiary, or accent text color outside the token file (AC-3)",
             patterns: [
-                // A member after `(`, a word, or `?` is a color or style; `prominence: .secondary`
-                // and `= .secondary` name the prominence of an action button.
-                #"[(\w]\.secondary\b"#,
-                #"\?\s*\.secondary\b"#,
+                // Every `.secondary` is a color or style except the prominence of an action
+                // button, which is written `prominence: .secondary` or
+                // `prominence: ActionProminence = .secondary`. Swift regex has no lookbehind,
+                // so the scan from the line start refuses to step over that spelling.
+                #"^(?:(?!prominence: (?:ActionProminence = )?\.secondary).)*?\.secondary\b"#,
                 #"\.tertiary\b"#,
                 #"\bsecondaryLabelColor\b"#,
                 #"\btertiaryLabelColor\b"#,
@@ -73,6 +74,14 @@ struct SourceRuleTests {
                 ".foregroundStyle(.tint)",
                 "Color.secondary",
                 ".foregroundStyle(isOn ? .secondary : .primary)",
+                "let color: Color = .secondary",
+                "label(style: .secondary)",
+                "cond ? .primary : .secondary",
+                ".foregroundStyle(.red, .secondary)",
+                "return .secondary",
+                "[.secondary]",
+                "{ .secondary }",
+                "static let a: HierarchicalShapeStyle = .secondary",
             ],
             allowedExamples: [
                 "ActionButton(action, prominence: .secondary)",
