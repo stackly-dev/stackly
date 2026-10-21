@@ -84,8 +84,6 @@ _Dijalankan sesi `chk-f13-verify` pada commit `2239e01` (main, fitur 67 sampai 6
 
 ### Catatan
 
-- Kepala file ini (baris `updated 2026-10-20` dan kalimat "baru memuat Milestone 4 … langkah 16 menyusul") sudah ketinggalan: langkah 16 sudah `PASS` dan bagian ini menambah milestone 1 sampai 3. Teks langkah tidak diubah.
-- Baris Commands `StatusAdapterTests` "6 test lulus" usang: suite itu kini 15 test (baris berikutnya sudah mencatat 15). Teks langkah tidak diubah.
 - Fitur 67 sampai 69 tidak merusak AC spec 0013 yang diamati di atas; satu satunya kegagalan (Diagnostics setelah tersambung lagi) berasal dari `DaemonModel` milestone 2, bukan dari perubahan fitur itu, dan sudah lulus setelah `ad7779c` dan `b54275d`. Pada putaran ulang item menu Reconnect to stacklyd masih terbaca `DISABLED` lewat AX saat daemon mati (lihat butir berikut).
 - Di luar spec ini: item menu Stackly › Reconnect to stacklyd terbaca `DISABLED` lewat AX selama daemon mati, berbeda dengan record cek 4 spec 0069. Pembacaan AX tanpa membuka menu mungkin belum memvalidasi item; layak dicek ulang oleh pemilik fitur 69.
 
