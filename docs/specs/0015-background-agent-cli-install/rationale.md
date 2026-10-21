@@ -437,7 +437,7 @@ Langkah 0 dijalankan di Mac ini (macOS 27.0 build 26A428) setelah persetujuan ka
 | Status setelah izin dimatikan | Tidak berubah: tetap `enabled`, job tidak dihentikan, dan `relaunch` tetap menyalakannya | Tidak, lihat B3 |
 | `unregister` menghentikan job yang jalan | Ya, `SIGTERM` selama panggilan, lalu status `notRegistered`; child di process group job ikut mati, child di session sendiri tetap hidup | Ya |
 
-**Bantahan yang membawa bagian spec kembali ke `/architect` sebelum langkah 5 dan 6:**
+**Bantahan yang membawa bagian spec kembali ke `/architect` sebelum langkah 5 dan 6** (dijawab di *Update 2026-10-21* di bawah)**:**
 
 - **B1. Bundle yang belum pernah didaftarkan membaca `notFound`.** `notRegistered` hanya muncul setelah `unregister`. Tabel *State background agent* memetakan `NotFound` ke `not_found` (langkah `move_or_reinstall_app`), sedangkan AC-8 dan Turn On hanya mendaftar dari `not_registered`, jadi instalasi baru tidak pernah bisa dinyalakan. Bagian terkait: AC-4, AC-8, AC-9, AC-13, AC-17, tabel *State background agent*, baris "berhasil, status sesudahnya `NotFound`" di *Hasil pendaftaran*, *Banner per state*, dan `protocols/fixtures/agent/states.json`. Yang perlu diputuskan: cara membedakan "belum pernah didaftarkan" dari "service tidak ditemukan", padahal plist dan `stacklyd` sudah dipastikan ada lewat cek `HelperMissing` sebelum `status` dibaca.
 - **B2. Lewat symlink, gerbang `NSBundle.mainBundle` menolak kasus yang didukung OS.** `MacosBackgroundAgent` mengembalikan `NotBundled` kalau `bundleIdentifier` dari `NSBundle.mainBundle` bukan `com.ojiepermana.stackly`. Lewat `~/.local/bin/stackly` nilai itu nil, sehingga `daemon install`, `start`, dan `restart` dari CLI yang dipasang selalu gagal `cli.agent_not_bundled`, padahal `SMAppService` sendiri bekerja lewat symlink. `AgentProbe::Registration.bundle` yang diambil dari `NSBundle.mainBundle` juga menjadi folder symlink. Bagian terkait: langkah adapter di *Port `BackgroundAgent`*, AC-8 (hint `not_bundled`), dan penggantian `Registration` menjadi `NotBundled` di *State background agent*. Arah yang terlihat adalah gerbang dan path bundle dari `AppBundle::enclosing` atas `current_exe()` canonical, tetapi itu keputusan `/architect`.
@@ -455,6 +455,196 @@ Langkah 0 dijalankan di Mac ini (macOS 27.0 build 26A428) setelah persetujuan ka
 - Setelah `unregister`, `launchctl print-disabled gui/<uid>` tetap menyimpan entri label test (`enabled`). Itu tabel override launchd, dan dibiarkan apa adanya.
 
 **Batasan**: hanya build ad hoc, bundle di `/private/tmp`, dan identifier test. Sesi spike tidak melihat UI System Settings, jadi hasil switch Login Items bertumpu pada laporan kamu dan log OS.
+
+## Update 2026-10-21 (hasil spike AC-21)
+
+`/architect` update atas empat bantahan spike (B1 sampai B4) di atas. Aturan program masih berlaku: gap keputusan diisi dengan opsi rekomendasi dan dicatat di sini, sedangkan perubahan teks AC menunggu persetujuan kamu lewat lead. ID AC tidak berubah.
+
+### Keputusan U1: arti `notFound` (B1)
+
+#### Option 1: `notFound` di luar aksi pendaftaran menjadi `not_registered`; hanya `notFound` tepat setelah `register` atau `relaunch` di aksi yang sama menjadi `not_found` (rekomendasi)
+
+**Pros**:
+- Instalasi baru langsung menawarkan Turn On dan `stackly daemon install`, yang memang langkah yang benar.
+- `HelperMissing` sudah memastikan plist dan `stacklyd` ada sebelum status dibaca, jadi `notFound` di luar aksi tidak punya arti lain yang bisa ditindaklanjuti selain "daftarkan".
+- Memakai masukan `just_registered` yang sudah ada; tidak ada field atau state wire baru, dan `not_found` tetap punya arti jujur (OS menerima permintaan tetapi tetap tidak menemukan service).
+
+**Cons**:
+- Service yang hilang di luar aksi (misalnya database BTM di reset) tampil `not_registered` tanpa sebab nya.
+- `just_registered` di GUI harus bertahan selama status tetap `notFound`, satu aturan lagi di model.
+
+#### Option 2: `not_found` tetap, tetapi `install` dan Turn On juga mendaftar dari `not_found`
+
+**Pros**:
+- Tabel `classify` tidak berubah.
+
+**Cons**:
+- Setiap instalasi baru melihat banner critical "Stackly can’t find its background service" dengan langkah "pindahkan atau install ulang", yang salah dan menakutkan.
+- AC-8, AC-13, dan spec 0016 harus menambah aksi untuk state yang artinya dua.
+
+#### Option 3: bedakan dengan launch record (`notFound` tanpa record berarti belum didaftarkan, dengan record berarti hilang)
+
+**Pros**:
+- Bisa menyebut "hilang" untuk pendaftaran yang pernah jalan.
+
+**Cons**:
+- Launch record tertinggal setelah uninstall dan reinstall (fitur 62 menyimpan data), jadi reinstall tampil "hilang" dengan langkah "pindahkan atau install ulang", padahal langkah yang benar adalah daftar.
+- Mencampur dua arti launch record (bukti izin pernah diberikan, dan bukti pernah terdaftar).
+
+Runner up: Option 3. Option 1 dipilih karena satu satunya langkah pemulihan yang benar untuk `notFound` di luar aksi adalah `register`, apa pun sebab nya.
+
+### Keputusan U2: cara CLI menemukan bundle (B2)
+
+#### Option 1: `main` memberi adapter path executable canonical; adapter memakai `AppBundle::enclosing` dan membaca identifier dari `Info.plist` bundle itu (rekomendasi)
+
+**Pros**:
+- `~/.local/bin/stackly` (symlink terkelola dari AC-14) bekerja, karena `SMAppService` sendiri menjawab untuk bundle asli lewat symlink.
+- Satu sumber bundle untuk gerbang, `Registration.bundle`, dan `AgentReport.bundlePath`, jadi langkah "ganti `Registration` yang bundle nya berbeda dengan `NotBundled`" hilang.
+- Mengikuti aturan yang sudah ada: hanya bin yang membaca `current_exe`, library tidak.
+
+**Cons**:
+- `MacosBackgroundAgent` butuh konstruktor dengan path, dan `MacosPlatform` memasang adapter `unlocated()` yang hanya ada supaya capability jujur.
+- Identifier dibaca lewat `NSBundle::bundleWithPath`, satu panggilan `objc2` lagi.
+
+#### Option 2: tetap `NSBundle.mainBundle`, dan CLI meminta pengguna menjalankan `Stackly.app/Contents/MacOS/stackly` langsung
+
+**Pros**:
+- Adapter di patch yang ditahan tidak berubah.
+
+**Cons**:
+- `daemon install`, `start`, dan `restart` dari CLI yang dipasang selalu gagal `cli.agent_not_bundled`, jadi instalasi CLI AC-14 tidak berguna untuk perintah agent.
+
+#### Option 3: adapter membaca `current_exe` sendiri dan membuatnya canonical
+
+**Pros**:
+- Tidak ada konstruktor baru.
+
+**Cons**:
+- Melanggar aturan spec ini bahwa library tidak memanggil `current_exe`, dan tes `locate` jadi butuh proses di dalam bundle.
+
+Runner up: Option 3. Option 1 dipilih karena path canonical sudah dihitung `main` untuk `AgentReport.bundlePath`, dan adapter cukup menerimanya. GUI tetap memakai `Bundle.main`, karena app selalu dijalankan LaunchServices dari bundle nya sendiri; path nya lewat `realpath(3)` supaya sama dengan `std::fs::canonicalize` di CLI (`resolvingSymlinksInPath()` membuang awalan `/private`, jadi tidak dipakai).
+
+### Keputusan U3: build ad hoc dan switch Login Items (B3)
+
+#### Option 1: tetap tampilkan status OS apa adanya; `disabled` dari launch record tetap hipotesis untuk build bertanda tangan, dan AC-17 mendapat cabang C (rekomendasi)
+
+**Pros**:
+- Jujur pada OS, tanpa kode baru, dan tanpa `unsafe` baru.
+- AC-17 tidak bisa berakhir ambigu: kalau build bertanda tangan juga mengabaikan switch, hasil nya tercatat dan Keputusan 5 kembali ke `/architect` dengan bukti.
+
+**Cons**:
+- Selama development tanpa identity, GUI menampilkan "Background service is on." saat System Settings menunjukkan mati.
+- `disabled` dan `requires_approval` hanya bisa dicoba lewat fake sampai OQ-012 selesai.
+
+#### Option 2: deteksi signature ad hoc saat runtime (`SecCodeCopySelf` dan flag ad hoc) dan tampilkan catatan di Diagnostics
+
+**Pros**:
+- Pengembang tahu kenapa switch tidak berpengaruh.
+
+**Cons**:
+- Blok `unsafe` dan panggilan Security framework baru di CLI dan GUI hanya untuk build development; produk yang dirilis selalu bertanda tangan.
+
+#### Option 3: buang `disabled` sekarang
+
+**Cons**:
+- Bukti untuk build bertanda tangan belum ada, dan scope meminta `disabled` terlihat.
+
+Runner up: Option 2. Option 1 dipilih karena masalah nya hanya ada di build development, dan cabang C membuat bukti build bertanda tangan menentukan nasib `disabled`, bukan tebakan.
+
+### Keputusan U4: restart setelah binary diganti (B4)
+
+#### Option 1: `restart` tetap lewat exit 75, dengan cadangan `relaunch` kalau launch record tidak menunjukkan respawn sampai `T_respawn` (rekomendasi)
+
+**Pros**:
+- Jalur biasa tidak menyentuh pendaftaran (respawn 0,3 detik di spike), jadi notifikasi "Background Items Added" tidak muncul di setiap restart.
+- AC-6 dan kontrak `daemon.shutdown` tidak berubah, dan AC-15 tetap menguji jalur launchd biasa.
+- Tanda respawn (`lastLaunchedAt` ditulis setelah lock, sebelum bind) sudah ada; tebakan yang salah hanya membuang beberapa detik.
+
+**Cons**:
+- Ada aturan waktu baru (`T_respawn`) yang harus diuji dengan jam yang dijeda.
+- Setelah `build-app --install`, restart sekitar 5 detik lebih lama sebelum `relaunch`.
+- `relaunch` sekarang juga dipanggil dari `restart` untuk daemon yang tadinya jalan, jadi teks AC-11 berubah.
+
+#### Option 2: `restart` untuk daemon `launchd` selalu `stop` lalu `relaunch`
+
+**Pros**:
+- Paling sederhana dan deterministik, tanpa aturan waktu.
+
+**Cons**:
+- Setiap restart menyentuh pendaftaran, yang untuk build bertanda tangan mungkin memunculkan notifikasi atau meminta persetujuan (belum diketahui, AC-17).
+- Mode `restart` dan exit 75 menjadi tidak terpakai oleh CLI, sehingga AC-6, AC-10, dan AC-15 berubah lebih banyak.
+
+#### Option 3: CLI mendeteksi binary yang diganti sebelum restart (misalnya daemon melaporkan identitas file executable nya)
+
+**Pros**:
+- `relaunch` hanya saat memang perlu, tanpa menunggu.
+
+**Cons**:
+- Field kontrak baru di `DaemonInfo`, dan identitas file tidak menjamin launchd menolak respawn (pemicu nya cdhash dan LWCR, bukan path).
+
+Runner up: Option 2. Option 1 dipilih karena ia menjaga jalur harian di IPC dan `KeepAlive` seperti Keputusan 3, dan hanya memakai `relaunch` saat launchd terbukti tidak menyalakan daemon.
+
+### Keputusan U5: `cargo xtask build-app --install`
+
+Tetap seperti AC-22: hanya mengganti bundle dan mencetak hint `stackly daemon restart` saat socket root default ada; *Penantian restart* yang menangani respawn yang gagal. Runner up: `--install` menjalankan sendiri `<bundle baru>/Contents/MacOS/stackly daemon restart`, yang ditolak karena perintah build tidak boleh mengubah daemon yang jalan tanpa perintah eksplisit dari kamu.
+
+### Keputusan kecil update ini
+
+- `just_registered` true setelah `register` atau `relaunch` yang berhasil atau gagal `NotFound`; error lain dibaca ulang dengan false, supaya `LaunchDenied` tetap bisa menjadi `disabled` (runner up: true setelah panggilan apa pun, yang membuat `disabled` mustahil setelah aksi).
+- Di GUI, `justRegistered` bertahan selama status tetap `requiresApproval` atau `notFound`, dan model baru mulai dengan false (runner up: reset di refresh pertama, yang membuat banner `not_found` langsung berganti ke `not_registered`).
+- `RESPAWN_GRACE` 5 detik di `commands/daemon/wait.rs` dan `LAUNCHD_THROTTLE_INTERVAL_SECS` 10 di `stackly-platform::bundle`, dipakai CLI dan plist (runner up: satu batas tetap 15 detik, yang menambah 10 detik ke setiap restart setelah `--install`).
+- Dengan `STACKLY_ROOT`, `restart` tidak memakai cadangan `relaunch`, karena agent hanya melayani root default (runner up: gagal `cli.agent_root_override` di langkah 5, yang memberi exit 2 untuk daemon test yang sebenarnya hanya lambat).
+- Script tahu apakah cadangan sudah dicoba dari warning `cli.agent_relaunched`, yang ada di envelope sukses maupun gagal (runner up: `details.relaunched` di `cli.daemon_wait_timeout`, yang awalnya dipilih lalu dihapus setelah cross check karena hanya ada di jalur gagal).
+- Ctrl+C ditunda selama `register`, `unregister`, atau `relaunch` berjalan, paling lama 10 detik (runner up: keluar langsung seperti di penantian, yang bisa meninggalkan `not_registered`).
+- `daemon start` dengan daemon yang sudah jalan memberi `agent` null supaya AC-9 ("tanpa memanggil OS") tetap benar (runner up: satu panggilan `status` dan ubah teks AC-9).
+- `FakeBackgroundAgent` mulai di `NotFound` supaya test CLI mulai dari keadaan instalasi baru yang sebenarnya (runner up: tetap `NotRegistered`, yang menyembunyikan B1 dari test).
+- Jalur "panggil port di thread utama" di *Perintah CLI* dihapus, karena spike menunjukkan semua panggilan bekerja di thread latar.
+
+### Perubahan teks AC (menunggu persetujuan kamu lewat lead)
+
+| AC | Perubahan | Sebab |
+| --- | --- | --- |
+| AC-4 | tambah aturan `notFound` menjadi `not_registered`, kecuali hasil pendaftaran di aksi yang sama (`not_found`) | B1 |
+| AC-8 | bundle CLI dari path canonical, `~/.local/bin/stackly` bekerja seperti di dalam bundle; hint `not_bundled` menjadi `use_bundled_cli` tanpa path canonical | B2 |
+| AC-10 | `restart` menunggu EOF lalu handshake, dengan cadangan `relaunch` sekali untuk state `enabled` dan warning `cli.agent_relaunched` | B4 |
+| AC-11 | `relaunch` juga dari `restart` yang tidak melihat daemon baru sampai batas respawn | B4 |
+| AC-17 | cabang C: status tetap `enabled` setelah izin dimatikan, dicatat, dan Keputusan 5 kembali ke `/architect` | B3 |
+| AC-19 | upgrade juga mencatat apakah `restart` butuh `relaunch` | B4 |
+| AC-11 (kalimat test) | `restart` untuk daemon yang jalan hanya memanggil `status` selama daemon baru muncul sebelum batas respawn; command lain "paling banyak" memanggil `status` | B4, cross check |
+| AC-13 | `AgentActionError.timedOut` menjadi `.daemonDidNotStart(seconds: 30)`, menyamakan AC dengan bagian GUI (selisih lama, bukan dari spike) | cross check |
+
+AC-1 sampai AC-3, AC-5 sampai AC-7, AC-9, AC-12, AC-14 sampai AC-16, AC-18, AC-20 sampai AC-22 tidak berubah teks nya.
+
+### Cross check update ini
+
+Spec yang sudah diperbarui dibaca model lain (Sonnet 5.5, baca saja, tanpa membuka link) pada 2026-10-21. Putusan: arah jawaban B1 sampai B4 benar dan B1 sampai B3 sudah opsi paling sederhana, tetapi cadangan `restart` (U4) kurang rinci dan daftar perubahan patch yang ditahan belum cukup untuk dipakai tanpa menebak. Semua gap keputusan diisi dengan rekomendasi saya sesuai aturan program, dan dua di antaranya menyentuh teks AC (AC-11 dan AC-13, tabel di atas):
+
+| No | Temuan | Perbaikan yang diterapkan |
+| --- | --- | --- |
+| 1 | `T_respawn` mencampur wall clock (`L0`) dan jam test yang monoton; `L0` di masa depan bisa membuat cadangan tidak pernah jalan | `elapsed` dihitung sekali saat EOF dengan `Clock` dan dijepit 0 sampai 10 detik; batas di jam monoton, selalu 5 sampai 15 detik; record rusak berarti `None` |
+| 2 | hasil setelah `relaunch` (selain `enabled`) dan isi `agent` JSON tidak ditentukan | `classify` dengan `just_registered` true; selain `enabled` gagal saat itu juga tanpa warning; `agent` dari probe hasil `relaunch`; baris *Hasil pendaftaran* untuk `RequiresApproval` dipisah |
+| 3 | `AlreadyRegistered`, baca ulang yang gagal, dan `justRegistered` GUI saat aksi berturut turut | `AlreadyRegistered` dihitung berhasil; baca ulang yang gagal setelah `LaunchDenied` atau `MustBeEnabled` memberi `cli.agent_requires_approval`; setiap aksi GUI menimpa nilai nya |
+| 4 | wiring CLI tidak bernama (`env::read`, `Environment`, OS lain, launch record saat `STACKLY_ROOT`) | `env::read(executable)`, field `agent`, `bundle`, `launch_record`; `UnsupportedBackgroundAgent` di OS lain; launch record root default, `None` saat override |
+| 5 | `start` dengan daemon yang jalan harus mengisi `agent` tanpa memanggil OS | `agent` nullable, null hanya saat `alreadyRunning` true; `install` di state `enabled` mencoba satu handshake |
+| 6 | penantian 250 ms bentrok dengan retry `daemon.starting` milik `Session`, dan error koneksi lain tidak ditentukan | satu percobaan per polling; daftar kode "belum naik"; error lain berhenti dan dilaporkan |
+| 7 | bentuk `states.json` tidak ditentukan | skema baris, encoding `probe`, dan 29 baris wajib |
+| 8 | daftar perubahan patch kurang: 0002 tidak bisa di `git apply`, test fake lain, `assert_not_bundled`, derive, method | daftar di langkah 2 dan 5 *Build plan* dilengkapi |
+| S1 | respawn bisa terjadi selama `status` di langkah 5, lalu `relaunch` menghentikan daemon yang sehat | satu handshake dan baca record lagi tepat sebelum `relaunch` |
+| S2 | Ctrl+C atau batas waktu di antara `unregister` dan `register` meninggalkan `not_registered` | Ctrl+C ditunda selama panggilan port yang mengubah pendaftaran; hint khusus untuk `relaunch` yang lewat batas |
+| S3 | B3 dan B4 bertumpu pada satu run dan penggantian satu binary, bukan seluruh bundle | kata kata diperhalus, dan record tambahan ad hoc (setelah persetujuan) diusulkan di milestone 2 |
+| S4 | `resolvingSymlinksInPath()` membuang `/private`, jadi path GUI bisa berbeda dari `canonicalize` Rust | `realpath(3)` lewat `CanonicalPath.resolve`, juga untuk status link CLI |
+| S5 | B2 untuk build bertanda tangan tidak pernah diuji lewat symlink | record AC-17 (langkah 14) menjalankan CLI lewat kedua path |
+| S6 | test urutan tulis launch record butuh hook filesystem; `NSBundle` menyimpan bundle per path | test memeriksa record sudah ada saat handshake pertama; path bundle palsu berbeda per kasus dan path harapan di `canonicalize` |
+| W | teks lain: AC-11 kalimat test, Summary dan Decision soal restart, AC-13 `.timedOut`, timeout `status`, kolom "Kapan" `cli.agent_not_found` dan `cli.agent_not_registered`, `daemon.shutting_down` pada `restart`, `details.relaunched` | semua diselaraskan; `details.relaunched` dihapus karena warning `cli.agent_relaunched` sudah ada di envelope yang sama |
+
+Yang tidak diambil: batas tetap `T_eof + 15 detik` (lebih sederhana, tetapi menambah 10 detik ke setiap restart setelah `--install`, justru jalur development yang paling sering), dan `DaemonInfo.startedAt` sebagai ganti `L0` (butuh `daemon.get_info` tambahan, sedangkan `L0` tetap diperlukan untuk tanda respawn).
+
+### Dampak ke spec lain
+
+- Spec 0013: tidak ada butir usulan yang berubah karena spike. Baris banner, `ConnectionHint`, seksi Diagnostics, dan aturan sumber tetap; yang berubah hanya state mana yang dilihat instalasi baru (`not_registered`, bukan `not_found`).
+- Spec 0016: teks nya tidak perlu berubah, karena kartu Background Agent mengikuti state; instalasi baru sekarang melihat kartu `not_registered`.
+- Spec 0008: warning `cli.agent_relaunched` ditambah ke usulan.
+- Spec 0004: butir baru di usulan untuk `MacosBackgroundAgent::unlocated()` dan `new(executable)`.
 
 ## References
 
