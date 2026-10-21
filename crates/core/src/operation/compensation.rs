@@ -4,11 +4,12 @@
 //! and removed through `remove_owned_tree`, never from a stored path.
 
 use std::fmt;
+use std::path::Path;
 use std::sync::Arc;
 
 use stackly_domain::{
     CompensatorName, CreatedItem, CreatedRecord, CreatedState, EnvironmentId, InstanceId,
-    OperationId, ReasonCode, Registry,
+    LockState, OperationId, ReasonCode, Registry,
 };
 use stackly_platform::{Platform, PlatformError};
 
@@ -102,6 +103,11 @@ pub(crate) const CREATED_BY_OTHER_OPERATION: ReasonCode = code("created_by_other
 const REMOVE_FAILED: ReasonCode = code("remove_failed");
 /// The instance manifest exists but cannot be read, so ownership is unknown.
 const MANIFEST_UNREADABLE: ReasonCode = code("manifest_unreadable");
+/// A process still holds the instance lock: an init helper that outlived
+/// the daemon (spec 0007, K10).
+const INSTANCE_LOCKED: ReasonCode = code("instance_locked");
+/// The instance lock could not be inspected, so nothing is removed.
+const LOCK_PROBE_FAILED: ReasonCode = code("lock_probe_failed");
 const COMPENSATOR_MISSING: ReasonCode = code("compensator_missing");
 const UNKNOWN_ITEM: ReasonCode = code("unknown_item");
 const TASK_STOPPED: ReasonCode = code("task_stopped");
@@ -289,6 +295,33 @@ fn remove_failed(error: &CoreError) -> CompensationError {
     CompensationError::new(REMOVE_FAILED, error.to_string())
 }
 
+/// Refuses the removal while a process holds the instance lock (K10).
+///
+/// A lock file that is not there means no process holds it, so the probe is
+/// skipped; the ordinary path (a create that stopped before `init`) never
+/// calls `probe_lock`. An error from either call is `lock_probe_failed`, and
+/// anything but `Free` is `instance_locked`; both leave the tree alone.
+pub(crate) fn check_instance_lock(
+    platform: &Platform,
+    lock: &Path,
+) -> Result<(), CompensationError> {
+    let probe_failed =
+        |error: &dyn fmt::Display| CompensationError::new(LOCK_PROBE_FAILED, error.to_string());
+    match platform.fs().symlink_metadata(lock) {
+        Ok(None) => return Ok(()),
+        Ok(Some(_)) => {}
+        Err(error) => return Err(probe_failed(&error)),
+    }
+    match platform.processes().probe_lock(lock) {
+        Ok(LockState::Free) => Ok(()),
+        Ok(_) => Err(CompensationError::new(
+            INSTANCE_LOCKED,
+            "a process still holds the instance lock",
+        )),
+        Err(error) => Err(probe_failed(&error)),
+    }
+}
+
 /// The built in compensator of an instance's folders: its root, its log
 /// folder, and its run folder unless another known instance shares its
 /// short key. A manifest naming another operation leaves it all alone.
@@ -325,6 +358,7 @@ async fn instance_tree(
                 ));
             }
         }
+        check_instance_lock(&scope.platform, &paths.lock)?;
         let platform = &scope.platform;
         let prepared = &scope.layout;
         remove_owned_tree(platform, prepared, &paths.root).map_err(|e| remove_failed(&e))?;

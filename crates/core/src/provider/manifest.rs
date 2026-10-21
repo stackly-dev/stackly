@@ -117,6 +117,25 @@ impl EndpointSpec {
     pub const fn default_port(&self) -> Option<Port> {
         self.default_port
     }
+
+    /// Returns the `socketName` template of a Unix endpoint as written,
+    /// with each `${...}` token whole, for the create form and for the
+    /// stored socket name (spec 0020).
+    #[must_use]
+    pub fn socket_name_template(&self) -> Option<String> {
+        use super::interpolate::Piece;
+        let socket = self.socket_name.as_ref()?;
+        Some(
+            socket
+                .pieces
+                .iter()
+                .map(|piece| match piece {
+                    Piece::Literal(text) => text.clone(),
+                    Piece::Token(token) => format!("${{{token}}}"),
+                })
+                .collect(),
+        )
+    }
 }
 
 /// `compatibility.dataMarker`.

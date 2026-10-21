@@ -3,7 +3,9 @@
 
 use std::fmt;
 
-use crate::id::{EnvironmentId, InstanceId, LeaseId, OperationId, RuntimeId, ShortKey};
+use crate::id::{
+    EnvironmentId, InstanceId, LeaseId, OperationId, ProviderSourceId, RuntimeId, ShortKey,
+};
 use crate::operation::StepSeq;
 use crate::provider::ProviderRevisionKey;
 use crate::registry::batch::Generation;
@@ -41,6 +43,38 @@ pub enum ResourceRef {
     /// A config revision of an instance (feature 10). It has no resource
     /// kind on the wire.
     ConfigRevision(ConfigRevisionId),
+    /// A provider source, a place provider packages come from (feature
+    /// 20). It has no resource kind on the wire.
+    ProviderSource(ProviderSourceId),
+}
+
+/// Why a resource cannot be deleted by the op that tried.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum NotDeletableReason {
+    /// Another operation created it.
+    CreatedByOtherOperation,
+    /// It is running or may be: its lifecycle is `starting`, `running`,
+    /// `stopping`, `recovering`, or `unknown`.
+    Active,
+}
+
+impl NotDeletableReason {
+    /// Returns the stable code, the `reason` detail of
+    /// `registry.not_deletable`.
+    #[must_use]
+    pub const fn as_code(self) -> &'static str {
+        match self {
+            Self::CreatedByOtherOperation => "created_by_other_operation",
+            Self::Active => "active",
+        }
+    }
+}
+
+impl fmt::Display for NotDeletableReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_code())
+    }
 }
 
 impl fmt::Display for ResourceRef {
@@ -63,6 +97,7 @@ impl fmt::Display for ResourceRef {
             Self::SecretReference(reference) => write!(f, "secret reference {reference}"),
             Self::AuditEvent(id) => write!(f, "audit event {id}"),
             Self::ConfigRevision(id) => write!(f, "config revision {id}"),
+            Self::ProviderSource(id) => write!(f, "provider source {id}"),
         }
     }
 }
@@ -215,6 +250,15 @@ pub enum RegistryError {
         instance: InstanceId,
         /// The environment.
         environment: EnvironmentId,
+    },
+    /// The resource cannot be deleted by the op that tried (spec 0020,
+    /// `DeleteInstanceCreatedBy`).
+    #[error("{resource} cannot be deleted: {reason}")]
+    NotDeletable {
+        /// The resource.
+        resource: ResourceRef,
+        /// Why not.
+        reason: NotDeletableReason,
     },
     /// A database constraint refused the write: a check before it was
     /// missed. The detail is for logs only.

@@ -17,9 +17,11 @@ use stackly_domain::{
     ManifestRuntime, NewInstanceManifest, OperationId, OperationKind, OperationState, Os,
     ProviderRevisionKey, Registry, RuntimeId, StepSeq, Target, WriteBatch, WriteOp,
 };
-use stackly_platform::{Clock, Platform};
+use stackly_platform::{Clock, InstanceLock, LockOutcome, Platform, ProcessError};
 use stackly_testkit::evidence::{Kind, evidence};
-use stackly_testkit::{InstanceBuilder, ProviderRevisionBuilder, RuntimeBuilder};
+use stackly_testkit::{
+    Fault, FsOp, InstanceBuilder, ProcessOp, ProviderRevisionBuilder, RuntimeBuilder,
+};
 
 use crate::common::{Harness, manager_request, wait_state};
 
@@ -53,6 +55,19 @@ fn manifest(platform: &Platform, id: InstanceId, created_by: OperationId) -> Ins
     })
 }
 
+/// What the `instance.lock` file of a [`Tree`] looks like when the failed
+/// create is compensated.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum Lock {
+    /// There is no lock file, as when the create stopped before `init`.
+    #[default]
+    Missing,
+    /// The file is there and nobody holds it.
+    Free,
+    /// A file the work keeps open holds it.
+    Held,
+}
+
 /// What a [`CreateTree`] work does with the instance folder it records.
 #[derive(Clone, Default)]
 struct Tree {
@@ -66,6 +81,10 @@ struct Tree {
     run_dir: bool,
     /// Decline the item as already existing, and make the folder anyway.
     already_exists: bool,
+    /// The state of the instance lock file.
+    lock: Lock,
+    /// Where a held lock lives, so it outlives the work.
+    held: Arc<Mutex<Vec<InstanceLock>>>,
     /// Hold after the tree is made.
     hold: Option<HoldHandle>,
     /// The new instance ID, for the test.
@@ -110,6 +129,22 @@ impl OperationWork for CreateTree {
                 if tree.run_dir {
                     std::fs::create_dir_all(layout.instance_run_dir(id.short_key()))
                         .expect("instance run directory can be created");
+                }
+                if tree.lock != Lock::Missing {
+                    let outcome = ctx
+                        .platform()
+                        .processes()
+                        .lock_instance(&paths.lock)
+                        .expect("the instance lock file can be opened");
+                    match outcome {
+                        LockOutcome::Acquired(lock) if tree.lock == Lock::Held => tree
+                            .held
+                            .lock()
+                            .expect("held lock list is not poisoned")
+                            .push(lock),
+                        LockOutcome::Acquired(_) => {}
+                        LockOutcome::Held => panic!("a new lock file is free"),
+                    }
                 }
                 if let Some(target) = &tree.plant {
                     symlink(target, paths.data.join("escape"))
@@ -635,6 +670,267 @@ async fn claim_resource_refuses_an_instance_the_registry_already_holds() {
     let failed = wait_state(&harness.engine, id, OperationState::Failed).await;
 
     assert!(failed.created.is_empty());
+    assert_eq!(
+        failed
+            .view
+            .journal
+            .failure_error()
+            .map(|error| error.code().as_str()),
+        Some("internal.unexpected")
+    );
+}
+
+fn probe_calls(harness: &Harness) -> usize {
+    harness
+        .fake
+        .processes()
+        .calls()
+        .iter()
+        .filter(|call| call.op == ProcessOp::ProbeLock)
+        .count()
+}
+
+/// Runs a failing create with `tree` and returns its operation as it
+/// settles in `state`, with the instance it made.
+async fn compensate_with(
+    harness: &Harness,
+    tree: Tree,
+    state: OperationState,
+) -> (stackly_core::operation::OperationDetailView, InstanceId) {
+    let made = Arc::clone(&tree.made);
+    let id = harness
+        .begin(manager_request(
+            OperationKind::CreateInstance,
+            Box::new(CreateTree(tree)),
+        ))
+        .await;
+    let settled = wait_state(&harness.engine, id, state).await;
+    let instance = made
+        .lock()
+        .expect("created instance ID lock is not poisoned")
+        .expect("the work made an instance ID");
+    (settled, instance)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_tree_without_a_lock_file_is_removed_without_probing_the_lock() {
+    let ev = evidence!(
+        covers = ["BR-023"],
+        kind = Kind::Fixture,
+        expected = "a create that stopped before init has no instance.lock, so the instance_tree compensator removes the tree and never calls probe_lock",
+    );
+    let harness = Harness::new().await;
+
+    let (failed, instance) =
+        compensate_with(&harness, Tree::default(), OperationState::Failed).await;
+
+    assert_eq!(failed.created[0].state(), CreatedState::Compensated);
+    assert!(
+        !harness
+            .layout
+            .layout()
+            .instance_paths(instance)
+            .root
+            .exists()
+    );
+    assert_eq!(probe_calls(&harness), 0);
+    ev.pass();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_free_lock_file_is_probed_once_and_the_tree_is_removed() {
+    let harness = Harness::new().await;
+    let tree = Tree {
+        lock: Lock::Free,
+        ..Tree::default()
+    };
+
+    let (failed, instance) = compensate_with(&harness, tree, OperationState::Failed).await;
+
+    assert_eq!(failed.created[0].state(), CreatedState::Compensated);
+    assert!(
+        !harness
+            .layout
+            .layout()
+            .instance_paths(instance)
+            .root
+            .exists()
+    );
+    assert_eq!(probe_calls(&harness), 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_held_lock_keeps_the_tree_and_the_operation_needs_recovery() {
+    let ev = evidence!(
+        covers = ["BR-023", "VAL-007"],
+        kind = Kind::Fixture,
+        expected = "an instance.lock another open file holds makes the instance_tree compensation fail with instance_locked and remove nothing, so the operation needs recovery with the abandon hint and the sentinel file in the tree is unchanged",
+    );
+    let harness = Harness::new().await;
+    let tree = Tree {
+        lock: Lock::Held,
+        ..Tree::default()
+    };
+    let held = Arc::clone(&tree.held);
+
+    let (stuck, instance) = compensate_with(&harness, tree, OperationState::NeedsRecovery).await;
+
+    let paths = harness.layout.layout().instance_paths(instance);
+    assert_eq!(std::fs::read(paths.data.join("PG_VERSION")).unwrap(), b"17");
+    assert!(paths.manifest.is_file());
+    assert_eq!(stuck.created[0].state(), CreatedState::CompensationFailed);
+    assert_eq!(
+        stuck.created[0].detail().map(|detail| detail.as_str()),
+        Some("instance_locked")
+    );
+    assert_eq!(
+        stuck.view.operation.recovery_hint(),
+        Some(stackly_domain::RecoveryHint::Abandon)
+    );
+
+    // Once the lock is free, abandon compensates and removes the tree.
+    held.lock().unwrap().clear();
+    let abandoned = harness
+        .engine
+        .abandon(stuck.view.operation.id(), stuck.view.operation.revision())
+        .await
+        .unwrap();
+    assert_eq!(abandoned.view.operation.state(), OperationState::Failed);
+    assert!(!paths.root.exists());
+    ev.pass();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_failing_lock_probe_keeps_the_tree_and_is_reported_as_lock_probe_failed() {
+    let harness = Harness::new().await;
+    harness.fake.processes().fail_next(
+        ProcessOp::ProbeLock,
+        ProcessError::io(
+            "probe_lock",
+            None,
+            &std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        ),
+    );
+    let tree = Tree {
+        lock: Lock::Free,
+        ..Tree::default()
+    };
+
+    let (stuck, instance) = compensate_with(&harness, tree, OperationState::NeedsRecovery).await;
+
+    let paths = harness.layout.layout().instance_paths(instance);
+    assert!(paths.data.join("PG_VERSION").is_file());
+    assert_eq!(stuck.created[0].state(), CreatedState::CompensationFailed);
+    assert_eq!(
+        stuck.created[0].detail().map(|detail| detail.as_str()),
+        Some("lock_probe_failed")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_lock_file_that_cannot_be_inspected_keeps_the_tree_without_probing() {
+    let harness = Harness::new().await;
+    harness.fake.fs().fail_when(
+        FsOp::SymlinkMetadata,
+        "instance.lock",
+        Fault::PermissionDenied,
+    );
+
+    let (stuck, instance) =
+        compensate_with(&harness, Tree::default(), OperationState::NeedsRecovery).await;
+
+    let paths = harness.layout.layout().instance_paths(instance);
+    assert!(paths.data.join("PG_VERSION").is_file());
+    assert_eq!(stuck.created[0].state(), CreatedState::CompensationFailed);
+    assert_eq!(
+        stuck.created[0].detail().map(|detail| detail.as_str()),
+        Some("lock_probe_failed")
+    );
+    assert_eq!(probe_calls(&harness), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_manifest_that_cannot_be_read_is_checked_before_the_lock() {
+    let harness = Harness::new().await;
+    let tree = Tree {
+        broken_manifest: true,
+        lock: Lock::Held,
+        ..Tree::default()
+    };
+
+    let (stuck, _) = compensate_with(&harness, tree, OperationState::NeedsRecovery).await;
+
+    assert_eq!(
+        stuck.created[0].detail().map(|detail| detail.as_str()),
+        Some("manifest_unreadable")
+    );
+    assert_eq!(probe_calls(&harness), 0);
+}
+
+/// Declines the item it records with `data_not_empty`, before or after it
+/// confirmed it.
+struct Decline {
+    after_confirm: bool,
+}
+
+impl OperationWork for Decline {
+    fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            ctx.begin_step(StepSpec::new("layout".parse().expect("a step name")))
+                .await?;
+            let (id, created) = ctx.new_instance_id().await?;
+            std::fs::create_dir_all(ctx.layout().layout().instance_paths(id).data)
+                .expect("instance data directory can be created");
+            let reason = "data_not_empty".parse().expect("a reason code");
+            if self.after_confirm {
+                ctx.confirm_created(created).await?;
+            }
+            ctx.not_created(created, reason).await?;
+            ctx.finish_step(None).await?;
+            Ok(stackly_core::operation::WorkOutcome {
+                result: OperationOutcome::default(),
+                finalize: None,
+            })
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn data_not_empty_marks_an_intended_item_not_owned_and_it_is_never_compensated() {
+    let harness = Harness::new().await;
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::CreateInstance,
+            Box::new(Decline {
+                after_confirm: false,
+            }),
+        ))
+        .await;
+    let done = wait_state(&harness.engine, id, OperationState::Succeeded).await;
+
+    assert_eq!(done.created[0].state(), CreatedState::NotOwned);
+    assert_eq!(
+        done.created[0].detail().map(|detail| detail.as_str()),
+        Some("data_not_empty")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn data_not_empty_on_an_item_that_is_already_created_is_refused() {
+    let harness = Harness::new().await;
+
+    let id = harness
+        .begin(manager_request(
+            OperationKind::CreateInstance,
+            Box::new(Decline {
+                after_confirm: true,
+            }),
+        ))
+        .await;
+    let failed = wait_state(&harness.engine, id, OperationState::Failed).await;
+
+    assert_eq!(failed.created[0].state(), CreatedState::Compensated);
     assert_eq!(
         failed
             .view

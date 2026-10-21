@@ -65,6 +65,8 @@ impl StageName {
     pub const COMPLETE: Self = Self::from_static("complete");
     /// Runs the provider's stop strategy and waits for the exit.
     pub const STOP: Self = Self::from_static("stop");
+    /// Pins the provider package a new instance runs with.
+    pub const PIN: Self = Self::from_static("pin");
     /// Stores the secrets of a new instance.
     pub const SECRETS: Self = Self::from_static("secrets");
     /// Creates the folders of a new instance.
@@ -158,6 +160,7 @@ mod tests {
         );
         let others: Vec<_> = [
             StageName::STOP,
+            StageName::PIN,
             StageName::SECRETS,
             StageName::LAYOUT,
             StageName::REGISTER,
@@ -166,6 +169,9 @@ mod tests {
         .iter()
         .map(|stage| stage.as_str().to_owned())
         .collect();
-        assert_eq!(others, ["stop", "secrets", "layout", "register", "init"]);
+        assert_eq!(
+            others,
+            ["stop", "pin", "secrets", "layout", "register", "init"]
+        );
     }
 }

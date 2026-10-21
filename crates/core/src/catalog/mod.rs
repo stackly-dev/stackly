@@ -10,7 +10,9 @@ mod index;
 mod install;
 mod load;
 mod model;
+mod pin;
 mod rules;
+mod source;
 mod status;
 #[cfg(feature = "test-support")]
 pub mod testing;
@@ -32,6 +34,7 @@ pub use model::{
     CatalogState, InvalidEntry, PlannedEntry, PlatformNote, ProviderEntry, TileHint,
     UnavailableReason,
 };
+pub use pin::{PinError, PinnedRevision, pin_revision};
 pub use rules::{
     ARTIFACT_ID_MAX_LEN, ARTIFACTS_MAX, BLOCKED_REASON_MAX_LEN, DEPENDENCIES_MAX, INDEX_MAX_LEN,
     LICENSE_MAX_LEN, LICENSE_URL_MAX_LEN, LimitKind, LimitViolation, NOTE_MAX_LEN,
@@ -40,6 +43,7 @@ pub use rules::{
     check_note, default_mark, index_problems, is_mark, namespace_allowed, package_limits,
     platform_note_problems,
 };
+pub use source::{BUNDLED_LOCATION, BUNDLED_TRUST_ROOT, ensure_source};
 pub use status::{
     CellStatus, EntryState, EntryStatus, MATRIX_OSES, SupportReason, TargetSupport, entry_status,
     host_cell_status, version_support,

@@ -218,6 +218,8 @@ pub enum FieldKind {
 pub struct ArrayRules {
     /// The fields of each item, by name.
     pub items: BTreeMap<SettingName, ItemField>,
+    /// The item field names in the order `properties` declares them.
+    pub order: Vec<SettingName>,
     /// Fewest items.
     pub min_items: u64,
     /// Most items.
@@ -226,6 +228,13 @@ pub struct ArrayRules {
     pub key: Option<SettingName>,
     /// The default list.
     pub default: Option<Vec<SettingsItem>>,
+}
+
+impl ArrayRules {
+    /// Returns the item fields, in the order `properties` declares them.
+    pub fn item_fields(&self) -> impl Iterator<Item = &ItemField> {
+        self.order.iter().filter_map(|name| self.items.get(name))
+    }
 }
 
 /// One scalar field of an array item.
@@ -358,12 +367,93 @@ impl SettingField {
     }
 }
 
+/// The fixed kind of one problem with a settings document, next to the
+/// issue code, so a caller can map the problem without reading its message
+/// (spec 0009 and spec 0020, *Field error*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum SettingsIssueKind {
+    /// A key the schema does not declare.
+    Unknown,
+    /// A value of another type, or a secret that is not a reference.
+    Type,
+    /// A value for a managed field.
+    ManagedFilled,
+    /// Text with a control character.
+    ControlCharacters,
+    /// Two items with the same `key` value.
+    DuplicateKey,
+    /// Text that does not match the pattern.
+    Pattern,
+    /// Text shorter than `minLength`.
+    TooShort,
+    /// Text longer than `maxLength`, or a document over its size limit.
+    TooLong,
+    /// An integer outside `minimum` and `maximum`.
+    OutOfRange,
+    /// Text that is not one of the `enum` values.
+    Enum,
+    /// More items than `maxItems`.
+    TooManyItems,
+    /// Fewer items than `minItems`.
+    TooFewItems,
+    /// A required field or item field with no value and no default.
+    Required,
+}
+
+impl SettingsIssueKind {
+    /// Every kind, in declaration order.
+    pub const ALL: &'static [Self] = &[
+        Self::Unknown,
+        Self::Type,
+        Self::ManagedFilled,
+        Self::ControlCharacters,
+        Self::DuplicateKey,
+        Self::Pattern,
+        Self::TooShort,
+        Self::TooLong,
+        Self::OutOfRange,
+        Self::Enum,
+        Self::TooManyItems,
+        Self::TooFewItems,
+        Self::Required,
+    ];
+
+    /// Returns the stable snake_case name.
+    #[must_use]
+    pub const fn as_code(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Type => "type",
+            Self::ManagedFilled => "managed_filled",
+            Self::ControlCharacters => "control_characters",
+            Self::DuplicateKey => "duplicate_key",
+            Self::Pattern => "pattern",
+            Self::TooShort => "too_short",
+            Self::TooLong => "too_long",
+            Self::OutOfRange => "out_of_range",
+            Self::Enum => "enum",
+            Self::TooManyItems => "too_many_items",
+            Self::TooFewItems => "too_few_items",
+            Self::Required => "required",
+        }
+    }
+}
+
+impl fmt::Display for SettingsIssueKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_code())
+    }
+}
+
 /// The typed settings model of one provider package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettingsSchema {
     title: String,
     description: Option<String>,
     fields: BTreeMap<SettingName, SettingField>,
+    /// The field names in the order `properties` declares them.
+    order: Vec<SettingName>,
 }
 
 /// One scalar settings value.
@@ -481,9 +571,9 @@ impl SettingsSchema {
         self.description.as_deref()
     }
 
-    /// Returns every field, in name order.
+    /// Returns every field, in the order `properties` declares them.
     pub fn fields(&self) -> impl Iterator<Item = &SettingField> {
-        self.fields.values()
+        self.order.iter().filter_map(|name| self.fields.get(name))
     }
 
     /// Returns one field by name.
@@ -513,12 +603,16 @@ impl SettingsSchema {
         let size = serde_json::to_string(document).map_or(usize::MAX, |text| text.len());
         let object = match document {
             _ if size > SETTINGS_DOCUMENT_MAX_LEN => {
-                problems.value("", "settings are larger than 256 KiB");
+                problems.add(
+                    "",
+                    SettingsIssueKind::TooLong,
+                    "settings are larger than 256 KiB",
+                );
                 None
             }
             serde_json::Value::Object(object) => Some(object),
             _ => {
-                problems.value("", "settings must be an object");
+                problems.add("", SettingsIssueKind::Type, "settings must be an object");
                 None
             }
         };
@@ -526,19 +620,22 @@ impl SettingsSchema {
         if let Some(object) = object {
             for key in object.keys() {
                 match self.field(key) {
-                    None => {
-                        problems.unknown(key, format!("the settings schema has no field {key}"))
-                    }
+                    None => problems.add(
+                        key,
+                        SettingsIssueKind::Unknown,
+                        format!("the settings schema has no field {key}"),
+                    ),
                     Some(field) if field.managed.is_some() => {
-                        problems.value(
+                        problems.add(
                             key,
+                            SettingsIssueKind::ManagedFilled,
                             "managed fields are computed by Stackly and cannot be set",
                         );
                     }
                     Some(_) => {}
                 }
             }
-            for field in self.fields.values().filter(|field| field.managed.is_none()) {
+            for field in self.fields().filter(|field| field.managed.is_none()) {
                 let path = field.name.as_str();
                 if let Some(value) = object.get(path) {
                     if let Some(value) = check_field(field, value, path, &mut problems) {
@@ -547,7 +644,11 @@ impl SettingsSchema {
                 } else if let Some(default) = field.default_value() {
                     values.insert(field.name.clone(), default);
                 } else {
-                    problems.value(path, "required field is missing");
+                    problems.add(
+                        path,
+                        SettingsIssueKind::Required,
+                        "required field is missing",
+                    );
                 }
             }
         }
@@ -565,7 +666,7 @@ impl SettingsSchema {
     /// reference, and for arrays either no items or one sample item.
     pub(crate) fn sample_values(&self, with_items: bool) -> SettingsValues {
         let mut values = BTreeMap::new();
-        for field in self.fields.values().filter(|field| field.managed.is_none()) {
+        for field in self.fields().filter(|field| field.managed.is_none()) {
             let value = if field.secret {
                 SettingValue::Secret(
                     SAMPLE_SECRET_REF
@@ -624,36 +725,32 @@ fn sample_scalar(kind: &ScalarKind) -> ScalarValue {
     })
 }
 
-/// Problems with a value: (path, message, unknown key).
+/// Problems with a value: (path, message, kind).
 #[derive(Default)]
 struct Problems {
-    list: Vec<(String, String, bool)>,
+    list: Vec<(String, String, SettingsIssueKind)>,
 }
 
 impl Problems {
-    fn value(&mut self, path: &str, message: impl Into<String>) {
-        self.list.push((path.to_owned(), message.into(), false));
-    }
-
-    fn unknown(&mut self, path: &str, message: impl Into<String>) {
-        self.list.push((path.to_owned(), message.into(), true));
+    fn add(&mut self, path: &str, kind: SettingsIssueKind, message: impl Into<String>) {
+        self.list.push((path.to_owned(), message.into(), kind));
     }
 
     fn into_issues(self, file: &str, code: IssueCode) -> Vec<Issue> {
         self.list
             .into_iter()
-            .map(|(path, message, unknown)| {
+            .map(|(path, message, kind)| {
                 let path = if path.is_empty() {
                     ".".to_owned()
                 } else {
                     path
                 };
-                let code = if unknown {
+                let code = if kind == SettingsIssueKind::Unknown {
                     IssueCode::UnknownSetting
                 } else {
                     code
                 };
-                Issue::new(file, Location::Field(path), code, message)
+                Issue::new(file, Location::Field(path), code, message).with_settings_kind(kind)
             })
             .collect()
     }
@@ -669,7 +766,11 @@ fn check_field(
         return match value.as_str().map(str::parse::<SecretRef>) {
             Some(Ok(reference)) => Some(SettingValue::Secret(reference)),
             _ => {
-                problems.value(path, "a secret field holds a secret reference");
+                problems.add(
+                    path,
+                    SettingsIssueKind::Type,
+                    "a secret field holds a secret reference",
+                );
                 None
             }
         };
@@ -693,17 +794,27 @@ fn check_scalar(
     match kind {
         ScalarKind::Text(rules) => {
             let Some(text) = value.as_str() else {
-                problems.value(path, "must be text");
+                problems.add(path, SettingsIssueKind::Type, "must be text");
                 return None;
             };
             let before = problems.list.len();
             if text.chars().any(is_control) {
-                problems.value(path, "text cannot hold control characters");
+                problems.add(
+                    path,
+                    SettingsIssueKind::ControlCharacters,
+                    "text cannot hold control characters",
+                );
             }
             let len = text.chars().count() as u64;
             if len < rules.min_length || rules.max_length.is_some_and(|max| len > max) {
-                problems.value(
+                let kind = if len < rules.min_length {
+                    SettingsIssueKind::TooShort
+                } else {
+                    SettingsIssueKind::TooLong
+                };
+                problems.add(
                     path,
+                    kind,
                     match rules.max_length {
                         Some(max) => format!("must be {} to {max} characters", rules.min_length),
                         None => format!("must be at least {} characters", rules.min_length),
@@ -713,12 +824,20 @@ fn check_scalar(
             if let Some(values) = &rules.enum_values
                 && !values.iter().any(|allowed| allowed == text)
             {
-                problems.value(path, "must be one of the allowed values");
+                problems.add(
+                    path,
+                    SettingsIssueKind::Enum,
+                    "must be one of the allowed values",
+                );
             }
             if let Some(pattern) = &rules.pattern
                 && !pattern.is_match(text)
             {
-                problems.value(path, "does not match the required pattern");
+                problems.add(
+                    path,
+                    SettingsIssueKind::Pattern,
+                    "does not match the required pattern",
+                );
             }
             (problems.list.len() == before).then(|| ScalarValue::Text(text.to_owned()))
         }
@@ -726,8 +845,9 @@ fn check_scalar(
             let number = match value {
                 serde_json::Value::Number(number) if !number.is_f64() => number.as_i64(),
                 _ => {
-                    problems.value(
+                    problems.add(
                         path,
+                        SettingsIssueKind::Type,
                         "must be a whole number written without a fraction or exponent",
                     );
                     return None;
@@ -738,8 +858,9 @@ fn check_scalar(
                     Some(ScalarValue::Integer(number))
                 }
                 _ => {
-                    problems.value(
+                    problems.add(
                         path,
+                        SettingsIssueKind::OutOfRange,
                         format!("must be between {} and {}", rules.minimum, rules.maximum),
                     );
                     None
@@ -749,7 +870,7 @@ fn check_scalar(
         ScalarKind::Boolean(_) => match value.as_bool() {
             Some(flag) => Some(ScalarValue::Boolean(flag)),
             None => {
-                problems.value(path, "must be true or false");
+                problems.add(path, SettingsIssueKind::Type, "must be true or false");
                 None
             }
         },
@@ -763,14 +884,20 @@ fn check_array(
     problems: &mut Problems,
 ) -> Option<Vec<SettingsItem>> {
     let Some(list) = value.as_array() else {
-        problems.value(path, "must be a list");
+        problems.add(path, SettingsIssueKind::Type, "must be a list");
         return None;
     };
     let before = problems.list.len();
     let len = list.len() as u64;
     if len < rules.min_items || len > rules.max_items {
-        problems.value(
+        let kind = if len < rules.min_items {
+            SettingsIssueKind::TooFewItems
+        } else {
+            SettingsIssueKind::TooManyItems
+        };
+        problems.add(
             path,
+            kind,
             format!("must hold {} to {} items", rules.min_items, rules.max_items),
         );
     }
@@ -779,13 +906,14 @@ fn check_array(
     for (index, item) in list.iter().enumerate() {
         let item_path = format!("{path}[{index}]");
         let Some(object) = item.as_object() else {
-            problems.value(&item_path, "must be an object");
+            problems.add(&item_path, SettingsIssueKind::Type, "must be an object");
             continue;
         };
         for key in object.keys() {
             if !rules.items.keys().any(|name| name.as_str() == key) {
-                problems.unknown(
+                problems.add(
                     &join_path(&item_path, key),
+                    SettingsIssueKind::Unknown,
                     format!("items have no field {key}"),
                 );
             }
@@ -803,7 +931,11 @@ fn check_array(
                     Some(default) => {
                         values.insert(name.clone(), default);
                     }
-                    None => problems.value(&field_path, "required field is missing"),
+                    None => problems.add(
+                        &field_path,
+                        SettingsIssueKind::Required,
+                        "required field is missing",
+                    ),
                 },
             }
         }
@@ -812,8 +944,9 @@ fn check_array(
         {
             let text = value.to_json().to_string();
             if !keys.insert(text) {
-                problems.value(
+                problems.add(
                     &join_path(&item_path, key.as_str()),
+                    SettingsIssueKind::DuplicateKey,
                     "must be unique across items",
                 );
             }
@@ -855,6 +988,7 @@ pub(crate) fn parse_schema(
     }
     let required = check_required(&raw.required, raw.properties.keys(), "required", issues);
     let mut fields = BTreeMap::new();
+    let mut order = Vec::new();
     for (name, field) in raw.properties {
         let path = format!("properties.{name}");
         let Ok(setting) = name.parse::<SettingName>() else {
@@ -872,14 +1006,16 @@ pub(crate) fn parse_schema(
             &path,
             issues,
         ) {
+            order.push(setting.clone());
             fields.insert(setting, field);
         }
     }
-    check_secret_purposes(&fields, issues);
+    check_secret_purposes(&order, &fields, issues);
     (issues_len(issues) == start).then(|| SettingsSchema {
         title: raw.title,
         description: raw.description,
         fields,
+        order,
     })
 }
 
@@ -887,11 +1023,16 @@ pub(crate) fn parse_schema(
 /// names each secret of an instance `local:instance/<id>/<purpose>`
 /// (spec 0011).
 fn check_secret_purposes(
+    order: &[SettingName],
     fields: &BTreeMap<SettingName, SettingField>,
     issues: &mut FileIssues<'_>,
 ) {
     let mut seen: BTreeMap<SecretPurpose, &SettingName> = BTreeMap::new();
-    for field in fields.values().filter(|field| field.is_secret()) {
+    for field in order
+        .iter()
+        .filter_map(|name| fields.get(name))
+        .filter(|field| field.is_secret())
+    {
         // A setting name has at most 32 characters, so its purpose has at
         // most 48 bytes and always derives.
         let Ok(purpose) = SecretPurpose::from_field_name(field.name().as_str()) else {
@@ -1354,7 +1495,7 @@ fn parse_array(
             "minItems cannot exceed maxItems",
         );
     }
-    let item_fields = parse_items(items, &join_path(path, "items"), issues);
+    let (item_fields, item_order) = parse_items(items, &join_path(path, "items"), issues);
     let key = key.and_then(
         |key| match item_fields.iter().find(|(name, _)| name.as_str() == key) {
             Some((name, field)) if !matches!(field.kind, ScalarKind::Boolean(_)) => {
@@ -1375,6 +1516,7 @@ fn parse_array(
     }
     let mut rules = ArrayRules {
         items: item_fields,
+        order: item_order,
         min_items,
         max_items,
         key,
@@ -1399,7 +1541,7 @@ fn parse_items(
     raw: &RawItems,
     path: &str,
     issues: &mut FileIssues<'_>,
-) -> BTreeMap<SettingName, ItemField> {
+) -> (BTreeMap<SettingName, ItemField>, Vec<SettingName>) {
     let rule = IssueCode::SettingsSchemaRule;
     if raw.kind != "object" {
         issues.at(
@@ -1429,6 +1571,7 @@ fn parse_items(
         issues,
     );
     let mut fields = BTreeMap::new();
+    let mut order = Vec::new();
     for (name, field) in &raw.properties {
         let field_path = join_path(&join_path(path, "properties"), name);
         let Ok(setting) = name.parse::<SettingName>() else {
@@ -1446,10 +1589,11 @@ fn parse_items(
             &field_path,
             issues,
         ) {
+            order.push(setting.clone());
             fields.insert(setting, item);
         }
     }
-    fields
+    (fields, order)
 }
 
 fn parse_item_field(

@@ -718,8 +718,13 @@ impl OperationContext {
     }
 
     /// Marks the item not created because it already existed
-    /// (`already_exists`, `short_key_taken`): it is `not_owned` and never
-    /// compensated.
+    /// (`already_exists`, `short_key_taken`), or because it was made but
+    /// holds content the operation cannot prove its own (`data_not_empty`,
+    /// spec 0020): it is `not_owned` and never compensated.
+    ///
+    /// Only an `intended` item can be declined; one that is already
+    /// `created` is refused like `confirm_created` refuses one that is not
+    /// `intended`, so call it before `confirm_created`.
     ///
     /// # Errors
     ///
