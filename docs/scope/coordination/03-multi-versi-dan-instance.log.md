@@ -11,6 +11,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `arc-f24-spec` | `architect` | 24. Instance kedua dari runtime yang sama · spec untuk `Build it` yang ada (spec 0024) | `03-multi-versi-dan-instance.md` | `docs/specs/0024-instance-kedua-runtime-sama/` | `claude/arc-f24-spec-b9ee1e` | `opus-5-5 · xhigh` | `merged` (`d3cc52c` → `002c9fe`) |
 | `arc-f25-spec` | `architect` | 25. PostgreSQL 17 & 18 berdampingan · spec untuk `Build it` yang ada (spec 0025) | `03-multi-versi-dan-instance.md` | `docs/specs/0025-postgresql-17-18-berdampingan/` | `claude/arc-f25-spec-20a08d` | `opus-5-5 · xhigh` | `merged` (`c5ed8ca` → `0afcd9b`) |
+| `dev-f24-m1` | `developer` | 24 · milestone 1 Duplicate draft in core and the fake sentinel (spec 0024 langkah 1 dan 2) | `03-multi-versi-dan-instance.md` | `crates/fake-server/src/`, `crates/fake-server/tests/dummy_server.rs`, `crates/core/src/instance/create/form.rs` (additive), `crates/core/src/instance/duplicate/`, satu baris di `crates/core/src/instance/mod.rs`, visibilitas `load_package` di `supervisor/prepare.rs` dan baris `mod prepare` di `supervisor/mod.rs`, test duplicate baru di `crates/core/tests/`, `verify.md` 0024 Milestone 1 | `-` | `sonnet-5-5 · high` | `kartu` (`task_45beff5d`, menunggu klik user) |
 
 ## Keputusan
 
@@ -32,6 +33,8 @@
 
 | `2026-10-22` | Jawaban lead Scope 02 untuk milestone 1 F25: tidak ada sesi mereka di `supervisor/startup.rs`, `prepare.rs`, `supervisor/mod.rs`; `dev-f19-m3` (spec 0019 langkah 9 dan 10) menambah test penolakan mayor dan unit test preflight `PG_VERSION`, jadi beri tahu lead Scope 02 sebelum langkah 1 mengubah jalur panggil preflight; `codes::supervisor::hint` boleh masuk tanpa kenaikan protokol, di-merge setelah F15 (konflik baris bersebelahan di `codes.rs` diselesaikan yang merge belakangan); langkah 11 spec 0018 milik `dev-f18-m3` (beberapa jam lagi), langkah 4 spec 0025 menunggunya dan memakai ulang fallback-nya; catatan spec 0019 boleh masuk sesi `architect (update)` lead ini asal additive dengan teks AC-11 tetap, hunk 0019 dikirim ke lead Scope 02 sebelum merge; usulan 0020 dan 0021 dari spec 0024 tetap di antrian Scope 02. | `lead` |
 | `2026-10-22` | User menambah dua item ke antrian wave 1, dimulai saat slot kosong (batas 4 sesi menghitung peer Stackly yang busy): `arc-f2425-update` (`opus-5-5 · xhigh`; catatan additive di spec 0004, 0009, 0010, 0011, 0019 dari usulan spec 0024 dan 0025) lalu `dev-f25-m1` (`sonnet-5-5 · high`; langkah 1 dan 3 dulu, langkah 2 setelah `dev-f24-m1` di-merge karena keduanya mengubah visibilitas `supervisor/prepare.rs` dan baris `mod prepare`, langkah 4 setelah langkah 11 spec 0018). Ownership visibilitas `load_package` dan baris `mod prepare` di `supervisor/mod.rs` milik `dev-f24-m1`. | `user` |
+
+| `2026-10-22` | Slot `main` dari lead Scope 02 setelah F15 (`1b30f56`): spec 0024 dan 0025 di-merge (`002c9fe`, `0afcd9b`), Pointer dan milestone fitur 24 dan 25 ditempel (`7d2c3b9`, `d04ebb0`), fitur 24 dan 25 `in-progress` di `index.md`. Graph dokumen dikumpulkan di akhir wave (aturan lintas scope). `start_session` `user_asked` ditolak karena giliran ini dipicu pesan sesi lain, jadi `dev-f24-m1` diajukan sebagai kartu `task_45beff5d` dengan brief lengkap. | `lead` |
 
 ## Blocker terbuka
 
