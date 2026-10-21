@@ -5,6 +5,7 @@
 
 use std::os::unix::fs::symlink;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use std::io::Write;
 
@@ -448,4 +449,25 @@ fn a_rename_out_of_or_into_another_root_is_a_violation() {
     assert_eq!(fs.violations(), 2);
     assert!(inside.exists() && outside.exists());
     assert!(fs.mutations().is_empty());
+}
+
+#[test]
+fn a_delay_slows_every_call_of_one_operation_until_it_is_removed() {
+    let (root, fs) = fake();
+    fs.set_delay(FsOp::VolumeSpace, Duration::from_millis(150));
+
+    let started = Instant::now();
+    fs.volume_space(root.path()).unwrap();
+    let delayed = started.elapsed();
+    let started = Instant::now();
+    fs.symlink_metadata(root.path()).unwrap();
+    let other = started.elapsed();
+    fs.set_delay(FsOp::VolumeSpace, Duration::ZERO);
+    let started = Instant::now();
+    fs.volume_space(root.path()).unwrap();
+    let cleared = started.elapsed();
+
+    assert!(delayed >= Duration::from_millis(150), "{delayed:?}");
+    assert!(other < Duration::from_millis(150), "{other:?}");
+    assert!(cleared < Duration::from_millis(150), "{cleared:?}");
 }
