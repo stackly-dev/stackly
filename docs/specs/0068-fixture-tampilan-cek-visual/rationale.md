@@ -466,7 +466,7 @@ Update `/architect` sesi `arc-f1368-0015`. Sumbernya baris 0068 di *Usulan updat
 | --- | --- | --- |
 | Batas dengan spec lain | baris spec 0015 untuk `AgentBanner`, model, dan kedua fake | spec 0015 *GUI* |
 | Model data | `FixtureContract`, `FixtureAgent`, `FixtureClock.secondsAgo(_:)`, `FixtureScenario.agent`, `AgentBannerMatrix`; `DaemonStatusMatrix` tidak berubah | spec 0015 paragraf **Fixture**; K14 di bawah; merge `dc88025` |
-| Katalog skenario | agent `.fresh` di setiap skenario dan banner jendela `not_registered` untuk `daemon-offline` dan `daemon-unreachable`; *Skenario agent* (usulan K14) | spec 0015 baris 0068 |
+| Katalog skenario | agent `.fresh` di setiap skenario dan banner jendela `not_registered` untuk `daemon-offline` dan `daemon-unreachable`; *Skenario agent* (K14) | spec 0015 baris 0068 |
 | Nilai skenario | `HandshakeAccepted` dan `DaemonInfo` dari `FixtureContract` (dulu tertulis `ContractInfo`); nilai agent dan Command Line di runtime fixture | kode `FixtureBuilders.swift` di `main`; spec 0015 paragraf **Fixture** |
 | Kasus yang menunggu DTO | fitur pemilik memakai `HandshakeAccepted.fixture` dan `DaemonInfo.fixture`, tidak pernah `ContractInfo` | butir log lead 2 |
 | *Kontrak fixture* (subbagian baru) | aturan pin 1.8, `pinningFixtureContract()`, dan test penjaga nya | merge `dc88025` |
@@ -478,7 +478,7 @@ Update `/architect` sesi `arc-f1368-0015`. Sumbernya baris 0068 di *Usulan updat
 | Usulan update untuk spec lain | butir spec 0015 (seam fake, launch record, jam, `bundledTool`, teks langkah 11 dan 12, selisih 10 dan 12 detik) dan spec 0067 (diterapkan) | turunan |
 | Follow-up | tiga butir dicentang dengan bukti; dua butir baru | `c4c0bfe`, `9a02771`, `c6f6ae7` |
 
-### Keputusan K14: skenario per state agent (usulan, menunggu keputusan lead)
+### Keputusan K14: skenario per state agent (Option A, dipilih user lewat lead 2026-10-22)
 
 Spec 0015 menyerahkan skenario tambahan per state agent untuk snapshot dan XCUITest ke spec ini. Yang harus diputuskan: state mana yang jadi skenario runtime, apa yang masuk snapshot dan apa yang masuk XCUITest, siapa yang membangun, dan bagaimana ambang 15 detik dibuat deterministik.
 
@@ -509,7 +509,7 @@ Fakta yang membatasi pilihan: `AgentBanner.content(_:now:)` adalah fungsi murni 
 
 ### Teks AC
 
-Tidak ada teks AC yang diubah. AC-2 tetap benar karena ia memetakan skenario ke presence dan `presentation.banner`, yang tidak berubah oleh fitur 15. AC-3 tetap benar karena fake agent dan Command Line ada di memori. AC-8 menyebut suite yang dibangun spec ini, dan suite agent dibangun fitur 15 sesuai *Key invariants*. AC-14 dibaca dengan tabel *Tampilan status daemon* spec 0013 beserta butir *Tambahan fase 02* di bawah nya (yang sejak AC-9 spec 0013 menunjuk tabel spec 0015 untuk kedua kode), dan dengan cara mencari banner seperti yang dibangun (label `daemonBanner.container`, tombol lewat judul). Karena teks AC-14 masih menyebut `daemonBanner.title` dan `daemonBanner.action.*`, yang tidak dibangun, satu klarifikasi teks AC-14 yang opsional dikirim ke lead.
+Commit pertama (`a6f17d3`) tidak mengubah teks AC; AC-14 diubah sesudahnya atas persetujuan user (lihat *Keputusan user* di bawah). AC-2 tetap benar karena ia memetakan skenario ke presence dan `presentation.banner`, yang tidak berubah oleh fitur 15. AC-3 tetap benar karena fake agent dan Command Line ada di memori. AC-8 menyebut suite yang dibangun spec ini, dan suite agent dibangun fitur 15 sesuai *Key invariants*. AC-14 dibaca dengan tabel *Tampilan status daemon* spec 0013 beserta butir *Tambahan fase 02* di bawah nya (yang sejak AC-9 spec 0013 menunjuk tabel spec 0015 untuk kedua kode), dan dengan cara mencari banner seperti yang dibangun (label `daemonBanner.container`, tombol lewat judul). Karena teks AC-14 masih menyebut `daemonBanner.title` dan `daemonBanner.action.*`, yang tidak dibangun, satu klarifikasi teks AC-14 yang opsional dikirim ke lead, dan user menyetujuinya.
 
 **Keputusan kecil yang diambil update ini.**
 
@@ -521,3 +521,11 @@ Tidak ada teks AC yang diubah. AC-2 tetap benar karena ia memetakan skenario ke 
 **Cross check update ini (2026-10-22, model lain: Sonnet 5.5, baca saja).** Diperbaiki langsung: `ShellBootstrap.fixture` membangun model agent dan Command Line sendiri tanpa `assemble`; nilai awal yang diisi sinkron adalah hasil probe (bukan hanya assessment), supaya `unavailableDetail` ikut terisi di `agent-unavailable`; kalimat "baris dengan awalan waktu hanya ada di matriks" bertentangan dengan `daemon-offline` dan diperbaiki; bagian yang bergantung pada K14 diberi tanda *(K14)*; *Kontrak fixture* tidak lagi mengklaim kenaikan protokol tidak mengubah apa pun, karena pesan banner `majorMismatch` sisi app masih membaca `ContractInfo` (belum ada referensi yang menampilkannya). Dikirim ke lead sebagai gap keputusan bersama rekomendasi: nilai Command Line fixture yang tetap (home, halaman man, baris yang tampil), `afterRegister` untuk `agent-unavailable` dan skenario untuk `diagnostics-agent-disabled`, perilaku tombol `AgentBannerMatrix` tanpa model, dan butir jam dan teardown yang dicatat di rationale spec 0013.
 
 **Keputusan lead atas gap cross check (2026-10-22): "apply all".** Yang ditulis di spec ini: (7) nilai Command Line fixture yang tetap (home `/fixture/home`, status `not_installed` tanpa link, `bundledTool` di bundle fake, satu halaman man `stackly.1` tanpa link), `afterRegister` `agent-unavailable` sama dengan `.fresh`, dan `diagnostics-agent-disabled` dari skenario `agent-disabled`; (8) tombol `AgentBannerMatrix` tanpa model tampil aktif tanpa aksi. K14 dan klarifikasi teks AC-14 masih menunggu jawaban user lewat lead; butir 7 dan 8 yang menyangkut skenario agent ikut berubah kalau K14 berubah.
+
+**Keputusan user (2026-10-22, lewat lead).** K14 Option A dipilih: `AgentBannerMatrix` ditambah lima skenario runtime, XCUITest per skenario ditambah tiga alur, dan `diagnostics-agent-disabled`, dibangun langkah 11 dan 12 milestone 3 fitur 15. Tanda "menunggu keputusan" dihapus dari spec, dan tanda *(K14)* tetap sebagai penunjuk asal keputusan. Klarifikasi teks AC-14 disetujui persis seperti usulan dan diterapkan; ID tetap.
+
+| AC | Teks lama (bagian yang berubah) | Teks baru |
+| --- | --- | --- |
+| AC-14 | "label VoiceOver `daemonFooter.status` ("Status: <teks footer>") dan judul `daemonBanner.title` sesuai tabel spec 0013, atau tanpa banner bila baris itu tanpa banner; aksi banner (`daemonBanner.action.reconnect`, `daemonBanner.action.openDiagnostics`) ada dan aktif sesuai tabel;" | "label VoiceOver `daemonFooter.status` ("Status: <teks footer>") dan judul banner (label `daemonBanner.container`) sesuai tabel spec 0013, atau tanpa banner bila baris itu tanpa banner, dan mulai langkah 11 milestone 3 fitur 15 sesuai baris *Banner per state* spec 0015 untuk skenario dengan `ipc.endpoint_missing` atau `ipc.connection_refused`; setiap aksi banner (tombol dengan judul nya di dalam `daemonBanner.container`) ada dan aktif sesuai baris itu;" |
+
+Alasannya: `daemonBanner.title` dan `daemonBanner.action.*` tidak pernah dibangun (XCUITest mencari banner lewat label `daemonBanner.container` dan tombol lewat judul), dan setelah langkah 11 skenario dengan kedua kode menampilkan baris agent spec 0015, misalnya Turn On di `daemon-offline`.

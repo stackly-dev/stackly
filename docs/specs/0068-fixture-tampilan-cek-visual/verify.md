@@ -114,7 +114,7 @@ _Mengaktifkan Automation Mode adalah langkah user; sampai itu dilakukan semua la
 
 ## Setelah langkah 11 dan 12 milestone 3 fitur 15 (ditambah 2026-10-22, `NOT_RUN`)
 
-_Langkah dari update spec 2026-10-22 (*Skenario agent*, menunggu keputusan lead atas K14). Jalankan setelah langkah 11 dan 12 milestone 3 fitur 15 di merge. Tiga baris lama menjadi usang setelah langkah 11: `FixtureScenarioTests` "16 nama skenario tetap" (menjadi 21), harapan banner `daemon-offline` dan `daemon-unreachable` di `ShellUITests` (menjadi baris `not_registered` spec 0015), dan jumlah method `ShellUITests` di langkah run UI test milestone 3._
+_Langkah dari update spec 2026-10-22 (*Skenario agent*, K14 Option A dipilih user 2026-10-22). Jalankan setelah langkah 11 dan 12 milestone 3 fitur 15 di merge. Tiga baris lama menjadi usang setelah langkah 11: `FixtureScenarioTests` "16 nama skenario tetap" (menjadi 21), harapan banner `daemon-offline` dan `daemon-unreachable` di `ShellUITests` (menjadi baris `not_registered` spec 0015), dan jumlah method `ShellUITests` di langkah run UI test milestone 3._
 
 ### Commands
 
