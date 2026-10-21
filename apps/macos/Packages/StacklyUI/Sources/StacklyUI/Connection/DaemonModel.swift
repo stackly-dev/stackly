@@ -339,6 +339,9 @@ public final class DaemonModel {
                 manualRetry = false
             }
             lastDaemon = daemon
+            // The error describes a failed attempt, so a handshake that
+            // succeeded ends it and the hint that came with it.
+            lastError = nil
             inputs.stable = state
             // The heartbeat brings the latest health, so recovery mode
             // follows it in both directions.

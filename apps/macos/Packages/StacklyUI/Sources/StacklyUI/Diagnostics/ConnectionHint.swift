@@ -44,7 +44,13 @@ nonisolated public enum ConnectionHint {
     private static func statusHint(_ status: ShellStatus) -> String? {
         switch status {
         case .refreshing(let previous):
-            statusHint(previous)
+            // A refresh runs on an open connection, so the hint of a failure that
+            // the new connection ended (unreachable, untrusted, incompatible,
+            // misconfigured) no longer applies.
+            switch previous {
+            case .recovery, .refreshing: statusHint(previous)
+            default: nil
+            }
         case .incompatible:
             "Install matching versions of Stackly and stacklyd."
         case .untrusted(let cause, _):
