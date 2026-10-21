@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15bc9-0e8b-7480-b305-9ff6392a9a55",
+  "covers": [
+    "AC-024",
+    "REQ-024"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 step 16: the Instances page follows a real stacklyd",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "With a real stacklyd on a seeded root, the Instances page lists one row per instance sorted by name with provider, version, and a StatusLabel, the subtitle and sidebar badge show the same count, stackly instance start changes one row's status without reloading the list, and each row is one VoiceOver element.",
+  "actual": "Instances showed three rows in the order alpha, orders-db, zeta (the creation order was zeta, alpha, orders-db), each row one AX element named `alpha, Fake 0.1.0, Status: Stopped` (name, provider and version, status), page title `Instances – 3 instances`, subtitle `3 instances`, and the sidebar badge `3 instances`, the same count. After `stackly instance start` the same rows read `alpha, Fake 0.1.0, Status: Running`, `orders-db ... Status: Stopped`, `zeta ... Status: Stopped` 1 s after the command returned, still three rows, and the daemon debug log holds exactly one `instance.list` (from the GUI, 00:03:38Z, the first load) and none after the `instance.start` at 00:04:24Z, so the row changed through events alone. Not run: the removed (retained) instance leaves the list, badge, and subtitle, because the CLI has no delete command yet (feature 54); the rule is locked from fixtures by InstanceStoreTests (23 tests, retained never enters the store, leaves a tombstone, event, snapshot, fetchOne, and fetchPage) and ProvisionalInstanceListTests (badge and subtitle skip retained). Differences from the written step: the fake provider is `Fake 0.1.0`, not `PostgreSQL 17.2.0`, because the seed has only the fake runtime (a real runtime comes with feature 18). VoiceOver itself was not run (check 6); the per row AX tree shows one element per row, the single label that VoiceOver reads. The footer reads `stacklyd degraded` only because this daemon has no app bundle catalog (`catalog: unavailable` in `stackly daemon status`).",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 1397658 (main) with only the evidence records of this check added, `CARGO_INCREMENTAL=0 cargo build -p stacklyd -p stackly-cli -p stackly-fake-server`, `cargo build -p stacklyd --example skeleton_seed`, and `cargo xtask build-app` (Debug); the root is a new private folder in the session scratchpad (mode 0700), seeded with `skeleton_seed --root <R>`",
+    "Claude Code drove Stackly through the macOS accessibility API (a small Swift AXUIElement dumper, axdump.swift.txt in this folder (the Swift source, renamed so the repo swift-format hook skips it), to read the tree and to select a sidebar row) and captured only the Stackly window with `screencapture -l <window id>`; no keystroke is sent, so this record does not cover the keyboard (check 6)",
+    "start `STACKLY_ROOT=<R> STACKLY_LOG=debug stacklyd`, create three fake instances with `STACKLY_ROOT=<R> stackly instance create <name> --runtime <id> --provider testing/fake --revision 0.3.0 --wait` in the order zeta, alpha, orders-db (a name with a capital letter is refused by the daemon), then open the Debug app with `open -n --env STACKLY_ROOT=<R> Stackly.app` and select Instances in the sidebar",
+    "read the AX tree and capture the window (step16-1-stopped.png, ax-instances-1.txt)",
+    "run `STACKLY_ROOT=<R> stackly instance start 01a15bc5-2396-7385-b1e8-9ca6768a426c --wait` (alpha) at 00:04:24Z, wait 2 s, read the AX tree again and capture the window (step16-2-alpha-running.png), then count the `instance.list` requests in the daemon debug log (stacklyd-debug.log)"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5) as the checker of the verify session chk-f13-m4, from the screenshots and logs it took; the user has not reviewed this record",
+  "startedAt": "2026-10-21T00:07:45.547117Z",
+  "finishedAt": "2026-10-21T00:08:30.000000Z",
+  "evidencePath": "evidence/manual/files/01a15bc9-0e8b-7480-b305-9ff6392a9a55/",
+  "context": {
+    "sourceCommit": "13976589beff19765b53551233ddce3113e994d7",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

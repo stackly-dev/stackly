@@ -1,0 +1,26 @@
+import ApplicationServices
+import AppKit
+import Foundation
+
+func attr(_ e: AXUIElement, _ a: String) -> AnyObject? {
+    var v: CFTypeRef?
+    return AXUIElementCopyAttributeValue(e, a as CFString, &v) == .success ? (v as AnyObject?) : nil
+}
+func dump(_ e: AXUIElement, _ depth: Int, _ maxDepth: Int) {
+    let role = attr(e, "AXRole") as? String ?? "?"
+    let sub = attr(e, "AXSubrole") as? String ?? ""
+    let title = attr(e, "AXTitle") as? String ?? ""
+    let desc = attr(e, "AXDescription") as? String ?? ""
+    let val = attr(e, "AXValue").map { "\($0)" } ?? ""
+    let help = attr(e, "AXHelp") as? String ?? ""
+    let enabled = attr(e, "AXEnabled").map { "\($0)" } ?? ""
+    print(String(repeating: "  ", count: depth) + "\(role)\(sub.isEmpty ? "" : "/" + sub) title=\(title) desc=\(desc) value=\(val) enabled=\(enabled)\(help.isEmpty ? "" : " help=" + help)")
+    if depth < maxDepth, let kids = attr(e, "AXChildren") as? [AXUIElement] {
+        for k in kids { dump(k, depth + 1, maxDepth) }
+    }
+}
+let args = CommandLine.arguments
+guard let app = NSWorkspace.shared.runningApplications.first(where: { $0.localizedName == "Stackly" && $0.bundleIdentifier?.contains("stackly") ?? true }) else { print("no app"); exit(1) }
+let ax = AXUIElementCreateApplication(app.processIdentifier)
+guard let wins = attr(ax, "AXWindows") as? [AXUIElement] else { print("no windows (AX trusted: \(AXIsProcessTrusted()))"); exit(1) }
+for w in wins { dump(w, 0, 14) }

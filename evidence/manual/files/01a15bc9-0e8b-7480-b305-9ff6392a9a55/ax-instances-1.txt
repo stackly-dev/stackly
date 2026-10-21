@@ -1,0 +1,64 @@
+AXWindow/AXStandardWindow title=Instances – 3 instances desc= value= enabled=
+  AXGroup/AXHostingView title= desc= value= enabled=
+    AXSplitGroup title= desc= value= enabled=
+      AXGroup/AXHostingView title= desc= value= enabled=
+        AXScrollArea title= desc= value= enabled=
+          AXOutline title= desc=Sidebar value= enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXGroup/AXHostingView title= desc= value= enabled=
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXStaticText title= desc= value=Overview enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXStaticText title= desc=Instances value=3 instances enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXStaticText title= desc= value=Environments enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXGroup/AXHostingView title= desc= value= enabled=
+                  AXHeading title= desc=Library value= enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXStaticText title= desc= value=Catalog enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXStaticText title= desc= value=Runtimes enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXGroup/AXHostingView title= desc= value= enabled=
+                  AXHeading title= desc=System value= enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXStaticText title= desc= value=Operations enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXStaticText title= desc= value=Diagnostics enabled=1
+            AXColumn title= desc= value= enabled=
+        AXStaticText title= desc= value=Status: stacklyd degraded enabled=1
+        AXButton title= desc=Settings value= enabled=1 help=Settings (⌘,)
+      AXSplitter title= desc= value=260 enabled=0
+      AXGroup/AXHostingView title= desc= value= enabled=
+        AXScrollArea title= desc= value= enabled=
+          AXOutline title= desc= value= enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXUnknown title= desc=alpha, Fake 0.1.0, Status: Stopped value= enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXUnknown title= desc=orders-db, Fake 0.1.0, Status: Stopped value= enabled=1
+            AXRow/AXOutlineRow title= desc= value= enabled=
+              AXCell title= desc= value= enabled=1
+                AXUnknown title= desc=zeta, Fake 0.1.0, Status: Stopped value= enabled=1
+            AXColumn title= desc= value= enabled=
+  AXToolbar title= desc= value= enabled=
+    AXButton title= desc=Hide Sidebar value= enabled=1 help=Hide Sidebar
+  AXButton/AXCloseButton title= desc= value= enabled=1
+  AXButton/AXFullScreenButton title= desc= value= enabled=1 help=this button also has an action to zoom the window
+    AXGroup title= desc= value= enabled=
+      AXGroup title= desc= value= enabled=
+  AXButton/AXMinimizeButton title= desc= value= enabled=1
+  AXStaticText title= desc= value=Instances enabled=1
+  AXStaticText title= desc= value=3 instances enabled=1
