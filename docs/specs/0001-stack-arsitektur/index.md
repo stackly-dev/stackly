@@ -211,7 +211,7 @@ Hal berikut sengaja tidak diputuskan di sini. Masing masing dimiliki fitur yang 
 | Transport IPC di Swift dan shell aplikasi | Fitur 13 | [spec 0013](../0013-app-shell-swift-client/index.md): socket POSIX dan DispatchIO tanpa dependency pihak ketiga, scene `Window` utama |
 | Memasukkan `stacklyd` dan `stackly` ke `.app`, signing, SMAppService, bundle ID helper | Fitur 15 | [spec 0015](../0015-background-agent-cli-install/index.md) (ditambah fase 02, 2026-10-20): `stacklyd` dan `stackly` di `Contents/MacOS`, LaunchAgent lewat `SMAppService.agent`, assembly dan signing development di `cargo xtask build-app` (ad hoc default, `--identity`), hardened runtime tanpa entitlement, identifier sementara di `stackly-platform::bundle` |
 | HTTP client untuk download dan ekstraksi archive | Fitur 18 | [spec 0018](../0018-install-runtime-managed/index.md) (ditambah fase 02, 2026-10-20): `ureq` 3 (rustls, `rustls-platform-verifier`, tanpa dekompresi) di port `Fetcher`; extractor sendiri di atas `tar`, `flate2`, dan `zip`; Mach-O lewat `object` |
-| Library snapshot test Swift | Fitur 68 | belum |
+| Library snapshot test Swift | Fitur 68 | [spec 0068](../0068-fixture-tampilan-cek-visual/index.md) (2026-10-21): tanpa library pihak ketiga; helper sendiri di test `StacklyUI` (`NSHostingView` plus `cacheDisplay`, skala 1x dikunci, banding piksel persis, referensi PNG di git), UI test XCUITest di target `StacklyAppUITests` |
 
 ## Consequences
 
