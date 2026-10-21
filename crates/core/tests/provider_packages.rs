@@ -12,11 +12,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
-    EnvValue, InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError,
-    PreflightOutcome, ReloadAction, ResolvedEndpoint, RuntimeContext, Segment, ValidatedPackage,
-    read_package,
+    Command, EnvValue, InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError,
+    PreflightOutcome, ProbeSpec, ReloadAction, ResolvedEndpoint, RunSpec, RuntimeContext, Segment,
+    Stdin, ValidatedPackage, read_package,
 };
-use stackly_core::secret::ResolvedSecrets;
+use stackly_core::secret::{ResolvedSecrets, SecretFieldRule};
 use stackly_domain::{
     Capability, ExactVersion, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
 };
@@ -43,6 +43,10 @@ fn fake_dir() -> PathBuf {
 
 fn nats_dir() -> PathBuf {
     repo_root().join("providers/nats")
+}
+
+fn postgresql_dir() -> PathBuf {
+    repo_root().join("providers/postgresql")
 }
 
 fn traefik_dir() -> PathBuf {
@@ -835,5 +839,253 @@ fn a_traefik_reload_rewrites_only_routes_and_verifies_readiness() {
             |step| matches!(step, InitStep::EnsureDirectories(dirs) if dirs.contains(&dynamic))
         ),
         "the reload plan creates config/dynamic before writing routes"
+    );
+}
+
+fn postgresql_settings() -> serde_json::Value {
+    serde_json::json!({ "superuserPassword": GOLDEN_SECRET_REF })
+}
+
+#[test]
+fn the_postgresql_package_reads_without_writes_and_validates() {
+    let ev = evidence!(
+        covers = ["REQ-035", "REQ-029"],
+        kind = Kind::Fixture,
+        expected = "providers/postgresql copied into a test root reads through the Filesystem port without a write, validates, and holds two available artifacts",
+    );
+    let package = validated(&postgresql_dir());
+
+    let key = package.key();
+    assert_eq!(key.provider().as_str(), "official/postgresql");
+    assert_eq!(key.revision().as_str(), "1.0.0");
+    assert_eq!(package.software().as_str(), "postgresql");
+    assert_eq!(
+        package
+            .provider_revision()
+            .capabilities()
+            .iter()
+            .collect::<Vec<_>>(),
+        [
+            Capability::Reload,
+            Capability::ColdBackup,
+            Capability::MultiInstance,
+            Capability::Persistence
+        ]
+    );
+    let versions: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("versions.json")
+            .expect("every package has versions.json"),
+    )
+    .expect("versions.json is JSON");
+    let available: Vec<(&str, &str)> = versions["artifacts"]
+        .as_array()
+        .expect("artifacts is a list")
+        .iter()
+        .filter(|artifact| artifact["status"] == "available")
+        .map(|artifact| {
+            (
+                artifact["id"].as_str().expect("id is text"),
+                artifact["line"].as_str().expect("line is text"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        available,
+        [
+            ("postgresql-18.6-r2-macos-aarch64", "18"),
+            ("postgresql-17.11-r2-macos-aarch64", "17"),
+        ]
+    );
+    ev.pass();
+}
+
+#[test]
+fn postgresql_plans_match_the_golden_files() {
+    let ev = evidence!(
+        covers = ["REQ-035"],
+        kind = Kind::Fixture,
+        expected = "the three PostgreSQL configs and the init, run, and reload plans of the golden context equal their golden files byte for byte",
+    );
+    let package = validated(&postgresql_dir());
+    let context = golden_context(&package, postgresql_settings());
+
+    let init = package
+        .init_plan(&context)
+        .expect("the postgresql init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the postgresql run plan builds");
+    let reload = package
+        .reload_plan(&context)
+        .expect("the postgresql reload plan builds");
+
+    assert_golden("postgresql", "init.json", &pretty(&init));
+    assert_golden("postgresql", "run.json", &pretty(&run));
+    assert_golden("postgresql", "reload.json", &pretty(&reload));
+    let renders = rendered(&package, &init.steps);
+    assert_eq!(renders.len(), 3);
+    for (config, text) in renders {
+        assert_golden("postgresql", &format!("render-{config}.txt"), &text);
+    }
+    ev.pass();
+}
+
+#[test]
+fn postgresql_programs_are_runtime_executables_and_no_argument_is_the_superuser_name() {
+    let ev = evidence!(
+        covers = ["REQ-035"],
+        kind = Kind::Fixture,
+        expected = "every program of the init, run, and probe plans is a bin/ executable inside the instance runtime root, and no argument equals postgres or ends in =postgres",
+    );
+    let package = validated(&postgresql_dir());
+    let context = golden_context(&package, postgresql_settings());
+    let init = package
+        .init_plan(&context)
+        .expect("the postgresql init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the postgresql run plan builds");
+    let probe = match &run.readiness.probe {
+        ProbeSpec::Exec(spec) => spec,
+        other => panic!("readiness should be an exec probe, got {other:?}"),
+    };
+
+    let mut commands: Vec<&Command> = init
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            InitStep::Run(spec) => Some(&spec.command),
+            _ => None,
+        })
+        .collect();
+    commands.push(&run.spawn);
+    commands.push(&probe.command);
+    let relatives: Vec<_> = commands
+        .iter()
+        .map(|command| command.program.relative.to_str().expect("UTF-8 path"))
+        .collect();
+    assert_eq!(
+        relatives,
+        ["bin/initdb", "bin/postgres", "bin/postgres", "bin/psql"]
+    );
+    for command in commands {
+        assert_eq!(command.program.runtime_root, context.runtime.root);
+        for arg in &command.args {
+            assert!(
+                arg != "postgres" && !arg.ends_with("=postgres"),
+                "{arg} would trip the argv secret check for a password of postgres"
+            );
+        }
+    }
+    ev.pass();
+}
+
+#[test]
+fn the_postgresql_readiness_role_script_is_literal_stdin_text() {
+    let ev = evidence!(
+        covers = ["REQ-035"],
+        kind = Kind::Fixture,
+        expected = "the single user step of init carries the role script as Stdin::Text, one statement per line",
+    );
+    let package = validated(&postgresql_dir());
+    let context = golden_context(&package, postgresql_settings());
+
+    let init = package
+        .init_plan(&context)
+        .expect("the postgresql init plan builds");
+
+    let texts: Vec<&str> = init
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            InitStep::Run(RunSpec {
+                stdin: Stdin::Text(text),
+                ..
+            }) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    let [text] = texts.as_slice() else {
+        panic!("exactly one step has text stdin: {texts:?}");
+    };
+    assert_eq!(text.lines().count(), 4);
+    assert!(text.lines().all(|line| line.ends_with(';')), "{text}");
+    assert!(text.starts_with("CREATE ROLE stackly_readiness WITH LOGIN NOSUPERUSER"));
+    ev.pass();
+}
+
+#[test]
+fn the_postgresql_hba_file_has_no_trust_and_the_secret_file_is_cleaned_up() {
+    let package = validated(&postgresql_dir());
+    let context = golden_context(&package, postgresql_settings());
+
+    let init = package
+        .init_plan(&context)
+        .expect("the postgresql init plan builds");
+
+    let renders = rendered(&package, &init.steps);
+    let (_, hba) = renders
+        .iter()
+        .find(|(config, _)| config == "pgHba")
+        .expect("init renders pg_hba.conf");
+    assert!(
+        !hba.lines()
+            .filter(|line| !line.trim_start().starts_with('#'))
+            .any(|line| line.split_whitespace().any(|word| word == "trust")),
+        "{hba}"
+    );
+    assert!(
+        init.cleanup
+            .contains(&context.paths.run.join("secrets").join("superuser-password")),
+        "{:?}",
+        init.cleanup
+    );
+}
+
+#[test]
+fn the_postgresql_superuser_password_is_a_printable_only_secret_field() {
+    let package = validated(&postgresql_dir());
+    let field = package
+        .settings_schema()
+        .field("superuserPassword")
+        .expect("the package has a superuser password");
+
+    assert!(field.is_secret());
+    assert!(field.is_printable_only());
+    let rule = SecretFieldRule::from_setting(field).expect("a secret text field has a rule");
+    assert!(rule.printable_only);
+    assert_eq!(rule.min_length, 8);
+    assert_eq!(rule.max_length, Some(128));
+}
+
+#[test]
+fn a_postgresql_text_setting_value_is_written_as_a_quoted_conf_value() {
+    let package = validated(&postgresql_dir());
+    let context = golden_context(
+        &package,
+        serde_json::json!({
+            "superuserPassword": GOLDEN_SECRET_REF,
+            "logStatement": "ddl",
+            "maxConnections": 7,
+            "logMinDurationStatementMs": -1,
+        }),
+    );
+
+    let init = package
+        .init_plan(&context)
+        .expect("the postgresql init plan builds");
+
+    let (_, conf) = rendered(&package, &init.steps)
+        .into_iter()
+        .find(|(config, _)| config == "postgresqlConf")
+        .expect("init renders postgresql.conf");
+    assert!(conf.contains("\nlog_statement = 'ddl'\n"), "{conf}");
+    assert!(conf.contains("\nmax_connections = 7\n"), "{conf}");
+    assert!(conf.contains("\nshared_buffers = 128MB\n"), "{conf}");
+    assert!(
+        conf.contains("\nlog_min_duration_statement = -1\n"),
+        "{conf}"
     );
 }
