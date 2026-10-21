@@ -268,6 +268,64 @@ struct SourceRuleTests {
         #expect(file.lineNumbers(matching: "STACKLY_UI_", outsideIfDebug: true) == [1, 8, 10])
     }
 
+    // MARK: - Every page has a snapshot suite (spec 0068 AC-7)
+
+    /// The names of the top level `struct <Name>Page: View` declarations in `lines` that are
+    /// not `private` or `fileprivate`.
+    nonisolated static func pageNames(in lines: [String]) -> [String] {
+        let declaration =
+            #/^\s*(?:(?:public|internal|package|final)\s+)*struct\s+(\w+Page)\s*:\s*View\b/#
+        return lines.compactMap { line in
+            line.firstMatch(of: declaration).map { String($0.output.1) }
+        }
+    }
+
+    /// The pages in `pages` that no line of `testLines` names as a whole word.
+    nonisolated static func unsnapshotted(pages: [String], testLines: [String]) throws -> [String] {
+        try pages.filter { page in
+            let word = try Regex("\\b\(page)\\b").wordBoundaryKind(.simple)
+            return testLines.contains { $0.contains(word) } == false
+        }
+    }
+
+    @Test func everyPageOutsideTheGalleryHasASnapshotSuite() throws {
+        let sources = try SourceTree.swiftFiles().filter {
+            $0.path.hasPrefix(Self.stacklyUI)
+                && $0.path.hasPrefix(Self.stacklyUI + "Gallery/") == false
+        }
+        let pages = sources.flatMap { Self.pageNames(in: $0.codeLines) }
+        #expect(pages.isEmpty == false, "no page found; the scan is broken")
+        let testFolder = "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests"
+        let testLines = try SourceTree.files(under: testFolder)
+            .filter { $0.hasSuffix(".swift") }
+            .flatMap { path in
+                SourceFile(
+                    path: path,
+                    text: try String(contentsOf: SourceTree.url(of: path), encoding: .utf8)
+                ).codeLines
+            }
+        for page in try Self.unsnapshotted(pages: pages, testLines: testLines) {
+            Issue.record("\(page) has no snapshot suite: name it in a file under \(testFolder)")
+        }
+    }
+
+    @Test func thePageScanSkipsPrivatePagesAndNamesOnlyWholeWords() throws {
+        let lines = [
+            "public struct UnbuiltPage: View {",
+            "private struct UnbuiltScrollPage: View {",
+            "    fileprivate struct HiddenPage: View {",
+            "struct DiagnosticsPage: View {",
+            "final class NotAPage: View {",
+            "struct Overview: View {",
+            "struct PageHelper: View {",
+        ]
+        #expect(Self.pageNames(in: lines) == ["UnbuiltPage", "DiagnosticsPage"])
+        let tests = ["UnbuiltPage(section: .overview)", "DiagnosticsPageHelper()"]
+        #expect(
+            try Self.unsnapshotted(pages: ["UnbuiltPage", "DiagnosticsPage"], testLines: tests)
+                == ["DiagnosticsPage"])
+    }
+
     @Test func lineCommentsAreSkippedButStringsAreKept() {
         #expect(SourceFile.removingLineComment(from: "a // .secondary") == "a ")
         #expect(SourceFile.removingLineComment(from: "/// doc .secondary") == "")

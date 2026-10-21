@@ -23,6 +23,8 @@ let package = Package(
                 "StacklyUI",
                 .product(name: "StacklyTestSupport", package: "swift"),
             ],
+            // Reference PNGs of the snapshot suites (spec 0068); not test sources.
+            exclude: ["SnapshotTests/__Snapshots__"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
     ]
