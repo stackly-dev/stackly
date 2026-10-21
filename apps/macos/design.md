@@ -498,15 +498,84 @@ Feedback is the result of something the person did, shown as an opaque card unde
 
 ### Sheet
 
-Filled by milestone 2.
+Checked on macOS 27.0.1 with a probe sheet and real key events (spec 0067 rationale, *Temuan langkah 9*): a footer drawn inside the sheet works, so the footer stays explicit and does not move to toolbar placements.
+
+- **Return** runs the primary action with focus in a `TextField` and in a `Toggle`; a destructive primary action has no shortcut and a disabled one does not run.
+- **Escape** closes a sheet on its own and does not run the Cancel action, even with `.keyboardShortcut(.cancelAction)`. With `.interactiveDismissDisabled()` Escape runs the Cancel action once and the sheet stays open unless that action closes it. A sheet therefore always sets it, because Cancel may mean something other than closing.
+- A confirmation from inside a sheet shows as a second sheet on top of it, and Escape there cancels only the confirmation.
+- `.presentationBackground` draws the sheet opaque, with nothing of the window behind it showing through.
+- Not checked (manual): Tab and Space with Keyboard navigation on, and VoiceOver.
+
+`StacklySheet(title:subtitle:tile:primary:cancel:minWidth:content:)` draws the opaque `surfaceWindow` background, a header, a body, and a fixed footer.
+
+- **Header.** An optional `ProviderTile` at `mediumSize` (40 pt), the title in `.title3.weight(.semibold)`, and the subtitle in `.callout` `textSecondary`. Padding: 20 above, 22 at the sides, 6 below.
+- **Body.** A `ScrollView` with 12 pt above, 22 pt at the sides, 16 pt below, and 16 pt between children. Its height is the height of its content, at most the visible screen height minus 160 pt, so a short sheet does not scroll and a long one scrolls without cutting text. A screen that puts a `Form` in the body sets `.scrollContentBackground(.hidden)` so the sheet background shows and the rows keep their native background.
+- **Footer.** Outside the scroll area: the reason on the left, then Cancel, then the primary action (12 pt above, 22 at the sides, 18 below). The reason is the `DisabledReasonText` of the primary action when it is disabled with a reason, or the gate's reason when the primary action `mutates` and the gate is `.blocked`, because the sheet covers the window banner. When the primary action is busy the footer shows a small spinner next to it and VoiceOver reads the value "In progress".
+- **Buttons.** The primary action is `.borderedProminent` with `.keyboardShortcut(.defaultAction)`; a destructive primary action is `.bordered`, `role: .destructive`, with no shortcut, so Return does nothing there. A disabled or busy primary action does not run on Return. Cancel is `.bordered` with `.keyboardShortcut(.cancelAction)` and stays enabled while the primary action is busy. These are the only two shortcuts the components set. With no `cancel` given, "Cancel" closes the sheet; a screen gives its own `cancel` when it means something else, such as cancelling an operation behind a confirmation. Identifiers: `sheet.cancel` and `sheet.primary`.
+- **Host.** The sheet sets its own `.actionHost()`, so a confirmation raised from inside shows on top of this sheet. A view inside a sheet never sends to the window's `FeedbackCenter`: it shows its result with a `StateBanner`, and the screen that owns the sheet sends feedback after the sheet closed.
 
 ### Checklist
 
-Filled by milestone 2.
+`CheckList(_:layout:)` shows `CheckItem`s: a symbol, the title in `.callout` primary text, the detail in `.subheadline` `textSecondary` wrapped in full (never an ellipsis), and an optional `ActionButton` under the text. A screen wraps it in a `CardSection` (for example "Preflight") and maps its own result (a preflight check, a doctor result) to a `CheckStatus`. This table replaces the preflight status table of spec 0020.
+
+| `CheckStatus` | VoiceOver word | Tone | Symbol |
+| --- | --- | --- | --- |
+| `passed` | Passed | `positive` | `checkmark.circle.fill` |
+| `warning` | Warning | `caution` | `exclamationmark.triangle.fill` |
+| `failed` | Failed | `critical` | `xmark.circle.fill` |
+| `pending` | Checking | `neutral` | a small `ProgressView` after 300 ms, an empty box before that |
+| `unrecognized` | Unrecognized status | `caution` | `questionmark.diamond.fill` |
+
+- The symbol uses the tone's fill (never `StacklyColor.decorative`), and its shape differs per status, so Differentiate Without Color changes nothing. A status change crossfades.
+- **Layout.** `.adaptive` is a grid with columns at least 200 pt wide and 16 pt apart: two columns in a 560 pt sheet (488 pt inside the card), one in a narrow width. `.single` is one column. `pending` shows its spinner only after 300 ms (`DelayedVisibility`), so a fast check does not flash.
+- **VoiceOver.** One element per row, "{title}, {status}: {detail}" (without the detail when there is none), and the row's action is its own element. The row identifier is `checklist.row.<id>`. Announcing a change of status or a summary is the screen's job.
 
 ### Staged progress
 
-Filled by milestone 2.
+`StagedProgressValue.from(operation:stages:)` turns an `OperationSummary` and the `StageDefinition`s of the screen that owns the operation (five for an install, six for create) into the state of every stage, a `fraction` for the bar, a whole `percent`, a `currentTitle`, and an `outcome`. It is a pure function. `i` is the index of `operation.stage` in the stages (from 0) and `n` the number of stages.
+
+| `operation.state` and `stage` | Stages | `runningIndex` | `fraction`, `percent` | `currentTitle` | `outcome` |
+| --- | --- | --- | --- | --- | --- |
+| `queued` | all `pending` | none | none | Queued | `waiting` |
+| `running`, known stage | before `i` `done`, `i` `running`, after `pending` | `i` | the formula below | title of stage `i` | `running` |
+| `cancelRequested`, known stage | as `running` | `i` | the formula below | Cancelling… | `cancelling` |
+| `running` or `cancelRequested`, no stage | first `running`, rest `pending` | 0 | 0, 0 | title of the first stage (or Cancelling…) | `running` (or `cancelling`) |
+| `running` or `cancelRequested`, unknown stage or no stages | all `pending` | none | none | Working… (or Cancelling…) | `running` (or `cancelling`) |
+| `succeeded` | all `done` | none | 1, 100 | Done | `succeeded` |
+| `failed`, known stage | before `i` `done`, `i` `failed`, after `pending` | `i` | none | Failed at {title of stage `i`} | `failed` |
+| `failed`, no or unknown stage, or no stages | all `pending` | none | none | Failed | `failed` |
+| `needsRecovery` | as the two `failed` rows | as `failed` | none | Needs Recovery | `needsRecovery` |
+| `cancelled`, known stage | before `i` `done`, `i` `cancelled`, after `pending` | `i` | none | Cancelled | `cancelled` |
+| `cancelled`, no or unknown stage, or no stages (also cancelled while queued) | all `pending` | none | none | Cancelled | `cancelled` |
+
+The formula: with `counted(done, total)` and `total` above 0, `percent = (i × total + min(done, total)) × 100 / (n × total)`; with `indeterminate` or a `total` of 0, `percent = i × 100 / n`. It is integer division (rounded down) and at most 99 until the operation `succeeded`, so "100%" never shows for work that is not finished. `fraction` is the same numerator over the same denominator as a `Double`. The arithmetic is 128 bit, so byte counts never overflow.
+
+`StagedProgress(_:layout:accessibilityLabel:announcesStages:)` draws it. The bar is a native linear `ProgressView`, shown only while the outcome is `running` or `cancelling`, indeterminate when `fraction` is none. Under Reduce Motion a change of the value is not animated (`StacklyMotion.progress`).
+
+| `outcome` | `.compact` text | Bar | VoiceOver value |
+| --- | --- | --- | --- |
+| `waiting` | Queued | none | Queued |
+| `running` with a percent | {title} · {percent}% | determinate | Stage {k} of {n}, {title}, {percent} percent |
+| `running` without a percent | Working… | indeterminate | Working |
+| `cancelling` | Cancelling… · {percent}% or Cancelling… | as `running` | Cancelling, stage {k} of {n}, {percent} percent, or Cancelling |
+| `succeeded` | `checkmark.circle.fill` (`positive` fill) and Done | none | Done |
+| `failed` | `xmark.circle.fill` (`critical` fill) and the title | none | the title |
+| `needsRecovery` | `xmark.circle.fill` (`critical` fill) and Needs Recovery | none | Needs Recovery |
+| `cancelled` | `minus.circle.fill` (`neutral` fill) and Cancelled | none | Cancelled |
+
+`k` is `runningIndex + 1` (stages count from 1). The compact text is `.callout` `textSecondary` with monospaced digits.
+
+The `.stages` layout draws the same bar, then every stage in a wrapping flow (16 pt across, 6 pt down) with a symbol and its title in `.callout`:
+
+| `StageState` | Symbol | Symbol color | Text |
+| --- | --- | --- | --- |
+| `done` | `checkmark.circle.fill` | `positive` fill | primary |
+| `running` | `circle.inset.filled` | `informative` fill | primary, semibold |
+| `pending` | `circle` | `textSecondary` | `textSecondary` |
+| `failed` | `xmark.circle.fill` | `critical` fill | `critical` text, semibold |
+| `cancelled` | `minus.circle.fill` | `neutral` fill | `textSecondary` |
+
+The whole view is one VoiceOver element: the label is `accessibilityLabel` ("Progress" by default) and the value comes from the table above. With `announcesStages`, each time the running stage changes (not when the view first appears), VoiceOver says "{stage title}." once. The identifier is `progress.view`.
 
 ### Inspector
 
