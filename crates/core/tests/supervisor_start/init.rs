@@ -234,3 +234,44 @@ async fn an_init_that_runs_past_its_deadline_fails_with_init_timeout() {
         Some("init_timeout")
     );
 }
+
+#[tokio::test]
+async fn a_text_stdin_reaches_the_init_step_as_its_exact_bytes_and_a_failing_step_is_init_step_failed()
+ {
+    let rig = Arc::new(
+        Rig::patched(|text| {
+            replace(
+                text,
+                "      stdin: { secret: authToken }",
+                "      stdin: { text: \"CREATE ROLE a;\\nSELECT 'ü 空';\\n\" }",
+            )
+        })
+        .await,
+    );
+    let id = rig.instance(&uninitialized());
+    let init = {
+        let rig = Arc::clone(&rig);
+        tokio::spawn(async move {
+            rig.sup
+                .execute_init(InitRequest::new(id, Rig::user()))
+                .await
+        })
+    };
+
+    let step = rig.helper_spawn(ChildRole::InitStep, 0).await;
+    let expected = "CREATE ROLE a;\nSELECT 'ü 空';\n";
+    assert_eq!(step.stdin_len, Some(expected.len()));
+    let stdin = rig
+        .processes()
+        .take_stdin(step.pid)
+        .expect("the text is written to stdin");
+    assert_eq!(stdin_payload(&stdin), expected.as_bytes());
+    rig.processes().exit(step.pid, Some(ExitStatus::Exited(1)));
+
+    let error = init.await.unwrap().expect_err("the step failed");
+
+    assert!(
+        matches!(&error, SupervisorError::InitFailed { reason, exit_code: Some(1), .. } if reason == "init_step_failed"),
+        "{error:?}"
+    );
+}

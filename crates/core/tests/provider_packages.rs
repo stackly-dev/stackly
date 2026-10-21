@@ -1089,3 +1089,43 @@ fn a_postgresql_text_setting_value_is_written_as_a_quoted_conf_value() {
         "{conf}"
     );
 }
+
+#[test]
+fn the_postgresql_version_check_reads_the_version_of_each_artifact_from_its_line() {
+    let ev = evidence!(
+        covers = ["REQ-035"],
+        kind = Kind::Fixture,
+        expected = "runtime.versionCheck runs bin/postgres --version, its pattern captures 18.6 and 17.11 from the whole line postgres (PostgreSQL) <version>, and a line with a prefix or a suffix does not match",
+    );
+    let package = validated(&postgresql_dir());
+    let check = package
+        .version_check()
+        .expect("the manifest declares runtime.versionCheck");
+    assert_eq!(check.args(), ["--version"]);
+    assert_eq!(check.timeout(), std::time::Duration::from_secs(10));
+    let spec = stackly_core::runtime::validate::VersionCheckSpec::from_check(check);
+
+    assert_eq!(
+        spec.read_version("postgres (PostgreSQL) 18.6\n", ""),
+        Some("18.6")
+    );
+    assert_eq!(
+        spec.read_version("postgres (PostgreSQL) 17.11\r\n", ""),
+        Some("17.11")
+    );
+    assert_eq!(
+        spec.read_version("", "postgres (PostgreSQL) 18.6\n"),
+        Some("18.6")
+    );
+    for line in [
+        "x postgres (PostgreSQL) 18.6",
+        "postgres (PostgreSQL) 18.6 (Homebrew)",
+        "postgres (PostgreSQL) 18",
+        "postgres (PostgreSQL) 18.6.1",
+        "psql (PostgreSQL) 18.6",
+        " postgres (PostgreSQL) 18.6",
+    ] {
+        assert_eq!(spec.read_version(line, line), None, "{line}");
+    }
+    ev.pass();
+}
