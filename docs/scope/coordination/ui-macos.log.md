@@ -2,7 +2,7 @@
 
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `72b8d9d`
-- **Wave aktif:** `2`, diajukan `2026-10-21` (menunggu persetujuan user)
+- **Wave aktif:** `2`, mulai `2026-10-21`
 - **Diperbarui:** `2026-10-21 07:51`
 
 ## Sub sesi wave `1`
@@ -20,10 +20,10 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `dev-f67-m1` | developer | F67 milestone 1, langkah 1 sampai 8 | `ui-macos.md` | `StacklyUI/.../Components/`, `Accessibility/`, `Gallery/` (Components), `Tokens/Typography.swift`, `Diagnostics/ConnectionDiagnosticsSection.swift`, `Secrets/RevealModel.swift`, `Secrets/SecretEntryModel.swift`, `Shell/LiveShell.swift`, `Shell/AppShell.swift`, test baru dan `SourceRuleTests.swift`, `ShellStructureTests.swift`, `design.md` "Components", `verify.md` 0067 M1, *Temuan langkah 1* di `rationale.md` 0067 | belum ada (kartu `task_0ed05ca5`) | `sonnet-5-5 · high` | diajukan sebagai kartu |
-| `dev-f69-m1` | developer | F69 milestone 1, langkah 1 sampai 2 | `ui-macos.md` | `StacklyUI/.../Commands/`, `StacklyUITests/Commands/` (aturan sumber di suite sendiri), `design.md` "Commands and shortcuts", `verify.md` 0069 M1 | belum ada (kartu `task_f6a0a055`) | `sonnet-5-5 · high` | diajukan sebagai kartu |
-| `dev-f68-m2` | developer | F68 milestone 2, langkah 7 sampai 9 | `ui-macos.md` | `clients/swift/Package.swift`, `StacklyTestSupport`, `StacklyEvidenceCore`, `StacklyXCTestSupport`, test-nya, `xtask/src/evidence/`, `verify.md` 0068 M2 | belum ada (kartu `task_7bf9f185`) | `sonnet-5-5 · high` | diajukan sebagai kartu |
-| `chk-f12-verify` | checker (verify penuh) | F12 `Verify it` | `ui-macos.md` | centang `verify.md` 0012, record baru `evidence/manual/` 0012 | belum ada (kartu `task_3b56a0a5`) | `opus-5-5 · high` | diajukan sebagai kartu |
+| `dev-f67-m1` | developer | F67 milestone 1, langkah 1 sampai 8 | `ui-macos.md` | `StacklyUI/.../Components/`, `Accessibility/`, `Gallery/` (Components), `Tokens/Typography.swift`, `Diagnostics/ConnectionDiagnosticsSection.swift`, `Secrets/RevealModel.swift`, `Secrets/SecretEntryModel.swift`, `Shell/LiveShell.swift`, `Shell/AppShell.swift`, test baru dan `SourceRuleTests.swift`, `ShellStructureTests.swift`, `design.md` "Components", `verify.md` 0067 M1, *Temuan langkah 1* di `rationale.md` 0067 | `claude/quizzical-proskuriakova-8512b1` (kartu `task_0ed05ca5`) | `sonnet-5-5 · high` | `aktif` |
+| `dev-f69-m1` | developer | F69 milestone 1, langkah 1 sampai 2 | `ui-macos.md` | `StacklyUI/.../Commands/`, `StacklyUITests/Commands/` (aturan sumber di suite sendiri), `design.md` "Commands and shortcuts", `verify.md` 0069 M1 | `claude/sleepy-zhukovsky-c5c4d6` (kartu `task_f6a0a055`) | `sonnet-5-5 · high` | `aktif` |
+| `dev-f68-m2` | developer | F68 milestone 2, langkah 7 sampai 9 | `ui-macos.md` | `clients/swift/Package.swift`, `StacklyTestSupport`, `StacklyEvidenceCore`, `StacklyXCTestSupport`, test-nya, `xtask/src/evidence/`, `verify.md` 0068 M2 | `claude/distracted-bartik-4e1411` (kartu `task_7bf9f185`) | `sonnet-5-5 · high` | `aktif` |
+| `chk-f12-verify` | checker (verify penuh) | F12 `Verify it` | `ui-macos.md` | centang `verify.md` 0012, record baru `evidence/manual/` 0012 | `claude/nice-banach-103b7f` (kartu `task_3b56a0a5`) | `opus-5-5 · high` | `aktif` |
 
 ## Keputusan
 
@@ -50,6 +50,7 @@
 | `2026-10-21` | User menyetujui teks baru AC-11 spec 0016 dari usulan spec 0067: "Setelah Get Started, `FeedbackCenter.show(.success("Setup complete."))` menampilkan kartu umpan balik di shell dan mengumumkannya sekali (pengumuman datang dari `FeedbackCenter`, bukan panggilan `announce` terpisah)." Diterapkan lewat architect update spec 0016. | `user` |
 | `2026-10-21` | User memilih architect update gabungan untuk spec 0001, 0002, 0012, 0014, 0016 sampai 0022 (usulan 0067, 0068, 0069) dimulai setelah F67 milestone 1 di-merge; spec 0013 terpisah setelah verify penuh F13. | `user` |
 | `2026-10-21` | Keempat item wave 2 ditolak `start_session` karena giliran persetujuan dipicu pesan sesi `arc-f68-spec`, jadi diajukan sebagai kartu (`task_0ed05ca5`, `task_f6a0a055`, `task_7bf9f185`, `task_3b56a0a5`); user memulainya dengan klik atau meminta lead. Dua kartu pertama sempat diajukan dengan brief yang belum rapi lalu ditarik (`task_64d151d6`, `task_6aa50f7e`): langkah 1 spec 0067 meminta *Temuan langkah 1* di `rationale.md`, jadi subbagian itu masuk ownership `dev-f67-m1`. | `lead` |
+| `2026-10-21` | User memulai keempat kartu wave 2 (tiga developer lewat klik, `chk-f12-verify` atas permintaan user). Branch dinamai aplikasi secara acak karena kartu tidak membawa `branch_name`; judul sesi tetap diawali nama item, jadi `ListAgents` tetap cocok. | `user` |
 | `2026-10-21` | Update spec 0013 dari usulan fase 02 (`02-instalasi-pertama.usulan-fondasi.md` bagian Spec 0013, sisa setelah K16 sampai K18; prasyarat F16 M1) ada di luar scope ini dan memuat perubahan teks AC-7. Diajukan ke user di akhir wave, setelah F13 `Verify it`, supaya verify penuh F13 memakai spec yang dibangun. | `lead` |
 
 ## Blocker terbuka
