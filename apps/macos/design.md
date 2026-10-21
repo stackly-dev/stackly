@@ -498,7 +498,13 @@ Feedback is the result of something the person did, shown as an opaque card unde
 
 ### Sheet
 
-Filled by milestone 2.
+Checked on macOS 27.0.1 with a probe sheet and real key events (spec 0067 rationale, *Temuan langkah 9*): a footer drawn inside the sheet works, so the footer stays explicit and does not move to toolbar placements.
+
+- **Return** runs the primary action with focus in a `TextField` and in a `Toggle`; a destructive primary action has no shortcut and a disabled one does not run.
+- **Escape** closes a sheet on its own and does not run the Cancel action, even with `.keyboardShortcut(.cancelAction)`. With `.interactiveDismissDisabled()` Escape runs the Cancel action once and the sheet stays open unless that action closes it. A sheet therefore always sets it, because Cancel may mean something other than closing.
+- A confirmation from inside a sheet shows as a second sheet on top of it, and Escape there cancels only the confirmation.
+- `.presentationBackground` draws the sheet opaque, with nothing of the window behind it showing through.
+- Not checked (manual): Tab and Space with Keyboard navigation on, and VoiceOver.
 
 ### Checklist
 
