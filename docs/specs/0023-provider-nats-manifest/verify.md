@@ -1,0 +1,36 @@
+# Verify: Provider NATS lewat manifest · spec 0023 · updated 2026-10-22
+
+_Langkah diturunkan dari acceptance criteria spec 0023. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon. Tidak ada langkah milestone 1 yang membutuhkan server NATS asli atau jaringan._
+
+## Milestone 1: Native probe kind and nats-readiness on fixtures
+
+Langkah Build plan yang tercakup: 0, 3, 4 (sesi sebelumnya), lalu 1, 5, dan 6 (sesi `dev-f23-m1`). Langkah 2 (blok `readiness` dan `connection` di `providers/nats`) menunggu baris `runtime.versionCheck` NATS dari spec 0018 langkah 1 masuk ke `main`; bagian langkahnya di bawah ditandai menunggu.
+
+### UI / manual
+
+- [ ] Tiga fakta startup NATS 2.15.1 dari langkah 0 belum tercatat di transcript (semua rekaman diambil setelah server siap), jadi ini langkah yang menunggu. Jalankan `nats-server -n golden -js -sd <folder sementara>` di loopback dan catat (1) apakah INFO pertama sudah memuat `"jetstream":true` sebelum JetStream siap melayani `$JS.API.INFO` (sambungkan sekali segera setelah proses start, lalu ulangi di store yang besar); (2) apakah listener client baru terbuka setelah JetStream aktif atau lebih dulu (poll `lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>` dan hubungkan sekali tiap 10 ms selama start); (3) apakah NATS mematikan JetStream saat berjalan (isi disk store sampai batas, atau `SIGUSR2` dan lihat balasan `$JS.API.INFO`). Hasilnya dicatat di rationale lewat `/architect` (Follow-up spec). Hasil apa pun tidak membuang langkah `$JS.API.INFO` (keputusan lead 2026-10-20) → AC-5, AC-8
+
+### Commands
+
+- [ ] `cargo test -p stackly-core --test provider_rules native` → 8 test lulus: probe `native` dengan token atau literal diterima di `readiness.probe` dan `health.probe`; nama di luar registry `unknown_probe` di `readiness.probe.name` dengan pesan yang menyebut `nats-readiness`, `name` yang tidak ada `missing_field`, `type: script` tetap `unknown_probe`; `endpoint` yang tidak ada `missing_field`, endpoint yang tidak dikenal atau bertransport `unix` `unknown_endpoint`; param tak dikenal `unknown_field`, param wajib tidak ada `missing_field`, literal bertipe salah, string kosong, di atas 255 byte, atau berkarakter kontrol `invalid_value`; token folder, root runtime, dan executable `token_not_allowed_here`, `secret.*` `secret_not_allowed_here`, token tak dikenal `unknown_token`, param boolean dengan teks lain `token_not_allowed_here`, field `apply: reload` `settings_schema_rule`; `path`, `expectStatus`, `command`, `successExitCodes` di `native` serta `name` dan `params` di `tcp`, `http`, `exec` `unknown_field`; `run_plan` membangun `ProbeSpec::Native` dan menulis `{"type":"native","content":{"target":...,"probe":{"name":"nats-readiness","params":{...}}}}`; param teks yang kosong atau di atas batas setelah render `PlanError::UnrepresentableValue` dengan `readiness.probe.params.<nama>` tanpa nilai → AC-1, AC-3
+- [ ] `cargo test -p stackly-core --test provider_rules closed_sets_reject_unknown_primitives_probes_formats_signals_and_strategies` → lulus, termasuk probe `native` dengan nama yang tidak ada di registry (skenario "Himpunan tertutup" spec 0009) → AC-1
+- [ ] `cargo test -p stackly-core --lib provider::probe::native` → 5 test lulus: nama registry unik dan cocok `^[a-z][a-z0-9-]{0,31}$`, `from_name`, descriptor `nats-readiness` (transport `tcp`, `serverName` teks 255 byte, `jetstream` boolean), `build`, dan bentuk `Serialize` → AC-2, AC-3
+- [ ] `cargo xtask codegen --check` → "20 generated files are up to date"; `schemas/provider/provider.v1alpha1.schema.json` memuat `name`, `params`, dan `ProbeParam` → AC-1
+- [ ] `cargo test -p stackly-core --test nats_readiness` → state machine untuk setiap transcript asli dan sintetis, dalam semua ukuran potongan → AC-5
+- [ ] `cargo test -p stackly-core --lib supervisor::probe::native` → 13 test di atas `tokio::io::duplex` dengan waktu dijeda: sukses dua mode, `jetstream_unavailable`, `connect_failed`, `timeout` saat connect, INFO, PONG, dan balasan `$JS.API.INFO` berakhir tepat 2000 ms dengan teks per fase, satu deadline untuk seluruh percobaan (INFO pada 1500 ms lalu tanpa PONG tetap berakhir di 2000 ms), EOF dan reset menjadi `protocol_error`, target `unix` tanpa connect, dan detail disamarkan lewat `Redactor` → AC-5
+- [ ] `cargo test -p stackly-core --test supervisor_probe` → 3 test lulus, termasuk smoke test dengan `tokio::net::TcpListener` asli: server bernama sama `Ok`, nama lain `identity_mismatch` dengan `server_name is "foreign", expected "golden"`, dan byte yang ditulis probe tidak memuat credential → AC-5
+- [ ] `cargo test -p stackly-core --test supervisor_start native` → 3 test lulus dengan `FakeProcessSupervision`, driver di atas duplex, dan waktu dijeda: `ready` dan `healthy` dengan reason `probe_ok`; server diam membuat readiness rutin `not_ready` dengan reason `timeout` dan detail `no INFO from the server within 1000 ms` setelah debounce, lifecycle tetap `running`, tidak ada sinyal atau spawn kedua, lalu pulih di PID yang sama; connect ditolak membuat health `degraded` setelah satu kegagalan lalu `unhealthy` di ambang 2 dengan reason `connect_failed`, dan kembali `healthy` → AC-6
+- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings` dan `cargo xtask check-deps` → bersih; `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus → AC-2
+- [ ] `cargo xtask fuzz run provider_manifest --time 600` lalu `cargo xtask fuzz run provider_interpolation --time 600` (setelah langkah 1; memakai posisi interpolasi baru `ProbeText` dan `ProbeBoolean` di harness) → tanpa crash, hang, atau kehabisan memori; hasil di record evidence manual di `evidence/manual/` (NFR-009) → AC-7
+- [ ] (menunggu spec 0018 langkah 1 di `main`) Langkah 2: blok `readiness` dan `connection` di `providers/nats/provider.yaml` dalam satu commit, `README.md`, `STACKLY_UPDATE_GOLDEN=1 cargo test -p stackly-core --test provider_packages` dengan diff golden `run_plan` NATS hanya di `readiness.probe` dan `health.probe`, `cargo xtask provider check` mencetak `ok official/nats 1.0.0 <sha256 baru>`, dan `cargo xtask fuzz seed` → AC-4
+
+### Acceptance-criteria coverage
+
+- AC-1 · cabang `native` di `validate::probe`, JSON Schema, skenario "Himpunan tertutup"; selesai di langkah 1
+- AC-2 · registry tertutup `NativeProbeKind` dengan `match` exhaustive di `descriptor`, `build`, dan `supervisor::probe::native::attempt`; selesai di langkah 1 dan 5
+- AC-3 · `ProbeSpec::Native` di `run_plan`, `UnrepresentableValue`, dan `Serialize`; selesai di langkah 1
+- AC-4 · menunggu langkah 2 (bergantung pada baris `runtime.versionCheck` NATS dari `dev-f18-m3`)
+- AC-5 · state machine dan transcript selesai di langkah 0 dan 3; driver, timing, dan smoke socket selesai di langkah 5; tiga fakta startup menunggu (langkah manual di atas)
+- AC-6 · selesai di langkah 6
+- AC-7 · target `nats_readiness_protocol` selesai di langkah 4; run ulang `provider_manifest` dan `provider_interpolation` di atas
+- AC-8 sampai AC-14 · milik milestone 2 dan 3
