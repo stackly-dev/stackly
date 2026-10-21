@@ -45,20 +45,18 @@ impl SecretFieldRule {
     }
 
     /// Reads the rules of a secret field of a settings schema, or `None`
-    /// when the field is not a secret text field. `printable_only` stays
-    /// false until the settings model carries `x-stackly.printableOnly`
-    /// (spec 0019, through spec 0009).
+    /// when the field is not a secret text field. `printable_only` follows
+    /// `x-stackly.printableOnly`.
     #[must_use]
     pub fn from_setting(field: &SettingField) -> Option<Self> {
         if !field.is_secret() {
             return None;
         }
         match field.kind() {
-            // provisional: F19 fills printable_only from x-stackly.printableOnly
-            // once the settings model of spec 0009 carries it.
-            FieldKind::Scalar(ScalarKind::Text(rules)) => {
-                Some(Self::new(rules.min_length, rules.max_length, field.apply()))
-            }
+            FieldKind::Scalar(ScalarKind::Text(rules)) => Some(
+                Self::new(rules.min_length, rules.max_length, field.apply())
+                    .with_printable_only(field.is_printable_only()),
+            ),
             _ => None,
         }
     }
