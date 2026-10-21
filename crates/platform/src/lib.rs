@@ -42,8 +42,9 @@ mod tree;
 mod unsupported;
 
 pub use agent::{
-    AgentOp, AgentOsErrorKind, AgentProbe, AgentRegistration, BackgroundAgent,
-    BackgroundAgentError, LaunchContext, UnsupportedBackgroundAgent,
+    AgentAssessment, AgentInput, AgentOp, AgentOsErrorKind, AgentProbe, AgentRegistration,
+    BackgroundAgent, BackgroundAgentError, BackgroundAgentState, LaunchContext, ProbeOutcome,
+    RecoveryStep, UnavailableReason, UnsupportedBackgroundAgent, classify,
 };
 pub use bundle::AppBundle;
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};

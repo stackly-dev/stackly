@@ -13,10 +13,11 @@ pub const FAKE_AGENT_BUNDLE: &str = "/Applications/Stackly.app";
 /// A background agent in memory that the test scripts, and that logs every
 /// call (spec 0015).
 ///
-/// It starts [`AgentRegistration::NotRegistered`] inside
-/// [`FAKE_AGENT_BUNDLE`]. Each change call moves the registration to the
-/// state the test set for it, so a test decides whether `register` ends
-/// `Enabled` (the default) or `RequiresApproval`. A queued failure answers
+/// It starts [`AgentRegistration::NotFound`] inside
+/// [`FAKE_AGENT_BUNDLE`], like a bundle that was never registered. Each
+/// change call moves the registration to the state the test set for it, so a
+/// test decides whether `register` ends `Enabled` (the default) or
+/// `RequiresApproval`. A queued failure answers
 /// the next call of that kind and leaves the state as it was. Clones share
 /// the state, so a test keeps one handle while the code under test holds the
 /// port.
@@ -63,7 +64,7 @@ enum Probe {
 impl Default for State {
     fn default() -> Self {
         Self {
-            probe: Probe::Registration(AgentRegistration::NotRegistered),
+            probe: Probe::Registration(AgentRegistration::NotFound),
             bundle: PathBuf::from(FAKE_AGENT_BUNDLE),
             after_register: AgentRegistration::Enabled,
             after_unregister: AgentRegistration::NotRegistered,
@@ -75,7 +76,8 @@ impl Default for State {
 }
 
 impl FakeBackgroundAgent {
-    /// Creates an agent that is not registered.
+    /// Creates an agent that reads [`AgentRegistration::NotFound`], like a
+    /// bundle that was never registered.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -227,12 +229,12 @@ mod tests {
     }
 
     #[test]
-    fn a_new_agent_is_not_registered_in_the_default_bundle() {
+    fn a_new_agent_reads_not_found_like_a_never_registered_bundle() {
         let agent = FakeBackgroundAgent::new();
         assert_eq!(
             agent.status(),
             Ok(AgentProbe::Registration {
-                registration: AgentRegistration::NotRegistered,
+                registration: AgentRegistration::NotFound,
                 bundle: PathBuf::from(FAKE_AGENT_BUNDLE),
             })
         );
@@ -284,10 +286,7 @@ mod tests {
         };
         agent.fail_next(AgentOp::Register, error.clone());
         assert_eq!(agent.register(), Err(error));
-        assert_eq!(
-            registration_of(agent.status()),
-            AgentRegistration::NotRegistered
-        );
+        assert_eq!(registration_of(agent.status()), AgentRegistration::NotFound);
         assert_eq!(
             registration_of(agent.register()),
             AgentRegistration::Enabled
