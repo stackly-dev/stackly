@@ -1,9 +1,9 @@
 # Log koordinasi: `ui-macos`
 
 - **Scope:** `docs/scope/ui-macos.md`
-- **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `ff6e626`
-- **Wave aktif:** `1`, mulai `2026-10-21`
-- **Diperbarui:** `2026-10-21 06:55`
+- **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `72b8d9d`
+- **Wave aktif:** `2`, diajukan `2026-10-21` (menunggu persetujuan user)
+- **Diperbarui:** `2026-10-21 07:51`
 
 ## Sub sesi wave `1`
 
@@ -60,5 +60,7 @@
 - `69` · `Design it (spec): /architect menu aplikasi, perintah & shortcut keyboard` · laporan `arc-f69-spec` STATUS done (`e48ad24`) · `claude/arc-f69-spec-a4bbd3` → `2e194db` · diff hanya `docs/specs/0069-*`, Requirements AC-1 sampai AC-16, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · heading `in-progress`, Pointer, Build it dengan tiga milestone, Verify it, Test it; At a glance dan Urutan file (3 in-progress, 2 planned) · commit `docs(scope): tick 69 design it`
 
 ## Riwayat wave
+
+- Wave `1` (`2026-10-21` sampai `2026-10-21`, hash awal `ff6e626`, akhir `72b8d9d`): selesai. Merge: `chk-f13-m4` (`a6baa41`), spec 0069 (`2e194db`), spec 0067 (`6fe69a8`), spec 0068 (`67ea52d`). Dicentang: F67, F68, F69 `Design it` (ketiganya `in-progress`, `ui-macos.md` kini 5 in-progress), tiga baris `/scope` dari Follow-up 0012 dan 0013. `/sync` (`72b8d9d`): `apps/macos/AGENTS.md`, `clients/swift/AGENTS.md`, dan root `AGENTS.md` mendapat Follow-up `/sync` 0012 dan 0013; tujuh baris Follow-up 0012 dan 0013 dicentang; Status spec 0067 sampai 0069 tetap `Proposed` sampai developer mulai (konvensi langkah 6). Graph dokumen wave ini (17 file Markdown) diperbarui subagent di latar belakang; hasilnya dicatat setelah selesai. Terbuka dan dibawa ke wave 2: F12 `Verify it` (`chk-f12-verify`, kartu `task_3b56a0a5`, empat cek setting sistem oleh user), F13 milestone 4 (cek 6 oleh user), F13 `Build it`, `Verify it`, `Test it`, semua `Build it` F67, F68, F69. Kotak di scope lain yang terbuka karena wave ini: tidak ada yang tercentang; F16 M1, F17 M3, F22 M3 (`02-instalasi-pertama.md`) kini menunggu F67 milestone 1 sesuai spec 0067.
 
 ## Penutupan
