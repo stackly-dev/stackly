@@ -5,6 +5,7 @@
     struct SheetComponentsSections: View {
         var body: some View {
             SheetGallerySection()
+            CheckListGallerySection()
         }
     }
 
@@ -92,6 +93,41 @@
                     RoundedRectangle(cornerRadius: Radius.large.value)
                         .strokeBorder(Color(nsColor: .separatorColor))
                 }
+        }
+    }
+#endif
+
+#if DEBUG
+    // MARK: - Checklist
+
+    /// The CheckList section: every status, a row with an action, a long detail, and both
+    /// layouts.
+    struct CheckListGallerySection: View {
+        var body: some View {
+            GallerySection(
+                "CheckList",
+                note: "A symbol, a title, and the detail in full. The shape of the symbol "
+                    + "differs per status, so color is never the only sign. The checking row "
+                    + "shows its spinner after 300 ms. Adaptive is two columns in a sheet and "
+                    + "one in a narrow width; single is always one."
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.s22) {
+                    CardSection("Preflight · adaptive") {
+                        CheckList(ComponentSamples.checkItems)
+                            .padding(.vertical, Spacing.s4)
+                    }
+                    .frame(maxWidth: 560)
+                    CardSection("Preflight · single") {
+                        CheckList(
+                            ComponentSamples.checkItems + [ComponentSamples.longDetailItem],
+                            layout: .single
+                        )
+                        .padding(.vertical, Spacing.s4)
+                    }
+                    .frame(maxWidth: 560)
+                }
+                .actionHost()
+            }
         }
     }
 #endif

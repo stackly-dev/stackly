@@ -508,7 +508,19 @@ Checked on macOS 27.0.1 with a probe sheet and real key events (spec 0067 ration
 
 ### Checklist
 
-Filled by milestone 2.
+`CheckList(_:layout:)` shows `CheckItem`s: a symbol, the title in `.callout` primary text, the detail in `.subheadline` `textSecondary` wrapped in full (never an ellipsis), and an optional `ActionButton` under the text. A screen wraps it in a `CardSection` (for example "Preflight") and maps its own result (a preflight check, a doctor result) to a `CheckStatus`. This table replaces the preflight status table of spec 0020.
+
+| `CheckStatus` | VoiceOver word | Tone | Symbol |
+| --- | --- | --- | --- |
+| `passed` | Passed | `positive` | `checkmark.circle.fill` |
+| `warning` | Warning | `caution` | `exclamationmark.triangle.fill` |
+| `failed` | Failed | `critical` | `xmark.circle.fill` |
+| `pending` | Checking | `neutral` | a small `ProgressView` after 300 ms, an empty box before that |
+| `unrecognized` | Unrecognized status | `caution` | `questionmark.diamond.fill` |
+
+- The symbol uses the tone's fill (never `StacklyColor.decorative`), and its shape differs per status, so Differentiate Without Color changes nothing. A status change crossfades.
+- **Layout.** `.adaptive` is a grid with columns at least 200 pt wide and 16 pt apart: two columns in a 560 pt sheet (488 pt inside the card), one in a narrow width. `.single` is one column. `pending` shows its spinner only after 300 ms (`DelayedVisibility`), so a fast check does not flash.
+- **VoiceOver.** One element per row, "{title}, {status}: {detail}" (without the detail when there is none), and the row's action is its own element. The row identifier is `checklist.row.<id>`. Announcing a change of status or a summary is the screen's job.
 
 ### Staged progress
 
