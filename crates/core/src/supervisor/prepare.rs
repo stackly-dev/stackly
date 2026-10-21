@@ -217,7 +217,7 @@ fn runtime_root(
 
 /// Reads the pinned package of the instance's provider revision and checks
 /// that its digest is the one the instance records.
-fn load_package(
+pub(crate) fn load_package(
     platform: &stackly_platform::Platform,
     layout: &crate::PreparedLayout,
     instance: &Instance,

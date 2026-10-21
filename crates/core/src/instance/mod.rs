@@ -3,5 +3,6 @@
 //! fuzz harness of the paths it writes.
 
 pub mod create;
+pub mod duplicate;
 #[cfg(unix)]
 pub mod fuzzing;

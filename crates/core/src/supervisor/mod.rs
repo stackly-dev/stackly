@@ -57,7 +57,7 @@ mod lock;
 mod pending;
 mod persist;
 mod ports;
-mod prepare;
+pub(crate) mod prepare;
 pub mod probe;
 mod readiness;
 mod recheck;

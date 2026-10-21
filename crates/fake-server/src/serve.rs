@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -20,6 +21,10 @@ use crate::{Failure, write_argv};
 const ARGV_FILE: &str = "argv-serve.json";
 /// Every key the rendered `fakeConfig` holds, and no other.
 const CONFIG_KEYS: [&str; 3] = ["greeting", "instanceName", "authToken"];
+/// The file `PUT /sentinel` writes in the data folder.
+const SENTINEL_FILE: &str = "SENTINEL";
+/// Largest sentinel `PUT /sentinel` takes, in bytes.
+const MAX_SENTINEL_BYTES: usize = 256;
 /// Largest config file `serve` reads.
 const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
 /// Exit code of a crash when `--crash-exit-code` is absent, the same as
@@ -67,6 +72,7 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
 
     let server = Arc::new(Server {
         config_path: options.config,
+        data: options.data,
         config: Mutex::new(config),
         started: Instant::now(),
         ready_delay: options.ready_delay,
@@ -188,6 +194,7 @@ impl Config {
 #[derive(Debug)]
 struct Server {
     config_path: PathBuf,
+    data: PathBuf,
     config: Mutex<Config>,
     started: Instant,
     ready_delay: Duration,
@@ -220,6 +227,8 @@ impl Server {
                 let body = serde_json::json!({ "greeting": self.greeting() }).to_string();
                 http::write_response(&mut stream, 200, JSON, body.as_bytes())
             }
+            ("PUT", "/sentinel") => self.put_sentinel(&mut stream, &request.body),
+            ("GET", "/sentinel") => self.get_sentinel(&mut stream),
             ("POST", "/shutdown") => {
                 let _ = http::write_response(&mut stream, 200, TEXT, b"shutting down\n");
                 let _ = stream.shutdown(Shutdown::Write);
@@ -227,6 +236,44 @@ impl Server {
             }
             _ => http::write_response(&mut stream, 404, TEXT, b"not found\n"),
         };
+    }
+
+    /// Stores `body` as the sentinel, or answers 400 when it is not 1 to
+    /// [`MAX_SENTINEL_BYTES`] bytes of UTF 8.
+    fn put_sentinel(&self, stream: &mut TcpStream, body: &[u8]) -> io::Result<()> {
+        if body.is_empty() || body.len() > MAX_SENTINEL_BYTES || std::str::from_utf8(body).is_err()
+        {
+            return http::write_response(
+                stream,
+                400,
+                TEXT,
+                b"the sentinel is 1 to 256 bytes of utf 8\n",
+            );
+        }
+        match write_sentinel(&self.data, body) {
+            Ok(()) => http::write_response(stream, 204, TEXT, b""),
+            Err(error) => {
+                note(
+                    Stream::Stderr,
+                    format!("cannot write the sentinel: {error}"),
+                );
+                http::write_response(stream, 500, TEXT, b"cannot write the sentinel\n")
+            }
+        }
+    }
+
+    /// Answers the sentinel of this process's own data folder, or 404.
+    fn get_sentinel(&self, stream: &mut TcpStream) -> io::Result<()> {
+        match std::fs::read(self.data.join(SENTINEL_FILE)) {
+            Ok(bytes) => http::write_response(stream, 200, TEXT, &bytes),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                http::write_response(stream, 404, TEXT, b"not found\n")
+            }
+            Err(error) => {
+                note(Stream::Stderr, format!("cannot read the sentinel: {error}"));
+                http::write_response(stream, 500, TEXT, b"cannot read the sentinel\n")
+            }
+        }
     }
 
     fn greeting(&self) -> String {
@@ -253,6 +300,23 @@ impl Server {
             }
         }
     }
+}
+
+/// Writes the sentinel through a temporary file in the same folder and a
+/// rename, so a reader sees the old value or the new one, never a part.
+fn write_sentinel(data: &Path, body: &[u8]) -> io::Result<()> {
+    static WRITES: AtomicU64 = AtomicU64::new(0);
+    let temporary = data.join(format!(
+        "{SENTINEL_FILE}.{}.tmp",
+        WRITES.fetch_add(1, Ordering::Relaxed)
+    ));
+    let result = std::fs::write(&temporary, body)
+        .and_then(|()| std::fs::rename(&temporary, data.join(SENTINEL_FILE)));
+    if result.is_err() {
+        // The write error is the one worth reporting.
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
 }
 
 /// SIGTERM and SIGINT end the process with exit 0, except that
