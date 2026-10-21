@@ -944,7 +944,8 @@ fn a_bad_request_is_refused_before_anything_runs() {
 #[test]
 fn macos_platform_supports_and_installs_process_supervision() {
     let root = TestRoot::new().unwrap();
-    let platform = MacosPlatform::with_roots(root.roots());
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
 
     assert_eq!(
         platform

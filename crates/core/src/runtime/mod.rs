@@ -6,9 +6,23 @@
 //! normalization, symlink, and size rules of spec 0018 *Ekstraksi aman*.
 //! It never calls the unpack functions of the archive crates and never
 //! writes an extended attribute.
+//!
+//! [`download`] brings an artifact into the cache through the
+//! [`stackly_platform::Fetcher`] port, resuming a partial file and keeping
+//! only bytes whose size and digest match the catalog.
 
 pub mod archive;
 pub mod closure;
+pub mod codes;
+pub mod commit;
+pub mod compatibility;
+pub mod download;
+#[cfg(feature = "fixture")]
+pub mod fixture;
+pub mod install;
+pub mod launch;
 pub mod macho;
+pub mod resolve;
 #[doc(hidden)]
 pub mod samples;
+pub mod validate;

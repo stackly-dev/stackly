@@ -215,6 +215,8 @@ struct State {
     calls: Vec<ProcessCall>,
     next_faults: Vec<(ProcessOp, ProcessError)>,
     always_faults: Vec<(ProcessOp, ProcessError)>,
+    /// The status the next main process dies with while still suspended.
+    die_suspended: Option<ExitStatus>,
     violations: usize,
 }
 
@@ -271,6 +273,7 @@ impl FakeProcessSupervision {
             calls: Vec::new(),
             next_faults: Vec::new(),
             always_faults: Vec::new(),
+            die_suspended: None,
             violations: 0,
         };
         Self {
@@ -370,6 +373,14 @@ impl FakeProcessSupervision {
         if let Some(process) = self.lock_state().processes.get_mut(&pid) {
             process.holds_override = Some(answer);
         }
+    }
+
+    /// Makes the next main process die with `status` right after it is
+    /// spawned, while it is still suspended, as when the OS kills a binary
+    /// it rejects during exec (spec 0018, K7). A later
+    /// [`discard`](ProcessSupervision::discard) answers `status` once.
+    pub fn die_suspended_on_next_spawn(&self, status: ExitStatus) {
+        self.lock_state().die_suspended = Some(status);
     }
 
     /// Ends a process with `status` (use `None` for one that is not the
@@ -802,12 +813,16 @@ fn link_metadata(op: &'static str, path: &Path) -> Result<Option<std::fs::Metada
 impl ProcessSupervision for FakeProcessSupervision {
     fn spawn_main(&self, request: SpawnRequest<'_>) -> Result<SuspendedChild, ProcessError> {
         let pid = self.spawn(ProcessOp::SpawnMain, request)?;
-        let facts = self
-            .lock_state()
+        let mut state = self.lock_state();
+        let facts = state
             .processes
             .get(&pid)
             .map(|process| process.facts.clone())
             .expect("a process the fake just spawned is in its table");
+        if let Some(status) = state.die_suspended.take() {
+            state.end(pid, Some(status), None);
+        }
+        drop(state);
         Ok(SuspendedChild::new(facts))
     }
 

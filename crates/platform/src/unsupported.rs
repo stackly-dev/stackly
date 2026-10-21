@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use stackly_domain::{Os, Target};
+use stackly_domain::{Os, OsVersion, Target};
 
 use crate::capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 use crate::clock::SystemClock;
@@ -11,7 +11,7 @@ use crate::fs::{
     VolumeSpace,
 };
 use crate::identity::{UserId, UserIdentity};
-use crate::info::PlatformInfo;
+use crate::info::{HostFacts, PlatformInfo};
 use crate::layout::{DirectoryResolver, RootSet};
 use crate::platform::Platform;
 use crate::process::UnsupportedProcessSupervision;
@@ -138,6 +138,11 @@ impl PlatformInfo for UnsupportedPlatform {
         };
         PlatformCapabilities::none(reason)
             .with(PlatformCapability::Clock, CapabilityStatus::Supported)
+    }
+
+    fn host_facts(&self) -> HostFacts {
+        // No path pretends to know the version of an OS without an adapter.
+        HostFacts::new(self.target, OsVersion::major_minor(0, 0), None)
     }
 }
 

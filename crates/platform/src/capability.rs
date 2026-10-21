@@ -25,11 +25,16 @@ pub enum PlatformCapability {
     BackgroundAgent,
     /// CPU and memory figures per process (feature 28).
     ProcessMetrics,
+    /// Downloading over HTTPS ([`Fetcher`](crate::Fetcher), feature 18).
+    NetworkFetch,
+    /// Reading and writing code signatures ([`CodeSigning`](crate::CodeSigning),
+    /// feature 18).
+    CodeSigning,
 }
 
 impl PlatformCapability {
     /// Every capability, in code order.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 11] = [
         Self::Directories,
         Self::Filesystem,
         Self::Clock,
@@ -39,6 +44,8 @@ impl PlatformCapability {
         Self::IpcEndpoint,
         Self::BackgroundAgent,
         Self::ProcessMetrics,
+        Self::NetworkFetch,
+        Self::CodeSigning,
     ];
 
     /// Returns the stable snake_case code, for example `user_identity`.
@@ -54,6 +61,8 @@ impl PlatformCapability {
             Self::IpcEndpoint => "ipc_endpoint",
             Self::BackgroundAgent => "background_agent",
             Self::ProcessMetrics => "process_metrics",
+            Self::NetworkFetch => "network_fetch",
+            Self::CodeSigning => "code_signing",
         }
     }
 
@@ -68,6 +77,8 @@ impl PlatformCapability {
             Self::IpcEndpoint => 6,
             Self::BackgroundAgent => 7,
             Self::ProcessMetrics => 8,
+            Self::NetworkFetch => 9,
+            Self::CodeSigning => 10,
         }
     }
 }

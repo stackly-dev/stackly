@@ -5,10 +5,11 @@
 //! architecture, OS, or emulation.
 
 use stackly_domain::{ExactVersion, Target};
+use stackly_platform::HostFacts;
 
 use crate::provider::{ArtifactStatus, VersionArtifact};
 
-use super::model::CatalogEntry;
+use super::model::{CatalogEntry, ProviderEntry};
 use super::status::SupportReason;
 
 /// Why the gate refuses a version. The codes are the same as the
@@ -28,6 +29,8 @@ pub enum NotInstallableReason {
     ArtifactBlocked,
     /// The artifact for this Mac is a test fixture.
     FixtureOnly,
+    /// The artifact for this Mac needs a newer macOS than this Mac runs.
+    RequiresNewerOs,
 }
 
 impl NotInstallableReason {
@@ -41,6 +44,7 @@ impl NotInstallableReason {
             Self::NoBuildForArch => SupportReason::NoBuildForArch,
             Self::ArtifactBlocked => SupportReason::ArtifactBlocked,
             Self::FixtureOnly => SupportReason::FixtureOnly,
+            Self::RequiresNewerOs => SupportReason::RequiresNewerOs,
         }
     }
 
@@ -78,10 +82,11 @@ pub struct VersionNotFound;
 /// Decides whether `version` of `entry` can be installed on `host`.
 ///
 /// Planned and invalid entries refuse every version. For a provider entry,
-/// the artifact built for exactly `host` decides: `available` installs,
-/// `blocked` and `fixture` refuse; without one, artifacts for the host OS
-/// on another architecture give `no_build_for_arch`, and anything else
-/// `no_build_for_host`.
+/// the artifact built for exactly the host's target decides: `available`
+/// installs, unless its `minOs` is above the macOS the host runs
+/// (`requires_newer_os`); `blocked` and `fixture` refuse. Without an artifact
+/// for the target, artifacts for the host OS on another architecture give
+/// `no_build_for_arch`, and anything else `no_build_for_host`.
 ///
 /// # Errors
 ///
@@ -90,17 +95,29 @@ pub struct VersionNotFound;
 pub fn installability<'a>(
     entry: &'a CatalogEntry,
     version: &ExactVersion,
-    host: Target,
+    host: &HostFacts,
 ) -> Result<Installability<'a>, VersionNotFound> {
     let refuse = |reason| Installability::NotInstallable {
         reason,
         available_targets: Vec::new(),
     };
-    let provider = match entry {
-        CatalogEntry::Planned(_) => return Ok(refuse(NotInstallableReason::ProviderPlanned)),
-        CatalogEntry::Invalid(_) => return Ok(refuse(NotInstallableReason::PackageInvalid)),
-        CatalogEntry::Provider(provider) => provider,
-    };
+    match entry {
+        CatalogEntry::Planned(_) => Ok(refuse(NotInstallableReason::ProviderPlanned)),
+        CatalogEntry::Invalid(_) => Ok(refuse(NotInstallableReason::PackageInvalid)),
+        CatalogEntry::Provider(provider) => provider_installability(provider, version, host),
+    }
+}
+
+/// [`installability`] for an entry already known to be a provider.
+///
+/// # Errors
+///
+/// Returns [`VersionNotFound`] when the entry has no artifact of `version`.
+pub fn provider_installability<'a>(
+    provider: &'a ProviderEntry,
+    version: &ExactVersion,
+    host: &HostFacts,
+) -> Result<Installability<'a>, VersionNotFound> {
     let artifacts: Vec<&VersionArtifact> = provider
         .artifacts()
         .iter()
@@ -116,8 +133,14 @@ pub fn installability<'a>(
         .collect();
     available_targets.sort_by_key(ToString::to_string);
     available_targets.dedup();
-    let reason = match artifacts.iter().find(|artifact| artifact.target == host) {
-        Some(artifact) => match artifact.status {
+    let reason = match artifacts
+        .iter()
+        .find(|artifact| artifact.target == host.target)
+    {
+        Some(artifact) => match &artifact.status {
+            ArtifactStatus::Available { min_os, .. } if *min_os > host.os_version => {
+                NotInstallableReason::RequiresNewerOs
+            }
             ArtifactStatus::Available { .. } => {
                 return Ok(Installability::Installable { artifact });
             }
@@ -126,7 +149,7 @@ pub fn installability<'a>(
         },
         None if artifacts
             .iter()
-            .any(|artifact| artifact.target.os() == host.os()) =>
+            .any(|artifact| artifact.target.os() == host.target.os()) =>
         {
             NotInstallableReason::NoBuildForArch
         }
@@ -152,8 +175,12 @@ mod tests {
     use super::*;
     use crate::provider::{Category, NameCheck, PackageFiles, ValidatedPackage};
 
-    fn host() -> Target {
-        "macos-aarch64".parse().unwrap()
+    fn host() -> HostFacts {
+        HostFacts::new(
+            "macos-aarch64".parse().unwrap(),
+            stackly_domain::OsVersion::major_minor(27, 0),
+            None,
+        )
     }
 
     fn provider(package: ValidatedPackage) -> CatalogEntry {
@@ -172,7 +199,7 @@ mod tests {
     }
 
     fn refusal(entry: &CatalogEntry) -> (NotInstallableReason, Vec<String>) {
-        match installability(entry, &version(), host()).unwrap() {
+        match installability(entry, &version(), &host()).unwrap() {
             Installability::NotInstallable {
                 reason,
                 available_targets,
@@ -223,14 +250,14 @@ mod tests {
                 .unwrap(),
         );
 
-        match installability(&nats, &version(), host()).unwrap() {
+        match installability(&nats, &version(), &host()).unwrap() {
             Installability::Installable { artifact } => {
                 assert_eq!(artifact.id, "nats-2.15.1-macos-aarch64");
             }
             other => panic!("not installable: {other:?}"),
         }
         assert_eq!(
-            installability(&nats, &"9.9.9".parse().unwrap(), host()),
+            installability(&nats, &"9.9.9".parse().unwrap(), &host()),
             Err(VersionNotFound)
         );
     }
@@ -250,7 +277,7 @@ mod tests {
         });
 
         assert_eq!(
-            installability(&planned, &"9.9.9".parse().unwrap(), host()),
+            installability(&planned, &"9.9.9".parse().unwrap(), &host()),
             Ok(Installability::NotInstallable {
                 reason: NotInstallableReason::ProviderPlanned,
                 available_targets: Vec::new()
@@ -267,6 +294,7 @@ mod tests {
             (NotInstallableReason::NoBuildForArch, "no_build_for_arch"),
             (NotInstallableReason::ArtifactBlocked, "artifact_blocked"),
             (NotInstallableReason::FixtureOnly, "fixture_only"),
+            (NotInstallableReason::RequiresNewerOs, "requires_newer_os"),
         ] {
             assert_eq!(reason.as_code(), code);
             assert_eq!(reason.support_reason().as_code(), code);

@@ -50,6 +50,7 @@ use crate::operation::{
     WorkResult,
 };
 use crate::provider::{MarkerRead, PreflightOutcome};
+use crate::runtime::launch::{LaunchRefusal, check_launchable, classify_early_exit};
 use crate::secret::{ResolvedSecrets, SecretCaller};
 use crate::{ensure_instance_run_dir, remove_owned_tree};
 
@@ -929,8 +930,22 @@ async fn run_attempt(
             return Ok(fail(sup, id, reason, error).await);
         }
     };
-    // The launch check of spec 0018 (`check_launchable`, a quarantined
-    // runtime) goes here, before the spool and the spawn.
+    // A quarantined runtime is refused before the spool and the spawn.
+    let launchable = {
+        let platform = deps.platform.clone();
+        let program = parts.program.clone();
+        blocking(move || check_launchable(&platform, &program)).await
+    };
+    match launchable {
+        Ok(Ok(())) => {}
+        Ok(Err(LaunchRefusal::Quarantined { path, .. })) => {
+            let error = SupervisorError::Quarantined {
+                path: path.display().to_string(),
+            };
+            return Ok(fail(sup, id, FailureCode::QUARANTINED, error).await);
+        }
+        Ok(Err(LaunchRefusal::BinaryRejectedByOs { .. })) | Err(_) => {}
+    }
     let output = match fresh_spools(sup, &prepared).await {
         Ok(output) => output,
         Err(error) => return Ok(fail(sup, id, FailureCode::SPAWN_FAILED, error).await),
@@ -964,7 +979,7 @@ async fn run_attempt(
     // From here until `resume`, the child is suspended and unrecorded: a
     // failure or a cancel discards it, so no process ever runs unrecorded.
     if let Err(stop) = enter(ctx, StageName::IDENTITY, first, true).await {
-        discard(sup, child).await;
+        let _ = discard(sup, child).await;
         return Err(stop);
     }
     let facts = child.facts().clone();
@@ -976,9 +991,8 @@ async fn run_attempt(
     let boot = match boot {
         Ok(Ok(boot)) => boot,
         _ => {
-            discard(sup, child).await;
-            let error = SupervisorError::IdentityCaptureFailed;
-            return Ok(fail(sup, id, FailureCode::IDENTITY_CAPTURE_FAILED, error).await);
+            let status = discard(sup, child).await;
+            return Ok(identity_failed(sup, id, &facts.executable, status).await);
         }
     };
     let identity = ProcessIdentity {
@@ -1020,9 +1034,8 @@ async fn run_attempt(
     .await;
     if let Err(error) = recorded {
         tracing::warn!(instance = %id, %error, "the identity of a new process could not be recorded");
-        discard(sup, child).await;
-        let error = SupervisorError::IdentityCaptureFailed;
-        return Ok(fail(sup, id, FailureCode::IDENTITY_CAPTURE_FAILED, error).await);
+        let status = discard(sup, child).await;
+        return Ok(identity_failed(sup, id, &facts.executable, status).await);
     }
 
     let (drain, logs_unavailable) = DrainSlot::start(sup, id, Opening::Fresh).await;
@@ -1055,10 +1068,9 @@ async fn run_attempt(
         blocking(move || platform.processes().watch_exit(pid, Arc::new(exit_slot))).await
     };
     if !matches!(watched, Ok(Ok(()))) {
-        discard(sup, child).await;
+        let status = discard(sup, child).await;
         finish_process(sup, &actor, generation, Vec::new());
-        let error = SupervisorError::IdentityCaptureFailed;
-        return Ok(fail(sup, id, FailureCode::IDENTITY_CAPTURE_FAILED, error).await);
+        return Ok(identity_failed(sup, id, &facts.executable, status).await);
     }
     spawn_exit_task(sup, Arc::clone(&actor), generation, exit_rx.clone());
     let resumed = {
@@ -1115,14 +1127,42 @@ async fn run_attempt(
     Ok(end)
 }
 
-/// Discards a suspended child that never ran.
-async fn discard(sup: &Supervisor, child: stackly_platform::SuspendedChild) {
+/// Discards a suspended child that never ran, and returns the status of a
+/// child that had already died by itself, which `discard` reaps first.
+async fn discard(sup: &Supervisor, child: stackly_platform::SuspendedChild) -> Option<ExitStatus> {
     let platform = sup.deps().platform.clone();
-    // provisional: spec 0018 classifies the status of a child that died by
-    // itself while suspended (`classify_early_exit`, K7).
     let discarded = blocking(move || platform.processes().discard(child)).await;
-    if !matches!(discarded, Ok(Ok(_))) {
-        tracing::warn!("a suspended child could not be discarded");
+    match discarded {
+        Ok(Ok(status)) => status,
+        _ => {
+            tracing::warn!("a suspended child could not be discarded");
+            None
+        }
+    }
+}
+
+/// Fails a start whose identity stage broke after the child was discarded:
+/// a child that had died of `SIGKILL` on its own was a binary the OS
+/// rejected (spec 0018, K7); anything else is an identity that could not be
+/// captured.
+async fn identity_failed(
+    sup: &Supervisor,
+    id: InstanceId,
+    executable: &std::path::Path,
+    status: Option<ExitStatus>,
+) -> AttemptEnd {
+    match classify_early_exit(status, false) {
+        Some(LaunchRefusal::BinaryRejectedByOs { signal }) => {
+            let error = SupervisorError::BinaryRejectedByOs {
+                path: executable.display().to_string(),
+                signal,
+            };
+            fail(sup, id, FailureCode::BINARY_REJECTED_BY_OS, error).await
+        }
+        _ => {
+            let error = SupervisorError::IdentityCaptureFailed;
+            fail(sup, id, FailureCode::IDENTITY_CAPTURE_FAILED, error).await
+        }
     }
 }
 
@@ -1133,12 +1173,18 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
     let deps = sup.deps();
     let actor = sup.actor(id);
     let target = actor.read(|state| {
-        state
-            .process
-            .as_ref()
-            .map(|slot| (slot.generation, slot.group, Arc::clone(&slot.drain)))
+        state.process.as_ref().map(|slot| {
+            (
+                slot.generation,
+                slot.group,
+                Arc::clone(&slot.drain),
+                slot.identity.executable.clone(),
+            )
+        })
     });
-    if let Some((generation, group, drain)) = target {
+    let mut executable = None;
+    if let Some((generation, group, drain, path)) = target {
+        executable = Some(path);
         actor.update(deps, |state| {
             if let Some(slot) = &state.process {
                 slot.probes_stop.send_replace(true);
@@ -1156,7 +1202,53 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
             .unwrap_or_default();
         finish_process(sup, &actor, generation, leftover);
     }
+    // A child of this daemon that macOS killed before it was ready is a
+    // binary the OS rejected (spec 0018, K7): it uses no restart budget.
+    if let (Some(LaunchRefusal::BinaryRejectedByOs { signal }), Some(path)) =
+        (classify_early_exit(notice.status, false), executable)
+    {
+        return binary_rejected(sup, id, &path, signal).await;
+    }
     after_unrequested_exit(sup, id, notice, CommitMode::Operation).await
+}
+
+/// Records `crashed { will_retry: false, reason: binary_rejected_by_os }`
+/// and ends the start with `runtime.binary_rejected_by_os`, without using
+/// the restart budget.
+async fn binary_rejected(
+    sup: &Supervisor,
+    id: InstanceId,
+    path: &std::path::Path,
+    signal: i32,
+) -> Next {
+    let deps = sup.deps();
+    let now = deps.platform.clock().now();
+    let mut recorded = ExitRecord::Nothing;
+    let committed = commit_instance(sup, id, None, CommitMode::Operation, |changes| {
+        recorded = apply_exit(
+            changes,
+            LifecycleEvent::Crashed {
+                will_retry: false,
+                reason: FailureCode::BINARY_REJECTED_BY_OS,
+            },
+            now,
+        )?;
+        Ok(Vec::new())
+    })
+    .await;
+    match committed {
+        Ok(()) if recorded == ExitRecord::Crashed => {
+            Next::Final(SupervisorError::BinaryRejectedByOs {
+                path: path.display().to_string(),
+                signal,
+            })
+        }
+        Ok(()) => {
+            forget_crash(deps, &sup.actor(id));
+            Next::Settled
+        }
+        Err(error) => Next::Final(error),
+    }
 }
 
 /// Decides what follows a process that exited without being asked to, and

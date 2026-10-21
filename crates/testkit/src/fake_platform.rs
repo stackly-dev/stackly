@@ -1,14 +1,16 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use jiff::{SignedDuration, Timestamp};
-use stackly_domain::{Arch, Os, Target};
+use stackly_domain::{Arch, Os, OsVersion, Target};
 use stackly_platform::{
-    CapabilityStatus, Clock, DirectoryResolver, FixedRoots, Platform, PlatformCapabilities,
-    PlatformCapability, PlatformError, PlatformInfo, RootSet, UserId, UserIdentity,
+    CapabilityStatus, Clock, DirectoryResolver, FixedRoots, HostFacts, Platform,
+    PlatformCapabilities, PlatformCapability, PlatformError, PlatformInfo, RootSet, UserId,
+    UserIdentity,
 };
 
 use crate::{
-    FakeBackgroundAgent, FakeFilesystem, FakeProcessSupervision, FakeSecretStore, TestRoot,
+    FakeBackgroundAgent, FakeCodeSigning, FakeFetcher, FakeFilesystem, FakeProcessSupervision,
+    FakeSecretStore, TestRoot,
 };
 
 /// Where [`FakeClock`] starts: 2026-01-01T00:00:00Z.
@@ -106,6 +108,8 @@ impl UserIdentity for FakeIdentity {
 pub struct FakePlatformInfo {
     target: Target,
     capabilities: PlatformCapabilities,
+    os_version: OsVersion,
+    os_build: Option<String>,
 }
 
 impl FakePlatformInfo {
@@ -114,6 +118,8 @@ impl FakePlatformInfo {
     pub const fn new() -> Self {
         Self {
             target: Target::new(Os::Macos, Arch::Aarch64),
+            os_version: OsVersion::major_minor(27, 0),
+            os_build: None,
             capabilities: PlatformCapabilities::none("")
                 .with(PlatformCapability::Directories, CapabilityStatus::Supported)
                 .with(PlatformCapability::Filesystem, CapabilityStatus::Supported)
@@ -138,7 +144,12 @@ impl FakePlatformInfo {
                 .with(
                     PlatformCapability::ProcessMetrics,
                     not_built("not built yet (feature 28)"),
-                ),
+                )
+                .with(
+                    PlatformCapability::NetworkFetch,
+                    CapabilityStatus::Supported,
+                )
+                .with(PlatformCapability::CodeSigning, CapabilityStatus::Supported),
         }
     }
 
@@ -146,6 +157,20 @@ impl FakePlatformInfo {
     #[must_use]
     pub const fn with_target(mut self, target: Target) -> Self {
         self.target = target;
+        self
+    }
+
+    /// Returns a copy that reports `os_version` as the version of the OS.
+    #[must_use]
+    pub const fn with_os_version(mut self, os_version: OsVersion) -> Self {
+        self.os_version = os_version;
+        self
+    }
+
+    /// Returns a copy that reports `os_build` as the build of the OS.
+    #[must_use]
+    pub fn with_os_build(mut self, os_build: impl Into<String>) -> Self {
+        self.os_build = Some(os_build.into());
         self
     }
 
@@ -180,6 +205,10 @@ impl PlatformInfo for FakePlatformInfo {
     fn capabilities(&self) -> PlatformCapabilities {
         self.capabilities
     }
+
+    fn host_facts(&self) -> HostFacts {
+        HostFacts::new(self.target, self.os_version, self.os_build.clone())
+    }
 }
 
 /// Every fake port wired together for one [`TestRoot`].
@@ -210,6 +239,8 @@ pub struct FakePlatform {
     secrets: FakeSecretStore,
     processes: FakeProcessSupervision,
     background_agent: FakeBackgroundAgent,
+    fetcher: FakeFetcher,
+    code_signing: FakeCodeSigning,
 }
 
 impl FakePlatform {
@@ -225,6 +256,8 @@ impl FakePlatform {
             secrets: FakeSecretStore::new(),
             processes: FakeProcessSupervision::new(root),
             background_agent: FakeBackgroundAgent::new(),
+            fetcher: FakeFetcher::new(),
+            code_signing: FakeCodeSigning::new(),
         }
     }
 
@@ -257,6 +290,8 @@ impl FakePlatform {
         .with_secrets(Arc::new(self.secrets.clone()))
         .with_processes(Arc::new(self.processes.clone()))
         .with_background_agent(Arc::new(self.background_agent.clone()))
+        .with_fetcher(Arc::new(self.fetcher.clone()))
+        .with_code_signing(Arc::new(self.code_signing.clone()))
     }
 
     /// Returns the fake filesystem, to inject faults or read its logs.
@@ -299,5 +334,21 @@ impl FakePlatform {
     #[must_use]
     pub fn background_agent(&self) -> &FakeBackgroundAgent {
         &self.background_agent
+    }
+
+    /// Returns the fake code signing port, to script signatures and
+    /// quarantine and read its call log (spec 0018). Every platform this
+    /// fake hands out shares it.
+    #[must_use]
+    pub fn code_signing(&self) -> &FakeCodeSigning {
+        &self.code_signing
+    }
+
+    /// Returns the fake fetcher, to serve bytes, script failures, and read
+    /// its request log (spec 0018). Every platform this fake hands out
+    /// shares it.
+    #[must_use]
+    pub fn fetcher(&self) -> &FakeFetcher {
+        &self.fetcher
     }
 }

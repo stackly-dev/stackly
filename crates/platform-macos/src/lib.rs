@@ -8,6 +8,13 @@
 //! of instances (spec 0010); [`MacosPlatform`] installs it with
 //! `Platform::with_processes`.
 //!
+//! [`MacosCodeSigning`] reads and writes code signatures through
+//! `/usr/bin/codesign` and reads quarantine with `getxattr` (spec 0018).
+//!
+//! [`MacosFetcher`] downloads runtime artifacts over HTTPS with the macOS
+//! trust store (spec 0018); [`MacosPlatform`] installs it with
+//! `Platform::with_fetcher`.
+//!
 //! [`MacosSecretStore`] keeps secret values in the login Keychain, or in a
 //! file keychain of its own for a root override and tests (spec 0011); the
 //! daemon installs it with `Platform::with_secrets`.
@@ -17,7 +24,9 @@
 //! opt out anywhere else.
 #![allow(unsafe_code)]
 
+mod codesign;
 mod dirs;
+mod fetch;
 mod fs;
 mod identity;
 mod info;
@@ -25,6 +34,8 @@ mod platform;
 mod process;
 mod secret;
 
+pub use codesign::MacosCodeSigning;
+pub use fetch::{CONNECT_TIMEOUT, IDLE_TIMEOUT, MacosFetcher};
 pub use fs::MacosFilesystem;
 pub use identity::MacosIdentity;
 pub use info::MacosPlatformInfo;

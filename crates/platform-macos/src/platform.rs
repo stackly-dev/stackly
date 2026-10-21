@@ -7,7 +7,9 @@ use stackly_platform::{
     validate_root_override,
 };
 
+use crate::codesign::MacosCodeSigning;
 use crate::dirs::{CACHE_DIR, DATA_DIR, LOGS_DIR, darwin_user_temp_dir, home_dir};
+use crate::fetch::MacosFetcher;
 use crate::fs::MacosFilesystem;
 use crate::identity::MacosIdentity;
 use crate::info::MacosPlatformInfo;
@@ -41,7 +43,8 @@ impl MacosPlatform {
     /// override breaks a rule (an empty value included),
     /// [`PlatformError::RuntimeRootTooLong`] when socket paths would not
     /// fit, and the error of a filesystem call that failed while checking
-    /// the override.
+    /// the override, and [`PlatformError::HostFactsUnavailable`] when the OS
+    /// version cannot be read.
     #[expect(
         clippy::new_ret_no_self,
         reason = "spec 0004: an adapter's constructor hands back the assembled Platform"
@@ -67,22 +70,30 @@ impl MacosPlatform {
                 RootSet::under_override(&root, &temp)?
             }
         };
-        Ok(Self::with_roots(roots))
+        Self::with_roots(roots)
     }
 
     /// Assembles the platform with roots the caller chose, without the
-    /// default resolver, and with [`MacosProcessSupervision`] as its process
-    /// port. Integration tests use it with a test root, so no
-    /// folder is left in the real user temporary directory.
-    #[must_use]
-    pub fn with_roots(roots: RootSet) -> Platform {
-        Platform::new(
+    /// default resolver, with [`MacosProcessSupervision`] as its process
+    /// port, with [`MacosFetcher`] as its download port, and with
+    /// [`MacosCodeSigning`] as its code signing port. Integration tests use
+    /// it with a test root, so no folder is left in the real user temporary
+    /// directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::HostFactsUnavailable`] when the OS version
+    /// of the host cannot be read.
+    pub fn with_roots(roots: RootSet) -> Result<Platform, PlatformError> {
+        Ok(Platform::new(
             Arc::new(FixedRoots::new(roots)),
             Arc::new(MacosFilesystem),
             Arc::new(SystemClock),
             Arc::new(MacosIdentity),
-            Arc::new(MacosPlatformInfo),
+            Arc::new(MacosPlatformInfo::read()?),
         )
         .with_processes(Arc::new(MacosProcessSupervision::new()))
+        .with_fetcher(Arc::new(MacosFetcher::new()))
+        .with_code_signing(Arc::new(MacosCodeSigning::new())))
     }
 }

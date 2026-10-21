@@ -28,6 +28,7 @@ mod agent;
 pub mod bundle;
 mod capability;
 mod clock;
+mod codesign;
 mod error;
 mod fetch;
 mod fs;
@@ -48,14 +49,20 @@ pub use agent::{
 pub use bundle::AppBundle;
 pub use capability::{CapabilityStatus, PlatformCapabilities, PlatformCapability};
 pub use clock::{Clock, SystemClock};
+pub use codesign::{
+    CodeAssessment, CodeSigning, QuarantineInfo, SignatureKind, UnsupportedCodeSigning,
+};
 pub use error::PlatformError;
-pub use fetch::StopFlag;
+pub use fetch::{
+    FetchError, FetchRequest, FetchResponse, FetchSink, FetchSummary, Fetcher, HTTPS_URL_MAX_LEN,
+    HttpsUrl, HttpsUrlError, ResponseKind, Resume, SinkError, StopFlag, UnsupportedFetcher,
+};
 pub use fs::{
     AppendFile, DirEntryInfo, FileIdentity, FileInfo, FileKind, Filesystem, REMOVE_TREE_MAX_DEPTH,
     ReadSeekFile, RemoveReport, VolumeFacts, VolumeSpace, is_same_or_inside, remove_tree_names,
 };
 pub use identity::{UserId, UserIdentity};
-pub use info::{PlatformInfo, host_target};
+pub use info::{HostFacts, PlatformInfo, host_target};
 pub use layout::{
     DirectoryLayout, DirectoryResolver, FixedRoots, INSTANCE_MANIFEST_FILE, InstancePaths,
     ROOT_OVERRIDE_ENV, RUNTIME_ROOT_MAX, RootKind, RootSet, SOCKET_NAME_MAX, SOCKET_PATH_MAX,

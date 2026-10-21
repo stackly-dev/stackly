@@ -128,6 +128,14 @@ pub enum PlatformError {
         /// The deepest nesting allowed, the target counted as one level.
         max: usize,
     },
+    /// The OS version of the host could not be read, or is not a valid
+    /// [`OsVersion`](stackly_domain::OsVersion), when an adapter made its
+    /// platform (spec 0018).
+    #[error("cannot read the OS version of this host: {reason}")]
+    HostFactsUnavailable {
+        /// What was wrong, without the value.
+        reason: &'static str,
+    },
     /// A path lies outside the roots a test owns. Only the fake filesystem
     /// in `stackly-testkit` returns this.
     #[error("{} is outside the test roots", path.display())]
