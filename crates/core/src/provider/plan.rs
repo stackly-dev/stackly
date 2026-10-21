@@ -392,6 +392,14 @@ pub struct NativeProbeSpec {
     pub probe: NativeProbe,
 }
 
+impl NativeProbeSpec {
+    /// A native probe attempt at `target`.
+    #[must_use]
+    pub const fn new(target: ProbeTarget, probe: NativeProbe) -> Self {
+        Self { target, probe }
+    }
+}
+
 /// Where a TCP probe connects.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(

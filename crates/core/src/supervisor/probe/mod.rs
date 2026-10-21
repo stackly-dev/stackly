@@ -14,6 +14,8 @@ mod http;
 mod native;
 mod tcp;
 
+pub use native::{Connecting, NativeConnect, NativeStream, TcpConnect};
+
 use std::time::Duration;
 
 use stackly_domain::{ObservationDetail, ReasonCode};
@@ -104,6 +106,8 @@ pub struct ProbeContext<'a> {
     /// The supervisor constants: the HTTP header limit and the helper
     /// grace period.
     pub config: &'a SupervisorConfig,
+    /// Opens the connection of a `native` probe.
+    pub native: &'a dyn NativeConnect,
 }
 
 /// Runs one attempt of `probe` within `attempt_timeout`.
@@ -141,7 +145,7 @@ pub async fn run(
             .await
         }
         ProbeSpec::Exec(spec) => exec::run(spec, attempt_timeout, context).await,
-        ProbeSpec::Native(spec) => native::run(spec, attempt_timeout, context.redactor).await,
+        ProbeSpec::Native(spec) => native::run(spec, attempt_timeout, &context).await,
     }
 }
 
