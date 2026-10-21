@@ -8,16 +8,34 @@
 
 /* Begin PBXBuildFile section */
 		5AC100000000000000000001 /* StacklyUI in Frameworks */ = {isa = PBXBuildFile; productRef = 5AC100000000000000000002 /* StacklyUI */; };
+		5AC100000000000000000020 /* StacklyXCTestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 5AC100000000000000000021 /* StacklyXCTestSupport */; };
+		5AC100000000000000000022 /* StacklyUI in Frameworks */ = {isa = PBXBuildFile; productRef = 5AC100000000000000000023 /* StacklyUI */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5AC100000000000000000024 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5AC10000000000000000000C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5AC100000000000000000009;
+			remoteInfo = Stackly;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		5AC100000000000000000004 /* Stackly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Stackly.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AC100000000000000000026 /* StacklyAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StacklyAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5AC100000000000000000005 /* Stackly */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Stackly;
+			sourceTree = "<group>";
+		};
+		5AC100000000000000000027 /* StacklyAppUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StacklyAppUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +49,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5AC100000000000000000028 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5AC100000000000000000022 /* StacklyUI in Frameworks */,
+				5AC100000000000000000020 /* StacklyXCTestSupport in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				5AC100000000000000000005 /* Stackly */,
+				5AC100000000000000000027 /* StacklyAppUITests */,
 				5AC100000000000000000008 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				5AC100000000000000000004 /* Stackly.app */,
+				5AC100000000000000000026 /* StacklyAppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +105,31 @@
 			productReference = 5AC100000000000000000004 /* Stackly.app */;
 			productType = "com.apple.product-type.application";
 		};
+		5AC10000000000000000002B /* StacklyAppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5AC10000000000000000002C /* Build configuration list for PBXNativeTarget "StacklyAppUITests" */;
+			buildPhases = (
+				5AC100000000000000000029 /* Sources */,
+				5AC100000000000000000028 /* Frameworks */,
+				5AC10000000000000000002A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5AC100000000000000000025 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5AC100000000000000000027 /* StacklyAppUITests */,
+			);
+			name = StacklyAppUITests;
+			packageProductDependencies = (
+				5AC100000000000000000023 /* StacklyUI */,
+				5AC100000000000000000021 /* StacklyXCTestSupport */,
+			);
+			productName = StacklyAppUITests;
+			productReference = 5AC100000000000000000026 /* StacklyAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -88,6 +142,10 @@
 				TargetAttributes = {
 					5AC100000000000000000009 = {
 						CreatedOnToolsVersion = 27.0;
+					};
+					5AC10000000000000000002B = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 5AC100000000000000000009;
 					};
 				};
 			};
@@ -102,6 +160,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				5AC100000000000000000003 /* XCLocalSwiftPackageReference "Packages/StacklyUI" */,
+				5AC10000000000000000002F /* XCLocalSwiftPackageReference "../../clients/swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5AC100000000000000000008 /* Products */;
@@ -109,12 +168,20 @@
 			projectRoot = "";
 			targets = (
 				5AC100000000000000000009 /* Stackly */,
+				5AC10000000000000000002B /* StacklyAppUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		5AC10000000000000000000B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AC10000000000000000002A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -131,7 +198,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5AC100000000000000000029 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5AC100000000000000000025 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5AC100000000000000000009 /* Stackly */;
+			targetProxy = 5AC100000000000000000024 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5AC10000000000000000000D /* Debug */ = {
@@ -318,6 +400,48 @@
 			};
 			name = Release;
 		};
+		5AC10000000000000000002D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ojiepermana.stackly.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = Stackly;
+			};
+			name = Debug;
+		};
+		5AC10000000000000000002E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ojiepermana.stackly.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = Stackly;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -339,6 +463,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		5AC10000000000000000002C /* Build configuration list for PBXNativeTarget "StacklyAppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AC10000000000000000002D /* Debug */,
+				5AC10000000000000000002E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -346,10 +479,22 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/StacklyUI;
 		};
+		5AC10000000000000000002F /* XCLocalSwiftPackageReference "../../clients/swift" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../../clients/swift";
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		5AC100000000000000000002 /* StacklyUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StacklyUI;
+		};
+		5AC100000000000000000021 /* StacklyXCTestSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StacklyXCTestSupport;
+		};
+		5AC100000000000000000023 /* StacklyUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = StacklyUI;
 		};

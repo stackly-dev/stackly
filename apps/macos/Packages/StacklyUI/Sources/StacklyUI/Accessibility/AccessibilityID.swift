@@ -3,8 +3,59 @@
 /// only a stable data key, never display text, and an identifier never changes a
 /// VoiceOver label or order.
 ///
-/// Feature 68 adds the scopes of the screens next to these.
+/// Feature 68 adds the scopes of the screens next to these: the sidebar, the daemon
+/// footer and banner, and the design gallery, which its UI tests read (spec 0068).
 nonisolated public enum AccessibilityID {
+    /// The main window's sidebar.
+    public enum Sidebar {
+        /// The row of `section`, such as `sidebar.row.instances`. The key is the raw
+        /// value of `SidebarSection`.
+        public static func row(_ section: SidebarSection) -> String {
+            "sidebar.row.\(section.rawValue)"
+        }
+    }
+
+    /// The daemon footer in the sidebar.
+    public enum DaemonFooter {
+        /// The status label.
+        public static let status = "daemonFooter.status"
+        /// The Settings button.
+        public static let settings = "daemonFooter.settings"
+    }
+
+    /// The daemon banner above the pages.
+    public enum DaemonBanner {
+        /// The banner.
+        public static let container = "daemonBanner.container"
+        /// The banner title.
+        public static let title = "daemonBanner.title"
+        /// The Reconnect action.
+        public static let reconnect = "daemonBanner.action.reconnect"
+        /// The Open Diagnostics action.
+        public static let openDiagnostics = "daemonBanner.action.openDiagnostics"
+    }
+
+    /// The design gallery window.
+    public enum Gallery {
+        /// The sidebar row of the topic with the lowercase name `topic`, such as
+        /// `gallery.topic.status`.
+        public static func topic(_ topic: String) -> String {
+            "gallery.topic.\(topic)"
+        }
+
+        /// The trigger button of the confirmation sample `sample`.
+        public static func confirmationTrigger(_ sample: String) -> String {
+            "gallery.confirmation.trigger.\(sample)"
+        }
+
+        /// The text that says what the last confirmation did.
+        public static let confirmationResult = "gallery.confirmation.result"
+        /// The Show All button of the States page.
+        public static let statesShowAll = "gallery.states.showAll"
+        /// The Daemon Unreachable toggle of the States page.
+        public static let statesDaemonUnreachable = "gallery.states.daemonUnreachable"
+    }
+
     /// The feedback card.
     public enum Feedback {
         /// The card.
