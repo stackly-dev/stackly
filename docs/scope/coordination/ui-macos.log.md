@@ -2,7 +2,7 @@
 
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `0605c50`
-- **Wave aktif:** `3`, diajukan `2026-10-21` (menunggu persetujuan user)
+- **Wave aktif:** `3`, mulai `2026-10-21`
 - **Diperbarui:** `2026-10-21 07:51`
 
 ## Sub sesi wave `1`
@@ -36,6 +36,12 @@
 | `tst-f68-test` | tester | F68 `Test it` | `ui-macos.md` | test di `clients/swift/Tests/StacklyXCTestSupportTests/`, `StacklyTestSupportTests/`, `StacklyUITests/Fixtures/`, `StacklyUITests/SnapshotTests/` (tanpa PNG), bagian test xtask `snapshot`, `ui_test`, `swift_scan`, record `evidence/` | `claude/arc-f68-spec-3056e5` (sesi `chk-f68-m1` dipakai ulang) | `sonnet-5-5 · high` | `merged` (`dc7b60d`) |
 | `chk-f69-m2` | checker (verify) | F69 milestone 2, langkah 3 sampai 5, plus ulang probe P4 sampai P7 | `ui-macos.md` | centang `verify.md` 0069 bagian Milestone 2, status record `evidence/manual/` 0069 | `claude/arc-f69-spec-a4bbd3` (sesi `chk-f69-m1` dipakai ulang) | `sonnet-5-5 · high` | `merged` (`caf7e5c`) |
 | `dev-f68-m1` | developer | F68 milestone 1, langkah 1 sampai 6 | `ui-macos.md` | `Fixtures/`, `FixtureAppearance.swift`, `State/StateView.swift`, `Shell/DaemonBanner.swift`, `Shell/AppShell.swift` (pindah `ShellPreviewSamples`), `Shell/LiveShell.swift`, `Connection/` untuk fixture, `Secrets/` untuk `SecretsClient.fixture`, `Gallery/`, `StacklyUI/Package.swift`, `StacklyUITests/Support/`, `Snapshots/`, suite baru, `SourceRuleTests.swift`, modul xtask `snapshot review` dan satu baris `main.rs`, `verify.md` 0068 M1 | `claude/distracted-bartik-4e1411` (sesi `dev-f68-m2` dipakai ulang) | `sonnet-5-5 · high` | `merged` (`ad7dcf9`) |
+
+## Sub sesi wave `3`
+
+| Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `arc-f1368-update` | architect (update) | update gabungan spec 0013 (usulan fase 02 tanpa K16 sampai K18, butir ditunda dari 0067, 0068, 0069, aturan 384 pt, perbaikan Diagnostics) dan perbaikan kata spec 0068 (AC-3 dan AC-4 waktu responsif, `galleryScrollsPage`, render per kelompok, langkah perubahan token) | `ui-macos.md`, `02-instalasi-pertama.md` | `index.md` dan `rationale.md` 0013 dan 0068, dua baris usang `verify.md` 0013, satu langkah `verify.md` 0068, akhiran tanda butir usulan 0013 di 0067 dan 0069 | `claude/arc-f1368-update-ceebb3` | `opus-5-5 · xhigh` | `aktif` |
 
 ## Sub sesi wave `2`
 
@@ -106,6 +112,7 @@
 | `2026-10-21` | `chk-f13-verify` ulang langkah "Diagnostics setelah tersambung lagi" di `015305a`: PASS (`8c7b63a` → merge `16db269`, record baru PASS, record FAIL lama tetap sebagai riwayat `2239e01`); AC-12 dan bagian AX AC-21 terpenuhi, baris Diagnostics satu elemen yang berganti. F13 `Build it`, `Verify it`, dan milestone 4 kini hanya menunggu user: cek 6 dan pemulihan pilihan sidebar setelah Quit (`docs/manual.md` bagian F); BLOCKED tidak ada. Pembersihan lead: lima `stacklyd` dan empat `stackly-fake-server` yatim (`ppid` 1, root `/private/tmp/stk-ui-*`, sekitar 41 menit, dari satu run test yang berhenti tanpa ringkasan) dihentikan dengan SIGTERM; guard test tidak bisa membereskan bila proses test sendiri mati. | `lead` |
 | `2026-10-21` | Lead scope 02 (`Scope 02 · Instalasi pertama`) melanjutkan `/coordinate` di checkout utama yang sama: ia hanya mengedit file scope 02, log 02, baris fitur 15 sampai 23 di `index.md`, dan nanti `CHANGELOG.md`, commit dengan pathspec, dan merge kode lewat worktree integrasi lalu `--ff-only`. Kesepakatan: kedua lead saling memberi tahu sebelum merge kode; lead ini mengedit `docs/manual.md` dan baris 12, 13, 67, 68, 69 di `index.md`; F13 milestone 4 dihitung terpenuhi untuk prasyarat fase 02; lead ini memegang satu update gabungan spec 0013 (usulan fase 02 tanpa K16 sampai K18, butir ditunda dari 0067, 0068, 0069, aturan 640 pt hanya untuk halaman tanpa inspector) yang dimulai setelah wave ini, dengan perubahan teks AC-7 ditanyakan ke user dulu; lead scope 02 tidak mengedit spec 0013 sampai itu. Catatan untuk `dev-f17-m3` dikirim: aturan cakupan halaman snapshot spec 0068, referensi `UnbuiltPage` yang harus direkam ulang, `ProviderTile` dan gaya key value dari spec 0067, Find lewat `CommandMap` spec 0069, aturan 384 pt. | `lead` |
 | `2026-10-21` | `tst-f68-test` `done` (`416c986`): tujuh test XCTest hidup baru untuk helper evidence (FAIL, native, BLOCKED di atas kegagalan, nama async, id salah, panggilan ganda) yang menutup celah jalur `XCTFail` native, dan AC-9, AC-11, AC-13 kini disebut di modul test xtask; AC-14 sampai AC-18 (UI test) tetap BLOCKED owner user. Gerbang lead: fmt, clippy `-p xtask`, `cargo test -p xtask` 369, evidence check, lint, `clients/swift` 170 Swift Testing dan 35 XCTest → merge `dc7b60d` (lead scope 02 diberi tahu sebelum dan sesudah). F68 `Test it` belum dicentang sampai UI test berjalan setelah user menyalakan Automation Mode (`docs/manual.md` bagian K). | `lead` |
+| `2026-10-21` | User memulai wave 3: satu architect `arc-f1368-update` (Opus xhigh, sesi baru) untuk update gabungan spec 0013 dan perbaikan kata spec 0068; semua perubahan teks AC kembali ke user dulu. Lead scope 02 diberi tahu dan diminta mengirim butir 0013 tambahan lewat lead; butir yang diterapkan ditandai di file usulan fase 02 oleh lead scope 02 atau lead ini sesuai kesepakatan. | `user` |
 | `2026-10-21` | Update spec 0013 dari usulan fase 02 (`02-instalasi-pertama.usulan-fondasi.md` bagian Spec 0013, sisa setelah K16 sampai K18; prasyarat F16 M1) ada di luar scope ini dan memuat perubahan teks AC-7. Diajukan ke user di akhir wave, setelah F13 `Verify it`, supaya verify penuh F13 memakai spec yang dibangun. | `lead` |
 
 ## Blocker terbuka
