@@ -5,6 +5,8 @@
 
 use std::os::unix::fs::symlink;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use std::io::Write;
@@ -470,4 +472,21 @@ fn a_delay_slows_every_call_of_one_operation_until_it_is_removed() {
     assert!(delayed >= Duration::from_millis(150), "{delayed:?}");
     assert!(other < Duration::from_millis(150), "{other:?}");
     assert!(cleared < Duration::from_millis(150), "{cleared:?}");
+}
+
+#[test]
+fn a_hook_runs_once_inside_the_next_call_of_its_operation_only() {
+    let (root, fs) = fake();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let seen = Arc::clone(&runs);
+    fs.run_on_next(FsOp::VolumeSpace, move || {
+        seen.fetch_add(1, Ordering::SeqCst);
+    });
+
+    fs.symlink_metadata(root.path()).unwrap();
+    assert_eq!(runs.load(Ordering::SeqCst), 0, "another operation");
+    fs.volume_space(root.path()).unwrap();
+    assert_eq!(runs.load(Ordering::SeqCst), 1, "the next call of its own");
+    fs.volume_space(root.path()).unwrap();
+    assert_eq!(runs.load(Ordering::SeqCst), 1, "never a second time");
 }
