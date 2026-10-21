@@ -8,6 +8,8 @@
         var body: some View {
             TileGallerySection()
             KeyValueGallerySection()
+            CopyGallerySection()
+            ConsoleGallerySection()
         }
     }
 
@@ -75,6 +77,16 @@
                             }
                         }
                     }
+                    CardSection("Connection") {
+                        HStack(spacing: Spacing.s8) {
+                            LabeledContent("Endpoint") {
+                                Text("127.0.0.1:5432").font(.callout.monospaced())
+                            }
+                            CopyButton(
+                                "127.0.0.1:5432", what: "endpoint", style: .icon,
+                                announcement: "Address copied.")
+                        }
+                    }
                     CardSection("Storage", footer: ComponentSamples.keyValueFooter) {
                         LabeledContent(ComponentSamples.longValueRow.label) {
                             Text(ComponentSamples.longValueRow.value)
@@ -87,6 +99,53 @@
                     }
                 }
                 .labeledContentStyle(.stackly)
+            }
+        }
+    }
+
+    // MARK: - Copy and console
+
+    /// The CopyButton section: both styles at rest and confirmed, and a live button.
+    struct CopyGallerySection: View {
+        var body: some View {
+            GallerySection(
+                "CopyButton",
+                note: "Pressing writes the text, then shows Copied with a checkmark for two "
+                    + "seconds without moving the layout. The last four are static states."
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.s12) {
+                    HStack(spacing: Spacing.s22) {
+                        CopyButton("127.0.0.1:5432", what: "address", key: "gallery")
+                        CopyButton("127.0.0.1:5432", what: "address", style: .icon)
+                    }
+                    HStack(spacing: Spacing.s22) {
+                        CopyButtonFace(style: .text, what: "address", isConfirming: false) {}
+                        CopyButtonFace(style: .text, what: "address", isConfirming: true) {}
+                        CopyButtonFace(style: .icon, what: "address", isConfirming: false) {}
+                        CopyButtonFace(style: .icon, what: "address", isConfirming: true) {}
+                    }
+                }
+            }
+        }
+    }
+
+    /// The ConsoleBlock section: a command with Copy, a command that wraps, and text.
+    struct ConsoleGallerySection: View {
+        var body: some View {
+            GallerySection(
+                "ConsoleBlock",
+                note: "Selectable monospace text on the console surface. Long lines wrap; "
+                    + "there is no horizontal scroll. Copy takes the command without “$ ”."
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.s12) {
+                    ConsoleBlock(command: ComponentSamples.command)
+                    ConsoleBlock(command: ComponentSamples.longCommand)
+                    ConsoleBlock(
+                        text: ComponentSamples.multilineText,
+                        accessibilityLabel: "Example",
+                        copy: ConsoleCopy(what: "example")
+                    )
+                }
             }
         }
     }

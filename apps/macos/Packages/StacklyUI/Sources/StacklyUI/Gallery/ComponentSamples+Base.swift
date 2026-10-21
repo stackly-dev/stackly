@@ -72,5 +72,22 @@
         static let keyValueFooter = "Stackly picks the next free port when you create an instance."
         /// The reason shown in a footer instead of only in a tooltip.
         static let backupReason = "The Valkey provider doesn’t declare a backup capability."
+
+        // MARK: - Copy and console
+
+        /// A command the CLI prints for an instance (mockup).
+        static let command =
+            "stackly instance create --software postgresql --version 17.4 --name pg17-dev"
+        /// A command that does not fit in one line at 640 pt and wraps.
+        static let longCommand =
+            "stackly instance create --software postgresql --version 17.4 --name pg17-dev "
+            + "--port 5433 --data-dir ~/Library/Application\\ Support/Stackly/instances/pg17-dev/data "
+            + "--set shared_buffers=256MB --set max_connections=200"
+        /// Several lines, such as the example of the onboarding page.
+        static let multilineText = """
+            # Put Stackly's tools on your PATH
+            export PATH="$HOME/Library/Application Support/Stackly/bin:$PATH"
+            stackly daemon status
+            """
     }
 #endif

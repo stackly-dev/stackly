@@ -465,6 +465,10 @@ Put the style on a `CardSection` whose rows are all read only, on an inspector, 
 
 ### Copy and console
 
+`CopyButton(_:what:style:announcement:key:)` copies plain text to the general pasteboard **only when pressed**, through `PlainPasteboard.write(_:)` (`clearContents()` then a plain string; `NSPasteboard` appears only there and in `ConcealedPasteboard`, a source rule guards it). For two seconds afterwards it shows "Copied" with a `checkmark` (the icon style: only the checkmark) and then goes back to "Copy" or `doc.on.doc`; the width is reserved for the longer label, so the row does not move. Every press writes again and starts the two seconds over. VoiceOver reads "Copy {what}" and, after the write, says the announcement once ("{What} copied." unless the screen gives its own copy, such as "Address copied." or "Command copied."). The text style is a small bordered button; the icon style is borderless with a 24 × 24 pt click area. The checkmark carries the tone fill `positive`; the resting icon is `textSecondary`. A copy button is never gated by `MutationAvailability`, it never copies a secret (a secret copy is always `RevealableSecretText` and `ConcealedPasteboard`), and a screen's own key goes into the identifier `copy.button.<key>`.
+
+`ConsoleBlock` draws `.callout.monospaced()` primary text on `.consoleSurface()`: `surfaceConsole`, `Radius.medium`, a hairline `separatorColor` border (1 pt under Increase Contrast), and 12 pt above and below and 14 pt at the sides. Text is selectable and wraps, with no horizontal scroll. `ConsoleBlock(command:)` puts "$ " in `textSecondary` before the command and a Copy button on the right that copies the command without the "$ ". `ConsoleBlock(text:accessibilityLabel:copy:)` shows several lines, with an optional Copy button at the top right. VoiceOver reads the text as one element, the screen's label with the text as its value (the command without "$ "), and the Copy button as its own element. A failure snippet inside a `StateBanner` keeps the banner's own code block.
+
 ### Actions
 
 ### Menus
