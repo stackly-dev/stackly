@@ -438,7 +438,7 @@ pub fn recovery_text(step: &str) -> Option<&'static str> {
             Some("move Stackly to the Applications folder or install it again")
         }
         "use_bundled_cli" => Some(
-            "use the stackly inside Stackly.app (Stackly.app/Contents/MacOS/stackly, or ~/.local/bin/stackly after installing the command line tool), or start stacklyd yourself",
+            "use the stackly inside Stackly.app (Stackly.app/Contents/MacOS/stackly-cli, or ~/.local/bin/stackly after installing the command line tool), or start stacklyd yourself",
         ),
         "manual_daemon_for_override" => Some("start stacklyd yourself for STACKLY_ROOT"),
         "build_with_xtask" => Some("build the app with cargo xtask build-app"),

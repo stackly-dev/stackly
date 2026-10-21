@@ -19,7 +19,7 @@ use super::wait::{BoxFuture, DaemonProbe, Interrupt, LaunchRecordSource, Reachab
 use crate::failure::CliFailure;
 
 /// The bundle executable the tests run from.
-pub const EXECUTABLE: &str = "/Applications/Stackly.app/Contents/MacOS/stackly";
+pub const EXECUTABLE: &str = "/Applications/Stackly.app/Contents/MacOS/stackly-cli";
 
 /// A daemon run id from a small number.
 pub fn run(n: u128) -> Uuid {
