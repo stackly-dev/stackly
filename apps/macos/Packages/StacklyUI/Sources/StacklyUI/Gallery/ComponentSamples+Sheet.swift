@@ -1,4 +1,5 @@
 #if DEBUG
+    import StacklyClient
     import SwiftUI
 
     /// The sample values of milestone 2 (spec 0067): the sheet, the checklist, and the staged
@@ -51,6 +52,72 @@
                 + "/Users/dev/Library/Application Support/Stackly/instances/pg16-old/data. "
                 + "Two instances writing to one directory would corrupt it, so choose another "
                 + "folder or remove the other instance first.")
+
+        // MARK: - Staged progress
+
+        /// The five stages of an install (spec 0018, *Alur install*).
+        static let installStages = [
+            StageDefinition(key: "download", title: "Download"),
+            StageDefinition(key: "verify_digest", title: "Verify digest"),
+            StageDefinition(key: "extract", title: "Extract"),
+            StageDefinition(key: "validate_binary", title: "Validate binary"),
+            StageDefinition(key: "commit", title: "Commit"),
+        ]
+
+        /// An operation in `state` at `stage`, for the progress samples.
+        static func operation(
+            _ state: OperationState, stage: String? = nil,
+            progress: OperationProgress = .indeterminate
+        ) -> OperationSummary {
+            OperationSummary(
+                id: UUID(), kind: .installRuntime, resource: nil, state: state, stage: stage,
+                progress: progress, waitingOn: nil, cancelRequestedAt: nil,
+                pointOfNoReturnAt: nil, failure: nil, recovery: nil, result: nil,
+                trigger: OperationTriggerInfo(origin: .user, client: .gui), createdAt: .now,
+                startedAt: nil, updatedAt: .now, revision: 1)
+        }
+
+        /// The staged progress of an install operation in `state`.
+        static func installProgress(
+            _ state: OperationState, stage: String? = nil,
+            progress: OperationProgress = .indeterminate
+        ) -> StagedProgressValue {
+            .from(
+                operation: operation(state, stage: stage, progress: progress),
+                stages: installStages)
+        }
+
+        /// The compact samples: 38%, a stage this build does not know, and queued.
+        static let compactProgress: [(name: String, value: StagedProgressValue)] = [
+            (
+                "Running at 38%",
+                installProgress(
+                    .running, stage: "verify_digest",
+                    progress: .counted(CountedProgress(done: 90, total: 100)))
+            ),
+            ("Unknown stage", installProgress(.running, stage: "unpacking")),
+            ("Queued", installProgress(.queued)),
+        ]
+
+        /// The stages samples, one per outcome.
+        static let stagesProgress: [(name: String, value: StagedProgressValue)] = [
+            (
+                "Running",
+                installProgress(
+                    .running, stage: "extract",
+                    progress: .counted(CountedProgress(done: 50, total: 100)))
+            ),
+            (
+                "Cancelling",
+                installProgress(
+                    .cancelRequested, stage: "extract",
+                    progress: .counted(CountedProgress(done: 50, total: 100)))
+            ),
+            ("Failed", installProgress(.failed, stage: "extract")),
+            ("Needs recovery", installProgress(.needsRecovery, stage: "commit")),
+            ("Cancelled while queued", installProgress(.cancelled)),
+            ("Succeeded", installProgress(.succeeded)),
+        ]
     }
 
     /// The body of the sample create sheet: a grouped form on the sheet background.

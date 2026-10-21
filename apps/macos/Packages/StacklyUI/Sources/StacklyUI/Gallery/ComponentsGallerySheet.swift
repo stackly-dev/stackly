@@ -6,6 +6,7 @@
         var body: some View {
             SheetGallerySection()
             CheckListGallerySection()
+            StagedProgressGallerySection()
         }
     }
 
@@ -128,6 +129,44 @@
                 }
                 .actionHost()
             }
+        }
+    }
+#endif
+
+#if DEBUG
+    // MARK: - Staged progress
+
+    /// The StagedProgress section: the compact line and the stages layout in every outcome.
+    struct StagedProgressGallerySection: View {
+        var body: some View {
+            GallerySection(
+                "StagedProgress",
+                note: "The bar and the stage that is running. Compact is one line for a row; "
+                    + "stages lists every stage with a symbol and a word. The percent is whole "
+                    + "and never 100 before the operation succeeded."
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.s22) {
+                    ForEach(ComponentSamples.compactProgress, id: \.name) { sample in
+                        labeled(sample.name) {
+                            StagedProgress(sample.value, layout: .compact)
+                        }
+                    }
+                    ForEach(ComponentSamples.stagesProgress, id: \.name) { sample in
+                        labeled(sample.name) {
+                            StagedProgress(sample.value, layout: .stages)
+                        }
+                    }
+                }
+            }
+        }
+
+        private func labeled(_ name: String, @ViewBuilder content: () -> some View) -> some View {
+            VStack(alignment: .leading, spacing: Spacing.s6) {
+                Text(name)
+                    .font(.subheadline.weight(.semibold))
+                content()
+            }
+            .frame(maxWidth: 560, alignment: .leading)
         }
     }
 #endif
