@@ -1,0 +1,65 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15bc9-1200-72f7-8436-50ded8758e67",
+  "covers": [
+    "AC-024",
+    "REQ-024"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0013 check 3: a running instance stays Running when stacklyd stops",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "A fake instance that is Running stays Running in the app while stacklyd is stopped with SIGTERM, the banner names the time of the last known state and the actions are disabled, and after stacklyd starts again the app reconnects and refreshes its state.",
+  "actual": "With stacklyd stopped by SIGTERM the window kept the last known state: row `alpha, Fake 0.1.0, Status: Running` (orders-db and zeta Stopped), the sidebar badge `3 instances, last known`, footer `stacklyd unavailable`, and the banner `Can’t connect to stacklyd.` with `Showing the last known state from 7.04. Actions are disabled until the daemon is reachable.`, Reconnect and Open Diagnostics enabled (cek3-1-daemon-down.png). The page has no mutation control, so the disabled actions are the banner sentence only, as the gate. After stacklyd started again the app reconnected without a click: handshake from the gui at 00:05:19.369Z, 1.2 s after the daemon start at 00:05:18.196Z, followed by get_info, get_health, events.subscribe, instance.list, and operation.list; the banner went, the badge lost `last known`, and the footer read `stacklyd degraded` (no catalog, as in step 16). In the second round, with the fake server killed while the daemon was down, the window still showed alpha Running and the same banner, and after the restart (handshake 4.7 s after the start, with instance.get, instance.list, events.subscribe) the row read Running again because the daemon had started alpha again (new process pid 43097, 07:06:11 +07:00; desired state Running). Not shown: a Running to Stopped change across the outage, because this daemon restarts an instance whose desired state is Running; the gap `server_restarted` path and the new snapshot are locked by `ShellEndToEndTests` (passed 4 of 4 in this run). The announcement `Reconnected. State refreshed.` was not captured here (it belongs to check 6 with VoiceOver). Unattributed: during the run the sidebar selection moved to Environments once and the Settings window flashed open once (window title `General`) while ChatGPT was the frontmost app; nothing in the steps sends input to Stackly, so this is treated as the user touching the Mac, not as an app defect, and the selection never moved again in the later watches of 36 s and 24 s.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 1397658 (main) with only the evidence records of this check added, `CARGO_INCREMENTAL=0 cargo build -p stacklyd -p stackly-cli -p stackly-fake-server`, `cargo build -p stacklyd --example skeleton_seed`, and `cargo xtask build-app` (Debug); the root is a new private folder in the session scratchpad (mode 0700), seeded with `skeleton_seed --root <R>`",
+    "Claude Code drove Stackly through the macOS accessibility API (a small Swift AXUIElement dumper, axdump.swift.txt in this folder (the Swift source, renamed so the repo swift-format hook skips it), to read the tree and to select a sidebar row) and captured only the Stackly window with `screencapture -l <window id>`; no keystroke is sent, so this record does not cover the keyboard (check 6)",
+    "start `STACKLY_ROOT=<R> STACKLY_LOG=debug stacklyd`, create three fake instances with `STACKLY_ROOT=<R> stackly instance create <name> --runtime <id> --provider testing/fake --revision 0.3.0 --wait` in the order zeta, alpha, orders-db (a name with a capital letter is refused by the daemon), then open the Debug app with `open -n --env STACKLY_ROOT=<R> Stackly.app` and select Instances in the sidebar",
+    "start alpha with `stackly instance start` so it is Running, then send SIGTERM to stacklyd at 00:04:38Z; the daemon exits and leaves the fake server running; 6 s later read the AX tree and capture the window (cek3-1-daemon-down.png, ax-cek3-down.txt)",
+    "start stacklyd again on the same root at 00:05:18Z (stacklyd-restart-1.log) and read the AX tree every 3 s",
+    "second round: SIGTERM stacklyd, SIGKILL the leftover fake server (pid 41827) while the daemon is down, read the AX tree and capture the window (cek3-2-down-after-fake-killed.png), start stacklyd at 00:06:10Z (stacklyd-restart-2.log), wait 5 s, read the AX tree, capture the window (cek3-3-reconnected.png), and ask the daemon with `stackly instance get`",
+    "stop alpha, quit the app, stop stacklyd, and confirm no stacklyd, stackly-fake-server, or Stackly process is left"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5) as the checker of the verify session chk-f13-m4, from the screenshots and logs it took; the user has not reviewed this record",
+  "startedAt": "2026-10-21T00:07:46.432576Z",
+  "finishedAt": "2026-10-21T00:09:00.000000Z",
+  "evidencePath": "evidence/manual/files/01a15bc9-1200-72f7-8436-50ded8758e67/",
+  "context": {
+    "sourceCommit": "13976589beff19765b53551233ddce3113e994d7",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
