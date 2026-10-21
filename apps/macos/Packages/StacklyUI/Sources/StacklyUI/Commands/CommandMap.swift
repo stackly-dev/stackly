@@ -145,6 +145,11 @@ nonisolated public struct CommandShortcut: Hashable, Sendable {
         ("'", "\""), ("-", "_"), ("=", "+"), ("`", "~"),
     ]
 
+    /// The character ⇧ turns a base punctuation key into, or `nil` for any other key.
+    static func shiftedCharacter(ofBaseKey key: String) -> Character? {
+        shiftedPunctuation.first { $0.base == key }.flatMap { $0.shifted.first }
+    }
+
     /// The glyph or label a special key shows in a menu.
     private static let specialKeyDisplay: [String: String] = [
         "tab": "⇥", "space": "Space", "escape": "⎋", "return": "↩", "delete": "⌫",
