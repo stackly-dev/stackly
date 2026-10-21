@@ -126,3 +126,4 @@ _Langkah dari update spec 2026-10-22 (*Skenario agent*, menunggu keputusan lead 
 ### UI / manual
 
 - [ ] `cargo xtask evidence run --kind fixture -- cargo xtask ui-test --only ShellUITests` (setelah Automation Mode menyala; sebelum itu `BLOCKED`, owner user) → kelima skenario agent dan `daemon-offline` serta `daemon-unreachable` lulus dengan footer, judul, dan aksi baris nya; tiga alur (Turn On ke `requires_approval`, Turn On ke `not_found`, Start stacklyd ke "stacklyd is starting…") lulus → AC-14, AC-18
+- [ ] Buka `diagnostics-*.light.png` yang direkam ulang di langkah 12 → seksi Command Line memakai nilai fixture tetap (home `/fixture/home`, status not installed, halaman man `stackly.1`), tanpa path dari Mac ini; `agent-banner-matrix.light.png` menampilkan tombol aksi aktif di setiap baris → AC-3, AC-8 (keputusan lead 2026-10-22)
