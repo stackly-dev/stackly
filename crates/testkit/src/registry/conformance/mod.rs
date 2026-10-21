@@ -84,6 +84,7 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     writes::compare_and_swap(&suite);
     writes::inserts(&suite);
     writes::runtimes(&suite);
+    writes::artifact_install_details(&suite);
     writes::names_and_short_keys(&suite);
     writes::software(&suite);
     writes::environments(&suite);

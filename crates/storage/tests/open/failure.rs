@@ -47,7 +47,7 @@ fn set(conn: &Connection, id: &str, items: &str, rule: Option<&str>) -> rusqlite
 fn migrating_v3_gives_old_rows_no_items_and_no_rule_and_keeps_the_data() {
     let harness = Harness::new();
     harness.load_fixture(&fixture(3));
-    let kept = |table: &str| table != "schema_migrations";
+    let kept = |table: &str| table != "schema_migrations" && table != "compatibility_records";
     let mut before = row_counts(&harness.connect());
     before.retain(|(table, _)| kept(table));
 
@@ -82,7 +82,7 @@ fn the_v4_fixture_items_and_rule_read_back_through_the_registry() {
     let harness = Harness::new();
     harness.load_fixture(&fixture(4));
     let (registry, summary) = ready(harness.open());
-    assert_eq!(summary.migrated_from, None);
+    assert_eq!(summary.migrated_from, Some(4));
 
     let error = read(&registry, WITH_ITEMS);
 

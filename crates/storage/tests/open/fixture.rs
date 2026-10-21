@@ -39,6 +39,10 @@ pub const FIXTURE_SHA256: &[(u32, &str)] = &[
         4,
         "ef2dfe13cf987cbc07d6c57270121f0de71bc96225b2a22fa45d94d67e6864c0",
     ),
+    (
+        5,
+        "fe35ef636a19b01ba59bb4650849998ecd6631acefc007f744ce22277de3562e",
+    ),
 ];
 
 /// When the fixture rows were applied, for the `schema_migrations` rows.

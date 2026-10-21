@@ -6,9 +6,11 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
 use stackly_domain::{
-    BatchError, DesiredState, EnvironmentId, InstanceFilter, InstanceId, InstanceName, LeaseFilter,
-    LifecycleEvent, OperationEvent, OperationId, RegistryError, ResourceRef, RuntimeId,
-    SoftwareName, WriteBatch, WriteOp,
+    Arch, ArtifactFormat, BatchError, CompatibilityRecordRow, CompatibilityResult,
+    CompatibilityScope, DependencyManifestJson, DesiredState, EnvironmentId, InstallDetails,
+    InstanceFilter, InstanceId, InstanceName, LeaseFilter, LifecycleEvent, OperationEvent,
+    OperationId, Os, OsVersion, ProviderRevisionKey, RegistryError, ResourceRef, RuntimeId,
+    SignatureInfoJson, SoftwareName, WriteBatch, WriteOp,
 };
 
 use super::{
@@ -1017,5 +1019,89 @@ pub(super) fn leases(suite: &Suite<'_>) {
                 .leases(InstanceId::generate(), LeaseFilter::All),
         ),
         Vec::new(),
+    );
+}
+
+/// The columns an install fills on an artifact, and its compatibility
+/// records, read back as written and in order (spec 0018, "Data model").
+pub(super) fn artifact_install_details(suite: &Suite<'_>) {
+    let provider = ProviderRevisionBuilder::new();
+    let record = |scope, revision: Option<ProviderRevisionKey>, result, minutes: i64| {
+        domain(
+            "make a compatibility record",
+            CompatibilityRecordRow::new(
+                scope,
+                revision,
+                Os::Macos,
+                OsVersion::major_minor(27, 0),
+                Some("26A428".to_owned()),
+                Arch::Aarch64,
+                result,
+                vec!["launch_agent".to_owned(), "ready".to_owned()],
+                vec!["provider_integration_not_covered".to_owned()],
+                Some("ready in 493 ms".to_owned()),
+                shifted(suite.loaded_at, -minutes * 60),
+                format!("runtime/run-{minutes}/record"),
+            ),
+        )
+    };
+    let details = InstallDetails {
+        catalog_id: Some("postgresql-17.6-r2-macos-aarch64".to_owned()),
+        build: Some(2),
+        format: Some(ArtifactFormat::TarGz),
+        size: Some(41_943_040),
+        signature_info: Some(domain(
+            "make signature info",
+            SignatureInfoJson::new(r#"{"adhocSignedAtInstall":false,"machOFiles":3}"#.to_owned()),
+        )),
+        dependency_manifest: Some(domain(
+            "make a dependency manifest",
+            DependencyManifestJson::new(r#"{"dependencies":[],"warnings":[]}"#.to_owned()),
+        )),
+        compatibility: vec![
+            record(
+                CompatibilityScope::Provider,
+                Some(provider.key()),
+                CompatibilityResult::Pass,
+                5,
+            ),
+            record(
+                CompatibilityScope::Runtime,
+                None,
+                CompatibilityResult::Fail,
+                9,
+            ),
+        ],
+    };
+    let artifact = RuntimeBuilder::new()
+        .artifact()
+        .with_install_details(details);
+    suite.commit(
+        "store an artifact with install details and compatibility records",
+        vec![
+            WriteOp::InsertProviderRevision(provider.record()),
+            WriteOp::InsertArtifact(artifact.clone()),
+        ],
+    );
+    let stored = suite
+        .value(
+            "read the artifact with install details",
+            suite.registry.artifact(&artifact.sha256),
+        )
+        .unwrap_or_else(|| super::fail("read the artifact with install details", "it is gone"));
+    expect_eq(
+        "install details and compatibility records read back as written, in order",
+        stored,
+        artifact.clone(),
+    );
+    suite.rejected(
+        "storing the same artifact again is refused, records included",
+        batch(vec![WriteOp::InsertArtifact(artifact.clone())]),
+        at(
+            0,
+            RegistryError::DuplicateResource {
+                resource: ResourceRef::Artifact(artifact.sha256),
+            },
+        ),
     );
 }
