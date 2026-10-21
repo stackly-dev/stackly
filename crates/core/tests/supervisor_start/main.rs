@@ -8,6 +8,7 @@ mod actor_commit;
 mod common;
 mod init;
 mod launch;
+mod native;
 mod reconcile;
 mod reload;
 mod restart;
