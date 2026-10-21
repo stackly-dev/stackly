@@ -11,6 +11,9 @@ publish.workspace = true
 [dependencies]
 core-foundation.workspace = true
 libc.workspace = true
+objc2.workspace = true
+objc2-foundation.workspace = true
+objc2-service-management.workspace = true
 security-framework.workspace = true
 stackly-domain.workspace = true
 stackly-platform.workspace = true

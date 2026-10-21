@@ -12,11 +12,15 @@
 //! file keychain of its own for a root override and tests (spec 0011); the
 //! daemon installs it with `Platform::with_secrets`.
 //!
+//! [`MacosBackgroundAgent`] registers the daemon's LaunchAgent with
+//! `SMAppService` (spec 0015); [`MacosPlatform`] installs it.
+//!
 //! This is the only crate where `unsafe` code may live. Every `unsafe` block
 //! needs a `// SAFETY:` comment, and `cargo xtask check-deps` rejects this
 //! opt out anywhere else.
 #![allow(unsafe_code)]
 
+mod agent;
 mod dirs;
 mod fs;
 mod identity;
@@ -25,6 +29,7 @@ mod platform;
 mod process;
 mod secret;
 
+pub use agent::MacosBackgroundAgent;
 pub use fs::MacosFilesystem;
 pub use identity::MacosIdentity;
 pub use info::MacosPlatformInfo;

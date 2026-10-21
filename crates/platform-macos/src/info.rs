@@ -25,10 +25,7 @@ const CAPABILITIES: PlatformCapabilities = PlatformCapabilities::none("")
     // in `stackly-ipc`, peer credentials come through tokio, and the daemon
     // lock through std (spec 0006).
     .with(PlatformCapability::IpcEndpoint, CapabilityStatus::Supported)
-    .with(
-        PlatformCapability::BackgroundAgent,
-        not_built("not built yet (feature 15)"),
-    )
+    .with(PlatformCapability::BackgroundAgent, CapabilityStatus::Supported)
     .with(
         PlatformCapability::ProcessMetrics,
         not_built("not built yet (feature 28)"),

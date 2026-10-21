@@ -50,6 +50,9 @@ flate2 = { version = "1.1", default-features = false, features = ["rust_backend"
 getrandom = "0.4"
 jiff = { version = "0.2", features = ["serde"] }
 libc = "0.2"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSBundle", "NSError", "NSString"] }
+objc2-service-management = { version = "0.3", default-features = false, features = ["std", "SMAppService", "SMErrors", "objc2", "objc2-foundation"] }
 # Mach-O headers and load commands only, for the runtime closure check
 # (spec 0018).
 object = { version = "0.40", default-features = false, features = ["read_core", "macho", "std"] }
