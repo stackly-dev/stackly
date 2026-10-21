@@ -89,5 +89,45 @@
             export PATH="$HOME/Library/Application Support/Stackly/bin:$PATH"
             stackly daemon status
             """
+
+        // MARK: - Actions
+
+        /// The confirmation of removing an instance (mockup copy).
+        static let removeConfirmation = ActionConfirmation(
+            title: "Remove “pg17-dev”?",
+            message: "The instance is removed from Stackly. Its data directory is kept.",
+            actionTitle: "Remove"
+        )
+        /// The main action of a page.
+        static let startAction = StacklyAction(
+            id: "gallery.start", title: "Start", symbol: "play.fill", mutates: true, perform: {})
+        /// An ordinary secondary action.
+        static let stopAction = StacklyAction(
+            id: "gallery.stop", title: "Stop", symbol: "stop.fill", mutates: true, perform: {})
+        /// A destructive action: red, bordered, and confirmed.
+        static let removeAction = StacklyAction(
+            id: "gallery.remove", title: "Remove…", symbol: "trash",
+            role: .destructive(removeConfirmation), mutates: true, perform: {})
+        /// An action that is running.
+        static let busyAction = StacklyAction(
+            id: "gallery.restart", title: "Restart", symbol: "arrow.clockwise", mutates: true,
+            isBusy: true, perform: {})
+        /// An action the provider does not support, disabled with its reason shown.
+        static let unsupportedAction = StacklyAction(
+            id: "gallery.backup", title: "Back Up…", symbol: "externaldrive", mutates: true,
+            disabledReason: backupReason, perform: {})
+        /// A read only action, which the gate never disables.
+        static let copyAction = StacklyAction(
+            id: "gallery.copy", title: "Copy Connection String", symbol: "doc.on.doc",
+            mutates: false, perform: {})
+        /// The reason the mutation gate gives while the daemon is unreachable.
+        static let gateReason =
+            "stacklyd is unavailable. Actions are disabled until the daemon is reachable."
+        /// The sections of the More menu sample: ordinary, unsupported, then destructive.
+        static let menuSections = [
+            [copyAction, startAction],
+            [busyAction, unsupportedAction],
+            [removeAction],
+        ]
     }
 #endif

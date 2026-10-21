@@ -471,6 +471,13 @@ Put the style on a `CardSection` whose rows are all read only, on an inspector, 
 
 ### Actions
 
+`StacklyAction` is the one description of an action that shows as a button, a menu item, or a command (feature 69): `id`, `title`, `symbol`, `role`, `mutates`, `disabledReason`, `isBusy`, `perform`. A screen builds it once.
+
+- **Availability**, in this order: the action's own `disabledReason` (visible: `.disabled(reason:showsReason: true)`), then the mutation gate for a `mutates` action while the daemon cannot be reached (`.disabled(reason:showsReason: false)`, because the window banner writes it), then `isBusy` (`.busy`), else `.enabled`. `invoke(gate:present:)` does nothing unless the action is `.enabled`.
+- **Role and confirmation.** `ActionRole.standard(confirmation:)` has a confirmation only when the action interrupts work; `ActionRole.destructive` always carries an `ActionConfirmation`, so a destructive action without a dialog cannot be written. The copy follows the Confirmation rules above, and the title of an action that confirms ends with "…" (an `assert` guards it). `invoke` builds the `ConfirmationRequest` and hands it to the host.
+- **One host.** `.actionHost()` holds one confirmation per window or sheet, reads `mutationAvailability` where it sits, and fills the `actionHost` environment value. `AppShell` sets it at its root inside `.environment(\.mutationAvailability, …)`, every `StacklySheet` sets its own, and the menu bar popover (feature 32) will too. A button, a menu item, and a command run through `ActionHost.run(_:)`. Without a host an action with no confirmation still runs; one that confirms asserts and runs nothing.
+- **`ActionButton`.** Primary is `.borderedProminent`, secondary is `.bordered`; a destructive action is `role: .destructive` and `.bordered`, never prominent and never the default. A disabled action keeps its button, with the reason as help and, with `showsReason`, as `DisabledReasonText` right under it; a toolbar button passes `showsReason: false` and the page writes the same `DisabledReasonText` in its content, a section footer, or the item's banner. Gate-blocked: disabled, gate reason as help only. Busy: disabled, the title stays, a small spinner stands next to it, and VoiceOver reads the value "In progress". A capability the provider lacks is never hidden. No keyboard shortcut is set here; feature 69 owns them. The identifier is `action.button.<id>`.
+
 ### Menus
 
 Actions in a menu come from `StacklyAction` through `ActionMenu` (the More menu in a toolbar) and `ActionMenuItems` (a `.contextMenu`). The reason an item is disabled never lives only in a tooltip, so it is written in the menu.

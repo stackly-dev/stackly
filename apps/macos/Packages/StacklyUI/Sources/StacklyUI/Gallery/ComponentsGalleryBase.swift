@@ -10,6 +10,8 @@
             KeyValueGallerySection()
             CopyGallerySection()
             ConsoleGallerySection()
+            ActionButtonGallerySection()
+            ActionMenuGallerySection()
         }
     }
 
@@ -147,6 +149,66 @@
                     )
                 }
             }
+        }
+    }
+
+    // MARK: - Actions
+
+    /// The ActionButton section: primary, secondary, destructive with its confirmation,
+    /// busy, disabled with a visible reason, and blocked by the mutation gate.
+    struct ActionButtonGallerySection: View {
+        var body: some View {
+            GallerySection(
+                "ActionButton",
+                note: "Primary is prominent, secondary is bordered, and a destructive action is "
+                    + "red and bordered, never the default, and asks first. An action the provider "
+                    + "does not support stays visible, disabled, with its reason under it. While "
+                    + "the daemon is unreachable a mutating button is disabled with the reason "
+                    + "as help only, because the window banner writes it."
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.s14) {
+                    HStack(alignment: .top, spacing: Spacing.s14) {
+                        ActionButton(ComponentSamples.startAction, prominence: .primary)
+                        ActionButton(ComponentSamples.stopAction)
+                        ActionButton(ComponentSamples.removeAction)
+                        ActionButton(ComponentSamples.busyAction)
+                    }
+                    ActionButton(ComponentSamples.unsupportedAction)
+                    HStack(alignment: .top, spacing: Spacing.s14) {
+                        ActionButton(ComponentSamples.startAction, prominence: .primary)
+                        ActionButton(ComponentSamples.copyAction)
+                    }
+                    .environment(
+                        \.mutationAvailability,
+                        .blocked(reason: ComponentSamples.gateReason, since: .now)
+                    )
+                }
+            }
+            .actionHost()
+        }
+    }
+
+    /// The ActionMenu section: the More button and the same items as a context menu.
+    struct ActionMenuGallerySection: View {
+        var body: some View {
+            GallerySection(
+                "ActionMenu",
+                note: "The More button of a toolbar. A disabled item says why on a row of its "
+                    + "own right under it (macOS 27: the subtitle is drawn but not exposed to "
+                    + "VoiceOver, see design.md, Menus). The items are also the context menu of "
+                    + "the box. A menu is checked by hand and by the XCUITest of feature 68."
+            ) {
+                HStack(alignment: .center, spacing: Spacing.s22) {
+                    ActionMenu(ComponentSamples.menuSections)
+                    Text("Right click here")
+                        .padding(Spacing.s12)
+                        .cardSurface()
+                        .contextMenu {
+                            ActionMenuItems(ComponentSamples.menuSections)
+                        }
+                }
+            }
+            .actionHost()
         }
     }
 #endif
