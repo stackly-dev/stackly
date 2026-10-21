@@ -89,18 +89,20 @@ pub use provider::{
 };
 pub use registry::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
-    AuditPage, AuditQuery, AuditResource, AuditResult, BatchError, Committed, ConfigRevisionId,
-    ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson, Generation, InstanceFilter,
-    InstancePathEntry, InstancePathKind, LeaseFilter, LogicalRoot, OperationCursor, OperationPage,
-    OperationQuery, PlatformStoreKey, ProviderRevisionRecord, PruneReport, Registry, RegistryError,
-    RegistryId, RelativePath, ResourceRef, RetentionPolicy, SafeDetails, SafeDetailsError,
-    SecretFieldName, SecretReferenceFilter, SecretReferenceId, SecretReferenceRecord,
-    SecretReferenceView, SecretUse, SecretUser, Versioned, WriteBatch, WriteOp,
+    AuditPage, AuditQuery, AuditResource, AuditResult, BatchError, CODES_MAX, Committed,
+    CompatibilityRecordRow, CompatibilityResult, CompatibilityScope, ConfigRevisionId,
+    ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson, DependencyManifestJson,
+    Generation, InstallDetails, InstanceFilter, InstancePathEntry, InstancePathKind, LeaseFilter,
+    LogicalRoot, OperationCursor, OperationPage, OperationQuery, PlatformStoreKey,
+    ProviderRevisionRecord, PruneReport, Registry, RegistryError, RegistryId, RelativePath,
+    ResourceRef, RetentionPolicy, SafeDetails, SafeDetailsError, SecretFieldName,
+    SecretReferenceFilter, SecretReferenceId, SecretReferenceRecord, SecretReferenceView,
+    SecretUse, SecretUser, SignatureInfoJson, Versioned, WriteBatch, WriteOp,
 };
 pub use rule::Rule;
 pub use runtime::{
     InstallMode, NewRuntime, RemovalBlocker, RemovalPlan, Runtime, RuntimeEvent, RuntimeReferences,
-    RuntimeState, StoredRuntime, plan_runtime_removal,
+    RuntimeSelector, RuntimeState, SELECTOR_MAX, StoredRuntime, plan_runtime_removal,
 };
 pub use secret::{
     InstanceBlocker, NeedsSecretItem, NeedsSecretReason, SecretOrigin, SecretOwner,
@@ -112,4 +114,5 @@ pub use value::{
     EnvironmentName, ErrorCodeName, ExactVersion, FailureCode, IdempotencyKey, InstanceName,
     MemberAlias, MethodName, ObservationDetail, Port, ProviderName, ReasonCode, ResourceRevision,
     RevisionLabel, RuntimeLine, SessionId, Sha256Digest, SocketName, SoftwareName, StageName,
+    TeamId,
 };

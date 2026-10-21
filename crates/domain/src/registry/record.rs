@@ -1,7 +1,9 @@
 //! Records of facts the registry keeps next to the aggregates: provider
 //! revisions with their registry columns, and artifacts.
 
+use crate::artifact_format::ArtifactFormat;
 use crate::provider::ProviderRevision;
+use crate::registry::install::{CompatibilityRecordRow, DependencyManifestJson, SignatureInfoJson};
 use crate::target::Target;
 use crate::value::{ExactVersion, Sha256Digest, SoftwareName};
 
@@ -43,8 +45,8 @@ impl ProviderRevisionRecord {
 /// One concrete artifact: an exact version of a software for one target,
 /// named by its digest (filled by feature 18).
 ///
-/// Fields later features fill (`signature_info`, `dependency_manifest`, the
-/// provider revision) are not here yet and are stored empty.
+/// The provider revision column is not here: managed runtimes are shared by
+/// every revision of a provider, so it stays empty (spec 0018).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ArtifactRecord {
@@ -60,6 +62,21 @@ pub struct ArtifactRecord {
     pub minimum_os: Option<String>,
     /// Where it was downloaded from, if known.
     pub source: Option<String>,
+    /// The ID of the catalog entry it came from, such as
+    /// `nats-2.15.1-macos-aarch64`.
+    pub catalog_id: Option<String>,
+    /// The maintainer build number, for a maintainer artifact.
+    pub build: Option<u32>,
+    /// How the downloaded file is packed.
+    pub format: Option<ArtifactFormat>,
+    /// The download size in bytes.
+    pub size: Option<u64>,
+    /// What the install found about the signatures.
+    pub signature_info: Option<SignatureInfoJson>,
+    /// The dependencies of the catalog entry and the validation warnings.
+    pub dependency_manifest: Option<DependencyManifestJson>,
+    /// The compatibility records copied from the catalog, in order.
+    pub compatibility: Vec<CompatibilityRecordRow>,
 }
 
 impl ArtifactRecord {
@@ -80,6 +97,46 @@ impl ArtifactRecord {
             target,
             minimum_os,
             source,
+            catalog_id: None,
+            build: None,
+            format: None,
+            size: None,
+            signature_info: None,
+            dependency_manifest: None,
+            compatibility: Vec::new(),
         }
     }
+
+    /// Adds what an install of the artifact records beyond its identity.
+    #[must_use]
+    pub fn with_install_details(mut self, details: InstallDetails) -> Self {
+        self.catalog_id = details.catalog_id;
+        self.build = details.build;
+        self.format = details.format;
+        self.size = details.size;
+        self.signature_info = details.signature_info;
+        self.dependency_manifest = details.dependency_manifest;
+        self.compatibility = details.compatibility;
+        self
+    }
+}
+
+/// The columns of an [`ArtifactRecord`] that only an install fills (spec
+/// 0018, "Data model"), for [`ArtifactRecord::with_install_details`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InstallDetails {
+    /// The ID of the catalog entry.
+    pub catalog_id: Option<String>,
+    /// The maintainer build number.
+    pub build: Option<u32>,
+    /// How the downloaded file is packed.
+    pub format: Option<ArtifactFormat>,
+    /// The download size in bytes.
+    pub size: Option<u64>,
+    /// What the install found about the signatures.
+    pub signature_info: Option<SignatureInfoJson>,
+    /// The dependencies and the validation warnings.
+    pub dependency_manifest: Option<DependencyManifestJson>,
+    /// The compatibility records, in order.
+    pub compatibility: Vec<CompatibilityRecordRow>,
 }
