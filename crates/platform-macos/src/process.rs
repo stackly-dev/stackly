@@ -15,9 +15,9 @@
 
 mod boot;
 mod inspect;
-mod kill;
+pub(crate) mod kill;
 mod lock;
-mod spawn;
+pub(crate) mod spawn;
 mod spool;
 mod stdin;
 mod sys;

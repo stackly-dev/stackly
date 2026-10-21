@@ -86,6 +86,10 @@ pub enum ChildRole {
     StopCommand,
     /// The provider's reload command.
     ReloadCommand,
+    /// The one run of a runtime's `versionCheck` at install time (spec 0018,
+    /// K6). It takes no lock, and only `stackly_core::runtime::validate`
+    /// uses it.
+    RuntimeCheck,
 }
 
 impl ChildRole {
@@ -1162,6 +1166,7 @@ mod tests {
             ChildRole::Probe,
             ChildRole::StopCommand,
             ChildRole::ReloadCommand,
+            ChildRole::RuntimeCheck,
         ] {
             let mut with_lock = request(role, &args, &env, OutputTarget::Capture);
             with_lock.lock = Some(&lock);

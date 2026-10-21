@@ -42,6 +42,10 @@
 //! interrupted, ignored-range, and failing downloads, and a record of every
 //! request (spec 0018).
 //!
+//! Tests of install validation run against [`FakeCodeSigning`], the code
+//! signing port of [`FakePlatform`]: the signature and quarantine of each
+//! file are scripted by path suffix, and every call is logged (spec 0018).
+//!
 //! On macOS, [`DiskImage`] attaches a small disk image inside a test root,
 //! so [`fs_cross_device_conformance`] can check that a removal never
 //! crosses onto another device (spec 0007).
@@ -59,6 +63,7 @@ mod conformance;
 #[cfg(target_os = "macos")]
 mod disk_image;
 mod fake_agent;
+mod fake_codesign;
 mod fake_fetcher;
 #[cfg(unix)]
 mod fake_fs;
@@ -93,6 +98,7 @@ pub use conformance::{CrossDevice, fs_cross_device_conformance};
 #[cfg(target_os = "macos")]
 pub use disk_image::DiskImage;
 pub use fake_agent::{FAKE_AGENT_BUNDLE, FakeBackgroundAgent};
+pub use fake_codesign::{FakeCodeSigning, SigningCall};
 pub use fake_fetcher::{FakeFetcher, FakeRequest, FakeStep};
 #[cfg(unix)]
 pub use fake_fs::{FakeFilesystem, FakeVolume, Fault, FsOp, Mutation};

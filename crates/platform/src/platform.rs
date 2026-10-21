@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::agent::{BackgroundAgent, UnsupportedBackgroundAgent};
 use crate::clock::Clock;
+use crate::codesign::{CodeSigning, UnsupportedCodeSigning};
 use crate::fetch::{Fetcher, UnsupportedFetcher};
 use crate::fs::Filesystem;
 use crate::identity::UserIdentity;
@@ -32,6 +33,7 @@ pub struct Platform {
     processes: Arc<dyn ProcessSupervision>,
     background_agent: Arc<dyn BackgroundAgent>,
     fetcher: Arc<dyn Fetcher>,
+    code_signing: Arc<dyn CodeSigning>,
 }
 
 impl Platform {
@@ -55,6 +57,7 @@ impl Platform {
         let processes = Arc::new(UnsupportedProcessSupervision::new(os));
         let background_agent = Arc::new(UnsupportedBackgroundAgent::new(os));
         let fetcher = Arc::new(UnsupportedFetcher::new(os));
+        let code_signing = Arc::new(UnsupportedCodeSigning::new(os));
         Self {
             directories,
             fs,
@@ -65,6 +68,7 @@ impl Platform {
             processes,
             background_agent,
             fetcher,
+            code_signing,
         }
     }
 
@@ -95,6 +99,14 @@ impl Platform {
     #[must_use]
     pub fn with_fetcher(mut self, fetcher: Arc<dyn Fetcher>) -> Self {
         self.fetcher = fetcher;
+        self
+    }
+
+    /// Returns a copy with `code_signing` as the code signing port (spec
+    /// 0018). A platform without one answers every call with not supported.
+    #[must_use]
+    pub fn with_code_signing(mut self, code_signing: Arc<dyn CodeSigning>) -> Self {
+        self.code_signing = code_signing;
         self
     }
 
@@ -158,6 +170,12 @@ impl Platform {
     #[must_use]
     pub fn background_agent(&self) -> &dyn BackgroundAgent {
         &*self.background_agent
+    }
+
+    /// Returns the code signing port.
+    #[must_use]
+    pub fn code_signing(&self) -> &dyn CodeSigning {
+        &*self.code_signing
     }
 
     /// Returns the download port.

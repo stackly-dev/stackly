@@ -78,6 +78,7 @@ impl Site {
         let root = TestRoot::new().expect("a test root can be created");
         let secrets = Arc::new(FakeSecretStore::new());
         let platform = MacosPlatform::with_roots(root.roots())
+            .expect("this Mac reports its OS version")
             .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
         let prepared = prepare_layout(&platform).expect("the test root layout can be prepared");
         let owner = LockOwner::new(

@@ -13,7 +13,10 @@
 
 pub mod archive;
 pub mod closure;
+pub mod codes;
 pub mod download;
+pub mod launch;
 pub mod macho;
 #[doc(hidden)]
 pub mod samples;
+pub mod validate;

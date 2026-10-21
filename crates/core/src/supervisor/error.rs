@@ -217,6 +217,22 @@ pub enum SupervisorError {
     /// recorded.
     #[error("the identity of the new process could not be recorded")]
     IdentityCaptureFailed,
+    /// A runtime executable carries the quarantine attribute, so nothing
+    /// was spawned (spec 0018, K7).
+    #[error("the runtime executable is quarantined")]
+    Quarantined {
+        /// The executable.
+        path: String,
+    },
+    /// macOS killed the process before it was ready, which is how it
+    /// refuses a binary it rejects (spec 0018, K7).
+    #[error("macOS rejected the runtime binary and killed it with signal {signal}")]
+    BinaryRejectedByOs {
+        /// The executable.
+        path: String,
+        /// The signal that ended it.
+        signal: i32,
+    },
     /// The identity of the process changed, so no signal was sent.
     #[error("process {pid} no longer has the recorded identity, so it was not signalled")]
     SignalRefused {
@@ -333,6 +349,8 @@ impl OperationError for SupervisorError {
             Self::InitFailed { .. } => codes::INIT_FAILED,
             Self::SpawnFailed { .. } => codes::SPAWN_FAILED,
             Self::IdentityCaptureFailed => codes::IDENTITY_CAPTURE_FAILED,
+            Self::Quarantined { .. } => crate::runtime::codes::QUARANTINED,
+            Self::BinaryRejectedByOs { .. } => crate::runtime::codes::BINARY_REJECTED_BY_OS,
             Self::SignalRefused { .. } => codes::SIGNAL_REFUSED,
             Self::ProcessUnsupported { .. } => codes::PROCESS_UNSUPPORTED,
             Self::SecretInArgv(_) => crate::secret::codes::DELIVERY_REJECTED,
@@ -442,6 +460,11 @@ impl OperationError for SupervisorError {
                 details
             }
             Self::SpawnFailed { kind } => vec![(key("kind"), kind.clone())],
+            Self::Quarantined { path } => vec![(key("path"), path.clone())],
+            Self::BinaryRejectedByOs { path, signal } => vec![
+                (key("path"), path.clone()),
+                (key("signal"), signal.to_string()),
+            ],
             Self::SignalRefused { pid } => vec![(key("pid"), pid.to_string())],
             Self::ProcessUnsupported { os } => vec![(key("os"), os.to_string())],
             Self::Secret(error) => OperationError::details(error),
