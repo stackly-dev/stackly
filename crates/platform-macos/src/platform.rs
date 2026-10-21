@@ -7,6 +7,7 @@ use stackly_platform::{
     validate_root_override,
 };
 
+use crate::agent::MacosBackgroundAgent;
 use crate::codesign::MacosCodeSigning;
 use crate::dirs::{CACHE_DIR, DATA_DIR, LOGS_DIR, darwin_user_temp_dir, home_dir};
 use crate::fetch::MacosFetcher;
@@ -93,6 +94,7 @@ impl MacosPlatform {
             Arc::new(MacosPlatformInfo::read()?),
         )
         .with_processes(Arc::new(MacosProcessSupervision::new()))
+        .with_background_agent(Arc::new(MacosBackgroundAgent::unlocated()))
         .with_fetcher(Arc::new(MacosFetcher::new()))
         .with_code_signing(Arc::new(MacosCodeSigning::new())))
     }

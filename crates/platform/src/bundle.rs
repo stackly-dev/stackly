@@ -40,8 +40,11 @@ pub const APP_EXECUTABLE: &str = "Stackly";
 /// The file name of the daemon executable in `Contents/MacOS`.
 pub const DAEMON_EXECUTABLE: &str = "stacklyd";
 
-/// The file name of the CLI executable in `Contents/MacOS`.
-pub const CLI_EXECUTABLE: &str = "stackly";
+/// The file name of the CLI executable in `Contents/MacOS`. It is not
+/// `stackly`: on a case insensitive volume (the APFS default) that would be
+/// the same file as the app executable `Stackly`. The command people type is
+/// still `stackly`; `~/.local/bin/stackly` is a symlink to this file.
+pub const CLI_EXECUTABLE: &str = "stackly-cli";
 
 /// The folder of the bundle's executables, relative to the bundle root.
 pub const MACOS_DIR: &str = "Contents/MacOS";
@@ -56,6 +59,13 @@ pub const RESOURCES_DIR: &str = "Contents/Resources";
 /// The `BundleProgram` of the LaunchAgent: the daemon, relative to the
 /// bundle root.
 pub const DAEMON_BUNDLE_PROGRAM: &str = "Contents/MacOS/stacklyd";
+
+/// The `ThrottleInterval` of the LaunchAgent in seconds: launchd starts the
+/// job again no sooner than this after it started. `cargo xtask build-app`
+/// writes it into the property list, and `stackly daemon restart` counts
+/// with it to tell when a respawn is overdue, so the two never differ
+/// (spec 0015).
+pub const LAUNCHD_THROTTLE_INTERVAL_SECS: u64 = 10;
 
 /// The extension of an app bundle folder.
 const APP_EXTENSION: &str = "app";
@@ -136,7 +146,7 @@ impl AppBundle {
         self.macos_dir().join(DAEMON_EXECUTABLE)
     }
 
-    /// Returns the CLI executable, `<root>/Contents/MacOS/stackly`.
+    /// Returns the CLI executable, `<root>/Contents/MacOS/stackly-cli`.
     #[must_use]
     pub fn cli_executable(&self) -> PathBuf {
         self.macos_dir().join(CLI_EXECUTABLE)
@@ -169,7 +179,7 @@ mod tests {
     #[test]
     fn the_app_extension_matches_without_regard_to_case() {
         assert_eq!(
-            bundle_of("/Applications/Stackly.APP/Contents/MacOS/stackly"),
+            bundle_of("/Applications/Stackly.APP/Contents/MacOS/stackly-cli"),
             Some(PathBuf::from("/Applications/Stackly.APP"))
         );
     }
@@ -231,7 +241,10 @@ mod tests {
             bundle.daemon_executable(),
             root.join("Contents/MacOS/stacklyd")
         );
-        assert_eq!(bundle.cli_executable(), root.join("Contents/MacOS/stackly"));
+        assert_eq!(
+            bundle.cli_executable(),
+            root.join("Contents/MacOS/stackly-cli")
+        );
         assert_eq!(
             bundle.daemon_plist(),
             root.join("Contents/Library/LaunchAgents/com.ojiepermana.stackly.daemon.plist")
@@ -246,5 +259,15 @@ mod tests {
             bundle.root().join(DAEMON_BUNDLE_PROGRAM),
             bundle.daemon_executable()
         );
+    }
+
+    #[test]
+    fn the_three_executable_names_differ_even_without_regard_to_case() {
+        let names = [APP_EXECUTABLE, DAEMON_EXECUTABLE, CLI_EXECUTABLE];
+        for (index, first) in names.iter().enumerate() {
+            for second in &names[index + 1..] {
+                assert!(!first.eq_ignore_ascii_case(second), "{first} and {second}");
+            }
+        }
     }
 }

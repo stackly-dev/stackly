@@ -22,6 +22,22 @@ struct Args {
     print_roots: bool,
 }
 
+/// The variable launchd sets to the job label.
+const XPC_SERVICE_NAME_ENV: &str = "XPC_SERVICE_NAME";
+
+/// The parent process ID; the daemon only runs on macOS, so any other
+/// target reports 0 (not launchd).
+fn parent_pid() -> u32 {
+    #[cfg(target_os = "macos")]
+    {
+        stackly_platform_macos::parent_pid()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        0
+    }
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
     stacklyd::run(
@@ -30,6 +46,11 @@ fn main() -> ExitCode {
             std::env::var_os(LOG_FILTER_ENV),
             args.print_roots,
         )
-        .with_catalog_dir(std::env::var_os(CATALOG_DIR_ENV)),
+        .with_catalog_dir(std::env::var_os(CATALOG_DIR_ENV))
+        .with_launch_environment(
+            std::env::var_os(XPC_SERVICE_NAME_ENV),
+            parent_pid(),
+            std::env::current_exe().ok(),
+        ),
     )
 }

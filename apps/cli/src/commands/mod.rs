@@ -4,8 +4,10 @@
 //! never changes `output`, `exit`, `session`, `wait`, `confirm`, or
 //! `progress`.
 
+pub mod completion;
 pub mod daemon;
 pub mod instance;
+pub mod manpage;
 pub mod operation;
 pub mod secret;
 

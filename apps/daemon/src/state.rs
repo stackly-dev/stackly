@@ -12,7 +12,7 @@ use stackly_core::secret::Redactor;
 use stackly_platform::Platform;
 use stackly_protocol::Count;
 use stackly_protocol::daemon::{
-    DaemonCounters, DaemonHealth, DaemonHealthStatus, DaemonInfo, RegistryRecovery,
+    DaemonCounters, DaemonHealth, DaemonHealthStatus, DaemonInfo, RegistryRecovery, ShutdownMode,
     SubsystemHealth, SubsystemStatus, subsystem,
 };
 use stackly_protocol::secret::SecretStoreTarget;
@@ -137,6 +137,7 @@ pub struct DaemonCore {
     next_connection_id: AtomicU64,
     stop: watch::Sender<bool>,
     fatal: watch::Sender<Option<u8>>,
+    shutdown: watch::Sender<Option<ShutdownMode>>,
 }
 
 impl std::fmt::Debug for DaemonCore {
@@ -185,6 +186,7 @@ impl DaemonCore {
             next_connection_id: AtomicU64::new(1),
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
+            shutdown: watch::Sender::new(None),
         }
     }
 
@@ -396,6 +398,31 @@ impl DaemonCore {
                 false
             }
         });
+    }
+
+    /// Records the mode of a `daemon.shutdown` request. Only the first
+    /// request counts; `false` means one was already accepted, so the
+    /// daemon is as good as stopping.
+    pub fn request_shutdown(&self, mode: ShutdownMode) -> bool {
+        self.shutdown.send_if_modified(|requested| {
+            if requested.is_none() {
+                *requested = Some(mode);
+                true
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Resolves with the mode once a `daemon.shutdown` request was
+    /// accepted.
+    pub async fn shutdown_requested(&self) -> ShutdownMode {
+        let mut requested = self.shutdown.subscribe();
+        match requested.wait_for(Option::is_some).await {
+            Ok(mode) => mode.unwrap_or(ShutdownMode::Stop),
+            // The sender lives as long as `self`, so this cannot happen.
+            Err(_) => ShutdownMode::Stop,
+        }
     }
 
     /// The exit code of a fatal error, if one happened.

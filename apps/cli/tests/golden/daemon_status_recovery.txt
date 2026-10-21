@@ -15,3 +15,6 @@ Recovery    schema_newer_than_app
 Report      /stackly/data/recovery/report.json
 Schema      3 > 2
 Override    no
+Agent       unavailable (root_override)
+App         -
+Next        start stacklyd yourself for STACKLY_ROOT

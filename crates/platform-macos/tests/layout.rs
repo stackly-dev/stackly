@@ -185,6 +185,7 @@ fn the_built_capabilities_are_supported_and_the_rest_name_their_feature() {
             | PlatformCapability::ProcessSupervision
             | PlatformCapability::SecretStore
             | PlatformCapability::IpcEndpoint
+            | PlatformCapability::BackgroundAgent
             | PlatformCapability::NetworkFetch
             | PlatformCapability::CodeSigning => {
                 assert_eq!(status, CapabilityStatus::Supported, "{capability}");
