@@ -25,7 +25,9 @@ pub use index::{
     IndexPlanned, IndexPlatformNote, IndexProvider, content_sha256, package_dir, provider_entry,
     versions_sha256,
 };
-pub use install::{Installability, NotInstallableReason, VersionNotFound, installability};
+pub use install::{
+    Installability, NotInstallableReason, VersionNotFound, installability, provider_installability,
+};
 pub use load::load_catalog;
 pub use model::{
     CATALOG_OUTDATED_AFTER, Catalog, CatalogEntry, CatalogLocation, CatalogMeta, CatalogOptions,
@@ -42,5 +44,5 @@ pub use rules::{
 };
 pub use status::{
     CellStatus, EntryState, EntryStatus, MATRIX_OSES, SupportReason, TargetSupport, entry_status,
-    host_cell_status, version_support,
+    version_support,
 };

@@ -14,9 +14,15 @@
 pub mod archive;
 pub mod closure;
 pub mod codes;
+pub mod commit;
+pub mod compatibility;
 pub mod download;
+#[cfg(feature = "fixture")]
+pub mod fixture;
+pub mod install;
 pub mod launch;
 pub mod macho;
+pub mod resolve;
 #[doc(hidden)]
 pub mod samples;
 pub mod validate;

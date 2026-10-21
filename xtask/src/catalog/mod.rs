@@ -21,10 +21,6 @@ use stackly_core::provider::ValidatedPackage;
 
 use ledger::{Entry, Ledger, Update};
 
-/// The lowest macOS the app runs on; no catalog artifact may need a newer
-/// one until feature 18 checks `minOs` at run time.
-pub const APP_MINIMUM_MACOS: &str = "27.0";
-
 /// The source file, relative to the repo root.
 const SOURCE_FILE: &str = "providers/catalog.toml";
 /// The ledger file, relative to the repo root.
@@ -146,11 +142,6 @@ fn prepare(root: &Path, with_ledger: bool) -> Result<(AssembledCatalog, CatalogR
     let (packages, mut problems) = read_packages(root, &spec)?;
     let options = AssembleOptions {
         allow_testing: false,
-        min_os_ceiling: Some(
-            APP_MINIMUM_MACOS
-                .parse()
-                .map_err(|_| anyhow!("APP_MINIMUM_MACOS is not an os version"))?,
-        ),
         not_after: Some(jiff::Timestamp::now()),
     };
     let catalog = match assemble(&spec, &packages, options) {
