@@ -76,7 +76,15 @@ fn the_repo_packages_pass_with_one_ok_line_each() {
         .iter()
         .map(|line| line.split(' ').nth(1).expect("an ok line has an ID"))
         .collect();
-    assert_eq!(ids, ["testing/fake", "official/nats", "official/traefik"]);
+    assert_eq!(
+        ids,
+        [
+            "testing/fake",
+            "official/nats",
+            "official/postgresql",
+            "official/traefik"
+        ]
+    );
     for line in &lines {
         let parts: Vec<&str> = line.split(' ').collect();
         assert_eq!(parts.len(), 4, "{line}");
