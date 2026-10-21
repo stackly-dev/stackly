@@ -1129,3 +1129,82 @@ fn the_postgresql_version_check_reads_the_version_of_each_artifact_from_its_line
     }
     ev.pass();
 }
+
+#[test]
+fn the_postgresql_data_marker_names_the_major_and_refuses_the_other_one() {
+    let ev = evidence!(
+        covers = ["REQ-035", "BR-009"],
+        kind = Kind::Fixture,
+        expected = "preflight reads the major from the PG_VERSION text initdb writes, runs 17 data on a 17 runtime only, refuses 17 data on 18 and 18 data on 17, and names a missing, changed, or malformed marker",
+    );
+    let package = validated(&postgresql_dir());
+    let context = golden_context(&package, postgresql_settings());
+    let line = |text: &str| text.parse::<RuntimeLine>().expect("valid line");
+    let contents = |text: &str| MarkerRead::Contents(text.into());
+
+    assert_eq!(
+        package.data_marker_path(&context.paths),
+        Some(context.paths.data.join("PG_VERSION"))
+    );
+    // initdb writes the major and a line break, nothing else.
+    for major in ["17", "18"] {
+        assert_eq!(
+            package.preflight(
+                Some(line(major)),
+                contents(&format!("{major}\n")),
+                &line(major)
+            ),
+            PreflightOutcome::Compatible,
+            "{major}"
+        );
+    }
+    for (data, runtime) in [("17", "18"), ("18", "17")] {
+        assert_eq!(
+            package.preflight(
+                Some(line(data)),
+                contents(&format!("{data}\n")),
+                &line(runtime)
+            ),
+            PreflightOutcome::Incompatible {
+                data: line(data),
+                runtime: line(runtime),
+            },
+            "data {data} on runtime {runtime}"
+        );
+    }
+    // The marker is the only record: it still names the major.
+    assert_eq!(
+        package.preflight(None, contents("17\n"), &line("18")),
+        PreflightOutcome::Incompatible {
+            data: line("17"),
+            runtime: line("18"),
+        }
+    );
+    assert_eq!(
+        package.preflight(Some(line("17")), MarkerRead::Missing, &line("17")),
+        PreflightOutcome::MarkerMissing
+    );
+    assert_eq!(
+        package.preflight(Some(line("17")), MarkerRead::Unreadable, &line("17")),
+        PreflightOutcome::MarkerUnreadable
+    );
+    assert_eq!(
+        package.preflight(Some(line("17")), contents("16\n"), &line("17")),
+        PreflightOutcome::MarkerMismatch {
+            recorded: Some(line("17")),
+            marker: Some(line("16")),
+        }
+    );
+    // A text that is not a bare major does not match the whole pattern.
+    for text in ["", "\n", "17.11\n", "v17\n", "17 18\n", "seventeen\n"] {
+        assert_eq!(
+            package.preflight(Some(line("17")), contents(text), &line("17")),
+            PreflightOutcome::MarkerMismatch {
+                recorded: Some(line("17")),
+                marker: None,
+            },
+            "{text:?}"
+        );
+    }
+    ev.pass();
+}
