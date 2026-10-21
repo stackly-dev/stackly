@@ -1,4 +1,5 @@
 import AppKit
+import StacklyTestSupport
 import SwiftUI
 import Testing
 
@@ -9,7 +10,11 @@ import Testing
 struct CheckListTests {
     // MARK: - status table
 
-    @Test func everyStatusHasTheToneSymbolAndWordOfTheTable() {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected: "Spec 0067 AC-13: every status has the tone, symbol, and word of the table"))
+    func everyStatusHasTheToneSymbolAndWordOfTheTable() {
         let table: [(CheckStatus, Tone, String?, String)] = [
             (.passed, .positive, "checkmark.circle.fill", "Passed"),
             (.warning, .caution, "exclamationmark.triangle.fill", "Warning"),
@@ -32,7 +37,11 @@ struct CheckListTests {
 
     // MARK: - spoken row
 
-    @Test func aRowIsReadAsTitleStatusAndDetail() {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected: "Spec 0067 AC-13: a row is read as title, status, and detail"))
+    func aRowIsReadAsTitleStatusAndDetail() {
         let item = CheckItem(
             id: "disk", status: .warning, title: "Low disk space", detail: "4.1 GB is left.")
         #expect(item.accessibilityLabel == "Low disk space, Warning: 4.1 GB is left.")
@@ -65,7 +74,11 @@ struct CheckListTests {
         CheckItem(id: "c\($0)", status: .passed, title: "Check number \($0)")
     }
 
-    @Test func theAdaptiveLayoutUsesTwoColumnsInASheet() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-13: the adaptive layout uses two columns in a sheet"))
+    func theAdaptiveLayoutUsesTwoColumnsInASheet() {
         let adaptive = height(of: CheckList(items), width: 488)
         let single = height(of: CheckList(items, layout: .single), width: 488)
         #expect(adaptive > 0)

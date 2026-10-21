@@ -1,4 +1,5 @@
 import Foundation
+import StacklyTestSupport
 import Testing
 
 @testable import StacklyUI
@@ -43,7 +44,11 @@ struct StacklyActionTests {
         #expect(action().availability(gate: .available) == .enabled)
     }
 
-    @Test func theActionsOwnReasonComesFirstAndIsShown() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected: "Spec 0067 AC-6: the action's own reason comes first and is shown"))
+    func theActionsOwnReasonComesFirstAndIsShown() {
         let gated = action(reason: "This instance isn’t initialized.", busy: true)
         let expected = ActionAvailability.disabled(
             reason: "This instance isn’t initialized.", showsReason: true)
@@ -51,7 +56,13 @@ struct StacklyActionTests {
         #expect(gated.availability(gate: Self.blocked) == expected)
     }
 
-    @Test func aBlockedGateDisablesOnlyAMutatingActionAndHidesItsReason() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected:
+                "Spec 0067 AC-6: a blocked gate disables only a mutating action and hides its reason"
+        ))
+    func aBlockedGateDisablesOnlyAMutatingActionAndHidesItsReason() {
         let blocked = ActionAvailability.disabled(
             reason: "stacklyd is unavailable.", showsReason: false)
         #expect(action(mutates: true).availability(gate: Self.blocked) == blocked)
@@ -64,7 +75,11 @@ struct StacklyActionTests {
         #expect(action(mutates: false, busy: true).availability(gate: Self.blocked) == .busy)
     }
 
-    @Test func menuReasonsAreTheOwnReasonOrInProgress() {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"],
+            expected: "Spec 0067 AC-8: a menu item shows its own reason or In progress"))
+    func menuReasonsAreTheOwnReasonOrInProgress() {
         #expect(ActionAvailability.enabled.menuReason == nil)
         #expect(ActionAvailability.busy.menuReason == "In progress")
         #expect(
@@ -85,7 +100,11 @@ struct StacklyActionTests {
         #expect(presented == 0)
     }
 
-    @Test func invokeDoesNothingWhileTheActionCannotRun() {
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected: "Spec 0067 AC-6: invoke does nothing while the action cannot run"))
+    func invokeDoesNothingWhileTheActionCannotRun() {
         let runs = Runs()
         var presented = 0
         let cannot = [
@@ -120,7 +139,11 @@ struct StacklyActionTests {
         #expect(runs.count == 1)
     }
 
-    @Test func invokePresentsADestructiveConfirmationForADestructiveRole() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected: "Spec 0067 AC-6: a destructive role presents a destructive confirmation"))
+    func invokePresentsADestructiveConfirmationForADestructiveRole() throws {
         let runs = Runs()
         var request: ConfirmationRequest?
         action(role: .destructive(Self.removal), runs: runs).invoke(gate: .available) {
@@ -133,7 +156,11 @@ struct StacklyActionTests {
         #expect(runs.count == 1)
     }
 
-    @Test func aDestructiveRoleAlwaysCarriesAConfirmation() {
+    @Test(
+        .evidence(
+            covers: ["REQ-027"],
+            expected: "Spec 0067 AC-6: a destructive role always carries a confirmation"))
+    func aDestructiveRoleAlwaysCarriesAConfirmation() {
         #expect(action(role: .destructive(Self.removal)).confirmation == Self.removal)
         #expect(action(role: .standard(confirmation: nil)).confirmation == nil)
         #expect(ActionRole.destructive(Self.removal).isDestructive)
@@ -180,7 +207,11 @@ struct StacklyActionTests {
         }
     }
 
-    @Test func aDestructiveButtonIsNeverProminent() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-026"], expected: "Spec 0067 AC-7: a destructive button is never prominent"
+        ))
+    func aDestructiveButtonIsNeverProminent() throws {
         let path =
             "apps/macos/Packages/StacklyUI/Sources/StacklyUI/Components/Actions/ActionButton.swift"
         let code = SourceFile(

@@ -1,4 +1,5 @@
 import Foundation
+import StacklyTestSupport
 import Testing
 
 @testable import StacklyUI
@@ -18,7 +19,11 @@ struct ConsoleBlockTests {
         .codeLines.joined(separator: "\n")
     }
 
-    @Test func aCommandIsSpokenWithoutItsPromptAndTheTextIsOneElement() {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"], expected: "Spec 0067 AC-5: a command is spoken without its prompt")
+    )
+    func aCommandIsSpokenWithoutItsPromptAndTheTextIsOneElement() {
         let block = ConsoleBlock(command: "stackly daemon status")
         #expect(block.spokenText == "stackly daemon status")
     }
@@ -30,7 +35,12 @@ struct ConsoleBlockTests {
         #expect(command.kind == .command("x", what: "command", announcement: "Command copied."))
     }
 
-    @Test func theTextIsOneElementWithTheScreensLabelAndTheCopyButtonStaysSeparate() throws {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected:
+                "Spec 0067 AC-5: the text is one VoiceOver element and the Copy button its own"))
+    func theTextIsOneElementWithTheScreensLabelAndTheCopyButtonStaysSeparate() throws {
         let text = try code("ConsoleBlock.swift")
         #expect(text.contains(".accessibilityElement(children: .ignore)"))
         #expect(text.contains(".accessibilityLabel(accessibilityLabel)"))
@@ -39,7 +49,11 @@ struct ConsoleBlockTests {
         #expect(text.contains(".textSelection(.enabled)"))
     }
 
-    @Test func theConsoleSurfaceIsMadeOfTokensOnly() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-5: the console surface is built from tokens only"))
+    func theConsoleSurfaceIsMadeOfTokensOnly() throws {
         let text = try code("ConsoleBlock.swift")
         #expect(text.contains("StacklyColor.surfaceConsole"))
         #expect(text.contains("Radius.medium.value"))

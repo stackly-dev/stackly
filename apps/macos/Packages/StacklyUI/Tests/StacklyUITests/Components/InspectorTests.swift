@@ -1,4 +1,5 @@
 import AppKit
+import StacklyTestSupport
 import SwiftUI
 import Testing
 
@@ -23,14 +24,22 @@ struct InspectorTests {
 
     // MARK: - Column
 
-    @Test func columnWidthsAreTheSpecMeasures() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-18: the column widths are the spec measures"))
+    func columnWidthsAreTheSpecMeasures() {
         #expect(InspectorMetrics.minWidth == 240)
         #expect(InspectorMetrics.idealWidth == 280)
         #expect(InspectorMetrics.maxWidth == 360)
         #expect(InspectorMetrics.padding == 16)
     }
 
-    @Test func maxWidthIs280BelowAThousandPointsAndAfterwards360() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-18: the maximum width is 280 below 1000 pt and 360 from there"))
+    func maxWidthIs280BelowAThousandPointsAndAfterwards360() {
         #expect(StacklyInspectorWidth.compactWindowWidth == 1000)
         #expect(StacklyInspectorWidth.maxWidth(windowWidth: 900) == 280)
         #expect(StacklyInspectorWidth.maxWidth(windowWidth: 999) == 280)
@@ -43,7 +52,12 @@ struct InspectorTests {
         #expect(EnvironmentValues().stacklyWindowWidth == nil)
     }
 
-    @Test func pageColumnAtTheSmallestWindowIsNeverBelow384() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-18: the page column at the smallest window is never below 384 pt"))
+    func pageColumnAtTheSmallestWindowIsNeverBelow384() {
         let page =
             AppShell.minimumSize.width - AppShell.sidebarWidth.ideal
             - StacklyInspectorWidth.maxWidth(windowWidth: AppShell.minimumSize.width)
@@ -52,7 +66,10 @@ struct InspectorTests {
 
     // MARK: - Toggle
 
-    @Test func toggleLabelFollowsTheBinding() {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"], expected: "Spec 0067 AC-18: the toggle label follows the binding"))
+    func toggleLabelFollowsTheBinding() {
         #expect(InspectorToggle.label(isPresented: true) == "Hide Inspector")
         #expect(InspectorToggle.label(isPresented: false) == "Show Inspector")
     }
@@ -122,7 +139,11 @@ struct InspectorTests {
 
     // MARK: - Placeholder
 
-    @Test func placeholderDefaultsToNoSelection() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-18: the placeholder defaults to No Selection"))
+    func placeholderDefaultsToNoSelection() {
         let placeholder = InspectorPlaceholder()
         #expect(placeholder.title == "No Selection")
         #expect(placeholder.message == nil)

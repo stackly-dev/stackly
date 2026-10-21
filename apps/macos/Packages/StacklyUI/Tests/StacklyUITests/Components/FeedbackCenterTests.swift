@@ -1,4 +1,5 @@
 import Foundation
+import StacklyTestSupport
 import Testing
 
 @testable import StacklyUI
@@ -24,7 +25,12 @@ struct FeedbackCenterTests {
 
     // MARK: - show
 
-    @Test func showReplacesWhatIsOnScreenAndAnnouncesTheMessageThenTheDetailOnce() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-9: a new feedback replaces the shown one and is announced once")
+    )
+    func showReplacesWhatIsOnScreenAndAnnouncesTheMessageThenTheDetailOnce() {
         let announcements = Announcements()
         let center = make(announcements, ManualSleeps())
         #expect(center.current == nil)
@@ -35,7 +41,12 @@ struct FeedbackCenterTests {
         #expect(announcements.texts == ["Instance started.", "Failed. Try again."])
     }
 
-    @Test func goodNewsOnlyAnnouncesWhilePersistentFeedbackIsOnScreen() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-9: transient feedback over persistent feedback is only announced"))
+    func goodNewsOnlyAnnouncesWhilePersistentFeedbackIsOnScreen() {
         let announcements = Announcements()
         let center = make(announcements, ManualSleeps())
         center.show(bad)
@@ -61,7 +72,13 @@ struct FeedbackCenterTests {
 
     // MARK: - countdown
 
-    @Test func countdownClearsTransientFeedbackAfterItsVisibleDuration() async {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-9: the countdown clears transient feedback after its visible duration"
+        ))
+    func countdownClearsTransientFeedbackAfterItsVisibleDuration() async {
         let sleeps = ManualSleeps()
         let center = make(Announcements(), sleeps)
         center.show(good)
@@ -87,7 +104,10 @@ struct FeedbackCenterTests {
         #expect(center.current?.id == bad.id)
     }
 
-    @Test func aCancelledCountdownClearsNothing() async {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"], expected: "Spec 0067 AC-9: a cancelled countdown clears nothing"))
+    func aCancelledCountdownClearsNothing() async {
         let sleeps = ManualSleeps()
         let center = make(Announcements(), sleeps)
         center.show(good)
@@ -113,7 +133,13 @@ struct FeedbackCenterTests {
 
     // MARK: - FeedbackHold
 
-    @Test func theCountdownRunsOnlyWhenNothingHoldsTheCard() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-9: the countdown runs only when no hover, focus, or inactive window holds the card"
+        ))
+    func theCountdownRunsOnlyWhenNothingHoldsTheCard() {
         for hover in [false, true] {
             for focus in [false, true] {
                 for active in [false, true] {
@@ -125,7 +151,10 @@ struct FeedbackCenterTests {
         }
     }
 
-    @Test func theCardStartsItsWaitFromTheStartWhenAHoldEnds() throws {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"], expected: "Spec 0067 AC-9: the wait starts over when a hold ends"))
+    func theCardStartsItsWaitFromTheStartWhenAHoldEnds() throws {
         let path =
             "apps/macos/Packages/StacklyUI/Sources/StacklyUI/Components/Feedback/FeedbackCard.swift"
         let code = SourceFile(

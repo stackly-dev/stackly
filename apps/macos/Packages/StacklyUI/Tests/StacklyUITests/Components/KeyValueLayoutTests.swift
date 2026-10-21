@@ -1,4 +1,5 @@
 import AppKit
+import StacklyTestSupport
 import SwiftUI
 import Testing
 
@@ -27,13 +28,21 @@ struct KeyValueLayoutTests {
         #expect(longer > single, "a value that does not fit moves below the label")
     }
 
-    @Test func longValueWrapsInsteadOfBeingCut() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-3: a long value wraps under its label instead of being cut"))
+    func longValueWrapsInsteadOfBeingCut() {
         let oneLine = height(of: row(String(repeating: "x", count: 60)), width: 400)
         let wrapped = height(of: row(String(repeating: "word ", count: 60)), width: 400)
         #expect(wrapped > oneLine)
     }
 
-    @Test func cardRowsAreAtLeastTheRowMinimumHigh() {
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected: "Spec 0067 AC-3: every card row is at least the row minimum high"))
+    func cardRowsAreAtLeastTheRowMinimumHigh() {
         let card = CardSection("Summary") {
             LabeledContent("A", value: "1")
             LabeledContent("B", value: "2")
@@ -70,7 +79,13 @@ struct KeyValueLayoutTests {
         #expect(height(of: full, width: 400) > height(of: bare, width: 400))
     }
 
-    @Test func voiceOverReadsTheRowAsOneElementBuiltFromLabelAndValue() throws {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected:
+                "Spec 0067 AC-3: VoiceOver reads a key value row as one element of label and value")
+    )
+    func voiceOverReadsTheRowAsOneElementBuiltFromLabelAndValue() throws {
         let path =
             "apps/macos/Packages/StacklyUI/Sources/StacklyUI/Components/KeyValue/StacklyLabeledContentStyle.swift"
         let code = SourceFile(
