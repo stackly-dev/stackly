@@ -8,7 +8,14 @@
 //!
 //! - an `@Test` in a `*NativeTests` target folder has no `kind: .native`;
 //! - `kind: .native` shows up outside such a folder;
-//! - a file that uses `.evidence(` calls `Test.cancel(` itself.
+//! - a file that uses `.evidence(` calls `Test.cancel(` itself;
+//! - a UI test file (spec 0068: under `apps/macos/`, its name ending with
+//!   `UITests`) that calls `evidence(covers:` also calls
+//!   `XCTSkip(`, `XCTSkipIf(`, or `XCTSkipUnless(` itself, or writes `kind:`
+//!   in the arguments of `evidence`.
+
+/// The name of a UI test file ends with this.
+const UI_TEST_SUFFIX: &str = "UITests";
 
 /// Returns every rule violation in one Swift source file. `file` is the
 /// repository relative path used in the messages, and `native_target` is
@@ -50,7 +57,83 @@ pub fn scan(file: &str, source: &str, native_target: bool) -> Vec<String> {
             );
         }
     }
+    if is_ui_test_file(file) {
+        scan_ui_test(&code, &mut report);
+    }
     violations
+}
+
+/// The UI test rules: the file records a `fixture` result only, and a missing
+/// prerequisite ends the test with `XCTEvidence.blocked`.
+fn scan_ui_test(code: &str, report: &mut impl FnMut(usize, &str)) {
+    let calls = evidence_calls(code);
+    if calls.is_empty() {
+        return;
+    }
+    for name in ["XCTSkip", "XCTSkipIf", "XCTSkipUnless"] {
+        for at in find_calls(code, name) {
+            report(
+                at,
+                &format!(
+                    "a UI test with evidence(covers:) never calls {name} itself; use XCTEvidence.blocked"
+                ),
+            );
+        }
+    }
+    for (at, arguments) in calls {
+        if let Some(offset) = find_word(arguments, "kind:")
+            .into_iter()
+            .find(|&kind| !arguments[..kind].ends_with(is_identifier_char))
+        {
+            report(
+                at + offset,
+                "a UI test never passes kind: to evidence(covers:); a UI test is always fixture",
+            );
+        }
+    }
+}
+
+/// True for a file under `apps/macos/` whose name ends with `UITests`. The
+/// folder does not count: `StacklyUITests` holds Swift Testing unit tests.
+fn is_ui_test_file(file: &str) -> bool {
+    let file = file.replace('\\', "/");
+    let name = file.rsplit('/').next().unwrap_or_default();
+    file.starts_with("apps/macos/")
+        && name
+            .strip_suffix(".swift")
+            .unwrap_or(name)
+            .ends_with(UI_TEST_SUFFIX)
+}
+
+/// The calls `evidence(covers:` of an `XCTestCase` in `code`, as the byte
+/// offset of each argument list (the opening parenthesis included) and the
+/// list itself. The `.evidence(` trait of Swift Testing is not one of them.
+fn evidence_calls(code: &str) -> Vec<(usize, &str)> {
+    find_calls(code, "evidence")
+        .into_iter()
+        .filter(|&at| !code[..at].ends_with('.') || code[..at - 1].ends_with("self"))
+        .filter_map(|at| {
+            let open = at + code[at..].find('(')?;
+            let group = balanced_group(code, open)?;
+            group
+                .strip_prefix('(')?
+                .trim_start()
+                .starts_with("covers:")
+                .then_some((open, group))
+        })
+        .collect()
+}
+
+/// Byte offsets of `name` used as a call: not part of a longer identifier,
+/// and followed by an opening parenthesis (whitespace allowed in between).
+fn find_calls(code: &str, name: &str) -> Vec<usize> {
+    code.match_indices(name)
+        .filter(|(at, _)| {
+            !code[..*at].ends_with(is_identifier_char)
+                && code[at + name.len()..].trim_start().starts_with('(')
+        })
+        .map(|(at, _)| at)
+        .collect()
 }
 
 /// The source with every line whose code starts with `//` emptied, so byte
@@ -102,7 +185,14 @@ fn test_attribute(code: &str, at: usize) -> Option<&str> {
     if !rest[open..].starts_with('(') {
         return Some(&code[at..after]);
     }
-    let start = after + open;
+    let group = balanced_group(code, after + open)?;
+    Some(&code[at..after + open + group.len()])
+}
+
+/// The text from the opening parenthesis at `start` through its matching
+/// closing one, skipping parentheses inside string literals. Null when the
+/// parenthesis never closes.
+fn balanced_group(code: &str, start: usize) -> Option<&str> {
     let mut depth = 0usize;
     let mut in_string = false;
     let mut escaped = false;
@@ -122,7 +212,7 @@ fn test_attribute(code: &str, at: usize) -> Option<&str> {
             ')' => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some(&code[at..start + offset + 1]);
+                    return Some(&code[start..start + offset + 1]);
                 }
             }
             _ => {}
@@ -260,5 +350,145 @@ struct InstanceListTests {
         let found = scan(FILE, "@Test(.evidence(kind: .native\nfunc x() {}\n", true);
         assert_eq!(found.len(), 1);
         assert!(found[0].contains(":1: @Test( has no closing parenthesis"));
+    }
+
+    const UI_FILE: &str = "apps/macos/StacklyAppUITests/ShellUITests.swift";
+
+    #[test]
+    fn a_ui_test_that_blocks_through_the_helper_passes() {
+        let source = r#"
+@MainActor
+final class ShellUITests: XCTestCase {
+    func testFooterReadsConnected() throws {
+        try evidence(
+            covers: ["AC-024"],
+            expected: "the footer reads \"kind\" of connection (a ) in a string)"
+        )
+        guard automationReady else {
+            try XCTEvidence.blocked(reason: "Automation Mode is off", owner: "user")
+        }
+    }
+}
+"#;
+        assert_eq!(scan(UI_FILE, source, false), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_ui_test_that_skips_directly_fails() {
+        let source = r#"
+final class ShellUITests: XCTestCase {
+    func testA() throws {
+        try evidence(covers: ["AC-024"], expected: "x")
+        throw XCTSkip("no")
+    }
+    func testB() throws {
+        try evidence(covers: ["AC-024"], expected: "x")
+        try XCTSkipIf(true, "no")
+        try XCTSkipUnless (false, "no")
+    }
+}
+"#;
+        let found = scan(UI_FILE, source, false);
+        assert_eq!(found.len(), 3, "{found:?}");
+        assert!(found.iter().any(|f| {
+            f.contains(":5: a UI test with evidence(covers:) never calls XCTSkip itself")
+        }));
+        assert!(
+            found
+                .iter()
+                .any(|f| f.contains(":9: ") && f.contains("XCTSkipIf"))
+        );
+        assert!(
+            found
+                .iter()
+                .any(|f| f.contains(":10: ") && f.contains("XCTSkipUnless"))
+        );
+    }
+
+    #[test]
+    fn a_ui_test_that_passes_kind_to_evidence_fails() {
+        let source = r#"
+final class ShellUITests: XCTestCase {
+    func testA() throws {
+        try evidence(
+            covers: ["AC-024"],
+            kind: .fixture,
+            expected: "x"
+        )
+    }
+}
+"#;
+        let found = scan(UI_FILE, source, false);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains(":6: a UI test never passes kind: to evidence(covers:)"));
+    }
+
+    #[test]
+    fn a_ui_test_file_without_an_evidence_call_may_skip() {
+        let source = r#"
+final class HelpersUITests {
+    func wait() throws {
+        throw XCTSkip("helper")
+    }
+}
+"#;
+        assert_eq!(scan(UI_FILE, source, false), Vec::<String>::new());
+    }
+
+    #[test]
+    fn ui_test_comments_and_longer_names_are_not_calls() {
+        let source = r#"
+final class ShellUITests: XCTestCase {
+    // throw XCTSkip("never")
+    /// try evidence(covers: ["AC-024"], kind: .fixture, expected: "x")
+    func testA() throws {
+        try evidence(covers: ["AC-024"], expected: "x")
+        try MyXCTSkip("a helper with another name")
+        let kind: Kind = .fixture
+    }
+}
+"#;
+        assert_eq!(scan(UI_FILE, source, false), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_swift_testing_trait_in_a_ui_named_file_is_not_a_call() {
+        let source = r#"
+struct ShellUITests {
+    @Test(.evidence(covers: ["AC-024"], kind: .fixture, expected: "x"))
+    func a() throws {
+        try Foo.cancel()
+        throw XCTSkip("no")
+    }
+}
+"#;
+        assert_eq!(scan(UI_FILE, source, false), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_ui_test_rules_apply_only_under_apps_macos() {
+        let source = r#"
+final class ShellUITests: XCTestCase {
+    func testA() throws {
+        try evidence(covers: ["AC-024"], kind: .fixture, expected: "x")
+        throw XCTSkip("no")
+    }
+}
+"#;
+        for file in [
+            "clients/swift/Tests/StacklyXCTestSupportTests/ShellUITests.swift",
+            "apps/macos/StacklyApp/ShellTests.swift",
+            "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/ShellTests.swift",
+            "apps/macos/StacklyAppUITests/Support/Launch.swift",
+        ] {
+            assert_eq!(scan(file, source, false), Vec::<String>::new(), "{file}");
+        }
+        for file in [
+            "apps/macos/StacklyAppUITests/ShellUITests.swift",
+            "apps/macos/Other/GalleryUITests.swift",
+            "apps/macos/StacklyAppUITests/MenuUITests.swift",
+        ] {
+            assert_eq!(scan(file, source, false).len(), 2, "{file}");
+        }
     }
 }
