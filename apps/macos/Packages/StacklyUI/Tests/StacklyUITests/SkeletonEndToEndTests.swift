@@ -271,3 +271,60 @@ struct SkeletonEndToEndTests {
         #expect(ContinuousClock.now - started < .seconds(20))
     }
 }
+
+/// The trail the events test follows the store with (spec 0014 AC-14): it keeps every state
+/// the store applies, also when the changes land in one main actor turn right before
+/// ``InstanceTrail/finish()``, as they do while another suite holds the main actor.
+@Suite struct SkeletonInstanceTrailTests {
+    /// `demo` at `revision`, with the same `statusSeq`, so each later one replaces it.
+    private static func demo(
+        _ revision: UInt64, _ lifecycle: InstanceLifecycle, _ readiness: InstanceReadinessState
+    ) throws -> Event {
+        let instance = try ContractFixture.instance().testing(
+            name: "demo", revision: revision, lifecycle: lifecycle,
+            readiness: InstanceReadiness(
+                state: readiness, reason: "test", detail: nil,
+                observedAt: Date(timeIntervalSince1970: 0)),
+            statusSeq: revision)
+        return .instanceState(instance)
+    }
+
+    private static func store() -> InstanceStore {
+        InstanceStore(
+            fetchPage: { _ throws(ClientError) in Page(items: [], next: nil) },
+            fetchOne: { _ throws(ClientError) in nil })
+    }
+
+    @Test func everyChangeAppliedInOneTurnBeforeFinishIsAStep() throws {
+        let store = Self.store()
+        store.store.receive(try Self.demo(1, .running, .ready))
+        let trail = InstanceTrail()
+        trail.follow("demo", in: store)
+
+        store.store.receive(try Self.demo(2, .stopping, .ready))
+        store.store.receive(try Self.demo(3, .stopped, .ready))
+        store.store.receive(try Self.demo(4, .stopped, .unknown))
+        trail.finish()
+
+        #expect(
+            trail.steps.map(\.description) == [
+                "running/ready", "stopping/ready", "stopped/ready", "stopped/unknown",
+            ])
+    }
+
+    @Test func afterFinishTheTrailTakesNoStepAndTheEarlierObserverStays() throws {
+        let store = Self.store()
+        var observed = 0
+        store.store.didApply = { _ in observed += 1 }
+        store.store.receive(try Self.demo(1, .stopped, .unknown))
+        let trail = InstanceTrail()
+        trail.follow("demo", in: store)
+
+        store.store.receive(try Self.demo(2, .starting, .unknown))
+        trail.finish()
+        store.store.receive(try Self.demo(3, .running, .notReady))
+
+        #expect(trail.steps.map(\.description) == ["stopped/unknown", "starting/unknown"])
+        #expect(observed == 3)
+    }
+}
