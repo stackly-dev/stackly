@@ -154,18 +154,21 @@ Fakta yang membatasi: semua mutasi lewat daemon (spec 0001), GUI hanya klien IPC
 
 ### Keputusan 5: cara memeriksa port
 
-#### Option 1: bind tepat di alamat endpoint dengan `SO_REUSEADDR` sebagai error, bind wildcard dan loopback keluarga lain tanpa opsi itu sebagai caution, plus `endpoints_conflict` atas registry (dipilih setelah cross check)
+#### Option 1: bind tepat di alamat endpoint dengan `SO_REUSEADDR` sebagai error, bind wildcard keluarga sama serta loopback dan wildcard keluarga lain, juga dengan `SO_REUSEADDR`, sebagai caution, plus `endpoints_conflict` atas registry (dipilih setelah cross check, diperbaiki 2026-10-22)
+
+Versi cross check memasang bind wildcard dan loopback keluarga lain tanpa `SO_REUSEADDR`. Test native milestone 1 menunjukkan bahwa versi itu membuat sisa `TIME_WAIT` menjadi caution; perbaikannya ada di *Update 2026-10-22* di bawah.
 
 **Pros**:
 
-- Meniru cara server sungguhan bind (PostgreSQL dan server Go memasang `SO_REUSEADDR`), jadi error hanya muncul untuk konflik yang pasti membuat start gagal; sisa `TIME_WAIT` setelah stop tidak lagi menjadi salah alarm.
-- Listener wildcard, dual stack, alamat LAN, dan `::1` tetap terlihat sebagai caution, sehingga `localhost` yang bisa sampai ke server lain diperingatkan tanpa memblokir instance yang sebenarnya bisa jalan.
+- Meniru cara server sungguhan bind (PostgreSQL dan server Go memasang `SO_REUSEADDR`), jadi error hanya muncul untuk konflik yang pasti membuat start gagal; sisa `TIME_WAIT` dan koneksi yang masih terbuka setelah stop tidak menjadi salah alarm, baik di langkah 4 maupun di langkah 5 dan 6.
+- Listener wildcard, dual stack, `[::]` IPv6 saja, dan `::1` tetap terlihat sebagai caution, sehingga `localhost` yang bisa sampai ke server lain diperingatkan tanpa memblokir instance yang sebenarnya bisa jalan.
 - Port milik instance yang sedang `stopped` tetap dianggap terpakai lewat registry.
 
 **Cons**:
 
 - Hasil bergantung pada perilaku stack jaringan macOS, jadi butuh test native yang mencatatnya; `std::net` tidak bisa dipakai, sehingga core mendapat dependency `socket2`.
 - Hanya pemilik Stackly yang bisa dinamai.
+- Listener di alamat spesifik lain Mac ini (misalnya alamat LAN) tidak terlihat, karena bind dengan `SO_REUSEADDR` hanya bentrok dengan alamat yang persis sama.
 
 #### Option 2: bind tepat di alamat endpoint tanpa `SO_REUSEADDR` sebagai error (pilihan draft pertama)
 
@@ -589,3 +592,138 @@ Update `/architect` (sesi `align-0020`) yang menerapkan `docs/scope/coordination
 - **Umpan balik setelah create.** Mockup tidak punya toast create. Spec 0067 meminta hasil create dikirim ke `FeedbackCenter` oleh layar pemilik sheet, jadi `AppShell` menampilkan "“{name}” created." atau "“{name}” created. Starting it now." Gagal create tetap di dalam sheet, sehingga kartu hanya untuk hasil yang menutup sheet.
 - **⌘N.** Tambahan "nonaktif saat jendela utama bukan key window atau onboarding tampil" dari spec 0069 ditulis di *Titik masuk* dan di teks AC-20, yang disetujui user lewat lead (2026-10-21), supaya perilaku itu bisa diverifikasi di fitur 20.
 - **Cross check (2026-10-21).** Cross check `Another model` (Sonnet 5.5) atas update ini dan perbaikannya diterima lead atas delegasi user (2026-10-21): `CheckItem.id` dari `PreflightCheck.id` dan "Use {n}" tetap di baris Port; urutan lengkap `disabledReason` dan field action Create (D1); Close menggantikan `Cancel…` saat gate blocked (D2); copy dan pemicu pengumuman preflight (D3); `FocusedValues.newInstanceAction` untuk ⌘N sementara (D4); umpan balik saat start lanjutan gagal (D5); baris perintah setara sebelum dan sesudah preflight (D6); `StateBanner` caution untuk `notSent` dan `outcomeUnknown` di sheet (D7); tombol New Instance sebagai `ActionButton` atas action `newInstance` (D17).
+
+## Update 2026-10-22: sisa `TIME_WAIT` dan probe wildcard
+
+Update `/architect` (sesi `arc-f20-update`, wave 4) atas temuan developer dan checker milestone 1. ID AC dan nomor langkah lama tetap; langkah 6a ditambah, dan teks AC-4 berubah dengan persetujuan user lewat lead (2026-10-22, teks persis seperti usulan).
+
+### Masalah
+
+Tabel *Hasil yang diharapkan* menulis `ok` untuk sisa `TIME_WAIT` di `127.0.0.1:p` setelah server berhenti, tetapi test native `a_time_wait_leftover_on_the_exact_address_is_not_a_conflict` di Mac ini memberi `caution` "In use on another address of this Mac". Langkah 4 (bind `127.0.0.1:p` dengan `SO_REUSEADDR`) memang `Free`; yang gagal adalah langkah 5, bind `0.0.0.0:p` tanpa `SO_REUSEADDR`. Klaim di Keputusan 5 bahwa `TIME_WAIT` tidak lagi menjadi salah alarm hanya benar untuk langkah 4.
+
+### Percobaan di Mac ini
+
+Script Python di scratchpad sesi (tidak di commit), hanya di loopback: `127.0.0.1`, `::1`, dan `fe80::1%lo0` milik `lo0`, tanpa listener di antarmuka jaringan. Setiap skenario memasang satu keadaan socket di port bebas p, lalu menjalankan setiap bind percobaan (bind tanpa `listen`, langsung ditutup). Kolom `r` berarti dengan `SO_REUSEADDR`, `n` tanpa; bind IPv6 memakai `IPV6_V6ONLY`. Untuk endpoint `127.0.0.1:p`:
+
+| Socket lain di port p | `127.0.0.1` r (langkah 4) | `0.0.0.0` n (langkah 5 lama) | `0.0.0.0` r (langkah 5 baru) | `[::1]` n (langkah 6 lama) | `[::1]` r (langkah 6 baru) | `[::]` r (langkah 6 baru) |
+| --- | --- | --- | --- | --- | --- | --- |
+| TCP `LISTEN` `127.0.0.1:p` | InUse | InUse | Free | Free | Free | Free |
+| TCP `LISTEN` `0.0.0.0:p` | Free | InUse | InUse | Free | Free | Free |
+| TCP `LISTEN` `[::]:p` dual stack | Free | InUse | InUse | InUse | Free | InUse |
+| TCP `LISTEN` `[::]:p` IPv6 saja | Free | Free | Free | InUse | Free | InUse |
+| TCP `LISTEN` `[::1]:p` | Free | Free | Free | InUse | InUse | Free |
+| TCP `LISTEN` `[fe80::1%lo0]:p` | Free | Free | Free | Free | Free | Free |
+| sisa `TIME_WAIT` di `127.0.0.1:p` (server menutup lebih dulu) | Free | InUse | Free | Free | Free | Free |
+| koneksi `ESTABLISHED` di `127.0.0.1:p`, listener sudah ditutup | Free | InUse | Free | Free | Free | Free |
+| koneksi keluar dengan port lokal `127.0.0.1:p` | Free | InUse | Free | Free | Free | Free |
+| sisa `TIME_WAIT` di `[::1]:p` | Free | Free | Free | InUse | Free | Free |
+| sisa `TIME_WAIT` di `127.0.0.1:p` dan listener `[::]:p` dual stack | Free | InUse | InUse | InUse | Free | InUse |
+| sisa `TIME_WAIT` di `127.0.0.1:p` dan listener `0.0.0.0:p` | Free | InUse | InUse | Free | Free | Free |
+| sisa `TIME_WAIT` di `127.0.0.1:p` dan listener `[::1]:p` | Free | InUse | Free | InUse | InUse | Free |
+| sisa `TIME_WAIT` di `[::1]:p` dan listener `[::]:p` IPv6 saja | Free | Free | Free | InUse | Free | InUse |
+| UDP `127.0.0.1:p` (endpoint TCP) | Free | Free | Free | Free | Free | Free |
+
+Catatan lain dari percobaan yang sama:
+
+- Listener di `[fe80::1%lo0]:p` membuat bind `[::]:p` tanpa `SO_REUSEADDR` `InUse`, tetapi bind `[::]:p` dengan `SO_REUSEADDR` `Free`. Itu padanan IPv6 dari listener di alamat LAN: langkah 5 lama melaporkannya, langkah 5 baru tidak.
+- Untuk endpoint `[::1]:p`, tabel yang sama dibaca dengan peran keluarga ditukar (langkah 4 `[::1]` r, langkah 5 `[::]` r, langkah 6 `127.0.0.1` r lalu `0.0.0.0` r): setiap listener yang menerima koneksi ke `::1` atau `localhost` tetap `InUse` di salah satunya, dan sisa `TIME_WAIT` di kedua loopback `Free` di semuanya.
+- Endpoint UDP mengikuti aturan yang sama: socket UDP di `127.0.0.1:p` `InUse` di langkah 4, di `0.0.0.0:p` dan `[::]:p` dual stack `InUse` di langkah 5 baru, di `[::]:p` IPv6 saja `InUse` di bind `[::]` r, dan socket UDP terhubung dengan port lokal p hanya `InUse` di bind tanpa `SO_REUSEADDR`.
+- Server dengan `SO_REUSEADDR` (bind, `listen`, lalu menerima koneksi) berhasil start di `127.0.0.1:p` selama sisa `TIME_WAIT`, di samping listener `0.0.0.0:p`, dan di `[::1]:p` selama sisa `TIME_WAIT` di `[::1]:p`. Server tanpa `SO_REUSEADDR` di `127.0.0.1:p` selama sisa `TIME_WAIT` gagal `EADDRINUSE`.
+- Sisa `TIME_WAIT` menahan bind wildcard lama sekitar 30,4 detik (`net.inet.tcp.msl` 15000 ms, jadi dua kali MSL).
+- Kalau client yang menutup lebih dulu, `TIME_WAIT` ada di port client, dan port server bebas untuk semua bind.
+
+Penjelasan singkatnya: saat bind, macOS mencari socket lain yang bentrok di port itu. Dengan `SO_REUSEADDR`, pencarian hanya cocok dengan socket yang belum terhubung dan bind ke alamat yang persis sama (wildcard IPv4 ikut cocok dengan socket dual stack). Tanpa opsi itu, pencarian juga cocok dengan socket mana pun di port p yang alamatnya bertumpuk, termasuk socket yang sudah terhubung. Sisa `TIME_WAIT` adalah socket terhubung yang masih memegang `127.0.0.1:p`, jadi ia hanya tertangkap oleh bind tanpa `SO_REUSEADDR`.
+
+Cross check (di bawah) menjalankan ulang matriks ini dengan pemegang port yang memasang `SO_REUSEADDR`, dan untuk TCP juga `SO_REUSEPORT`, seperti server sungguhan; hasilnya sama persis.
+
+Tidak diamati: socket milik user macOS lain (XNU punya aturan tambahan antar user). Stackly dan server yang ia jalankan memakai user yang sama. Menurut aturan itu, listener wildcard milik user lain bisa membuat langkah 4 `InUse`, sama dengan yang akan dialami server; ini tidak diuji.
+
+### Opsi
+
+#### Option A: semua bind percobaan dengan `SO_REUSEADDR`, alamat wildcard dibind eksplisit (dipilih)
+
+Langkah 5 bind wildcard keluarga yang sama dan langkah 6 bind loopback lalu wildcard keluarga lain, semuanya dengan `BindOptions::like_server`.
+
+**Pros**:
+
+- Sisa `TIME_WAIT`, koneksi yang masih terbuka, dan koneksi keluar dengan port lokal p tidak lagi menjadi caution, di kedua loopback; baris `TIME_WAIT` di tabel tetap `ok`.
+- Setiap listener yang bisa menerima koneksi ke A atau ke `localhost` tetap tertangkap, termasuk saat sisa `TIME_WAIT` ada bersamaan (tabel di atas). Overlap IPv4 dan IPv6 serta listener wildcard yang diminta BR-004 dan AC-056 tetap diperiksa.
+- Probe menjawab pertanyaan yang sama dengan server: semua bind memakai opsi server, sehingga hasilnya sama dengan yang dialami server saat start.
+- Perubahan kecil di `port.rs` (satu bind tambahan di langkah 6), tanpa dependency baru, tanpa method baru di `PortProbe`, dan bentuk `PortFacts` tetap.
+
+**Cons**:
+
+- Listener di alamat spesifik lain Mac ini (alamat LAN) tidak lagi menjadi caution. Listener itu tidak menerima koneksi ke loopback, dan AC-4 sendiri melarang tuple diperlakukan sebagai satu angka global, jadi yang hilang hanya informasi, bukan perlindungan.
+- Teks AC-4 berubah (frasa "tanpa `SO_REUSEADDR`" dan daftar listener test), jadi butuh persetujuan user.
+- Port bebas kini dibuka empat kali, bukan tiga; pencarian saran paling banyak 256 bind, masih dalam hitungan milidetik.
+
+#### Option B: tabel diubah menjadi `caution` untuk sisa `TIME_WAIT` (dokumen saja)
+
+**Pros**:
+
+- Tanpa perubahan kode, dan teks AC tidak berubah.
+- Listener di alamat LAN tetap menjadi caution.
+
+**Cons**:
+
+- Salah alarm sekitar 30 detik setelah setiap server di port itu berhenti, termasuk instance Stackly yang baru dihapus lalu dibuat ulang dengan port yang sama, yang justru jalur coba lagi yang dijaga spec ini.
+- Salah alarm juga untuk setiap koneksi terbuka atau koneksi keluar yang port lokalnya p; port fixed di rentang ephemeral macOS (49152 sampai 65535) bisa kena secara acak.
+- Teksnya keliru: "In use on another address of this Mac" untuk alamat yang sama tanpa listener, dan sisa `TIME_WAIT` di `[::1]` memberi "clients that connect to localhost may reach that server" padahal tidak ada server.
+- Pencarian saran melewati port seperti itu, dan *Consequences* serta temuan S4 yang menjanjikan tanpa salah alarm `TIME_WAIT` harus ditarik.
+
+#### Option C: tetap tanpa `SO_REUSEADDR`, lalu bedakan listener dari socket terhubung dengan bind tambahan
+
+**Pros**:
+
+- Secara prinsip, listener di alamat LAN tetap bisa dilaporkan.
+
+**Cons**:
+
+- Bind saja tidak bisa membedakan listener di alamat spesifik lain dari sisa `TIME_WAIT` saat keduanya ada; kombinasi bind apa pun memberi jawaban salah untuk salah satu keadaan campuran.
+- Lebih banyak bind dan aturan yang sulit diuji, tetap dengan salah alarm di kasus campuran.
+
+#### Option D: baca daftar antarmuka jaringan (atau tabel socket OS) lalu bind setiap alamat dengan `SO_REUSEADDR`
+
+**Pros**:
+
+- Listener di alamat LAN terlihat tanpa salah alarm `TIME_WAIT`.
+
+**Cons**:
+
+- Butuh method port baru dan adapter, karena core tidak boleh memanggil API macOS atau libc; atau dependency baru. Tabel socket OS lebih berat lagi dan khusus macOS.
+- Alamat berubah bersama jaringan (VPN, DHCP), dan jumlah bind tumbuh menurut jumlah antarmuka dikali kandidat saran.
+- Informasi tambahannya tidak mengubah apa pun untuk endpoint loopback.
+
+### Keputusan
+
+Option A. Tugas langkah 5 dan 6 adalah menjawab "apakah client yang dimaksudkan untuk instance ini bisa sampai ke server lain" (BR-004, AC-056). Sebuah socket hanya menerima koneksi baru kalau ia listener di alamat yang persis sama atau di wildcard keluarga itu (dual stack menutup keduanya). Bind A, kedua wildcard, dan loopback keluarga lain dengan opsi server menanyakan tepat hal itu. Socket terhubung, termasuk sisa `TIME_WAIT`, tidak pernah menerima koneksi baru, dan listener di alamat spesifik lain juga tidak menerima koneksi ke loopback, jadi keduanya bukan overlap. Runner up: Option B, yang tidak mengubah kode tetapi meninggalkan salah alarm yang dijanjikan hilang oleh spec ini dan memberi teks yang keliru.
+
+Dampak ke AC dan spec lain:
+
+- AC-4: teks berubah (lihat di bawah); disetujui user lewat lead pada 2026-10-22, teks persis seperti usulan; spec diterima lead dengan opsi A dan langkah 6a.
+- AC-5: pencarian saran tidak lagi melewati port yang hanya punya sisa `TIME_WAIT`.
+- AC-12 dan AC-16 tidak berubah: langkah 3 (registry) dan langkah 4 (alamat persis) tetap, dan race AC-16 memakai listener di alamat endpoint yang persis sama, yang tetap `supervisor.endpoint_in_use` saat start.
+- Spec 0010 tidak berubah: tahap `endpoints` start hanya bind alamat endpoint dengan `like_server` (K2).
+- Teks caution langkah 5 diganti menjadi "Also in use on all addresses of this Mac; clients may reach that server", karena langkah 5 kini hanya menangkap listener wildcard; "another address" akan menyesatkan untuk listener yang justru bisa menerima koneksi ke A saat instance ini berhenti.
+
+Teks AC-4 lama (bagian yang berubah): "bind wildcard (`0.0.0.0:p` untuk A IPv4, `[::]:p` dengan `IPV6_V6ONLY` untuk A IPv6) atau bind loopback keluarga lain (`[::1]:p` atau `127.0.0.1:p`) tanpa `SO_REUSEADDR` yang gagal menghasilkan status `caution` dengan keterangan, bukan error. Dengan listener test di `127.0.0.1:p`, `0.0.0.0:p`, `[::]:p` dual stack, `[::1]:p`, sisa socket `TIME_WAIT` di `127.0.0.1:p`, dan UDP di port yang sama,"
+
+Teks AC-4 baru: "bind wildcard keluarga yang sama (`0.0.0.0:p` untuk A IPv4, `[::]:p` dengan `IPV6_V6ONLY` untuk A IPv6) atau bind loopback dan wildcard keluarga lain (`[::1]:p` dan `[::]:p` dengan `IPV6_V6ONLY` untuk A IPv4, `127.0.0.1:p` dan `0.0.0.0:p` untuk A IPv6), semuanya juga dengan `SO_REUSEADDR`, yang gagal menghasilkan status `caution` dengan keterangan, bukan error; socket terhubung yang memakai port p (sisa `TIME_WAIT` atau koneksi yang masih terbuka) tidak menghasilkan caution maupun error. Dengan listener test di `127.0.0.1:p`, `0.0.0.0:p`, `[::]:p` dual stack, `[::]:p` IPv6 saja, `[::1]:p`, sisa socket `TIME_WAIT` di `127.0.0.1:p`, dan UDP di port yang sama,"
+
+Langkah build yang mewujudkannya adalah langkah 6a di milestone 1 (`index.md`, *Build plan*).
+
+### Cross check
+
+Dijalankan 2026-10-22 oleh model lain (Sonnet, read only) atas draft update ini, dengan jawaban tetap brief `Another model`. Verdict: desain sehat, tidak ada listener yang terlewat (setiap listener yang bisa menerima koneksi ke `127.0.0.1:p` atau `localhost` tetap tertangkap, dan hal yang sama berlaku untuk endpoint IPv6), AC-12 dan AC-16 tidak tersentuh, dan tidak ada opsi yang lebih sederhana: bind `[::]` dual stack `Free` di samping pemegang `0.0.0.0`, jadi dua wildcard tidak bisa digabung, dan empat bind adalah minimum. Temuan diterapkan dengan rekomendasi checker sesuai aturan brief (gap keputusan memakai opsi rekomendasi):
+
+| ID | Temuan | Yang diterapkan |
+| --- | --- | --- |
+| GAP-1 | Teks caution langkah 6 memakai `{alamat}` tanpa definisi, padahal `PortFacts.other_loopback` tidak membedakan bind loopback dari bind wildcard | Teks selalu menyebut loopback keluarga lain (`[::1]:{port}` atau `127.0.0.1:{port}`); *Pemeriksaan port* dan *Copy preflight* |
+| GAP-2 | Urutan hasil langkah 5 dan 6 tidak tertulis; `port_notes` sekarang membiarkan `Denied` di langkah 5 menutupi `InUse` di langkah 6 | Urutan teks ditulis (langkah 5 `InUse`, langkah 6 `InUse`, lalu `Denied` atau `Unavailable`, lalu `ok`) dan `port_notes` diubah di langkah 6a. Runner up: mencatat urutan sekarang sebagai sengaja, yang menyembunyikan overlap nyata di balik "couldn’t check" |
+| GAP-3 | `Denied` dan `Unavailable` di bind kedua langkah 6 tidak punya test | Dua test di langkah 6a |
+| GAP-4 | Tidak ada test untuk endpoint IPv6, padahal validasi paket menerima `defaultHost` `::1` | Satu kasus `::1` lewat `Site::with_provider_edit` di langkah 6a |
+| GAP-5 | Detail test: teks `0.0.0.0` di `listeners.rs`, kalimat `expected` evidence, kind dan `#[ignore]` baris baru, dua bentuk koneksi terbuka, alasan `#[ignore]` | Semua disebut di langkah 6a, dengan alasan `#[ignore]` yang tetap |
+| GAP-6 | Doc `BindOutcome::InUse` ("exact address and port") salah untuk bind wildcard IPv4 di samping dual stack | Ditambah ke langkah 6a |
+| RISK-1 | Pemegang port di matriks tidak memasang `SO_REUSEADDR` atau `SO_REUSEPORT` | Checker menjalankan ulang dengan opsi itu, hasil sama; dicatat di *Percobaan di Mac ini* |
+| RISK-2 | Dua probe bersamaan bisa saling melihat socket percobaan | Dicatat di *Consequences* (risiko lama langkah 4, jendela sedikit lebih lebar) |
+| NIT-1 | Sel langkah 5 berkata listener wildcard "juga menerima koneksi ke A", padahal server yang bind `A:p` menang selama ia berjalan | Sel dan kalimat penjelasan diperbaiki |
