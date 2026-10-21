@@ -598,7 +598,10 @@ mod tests {
                 .fixture(CatalogFixture::LinuxOnly)
                 .fixture(CatalogFixture::IntelOnly),
         );
-        let one = repo_package("nats")
+        // One package is the size of a fixture package, which no longer
+        // tracks the nats package once its catalog carries the records.
+        let one = CatalogFixture::IntelOnly
+            .files()
             .iter()
             .map(|(_, bytes)| bytes.len())
             .sum::<usize>();

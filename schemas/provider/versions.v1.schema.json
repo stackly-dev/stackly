@@ -57,6 +57,16 @@
           "format": "uint32",
           "minimum": 1
         },
+        "compatibility": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/CompatibilityRecord"
+          },
+          "maxItems": 32
+        },
         "dependencies": {
           "type": [
             "array",
@@ -201,6 +211,86 @@
         "since"
       ]
     },
+    "CompatibilityRecord": {
+      "description": "One compatibility record of an available artifact (spec 0018,\n*Compatibility record*), written by `cargo xtask codegen` from native\nevidence. The catalog does not read the records yet.",
+      "type": "object",
+      "properties": {
+        "arch": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64
+        },
+        "evidence": {
+          "type": "string"
+        },
+        "knownLimitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64
+        },
+        "os": {
+          "type": "string"
+        },
+        "osBuild": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 32,
+          "minLength": 1
+        },
+        "osVersion": {
+          "type": "string",
+          "maxLength": 16,
+          "minLength": 1
+        },
+        "providerRevision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "testedAt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "result",
+        "os",
+        "osVersion",
+        "arch",
+        "checks",
+        "knownLimitations",
+        "testedAt",
+        "evidence"
+      ]
+    },
     "Dependency": {
       "description": "One library an available artifact links (spec 0009, fase 02 fields).",
       "type": "object",
@@ -240,6 +330,27 @@
         "name",
         "kind",
         "installName"
+      ]
+    },
+    "ProviderRevision": {
+      "description": "The provider package a `provider` record was tested with.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "manifestSha256": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision",
+        "manifestSha256"
       ]
     }
   }

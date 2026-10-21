@@ -45,6 +45,43 @@
           "kind": "system",
           "installName": "/System/Library/Frameworks/Security.framework/Versions/A/Security"
         }
+      ],
+      "compatibility": [
+        {
+          "scope": "runtime",
+          "result": "pass",
+          "providerRevision": null,
+          "os": "macos",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "arch": "aarch64",
+          "checks": [
+            "archive_report",
+            "closure",
+            "dependencies",
+            "extract",
+            "hash",
+            "init",
+            "jetstream",
+            "launch_agent",
+            "min_os",
+            "probes",
+            "ready",
+            "recipe",
+            "runtime_audit",
+            "signing",
+            "start",
+            "static_audit",
+            "stop",
+            "version"
+          ],
+          "knownLimitations": [
+            "provider_integration_not_covered"
+          ],
+          "summary": "nats 2.15.1 ready in 322 ms, stopped in 183 ms",
+          "testedAt": "2026-10-18T11:20:01.288Z",
+          "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f4807c4123"
+        }
       ]
     }
   ]
