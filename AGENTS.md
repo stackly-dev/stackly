@@ -38,6 +38,7 @@ cargo xtask fuzz list        # fuzz targets; also seed, build, and run <target> 
 cargo xtask fuzz seed        # rewrite fuzz/seeds/ from protocols/fixtures/ after a fixture change
 cargo xtask build-app        # xcodebuild, scheme Stackly
 swift test --package-path clients/swift
+swift test --package-path apps/macos/Packages/StacklyUI   # Swift integration tests need cargo build -p stacklyd -p stackly-fake-server and the skeleton_seed example first (or STACKLY_DAEMON_BIN), else they end as BLOCKED
 cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core
 ```
 
