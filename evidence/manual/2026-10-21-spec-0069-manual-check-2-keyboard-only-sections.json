@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15c8e-4e42-747b-b41a-15ff89297380",
+  "covers": [
+    "AC-027",
+    "REQ-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0069 manual check 2: keyboard only, sections, close, reopen, minimize, and Settings",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "Command 1 to 7 select the sections, Command W closes the main window with the notice, Command 0 opens it again and restores it from minimize, and with Settings key Command 2 does nothing until the main window is key again.",
+  "actual": "Command 1 to 7 made the window title Overview, Instances – 0 instances, Environments, Catalog, Runtimes, Operations – No running operations, and Diagnostics. Command W closed the main window and a second untitled window (the close notice) appeared. Command 0 opened the main window again with the Diagnostics section it had. Command M minimized it and Command 0 brought it back (minimized=false). Command comma opened Settings (General); with it key, View > Instances read disabled and Command 2 changed nothing; after Command 0 returned the main window, Instances was enabled and Command 2 selected it.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 9d19e4a with a clean tree: `cargo xtask build-app` (Debug), a temporary STACKLY_ROOT under the session scratchpad, `target/debug/stacklyd` with that root, and the app started from target/xcode/Build/Products/Debug/Stackly.app with the same STACKLY_ROOT",
+    "Claude Code drove the app with a small AX tool (AXUIElement menu bar dump and AXPress on menu items) and, for keys, `osascript` System Events `keystroke` after bringing the app to the front; CGEvent posts to the pid did not reach the app on this Mac, System Events keystrokes did",
+    "keys were sent with `osascript -e 'tell application \"System Events\" to keystroke \"1\" using {command down}'` one at a time with a 1 second pause, and the window title (AX) was read after each"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5, sub session dev-f69-m2) drove the app; the user has not reviewed this record yet",
+  "startedAt": "2026-10-21T03:43:12.449907Z",
+  "finishedAt": "2026-10-21T03:43:28.278260Z",
+  "evidencePath": "evidence/manual/2026-10-21-spec-0069-manual-check-2-keyboard-only-sections.json",
+  "context": {
+    "sourceCommit": "9d19e4a775a6b30c65e74eb665d84dcda964329a",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

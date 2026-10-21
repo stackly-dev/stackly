@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a15c8e-313e-72fb-bd5f-449031099767",
+  "covers": [
+    "AC-027",
+    "REQ-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0069 manual check 1: the menu bar of the Debug app, every built row with its map shortcut and no clash",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "The AX dump of every menu of the Debug app shows each built CommandMap row in its menu with the shortcut of the map, no two items with the same key equivalent, and no New Window, Spelling and Grammar, Substitutions, Transformations, Speech, or default Stackly Help item.",
+  "actual": "With the main window key, the AX dump listed Stackly (About, Settings… ⌘,, Reconnect to stacklyd with no shortcut, Services, Hide ⌘H, Hide Others ⌥⌘H, Quit ⌘Q), Edit (system items, Find ▸ Find… ⌘F, Writing Tools, AutoFill), View (Show Sidebar ⌃⌘S, Overview ⌘1 to Diagnostics ⌘7, Enter Full Screen), Window (system items, Stackly ⌘0, Design Gallery), and Help with only the system search field. No two items shared a key equivalent (sort | uniq -d over every item key with modifiers, the 🌐⌃ arrow items of Move & Resize differ by modifier). No New Window, Spelling and Grammar, Substitutions, Transformations, Speech, or default Stackly Help item. Observed difference from the AC-3 table: with New Instance… still planned there is no File menu at all and Close ⌘W and Close All sit in Window; File returns with the first built File row (spec 0020). The Instance menu is absent too because no Instance row is built yet, as AC-3 says. Find… is disabled because no page publishes find yet.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 9d19e4a with a clean tree: `cargo xtask build-app` (Debug), a temporary STACKLY_ROOT under the session scratchpad, `target/debug/stacklyd` with that root, and the app started from target/xcode/Build/Products/Debug/Stackly.app with the same STACKLY_ROOT",
+    "Claude Code drove the app with a small AX tool (AXUIElement menu bar dump and AXPress on menu items) and, for keys, `osascript` System Events `keystroke` after bringing the app to the front; CGEvent posts to the pid did not reach the app on this Mac, System Events keystrokes did",
+    "Window > Stackly was pressed so the Overview window was the main window, then `osascript` set the app frontmost; `axtool dump <pid>` printed every menu with AXMenuItemCmdChar, AXMenuItemCmdModifiers (bit 3 means no ⌘, bit 4 is the globe), AXMenuItemCmdVirtualKey, and AXEnabled",
+    "the dump was compared by eye with the Command map table of apps/macos/design.md and by script for duplicate key equivalents"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5, sub session dev-f69-m2) drove the app; the user has not reviewed this record yet",
+  "startedAt": "2026-10-21T03:43:05.021918Z",
+  "finishedAt": "2026-10-21T03:43:28.278260Z",
+  "evidencePath": "evidence/manual/2026-10-21-spec-0069-manual-check-1-the-menu-bar-of-the-deb.json",
+  "context": {
+    "sourceCommit": "9d19e4a775a6b30c65e74eb665d84dcda964329a",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
