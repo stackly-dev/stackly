@@ -265,6 +265,17 @@ fn check_custom_item_key(s: &str) -> Result<(), &'static str> {
     }
 }
 
+fn check_team_id(s: &str) -> Result<(), &'static str> {
+    if s.len() == 10
+        && s.bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+    {
+        Ok(())
+    } else {
+        Err("must be 10 characters of A-Z and 0-9")
+    }
+}
+
 fn check_runtime_line(s: &str) -> Result<(), &'static str> {
     if (1..=2).contains(&s.split('.').count()) && s.split('.').all(is_digits) {
         Ok(())
@@ -307,6 +318,20 @@ macro_rules! text_value {
 
         serde_as_text!($name => $expecting);
     };
+}
+
+text_value! {
+    /// The Apple Developer team ID that signed a binary: 10 characters of
+    /// `A-Z` and `0-9`, such as `ABCDE12345`.
+    ///
+    /// ```
+    /// use stackly_domain::TeamId;
+    ///
+    /// assert!("ABCDE12345".parse::<TeamId>().is_ok());
+    /// assert!("abcde12345".parse::<TeamId>().is_err());
+    /// ```
+    #[derive(PartialOrd, Ord)]
+    TeamId, TeamId, "a team ID", check_team_id
 }
 
 text_value! {

@@ -9,6 +9,7 @@
 mod batch;
 mod config;
 mod error;
+mod install;
 mod path;
 mod query;
 mod record;
@@ -36,9 +37,13 @@ use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
 pub use batch::{Committed, Generation, Versioned, WriteBatch, WriteOp};
 pub use config::{ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson};
 pub use error::{BatchError, RegistryError, ResourceRef};
+pub use install::{
+    CODES_MAX, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope,
+    DependencyManifestJson, SignatureInfoJson,
+};
 pub use path::{InstancePathEntry, InstancePathKind, LogicalRoot, RelativePath};
 pub use query::{InstanceFilter, LeaseFilter, OperationCursor, OperationPage, OperationQuery};
-pub use record::{ArtifactRecord, ProviderRevisionRecord};
+pub use record::{ArtifactRecord, InstallDetails, ProviderRevisionRecord};
 pub use retention::{PruneReport, RetentionPolicy};
 pub use secret::{
     AuditAction, AuditActor, AuditCursor, AuditEventRecord, AuditPage, AuditQuery, AuditResource,

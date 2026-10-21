@@ -32,6 +32,11 @@ const BUILTIN_MIGRATIONS: &[Migration] = &[
         name: "operation_failure",
         sql: include_str!("../migrations/0004_operation_failure.sql"),
     },
+    Migration {
+        version: 5,
+        name: "runtime_install",
+        sql: include_str!("../migrations/0005_runtime_install.sql"),
+    },
 ];
 
 /// The expected schema fingerprint after each built in version. They are
@@ -54,6 +59,10 @@ const BUILTIN_FINGERPRINTS: &[(u32, &str)] = &[
     (
         4,
         "a854c1f9020b9c46bfe6753f34cfe415f60e892d989349395424084d717832ab",
+    ),
+    (
+        5,
+        "9d8d855fb4418c39ff9aa9fc84e10d02154a819145e4fafdbe4604c0cb1f60db",
     ),
 ];
 
@@ -280,7 +289,7 @@ mod tests {
                 migration.name
             );
         }
-        assert_eq!(set.latest(), 4);
+        assert_eq!(set.latest(), 5);
     }
 
     #[test]

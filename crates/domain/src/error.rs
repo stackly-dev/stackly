@@ -183,6 +183,20 @@ pub enum ValueKind {
     ArtifactFormat,
     /// A [`SupportStatus`](crate::SupportStatus).
     SupportStatus,
+    /// A [`SignatureInfoJson`](crate::SignatureInfoJson).
+    SignatureInfoJson,
+    /// A [`DependencyManifestJson`](crate::DependencyManifestJson).
+    DependencyManifestJson,
+    /// A [`CompatibilityScope`](crate::CompatibilityScope).
+    CompatibilityScope,
+    /// A [`CompatibilityResult`](crate::CompatibilityResult).
+    CompatibilityResult,
+    /// A [`CompatibilityRecordRow`](crate::CompatibilityRecordRow).
+    CompatibilityRecord,
+    /// A [`TeamId`](crate::TeamId).
+    TeamId,
+    /// A [`RuntimeSelector`](crate::RuntimeSelector).
+    RuntimeSelector,
 }
 
 impl ValueKind {
@@ -274,6 +288,13 @@ impl ValueKind {
             Self::OsVersion => "os version",
             Self::ArtifactFormat => "artifact format",
             Self::SupportStatus => "support status",
+            Self::SignatureInfoJson => "signature info",
+            Self::DependencyManifestJson => "dependency manifest",
+            Self::CompatibilityScope => "compatibility scope",
+            Self::CompatibilityResult => "compatibility result",
+            Self::CompatibilityRecord => "compatibility record",
+            Self::TeamId => "team ID",
+            Self::RuntimeSelector => "runtime selector",
         }
     }
 }

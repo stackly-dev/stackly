@@ -10,10 +10,11 @@
 use jiff::Timestamp;
 use rusqlite::{Connection, TransactionBehavior, params};
 use stackly_domain::{
-    ArtifactRecord, BatchError, Committed, Endpoint, Environment, Generation, InstallMode,
-    Instance, Lease, LeaseHolder, LeaseState, Operation, Ownership, PortRequest, Progress,
-    ProviderRevisionKey, ProviderRevisionRecord, RegistryError, ResourceRef, ResourceRevision,
-    Runtime, SoftwareName, WriteBatch, WriteOp,
+    ArtifactFormat, ArtifactRecord, BatchError, Committed, CompatibilityRecordRow,
+    DependencyManifestJson, Endpoint, Environment, Generation, InstallMode, Instance, Lease,
+    LeaseHolder, LeaseState, Operation, Ownership, PortRequest, Progress, ProviderRevisionKey,
+    ProviderRevisionRecord, RegistryError, ResourceRef, ResourceRevision, Runtime,
+    SignatureInfoJson, SoftwareName, WriteBatch, WriteOp,
 };
 use stackly_platform::instance_path_entries;
 
@@ -368,7 +369,8 @@ fn insert_artifact(
     }
     conn.execute(
         "INSERT INTO artifacts (sha256, software, version, os, arch, minimum_os, source, \
-         created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+         signature_info, dependency_manifest, catalog_id, build, format, size_bytes, \
+         created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             sha256,
             record.software.as_str(),
@@ -377,7 +379,60 @@ fn insert_artifact(
             record.target.arch().as_code(),
             record.minimum_os,
             record.source,
+            record
+                .signature_info
+                .as_ref()
+                .map(SignatureInfoJson::as_str),
+            record
+                .dependency_manifest
+                .as_ref()
+                .map(DependencyManifestJson::as_str),
+            record.catalog_id,
+            record.build,
+            record.format.map(ArtifactFormat::as_code),
+            record
+                .size
+                .map(|size| int(size, "size_bytes"))
+                .transpose()?,
             now,
+        ],
+    )
+    .map_err(sql_error)?;
+    for (position, row) in record.compatibility.iter().enumerate() {
+        insert_compatibility_record(conn, &sha256, position, row)?;
+    }
+    Ok(())
+}
+
+fn insert_compatibility_record(
+    conn: &Connection,
+    sha256: &str,
+    position: usize,
+    row: &CompatibilityRecordRow,
+) -> Result<(), RegistryError> {
+    let revision = row.provider_revision.as_ref();
+    conn.execute(
+        "INSERT INTO compatibility_records (artifact_sha256, position, scope, provider, \
+         provider_revision, manifest_sha256, os, os_version, os_build, arch, result, checks, \
+         known_limitations, summary, tested_at, evidence) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+        params![
+            sha256,
+            int(position as u64, "position")?,
+            row.scope.as_code(),
+            revision.map(|key| key.provider().as_str()),
+            revision.map(|key| key.revision().as_str()),
+            revision.map(|key| key.manifest_sha256().to_string()),
+            row.os.as_code(),
+            row.os_version.to_string(),
+            row.os_build,
+            row.arch.as_code(),
+            row.result.as_code(),
+            json_text(&row.checks)?,
+            json_text(&row.known_limitations)?,
+            row.summary,
+            ts(row.tested_at),
+            row.evidence,
         ],
     )
     .map_err(sql_error)?;

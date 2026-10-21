@@ -12,15 +12,15 @@ use std::path::PathBuf;
 use jiff::Timestamp;
 use rusqlite::{Connection, params_from_iter};
 use stackly_domain::{
-    ArtifactRecord, Capability, CapabilitySet, DesiredState, Endpoint, Environment, EnvironmentId,
-    EnvironmentMember, Generation, InstallMode, Instance, InstanceFilter, InstanceId,
-    InstanceLifecycle, InstancePathEntry, InstancePathKind, IpEndpoint, Lease, LeaseFilter,
-    LeaseHolder, LeaseState, LineCompatibility, LogicalRoot, Operation, OperationCursor,
-    OperationFailure, OperationId, OperationPage, OperationQuery, OperationResource, Ownership,
-    PortRequest, Progress, ProviderRevision, ProviderRevisionKey, ProviderRevisionRecord,
-    RegistryError, RelativePath, ResourceRef, Runtime, RuntimeId, RuntimeLine, RuntimeReferences,
-    Sha256Digest, StoredEnvironment, StoredInstance, StoredLease, StoredOperation, StoredRuntime,
-    Target, Transport, UnixEndpoint,
+    ArtifactRecord, Capability, CapabilitySet, CompatibilityRecordRow, DesiredState, Endpoint,
+    Environment, EnvironmentId, EnvironmentMember, Generation, InstallDetails, InstallMode,
+    Instance, InstanceFilter, InstanceId, InstanceLifecycle, InstancePathEntry, InstancePathKind,
+    IpEndpoint, Lease, LeaseFilter, LeaseHolder, LeaseState, LineCompatibility, LogicalRoot,
+    Operation, OperationCursor, OperationFailure, OperationId, OperationPage, OperationQuery,
+    OperationResource, Ownership, PortRequest, Progress, ProviderRevision, ProviderRevisionKey,
+    ProviderRevisionRecord, RegistryError, RelativePath, ResourceRef, Runtime, RuntimeId,
+    RuntimeLine, RuntimeReferences, Sha256Digest, StoredEnvironment, StoredInstance, StoredLease,
+    StoredOperation, StoredRuntime, Target, Transport, UnixEndpoint,
 };
 
 use super::column::{Cells, collect, corrupt, exists, first, inconsistent, sql_error, ts};
@@ -124,13 +124,30 @@ pub(super) fn artifact(
     conn: &Connection,
     sha256: &Sha256Digest,
 ) -> Result<Option<ArtifactRecord>, RegistryError> {
-    first(
+    let key = sha256.to_string();
+    let found = first(
         conn,
-        "SELECT sha256, software, version, os, arch, minimum_os, source FROM artifacts \
+        "SELECT sha256, software, version, os, arch, minimum_os, source, signature_info, \
+         dependency_manifest, catalog_id, build, format, size_bytes FROM artifacts \
          WHERE sha256 = ?1",
-        [sha256.to_string()],
+        [&key],
         "artifacts",
         |cells| {
+            let build = cells
+                .opt_int("build")?
+                .map(|build| {
+                    u32::try_from(build).map_err(|_| cells.corrupt("build", "is out of range"))
+                })
+                .transpose()?;
+            let details = InstallDetails {
+                catalog_id: cells.opt_text("catalog_id")?,
+                build,
+                format: cells.opt_parse("format")?,
+                size: cells.opt_u64("size_bytes")?,
+                signature_info: cells.opt_parse("signature_info")?,
+                dependency_manifest: cells.opt_parse("dependency_manifest")?,
+                compatibility: Vec::new(),
+            };
             Ok(ArtifactRecord::new(
                 cells.parse("sha256")?,
                 cells.parse("software")?,
@@ -138,9 +155,55 @@ pub(super) fn artifact(
                 target(cells)?,
                 cells.opt_text("minimum_os")?,
                 cells.opt_text("source")?,
-            ))
+            )
+            .with_install_details(details))
         },
+    )?;
+    let Some(mut record) = found else {
+        return Ok(None);
+    };
+    record.compatibility = collect(
+        conn,
+        "SELECT scope, provider, provider_revision, manifest_sha256, os, os_version, os_build, \
+         arch, result, checks, known_limitations, summary, tested_at, evidence \
+         FROM compatibility_records WHERE artifact_sha256 = ?1 ORDER BY position",
+        [&key],
+        "compatibility_records",
+        compatibility_row,
+    )?;
+    Ok(Some(record))
+}
+
+fn compatibility_row(cells: Cells<'_, '_>) -> Result<CompatibilityRecordRow, RegistryError> {
+    let revision = match (
+        cells.opt_parse("provider")?,
+        cells.opt_parse("provider_revision")?,
+        cells.opt_parse("manifest_sha256")?,
+    ) {
+        (Some(provider), Some(revision), Some(digest)) => {
+            Some(ProviderRevisionKey::new(provider, revision, digest))
+        }
+        (None, None, None) => None,
+        _ => return Err(cells.corrupt("provider", "is set without its revision columns")),
+    };
+    let codes = |column: &'static str| -> Result<Vec<String>, RegistryError> {
+        serde_json::from_str(&cells.text(column)?).map_err(|err| cells.corrupt(column, err))
+    };
+    CompatibilityRecordRow::new(
+        cells.parse("scope")?,
+        revision,
+        cells.parse("os")?,
+        cells.parse("os_version")?,
+        cells.opt_text("os_build")?,
+        cells.parse("arch")?,
+        cells.parse("result")?,
+        codes("checks")?,
+        codes("known_limitations")?,
+        cells.opt_text("summary")?,
+        cells.ts("tested_at")?,
+        cells.text("evidence")?,
     )
+    .map_err(|err| cells.corrupt("*", err))
 }
 
 fn target(cells: Cells<'_, '_>) -> Result<Target, RegistryError> {

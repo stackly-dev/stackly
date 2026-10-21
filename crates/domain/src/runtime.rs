@@ -13,6 +13,10 @@ use crate::manifest::InstallKind;
 use crate::target::Target;
 use crate::value::{ExactVersion, ResourceRevision, RuntimeLine, Sha256Digest, SoftwareName};
 
+mod selector;
+
+pub use selector::{RuntimeSelector, SELECTOR_MAX};
+
 code_enum! {
     /// The state of an installed runtime (PRD section 19.1).
     pub enum RuntimeState: RuntimeState {
@@ -255,6 +259,43 @@ impl Runtime {
             depends_on: new.depends_on,
             revision: ResourceRevision::INITIAL,
         }
+    }
+
+    /// Creates a runtime that an install just committed: it walks
+    /// `resolved`, `downloaded`, `verified`, and `committed` from
+    /// `resolving`, and returns the runtime `installed` at revision 1,
+    /// because the registry insert needs revision 1 and one commit is one
+    /// mutation (spec 0018).
+    ///
+    /// `verified_at` is when validation passed and `committed_at` when the
+    /// install was committed.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`TransitionError`] when the state table rejects one of
+    /// the four events for this install mode, which a managed runtime does
+    /// not.
+    pub fn committed(
+        new: NewRuntime,
+        verified_at: Timestamp,
+        committed_at: Timestamp,
+    ) -> Result<Self, TransitionError> {
+        let mut runtime = Self::new(new);
+        for event in [
+            RuntimeEvent::Resolved,
+            RuntimeEvent::Downloaded,
+            RuntimeEvent::Verified,
+            RuntimeEvent::Committed,
+        ] {
+            let at = if event == RuntimeEvent::Committed {
+                committed_at
+            } else {
+                verified_at
+            };
+            runtime.apply(event, at)?;
+        }
+        runtime.revision = ResourceRevision::INITIAL;
+        Ok(runtime)
     }
 
     /// Rebuilds a runtime the registry stored. Only the registry and test
@@ -544,6 +585,44 @@ mod tests {
         assert_eq!(runtime.state(), RuntimeState::Installed);
         assert_eq!(runtime.last_verified_at(), Some(at("2026-01-01T00:03:00Z")));
         assert_eq!(runtime.installed_at(), Some(at("2026-01-01T00:04:00Z")));
+    }
+
+    #[test]
+    fn a_committed_runtime_is_installed_at_revision_one_with_both_times() {
+        let new = |install| NewRuntime {
+            id: RuntimeId::generate(),
+            software: "nats".parse().unwrap(),
+            version: "2.15.1".parse().unwrap(),
+            line: "2.15".parse().unwrap(),
+            target: Target::new(Os::Macos, Arch::Aarch64),
+            install,
+            depends_on: BTreeSet::new(),
+        };
+
+        let runtime = Runtime::committed(
+            new(managed()),
+            at("2026-01-01T00:03:00Z"),
+            at("2026-01-01T00:04:00Z"),
+        )
+        .unwrap();
+
+        assert_eq!(runtime.state(), RuntimeState::Installed);
+        assert_eq!(runtime.revision(), ResourceRevision::INITIAL);
+        assert_eq!(runtime.last_verified_at(), Some(at("2026-01-01T00:03:00Z")));
+        assert_eq!(runtime.installed_at(), Some(at("2026-01-01T00:04:00Z")));
+
+        let external = InstallMode::External {
+            root: PathBuf::from("pg"),
+            observed_sha256: None,
+        };
+        assert!(
+            Runtime::committed(
+                new(external),
+                at("2026-01-01T00:03:00Z"),
+                at("2026-01-01T00:04:00Z")
+            )
+            .is_err()
+        );
     }
 
     #[test]
