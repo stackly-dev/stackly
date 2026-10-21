@@ -1,0 +1,288 @@
+{
+  "render": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/pg_hba.conf",
+        "content": {
+          "configFile": "pgHba",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Edits to this file are lost on the next start.\n# Only the readiness probe role logs in without a password, and only through\n# the instance's private Unix socket, as the OS user that owns that socket.\n# TYPE  DATABASE  USER               ADDRESS        METHOD\nlocal   postgres  stackly_readiness                 peer map=stackly\nlocal   all       stackly_readiness                 reject\nhost    all       stackly_readiness  all            reject\nlocal   all       all                               scram-sha-256\nhost    all       all                127.0.0.1/32   scram-sha-256\nhost    all       all                ::1/128        scram-sha-256\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/pg_ident.conf",
+        "content": {
+          "configFile": "pgIdent",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Edits to this file are lost on the next start.\n# Any OS user that can reach the private socket folder (only its owner)\n# maps to the readiness probe role, and to no other role.\n# MAPNAME  SYSTEM-USERNAME  PG-USERNAME\nstackly    /^.*$            stackly_readiness\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/postgresql.conf",
+        "content": {
+          "configFile": "postgresqlConf",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Edits to this file are lost on the next start.\n# Port, listen address, socket folder, and the hba and ident files are set\n# on the postgres command line by Stackly and cannot be changed here.\ncluster_name = 'golden'\nmax_connections = 100\nshared_buffers = 128MB\npassword_encryption = 'scram-sha-256'\nssl = off\nlog_line_prefix = '%m [%p] %q%u@%d '\nlog_timezone = 'UTC'\ntimezone = 'UTC'\nlog_statement = 'none'\nlog_min_duration_statement = -1\ndatestyle = 'iso, mdy'\nlc_messages = 'C'\nlc_monetary = 'C'\nlc_numeric = 'C'\nlc_time = 'C'\ndefault_text_search_config = 'pg_catalog.english'\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    }
+  ],
+  "spawn": {
+    "program": {
+      "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/postgresql/18.6/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "relative": "bin/postgres"
+    },
+    "args": [
+      "-D",
+      "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+      "--config-file=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/postgresql.conf",
+      "--hba-file=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/pg_hba.conf",
+      "--ident-file=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/pg_ident.conf",
+      "--listen-addresses=127.0.0.1",
+      "--port=14000",
+      "--unix-socket-directories=/private/tmp/skt-golden/stackly-0000000a/i/0000000a",
+      "--unix-socket-permissions=0700",
+      "--logging-collector=off",
+      "--log-destination=stderr"
+    ],
+    "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+    "env": [
+      [
+        "HOME",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ],
+      [
+        "PATH",
+        {
+          "type": "text",
+          "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      ],
+      [
+        "TMPDIR",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ]
+    ]
+  },
+  "readiness": {
+    "probe": {
+      "type": "exec",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/postgresql/18.6/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "bin/psql"
+          },
+          "args": [
+            "--no-psqlrc",
+            "--no-password",
+            "--quiet",
+            "--tuples-only",
+            "--no-align",
+            "--set=ON_ERROR_STOP=1",
+            "--host=/private/tmp/skt-golden/stackly-0000000a/i/0000000a",
+            "--port=14000",
+            "--username=stackly_readiness",
+            "--command=SELECT 1"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+          "env": [
+            [
+              "HOME",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "PATH",
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
+            ],
+            [
+              "PGAPPNAME",
+              {
+                "type": "text",
+                "content": "stackly-readiness"
+              }
+            ],
+            [
+              "PGCONNECT_TIMEOUT",
+              {
+                "type": "text",
+                "content": "2"
+              }
+            ],
+            [
+              "PGDATABASE",
+              {
+                "type": "text",
+                "content": "postgres"
+              }
+            ],
+            [
+              "TMPDIR",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "3s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    },
+    "interval": "500ms",
+    "attemptTimeout": "3s",
+    "deadline": "120s"
+  },
+  "recoveryDeadline": "300s",
+  "health": {
+    "probe": {
+      "type": "exec",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/postgresql/18.6/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "bin/psql"
+          },
+          "args": [
+            "--no-psqlrc",
+            "--no-password",
+            "--quiet",
+            "--tuples-only",
+            "--no-align",
+            "--set=ON_ERROR_STOP=1",
+            "--host=/private/tmp/skt-golden/stackly-0000000a/i/0000000a",
+            "--port=14000",
+            "--username=stackly_readiness",
+            "--command=SELECT 1"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+          "env": [
+            [
+              "HOME",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "PATH",
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
+            ],
+            [
+              "PGAPPNAME",
+              {
+                "type": "text",
+                "content": "stackly-readiness"
+              }
+            ],
+            [
+              "PGCONNECT_TIMEOUT",
+              {
+                "type": "text",
+                "content": "2"
+              }
+            ],
+            [
+              "PGDATABASE",
+              {
+                "type": "text",
+                "content": "postgres"
+              }
+            ],
+            [
+              "TMPDIR",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "3s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    },
+    "interval": "10s",
+    "attemptTimeout": "3s",
+    "failureThreshold": 3
+  },
+  "stop": {
+    "type": "signal",
+    "content": {
+      "signal": "int",
+      "timeout": "60s"
+    }
+  },
+  "logFiles": [],
+  "endpoints": [
+    [
+      "client",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14000
+        }
+      }
+    ],
+    [
+      "socket",
+      {
+        "type": "unix"
+      }
+    ]
+  ]
+}
