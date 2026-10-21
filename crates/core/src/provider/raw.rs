@@ -500,6 +500,9 @@ pub(crate) struct RawXStackly {
     pub(crate) apply: Option<String>,
     pub(crate) visibility: Option<String>,
     pub(crate) secret: Option<bool>,
+    /// Whether a secret value must hold no control character (spec 0019).
+    #[serde(rename = "printableOnly")]
+    pub(crate) printable_only: Option<bool>,
     pub(crate) managed: Option<String>,
     pub(crate) key: Option<String>,
 }
