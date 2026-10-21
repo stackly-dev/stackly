@@ -12,7 +12,7 @@
 | `Langkah penyelesaian foundation.md` | lead foundation | penutupan `01-foundation` | `01-foundation.md` | tidak menyentuh `ui-macos.md` | tidak ada | tidak diketahui | `peer` (idle) |
 | `arc-f67-spec` | architect | F67 `Design it (spec)`, spec 0067 | `ui-macos.md` | `docs/specs/0067-komponen-dasar-stackly/` | `claude/arc-f67-spec-281774` | `opus-5-5 · xhigh` | `aktif` |
 | `arc-f68-spec` | architect | F68 `Design it (spec)`, spec 0068 | `ui-macos.md` | `docs/specs/0068-fixture-tampilan-cek-visual/`, baris snapshot spec 0001, teks XCTest dan Follow-up spec 0002 | `claude/arc-f68-spec-3056e5` | `opus-5-5 · xhigh` | `aktif` |
-| `arc-f69-spec` | architect | F69 `Design it (spec)`, spec 0069 | `ui-macos.md` | `docs/specs/0069-menu-aplikasi-perintah-shortcut/` | `claude/arc-f69-spec-a4bbd3` | `opus-5-5 · xhigh` | `aktif` |
+| `arc-f69-spec` | architect | F69 `Design it (spec)`, spec 0069 | `ui-macos.md` | `docs/specs/0069-menu-aplikasi-perintah-shortcut/` | `claude/arc-f69-spec-a4bbd3` | `opus-5-5 · xhigh` | `merged` (`2e194db`) |
 | `chk-f13-m4` | checker (verify) | F13 milestone 4, langkah 15 sampai 18 (kode di `main`) | `ui-macos.md` | centang `verify.md` 0013 Milestone 4, record baru `evidence/manual/` 0013 | `claude/chk-f13-m4-10cbd7` | `sonnet-5-5 · high` | `merged` (`a6baa41`) |
 | `chk-f12-verify` | checker (verify penuh) | F12 `Verify it` | `ui-macos.md` | centang `verify.md` 0012, record baru `evidence/manual/` 0012 | belum ada (kartu `task_3b56a0a5`) | `opus-5-5 · high` | diajukan sebagai kartu |
 
@@ -41,11 +41,14 @@
 
 - F12 `Verify it`: empat cek setting sistem asli menunggu user; lead memberi langkahnya saat `chk-f12-verify` siap.
 - F13 milestone 4: cek 6 (keyboard dan VoiceOver) menunggu user, `docs/manual.md` bagian F; langkah 16 dan cek 3 sudah PASS (`a6baa41`), jadi user cukup menjalankan butir 1 sampai 3 bagian F.
-- F67, F68, F69 `Build it`: menunggu spec wave ini.
+- F67 dan F68 `Build it`: menunggu spec wave ini. F69 `Build it` milestone 1 SIAP (butuh F13 milestone 3, sudah `[x]`), dimulai di wave berikutnya dengan persetujuan user; milestone 2 butuh F67 milestone 1, milestone 3 butuh F17, F21, F22 milestone 3 (`02-instalasi-pertama.md`) dan F67 milestone 3.
+- Usulan `/scope` dari spec 0069 (menunggu persetujuan user): baris Selisih "Menu (fitur 69, spec 0069): menu bar mendapat menu Instance di antara View dan Window, di luar enam menu yang digambar mockup; Help tidak berisi Stackly Help sampai fitur 66."
+- `architect (update)` dari "Usulan update untuk spec lain" spec 0069: 0013 (digabung ke update fase 02 yang masih terbuka, butir 1, 5, 8, P20), 0016, 0017, 0020, 0021 (hook `onReselect`), 0022; diantrikan bersama usulan spec 0067 dan 0068.
 
 ## Dicentang pada wave ini
 
 - `ui-macos` · tiga baris `/scope` (Done when F67, Selisih fitur 12 dan 13) · persetujuan user 2026-10-21 · tanpa merge · commit `docs(scope): align feature 67 and record the spec 0012 and 0013 mockup gaps`
+- `69` · `Design it (spec): /architect menu aplikasi, perintah & shortcut keyboard` · laporan `arc-f69-spec` STATUS done (`e48ad24`) · `claude/arc-f69-spec-a4bbd3` → `2e194db` · diff hanya `docs/specs/0069-*`, Requirements AC-1 sampai AC-16, Decision, Build plan, Consequences, Status Proposed, tanpa penanda konflik · heading `in-progress`, Pointer, Build it dengan tiga milestone, Verify it, Test it; At a glance dan Urutan file (3 in-progress, 2 planned) · commit `docs(scope): tick 69 design it`
 
 ## Riwayat wave
 
