@@ -1,0 +1,79 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a163bd-1573-774e-8367-c3db3d283798",
+  "covers": [
+    "REQ-035",
+    "REQ-043"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "JOURNEY-03 in the app: PostgreSQL 18 beside 17 on this Mac",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "JOURNEY-03 in the app: PostgreSQL 17.11 and 18.6 install through the Get button from the xtask cache without network, pg17-dev stays Ready while 18.6 installs, New Instance offers both runtimes, pg18-dev starts from 18.6, the Instances Version column shows 17.11 and 18.6, and the connection copied from the Summary tab of pg18-dev reaches psql of runtime 18 with SELECT version() containing 18.6",
+  "actual": null,
+  "reason": null,
+  "owner": "@ojiepermana",
+  "subjects": [
+    {
+      "provider": "postgresql",
+      "version": "17.11",
+      "digest": "04b1eff117441c0b6f1cbefa42ded6cf5726d656e54881674defea04b515d6d3",
+      "source": "managed"
+    },
+    {
+      "provider": "postgresql",
+      "version": "18.6",
+      "digest": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+      "source": "managed"
+    }
+  ],
+  "steps": [
+    "follow docs/manual.md section T (JOURNEY-03: PostgreSQL 17 dan 18 di aplikasi) on the commit this record was made on, with a clean tree; it builds with `cargo build -p stacklyd -p stackly-cli` and `cargo xtask build-app`, builds a throwaway catalog with `cargo xtask catalog build`, starts stacklyd on a mktemp root with STACKLY_CATALOG_DIR, and copies the two artifacts from ~/Library/Caches/dev.stackly.xtask/runtime/ (sha256 04b1eff1... for 17.11 and 88bb7533... for 18.6) into <root>/cache/downloads/ so Get never touches the network; if either file is missing the status is BLOCKED and nothing is downloaded without your approval",
+    "Catalog, PostgreSQL: Get on 17.11, expect Installed in about 10 s and one PostgreSQL 17.11 row on Runtimes; create and start pg17-dev from New Instance (Runtime offers only PostgreSQL 17.11), expect Ready, and write down its PID from `stackly instance get`",
+    "with pg17-dev Ready, Get on 18.6; expect the pg17-dev row to stay Ready on Instances for the whole install and `stackly instance get` to show the same PID and start time afterwards; Runtimes shows two rows (17.11 and 18.6)",
+    "New Instance again: the Runtime list holds PostgreSQL 17.11 and PostgreSQL 18.6; create and start pg18-dev from 18.6 on a different port, expect Ready while pg17-dev stays Ready with the same PID",
+    "Instances with a wide window: Version column reads 17.11 for pg17-dev and 18.6 for pg18-dev, Endpoints shows two different ports; open pg18-dev, tab Summary shows its own endpoint and connection",
+    "Copy the connection string of pg18-dev (within 90 s run it): `<root>/data/runtimes/postgresql/18.6/.../bin/psql \"$(pbpaste)\" -Atc 'SELECT version()'` prints a line containing PostgreSQL 18.6; the same for pg17-dev with the runtime 17.11 psql prints 17.11; `ps` shows two postmasters, one under each runtime folder",
+    "screenshots (Runtimes with both runtimes, New Instance sheet with the Runtime list open, Instances with the Version column, Summary tab of pg18-dev) are copied to evidence/manual/files/01a163bd-1573-774e-8367-c3db3d283798/",
+    "clean up as section T step 17 (stop both instances, quit the app, stop stacklyd, rm -rf the root and the catalog folder, check ps), then fill in this record: steps (note any change), actual, status (PASS, FAIL, or BLOCKED with reason and owner), reviewer, finishedAt, and the Version fields as observed from `SHOW server_version`, then run `cargo xtask evidence check`"
+  ],
+  "reviewer": null,
+  "startedAt": "2026-10-22T13:11:38.610255Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-22-journey-03-in-the-app-postgresql-18-beside-17-on.json",
+  "context": {
+    "sourceCommit": "aaaf81d99d41c214b2e430f4936f6f07ab304d8f",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}
