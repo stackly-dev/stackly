@@ -168,6 +168,23 @@ Tabel spec tidak memuat angka target, jadi tidak ada selisih yang dikembalikan k
 
 Skrip hitung (jalankan dari root repo): untuk setiap commit `c` dalam daftar, `git diff -U0 c^ c`, kumpulkan baris `+` yang cocok dengan `/nats/i` per file, abaikan file test (`tests/`, `fixtures`, golden, `docs/`, `evidence/`, `providers/`, `protocols/`, `schemas/`, `fuzz/`, dan berkas non kode), dan bandingkan dengan allowlist.
 
+### Verifikasi mandiri `/check verify` (2026-10-22, sesi `chk-f23-m4`, `main` di `cabcaf4a`)
+
+Semua dijalankan ulang dari worktree bersih setelah `git merge main`; tidak ada kode yang diubah.
+
+- PASS · `cargo test -p stackly-cli --test nats_journey --locked -- --ignored` → `1 passed` (87,15 detik pada build dingin dengan load tinggi; sekitar 7 detik di run developer). Runtime NATS 2.15.1 dari cache xtask, tanpa download. AC-13 (bagian CLI)
+- PASS · `swift test --package-path apps/macos/Packages/StacklyUI --filter "SchemaFormModelTests|CreateInstanceModelTests"` → `Test run with 49 tests in 2 suites passed`, termasuk tujuh test NATS: `theNatsServerNameIsAManagedRowThatStaysInTheBasicGroup`, `theNatsJetStreamToggleStartsOnAndIsSentWhenItIsSwitchedOff`, `eachNatsAdvancedIntegerHasItsBoundsDefaultAndRestartRule`, `theNatsFormHasItsClientAndMonitoringRowsWithFixedOrAutomaticPorts`, `theNatsManagedFieldIsLockedAndNeverSent`, `theNatsAdvancedIntegersCarryTheirBounds`, `theNatsFormHasOneRowPerFieldWithTheRightControl`. AC-13 (bagian form)
+- PASS · `cargo xtask evidence check` → `60 manual record(s), baseline valid, 797 Rust and 530 Swift file(s) follow the rules`. `evidence/connection/nats-journey-20261022/report.json` ada, `sourceCommit` `0122207f`, `sourceDirty` false, 1 record native. AC-13
+- PASS · ledger RISK-07 dihitung ulang sendiri dari `8aa1b3cb` (induk `e257d26b`) dan 19 commit di daftar, `git diff -U0 <commit>^ <commit>` per commit. Baris `+` yang memuat `nats` di file sumber non test: `e2651ede` `probe/nats.rs` 22 dan `probe/mod.rs` 1; `63d7a54b` `provider/fuzzing.rs` 21 dan `xtask/src/fuzz.rs` 18; `06c095c4` `probe/native.rs` 19; `f5c1ea85` `supervisor/probe/native.rs` 17. Sama dengan tabel di atas, tanpa selisih. Semua commit lain di daftar hanya memuat `nats` di test, fixture, golden, `providers/`, `evidence/`, dan `docs/`. Daftar commit lengkap: tidak ada commit `spec 0023` lain yang mengubah kode di `8aa1b3cb..HEAD`. AC-14
+- PASS · `git diff --numstat` per commit dijumlahkan untuk `crates/core/src`, `xtask/src`, `apps/daemon/src`, dan `fuzz/fuzz_targets`: sama dengan tabel numstat di atas untuk semua file (mis. `nats.rs` 641 dan 1, `supervisor/probe/native.rs` 570 dan 11, `provider/native.rs` 237 dan 0, `fuzzing.rs` 171, `xtask/src/fuzz.rs` 78 dan 2, empat file kecil supervisor 9 tambah gabungan); baris 4 (`supervisor/fixture.rs`, `apps/daemon/src`) 0 dan 0. AC-14
+- PASS · tidak ada commit di daftar yang menyentuh file sumber non test di `apps/`, `clients/`, `crates/domain|platform|platform-macos|protocol|storage|ipc`; `ProtocolVersion::CURRENT` tidak diubah oleh satu pun commit di daftar (`crates/protocol/src/version.rs` berubah di `8aa1b3cb..HEAD` hanya oleh spec lain). AC-14
+
+Catatan untuk lead dan architect (bukan FAIL):
+
+- Pemeriksaan baris `nats` memakai skrip yang mengecualikan `fuzz/`. `63d7a54b` menambah 3 baris `nats` di `fuzz/fuzz_targets/nats_readiness_protocol.rs` dan 2 di `fuzz/Cargo.toml`; file itu tidak ada di *Allowlist AC-14*, tetapi baris 3 tabel menyebut `fuzz/fuzz_targets/` sebagai tempat resmi. Bila allowlist dibaca harfiah, tambahkan `fuzz/` ke teks allowlist (`/architect`).
+- Dalam `8aa1b3cb..HEAD` commit spec lain (0017 sampai 0021) juga menambah baris `nats` di `crates/core/src/{catalog,provider}`, `crates/protocol`, `apps/`, dan `clients/`. Itu di luar daftar commit build fitur 23 dan di luar lingkup AC-14.
+- Langkah GUI AC-13 di atas tetap `NOT_RUN`, milik user (`docs/manual.md` bagian S); `cargo xtask ui-test` tidak dijalankan karena butuh Automation Mode yang hanya user yang menyalakan (exit 2, `BLOCKED`, owner `@ojiepermana`).
+
 ### Acceptance-criteria coverage
 
 - AC-13 · bagian CLI selesai di langkah 10 (`nats_journey`, PASS native); bagian form selesai di langkah 11 (fixture masih lolos kontrak Rust dan Swift, empat assertion baru); bagian GUI (sheet New Instance, Summary, keyboard, VoiceOver) `NOT_RUN`, tiga langkah manual di atas untuk `/check verify` dan user
