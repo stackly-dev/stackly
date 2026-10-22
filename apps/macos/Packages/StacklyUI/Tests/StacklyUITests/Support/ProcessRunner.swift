@@ -24,7 +24,7 @@ struct ProcessOutcome {
 enum ProcessRunner {
     /// Shared by the watchdog and the termination handler: the watchdog kills the process
     /// only while it has not ended, so a late watchdog never reaches a reused pid.
-    private nonisolated final class Watch: Sendable {
+    nonisolated final class Watch: Sendable {
         private let state = Mutex((ended: false, killed: false))
 
         /// Sends SIGKILL to `pid` unless the process already ended.
@@ -54,13 +54,16 @@ enum ProcessRunner {
     ///   - arguments: Its arguments.
     ///   - environment: Its whole environment; nothing is inherited.
     ///   - timeout: How long it may run before it is killed.
+    ///   - onLaunch: Called on the main actor with the pid once the process and its
+    ///     watchdog run, so a test can hold the main actor while the process runs.
     /// - Returns: The exit status, the output, whether the limit killed it, and how long
     ///   it ran.
     static func run(
         _ executable: URL,
         arguments: [String],
         environment: [String: String] = ["PATH": "/usr/bin:/bin"],
-        timeout: Duration
+        timeout: Duration,
+        onLaunch: (pid_t) -> Void = { _ in }
     ) async throws -> ProcessOutcome {
         let outputURL = FileManager.default.temporaryDirectory
             .appending(path: "stk-ui-run-\(UUID().uuidString.lowercased()).out")
@@ -94,6 +97,7 @@ enum ProcessRunner {
             try await Task.sleep(for: timeout)
             watch.kill(pid)
         }
+        onLaunch(pid)
         var status: Int32 = -1
         var ended = launched
         for await exited in exits {
