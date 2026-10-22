@@ -100,6 +100,32 @@ nonisolated public enum DetailFormat {
         masked.replacingOccurrences(of: "****", with: "password hidden")
     }
 
+    // MARK: - Endpoints
+
+    /// The value of an endpoint row: "{host}:{port}" (an IPv6 host in square brackets),
+    /// "{host}, port assigned at start", the path of the socket, or "socket, created at
+    /// start".
+    ///
+    /// - Parameter endpoint: The endpoint of the summary.
+    public static func endpointValue(_ endpoint: EndpointStatus) -> String {
+        if endpoint.transport == .unix {
+            return endpoint.socketPath ?? "socket, created at start"
+        }
+        let host = endpoint.host ?? "—"
+        guard let port = endpoint.port else { return "\(host), port assigned at start" }
+        return (host.contains(":") ? "[\(host)]" : host) + ":\(port)"
+    }
+
+    /// What the Copy button of an endpoint writes: the address or the path, only when it is
+    /// known. `nil` for an endpoint with no port yet or no socket yet.
+    ///
+    /// - Parameter endpoint: The endpoint of the summary.
+    public static func endpointCopyText(_ endpoint: EndpointStatus) -> String? {
+        if endpoint.transport == .unix { return endpoint.socketPath }
+        guard endpoint.host != nil, endpoint.port != nil else { return nil }
+        return endpointValue(endpoint)
+    }
+
     // MARK: - Details
 
     /// "{name} {version} · {arch}": the name from the pinned package (the software name of the

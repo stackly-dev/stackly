@@ -26,6 +26,7 @@ public struct AppShell: View {
     @State private var navigator = ShellNavigator()
     @Environment(\.openWindow) private var openWindow
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(DaemonModel.self) private var daemon: DaemonModel?
 
     private let presentation: ShellPresentation
     private let diagnostics: ConnectionDiagnostics
@@ -110,7 +111,8 @@ public struct AppShell: View {
             ShellSidebar(
                 selection: selection,
                 counts: counts,
-                isConnected: presentation.isConnected
+                isConnected: presentation.isConnected,
+                reselect: { select($0) }
             )
             .navigationSplitViewColumnWidth(
                 min: Self.sidebarWidth.min,
@@ -197,6 +199,9 @@ public struct AppShell: View {
     /// already shows calls ``onReselect`` instead.
     func select(_ newSection: SidebarSection) {
         if newSection == section {
+            // The detail page of an instance is a page of the Instances section; choosing
+            // the section again goes back to its table (spec 0021).
+            if newSection == .instances { navigator.showInstancesTable() }
             onReselect(newSection)
         } else {
             section = newSection
@@ -263,7 +268,8 @@ public struct AppShell: View {
                     waiting: presentation.pageFailure,
                     hasConnection: presentation.hasConnection,
                     reconnect: reconnect,
-                    openDiagnostics: { select(.diagnostics) }
+                    openDiagnostics: { select(.diagnostics) },
+                    detail: daemon.map(InstanceDetailService.live)
                 )
             } else {
                 UnbuiltScrollPage(section: .instances)
@@ -336,6 +342,9 @@ private struct ShellSidebar: View {
     @Binding var selection: SidebarSection?
     let counts: SidebarCounts
     let isConnected: Bool
+    /// Called when the row of the section that already shows is clicked again: a `List`
+    /// does not set a selection that did not change.
+    let reselect: (SidebarSection) -> Void
 
     var body: some View {
         List(selection: $selection) {
@@ -361,6 +370,10 @@ private struct ShellSidebar: View {
                 badge: section.badge(counts: counts, isConnected: isConnected)
             )
             .tag(section)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if selection == section { reselect(section) }
+                })
         }
     }
 }

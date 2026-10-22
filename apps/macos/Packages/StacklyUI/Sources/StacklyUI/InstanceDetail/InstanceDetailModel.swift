@@ -104,6 +104,15 @@ public final class InstanceDetailModel {
         await size
     }
 
+    /// Reads the detail and the size the daemon already holds, for the inspector of the
+    /// Instances page: it never starts a measurement (`cachedOnly`), so the size shows "—"
+    /// until the detail page or Recalculate measured it.
+    public func openForInspector() async {
+        async let size: Void = loadUsage(refresh: false, cachedOnly: true)
+        await reload()
+        await size
+    }
+
     /// Reads the detail now. A reply older than the held detail is dropped.
     public func reload() async {
         requests += 1
@@ -136,16 +145,19 @@ public final class InstanceDetailModel {
         detailError = body
     }
 
-    /// Reads the data size. `refresh` skips the daemon's cache (Recalculate).
+    /// Reads the data size. `refresh` skips the daemon's cache (Recalculate); `cachedOnly`
+    /// never starts a measurement. The daemon refuses both together.
     ///
-    /// - Parameter refresh: Whether to measure again.
-    public func loadUsage(refresh: Bool) async {
+    /// - Parameters:
+    ///   - refresh: Whether to measure again.
+    ///   - cachedOnly: Whether to answer from the daemon's cache only.
+    public func loadUsage(refresh: Bool, cachedOnly: Bool = false) async {
         usageRequests += 1
         let mine = usageRequests
         isLoadingUsage = true
         defer { if mine == usageRequests { isLoadingUsage = false } }
         do throws(ClientError) {
-            let reply = try await service.usage(instanceId, refresh, false)
+            let reply = try await service.usage(instanceId, refresh, cachedOnly)
             guard mine == usageRequests, Task.isCancelled == false else { return }
             usage = reply
             usageFailed = false
@@ -161,8 +173,11 @@ public final class InstanceDetailModel {
     /// revision moved, and it announces that the instance is ready once readiness lasted
     /// ``readyAnnounceDelay`` (never for an instance that was already ready on arrival).
     ///
-    /// - Parameter summary: The summary in the instance store.
-    public func observe(_ summary: InstanceSummary) {
+    /// - Parameters:
+    ///   - summary: The summary in the instance store.
+    ///   - announcesReady: Whether readiness is announced. The detail page does; the inspector
+    ///     of the Instances page only keeps the detail current.
+    public func observe(_ summary: InstanceSummary, announcesReady: Bool = true) {
         if observedRevision != summary.revision {
             let first = observedRevision == nil
             observedRevision = summary.revision
@@ -170,6 +185,7 @@ public final class InstanceDetailModel {
                 scheduleReload()
             }
         }
+        guard announcesReady else { return }
         let ready = summary.lifecycle == .running && summary.readiness.state == .ready
         defer { wasReady = ready }
         guard let wasReady else { return }

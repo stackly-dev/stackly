@@ -12,6 +12,7 @@ nonisolated final class DetailScript: Sendable {
     private struct State {
         var detail: Result<InstanceDetail, ClientError>
         var usage: Result<DataUsage?, ClientError>
+        var instance: InstanceSummary?
         var detailCalls = 0
         var usageCalls: [(refresh: Bool, cachedOnly: Bool)] = []
         var listeners: [AsyncStream<Event>.Continuation] = []
@@ -21,8 +22,9 @@ nonisolated final class DetailScript: Sendable {
 
     private let state: Mutex<State>
 
-    init(detail: InstanceDetail, usage: DataUsage? = nil) {
-        state = Mutex(State(detail: .success(detail), usage: .success(usage)))
+    init(detail: InstanceDetail, usage: DataUsage? = nil, instance: InstanceSummary? = nil) {
+        state = Mutex(
+            State(detail: .success(detail), usage: .success(usage), instance: instance))
     }
 
     var detailCalls: Int { state.withLock { $0.detailCalls } }
@@ -73,6 +75,9 @@ nonisolated final class DetailScript: Sendable {
             usage: { [self] _, refresh, cachedOnly throws(ClientError) in
                 state.withLock { $0.usageCalls.append((refresh, cachedOnly)) }
                 return try state.withLock { $0.usage }.get()
+            },
+            instance: { [self] _ throws(ClientError) in
+                state.withLock { $0.instance }
             },
             secretEvents: { [self] in
                 let (stream, continuation) = AsyncStream.makeStream(of: Event.self)

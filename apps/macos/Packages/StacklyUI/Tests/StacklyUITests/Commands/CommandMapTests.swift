@@ -84,15 +84,16 @@ struct CommandMapTests {
         #expect(CommandMap.entry(for: .showMainWindow).kind == .system)
     }
 
-    /// The commands whose menu item exists after milestone 2 and the Instances page (spec
-    /// 0022). New Instance… waits for spec 0020, Welcome to Stackly for spec 0016, and the
-    /// rest for their owner features.
+    /// The commands whose menu item exists after the Instances page (spec 0022) and the detail
+    /// page (spec 0021: Open, Back, and Copy Connection String). New Instance… waits for spec
+    /// 0020, Welcome to Stackly for spec 0016, and the rest for their owner features.
     private static let builtCommands: Set<CommandID> = [
         .reconnect, .find, .showOverview, .showInstances, .showEnvironments, .showCatalog,
         .showRuntimes, .showOperations, .showDiagnostics, .showMainWindow, .toggleInspector,
         .sortInstancesByName, .sortInstancesByProvider, .sortInstancesByVersion,
         .sortInstancesByEndpoints, .sortInstancesByStatus, .sortInstancesAscending,
-        .sortInstancesDescending, .startInstance, .stopInstance,
+        .sortInstancesDescending, .startInstance, .stopInstance, .openInstance, .back,
+        .copyConnectionString,
     ]
 
     @Test func aRowIsBuiltExactlyWhenItsMenuItemExists() {
@@ -269,7 +270,7 @@ struct CommandMapTests {
                     .showOverview, .showInstances, .showEnvironments, .showCatalog,
                     .showRuntimes, .showOperations, .showDiagnostics,
                 ],
-                [.toggleInspector],
+                [.back], [.toggleInspector],
             ])
         #expect(
             ids(.view, .sortInstancesBy) == [
@@ -279,7 +280,11 @@ struct CommandMapTests {
                 ],
                 [.sortInstancesAscending, .sortInstancesDescending],
             ])
-        #expect(ids(.instance) == [[.startInstance, .stopInstance]])
+        #expect(
+            ids(.instance) == [
+                [.openInstance], [.startInstance, .stopInstance], [.copyConnectionString],
+            ]
+        )
         #expect(ids(.help).isEmpty)
         #expect(ids(.window).isEmpty)
     }
