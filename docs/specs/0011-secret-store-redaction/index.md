@@ -595,7 +595,7 @@ Untuk fitur dan spec lain:
 - [ ] Fitur 20, 46, dan 51: permintaan create instance, env up, dan restore membawa `SecretInput` per secret field dan memanggil `SecretService::put` dengan `PutTarget::New` (dengan `field` untuk create dan restore); secret dibuat sebelum `initdb`, kegagalan dipetakan `classify_create_failure` (sumber yang tidak terbaca menjadi `secret.needs_secret`, tulisan target yang gagal menjadi `secret.store_*`), dan kompensasi operasi menghapus reference yang dibuat operasi itu. Bagian fitur 20 dicentang `/sync` setelah build fitur 20 (spec 0020 AC-7, langkah `secrets`, dan AC-11).
 - [ ] Fitur 20: `SecretField` di sheet New Instance dengan `generate` sebagai default; preflight "Secret stored in Keychain" membaca hasil `put`.
 - [ ] Fitur 21: connection URI tersamar secara default dan `RevealableSecretText` untuk Show Password dan Copy.
-- [ ] Fitur 24: duplicate memakai `generate` atau `copyFrom` ke reference baru, tidak pernah `bind` diam diam.
+- [x] Fitur 24: duplicate memakai `generate` atau `copyFrom` ke reference baru, tidak pernah `bind` diam diam. Dijawab spec 0024 AC-5 (2026-10-22); kodenya dibangun milestone 2 sampai 4 spec 0024.
 - [ ] Fitur 26 dan 29: reload merender ulang file `secrets/` lebih dulu; tampilan config, diff, dan `config-history` tidak pernah membaca folder `secrets/`.
 - [ ] Fitur 27: setiap baris log instance lewat `Redactor` sebelum disimpan, dengan test dummy server yang mencetak fixture credential.
 - [ ] Fitur 31: autostart memakai interaksi `Never`, Keychain yang terkunci menghasilkan blocker needs secret, dan kebijakan kapan mencoba lagi setelah blocker hilang.

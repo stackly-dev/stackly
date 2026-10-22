@@ -464,9 +464,9 @@ Sesi paralel: langkah 8 bisa dimulai begitu milestone 2 masuk. Milestone tiga cl
 ## Follow-up
 
 - [ ] Lead: bawa *Usulan update untuk spec lain* untuk spec 0021 ke pemiliknya sebelum milestone 3; blok spec 0020 dan 0011 sudah diterapkan (2026-10-22).
-- [ ] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`.
+- [x] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`. Dicatat lead `ui-macos` di `2b1e4f3` (2026-10-22).
 - [x] Lead: spec 0020 tidak menyebut dari mana `copyFromOptions` `SecretField` di mode create diisi (misalnya `secret.list`); mode duplicate spec ini hanya menambahkan reference sumber di depan daftar itu. Putuskan lewat `/architect` update spec 0020 sebelum milestone 3 spec 0020; dijawab spec 0020 Keputusan 19 (`49f0f4f`, 2026-10-22).
-- [ ] Spec 0025: pakai *Helper sentinel* dan `two_postgresql_17_instances` (disepakati dengan arc-f25-spec, 2026-10-22); milestone tiga cluster after langkah 9.
+- [x] Spec 0025: pakai *Helper sentinel* dan `two_postgresql_17_instances` (disepakati dengan arc-f25-spec, 2026-10-22); milestone tiga cluster after langkah 9. Diterapkan di spec 0025 (`0afcd9b`, milestone 3 langkah 6).
 - [ ] Fitur 35: kalau tab Activity perlu menampilkan "created from", ambil dari journal create (reference `copyFrom` dan nama di draft) atau putuskan field asal di create lewat `/architect`.
 - [ ] Fitur 54: remove instance yang reference secret nya di `bind` oleh instance lain mengikuti aturan `in_use` spec 0011.
 - [ ] Fitur 26: restart sebagai satu operasi memakai ulang skenario sentinel langkah 9 untuk membuktikan isolasi setelah restart.
