@@ -23,7 +23,7 @@ struct ProviderFactsTests {
         #expect(facts.requires == "macOS 13.0 or later on Apple Silicon")
         #expect(facts.dependencies == "None declared")
         #expect(facts.publisher == "Stackly")
-        #expect(facts.revision == "1.0.0 · eb02876b69a4")
+        #expect(facts.revision == "1.0.0 · d115e2ad7cd0")
         #expect(facts.trust == "Official, bundled with Stackly")
     }
 
