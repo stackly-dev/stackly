@@ -14,6 +14,8 @@ mod common;
 mod compat;
 #[path = "postgresql/create.rs"]
 mod create;
+#[path = "postgresql/create_cli.rs"]
+mod create_cli;
 #[path = "postgresql/create_ports.rs"]
 mod create_ports;
 #[path = "postgresql/endpoints.rs"]
