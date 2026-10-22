@@ -25,9 +25,9 @@ public struct RevealableSecretText: View {
 
     @State private var model: RevealModel
     private let maskedText: String
-    private let maskedLabel: String
-    private let copyLabel: String
-    private let copyAnnouncement: String?
+    let maskedLabel: String
+    let copyLabel: String
+    let copyAnnouncement: String?
 
     /// Creates the view.
     ///
