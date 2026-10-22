@@ -12,7 +12,7 @@ Daemon berjalan sebagai helper yang dibundel di dalam `.app` dan didaftarkan lew
 
 **Trace:** REQ-014 (bagian daemon), REQ-028, OQ-001 (identifier sementara), OQ-006, OQ-012, RISK-10, gate G0, NFR-015, PRD bagian 25 dan 32.2
 
-**Pointer:** spec [0015](../specs/0015-background-agent-cli-install/index.md) · code in `crates/platform/src/agent.rs`, `crates/platform/src/bundle.rs`, `crates/platform-macos/src/agent.rs`, `apps/daemon/src/launch.rs`, `apps/cli/src/commands/daemon/`, `xtask/src/build_app/`
+**Pointer:** spec [0015](../specs/0015-background-agent-cli-install/index.md) · code in `crates/platform/src/agent.rs`, `crates/platform/src/bundle.rs`, `crates/platform-macos/src/agent.rs`, `apps/daemon/src/launch.rs`, `apps/cli/src/commands/daemon/`, `xtask/src/build_app/`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Agent/`
 
 - [x] Design it (spec): `/architect background agent & CLI install`
 - [ ] Build it: `/develop background agent & CLI install`
