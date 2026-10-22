@@ -339,6 +339,23 @@ fn the_new_error_codes_have_a_fixture_with_their_catalog_details_and_static_hint
     }
 }
 
+// covers: AC-2, AC-9
+#[test]
+fn endpoint_invalid_has_one_static_hint_that_names_the_fixed_port_cause() {
+    let hint = codes::instance::hint(codes::instance::ENDPOINT_INVALID.code, &[])
+        .expect("instance.endpoint_invalid has a hint");
+
+    assert_eq!(
+        hint,
+        "check the endpoint name and port; some providers need a fixed port for an endpoint when the instance is created"
+    );
+    assert!(
+        codes::instance::ENDPOINT_INVALID
+            .summary
+            .ends_with("or is Auto while the provider’s initialize needs its port")
+    );
+}
+
 #[test]
 fn a_name_error_lists_its_field_issues_and_registry_not_deletable_names_the_instance() {
     let ServerFrame::Error(ErrorFrame { error, .. }) =

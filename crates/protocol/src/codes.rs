@@ -720,7 +720,7 @@ area! {
         SETTINGS_INVALID = "instance.settings_invalid", InvalidInput, retryable false,
             details ["omitted"], "the settings break the schema of the package; fields lists each issue";
         ENDPOINT_INVALID = "instance.endpoint_invalid", InvalidInput, retryable false,
-            details ["endpoint", "omitted"], "an endpoint is not in the manifest, has a port outside 1 to 65535, or asks for a port on a unix endpoint";
+            details ["endpoint", "omitted"], "an endpoint is not in the manifest, has a port outside 1 to 65535, asks for a port on a unix endpoint, or is Auto while the provider’s initialize needs its port";
         NAME_INVALID = "instance.name_invalid", InvalidInput, retryable false,
             details ["omitted"], "the instance name or display name is not valid; fields lists each issue";
         PROVIDER_UNAVAILABLE = "instance.provider_unavailable", Unsupported, retryable false,
@@ -748,6 +748,9 @@ area! {
         #[must_use]
         pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
             Some(match code {
+                "instance.endpoint_invalid" => {
+                    "check the endpoint name and port; some providers need a fixed port for an endpoint when the instance is created"
+                }
                 "instance.name_invalid" => {
                     "use lowercase letters, digits, and single hyphens, starting with a letter"
                 }

@@ -529,7 +529,7 @@
         "omitted"
       ],
       "items": null,
-      "summary": "an endpoint is not in the manifest, has a port outside 1 to 65535, or asks for a port on a unix endpoint"
+      "summary": "an endpoint is not in the manifest, has a port outside 1 to 65535, asks for a port on a unix endpoint, or is Auto while the provider’s initialize needs its port"
     },
     {
       "code": "instance.insufficient_space",
