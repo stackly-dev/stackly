@@ -72,7 +72,8 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .runtimeGet = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceGetCreateForm = $0 { true } else { false } })
         #expect(methods.contains { if case .instancePreflight = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 32)
+        #expect(methods.contains { if case .instanceGetDuplicateForm = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 33)
     }
 
     private func check<Value: Codable & Equatable>(

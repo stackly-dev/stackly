@@ -1193,6 +1193,21 @@
       "expect": "roundtrip"
     },
     {
+      "file": "request-instance-get-duplicate-form.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-duplicate-form.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-duplicate-form-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
       "file": "frame-error-instance-name-invalid.json",
       "type": "ServerFrame",
       "expect": "roundtrip"

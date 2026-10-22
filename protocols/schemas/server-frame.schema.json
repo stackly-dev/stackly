@@ -1663,6 +1663,77 @@
         }
       ]
     },
+    "DuplicateForm": {
+      "description": "Reply of `instance.get_duplicate_form`.",
+      "type": "object",
+      "properties": {
+        "draft": {
+          "description": "The draft the form starts with: every port `auto`, every secret\n`generate`, the settings of the source, no display name, no start.",
+          "$ref": "#/$defs/PreflightCreateParams"
+        },
+        "form": {
+          "description": "The create form of the pinned package and the runtime of the source;\n`suggestedName` is the duplicate name.",
+          "$ref": "#/$defs/CreateForm"
+        },
+        "secrets": {
+          "description": "One entry per secret field, in form order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DuplicateSecret"
+          }
+        },
+        "source": {
+          "description": "The instance the form copies the settings of.",
+          "$ref": "#/$defs/DuplicateSource"
+        }
+      },
+      "required": [
+        "source",
+        "form",
+        "draft",
+        "secrets"
+      ]
+    },
+    "DuplicateSecret": {
+      "description": "The reference the source uses for one secret field.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field the secret fills.",
+          "type": "string"
+        },
+        "sourceReference": {
+          "description": "The reference the source uses for the field; absent when it uses\nnone. It is a reference, never a value.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "field"
+      ]
+    },
+    "DuplicateSource": {
+      "description": "The instance a duplicate form was built from.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The source instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name"
+      ]
+    },
     "EndpointPortMode": {
       "description": "How an IP endpoint asked for its port. Open.",
       "oneOf": [
@@ -1706,6 +1777,24 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "EndpointRequest": {
+      "description": "The port request of one manifest endpoint.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The endpoint name from the manifest.",
+          "type": "string"
+        },
+        "port": {
+          "description": "The port it asks for.",
+          "$ref": "#/$defs/PortRequest"
+        }
+      },
+      "required": [
+        "name",
+        "port"
       ]
     },
     "EndpointStatus": {
@@ -4665,6 +4754,44 @@
         "note"
       ]
     },
+    "PortRequest": {
+      "description": "How an IP endpoint asks for its port. Tagged `type` and `content`:\n`{ \"type\": \"fixed\", \"content\": 5432 }` or `{ \"type\": \"auto\" }`.",
+      "oneOf": [
+        {
+          "description": "Exactly this port, never a substitute.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "fixed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Any free port, picked when the process starts.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "auto"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
     "PreflightCheck": {
       "description": "One row of a preflight. The English `title` and `detail` are the daemon's\ntext, the same in the sheet and on the command line.",
       "type": "object",
@@ -4777,6 +4904,65 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "PreflightCreateParams": {
+      "description": "Params of `instance.preflight`: the draft of `instance.create` without\nany secret value.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "The name to show.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "endpoints": {
+          "description": "One request per manifest endpoint that asks for a port.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EndpointRequest"
+          }
+        },
+        "name": {
+          "description": "The unique instance name.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "The provider to create it from.",
+          "$ref": "#/$defs/ProviderSelector"
+        },
+        "runtimeId": {
+          "description": "The installed runtime to run it on.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "secrets": {
+          "description": "The source of each secret field.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretPlan"
+          }
+        },
+        "settings": {
+          "description": "The settings, without secret values.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "start": {
+          "description": "Whether the equivalent command ends with `--start`.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "name",
+        "provider",
+        "runtimeId",
+        "settings"
       ]
     },
     "PreflightStatus": {
@@ -5029,6 +5215,27 @@
         "id",
         "revision",
         "manifestSha256"
+      ]
+    },
+    "ProviderSelector": {
+      "description": "The provider an instance is created from.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The provider ID, such as `official/nats`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision to pin. Absent means the revision of the loaded\ncatalog. The first daemon builds refuse an absent revision with\n`request.invalid_params` at `provider.revision`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name"
       ]
     },
     "ProviderSummary": {
@@ -5886,6 +6093,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The form and the draft of a duplicate.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DuplicateForm"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_duplicate_form"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -6559,6 +6783,24 @@
         }
       ]
     },
+    "SecretPlan": {
+      "description": "The source of one secret field in a preflight.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field the secret fills.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where its value comes from.",
+          "$ref": "#/$defs/SecretSource"
+        }
+      },
+      "required": [
+        "field",
+        "source"
+      ]
+    },
     "SecretRefSummary": {
       "description": "One reference row, without any value.",
       "type": "object",
@@ -6640,6 +6882,71 @@
         "purpose",
         "status",
         "revision"
+      ]
+    },
+    "SecretSource": {
+      "description": "Where a secret field gets its value, without the value. Tagged `type`\nand `content`.",
+      "oneOf": [
+        {
+          "description": "The daemon generates a value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "generate"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "The client sends a value with `instance.create`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "value"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A copy of the value stored under this reference.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "copyFrom"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The instance uses this reference.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "bind"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
       ]
     },
     "SecretStatus": {
