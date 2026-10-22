@@ -202,3 +202,45 @@ nonisolated extension OnboardingCopy {
     /// The action that reads the status again.
     static let actionCheckAgain = "Check Again"
 }
+
+// MARK: - Command Line step (spec 0016, *Kontrol Command Line*)
+
+nonisolated extension OnboardingCopy {
+    /// The row title of the Command Line step.
+    static let commandLineRowTitle = "Install stackly in ~/.local/bin"
+    /// The detail while nothing is installed.
+    static let commandLineNotInstalled =
+        "No password needed. Stackly doesn’t change your PATH or shell files."
+    /// The detail while the link points to this copy.
+    static let commandLineInstalled = "~/.local/bin/stackly points to this copy of Stackly."
+    /// The detail while the link points to another copy.
+    static let commandLineStale = "~/.local/bin/stackly points to another copy of Stackly."
+    /// The detail while the link points to a copy that is gone.
+    static let commandLineBroken =
+        "~/.local/bin/stackly points to a copy of Stackly that’s gone."
+    /// The detail, and the reason the toggle is off, while something else is there.
+    static let commandLineConflict =
+        "~/.local/bin/stackly already exists and wasn’t made by Stackly. Stackly won’t change it."
+    /// The title of the Repair button.
+    static let commandLineRepair = "Repair…"
+    /// What introduces the PATH line.
+    static let commandLinePathNote =
+        "If Terminal can’t find stackly, add this line to your shell profile:"
+    /// The line to add to a shell profile.
+    static let commandLinePathLine = #"export PATH="$HOME/.local/bin:$PATH""#
+    /// What the Copy button of the PATH line names.
+    static let commandLinePathWhat = "PATH line"
+    /// What VoiceOver says after the PATH line is copied.
+    static let copied = "Copied."
+    /// What introduces the path of the command inside the app.
+    static let commandLineRunDirectly = "Or run it directly:"
+    /// The VoiceOver label of the example block.
+    static let commandExamplesLabel = "Example commands"
+    /// The commands of the example block; commands of later features join with them
+    /// (spec 0016, *Fitur yang belum ada*).
+    static let commandExamples = ["stackly daemon status", "stackly provider list"]
+    /// The example block as it shows: one command per line, each after `$ `.
+    static var commandExamplesText: String {
+        commandExamples.map { "$ " + $0 }.joined(separator: "\n")
+    }
+}
