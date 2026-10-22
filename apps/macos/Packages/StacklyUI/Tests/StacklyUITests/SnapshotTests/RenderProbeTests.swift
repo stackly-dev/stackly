@@ -246,7 +246,7 @@ extension SnapshotTests {
         }
 
         /// The places of the guard: outside the inspector, in its main content, and in its
-        /// column.
+        /// column while it is open.
         private struct Places {
             /// How the page holds its main content.
             enum Main: CaseIterable {
@@ -257,23 +257,25 @@ extension SnapshotTests {
             }
 
             let main: Main
+            let isOpen: Bool
             let direct = PlacedSpy.Seen()
             let mainContent = PlacedSpy.Seen()
             let column = PlacedSpy.Seen()
 
             var all: [(name: String, seen: PlacedSpy.Seen)] {
-                [
-                    ("outside the inspector", direct),
-                    ("inspector main content (\(main))", mainContent),
-                    ("inspector column (\(main))", column),
+                let state = isOpen ? "open" : "closed"
+                let places = [
+                    ("outside the inspector (\(state))", direct),
+                    ("inspector main content (\(main), \(state))", mainContent),
                 ]
+                return isOpen ? places + [("inspector column (\(main))", column)] : places
             }
 
             /// A page the way a screen builds one, with the column as the direct content of
             /// `.stacklyInspector`.
             var view: some View {
                 mainView
-                    .stacklyInspector(isPresented: .constant(true)) { PlacedSpy(seen: column) }
+                    .stacklyInspector(isPresented: .constant(isOpen)) { PlacedSpy(seen: column) }
                     .overlay(alignment: .topLeading) { PlacedSpy(seen: direct) }
             }
 
@@ -293,9 +295,9 @@ extension SnapshotTests {
         /// Renders the places through ``SnapshotRoot``, the way `assertSnapshot` renders a
         /// variant, so the page sits under the same containers as in a snapshot.
         private static func renderPlaces(
-            _ main: Places.Main, _ variant: SnapshotVariant
+            _ main: Places.Main, isOpen: Bool, _ variant: SnapshotVariant
         ) async throws -> Places {
-            let places = Places(main: main)
+            let places = Places(main: main, isOpen: isOpen)
             _ = try await SnapshotRender.render(
                 SnapshotRoot(
                     content: places.view, variant: variant, width: 900, height: .fixed(500)),
@@ -310,46 +312,54 @@ extension SnapshotTests {
             .evidence(
                 covers: ["REQ-027", "NFR-012"],
                 expected:
-                    "Increase Contrast and Reduce Transparency of the fixture reach views outside the inspector, in its main content, and in its column, with the main content in a ScrollView or a GeometryReader"
+                    "Increase Contrast and Reduce Transparency of the fixture reach views outside the inspector, in its main content, and in its column, with the main content in a ScrollView or a GeometryReader and the inspector open or closed"
             )
         )
         func theFixtureAppearanceReachesTheInspectorContent() async throws {
             let sdk = ProcessInfo.processInfo.operatingSystemVersionString
             for main in Places.Main.allCases {
-                let highContrast = try await Self.renderPlaces(main, .hcLight)
-                for (place, seen) in highContrast.all {
-                    guard let contrast = seen.contrast else {
-                        Issue.record("\(place) was never evaluated")
-                        continue
-                    }
-                    #expect(
-                        contrast == .increased,
-                        "\(place) does not read colorSchemeContrast == .increased on \(sdk); the fixture values no longer reach it, go back to /architect"
-                    )
+                for isOpen in [true, false] {
+                    try await checkPlaces(main, isOpen: isOpen, sdk: sdk)
                 }
-                let transparent = try await Self.renderPlaces(main, .reduceTransparency)
-                for (place, seen) in transparent.all {
-                    guard let reduceTransparency = seen.reduceTransparency else {
-                        Issue.record("\(place) was never evaluated")
-                        continue
-                    }
-                    #expect(
-                        reduceTransparency,
-                        "\(place) does not read accessibilityReduceTransparency == true on \(sdk); the fixture values no longer reach it, go back to /architect"
-                    )
+            }
+        }
+
+        /// Checks every place of one page in the HC, RT, and light variants.
+        private func checkPlaces(_ main: Places.Main, isOpen: Bool, sdk: String) async throws {
+            let highContrast = try await Self.renderPlaces(main, isOpen: isOpen, .hcLight)
+            for (place, seen) in highContrast.all {
+                guard let contrast = seen.contrast else {
+                    Issue.record("\(place) was never evaluated")
+                    continue
                 }
-                let standard = try await Self.renderPlaces(main, .light)
-                for (place, seen) in standard.all {
-                    guard let contrast = seen.contrast,
-                        let reduceTransparency = seen.reduceTransparency
-                    else {
-                        Issue.record("\(place) was never evaluated")
-                        continue
-                    }
-                    #expect(contrast == .standard, "\(place) reads increased contrast in light")
-                    #expect(
-                        reduceTransparency == false, "\(place) reads reduced transparency in light")
+                #expect(
+                    contrast == .increased,
+                    "\(place) does not read colorSchemeContrast == .increased on \(sdk); the fixture values no longer reach it, go back to /architect"
+                )
+            }
+            let transparent = try await Self.renderPlaces(
+                main, isOpen: isOpen, .reduceTransparency)
+            for (place, seen) in transparent.all {
+                guard let reduceTransparency = seen.reduceTransparency else {
+                    Issue.record("\(place) was never evaluated")
+                    continue
                 }
+                #expect(
+                    reduceTransparency,
+                    "\(place) does not read accessibilityReduceTransparency == true on \(sdk); the fixture values no longer reach it, go back to /architect"
+                )
+            }
+            let standard = try await Self.renderPlaces(main, isOpen: isOpen, .light)
+            for (place, seen) in standard.all {
+                guard let contrast = seen.contrast,
+                    let reduceTransparency = seen.reduceTransparency
+                else {
+                    Issue.record("\(place) was never evaluated")
+                    continue
+                }
+                #expect(contrast == .standard, "\(place) reads increased contrast in light")
+                #expect(
+                    reduceTransparency == false, "\(place) reads reduced transparency in light")
             }
         }
 

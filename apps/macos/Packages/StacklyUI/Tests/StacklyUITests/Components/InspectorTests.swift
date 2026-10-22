@@ -106,6 +106,54 @@ struct InspectorTests {
         }
     }
 
+    /// A page with a note that is thousands of points tall at a width of 0, which is where
+    /// the split view of `.inspector` measures a page.
+    private struct WrappingPage: View {
+        final class Seen {
+            var size: CGSize?
+        }
+        let seen: Seen
+
+        var body: some View {
+            VStack(alignment: .leading) {
+                Text(String(repeating: "A note that wraps at the width of the page. ", count: 8))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .onGeometryChange(for: CGSize.self) {
+                $0.size
+            } action: {
+                seen.size = $0
+            }
+        }
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-18: the page under the inspector takes the size the column offers, open or closed, also with text that wraps"
+        ))
+    func pageTakesTheSizeTheColumnOffers() async throws {
+        for isOpen in [false, true] {
+            let state = isOpen ? "open" : "closed"
+            let seen = WrappingPage.Seen()
+            _ = try await SnapshotRender.render(
+                WrappingPage(seen: seen).stacklyInspector(isPresented: .constant(isOpen)) {
+                    Color.clear
+                },
+                width: 900,
+                height: .fixed(500),
+                scheme: .light
+            )
+            let size = try #require(seen.size, "the page was never laid out (\(state))")
+            #expect(
+                size.height == 500,
+                "the page is \(size.height) pt tall in a 500 pt window with the inspector \(state)")
+            #expect(size.width <= 900, "the page is \(size.width) pt wide (\(state))")
+        }
+    }
+
     // MARK: - Toggle
 
     @Test(
