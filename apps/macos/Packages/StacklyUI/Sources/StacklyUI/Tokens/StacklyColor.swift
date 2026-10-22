@@ -144,6 +144,10 @@ nonisolated public enum StacklyColor {
     /// Disabled text and decorative icons only, such as placeholder symbols and
     /// chevrons: the system tertiary label color. Never for text that carries meaning.
     public static let decorative = Color(nsColor: .tertiaryLabelColor)
+
+    /// The selection ring of a custom card: the system accent (`controlAccentColor`), so it
+    /// follows System Settings. Never a text color.
+    public static let selectionRing = Color(nsColor: .controlAccentColor)
 }
 
 /// The opaque base a tone surface is mixed onto.
