@@ -68,7 +68,7 @@
             "state": "available",
             "stateReason": null,
             "stateNote": null,
-            "providerRevision": "1.0.0",
+            "providerRevision": "1.0.1",
             "publisher": "Stackly",
             "trust": "official",
             "versions": [

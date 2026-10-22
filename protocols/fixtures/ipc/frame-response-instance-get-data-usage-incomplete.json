@@ -1,0 +1,16 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000932",
+    "reply": {
+      "type": "instance.get_data_usage",
+      "content": {
+        "usage": {
+          "bytes": 52428800,
+          "complete": false,
+          "scannedAt": "2026-10-20T09:10:00.000Z"
+        }
+      }
+    }
+  }
+}

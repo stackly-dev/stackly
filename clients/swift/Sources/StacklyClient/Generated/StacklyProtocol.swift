@@ -1282,6 +1282,104 @@ public struct CompatibilityRecordView: Codable, Sendable, Equatable {
 	}
 }
 
+/// What one [`ConnectionPart`] holds. Open.
+public enum ConnectionPartKind: String, Codable, Sendable, Equatable {
+	/// Text that is already percent encoded.
+	case text
+	/// A secret value the client fills in.
+	case secret
+	/// A kind this build does not know.
+	case unrecognized
+}
+
+/// The secret a secret part stands for.
+public struct ConnectionSecretPart: Codable, Sendable, Equatable {
+	/// The settings field of the secret.
+	public let field: String
+	/// The reference `secret.reveal` takes.
+	public let reference: String
+
+	public init(field: String, reference: String) {
+		self.field = field
+		self.reference = reference
+	}
+}
+
+/// One piece of a connection string: [`text`](Self::text) for a text part,
+/// [`secret`](Self::secret) for a secret part.
+public struct ConnectionPart: Codable, Sendable, Equatable {
+	/// What the part holds.
+	public let kind: ConnectionPartKind
+	/// The text of a text part, already percent encoded, written as is.
+	public let text: String?
+	/// The secret of a secret part: its field and its reference, never its
+	/// value.
+	public let secret: ConnectionSecretPart?
+
+	public init(kind: ConnectionPartKind, text: String?, secret: ConnectionSecretPart?) {
+		self.kind = kind
+		self.text = text
+		self.secret = secret
+	}
+}
+
+/// Whether a connection string could be built. Open.
+public enum ConnectionAvailability: String, Codable, Sendable, Equatable {
+	/// The string is ready except for its secrets.
+	case available
+	/// The string cannot be built now; `reason` says why.
+	case unavailable
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Why a connection string cannot be built. Open.
+public enum ConnectionUnavailableReason: String, Codable, Sendable, Equatable {
+	/// An endpoint the string names has no effective port yet.
+	case portNotAssigned = "port_not_assigned"
+	/// The package of the instance cannot be used to render the string.
+	case packageUnavailable = "package_unavailable"
+	/// The instance was removed and kept.
+	case retained
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One connection string of an instance, in manifest order.
+/// 
+/// When `state` is `available`, `masked` holds the string with every secret
+/// as `****`, `parts` is not empty, and `reason` is null. When it is
+/// `unavailable`, `reason` is set, `masked` is null, and `parts` is empty.
+/// [`ConnectionString::is_consistent`] checks that.
+public struct ConnectionString: Codable, Sendable, Equatable {
+	/// The entry name from the manifest, such as `uri`.
+	public let name: String
+	/// The label a client shows.
+	public let title: String
+	/// Whether the string could be built.
+	public let state: ConnectionAvailability
+	/// Set if and only if the string is unavailable.
+	public let reason: ConnectionUnavailableReason?
+	/// The string with each secret as four stars; set if and only if the
+	/// string is available.
+	public let masked: String?
+	/// The string in order: encoded text and secret references, never a
+	/// value. Empty when unavailable.
+	public let parts: [ConnectionPart]
+	/// True when the port may differ the next time the instance starts.
+	public let portMayChange: Bool
+
+	public init(name: String, title: String, state: ConnectionAvailability, reason: ConnectionUnavailableReason?, masked: String?, parts: [ConnectionPart], portMayChange: Bool) {
+		self.name = name
+		self.title = title
+		self.state = state
+		self.reason = reason
+		self.masked = masked
+		self.parts = parts
+		self.portMayChange = portMayChange
+	}
+}
+
 /// Content of a `counted` progress.
 public struct CountedProgress: Codable, Sendable, Equatable {
 	/// What is done, such as bytes downloaded.
@@ -2443,6 +2541,32 @@ public struct DaemonReconciling: Codable, Sendable, Equatable {
 	}
 }
 
+/// The size of a data folder.
+public struct DataUsage: Codable, Sendable, Equatable {
+	/// The allocated bytes (blocks times 512) of every entry counted.
+	public let bytes: UInt64
+	/// False when the scan stopped at a limit, so `bytes` is a lower bound.
+	public let complete: Bool
+	/// When the scan finished.
+	public let scannedAt: Date
+
+	public init(bytes: UInt64, complete: Bool, scannedAt: Date) {
+		self.bytes = bytes
+		self.complete = complete
+		self.scannedAt = scannedAt
+	}
+}
+
+/// Reply of `instance.get_data_usage`.
+public struct DataUsageReply: Codable, Sendable, Equatable {
+	/// The measured size; null when `cachedOnly` found no fresh result.
+	public let usage: DataUsage?
+
+	public init(usage: DataUsage?) {
+		self.usage = usage
+	}
+}
+
 /// Params of `secret.delete`.
 public struct DeleteSecretParams: Codable, Sendable, Equatable {
 	/// The reference.
@@ -2463,6 +2587,273 @@ public struct DeleteSecretReply: Codable, Sendable, Equatable {
 
 	public init(reference: String) {
 		self.reference = reference
+	}
+}
+
+/// Whether an environment owns an instance it holds. Open.
+public enum DependentOwnership: String, Codable, Sendable, Equatable {
+	/// Only this environment uses the instance.
+	case dedicated
+	/// Other environments may use it too.
+	case shared
+	/// An ownership this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// An environment that holds the instance.
+public struct DetailDependent: Codable, Sendable, Equatable {
+	/// The environment.
+	public let environmentId: UUID
+	/// Its name.
+	public let name: String
+	/// Whether the environment owns the instance.
+	public let ownership: DependentOwnership
+	/// Whether the environment holds an active lease on the instance.
+	public let leaseActive: Bool
+
+	public init(environmentId: UUID, name: String, ownership: DependentOwnership, leaseActive: Bool) {
+		self.environmentId = environmentId
+		self.name = name
+		self.ownership = ownership
+		self.leaseActive = leaseActive
+	}
+}
+
+/// The pinned provider revision of an instance.
+public struct DetailProvider: Codable, Sendable, Equatable {
+	/// The provider name, such as `official/postgresql`.
+	public let name: String
+	/// The pinned revision.
+	public let revision: String
+	/// The SHA-256 of the pinned manifest.
+	public let manifestSha256: String
+	/// `metadata.displayName` of the pinned package; null when the package
+	/// cannot be read. Never taken from the catalog.
+	public let displayName: String?
+	/// False when the pinned package cannot be read, or the package found
+	/// is not the pinned one; then `displayName` is null and the detail has
+	/// no connection. True otherwise, also for a package without a
+	/// `connection` block.
+	public let packageReadable: Bool
+
+	public init(name: String, revision: String, manifestSha256: String, displayName: String?, packageReadable: Bool) {
+		self.name = name
+		self.revision = revision
+		self.manifestSha256 = manifestSha256
+		self.displayName = displayName
+		self.packageReadable = packageReadable
+	}
+}
+
+/// The runtime an instance runs on.
+public struct DetailRuntime: Codable, Sendable, Equatable {
+	/// The runtime ID.
+	public let id: UUID
+	/// The exact version.
+	public let version: String
+	/// The OS and architecture it was built for.
+	public let target: HostTarget
+	/// Whether Stackly installed it or it lives in a folder the user owns.
+	public let installMode: InstallModeKind
+	/// The SHA-256 of the installed artifact; null for an external runtime.
+	public let artifactSha256: String?
+
+	public init(id: UUID, version: String, target: HostTarget, installMode: InstallModeKind, artifactSha256: String?) {
+		self.id = id
+		self.version = version
+		self.target = target
+		self.installMode = installMode
+		self.artifactSha256 = artifactSha256
+	}
+}
+
+/// What the store held when the daemon last looked, never a value.
+public enum SecretStatus: String, Codable, Sendable, Equatable {
+	/// The store holds a value.
+	case present
+	/// The store holds none.
+	case missing
+	/// The store could not be checked.
+	case unknown
+	/// A status this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One secret an instance uses.
+public struct DetailSecret: Codable, Sendable, Equatable {
+	/// The settings field.
+	public let field: String
+	/// The title from the schema of the pinned package, else the field name.
+	public let title: String
+	/// The reference `secret.reveal` takes.
+	public let reference: String
+	/// What the store held when the daemon last looked; `unknown` before the
+	/// first look.
+	public let status: SecretStatus
+
+	public init(field: String, title: String, reference: String, status: SecretStatus) {
+		self.field = field
+		self.title = title
+		self.reference = reference
+		self.status = status
+	}
+}
+
+/// The instance a duplicate form was built from.
+public struct DuplicateSource: Codable, Sendable, Equatable {
+	/// The source instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+
+	public init(instanceId: UUID, name: String) {
+		self.instanceId = instanceId
+		self.name = name
+	}
+}
+
+/// Where a secret field gets its value, without the value. Tagged `type`
+/// and `content`.
+public enum SecretSource: Codable, Sendable, Equatable {
+	/// The daemon generates a value.
+	case generate
+	/// The client sends a value with `instance.create`.
+	case value
+	/// A copy of the value stored under this reference.
+	case copyFrom(String)
+	/// The instance uses this reference.
+	case bind(String)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case generate,
+			value,
+			copyFrom,
+			bind
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .generate:
+				self = .generate
+				return
+			case .value:
+				self = .value
+				return
+			case .copyFrom:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .copyFrom(content)
+					return
+				}
+			case .bind:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .bind(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(SecretSource.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SecretSource"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .generate:
+			try container.encode(CodingKeys.generate, forKey: .type)
+		case .value:
+			try container.encode(CodingKeys.value, forKey: .type)
+		case .copyFrom(let content):
+			try container.encode(CodingKeys.copyFrom, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .bind(let content):
+			try container.encode(CodingKeys.bind, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// The source of one secret field in a preflight.
+public struct SecretPlan: Codable, Sendable, Equatable {
+	/// The settings field the secret fills.
+	public let field: String
+	/// Where its value comes from.
+	public let source: SecretSource
+
+	public init(field: String, source: SecretSource) {
+		self.field = field
+		self.source = source
+	}
+}
+
+/// Params of `instance.preflight`: the draft of `instance.create` without
+/// any secret value.
+public struct PreflightCreateParams: Codable, Sendable, Equatable {
+	/// The unique instance name.
+	public let name: String
+	/// The name to show.
+	public let displayName: String?
+	/// The provider to create it from.
+	public let provider: ProviderSelector
+	/// The installed runtime to run it on.
+	public let runtimeId: UUID
+	/// One request per manifest endpoint that asks for a port.
+	public let endpoints: [EndpointRequest]?
+	/// The settings, without secret values.
+	public let settings: JSONObject
+	/// The source of each secret field.
+	public let secrets: [SecretPlan]?
+	/// Whether the equivalent command ends with `--start`.
+	public let start: Bool?
+
+	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretPlan]?, start: Bool?) {
+		self.name = name
+		self.displayName = displayName
+		self.provider = provider
+		self.runtimeId = runtimeId
+		self.endpoints = endpoints
+		self.settings = settings
+		self.secrets = secrets
+		self.start = start
+	}
+}
+
+/// The reference the source uses for one secret field.
+public struct DuplicateSecret: Codable, Sendable, Equatable {
+	/// The settings field the secret fills.
+	public let field: String
+	/// The reference the source uses for the field; absent when it uses
+	/// none. It is a reference, never a value.
+	public let sourceReference: String?
+
+	public init(field: String, sourceReference: String?) {
+		self.field = field
+		self.sourceReference = sourceReference
+	}
+}
+
+/// Reply of `instance.get_duplicate_form`.
+public struct DuplicateForm: Codable, Sendable, Equatable {
+	/// The instance the form copies the settings of.
+	public let source: DuplicateSource
+	/// The create form of the pinned package and the runtime of the source;
+	/// `suggestedName` is the duplicate name.
+	public let form: CreateForm
+	/// The draft the form starts with: every port `auto`, every secret
+	/// `generate`, the settings of the source, no display name, no start.
+	public let draft: PreflightCreateParams
+	/// One entry per secret field, in form order.
+	public let secrets: [DuplicateSecret]
+
+	public init(source: DuplicateSource, form: CreateForm, draft: PreflightCreateParams, secrets: [DuplicateSecret]) {
+		self.source = source
+		self.form = form
+		self.draft = draft
+		self.secrets = secrets
 	}
 }
 
@@ -2771,6 +3162,42 @@ public struct GetCreateFormParams: Codable, Sendable, Equatable {
 	public init(runtimeId: UUID, provider: String?) {
 		self.runtimeId = runtimeId
 		self.provider = provider
+	}
+}
+
+/// Params of `instance.get_data_usage`.
+public struct GetDataUsageParams: Codable, Sendable, Equatable {
+	/// The instance whose data folder is measured.
+	public let instanceId: UUID
+	/// Measure again even when a fresh result is cached.
+	public let refresh: Bool?
+	/// Never start a scan: answer from the cache, or with a null `usage`.
+	public let cachedOnly: Bool?
+
+	public init(instanceId: UUID, refresh: Bool?, cachedOnly: Bool?) {
+		self.instanceId = instanceId
+		self.refresh = refresh
+		self.cachedOnly = cachedOnly
+	}
+}
+
+/// Params of `instance.get_duplicate_form`.
+public struct GetDuplicateFormParams: Codable, Sendable, Equatable {
+	/// The instance whose settings fill the form, retained ones refused.
+	public let instanceId: UUID
+
+	public init(instanceId: UUID) {
+		self.instanceId = instanceId
+	}
+}
+
+/// Params of `instance.get_detail`.
+public struct GetInstanceDetailParams: Codable, Sendable, Equatable {
+	/// The instance to describe.
+	public let instanceId: UUID
+
+	public init(instanceId: UUID) {
+		self.instanceId = instanceId
 	}
 }
 
@@ -3185,6 +3612,52 @@ public struct InstanceActionAccepted: Codable, Sendable, Equatable {
 	public init(accepted: OperationAccepted?, alreadyInState: Bool) {
 		self.accepted = accepted
 		self.alreadyInState = alreadyInState
+	}
+}
+
+/// When an instance starts on its own. Open.
+public enum StartupPolicyKind: String, Codable, Sendable, Equatable {
+	/// Only when the user starts it.
+	case manual
+	/// When the user logs in.
+	case atLogin = "at_login"
+	/// A policy this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Reply of `instance.get_detail`.
+public struct InstanceDetail: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// The revision of the instance this detail was built from. A client
+	/// drops a detail older than the one it holds.
+	public let revision: UInt64
+	/// The pinned provider revision.
+	public let provider: DetailProvider
+	/// The runtime.
+	public let runtime: DetailRuntime
+	/// The absolute path of the data folder.
+	public let dataPath: String
+	/// When the instance starts on its own.
+	public let startup: StartupPolicyKind
+	/// One row per secret the instance uses, ordered by field.
+	public let secrets: [DetailSecret]
+	/// The environments that hold the instance, ordered by name and then ID.
+	public let dependents: [DetailDependent]
+	/// The connection strings, in manifest order; none when the pinned
+	/// package cannot be read or declares none.
+	public let connections: [ConnectionString]
+
+	public init(instanceId: UUID, revision: UInt64, provider: DetailProvider, runtime: DetailRuntime, dataPath: String, startup: StartupPolicyKind, secrets: [DetailSecret], dependents: [DetailDependent], connections: [ConnectionString]) {
+		self.instanceId = instanceId
+		self.revision = revision
+		self.provider = provider
+		self.runtime = runtime
+		self.dataPath = dataPath
+		self.startup = startup
+		self.secrets = secrets
+		self.dependents = dependents
+		self.connections = connections
 	}
 }
 
@@ -3776,18 +4249,6 @@ public enum SecretOwnerKind: String, Codable, Sendable, Equatable {
 	case unrecognized
 }
 
-/// What the store held when the daemon last looked, never a value.
-public enum SecretStatus: String, Codable, Sendable, Equatable {
-	/// The store holds a value.
-	case present
-	/// The store holds none.
-	case missing
-	/// The store could not be checked.
-	case unknown
-	/// A status this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
 /// Params of `secret.list`.
 public struct ListSecretsParams: Codable, Sendable, Equatable {
 	/// Only references of this owner kind.
@@ -4056,116 +4517,6 @@ public struct PlatformNoteDto: Codable, Sendable, Equatable {
 	}
 }
 
-/// Where a secret field gets its value, without the value. Tagged `type`
-/// and `content`.
-public enum SecretSource: Codable, Sendable, Equatable {
-	/// The daemon generates a value.
-	case generate
-	/// The client sends a value with `instance.create`.
-	case value
-	/// A copy of the value stored under this reference.
-	case copyFrom(String)
-	/// The instance uses this reference.
-	case bind(String)
-
-	enum CodingKeys: String, CodingKey, Codable {
-		case generate,
-			value,
-			copyFrom,
-			bind
-	}
-
-	private enum ContainerCodingKeys: String, CodingKey {
-		case type, content
-	}
-
-	public init(from decoder: Decoder) throws {
-		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
-		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
-			switch type {
-			case .generate:
-				self = .generate
-				return
-			case .value:
-				self = .value
-				return
-			case .copyFrom:
-				if let content = try? container.decode(String.self, forKey: .content) {
-					self = .copyFrom(content)
-					return
-				}
-			case .bind:
-				if let content = try? container.decode(String.self, forKey: .content) {
-					self = .bind(content)
-					return
-				}
-			}
-		}
-		throw DecodingError.typeMismatch(SecretSource.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SecretSource"))
-	}
-
-	public func encode(to encoder: Encoder) throws {
-		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
-		switch self {
-		case .generate:
-			try container.encode(CodingKeys.generate, forKey: .type)
-		case .value:
-			try container.encode(CodingKeys.value, forKey: .type)
-		case .copyFrom(let content):
-			try container.encode(CodingKeys.copyFrom, forKey: .type)
-			try container.encode(content, forKey: .content)
-		case .bind(let content):
-			try container.encode(CodingKeys.bind, forKey: .type)
-			try container.encode(content, forKey: .content)
-		}
-	}
-}
-
-/// The source of one secret field in a preflight.
-public struct SecretPlan: Codable, Sendable, Equatable {
-	/// The settings field the secret fills.
-	public let field: String
-	/// Where its value comes from.
-	public let source: SecretSource
-
-	public init(field: String, source: SecretSource) {
-		self.field = field
-		self.source = source
-	}
-}
-
-/// Params of `instance.preflight`: the draft of `instance.create` without
-/// any secret value.
-public struct PreflightCreateParams: Codable, Sendable, Equatable {
-	/// The unique instance name.
-	public let name: String
-	/// The name to show.
-	public let displayName: String?
-	/// The provider to create it from.
-	public let provider: ProviderSelector
-	/// The installed runtime to run it on.
-	public let runtimeId: UUID
-	/// One request per manifest endpoint that asks for a port.
-	public let endpoints: [EndpointRequest]?
-	/// The settings, without secret values.
-	public let settings: JSONObject
-	/// The source of each secret field.
-	public let secrets: [SecretPlan]?
-	/// Whether the equivalent command ends with `--start`.
-	public let start: Bool?
-
-	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretPlan]?, start: Bool?) {
-		self.name = name
-		self.displayName = displayName
-		self.provider = provider
-		self.runtimeId = runtimeId
-		self.endpoints = endpoints
-		self.settings = settings
-		self.secrets = secrets
-		self.start = start
-	}
-}
-
 /// Reply of `catalog.get_provider`: one entry with its versions, its
 /// artifacts, and what is wrong with it.
 public struct ProviderDetail: Codable, Sendable, Equatable {
@@ -4271,6 +4622,13 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceGetCreateForm(GetCreateFormParams)
 	/// Judges a create draft without any secret value and changes nothing.
 	case instancePreflight(PreflightCreateParams)
+	/// The create form and the draft of a duplicate of one instance.
+	case instanceGetDuplicateForm(GetDuplicateFormParams)
+	/// The detail page facts of one instance: provider, runtime, secrets,
+	/// dependents, and connection strings.
+	case instanceGetDetail(GetInstanceDetailParams)
+	/// The size of the data folder of one instance.
+	case instanceGetDataUsage(GetDataUsageParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -4304,7 +4662,10 @@ public enum Call: Codable, Sendable, Equatable {
 			runtimeList = "runtime.list",
 			runtimeGet = "runtime.get",
 			instanceGetCreateForm = "instance.get_create_form",
-			instancePreflight = "instance.preflight"
+			instancePreflight = "instance.preflight",
+			instanceGetDuplicateForm = "instance.get_duplicate_form",
+			instanceGetDetail = "instance.get_detail",
+			instanceGetDataUsage = "instance.get_data_usage"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -4463,6 +4824,21 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instancePreflight(content)
 					return
 				}
+			case .instanceGetDuplicateForm:
+				if let content = try? container.decode(GetDuplicateFormParams.self, forKey: .content) {
+					self = .instanceGetDuplicateForm(content)
+					return
+				}
+			case .instanceGetDetail:
+				if let content = try? container.decode(GetInstanceDetailParams.self, forKey: .content) {
+					self = .instanceGetDetail(content)
+					return
+				}
+			case .instanceGetDataUsage:
+				if let content = try? container.decode(GetDataUsageParams.self, forKey: .content) {
+					self = .instanceGetDataUsage(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -4561,6 +4937,15 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instancePreflight(let content):
 			try container.encode(CodingKeys.instancePreflight, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceGetDuplicateForm(let content):
+			try container.encode(CodingKeys.instanceGetDuplicateForm, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGetDetail(let content):
+			try container.encode(CodingKeys.instanceGetDetail, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGetDataUsage(let content):
+			try container.encode(CodingKeys.instanceGetDataUsage, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -4650,6 +5035,12 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceGetCreateForm(CreateForm)
 	/// The preflight rows, the field issues, and the equivalent command.
 	case instancePreflight(CreatePreflight)
+	/// The form and the draft of a duplicate.
+	case instanceGetDuplicateForm(DuplicateForm)
+	/// The detail of an instance.
+	case instanceGetDetail(InstanceDetail)
+	/// The size of a data folder, or null when none is cached.
+	case instanceGetDataUsage(DataUsageReply)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -4683,7 +5074,10 @@ public enum Reply: Codable, Sendable, Equatable {
 			runtimeList = "runtime.list",
 			runtimeGet = "runtime.get",
 			instanceGetCreateForm = "instance.get_create_form",
-			instancePreflight = "instance.preflight"
+			instancePreflight = "instance.preflight",
+			instanceGetDuplicateForm = "instance.get_duplicate_form",
+			instanceGetDetail = "instance.get_detail",
+			instanceGetDataUsage = "instance.get_data_usage"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -4852,6 +5246,21 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instancePreflight(content)
 					return
 				}
+			case .instanceGetDuplicateForm:
+				if let content = try? container.decode(DuplicateForm.self, forKey: .content) {
+					self = .instanceGetDuplicateForm(content)
+					return
+				}
+			case .instanceGetDetail:
+				if let content = try? container.decode(InstanceDetail.self, forKey: .content) {
+					self = .instanceGetDetail(content)
+					return
+				}
+			case .instanceGetDataUsage:
+				if let content = try? container.decode(DataUsageReply.self, forKey: .content) {
+					self = .instanceGetDataUsage(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -4954,6 +5363,15 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .instancePreflight(let content):
 			try container.encode(CodingKeys.instancePreflight, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGetDuplicateForm(let content):
+			try container.encode(CodingKeys.instanceGetDuplicateForm, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGetDetail(let content):
+			try container.encode(CodingKeys.instanceGetDetail, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGetDataUsage(let content):
+			try container.encode(CodingKeys.instanceGetDataUsage, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

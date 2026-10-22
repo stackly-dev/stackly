@@ -18,8 +18,13 @@ struct ProviderDetailPanel: View {
     let phase: ProviderDetailModel.Phase
     let host: HostTarget
     let retry: @MainActor () -> Void
+    /// The runtimes, for the Get column and the failure of an install, or `nil`.
+    var runtimes: RuntimeStore?
+    /// The operation center, for the percent of a running install, or `nil`.
+    var operations: OperationCenter?
 
     @Environment(\.locale) private var locale
+    @Environment(\.shellNavigator) private var navigator
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s16) {
@@ -45,6 +50,7 @@ struct ProviderDetailPanel: View {
                     .foregroundStyle(StacklyColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            installFailure
             switch phase {
             case .loading:
                 ProgressView()
@@ -62,6 +68,32 @@ struct ProviderDetailPanel: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("catalog.detail")
+    }
+
+    /// Why the last install of this provider did not start or did not finish: the daemon's
+    /// message, hint, and code, with a way to Operations (spec 0018, *Kolom aksi Catalog*).
+    /// The next Get of the provider clears it.
+    @ViewBuilder private var installFailure: some View {
+        if let failure = runtimes?.failure(for: summary.provider) {
+            StateBanner(
+                tone: .critical, title: "Couldn’t install \(summary.displayName)",
+                message: [failure.message, failure.hint].compactMap { $0 }.joined(separator: " "),
+                code: failure.code,
+                actions: [
+                    StateAction(
+                        title: "Show Operations", mutates: false,
+                        perform: { navigator?.show(.operations) })
+                ])
+        }
+    }
+
+    /// The Get column of the version matrix, when the panel has runtimes to join.
+    private var runtimeGet: RuntimeGetSource? {
+        runtimes.map {
+            RuntimeGetSource(
+                provider: summary.provider, displayName: summary.displayName, host: host,
+                runtimes: $0, operations: operations)
+        }
     }
 
     /// The reason line under the description of an unsupported or blocked provider.
@@ -126,7 +158,7 @@ struct ProviderDetailPanel: View {
                         ForEach(notes, id: \.self) { Text($0) }
                     }
                 },
-                content: { VersionMatrix(versions: versions) })
+                content: { VersionMatrix(versions: versions, runtimeGet: runtimeGet) })
         }
         CardSection("Capabilities") {
             CapabilityList(capabilities: detail.capabilities ?? [])

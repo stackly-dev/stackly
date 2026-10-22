@@ -8,12 +8,15 @@
     reason = "each scenario module uses a part of these helpers"
 )]
 
+use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::json;
+use stackly_core::catalog::{Catalog, CatalogEntry, ProviderEntry, TileColor, TileHint};
 use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
 use stackly_core::runtime::fixture::install_cached_artifact;
 use stackly_core::supervisor::fixture::pin_package;
@@ -31,7 +34,10 @@ use stackly_protocol::instance::{
 use stackly_protocol::secret::{SecretInput, SecretText};
 use stackly_storage::{OpenOptions, RegistryOpen};
 use stackly_testkit::evidence::{Evidence, Source};
-use stackly_testkit::{FakeSecretStore, ReapGuard, TestRoot, allocate_port};
+use stackly_testkit::{
+    FakeFetcher, FakeSecretStore, ReapGuard, RuntimeCache, TestRoot, allocate_port,
+};
+use stacklyd::catalog::CatalogOverride;
 use stacklyd::lock::{DaemonLock, LockOwner};
 use stacklyd::server::{self, DaemonConfig, DaemonHandle};
 use uuid::Uuid;
@@ -115,6 +121,23 @@ pub fn artifact_sha256(pg: Pg) -> String {
         .to_owned()
 }
 
+/// The size in bytes of the artifact `pg` in `versions.json`.
+#[must_use]
+pub fn artifact_size(pg: Pg) -> u64 {
+    let text = std::fs::read_to_string(package_dir().join("versions.json"))
+        .expect("versions.json can be read");
+    let versions: serde_json::Value = serde_json::from_str(&text).expect("versions.json is JSON");
+    versions["artifacts"]
+        .as_array()
+        .and_then(|artifacts| {
+            artifacts
+                .iter()
+                .find(|artifact| artifact["id"] == pg.artifact)
+        })
+        .and_then(|artifact| artifact["size"].as_u64())
+        .unwrap_or_else(|| panic!("versions.json has a size for {}", pg.artifact))
+}
+
 /// A platform on `root`, with a fake secret store the test can read.
 fn platform_of(root: &TestRoot, secrets: &Arc<FakeSecretStore>) -> Platform {
     MacosPlatform::new(Some(root.path().into()))
@@ -135,6 +158,10 @@ pub struct Site {
     pub runtime_id: Uuid,
     pub runtime_dir: PathBuf,
     pub artifact_sha256: String,
+    /// The revision of the package, as `pin_package` recorded it.
+    pub revision: String,
+    /// The SHA-256 of the manifest of that revision.
+    pub manifest_sha256: String,
 }
 
 impl Site {
@@ -186,6 +213,10 @@ impl Site {
         .expect("the cached artifact installs, exec check included");
         let revision =
             pin_package(&platform, prepared.layout(), dir).expect("the package can be pinned");
+        // A daemon with a catalog pins the same revision again and refuses
+        // folders that are not private; the fixture pin makes them 0755.
+        make_private(&prepared.layout().providers_dir());
+        let revision_key = revision.revision.key().clone();
         registry
             .commit(WriteBatch::new(vec![WriteOp::InsertProviderRevision(
                 revision,
@@ -209,6 +240,8 @@ impl Site {
             runtime_id: runtime.id().as_uuid(),
             runtime_dir,
             artifact_sha256: sha256,
+            revision: revision_key.revision().to_string(),
+            manifest_sha256: revision_key.manifest_sha256().to_string(),
         })
     }
 
@@ -267,8 +300,20 @@ impl Site {
             .expect("the rebound instance can be committed");
     }
 
+    /// The runtime and line of the site itself.
+    #[must_use]
+    pub fn own_runtime(&self) -> (RuntimeId, RuntimeLine) {
+        (
+            self.runtime_id
+                .to_string()
+                .parse::<RuntimeId>()
+                .expect("a runtime id"),
+            self.pg.major.parse().expect("a runtime line"),
+        )
+    }
+
     /// Opens the registry of this root. The daemon must be stopped.
-    fn open_registry(&self) -> impl Registry + use<> {
+    pub fn open_registry(&self) -> impl Registry + use<> {
         let RegistryOpen::Ready { registry, .. } = OpenOptions::new()
             .open(
                 &self.platform,
@@ -326,6 +371,74 @@ impl Site {
     /// Starts a daemon in this process, with the supervisor constants of
     /// the tests and `config` adjusted by `tweak`.
     pub async fn in_process(&self, tweak: impl FnOnce(&mut DaemonConfig)) -> InProcess {
+        self.in_process_on(self.platform.clone(), tweak).await
+    }
+
+    /// [`Site::in_process`] for a daemon that cannot reach the network and
+    /// whose catalog holds the real `official/postgresql` package of the
+    /// repository, so `runtime.install` finds the artifacts of its
+    /// `versions.json` (spec 0025, *Lingkungan test native*). The fetcher
+    /// serves nothing: an install that is not answered by a staged download
+    /// fails the test.
+    ///
+    /// The catalog is preloaded because `providers/` holds only the source
+    /// of the catalog, `catalog.toml`, and the daemon reads the
+    /// `catalog.json` that `cargo xtask catalog build` writes.
+    pub async fn in_process_offline(&self, tweak: impl FnOnce(&mut DaemonConfig)) -> InProcess {
+        let platform = self
+            .platform
+            .clone()
+            .with_fetcher(Arc::new(FakeFetcher::new()));
+        let entry = CatalogEntry::Provider(ProviderEntry {
+            package: Arc::new(package(&self.platform, &package_dir())),
+            tile: TileHint {
+                mark: "Pg".to_owned(),
+                tile: TileColor::Blue,
+            },
+            notes: Vec::new(),
+        });
+        self.in_process_on(platform, |config| {
+            config.catalog = Some(CatalogOverride::Preloaded(Catalog::for_tests(&[entry])));
+            tweak(config);
+        })
+        .await
+    }
+
+    /// Copies the cached archive of `pg` into the download cache of the
+    /// daemon, where `runtime.install` finds a finished download (spec 0018
+    /// AC-6). Notes `evidence` as `BLOCKED` and returns `false` when the
+    /// runtime cache does not hold the artifact, intact.
+    pub fn stage_download(&self, evidence: &Evidence, pg: Pg) -> bool {
+        let staged = RuntimeCache::open().and_then(|cache| {
+            cache
+                .copy_to(
+                    &artifact_sha256(pg),
+                    artifact_size(pg),
+                    &self.prepared.layout().downloads_dir(),
+                )
+                .expect("the cached artifact can be copied")
+        });
+        match staged {
+            Some(file) => {
+                std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))
+                    .expect("the staged download can be made private");
+                true
+            }
+            None => {
+                evidence.blocked(
+                    &format!("artifact {} is not in the runtime cache", pg.artifact),
+                    OWNER,
+                );
+                false
+            }
+        }
+    }
+
+    async fn in_process_on(
+        &self,
+        platform: Platform,
+        tweak: impl FnOnce(&mut DaemonConfig),
+    ) -> InProcess {
         let owner = LockOwner::new(
             std::process::id(),
             Uuid::now_v7(),
@@ -349,13 +462,8 @@ impl Site {
             true,
             std::process::id(),
         );
-        let deps = server::DaemonDeps::new(
-            self.platform.clone(),
-            self.prepared.clone(),
-            facts,
-            Arc::new(log),
-        )
-        .with_config(config);
+        let deps = server::DaemonDeps::new(platform, self.prepared.clone(), facts, Arc::new(log))
+            .with_config(config);
         let handle = server::start(deps).await.expect("the server starts");
         handle.started().await;
         InProcess {
@@ -423,6 +531,31 @@ impl Site {
             socket_dir: self.run_dir(id),
             port,
             home: self.root.path().to_path_buf(),
+        }
+    }
+
+    /// `psql` of the runtime installed in `runtime_dir` against the instance
+    /// `id`, for an instance that does not run on the runtime of the site.
+    #[must_use]
+    pub fn psql_in(&self, runtime_dir: &Path, id: Uuid, port: u16) -> Psql {
+        Psql {
+            bin: runtime_dir.join("bin").join("psql"),
+            socket_dir: self.run_dir(id),
+            port,
+            home: self.root.path().to_path_buf(),
+        }
+    }
+}
+
+/// Makes `dir` and every folder under it private (0700), the way the pin of
+/// the daemon makes them.
+fn make_private(dir: &Path) {
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+        .expect("a pinned folder can be made private");
+    for entry in std::fs::read_dir(dir).expect("a pinned folder can be listed") {
+        let path = entry.expect("a folder entry can be read").path();
+        if path.is_dir() {
+            make_private(&path);
         }
     }
 }
@@ -675,6 +808,19 @@ pub fn create_params(
     password: &str,
     settings: serde_json::Value,
 ) -> CreateInstanceParams {
+    create_params_on(site.runtime_id, name, port, password, settings)
+}
+
+/// [`create_params`] for the runtime `runtime_id`, which does not have to be
+/// the runtime of the site.
+#[must_use]
+pub fn create_params_on(
+    runtime_id: Uuid,
+    name: &str,
+    port: PortRequest,
+    password: &str,
+    settings: serde_json::Value,
+) -> CreateInstanceParams {
     let map = match settings {
         serde_json::Value::Object(map) => map,
         serde_json::Value::Null => serde_json::Map::new(),
@@ -687,7 +833,7 @@ pub fn create_params(
             name: PROVIDER.to_owned(),
             revision: Some(REVISION.to_owned()),
         },
-        runtime_id: site.runtime_id,
+        runtime_id,
         endpoints: vec![EndpointRequest {
             name: "client".to_owned(),
             port,
@@ -755,6 +901,43 @@ pub async fn create_with(
         port,
         password: password.to_owned(),
     }
+}
+
+/// [`create_instance`] on the runtime `runtime_id`, with a new fixture
+/// password: the create of an instance beside the ones of the site runtime.
+pub async fn create_on(api: &Api, runtime_id: Uuid, name: &str) -> Made {
+    let password = new_password();
+    let port = free_port();
+    let accepted = api
+        .create(create_params_on(
+            runtime_id,
+            name,
+            PortRequest::Fixed(port),
+            &password,
+            json!({}),
+        ))
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let id = accepted
+        .operation
+        .resource
+        .as_ref()
+        .map(|resource| resource.id.parse::<Uuid>().expect("an instance id"))
+        .expect("the operation names the instance");
+    let detail = api
+        .wait_state(
+            accepted.operation.id,
+            stackly_protocol::operation::OperationState::Succeeded,
+        )
+        .await;
+    assert_eq!(
+        detail.operation.state,
+        stackly_protocol::operation::OperationState::Succeeded,
+        "{detail:?}"
+    );
+    Made { id, port, password }
 }
 
 /// Sends the create and returns the acceptance, without waiting.
@@ -876,4 +1059,146 @@ pub fn files_holding(dir: &Path, needle: &str) -> Vec<PathBuf> {
         }
     }
     found
+}
+
+/// SHA-256 and mode of every regular file under `root`, by path relative to
+/// it. A folder that does not exist counts as an empty tree, because the log
+/// folder of an instance may not exist yet.
+#[must_use]
+pub fn tree_digest(root: &Path) -> BTreeMap<String, (String, u32)> {
+    use sha2::{Digest, Sha256};
+    let mut digest = BTreeMap::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries {
+            let path = entry.expect("a folder entry can be read").path();
+            let meta = std::fs::symlink_metadata(&path).expect("an entry has metadata");
+            if meta.is_dir() {
+                pending.push(path);
+            } else if meta.is_file() {
+                let bytes = std::fs::read(&path).expect("a file of the tree can be read");
+                let relative = path
+                    .strip_prefix(root)
+                    .expect("the file is under the root")
+                    .display()
+                    .to_string();
+                let hash: String = Sha256::digest(&bytes)
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect();
+                digest.insert(relative, (hash, meta.permissions().mode() & 0o7777));
+            }
+        }
+    }
+    digest
+}
+
+/// A runtime installed by [`install_runtime`].
+#[derive(Debug, Clone)]
+pub struct Installed {
+    /// The runtime ID, from the result of the install operation.
+    pub id: Uuid,
+    /// The folder of the runtime, from `runtime.get`.
+    pub dir: PathBuf,
+}
+
+/// How long a native install may take: the archive is hashed, unpacked, and
+/// checked with `codesign` on a busy Mac.
+const INSTALL_PATIENCE: Duration = Duration::from_secs(300);
+
+/// Installs `pg` through `runtime.install` from the download cache staged by
+/// [`Site::stage_download`] and waits until the operation succeeded.
+pub async fn install_runtime(api: &Api, pg: Pg) -> Installed {
+    use stackly_protocol::operation::{GetOperationParams, OperationState};
+    use stackly_protocol::runtime::{GetRuntimeParams, InstallOutcome, InstallRuntimeParams};
+    use stackly_protocol::{Call, Reply};
+
+    let mut options = stackly_ipc::CallOptions::default();
+    options.idempotency_key = Some(format!("install-{}", pg.artifact));
+    let installed = api
+        .client
+        .call_detailed(
+            Call::RuntimeInstall(InstallRuntimeParams {
+                provider: PROVIDER.to_owned(),
+                selector: pg.major.to_owned(),
+                expected_sha256: None,
+            }),
+            options,
+        )
+        .await;
+    let Ok(Reply::RuntimeInstall(reply)) = installed else {
+        panic!("runtime.install is not answered: {installed:?}");
+    };
+    assert_eq!(reply.resolved.artifact_id, pg.artifact);
+    let InstallOutcome::Started(accepted) = reply.outcome else {
+        panic!("the runtime is not installed yet, so the install starts");
+    };
+    let deadline = tokio::time::Instant::now() + INSTALL_PATIENCE;
+    let done = loop {
+        let Ok(Reply::OperationGet(detail)) = api
+            .client
+            .call(Call::OperationGet(GetOperationParams {
+                operation_id: accepted.operation.id,
+            }))
+            .await
+        else {
+            panic!("the install operation can be read");
+        };
+        if matches!(
+            detail.operation.state,
+            OperationState::Succeeded
+                | OperationState::Failed
+                | OperationState::Cancelled
+                | OperationState::NeedsRecovery
+        ) {
+            break detail;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the install did not end: {:?}",
+            detail.operation
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    assert_eq!(
+        done.operation.state,
+        OperationState::Succeeded,
+        "the install ended as {:?}",
+        done.operation
+    );
+    let id = done
+        .operation
+        .result
+        .as_ref()
+        .and_then(|result| result.resources.first())
+        .map(|resource| resource.id.parse::<Uuid>().expect("a runtime id"))
+        .expect("the install result names the runtime");
+    let Ok(Reply::RuntimeGet(detail)) = api
+        .client
+        .call(Call::RuntimeGet(GetRuntimeParams { runtime_id: id }))
+        .await
+    else {
+        panic!("the runtime can be read");
+    };
+    Installed {
+        id,
+        dir: PathBuf::from(&detail.path),
+    }
+}
+
+/// The runtime ID and line of `installed`, as `Site::rebind_instance` takes
+/// them.
+#[must_use]
+pub fn runtime_pair(installed: &Installed, pg: Pg) -> (RuntimeId, RuntimeLine) {
+    (
+        installed
+            .id
+            .to_string()
+            .parse::<RuntimeId>()
+            .expect("a runtime id"),
+        pg.major.parse().expect("a runtime line"),
+    )
 }

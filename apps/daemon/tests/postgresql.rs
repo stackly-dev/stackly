@@ -10,6 +10,8 @@
 mod adoption;
 #[path = "common/mod.rs"]
 mod common;
+#[path = "postgresql/compat.rs"]
+mod compat;
 #[path = "postgresql/endpoints.rs"]
 mod endpoints;
 #[path = "postgresql/failure.rs"]
@@ -24,12 +26,22 @@ mod install;
 mod lifecycle;
 #[path = "postgresql/mismatch.rs"]
 mod mismatch;
+#[path = "postgresql/phases.rs"]
+mod phases;
 #[path = "postgresql/readiness.rs"]
 mod readiness;
 #[path = "postgresql/reload.rs"]
 mod reload;
+#[path = "postgresql/role_failure.rs"]
+mod role_failure;
+#[path = "postgresql/same_runtime.rs"]
+mod same_runtime;
 #[path = "postgresql/security.rs"]
 mod security;
+#[path = "postgresql/sentinel.rs"]
+mod sentinel;
+#[path = "postgresql/side_by_side.rs"]
+mod side_by_side;
 #[path = "postgresql/stop.rs"]
 mod stop;
 #[path = "supervisor/support.rs"]

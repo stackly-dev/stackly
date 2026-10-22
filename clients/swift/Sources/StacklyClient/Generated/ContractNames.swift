@@ -55,6 +55,9 @@ extension Call {
 		case .runtimeGet: "runtime.get"
 		case .instanceGetCreateForm: "instance.get_create_form"
 		case .instancePreflight: "instance.preflight"
+		case .instanceGetDuplicateForm: "instance.get_duplicate_form"
+		case .instanceGetDetail: "instance.get_detail"
+		case .instanceGetDataUsage: "instance.get_data_usage"
 		}
 	}
 }
@@ -95,6 +98,9 @@ extension Reply {
 		case .runtimeGet: "runtime.get"
 		case .instanceGetCreateForm: "instance.get_create_form"
 		case .instancePreflight: "instance.preflight"
+		case .instanceGetDuplicateForm: "instance.get_duplicate_form"
+		case .instanceGetDetail: "instance.get_detail"
+		case .instanceGetDataUsage: "instance.get_data_usage"
 		}
 	}
 }

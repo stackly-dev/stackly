@@ -1,0 +1,18 @@
+{
+  "checks": [
+    "adoption",
+    "init",
+    "major_mismatch_refusal",
+    "readiness",
+    "reload",
+    "start",
+    "stop"
+  ],
+  "knownLimitations": [],
+  "providerRevision": {
+    "id": "official/postgresql",
+    "manifestSha256": "123e3fc6ad565cbc57f8f70a3a06a93ffab62a831b00ca0d1b33f85f88071df1",
+    "revision": "1.0.0"
+  },
+  "schema": "stackly.compatibility-evidence/v1"
+}

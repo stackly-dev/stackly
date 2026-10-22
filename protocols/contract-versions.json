@@ -64,6 +64,16 @@
       "major": 1,
       "minor": 12,
       "digest": "fd9c08006dbc57de04937f962633ba82c5072bd6d1e2b68164c9c6c1af8ddcd1"
+    },
+    {
+      "major": 1,
+      "minor": 13,
+      "digest": "7a5accd64eb6a06007e935777f2886f0853719a32f516f6d61a6b94eb8440f89"
+    },
+    {
+      "major": 1,
+      "minor": 14,
+      "digest": "f8c175ce07186b44cb027576c0cb4f2a000a3aa5b273ad2e1f82eea7629a0010"
     }
   ]
 }

@@ -5,6 +5,8 @@
 
 pub mod catalog;
 pub mod create;
+pub mod detail;
+pub mod duplicate;
 pub mod redact;
 pub mod runtime;
 pub mod socket;

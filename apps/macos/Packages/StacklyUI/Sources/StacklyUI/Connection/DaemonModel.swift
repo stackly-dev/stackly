@@ -115,6 +115,9 @@ public final class DaemonModel {
     public let instances: InstanceStore
     /// The provider catalog, for the Catalog page.
     public let catalog: CatalogStore
+    /// The managed runtimes and the installs that have not ended, for the Runtimes page and
+    /// the Get action of the Catalog (spec 0018).
+    public let runtimes: RuntimeStore
     /// The space left on the disk that holds Stackly data, for the Overview (spec 0022).
     public let capacity: CapacityModel
     /// Start, Stop, and Retry of instances, shared by the Overview and the Instances page
@@ -231,6 +234,18 @@ public final class DaemonModel {
                 }
             },
             now: now)
+        runtimes = RuntimeStore(
+            call: { call throws(ClientError) in try await link.call(call, nil, .standard) },
+            send: { call, key in
+                guard let path = mutations.path else {
+                    return .notSent(ClientErrorCatalog.notConnected())
+                }
+                return await path.perform(call, idempotencyKey: key)
+            },
+            updates: { [operations] id in operations.updates(for: id) },
+            serverInstance: { serverInstance.id },
+            now: now)
+        sync.register(runtimes.store)
         mutationPathBox = mutations
         agent?.attach(
             presence: presence, now: now, sleep: sleep,
@@ -272,6 +287,7 @@ public final class DaemonModel {
                 })
         }
         sync.onChange = { [weak self] in self?.update() }
+        runtimes.follow(operations)
         tasks.append(
             Task { [weak self, sleep] in
                 try? await sleep(.seconds(1))
@@ -286,6 +302,7 @@ public final class DaemonModel {
     public func stop() {
         for task in tasks { task.cancel() }
         tasks.removeAll()
+        runtimes.stop()
         pendingLoss?.cancel()
         pendingLoss = nil
         agent?.stop()

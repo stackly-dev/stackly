@@ -25,8 +25,36 @@
       "type": "CreateForm"
     },
     {
+      "file": "duplicate-form-fake.json",
+      "type": "DuplicateForm"
+    },
+    {
+      "file": "duplicate-form-postgresql.json",
+      "type": "DuplicateForm"
+    },
+    {
       "file": "commands.json",
       "type": "CommandCases"
+    },
+    {
+      "file": "connection-compose.json",
+      "type": "ConnectionComposeCases"
+    },
+    {
+      "file": "detail-postgresql.json",
+      "type": "DetailTriple"
+    },
+    {
+      "file": "detail-nats.json",
+      "type": "DetailTriple"
+    },
+    {
+      "file": "detail-unavailable.json",
+      "type": "DetailTriple"
+    },
+    {
+      "file": "detail-package-unreadable.json",
+      "type": "DetailTriple"
     }
   ]
 }

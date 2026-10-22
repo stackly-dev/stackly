@@ -11,7 +11,10 @@ import Testing
 ///
 /// A hosted view builds no accessibility tree without a running assistive client, so most
 /// checks read the source, as the other component suites do.
-struct ComponentContractTests {
+///
+/// `nonisolated` and serialized like `SourceRuleTests`, so the source scans stay off the
+/// main actor; a `nonisolated` test inside a main actor suite would still run on it.
+@Suite(.serialized) nonisolated struct ComponentContractTests {
     private static let sources = "apps/macos/Packages/StacklyUI/Sources/StacklyUI/"
 
     private func code(_ path: String) throws -> String {

@@ -148,3 +148,25 @@ Tidak ada. Config sensitif adalah urusan engine, plan, dan daemon; tidak ada lay
 
 - AC-20 · validasi di `interpolate.rs`, invariant harness dua arah, `InitPlan.cleanup` untuk config sensitif hasil `renderConfig`, paket `fake` revision `0.3.0` dan `fake-command` yang menulis ke folder secrets, golden, seed fuzz, dan test supervisor; paket NATS dan Traefik tidak berubah
 - spec 0014 AC-18 · pindaian sentinel seluruh folder instance di root data dan folder `secrets/` instance yang hilang setelah stop, di `apps/daemon/tests/skeleton.rs`
+
+## Milestone 5: Pemeriksaan port saat initialize
+
+_Langkah 22 (update 2026-10-22, usulan spec 0023; dikerjakan di milestone 5 spec 0020, langkah 18). Jalankan dari root repo pada commit bersih._
+
+### UI / manual
+
+Tidak ada. Pemeriksaan ini adalah laporan untuk penulis paket dan perubahan plan builder; tidak ada layar baru.
+
+### Commands
+
+- [x] `cargo xtask provider check` → empat baris `ok` (`testing/fake`, `official/nats 1.0.1`, `official/postgresql`, `official/traefik 1.0.0` dengan digest baru) dan exit 0 → AC-21, AC-14
+- [x] `cargo test -p xtask --test provider_check` → salinan NATS yang disisipi `renderConfig natsConf` di `lifecycle.initialize` mencetak issue `token_not_allowed_here` di `templates/nats.conf.tmpl` tanpa baris `ok` dan exit 1; salinan Traefik yang disisipi `renderConfig staticConfig` mencetak issue di `templates/traefik.yaml.tmpl` di samping baris `ok` paket lain → AC-21
+- [x] `cargo test -p stackly-core --test provider_rules` → test `init_port_issues_*`, `a_config_file_rendered_only_before_the_spawn_has_no_init_port_issue`, `the_host_and_the_socket_folder_need_no_port_at_initialize`, `a_socket_whose_name_holds_the_port_is_an_init_port_issue`, `the_nats_1_0_0_shape_loads_but_reports_its_client_and_monitoring_addresses`, dan `a_managed_port_field_fails_only_where_its_token_is_rendered` lulus; `fake-command` punya tepat satu issue di `templates/peers.yaml.tmpl` baris 2 kolom 7 → AC-21
+- [x] `cargo test -p stackly-core --test provider_packages` → `every_folder_in_providers_has_no_init_port_issue` dan `every_package_initializes_with_endpoints_that_have_no_port` (tanpa pengecualian Traefik) lulus; golden Traefik `init.json` tidak lagi menulis `traefik.yaml`, dan `render-staticConfig.txt` dibandingkan dengan render dari `run.render` → AC-21
+- [x] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stackly-core --test provider_packages` lalu `git diff --stat crates/core/tests/golden` → hanya `traefik/init.json` yang berubah; `cargo xtask fuzz seed` → hanya `fuzz/seeds/provider_manifest/traefik.provider.yaml` yang berubah
+- [x] `cargo xtask catalog check` → `ok catalog revision 7`; revision Traefik tetap `1.0.0` karena paket itu belum pernah terbit → AC-21
+
+### Acceptance-criteria coverage
+
+- AC-21 · `ValidatedPackage::init_port_issues`, `Resolver` dengan field `managed` yang gagal saat dipakai dan `endpoint.<n>.host` tanpa port, `cargo xtask provider check`, dan init Traefik tanpa `renderConfig staticConfig`
+- AC-11 dan AC-14 · tetap utuh: `from_files` tidak berubah, dan `provider check` tetap mencetak satu baris `ok` per paket yang valid dan tanpa issue

@@ -159,10 +159,14 @@ const CLI_CODES_RULE: &str = "only the cli and the protocol name codes::cli, so 
 /// *Penjaga di kode*), each with its submodules: exactly the call sites
 /// that exist. A crate of the spec's table adds its module here once it
 /// has a call site (`stackly-platform` `secret`,
-/// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input` and
-/// `commands::secret`).
+/// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input`,
+/// `commands::secret`, and `commands::instance::connection`, which joins the
+/// revealed password into a connection string, spec 0021).
 pub const EXPOSE_ALLOWED: [(&str, &[&str]); 6] = [
-    ("stackly-cli", &["commands::secret"]),
+    (
+        "stackly-cli",
+        &["commands::secret", "commands::instance::connection"],
+    ),
     ("stackly-core", &["secret::redact", "secret::delivery"]),
     ("stackly-platform-macos", &["secret", "process::stdin"]),
     ("stackly-protocol", &["secret"]),
@@ -1611,7 +1615,10 @@ mod tests {
         assert_eq!(
             EXPOSE_ALLOWED,
             [
-                ("stackly-cli", &["commands::secret"][..]),
+                (
+                    "stackly-cli",
+                    &["commands::secret", "commands::instance::connection"][..]
+                ),
                 ("stackly-core", &["secret::redact", "secret::delivery"][..]),
                 ("stackly-platform-macos", &["secret", "process::stdin"][..]),
                 ("stackly-protocol", &["secret"][..]),

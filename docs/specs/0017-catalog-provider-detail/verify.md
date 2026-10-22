@@ -98,7 +98,7 @@ Langkah ini milik user: tidak ada yang mengubah setelan sistem, tetapi Different
 - [ ] Nyalakan Full Keyboard Access (System Settings > Keyboard), lalu hanya dengan keyboard: Tab ke field pencarian, picker kategori, setiap kartu (Return atau Space memilih), dan isi panel detail termasuk link lisensi → semua dapat dicapai dan fokus terlihat → AC-11
 - [ ] Nyalakan VoiceOver (⌘F5): kartu dibaca "NATS Server, Messaging, Available", sel matrix "macOS, Unverified: Not tested on this Mac yet.", capability "Reload without restart, not supported" dan "Metrics, supported", tile tidak dibaca → AC-11
 - [ ] Nyalakan Differentiate Without Color → badge status menulis simbol tone di depan label dan tidak ada status yang hanya berbeda warna; nyalakan Increase Contrast dan Reduce Transparency, ulangi di light dan dark → semua teks terbaca, kartu planned tidak redup → AC-11
-- [ ] Atur jam Mac atau pakai catalog dengan `published_at` lebih dari 180 hari → banner "Showing the last known state from {tanggal}." dengan "the development catalog last updated {tanggal}." (penulisan kecil "the" ditandai di laporan, lihat catatan) dan tidak ada teks "latest", "up to date", atau "newer catalog" di layar → AC-8, AC-10
+- [ ] Atur jam Mac atau pakai catalog dengan `published_at` lebih dari 180 hari → banner "Showing the last known state from {tanggal}." dengan "The development catalog last updated {tanggal}." dan tidak ada teks "latest", "up to date", atau "newer catalog" di layar → AC-8, AC-10
 
 ### Commands
 
@@ -123,3 +123,35 @@ Langkah ini milik user: tidak ada yang mengubah setelan sistem, tetapi Different
 - AC-11: label VoiceOver di test view model, tata letak tanpa pemotongan di snapshot narrow, dan langkah manual keyboard, VoiceOver, Differentiate Without Color, Increase Contrast. Kontras AA diperiksa snapshot hc-light dan hc-dark, tetapi pengukuran kontras dan Differentiate Without Color (yang tidak dirender snapshot, spec 0068 AC-5) tetap langkah manual.
 - AC-12: `CatalogAppearanceTests`, tabel di `apps/macos/design.md`, dan teks nilai asing di `CatalogCopyTests`.
 - AC-13: milestone 1.
+
+## Milestone 4: Catalog di bundle dan penolakan install end to end
+
+Prasyarat: `cargo build -p stacklyd -p stackly-fake-server` dan `cargo build -p stacklyd --example skeleton_seed`. Bundle dibangun ad hoc di `target/app/Debug/Stackly.app`, tanpa instalasi ke `~/Applications`.
+
+### UI / manual
+
+Tidak ada. Milestone ini tidak mengubah layar; hasilnya terlihat di layar Catalog (milestone 3) hanya lewat sumber `Bundled`.
+
+### Commands
+
+- [x] `cargo test -p xtask build_app` → 31 test lulus, termasuk `the_catalog_step_writes_the_index_and_only_official_packages_into_the_bundle` (langkah catalog menulis `catalog.json` dan hanya `packages/official`), `a_failing_catalog_step_stops_the_build_and_leaves_no_bundle` (repo root tanpa `providers/catalog.toml`: galat menyebut "write the provider catalog" dan `catalog.toml`, langkah man page sesudahnya tidak jalan, tidak ada bundle dan tidak ada folder staging), dan `the_bundled_catalog_needs_an_index_and_only_the_official_namespace` → AC-1, AC-1 spec 0015
+- [x] `cargo xtask build-app` → `built …/target/app/Debug/Stackly.app`; `find target/app/Debug/Stackly.app/Contents/Resources/catalog -maxdepth 3` → `catalog.json` dan `packages/official/{nats,postgresql}`, tanpa segmen `testing` → AC-1
+- [x] Ubah sementara `providers/catalog.toml` (misalnya `published_at` ke 2027-01-01), jalankan `cargo xtask build-app` → berhenti dengan `error: assembly step failed: write the provider catalog: published_at 2027-01-01T00:00:00Z is in the future`, `target/app/Debug/Stackly.app` tetap bundle lama (waktu ubah sama) dan tidak ada folder staging; kembalikan dengan `git checkout providers/catalog.toml` → AC-1
+- [x] `cargo test -p stacklyd --lib startup` → delapan test lulus, termasuk `the_catalog_location_is_the_development_folder_then_the_bundle_then_none` (`STACKLY_CATALOG_DIR` menang, lalu `Contents/Resources/catalog` dari `AppBundle`, lalu tidak ada) → AC-2
+- [x] `cargo test -p stacklyd --test catalog` → tujuh test lulus; tiga yang baru memakai salinan `stacklyd` di `<root>/Stackly.app/Contents/MacOS`: katalog bundle dilayani `bundled` dan `official`, `STACKLY_CATALOG_DIR` menang atas katalog bundle, dan bundle tanpa folder catalog menjawab `catalog.unavailable` reason `missing` → AC-2
+- [x] Dari bundle hasil `cargo xtask build-app`, tanpa `STACKLY_CATALOG_DIR`: `R=$(mktemp -d)`, `STACKLY_ROOT=$R target/app/Debug/Stackly.app/Contents/MacOS/stacklyd &`, lalu `STACKLY_ROOT=$R target/app/Debug/Stackly.app/Contents/MacOS/stackly-cli provider list --json` → `catalog.source` `bundled`, `trust` `official`, `revision` 4, `outdated` false, `invalidCount` 0, item `official/postgresql` dan `official/nats`; log daemon `catalog_state` `loaded`; hentikan dengan `stackly-cli daemon stop` → AC-1, AC-2
+- [x] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test runtime runtime_install_refuses --locked` → satu test lulus (`runtime_install_refuses_an_artifact_for_another_target`: `official/linuxonly` ditolak `catalog.not_installable` reason `no_build_for_host` dengan `availableTargets` `linux-x86_64`, `official/intelonly` `no_build_for_arch` dengan `macos-x86_64`, hint ada, nol operasi dibuat); `evidence: 1 fixture records (PASS 1)`, 0 masalah, run id `01a161fe-a109-74c8-b263-5d806596966c`, mencakup PRD AC-002 dan AC-005. Record fixture, bukan bukti runtime native → AC-7
+- [x] `cargo test --workspace --locked --no-fail-fast` → 3338 test lulus, 0 gagal
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask catalog check`, `cargo xtask evidence check` → bersih
+- [x] Tambahan kecil milestone 3: `swift test --package-path apps/macos/Packages/StacklyUI --filter Catalog` → 79 test lulus; 29 PNG referensi `CatalogSnapshotTests` direkam ulang karena cincin pilihan kartu kini `Tone.informative.text`, bukan warna aksen sistem: `catalog-available`, `-blocked`, `-invalid`, `-outdated`, `-unsupported` (light, dark, hc-light, hc-dark, narrow) dan `catalog-planned` (light, dark, hc-light, hc-dark) → AC-10
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (penuh) → 888 test lulus. Catatan: satu run penuh pada beban mesin sangat tinggi (load average sekitar 44) melaporkan 3 issue di luar known issues yang tidak sempat dikenali; dua run sesudahnya bersih (888 test, 23 known issues), jadi dicatat sebagai flake beban, bukan regresi
+- [x] `xcrun swift-format lint --strict` pada `ProviderCard.swift` dan `CatalogCopy.swift` → bersih
+- [x] `git status --short` setelah semua langkah → bersih
+- [x] Dijalankan ulang oleh checker pada branch yang sudah memuat merge main `e4869c9e` (sesudah F21 milestone 1) → semua langkah di atas lulus. Selisih dengan angka yang tertulis berasal dari main, bukan dari milestone ini: `catalog.revision` kini 5 (`3bde85d0`, F21) dan `provider list` mengembalikan enam item (`official/postgresql`, `official/nats`, plus empat entri planned `mysql`, `clickhouse`, `valkey`, `traefik`); `cargo test --workspace` 3373 lulus, 0 gagal (termasuk `operations` perf dan `served` p95); `swift test --filter Catalog` 82 lulus; suite Swift penuh 1039 test dengan satu kegagalan `SkeletonProcessRunnerTests.aProcessThatOutlivesItsLimitIsKilledAndReportedAsTimedOut` (batas 20 s terlewati, 24,7 s) pada dua run dengan load average di atas 100, lulus 0,3 s saat dijalankan sendiri di load sekitar 60. Test itu milik spec 0014, di luar diff milestone ini. Run evidence fixture baru: `evidence: 1 fixture records (PASS 1)`, 0 masalah → AC-1, AC-2, AC-7
+
+### Acceptance-criteria coverage
+
+- AC-1: langkah catalog `build-app` (test xtask, bundle hasil build, dan build yang berhenti saat catalog gagal) menutup klausa yang menunggu di Milestone 1; klausa catalog AC-1 spec 0015 dibuktikan di sini.
+- AC-2: cabang lokasi `Bundled` dari `AppBundle` (test unit dan tiga test binary), menutup bagian yang menunggu di Milestone 1.
+- AC-7: penolakan ujung ke ujung lewat `runtime.install` dengan fixture `official/linuxonly` dan `official/intelonly`, menutup bagian yang menunggu di Milestone 1; PRD AC-002 dan AC-005 tercatat sebagai record fixture.
+- AC-3 sampai AC-6, AC-8 sampai AC-13: Milestone 1 sampai 3.

@@ -1,1 +1,1 @@
-${settings.serverName}
+${instance.config}/nats.conf

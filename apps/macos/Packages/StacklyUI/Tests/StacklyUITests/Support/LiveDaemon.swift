@@ -140,6 +140,10 @@ extension LiveShellParts {
 /// Waits until `condition` holds, checking every 20 ms, for at most `seconds`. A timeout
 /// records an issue naming `what` and the `state` it ended in, and throws, so the test
 /// stops there.
+///
+/// The limit counts responsive time only (``ResponsiveTimer``): another test that holds
+/// the main actor for seconds in a full run counts as one check, so the condition is
+/// checked again after the hold before the wait can time out.
 func waitFor(
     _ what: String,
     seconds: Double,
@@ -147,9 +151,11 @@ func waitFor(
     sourceLocation: SourceLocation = #_sourceLocation,
     until condition: () -> Bool
 ) async throws {
-    let deadline = ContinuousClock.now + .milliseconds(Int64(seconds * 1000))
+    let limit = Duration.milliseconds(Int64(seconds * 1000))
+    var timer = ResponsiveTimer(maxCharge: .milliseconds(70))
     while condition() == false {
-        guard ContinuousClock.now < deadline else {
+        timer.lap()
+        guard timer.counted < limit else {
             Issue.record(
                 "timed out after \(seconds) s waiting for \(what); \(state())",
                 sourceLocation: sourceLocation)

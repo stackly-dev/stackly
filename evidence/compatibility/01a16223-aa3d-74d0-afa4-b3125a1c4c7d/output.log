@@ -1,0 +1,46 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($WORKSPACE/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($WORKSPACE/apps/daemon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.88s
+     Running tests/postgresql.rs (target/debug/deps/postgresql-69620f3330488b80)
+
+running 29 tests
+test failure::postgresql_17_init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated ... ok
+test failure::postgresql_18_init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated ... ok
+test adoption::postgresql_17_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it ... ok
+test adoption::postgresql_18_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it ... ok
+test format::postgresql_18_reads_back_the_text_the_postgresql_conf_escaper_wrote ... ok
+test format::postgresql_17_reads_back_the_text_the_postgresql_conf_escaper_wrote ... ok
+test endpoints::postgresql_17_listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns ... ok
+test endpoints::postgresql_18_listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns ... ok
+kill: 31082: No such process
+test compat::postgresql_18_runs_the_package_and_records_what_it_proved ... ok
+test compat::postgresql_17_runs_the_package_and_records_what_it_proved has been running for over 60 seconds
+kill: 32133: No such process
+test compat::postgresql_17_runs_the_package_and_records_what_it_proved ... ok
+test lifecycle::postgresql_17_is_created_started_served_and_stopped_through_the_daemon ... ok
+test readiness::postgresql_17_is_not_ready_when_the_port_accepts_but_the_query_fails ... ok
+test lifecycle::postgresql_18_is_created_started_served_and_stopped_through_the_daemon ... ok
+test readiness::postgresql_18_is_not_ready_when_the_port_accepts_but_the_query_fails ... ok
+test reload::postgresql_17_applies_a_reloadable_setting_with_sighup_and_keeps_its_pid ... ok
+test install::postgresql_17_and_18_pass_the_install_exec_check_with_the_version_of_their_artifact ... ok
+test reload::postgresql_18_applies_a_reloadable_setting_with_sighup_and_keeps_its_pid ... ok
+test security::postgresql_17_fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment ... ok
+test security::postgresql_17_takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break ... ok
+test security::postgresql_18_fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment ... ok
+test mismatch::postgresql_17_data_is_refused_by_a_runtime_18_and_a_missing_or_changed_marker_is_refused ... ok
+test mismatch::postgresql_18_data_is_refused_by_a_runtime_17_and_a_missing_or_changed_marker_is_refused ... ok
+test security::postgresql_17_has_no_trust_and_its_password_stays_out_of_argv_files_and_logs ... ok
+test security::postgresql_18_takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break ... ok
+test security::postgresql_18_has_no_trust_and_its_password_stays_out_of_argv_files_and_logs ... ok
+test stop::postgresql_17_stops_fast_with_a_session_open_and_starts_again_without_crash_recovery ... ok
+test stop::postgresql_18_stops_fast_with_a_session_open_and_starts_again_without_crash_recovery ... ok
+test tools::postgresql_17_never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path ... ok
+test tools::postgresql_18_never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 113.81s
+

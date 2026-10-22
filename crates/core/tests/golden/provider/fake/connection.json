@@ -1,0 +1,25 @@
+[
+  {
+    "masked": "http://stackly:****@127.0.0.1:14000/",
+    "name": "uri",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "http://stackly:"
+      },
+      {
+        "kind": "secret",
+        "secret": {
+          "field": "authToken",
+          "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/auth-token"
+        }
+      },
+      {
+        "kind": "text",
+        "text": "@127.0.0.1:14000/"
+      }
+    ],
+    "portMayChange": true,
+    "title": "Connection string"
+  }
+]

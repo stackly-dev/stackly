@@ -25,9 +25,10 @@ use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
 use crate::instance::{
-    CreateForm, CreateInstanceParams, CreatePreflight, GetCreateFormParams, GetInstanceParams,
-    InstanceActionAccepted, InstancePage, InstanceSummary, ListInstancesParams,
-    PreflightCreateParams, StartInstanceParams, StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, DataUsageReply, DuplicateForm,
+    GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams, GetInstanceDetailParams,
+    GetInstanceParams, InstanceActionAccepted, InstanceDetail, InstancePage, InstanceSummary,
+    ListInstancesParams, PreflightCreateParams, StartInstanceParams, StopInstanceParams,
 };
 use crate::json;
 use crate::operation::{
@@ -167,6 +168,16 @@ pub enum Call {
     /// Judges a create draft without any secret value and changes nothing.
     #[serde(rename = "instance.preflight")]
     InstancePreflight(PreflightCreateParams),
+    /// The create form and the draft of a duplicate of one instance.
+    #[serde(rename = "instance.get_duplicate_form")]
+    InstanceGetDuplicateForm(GetDuplicateFormParams),
+    /// The detail page facts of one instance: provider, runtime, secrets,
+    /// dependents, and connection strings.
+    #[serde(rename = "instance.get_detail")]
+    InstanceGetDetail(GetInstanceDetailParams),
+    /// The size of the data folder of one instance.
+    #[serde(rename = "instance.get_data_usage")]
+    InstanceGetDataUsage(GetDataUsageParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -270,6 +281,15 @@ pub enum Reply {
     /// The preflight rows, the field issues, and the equivalent command.
     #[serde(rename = "instance.preflight")]
     InstancePreflight(Box<CreatePreflight>),
+    /// The form and the draft of a duplicate.
+    #[serde(rename = "instance.get_duplicate_form")]
+    InstanceGetDuplicateForm(Box<DuplicateForm>),
+    /// The detail of an instance.
+    #[serde(rename = "instance.get_detail")]
+    InstanceGetDetail(Box<InstanceDetail>),
+    /// The size of a data folder, or null when none is cached.
+    #[serde(rename = "instance.get_data_usage")]
+    InstanceGetDataUsage(DataUsageReply),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -372,6 +392,9 @@ methods! {
     "runtime.get" => RuntimeGet(GetRuntimeParams), recovery refused;
     "instance.get_create_form" => InstanceGetCreateForm(GetCreateFormParams), recovery refused;
     "instance.preflight" => InstancePreflight(PreflightCreateParams), recovery refused;
+    "instance.get_duplicate_form" => InstanceGetDuplicateForm(GetDuplicateFormParams), recovery refused;
+    "instance.get_detail" => InstanceGetDetail(GetInstanceDetailParams), recovery refused;
+    "instance.get_data_usage" => InstanceGetDataUsage(GetDataUsageParams), recovery refused;
 }
 
 impl Reply {
@@ -524,7 +547,7 @@ mod tests {
                 .iter()
                 .filter(|method| method.starts_with("instance."))
                 .count()
-                == 7
+                == 10
                 && Call::METHODS
                     .iter()
                     .filter(|method| method.starts_with("instance."))
@@ -538,7 +561,7 @@ mod tests {
             "installing, listing, and reading runtimes need the registry"
         );
         assert_eq!(
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 2,
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

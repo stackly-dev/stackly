@@ -570,6 +570,57 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The create form and the draft of a duplicate of one instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetDuplicateFormParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_duplicate_form"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The detail page facts of one instance: provider, runtime, secrets,\ndependents, and connection strings.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetInstanceDetailParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_detail"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The size of the data folder of one instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetDataUsageParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_data_usage"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -781,6 +832,58 @@
       },
       "required": [
         "runtimeId"
+      ]
+    },
+    "GetDataUsageParams": {
+      "description": "Params of `instance.get_data_usage`.",
+      "type": "object",
+      "properties": {
+        "cachedOnly": {
+          "description": "Never start a scan: answer from the cache, or with a null `usage`.",
+          "type": "boolean",
+          "default": false
+        },
+        "instanceId": {
+          "description": "The instance whose data folder is measured.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "refresh": {
+          "description": "Measure again even when a fresh result is cached.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "instanceId"
+      ]
+    },
+    "GetDuplicateFormParams": {
+      "description": "Params of `instance.get_duplicate_form`.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance whose settings fill the form, retained ones refused.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
+      ]
+    },
+    "GetInstanceDetailParams": {
+      "description": "Params of `instance.get_detail`.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance to describe.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
       ]
     },
     "GetInstanceParams": {

@@ -25,11 +25,12 @@ use stackly_platform::{Clock, Platform, SystemClock, UserId};
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::handshake::{ClientInfo, ClientKind};
 use stackly_protocol::instance::{
-    CreateForm, CreateInstanceParams, CreatePreflight, EndpointRequest, GetCreateFormParams,
-    GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceReadinessState,
-    InstanceSummary, ListInstancesParams, PortRequest, PreflightCreateParams, ProviderSelector,
-    SecretFieldInput, SecretPlan, SecretSource, SettingsDocument, StartInstanceParams,
-    StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, DataUsage, DuplicateForm, EndpointRequest,
+    GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams, GetInstanceDetailParams,
+    GetInstanceParams, InstanceActionAccepted, InstanceDetail, InstancePage,
+    InstanceReadinessState, InstanceSummary, ListInstancesParams, PortRequest,
+    PreflightCreateParams, ProviderSelector, SecretFieldInput, SecretPlan, SecretSource,
+    SettingsDocument, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{GetOperationParams, OperationDetail, OperationState};
 use stackly_protocol::secret::{SecretInput, SecretText};
@@ -81,11 +82,24 @@ pub struct Site {
 impl Site {
     /// A root with the fake runtime and the fake provider seeded.
     pub fn new() -> Self {
+        Self::build(false)
+    }
+
+    /// The same, laid out as `STACKLY_ROOT` lays out a root, so the real
+    /// `stackly` binary with that override finds the daemon socket.
+    pub fn for_cli() -> Self {
+        Self::build(true)
+    }
+
+    fn build(as_override: bool) -> Self {
         let root = TestRoot::new().expect("a test root can be created");
         let secrets = Arc::new(FakeSecretStore::new());
-        let platform = MacosPlatform::with_roots(root.roots())
-            .expect("this Mac reports its OS version")
-            .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
+        let platform = if as_override {
+            MacosPlatform::new(Some(root.path().into())).expect("a test root is a valid override")
+        } else {
+            MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version")
+        }
+        .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
         let prepared = prepare_layout(&platform).expect("the test root layout can be prepared");
         let owner = LockOwner::new(
             std::process::id(),
@@ -112,7 +126,7 @@ impl Site {
         .expect("the fake runtime and package are seeded");
         // The registry closes here, so the daemon opens it alone.
         drop(registry);
-        let reap = ReapGuard::new(root.path(), root.roots().runtime());
+        let reap = ReapGuard::new(root.path(), prepared.layout().roots().runtime());
         Self {
             _reap: reap,
             root,
@@ -468,6 +482,40 @@ impl Api {
         }
     }
 
+    /// `instance.get_duplicate_form`.
+    pub async fn duplicate_form(&self, source: Uuid) -> Result<DuplicateForm, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDuplicateForm(GetDuplicateFormParams {
+                instance_id: source,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDuplicateForm(form) => Ok(*form),
+            other => panic!("not a duplicate form reply: {other:?}"),
+        }
+    }
+
+    /// `instance.create` with the draft of a preflight and the secret
+    /// inputs a client builds from the choices of the user, as the sheet
+    /// and `stackly instance duplicate` do.
+    pub async fn create_from_draft(
+        &self,
+        draft: PreflightCreateParams,
+        secrets: Vec<SecretFieldInput>,
+    ) -> Result<InstanceActionAccepted, Box<ErrorBody>> {
+        self.create(CreateInstanceParams {
+            name: draft.name,
+            display_name: draft.display_name,
+            provider: draft.provider,
+            runtime_id: draft.runtime_id,
+            endpoints: draft.endpoints,
+            settings: draft.settings,
+            secrets,
+        })
+        .await
+    }
+
     /// `instance.preflight`.
     pub async fn preflight(
         &self,
@@ -615,6 +663,41 @@ impl Api {
         }
     }
 
+    /// `instance.get_detail`.
+    pub async fn detail(&self, id: Uuid) -> Result<InstanceDetail, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDetail(GetInstanceDetailParams {
+                instance_id: id,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDetail(detail) => Ok(*detail),
+            other => panic!("not a detail reply: {other:?}"),
+        }
+    }
+
+    /// `instance.get_data_usage`; `None` is a reply without a size.
+    pub async fn data_usage(
+        &self,
+        id: Uuid,
+        refresh: bool,
+        cached_only: bool,
+    ) -> Result<Option<DataUsage>, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDataUsage(GetDataUsageParams {
+                instance_id: id,
+                refresh,
+                cached_only,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDataUsage(reply) => Ok(reply.usage),
+            other => panic!("not a data usage reply: {other:?}"),
+        }
+    }
+
     /// `instance.list`.
     pub async fn list(&self, params: ListInstancesParams) -> InstancePage {
         match self.client.call(Call::InstanceList(params)).await {
@@ -720,6 +803,57 @@ impl Api {
             .error
             .code()
             .to_owned()
+    }
+}
+
+/// One request to the dummy server on `port`: the status code and the body.
+fn http_exchange(port: u16, request: &str) -> (u16, String) {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port))
+        .expect("the dummy server accepts connections");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("a read timeout is set");
+    stream
+        .write_all(request.as_bytes())
+        .expect("the request is written");
+    let mut text = String::new();
+    stream.read_to_string(&mut text).expect("the reply is read");
+    let status = text
+        .split(' ')
+        .nth(1)
+        .and_then(|code| code.parse().ok())
+        .expect("a status line");
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body.to_owned())
+        .unwrap_or_default();
+    (status, body)
+}
+
+/// `PUT /sentinel` of the dummy server on `port`; returns the status code.
+pub fn put_sentinel(port: u16, value: &str) -> u16 {
+    http_exchange(
+        port,
+        &format!(
+            "PUT /sentinel HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{value}",
+            value.len()
+        ),
+    )
+    .0
+}
+
+/// `GET /sentinel` of the dummy server on `port`: the value it holds, or
+/// `None` for a 404.
+pub fn get_sentinel(port: u16) -> Option<String> {
+    let (status, body) = http_exchange(
+        port,
+        "GET /sentinel HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n",
+    );
+    match status {
+        200 => Some(body),
+        404 => None,
+        other => panic!("GET /sentinel answered {other}"),
     }
 }
 

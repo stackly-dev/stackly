@@ -12,8 +12,10 @@
 //! conversion of a wire secret is `ipc::secret`'s.
 
 mod create;
+mod detail;
 mod draft;
 pub mod dto;
+mod duplicate;
 mod form;
 
 use stackly_core::operation::{
@@ -38,6 +40,8 @@ use stackly_storage::SqliteRegistry;
 use uuid::Uuid;
 
 pub use create::{create, work_deps};
+pub use detail::{get_data_usage, get_instance_detail};
+pub use duplicate::get_duplicate_form;
 pub use form::{get_create_form, preflight};
 
 use crate::dispatch::{HandlerFuture, RequestContext};

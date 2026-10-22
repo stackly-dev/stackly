@@ -88,6 +88,36 @@
                     sha256: digest(1))
             ])
 
+        /// The detail of `summary`: the fixture detail with the summary, the digest, and the
+        /// path of that runtime.
+        ///
+        /// - Parameter summary: A runtime of the fixtures.
+        public static func detail(of summary: RuntimeSummary) -> RuntimeDetail {
+            let digest = summary.artifactSha256 ?? digest(0)
+            let artifact = detail.artifact
+            return RuntimeDetail(
+                summary: summary,
+                path:
+                    "/fixture/Library/Application Support/Stackly/runtimes/\(summary.software)/\(summary.version)/macos-aarch64/\(digest)",
+                artifact: artifact.map {
+                    ArtifactInfo(
+                        catalogId: $0.catalogId, sha256: digest, size: $0.size,
+                        unpackedSize: $0.unpackedSize, format: $0.format,
+                        minimumOs: $0.minimumOs, build: $0.build, source: $0.source,
+                        signature: $0.signature, dependencies: $0.dependencies,
+                        warnings: $0.warnings)
+                },
+                executables: detail.executables,
+                compatibility: detail.compatibility?.map {
+                    CompatibilityRecordView(
+                        scope: $0.scope, result: $0.result, providerRevision: $0.providerRevision,
+                        os: $0.os, osVersion: $0.osVersion, osBuild: $0.osBuild, arch: $0.arch,
+                        checks: $0.checks, knownLimitations: $0.knownLimitations,
+                        summary: $0.summary, testedAt: $0.testedAt, evidence: $0.evidence,
+                        sourceUrl: $0.sourceUrl, sha256: digest)
+                })
+        }
+
         /// What `runtime.resolve` returns for the runtime being installed.
         public static let resolved = ResolvedArtifact(
             provider: "official/postgresql", software: "postgresql",

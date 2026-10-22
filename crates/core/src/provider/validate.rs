@@ -208,6 +208,133 @@ impl ValidatedPackage {
     pub const fn version_check(&self) -> Option<&VersionCheck> {
         self.manifest.version_check()
     }
+
+    /// Reports every token in a position of `lifecycle.initialize` that
+    /// needs the port of an endpoint, which an `Auto` endpoint gets only
+    /// when the instance starts (spec 0009, *Pemeriksaan port saat
+    /// initialize*).
+    ///
+    /// The positions are the `args` entries and `env` values of each
+    /// `runExecutable` step and the template of each config that a
+    /// `renderConfig` step renders. The tokens are `endpoint.<n>.port`,
+    /// `endpoint.<n>.address`, an `endpoint.<n>.socket` whose `socketName`
+    /// holds one of them, and a `managed` settings field whose expression
+    /// does. `endpoint.<n>.host` and `endpoint.<n>.socketDir` need no port.
+    ///
+    /// This is a report for package authors, not a validation rule:
+    /// [`from_files`](Self::from_files) never calls it, so a pinned copy of
+    /// an older package still loads and its instances still start. Each
+    /// issue has the code `token_not_allowed_here`, in step order and then
+    /// position order.
+    #[must_use]
+    pub fn init_port_issues(&self) -> Vec<Issue> {
+        let mut issues = Vec::new();
+        let mut rendered = BTreeSet::new();
+        for (index, step) in self.manifest.initialize.iter().enumerate() {
+            match step {
+                InitStepSpec::RunExecutable { command, .. } => {
+                    for (arg, interp) in command.args.iter().enumerate() {
+                        let location = format!("lifecycle.initialize[{index}].args[{arg}]");
+                        self.init_interp_issues(interp, &location, &mut issues);
+                    }
+                    for (key, interp) in &command.env {
+                        let location = format!("lifecycle.initialize[{index}].env.{key}");
+                        self.init_interp_issues(interp, &location, &mut issues);
+                    }
+                }
+                InitStepSpec::RenderConfig(config) => {
+                    if !rendered.insert(config.as_str()) {
+                        continue;
+                    }
+                    self.init_template_issues(config, &mut issues);
+                }
+                InitStepSpec::CreateManagedDirectories | InitStepSpec::MaterializeSecret { .. } => {
+                }
+            }
+        }
+        issues
+    }
+
+    fn init_interp_issues(&self, interp: &Interp, location: &str, issues: &mut Vec<Issue>) {
+        for token in interp.tokens() {
+            if let Some(reason) = self.port_need(token) {
+                issues.push(Issue::new(
+                    MANIFEST_FILE,
+                    Location::Field(location.to_owned()),
+                    IssueCode::TokenNotAllowedHere,
+                    format!(
+                        "{reason}, so initialize can't use it; every config file is rendered again before each spawn"
+                    ),
+                ));
+            }
+        }
+    }
+
+    fn init_template_issues(&self, config: &str, issues: &mut Vec<Issue>) {
+        let Some(spec) = self.manifest.config_files.get(config) else {
+            return;
+        };
+        let Some(checked) = self.templates.get(&spec.template) else {
+            return;
+        };
+        for (token, at) in &checked.tokens {
+            if let Some(reason) = self.port_need(token) {
+                issues.push(Issue::new(
+                    format!("templates/{}", spec.template),
+                    Location::Position {
+                        line: at.line,
+                        column: at.column,
+                    },
+                    IssueCode::TokenNotAllowedHere,
+                    format!(
+                        "config file {config} is rendered by initialize, but {reason}; every config file is rendered again before each spawn"
+                    ),
+                ));
+            }
+        }
+    }
+
+    /// Says why a token needs a port the endpoint does not have at
+    /// initialize, or `None` when it needs none.
+    fn port_need(&self, token: &Token) -> Option<String> {
+        match token {
+            Token::EndpointPort(_) | Token::EndpointAddress(_) => {
+                Some(format!("{token} is chosen when the instance starts"))
+            }
+            Token::EndpointSocket(name) => {
+                let socket_name = self.manifest.endpoints.get(name)?.socket_name.as_ref()?;
+                socket_name
+                    .tokens()
+                    .any(|inner| {
+                        matches!(inner, Token::EndpointPort(_) | Token::EndpointAddress(_))
+                    })
+                    .then(|| {
+                        format!("{token} holds a port, which is chosen when the instance starts")
+                    })
+            }
+            Token::Setting(name) => {
+                let field = self
+                    .manifest
+                    .managed_fields
+                    .iter()
+                    .find(|field| field.name == *name)?;
+                field
+                    .expression
+                    .tokens()
+                    .any(|inner| {
+                        matches!(inner, Token::EndpointPort(_) | Token::EndpointAddress(_))
+                            || (matches!(inner, Token::EndpointSocket(_))
+                                && self.port_need(inner).is_some())
+                    })
+                    .then(|| {
+                        format!(
+                            "{token} is managed from an endpoint port, which is chosen when the instance starts"
+                        )
+                    })
+            }
+            _ => None,
+        }
+    }
 }
 
 type Validated = (

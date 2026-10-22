@@ -1,0 +1,23 @@
+{
+  "checks": [
+    "adoption",
+    "honest_readiness",
+    "identity_check",
+    "init",
+    "jetstream_mode",
+    "readiness",
+    "start",
+    "stop"
+  ],
+  "knownLimitations": [
+    "client_auth_not_configured",
+    "jetstream_persistence_not_covered",
+    "multi_instance_not_covered"
+  ],
+  "providerRevision": {
+    "id": "official/nats",
+    "manifestSha256": "fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd",
+    "revision": "1.0.1"
+  },
+  "schema": "stackly.compatibility-evidence/v1"
+}
