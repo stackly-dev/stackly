@@ -512,6 +512,7 @@ Konstanta restart ada di *Restart policy*. Semuanya ada di `SupervisorConfig` da
 | start | `PlanContext.settings` | `Registry::active_config_revision`, teks `ConfigValuesJson` diurai lalu divalidasi ulang dengan `SettingsSchema::validate` |
 | start | port `Fixed` | `PortRequest::Fixed` di endpoint instance |
 | start | port `Auto` | `bound` tersimpan kalau `PortProbe` bisa bind; kalau tidak, port dari bind `127.0.0.1:0` atau `[::1]:0` di alamat endpoint, lalu `resolve_port` |
+| init (`execute_init`, dipanggil create) | port `Auto` | tidak ada: endpoint tanpa port efektif masuk `PlanContext` tanpa port (`Prepared::context` dengan peta port kosong), jadi token yang butuh port di plan init menjadi `PlanError::EndpointUnresolved`. Spec 0009 melaporkan token itu lewat `init_port_issues` (AC-21) dan dry run preflight spec 0020 memakai context yang sama (AC-9) *(dicatat 2026-10-22, usulan spec 0023; perilaku yang sudah dibangun)* |
 | start | nilai secret | `resolve_for_start` (spec 0011) |
 | start | argv, env, cwd, timeout | `RunPlan` spec 0009 |
 | start | `ProcessIdentity` | `ProcessFacts` dari `inspect(pid)` pada child yang tertahan, plus `boot_id()` |

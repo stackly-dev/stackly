@@ -825,3 +825,28 @@ Dijalankan 2026-10-22 oleh model lain (Sonnet, read only) atas draft update ini,
 | RISK-3 | Pelanggaran batas field pada nilai `copyFrom` baru terlihat setelah Create | Dicatat di *Consequences*; test daemon di skenario secret dan test model untuk banner |
 | NIT-1 | Kalimat muat lebih cocok di AC-20 daripada AC-21; status "diterapkan" terbaca final padahal teks AC menunggu persetujuan | Kalimat pindah ke AC-20; Follow-up menyebut teks AC-20 menunggu persetujuan |
 | NIT-2 | Rujukan spec 0011 kurang tepat | *Status dan probe* untuk cache, AC-5 dan langkah 3 *Use case isi atau ganti nilai* untuk jenis pemilik |
+
+## Update 2026-10-22: dry run init tanpa port `Auto` (usulan spec 0023)
+
+Sumber nya *Usulan update spec lain (2026-10-22)* butir 2 di spec 0023 (commit `73322b32`, merge `d94c4c87`), dibawa lead scope 02 lewat brief `arc-f15-update-4`. Dry run AC-9 memberi port `defaultPort` ke endpoint `Auto` untuk `init_plan` maupun `run_plan`, sedangkan `execute_init` di langkah `init` create memakai `Prepared::context` yang tidak memberi port ke endpoint `Auto` (spec 0010 *Value sourcing*, baris `init`). Jadi paket yang init nya butuh port (NATS `1.0.0`) mendapat preflight `ready`, lalu create gagal `supervisor.config_invalid` di langkah `init` dan dikompensasi. Spec 0023 memperbaiki NATS di paket; butir ini penjaga kedua, dan spec 0009 (AC-21, `init_port_issues`) penjaga pertama untuk paket di repo.
+
+### Keputusan 20: context dry run
+
+- **Option 1: dua context (dipilih).** `init_plan` memakai context yang sama dengan `execute_init` (port `Fixed` apa adanya, `Auto` tanpa port), dan `run_plan` tetap memakai `Fixed` atau `defaultPort`. Kelebihan: preflight memeriksa persis apa yang akan dijalankan langkah `init`, dan `run_plan` tetap terperiksa dengan port yang masuk akal (start memilih port nyata nanti). Kekurangan: dua context dibangun per preflight, dan pemetaan `EndpointUnresolved` dari init butuh keterangan sendiri.
+- **Option 2: satu context tanpa port untuk keduanya.** Kekurangan: `run_plan` selalu gagal untuk endpoint `Auto`, karena plan run memang butuh port.
+- **Option 3: tetap satu context dengan `defaultPort`, dan andalkan `init_port_issues` spec 0009.** Kekurangan: salinan pinned lama dan paket yang tidak lewat `provider check` (import fitur 37, duplicate dari paket pinned) tidak terjaga, dan preflight tetap tidak memeriksa yang benar benar dijalankan.
+
+### Keputusan kecil
+
+- **Kode dan path.** `PlanError::EndpointUnresolved` sudah dipetakan ke `CreateError::EndpointInvalid { endpoint }` dengan field `endpoints[<i>].port` (`invalid_value`) kalau draft menyebut endpoint itu; pemetaan itu dipakai apa adanya. Draft yang tidak menyebut endpoint (default `Auto`, misalnya `stackly instance create` tanpa `--port`) mendapat error tanpa field issue.
+- **Keterangan baris.** Pesan `FieldError` adalah teks tetap per kode (spec 0006), jadi kalimat yang menyebut bahwa provider ini butuh port fixed tidak bisa ditaruh di field. Dipilih: keterangan baris `settings` yang menyebut nama endpoint. Tanpa ini, draft yang tidak menyebut endpoint mendapat "0 settings need attention", karena tidak ada field issue yang dihitung. Runner up: memindahkan error ke baris `endpoint.<n>` endpoint `Auto` itu. Kekurangan nya: baris endpoint dihitung sebelum settings tervalidasi, jadi evaluator harus menulis ulang baris yang sudah selesai, dan urutan baris error pertama (yang menentukan error sinkron create) ikut berubah.
+- **Fixture test.** Paket fake yang disunting test (`Site::with_provider_edit`), karena `Site` hanya membaca `providers/`, dan paket fake asli tidak memakai port di init.
+- **Urutan.** Milestone baru (5) sesudah fitur 23 langkah 13, supaya test "NATS dengan semua endpoint `Auto` tetap `ready`" berjalan atas `1.0.1`, dan langkah 22 spec 0009 masuk di milestone yang sama.
+
+### Dampak ke spec 0024 (milik scope 03, tidak diedit)
+
+Draft duplicate mengirim setiap endpoint sebagai `auto` (AC-4 spec 0024) dan memakai `instance.preflight` serta `instance.create` tanpa perubahan (AC-6 spec 0024). Teks kedua AC tetap benar. Yang berubah adalah hasil nya untuk sumber yang paket pinned nya butuh port di init: preflight `ready: false` dengan baris `settings` error `instance.endpoint_invalid`, keterangan endpoint, dan field `endpoints[<i>].port` `invalid_value` (draft duplicate menyebut setiap endpoint), sampai pengguna memilih Fixed. Hari ini satu satunya paket seperti itu adalah salinan pinned NATS `1.0.0`.
+
+### Teks AC yang berubah (menunggu persetujuan kamu lewat lead)
+
+AC-9: kalimat dry run. Teks lama dan baru lengkap di catatan bersama `arc-f15-update-4-ac-and-scope.md`. ID tetap.
