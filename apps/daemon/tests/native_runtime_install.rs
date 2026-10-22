@@ -277,7 +277,7 @@ async fn nats_installs_from_the_network() {
 }
 
 #[tokio::test]
-#[ignore = "native: needs the NATS artifact in the runtime cache and a TestRoot with no network"]
+#[ignore = "native: runs the real adapters on a TestRoot with no network and an empty download cache"]
 async fn an_install_without_a_network_and_without_a_cache_entry_is_offline_not_a_hang() {
     let ev = evidence!(
         covers = ["AC-046"],
@@ -311,6 +311,9 @@ async fn an_install_without_a_network_and_without_a_cache_entry_is_offline_not_a
             .expect("no test thread panics")
             .is_empty()
     );
+    // The artifact the install tried to fetch is the subject; it never ran.
+    let (sha256, _) = artifact_facts(NATS);
+    ev.subject(NATS.software, NATS.version, Some(&sha256), Source::Managed);
     ev.pass_with(&format!(
         "runtime.download_offline after {:?}, retryable, no runtime",
         started.elapsed()

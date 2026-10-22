@@ -3,7 +3,8 @@
 //! native binary whose signature was damaged is killed by the kernel when
 //! `spawn_main` runs it and that death is classified
 //! `binary_rejected_by_os`, and the daemon names no tool but `codesign`.
-//! The binaries are built with `cc` in the test, so no artifact is needed.
+//! The binary is the `nats-server` of the cached NATS artifact, unpacked by
+//! the test into its own root, so the evidence names a real runtime.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,7 +22,10 @@ use stackly_platform_macos::MacosProcessSupervision;
 use stackly_testkit::TestRoot;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{OWNER, Site};
+use stackly_testkit::RuntimeCache;
+use stackly_testkit::evidence::Source;
+
+use crate::harness::{NATS, OWNER, Site, artifact_facts};
 
 /// How long a killed child may take to be noticed.
 const PATIENCE: Duration = Duration::from_secs(30);
@@ -30,19 +34,22 @@ const QUARANTINE: &str = "0083;5f5e1000;Safari;";
 /// `LC_MAIN`, the load command that names the entry point.
 const LC_MAIN: u32 = 0x8000_0028;
 
-/// Builds a one line C program with `/usr/bin/cc`, or `None` when this Mac
-/// has no compiler.
-fn build(dir: &Path, name: &str, source: &str) -> Option<PathBuf> {
-    let c_file = dir.join(format!("{name}.c"));
-    fs::write(&c_file, source).expect("the source can be written");
-    let out = dir.join(name);
-    let built = Command::new("/usr/bin/cc")
-        .arg("-o")
-        .arg(&out)
-        .arg(&c_file)
-        .output()
-        .ok()?;
-    built.status.success().then_some(out)
+/// Unpacks the cached NATS artifact into `dir` and returns its
+/// `nats-server`, or `None` when the spike never downloaded the artifact.
+fn extract_nats(dir: &Path) -> Option<PathBuf> {
+    let (sha256, size) = artifact_facts(NATS);
+    let archive = RuntimeCache::open()?.entry(&sha256, size)?;
+    let unpacked = Command::new("/usr/bin/tar")
+        .arg("-xzf")
+        .arg(archive)
+        .arg("-C")
+        .arg(dir)
+        .status()
+        .expect("tar runs");
+    assert!(unpacked.success(), "the cached archive unpacks");
+    let server = dir.join("nats-server-v2.15.1-darwin-arm64/nats-server");
+    assert!(server.is_file(), "the archive holds {}", server.display());
+    Some(server)
 }
 
 /// The file offset of the first instruction of a thin 64 bit Mach-O.
@@ -93,7 +100,12 @@ impl ExitListener for Notice {
 }
 
 /// Runs `program` as a main process, resumed, and returns how it ended.
-fn run_main(adapter: &MacosProcessSupervision, root: &TestRoot, program: &Path) -> ExitStatus {
+fn run_main(
+    adapter: &MacosProcessSupervision,
+    root: &TestRoot,
+    program: &Path,
+    args: &[String],
+) -> ExitStatus {
     static RUNS: AtomicUsize = AtomicUsize::new(0);
     let run = RUNS.fetch_add(1, Ordering::Relaxed);
     let spool = |stream: &str| {
@@ -104,7 +116,7 @@ fn run_main(adapter: &MacosProcessSupervision, root: &TestRoot, program: &Path) 
     let child = adapter
         .spawn_main(SpawnRequest {
             program,
-            args: &[],
+            args,
             env: &[],
             cwd: root.path(),
             stdin: StdinSource::Null,
@@ -130,26 +142,30 @@ fn run_main(adapter: &MacosProcessSupervision, root: &TestRoot, program: &Path) 
 }
 
 #[test]
-#[ignore = "native: runs a binary the kernel kills; needs /usr/bin/cc"]
+#[ignore = "native: runs a binary the kernel kills; needs the NATS artifact in the runtime cache"]
 fn a_binary_with_a_damaged_signature_is_killed_by_the_os_and_classified_as_rejected() {
     let ev = evidence!(
         covers = ["AC-012"],
         kind = Kind::Native,
-        expected = "a native arm64 binary built by cc runs and exits 0 through spawn_main, and the same file with one byte of its first instruction changed is killed with SIGKILL that the daemon did not send, which classify_early_exit reports as binary_rejected_by_os",
+        expected = "nats-server from the cached NATS artifact prints its version and exits 0 through spawn_main, and a copy with one byte of its first instruction changed is killed with SIGKILL that the daemon did not send, which classify_early_exit reports as binary_rejected_by_os",
     );
     let root = TestRoot::new().expect("a test root can be created");
-    let Some(good) = build(root.path(), "good", "int main(void) { return 0; }\n") else {
-        ev.blocked("this Mac has no working /usr/bin/cc", OWNER);
+    let Some(good) = extract_nats(root.path()) else {
+        ev.blocked(
+            "artifact nats-2.15.1-macos-aarch64 is not in the runtime cache",
+            OWNER,
+        );
         return;
     };
     let adapter = MacosProcessSupervision::new();
-    let control = run_main(&adapter, &root, &good);
+    let version = vec!["--version".to_owned()];
+    let control = run_main(&adapter, &root, &good, &version);
     assert_eq!(control, ExitStatus::Exited(0));
 
     let mut bytes = fs::read(&good).expect("the binary can be read");
     let at = entry_offset(&bytes);
     bytes[at] ^= 0xff;
-    let bad = root.path().join("damaged");
+    let bad = root.path().join("nats-server-damaged");
     fs::write(&bad, &bytes).expect("the copy can be written");
     Command::new("/bin/chmod")
         .args(["755"])
@@ -164,31 +180,32 @@ fn a_binary_with_a_damaged_signature_is_killed_by_the_os_and_classified_as_rejec
         .expect("codesign runs");
     assert!(!verified.status.success(), "codesign sees the damage");
 
-    let status = run_main(&adapter, &root, &bad);
+    let status = run_main(&adapter, &root, &bad, &version);
 
     assert_eq!(status, ExitStatus::Signaled(9));
     assert_eq!(
         classify_early_exit(Some(status), false),
         Some(LaunchRefusal::BinaryRejectedByOs { signal: 9 })
     );
-    ev.pass_with("the control exited 0; the damaged copy ended Signaled(9), classified binary_rejected_by_os");
+    let (sha256, _) = artifact_facts(NATS);
+    ev.subject("nats", NATS.version, Some(&sha256), Source::Managed);
+    ev.pass_with("the control nats-server --version exited 0; the damaged copy ended Signaled(9), classified binary_rejected_by_os");
 }
 
 #[test]
-#[ignore = "native: needs /usr/bin/cc and /usr/bin/xattr"]
+#[ignore = "native: needs the NATS artifact in the runtime cache and /usr/bin/xattr"]
 fn an_executable_with_the_quarantine_attribute_is_refused_before_it_runs() {
     let ev = evidence!(
         covers = ["AC-012"],
         kind = Kind::Native,
-        expected = "check_launchable on the real macOS adapter names runtime.quarantined for a file with com.apple.quarantine, nothing is spawned and the file never ran, and the same file without the attribute passes",
+        expected = "check_launchable on the real macOS adapter names runtime.quarantined for nats-server with com.apple.quarantine, nothing is spawned, and the same file without the attribute passes",
     );
     let site = Site::offline();
-    let Some(program) = build(
-        site.root.path(),
-        "touchy",
-        "#include <stdio.h>\nint main(int argc, char **argv) { if (argc > 1) { FILE *f = fopen(argv[1], \"w\"); if (f) fclose(f); } return 0; }\n",
-    ) else {
-        ev.blocked("this Mac has no working /usr/bin/cc", OWNER);
+    let Some(program) = extract_nats(site.root.path()) else {
+        ev.blocked(
+            "artifact nats-2.15.1-macos-aarch64 is not in the runtime cache",
+            OWNER,
+        );
         return;
     };
     assert_eq!(check_launchable(&site.platform, &program), Ok(()));
@@ -215,8 +232,9 @@ fn an_executable_with_the_quarantine_attribute_is_refused_before_it_runs() {
             .is_empty(),
         "nothing was spawned"
     );
-    assert!(!site.root.path().join("ran").exists());
-    ev.pass_with("quarantined file refused with agent Safari; nothing spawned; control without the attribute passed");
+    let (sha256, _) = artifact_facts(NATS);
+    ev.subject("nats", NATS.version, Some(&sha256), Source::Managed);
+    ev.pass_with("quarantined nats-server refused with agent Safari; nothing spawned; the control without the attribute passed");
 }
 
 /// Source files of the crates that start processes for the install, with
