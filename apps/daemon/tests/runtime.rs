@@ -6,6 +6,8 @@
 
 #[path = "runtime/install.rs"]
 mod install;
+#[path = "runtime/instances_untouched.rs"]
+mod instances_untouched;
 #[path = "runtime/read.rs"]
 mod read;
 #[path = "runtime/resolve.rs"]

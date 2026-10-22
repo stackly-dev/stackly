@@ -61,6 +61,16 @@
             case daemonMisconfigured = "daemon-misconfigured"
             /// A ready daemon with no instances, before onboarding finished.
             case onboarding
+            /// Unreachable; the agent needs approval in Login Items.
+            case agentRequiresApproval = "agent-requires-approval"
+            /// Unreachable; the agent was turned off in Login Items.
+            case agentDisabled = "agent-disabled"
+            /// Unreachable for a minute; the agent is on and the daemon is not running.
+            case agentEnabled = "agent-enabled"
+            /// Unreachable; the OS cannot find the service once Turn On ran.
+            case agentNotFound = "agent-not-found"
+            /// Unreachable; the status of the agent cannot be read.
+            case agentUnavailable = "agent-unavailable"
         }
 
         /// The scenario's name.
@@ -85,6 +95,8 @@
         public let onboardingFinished: Bool
         /// The presence the shell settles in, or `nil` when the scenario shows onboarding.
         public let expectedPresence: DaemonPresence?
+        /// The background agent; ``FixtureAgent/fresh`` except in the agent scenarios.
+        public let agent: FixtureAgent
 
         /// Creates a scenario from its parts.
         public init(
@@ -98,7 +110,8 @@
             providers: [ProviderSummary] = [],
             replies: [String: FixtureReply] = [:],
             onboardingFinished: Bool = true,
-            expectedPresence: DaemonPresence?
+            expectedPresence: DaemonPresence?,
+            agent: FixtureAgent = .fresh
         ) {
             self.id = id
             self.connection = connection
@@ -111,6 +124,7 @@
             self.replies = replies
             self.onboardingFinished = onboardingFinished
             self.expectedPresence = expectedPresence
+            self.agent = agent
         }
 
         /// Every scenario, in the order of ``ID``.

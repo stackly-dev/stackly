@@ -10,6 +10,7 @@ use stackly_domain::{
 use stackly_platform::ProcessError;
 
 use super::codes;
+use crate::instance::data_compat::DataIncompatible;
 use crate::operation::{OperationError, codes as operation_codes};
 use crate::secret::{SecretError, delivery::SecretInArgv, registry_code};
 
@@ -273,6 +274,16 @@ pub enum SupervisorError {
         /// What went wrong.
         reason: String,
     },
+}
+
+impl From<DataIncompatible> for SupervisorError {
+    fn from(refused: DataIncompatible) -> Self {
+        Self::DataIncompatible {
+            outcome: refused.outcome.as_code().to_owned(),
+            data: refused.data.map(|data| data.to_string()),
+            runtime: refused.runtime.to_string(),
+        }
+    }
 }
 
 impl SupervisorError {

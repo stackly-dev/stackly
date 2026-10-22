@@ -164,7 +164,7 @@ fn runtime_unavailable(runtime_id: String, state: &str) -> SupervisorError {
 }
 
 /// The runtime and every runtime it depends on must be `installed`.
-fn require_installed(
+pub(crate) fn require_installed(
     registry: &dyn stackly_domain::Registry,
     runtime: &Runtime,
 ) -> Result<(), SupervisorError> {
@@ -241,7 +241,7 @@ pub(crate) fn load_package(
 }
 
 /// The instance folder must be a private folder of the current user.
-fn check_instance_folder(
+pub(crate) fn check_instance_folder(
     platform: &stackly_platform::Platform,
     paths: &InstancePaths,
 ) -> Result<(), SupervisorError> {

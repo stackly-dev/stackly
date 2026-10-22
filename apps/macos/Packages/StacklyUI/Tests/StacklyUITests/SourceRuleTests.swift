@@ -167,6 +167,49 @@ struct SourceRuleTests {
             allowedExamples: ["environment[\"STACKLY_ROOT\"]"]
         ),
         Rule(
+            name: "ServiceManagement outside the SMAppService adapter (spec 0015 AC-11)",
+            patterns: [#"\bimport ServiceManagement\b"#, #"\bSMAppService\b"#],
+            allowed: [stacklyUI + "Agent/SMAppServiceAgent.swift"],
+            forbiddenExamples: [
+                "import ServiceManagement",
+                "let service = SMAppService.mainApp",
+                "SMAppService.openSystemSettingsLoginItems()",
+            ],
+            allowedExamples: [
+                "let agent = SMAppServiceAgent()",
+                "controller.openApprovalSettings()",
+            ]
+        ),
+        Rule(
+            name: "registering or relaunching the agent outside the Agent folder (spec 0015 AC-11)",
+            patterns: [#"\.(register|unregister|relaunch)\(\)"#],
+            allowed: [stacklyUI + "Agent/"],
+            forbiddenExamples: [
+                "try await controller.register()",
+                "_ = try await agent.relaunch()",
+                "service.unregister()",
+            ],
+            allowedExamples: ["sync.register(store)", "await agent.turnOn()", "model.start()"]
+        ),
+        Rule(
+            name: "file changes outside the command line tool (spec 0015 AC-14)",
+            patterns: [
+                #"\bcreateSymbolicLink\("#, #"\bcreateDirectory\("#, #"\bremoveItem\("#,
+                #"\bmoveItem\("#, #"\breplaceItem"#, #"\brename\("#,
+            ],
+            allowed: [stacklyUI + "Agent/CommandLineTool.swift"],
+            forbiddenExamples: [
+                "try manager.createSymbolicLink(at: link, withDestinationURL: target)",
+                "try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)",
+                "try FileManager.default.removeItem(at: url)",
+                "rename(from, to)",
+            ],
+            allowedExamples: [
+                "FileManager.default.fileExists(atPath: path)",
+                "let renamed = title",
+            ]
+        ),
+        Rule(
             name: "inspector outside the inspector components (spec 0067 AC-18)",
             patterns: [#"\.inspector\("#],
             allowed: [stacklyUI + "Components/Inspector/"],
