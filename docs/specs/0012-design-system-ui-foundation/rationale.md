@@ -887,3 +887,42 @@ Update `/architect` sesi `arc-f126768-fix`, dari keputusan lead ui-macos atas te
 - **Batas yang dicatat.** Sumber yang namanya harus tetap huruf kecil di awal kalimat (misalnya `stacklyd`) akan tampil kapital. Hari ini tidak ada layar yang menampilkannya: `ShellPresentation` memakai `.outdated(source: "stacklyd")` hanya untuk memformat waktu dan tidak pernah menampilkan isi banner itu. Kalau suatu layar butuh sumber seperti itu, `/architect` spec ini memutuskan bentuk kalimatnya.
 - **Rekam ulang.** Referensi yang menampilkan catatan outdated adalah `catalog-outdated` di `CatalogSnapshotTests`; halaman States galeri memakai "Catalog" yang sudah kapital. Perbaikan dan rekam ulang masuk satu commit bersama perbaikan environment fixture di bawah `.stacklyInspector` (spec 0068 K15), karena keduanya menggeser referensi Catalog yang sama.
 - **Kasus tepi (keputusan lead 2026-10-22, gap cross check G7 spec 0068).** `uppercased()` yang tidak bergantung locale, karena `localizedUppercase` di locale Turki mengubah "i" menjadi "İ" dan copy UI berbahasa Inggris; karakter tanpa huruf besar dan `source` kosong tidak diubah; test di `ViewStateTests.swift` dan doc comment tiga tempat diperbarui (index.md, *Pola state*).
+
+## Perubahan 2026-10-22 (cincin pilihan dan spinner di frame pertama, wave 7)
+
+Update `/architect` sesi `arc-ui-sync`, bersama spec 0013, 0067, 0068, dan `apps/macos/design.md`. Dua keputusan lead ui-macos dicatat sebelum kodenya masuk `main`; sesi `dev-f12-fix` sedang membangunnya, dan lead merge nya terpisah. Tidak ada ID atau teks AC yang berubah: aturan sumber AC-3 sudah menolak `accentColor` di mana pun di luar file token, dan menambah `controlAccentColor` memperketat aturan itu tanpa mengubah kalimat AC-3; AC-6 tetap (tidak ada setting accent, `AccentColor.colorset` tetap kosong).
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| *Warna* | `StacklyColor.selectionRing` dan batas pemakaiannya; aturan sumber juga menolak `controlAccentColor` | keputusan lead (nama tetap); `dev-f12-fix` |
+| *Pola state* | delay nol berarti `DelayedProgress` di frame pertama, sama dengan `CheckSymbol` | keputusan lead; spec 0068 *Kunci environment baru*; `dev-f12-fix` |
+| API surface | baris `StacklyColor` dan `loadingDelay` | sama |
+| Key invariants, Consequences | accent di view kustom hanya lewat cincin pilihan; kontras cincin ikut accent pengguna | update ini |
+| Follow-up | `StaleNote` dicentang (`b4850bd2`, merge `582afd51`); baris baru untuk build `dev-f12-fix` | update ini |
+
+### Cincin pilihan kartu kustom
+
+**Masalah.** Kartu provider Catalog (spec 0017) menggambar cincin pilihan dengan `Color(nsColor: .controlAccentColor)` langsung di view layar, ditandai `// provisional: F12`. Aturan spec ini hanya membolehkan accent lewat kontrol native, tint seleksi, dan link, dan tidak punya jalan untuk cincin di view kustom; grid kartu bukan `List`, jadi seleksi native tidak tersedia.
+
+- **Option 1: `StacklyColor.selectionRing` = accent sistem (dipilih lead, nama tetap).** Cincin ikut accent pilihan pengguna seperti seleksi native, dan accent tetap terkunci di file token. Kekurangan: kontrasnya ikut accent pengguna dan tidak bisa dibuktikan test (Consequences).
+- **Option 2: `ColorToken` kustom (misalnya fill tone `informative`).** Kontras bisa dibuktikan di tabel Pasangan kontras. Kekurangan: tidak ikut accent pengguna, sehingga seleksi kartu berbeda warna dari seleksi native di sidebar dan tabel.
+- **Option 3: cincin `labelColor`.** Kontras tinggi di semua appearance. Kekurangan: tidak terbaca sebagai pilihan dan berbeda dari bahasa seleksi macOS.
+
+Bentuknya mengikuti `decorative`: warna sistem bernama di file token, bukan `ColorToken`, karena nilainya milik sistem. Trait `.isSelected` di kartu membawa arti pilihan untuk VoiceOver, dan inspector menampilkan provider yang terpilih, jadi warna cincin bukan satu satunya tanda.
+
+### Spinner di frame pertama
+
+**Masalah.** `CheckSymbol` spec 0067 sudah menggambar spinner di frame pertama saat delay nol (perbaikan `9180a9a`), tetapi `DelayedProgress` masih menyalakan spinner dari `task` setelah tidur nol dan crossfade, jadi snapshot `StateView` bergantung pada urutan frame. Spec 0068 sudah menulis syaratnya: kalau sebuah snapshot `StateView` tidak stabil karena itu, `DelayedProgress` diselaraskan dengan aturan yang sama, bukan diberi retry. Syarat itu ditulis untuk `StateView`, tetapi pemicunya datang dari pemakai `DelayedProgress` yang lain: referensi `overview-operations-failed` flaky lewat `SectionProgress` Overview spec 0022 (catatan lead scope ui-macos, 2026-10-22). Runner up: retry di helper snapshot, yang dilarang spec 0068 (*Key invariants*). Delay bukan nol tidak berubah, jadi perilaku app nyata sama.
+
+### Cross check wave 7 (spec 0012, 0013, 0067, 0068, design.md)
+
+Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas diff update ini dengan kode `main` dan diff `dev-f12-fix` yang belum di commit. Yang ia periksa ulang dan benar: setiap hash yang dikutip ada dan isinya cocok, nama helper, frame ukuran halaman, posisi relay dan `backgroundMaterial`, tempat dan pesan test penjaga, nama test inspector dan angka 500, 4352, dan 5228 pt, signature `attach(...didFail...)` dan `agentDidFail`, dan tidak ada baris `**AC-n**` yang tersentuh.
+
+**Diperbaiki langsung (fakta dan kata).** Penanda "belum dibangun" fitur 15 yang tersisa di spec 0013 (banner per state, dua aturan sumber, blok usulan fondasi butir 5 kecuali butir fitur 16); kalimat `not_found` spec 0013 kini mengikuti spec 0016 persis (`OnboardingFlow` menggantikan `StateBanner` dengan syarat yang sama, "paling banyak sekali", celah jendela tertutup diterima) dan klausa spec 0015 bahwa banner critical lain tidak dihitung; `SectionProgress` Overview sebagai pemakai `DelayedProgress` di semua daftar, dan flake `overview-operations-failed` dicatat lewat pemakai itu, bukan `StateView`; penanda "belum di `main`" di design.md dan spec untuk kerja `dev-f12-fix`; Follow-up fitur 22 spec 0013 tidak mengklaim kartu Runtimes (langkah 9); `.task`, bukan `.task(id:)`, di *Pola state*; dua contoh probe ukuran halaman di spec 0067 dipisah, panduan ukuran minimum yang belum diprobe dihapus, pengecualian demo galeri dicatat, dan Follow-up `RuntimesPage.minimumWidth`; kalimat AC-3 di rationale ini; AC-9 dicatat sebagai perilaku app nyata.
+
+**Gap keputusan, dikirim ke lead dengan rekomendasi. Keputusan lead (2026-10-22): "accept" untuk update ini, W1 dan W2 sesuai rekomendasi.** W1 ditulis di *Warna*, *Consequences*, dan design.md (kalimat "accepted" seperti header `Table`). W2 ditulis di *Pola state*, *Critical test scenarios*, Build plan *Tambahan 2026-10-22*, dan Follow-up, dengan catatan lead bahwa run snapshot berulang belum dijalankan developer karena load, jadi bukti frame pertama `NOT_RUN` sampai `dev-f12-fix` melapor.
+
+| # | Gap | Rekomendasi |
+| --- | --- | --- |
+| W1 | Kontras `selectionRing`: inspector bisa ditutup, jadi saat tertutup cincin adalah satu satunya tanda pilihan yang terlihat; AGENTS.md meminta WCAG AA | terima sebagai tradeoff yang dicatat (Consequences dan design.md, seperti header `Table`), dengan mitigasi inspector ditulis "saat terbuka"; tanpa baris tabel Pasangan kontras, karena `controlAccentColor` di test membaca accent Mac yang menjalankan test. Runner up: baris P5 non teks 3:1 untuk biru sistem sebagai wakil accent default |
+| W2 | Test dan detail kerja `dev-f12-fix` yang belum ditulis spec: test model delay nol, contoh negatif aturan sumber `controlAccentColor`, bukti tampilan frame pertama, rekam ulang referensi yang bergeser, arti "nol", frame `.infinity` di cabang frame pertama | tulis seperti diff `dev-f12-fix`: `delay == .zero` persis; cabang frame pertama tetap `.frame(maxWidth: .infinity, maxHeight: .infinity)`; test `DelayedVisibility` (terlihat sejak dibuat, `run()` tanpa tidur, delay bukan nol tetap tersembunyi sampai tidur selesai); contoh negatif `Color(nsColor: .controlAccentColor)`; bukti tampilan lewat suite snapshot yang memakai `DelayedProgress` (Overview dan state loading) yang lulus berulang tanpa flake; referensi yang pikselnya bergeser direkam ulang dan direview dengan `cargo xtask snapshot review` |

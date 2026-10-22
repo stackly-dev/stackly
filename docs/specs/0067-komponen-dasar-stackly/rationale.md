@@ -294,3 +294,34 @@ Dibangun menurut itu, dengan penyimpangan kecil dari spec yang tidak mengubah AP
 ## Perubahan 2026-10-22 (environment fixture di bawah inspector)
 
 Update `/architect` sesi `arc-f126768-fix`, bersama spec 0068 K15. Sesi F17 menemukan bahwa varian HC snapshot halaman Catalog identik dengan varian standard, dan probe spec 0068 menunjukkan sebabnya: `.inspector` menampung ulang isi utama dan isi kolom, dan hanya `colorSchemeContrast` yang kembali ke nilai sistem di sana. Spec ini hanya mendapat catatan di *Inspector* dan *Key invariants*: `StacklyInspectorModifier` memanggil relay spec 0068 di `#if DEBUG` di dua posisi yang dibuktikan probe. Keputusan, opsi, dan bukti nya ada di rationale spec 0068 (*Keputusan K15*). AC-18 tidak berubah, karena perilaku Release `.stacklyInspector` sama persis; yang berubah hanya jalur Debug saat `fixtureAppearance` mengisi kunci `fixtureAccessibility` (snapshot dan preview).
+
+## Perubahan 2026-10-22 (inspector seperti yang dibangun, wave 7)
+
+Update `/architect` sesi `arc-ui-sync`, bersama spec 0012, 0013, 0068, dan `apps/macos/design.md`. Spec ini diselaraskan dengan tiga perbaikan sesi `dbg-f67-inspector` yang sudah di `main` (F67 bagian 1 `61d4e0ac`, bagian 2 `ace13361`). Tidak ada ID atau teks AC yang berubah: AC-18 sudah menuntut isi kolom di atas latar opak `surfaceWindow` dan tidak menyebut cara halaman diukur, dan perbaikan ini membuat kode memenuhi kalimat itu.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| *Inspector*, catatan baru *Kolom tidak vibrant* | `backgroundMaterial` nil di isi kolom, di dalam `ScrollView` | `6aaea490` |
+| *Inspector*, catatan baru *Ukuran halaman* | frame 0 sampai tak hingga pada isi utama; halaman tanpa `minWidth` sendiri | `5d12cb22`, `e99c6061` |
+| *Inspector*, catatan *Environment fixture* | relay isi utama di dalam `ZStack` sendiri | `e191d756`; detail di spec 0068 |
+| Key invariants | dua butir: kolom tanpa material kaca, halaman mengambil ukuran yang ditawarkan | sama |
+| Critical test scenarios | `columnContentDrawsWithoutTheGlassMaterial`, `pageTakesTheSizeTheColumnOffers` | `6aaea490`, `5d12cb22` |
+| Build plan | catatan *Perbaikan langkah 14* (tanpa langkah baru) | merge `61d4e0ac`, `ace13361` |
+| Consequences | dua butir negatif | update ini |
+
+### Kolom tidak vibrant
+
+**Temuan (macOS 27.0.1, 2026-10-22).** Di snapshot, ikon `ActionButton` di kolom inspector tergambar putih di atas putih. Pohon view kolom: `NSGlassEffectView` dengan appearance `NSAppearanceNameVibrantLight`, dan environment isi kolom membawa `backgroundMaterial` kaca (`DesignLibrary.GlassMaterialProvider`), sementara isi utama membawa nil. SwiftUI lalu menggambar bezel tombol, lapisan simbol SF, dan teks tanpa gaya eksplisit dengan filter `vibrantColorMatrix`. `cacheDisplay` tidak menjalankan filter Core Animation, jadi snapshot menunjukkan warna mentah. Di app nyata ikonnya tampil, tetapi filter itu menggeser semua warna kolom, padahal spec ini dan design.md menyatakan kolom opak `surfaceWindow` dan tidak pernah kaca.
+
+- **Option 1: `.environment(\.backgroundMaterial, nil)` di komponen (dipilih).** Isi kolom tergambar seperti di permukaan opak lain, dengan warna token, di app nyata dan di snapshot. Kekurangan: bergantung pada kunci environment yang diamati, bukan aturan Apple; dan kolom sedikit berbeda dari inspector app lain.
+- **Option 2: perbaikan di harness snapshot.** Ditolak: masalahnya juga ada di app nyata (warna kolom bergeser), jadi harness hanya akan menyembunyikannya.
+- **Option 3: menerima gaya vibrant.** Ditolak: bertentangan dengan latar opak dan pasangan kontras P1 dan P2 spec 0012 yang dijanjikan AC-18 dan AC-19.
+
+Posisinya sama dengan relay kolom (pada `VStack` di dalam `ScrollView`); dipasang pada `ScrollView` nilai itu tidak sampai ke isi. Sesudah perbaikan, di app nyata hanya kolom inspector yang berubah (paling banyak 71 level per kanal di light dan 27 di dark), dan halaman serta sidebar sama piksel demi piksel.
+
+### Ukuran halaman
+
+**Temuan (2026-10-22, dari F18 milestone 4).** Probe `Layout` yang mencatat usulan ukuran menunjukkan split view dari `.inspector` mengusulkan `(0, 0)` dan `(inf, inf)` ke halaman, terbuka atau tertutup. Di `(0, 0)`, halaman dengan catatan yang membungkus menjawab 32 × 5228 pt, lalu `NSSplitView` dan halaman ditata 1044 × 5228 pt di jendela 748 pt. Halaman Catalog dengan panel NATS yang panjang kena akibat yang sama: split view 1492 pt, kolom inspector yang tidak bisa digulir, dan baris kartu Capabilities 35 pt (bukan 39 pt). F18 menutupinya dengan `.frame(minWidth: 384)` di halaman Runtimes.
+
+- **Option 1: frame 0 sampai tak hingga di `StacklyInspectorModifier` (dipilih).** Dengan kedua batas terpasang, frame mengambil ukuran yang diusulkan, jadi halaman menjawab 0 × 0 di `(0, 0)` dan split view tetap setinggi jendela. Satu tempat untuk semua halaman. Kekurangan: halaman tidak bisa lagi memaksa ukuran minimum lewat view akar nya.
+- **Option 2: setiap halaman memasang `minWidth` sendiri.** Ditolak: menyembunyikan gejala, harus diingat setiap halaman baru, dan angka 384 pt adalah urusan jendela dan inspector, bukan halaman.
