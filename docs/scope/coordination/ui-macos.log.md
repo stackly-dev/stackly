@@ -219,7 +219,6 @@
 - (selesai) `dbg-f67-inspector` bagian 2: `ace13361`, pembekuan dicabut.
 - `DelayedProgress` frame pertama dan token `selectionRing`: `dev-f12-fix` berjalan.
 - (selesai) Race close `DaemonConnection`: `5e8347c0`.
-
 - F13 muat ulang store dan sibling koneksi: `dev-f13-followups` berjalan (C diputuskan varian ii); teks desain spec 0013 menyusul lewat architect.
 - F69 milestone 3: `dev-f69-m3` berjalan; beri tahu lead scope 03 saat mendarat.
 - Teks spec 0067 baris 518, 0068 baris 264, dan `design.md` masih menyebut relay "on content before .inspector" dan belum memuat baris "Not vibrant" untuk kolom inspector: diarahkan ke architect setelah bagian 2, bersama token tint pilihan (F12).
