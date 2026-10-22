@@ -1,0 +1,122 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000804",
+    "reply": {
+      "type": "runtime.get",
+      "content": {
+        "summary": {
+          "id": "0192f3a6-0000-7000-8000-0000000000a1",
+          "revision": 1,
+          "software": "postgresql",
+          "displayName": "PostgreSQL",
+          "version": "18.6",
+          "line": "18",
+          "target": {
+            "os": "macos",
+            "arch": "aarch64"
+          },
+          "installMode": "managed",
+          "state": "installed",
+          "artifactSha256": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+          "installedAt": "2026-10-21T08:00:00.000Z",
+          "lastVerifiedAt": "2026-10-21T08:00:00.000Z",
+          "support": "experimental",
+          "supportReason": "runtime_tested",
+          "usedBy": [
+            {
+              "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+              "name": "orders-db",
+              "retained": false
+            }
+          ],
+          "dependentRuntimes": []
+        },
+        "path": "/Users/dev/Library/Application Support/Stackly/runtimes/postgresql/18.6/macos-aarch64/88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+        "artifact": {
+          "catalogId": "postgresql-18.6-r2-macos-aarch64",
+          "sha256": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+          "size": 28311215,
+          "unpackedSize": 80668813,
+          "format": "tar_gz",
+          "minimumOs": "13.0",
+          "build": 2,
+          "source": "github.com/stackly-runtimes",
+          "signature": {
+            "policy": "keep_or_adhoc",
+            "adhocSignedAtInstall": false,
+            "machOFiles": 214,
+            "executables": [
+              {
+                "path": "bin/postgres",
+                "kind": "adhoc",
+                "teamId": null
+              },
+              {
+                "path": "bin/psql",
+                "kind": "adhoc",
+                "teamId": null
+              }
+            ]
+          },
+          "dependencies": [
+            {
+              "name": "libssl.3.dylib",
+              "kind": "bundled",
+              "installName": "@rpath/libssl.3.dylib",
+              "version": "3.5.9",
+              "license": "Apache-2.0",
+              "sourceUrl": "https://example.invalid/openssl.tar.gz"
+            },
+            {
+              "name": "libSystem.B.dylib",
+              "kind": "system",
+              "installName": "/usr/lib/libSystem.B.dylib",
+              "version": null,
+              "license": null,
+              "sourceUrl": null
+            }
+          ],
+          "warnings": []
+        },
+        "executables": [
+          "bin/postgres",
+          "bin/initdb",
+          "bin/psql",
+          "bin/pg_dump"
+        ],
+        "compatibility": [
+          {
+            "scope": "runtime",
+            "result": "pass",
+            "providerRevision": null,
+            "os": "macos",
+            "osVersion": "27.0",
+            "osBuild": "26A428",
+            "arch": "aarch64",
+            "checks": [
+              "closure",
+              "dependencies",
+              "icu",
+              "launch_agent",
+              "lz4",
+              "manifest",
+              "pgcrypto",
+              "ready",
+              "stop",
+              "zstd"
+            ],
+            "knownLimitations": [
+              "provider_integration_not_covered"
+            ],
+            "summary": "postgresql 18.6 ready in 493 ms, stopped in 184 ms",
+            "testedAt": "2026-10-18T11:07:19.973Z",
+            "evidence": "runtime/01a14eb1-694f-7400-b05e-71b9a321b96b/01a14eb1-6c78-7311-bd09-2b75053ea60d",
+            "sourceUrl": "https://github.com/stackly-runtimes/releases/postgresql-18.6-r2-macos-aarch64.tar.gz",
+            "sha256": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590"
+          }
+        ]
+      }
+    }
+  }
+}

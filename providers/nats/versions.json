@@ -24,6 +24,8 @@
         "nats-server"
       ],
       "stable": true,
+      "unpackedSize": 17674495,
+      "entryCount": 3,
       "dependencies": [
         {
           "name": "libSystem.B.dylib",

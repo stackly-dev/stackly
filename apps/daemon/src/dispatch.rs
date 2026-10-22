@@ -34,6 +34,10 @@ use stackly_protocol::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
+use stackly_protocol::runtime::{
+    GetRuntimeParams, InstallRuntimeParams, InstallRuntimeReply, ListRuntimesParams,
+    ResolvedArtifact, RuntimeDetail, RuntimeListPage,
+};
 use stackly_protocol::secret::{
     DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
     RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
@@ -43,6 +47,7 @@ use stackly_protocol::storage::CapacityReport;
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
+use crate::ipc::runtime;
 use crate::ipc::secret;
 use crate::state::DaemonCore;
 use crate::{catalog, map, storage};
@@ -337,6 +342,49 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, CapacityReport> {
         let _ = context;
         storage::get_capacity(core)
+    }
+
+    /// `runtime.install`.
+    fn install_runtime<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: InstallRuntimeParams,
+    ) -> HandlerFuture<'a, Box<InstallRuntimeReply>> {
+        runtime::install(core, context, params)
+    }
+
+    /// `runtime.resolve`.
+    fn resolve_runtime<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: InstallRuntimeParams,
+    ) -> HandlerFuture<'a, Box<ResolvedArtifact>> {
+        let _ = context;
+        runtime::resolve_runtime(core, params)
+    }
+
+    /// `runtime.list`.
+    fn list_runtimes<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ListRuntimesParams,
+    ) -> HandlerFuture<'a, Box<RuntimeListPage>> {
+        let _ = context;
+        runtime::list(core, params)
+    }
+
+    /// `runtime.get`.
+    fn get_runtime<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetRuntimeParams,
+    ) -> HandlerFuture<'a, Box<RuntimeDetail>> {
+        let _ = context;
+        runtime::get(core, params)
     }
 
     /// A method outside the contract that starts an operation, which only

@@ -92,6 +92,12 @@ pub enum EventKind {
     /// no resource, no revision.
     #[serde(rename = "daemon.reconciling")]
     DaemonReconciling(DaemonReconciling),
+    /// A runtime changed in a way that raised its revision: an install
+    /// committed it, or a later feature changed it (spec 0018). The
+    /// event's resource is the runtime and its revision the runtime's;
+    /// there is no payload, so clients fetch it again with `runtime.get`.
+    #[serde(rename = "runtime.state_changed")]
+    RuntimeStateChanged,
 }
 
 /// Lists every event kind once, giving `EventKind::KINDS` and
@@ -124,6 +130,7 @@ event_kinds! {
     "instance.health_changed" => InstanceHealthChanged;
     "instance.removed" => InstanceRemoved;
     "daemon.reconciling" => DaemonReconciling;
+    "runtime.state_changed" => RuntimeStateChanged;
 }
 
 impl EventKind {
@@ -360,10 +367,13 @@ mod tests {
     #[test]
     fn every_known_kind_has_a_variant_with_the_same_serde_tag() {
         for kind in EventKind::KINDS {
-            let err = serde_json::from_value::<EventKind>(serde_json::json!({ "type": kind }))
-                .unwrap_err()
-                .to_string();
-            assert!(!err.contains("unknown variant"), "{kind}: {err}");
+            // A unit kind decodes from its tag alone.
+            if let Err(err) =
+                serde_json::from_value::<EventKind>(serde_json::json!({ "type": kind }))
+            {
+                let err = err.to_string();
+                assert!(!err.contains("unknown variant"), "{kind}: {err}");
+            }
         }
         assert_eq!(shutdown().name(), "daemon.shutting_down");
         let json = serde_json::to_value(shutdown()).unwrap();

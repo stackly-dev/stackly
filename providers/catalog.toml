@@ -7,8 +7,8 @@
 # published_at, then `cargo xtask catalog check --update`.
 
 schema = "stackly.catalog-source/v1"
-revision = 2
-published_at = 2026-10-21T23:06:00Z
+revision = 3
+published_at = 2026-10-22T01:08:22Z
 
 [[provider]]
 id = "official/postgresql"

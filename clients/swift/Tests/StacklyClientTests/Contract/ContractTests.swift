@@ -120,6 +120,7 @@ struct ContractTests {
                 "events.gap", "daemon.shutting_down", "operation.state_changed",
                 "operation.progress", "secret.changed", "instance.state_changed",
                 "instance.health_changed", "instance.removed", "daemon.reconciling",
+                "runtime.state_changed",
             ])
         let calls: [Call] = [
             .daemonGetInfo, .daemonGetHealth, .daemonGetCapabilities,
@@ -133,7 +134,7 @@ struct ContractTests {
         #expect(Reply.eventsUnsubscribe.methodName == "events.unsubscribe")
     }
 
-    @Test func protocolIsOnePointTen() {
-        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 1, minor: 10))
+    @Test func protocolIsOnePointEleven() {
+        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 1, minor: 11))
     }
 }

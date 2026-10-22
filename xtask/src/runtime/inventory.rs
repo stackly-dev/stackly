@@ -310,6 +310,44 @@ impl Inventory {
         out
     }
 
+    /// Checks rule 11: an available artifact has both `unpacked_size` and
+    /// `entry_count`, never one alone, neither negative, and a zero
+    /// `unpacked_size` only with a zero `entry_count`.
+    pub fn scan_violations(&self) -> Vec<Violation> {
+        let mut out = Vec::new();
+        for (index, artifact) in self.artifacts.iter().enumerate() {
+            if artifact.status.as_deref() != Some("available") {
+                continue;
+            }
+            let mut push = |message: String| {
+                out.push(Violation {
+                    subject: artifact.label(index),
+                    rule: 11,
+                    message,
+                });
+            };
+            match (artifact.unpacked_size, artifact.entry_count) {
+                (None, None) => push(
+                    "an available artifact needs unpacked_size and entry_count; run `cargo xtask runtime pin`".to_owned(),
+                ),
+                (Some(_), None) => push("unpacked_size needs entry_count beside it".to_owned()),
+                (None, Some(_)) => push("entry_count needs unpacked_size beside it".to_owned()),
+                (Some(bytes), Some(entries)) => {
+                    if bytes < 0 {
+                        push("unpacked_size must not be negative".to_owned());
+                    }
+                    if entries < 0 {
+                        push("entry_count must not be negative".to_owned());
+                    }
+                    if bytes == 0 && entries > 0 {
+                        push("unpacked_size is 0 only when entry_count is 0".to_owned());
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// Checks rule 9: every required line has exactly one entry, whatever
     /// its status.
     pub fn required_line_violations(&self) -> Vec<Violation> {
@@ -1505,6 +1543,77 @@ upstream_signature = { kind = "none" }
             .iter()
             .map(ToString::to_string)
             .collect()
+    }
+
+    fn scan_lines(text: &str) -> Vec<String> {
+        Inventory::parse(text)
+            .unwrap()
+            .scan_violations()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    // covers: AC-21
+    #[test]
+    fn rule_11_wants_both_scan_values_on_an_available_artifact() {
+        let with = |extra: &str| {
+            edit(
+                UPSTREAM,
+                "status = \"available\"",
+                &format!("status = \"available\"\n{extra}"),
+            )
+        };
+        let id = "nats-2.15.1-macos-aarch64";
+
+        assert_eq!(
+            scan_lines(&with("unpacked_size = 10\nentry_count = 3")),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            scan_lines(&with("unpacked_size = 0\nentry_count = 0")),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            scan_lines(UPSTREAM),
+            [format!(
+                "{id}: an available artifact needs unpacked_size and entry_count; run `cargo xtask runtime pin` (rule 11)"
+            )]
+        );
+        assert_eq!(
+            scan_lines(&with("unpacked_size = 10")),
+            [format!(
+                "{id}: unpacked_size needs entry_count beside it (rule 11)"
+            )]
+        );
+        assert_eq!(
+            scan_lines(&with("entry_count = 3")),
+            [format!(
+                "{id}: entry_count needs unpacked_size beside it (rule 11)"
+            )]
+        );
+        assert_eq!(
+            scan_lines(&with("unpacked_size = 0\nentry_count = 3")),
+            [format!(
+                "{id}: unpacked_size is 0 only when entry_count is 0 (rule 11)"
+            )]
+        );
+        assert_eq!(
+            scan_lines(&with("unpacked_size = -1\nentry_count = -2")),
+            [
+                format!("{id}: unpacked_size must not be negative (rule 11)"),
+                format!("{id}: entry_count must not be negative (rule 11)")
+            ]
+        );
+        assert_eq!(
+            scan_lines(&edit(
+                UPSTREAM,
+                "status = \"available\"",
+                "status = \"blocked\""
+            )),
+            Vec::<String>::new(),
+            "only an available artifact is held to rule 11"
+        );
     }
 
     #[test]

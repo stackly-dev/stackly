@@ -1,0 +1,11 @@
+Provider       official/postgresql
+Artifact       postgresql-18.6-r2-macos-aarch64
+Version        18.6 (line 18)
+Target         macos-aarch64
+Digest         sha256:88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590
+Download       28311215 bytes
+Unpacked       80668813 bytes
+Format         tar_gz
+Minimum macOS  13.0
+Stable         yes
+Support        experimental (runtime_tested)

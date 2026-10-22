@@ -29,7 +29,7 @@
           "tile": "magenta"
         },
         "software": "nats",
-        "manifestSha256": "eb02876b69a4a0bb1abd4393a482903e118afba77a3eb5ef25d7ba3d07242363",
+        "manifestSha256": "d115e2ad7cd0658bb40735bdb7808a8c4ffa1323dacec49f931e0a573f1a656d",
         "capabilities": [
           {
             "capability": "multi_instance",

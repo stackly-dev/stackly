@@ -10,6 +10,7 @@ pub mod instance;
 pub mod manpage;
 pub mod operation;
 pub mod provider;
+pub mod runtime;
 pub mod secret;
 
 use std::future::Future;

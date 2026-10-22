@@ -1,0 +1,16 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 140,
+    "at": "2026-10-21T08:05:00.000Z",
+    "resource": {
+      "kind": "runtime",
+      "id": "0192f3a6-0000-7000-8000-0000000000a1"
+    },
+    "revision": 2,
+    "kind": {
+      "type": "runtime.state_changed"
+    }
+  }
+}

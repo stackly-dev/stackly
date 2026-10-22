@@ -1072,6 +1072,38 @@ async fn dispatch(
                 .map(Reply::StorageGetCapacity),
             None,
         ),
+        Call::RuntimeInstall(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.install_runtime(c, x, p)
+            })
+            .await
+            .map(Reply::RuntimeInstall),
+            None,
+        ),
+        Call::RuntimeResolve(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.resolve_runtime(c, x, p)
+            })
+            .await
+            .map(Reply::RuntimeResolve),
+            None,
+        ),
+        Call::RuntimeList(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.list_runtimes(c, x, p)
+            })
+            .await
+            .map(Reply::RuntimeList),
+            None,
+        ),
+        Call::RuntimeGet(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_runtime(c, x, p)
+            })
+            .await
+            .map(Reply::RuntimeGet),
+            None,
+        ),
     }
 }
 

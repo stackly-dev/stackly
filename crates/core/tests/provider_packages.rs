@@ -262,6 +262,52 @@ fn fake_command_settings() -> serde_json::Value {
     })
 }
 
+// covers: AC-12
+#[test]
+fn every_repo_package_reads_its_version_from_the_literal_output_of_its_binary() {
+    let cases = [
+        (
+            fake_dir(),
+            "version",
+            "stackly-fake-server 0.1.0\n",
+            "0.1.0",
+        ),
+        (
+            nats_dir(),
+            "--version",
+            "nats-server: v2.15.1\r\n",
+            "2.15.1",
+        ),
+        (
+            traefik_dir(),
+            "version",
+            "Version:      3.7.15\nCodename:     x\nGo version:   go1.26\n",
+            "3.7.15",
+        ),
+        (
+            postgresql_dir(),
+            "--version",
+            "postgres (PostgreSQL) 18.6\n",
+            "18.6",
+        ),
+    ];
+    for (dir, arg, output, expected) in cases {
+        let package = validated(&dir);
+        let check = package
+            .manifest()
+            .version_check()
+            .unwrap_or_else(|| panic!("{} declares runtime.versionCheck", dir.display()));
+        assert_eq!(check.args(), [arg], "{}", dir.display());
+        assert_eq!(
+            check.read_version(output, ""),
+            Some(expected),
+            "{}",
+            dir.display()
+        );
+        assert_eq!(check.read_version("", ""), None, "{}", dir.display());
+    }
+}
+
 #[test]
 fn the_fake_package_reads_without_writes_and_validates() {
     let ev = evidence!(

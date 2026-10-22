@@ -134,12 +134,29 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
     ),
     ("requestIdMax", REQUEST_ID_MAX as u64),
     (
+        "runtimeListLimitDefault",
+        crate::runtime::RUNTIME_LIST_LIMIT_DEFAULT,
+    ),
+    (
+        "runtimeListLimitMax",
+        crate::runtime::RUNTIME_LIST_LIMIT_MAX,
+    ),
+    (
+        "runtimeListLimitMin",
+        crate::runtime::RUNTIME_LIST_LIMIT_MIN,
+    ),
+    (
+        "runtimePageBytesMax",
+        crate::runtime::RUNTIME_PAGE_BYTES_MAX as u64,
+    ),
+    (
         "secretReferenceMax",
         crate::secret::SECRET_REFERENCE_MAX as u64,
     ),
     ("secretSegmentMax", crate::secret::SEGMENT_MAX as u64),
     ("secretSegmentsMax", crate::secret::SEGMENTS_MAX as u64),
     ("secretSegmentsMin", crate::secret::SEGMENTS_MIN as u64),
+    ("selectorMax", crate::runtime::SELECTOR_MAX as u64),
     (
         "subscribeKindsMax",
         crate::events::SUBSCRIBE_KINDS_MAX as u64,
@@ -217,7 +234,7 @@ mod tests {
 
     /// Every module of the crate whose constants can be contract limits:
     /// all but the fuzz harnesses and the generated digest.
-    const SOURCES: [(&str, &str); 17] = [
+    const SOURCES: [(&str, &str); 18] = [
         ("catalog", include_str!("catalog.rs")),
         ("codes", include_str!("codes.rs")),
         ("daemon", include_str!("daemon.rs")),
@@ -231,6 +248,7 @@ mod tests {
         ("limits", include_str!("limits.rs")),
         ("message", include_str!("message.rs")),
         ("operation", include_str!("operation.rs")),
+        ("runtime", include_str!("runtime.rs")),
         ("secret", include_str!("secret.rs")),
         ("storage", include_str!("storage.rs")),
         ("version", include_str!("version.rs")),

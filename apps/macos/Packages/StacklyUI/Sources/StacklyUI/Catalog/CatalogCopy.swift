@@ -101,6 +101,12 @@ nonisolated public enum CatalogCopy {
             "Not in this release."
         case .packageInvalid:
             "The provider package failed validation."
+        case .requiresNewerOs:
+            "Needs a newer macOS than this Mac runs."
+        case .providerTested:
+            "Tested with this provider on this Mac."
+        case .runtimeTested:
+            "The runtime ran on this Mac; the provider is not tested with it yet."
         case .unrecognized:
             "Reason not recognized by this version of Stackly."
         }

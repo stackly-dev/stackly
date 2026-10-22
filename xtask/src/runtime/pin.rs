@@ -1,8 +1,9 @@
 //! `cargo xtask runtime pin --url <https>... [--executable <path>]
 //! [--sha256-url <https>]`: downloads every candidate URL, checks that they
 //! give the same bytes, and prints the `format`, `urls`, `sha256`, `size`,
-//! and `min_os` lines of an inventory entry (spec 0003). Digests are never
-//! typed by hand.
+//! `unpacked_size`, `entry_count`, and `min_os` lines of an inventory entry
+//! (spec 0003; the two scan values are measured by the extractor's `scan`,
+//! spec 0018). Digests are never typed by hand.
 //!
 //! `cargo xtask runtime pin --file <tar.gz> --url <https>...
 //! [--executable <path>]` does the same for a maintainer artifact built on
@@ -23,6 +24,7 @@ use super::cache::{Cache, Download, PIN_MAX_SIZE, SIDE_FILE_MAX_SIZE};
 use super::checksum::{SumLine, base_name, expected_digest, parse_sums};
 use super::inventory::{is_https, is_inner_relative_path};
 use super::macho::{self, FileKind};
+use super::scan;
 
 /// The archive tool; never one from PATH.
 const TAR: &str = "/usr/bin/tar";
@@ -50,6 +52,10 @@ struct Pinned {
     urls: Vec<String>,
     sha256: String,
     size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unpacked_size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entry_count: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     min_os: Option<String>,
 }
@@ -170,6 +176,10 @@ fn pinned(stored: &Path, options: &Options, sha256: String, size: u64) -> Result
     // The format comes from the bytes on every OS; only min_os needs macOS.
     let kind = macho::file_kind(stored)?;
     let format = kind.format();
+    let measured = match format {
+        Some(format) => Some(measure(stored, format, options.executable.as_deref())?),
+        None => None,
+    };
     let min_os = if format.is_some() {
         read_min_os(stored, kind, options.executable.as_deref())?
     } else {
@@ -181,8 +191,25 @@ fn pinned(stored: &Path, options: &Options, sha256: String, size: u64) -> Result
         urls: options.urls.clone(),
         sha256,
         size,
+        unpacked_size: measured.map(|measured| measured.unpacked_size),
+        entry_count: measured.map(|measured| measured.entry_count),
         min_os,
     })
+}
+
+/// The unpacked size and entry count of the download, from the scan the
+/// install extracts with. The archive root it strips is the single top
+/// folder, which `archive_root` of the entry names. A `binary` takes the
+/// name `executable` when `--executable` is left out; the numbers do not
+/// depend on it.
+fn measure(stored: &Path, format: &str, executable: Option<&str>) -> Result<scan::Measured> {
+    let format = scan::parse_format(format)?;
+    let executable = executable.unwrap_or("executable").to_owned();
+    let (root, measured) = scan::measure_detecting_root(stored, format, &[executable])?;
+    if let Some(root) = root {
+        eprintln!("pin: measured inside the archive root `{root}`; put it in archive_root");
+    }
+    Ok(measured)
 }
 
 const USAGE: &str = "use `cargo xtask runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]` or `cargo xtask runtime pin --file <tar.gz> --url <https>... [--executable <path>]`";
@@ -496,7 +523,7 @@ mod tests {
         let out = dir.join("out");
         std::fs::create_dir_all(&out).unwrap();
         let file = out.join(ARTIFACT);
-        std::fs::write(&file, [0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, b'x']).unwrap();
+        std::fs::write(&file, TOOL_TAR_GZ).unwrap();
         let (sha256, _) = crate::runtime::cache::sha256_file(&file).unwrap();
         std::fs::write(
             out.join(format!("{ARTIFACT}.sha256")),
@@ -505,6 +532,17 @@ mod tests {
         .unwrap();
         (file, sha256, Cache::at(dir.join("cache")).unwrap())
     }
+
+    /// A real `.tar.gz` of one 5 byte file `tool`: 95 bytes, 1 entry.
+    const TOOL_TAR_GZ: [u8; 95] = [
+        0x1f, 0x8b, 0x8, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2, 0xff, 0xed, 0xcd, 0xbb, 0x9, 0x80, 0x40,
+        0x14, 0x4, 0xc0, 0x57, 0x8a, 0x25, 0xf8, 0x3b, 0xad, 0xc7, 0x5c, 0x10, 0xfc, 0xf4, 0xef,
+        0x69, 0x24, 0xe6, 0xa, 0xe2, 0x4c, 0xb2, 0xcb, 0x26, 0xbb, 0x4e, 0xd3, 0x18, 0xf, 0x2b,
+        0xb3, 0x3e, 0xa5, 0x33, 0xb3, 0x7b, 0x66, 0xe9, 0xd2, 0x8f, 0xbd, 0xeb, 0xda, 0x26, 0x8a,
+        0x32, 0x5e, 0xb0, 0x2d, 0xeb, 0x30, 0xe7, 0xcb, 0xf8, 0xa7, 0xaa, 0x6e, 0xda, 0x14, 0x0,
+        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x7c, 0xcd, 0xe, 0x41, 0x10, 0x91, 0x6f, 0x0, 0x28,
+        0x0, 0x0,
+    ];
 
     fn file_options(file: &Path, url: &str) -> Options {
         Options {
@@ -533,7 +571,7 @@ mod tests {
         assert_eq!(
             toml::to_string(&pinned).unwrap(),
             format!(
-                "format = \"tar_gz\"\nurls = [\"{RELEASE_URL}\"]\nsha256 = \"{sha256}\"\nsize = 9\n"
+                "format = \"tar_gz\"\nurls = [\"{RELEASE_URL}\"]\nsha256 = \"{sha256}\"\nsize = 95\nunpacked_size = 5\nentry_count = 1\n"
             )
         );
         assert_eq!(cache_entries(&cache), std::slice::from_ref(&sha256));
@@ -681,24 +719,28 @@ mod tests {
             urls: vec!["https://a.example/x.tar.gz".to_owned()],
             sha256: "a".repeat(64),
             size: 42,
+            unpacked_size: Some(100),
+            entry_count: Some(7),
             min_os: Some("11.0".to_owned()),
         };
         assert_eq!(
             toml::to_string(&pinned).unwrap(),
             format!(
-                "format = \"tar_gz\"\nurls = [\"https://a.example/x.tar.gz\"]\nsha256 = \"{}\"\nsize = 42\nmin_os = \"11.0\"\n",
+                "format = \"tar_gz\"\nurls = [\"https://a.example/x.tar.gz\"]\nsha256 = \"{}\"\nsize = 42\nunpacked_size = 100\nentry_count = 7\nmin_os = \"11.0\"\n",
                 "a".repeat(64)
             )
         );
     }
 
     #[test]
-    fn an_unknown_download_prints_neither_format_nor_min_os() {
+    fn an_unknown_download_prints_no_format_scan_values_or_min_os() {
         let pinned = Pinned {
             format: FileKind::Other.format(),
             urls: vec!["https://a.example/x.tar.zst".to_owned()],
             sha256: "a".repeat(64),
             size: 42,
+            unpacked_size: None,
+            entry_count: None,
             min_os: None,
         };
         assert_eq!(

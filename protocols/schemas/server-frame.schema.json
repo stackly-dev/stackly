@@ -111,6 +111,141 @@
         "kind"
       ]
     },
+    "ArtifactFormat": {
+      "description": "The archive format of an artifact. Open.",
+      "oneOf": [
+        {
+          "description": "A gzip compressed tar archive.",
+          "type": "string",
+          "const": "tar_gz"
+        },
+        {
+          "description": "A zip archive.",
+          "type": "string",
+          "const": "zip"
+        },
+        {
+          "description": "A single executable.",
+          "type": "string",
+          "const": "binary"
+        },
+        {
+          "description": "A format this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ArtifactInfo": {
+      "description": "What the registry knows about the artifact a runtime came from.",
+      "type": "object",
+      "properties": {
+        "build": {
+          "description": "The build number.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "catalogId": {
+          "description": "The artifact ID from `versions.json`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dependencies": {
+          "description": "Its libraries.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DependencyInfo"
+          }
+        },
+        "format": {
+          "description": "The archive format.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactFormat"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "minimumOs": {
+          "description": "The oldest macOS it runs on.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "sha256": {
+          "description": "The SHA-256 of the archive.",
+          "type": "string"
+        },
+        "signature": {
+          "description": "Its signatures.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SignatureInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "size": {
+          "description": "The archive size in bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "source": {
+          "description": "Where it was downloaded from.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "unpackedSize": {
+          "description": "The unpacked size in bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "warnings": {
+          "description": "What validation noted without failing.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "sha256"
+      ]
+    },
     "ArtifactStatus": {
       "description": "The status of an artifact in `versions.json`. Open.",
       "oneOf": [
@@ -630,6 +765,147 @@
         }
       ]
     },
+    "CompatibilityRecordView": {
+      "description": "One compatibility record with the artifact it belongs to (PRD section\n32.2).",
+      "type": "object",
+      "properties": {
+        "arch": {
+          "description": "The architecture of the host.",
+          "$ref": "#/$defs/TargetArch"
+        },
+        "checks": {
+          "description": "The checks that ran and passed.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "description": "Where the evidence is, relative to `evidence/`.",
+          "type": "string"
+        },
+        "knownLimitations": {
+          "description": "What the record does not cover.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "os": {
+          "description": "The OS of the host.",
+          "$ref": "#/$defs/TargetOs"
+        },
+        "osBuild": {
+          "description": "The OS build of the host, such as `26A428`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "osVersion": {
+          "description": "The OS version of the host, such as `27.0`.",
+          "type": "string"
+        },
+        "providerRevision": {
+          "description": "The package a `provider` record was tested with.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderRevisionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "result": {
+          "description": "How it went.",
+          "$ref": "#/$defs/CompatibilityResult"
+        },
+        "scope": {
+          "description": "What was tested.",
+          "$ref": "#/$defs/CompatibilityScope"
+        },
+        "sha256": {
+          "description": "The SHA-256 of the artifact.",
+          "type": "string"
+        },
+        "sourceUrl": {
+          "description": "Where the artifact was downloaded from.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "summary": {
+          "description": "One line about the run.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "testedAt": {
+          "description": "When it was tested.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "scope",
+        "result",
+        "os",
+        "osVersion",
+        "arch",
+        "testedAt",
+        "evidence",
+        "sha256"
+      ]
+    },
+    "CompatibilityResult": {
+      "description": "The result of a compatibility record. Open.",
+      "oneOf": [
+        {
+          "description": "Every check passed.",
+          "type": "string",
+          "const": "pass"
+        },
+        {
+          "description": "A check failed.",
+          "type": "string",
+          "const": "fail"
+        },
+        {
+          "description": "A result this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "CompatibilityScope": {
+      "description": "What a compatibility record tested. Open.",
+      "oneOf": [
+        {
+          "description": "The artifact alone ran under a LaunchAgent.",
+          "type": "string",
+          "const": "runtime"
+        },
+        {
+          "description": "A provider package ran against the artifact.",
+          "type": "string",
+          "const": "provider"
+        },
+        {
+          "description": "A scope this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "CountedProgress": {
       "description": "Content of a `counted` progress.",
       "type": "object",
@@ -1099,6 +1375,53 @@
       },
       "required": [
         "reference"
+      ]
+    },
+    "DependencyInfo": {
+      "description": "One library an artifact links.",
+      "type": "object",
+      "properties": {
+        "installName": {
+          "description": "The install name the binaries load it by.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Where it comes from.",
+          "$ref": "#/$defs/DependencyKind"
+        },
+        "license": {
+          "description": "Its license, if known.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The library, such as `libssl.3.dylib`.",
+          "type": "string"
+        },
+        "sourceUrl": {
+          "description": "Where its source is.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "version": {
+          "description": "Its version, if known.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "installName"
       ]
     },
     "DependencyKind": {
@@ -1664,7 +1987,46 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "A runtime changed in a way that raised its revision: an install\ncommitted it, or a later feature changed it (spec 0018). The\nevent's resource is the runtime and its revision the runtime's;\nthere is no payload, so clients fetch it again with `runtime.get`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "runtime.state_changed"
+            }
+          },
+          "required": [
+            "type"
+          ]
         }
+      ]
+    },
+    "ExecutableSignature": {
+      "description": "The signature of one executable.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "The kind of signature.",
+          "$ref": "#/$defs/SignatureKindDto"
+        },
+        "path": {
+          "description": "The path inside the runtime folder.",
+          "type": "string"
+        },
+        "teamId": {
+          "description": "The Apple team ID of a Developer ID signature.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "path",
+        "kind"
       ]
     },
     "FieldError": {
@@ -1948,6 +2310,83 @@
         "stopped"
       ]
     },
+    "InstallModeKind": {
+      "description": "How a runtime was installed. Open.",
+      "oneOf": [
+        {
+          "description": "Stackly downloaded and installed it.",
+          "type": "string",
+          "const": "managed"
+        },
+        {
+          "description": "Found on the system and registered.",
+          "type": "string",
+          "const": "external"
+        },
+        {
+          "description": "A mode this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "InstallOutcome": {
+      "description": "What `runtime.install` did.",
+      "oneOf": [
+        {
+          "description": "An `install_runtime` operation started, or an earlier request with\nthe same idempotency key started it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/OperationAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "started"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The artifact is installed already; nothing ran.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RuntimeSummary"
+            },
+            "type": {
+              "type": "string",
+              "const": "alreadyInstalled"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
+    "InstallRuntimeReply": {
+      "description": "Reply of `runtime.install`.",
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "description": "What happened.",
+          "$ref": "#/$defs/InstallOutcome"
+        },
+        "resolved": {
+          "description": "The artifact the selector resolved to.",
+          "$ref": "#/$defs/ResolvedArtifact"
+        }
+      },
+      "required": [
+        "resolved",
+        "outcome"
+      ]
+    },
     "InstallVerdict": {
       "description": "The install gate's verdict for one version on this Mac.",
       "type": "object",
@@ -1971,6 +2410,56 @@
       },
       "required": [
         "installable"
+      ]
+    },
+    "InstallingRuntime": {
+      "description": "An install that has not ended.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "The catalog's display name for the software.",
+          "type": "string"
+        },
+        "operationId": {
+          "description": "The `install_runtime` operation; its stage and progress come from\n`operation.get`.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "provider": {
+          "description": "The provider ID.",
+          "type": "string"
+        },
+        "runtimeId": {
+          "description": "The runtime it will create.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "sha256": {
+          "description": "The SHA-256 of the artifact.",
+          "type": "string"
+        },
+        "software": {
+          "description": "The software.",
+          "type": "string"
+        },
+        "target": {
+          "description": "The OS and architecture.",
+          "$ref": "#/$defs/HostTarget"
+        },
+        "version": {
+          "description": "The exact version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "runtimeId",
+        "provider",
+        "software",
+        "displayName",
+        "version",
+        "target",
+        "sha256"
       ]
     },
     "InstanceActionAccepted": {
@@ -3791,6 +4280,29 @@
         "manifestSha256"
       ]
     },
+    "ProviderRevisionRef": {
+      "description": "The provider package a `provider` record was tested with.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The package ID.",
+          "type": "string"
+        },
+        "manifestSha256": {
+          "description": "The SHA-256 of the manifest.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The package revision.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "manifestSha256"
+      ]
+    },
     "ProviderSummary": {
       "description": "One catalog entry as a card or a list row shows it.",
       "type": "object",
@@ -4544,7 +5056,162 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The artifact the selector resolved to, and what happened to it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstallRuntimeReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "runtime.install"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The artifact the selector resolved to.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ResolvedArtifact"
+            },
+            "type": {
+              "type": "string",
+              "const": "runtime.resolve"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One page of runtimes.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RuntimeListPage"
+            },
+            "type": {
+              "type": "string",
+              "const": "runtime.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The runtime.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RuntimeDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "runtime.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
+      ]
+    },
+    "ResolvedArtifact": {
+      "description": "The one artifact a selector resolved to, as `runtime.resolve` and\n`runtime.install` answer it.",
+      "type": "object",
+      "properties": {
+        "artifactId": {
+          "description": "The artifact ID from `versions.json`.",
+          "type": "string"
+        },
+        "format": {
+          "description": "The archive format.",
+          "$ref": "#/$defs/ArtifactFormat"
+        },
+        "line": {
+          "description": "The line, such as `18`.",
+          "type": "string"
+        },
+        "minOs": {
+          "description": "The oldest macOS it runs on, such as `13.0`.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "The provider ID.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "The SHA-256 of the archive, 64 lowercase hex characters.",
+          "type": "string"
+        },
+        "size": {
+          "description": "The archive size in bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "software": {
+          "description": "The software, such as `postgresql`.",
+          "type": "string"
+        },
+        "stable": {
+          "description": "Whether `@stable` selects it.",
+          "type": "boolean"
+        },
+        "support": {
+          "description": "How supported it is on this Mac.",
+          "$ref": "#/$defs/SupportStatus"
+        },
+        "supportReason": {
+          "description": "Why.",
+          "$ref": "#/$defs/SupportReason"
+        },
+        "target": {
+          "description": "The OS and architecture it is built for.",
+          "$ref": "#/$defs/HostTarget"
+        },
+        "unpackedSize": {
+          "description": "The unpacked size in bytes, once `versions.json` records it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "version": {
+          "description": "The exact version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "software",
+        "artifactId",
+        "version",
+        "line",
+        "target",
+        "sha256",
+        "size",
+        "format",
+        "minOs",
+        "stable",
+        "support",
+        "supportReason"
       ]
     },
     "ResourceKind": {
@@ -4650,6 +5317,272 @@
       "required": [
         "reference",
         "value"
+      ]
+    },
+    "RuntimeDetail": {
+      "description": "One runtime with everything `stackly runtime inspect` and the\ninspector show.",
+      "type": "object",
+      "properties": {
+        "artifact": {
+          "description": "The artifact it came from.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "compatibility": {
+          "description": "Its compatibility records, newest first.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CompatibilityRecordView"
+          }
+        },
+        "executables": {
+          "description": "The artifact's executables, relative to the runtime folder.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "path": {
+          "description": "The runtime folder, absolute.",
+          "type": "string"
+        },
+        "summary": {
+          "description": "The row.",
+          "$ref": "#/$defs/RuntimeSummary"
+        }
+      },
+      "required": [
+        "summary",
+        "path"
+      ]
+    },
+    "RuntimeListPage": {
+      "description": "Reply of `runtime.list`.",
+      "type": "object",
+      "properties": {
+        "installing": {
+          "description": "The installs that have not ended; only on the first page.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/InstallingRuntime"
+          }
+        },
+        "items": {
+          "description": "The runtimes on this page.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RuntimeSummary"
+          }
+        },
+        "next": {
+          "description": "The cursor of the next page, to send back as `after`; null on the\nlast page.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        }
+      }
+    },
+    "RuntimeState": {
+      "description": "The state of a runtime. Open.",
+      "oneOf": [
+        {
+          "description": "Removed.",
+          "type": "string",
+          "const": "absent"
+        },
+        {
+          "description": "The selector resolved to an exact identity.",
+          "type": "string",
+          "const": "resolving"
+        },
+        {
+          "description": "The artifact is downloading.",
+          "type": "string",
+          "const": "downloading"
+        },
+        {
+          "description": "The artifact is being verified.",
+          "type": "string",
+          "const": "verifying"
+        },
+        {
+          "description": "The files are being installed.",
+          "type": "string",
+          "const": "installing"
+        },
+        {
+          "description": "Ready to use.",
+          "type": "string",
+          "const": "installed"
+        },
+        {
+          "description": "A step before `installed` failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "The installed files are gone.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "The installed files changed.",
+          "type": "string",
+          "const": "drifted"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "RuntimeSummary": {
+      "description": "One runtime as a list row or a card shows it.",
+      "type": "object",
+      "properties": {
+        "artifactSha256": {
+          "description": "The SHA-256 of the artifact it came from; null for an external\nruntime.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dependentRuntimes": {
+          "description": "The runtimes that depend on it.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "displayName": {
+          "description": "The catalog's display name for the software; the software name when\nthe catalog has none.",
+          "type": "string"
+        },
+        "id": {
+          "description": "The runtime.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "installMode": {
+          "description": "How it was installed.",
+          "$ref": "#/$defs/InstallModeKind"
+        },
+        "installedAt": {
+          "description": "When it was installed.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "lastVerifiedAt": {
+          "description": "When it was last verified.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "line": {
+          "description": "The line.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "Its revision, raised by every change.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "software": {
+          "description": "The software, such as `postgresql`.",
+          "type": "string"
+        },
+        "state": {
+          "description": "Its state.",
+          "$ref": "#/$defs/RuntimeState"
+        },
+        "support": {
+          "description": "How supported it is on this Mac.",
+          "$ref": "#/$defs/SupportStatus"
+        },
+        "supportReason": {
+          "description": "Why.",
+          "$ref": "#/$defs/SupportReason"
+        },
+        "target": {
+          "description": "The OS and architecture.",
+          "$ref": "#/$defs/HostTarget"
+        },
+        "usedBy": {
+          "description": "The instances that use it, retained ones included.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RuntimeUser"
+          }
+        },
+        "version": {
+          "description": "The exact version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "software",
+        "displayName",
+        "version",
+        "line",
+        "target",
+        "installMode",
+        "state",
+        "support",
+        "supportReason"
+      ]
+    },
+    "RuntimeUser": {
+      "description": "An instance that uses a runtime.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        },
+        "retained": {
+          "description": "True for a removed instance whose data is kept.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name",
+        "retained"
       ]
     },
     "SecretChangeStatus": {
@@ -5182,6 +6115,95 @@
         "reason"
       ]
     },
+    "SignatureInfo": {
+      "description": "What the install found and did about signatures.",
+      "type": "object",
+      "properties": {
+        "adhocSignedAtInstall": {
+          "description": "True when the install signed files ad hoc.",
+          "type": "boolean"
+        },
+        "executables": {
+          "description": "The signature of each executable.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ExecutableSignature"
+          }
+        },
+        "machOFiles": {
+          "description": "How many Mach-O files the runtime holds.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "policy": {
+          "description": "The policy the artifact asked for.",
+          "$ref": "#/$defs/SigningPolicy"
+        }
+      },
+      "required": [
+        "policy",
+        "adhocSignedAtInstall",
+        "machOFiles"
+      ]
+    },
+    "SignatureKindDto": {
+      "description": "The kind of signature an executable carries. Open.",
+      "oneOf": [
+        {
+          "description": "Signed with a Developer ID.",
+          "type": "string",
+          "const": "developer_id"
+        },
+        {
+          "description": "Signed ad hoc.",
+          "type": "string",
+          "const": "adhoc"
+        },
+        {
+          "description": "Signed by the linker.",
+          "type": "string",
+          "const": "linker_signed"
+        },
+        {
+          "description": "Another signature, such as Apple's.",
+          "type": "string",
+          "const": "other"
+        },
+        {
+          "description": "Not signed.",
+          "type": "string",
+          "const": "unsigned"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SigningPolicy": {
+      "description": "How an artifact is signed at install. Open.",
+      "oneOf": [
+        {
+          "description": "Keep a valid signature, or sign ad hoc when a file has none.",
+          "type": "string",
+          "const": "keep_or_adhoc"
+        },
+        {
+          "description": "Always sign every Mach-O file ad hoc.",
+          "type": "string",
+          "const": "adhoc_pipeline"
+        },
+        {
+          "description": "A policy this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "StepState": {
       "description": "The state of one step. Open.",
       "oneOf": [
@@ -5335,6 +6357,21 @@
           "description": "The provider package failed validation.",
           "type": "string",
           "const": "package_invalid"
+        },
+        {
+          "description": "The artifact needs a newer macOS than this Mac runs (spec 0018).",
+          "type": "string",
+          "const": "requires_newer_os"
+        },
+        {
+          "description": "A passing provider record for this provider revision, macOS major,\nand architecture decides (spec 0018).",
+          "type": "string",
+          "const": "provider_tested"
+        },
+        {
+          "description": "A passing runtime record for this macOS major and architecture\ndecides (spec 0018).",
+          "type": "string",
+          "const": "runtime_tested"
         },
         {
           "description": "A reason this build does not know. The daemon never sends it.",

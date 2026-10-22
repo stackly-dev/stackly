@@ -133,7 +133,7 @@ pub fn health(state: Option<&CatalogState>) -> SubsystemHealth {
 }
 
 /// The loaded catalog, or the error a catalog method answers without one.
-fn loaded(core: &DaemonCore) -> Result<Arc<Catalog>, Box<ErrorBody>> {
+pub(crate) fn loaded(core: &DaemonCore) -> Result<Arc<Catalog>, Box<ErrorBody>> {
     match core.catalog().as_deref() {
         None => Err(Box::new(
             ErrorBody::new(&daemon::STARTING, "the provider catalog is still loading")

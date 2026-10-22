@@ -35,7 +35,7 @@ fn inspect_writes_the_identity_capabilities_matrix_and_artifacts() {
     assert_eq!(text.stderr, "");
     golden::check("provider_inspect_nats.txt", &text.stdout);
     for needle in [
-        "sha256:eb02876b69a4a0bb1abd4393a482903e118afba77a3eb5ef25d7ba3d07242363",
+        "sha256:d115e2ad7cd0658bb40735bdb7808a8c4ffa1323dacec49f931e0a573f1a656d",
         "lifecycle, readiness probe, logs",
         "Reload without restart  not supported",
         "6.8 MB",

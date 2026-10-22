@@ -602,6 +602,144 @@ public struct ArtifactDependency: Codable, Sendable, Equatable {
 	}
 }
 
+/// The archive format of an artifact. Open.
+public enum ArtifactFormat: String, Codable, Sendable, Equatable {
+	/// A gzip compressed tar archive.
+	case tarGz = "tar_gz"
+	/// A zip archive.
+	case zip
+	/// A single executable.
+	case binary
+	/// A format this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// How an artifact is signed at install. Open.
+public enum SigningPolicy: String, Codable, Sendable, Equatable {
+	/// Keep a valid signature, or sign ad hoc when a file has none.
+	case keepOrAdhoc = "keep_or_adhoc"
+	/// Always sign every Mach-O file ad hoc.
+	case adhocPipeline = "adhoc_pipeline"
+	/// A policy this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The kind of signature an executable carries. Open.
+public enum SignatureKindDto: String, Codable, Sendable, Equatable {
+	/// Signed with a Developer ID.
+	case developerId = "developer_id"
+	/// Signed ad hoc.
+	case adhoc
+	/// Signed by the linker.
+	case linkerSigned = "linker_signed"
+	/// Another signature, such as Apple's.
+	case other
+	/// Not signed.
+	case unsigned
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The signature of one executable.
+public struct ExecutableSignature: Codable, Sendable, Equatable {
+	/// The path inside the runtime folder.
+	public let path: String
+	/// The kind of signature.
+	public let kind: SignatureKindDto
+	/// The Apple team ID of a Developer ID signature.
+	public let teamId: String?
+
+	public init(path: String, kind: SignatureKindDto, teamId: String?) {
+		self.path = path
+		self.kind = kind
+		self.teamId = teamId
+	}
+}
+
+/// What the install found and did about signatures.
+public struct SignatureInfo: Codable, Sendable, Equatable {
+	/// The policy the artifact asked for.
+	public let policy: SigningPolicy
+	/// True when the install signed files ad hoc.
+	public let adhocSignedAtInstall: Bool
+	/// How many Mach-O files the runtime holds.
+	public let machOFiles: UInt64
+	/// The signature of each executable.
+	public let executables: [ExecutableSignature]?
+
+	public init(policy: SigningPolicy, adhocSignedAtInstall: Bool, machOFiles: UInt64, executables: [ExecutableSignature]?) {
+		self.policy = policy
+		self.adhocSignedAtInstall = adhocSignedAtInstall
+		self.machOFiles = machOFiles
+		self.executables = executables
+	}
+}
+
+/// One library an artifact links.
+public struct DependencyInfo: Codable, Sendable, Equatable {
+	/// The library, such as `libssl.3.dylib`.
+	public let name: String
+	/// Where it comes from.
+	public let kind: DependencyKind
+	/// The install name the binaries load it by.
+	public let installName: String
+	/// Its version, if known.
+	public let version: String?
+	/// Its license, if known.
+	public let license: String?
+	/// Where its source is.
+	public let sourceUrl: String?
+
+	public init(name: String, kind: DependencyKind, installName: String, version: String?, license: String?, sourceUrl: String?) {
+		self.name = name
+		self.kind = kind
+		self.installName = installName
+		self.version = version
+		self.license = license
+		self.sourceUrl = sourceUrl
+	}
+}
+
+/// What the registry knows about the artifact a runtime came from.
+public struct ArtifactInfo: Codable, Sendable, Equatable {
+	/// The artifact ID from `versions.json`.
+	public let catalogId: String?
+	/// The SHA-256 of the archive.
+	public let sha256: String
+	/// The archive size in bytes.
+	public let size: UInt64?
+	/// The unpacked size in bytes.
+	public let unpackedSize: UInt64?
+	/// The archive format.
+	public let format: ArtifactFormat?
+	/// The oldest macOS it runs on.
+	public let minimumOs: String?
+	/// The build number.
+	public let build: UInt64?
+	/// Where it was downloaded from.
+	public let source: String?
+	/// Its signatures.
+	public let signature: SignatureInfo?
+	/// Its libraries.
+	public let dependencies: [DependencyInfo]?
+	/// What validation noted without failing.
+	public let warnings: [String]?
+
+	public init(catalogId: String?, sha256: String, size: UInt64?, unpackedSize: UInt64?, format: ArtifactFormat?, minimumOs: String?, build: UInt64?, source: String?, signature: SignatureInfo?, dependencies: [DependencyInfo]?, warnings: [String]?) {
+		self.catalogId = catalogId
+		self.sha256 = sha256
+		self.size = size
+		self.unpackedSize = unpackedSize
+		self.format = format
+		self.minimumOs = minimumOs
+		self.build = build
+		self.source = source
+		self.signature = signature
+		self.dependencies = dependencies
+		self.warnings = warnings
+	}
+}
+
 /// Params of `operation.cancel`.
 public struct CancelOperationParams: Codable, Sendable, Equatable {
 	/// The operation to cancel.
@@ -963,6 +1101,14 @@ public enum SupportReason: String, Codable, Sendable, Equatable {
 	case providerPlanned = "provider_planned"
 	/// The provider package failed validation.
 	case packageInvalid = "package_invalid"
+	/// The artifact needs a newer macOS than this Mac runs (spec 0018).
+	case requiresNewerOs = "requires_newer_os"
+	/// A passing provider record for this provider revision, macOS major,
+	/// and architecture decides (spec 0018).
+	case providerTested = "provider_tested"
+	/// A passing runtime record for this macOS major and architecture
+	/// decides (spec 0018).
+	case runtimeTested = "runtime_tested"
 	/// A reason this build does not know. The daemon never sends it.
 	case unrecognized
 }
@@ -1047,6 +1193,92 @@ public struct ClientInfo: Codable, Sendable, Equatable {
 		self.version = version
 		self.pid = pid
 		self.interactive = interactive
+	}
+}
+
+/// What a compatibility record tested. Open.
+public enum CompatibilityScope: String, Codable, Sendable, Equatable {
+	/// The artifact alone ran under a LaunchAgent.
+	case runtime
+	/// A provider package ran against the artifact.
+	case provider
+	/// A scope this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The result of a compatibility record. Open.
+public enum CompatibilityResult: String, Codable, Sendable, Equatable {
+	/// Every check passed.
+	case pass
+	/// A check failed.
+	case fail
+	/// A result this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The provider package a `provider` record was tested with.
+public struct ProviderRevisionRef: Codable, Sendable, Equatable {
+	/// The package ID.
+	public let id: String
+	/// The package revision.
+	public let revision: String
+	/// The SHA-256 of the manifest.
+	public let manifestSha256: String
+
+	public init(id: String, revision: String, manifestSha256: String) {
+		self.id = id
+		self.revision = revision
+		self.manifestSha256 = manifestSha256
+	}
+}
+
+/// One compatibility record with the artifact it belongs to (PRD section
+/// 32.2).
+public struct CompatibilityRecordView: Codable, Sendable, Equatable {
+	/// What was tested.
+	public let scope: CompatibilityScope
+	/// How it went.
+	public let result: CompatibilityResult
+	/// The package a `provider` record was tested with.
+	public let providerRevision: ProviderRevisionRef?
+	/// The OS of the host.
+	public let os: TargetOs
+	/// The OS version of the host, such as `27.0`.
+	public let osVersion: String
+	/// The OS build of the host, such as `26A428`.
+	public let osBuild: String?
+	/// The architecture of the host.
+	public let arch: TargetArch
+	/// The checks that ran and passed.
+	public let checks: [String]?
+	/// What the record does not cover.
+	public let knownLimitations: [String]?
+	/// One line about the run.
+	public let summary: String?
+	/// When it was tested.
+	public let testedAt: Date
+	/// Where the evidence is, relative to `evidence/`.
+	public let evidence: String
+	/// Where the artifact was downloaded from.
+	public let sourceUrl: String?
+	/// The SHA-256 of the artifact.
+	public let sha256: String
+
+	public init(scope: CompatibilityScope, result: CompatibilityResult, providerRevision: ProviderRevisionRef?, os: TargetOs, osVersion: String, osBuild: String?, arch: TargetArch, checks: [String]?, knownLimitations: [String]?, summary: String?, testedAt: Date, evidence: String, sourceUrl: String?, sha256: String) {
+		self.scope = scope
+		self.result = result
+		self.providerRevision = providerRevision
+		self.os = os
+		self.osVersion = osVersion
+		self.osBuild = osBuild
+		self.arch = arch
+		self.checks = checks
+		self.knownLimitations = knownLimitations
+		self.summary = summary
+		self.testedAt = testedAt
+		self.evidence = evidence
+		self.sourceUrl = sourceUrl
+		self.sha256 = sha256
 	}
 }
 
@@ -1706,6 +1938,11 @@ public enum EventKind: Codable, Sendable, Equatable {
 	/// processes found after a daemon start (spec 0010). A daemon event:
 	/// no resource, no revision.
 	case daemonReconciling(DaemonReconciling)
+	/// A runtime changed in a way that raised its revision: an install
+	/// committed it, or a later feature changed it (spec 0018). The
+	/// event's resource is the runtime and its revision the runtime's;
+	/// there is no payload, so clients fetch it again with `runtime.get`.
+	case runtimeStateChanged
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case eventsGap = "events.gap",
@@ -1716,7 +1953,8 @@ public enum EventKind: Codable, Sendable, Equatable {
 			instanceStateChanged = "instance.state_changed",
 			instanceHealthChanged = "instance.health_changed",
 			instanceRemoved = "instance.removed",
-			daemonReconciling = "daemon.reconciling"
+			daemonReconciling = "daemon.reconciling",
+			runtimeStateChanged = "runtime.state_changed"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -1772,6 +2010,9 @@ public enum EventKind: Codable, Sendable, Equatable {
 					self = .daemonReconciling(content)
 					return
 				}
+			case .runtimeStateChanged:
+				self = .runtimeStateChanged
+				return
 			}
 		}
 		throw DecodingError.typeMismatch(EventKind.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EventKind"))
@@ -1807,6 +2048,8 @@ public enum EventKind: Codable, Sendable, Equatable {
 		case .daemonReconciling(let content):
 			try container.encode(CodingKeys.daemonReconciling, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .runtimeStateChanged:
+			try container.encode(CodingKeys.runtimeStateChanged, forKey: .type)
 		}
 	}
 }
@@ -1932,6 +2175,16 @@ public struct GetProviderParams: Codable, Sendable, Equatable {
 
 	public init(provider: String) {
 		self.provider = provider
+	}
+}
+
+/// Params of `runtime.get`.
+public struct GetRuntimeParams: Codable, Sendable, Equatable {
+	/// The runtime.
+	public let runtimeId: UUID
+
+	public init(runtimeId: UUID) {
+		self.runtimeId = runtimeId
 	}
 }
 
@@ -2105,6 +2358,170 @@ public struct IdentityBlocker: Codable, Sendable, Equatable {
 	public init(evidence: IdentityEvidence, observedAt: Date) {
 		self.evidence = evidence
 		self.observedAt = observedAt
+	}
+}
+
+/// Params of `runtime.install` and `runtime.resolve`.
+public struct InstallRuntimeParams: Codable, Sendable, Equatable {
+	/// The provider ID, such as `official/postgresql`.
+	public let provider: String
+	/// What to install: `stable`, a line such as `18`, an exact version
+	/// such as `18.6`, or `sha256:<64 hex>`. 1 to 80 bytes of letters,
+	/// digits, and `.`, `-`, `_`, `+`, `:`.
+	public let selector: String
+	/// The SHA-256 the person saw when they chose, 64 lowercase hex
+	/// characters. A resolution to another artifact is refused with
+	/// `runtime.selector_changed`.
+	public let expectedSha256: String?
+
+	public init(provider: String, selector: String, expectedSha256: String?) {
+		self.provider = provider
+		self.selector = selector
+		self.expectedSha256 = expectedSha256
+	}
+}
+
+/// The one artifact a selector resolved to, as `runtime.resolve` and
+/// `runtime.install` answer it.
+public struct ResolvedArtifact: Codable, Sendable, Equatable {
+	/// The provider ID.
+	public let provider: String
+	/// The software, such as `postgresql`.
+	public let software: String
+	/// The artifact ID from `versions.json`.
+	public let artifactId: String
+	/// The exact version.
+	public let version: String
+	/// The line, such as `18`.
+	public let line: String
+	/// The OS and architecture it is built for.
+	public let target: HostTarget
+	/// The SHA-256 of the archive, 64 lowercase hex characters.
+	public let sha256: String
+	/// The archive size in bytes.
+	public let size: UInt64
+	/// The unpacked size in bytes, once `versions.json` records it.
+	public let unpackedSize: UInt64?
+	/// The archive format.
+	public let format: ArtifactFormat
+	/// The oldest macOS it runs on, such as `13.0`.
+	public let minOs: String
+	/// Whether `@stable` selects it.
+	public let stable: Bool
+	/// How supported it is on this Mac.
+	public let support: SupportStatus
+	/// Why.
+	public let supportReason: SupportReason
+
+	public init(provider: String, software: String, artifactId: String, version: String, line: String, target: HostTarget, sha256: String, size: UInt64, unpackedSize: UInt64?, format: ArtifactFormat, minOs: String, stable: Bool, support: SupportStatus, supportReason: SupportReason) {
+		self.provider = provider
+		self.software = software
+		self.artifactId = artifactId
+		self.version = version
+		self.line = line
+		self.target = target
+		self.sha256 = sha256
+		self.size = size
+		self.unpackedSize = unpackedSize
+		self.format = format
+		self.minOs = minOs
+		self.stable = stable
+		self.support = support
+		self.supportReason = supportReason
+	}
+}
+
+/// What `runtime.install` did.
+public enum InstallOutcome: Codable, Sendable, Equatable {
+	/// An `install_runtime` operation started, or an earlier request with
+	/// the same idempotency key started it.
+	case started(OperationAccepted)
+	/// The artifact is installed already; nothing ran.
+	case alreadyInstalled(RuntimeSummary)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case started,
+			alreadyInstalled
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .started:
+				if let content = try? container.decode(OperationAccepted.self, forKey: .content) {
+					self = .started(content)
+					return
+				}
+			case .alreadyInstalled:
+				if let content = try? container.decode(RuntimeSummary.self, forKey: .content) {
+					self = .alreadyInstalled(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(InstallOutcome.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for InstallOutcome"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .started(let content):
+			try container.encode(CodingKeys.started, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .alreadyInstalled(let content):
+			try container.encode(CodingKeys.alreadyInstalled, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// Reply of `runtime.install`.
+public struct InstallRuntimeReply: Codable, Sendable, Equatable {
+	/// The artifact the selector resolved to.
+	public let resolved: ResolvedArtifact
+	/// What happened.
+	public let outcome: InstallOutcome
+
+	public init(resolved: ResolvedArtifact, outcome: InstallOutcome) {
+		self.resolved = resolved
+		self.outcome = outcome
+	}
+}
+
+/// An install that has not ended.
+public struct InstallingRuntime: Codable, Sendable, Equatable {
+	/// The `install_runtime` operation; its stage and progress come from
+	/// `operation.get`.
+	public let operationId: UUID
+	/// The runtime it will create.
+	public let runtimeId: UUID
+	/// The provider ID.
+	public let provider: String
+	/// The software.
+	public let software: String
+	/// The catalog's display name for the software.
+	public let displayName: String
+	/// The exact version.
+	public let version: String
+	/// The OS and architecture.
+	public let target: HostTarget
+	/// The SHA-256 of the artifact.
+	public let sha256: String
+
+	public init(operationId: UUID, runtimeId: UUID, provider: String, software: String, displayName: String, version: String, target: HostTarget, sha256: String) {
+		self.operationId = operationId
+		self.runtimeId = runtimeId
+		self.provider = provider
+		self.software = software
+		self.displayName = displayName
+		self.version = version
+		self.target = target
+		self.sha256 = sha256
 	}
 }
 
@@ -2723,6 +3140,19 @@ public struct ListProvidersReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `runtime.list`.
+public struct ListRuntimesParams: Codable, Sendable, Equatable {
+	/// Most runtimes on the page, 1 to 200; absent means 100.
+	public let limit: UInt64?
+	/// The `next` cursor of the previous page, sent back unchanged.
+	public let after: UUID?
+
+	public init(limit: UInt64?, after: UUID?) {
+		self.limit = limit
+		self.after = after
+	}
+}
+
 /// Who owns a secret reference.
 public enum SecretOwnerKind: String, Codable, Sendable, Equatable {
 	/// An instance.
@@ -3106,6 +3536,15 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceList(ListInstancesParams)
 	/// The space left on the volume that holds the data root.
 	case storageGetCapacity
+	/// Resolves a selector and starts the operation that installs the
+	/// artifact, or answers that it is installed already.
+	case runtimeInstall(InstallRuntimeParams)
+	/// Resolves a selector to one artifact without installing it.
+	case runtimeResolve(InstallRuntimeParams)
+	/// One page of runtimes, with the installs that have not ended.
+	case runtimeList(ListRuntimesParams)
+	/// One runtime in detail.
+	case runtimeGet(GetRuntimeParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -3133,7 +3572,11 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceStop = "instance.stop",
 			instanceGet = "instance.get",
 			instanceList = "instance.list",
-			storageGetCapacity = "storage.get_capacity"
+			storageGetCapacity = "storage.get_capacity",
+			runtimeInstall = "runtime.install",
+			runtimeResolve = "runtime.resolve",
+			runtimeList = "runtime.list",
+			runtimeGet = "runtime.get"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -3262,6 +3705,26 @@ public enum Call: Codable, Sendable, Equatable {
 			case .storageGetCapacity:
 				self = .storageGetCapacity
 				return
+			case .runtimeInstall:
+				if let content = try? container.decode(InstallRuntimeParams.self, forKey: .content) {
+					self = .runtimeInstall(content)
+					return
+				}
+			case .runtimeResolve:
+				if let content = try? container.decode(InstallRuntimeParams.self, forKey: .content) {
+					self = .runtimeResolve(content)
+					return
+				}
+			case .runtimeList:
+				if let content = try? container.decode(ListRuntimesParams.self, forKey: .content) {
+					self = .runtimeList(content)
+					return
+				}
+			case .runtimeGet:
+				if let content = try? container.decode(GetRuntimeParams.self, forKey: .content) {
+					self = .runtimeGet(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -3342,6 +3805,18 @@ public enum Call: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .storageGetCapacity:
 			try container.encode(CodingKeys.storageGetCapacity, forKey: .type)
+		case .runtimeInstall(let content):
+			try container.encode(CodingKeys.runtimeInstall, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .runtimeResolve(let content):
+			try container.encode(CodingKeys.runtimeResolve, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .runtimeList(let content):
+			try container.encode(CodingKeys.runtimeList, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .runtimeGet(let content):
+			try container.encode(CodingKeys.runtimeGet, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -3419,6 +3894,14 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceList(InstancePage)
 	/// The space left, read now.
 	case storageGetCapacity(CapacityReport)
+	/// The artifact the selector resolved to, and what happened to it.
+	case runtimeInstall(InstallRuntimeReply)
+	/// The artifact the selector resolved to.
+	case runtimeResolve(ResolvedArtifact)
+	/// One page of runtimes.
+	case runtimeList(RuntimeListPage)
+	/// The runtime.
+	case runtimeGet(RuntimeDetail)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -3446,7 +3929,11 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceStop = "instance.stop",
 			instanceGet = "instance.get",
 			instanceList = "instance.list",
-			storageGetCapacity = "storage.get_capacity"
+			storageGetCapacity = "storage.get_capacity",
+			runtimeInstall = "runtime.install",
+			runtimeResolve = "runtime.resolve",
+			runtimeList = "runtime.list",
+			runtimeGet = "runtime.get"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -3585,6 +4072,26 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .storageGetCapacity(content)
 					return
 				}
+			case .runtimeInstall:
+				if let content = try? container.decode(InstallRuntimeReply.self, forKey: .content) {
+					self = .runtimeInstall(content)
+					return
+				}
+			case .runtimeResolve:
+				if let content = try? container.decode(ResolvedArtifact.self, forKey: .content) {
+					self = .runtimeResolve(content)
+					return
+				}
+			case .runtimeList:
+				if let content = try? container.decode(RuntimeListPage.self, forKey: .content) {
+					self = .runtimeList(content)
+					return
+				}
+			case .runtimeGet:
+				if let content = try? container.decode(RuntimeDetail.self, forKey: .content) {
+					self = .runtimeGet(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -3670,6 +4177,18 @@ public enum Reply: Codable, Sendable, Equatable {
 		case .storageGetCapacity(let content):
 			try container.encode(CodingKeys.storageGetCapacity, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .runtimeInstall(let content):
+			try container.encode(CodingKeys.runtimeInstall, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .runtimeResolve(let content):
+			try container.encode(CodingKeys.runtimeResolve, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .runtimeList(let content):
+			try container.encode(CodingKeys.runtimeList, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .runtimeGet(let content):
+			try container.encode(CodingKeys.runtimeGet, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -3735,6 +4254,153 @@ public struct RevealSecretReply: Codable, Sendable, Equatable {
 	public init(reference: String, value: SecretText) {
 		self.reference = reference
 		self.value = value
+	}
+}
+
+/// How a runtime was installed. Open.
+public enum InstallModeKind: String, Codable, Sendable, Equatable {
+	/// Stackly downloaded and installed it.
+	case managed
+	/// Found on the system and registered.
+	case external
+	/// A mode this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The state of a runtime. Open.
+public enum RuntimeState: String, Codable, Sendable, Equatable {
+	/// Removed.
+	case absent
+	/// The selector resolved to an exact identity.
+	case resolving
+	/// The artifact is downloading.
+	case downloading
+	/// The artifact is being verified.
+	case verifying
+	/// The files are being installed.
+	case installing
+	/// Ready to use.
+	case installed
+	/// A step before `installed` failed.
+	case failed
+	/// The installed files are gone.
+	case missing
+	/// The installed files changed.
+	case drifted
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// An instance that uses a runtime.
+public struct RuntimeUser: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+	/// True for a removed instance whose data is kept.
+	public let retained: Bool
+
+	public init(instanceId: UUID, name: String, retained: Bool) {
+		self.instanceId = instanceId
+		self.name = name
+		self.retained = retained
+	}
+}
+
+/// One runtime as a list row or a card shows it.
+public struct RuntimeSummary: Codable, Sendable, Equatable {
+	/// The runtime.
+	public let id: UUID
+	/// Its revision, raised by every change.
+	public let revision: UInt64
+	/// The software, such as `postgresql`.
+	public let software: String
+	/// The catalog's display name for the software; the software name when
+	/// the catalog has none.
+	public let displayName: String
+	/// The exact version.
+	public let version: String
+	/// The line.
+	public let line: String
+	/// The OS and architecture.
+	public let target: HostTarget
+	/// How it was installed.
+	public let installMode: InstallModeKind
+	/// Its state.
+	public let state: RuntimeState
+	/// The SHA-256 of the artifact it came from; null for an external
+	/// runtime.
+	public let artifactSha256: String?
+	/// When it was installed.
+	public let installedAt: Date?
+	/// When it was last verified.
+	public let lastVerifiedAt: Date?
+	/// How supported it is on this Mac.
+	public let support: SupportStatus
+	/// Why.
+	public let supportReason: SupportReason
+	/// The instances that use it, retained ones included.
+	public let usedBy: [RuntimeUser]?
+	/// The runtimes that depend on it.
+	public let dependentRuntimes: [UUID]?
+
+	public init(id: UUID, revision: UInt64, software: String, displayName: String, version: String, line: String, target: HostTarget, installMode: InstallModeKind, state: RuntimeState, artifactSha256: String?, installedAt: Date?, lastVerifiedAt: Date?, support: SupportStatus, supportReason: SupportReason, usedBy: [RuntimeUser]?, dependentRuntimes: [UUID]?) {
+		self.id = id
+		self.revision = revision
+		self.software = software
+		self.displayName = displayName
+		self.version = version
+		self.line = line
+		self.target = target
+		self.installMode = installMode
+		self.state = state
+		self.artifactSha256 = artifactSha256
+		self.installedAt = installedAt
+		self.lastVerifiedAt = lastVerifiedAt
+		self.support = support
+		self.supportReason = supportReason
+		self.usedBy = usedBy
+		self.dependentRuntimes = dependentRuntimes
+	}
+}
+
+/// One runtime with everything `stackly runtime inspect` and the
+/// inspector show.
+public struct RuntimeDetail: Codable, Sendable, Equatable {
+	/// The row.
+	public let summary: RuntimeSummary
+	/// The runtime folder, absolute.
+	public let path: String
+	/// The artifact it came from.
+	public let artifact: ArtifactInfo?
+	/// The artifact's executables, relative to the runtime folder.
+	public let executables: [String]?
+	/// Its compatibility records, newest first.
+	public let compatibility: [CompatibilityRecordView]?
+
+	public init(summary: RuntimeSummary, path: String, artifact: ArtifactInfo?, executables: [String]?, compatibility: [CompatibilityRecordView]?) {
+		self.summary = summary
+		self.path = path
+		self.artifact = artifact
+		self.executables = executables
+		self.compatibility = compatibility
+	}
+}
+
+/// Reply of `runtime.list`.
+public struct RuntimeListPage: Codable, Sendable, Equatable {
+	/// The runtimes on this page.
+	public let items: [RuntimeSummary]?
+	/// The cursor of the next page, to send back as `after`; null on the
+	/// last page.
+	public let next: UUID?
+	/// The installs that have not ended; only on the first page.
+	public let installing: [InstallingRuntime]?
+
+	public init(items: [RuntimeSummary]?, next: UUID?, installing: [InstallingRuntime]?) {
+		self.items = items
+		self.next = next
+		self.installing = installing
 	}
 }
 

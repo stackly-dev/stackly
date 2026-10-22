@@ -474,6 +474,14 @@ pub enum SupportReason {
     ProviderPlanned,
     /// The provider package failed validation.
     PackageInvalid,
+    /// The artifact needs a newer macOS than this Mac runs (spec 0018).
+    RequiresNewerOs,
+    /// A passing provider record for this provider revision, macOS major,
+    /// and architecture decides (spec 0018).
+    ProviderTested,
+    /// A passing runtime record for this macOS major and architecture
+    /// decides (spec 0018).
+    RuntimeTested,
     /// A reason this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,

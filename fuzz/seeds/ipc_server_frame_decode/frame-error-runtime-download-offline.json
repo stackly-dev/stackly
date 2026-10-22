@@ -1,0 +1,31 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000806",
+    "error": {
+      "code": "runtime.download_offline",
+      "category": "unavailable",
+      "message": "no network and no cached download of postgresql-18.6-r2-macos-aarch64",
+      "retryable": false,
+      "resource": {
+        "kind": "runtime",
+        "id": "0192f3a6-0000-7000-8000-0000000000a1"
+      },
+      "fields": [],
+      "hint": "Connect to the internet and try again. Stackly keeps any partial download.",
+      "details": [
+        {
+          "key": "artifact",
+          "value": "postgresql-18.6-r2-macos-aarch64"
+        },
+        {
+          "key": "hosts",
+          "value": "github.com"
+        }
+      ],
+      "operationId": "0192f3a6-0000-7000-8000-0000000000b1",
+      "rule": null,
+      "items": []
+    }
+  }
+}

@@ -1021,6 +1021,99 @@
       "langs": [
         "rust"
       ]
+    },
+    {
+      "file": "request-runtime-install.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-runtime-resolve.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-runtime-list.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-runtime-get.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-runtime-install-selector.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-runtime-list-limit.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-runtime-install-started.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-runtime-install-already-installed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-runtime-resolve.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-runtime-list.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-runtime-list-last-page.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-runtime-get.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-runtime-get-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-runtime-resolve-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-event-runtime-state-changed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-runtime-selector-unresolved.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-runtime-download-offline.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
     }
   ]
 }

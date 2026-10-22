@@ -23,6 +23,8 @@
         "traefik"
       ],
       "stable": true,
+      "unpackedSize": 175271061,
+      "entryCount": 3,
       "dependencies": [
         {
           "name": "libSystem.B.dylib",
