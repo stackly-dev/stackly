@@ -554,3 +554,7 @@ Temuan untuk peran lain (dikirim ke lead): test `security` hanya memeriksa jalur
 
 - AC-6, *Batas fitur*, catatan *Template config*, *Security model* (residual risk), dan skenario *Tanpa `trust`* di `index.md`. ID AC, status, keputusan lain, dan langkah build plan tetap.
 - Usulan teks `verify.md` (milik `/develop` dan checker) dan teks evidence test dikirim ke lead.
+
+## Nama cache runtime di harness native (2026-10-22)
+
+Dari *Usulan update spec lain (2026-10-22)* butir 6 spec 0023, dibawa lead scope 02 lewat brief `arc-f15-update-4`. Spec 0018 milestone 5 membangun `stackly_testkit::RuntimeCache` (`open`, `entry(sha256, size)`, dengan cek ukuran dan digest), bukan `runtime_cache::cached_artifact(sha256)` yang diasumsikan di sini, dan harness `apps/daemon/tests/postgresql/harness.rs` masih membawa salinan lokal fungsi lama itu. *Value sourcing* dan *Asumsi pada spec lain* kini menyebut nama yang dibangun, dan langkah 9 (milestone 3, build berikutnya yang menyentuh harness) mengganti salinan lokal itu, dengan ukuran dari `versions.json`. Tidak ada AC atau keputusan yang berubah. Dua catatan fitur 25 di *Preflight data* tidak disentuh.

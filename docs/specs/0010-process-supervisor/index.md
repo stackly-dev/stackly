@@ -427,7 +427,7 @@ Semua `retryable` false kecuali disebut. Pesan bahasa Inggris, huruf kecil di aw
 | `instance.runtime_not_found` | `not_found` | runtime tidak ada | `runtimeId` |
 | `instance.runtime_mismatch` | `conflict` | software runtime berbeda dengan provider | `runtimeSoftware`, `providerSoftware` |
 | `instance.settings_invalid` | `invalid_input` | `SettingsError`; `fields[]` per issue | `omitted` |
-| `instance.endpoint_invalid` | `invalid_input` | endpoint tidak ada di manifest, port di luar 1 sampai 65535, permintaan untuk endpoint `unix`, atau *(fitur 20, spec 0020)* permintaan ganda untuk endpoint yang sama dan konflik antar endpoint draft itu sendiri | `endpoint`, `omitted` |
+| `instance.endpoint_invalid` | `invalid_input` | endpoint tidak ada di manifest, port di luar 1 sampai 65535, permintaan untuk endpoint `unix`, atau *(fitur 20, spec 0020)* permintaan ganda untuk endpoint yang sama dan konflik antar endpoint draft itu sendiri, atau *(spec 0020 langkah 17, 2026-10-22)* endpoint `Auto` yang dibutuhkan initialize paket (dry run init) | `endpoint`, `omitted` |
 | `instance.name_invalid` *(fitur 20, spec 0020)* | `invalid_input` | nama atau nama tampil tidak valid; `fields` | `omitted` |
 | `instance.provider_unavailable` *(fitur 20, spec 0020)* | `unsupported` | entri catalog planned atau invalid | `provider`, `state` |
 | `instance.capability_unsupported` *(fitur 20, spec 0020)* | `unsupported` | `multi_instance` tidak ada dan instance provider itu sudah ada (BR-016) | `capability`, `provider`, `existing` |
@@ -512,6 +512,7 @@ Konstanta restart ada di *Restart policy*. Semuanya ada di `SupervisorConfig` da
 | start | `PlanContext.settings` | `Registry::active_config_revision`, teks `ConfigValuesJson` diurai lalu divalidasi ulang dengan `SettingsSchema::validate` |
 | start | port `Fixed` | `PortRequest::Fixed` di endpoint instance |
 | start | port `Auto` | `bound` tersimpan kalau `PortProbe` bisa bind; kalau tidak, port dari bind `127.0.0.1:0` atau `[::1]:0` di alamat endpoint, lalu `resolve_port` |
+| init (`execute_init`, dipanggil create) | port `Auto` | tidak ada: endpoint tanpa port efektif masuk `PlanContext` tanpa port (`Prepared::context` dengan peta port kosong), jadi token yang butuh port di plan init menjadi `PlanError::EndpointUnresolved`. Spec 0009 melaporkan token itu lewat `init_port_issues` (AC-21) dan dry run preflight spec 0020 memakai context yang sama (AC-9) *(dicatat 2026-10-22, usulan spec 0023; perilaku yang sudah dibangun)* |
 | start | nilai secret | `resolve_for_start` (spec 0011) |
 | start | argv, env, cwd, timeout | `RunPlan` spec 0009 |
 | start | `ProcessIdentity` | `ProcessFacts` dari `inspect(pid)` pada child yang tertahan, plus `boot_id()` |
