@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 16:32`
+- **Diperbarui:** `2026-10-22 16:36`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -315,6 +315,7 @@
 | `2026-10-22` | `chk-f18-m4` PASS otomatis: AC-17 bagian otomatis dan AC-18 terpenuhi, run penuh StacklyUI 1118 tanpa time out, `cmp` HC hanya `runtimes-loading` identik. Langkah UI dan manual (pointer ke tombol hapus, Cancel Install, jendela 900 pt, klik Get, banner gagal, keyboard, VoiceOver) menunggu user, jadi kotak milestone 4 F18 tetap terbuka seperti milestone 3 F15 dan F17. Di-merge `7c95d3f7`. Dimulai: `dev-f20-m3` (sheet New Instance; tanpa edit `InstancesPage.swift` karena halaman itu sudah membaca `newInstanceAction`) dan `dev-f15-m3-s12a`. Milestone 1 F16 menunggu `dev-f20-m3` karena keduanya mengubah `AppShell.swift`. | `lead` |
 | `2026-10-22` | `chk-f20-m5` PASS 10/10: spec 0020 AC-2 dan AC-9, spec 0009 AC-21 (AC-11 dan AC-14 tetap utuh), tanpa drift golden atau seed fuzz, catalog revision 7. Di-merge `8bd3132e`; F20 milestone 5 dicentang (`4a21c93b`). Disk sempat 14 GiB: `target/debug/incremental` di checkout utama ternyata 7,4 GB (hook pre-commit menjalankan clippy tanpa `CARGO_INCREMENTAL=0`); dihapus bersama `testkit-bin` dan `xcode` (disk 24 GiB). Lead ui-macos melaporkan fix stall source rule (scan di luar main actor) sedang di-gate; setelah masuk, aturan "jalankan ulang korban stall sendiri" tidak lagi diperlukan. | `lead` |
 | `2026-10-22` | Fix stall StacklyUI dari ui-macos masuk `fda8275a` (hanya test: scan source rule di luar main actor, `waitFor` dan `ConfirmationPresentationTests.settle` menghitung waktu responsif, watchdog `ProcessRunner` di luar main actor, test regresi). Gate mereka 1121 test tanpa satu pun "Time limit was exceeded" di load 25 sampai 49. Mulai sekarang gate lead tidak memakai pengecualian "jalankan ulang korban stall sendiri"; kegagalan di run penuh dianggap nyata dan lognya dikirim ke lead ui-macos. `dev-f20-m3` dan `dev-f15-m3-s12a` diberi tahu. | `lead` |
+| `2026-10-22` | Run penuh StacklyUI F67 part 2 milik ui-macos terbunuh SIGTERM (exit 143) saat sesi scope ini (kemungkinan `dev-f20-m3`) menjalankan `swift test --filter NewInstanceSnapshotTests`. Aturan baru untuk semua sesi scope ini, dikirim ke `dev-f20-m3`, `dev-f15-m3-s12a`, dan `chk-f21-m2` dan masuk setiap brief berikutnya: tidak pernah `pkill` atau `killall` berdasarkan nama (`swift-test`, `swiftpm-testing-helper`, `xctest`, `stacklyd`, `nats-server`, `postgres`, `stackly-fake-server`) dan tidak pernah `pkill -f` dengan pola lebar; hanya PID yang dimulai sendiri atau proses di bawah worktree atau root test sendiri. `cargo xtask runtime spike --cleanup` hanya saat tidak ada sesi lain yang menjalankan test native (kesepakatan dengan lead scope 03). | `lead` |
 
 ## Blocker terbuka
 
