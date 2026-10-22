@@ -351,8 +351,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: InstallRuntimeParams,
     ) -> HandlerFuture<'a, Box<InstallRuntimeReply>> {
-        let _ = context;
-        runtime::install(core, params)
+        runtime::install(core, context, params)
     }
 
     /// `runtime.resolve`.
@@ -363,7 +362,7 @@ pub trait Handlers: Send + Sync + 'static {
         params: InstallRuntimeParams,
     ) -> HandlerFuture<'a, Box<ResolvedArtifact>> {
         let _ = context;
-        runtime::resolve(core, params)
+        runtime::resolve_runtime(core, params)
     }
 
     /// `runtime.list`.

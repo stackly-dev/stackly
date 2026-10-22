@@ -65,9 +65,41 @@ impl BusEvents {
     }
 }
 
+impl BusEvents {
+    /// Publishes `runtime.state_changed` for the runtime a succeeded
+    /// `install_runtime` operation created, at revision 1 (spec 0018). An
+    /// operation that found the runtime installed already ends with that
+    /// runtime's ID, not its own, and announces nothing: nothing changed.
+    fn announce_runtime(&self, view: &OperationView) {
+        let summary = dto::summary(view);
+        if summary.kind != stackly_protocol::operation::OperationKind::InstallRuntime
+            || summary.state != stackly_protocol::operation::OperationState::Succeeded
+        {
+            return;
+        }
+        let created = summary
+            .result
+            .as_ref()
+            .into_iter()
+            .flat_map(|result| &result.resources)
+            .find(|resource| {
+                resource.kind == ResourceKind::Runtime
+                    && Some(&resource.id) == summary.resource.as_ref().map(|own| &own.id)
+            });
+        if let Some(created) = created {
+            self.bus.publish_resource(
+                EventKind::RuntimeStateChanged,
+                created.clone(),
+                Revision::saturating(1),
+            );
+        }
+    }
+}
+
 impl OperationEvents for BusEvents {
     fn state_changed(&self, view: &OperationView) {
         self.publish(view, EventKind::OperationStateChanged);
+        self.announce_runtime(view);
     }
 
     fn progress(&self, view: &OperationView) {

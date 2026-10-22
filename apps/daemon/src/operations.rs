@@ -12,8 +12,10 @@ use stackly_core::operation::{
     EngineDeps, EngineLimits, OperationEngine, Redact, ShutdownReport,
     limits::OPERATION_SHUTDOWN_GRACE,
 };
+use stackly_core::runtime::download::DownloadPolicy;
+use stackly_core::runtime::install::{InstallDeps, InstallRuntimeFactory};
 use stackly_core::secret::Redactor;
-use stackly_domain::Registry;
+use stackly_domain::{OperationKind, Registry};
 use stackly_platform::Platform;
 use stackly_protocol::ErrorBody;
 use stackly_protocol::codes::{internal, registry};
@@ -78,6 +80,14 @@ impl Operations {
                 redactor: engine_redactor,
             },
             EngineLimits::default(),
+        );
+        engine.register_factory(
+            OperationKind::InstallRuntime,
+            Arc::new(InstallRuntimeFactory::new(InstallDeps {
+                platform: Arc::new(platform.clone()),
+                layout: Arc::new(prepared.clone()),
+                policy: DownloadPolicy::default(),
+            })),
         );
         *self.lock() = Slot::Recovering(engine.clone());
         engine

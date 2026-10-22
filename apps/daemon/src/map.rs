@@ -5,6 +5,7 @@
 
 pub mod catalog;
 pub mod redact;
+pub mod runtime;
 
 use std::path::Path;
 

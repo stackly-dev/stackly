@@ -30,13 +30,13 @@ const NOT_CONFIGURED: &str = "not_configured";
 /// Reads a wire enum from its code. Every catalog DTO enum is open, so any
 /// code reads; one this build does not know reads as `unrecognized`, which
 /// the per variant tests below rule out for every core value.
-fn wire<T: DeserializeOwned>(code: &str) -> T {
+pub(crate) fn wire<T: DeserializeOwned>(code: &str) -> T {
     serde_json::from_value(serde_json::Value::String(code.to_owned()))
         .expect("an open wire enum reads any string")
 }
 
 /// The OS and architecture of `target`.
-fn host_target(target: Target) -> dto::HostTarget {
+pub(crate) fn host_target(target: Target) -> dto::HostTarget {
     dto::HostTarget {
         os: wire(target.os().as_code()),
         arch: wire(target.arch().as_code()),
@@ -426,14 +426,33 @@ pub fn not_installable(
     reason: NotInstallableReason,
     available_targets: &[Target],
 ) -> ErrorBody {
+    not_installable_text(
+        provider.as_str(),
+        &version.to_string(),
+        host,
+        reason,
+        available_targets,
+    )
+}
+
+/// [`not_installable`] with the provider and version as text, for a
+/// selector that never became an exact version (spec 0018).
+#[must_use]
+pub fn not_installable_text(
+    provider: &str,
+    version: &str,
+    host: Target,
+    reason: NotInstallableReason,
+    available_targets: &[Target],
+) -> ErrorBody {
     let available: Vec<String> = available_targets.iter().map(ToString::to_string).collect();
     with_catalog_hint(
         ErrorBody::new(
             &catalog::NOT_INSTALLABLE,
             format!("{provider} {version} can't be installed on {host}"),
         )
-        .with_detail("provider", provider.as_str())
-        .with_detail("version", version.to_string())
+        .with_detail("provider", provider)
+        .with_detail("version", version)
         .with_detail("target", host.to_string())
         .with_detail("availableTargets", available.join(","))
         .with_detail("reason", reason.as_code()),
