@@ -660,3 +660,28 @@ Update `/architect` sesi `arc-ui-sync`, bersama spec 0012, 0067, 0068, dan `apps
 Kalimat ketiga yang sama maknanya (butir pengumuman di *Model shell*, "Judul banner critical (`not_found`) tidak diumumkan `DaemonModel`") ikut dibuat bersyarat, walau usulan spec 0016 hanya menyebut dua kalimat, supaya ketiganya tidak saling bertentangan.
 
 **Ditunda.** Penanda "belum dibangun" lain di spec ini yang bukan milik fitur 15 (misalnya `itemFailures` spec 0022, `MainWindowRoot` spec 0016, `ShellNavigator`) tidak diperiksa di update ini dan dibiarkan; penyelarasannya lewat `/sync` atau update berikutnya. Penanda diterapkan di baris spec 0016 (Follow-up langkah 12a) dan baris 0013 di usulan spec 0015 milik pemilik spec itu, jadi teksnya dikirim di laporan.
+
+## Perubahan 2026-10-22 (muat ulang store yang gagal saat `.caughtUp`, wave 8)
+
+Update `/architect` sesi `arc-f13-reload`. Spec ini menyelaraskan teks *Sinkronisasi snapshot plus cursor* dengan kode yang masuk `main` lewat merge `9ee06a25` (dev-f13-followups butir C, commit `3ca3a96`). Tidak ada ID atau teks AC yang berubah: AC-8 dan AC-10 tetap, dan baris `ResourceStore<Item>` di tabel tipe tetap.
+
+**Masalah.** Sebelum `9ee06a25`, `.caughtUp` tidak memuat snapshot sama sekali. Store yang snapshot terakhirnya gagal (misalnya saat daemon sedang berhenti) tetap menyimpan error setelah reconnect yang menyusul, sampai gap atau tombol Retry berikutnya. Halaman Overview spec 0022 menutup celah itu dengan retry sendiri (langkah 9a spec 0022).
+
+**Opsi.**
+
+- *Varian i:* setiap store yang gagal atau `unsupported` dimuat ulang saat `.caughtUp`.
+- *Varian ii (dipilih lead):* hanya store dengan `error` terisi yang tidak sedang refresh dimuat ulang, sekali per `.caughtUp`. Store `unsupported` tidak dicoba ulang.
+
+**Alasan.** Method baru hanya datang bersama run daemon baru, dan run baru selalu memberi `.resnapshot` (cursor dari `serverInstanceId` lama tidak berlaku lagi), jadi mencoba ulang store `unsupported` di `.caughtUp` hanya menambah call yang pasti gagal dengan `request.unknown_method`. Beban varian ii adalah satu snapshot per store yang gagal per reconnect, tanpa timer baru dan tanpa loop retry: snapshot yang gagal lagi menunggu `.caughtUp` atau gap berikutnya. `completedRounds` naik setelah snapshot itu selesai, berhasil atau gagal, supaya `DaemonModel` tetap keluar dari `refreshing` dan AC-10 tetap terpenuhi walau store itu gagal lagi.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| *Sinkronisasi snapshot plus cursor*, butir `.caughtUp` | store sehat tidak di snapshot ulang; store dengan `error` terisi dan tidak sedang refresh memuat snapshot sekali per `.caughtUp`; `completedRounds` naik setelah snapshot itu (semuanya, bila lebih dari satu) selesai; store `unsupported` tidak dicoba ulang; tanpa store gagal dan tanpa snapshot berjalan, `completedRounds` langsung naik | `ShellSync.handle(.caughtUp)` dan `snapshotFailed` di `9ee06a25` |
+| *Critical test scenarios*, baris sinkronisasi | lima test `ResourceStoreTests` untuk muat ulang saat `.caughtUp` | `9ee06a25` |
+| Butir aturan snapshot gagal | snapshot yang berhasil menghapus `error` dan `unsupported` | `ResourceStore.complete()` di `9ee06a25` |
+
+**Spec 0022.** Retry Overview spec 0022 langkah 9a sudah dihapus lead scope 02 (merge `28cbe678`), karena perilaku di atas menggantikannya. Teks spec 0022 milik lead itu, jadi penyelarasannya tidak dilakukan di sini.
+
+**AC-10.** Kalimat "ditahan sampai snapshot semua store selesai (atau sampai reconnect menyusul tanpa snapshot lewat `.caughtUp`)" tidak bertentangan: putaran lewat `.caughtUp` kini menunggu muat ulang store yang gagal, dan teks desain sudah menyatakan bahwa "selesai resnapshot" mencakup putaran yang selesai lewat `.caughtUp`. Tidak ada baris Follow-up spec ini yang terkait, jadi tidak ada yang dicentang.
+
+**Cross check (model lain, 2026-10-22).** Semua klaim cocok dengan kode. Tiga ketepatan teks diperbaiki langsung: store `unsupported` yang kemudian gagal dengan error lain memang dimuat ulang (`fail` tidak menghapus `unsupported`), jadi pengecualiannya ditulis sebagai `unsupported` tanpa error; `.caughtUp` yang datang saat putaran resnapshot masih berjalan menaikkan `completedRounds` sekali setelah seluruh putaran selesai; dan muat ulang ini tidak menaikkan generasi `ShellSync` dan tidak mengubah `lastResnapshot`, sehingga frasa "menyusul tanpa snapshot" di AC-10 tetap benar. Satu risiko kode dilaporkan ke lead, bukan diputuskan di sini: `refresh()` (Retry halaman) pada store yang sedang dimuat ulang oleh `ShellSync` membuat `resnapshot()` milik `ShellSync` memberi `false`, sehingga store itu tidak pernah keluar dari `pending` dan `refreshing` bertahan sampai `.resnapshot` berikutnya. Pola ini sudah ada sejak putaran resnapshot biasa, bukan baru dari `9ee06a25`.
