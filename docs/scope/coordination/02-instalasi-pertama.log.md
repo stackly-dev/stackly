@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 16:01`
+- **Diperbarui:** `2026-10-22 16:05`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -97,6 +97,8 @@
 | `chk-f18-m4` (sesi F18 dipakai ulang) | `checker (verify)` | 18 · verify milestone 4 | `02-instalasi-pertama.md` | bagian Milestone 4 `verify.md` 0018 | `claude/dev-f18-m2-f7a13e` | `sonnet-5-5 · high` | PASS otomatis (`16ab3cd8` → `7c95d3f7`); langkah manual user terbuka |
 | `dev-f20-m3` (sesi F20 dipakai ulang) | `developer` | 20 · New Instance sheet (spec 0020 milestone 3, langkah 12 sampai 14, Swift) | `02-instalasi-pertama.md` | StacklyUI folder create baru, `AppShell.swift` (`newInstanceAction`, ⌘N), `ProviderDetailPanel.swift`, `CommandMap`, fixture create, suite snapshot sheet | `claude/dev-f20-m1-ed6675` | `sonnet-5-5 · high` | `aktif` |
 | `dev-f15-m3-s12a` (sesi F22 dipakai ulang) | `developer` | 15 · langkah susulan 12a (pengumuman `lastError` agent, `not_found` di luar banner, akhir penantian daemon) | `02-instalasi-pertama.md` | `Agent/BackgroundAgentModel.swift`, announcer `DaemonModel.swift`, test Agent dan `DaemonModelAgentTests` | `claude/nifty-joliot-9c338f` | `sonnet-5-5 · high` | `aktif` |
+| `chk-f20-m5` (sesi F18 dipakai ulang) | `checker (verify)` | 20 · verify milestone 5 (spec 0020 dan langkah 22 spec 0009) | `02-instalasi-pertama.md` | bagian Milestone 5 kedua verify.md | `claude/dev-f18-m2-f7a13e` | `sonnet-5-5 · high` | PASS 10/10 (`1941e3ab` → `8bd3132e`) |
+| `chk-f21-m2` (sesi F21 dipakai ulang) | `checker (verify)` | 21 · verify milestone 2 | `02-instalasi-pertama.md` | bagian Milestone 2 `verify.md` 0021 | `claude/arc-f21-update-cc228d` | `sonnet-5-5 · high` | `aktif` |
 
 ## Keputusan
 
@@ -311,6 +313,7 @@
 | `2026-10-22` | Urutan F67: part 1 ui-macos masuk `61d4e0ac` (relay di container, kolom inspector tanpa vibrancy kaca, relay provisional F22 dihapus, 74 PNG direkam ulang). `dev-f18-m4` merge main, membuang tujuh wrapper interim, dan merekam ulang HC Runtimes serta 10 referensi Catalog di kode gabungan (`c974d07c`; `cmp` 50 pasangan, semua berbeda kecuali `runtimes-loading`). F18 milestone 4 di-merge `4c7bb053`. Gate: swift-format, evidence, clients/swift 198, StacklyUI 1118 dengan satu korban stall yang lulus sendiri, `build-app`. Cek "tanpa PNG berubah" sempat salah karena menghitung entri staged; tidak ada PNG berubah di working tree. `minWidth` Runtimes tetap `// provisional: F67` sampai part 2. Pembekuan F67 kini juga mencakup halaman Runtimes. | `lead` |
 | `2026-10-22` | F20 milestone 5 (`02e2c198`) dan F21 milestone 2 (`0c34f4d1`) di-merge bersama `7cd4d1a9`; main kini di **protokol 1.14**. Gate: workspace 3493/0, deny, `codegen --check`, provider (Traefik digest baru, revision tetap 1.0.0), catalog revision 7, runtime, evidence, Windows; clients/swift sempat gagal satu test time out di bawah beban (`DaemonConnectionTests.callsAboveTheInFlightLimitWaitForASlot`), lulus tiga kali sendiri dan run penuh ulang hijau; StacklyUI build dan run penuh (atas permintaan lead ui-macos) dengan dua korban stall yang lulus sendiri, tanpa PNG bergeser, `FixtureContract` 1.8; `build-app`. Penyimpangan diterima: F20 M5 menambah satu test hint di `crates/protocol/tests/create_fixtures.rs`; F21 M2 memakai nama enum Swift `ConnectionAvailability`, membandingkan byte `provider.yaml` untuk cek paket (tanpa mtime), menambah `commands::instance::connection` ke `EXPOSE_ALLOWED` (untuk `--show-password` sesuai AC-6), dan menyentuh `apps/cli/src/failure.rs`. Kasus fixture tampilan "start gagal karena konflik port" (spec 0068) dipindah ke F21 milestone 3. Follow-up kecil: cache paket di detail belum dibagi dengan `SocketPaths`. | `lead` |
 | `2026-10-22` | `chk-f18-m4` PASS otomatis: AC-17 bagian otomatis dan AC-18 terpenuhi, run penuh StacklyUI 1118 tanpa time out, `cmp` HC hanya `runtimes-loading` identik. Langkah UI dan manual (pointer ke tombol hapus, Cancel Install, jendela 900 pt, klik Get, banner gagal, keyboard, VoiceOver) menunggu user, jadi kotak milestone 4 F18 tetap terbuka seperti milestone 3 F15 dan F17. Di-merge `7c95d3f7`. Dimulai: `dev-f20-m3` (sheet New Instance; tanpa edit `InstancesPage.swift` karena halaman itu sudah membaca `newInstanceAction`) dan `dev-f15-m3-s12a`. Milestone 1 F16 menunggu `dev-f20-m3` karena keduanya mengubah `AppShell.swift`. | `lead` |
+| `2026-10-22` | `chk-f20-m5` PASS 10/10: spec 0020 AC-2 dan AC-9, spec 0009 AC-21 (AC-11 dan AC-14 tetap utuh), tanpa drift golden atau seed fuzz, catalog revision 7. Di-merge `8bd3132e`; F20 milestone 5 dicentang (`4a21c93b`). Disk sempat 14 GiB: `target/debug/incremental` di checkout utama ternyata 7,4 GB (hook pre-commit menjalankan clippy tanpa `CARGO_INCREMENTAL=0`); dihapus bersama `testkit-bin` dan `xcode` (disk 24 GiB). Lead ui-macos melaporkan fix stall source rule (scan di luar main actor) sedang di-gate; setelah masuk, aturan "jalankan ulang korban stall sendiri" tidak lagi diperlukan. | `lead` |
 
 ## Blocker terbuka
 
