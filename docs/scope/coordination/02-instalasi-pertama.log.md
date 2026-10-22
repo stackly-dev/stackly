@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 11:45`
+- **Diperbarui:** `2026-10-22 11:47`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -254,6 +254,8 @@
 | `2026-10-22` | `arc-f23-update` (`73322b32`) menemukan bahwa create penuh spec 0020 tidak mengalokasikan port `Auto` sebelum init, padahal paket NATS merender `nats.conf` saat init, sehingga create NATS dengan port default (dan `stackly instance create` tanpa `--port`) gagal setelah preflight lulus. Keputusan 8 Option 1: paket NATS berhenti merender `nats.conf` saat init (revision 1.0.1), dan evidence direkam ulang dengan `Auto`. Tiga fakta startup mengesahkan desain `nats-readiness`; disk penuh dicatat sebagai batas yang diketahui. Teks AC-4 dan AC-8 serta AC-15 baru diajukan ke user. Usulan untuk spec 0009 (tolak token port di init; ikut memperbaiki Traefik), 0020 (dry run init tanpa port `Auto`), 0010, 0018, 0019, dan 0021 menunggu pemiliknya. | `lead` |
 | `2026-10-22` | `dev-f22-m3` selesai (`b69b170f`, langkah 6 sampai 8; 150 PNG baru di `InstancesSnapshotTests` dan `OverviewSnapshotTests`). Sepuluh penyimpangan diterima: empat baris `LiveShell.swift`, `instanceActions` di `DaemonModel`, `ReadinessText` di lokasi spec 0021 (`InstanceDetail/`), ekspektasi `CommandMapTests`, bingkai 664 pt, kalimat No Selection tanpa "Double-click", jamak, kartu Runtimes ke milestone 4, `.id` rebuild tabel, dan ikon inspector putih di snapshot (komponen F67, diteruskan ke ui-macos bersama label `.searchable`). Semua 16 state Instances punya HC identik standar karena inspector selalu terpasang. Urutan yang dipilih: K15 ui-macos (relay dan cek identitas HC) masuk main dulu, lalu `dev-f22-m3` merge main dan merekam ulang HC sebelum gate lead. | `lead` |
 | `2026-10-22` | `chk-f15-m3` dimulai di sesi F15 yang dipakai ulang. Run StacklyUI penuh yang tertunda untuk F15 milestone 3 sudah hijau di gate `aa9177c0`. XCUITest dan langkah dengan agent sungguhan dicatat `NOT_RUN` atau `BLOCKED`. | `lead` |
+| `2026-10-22` | Disk turun lagi ke 14 GiB (`chk-f15-m3` berhenti di batas 15 GiB sebelum build). `target/` dan `.build/` worktree F23, F19, dan F18 yang idle dihapus (jadi 23 GiB); lead scope 03 dan ui-macos ikut membersihkan worktree mereka yang sudah merge (sekitar 34 GiB bebas). `chk-f15-m3` dilanjutkan. | `lead` |
+| `2026-10-22` | K15 ui-macos masuk main (`582afd51`): relay kontras `.stacklyInspector`, cek identitas HC AC-5 0068, `StaleNote` huruf kapital, dan 23 PNG Catalog direkam ulang. `dev-f22-m3` diminta merge main, merekam ulang HC Instances, memastikan dengan `cmp` bahwa setiap pasangan HC berbeda, memakai `contrastInvariant` untuk `overview-loading` hanya bila isinya murni spinner sistem, memeriksa ulang ikon putih di inspector, dan memakai prompt terlihat "Search instances" bila spec 0022 meminta label VoiceOver itu. Baris verify spec 0017 "The development catalog last updated" (huruf kapital) masuk brief F17 milestone 4. Merge terpisah langkah 2 F21 ditunda sampai milestone 1 F21 lengkap, supaya tidak menambah satu gate penuh di load sekitar 60; `dev-f19-m3` tetap menunggu. | `lead` |
 
 ## Blocker terbuka
 
