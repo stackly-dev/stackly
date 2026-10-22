@@ -6,6 +6,10 @@ Manifest      sha256:3f786850e387
 Software      postgresql
 Runtime       0192f3a5-0000-7000-8000-0000000000a1
 Version       17.2.0
+Digest        sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90
+Data          /Users/test/Library/Application Support/Stackly/instances/orders-db/data
+Data size     1.3 GB
+Autostart     At login
 Ownership     manual
 Initialized   yes
 Lifecycle     running
@@ -17,9 +21,15 @@ Restarts      0 of 5 in 1m, next attempt 2026-10-20 09:05:00 +00:00
 Last failure  -
 Blocker       -
 Logs          available
+Dependents    erp-dev (dedicated, lease active), reporting (shared)
+Secrets       superuserPassword: local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password (present)
 Revision      7
 
 ENDPOINT  TRANSPORT  ADDRESS                                                                                  PORT MODE  BOUND
 postgres  tcp        127.0.0.1:5432                                                                           fixed      yes
 admin     tcp        127.0.0.1:49211                                                                          auto       yes
 socket    unix       /Users/fixture/Library/Application Support/Stackly/instances/0192f3a5/run/.s.PGSQL.5432  fixed      no
+
+CONNECTION  VALUE
+uri         postgresql://postgres:****@127.0.0.1:5432/postgres
+socket      postgresql://postgres:****@/postgres?host=/Users/test/Library/Application%20Support/Stackly/run/ab12cd34&port=5432

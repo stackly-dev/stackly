@@ -15,7 +15,7 @@ fn serving(instance: stackly_protocol::instance::InstanceSummary) -> (TestRoot, 
     let root = TestRoot::new().expect("a test root is made");
     let daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
         Call::InstanceGet(_) => vec![Step::Reply(Reply::InstanceGet(Box::new(instance.clone())))],
-        _ => Vec::new(),
+        other => data::detail_steps(other, &instance).unwrap_or_default(),
     });
     (root, daemon)
 }
@@ -47,15 +47,19 @@ fn get_writes_the_block_the_endpoints_and_the_json_result() {
             .unwrap()
             .keys()
             .collect::<Vec<_>>(),
-        ["instance"]
+        ["dataUsage", "detail", "instance"]
     );
     assert_eq!(
         daemon.methods(),
         [
             "daemon.handshake",
             "instance.get",
+            "instance.get_detail",
+            "instance.get_data_usage",
             "daemon.handshake",
-            "instance.get"
+            "instance.get",
+            "instance.get_detail",
+            "instance.get_data_usage"
         ]
     );
     assert_eq!(daemon.log()[1].raw["call"]["content"]["instanceId"], ID);

@@ -18,6 +18,7 @@ mod data_usage;
 mod detail;
 mod lifecycle;
 mod logs;
+mod offline;
 mod process;
 mod restart;
 mod same_runtime;

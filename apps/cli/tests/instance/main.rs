@@ -9,6 +9,7 @@
 mod common;
 
 mod action;
+mod connection;
 mod create;
 mod data;
 mod duplicate;
