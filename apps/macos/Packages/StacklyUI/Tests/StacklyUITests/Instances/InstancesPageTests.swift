@@ -250,6 +250,42 @@ struct InstancesPageTests {
         #expect(start?.disabledReason == "This instance isn’t initialized.")
     }
 
+    @Test func openBackAndCopyAreOnlyPublishedWhenTheirTargetExists() {
+        let (none, _) = published(selected: nil)
+        for command in [CommandID.openInstance, .back, .copyConnectionString] {
+            #expect(none[command] == nil, "\(command)")
+        }
+        var backs = 0
+        let open = StacklyAction(id: "open", title: "Open", mutates: false, perform: {})
+        let copy = StacklyAction(id: "copy", title: "Copy Connection String", mutates: false) {}
+        let (actions, _) = InstancesCommandActions.publish(
+            showsInspector: true, toggleInspector: {}, sort: .default, setSort: { _ in },
+            focusSearch: {}, target: nil, open: open, back: { backs += 1 }, copyConnection: copy)
+        #expect(actions[.openInstance]?.id == "openInstance")
+        #expect(actions[.copyConnectionString]?.id == "copyConnectionString")
+        #expect(actions[.back]?.title == "Back")
+        #expect(actions[.back]?.mutates == false)
+        actions[.back]?.perform()
+        #expect(backs == 1)
+    }
+
+    @Test func findIsNotPublishedWhileADetailPageIsOpen() {
+        let (detail, _) = InstancesCommandActions.publish(
+            showsInspector: true, toggleInspector: {}, sort: .default, setSort: { _ in },
+            focusSearch: {}, hasSearch: false, target: nil, back: {})
+        #expect(detail[.find] == nil)
+        #expect(detail[.back] != nil)
+        #expect(published(selected: nil).actions[.find] != nil)
+    }
+
+    @Test func theInspectorTooltipsNameTheShortcutsOfTheCommands() {
+        #expect(
+            CommandMap.helpText(for: .toggleInspector, title: "Hide Inspector")
+                == "Hide Inspector (⌥⌘I)")
+        #expect(CommandMap.helpText(for: .startInstance, title: "Retry") == "Retry (⌘R)")
+        #expect(CommandMap.helpText(for: .stopInstance, title: "Stop") == "Stop (⇧⌘R)")
+    }
+
     // MARK: - The words of the inspector
 
     @Test func readinessIsOnlyWrittenForARunningOrRecoveringInstance() throws {

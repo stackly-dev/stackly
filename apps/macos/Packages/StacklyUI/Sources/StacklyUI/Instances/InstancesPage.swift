@@ -477,6 +477,7 @@ public struct InstancesPage: View {
             sort: sort,
             setSort: { sortOrder = [$0] },
             focusSearch: { searchFocused = true },
+            hasSearch: isDetailOpen == false,
             target: target, open: open, back: back, copyConnection: copyConnection)
     }
 
