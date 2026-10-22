@@ -9,6 +9,7 @@
 mod batch;
 mod config;
 mod error;
+mod guard;
 mod install;
 mod path;
 mod query;
@@ -37,6 +38,7 @@ use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
 pub use batch::{Committed, Generation, Versioned, WriteBatch, WriteOp};
 pub use config::{ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson};
 pub use error::{BatchError, NotDeletableReason, RegistryError, ResourceRef};
+pub use guard::{CommitGuard, GuardDecision, GuardView, Guarded};
 pub use install::{
     CODES_MAX, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope,
     DependencyManifestJson, SignatureInfoJson,
@@ -83,6 +85,16 @@ pub use secret::{
 /// first error found is the one returned, and nothing of the batch applies.
 /// A successful commit raises the generation by exactly 1, whatever it
 /// holds.
+///
+/// # Guarded commits
+///
+/// A caller whose write depends on rules it must check against the registry
+/// uses [`Registry::commit_guarded`] instead of a read followed by a commit
+/// at `expected_generation`: the generation rises for every commit, journal
+/// and progress writes of other operations included, so that read is often
+/// stale by the time the commit arrives. The guard runs inside the write
+/// transaction, so no other commit lands between its reads and its writes,
+/// and a guarded commit never fails with `GenerationConflict`.
 ///
 /// # Operation journals
 ///
@@ -369,6 +381,24 @@ pub trait Registry: Send + Sync {
     /// Returns a [`BatchError`] with the first error found, in the order the
     /// trait documents.
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError>;
+
+    /// Runs `guard` and applies the ops it returns in one transaction.
+    ///
+    /// The guard reads through a [`GuardView`] over the transaction itself,
+    /// then returns [`GuardDecision::Write`] or [`GuardDecision::Refuse`].
+    /// The ops apply with the same checks, in the same order, as
+    /// [`Registry::commit`], and the generation rises by 1. A refusal, an
+    /// error from the guard, and a failing op apply nothing and leave the
+    /// generation where it was. The guard is called exactly once, on the
+    /// registry's thread; a guard that panics becomes an `Io` error and the
+    /// registry keeps serving.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`BatchError`] carrying the guard's own error, or the first
+    /// error of the ops with their index. It never returns
+    /// `GenerationConflict`.
+    fn commit_guarded(&self, guard: CommitGuard) -> Result<Guarded, BatchError>;
 
     /// Deletes history beyond `policy`, measured from `now`, a few
     /// thousand rows per transaction. It never raises the generation.

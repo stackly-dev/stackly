@@ -3,24 +3,25 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
-    AuditPage, AuditQuery, AuditResult, BackupId, BatchError, Committed, ConfigRevisionId,
-    ConfigRevisionRecord, CreatedRecord, CreatedSeq, Environment, EnvironmentId, Generation,
-    IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
-    InstanceName, InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder,
-    LeaseId, LeaseState, LockKey, NotDeletableReason, Operation, OperationCursor, OperationId,
-    OperationJournal, OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
-    PlatformStoreKey, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
-    ProviderSourceId, ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry,
-    RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime, RuntimeId,
-    RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
-    SecretReferenceView, SecretStatus, SecretUse, SecretUser, Sha256Digest, StepSeq, Versioned,
-    WriteBatch, WriteOp,
+    AuditPage, AuditQuery, AuditResult, BackupId, BatchError, CommitGuard, Committed,
+    ConfigRevisionId, ConfigRevisionRecord, CreatedRecord, CreatedSeq, Environment, EnvironmentId,
+    Generation, GuardDecision, GuardView, Guarded, IdempotencyKey, InstallMode, Instance,
+    InstanceFilter, InstanceId, InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep,
+    JournalView, Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState, LockKey, NotDeletableReason,
+    Operation, OperationCursor, OperationId, OperationJournal, OperationPage, OperationQuery,
+    OperationResource, OperationState, Ownership, PlatformStoreKey, ProcessObservation,
+    ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceId, ProviderSourceKind,
+    ProviderSourceRecord, PruneReport, Registry, RegistryError, ResourceRef, ResourceRevision,
+    RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretFieldName, SecretRef,
+    SecretReferenceFilter, SecretReferenceRecord, SecretReferenceView, SecretStatus, SecretUse,
+    SecretUser, Sha256Digest, StepSeq, Versioned, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
 
@@ -131,6 +132,30 @@ impl FakeRegistry {
         Ok(Versioned::new(value, state.generation))
     }
 
+    /// Applies `ops` to a copy of `state` and swaps the copy in, raising
+    /// the generation by 1; nothing applies when an op fails.
+    fn apply_ops(&self, state: &mut State, ops: Vec<WriteOp>) -> Result<Committed, BatchError> {
+        let now = self.clock.now();
+        let mut next = state.clone();
+        let mut revisions = Vec::new();
+        for (index, op) in ops.into_iter().enumerate() {
+            let resource = op.resource();
+            let revision = op.revision();
+            next.apply(op, now)
+                .map_err(|error| BatchError::at(index, error))?;
+            if let Some(revision) = revision {
+                revisions.push((resource, revision));
+            }
+        }
+        next.generation = next.generation.next();
+        let generation = next.generation;
+        *state = next;
+        Ok(Committed {
+            generation,
+            revisions,
+        })
+    }
+
     /// Rebuilds a stored instance the way the SQLite registry reads one.
     fn restored(&self, instance: &Instance) -> Result<Instance, RegistryError> {
         Instance::restore(stored_instance(instance), self.loaded_at).map_err(|err| {
@@ -140,6 +165,37 @@ impl FakeRegistry {
                 detail: err.to_string(),
             }
         })
+    }
+}
+
+/// What a commit guard reads: the state the guarded commit holds locked.
+struct StateView<'a> {
+    registry: &'a FakeRegistry,
+    state: &'a State,
+}
+
+impl GuardView for StateView<'_> {
+    fn instances(&self, filter: InstanceFilter) -> Result<Vec<Instance>, RegistryError> {
+        let mut instances = self
+            .state
+            .instances
+            .values()
+            .filter(|instance| filter.include_retained || instance.retained_at().is_none())
+            .map(|instance| self.registry.restored(instance))
+            .collect::<Result<Vec<_>, _>>()?;
+        instances.sort_by(|a, b| (a.name(), a.id()).cmp(&(b.name(), b.id())));
+        Ok(instances)
+    }
+
+    fn runtime(&self, id: RuntimeId) -> Result<Option<Runtime>, RegistryError> {
+        Ok(self.state.runtimes.get(&id).cloned())
+    }
+
+    fn provider_revision(
+        &self,
+        key: &ProviderRevisionKey,
+    ) -> Result<Option<ProviderRevisionRecord>, RegistryError> {
+        Ok(self.state.provider_revisions.get(key).cloned())
     }
 }
 
@@ -507,25 +563,29 @@ impl Registry for FakeRegistry {
                 actual: state.generation,
             }));
         }
-        let now = self.clock.now();
-        let mut next = state.clone();
-        let mut revisions = Vec::new();
-        for (index, op) in batch.ops.into_iter().enumerate() {
-            let resource = op.resource();
-            let revision = op.revision();
-            next.apply(op, now)
-                .map_err(|error| BatchError::at(index, error))?;
-            if let Some(revision) = revision {
-                revisions.push((resource, revision));
+        self.apply_ops(&mut state, batch.ops)
+    }
+
+    fn commit_guarded(&self, guard: CommitGuard) -> Result<Guarded, BatchError> {
+        let mut state = self.state();
+        if let Some(error) = lock(&self.next_fault).take() {
+            return Err(BatchError::batch(error));
+        }
+        let view = StateView {
+            registry: self,
+            state: &state,
+        };
+        let decision = catch_unwind(AssertUnwindSafe(|| guard(&view)));
+        match decision {
+            Err(_) => Err(BatchError::batch(RegistryError::Io {
+                detail: "the commit guard panicked".to_owned(),
+            })),
+            Ok(Err(error)) => Err(BatchError::batch(error)),
+            Ok(Ok(GuardDecision::Refuse(reason))) => Ok(Guarded::Refused(reason)),
+            Ok(Ok(GuardDecision::Write(ops))) => {
+                self.apply_ops(&mut state, ops).map(Guarded::Committed)
             }
         }
-        next.generation = next.generation.next();
-        let generation = next.generation;
-        *state = next;
-        Ok(Committed {
-            generation,
-            revisions,
-        })
     }
 
     fn prune(

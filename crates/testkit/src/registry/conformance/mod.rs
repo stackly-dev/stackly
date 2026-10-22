@@ -3,6 +3,7 @@
 //! apart unnoticed (spec 0005, AC-8 to AC-11, AC-14, AC-16).
 
 mod creates;
+mod guarded;
 mod journal;
 mod prune;
 mod races;
@@ -41,7 +42,8 @@ use crate::FakeClock;
 /// 11"), the process observations, config revisions, and chained instance
 /// updates of feature 10 (spec 0005 "Tambahan fitur 10"), the provider
 /// sources, `source_id`, and `DeleteInstanceCreatedBy` of feature 20 (spec 0005
-/// "Tambahan fitur 20"), retention with
+/// "Tambahan fitur 20"), guarded commits (spec 0020, "Commit terjaga di langkah
+/// `register`"), retention with
 /// the 20 observations kept per instance, and three races of 16 threads (same name, same
 /// artifact, same revision).
 ///
@@ -94,6 +96,7 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     writes::leases(&suite);
     creates::provider_sources(&suite);
     creates::delete_created_instance(&suite);
+    guarded::guarded(&suite);
     reads::round_trip(&suite);
     reads::lists(&suite);
     reads::stored_paths(&suite);

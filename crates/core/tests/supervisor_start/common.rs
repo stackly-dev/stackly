@@ -8,7 +8,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -29,11 +29,12 @@ use stackly_core::supervisor::{
 };
 use stackly_core::{PreparedLayout, create_instance_layout, daemon_info, prepare_layout};
 use stackly_domain::{
-    BatchError, Committed, ConfigRevisionRecord, ConfigValuesJson, DesiredState, Endpoint,
-    Instance, InstanceId, InstanceLifecycle, InstanceManifest, IpEndpoint, JournalPayload,
-    ManifestRuntime, NewInstanceManifest, OperationId, OperationKind, OperationResource,
-    OperationState, Port, PortRequest, ProviderRevisionKey, Registry, ResourceRevision,
-    RuntimeState, SecretFieldName, SecretRef, SecretUser, Transport, WriteBatch, WriteOp,
+    BatchError, CommitGuard, Committed, ConfigRevisionRecord, ConfigValuesJson, DesiredState,
+    Endpoint, Guarded, Instance, InstanceId, InstanceLifecycle, InstanceManifest, IpEndpoint,
+    JournalPayload, ManifestRuntime, NewInstanceManifest, OperationId, OperationKind,
+    OperationResource, OperationState, Port, PortRequest, ProviderRevisionKey, Registry,
+    ResourceRevision, RuntimeState, SecretFieldName, SecretRef, SecretUser, Transport, WriteBatch,
+    WriteOp,
 };
 use stackly_platform::{Clock, Platform, ProcessError, ProcessSupervision};
 use stackly_testkit::{
@@ -234,6 +235,14 @@ pub struct FaultyRegistry {
     /// How many commits that insert an instance still answer a generation
     /// conflict.
     insert_conflicts: Mutex<usize>,
+    /// Errors the next guarded commits answer with, one each, oldest first;
+    /// the guard is not called.
+    guarded_faults: Mutex<Vec<stackly_domain::RegistryError>>,
+    /// A batch committed through the fake just before the next guarded
+    /// commit, as another operation's write would.
+    before_guarded: Mutex<Option<WriteBatch>>,
+    /// How many times a guard has been called.
+    guard_calls: Arc<AtomicUsize>,
     /// Holds the next commit that moves an operation of a kind to a stage.
     stage_hold: Mutex<Option<(stackly_domain::OperationKind, &'static str, Arc<Hold>)>>,
 }
@@ -348,6 +357,34 @@ impl FaultyRegistry {
             .unwrap_or_else(PoisonError::into_inner) = count;
     }
 
+    /// Makes the next guarded commits fail with `errors`, one error per
+    /// commit, before the guard is called. `fail_commits` never reaches a
+    /// guarded commit, and this never reaches a plain one.
+    #[allow(dead_code)]
+    pub fn fail_guarded_commits(&self, errors: Vec<stackly_domain::RegistryError>) {
+        *self
+            .guarded_faults
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = errors;
+    }
+
+    /// Commits `batch` through the fake just before the next guarded
+    /// commit and before its guard reads, as a write of another operation
+    /// landing in between would.
+    #[allow(dead_code)]
+    pub fn before_guarded_commit(&self, batch: WriteBatch) {
+        *self
+            .before_guarded
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(batch);
+    }
+
+    /// How many times a guarded commit has called its guard.
+    #[allow(dead_code)]
+    pub fn guard_calls(&self) -> usize {
+        self.guard_calls.load(Ordering::SeqCst)
+    }
+
     pub fn refuse_process_observations(&self, refuse: bool) {
         *self
             .refuse_observation
@@ -420,6 +457,33 @@ impl Registry for FaultyRegistry {
             hold.pass();
         }
         self.inner.instances(filter)
+    }
+
+    fn commit_guarded(&self, guard: CommitGuard) -> Result<Guarded, BatchError> {
+        let before = self
+            .before_guarded
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(batch) = before {
+            self.inner
+                .commit(batch)
+                .expect("the batch before the guarded commit applies");
+        }
+        {
+            let mut faults = self
+                .guarded_faults
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if !faults.is_empty() {
+                return Err(BatchError::batch(faults.remove(0)));
+            }
+        }
+        let calls = Arc::clone(&self.guard_calls);
+        self.inner.commit_guarded(Box::new(move |view| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            guard(view)
+        }))
     }
 
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
@@ -656,6 +720,9 @@ impl Rig {
             read_faults: Mutex::new(Vec::new()),
             crash_hold: Mutex::new(None),
             insert_conflicts: Mutex::new(0),
+            guarded_faults: Mutex::new(Vec::new()),
+            before_guarded: Mutex::new(None),
+            guard_calls: Arc::new(AtomicUsize::new(0)),
             stage_hold: Mutex::new(None),
         });
         let redactor = Arc::new(Redactor::new());

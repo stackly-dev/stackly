@@ -22,13 +22,14 @@ use std::thread::JoinHandle;
 use jiff::Timestamp;
 use rusqlite::{Connection, Transaction};
 use stackly_domain::{
-    ArtifactRecord, AuditPage, AuditQuery, BatchError, Committed, ConfigRevisionRecord,
-    Environment, EnvironmentId, IdempotencyKey, Instance, InstanceFilter, InstanceId, InstanceName,
-    InstancePathEntry, JournalView, Lease, LeaseFilter, Operation, OperationId, OperationJournal,
-    OperationPage, OperationQuery, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
-    ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry, RegistryError,
-    RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretRef, SecretReferenceFilter,
-    SecretReferenceView, SecretUse, SecretUser, Sha256Digest, Versioned, WriteBatch,
+    ArtifactRecord, AuditPage, AuditQuery, BatchError, CommitGuard, Committed,
+    ConfigRevisionRecord, Environment, EnvironmentId, Guarded, IdempotencyKey, Instance,
+    InstanceFilter, InstanceId, InstanceName, InstancePathEntry, JournalView, Lease, LeaseFilter,
+    Operation, OperationId, OperationJournal, OperationPage, OperationQuery, ProcessObservation,
+    ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceKind, ProviderSourceRecord,
+    PruneReport, Registry, RegistryError, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences,
+    SecretRef, SecretReferenceFilter, SecretReferenceView, SecretUse, SecretUser, Sha256Digest,
+    Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
@@ -320,6 +321,13 @@ impl Registry for SqliteRegistry {
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
         let now = self.inner.clock.now();
         self.call(move |conn| write::commit(conn, &batch, now))
+            .map_err(BatchError::batch)?
+    }
+
+    fn commit_guarded(&self, guard: CommitGuard) -> Result<Guarded, BatchError> {
+        let now = self.inner.clock.now();
+        let loaded_at = self.inner.opened_at;
+        self.call(move |conn| write::commit_guarded(conn, guard, now, loaded_at))
             .map_err(BatchError::batch)?
     }
 
