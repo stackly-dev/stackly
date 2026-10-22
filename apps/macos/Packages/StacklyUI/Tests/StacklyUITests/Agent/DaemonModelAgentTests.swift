@@ -167,12 +167,15 @@ struct DaemonModelAgentTests {
     @Test func theScheduleTicksForTheModelInput() async throws {
         let rig = Rig(
             record: LaunchRecordStatus(exists: true, lastLaunchedAt: nil),
-            initialProbe: Self.fresh(.enabled))
+            initialProbe: Self.fresh(.enabled), holdFirstCall: true)
         try await rig.push(Self.refusedState(5))
+        // The refresh the loss starts waits at the gate, so the input is the initial probe's.
+        await rig.controller.waitUntilHolding()
         let input = rig.model.agentBannerInput
         #expect(DaemonBanner.ticksEverySecond(input, now: Self.launch.addingTimeInterval(10)))
         #expect(
             DaemonBanner.ticksEverySecond(input, now: Self.launch.addingTimeInterval(20)) == false)
+        rig.controller.release()
     }
 
     // MARK: - Announcements
@@ -188,11 +191,14 @@ struct DaemonModelAgentTests {
     }
 
     @Test func aLossWithAnOldStateWaitsForTheFirstProbeAndAnnouncesItsTitle() async throws {
-        let rig = Rig(initialProbe: Self.fresh())
+        let rig = Rig(initialProbe: Self.fresh(), holdFirstCall: true)
         rig.clock = Self.launch.addingTimeInterval(600)
         try await rig.push(DaemonModelTests.unreachable(600))
-        // The status is older than a poll, so nothing is said until a probe arrives.
+        // The status is older than a poll, so nothing is said until a probe arrives; the
+        // probe the loss starts waits at the gate until the test lets it return.
+        await rig.controller.waitUntilHolding()
         #expect(rig.announced.isEmpty)
+        rig.controller.release()
         try await waitUntil { rig.controller.count(of: .status) == 1 }
         try await waitUntil { rig.announced == [Self.offTitle] }
         #expect(rig.announced == [Self.offTitle])
@@ -256,7 +262,9 @@ struct DaemonModelAgentTests {
         #expect(rig.announced.last == "Background service is on.")
     }
 
-    @Test func aStateWithoutTextIsNotAnnouncedByTheDaemonModel() async throws {
+    static let notFoundTitle = "Stackly can’t find its background service."
+
+    @Test func notFoundIsLeftToTheCriticalBannerWhenTheWindowBannerShowsIt() async throws {
         let rig = Rig(afterRegister: Self.fresh(.notFound), initialProbe: Self.fresh())
         try await rig.push(DaemonModelTests.unreachable())
         for _ in 0..<20 { await Task.yield() }
@@ -265,6 +273,74 @@ struct DaemonModelAgentTests {
         #expect(rig.agent?.assessment?.state == .notFound)
         #expect(rig.announced == [Self.offTitle])
         #expect(rig.model.bannerContent(now: rig.clock)?.tone == .critical)
+    }
+
+    @Test func notFoundIsAnnouncedOnceWhenTheWindowBannerDoesNotShowTheAgentRow() async throws {
+        let rig = Rig(afterRegister: Self.fresh(.notFound), initialProbe: Self.fresh())
+        try await rig.push(.connected(DaemonModelTests.daemon(.ready)))
+        await rig.send(.caughtUp)
+        try await waitUntil { rig.model.presence == .connected(health: .ready) }
+        let row = rig.model.agentBannerInput.flatMap { AgentBanner.content($0, now: rig.clock) }
+        #expect(row == nil)
+        await rig.agent?.turnOn()
+        #expect(rig.agent?.assessment?.state == .notFound)
+        #expect(rig.announced == [Self.notFoundTitle])
+        // The same state again is not a change.
+        await rig.agent?.refresh()
+        #expect(rig.announced == [Self.notFoundTitle])
+        // A later change is announced as usual.
+        rig.controller.setStatus(Self.fresh(.requiresApproval))
+        await rig.agent?.refresh()
+        #expect(rig.announced.last == "Background service needs your approval.")
+    }
+
+    // MARK: - Failed actions
+
+    @Test func aFailedActionIsAnnouncedWithTheLastErrorTextOnce() async throws {
+        let rig = Rig(initialProbe: Self.fresh())
+        try await rig.push(.connected(DaemonModelTests.daemon(.ready)))
+        await rig.send(.caughtUp)
+        try await waitUntil { rig.model.presence == .connected(health: .ready) }
+        let error = AgentActionError.os(
+            op: .register, kind: .invalidSignature, domain: "d", code: 3)
+        rig.controller.setAfterRegister(.failure(error))
+        rig.controller.setStatus(Self.fresh())
+        await rig.agent?.turnOn()
+        #expect(rig.agent?.lastError == error)
+        #expect(rig.announced == [error.message])
+        // The next action clears the error and says nothing about it.
+        rig.controller.setAfterRegister(Self.fresh(.requiresApproval))
+        await rig.agent?.turnOn()
+        #expect(rig.agent?.lastError == nil)
+        #expect(rig.announced == [error.message, "Background service needs your approval."])
+    }
+
+    @Test func aRegistrationTheOSDidNotKeepIsAnnouncedOnce() async throws {
+        let rig = Rig(afterRegister: Self.fresh(.notRegistered), initialProbe: Self.fresh())
+        try await rig.push(.connected(DaemonModelTests.daemon(.ready)))
+        await rig.send(.caughtUp)
+        try await waitUntil { rig.model.presence == .connected(health: .ready) }
+        await rig.agent?.turnOn()
+        #expect(rig.agent?.lastError == .registrationNotKept)
+        #expect(rig.announced.last == AgentActionError.registrationNotKept.message)
+        let kept = AgentActionError.registrationNotKept.message
+        #expect(rig.announced.filter { $0 == kept }.count == 1)
+    }
+
+    @Test func daemonDidNotStartIsAnnouncedWhereverTheActionWasPressed() async throws {
+        let rig = Rig(
+            status: Self.fresh(.enabled), afterRegister: Self.fresh(.enabled),
+            record: LaunchRecordStatus(exists: true, lastLaunchedAt: nil),
+            initialProbe: Self.fresh(.enabled))
+        try await rig.push(DaemonModelTests.unreachable(5))
+        let action = Task { await rig.agent?.start() }
+        while rig.agent?.isStarting != true { await Task.yield() }
+        await rig.waitForSleep(AgentTiming.startWait)
+        rig.sleeper.fire()
+        await action.value
+        let text = AgentActionError.daemonDidNotStart(seconds: 30).message
+        #expect(rig.announced.filter { $0 == text }.count == 1)
+        #expect(text == "stacklyd didn’t start within 30 seconds.")
     }
 
     // MARK: - Starting
