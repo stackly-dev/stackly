@@ -3,10 +3,12 @@
 //! AC-11).
 
 use stackly_core::instance::data_compat::{DataOutcome, check_data_compatibility};
+use stackly_core::instance::rebind;
 use stackly_core::operation::OperationError;
 use stackly_core::supervisor::{SupervisorError, codes};
 use stackly_domain::{
-    InstanceId, InstanceLifecycle, OperationState, Registry, RuntimeState, WriteBatch, WriteOp,
+    ArtifactRecord, InstallMode, InstanceId, InstanceLifecycle, OperationState, Registry,
+    RuntimeId, RuntimeState, WriteBatch, WriteOp,
 };
 use stackly_testkit::RuntimeBuilder;
 
@@ -84,6 +86,40 @@ async fn rig_for(case: Case) -> (Rig, InstanceId) {
             .expect("the runtime row is replaced");
     }
     (rig, id)
+}
+
+/// Stores a second installed runtime of the rig's software and of `line`,
+/// as the target of a rebind check.
+fn another_runtime(rig: &Rig, line: &str) -> RuntimeId {
+    let runtime = RuntimeBuilder::new()
+        .software("fake")
+        .version("9.0.0", line)
+        .state(RuntimeState::Installed)
+        .installed_at(
+            "2026-01-01T00:00:00Z"
+                .parse()
+                .expect("a valid test timestamp"),
+        )
+        .build();
+    let InstallMode::Managed { artifact_sha256 } = runtime.install() else {
+        unreachable!("the builder makes a managed runtime");
+    };
+    let artifact = ArtifactRecord::new(
+        *artifact_sha256,
+        runtime.software().clone(),
+        runtime.version().clone(),
+        runtime.target(),
+        None,
+        None,
+    );
+    let id = runtime.id();
+    rig.registry
+        .commit(WriteBatch::new(vec![
+            WriteOp::InsertArtifact(artifact),
+            WriteOp::InsertRuntime(runtime),
+        ]))
+        .expect("the second runtime is stored");
+    id
 }
 
 /// The code and the details a failed start stored.
@@ -183,5 +219,20 @@ async fn data_compatibility_is_the_same_for_start_and_rebind() {
         );
 
         assert_eq!(started, direct, "{case:?}");
+
+        // The rebind check asks the same question of the same data: the
+        // target has the line the start refused.
+        let target = another_runtime(&rig, &runtime.line().to_string());
+        let refused = rebind::check(&*rig.registry, &rig.platform, &rig.layout, id, target)
+            .expect_err("the rebind check refuses the same data");
+        let rebound = (
+            refused.code().to_string(),
+            refused
+                .details()
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.clone()))
+                .collect::<Vec<_>>(),
+        );
+        assert_eq!(started, rebound, "{case:?}");
     }
 }
