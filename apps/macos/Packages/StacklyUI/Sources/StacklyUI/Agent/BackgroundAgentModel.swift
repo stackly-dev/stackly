@@ -4,7 +4,7 @@ import Observation
 /// The state of the background agent and the four things the user can do about it (spec
 /// 0015, *GUI*): Turn On, Open Login Items, Check Again, and Start stacklyd.
 ///
-/// ``DaemonModel`` owns it and calls ``attach(presence:now:sleep:didAssess:systemRetry:)``
+/// ``DaemonModel`` owns it and calls ``attach(presence:now:sleep:didAssess:didFail:systemRetry:)``
 /// once. Reading the status never changes the registration: only ``turnOn()`` registers
 /// and only ``start()`` relaunches. At most one call to the OS runs at a time.
 @Observable
@@ -14,7 +14,9 @@ public final class BackgroundAgentModel {
     /// When the status was last read, from the clock ``DaemonModel`` gave.
     public private(set) var lastCheckedAt: Date?
     /// What the last action failed with. Only an action sets it, and every action clears
-    /// it first.
+    /// it first. Each time it is set to an error, ``attach(presence:now:sleep:didAssess:didFail:systemRetry:)``'s
+    /// `didFail` is called once, after the `didAssess` of the same action's probe; clearing
+    /// it calls nothing.
     public private(set) var lastError: AgentActionError?
     /// Whether an action (or the wait for the daemon after the agent turned on) runs. The
     /// banner buttons are disabled meanwhile.
@@ -43,6 +45,7 @@ public final class BackgroundAgentModel {
         try await Task.sleep(for: $0)
     }
     @ObservationIgnored private var didAssess: (AgentAssessment, Date) -> Void = { _, _ in }
+    @ObservationIgnored private var didFail: (AgentActionError) -> Void = { _ in }
     @ObservationIgnored private var systemRetry: () -> Void = {}
 
     @ObservationIgnored private var presence: DaemonPresence = .connecting(slow: false)
@@ -94,12 +97,15 @@ public final class BackgroundAgentModel {
     ///   - now: The clock; `lastCheckedAt` always comes from it.
     ///   - sleep: Waits, for the polling and the wait for the daemon.
     ///   - didAssess: Called after every status read except the initial one.
+    ///   - didFail: Called once each time an action sets ``lastError``, after the `didAssess`
+    ///     of that action's probe.
     ///   - systemRetry: Asks the link to connect now, without an announcement.
     func attach(
         presence: DaemonPresence,
         now: @escaping () -> Date,
         sleep: @escaping (Duration) async throws -> Void,
         didAssess: @escaping (AgentAssessment, Date) -> Void,
+        didFail: @escaping (AgentActionError) -> Void,
         systemRetry: @escaping () -> Void
     ) {
         guard isAttached == false else { return }
@@ -108,6 +114,7 @@ public final class BackgroundAgentModel {
         self.now = now
         self.sleep = sleep
         self.didAssess = didAssess
+        self.didFail = didFail
         self.systemRetry = systemRetry
         if rootOverrideActive {
             assessment = BackgroundAgentClassifier.classify(
@@ -248,11 +255,11 @@ public final class BackgroundAgentModel {
         let record = await launchRecord.read()
         apply(outcome.result, record: record, justRegistered: outcome.justRegistered, report: true)
         if let error = outcome.error {
-            lastError = error
+            fail(with: error)
         } else if case .success(.registration(.notRegistered, _)) = outcome.result {
-            lastError = .registrationNotKept
+            fail(with: .registrationNotKept)
         } else if case .success(.registration(.unrecognized, _)) = outcome.result {
-            lastError = .registrationNotKept
+            fail(with: .registrationNotKept)
         }
         actionRunning = false
         if opensSettings, case .success(.registration(.requiresApproval, _)) = outcome.result {
@@ -265,6 +272,12 @@ public final class BackgroundAgentModel {
         } else {
             isWorking = false
         }
+    }
+
+    /// Keeps `error` as the Last error and reports it once.
+    private func fail(with error: AgentActionError) {
+        lastError = error
+        didFail(error)
     }
 
     /// What a registration call left: the status to apply, whether it counts as just
@@ -337,6 +350,17 @@ public final class BackgroundAgentModel {
             justRegistered = false
         }
         if report { didAssess(assessment, checkedAt) }
+        if isStarting { endWaitIfLaunchdStopped(assessment.state) }
+    }
+
+    /// A probe during the wait for the daemon that says the job will not start ends the
+    /// wait with no error, so the user sees the real state at once. `unavailable` says
+    /// nothing about the job, so the 30 second limit and the handshake rules still apply.
+    private func endWaitIfLaunchdStopped(_ state: BackgroundAgentState) {
+        switch state {
+        case .requiresApproval, .disabled, .notRegistered, .notFound: endWait()
+        case .enabled, .unavailable: break
+        }
     }
 
     private static func detail(of outcome: ProbeOutcome) -> String? {
@@ -378,7 +402,7 @@ public final class BackgroundAgentModel {
 
     private func startWaitElapsed() {
         guard isStarting, sawHandshake == false else { return }
-        lastError = .daemonDidNotStart(seconds: 30)
+        fail(with: .daemonDidNotStart(seconds: 30))
         endWait()
     }
 

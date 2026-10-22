@@ -69,14 +69,16 @@ public final class DaemonModel {
         static let stillUnreachable = "Still unreachable."
 
         /// What the agent's state changing to `state` announces (spec 0015,
-        /// *Pengumuman*), or `nil` for a state that has no text.
+        /// *Pengumuman*), or `nil` for a state that has no text. `not_found` has the title
+        /// of its critical banner row; the caller says it only when the window banner does
+        /// not show that row (``DaemonModel`` checks, see `agentDidAssess`).
         static func agent(_ assessment: AgentAssessment) -> String? {
             switch assessment.state {
             case .requiresApproval: "Background service needs your approval."
             case .notRegistered: "Background service is off."
             case .disabled: "Background service is turned off in Login Items."
             case .enabled: "Background service is on."
-            case .notFound: nil
+            case .notFound: "Stackly can’t find its background service."
             case .unavailable:
                 switch assessment.reason {
                 case .statusFailed, .statusUnrecognized:
@@ -250,6 +252,7 @@ public final class DaemonModel {
         agent?.attach(
             presence: presence, now: now, sleep: sleep,
             didAssess: { [weak self] assessment, _ in self?.agentDidAssess(assessment) },
+            didFail: { [weak self] error in self?.agentDidFail(error) },
             systemRetry: { [weak self] in self?.systemRetry() })
         lastAgentState = agent?.assessment?.state
         mutationPathBox.path = MutationPath(model: self)
@@ -674,7 +677,20 @@ public final class DaemonModel {
         }
         guard assessment.state != last else { return }
         lastAgentState = assessment.state
+        // The critical `not_found` row announces itself when the window banner shows it
+        // (`StateBanner`, or the onboarding card); only a hidden row is said here.
+        if assessment.state == .notFound,
+            agentBannerInput.flatMap({ AgentBanner.content($0, now: now()) }) != nil
+        {
+            return
+        }
         if let text = Announcement.agent(assessment) { announcer(text) }
+    }
+
+    /// An agent action failed: its Last error text is announced once, wherever the action
+    /// was pressed (spec 0015, *Pengumuman*).
+    private func agentDidFail(_ error: AgentActionError) {
+        announcer(error.message)
     }
 
     /// A failed attempt after a manual Reconnect from a failure is announced
