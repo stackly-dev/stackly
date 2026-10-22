@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 use stackly_protocol::instance::{
-    CreateForm, CreatePreflight, DuplicateForm, InstanceActionAccepted, InstanceSummary,
+    CreateForm, CreatePreflight, DataUsage, DataUsageReply, DuplicateForm, InstanceActionAccepted,
+    InstanceDetail, InstanceSummary,
 };
 use stackly_protocol::operation::{OperationAccepted, OperationKind, OperationState};
 use stackly_protocol::runtime::RuntimeListPage;
@@ -187,4 +188,62 @@ pub fn list_mixed() -> stackly_protocol::instance::InstancePage {
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("fixture {} reads: {error}", path.display()));
     serde_json::from_str(&text).expect("the list-mixed fixture decodes")
+}
+
+/// One `instance/detail-*.json` file: the three values `inspect --json`
+/// writes as its `result`.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Triple {
+    /// The summary.
+    pub instance: InstanceSummary,
+    /// The detail.
+    pub detail: InstanceDetail,
+    /// The size of the data folder, if one was measured.
+    pub data_usage: Option<DataUsage>,
+}
+
+/// The triple of `protocols/fixtures/instance/detail-<name>.json`.
+pub fn triple(name: &str) -> Triple {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "../../protocols/fixtures/instance/detail-{name}.json"
+    ));
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("fixture {} reads: {error}", path.display()));
+    serde_json::from_str(&text).expect("the detail fixture decodes")
+}
+
+/// The detail a daemon answers for `instance`: the PostgreSQL triple with
+/// the identity and the revision of `instance`, so the two always agree.
+pub fn detail_of(instance: &InstanceSummary) -> InstanceDetail {
+    let mut detail = triple("postgresql").detail;
+    detail.instance_id = instance.id;
+    detail.revision = instance.revision;
+    detail.provider.name.clone_from(&instance.provider.name);
+    detail
+        .provider
+        .revision
+        .clone_from(&instance.provider.revision);
+    detail
+        .provider
+        .manifest_sha256
+        .clone_from(&instance.provider.manifest_sha256);
+    detail.runtime.id = instance.runtime_id;
+    detail
+}
+
+/// The answer of a scripted daemon to `instance.get_detail` and
+/// `instance.get_data_usage` for `instance`, and `None` for any other call.
+pub fn detail_steps(call: &Call, instance: &InstanceSummary) -> Option<Vec<Step>> {
+    match call {
+        Call::InstanceGetDetail(_) => Some(vec![Step::Reply(Reply::InstanceGetDetail(Box::new(
+            detail_of(instance),
+        )))]),
+        Call::InstanceGetDataUsage(_) => Some(vec![Step::Reply(Reply::InstanceGetDataUsage(
+            DataUsageReply {
+                usage: triple("postgresql").data_usage,
+            },
+        ))]),
+        _ => None,
+    }
 }

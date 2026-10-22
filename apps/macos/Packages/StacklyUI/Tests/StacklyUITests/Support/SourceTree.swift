@@ -1,8 +1,9 @@
 import Foundation
 import Testing
 
-/// The Swift sources of the macOS app, read by the source rule tests.
-enum SourceTree {
+/// The Swift sources of the macOS app, read by the source rule tests. `nonisolated`, so the
+/// scans can run off the main actor.
+nonisolated enum SourceTree {
     /// The repository root, found from this file's path. Builds must never remap source
     /// paths (`-file-prefix-map`), or this breaks.
     static let repositoryRoot = URL(filePath: #filePath)
@@ -56,7 +57,7 @@ enum SourceTree {
 
 /// One Swift source file, with its line comments removed so prose that names a
 /// forbidden API does not count.
-struct SourceFile {
+nonisolated struct SourceFile {
     /// The path relative to the repository root.
     let path: String
     /// The file's lines, each with any `//` comment cut off. Line numbers start at 1.

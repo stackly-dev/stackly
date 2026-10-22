@@ -176,6 +176,7 @@ fn every_field_comes_from_its_source() {
         detail.provider.display_name.as_deref(),
         Some("Fake Command Provider")
     );
+    assert!(detail.provider.package_readable);
     assert_eq!(detail.runtime.id, site.runtime.id());
     assert_eq!(detail.runtime.version, site.runtime.version().to_string());
     assert_eq!(detail.runtime.target, site.runtime.target());
@@ -252,6 +253,7 @@ fn an_unreadable_package_gives_no_display_name_no_connections_and_field_names_as
         build(&site.snapshot(&uses, &[], &[], &[], None)).expect("an unreadable package is fine");
 
     assert_eq!(detail.provider.display_name, None);
+    assert!(!detail.provider.package_readable);
     assert!(detail.connections.is_empty());
     assert_eq!(detail.secrets[0].title, "authToken");
     assert_eq!(
@@ -270,6 +272,32 @@ fn a_package_that_is_not_the_pinned_one_counts_as_unreadable() {
         build(&site.snapshot(&[], &[], &[], &[], Some(&other))).expect("the detail builds");
 
     assert_eq!(detail.provider.display_name, None);
+    assert!(!detail.provider.package_readable);
+    assert!(detail.connections.is_empty());
+}
+
+#[test]
+fn a_readable_package_without_a_connection_block_is_readable_with_no_connections() {
+    let site = Site::new();
+    let plain = package(false);
+    let runtime = RuntimeBuilder::new().build();
+    let instance = instance(&plain, &runtime);
+    let snapshot = DetailSnapshot::new(
+        &instance,
+        &runtime,
+        &site.paths,
+        &[],
+        &[],
+        &[],
+        &[],
+        Some(&plain),
+        &site.layout,
+    );
+
+    let detail = build(&snapshot).expect("the detail builds");
+
+    assert!(detail.provider.package_readable);
+    assert!(detail.provider.display_name.is_some());
     assert!(detail.connections.is_empty());
 }
 

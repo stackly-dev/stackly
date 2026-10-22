@@ -261,14 +261,49 @@ struct SkeletonEndToEndTests {
     }
 
     @Test func aProcessThatOutlivesItsLimitIsKilledAndReportedAsTimedOut() async throws {
-        let started = ContinuousClock.now
-
         let outcome = try await ProcessRunner.run(
             URL(filePath: "/bin/sleep"), arguments: ["60"], timeout: .milliseconds(300))
 
         #expect(outcome.timedOut)
         #expect(outcome.status == SIGKILL)
-        #expect(ContinuousClock.now - started < .seconds(20))
+        // The run time of the process itself, so a main actor that another test holds in
+        // a full run does not count; the kill is what keeps it far below the 60 s sleep.
+        #expect(outcome.ranFor < .seconds(20))
+    }
+
+    /// The main actor is held from the launch until the process is gone, which only the
+    /// watchdog can bring about before the 60 s sleep ends. A watchdog on the main actor
+    /// would leave the sleep to end by itself, with status 0.
+    @Test(.timeLimit(.minutes(2)))
+    func theLimitKillsTheProcessWhileTheMainActorIsHeld() async throws {
+        let outcome = try await ProcessRunner.run(
+            URL(filePath: "/bin/sleep"), arguments: ["60"], timeout: .milliseconds(100),
+            onLaunch: { pid in
+                while kill(pid, 0) == 0 {
+                    usleep(1_000)
+                }
+            })
+
+        #expect(outcome.timedOut)
+        #expect(outcome.status == SIGKILL)
+    }
+
+    /// Once the end of the process is recorded, a watchdog that fires late sends nothing, so
+    /// it never reaches a pid the system may have given to another process. The test ends
+    /// the sleep with SIGTERM itself; a SIGKILL from the late watchdog would be the status.
+    @Test func aWatchdogThatFiresAfterTheEndSendsNothing() async throws {
+        let late = ProcessRunner.Watch()
+        let outcome = try await ProcessRunner.run(
+            URL(filePath: "/bin/sleep"), arguments: ["60"], timeout: .seconds(60),
+            onLaunch: { pid in
+                late.end()
+                late.kill(pid)
+                kill(pid, SIGTERM)
+            })
+
+        #expect(late.killed == false)
+        #expect(outcome.status == SIGTERM)
+        #expect(outcome.timedOut == false)
     }
 }
 

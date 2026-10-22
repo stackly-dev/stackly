@@ -1,0 +1,113 @@
+{
+  "instance": {
+    "id": "0192f3a5-0000-7000-8000-000000000008",
+    "name": "locked-db",
+    "displayName": null,
+    "revision": 11,
+    "software": "postgresql",
+    "provider": {
+      "name": "official/postgresql",
+      "revision": "2026.10.1",
+      "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed"
+    },
+    "runtimeId": "0192f3a5-0000-7000-8000-0000000000a8",
+    "runtimeVersion": "17.2.0",
+    "lifecycle": "retained",
+    "desired": "stopped",
+    "readiness": {
+      "state": "unknown",
+      "reason": "not_running",
+      "detail": null,
+      "observedAt": "2026-10-20T09:00:05.000Z"
+    },
+    "health": {
+      "state": "unknown",
+      "reason": "not_running",
+      "detail": null,
+      "observedAt": "2026-10-20T09:00:05.000Z"
+    },
+    "statusSeq": 8,
+    "process": null,
+    "lastFailure": null,
+    "restart": {
+      "attempts": 0,
+      "budget": 5,
+      "windowSeconds": 60,
+      "nextAttemptAt": null,
+      "exhausted": false
+    },
+    "blocker": null,
+    "endpoints": [
+      {
+        "name": "client",
+        "transport": "tcp",
+        "host": "127.0.0.1",
+        "port": 5433,
+        "portMode": "fixed",
+        "bound": false,
+        "socketPath": null
+      }
+    ],
+    "leftoverProcesses": [],
+    "logsUnavailable": false,
+    "ownership": "manual",
+    "initialized": true
+  },
+  "detail": {
+    "instanceId": "0192f3a5-0000-7000-8000-000000000008",
+    "revision": 11,
+    "provider": {
+      "name": "official/postgresql",
+      "revision": "2026.10.1",
+      "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed",
+      "displayName": "PostgreSQL",
+      "packageReadable": true
+    },
+    "runtime": {
+      "id": "0192f3a5-0000-7000-8000-0000000000a8",
+      "version": "17.2.0",
+      "target": {
+        "os": "macos",
+        "arch": "aarch64"
+      },
+      "installMode": "managed",
+      "artifactSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    },
+    "dataPath": "/Users/test/Library/Application Support/Stackly/instances/locked-db/data",
+    "startup": "manual",
+    "secrets": [
+      {
+        "field": "superuserPassword",
+        "title": "Superuser password",
+        "reference": "local:instance/0192f3a5-0000-7000-8000-000000000008/superuser-password",
+        "status": "missing"
+      }
+    ],
+    "dependents": [],
+    "connections": [
+      {
+        "name": "uri",
+        "title": "Connection string",
+        "state": "unavailable",
+        "reason": "retained",
+        "masked": null,
+        "parts": [],
+        "portMayChange": false
+      },
+      {
+        "name": "socket",
+        "title": "Unix socket",
+        "state": "unavailable",
+        "reason": "retained",
+        "masked": null,
+        "parts": [],
+        "portMayChange": false
+      }
+    ]
+  },
+  "dataUsage": {
+    "bytes": 52428800,
+    "complete": false,
+    "scannedAt": "2026-10-20T09:10:00.000Z"
+  }
+}

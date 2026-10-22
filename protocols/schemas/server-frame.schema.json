@@ -906,6 +906,178 @@
         }
       ]
     },
+    "ConnectionAvailability": {
+      "description": "Whether a connection string could be built. Open.",
+      "oneOf": [
+        {
+          "description": "The string is ready except for its secrets.",
+          "type": "string",
+          "const": "available"
+        },
+        {
+          "description": "The string cannot be built now; `reason` says why.",
+          "type": "string",
+          "const": "unavailable"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ConnectionPart": {
+      "description": "One piece of a connection string: [`text`](Self::text) for a text part,\n[`secret`](Self::secret) for a secret part.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What the part holds.",
+          "$ref": "#/$defs/ConnectionPartKind"
+        },
+        "secret": {
+          "description": "The secret of a secret part: its field and its reference, never its\nvalue.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionSecretPart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "description": "The text of a text part, already percent encoded, written as is.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "ConnectionPartKind": {
+      "description": "What one [`ConnectionPart`] holds. Open.",
+      "oneOf": [
+        {
+          "description": "Text that is already percent encoded.",
+          "type": "string",
+          "const": "text"
+        },
+        {
+          "description": "A secret value the client fills in.",
+          "type": "string",
+          "const": "secret"
+        },
+        {
+          "description": "A kind this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ConnectionSecretPart": {
+      "description": "The secret a secret part stands for.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field of the secret.",
+          "type": "string"
+        },
+        "reference": {
+          "description": "The reference `secret.reveal` takes.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "reference"
+      ]
+    },
+    "ConnectionString": {
+      "description": "One connection string of an instance, in manifest order.\n\nWhen `state` is `available`, `masked` holds the string with every secret\nas `****`, `parts` is not empty, and `reason` is null. When it is\n`unavailable`, `reason` is set, `masked` is null, and `parts` is empty.\n[`ConnectionString::is_consistent`] checks that.",
+      "type": "object",
+      "properties": {
+        "masked": {
+          "description": "The string with each secret as four stars; set if and only if the\nstring is available.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The entry name from the manifest, such as `uri`.",
+          "type": "string"
+        },
+        "parts": {
+          "description": "The string in order: encoded text and secret references, never a\nvalue. Empty when unavailable.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectionPart"
+          }
+        },
+        "portMayChange": {
+          "description": "True when the port may differ the next time the instance starts.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Set if and only if the string is unavailable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionUnavailableReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "state": {
+          "description": "Whether the string could be built.",
+          "$ref": "#/$defs/ConnectionAvailability"
+        },
+        "title": {
+          "description": "The label a client shows.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "title",
+        "state",
+        "parts",
+        "portMayChange"
+      ]
+    },
+    "ConnectionUnavailableReason": {
+      "description": "Why a connection string cannot be built. Open.",
+      "oneOf": [
+        {
+          "description": "An endpoint the string names has no effective port yet.",
+          "type": "string",
+          "const": "port_not_assigned"
+        },
+        {
+          "description": "The package of the instance cannot be used to render the string.",
+          "type": "string",
+          "const": "package_unavailable"
+        },
+        {
+          "description": "The instance was removed and kept.",
+          "type": "string",
+          "const": "retained"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "CountedProgress": {
       "description": "Content of a `counted` progress.",
       "type": "object",
@@ -1578,6 +1750,51 @@
         "rootOverride"
       ]
     },
+    "DataUsage": {
+      "description": "The size of a data folder.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "The allocated bytes (blocks times 512) of every entry counted.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "complete": {
+          "description": "False when the scan stopped at a limit, so `bytes` is a lower bound.",
+          "type": "boolean"
+        },
+        "scannedAt": {
+          "description": "When the scan finished.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "bytes",
+        "complete",
+        "scannedAt"
+      ]
+    },
+    "DataUsageReply": {
+      "description": "Reply of `instance.get_data_usage`.",
+      "type": "object",
+      "properties": {
+        "usage": {
+          "description": "The measured size; null when `cachedOnly` found no fresh result.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      }
+    },
     "DeleteSecretReply": {
       "description": "Reply of `secret.delete`.",
       "type": "object",
@@ -1661,6 +1878,156 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "DependentOwnership": {
+      "description": "Whether an environment owns an instance it holds. Open.",
+      "oneOf": [
+        {
+          "description": "Only this environment uses the instance.",
+          "type": "string",
+          "const": "dedicated"
+        },
+        {
+          "description": "Other environments may use it too.",
+          "type": "string",
+          "const": "shared"
+        },
+        {
+          "description": "An ownership this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "DetailDependent": {
+      "description": "An environment that holds the instance.",
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "description": "The environment.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "leaseActive": {
+          "description": "Whether the environment holds an active lease on the instance.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        },
+        "ownership": {
+          "description": "Whether the environment owns the instance.",
+          "$ref": "#/$defs/DependentOwnership"
+        }
+      },
+      "required": [
+        "environmentId",
+        "name",
+        "ownership",
+        "leaseActive"
+      ]
+    },
+    "DetailProvider": {
+      "description": "The pinned provider revision of an instance.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "`metadata.displayName` of the pinned package; null when the package\ncannot be read. Never taken from the catalog.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "manifestSha256": {
+          "description": "The SHA-256 of the pinned manifest.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The provider name, such as `official/postgresql`.",
+          "type": "string"
+        },
+        "packageReadable": {
+          "description": "False when the pinned package cannot be read, or the package found\nis not the pinned one; then `displayName` is null and the detail has\nno connection. True otherwise, also for a package without a\n`connection` block.",
+          "type": "boolean"
+        },
+        "revision": {
+          "description": "The pinned revision.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "manifestSha256",
+        "packageReadable"
+      ]
+    },
+    "DetailRuntime": {
+      "description": "The runtime an instance runs on.",
+      "type": "object",
+      "properties": {
+        "artifactSha256": {
+          "description": "The SHA-256 of the installed artifact; null for an external runtime.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "id": {
+          "description": "The runtime ID.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "installMode": {
+          "description": "Whether Stackly installed it or it lives in a folder the user owns.",
+          "$ref": "#/$defs/InstallModeKind"
+        },
+        "target": {
+          "description": "The OS and architecture it was built for.",
+          "$ref": "#/$defs/HostTarget"
+        },
+        "version": {
+          "description": "The exact version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "target",
+        "installMode"
+      ]
+    },
+    "DetailSecret": {
+      "description": "One secret an instance uses.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field.",
+          "type": "string"
+        },
+        "reference": {
+          "description": "The reference `secret.reveal` takes.",
+          "type": "string"
+        },
+        "status": {
+          "description": "What the store held when the daemon last looked; `unknown` before the\nfirst look.",
+          "$ref": "#/$defs/SecretStatus"
+        },
+        "title": {
+          "description": "The title from the schema of the pinned package, else the field name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "title",
+        "reference",
+        "status"
       ]
     },
     "DuplicateForm": {
@@ -3234,6 +3601,72 @@
           "type": "string",
           "const": "stopped"
         }
+      ]
+    },
+    "InstanceDetail": {
+      "description": "Reply of `instance.get_detail`.",
+      "type": "object",
+      "properties": {
+        "connections": {
+          "description": "The connection strings, in manifest order; none when the pinned\npackage cannot be read or declares none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectionString"
+          }
+        },
+        "dataPath": {
+          "description": "The absolute path of the data folder.",
+          "type": "string"
+        },
+        "dependents": {
+          "description": "The environments that hold the instance, ordered by name and then ID.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailDependent"
+          }
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "provider": {
+          "description": "The pinned provider revision.",
+          "$ref": "#/$defs/DetailProvider"
+        },
+        "revision": {
+          "description": "The revision of the instance this detail was built from. A client\ndrops a detail older than the one it holds.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "runtime": {
+          "description": "The runtime.",
+          "$ref": "#/$defs/DetailRuntime"
+        },
+        "secrets": {
+          "description": "One row per secret the instance uses, ordered by field.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailSecret"
+          }
+        },
+        "startup": {
+          "description": "When the instance starts on its own.",
+          "$ref": "#/$defs/StartupPolicyKind"
+        }
+      },
+      "required": [
+        "instanceId",
+        "revision",
+        "provider",
+        "runtime",
+        "dataPath",
+        "startup",
+        "secrets",
+        "dependents",
+        "connections"
       ]
     },
     "InstanceHealth": {
@@ -6110,6 +6543,40 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The detail of an instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_detail"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The size of a data folder, or null when none is cached.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DataUsageReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_data_usage"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -7460,6 +7927,26 @@
           "description": "Always sign every Mach-O file ad hoc.",
           "type": "string",
           "const": "adhoc_pipeline"
+        },
+        {
+          "description": "A policy this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "StartupPolicyKind": {
+      "description": "When an instance starts on its own. Open.",
+      "oneOf": [
+        {
+          "description": "Only when the user starts it.",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "When the user logs in.",
+          "type": "string",
+          "const": "at_login"
         },
         {
           "description": "A policy this build does not know. The daemon never sends it.",
