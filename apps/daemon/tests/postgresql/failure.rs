@@ -5,16 +5,14 @@ use std::sync::Arc;
 use stackly_core::instance::create::Hook;
 use stackly_protocol::instance::PortRequest;
 use stackly_protocol::operation::OperationState;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, create_params, new_password};
 
-async fn init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035", "BR-009"],
-        kind = Kind::Native,
-        expected = "a data folder that holds a file once the create checked it empty makes initdb exit 1, the init fails with init_step_failed, no password file is left, and the create ends failed with the instance row, the instance folder, and the secret reference all removed",
-    );
+async fn init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated(
+    pg: Pg,
+    ev: Evidence,
+) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -91,12 +89,24 @@ async fn init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compen
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated()
  {
-    init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035", "BR-009"],
+        kind = Kind::Native,
+        expected = "a data folder that holds a file once the create checked it empty makes initdb exit 1, the init fails with init_step_failed, no password file is left, and the create ends failed with the instance row, the instance folder, and the secret reference all removed",
+    );
+    init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated()
  {
-    init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035", "BR-009"],
+        kind = Kind::Native,
+        expected = "a data folder that holds a file once the create checked it empty makes initdb exit 1, the init fails with init_step_failed, no password file is left, and the create ends failed with the instance row, the instance folder, and the secret reference all removed",
+    );
+    init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compensated(pg, ev).await;
 }

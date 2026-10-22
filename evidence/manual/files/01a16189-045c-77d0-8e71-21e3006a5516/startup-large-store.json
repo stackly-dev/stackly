@@ -1,0 +1,25 @@
+{
+ "store_bytes": 127335642,
+ "first_connect_ms": 102.3,
+ "attempts": [
+  {
+   "connected_ms": 102.3,
+   "info_jetstream": true,
+   "info_server_name": "golden",
+   "pong_ms": 102.9,
+   "js_api": "io.nats.jetstream.api.v1.account_info_response",
+   "js_api_ms": 103.2
+  }
+ ],
+ "attempt_count": 1,
+ "log": [
+  "[37905] 2026/10/22 09:54:04.557509 [INF] Starting nats-server",
+  "... 300 lines \"Starting restore for stream\" between 09:54:04.559145 and 09:54:04.630760 cut ...",
+  "[37905] 2026/10/22 09:54:04.557855 [INF] Starting JetStream",
+  "[37905] 2026/10/22 09:54:04.643296 [INF] Took 85.338833ms to start JetStream",
+  "[37905] 2026/10/22 09:54:04.643403 [INF] Listening for client connections on 127.0.0.1:61386",
+  "[37905] 2026/10/22 09:54:04.643413 [INF] Server is ready",
+  "[37905] 2026/10/22 09:54:04.645165 [INF] Initiating JetStream Shutdown...",
+  "[37905] 2026/10/22 09:54:04.646554 [INF] JetStream Shutdown"
+ ]
+}
