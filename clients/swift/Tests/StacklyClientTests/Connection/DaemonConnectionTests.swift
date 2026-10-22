@@ -291,8 +291,6 @@ struct DaemonConnectionTests {
     @Test func aFrameAboveTheLimitClosesTheConnection() async throws {
         server.serve { session in
             try session.acceptHandshake(limits: Samples.limits.withFrameBytes(64))
-            // Later than the handshake reply, so the daemon's limit applies.
-            Thread.sleep(forTimeInterval: 0.2)
             try session.sendRaw([0x00, 0x00, 0x01, 0x00])
         }
         let (connection, _) = try await open()

@@ -380,16 +380,13 @@ public actor DaemonConnection {
                 return
             }
             guard phase != .closed else { return }
-            var refused: FrameError?
-            do {
-                try decoder.push(chunk)
-            } catch {
-                refused = error
-            }
+            // A refused header is read from `refusal` below: the handshake
+            // reply in this chunk can change the limit it is checked against.
+            try? decoder.push(chunk)
             while phase != .closed, let payload = decoder.nextFrame() {
                 handle(payload)
             }
-            if let refused {
+            if let refused = decoder.refusal {
                 terminate(reason: ClientErrorCatalog.frame(refused))
                 return
             }
