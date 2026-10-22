@@ -11,14 +11,6 @@ struct ConnectionDiagnosticsTests {
     // MARK: - Hints
 
     nonisolated static let codeHints: [(String, String)] = [
-        (
-            "ipc.endpoint_missing",
-            "stacklyd isn’t running. Start it with stacklyd, then click Reconnect."
-        ),
-        (
-            "ipc.connection_refused",
-            "A stale socket is left from a stopped stacklyd. Start stacklyd, then click Reconnect."
-        ),
         ("ipc.call_timeout", "stacklyd stopped answering."),
         ("ipc.connection_closed", "stacklyd closed the connection."),
         ("daemon.shutting_down", "stacklyd is shutting down."),
@@ -35,6 +27,36 @@ struct ConnectionDiagnosticsTests {
             let error = DiagnosticsError(code: code, category: "unavailable", message: "m")
             #expect(ConnectionHint.text(status: status, error: error) == hint, "\(code)")
         }
+    }
+
+    /// The two codes the background agent answers (spec 0015) have no hint of their own: the
+    /// words come from the agent's banner row, so without one the hint is empty.
+    @Test func theTwoAgentCodesHaveNoHintWithoutAnAgent() {
+        let status = ShellStatus.unreachable(lastKnownAt: nil, since: Self.now)
+        for code in ["ipc.endpoint_missing", "ipc.connection_refused"] {
+            let error = DiagnosticsError(code: code, category: "unavailable", message: "m")
+            #expect(ConnectionHint.text(status: status, error: error) == nil, "\(code)")
+        }
+    }
+
+    @Test func theTwoAgentCodesTakeTheirWordsFromTheAgentRow() throws {
+        let status = ShellStatus.unreachable(lastKnownAt: nil, since: Self.now)
+        let input = AgentBanner.Input(
+            status: status, failureCode: "ipc.endpoint_missing",
+            assessment: AgentAssessment(state: .requiresApproval, recovery: .approveInLoginItems))
+        let diagnostics = ConnectionDiagnostics(
+            status: status,
+            lastError: DiagnosticsError(
+                code: "ipc.endpoint_missing", category: "unavailable", message: "m"),
+            appProtocol: "1.0", agentHint: input)
+        let rows = diagnostics.rows(
+            calendar: Calendar(identifier: .gregorian), locale: Locale(identifier: "en_US"),
+            timeZone: .gmt, now: Self.now)
+        let hint = try #require(rows.first { $0.label == "What to do" })
+        #expect(
+            hint.value
+                == "Allow Stackly to run in the background. Turn on Stackly in System Settings > General > Login Items & Extensions. Stackly doesn’t change this setting for you."
+        )
     }
 
     @Test func aHandshakeCallTimeoutSaysFiveSecondsAndTheDaemonOnlyCodeHasNoHint() {
@@ -270,7 +292,6 @@ struct ConnectionDiagnosticsTests {
                 Status: stacklyd unavailable
                 Socket: /tmp/stackly/stacklyd.sock
                 Last error: ipc.endpoint_missing · unavailable · no socket at the daemon path
-                What to do: stacklyd isn’t running. Start it with stacklyd, then click Reconnect.
                 Last connected: Never
                 Protocol: Stackly 1.0
                 """

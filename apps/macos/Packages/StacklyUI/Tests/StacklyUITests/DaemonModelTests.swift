@@ -126,6 +126,18 @@ struct DaemonModelTests {
 
     static let missing = ClientErrorCatalog.endpointMissing(path: "/t/stackly/stacklyd.sock")
 
+    /// A lost connection whose code has a hint of its own (`ipc.connection_closed`); the two
+    /// codes of the missing and refused socket have none without a background agent.
+    static func closed(_ seconds: TimeInterval = 5) -> ConnectionState {
+        .unreachable(
+            ErrorBody(
+                code: "ipc.connection_closed", category: .unavailable, message: "m",
+                retryable: true, resource: nil, fields: nil, hint: nil, details: nil,
+                operationId: nil, rule: nil, items: nil),
+            since: launch.addingTimeInterval(seconds),
+            nextAttempt: launch.addingTimeInterval(seconds + 0.5))
+    }
+
     static func unreachable(_ seconds: TimeInterval = 5) -> ConnectionState {
         .unreachable(
             missing, since: launch.addingTimeInterval(seconds),
@@ -437,7 +449,7 @@ struct DaemonModelTests {
         let untrusted = ClientErrorCatalog.endpointUntrusted(
             path: "/t/stackly/stacklyd.sock", reason: .groupOrOtherAccess)
         let failures: [ConnectionState] = [
-            Self.unreachable(5),
+            Self.closed(5),
             .untrusted(
                 untrusted, since: Self.launch.addingTimeInterval(5),
                 nextAttempt: Self.launch.addingTimeInterval(5.5)),

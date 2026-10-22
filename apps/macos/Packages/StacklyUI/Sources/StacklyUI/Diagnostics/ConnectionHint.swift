@@ -33,8 +33,13 @@ nonisolated public enum ConnectionHint {
     /// - Parameters:
     ///   - status: The daemon's state.
     ///   - error: The last connection error, or `nil`.
-    public static func text(status: ShellStatus, error: DiagnosticsError?) -> String? {
-        let parts = [statusHint(status) ?? error.flatMap(codeHint), error?.daemonHint]
+    ///   - agent: The words of the background agent's banner row, for
+    ///     `ipc.endpoint_missing` and `ipc.connection_refused`; those two codes have no hint
+    ///     of their own, so without it the hint is empty.
+    public static func text(
+        status: ShellStatus, error: DiagnosticsError?, agent: String? = nil
+    ) -> String? {
+        let parts = [statusHint(status) ?? agent ?? error.flatMap(codeHint), error?.daemonHint]
             .compactMap { $0 }
             .filter { $0.isEmpty == false }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
@@ -67,11 +72,9 @@ nonisolated public enum ConnectionHint {
     /// The hint for an error code, or `nil` for a code without one.
     private static func codeHint(_ error: DiagnosticsError) -> String? {
         switch error.code {
-        case "ipc.endpoint_missing":
-            // provisional: F15 (the GUI starts the daemon itself)
-            "stacklyd isn’t running. Start it with stacklyd, then click Reconnect."
-        case "ipc.connection_refused":
-            "A stale socket is left from a stopped stacklyd. Start stacklyd, then click Reconnect."
+        case "ipc.endpoint_missing", "ipc.connection_refused":
+            // The background agent's banner row gives the words (spec 0015).
+            nil
         case "ipc.io_error":
             "Stackly couldn’t reach the socket (\(error.operation ?? "unknown"): \(error.kind ?? "unknown"))."
         case "ipc.endpoint_untrusted":

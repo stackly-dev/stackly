@@ -361,7 +361,7 @@ Page banners from `StateView`:
 - The time comes from `StaleNote.formattedSince(now:calendar:locale:timeZone:)`: the short time in the locale's style (14:02 in a 24 hour locale, 2:02 PM in en_US), plus the short date when it is not today in that time zone. The banner reads the calendar, locale, and time zone from the environment and updates every minute.
 - While `isRefreshing`, Retry is disabled and shows a small `ProgressView` next to it.
 - Content is never dimmed while stale (the mockup's 0.6 opacity fails AA).
-- A daemon that cannot be reached is not a page stale note. The app shell (spec 0013) shows one `StateBanner(tone: .caution, …, base: .window)` for the whole window and sets `MutationAvailability`.
+- A daemon that cannot be reached is not a page stale note. The app shell (spec 0013) shows one `StateBanner(tone: .caution, …, base: .window)` for the whole window and sets `MutationAvailability`. When the cause is a missing or refused socket, the same banner shows the row of the background agent's state (`AgentBanner`, spec 0015): caution for off, approval, and not running, informative while stacklyd starts, critical when macOS cannot find the service. Its actions (Turn On, Open Login Items, Check Again, Start stacklyd) never change data, so the gate never disables them.
 
 ### Loading
 

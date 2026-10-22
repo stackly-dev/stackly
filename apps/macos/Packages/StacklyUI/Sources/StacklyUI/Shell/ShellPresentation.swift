@@ -107,19 +107,31 @@ nonisolated public indirect enum ShellStatus: Hashable, Sendable {
     }
 }
 
-/// An action the daemon banner offers. Neither changes data, so the mutation gate never
+/// An action the daemon banner offers. None changes data, so the mutation gate never
 /// disables them.
 nonisolated public enum DaemonBannerAction: Hashable, Sendable {
     /// Tries to connect now.
     case reconnect
     /// Opens the Diagnostics page.
     case openDiagnostics
+    /// Registers the background agent (spec 0015).
+    case turnOn
+    /// Opens Login Items in System Settings.
+    case openLoginItems
+    /// Reads the background agent's status again.
+    case checkAgain
+    /// Starts stacklyd through the background agent.
+    case startDaemon
 
     /// The button title.
     public var title: String {
         switch self {
         case .reconnect: "Reconnect"
         case .openDiagnostics: "Open Diagnostics"
+        case .turnOn: "Turn On"
+        case .openLoginItems: "Open Login Items"
+        case .checkAgain: "Check Again"
+        case .startDaemon: "Start stacklyd"
         }
     }
 }

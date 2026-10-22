@@ -241,12 +241,35 @@
                 return FixtureScenario(
                     id: id, connection: [.state(.misconfigured(.rootOverride(.empty)))],
                     expectedPresence: .misconfigured(.rootOverride(.empty)))
+            case .agentRequiresApproval:
+                return agentScenario(id, agent: .requiresApproval)
+            case .agentDisabled:
+                return agentScenario(id, agent: .disabled)
+            case .agentEnabled:
+                return agentScenario(id, agent: .enabled, since: FixtureClock.minutesAgo(1))
+            case .agentNotFound:
+                return agentScenario(id, agent: .notFound)
+            case .agentUnavailable:
+                return agentScenario(id, agent: .unavailable)
             case .onboarding:
                 return FixtureScenario(
                     id: id, connection: [.state(connected(.fixture()))],
                     handshake: .fixture, daemonInfo: .fixture, health: .fixture(),
                     onboardingFinished: false, expectedPresence: nil)
             }
+        }
+
+        /// An agent scenario: unreachable from the start with `ipc.endpoint_missing`, no
+        /// data, and the agent of the case.
+        private static func agentScenario(
+            _ id: ID, agent: FixtureAgent, since: Date = FixtureClock.now
+        ) -> FixtureScenario {
+            let state = ConnectionState.unreachable(
+                ClientErrorCatalog.endpointMissing(path: FixturePaths.socket), since: since,
+                nextAttempt: FixtureClock.now.addingTimeInterval(5))
+            return FixtureScenario(
+                id: id, connection: [.state(state)],
+                expectedPresence: .unreachable(lastKnownAt: nil), agent: agent)
         }
 
         private static func connectedScenario(

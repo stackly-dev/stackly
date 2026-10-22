@@ -33,7 +33,17 @@ final class ShellUITests: XCTestCase {
 
     static let reconnect = "Reconnect"
     static let diagnostics = "Open Diagnostics"
+    static let turnOn = "Turn On"
+    static let openLoginItems = "Open Login Items"
+    static let checkAgain = "Check Again"
+    static let startDaemon = "Start stacklyd"
     static let both = [reconnect, diagnostics]
+    /// Every action a banner can offer. A banner has exactly the ones its row lists.
+    static let allActions = [
+        reconnect, diagnostics, turnOn, openLoginItems, checkAgain, startDaemon,
+    ]
+    static let unavailableFooter = "stacklyd unavailable"
+    static let offTitle = "Stackly’s background service is off."
     static let incompatibleTitle = "This version of Stackly can’t talk to stacklyd."
 
     // MARK: - Footer and banner per scenario
@@ -103,8 +113,8 @@ final class ShellUITests: XCTestCase {
             expected: "a daemon that went away shows the unreachable banner with Reconnect")
         try check(
             Expectation(
-                .daemonOffline, footer: "stacklyd unavailable",
-                banner: "Can’t connect to stacklyd.", actions: Self.both))
+                .daemonOffline, footer: Self.unavailableFooter,
+                banner: Self.offTitle, actions: [Self.turnOn, Self.diagnostics]))
     }
 
     func testUnreachableDaemonOffersReconnectAndDiagnostics() throws {
@@ -112,8 +122,105 @@ final class ShellUITests: XCTestCase {
             covers: ["AC-024"], expected: "an unreachable daemon shows the banner with Reconnect")
         try check(
             Expectation(
-                .daemonUnreachable, footer: "stacklyd unavailable",
-                banner: "Can’t connect to stacklyd.", actions: Self.both))
+                .daemonUnreachable, footer: Self.unavailableFooter,
+                banner: Self.offTitle, actions: [Self.turnOn, Self.diagnostics]))
+    }
+
+    // MARK: - The background agent rows (spec 0015, K14 Option A)
+
+    func testRequiresApprovalAgentOffersLoginItemsAndCheckAgain() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "an agent that needs approval shows its banner row")
+        try check(
+            Expectation(
+                .agentRequiresApproval, footer: Self.unavailableFooter,
+                banner: "Allow Stackly to run in the background.",
+                actions: [Self.openLoginItems, Self.checkAgain]))
+    }
+
+    func testDisabledAgentOffersLoginItemsAndCheckAgain() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "an agent turned off in Login Items shows its banner row")
+        try check(
+            Expectation(
+                .agentDisabled, footer: Self.unavailableFooter,
+                banner: "Stackly’s background service is turned off.",
+                actions: [Self.openLoginItems, Self.checkAgain]))
+    }
+
+    func testEnabledAgentWithoutADaemonOffersStart() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "an enabled agent and no daemon offers Start stacklyd")
+        try check(
+            Expectation(
+                .agentEnabled, footer: Self.unavailableFooter, banner: "stacklyd isn’t running.",
+                actions: [Self.startDaemon, Self.diagnostics]))
+    }
+
+    func testNotFoundAgentBeforeTurnOnOffersTurnOn() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "an agent the OS has not found yet offers Turn On")
+        try check(
+            Expectation(
+                .agentNotFound, footer: Self.unavailableFooter, banner: Self.offTitle,
+                actions: [Self.turnOn, Self.diagnostics]))
+    }
+
+    func testUnavailableAgentOffersCheckAgain() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "an agent whose status timed out offers Check Again")
+        try check(
+            Expectation(
+                .agentUnavailable, footer: Self.unavailableFooter,
+                banner: "Stackly couldn’t check its background service.",
+                actions: [Self.checkAgain, Self.diagnostics]))
+    }
+
+    func testTurnOnInTheUnreachableScenarioShowsTheApprovalBanner() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "Turn On leads to the banner that asks for approval")
+        let app = launch(.daemonUnreachable)
+        let banner = app.element(AccessibilityID.DaemonBanner.container)
+        XCTAssertTrue(banner.waitForExistence(timeout: 5))
+        banner.buttons[Self.turnOn].click()
+        XCTAssertTrue(
+            banner.waitForLabel("Allow Stackly to run in the background."),
+            "the banner reads \(banner.label)")
+        XCTAssertTrue(banner.buttons[Self.openLoginItems].exists)
+        XCTAssertTrue(banner.buttons[Self.checkAgain].exists)
+        XCTAssertFalse(banner.buttons[Self.turnOn].exists)
+    }
+
+    func testTurnOnWhenTheServiceIsNotFoundShowsTheCriticalBanner() throws {
+        try evidence(
+            covers: ["AC-024"],
+            expected: "Turn On on an agent the OS cannot find shows the critical banner")
+        let app = launch(.agentNotFound)
+        let banner = app.element(AccessibilityID.DaemonBanner.container)
+        XCTAssertTrue(banner.waitForExistence(timeout: 5))
+        banner.buttons[Self.turnOn].click()
+        XCTAssertTrue(
+            banner.waitForLabel("Stackly can’t find its background service."),
+            "the banner reads \(banner.label)")
+        XCTAssertTrue(banner.buttons[Self.diagnostics].exists)
+        for action in Self.allActions where action != Self.diagnostics {
+            XCTAssertFalse(banner.buttons[action].exists, "the banner should not offer \(action)")
+        }
+    }
+
+    func testStartStacklydShowsTheStartingBannerWithoutActions() throws {
+        try evidence(
+            covers: ["AC-024"], expected: "Start stacklyd leads to the starting banner")
+        let app = launch(.agentEnabled)
+        let banner = app.element(AccessibilityID.DaemonBanner.container)
+        XCTAssertTrue(banner.waitForExistence(timeout: 5))
+        banner.buttons[Self.startDaemon].click()
+        XCTAssertTrue(
+            banner.waitForLabel("stacklyd is starting…"), "the banner reads \(banner.label)")
+        for action in Self.allActions {
+            XCTAssertFalse(banner.buttons[action].exists, "the banner should not offer \(action)")
+        }
+        // The wait for the daemon ends after 30 seconds; the test does not wait for it.
     }
 
     func testMajorMismatchShowsTheIncompatibleBanner() throws {
@@ -173,7 +280,7 @@ final class ShellUITests: XCTestCase {
         if let title = expectation.banner {
             XCTAssertTrue(banner.waitForExistence(timeout: bannerTimeout), "no banner")
             XCTAssertEqual(banner.label, title)
-            for action in [Self.reconnect, Self.diagnostics] {
+            for action in Self.allActions {
                 let button = banner.buttons[action]
                 if expectation.actions.contains(action) {
                     XCTAssertTrue(button.exists, "the banner has no \(action) action")

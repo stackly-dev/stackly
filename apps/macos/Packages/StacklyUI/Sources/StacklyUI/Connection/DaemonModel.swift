@@ -67,6 +67,24 @@ public final class DaemonModel {
         static let unreachable = "Can’t connect to stacklyd."
         static let reconnected = "Reconnected. State refreshed."
         static let stillUnreachable = "Still unreachable."
+
+        /// What the agent's state changing to `state` announces (spec 0015,
+        /// *Pengumuman*), or `nil` for a state that has no text.
+        static func agent(_ assessment: AgentAssessment) -> String? {
+            switch assessment.state {
+            case .requiresApproval: "Background service needs your approval."
+            case .notRegistered: "Background service is off."
+            case .disabled: "Background service is turned off in Login Items."
+            case .enabled: "Background service is on."
+            case .notFound: nil
+            case .unavailable:
+                switch assessment.reason {
+                case .statusFailed, .statusUnrecognized:
+                    "Stackly couldn’t check its background service."
+                default: nil
+                }
+            }
+        }
     }
 
     /// The presence.
@@ -80,6 +98,10 @@ public final class DaemonModel {
     public private(set) var lastDaemon: ConnectedDaemon?
     /// The last connection error.
     public private(set) var lastError: ErrorBody?
+    /// The code of the last failed attempt while the status stays unreachable, kept while
+    /// the stores refresh after it and `nil` in every other presence (spec 0015). It is
+    /// needed because ``lastError`` is cleared when the connection opens.
+    public private(set) var unreachableCode: String?
     /// When the link last completed a handshake.
     public private(set) var lastConnectedAt: Date?
     /// The link's latest status.
@@ -93,6 +115,11 @@ public final class DaemonModel {
     public let instances: InstanceStore
     /// The provider catalog, for the Catalog page.
     public let catalog: CatalogStore
+    /// The background agent, or `nil` when the shell has none (spec 0015).
+    public let agent: BackgroundAgentModel?
+    /// Whether `STACKLY_ROOT` is set. `ShellBootstrap.assemble` sets it once, right after
+    /// the model is created; the agent model learned the same value at creation.
+    public internal(set) var rootOverrideActive = false
 
     @ObservationIgnored private let link: LinkHandle
     @ObservationIgnored private let signals: AsyncStream<SyncSignal>?
@@ -112,6 +139,13 @@ public final class DaemonModel {
     @ObservationIgnored private var lostSinceRefresh = false
     @ObservationIgnored private var manualRetry = false
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
+    /// The agent state last announced or recorded, so one state is announced once.
+    @ObservationIgnored private var lastAgentState: BackgroundAgentState?
+    /// The loss announcement that waits for the first status after the loss.
+    @ObservationIgnored private var pendingLoss: Task<Void, Never>?
+    /// The banner input at the last update while unreachable, for a pending announcement
+    /// that ends when the presence leaves `unreachable`.
+    @ObservationIgnored private var unreachableInput: AgentBanner.Input?
     /// The ID of the daemon instance now, for the catalog's detail cache.
     @ObservationIgnored private let serverInstance = ServerInstanceBox()
 
@@ -127,6 +161,8 @@ public final class DaemonModel {
     ///   - now: The wall clock.
     ///   - sleep: Waits; tests inject one.
     ///   - announce: Posts a VoiceOver announcement.
+    ///   - agent: The background agent, or `nil` for a shell without one. The model attaches
+    ///     it with its own clock and `sleep`.
     public init(
         link: LinkHandle,
         signals: AsyncStream<SyncSignal>?,
@@ -135,9 +171,11 @@ public final class DaemonModel {
         launchedAt: Date,
         now: @escaping () -> Date = { Date() },
         sleep: @escaping (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        announce: @escaping (String) -> Void = { StacklyUI.announce($0) }
+        announce: @escaping (String) -> Void = { StacklyUI.announce($0) },
+        agent: BackgroundAgentModel? = nil
     ) {
         self.link = link
+        self.agent = agent
         self.signals = signals
         self.sync = sync
         self.endpoint = endpoint
@@ -162,6 +200,11 @@ public final class DaemonModel {
             serverInstance: { serverInstance.id },
             now: now)
         sync.register(catalog.store)
+        agent?.attach(
+            presence: presence, now: now, sleep: sleep,
+            didAssess: { [weak self] assessment, _ in self?.agentDidAssess(assessment) },
+            systemRetry: { [weak self] in self?.systemRetry() })
+        lastAgentState = agent?.assessment?.state
     }
 
     /// Whether mutations can run, from the presentation.
@@ -205,10 +248,14 @@ public final class DaemonModel {
         Task { await link.start() }
     }
 
-    /// Stops listening; the link keeps running.
+    /// Stops listening; the link keeps running. The pending announcement and everything
+    /// the agent model has running stop too.
     public func stop() {
         for task in tasks { task.cancel() }
         tasks.removeAll()
+        pendingLoss?.cancel()
+        pendingLoss = nil
+        agent?.stop()
     }
 
     // MARK: - Actions
@@ -269,6 +316,9 @@ public final class DaemonModel {
 
     /// Closes the socket synchronously, for app termination.
     func stopNow() {
+        pendingLoss?.cancel()
+        pendingLoss = nil
+        agent?.stop()
         link.stopNow()
     }
 
@@ -290,15 +340,48 @@ public final class DaemonModel {
             daemonProtocol: daemonProtocol,
             appProtocol: ShellStatusMapping.appProtocol,
             contractDrift: lastDaemon?.accepted.contractDrift,
-            health: lastDaemon?.health.map(Self.healthFacts)
+            health: lastDaemon?.health.map(Self.healthFacts),
+            agentHint: agentHint
         )
     }
 
     /// The text Copy Details puts on the pasteboard, with the system calendar,
     /// locale, and time zone.
-    public func copyDiagnostics() -> String {
+    ///
+    /// - Parameter now: The time the agent hint is worked out at.
+    public func copyDiagnostics(now: Date = Date()) -> String {
         ConnectionDiagnostics.copyText(
-            diagnostics.rows(calendar: .current, locale: .current, timeZone: .current))
+            diagnostics.rows(
+                calendar: .current, locale: .current, timeZone: .current, now: now))
+    }
+
+    // MARK: - The agent in the banner
+
+    /// What the window banner is built from, or `nil` for a shell without an agent.
+    public var agentBannerInput: AgentBanner.Input? {
+        guard let agent else { return nil }
+        return AgentBanner.Input(
+            status: presentation.status, failureCode: unreachableCode,
+            assessment: agent.assessment, detail: agent.unavailableDetail,
+            isStarting: agent.isStarting)
+    }
+
+    /// The window banner at `now`: the agent's row while the daemon is unreachable with
+    /// one of the two connection codes, otherwise the banner of the status. The banner,
+    /// the Diagnostics hint, and the announcements all take their words from here.
+    public func bannerContent(now: Date) -> DaemonBannerContent? {
+        agentBannerInput.flatMap { AgentBanner.content($0, now: now) } ?? presentation.banner
+    }
+
+    /// The hint of the Connection section: the banner input, only while the presence is
+    /// `unreachable` with one of the two codes.
+    private var agentHint: AgentBanner.Input? {
+        guard case .unreachable = presence, let input = agentBannerInput,
+            let code = input.failureCode, AgentBanner.failureCodes.contains(code)
+        else {
+            return nil
+        }
+        return input
     }
 
     private var daemonProtocol: String? {
@@ -357,15 +440,23 @@ public final class DaemonModel {
             // The heartbeat brings the latest health, so recovery mode
             // follows it in both directions.
             inputs.recovery = daemon.health?.recovery != nil
-        case .unreachable(let error, _, _), .untrusted(let error, _, _):
+        case .unreachable(let error, _, _):
             lastError = error
+            unreachableCode = error.code
+            noteFailure(after: inputs.stable)
+            inputs.stable = state
+        case .untrusted(let error, _, _):
+            lastError = error
+            unreachableCode = nil
             noteFailure(after: inputs.stable)
             inputs.stable = state
         case .incompatible(let reason, _, _):
             lastError = reason.error
+            unreachableCode = nil
             noteFailure(after: inputs.stable)
             inputs.stable = state
         case .misconfigured:
+            unreachableCode = nil
             inputs.stable = state
         }
         update()
@@ -413,9 +504,9 @@ public final class DaemonModel {
         }
         inputs.lastKnownAt = refreshedOnce ? lastKnownAt : nil
         let next = DaemonPresence.derive(inputs)
-        if next != presence {
-            announce(from: presence, to: next)
-            presence = next
+        switch next {
+        case .unreachable, .refreshing: break
+        default: unreachableCode = nil
         }
         let status = ShellStatusMapping.status(
             for: next, stable: inputs.stable, launchedAt: launchedAt, before: statusBeforeConnect)
@@ -426,15 +517,23 @@ public final class DaemonModel {
             }
         presentation = ShellPresentation(
             status: status, lastErrorCode: lastError?.code, isReconnecting: attempting)
+        // The status and the presentation come first: the announcements read the banner.
+        let previous = presence
+        if next != previous {
+            presence = next
+            announce(from: previous, to: next)
+        }
+        if case .unreachable = next { unreachableInput = agentBannerInput }
+        if next != previous { agent?.presenceDidChange(next) }
     }
 
     private func announce(from old: DaemonPresence, to new: DaemonPresence) {
+        if case .unreachable = old, case .unreachable = new { return }
+        if case .unreachable = old { settlePendingLoss() }
         switch (old, new) {
-        case (.unreachable, .unreachable):
-            break
         case (_, .unreachable):
             lostSinceRefresh = true
-            announcer(Announcement.unreachable)
+            announceLoss()
         case (_, .connected) where lostSinceRefresh:
             // Usually from refreshing; straight from the loss when the snapshot
             // finished before the model saw the connection.
@@ -443,6 +542,89 @@ public final class DaemonModel {
         default:
             break
         }
+    }
+
+    /// Announces the loss of the daemon. With an agent and one of the two codes, the title
+    /// of the agent's banner row is announced: at once when the status is at most
+    /// ``AgentTiming/pollInterval`` old, else once the first status after the loss
+    /// arrives, or "Can’t connect to stacklyd." after ``AgentTiming/announceWait``.
+    private func announceLoss() {
+        guard let agent, let code = unreachableCode, AgentBanner.failureCodes.contains(code)
+        else {
+            announcer(Announcement.unreachable)
+            return
+        }
+        if let assessment = agent.assessment, let checkedAt = agent.lastCheckedAt,
+            now().timeIntervalSince(checkedAt) <= Self.pollSeconds
+        {
+            announceLossTitle(for: assessment)
+            return
+        }
+        pendingLoss?.cancel()
+        let sleep = self.sleep
+        pendingLoss = Task { [weak self] in
+            do {
+                try await sleep(AgentTiming.announceWait)
+            } catch {
+                return
+            }
+            guard let self, self.pendingLoss != nil else { return }
+            self.pendingLoss = nil
+            self.announcer(Announcement.unreachable)
+        }
+    }
+
+    private static let pollSeconds: TimeInterval = 5
+
+    /// Announces the title of the banner for `assessment` in the current status. The
+    /// critical banner (`not_found`) announces itself, so nothing is said for it.
+    private func announceLossTitle(for assessment: AgentAssessment) {
+        lastAgentState = assessment.state
+        guard let banner = bannerContent(now: now()) else {
+            announcer(Announcement.unreachable)
+            return
+        }
+        if banner.tone != .critical { announcer(banner.title) }
+    }
+
+    /// Ends a pending loss announcement because the presence left `unreachable`: it says the
+    /// title the agent's row had, or the plain loss when no state was known.
+    private func settlePendingLoss() {
+        guard pendingLoss != nil else { return }
+        pendingLoss?.cancel()
+        pendingLoss = nil
+        if let agent, var input = unreachableInput, let assessment = agent.assessment {
+            input.assessment = assessment
+            input.isStarting = false
+            lastAgentState = assessment.state
+            if let content = AgentBanner.content(input, now: now()) {
+                if content.tone != .critical { announcer(content.title) }
+                return
+            }
+        }
+        announcer(Announcement.unreachable)
+    }
+
+    /// The agent read its status again.
+    private func agentDidAssess(_ assessment: AgentAssessment) {
+        if pendingLoss != nil {
+            pendingLoss?.cancel()
+            pendingLoss = nil
+            if let code = unreachableCode, AgentBanner.failureCodes.contains(code) {
+                announceLossTitle(for: assessment)
+            } else {
+                lastAgentState = assessment.state
+                announcer(Announcement.unreachable)
+            }
+            return
+        }
+        guard let last = lastAgentState else {
+            lastAgentState = assessment.state
+            return
+        }
+        guard assessment.state != last else { return }
+        lastAgentState = assessment.state
+        if let text = Announcement.agent(assessment) { announcer(text) }
     }
 
     /// A failed attempt after a manual Reconnect from a failure is announced
