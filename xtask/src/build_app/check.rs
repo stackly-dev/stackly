@@ -55,6 +55,7 @@ pub fn contents(bundle: &Path, version: &str) -> Result<()> {
         executable_is_arm64_and_0755(&path)?;
     }
     no_test_files(bundle)?;
+    bundled_catalog(bundle)?;
     if !bundle
         .join(LAUNCH_AGENTS_DIR)
         .join(DAEMON_PLIST_FILE)
@@ -117,6 +118,37 @@ fn no_test_files(bundle: &Path) -> Result<()> {
             if entry.file_type()?.is_dir() {
                 stack.push(path);
             }
+        }
+    }
+    Ok(())
+}
+
+/// The bundled catalog (spec 0017, AC-1): `Contents/Resources/catalog`
+/// holds a `catalog.json`, and the only namespace under its `packages`
+/// folder is `official`.
+///
+/// # Errors
+///
+/// The missing index or the namespace that must not ship, named.
+pub fn bundled_catalog(bundle: &Path) -> Result<()> {
+    let catalog = bundle.join(RESOURCES_DIR).join("catalog");
+    if !catalog.join("catalog.json").is_file() {
+        bail!(
+            "the bundle has no {}",
+            catalog.join("catalog.json").display()
+        );
+    }
+    let packages = catalog.join("packages");
+    for entry in std::fs::read_dir(&packages)
+        .with_context(|| format!("the bundled catalog has no {}", packages.display()))?
+    {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name != "official" || !entry.file_type()?.is_dir() {
+            bail!(
+                "{} is not an official package folder; only the `official` namespace ships in the bundled catalog",
+                entry.path().display()
+            );
         }
     }
     Ok(())
@@ -205,6 +237,24 @@ mod tests {
 
         std::fs::write(bundle.join(MACOS_DIR).join(FAKE_SERVER), b"").unwrap();
         assert!(no_test_files(&bundle).is_err());
+    }
+
+    #[test]
+    fn the_bundled_catalog_needs_an_index_and_only_the_official_namespace() {
+        let dir = tempfile::tempdir().unwrap();
+        let bundle = dir.path().join("Stackly.app");
+        let catalog = bundle.join("Contents/Resources/catalog");
+        assert!(bundled_catalog(&bundle).is_err(), "no catalog folder");
+
+        std::fs::create_dir_all(catalog.join("packages/official/nats")).unwrap();
+        assert!(bundled_catalog(&bundle).is_err(), "no catalog.json");
+
+        std::fs::write(catalog.join("catalog.json"), "{}").unwrap();
+        bundled_catalog(&bundle).unwrap();
+
+        std::fs::create_dir_all(catalog.join("packages/testing/fake-command")).unwrap();
+        let error = bundled_catalog(&bundle).unwrap_err().to_string();
+        assert!(error.contains("official"), "{error}");
     }
 
     #[cfg(target_os = "macos")]
