@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `abe61d48`
 - **Wave aktif:** tidak ada (wave 7 selesai `2026-10-22`; sisa: teks spec 0013 untuk muat ulang store lewat architect, langkah manual user)
-- **Diperbarui:** `2026-10-22 21:33`
+- **Diperbarui:** `2026-10-22 22:13`
 
 ## Sub sesi wave `1`
 
@@ -211,6 +211,8 @@
 
 | `2026-10-22` | `dev-f12-fix` (`cfb6d491`, `c1c193ff`, `1ccbc80a`, `b529f512`): `DelayedProgress` menggambar spinner di frame pertama saat delay nol tanpa task atau transisi, dan `DelayedProgress()` tanpa argumen kini mengikuti `loadingDelay` dari environment (aturan spec 0068), yang menutup flake `overview-operations-failed` dan `new-instance-loading`; token `StacklyColor.selectionRing` menggantikan `controlAccentColor` di `ProviderCard.swift:53` (`// provisional: F12` hilang), aturan sumber accent menangkap `controlAccentColor`. 11 PNG `NewInstanceSnapshotTests` (`new-instance-loading` dan `new-instance-preflight-checking`) direkam ulang karena spinner kini di referensi; `overview-operations-loading` dari 9a tidak bergeser. Bukti developer: Overview dan NewInstance 10 dari 10 setelah merge 9a, suite penuh 1495, `build-app`. Flake lain `new-instance-ready` (light, 2194 px, load 92) bukan spinner, milik F20, dicatat untuk lead scope 02 bila muncul lagi. Gerbang lead setelah `git merge main` (`cb0efc8a`): Overview dan NewInstance 3 dari 3, StacklyUI penuh 1510 test tanpa kegagalan, lint, `evidence check`; setelah F22 retry removal masuk, merge dipentaskan dan 75 test di 8 suite terkait lulus pada kode gabungan di load 129. Merge `9065a938`; pembekuan ui-macos terakhir dicabut. Wave 7 selesai. | `lead` |
 
+| `2026-10-22` | User meminta architect kecil untuk teks spec 0013 muat ulang store. `arc-f13-reload` (`5293cb02`): butir `.caughtUp` di ShellSync dan butir snapshot gagal sesuai kode `9ee06a25` (varian ii), plus tiga ketepatan dari cross check (muat ulang dalam generasi yang sama tanpa mengubah `lastResnapshot`; `completedRounds` naik sekali setelah semua store selesai; pengecualian "store `unsupported` tanpa error"; muat ulang ini bukan `.resnapshot`, jadi AC-10 dan tabel `SyncSignal` tetap benar), lima test `ResourceStoreTests` di *Critical test scenarios*, dan rationale "Perubahan 2026-10-22". Tanpa perubahan teks AC; gerbang lead: 2 file di ownership, nol baris AC. Diterima lead dan di-merge. Temuan cross check (risiko kode lama, lebih mungkin sekarang): Retry halaman (`refresh()`) pada store yang sedang dimuat ShellSync membuat `resnapshot()` milik ShellSync memberi `false`, store tidak keluar dari `pending`, `isSettled` tetap false dan presence bertahan `refreshing` sampai `.resnapshot` berikutnya; diajukan ke user sebagai tugas debug kecil. Usulan untuk spec 0022 (lead scope 02): tandai langkah 9a dihapus di `28cbe678` dengan rujukan ke butir `.caughtUp` spec 0013. | `user` |
+
 ## Blocker terbuka
 
 - (selesai) Test flaky `SkeletonEndToEndTests.theInstanceStoreFollowsChangesAnotherClientMakes` diperbaiki `dbg-f14-trail` (`edd197d`).
@@ -226,7 +228,8 @@
 - (selesai) `DelayedProgress` frame pertama dan token `selectionRing`: `9065a938`.
 - (selesai) Race close `DaemonConnection`: `5e8347c0`.
 - (selesai) F13 muat ulang store dan sibling koneksi: `9ee06a25`.
-- Teks desain spec 0013 untuk muat ulang store (varian ii: butir `.caughtUp` di ShellSync dan butir aturan snapshot gagal), teks usulan ada di laporan `dev-f13-followups`: menunggu architect berikutnya.
+- (selesai) Teks spec 0013 untuk muat ulang store: di-merge (wave 8).
+- Risiko `pending` di ShellSync saat Retry halaman bertabrakan dengan muat ulang (`refreshing` macet sampai `.resnapshot` berikutnya): menunggu persetujuan user untuk debugger kecil.
 - F69 milestone 3: kode di `main` (`b8f575c9`); kotak menunggu cek keyboard dan VoiceOver user (`docs/manual.md` J butir 5 sampai 8) dan cek menu langsung di app saat layar tidak terkunci.
 - Teks spec 0067 baris 518, 0068 baris 264, dan `design.md` masih menyebut relay "on content before .inspector" dan belum memuat baris "Not vibrant" untuk kolom inspector: diarahkan ke architect setelah bagian 2, bersama token tint pilihan (F12).
 - (selesai) Teks spec sesuai yang dibangun: `97e093f9`.
