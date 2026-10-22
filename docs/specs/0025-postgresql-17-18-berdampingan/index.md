@@ -336,10 +336,10 @@ Urutan mengikuti pendekatan Journey proyek: jalur JOURNEY-03 ("pasang mayor kedu
 
 ## Follow-up
 
-- [ ] `/architect` update spec 0010: hint `supervisor.data_incompatible` per `outcome` dan pemakaian `check_data_compatibility` di `verify` (tabel *Usulan update untuk spec lain*), sebelum langkah 3 dan 4.
-- [ ] `/architect` update spec 0009: daftar pemanggil preflight menyebut `check_data_compatibility` dan `rebind::check` spec 0025, sebelum langkah 2.
-- [ ] `/architect` update spec 0019: pemanggil preflight menyebut `rebind::check` spec 0025, dan AC-11 boleh memeriksa hint, sebelum langkah 4.
-- [ ] `/architect` update spec 0004: fitur 25 di kolom fitur pemilik BR-001 dan BR-009, sebelum langkah 6.
+- [x] `/architect` update spec 0010: hint `supervisor.data_incompatible` per `outcome` dan pemakaian `check_data_compatibility` di `verify` (tabel *Usulan update untuk spec lain*), sebelum langkah 3 dan 4; diterapkan di spec 0010 (2026-10-22).
+- [x] `/architect` update spec 0009: daftar pemanggil preflight menyebut `check_data_compatibility` dan `rebind::check` spec 0025, sebelum langkah 2; diterapkan di spec 0009 (2026-10-22).
+- [x] `/architect` update spec 0019: pemanggil preflight menyebut `rebind::check` spec 0025, dan AC-11 boleh memeriksa hint, sebelum langkah 4; diterapkan di spec 0019 (2026-10-22).
+- [x] `/architect` update spec 0004: fitur 25 di kolom fitur pemilik BR-001 dan BR-009, sebelum langkah 6; diterapkan di spec 0004 (2026-10-22).
 - [ ] Fitur 58: operasi `rebind_runtime` memanggil `stackly_core::instance::rebind::check` sebagai precheck dan sekali lagi setelah stop terkontrol sebelum `Instance::rebind`, ditambah method IPC, CLI, GUI, kebijakan backup sebelum rebind, verifikasi start, dan pesan penolakan yang mengarahkan ke backup dan restore (fitur 50 dan 51), termasuk keputusan apakah teks hint `incompatible` diganti.
 - [ ] Fitur 51 dan 52: bagian AC-035 untuk backup dan restore pada matriks PostgreSQL 17 dan 18 serta pasangan versi sama, di atas `three_postgresql_clusters`.
 - [ ] Fitur 26: setelah restart menjadi satu operasi, ulangi siklus AC-3 dengan `instance.restart` di test yang sama.

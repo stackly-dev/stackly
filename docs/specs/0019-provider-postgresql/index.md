@@ -350,7 +350,8 @@ Karena peta `stackly` menerima user OS mana pun, batas sebenarnya untuk role rea
 ### Preflight data
 
 - `dataMarker` `PG_VERSION` dengan pattern `([0-9]+)`: isi `17\n` atau `18\n` menjadi `RuntimeLine` `17` atau `18`. Tanpa `lineCompatibility`, data hanya boleh dijalankan runtime dengan line yang sama (BR-009 ketat).
-- Pemanggil `preflight` tetap milik spec 0009 dan 0010 (start sebelum spawn), fitur 58 (rebind), 57 (adoption), dan 51 (restore). PostgreSQL sendiri juga menolak data mayor lain (`database files are incompatible with server`), tetapi itu terjadi setelah spawn; Stackly menolak lebih dulu.
+- Pemanggil `preflight` tetap milik spec 0009 dan 0010 (start sebelum spawn), fitur 58 (rebind), 57 (adoption), dan 51 (restore). PostgreSQL sendiri juga menolak data mayor lain (`database files are incompatible with server`), tetapi itu terjadi setelah spawn; Stackly menolak lebih dulu. *(Ditambah fitur 25, spec 0025: fitur 58 memanggil `preflight` lewat `stackly_core::instance::rebind::check` [spec 0025](../0025-postgresql-17-18-berdampingan/index.md), yang membaca `PG_VERSION` lewat `check_data_compatibility` yang sama dengan start.)*
+- *(Ditambah fitur 25, spec 0025.)* Penolakan AC-11 kini membawa hint statis dari `codes::supervisor::hint` di kegagalan operasi start: hint `incompatible` (data mayor lain butuh migrasi) untuk `outcome` `incompatible`, dan hint penanda untuk `marker_missing` dan `marker_mismatch`. Test AC-11 boleh memeriksa hint itu, tetapi tidak wajib. Kode, `outcome`, dan details penolakannya tidak berubah.
 
 ### Perubahan core additive
 

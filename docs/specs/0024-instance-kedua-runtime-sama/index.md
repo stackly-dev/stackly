@@ -163,7 +163,7 @@ pub struct DuplicateModel { pub source: (InstanceId, InstanceName), pub form: Cr
 pub enum DuplicateError { NotFound, Retained, PackageUnavailable { provider: String, reason: String },
                           ProviderAmbiguous { provider: ProviderName, revision: RevisionLabel },
                           CapabilityUnsupported { provider: ProviderName, existing: InstanceName },
-                          RuntimeNotFound, RuntimeUnavailable { state: RuntimeState }, Registry(RegistryError) }
+                          RuntimeNotFound { runtime_id: RuntimeId }, RuntimeUnavailable { runtime_id: RuntimeId, state: RuntimeState }, Registry(RegistryError) }
 pub fn duplicate_name(source: &InstanceName, taken: &[InstanceName]) -> Option<InstanceName>;
 ```
 
