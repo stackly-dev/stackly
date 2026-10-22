@@ -1,4 +1,4 @@
-//! `stackly instance create`, `start`, `stop`, and `get` (spec 0014,
+//! `stackly instance create`, `duplicate` (spec 0024), `start`, `stop`, and `get` (spec 0014,
 //! *CLI*, AC-5 to AC-8), and `list` and `inspect` (spec 0022, AC-10 and
 //! AC-11). They only talk to the daemon: the CLI never reads
 //! a provider package or starts a process.
@@ -10,6 +10,7 @@
 
 mod action;
 mod create;
+mod duplicate;
 mod get;
 pub mod group;
 mod inspect;
@@ -26,6 +27,7 @@ use uuid::Uuid;
 
 use self::action::{StartArgs, StopArgs};
 use self::create::CreateArgs;
+use self::duplicate::DuplicateArgs;
 use self::get::GetArgs;
 use self::inspect::InspectArgs;
 use self::list::ListArgs;
@@ -47,6 +49,11 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance create orders --runtime postgresql@18 --port postgres=5432 --wait\n  stackly instance create orders --runtime postgresql@18 --dry-run --json\n  stackly instance create queue --runtime nats@2.15 --set jetstream=true --start --wait"
     )]
     Create(Box<CreateArgs>),
+    /// Create an instance from the settings of another, on the same runtime; no data is copied
+    #[command(
+        after_help = "Examples:\n  stackly instance duplicate pg17-dev pg17-test\n  stackly instance duplicate pg17-dev pg17-test --secret superuserPassword=copy --start --wait\n  stackly instance duplicate pg17-dev --set maxConnections=300 --dry-run --json"
+    )]
+    Duplicate(Box<DuplicateArgs>),
     /// Start an instance
     #[command(
         after_help = "Examples:\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001 --wait --timeout 5m"
@@ -79,6 +86,7 @@ impl InstanceCommand {
     pub async fn run(self, cx: &mut Context) -> u8 {
         match self {
             Self::Create(args) => execute(*args, cx).await,
+            Self::Duplicate(args) => execute(*args, cx).await,
             Self::Start(args) => execute(args, cx).await,
             Self::Stop(args) => execute(args, cx).await,
             Self::List(args) => execute(args, cx).await,

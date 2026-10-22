@@ -11,6 +11,8 @@ mod common;
 mod action;
 mod create;
 mod data;
+mod duplicate;
+mod duplicate_real;
 mod exit_codes;
 mod get;
 mod inspect;

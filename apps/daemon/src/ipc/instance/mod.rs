@@ -14,6 +14,7 @@
 mod create;
 mod draft;
 pub mod dto;
+mod duplicate;
 mod form;
 
 use stackly_core::operation::{
@@ -38,6 +39,7 @@ use stackly_storage::SqliteRegistry;
 use uuid::Uuid;
 
 pub use create::{create, work_deps};
+pub use duplicate::get_duplicate_form;
 pub use form::{get_create_form, preflight};
 
 use crate::dispatch::{HandlerFuture, RequestContext};

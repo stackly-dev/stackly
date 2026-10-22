@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 use stackly_protocol::instance::{
-    CreateForm, CreatePreflight, InstanceActionAccepted, InstanceSummary,
+    CreateForm, CreatePreflight, DuplicateForm, InstanceActionAccepted, InstanceSummary,
 };
 use stackly_protocol::operation::{OperationAccepted, OperationKind, OperationState};
 use stackly_protocol::runtime::RuntimeListPage;
@@ -39,6 +39,13 @@ pub fn fixture(name: &str) -> Value {
 pub fn create_form() -> CreateForm {
     serde_json::from_value(fixture("frame-response-instance-get-create-form.json"))
         .expect("the create form fixture decodes")
+}
+
+/// The duplicate form every scripted `instance.get_duplicate_form`
+/// answers: `pg17-dev` of the PostgreSQL fixtures.
+pub fn duplicate_form() -> DuplicateForm {
+    serde_json::from_value(fixture("frame-response-instance-get-duplicate-form.json"))
+        .expect("the duplicate form fixture decodes")
 }
 
 /// The preflight every scripted `instance.preflight` answers: ready.
@@ -159,6 +166,9 @@ pub fn scripted(
         },
         Call::InstanceGetCreateForm(_) => vec![Step::Reply(Reply::InstanceGetCreateForm(
             Box::new(create_form()),
+        ))],
+        Call::InstanceGetDuplicateForm(_) => vec![Step::Reply(Reply::InstanceGetDuplicateForm(
+            Box::new(duplicate_form()),
         ))],
         Call::InstancePreflight(_) => vec![Step::Reply(Reply::InstancePreflight(Box::new(
             preflight_ready(),

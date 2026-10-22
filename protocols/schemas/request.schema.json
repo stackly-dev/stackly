@@ -570,6 +570,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The create form and the draft of a duplicate of one instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetDuplicateFormParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_duplicate_form"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -781,6 +798,20 @@
       },
       "required": [
         "runtimeId"
+      ]
+    },
+    "GetDuplicateFormParams": {
+      "description": "Params of `instance.get_duplicate_form`.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance whose settings fill the form, retained ones refused.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
       ]
     },
     "GetInstanceParams": {

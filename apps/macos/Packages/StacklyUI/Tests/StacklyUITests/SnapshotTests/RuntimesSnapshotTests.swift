@@ -42,25 +42,6 @@ extension SnapshotTests {
 
         private static let unknownMethod = ClientError.rejected(PageRig.unknownMethod)
 
-        /// Snapshots a state with the inspector closed. Its Increase Contrast images equal the
-        /// standard ones while `.stacklyInspector` drops the pinned contrast of the main
-        /// content, so only that identity issue is a known issue; a real pixel difference or
-        /// any other issue still fails. Once the F67 fix lands the known issue is not
-        /// recorded, Swift Testing says so, and this wrapper goes away.
-        // provisional: F67 (re-record the HC images after dbg-f67-inspector and use assertSnapshot)
-        @MainActor
-        private func assertSnapshotWithF67Contrast<V: View>(
-            _ view: V, named name: String
-        ) async throws {
-            try await withKnownIssue(
-                "F67: .stacklyInspector drops Increase Contrast; re-record after dbg-f67-inspector"
-            ) {
-                try await assertSnapshot(view, named: name)
-            } matching: { issue in
-                issue.description.contains("identical to")
-            }
-        }
-
         // MARK: - Chosen runtime and Installing
 
         @Test(
@@ -95,7 +76,7 @@ extension SnapshotTests {
             ))
         func runtimesWithAnInstallRunning() async throws {
             let rig = await rig()
-            try await assertSnapshotWithF67Contrast(
+            try await assertSnapshot(
                 rig.runtimesPage(showsInspector: false), named: "runtimes-installing")
         }
 
@@ -111,7 +92,7 @@ extension SnapshotTests {
             let page = RuntimeListPage(
                 items: [FixtureRuntime.summaries[0], drifted, missing], next: nil, installing: [])
             let rig = await rig(page: page)
-            try await assertSnapshotWithF67Contrast(
+            try await assertSnapshot(
                 rig.runtimesPage(showsInspector: false), named: "runtimes-states")
         }
 
@@ -124,7 +105,7 @@ extension SnapshotTests {
             ))
         func runtimesWithoutRuntimes() async throws {
             let rig = await rig(page: RuntimeListPage(items: [], next: nil, installing: []))
-            try await assertSnapshotWithF67Contrast(
+            try await assertSnapshot(
                 rig.runtimesPage(showsInspector: false), named: "runtimes-empty")
         }
 
@@ -150,7 +131,7 @@ extension SnapshotTests {
         func runtimesThatFailedToLoad() async throws {
             let rig = await rig(load: false) { $0.script.listFailure = .rejected(PageRig.failure) }
             await rig.load()
-            try await assertSnapshotWithF67Contrast(
+            try await assertSnapshot(
                 rig.runtimesPage(showsInspector: false), named: "runtimes-failed")
         }
 
@@ -163,7 +144,7 @@ extension SnapshotTests {
         func runtimesOfADaemonWithoutTheMethod() async throws {
             let rig = await rig(load: false) { $0.script.listFailure = Self.unknownMethod }
             await rig.load()
-            try await assertSnapshotWithF67Contrast(
+            try await assertSnapshot(
                 rig.runtimesPage(showsInspector: false), named: "runtimes-daemon-unsupported")
         }
 
@@ -176,7 +157,7 @@ extension SnapshotTests {
             let rig = await rig()
             rig.script.listFailure = .rejected(PageRig.failure)
             await rig.runtimes.store.refresh()
-            try await assertSnapshotWithF67Contrast(
+            try await assertSnapshot(
                 rig.runtimesPage(showsInspector: false), named: "runtimes-stale")
         }
 
@@ -198,7 +179,7 @@ extension SnapshotTests {
                     resource: ResourceRef(kind: .runtime, id: stranger.uuidString.lowercased()),
                     revision: 9, kind: .runtimeStateChanged))
             try await waitUntil { rig.runtimes.store.itemFailures.isEmpty == false }
-            try await assertSnapshotWithF67Contrast(
+            try await assertSnapshot(
                 rig.runtimesPage(showsInspector: false), named: "runtimes-partial")
         }
 

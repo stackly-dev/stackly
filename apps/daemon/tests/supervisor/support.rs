@@ -25,11 +25,11 @@ use stackly_platform::{Clock, Platform, SystemClock, UserId};
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::handshake::{ClientInfo, ClientKind};
 use stackly_protocol::instance::{
-    CreateForm, CreateInstanceParams, CreatePreflight, EndpointRequest, GetCreateFormParams,
-    GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceReadinessState,
-    InstanceSummary, ListInstancesParams, PortRequest, PreflightCreateParams, ProviderSelector,
-    SecretFieldInput, SecretPlan, SecretSource, SettingsDocument, StartInstanceParams,
-    StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, DuplicateForm, EndpointRequest,
+    GetCreateFormParams, GetDuplicateFormParams, GetInstanceParams, InstanceActionAccepted,
+    InstancePage, InstanceReadinessState, InstanceSummary, ListInstancesParams, PortRequest,
+    PreflightCreateParams, ProviderSelector, SecretFieldInput, SecretPlan, SecretSource,
+    SettingsDocument, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{GetOperationParams, OperationDetail, OperationState};
 use stackly_protocol::secret::{SecretInput, SecretText};
@@ -468,6 +468,40 @@ impl Api {
         }
     }
 
+    /// `instance.get_duplicate_form`.
+    pub async fn duplicate_form(&self, source: Uuid) -> Result<DuplicateForm, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDuplicateForm(GetDuplicateFormParams {
+                instance_id: source,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDuplicateForm(form) => Ok(*form),
+            other => panic!("not a duplicate form reply: {other:?}"),
+        }
+    }
+
+    /// `instance.create` with the draft of a preflight and the secret
+    /// inputs a client builds from the choices of the user, as the sheet
+    /// and `stackly instance duplicate` do.
+    pub async fn create_from_draft(
+        &self,
+        draft: PreflightCreateParams,
+        secrets: Vec<SecretFieldInput>,
+    ) -> Result<InstanceActionAccepted, Box<ErrorBody>> {
+        self.create(CreateInstanceParams {
+            name: draft.name,
+            display_name: draft.display_name,
+            provider: draft.provider,
+            runtime_id: draft.runtime_id,
+            endpoints: draft.endpoints,
+            settings: draft.settings,
+            secrets,
+        })
+        .await
+    }
+
     /// `instance.preflight`.
     pub async fn preflight(
         &self,
@@ -720,6 +754,57 @@ impl Api {
             .error
             .code()
             .to_owned()
+    }
+}
+
+/// One request to the dummy server on `port`: the status code and the body.
+fn http_exchange(port: u16, request: &str) -> (u16, String) {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port))
+        .expect("the dummy server accepts connections");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("a read timeout is set");
+    stream
+        .write_all(request.as_bytes())
+        .expect("the request is written");
+    let mut text = String::new();
+    stream.read_to_string(&mut text).expect("the reply is read");
+    let status = text
+        .split(' ')
+        .nth(1)
+        .and_then(|code| code.parse().ok())
+        .expect("a status line");
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body.to_owned())
+        .unwrap_or_default();
+    (status, body)
+}
+
+/// `PUT /sentinel` of the dummy server on `port`; returns the status code.
+pub fn put_sentinel(port: u16, value: &str) -> u16 {
+    http_exchange(
+        port,
+        &format!(
+            "PUT /sentinel HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{value}",
+            value.len()
+        ),
+    )
+    .0
+}
+
+/// `GET /sentinel` of the dummy server on `port`: the value it holds, or
+/// `None` for a 404.
+pub fn get_sentinel(port: u16) -> Option<String> {
+    let (status, body) = http_exchange(
+        port,
+        "GET /sentinel HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n",
+    );
+    match status {
+        200 => Some(body),
+        404 => None,
+        other => panic!("GET /sentinel answered {other}"),
     }
 }
 

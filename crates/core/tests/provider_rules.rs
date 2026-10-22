@@ -668,6 +668,29 @@ fn stdin_text_is_literal_one_key_bounded_and_free_of_tokens_and_most_control_cha
 }
 
 #[test]
+fn stdin_text_is_refused_on_a_stop_command_and_a_reload_command() {
+    let yaml = "provider.yaml";
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "      args: [shutdown, \"--port=${endpoint.http.port}\"]\n    successExitCodes: [0]",
+            "      args: [shutdown, \"--port=${endpoint.http.port}\"]\n      stdin: { text: x }\n    successExitCodes: [0]",
+        ),
+        "lifecycle.stop.command.stdin",
+        IssueCode::UnknownField,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
+            "      args: [version]\n    verify: none",
+            "      args: [version]\n      stdin: { text: x }\n    verify: none",
+        ),
+        "lifecycle.reload.command.stdin",
+        IssueCode::UnknownField,
+    );
+}
+
+#[test]
 fn stdin_text_reaches_the_plan_exactly_and_changes_the_digest() {
     let package = Edit::fake_command()
         .validate()

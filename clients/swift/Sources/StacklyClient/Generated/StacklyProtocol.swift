@@ -2466,6 +2466,164 @@ public struct DeleteSecretReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// The instance a duplicate form was built from.
+public struct DuplicateSource: Codable, Sendable, Equatable {
+	/// The source instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+
+	public init(instanceId: UUID, name: String) {
+		self.instanceId = instanceId
+		self.name = name
+	}
+}
+
+/// Where a secret field gets its value, without the value. Tagged `type`
+/// and `content`.
+public enum SecretSource: Codable, Sendable, Equatable {
+	/// The daemon generates a value.
+	case generate
+	/// The client sends a value with `instance.create`.
+	case value
+	/// A copy of the value stored under this reference.
+	case copyFrom(String)
+	/// The instance uses this reference.
+	case bind(String)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case generate,
+			value,
+			copyFrom,
+			bind
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .generate:
+				self = .generate
+				return
+			case .value:
+				self = .value
+				return
+			case .copyFrom:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .copyFrom(content)
+					return
+				}
+			case .bind:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .bind(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(SecretSource.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SecretSource"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .generate:
+			try container.encode(CodingKeys.generate, forKey: .type)
+		case .value:
+			try container.encode(CodingKeys.value, forKey: .type)
+		case .copyFrom(let content):
+			try container.encode(CodingKeys.copyFrom, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .bind(let content):
+			try container.encode(CodingKeys.bind, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// The source of one secret field in a preflight.
+public struct SecretPlan: Codable, Sendable, Equatable {
+	/// The settings field the secret fills.
+	public let field: String
+	/// Where its value comes from.
+	public let source: SecretSource
+
+	public init(field: String, source: SecretSource) {
+		self.field = field
+		self.source = source
+	}
+}
+
+/// Params of `instance.preflight`: the draft of `instance.create` without
+/// any secret value.
+public struct PreflightCreateParams: Codable, Sendable, Equatable {
+	/// The unique instance name.
+	public let name: String
+	/// The name to show.
+	public let displayName: String?
+	/// The provider to create it from.
+	public let provider: ProviderSelector
+	/// The installed runtime to run it on.
+	public let runtimeId: UUID
+	/// One request per manifest endpoint that asks for a port.
+	public let endpoints: [EndpointRequest]?
+	/// The settings, without secret values.
+	public let settings: JSONObject
+	/// The source of each secret field.
+	public let secrets: [SecretPlan]?
+	/// Whether the equivalent command ends with `--start`.
+	public let start: Bool?
+
+	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretPlan]?, start: Bool?) {
+		self.name = name
+		self.displayName = displayName
+		self.provider = provider
+		self.runtimeId = runtimeId
+		self.endpoints = endpoints
+		self.settings = settings
+		self.secrets = secrets
+		self.start = start
+	}
+}
+
+/// The reference the source uses for one secret field.
+public struct DuplicateSecret: Codable, Sendable, Equatable {
+	/// The settings field the secret fills.
+	public let field: String
+	/// The reference the source uses for the field; absent when it uses
+	/// none. It is a reference, never a value.
+	public let sourceReference: String?
+
+	public init(field: String, sourceReference: String?) {
+		self.field = field
+		self.sourceReference = sourceReference
+	}
+}
+
+/// Reply of `instance.get_duplicate_form`.
+public struct DuplicateForm: Codable, Sendable, Equatable {
+	/// The instance the form copies the settings of.
+	public let source: DuplicateSource
+	/// The create form of the pinned package and the runtime of the source;
+	/// `suggestedName` is the duplicate name.
+	public let form: CreateForm
+	/// The draft the form starts with: every port `auto`, every secret
+	/// `generate`, the settings of the source, no display name, no start.
+	public let draft: PreflightCreateParams
+	/// One entry per secret field, in form order.
+	public let secrets: [DuplicateSecret]
+
+	public init(source: DuplicateSource, form: CreateForm, draft: PreflightCreateParams, secrets: [DuplicateSecret]) {
+		self.source = source
+		self.form = form
+		self.draft = draft
+		self.secrets = secrets
+	}
+}
+
 /// How an IP endpoint asked for its port. Open.
 public enum EndpointPortMode: String, Codable, Sendable, Equatable {
 	/// Exactly the requested port.
@@ -2771,6 +2929,16 @@ public struct GetCreateFormParams: Codable, Sendable, Equatable {
 	public init(runtimeId: UUID, provider: String?) {
 		self.runtimeId = runtimeId
 		self.provider = provider
+	}
+}
+
+/// Params of `instance.get_duplicate_form`.
+public struct GetDuplicateFormParams: Codable, Sendable, Equatable {
+	/// The instance whose settings fill the form, retained ones refused.
+	public let instanceId: UUID
+
+	public init(instanceId: UUID) {
+		self.instanceId = instanceId
 	}
 }
 
@@ -4056,116 +4224,6 @@ public struct PlatformNoteDto: Codable, Sendable, Equatable {
 	}
 }
 
-/// Where a secret field gets its value, without the value. Tagged `type`
-/// and `content`.
-public enum SecretSource: Codable, Sendable, Equatable {
-	/// The daemon generates a value.
-	case generate
-	/// The client sends a value with `instance.create`.
-	case value
-	/// A copy of the value stored under this reference.
-	case copyFrom(String)
-	/// The instance uses this reference.
-	case bind(String)
-
-	enum CodingKeys: String, CodingKey, Codable {
-		case generate,
-			value,
-			copyFrom,
-			bind
-	}
-
-	private enum ContainerCodingKeys: String, CodingKey {
-		case type, content
-	}
-
-	public init(from decoder: Decoder) throws {
-		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
-		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
-			switch type {
-			case .generate:
-				self = .generate
-				return
-			case .value:
-				self = .value
-				return
-			case .copyFrom:
-				if let content = try? container.decode(String.self, forKey: .content) {
-					self = .copyFrom(content)
-					return
-				}
-			case .bind:
-				if let content = try? container.decode(String.self, forKey: .content) {
-					self = .bind(content)
-					return
-				}
-			}
-		}
-		throw DecodingError.typeMismatch(SecretSource.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SecretSource"))
-	}
-
-	public func encode(to encoder: Encoder) throws {
-		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
-		switch self {
-		case .generate:
-			try container.encode(CodingKeys.generate, forKey: .type)
-		case .value:
-			try container.encode(CodingKeys.value, forKey: .type)
-		case .copyFrom(let content):
-			try container.encode(CodingKeys.copyFrom, forKey: .type)
-			try container.encode(content, forKey: .content)
-		case .bind(let content):
-			try container.encode(CodingKeys.bind, forKey: .type)
-			try container.encode(content, forKey: .content)
-		}
-	}
-}
-
-/// The source of one secret field in a preflight.
-public struct SecretPlan: Codable, Sendable, Equatable {
-	/// The settings field the secret fills.
-	public let field: String
-	/// Where its value comes from.
-	public let source: SecretSource
-
-	public init(field: String, source: SecretSource) {
-		self.field = field
-		self.source = source
-	}
-}
-
-/// Params of `instance.preflight`: the draft of `instance.create` without
-/// any secret value.
-public struct PreflightCreateParams: Codable, Sendable, Equatable {
-	/// The unique instance name.
-	public let name: String
-	/// The name to show.
-	public let displayName: String?
-	/// The provider to create it from.
-	public let provider: ProviderSelector
-	/// The installed runtime to run it on.
-	public let runtimeId: UUID
-	/// One request per manifest endpoint that asks for a port.
-	public let endpoints: [EndpointRequest]?
-	/// The settings, without secret values.
-	public let settings: JSONObject
-	/// The source of each secret field.
-	public let secrets: [SecretPlan]?
-	/// Whether the equivalent command ends with `--start`.
-	public let start: Bool?
-
-	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretPlan]?, start: Bool?) {
-		self.name = name
-		self.displayName = displayName
-		self.provider = provider
-		self.runtimeId = runtimeId
-		self.endpoints = endpoints
-		self.settings = settings
-		self.secrets = secrets
-		self.start = start
-	}
-}
-
 /// Reply of `catalog.get_provider`: one entry with its versions, its
 /// artifacts, and what is wrong with it.
 public struct ProviderDetail: Codable, Sendable, Equatable {
@@ -4271,6 +4329,8 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceGetCreateForm(GetCreateFormParams)
 	/// Judges a create draft without any secret value and changes nothing.
 	case instancePreflight(PreflightCreateParams)
+	/// The create form and the draft of a duplicate of one instance.
+	case instanceGetDuplicateForm(GetDuplicateFormParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -4304,7 +4364,8 @@ public enum Call: Codable, Sendable, Equatable {
 			runtimeList = "runtime.list",
 			runtimeGet = "runtime.get",
 			instanceGetCreateForm = "instance.get_create_form",
-			instancePreflight = "instance.preflight"
+			instancePreflight = "instance.preflight",
+			instanceGetDuplicateForm = "instance.get_duplicate_form"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -4463,6 +4524,11 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instancePreflight(content)
 					return
 				}
+			case .instanceGetDuplicateForm:
+				if let content = try? container.decode(GetDuplicateFormParams.self, forKey: .content) {
+					self = .instanceGetDuplicateForm(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -4561,6 +4627,9 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instancePreflight(let content):
 			try container.encode(CodingKeys.instancePreflight, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceGetDuplicateForm(let content):
+			try container.encode(CodingKeys.instanceGetDuplicateForm, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -4650,6 +4719,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceGetCreateForm(CreateForm)
 	/// The preflight rows, the field issues, and the equivalent command.
 	case instancePreflight(CreatePreflight)
+	/// The form and the draft of a duplicate.
+	case instanceGetDuplicateForm(DuplicateForm)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -4683,7 +4754,8 @@ public enum Reply: Codable, Sendable, Equatable {
 			runtimeList = "runtime.list",
 			runtimeGet = "runtime.get",
 			instanceGetCreateForm = "instance.get_create_form",
-			instancePreflight = "instance.preflight"
+			instancePreflight = "instance.preflight",
+			instanceGetDuplicateForm = "instance.get_duplicate_form"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -4852,6 +4924,11 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instancePreflight(content)
 					return
 				}
+			case .instanceGetDuplicateForm:
+				if let content = try? container.decode(DuplicateForm.self, forKey: .content) {
+					self = .instanceGetDuplicateForm(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -4954,6 +5031,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .instancePreflight(let content):
 			try container.encode(CodingKeys.instancePreflight, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGetDuplicateForm(let content):
+			try container.encode(CodingKeys.instanceGetDuplicateForm, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

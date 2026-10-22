@@ -25,6 +25,14 @@
       "type": "CreateForm"
     },
     {
+      "file": "duplicate-form-fake.json",
+      "type": "DuplicateForm"
+    },
+    {
+      "file": "duplicate-form-postgresql.json",
+      "type": "DuplicateForm"
+    },
+    {
       "file": "commands.json",
       "type": "CommandCases"
     },

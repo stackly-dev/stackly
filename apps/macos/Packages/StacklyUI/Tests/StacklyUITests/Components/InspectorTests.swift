@@ -64,6 +64,48 @@ struct InspectorTests {
         #expect(page == 384)
     }
 
+    /// Records the background material where it stands, so a body that never ran cannot
+    /// pass for no material.
+    private struct MaterialSpy: View {
+        final class Seen {
+            var evaluated = false
+            var material: Material?
+        }
+        let seen: Seen
+        @Environment(\.backgroundMaterial) private var material
+
+        var body: some View {
+            seen.evaluated = true
+            seen.material = material
+            return Color.clear
+        }
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-024"],
+            expected:
+                "Spec 0067 AC-18: the inspector content draws on the opaque column without the glass material of the system's column"
+        ))
+    func columnContentDrawsWithoutTheGlassMaterial() async throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let seen = MaterialSpy.Seen()
+            _ = try await SnapshotRender.render(
+                Color.clear.stacklyInspector(isPresented: .constant(true)) {
+                    MaterialSpy(seen: seen)
+                },
+                width: 900,
+                height: .fixed(300),
+                scheme: scheme
+            )
+            #expect(seen.evaluated, "the column content was never evaluated in \(scheme)")
+            #expect(
+                seen.material == nil,
+                "the column content reads a background material in \(scheme), so its buttons, symbols, and text draw vibrant"
+            )
+        }
+    }
+
     // MARK: - Toggle
 
     @Test(

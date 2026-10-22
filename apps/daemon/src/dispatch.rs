@@ -26,9 +26,10 @@ use stackly_protocol::daemon::{
 };
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::{
-    CreateForm, CreateInstanceParams, CreatePreflight, GetCreateFormParams, GetInstanceParams,
-    InstanceActionAccepted, InstancePage, InstanceSummary, ListInstancesParams,
-    PreflightCreateParams, StartInstanceParams, StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, DuplicateForm, GetCreateFormParams,
+    GetDuplicateFormParams, GetInstanceParams, InstanceActionAccepted, InstancePage,
+    InstanceSummary, ListInstancesParams, PreflightCreateParams, StartInstanceParams,
+    StopInstanceParams,
 };
 use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
@@ -313,6 +314,17 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, Box<CreatePreflight>> {
         let _ = context;
         instance::preflight(core, params)
+    }
+
+    /// `instance.get_duplicate_form`.
+    fn get_duplicate_form<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetDuplicateFormParams,
+    ) -> HandlerFuture<'a, Box<DuplicateForm>> {
+        let _ = context;
+        instance::get_duplicate_form(core, params)
     }
 
     /// `instance.start`.
