@@ -46,6 +46,46 @@ struct SchemaFormModelTests {
         #expect(memory.isSetOnce == false)
     }
 
+    @Test func theNatsServerNameIsAManagedRowThatStaysInTheBasicGroup() throws {
+        let schema = try schema("nats")
+        let name = try #require(schema.row("serverName"))
+        #expect(name.field.managed)
+        #expect(name.control == .managed)
+        #expect(!name.isAdvanced)
+        #expect(!name.showsRequired)
+        schema.setText("serverName", "typed")
+        #expect(schema.settings().members["serverName"] == nil)
+    }
+
+    @Test func theNatsJetStreamToggleStartsOnAndIsSentWhenItIsSwitchedOff() throws {
+        let schema = try schema("nats")
+        let row = try #require(schema.row("jetstream"))
+        #expect(row.control == .toggle)
+        #expect(row.field.apply == .restart)
+        #expect(!row.isAdvanced)
+        #expect(schema.isOn("jetstream"))
+        schema.setOn("jetstream", false)
+        #expect(!schema.isOn("jetstream"))
+        #expect(schema.settings().members["jetstream"] == .bool(false))
+    }
+
+    @Test func eachNatsAdvancedIntegerHasItsBoundsDefaultAndRestartRule() throws {
+        let schema = try schema("nats")
+        let expected: [(key: String, hint: String, value: Double)] = [
+            ("jetstreamMaxMemoryBytes", "From 1048576 to 1099511627776.", 1_073_741_824),
+            ("jetstreamMaxFileBytes", "From 1048576 to 1099511627776.", 10_737_418_240),
+            ("maxPayloadBytes", "From 1024 to 67108864.", 1_048_576),
+        ]
+        for item in expected {
+            let row = try #require(schema.row(item.key))
+            #expect(row.control == .integer)
+            #expect(row.isAdvanced)
+            #expect(row.field.apply == .restart)
+            #expect(row.boundsHint == item.hint)
+            #expect(schema.settings().members[item.key] == .number(item.value))
+        }
+    }
+
     @Test func aSecretFieldTakesItsLimitsFromTheDatabaseForm() throws {
         let schema = try schema("postgresql")
         let row = try #require(schema.rows.first { $0.id == "superuserPassword" })
