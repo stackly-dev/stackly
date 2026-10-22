@@ -4,7 +4,7 @@
 use std::os::unix::fs::PermissionsExt;
 
 use stackly_protocol::instance::EndpointPortMode;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{
     PG17, PG18, Pg, Site, create_auto, create_instance, output_of, stop_and_shutdown,
@@ -18,12 +18,7 @@ fn mode_of(path: &std::path::Path) -> u32 {
         & 0o777
 }
 
-async fn listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = "the postmaster listens only on 127.0.0.1 at the endpoint port and on one private socket in a 0700 folder, ALTER SYSTEM SET port does not move it, and an Auto port is stored and named by the socket",
-    );
+async fn listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(pg: Pg, ev: Evidence) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -110,11 +105,23 @@ async fn listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(pg: Pg
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns() {
-    listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "the postmaster listens only on 127.0.0.1 at the endpoint port and on one private socket in a 0700 folder, ALTER SYSTEM SET port does not move it, and an Auto port is stored and named by the socket",
+    );
+    listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns() {
-    listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "the postmaster listens only on 127.0.0.1 at the endpoint port and on one private socket in a 0700 folder, ALTER SYSTEM SET port does not move it, and an Auto port is stored and named by the socket",
+    );
+    listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(pg, ev).await;
 }

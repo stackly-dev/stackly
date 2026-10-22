@@ -18,7 +18,7 @@ use stackly_domain::{
     WriteBatch, WriteOp,
 };
 use stackly_storage::{OpenOptions, RegistryOpen};
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, create_instance, instance_id, stop_and_shutdown};
 
@@ -36,12 +36,7 @@ impl SecretEvents for NoEvents {
     fn changed(&self, _change: &SecretChange) {}
 }
 
-async fn applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = "after logStatement is changed to all in a new config revision, execute_reload makes SHOW log_statement say all with the same postmaster pid and start time",
-    );
+async fn applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(pg: Pg, ev: Evidence) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -162,11 +157,23 @@ async fn applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(pg: Pg) {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_applies_a_reloadable_setting_with_sighup_and_keeps_its_pid() {
-    applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "after logStatement is changed to all in a new config revision, execute_reload makes SHOW log_statement say all with the same postmaster pid and start time",
+    );
+    applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_applies_a_reloadable_setting_with_sighup_and_keeps_its_pid() {
-    applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "after logStatement is changed to all in a new config revision, execute_reload makes SHOW log_statement say all with the same postmaster pid and start time",
+    );
+    applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(pg, ev).await;
 }
