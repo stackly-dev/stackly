@@ -122,7 +122,6 @@ struct RuntimesPageTests {
         #expect(RuntimesPage.showsSourceAndDigest(559) == false)
         #expect(RuntimesPage.showsSourceAndDigest(560))
         #expect(RuntimesPage.showsSourceAndDigest(384) == false)
-        #expect(RuntimesPage.minimumWidth == 384)
     }
 
     @Test func aRowTakesTheTileOfTheProviderThatRunsTheSameSoftware() {

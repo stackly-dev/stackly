@@ -1,0 +1,57 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a16314-d51c-7266-81a5-b3779dad6201",
+  "covers": [
+    "REQ-018",
+    "REQ-028"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0022 manual check 1: cards, subtitle, Needs Attention, and stackly instance list agree",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "With fake instances in the ready, not ready (readyDelayMs), stopped, failed (crash loop), and data in use groups, the Overview cards, the subtitle, Needs Attention, and stackly instance list show the same counts and groups; the unknown group is proven by fixture only.",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-22T10:07:52.091975Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-22-spec-0022-manual-check-1-cards-subtitle-needs-at.json",
+  "context": {
+    "sourceCommit": "01381aede595d221f48be65bce5770495786bc77",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

@@ -1,6 +1,6 @@
-# Verify: Overview dan daftar instance · spec 0022 · updated 2026-10-21
+# Verify: Overview dan daftar instance · spec 0022 · updated 2026-10-22
 
-_Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah; saat ini Milestone 1, 2, dan 3._
+_Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah; saat ini Milestone 1 sampai 4._
 
 ## Milestone 1: Daemon contract
 
@@ -110,3 +110,43 @@ Status checker 2026-10-22: keenam langkah di atas `NOT_RUN` (kind `native`), kar
 - AC-6, AC-7, AC-8: halaman Instances, inspector, dan aksi lengkap. Penerbitan perintah menu lewat `CommandMap` (Follow-up fitur 69).
 - AC-9: state halaman, state seksi, `itemFailures`, dan Retry lengkap; daemon mati dibuktikan di cek manual milestone 4.
 - AC-13: bagian otomatis (label VoiceOver, aturan sumber, snapshot enam varian, 640 pt dan 664 pt); evidence manual keyboard dan VoiceOver milik milestone 4.
+
+## Milestone 4: Runtimes card and evidence
+
+### UI / manual
+
+Enam catatan evidence manual sudah dibuat sebagai `NOT_RUN` lewat `cargo xtask evidence new` (kind `fixture`, folder `evidence/manual/`, berjudul "Spec 0022 manual check 1" sampai "6"); user yang menjalankannya di app Debug dengan `stacklyd` asli dan `STACKLY_ROOT` ke folder sementara (`docs/manual.md`).
+
+- [ ] Dengan instance fake di kelompok ready, not ready (lewat `readyDelayMs`), stopped, failed (crash loop), dan data in use (lock dipegang proses lain, aturan I3): kartu, subjudul, Needs Attention, dan `stackly instance list` menunjukkan jumlah dan kelompok yang sama; kartu Runtimes menunjukkan jumlah yang sama dengan subjudul "{n} installed" halaman Runtimes dan membuka Runtimes → AC-1, AC-2, AC-3, AC-10
+- [ ] Image disk APFS 3 GB (`hdiutil create -size 3g -fs APFS`), mount, `STACKLY_ROOT` di dalamnya: Overview menampilkan S2 (di bawah 5 GB tersedia); isi sampai kurang dari 2 GB tersedia: S1 dalam 60 detik → AC-4
+- [ ] Hanya keyboard (Keyboard navigation menyala): Overview, kartu Failed, Instances, pilih baris, inspector, Stop lewat tombol inspector, urutkan lewat menu View; kartu Runtimes bisa difokus dan dijalankan dengan Space → AC-13
+- [ ] VoiceOver: alur yang sama; setiap status terbaca sebagai teks, kartu Runtimes terbaca "Runtimes, {n}" dengan hint "Shows Runtimes.", dan baris install terbaca "Install {nama} {versi}, Running, {tahap}, {n} percent" → AC-13, AC-5
+- [ ] Lebar konten 640 pt: Overview satu kolom tanpa teks terpotong (empat kartu), Instances dengan inspector terbuka menampilkan Name dan Status tanpa menggulir; light, dark, dan Increase Contrast; lalu jendela 900 pt dengan inspector terbuka (kolom halaman 384 pt) → AC-13
+- [ ] Hentikan `stacklyd`: kedua halaman tetap menampilkan state terakhir, tombol aksi nonaktif dengan alasan; jalankan lagi: state disegarkan → AC-9
+
+Status 2026-10-22: keenam langkah `NOT_RUN`, karena butuh app nyata, keyboard, VoiceOver, atau image disk yang hanya user yang menjalankan. Bukti pengganti `fixture` dari snapshot: `overview-runtimes` (kartu Runtimes "4" dan baris "Install PostgreSQL 18.1 · Download · 8%" di Operations), `overview-runtimes-failed` (kartu "–" dengan "Couldn’t load" dan halaman tetap utuh), dan `overview-runtimes-loading` (spinner kecil, bukan nol), masing masing di enam varian termasuk 640 pt.
+
+### Commands
+
+- [x] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed` → selesai tanpa error
+- [x] `cargo test -p stacklyd --test supervisor list_performance` → `a_list_of_100_instances_is_answered_in_at_most_500_ms` lulus; di bawah `cargo xtask evidence run --kind fixture` (batas spec 500 ms, bukan batas 10 kali di `cargo test` biasa) tercatat "instance.list of 100 instances answered in 16 ms" pada load rata rata mesin 160 sampai 270 → AC-14
+- [x] `cargo xtask evidence run --kind fixture -- swift test --package-path apps/macos/Packages/StacklyUI --filter InitialSnapshotTests` → 2 test lulus, tercatat "100 instances in the store 27 ms after the handshake was accepted" (batas spec 1 detik) dan "20 operation events left the recompute counter at 1; one instance event raised it to 2" pada load rata rata mesin sekitar 125 → AC-14
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "OverviewRuntimesTests|OperationTitleTests|OverviewPageTests"` → 13 test baru: kartu tanpa store tidak dirender, `loading` sebelum snapshot, jumlah sama dengan subjudul Runtimes, nol setelah termuat, "Couldn’t load" tanpa data, angka lama tetap saat refresh gagal, `unsupported` tidak dirender, label VoiceOver; judul "Install PostgreSQL 18.1" dari baris `installing`, "Install runtime" tanpa baris itu, dan "{judul}, Running, Download, 8 percent" → AC-2, AC-5
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OverviewSnapshotTests` → 17 test (14 lama tidak berubah, 3 baru `overview-runtimes`, `overview-runtimes-failed`, `overview-runtimes-loading` di enam varian) → AC-2, AC-5, AC-13
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (run penuh) → 1140 test di 109 suite lulus dengan 23 known issue yang sudah ada sebelumnya (`ContrastProbe`), pada load rata rata mesin sekitar 115
+- [x] `cargo xtask build-app` → `built .../target/app/Debug/Stackly.app`; `xcrun swift-format lint --strict` pada `Sources` dan `Tests` StacklyUI bersih; `cargo fmt --all --check`, `cargo clippy -p stacklyd --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, dan `cargo xtask evidence check` bersih
+
+### Value sourcing
+
+- [x] Angka kartu Runtimes datang dari `RuntimeStore.loadedCount`, sama dengan subjudul halaman Runtimes ("{n} installed"); tidak pernah 0 sebelum snapshot pertama → AC-2
+- [x] Judul `install_runtime` datang dari `RuntimeStore.installing` (`displayName` dan `version` baris yang `operationId` nya sama dengan operasi), judul `remove_runtime` dari `RuntimeStore.runtimes`; persen dari `StagedProgressValue.from` atas lima tahap spec 0018 dan `OperationProgress` operasi di `OperationCenter` → AC-5
+- [x] Hitungan dan baris Instances di Overview dihitung ulang (`OverviewDerivation`) hanya saat `[InstanceSummary]`, katalog, atau kumpulan kegagalan refetch berubah → AC-14
+
+### Acceptance-criteria coverage
+
+- AC-2: lengkap di tampilan (kartu Runtimes dengan angka, tertunda, gagal, tidak dirender tanpa store atau saat `unsupported`, membuka Runtimes). **Terbuka:** `AppShell.swift` (milik `dev-f20-m3` dan `dev-f21-m3`, dilarang di brief ini) belum meneruskan `runtimes:` ke `OverviewPage(...)`, jadi di app nyata kartu belum muncul sampai satu baris `runtimes: runtimes,` ditambahkan di pemanggilan `OverviewPage` itu.
+- AC-5: lengkap: judul dan persen install dari baris `installing` (di app nyata sama menunggu baris `AppShell` di atas, karena `RuntimeNames` dibaca dari `OverviewPage.runtimes`).
+- AC-3: Needs Attention tetap menampilkan spinner selama `OperationCenter` gagal memuat, sesuai teks AC-3 ("belum termuat atau gagal"). Ini bertentangan dengan kalimat AC-5 ("seksi lain tetap tampil") dan membuat spinner tanpa akhir; perbaikan butuh keputusan di spec, tidak diubah di sini.
+- AC-13, AC-9, AC-4: bagian otomatis lengkap sejak milestone 3; evidence manual (keyboard, VoiceOver, 640 pt, daemon mati, image disk kecil) `NOT_RUN` untuk user.
+- AC-14: lengkap. Test daemon 16 ms (batas 500 ms), test Swift 27 ms (batas 1 detik), penghitung recompute tidak naik untuk 20 event operasi dan satu perubahan status koneksi halaman, naik satu untuk satu event instance. Snapshot awal NFR-002 (2 detik) terpenuhi dengan selisih besar; benchmark formal di fitur 64.
+
