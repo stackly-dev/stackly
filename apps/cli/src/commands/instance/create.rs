@@ -123,77 +123,90 @@ pub struct StartInfo {
     pub idempotency_key: String,
 }
 
+/// The secret sources `secrets` name, the last one for a field winning, in
+/// the order the fields first appeared.
+pub(super) fn latest_sources(secrets: &[(String, SecretSource)]) -> Vec<(&str, &SecretSource)> {
+    let mut sources: Vec<(&str, &SecretSource)> = Vec::new();
+    for (field, source) in secrets {
+        match sources.iter_mut().find(|(known, _)| known == field) {
+            Some(slot) => slot.1 = source,
+            None => sources.push((field, source)),
+        }
+    }
+    sources
+}
+
+fn check_stdin(sources: &[(&str, &SecretSource)]) -> Result<(), CliFailure> {
+    let stdin = sources
+        .iter()
+        .filter(|(_, source)| matches!(source, SecretSource::Stdin))
+        .count();
+    if stdin > 1 {
+        return Err(CliFailure::usage(
+            "secret_stdin_twice",
+            "only one --secret field can read from stdin",
+        ));
+    }
+    Ok(())
+}
+
+/// Reads the value of every `--secret` flag, so a refused source stops
+/// the command before it reaches the daemon.
+///
+/// # Errors
+///
+/// `cli.usage` when `stdin` names more than one field, and the errors
+/// of [`secret_input::read_input`].
+pub(super) fn read_secrets(
+    cx: &mut Context,
+    sources: &[(&str, &SecretSource)],
+) -> Result<Vec<SecretFieldInput>, CliFailure> {
+    check_stdin(sources)?;
+    let mut inputs = Vec::new();
+    for (field, source) in sources {
+        let input =
+            secret_input::read_input(cx, source, field, &mut Tty, &|name| std::env::var_os(name))?;
+        inputs.push(SecretFieldInput {
+            field: (*field).to_owned(),
+            input,
+        });
+    }
+    Ok(inputs)
+}
+
+/// The source of each `--secret` flag as a preflight plan: where the
+/// value comes from, never the value.
+pub(super) fn secret_plans(
+    sources: &[(&str, &SecretSource)],
+) -> Result<Vec<SecretPlan>, CliFailure> {
+    check_stdin(sources)?;
+    Ok(sources
+        .iter()
+        .map(|(field, source)| SecretPlan {
+            field: (*field).to_owned(),
+            source: plan_source(source),
+        })
+        .collect())
+}
+
+/// What a preflight plan says of a secret source.
+pub(super) fn plan_source(source: &SecretSource) -> PlanSource {
+    match source {
+        SecretSource::Generate => PlanSource::Generate,
+        SecretSource::Prompt
+        | SecretSource::Stdin
+        | SecretSource::File(_)
+        | SecretSource::Env(_) => PlanSource::Value,
+        SecretSource::CopyFrom(reference) => PlanSource::CopyFrom(reference.clone()),
+        SecretSource::Bind(reference) => PlanSource::Bind(reference.clone()),
+    }
+}
+
 impl CreateArgs {
     /// The secret sources these flags name, the last one for a field
     /// winning, in the order the fields first appeared.
     fn sources(&self) -> Vec<(&str, &SecretSource)> {
-        let mut sources: Vec<(&str, &SecretSource)> = Vec::new();
-        for (field, source) in &self.secrets {
-            match sources.iter_mut().find(|(known, _)| known == field) {
-                Some(slot) => slot.1 = source,
-                None => sources.push((field, source)),
-            }
-        }
-        sources
-    }
-
-    fn check_stdin(&self) -> Result<(), CliFailure> {
-        let stdin = self
-            .sources()
-            .iter()
-            .filter(|(_, source)| matches!(source, SecretSource::Stdin))
-            .count();
-        if stdin > 1 {
-            return Err(CliFailure::usage(
-                "secret_stdin_twice",
-                "only one --secret field can read from stdin",
-            ));
-        }
-        Ok(())
-    }
-
-    /// Reads the value of every `--secret` flag, so a refused source stops
-    /// the command before it reaches the daemon.
-    ///
-    /// # Errors
-    ///
-    /// `cli.usage` when `stdin` names more than one field, and the errors
-    /// of [`secret_input::read_input`].
-    fn read_secrets(&self, cx: &mut Context) -> Result<Vec<SecretFieldInput>, CliFailure> {
-        self.check_stdin()?;
-        let mut inputs = Vec::new();
-        for (field, source) in self.sources() {
-            let input = secret_input::read_input(cx, source, field, &mut Tty, &|name| {
-                std::env::var_os(name)
-            })?;
-            inputs.push(SecretFieldInput {
-                field: field.to_owned(),
-                input,
-            });
-        }
-        Ok(inputs)
-    }
-
-    /// The source of each `--secret` flag as a preflight plan: where the
-    /// value comes from, never the value.
-    fn secret_plans(&self) -> Result<Vec<SecretPlan>, CliFailure> {
-        self.check_stdin()?;
-        Ok(self
-            .sources()
-            .into_iter()
-            .map(|(field, source)| SecretPlan {
-                field: field.to_owned(),
-                source: match source {
-                    SecretSource::Generate => PlanSource::Generate,
-                    SecretSource::Prompt
-                    | SecretSource::Stdin
-                    | SecretSource::File(_)
-                    | SecretSource::Env(_) => PlanSource::Value,
-                    SecretSource::CopyFrom(reference) => PlanSource::CopyFrom(reference.clone()),
-                    SecretSource::Bind(reference) => PlanSource::Bind(reference.clone()),
-                },
-            })
-            .collect())
+        latest_sources(&self.secrets)
     }
 
     /// The runtime ID: the one given, or the one `software@version` names
@@ -311,7 +324,7 @@ impl CreateArgs {
         runtime_id: Uuid,
         form: Option<&CreateForm>,
     ) -> CommandOutput<CreateOutput> {
-        let secrets = match self.secret_plans() {
+        let secrets = match secret_plans(&self.sources()) {
             Ok(secrets) => secrets,
             Err(failure) => return CommandOutput::failed(failure),
         };
@@ -337,44 +350,44 @@ impl CreateArgs {
             None => CommandOutput::ok(CreateOutput::DryRun(output)),
         }
     }
+}
 
-    /// The start that follows a create that succeeded, with the key derived
-    /// from the key of the create so a repeated command starts once.
-    async fn start_after(
-        &self,
-        cx: &mut Context,
-        created: &InstanceAction,
-    ) -> (Option<StartInfo>, Option<CliFailure>) {
-        let Some(id) = created
-            .instance
-            .as_ref()
-            .map(|instance| instance.id)
-            .or(created.instance_id)
-        else {
-            return (None, None);
-        };
-        let key = derived_start_key(&created.idempotency_key);
-        let Ok(key) = key.parse() else {
-            return (None, None);
-        };
-        let run = AsyncArgs {
-            wait: self.run.wait,
-            idempotency_key: Some(key),
-        };
-        let call = Call::InstanceStart(StartInstanceParams {
-            instance_id: id,
-            expected_revision: None,
-        });
-        match cx.submit(call, &run, extract_start).await {
-            Ok(submission) => (
-                Some(StartInfo {
-                    operation: submission.operation,
-                    idempotency_key: submission.idempotency_key,
-                }),
-                submission.failure,
-            ),
-            Err(failure) => (None, Some(failure)),
-        }
+/// The start that follows a create that succeeded, with the key derived
+/// from the key of the create so a repeated command starts once.
+pub(super) async fn start_after(
+    cx: &mut Context,
+    wait: &AsyncArgs,
+    created: &InstanceAction,
+) -> (Option<StartInfo>, Option<CliFailure>) {
+    let Some(id) = created
+        .instance
+        .as_ref()
+        .map(|instance| instance.id)
+        .or(created.instance_id)
+    else {
+        return (None, None);
+    };
+    let key = derived_start_key(&created.idempotency_key);
+    let Ok(key) = key.parse() else {
+        return (None, None);
+    };
+    let run = AsyncArgs {
+        wait: wait.wait,
+        idempotency_key: Some(key),
+    };
+    let call = Call::InstanceStart(StartInstanceParams {
+        instance_id: id,
+        expected_revision: None,
+    });
+    match cx.submit(call, &run, extract_start).await {
+        Ok(submission) => (
+            Some(StartInfo {
+                operation: submission.operation,
+                idempotency_key: submission.idempotency_key,
+            }),
+            submission.failure,
+        ),
+        Err(failure) => (None, Some(failure)),
     }
 }
 
@@ -390,7 +403,7 @@ pub fn derived_start_key(create_key: &str) -> String {
 
 /// `text` as the JSON value of a field of `kind`: a whole number, `true` or
 /// `false`, or else text.
-fn typed(kind: Option<FieldKind>, text: &str) -> serde_json::Value {
+pub(super) fn typed(kind: Option<FieldKind>, text: &str) -> serde_json::Value {
     match kind {
         Some(FieldKind::Integer) => text
             .parse::<i64>()
@@ -406,7 +419,7 @@ fn typed(kind: Option<FieldKind>, text: &str) -> serde_json::Value {
 
 /// The error of the first failing row of `preflight`, which decides the
 /// exit code of `--dry-run`; `None` when the draft is ready.
-fn first_error(preflight: &CreatePreflight) -> Option<CliFailure> {
+pub(super) fn first_error(preflight: &CreatePreflight) -> Option<CliFailure> {
     if preflight.ready {
         return None;
     }
@@ -418,7 +431,7 @@ fn first_error(preflight: &CreatePreflight) -> Option<CliFailure> {
     Some(CliFailure::daemon(Box::new(error), None))
 }
 
-fn extract(reply: Reply) -> Option<Accepted> {
+pub(super) fn extract(reply: Reply) -> Option<Accepted> {
     match reply {
         Reply::InstanceCreate(reply) => Some(accepted(&reply)),
         _ => None,
@@ -440,7 +453,7 @@ impl RunCommand for CreateArgs {
         if self.dry_run {
             return self.dry_run(cx, runtime_id, form.as_ref()).await;
         }
-        let secrets = match self.read_secrets(cx) {
+        let secrets = match read_secrets(cx, &self.sources()) {
             Ok(secrets) => secrets,
             Err(failure) => return CommandOutput::failed(failure),
         };
@@ -468,7 +481,7 @@ impl RunCommand for CreateArgs {
         let mut output = conclude(cx, submission, verb, None).await;
         let (start, start_failure) = match (&output.result, &output.failure) {
             (Some(created), None) if self.start && created.succeeded() => {
-                self.start_after(cx, created).await
+                start_after(cx, &self.run, created).await
             }
             _ => (None, None),
         };
