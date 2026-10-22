@@ -91,6 +91,8 @@ public final class DaemonModel {
     public let operations: OperationCenter
     /// The instances, for the Instances badge, subtitle, and list.
     public let instances: InstanceStore
+    /// The provider catalog, for the Catalog page.
+    public let catalog: CatalogStore
 
     @ObservationIgnored private let link: LinkHandle
     @ObservationIgnored private let signals: AsyncStream<SyncSignal>?
@@ -110,6 +112,8 @@ public final class DaemonModel {
     @ObservationIgnored private var lostSinceRefresh = false
     @ObservationIgnored private var manualRetry = false
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
+    /// The ID of the daemon instance now, for the catalog's detail cache.
+    @ObservationIgnored private let serverInstance = ServerInstanceBox()
 
     /// Creates a model; call ``start()`` to connect.
     ///
@@ -152,6 +156,12 @@ public final class DaemonModel {
             call: { call throws(ClientError) in try await link.call(call, nil, .standard) },
             now: now)
         sync.register(instances.store)
+        let serverInstance = serverInstance
+        catalog = CatalogStore(
+            call: { call throws(ClientError) in try await link.call(call, nil, .standard) },
+            serverInstance: { serverInstance.id },
+            now: now)
+        sync.register(catalog.store)
     }
 
     /// Whether mutations can run, from the presentation.
@@ -339,6 +349,7 @@ public final class DaemonModel {
                 manualRetry = false
             }
             lastDaemon = daemon
+            serverInstance.id = daemon.info?.serverInstanceId
             // The error describes a failed attempt, so a handshake that
             // succeeded ends it and the hint that came with it.
             lastError = nil
@@ -450,4 +461,9 @@ public final class DaemonModel {
         case .connecting, .connected, .misconfigured: false
         }
     }
+}
+
+/// The ID of the daemon instance the link talks to, shared with the catalog's detail cache.
+private final class ServerInstanceBox {
+    var id: UUID?
 }

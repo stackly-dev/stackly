@@ -12,7 +12,9 @@
     public nonisolated final class FixtureLink: Sendable {
         /// The methods the shell's stores call to load a snapshot. A store that a later
         /// feature registers with `ShellSync` adds its `list` method here.
-        static let snapshotMethods: Set<String> = ["instance.list", "operation.list"]
+        static let snapshotMethods: Set<String> = [
+            "instance.list", "operation.list", "catalog.list_providers",
+        ]
 
         private struct State {
             var current: ConnectionState?
