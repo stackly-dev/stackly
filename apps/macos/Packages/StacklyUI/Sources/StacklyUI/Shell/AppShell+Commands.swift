@@ -20,16 +20,22 @@ extension AppShell {
     ///   - presentation: What the shell shows for the daemon's state.
     ///   - select: Shows a section, the same function the sidebar uses.
     ///   - reconnect: Tries to connect now.
+    ///   - newInstance: The New Instance action, or `nil` for a shell without the sheet; the
+    ///     File menu then keeps the item off.
     static func shellActions(
         presentation: ShellPresentation,
         select: @escaping @MainActor (SidebarSection) -> Void,
-        reconnect: @escaping @MainActor () -> Void
+        reconnect: @escaping @MainActor () -> Void,
+        newInstance: StacklyAction? = nil
     ) -> [CommandID: StacklyAction] {
         var actions: [CommandID: StacklyAction] = [:]
         for (command, section) in sectionCommands {
             actions[command] = StacklyAction(
                 id: command.rawValue, title: CommandMap.entry(for: command).title,
                 mutates: false, perform: { select(section) })
+        }
+        if let newInstance {
+            actions[.newInstance] = newInstance
         }
         if presentation.hasConnection == false {
             actions[.reconnect] = StacklyAction(
