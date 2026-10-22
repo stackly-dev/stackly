@@ -264,6 +264,7 @@ public struct AppShell: View {
                 OverviewPage(
                     instances: instances,
                     catalog: catalog,
+                    runtimes: runtimes,
                     operations: operations,
                     capacity: capacity,
                     actions: instanceActions,
