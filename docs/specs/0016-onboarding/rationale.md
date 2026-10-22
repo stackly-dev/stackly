@@ -327,7 +327,7 @@ Welcome tanpa "Environments as files" sampai fitur 44, diganti "No account neede
 
 **Pros**:
 
-- Idiom macOS, dan spec 0012 membatasi accent hanya untuk kontrol native, tint seleksi, dan link.
+- Idiom macOS, dan spec 0012 membatasi accent hanya untuk kontrol native, tint seleksi, dan link (sejak 2026-10-22 juga `StacklyColor.selectionRing`, tetapi hanya untuk cincin pilihan kartu kustom, tidak pernah untuk isian, jadi pilihan ini tetap berlaku).
 
 **Cons**:
 
