@@ -156,6 +156,9 @@ nonisolated public enum CatalogCopy {
 
     /// The name of the catalog's source in the stale note: "the bundled catalog" or "the
     /// development catalog".
+    ///
+    /// The names start in lowercase on purpose: `StaleNote` capitalizes the first letter
+    /// when the name opens a sentence.
     public static func sourceName(_ source: CatalogSourceKind) -> String {
         switch source {
         case .bundled: "the bundled catalog"

@@ -98,7 +98,7 @@ Langkah ini milik user: tidak ada yang mengubah setelan sistem, tetapi Different
 - [ ] Nyalakan Full Keyboard Access (System Settings > Keyboard), lalu hanya dengan keyboard: Tab ke field pencarian, picker kategori, setiap kartu (Return atau Space memilih), dan isi panel detail termasuk link lisensi → semua dapat dicapai dan fokus terlihat → AC-11
 - [ ] Nyalakan VoiceOver (⌘F5): kartu dibaca "NATS Server, Messaging, Available", sel matrix "macOS, Unverified: Not tested on this Mac yet.", capability "Reload without restart, not supported" dan "Metrics, supported", tile tidak dibaca → AC-11
 - [ ] Nyalakan Differentiate Without Color → badge status menulis simbol tone di depan label dan tidak ada status yang hanya berbeda warna; nyalakan Increase Contrast dan Reduce Transparency, ulangi di light dan dark → semua teks terbaca, kartu planned tidak redup → AC-11
-- [ ] Atur jam Mac atau pakai catalog dengan `published_at` lebih dari 180 hari → banner "Showing the last known state from {tanggal}." dengan "the development catalog last updated {tanggal}." (penulisan kecil "the" ditandai di laporan, lihat catatan) dan tidak ada teks "latest", "up to date", atau "newer catalog" di layar → AC-8, AC-10
+- [ ] Atur jam Mac atau pakai catalog dengan `published_at` lebih dari 180 hari → banner "Showing the last known state from {tanggal}." dengan "The development catalog last updated {tanggal}." dan tidak ada teks "latest", "up to date", atau "newer catalog" di layar → AC-8, AC-10
 
 ### Commands
 
