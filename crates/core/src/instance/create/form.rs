@@ -175,7 +175,29 @@ pub fn build_form(
     taken: &[InstanceName],
     meta: &CatalogMeta,
 ) -> CreateFormModel {
-    let package = &entry.package;
+    let source = match meta.location {
+        CatalogLocation::Bundled(_) => PackageSource::BundledCatalog,
+        CatalogLocation::Development(_) => PackageSource::DevelopmentCatalog,
+    };
+    build_form_from_package(
+        &entry.package,
+        source,
+        runtime,
+        suggested_name(runtime.software().as_str(), runtime.line().as_str(), taken),
+    )
+}
+
+/// Builds the form of `package` for `runtime`, whichever way the package
+/// was found: a catalog entry for create, the pinned package of an
+/// instance for duplicate (spec 0024). `suggested_name` is the name the
+/// form starts with.
+#[must_use]
+pub fn build_form_from_package(
+    package: &ValidatedPackage,
+    source: PackageSource,
+    runtime: &Runtime,
+    suggested_name: Option<InstanceName>,
+) -> CreateFormModel {
     let key = package.key();
     CreateFormModel {
         provider: FormProvider {
@@ -184,13 +206,10 @@ pub fn build_form(
             manifest_sha256: *key.manifest_sha256(),
             display_name: package.manifest().display_name().to_owned(),
             category: package.manifest().category(),
-            source: match meta.location {
-                CatalogLocation::Bundled(_) => PackageSource::BundledCatalog,
-                CatalogLocation::Development(_) => PackageSource::DevelopmentCatalog,
-            },
+            source,
         },
         runtime: runtime.clone(),
-        suggested_name: suggested_name(runtime.software().as_str(), runtime.line().as_str(), taken),
+        suggested_name,
         data_path: DATA_PATH_TEXT,
         endpoints: form_endpoints(package),
         fields: package.settings_schema().fields().cloned().collect(),

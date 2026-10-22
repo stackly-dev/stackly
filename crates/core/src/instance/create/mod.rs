@@ -32,8 +32,8 @@ pub use facts::{
     ProgramCheck, ProviderFound, ProviderProblem, SecretFacts, SourceFact, gather,
 };
 pub use form::{
-    CreateFormModel, DATA_PATH_TEXT, FormEndpoint, FormError, FormProvider, build_form, names_of,
-    select_provider, suggested_name,
+    CreateFormModel, DATA_PATH_TEXT, FormEndpoint, FormError, FormProvider, build_form,
+    build_form_from_package, names_of, select_provider, suggested_name,
 };
 #[cfg(feature = "test-support")]
 pub use ids::ScriptedIds;

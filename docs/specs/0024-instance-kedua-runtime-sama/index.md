@@ -1,7 +1,7 @@
 # 0024. Instance kedua dari runtime yang sama
 
 **Date**: 2026-10-22
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
