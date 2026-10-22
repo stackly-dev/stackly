@@ -80,7 +80,10 @@ public actor DaemonConnection {
     ///   - policy: Whose socket and server to accept.
     ///   - client: Who this client is, sent in the handshake.
     ///   - options: The time limit for connect plus handshake.
-    /// - Returns: The open connection and the daemon's handshake reply.
+    /// - Returns: The connection and the daemon's handshake reply. The
+    ///   connection is open from the moment the reply is read, so a close
+    ///   right behind the reply leaves it closed, with the reason in
+    ///   ``termination``.
     /// - Throws: The errors of ``UnixSocket/connectVerified(_:policy:)``;
     ///   ``ClientError/rejected(_:)`` with the daemon's error, such as
     ///   `protocol.major_mismatch`; `ipc.call_timeout` with the method
@@ -217,10 +220,20 @@ public actor DaemonConnection {
             terminate(reason: error.body)
             throw error
         }
-        guard phase == .handshaking, case .daemonHandshake(let accepted) = reply else {
+        // `accept` ran when the reply was read: the connection may have
+        // closed since, but the handshake was accepted.
+        guard case .daemonHandshake(let accepted) = reply else {
             terminate(reason: ClientErrorCatalog.protocolViolation())
             throw .outcomeUnknown(ClientErrorCatalog.protocolViolation())
         }
+        return accepted
+    }
+
+    /// Opens the connection with the daemon's limits as soon as
+    /// `HandshakeAccepted` is read, before ``open(endpoint:policy:client:options:)``
+    /// resumes: frames read right behind it, and a close, then find the
+    /// connection open.
+    private func accept(_ accepted: HandshakeAccepted) {
         phase = .open
         decoder.setMaxLength(accepted.limits.maxFrameBytes)
         maxDepth = accepted.limits.maxJsonDepth
@@ -230,7 +243,6 @@ public actor DaemonConnection {
             logger.warning("stacklyd has the same protocol but another contract digest")
         }
         logger.info("connected to stacklyd")
-        return accepted
     }
 
     // MARK: - Writing
@@ -423,6 +435,9 @@ public actor DaemonConnection {
             let (stream, continuation) = EventStream.makeStream()
             subscriptions[subscribed.subscriptionId] = continuation
             newStreams[subscribed.subscriptionId] = stream
+        }
+        if phase == .handshaking, case .daemonHandshake(let accepted) = response.reply {
+            accept(accepted)
         }
         entry.continuation.resume(returning: .success(response.reply))
     }

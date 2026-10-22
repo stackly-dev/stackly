@@ -116,13 +116,20 @@ extension DaemonConnectionTests {
     @Test func aCallAfterTheDaemonSentAConnectionErrorIsNotSentWithThatError() async throws {
         let shutdown = Samples.error("daemon.shutting_down", .unavailable)
         server.serve { session in
-            try session.acceptHandshake()
-            // Later than the handshake reply, so the connection is open when it arrives.
-            Thread.sleep(forTimeInterval: 0.2)
-            try session.fail(nil, with: shutdown)
+            let request = try session.readRequest()
+            // In the same read as the handshake reply, so it is handled before
+            // `open` gets the reply back, the way an EOF right behind the reply
+            // can be. The connection is open from the moment the reply is read.
+            try session.sendTogether([
+                .response(
+                    Response(
+                        requestId: request.requestId, reply: .daemonHandshake(Samples.accepted()))),
+                .error(ErrorFrame(requestId: nil, error: shutdown)),
+            ])
             session.drainUntilClosed()
         }
-        let (connection, _) = try await open()
+        let (connection, accepted) = try await open()
+        #expect(accepted == Samples.accepted())
         var reasons = connection.termination.makeAsyncIterator()
         #expect(await reasons.next() == shutdown)
         await #expect(throws: ClientError.notSent(shutdown)) {
