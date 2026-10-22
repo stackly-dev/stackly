@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1634c-9941-74a3-86ff-2101b7dc00d5",
+  "covers": [
+    "AC-027"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "connection_proof",
+    "name": "nats_started_from_the_cli_answers_its_connection_string_with_info",
+    "file": "apps/daemon/tests/connection_proof.rs",
+    "line": 344
+  },
+  "status": "PASS",
+  "expected": "a NATS 2.15.1 instance with both endpoints on Auto starts from stackly instance start until it is ready; the uri string of stackly instance connection is the same as the masked string of the detail the Summary tab reads, and a TCP client that connects to its address receives the INFO line of the server",
+  "actual": "NATS 2.15.1 started from the CLI, was ready, and sent its INFO line to a client that connected to 127.0.0.1:58669",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "nats",
+      "version": "2.15.1",
+      "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-22T11:08:46.785697Z",
+  "finishedAt": "2026-10-22T11:09:01.727177Z",
+  "evidencePath": "output.log"
+}

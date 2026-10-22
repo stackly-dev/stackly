@@ -1,0 +1,17 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 (/Users/ojiepermana/Worktrees/Stackly/arc-f16-update-19d886/crates/platform-macos)
+   Compiling stacklyd v0.1.0 (/Users/ojiepermana/Worktrees/Stackly/arc-f16-update-19d886/apps/daemon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.55s
+     Running tests/connection_proof.rs (target/debug/deps/connection_proof-de8391939e15599a)
+
+running 2 tests
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
+test nats_started_from_the_cli_answers_its_connection_string_with_info ... ok
+test postgresql_18_started_from_the_cli_connects_with_the_composed_strings ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 21.83s
+
