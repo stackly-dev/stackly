@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 15:11`
+- **Diperbarui:** `2026-10-22 15:12`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -93,6 +93,7 @@
 | `dbg-f19-fix` (sesi arc-f16 dipakai ulang) | `debugger` | 19 · cuplikan langkah init yang gagal tidak pernah terisi (spec 0019 AC-5, spec 0010) | `02-instalasi-pertama.md` | `crates/core/src/supervisor/` (minimal `init.rs`), test regresi core | `claude/arc-f16-update-19d886` | `opus-5-5 · xhigh` | `merged` lewat branch tester (`8e649573` → `01bb004f`); sesi idle |
 | `dev-f21-m2` (sesi F21 dipakai ulang) | `developer` | 21 · Contract, daemon, CLI, and offline proof (spec 0021 milestone 2, langkah 6 sampai 8, protokol 1.14) | `02-instalasi-pertama.md` | `crates/protocol/` (detail, data usage), fixture `detail-*.json`, `Generated/` Swift, `detail.rs` core, handler daemon, `apps/cli/src/commands/instance/` (connection, inspect) | `claude/arc-f21-update-cc228d` | `sonnet-5-5 · high` | `aktif` |
 | `arc-f16-update-2` (sesi F15 dipakai ulang) | `architect (update)` | 16 · baris usulan baru spec 0015 untuk spec 0016 (langkah 12a sebagai prasyarat langkah 4) | `02-instalasi-pertama.md` | `docs/specs/0016-onboarding/`, penanda di spec 0015 | `claude/arc-f15-update-92bf17` | `opus-5-5 · xhigh` | spec di-commit `135bf2c7`; menunggu persetujuan user untuk AC-5 dan AC-10 spec 0016 |
+| `dev-f20-m5` (sesi F20 dipakai ulang) | `developer` | 20 · Init port guard for `Auto` endpoints (spec 0020 milestone 5, langkah 17 dan 18 = langkah 22 spec 0009) | `02-instalasi-pertama.md` | `crates/core/src/instance/create/evaluate.rs`, `crates/core/src/provider/validate.rs` dan `plan.rs`, `xtask/src/provider.rs`, `providers/traefik/`, baris `instance.endpoint_invalid` di `codes.rs` | `claude/dev-f20-m1-ed6675` | `sonnet-5-5 · high` | `aktif` |
 
 ## Keputusan
 
@@ -303,6 +304,7 @@
 | `2026-10-22` | F19 Test it plus fix di-merge `01bb004f` (branch tester sudah memuat fix). Gate hijau: workspace 3409/0, clippy, check-deps, evidence, Windows; native tester 33/33 dengan fix, termasuk penegasan bahwa password superuser tidak pernah sampai ke sink. `Build it`, `Verify it`, dan `Test it` F19 dicentang (`10af9013`); fitur 19 selesai untuk scope ini (tanpa kotak Review dan Document). Disk sempat 14 GiB sebelum gate; `target/` worktree dbg dan tester dihapus. Load sekitar 300 sampai 390 dari iOS Simulator lagi. | `lead` |
 | `2026-10-22` | `arc-f16-update-2` (`135bf2c7`) diterima lead dengan aturan delegasi, termasuk 12 temuan cross check dan pemindahan pemicu pengumuman `not_found` ke `OnboardingFlow`. Opsi `windowBannerHidden` dari cross check tidak diambil. Teks AC-5 dan AC-10 spec 0016 diajukan ke user. | `lead` |
 | `2026-10-22` | Remote `origin` checkout ini kini `https://github.com/stackly-dev/stackly.git`, sedangkan aplikasi mem-pin `github.com/ojiepermana/stackly.git` (temuan `tst-f19-test`; `sync_with_base_branch` menolak). Push main saat penutupan wave akan ke `stackly-dev/stackly`; lead bertanya ke user sebelum push. | `lead` |
+| `2026-10-22` | `dev-f20-m5` dimulai (milestone 5 F20 SIAP: langkah 13 F23 dan update spec 0009 dan 0020 di main). Baris `instance.endpoint_invalid` di `codes.rs` dikoordinasikan langsung dengan `dev-f21-m2` (pemilik protokol 1.14). Lead ui-macos menawarkan dua pilihan untuk F67; lead memilih (b): tiga commit yang sudah ditinjau (relay di container, tanpa vibrancy kaca, 74 PNG) merge sekarang, F18 milestone 4 merge di atasnya, dan perbaikan ukuran minimum lebar 0 menyusul sebagai merge kedua. Alasannya, F18 milestone 4 memblokir empat item (milestone 3 F20, milestone 4 F22, milestone 1 F16, langkah 12a F15). | `lead` |
 
 ## Blocker terbuka
 

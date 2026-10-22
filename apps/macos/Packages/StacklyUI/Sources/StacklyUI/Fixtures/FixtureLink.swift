@@ -13,7 +13,7 @@
         /// The methods the shell's stores call to load a snapshot. A store that a later
         /// feature registers with `ShellSync` adds its `list` method here.
         static let snapshotMethods: Set<String> = [
-            "instance.list", "operation.list", "catalog.list_providers",
+            "instance.list", "operation.list", "catalog.list_providers", "runtime.list",
         ]
 
         private struct State {
@@ -144,6 +144,10 @@
             case .catalogListProviders:
                 return .catalogListProviders(
                     ListProvidersReply(catalog: .fixture, items: scenario.providers))
+            case .runtimeList:
+                return runtimeList()
+            case .runtimeGet(let params):
+                return try runtimeGet(params.runtimeId)
             case .daemonGetInfo:
                 if let info = scenario.daemonInfo { return .daemonGetInfo(info) }
             case .daemonGetHealth:
@@ -156,6 +160,23 @@
             case .error(let error): throw error
             case nil: throw .notSent(ClientErrorCatalog.notConnected())
             }
+        }
+
+        /// `runtime.list`: the scenario's reply, or a page with no runtime and no install.
+        private func runtimeList() -> Reply {
+            if case .reply(let reply) = scenario.replies["runtime.list"] { return reply }
+            return .runtimeList(RuntimeListPage(items: [], next: nil, installing: []))
+        }
+
+        /// `runtime.get`: the runtime of the scenario's list with that ID, with the detail
+        /// the fixtures give it.
+        private func runtimeGet(_ id: UUID) throws(ClientError) -> Reply {
+            guard case .runtimeList(let page) = runtimeList(),
+                let found = (page.items ?? []).first(where: { $0.id == id })
+            else {
+                throw .rejected(.fixtureNotFound(.runtime, id: id.uuidString.lowercased()))
+            }
+            return .runtimeGet(FixtureRuntime.detail(of: found))
         }
 
         /// Whether an operation in `state` has not ended: what `activeOnly` returns.

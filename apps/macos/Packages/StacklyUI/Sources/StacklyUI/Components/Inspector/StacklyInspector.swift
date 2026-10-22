@@ -88,7 +88,7 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .relayingFixtureAccessibility()
+            .relayingFixtureAccessibilityInContainer()
             .inspector(isPresented: $isPresented) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.s16) {
@@ -100,6 +100,12 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
                         alignment: .top
                     )
                     .padding(InspectorMetrics.padding)
+                    // The system holds the column in Liquid Glass and gives the content the
+                    // glass material, so SwiftUI would draw its controls, symbols, and text
+                    // vibrant. The column is opaque, so the content draws as on any opaque
+                    // surface, in the token colors. Like the relay, it reaches the content only
+                    // here, inside the `ScrollView`.
+                    .environment(\.backgroundMaterial, nil)
                     .relayingFixtureAccessibility()
                 }
                 .onGeometryChange(for: CGFloat.self) {
@@ -127,12 +133,27 @@ extension View {
     /// content again and drops Increase Contrast there (spec 0068, K15). Release builds
     /// return the view as it is.
     ///
-    /// It is used at two places only: on the main content before `.inspector`, and on the
-    /// padded column content inside its `ScrollView`. Further out, the column content does
-    /// not get the values (the probe of the spec).
+    /// It is used on the padded column content inside its `ScrollView`. Further out, the
+    /// column content does not get the values (the probe of the spec).
     fileprivate func relayingFixtureAccessibility() -> some View {
         #if DEBUG
             relayFixtureAccessibility()
+        #else
+            self
+        #endif
+    }
+
+    /// The relay of ``relayingFixtureAccessibility()`` for the main content, inside a
+    /// `ZStack` of its own that holds only this view, so it changes no layout. Release builds
+    /// return the view as it is.
+    ///
+    /// `.inspector` pins the system values again where it holds the main content. A relay
+    /// written straight on the content lands above that point whenever the page sits under
+    /// an `if`, a `switch`, an `AnyView`, or a modifier, as it always does in a snapshot,
+    /// and the page then reads standard contrast. Inside the container it lands below.
+    fileprivate func relayingFixtureAccessibilityInContainer() -> some View {
+        #if DEBUG
+            ZStack { relayFixtureAccessibility() }
         #else
             self
         #endif
