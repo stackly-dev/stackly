@@ -100,6 +100,8 @@ public struct RuntimesPage: View {
         ) { rows in
             content(rows, selected: selected)
         }
+        // provisional: F67 (a `.stacklyInspector` fix replaces this minimum width: the split
+        // view measures the page at a width of zero, where its notes and text wrap per word)
         // The notes above the content wrap at the width the split view measures them at too.
         .frame(minWidth: Self.minimumWidth, maxWidth: .infinity, maxHeight: .infinity)
         .stacklyInspector(isPresented: $showsInspector) {
