@@ -175,8 +175,10 @@ struct OperationsUnreadableTests {
         var gate: CheckedContinuation<Void, Never>?
         var holds = false
         var failure: ClientError? = .rejected(PageRig.failure)
+        var reads = 0
 
         func fetch() async throws(ClientError) -> Page<OperationSummary> {
+            reads += 1
             if holds { await withCheckedContinuation { gate = $0 } }
             if let failure { throw failure }
             return Page(items: [], next: nil)
@@ -216,5 +218,36 @@ struct OperationsUnreadableTests {
                 active: center.active, loaded: center.store.loadedAt != nil,
                 failed: center.store.error != nil, unsupported: center.store.unsupported)
                 == .loaded([]))
+    }
+
+    @Test func o2GoesAwayWhenShellSyncLoadsTheFailedStoreAgainOnCaughtUp() async throws {
+        let held = HeldCenter()
+        let center = OperationCenter(
+            fetchPage: { _ throws(ClientError) in try await held.fetch() },
+            fetchOne: { _ throws(ClientError) in nil },
+            now: { FixtureClock.now }, sleep: { _ in })
+        let sync = ShellSync()
+        sync.register(center.store)
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { sync.isSettled }
+        func state() -> AttentionOperations? {
+            OverviewPage.operationsState(
+                active: center.active, loaded: center.store.loadedAt != nil,
+                failed: center.store.error != nil, unsupported: center.store.unsupported)
+        }
+        #expect(state() == .failed, "the first snapshot failed: item O2")
+        let rounds = sync.completedRounds
+
+        // The connection comes back through its cursor, with no new snapshot.
+        held.failure = nil
+        sync.handle(.caughtUp)
+        try await waitUntil { sync.isSettled && center.store.loadedAt != nil }
+        #expect(state() == .loaded([]), "the store loaded again and O2 is gone")
+        #expect(sync.completedRounds > rounds)
+
+        // A caught up connection with every store loaded reads nothing again.
+        let reads = held.reads
+        sync.handle(.caughtUp)
+        #expect(held.reads == reads)
     }
 }

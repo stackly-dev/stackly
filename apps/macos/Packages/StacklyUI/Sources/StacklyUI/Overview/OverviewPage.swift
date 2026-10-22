@@ -137,11 +137,6 @@ public struct OverviewPage: View {
                 names: Dictionary(
                     summaries.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }),
                 context: context)
-            // A connection that recovers through its cursor raises `completedRounds` without
-            // a new snapshot, so a snapshot of operations that failed is read again here.
-            if operationsState == .failed {
-                await operations.store.refresh()
-            }
         }
     }
 
@@ -235,7 +230,9 @@ public struct OverviewPage: View {
     /// Unsupported comes first, also when the store still holds the data of an earlier daemon,
     /// because `ResourceStore` marks a store unsupported without dropping `loadedAt`. Loaded
     /// data wins over a later failed refresh. A failure with nothing loaded is `.failed`, and
-    /// `nil` means the first answer has not come.
+    /// `nil` means the first answer has not come. The page does not read a failed snapshot again
+    /// itself: `ShellSync` does on the next `.caughtUp`, and a snapshot that works clears both
+    /// `error` and `unsupported`.
     ///
     /// - Parameters:
     ///   - active: The operations that have not ended.
