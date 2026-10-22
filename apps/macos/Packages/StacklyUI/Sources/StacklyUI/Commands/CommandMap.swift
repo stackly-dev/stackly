@@ -455,7 +455,8 @@ nonisolated public enum CommandMap {
                 standardMeaning: .help)
         case .welcome:
             CommandEntry(
-                id, menu: .help, group: 2, title: "Welcome to Stackly", scope: .app, owner: 16)
+                id, menu: .help, group: 2, title: "Welcome to Stackly", scope: .app, owner: 16,
+                status: .built)
         case .showMainWindow:
             CommandEntry(
                 id, menu: .window, group: 0, kind: .system, title: "Stackly",

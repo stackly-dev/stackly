@@ -21,6 +21,11 @@ nonisolated public enum OnboardingCopy {
         "Step \(number) of \(stepLabels.count), \(label)"
     }
 
+    /// What VoiceOver announces once when the step changes.
+    static func stepAnnouncement(number: Int, label: String) -> String {
+        stepSpoken(number: number, label: label) + "."
+    }
+
     /// The label of the Back button.
     static let back = "Back"
     /// The primary label for most steps.

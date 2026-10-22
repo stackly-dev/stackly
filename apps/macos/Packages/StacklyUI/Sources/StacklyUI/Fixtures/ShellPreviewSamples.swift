@@ -38,8 +38,6 @@
                 presentation: presentation,
                 diagnostics: diagnostics,
                 counts: SidebarCounts(instances: 6, runningOperations: 2),
-                windowOpener: WindowOpener(),
-                windowWillClose: { _ in },
                 reconnect: {},
                 refreshDiagnostics: {}
             )

@@ -40,3 +40,11 @@ nonisolated public enum OnboardingFooter {
         step != .welcome
     }
 }
+
+extension OnboardingFooter {
+    /// What VoiceOver announces once when the step changes, such as
+    /// `Step 3 of 5, Storage.`
+    public static func announcement(_ step: OnboardingStep) -> String {
+        OnboardingCopy.stepAnnouncement(number: step.number, label: step.label)
+    }
+}

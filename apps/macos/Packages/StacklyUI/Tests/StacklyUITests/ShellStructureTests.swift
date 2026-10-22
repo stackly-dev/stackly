@@ -171,8 +171,8 @@ struct ShellStructureTests {
         #expect(environment.lowerBound < gate.lowerBound, "which the gate and the host sit inside")
     }
 
-    @Test func theLiveShellCreatesOneFeedbackCenterAndPutsItInTheEnvironment() throws {
-        let code = try shellCode("LiveShell.swift")
+    @Test func theMainWindowRootCreatesOneFeedbackCenterAndPutsItInTheEnvironment() throws {
+        let code = try shellCode("MainWindowRoot.swift")
         #expect(code.components(separatedBy: "FeedbackCenter()").count == 2, "exactly one")
         #expect(code.contains("@State private var feedbackCenter = FeedbackCenter()"))
         #expect(code.contains(".environment(\\.feedbackCenter, feedbackCenter)"))

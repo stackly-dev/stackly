@@ -45,8 +45,6 @@ struct ShellLayoutTests {
         let shell = AppShell(
             presentation: presentation,
             diagnostics: ConnectionDiagnostics(status: presentation.status, appProtocol: "1.3"),
-            windowOpener: WindowOpener(),
-            windowWillClose: { _ in },
             reconnect: {},
             refreshDiagnostics: {}
         )

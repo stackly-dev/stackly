@@ -4,7 +4,7 @@ import SwiftUI
 /// clicks Stackly in the Dock after closing the window.
 ///
 /// SwiftUI opens a `Window` scene only through the `openWindow` environment action, so
-/// ``AppShell`` captures that action here when it appears. The captured action keeps
+/// ``MainWindowRoot`` captures that action here when it appears. The captured action keeps
 /// working after the main window closed (checked on macOS 27, see `apps/macos/design.md`,
 /// App shell).
 public final class WindowOpener {
@@ -16,12 +16,12 @@ public final class WindowOpener {
     /// Creates an opener with no captured action yet.
     public init() {}
 
-    /// Whether ``AppShell`` has captured the `openWindow` action yet.
+    /// Whether ``MainWindowRoot`` has captured the `openWindow` action yet.
     public var canOpen: Bool {
         openWindow != nil
     }
 
-    /// Keeps the scene's `openWindow` action. ``AppShell`` calls it when it appears.
+    /// Keeps the scene's `openWindow` action. ``MainWindowRoot`` calls it when it appears.
     func capture(_ action: OpenWindowAction) {
         openWindow = action
     }

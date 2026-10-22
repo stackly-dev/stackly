@@ -40,7 +40,9 @@
             return ShellRuntime(
                 model: model, closeNotice: CloseNotice(presentsPanel: false),
                 commandLineTool: CommandLineToolModel(
-                    controller: tool, initialStatus: FakeCommandLineTool.fixtureStatus))
+                    controller: tool, initialStatus: FakeCommandLineTool.fixtureStatus),
+                onboardingStore: InMemoryOnboardingRecordStore(
+                    isFinished: scenario.onboardingFinished))
         }
     }
 #endif

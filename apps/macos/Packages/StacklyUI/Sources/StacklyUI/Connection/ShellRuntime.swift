@@ -14,6 +14,8 @@ public final class ShellRuntime {
     public let closeNotice: CloseNotice
     /// The command line tool, or `nil` for a shell without one (spec 0015).
     public let commandLineTool: CommandLineToolModel?
+    /// Whether the onboarding shows in the main window and at which step (spec 0016).
+    public let onboarding: OnboardingModel
     private var observers: [any NSObjectProtocol] = []
 
     /// Wraps `model`, starts it, and listens for the app becoming active and
@@ -23,13 +25,17 @@ public final class ShellRuntime {
     ///   - model: The daemon model.
     ///   - closeNotice: The notice shown the first time the main window closes.
     ///   - commandLineTool: The command line tool model, or `nil`.
+    ///   - onboardingStore: Where the finished record of the onboarding lives; the app's
+    ///     `UserDefaults` by default.
     public init(
         model: DaemonModel, closeNotice: CloseNotice = CloseNotice(),
-        commandLineTool: CommandLineToolModel? = nil
+        commandLineTool: CommandLineToolModel? = nil,
+        onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore()
     ) {
         self.model = model
         self.closeNotice = closeNotice
         self.commandLineTool = commandLineTool
+        onboarding = OnboardingModel(store: onboardingStore)
         model.start()
         observers.append(
             NotificationCenter.default.addObserver(
@@ -98,14 +104,18 @@ public enum ShellBootstrap {
     ///   - rootOverride: `STACKLY_ROOT`, or `nil` when it is not set.
     ///   - clientVersion: The bundle's `CFBundleShortVersionString`.
     ///   - now: The wall clock.
+    ///   - onboardingStore: Where the finished record of the onboarding lives; the app's
+    ///     `UserDefaults` by default.
     public static func live(
         rootOverride: String?,
         clientVersion: String,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore()
     ) -> ShellRuntime {
         assemble(
             rootOverride: rootOverride, clientVersion: clientVersion, now: now,
-            agentController: SMAppServiceAgent(), commandLineTool: CommandLineTool.live()
+            agentController: SMAppServiceAgent(), commandLineTool: CommandLineTool.live(),
+            onboardingStore: onboardingStore
         ).runtime
     }
 
@@ -123,6 +133,7 @@ public enum ShellBootstrap {
     ///     ``SMAppServiceAgent``.
     ///   - commandLineTool: The command line tool, or `nil` for a shell without one. `live`
     ///     gives ``CommandLineTool``.
+    ///   - onboardingStore: Where the finished record of the onboarding lives.
     static func assemble(
         rootOverride: String?,
         clientVersion: String,
@@ -130,7 +141,8 @@ public enum ShellBootstrap {
         announce: @escaping (String) -> Void = { StacklyUI.announce($0) },
         closeNotice: CloseNotice = CloseNotice(),
         agentController: (any BackgroundAgentControlling)? = nil,
-        commandLineTool: (any CommandLineToolControlling)? = nil
+        commandLineTool: (any CommandLineToolControlling)? = nil,
+        onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore()
     ) -> LiveShellParts {
         let endpoint = Result { () throws(RootOverrideProblem) -> SocketEndpoint in
             try SocketPathResolver.current(rootOverride: rootOverride)
@@ -160,7 +172,8 @@ public enum ShellBootstrap {
         return LiveShellParts(
             runtime: ShellRuntime(
                 model: model, closeNotice: closeNotice,
-                commandLineTool: commandLineTool.map { CommandLineToolModel(controller: $0) }),
+                commandLineTool: commandLineTool.map { CommandLineToolModel(controller: $0) },
+                onboardingStore: onboardingStore),
             link: link,
             engine: engine)
     }
