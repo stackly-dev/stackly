@@ -4,7 +4,9 @@
 //! sockets this test holds. Every case judges `127.0.0.1:p`.
 
 use std::io::Read;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener, TcpStream, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
+
+use socket2::{Domain, Protocol, Socket, Type};
 
 use stackly_protocol::instance::{PortRequest, PreflightStatus};
 use stackly_testkit::evidence::{Kind, evidence};
@@ -98,6 +100,32 @@ async fn the_postgresql_endpoint_row_matches_the_table_against_real_listeners() 
         assert_eq!(detail, ALL_ADDRESSES);
     }
 
+    // TCP [::]:p for IPv6 only: it takes no connection to 127.0.0.1, but it
+    // takes one to [::1].
+    let six_only = Socket::new(Domain::IPV6, Type::STREAM, Some(Protocol::TCP))
+        .and_then(|socket| {
+            socket.set_only_v6(true)?;
+            socket.set_reuse_address(true)?;
+            socket.bind(&SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0).into())?;
+            socket.listen(1)?;
+            Ok(socket)
+        })
+        .expect("an IPv6 only wildcard listener");
+    let port = six_only
+        .local_addr()
+        .expect("an address")
+        .as_socket()
+        .expect("an inet address")
+        .port();
+    let (status, detail, error) = judge(&site, &api, port).await;
+    assert_eq!(
+        (status, error),
+        (PreflightStatus::Caution, None),
+        "[::] v6only"
+    );
+    assert!(detail.starts_with("Also in use on [::1]:"), "{detail}");
+    drop(six_only);
+
     // TCP [::1]:p.
     if let Ok(six) = TcpListener::bind((Ipv6Addr::LOCALHOST, 0)) {
         let port = six.local_addr().expect("an address").port();
@@ -156,6 +184,6 @@ async fn the_postgresql_endpoint_row_matches_the_table_against_real_listeners() 
     drop(api);
     daemon.shutdown().await;
     ev.pass_with(
-        "on this Mac the endpoint.client row of PostgreSQL gave the table result for every listener kind: 127.0.0.1 error, 0.0.0.0, [::] dual stack and [::1] caution, TIME_WAIT on 127.0.0.1 and [::1], an open connection, and UDP ok, and TIME_WAIT next to a dual stack listener caution",
+        "on this Mac the endpoint.client row of PostgreSQL gave the table result for every listener kind: 127.0.0.1 error, 0.0.0.0, [::] dual stack, [::] IPv6 only and [::1] caution, TIME_WAIT on 127.0.0.1 and [::1], an open connection, and UDP ok, and TIME_WAIT next to a dual stack listener caution",
     );
 }
