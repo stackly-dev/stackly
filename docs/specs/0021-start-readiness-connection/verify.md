@@ -39,3 +39,40 @@ _Langkah diturunkan dari acceptance criteria spec 0021. `/check verify` menjalan
 - AC-4 (`instance.get_detail`) · `core::instance::detail::build` di milestone ini; handler, cek stat paket, dan `resource.not_found` menunggu langkah 7 (milestone 2).
 - AC-5 (`instance.get_data_usage`) · `Filesystem::tree_usage` dan aturan penelusurannya di milestone ini; cache, penggabungan, semaphore, pemetaan error, dan batas `DaemonConfig` menunggu langkah 7 (milestone 2).
 - AC-6 sampai AC-20 · menunggu milestone 2 sampai 4.
+
+## Milestone 2: Kontrak, daemon, CLI, dan bukti offline
+
+### UI / manual
+
+- [x] Buka `protocols/fixtures/instance/detail-postgresql.json`, `detail-nats.json`, `detail-unavailable.json`, dan `detail-package-unreadable.json` → masing masing berisi `{ instance, detail, dataUsage }` (bentuk yang sama dengan `result` `inspect --json`): PostgreSQL berjalan dengan dua connection tersedia, dua dependents, dan ukuran lengkap; NATS berhenti dengan runtime eksternal dan dua connection `port_not_assigned`; instance retained dengan dua connection `retained` dan ukuran tidak lengkap; PostgreSQL berhenti dengan `packageReadable` false, `displayName` null, `connections` kosong, secret `superuserPassword` berjudul nama field, dan `dataUsage` null → AC-7, AC-17
+- [x] Buka `protocols/fixtures/ipc/` → `request-instance-get-detail.json`, dua request `get-data-usage`, `reject-instance-get-data-usage-refresh-and-cached-only.json`, lima frame `response` (detail, detail paket tidak terbaca, detail dengan nilai asing, data usage lengkap, tidak lengkap, dan kosong), dan tiga frame error `instance.data_usage_unavailable` (`missing`, `not-private`, `io`, masing masing dengan hint statis) → AC-17
+- [x] `stackly instance inspect <instance>` terhadap fixture `detail-package-unreadable.json` (lihat `apps/cli/tests/golden/instance_inspect_package_unreadable.txt`) → baris `Connection  unavailable (package_unavailable)` sesudah tabel endpoint, tanpa tabel `CONNECTION` → AC-7
+- [x] Buka `apps/cli/tests/golden/instance_inspect_postgresql.txt` → baris `Digest` (sha256 lengkap), `Data`, `Data size`, `Autostart` sesudah `Version`; `Dependents` dan `Secrets` sesudah `Logs`; lalu tabel `CONNECTION`/`VALUE` dengan string tersamar → AC-7
+
+### Commands
+
+- [x] `cargo xtask codegen --check` → "20 generated files are up to date"; `ProtocolVersion::CURRENT` 1.14 dan digest-nya tercatat di `protocols/contract-versions.json` → AC-17
+- [x] `cargo test -p stackly-protocol` → termasuk 11 test `detail_fixtures`: triple round trip dalam bentuk kawat, satu instance pada satu revision, `ConnectionString` konsisten (tersedia jika dan hanya jika `masked` terisi, `parts` tidak kosong, `reason` kosong), `packageReadable` false hanya di triple paket tidak terbaca dengan `displayName` null dan `connections` kosong, string tersamar sama dengan hasil `compose` dengan `****`, tidak ada nilai secret, request dan penolakan `refresh` bersama `cachedOnly` (`cachedOnly` dengan `invalid_value`), nilai asing setiap enum terbuka menjadi `Unrecognized`, dan hint statis tiga reason `instance.data_usage_unavailable` → AC-17
+- [x] `swift test --package-path clients/swift` → `DetailContractTests` (konsistensi `ConnectionString`, triple, frame, nilai asing menjadi `.unrecognized`) dan `IpcFixtureTests` (35 method) lulus. Catatan: enum kontrak Swift bernama `ConnectionAvailability`, bukan `ConnectionState`, karena `ConnectionState` sudah status link daemon di `StacklyClient` → AC-17
+- [x] `swift build --package-path apps/macos/Packages/StacklyUI` → build selesai tanpa perubahan di pemanggil StacklyUI → AC-17
+- [x] `cargo test -p stackly-core --test instance_detail` → 11 test, termasuk `packageReadable` true untuk paket terbaca tanpa blok `connection`, false untuk paket hilang dan paket yang bukan yang di pin → AC-4
+- [x] `cargo test -p stacklyd --lib detail` → cache data usage lewat `FakeClock` (segar sampai 60 detik, tidak lengkap sampai 10 detik, `cachedOnly` tanpa scan, satu scan untuk permintaan bersamaan termasuk `refresh`, paling banyak dua scan bersamaan, scan tetap selesai saat klien pergi, folder hilang atau tidak privat gagal sebelum scan, folder yang diganti file antara cek dan scan, error tidak pernah di cache) dan pemetaan error `tree_usage` → AC-5
+- [x] `cargo test -p stacklyd --test supervisor detail::` → 8 test lewat daemon asli: detail instance fake dari registry dan paket pinned tanpa membaca secret store, `resource.not_found`, paket yang dirusak lalu diperbaiki (ukuran sama) dan dihapus, paket dengan digest lain, port `auto` (`port_not_assigned` lalu tersedia), `running` tanpa probe tidak pernah ready (AC-012), tidak ada nilai secret di detail, 10 instance dalam batas 100 ms p95 hangat dan 300 ms dingin → AC-4, AC-8, AC-18, AC-19
+- [x] `cargo test -p stacklyd --test supervisor data_usage::` → 10 test lewat daemon asli, termasuk 250 000 entri dengan konstanta asli `complete: false` dalam 2,1 detik → AC-5, AC-19
+- [x] `cargo test -p stacklyd --test supervisor offline::` → server di dalam proses tanpa catalog, `FakeFetcher` offline, dan `FakeCodeSigning`: `instance.start` sampai ready, `instance.get`, `instance.get_detail`, `instance.get_data_usage`, `stackly instance connection`, dan `stackly instance inspect` berhasil dengan nol akses `CatalogState`, nol permintaan fetch, dan nol `assess`; tidak ada awalan token di log, detail, dan output CLI; `--show-password` menulis string dengan token asli dan satu baris audit `secret.reveal` → AC-6, AC-10, AC-18
+- [x] `cargo test -p stackly-cli` → termasuk 18 test `connection` terhadap daemon tiruan (default tersamar tanpa `secret.reveal`, `--format`, `cli.connection_not_found` dan `cli.connection_unavailable` dengan golden, `--all`, konflik clap, `--show-password` dengan satu reveal `show` per reference dan string ter-encode, reveal yang gagal, catatan `portMayChange` di stderr, paket tidak terbaca di setiap bentuk, golden `inspect` dari empat triple, `--size`, data usage yang gagal, ambil ulang saat revision beda) → AC-6, AC-7, AC-18
+- [x] `cargo xtask check-deps` → lulus; `commands::instance::connection` masuk `EXPOSE_ALLOWED` untuk `stackly-cli` → AC-6
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-4 (`instance.get_detail`) · seluruhnya di milestone ini. Cek ulang paket per request membandingkan isi `provider.yaml` (bukan inode, ukuran, dan mtime): `FileInfo` tidak membawa mtime, dan perbandingan isi lebih kuat; perbedaan memicu baca ulang dengan cek digest terhadap kunci pin.
+- AC-5 (`instance.get_data_usage`) · seluruhnya di milestone ini (urutan jawaban, cache lewat `Clock`, penggabungan, semaphore, pemetaan error, batas di `DaemonConfig.data_usage`). Folder di volume lain diuji di tingkat platform (milestone 1, langkah 4).
+- AC-6 (`stackly instance connection`) · seluruhnya di milestone ini.
+- AC-7 (paritas inspect dan Summary) · sisi CLI di milestone ini (golden dari empat triple); sisi Swift menunggu langkah 9 (milestone 3).
+- AC-8 (readiness terpisah) · bagian daemon dan CLI di milestone ini; header, kartu Endpoints, dan view model menunggu milestone 3.
+- AC-10 (offline) · test di dalam proses di milestone ini; run native dengan jaringan mati menunggu milestone 4 dan persetujuan user.
+- AC-17 (kontrak) · seluruhnya di milestone ini (Rust dan Swift).
+- AC-18 (keamanan) · bagian daemon dan CLI di milestone ini; model Swift menunggu milestone 3.
+- AC-19 (kinerja) · `get_detail` dan `get_data_usage` terukur di milestone ini dengan 10 instance fake di Mac ini; batas dijaga hanya saat Mac tidak dibebani.
+- Lainnya (AC-9, AC-11 sampai AC-16, AC-20) · menunggu milestone 3 dan 4.

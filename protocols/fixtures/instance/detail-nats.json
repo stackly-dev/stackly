@@ -1,0 +1,111 @@
+{
+  "instance": {
+    "id": "0192f3a5-0000-7000-8000-000000000004",
+    "name": "queue",
+    "displayName": "Job queue",
+    "revision": 7,
+    "software": "nats",
+    "provider": {
+      "name": "official/nats",
+      "revision": "2026.10.1",
+      "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed"
+    },
+    "runtimeId": "0192f3a5-0000-7000-8000-0000000000a4",
+    "runtimeVersion": "2.15.1",
+    "lifecycle": "stopped",
+    "desired": "stopped",
+    "readiness": {
+      "state": "unknown",
+      "reason": "not_running",
+      "detail": null,
+      "observedAt": "2026-10-20T09:00:05.000Z"
+    },
+    "health": {
+      "state": "unknown",
+      "reason": "not_running",
+      "detail": null,
+      "observedAt": "2026-10-20T09:00:05.000Z"
+    },
+    "statusSeq": 4,
+    "process": null,
+    "lastFailure": null,
+    "restart": {
+      "attempts": 0,
+      "budget": 5,
+      "windowSeconds": 60,
+      "nextAttemptAt": null,
+      "exhausted": false
+    },
+    "blocker": null,
+    "endpoints": [
+      {
+        "name": "client",
+        "transport": "tcp",
+        "host": "127.0.0.1",
+        "port": null,
+        "portMode": "auto",
+        "bound": false,
+        "socketPath": null
+      },
+      {
+        "name": "monitoring",
+        "transport": "tcp",
+        "host": "127.0.0.1",
+        "port": null,
+        "portMode": "auto",
+        "bound": false,
+        "socketPath": null
+      }
+    ],
+    "leftoverProcesses": [],
+    "logsUnavailable": false,
+    "ownership": "manual",
+    "initialized": true
+  },
+  "detail": {
+    "instanceId": "0192f3a5-0000-7000-8000-000000000004",
+    "revision": 7,
+    "provider": {
+      "name": "official/nats",
+      "revision": "2026.10.1",
+      "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed",
+      "displayName": "NATS",
+      "packageReadable": true
+    },
+    "runtime": {
+      "id": "0192f3a5-0000-7000-8000-0000000000a4",
+      "version": "2.15.1",
+      "target": {
+        "os": "macos",
+        "arch": "aarch64"
+      },
+      "installMode": "external",
+      "artifactSha256": null
+    },
+    "dataPath": "/Users/test/Library/Application Support/Stackly/instances/queue/data",
+    "startup": "manual",
+    "secrets": [],
+    "dependents": [],
+    "connections": [
+      {
+        "name": "uri",
+        "title": "Client URL",
+        "state": "unavailable",
+        "reason": "port_not_assigned",
+        "masked": null,
+        "parts": [],
+        "portMayChange": true
+      },
+      {
+        "name": "monitoring",
+        "title": "Monitoring URL",
+        "state": "unavailable",
+        "reason": "port_not_assigned",
+        "masked": null,
+        "parts": [],
+        "portMayChange": true
+      }
+    ]
+  },
+  "dataUsage": null
+}

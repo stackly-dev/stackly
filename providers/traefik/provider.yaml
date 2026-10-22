@@ -36,7 +36,6 @@ configFiles:
 lifecycle:
   initialize:
     - { primitive: createManagedDirectories }
-    - { primitive: renderConfig, file: staticConfig }
     - { primitive: renderConfig, file: routes }
   start:
     executable: "${runtime.executable}"

@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000935",
+    "error": {
+      "code": "instance.data_usage_unavailable",
+      "category": "unavailable",
+      "message": "the data folder size can't be measured",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "run stackly doctor; the data folder is missing",
+      "details": [
+        {
+          "key": "reason",
+          "value": "missing"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

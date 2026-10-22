@@ -281,6 +281,28 @@
       "summary": "a confirmation is needed while the cli runs noninteractive without the approval flag"
     },
     {
+      "code": "cli.connection_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "format",
+        "available"
+      ],
+      "items": null,
+      "summary": "no connection string has the name the command was given, or the provider describes none (spec 0021)"
+    },
+    {
+      "code": "cli.connection_unavailable",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "format",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the selected connection string cannot be built now, or the pinned package cannot be read (spec 0021)"
+    },
+    {
       "code": "cli.daemon_wait_timeout",
       "category": "timeout",
       "retryable": false,
@@ -521,6 +543,16 @@
       "summary": "the new data folder overlaps the data folder of another instance"
     },
     {
+      "code": "instance.data_usage_unavailable",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the data folder size can't be measured"
+    },
+    {
       "code": "instance.endpoint_invalid",
       "category": "invalid_input",
       "retryable": false,
@@ -529,7 +561,7 @@
         "omitted"
       ],
       "items": null,
-      "summary": "an endpoint is not in the manifest, has a port outside 1 to 65535, or asks for a port on a unix endpoint"
+      "summary": "an endpoint is not in the manifest, has a port outside 1 to 65535, asks for a port on a unix endpoint, or is Auto while the provider’s initialize needs its port"
     },
     {
       "code": "instance.insufficient_space",

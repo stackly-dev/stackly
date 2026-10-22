@@ -94,3 +94,23 @@ _Langkah 8 sampai 11 (`dev-f20-m2`, 2026-10-22), protokol 1.12. Test daemon mema
 - AC-26 · test keamanan (nama berbahaya, symlink, secret tidak di argv atau perintah setara); review fresh model menunggu kotak Review it
 - AC-3 sampai AC-9, AC-15 · dari Milestone 1; lewat daemon di test paritas dan test create di atas
 - AC-20, AC-22, AC-23, AC-25 · belum, milik Milestone 3 dan 4
+
+## Milestone 5: Init port guard
+
+_Langkah 17 dan 18 (update 2026-10-22, usulan spec 0023). Langkah 18 adalah langkah 22 spec 0009; bagiannya ada di `docs/specs/0009-provider-engine-manifest-schema/verify.md`. Jalankan dari root repo pada commit bersih._
+
+### UI / manual
+
+Tidak ada. Perubahan ini ada di evaluator core, dan teks barisnya muncul di sheet dan `--dry-run` lewat baris preflight yang sama.
+
+### Commands
+
+- [ ] `cargo test -p stackly-core --test create_evaluate init_port` → lima test lulus: paket fake yang init nya memakai `${endpoint.http.port}` tanpa permintaan port memberi baris `settings` error `instance.endpoint_invalid` (detail `endpoint` `http`) dengan keterangan "This provider needs a fixed port for http when the instance is created. Choose a port for it." dan tanpa field issue; `http` `auto` eksplisit memberi hal yang sama ditambah `endpoints[0].port` `invalid_value`; `first_error` kedua draft sama; `http` `Fixed` 20000 `ready`; `http` `Fixed` 0 hanya memberi error baris `endpoint.http` (`out_of_range`) tanpa keterangan "needs a fixed port"; paket fake, NATS `1.0.1`, dan PostgreSQL dengan semua endpoint `Auto` tetap `ready`; salinan NATS bentuk `1.0.0` meminta port `Fixed` untuk `client`, lalu `monitoring` → AC-2, AC-9
+- [ ] `cargo test -p stackly-core --test create_evaluate` → seluruh suite hijau (46 lama lulus, tidak berubah), termasuk dry run dengan port `Fixed` dan settings salah → AC-9
+- [ ] `cargo test -p stackly-protocol --test create_fixtures endpoint_invalid` → hint `instance.endpoint_invalid` statis dan ringkasan katalog menyebut sebab baru → AC-9
+- [ ] `cargo xtask codegen --check` → `20 generated files are up to date`; `git diff protocols/` hanya mengubah baris `summary` `instance.endpoint_invalid` di `protocols/error-codes.json`, dan `protocols/contract-versions.json` tidak berubah (`ProtocolVersion` tidak naik)
+
+### Acceptance-criteria coverage
+
+- AC-2 dan AC-9 (kalimat 2026-10-22) · `DryRunRefusal`, dua `PlanContext` di `dry_run`, keterangan baris `settings`, ringkasan dan hint `instance.endpoint_invalid`
+- Tidak teruji: varian `DryRunRefusal::Endpoint` ("Endpoint {nama} can’t be used with these settings."), karena paket yang tervalidasi memaksa `defaultHost` loopback dan setiap endpoint punya port di context run; varian itu hanya pagar untuk `EndpointNotLoopback`
