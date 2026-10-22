@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `abe61d48`
 - **Wave aktif:** tidak ada (wave 7 selesai `2026-10-22`; sisa: teks spec 0013 untuk muat ulang store lewat architect, langkah manual user)
-- **Diperbarui:** `2026-10-22 22:13`
+- **Diperbarui:** `2026-10-22 23:05`
 
 ## Sub sesi wave `1`
 
@@ -213,6 +213,8 @@
 
 | `2026-10-22` | User meminta architect kecil untuk teks spec 0013 muat ulang store. `arc-f13-reload` (`5293cb02`): butir `.caughtUp` di ShellSync dan butir snapshot gagal sesuai kode `9ee06a25` (varian ii), plus tiga ketepatan dari cross check (muat ulang dalam generasi yang sama tanpa mengubah `lastResnapshot`; `completedRounds` naik sekali setelah semua store selesai; pengecualian "store `unsupported` tanpa error"; muat ulang ini bukan `.resnapshot`, jadi AC-10 dan tabel `SyncSignal` tetap benar), lima test `ResourceStoreTests` di *Critical test scenarios*, dan rationale "Perubahan 2026-10-22". Tanpa perubahan teks AC; gerbang lead: 2 file di ownership, nol baris AC. Diterima lead dan di-merge. Temuan cross check (risiko kode lama, lebih mungkin sekarang): Retry halaman (`refresh()`) pada store yang sedang dimuat ShellSync membuat `resnapshot()` milik ShellSync memberi `false`, store tidak keluar dari `pending`, `isSettled` tetap false dan presence bertahan `refreshing` sampai `.resnapshot` berikutnya; diajukan ke user sebagai tugas debug kecil. Usulan untuk spec 0022 (lead scope 02): tandai langkah 9a dihapus di `28cbe678` dengan rujukan ke butir `.caughtUp` spec 0013. | `user` |
 
+| `2026-10-22` | User memulai `dbg-f13-pending`. Akar masalah: `ResourceStore.refresh()` (Retry halaman) selalu mengambil alih generasi store, sehingga `resnapshot()` milik ShellSync (putaran resnapshot atau muat ulang `.caughtUp`) memberi `false`, store tetap `pending`, `isSettled` false, presence bertahan `refreshing`. Perbaikan `cc277dd2`: `refresh()` menunggu snapshot yang sedang berjalan (continuation dilepas di akhir `complete` dan `fail`), tanpa fetch kedua dan tanpa timer; `ShellSync.swift` tidak berubah. Pertanyaan lead tentang snapshot yang ditinggalkan dijawab (a): semua jalur berakhir di `complete` atau `fail` (generasi basi dilepas oleh generasi terbaru, tidak ada jalur yang membatalkan task snapshot, teardown menutup channel sehingga setiap call gagal dengan `ipc.connection_closed`), dengan dua test tambahan dan uji mutasi (`75f26b1`). Regresi gagal di kode lama dan lulus sesudah, 50 dari 50 run untuk 12 test sinkronisasi. Gerbang lead setelah `git merge main` (`f96b64c3`): StacklyUI penuh 1557 test tanpa kegagalan, lint, `evidence check`. Di-merge. Usulan teks spec 0013 dari debugger (baris `refresh()` di "Sinkronisasi snapshot plus cursor" menunggu snapshot yang berjalan; catatan risiko di rationale diganti rujukan `cc277dd2`) diantrikan untuk architect berikutnya. Lead scope 03 juga di-merge: spec 0024 milestone 3 (`e5e34439`, diff `Shell/` dan `Commands/` sesuai tinjauan lead), `docs/manual.md` bagian U tanpa menyentuh A sampai K. | `user` |
+
 ## Blocker terbuka
 
 - (selesai) Test flaky `SkeletonEndToEndTests.theInstanceStoreFollowsChangesAnotherClientMakes` diperbaiki `dbg-f14-trail` (`edd197d`).
@@ -229,7 +231,8 @@
 - (selesai) Race close `DaemonConnection`: `5e8347c0`.
 - (selesai) F13 muat ulang store dan sibling koneksi: `9ee06a25`.
 - (selesai) Teks spec 0013 untuk muat ulang store: di-merge (wave 8).
-- Risiko `pending` di ShellSync saat Retry halaman bertabrakan dengan muat ulang (`refreshing` macet sampai `.resnapshot` berikutnya): menunggu persetujuan user untuk debugger kecil.
+- (selesai) Risiko `pending` saat Retry: diperbaiki (`cc277dd2`).
+- Teks spec 0013 untuk `refresh()` yang menunggu snapshot berjalan dan penggantian catatan risiko di rationale (usulan `dbg-f13-pending`): menunggu architect berikutnya.
 - F69 milestone 3: kode di `main` (`b8f575c9`); kotak menunggu cek keyboard dan VoiceOver user (`docs/manual.md` J butir 5 sampai 8) dan cek menu langsung di app saat layar tidak terkunci.
 - Teks spec 0067 baris 518, 0068 baris 264, dan `design.md` masih menyebut relay "on content before .inspector" dan belum memuat baris "Not vibrant" untuk kolom inspector: diarahkan ke architect setelah bagian 2, bersama token tint pilihan (F12).
 - (selesai) Teks spec sesuai yang dibangun: `97e093f9`.
