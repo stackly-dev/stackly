@@ -137,6 +137,7 @@ public struct InstancesPage: View {
         return GeometryReader { proxy in
             pageContent(all: all, visible: visible, selected: selected)
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+                .relayingFixtureAccessibility()
         }
         .stacklyInspector(
             isPresented: $showsInspector,
@@ -525,6 +526,19 @@ public struct InstancesPage: View {
             secondaryAction: newInstance.map { action in
                 StateAction(title: action.title, mutates: true, perform: action.perform)
             })
+    }
+}
+
+extension View {
+    /// Pins the fixture's accessibility values again inside the page's `GeometryReader`,
+    /// which holds its content again and drops Increase Contrast there (spec 0068, K15).
+    /// Release builds return the view as it is.
+    fileprivate func relayingFixtureAccessibility() -> some View {
+        #if DEBUG
+            relayFixtureAccessibility()
+        #else
+            self
+        #endif
     }
 }
 
