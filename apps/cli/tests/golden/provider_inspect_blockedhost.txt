@@ -1,0 +1,26 @@
+Name               NATS Blocked Build
+ID                 official/blockedhost
+Category           messaging
+Description        NATS messaging server with JetStream, one server per instance.
+State              blocked (artifact_blocked): the upstream build fails the closure audit
+Publisher          Stackly
+Trust              official
+Provider revision  1.0.0
+Manifest           sha256:6c4ab70f4eb4efd24b875ebbdc6a946d094406b8a825f8471a472d0d41684dab
+Baseline           lifecycle, readiness probe, logs
+
+CAPABILITY              SUPPORT
+Multiple instances      supported
+Persistent data         supported
+Reload without restart  not supported
+Metrics                 supported
+TLS                     not supported
+Cold backup             supported
+Online backup           not supported
+Logical backup          not supported
+
+VERSION  MACOS                                                 LINUX                   WINDOWS                 INSTALL
+2.15.1   blocked (the upstream build fails the closure audit)  unsupported (no_build)  unsupported (no_build)  no (artifact_blocked)
+
+ARTIFACT                   TARGET         STATUS   DOWNLOAD  DISK  MIN OS  LICENSE     SOURCE
+nats-2.15.1-macos-aarch64  macos/aarch64  blocked  -         -     -       Apache-2.0  -

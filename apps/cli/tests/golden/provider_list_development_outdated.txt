@@ -1,0 +1,12 @@
+Catalog: development, revision 1, published 2026-10-20 01:26 +00:00, older than 180 days; updating Stackly may bring a newer catalog
+PROVIDER              NAME                CATEGORY   STATE                            VERSIONS  LICENSE
+official/blockedhost  NATS Blocked Build  messaging  blocked (artifact_blocked)       -         -
+official/intelonly    NATS Intel Build    messaging  unsupported (no_build_for_arch)  -         -
+official/nats         NATS Server         messaging  available                        2.15.1    Apache-2.0
+official/broken       official/broken     cache      invalid (package_invalid)        -         -
+official/zenith       official/zenith     -          invalid (package_invalid)        -         -
+official/mysql        MySQL               database   planned (provider_planned)       -         -
+official/postgresql   PostgreSQL          database   planned (provider_planned)       -         -
+official/clickhouse   ClickHouse          analytics  planned (provider_planned)       -         -
+official/valkey       Valkey              cache      planned (provider_planned)       -         -
+official/traefik      Traefik             proxy      planned (provider_planned)       -         -

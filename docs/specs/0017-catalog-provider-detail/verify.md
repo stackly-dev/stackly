@@ -48,6 +48,37 @@ Siapkan satu root sementara untuk langkah daemon: `export STACKLY_ROOT=$(mktemp 
 - AC-9 sampai AC-12: milestone 2 dan 3, tidak dicakup bagian ini.
 - AC-13: tabel kode, test pemetaan per varian di `stacklyd`, fixture Rust dan Swift, dan `codegen --check`.
 
+## Milestone 2: `stackly provider list` dan `inspect`
+
+Prasyarat: `cargo build -p stacklyd -p stackly-fake-server`. Langkah dengan daemon asli membangun `xtask` sendiri lewat `stackly_testkit::cargo_bin`. Test golden berjalan dengan `TZ=UTC` (diatur `common::stackly`) dan membaca fixture `protocols/fixtures/catalog/`, file yang sama dengan test view model Swift.
+
+### UI / manual
+
+Tidak ada. Milestone ini hanya CLI; layar Catalog ada di milestone 3.
+
+### Commands
+
+Siapkan satu root sementara: `export STACKLY_ROOT=$(mktemp -d)`.
+
+- [x] `cargo xtask catalog build --out $STACKLY_ROOT/catalog`, lalu `STACKLY_CATALOG_DIR=$STACKLY_ROOT/catalog cargo run -q -p stacklyd` di satu terminal; di terminal lain (dengan `STACKLY_ROOT` yang sama) `cargo run -q -p stackly-cli -- provider list` → baris `Catalog: development, revision <n>, published <tanggal> <jam> <offset>`, lalu tabel `PROVIDER NAME CATEGORY STATE VERSIONS LICENSE` dengan semua entri dalam urutan daemon (satu baris per entri, `-` untuk sel kosong; entri provider dengan versi menulis `18.6, 17.11` dan lisensinya) → AC-9
+- [x] `cargo run -q -p stackly-cli -- provider list --category database` dan `--category testing` → hanya entri database; kategori tanpa entri menulis baris catalog lalu `No providers in category testing.` dan exit 0; `--category games` → exit 2 dengan daftar nilai yang valid → AC-9
+- [x] `cargo run -q -p stackly-cli -- provider list --json` → satu baris envelope `schemaVersion` 2, `command` `provider list`, `result` `{ "catalog": …, "items": […] }`; dengan `--category cache` `items` ikut tersaring → AC-9
+- [x] `cargo run -q -p stackly-cli -- provider inspect official/postgresql` (state `available` di catalog repo) → blok identitas dengan manifest lengkap dan baris `Baseline`, tabel capability, matrix versi dengan `INSTALL yes`, dan tabel artefak dengan ukuran desimal; `provider inspect official/nats` (entri planned di catalog repo) → blok identitas saja, tanpa tabel capability, matrix, atau artefak → AC-9
+- [x] `cargo run -q -p stackly-cli -- provider inspect official/postgresql --json` → `result` sama dengan `ProviderDetail` (kunci `summary`, `capabilities`, `versions`, `platformNotes`, `note`, `issues`) → AC-9
+- [x] `cargo run -q -p stackly-cli -- provider inspect nats` → exit 10, `catalog.provider_not_found`, pesan `no provider nats in the catalog; did you mean official/nats`, hint "use the full provider ID, including its namespace"; `provider inspect postgres` dan `official/no-such` → exit 10 dengan hint "run stackly provider list to see the catalog"; `provider inspect Official/NATS` → exit 2 `request.invalid_params` dengan field `provider` → AC-9
+- [x] Hentikan daemon, lalu `cargo run -q -p stackly-cli -- provider list` → exit 6; mulai daemon tanpa `STACKLY_CATALOG_DIR`, ulangi `provider list` dan `provider inspect official/nats` → exit 6 dengan `catalog.unavailable` dan hint "run stacklyd from Stackly.app or set STACKLY_CATALOG_DIR" (dua langkah terakhir dicakup test `cargo test -p stackly-cli --test provider`) → AC-9
+- [x] `cargo test -p stackly-cli --test provider` → sepuluh test lulus: golden teks dan JSON `list` (semua, `--category messaging`, kategori kosong, catalog development yang lebih tua dari 180 hari, catalog kosong), golden `inspect` untuk NATS (teks dan JSON), `intelonly`, `blockedhost`, `postgresql` (planned), `broken` dan `zenith` (invalid, kategori kosong), baris exit code 10, 2, dan 6 lewat daemon skrip, dan dua test terhadap `stacklyd` asli dengan `STACKLY_CATALOG_DIR` (catalog hasil `cargo xtask catalog build`, dan tanpa catalog) → AC-9
+- [x] `cargo test -p stackly-cli --bin stackly provider` → aturan ukuran desimal (`6.8 MB`, `48.1 MB`, `1.2 GB`, `1.23 GB`, naik ke unit berikutnya di 1000), `, +<n> more` untuk versi di atas 16, dan entri tanpa kategori yang tidak pernah cocok dengan filter → AC-9
+- [x] `cargo test -p stackly-cli --bin stackly every_command_has_a_description_and_an_example` → `provider list` dan `provider inspect` punya deskripsi dan contoh → aturan CLI spec 0008
+- [x] `cargo test --workspace --locked --no-fail-fast`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo xtask codegen --check` → bersih (tidak ada perubahan di `crates/protocol/`, jadi digest kontrak tidak berubah)
+- [x] `git status --short` setelah semua langkah → bersih
+
+### Acceptance-criteria coverage
+
+- AC-9: perintah `provider list` dan `inspect` dengan teks dan JSON, `--category`, exit 6 dan 10, dan golden dari fixture `protocols/fixtures/catalog/`. Bagian GUI (view model Swift dari fixture yang sama) ada di milestone 3. Aturan ukuran memakai `ByteCountFormatter` gaya `.file` seperti GUI: kB bulat, MB satu desimal, GB ke atas dua desimal tanpa nol di belakang (teks spec "satu desimal" cocok untuk `6.8 MB`, `48.1 MB`, `1.2 GB`; `1.23 GB` adalah selisihnya).
+- AC-8: bagian CLI, yaitu baris catalog dengan tanggal terbit dan keterangan "older than 180 days" saat `outdated`. Baris itu mengikuti teks bagian *CLI* spec (`updating Stackly may bring a newer catalog`), yang tidak menyatakan ada catalog yang lebih baru.
+- AC-6 dan AC-7: status, reason, dan keputusan install di CLI adalah nilai wire dari DTO daemon (`unverified (untested)`, `no (no_build_for_arch)`), tidak dihitung ulang.
+
 ## Milestone 3: Layar Catalog
 
 Prasyarat untuk langkah yang memakai daemon asli: `cargo build -p stacklyd -p stackly-fake-server` dan `cargo build -p stacklyd --example skeleton_seed`. Langkah snapshot dan test view model berjalan dari fixture di `protocols/fixtures/catalog/` dan `protocols/fixtures/ipc/`, tanpa daemon.

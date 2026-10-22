@@ -1,0 +1,12 @@
+Name               official/broken
+ID                 official/broken
+Category           cache
+Description        -
+State              invalid (package_invalid)
+Publisher          Stackly
+Trust              official
+Provider revision  -
+Manifest           -
+
+FILE          LOCATION                     CODE                     MESSAGE
+catalog.json  providers[1].manifestSha256  catalog_digest_mismatch  manifestSha256 does not match the package files

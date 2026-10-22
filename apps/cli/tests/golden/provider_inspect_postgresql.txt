@@ -1,0 +1,10 @@
+Name               PostgreSQL
+ID                 official/postgresql
+Category           database
+Description        Relational database. Multiple majors and multiple clusters per version, each with its own data area.
+State              planned (provider_planned)
+Publisher          Stackly
+Trust              official
+Provider revision  -
+Manifest           -
+Note               Planned for a later release.

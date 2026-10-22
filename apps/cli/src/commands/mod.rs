@@ -9,6 +9,7 @@ pub mod daemon;
 pub mod instance;
 pub mod manpage;
 pub mod operation;
+pub mod provider;
 pub mod runtime;
 pub mod secret;
 
