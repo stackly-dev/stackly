@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 16:36`
+- **Diperbarui:** `2026-10-22 16:46`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -99,6 +99,8 @@
 | `dev-f15-m3-s12a` (sesi F22 dipakai ulang) | `developer` | 15 · langkah susulan 12a (pengumuman `lastError` agent, `not_found` di luar banner, akhir penantian daemon) | `02-instalasi-pertama.md` | `Agent/BackgroundAgentModel.swift`, announcer `DaemonModel.swift`, test Agent dan `DaemonModelAgentTests` | `claude/nifty-joliot-9c338f` | `sonnet-5-5 · high` | `aktif` |
 | `chk-f20-m5` (sesi F18 dipakai ulang) | `checker (verify)` | 20 · verify milestone 5 (spec 0020 dan langkah 22 spec 0009) | `02-instalasi-pertama.md` | bagian Milestone 5 kedua verify.md | `claude/dev-f18-m2-f7a13e` | `sonnet-5-5 · high` | PASS 10/10 (`1941e3ab` → `8bd3132e`) |
 | `chk-f21-m2` (sesi F21 dipakai ulang) | `checker (verify)` | 21 · verify milestone 2 | `02-instalasi-pertama.md` | bagian Milestone 2 `verify.md` 0021 | `claude/arc-f21-update-cc228d` | `sonnet-5-5 · high` | `aktif` |
+| `dev-f21-m3` (sesi F21 dipakai ulang) | `developer` | 21 · Detail page and Summary tab (spec 0021 milestone 3, langkah 9 sampai 11, Swift) | `02-instalasi-pertama.md` | StacklyUI `InstanceDetail/`, `ShellNavigator` (`.instance`), route di `AppShell.swift`, Open dan klik ganda di `Instances/`, `ShellSync.events(kindPrefix:)`, fixture konflik port | `claude/arc-f21-update-cc228d` | `sonnet-5-5 · high` | `aktif` |
+| `dev-f22-m4` (sesi F18 dipakai ulang) | `developer` | 22 · Runtimes card and evidence (spec 0022 milestone 4, langkah 9 dan 10) plus sisa F18 `minimumWidth` | `02-instalasi-pertama.md` | `Overview/`, `OperationTitle`, test kinerja NFR-002, evidence manual `NOT_RUN`, `RuntimesPage.minimumWidth` | `claude/dev-f18-m2-f7a13e` | `sonnet-5-5 · high` | `aktif` |
 
 ## Keputusan
 
@@ -316,6 +318,9 @@
 | `2026-10-22` | `chk-f20-m5` PASS 10/10: spec 0020 AC-2 dan AC-9, spec 0009 AC-21 (AC-11 dan AC-14 tetap utuh), tanpa drift golden atau seed fuzz, catalog revision 7. Di-merge `8bd3132e`; F20 milestone 5 dicentang (`4a21c93b`). Disk sempat 14 GiB: `target/debug/incremental` di checkout utama ternyata 7,4 GB (hook pre-commit menjalankan clippy tanpa `CARGO_INCREMENTAL=0`); dihapus bersama `testkit-bin` dan `xcode` (disk 24 GiB). Lead ui-macos melaporkan fix stall source rule (scan di luar main actor) sedang di-gate; setelah masuk, aturan "jalankan ulang korban stall sendiri" tidak lagi diperlukan. | `lead` |
 | `2026-10-22` | Fix stall StacklyUI dari ui-macos masuk `fda8275a` (hanya test: scan source rule di luar main actor, `waitFor` dan `ConfirmationPresentationTests.settle` menghitung waktu responsif, watchdog `ProcessRunner` di luar main actor, test regresi). Gate mereka 1121 test tanpa satu pun "Time limit was exceeded" di load 25 sampai 49. Mulai sekarang gate lead tidak memakai pengecualian "jalankan ulang korban stall sendiri"; kegagalan di run penuh dianggap nyata dan lognya dikirim ke lead ui-macos. `dev-f20-m3` dan `dev-f15-m3-s12a` diberi tahu. | `lead` |
 | `2026-10-22` | Run penuh StacklyUI F67 part 2 milik ui-macos terbunuh SIGTERM (exit 143) saat sesi scope ini (kemungkinan `dev-f20-m3`) menjalankan `swift test --filter NewInstanceSnapshotTests`. Aturan baru untuk semua sesi scope ini, dikirim ke `dev-f20-m3`, `dev-f15-m3-s12a`, dan `chk-f21-m2` dan masuk setiap brief berikutnya: tidak pernah `pkill` atau `killall` berdasarkan nama (`swift-test`, `swiftpm-testing-helper`, `xctest`, `stacklyd`, `nats-server`, `postgres`, `stackly-fake-server`) dan tidak pernah `pkill -f` dengan pola lebar; hanya PID yang dimulai sendiri atau proses di bawah worktree atau root test sendiri. `cargo xtask runtime spike --cleanup` hanya saat tidak ada sesi lain yang menjalankan test native (kesepakatan dengan lead scope 03). | `lead` |
+| `2026-10-22` | `chk-f21-m2` PASS untuk AC-4, AC-5, AC-6, AC-17, AC-18 (daemon dan CLI) dan AC-19; bagian Swift AC-7, AC-8, AC-18 menunggu milestone 3 dan run native AC-10 menunggu milestone 4. Probe langsung terhadap daemon dan CLI nyata memastikan password hanya keluar lewat `--show-password` dan tidak pernah di log, `inspect`, file, atau argv. Di-merge `f1228b0e`; F21 milestone 2 dicentang (`34033908`). Catatan di luar lingkup: `stackly instance start` dan `stop` menolak nama dan meminta UUID, sementara `connection` dan `inspect` menerima nama. | `lead` |
+| `2026-10-22` | `arc-f16-update-2` melaporkan user menjawab "lakukan" di sesinya dan mencatatnya sebagai persetujuan AC-5 dan AC-10 spec 0016 (`5f17d93a`). Lead tidak menganggap pesan antarsesi sebagai persetujuan dan meminta konfirmasi user di chat lead sebelum merge. | `lead` |
+| `2026-10-22` | F67 part 2 ui-macos masuk `ace13361` (ukuran yang ditawarkan kolom inspector, penjaga inspector tertutup, `minWidth` Runtimes dihapus, 35 PNG kolom inspector direkam ulang) dan **pembekuan F67 dicabut**. Flake yang dikenal: `overviewWhoseOperationsFailedToLoad` hc-dark (spinner `DelayedProgress` yang muncul dari task; fix F12 ui-macos menyusul). Pertanyaan ui-macos untuk F22: spinner selamanya di Needs Attention saat operasi gagal dimuat, dibawa ke `dev-f22-m4` untuk diperiksa terhadap spec 0022. Dimulai `dev-f21-m3` (koordinasi `AppShell.swift` dengan `dev-f20-m3`) dan `dev-f22-m4` (dengan sisa F18 `minimumWidth`). | `lead` |
 
 ## Blocker terbuka
 
