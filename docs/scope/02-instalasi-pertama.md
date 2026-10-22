@@ -168,7 +168,7 @@ NATS dasar sebagai provider nyata kedua, hanya lewat manifest, template, dan pri
 
 **Trace:** REQ-029, REQ-036 (dasar), AC-029 (provider nyata), RISK-07, PRD bagian 21.2, 22.2, dan 33.2
 
-**Pointer:** spec [0023](../specs/0023-provider-nats-manifest/index.md) · code in `crates/core/src/provider/probe/`, `crates/core/src/supervisor/probe/native.rs`, `providers/nats/`, `apps/daemon/tests/nats.rs`, `apps/daemon/tests/nats/`
+**Pointer:** spec [0023](../specs/0023-provider-nats-manifest/index.md) · code in `crates/core/src/provider/probe/`, `crates/core/src/supervisor/probe/native.rs`, `providers/nats/`, `apps/daemon/tests/nats.rs`, `apps/daemon/tests/nats/`, `apps/cli/tests/nats_journey.rs`
 
 - [x] Design it (spec): `/architect provider NATS lewat manifest`
 - [ ] Build it: `/develop provider NATS lewat manifest`
