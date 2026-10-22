@@ -1,13 +1,11 @@
-//! `instance.create` of the first daemon build (spec 0010, create
-//! sementara, K1, K12, K14): the refusals the method gives, the replay of a
-//! repeated key, and the operation that ends `needs_recovery` when its init
-//! fails.
+//! `instance.create` (spec 0010 K1, K12, K14, and spec 0020): the refusals
+//! the method gives, the replay of a repeated key, and the operation that
+//! ends `failed` with everything it made undone when its init fails.
 
 use serde_json::json;
-use stackly_protocol::codes::{instance, operation, request};
-use stackly_protocol::instance::{InstanceLifecycle, PortRequest};
-use stackly_protocol::operation::{AbandonOperationParams, OperationState};
-use stackly_protocol::{Call, Reply};
+use stackly_protocol::codes::{instance, operation};
+use stackly_protocol::instance::PortRequest;
+use stackly_protocol::operation::OperationState;
 use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::support::{Api, Site, key};
@@ -40,11 +38,12 @@ async fn a_create_that_the_registry_or_the_package_refuses_gets_its_own_code_and
     let error = api.create(other_revision).await.unwrap_err();
     assert!(error.is(&instance::PROVIDER_NOT_FOUND), "{error:?}");
 
+    // An absent revision means the revision of the loaded catalog (spec
+    // 0020); this daemon has no catalog.
     let mut no_revision = api.params("norevision", json!({}));
     no_revision.provider.revision = None;
     let error = api.create(no_revision).await.unwrap_err();
-    assert!(error.is(&request::INVALID_PARAMS), "{error:?}");
-    assert_eq!(error.fields()[0].path(), "provider.revision");
+    assert_eq!(error.code(), "catalog.unavailable", "{error:?}");
 
     let mut lost = api.params("lost", json!({}));
     lost.runtime_id = uuid::Uuid::now_v7();
@@ -144,11 +143,11 @@ async fn a_repeated_create_with_the_same_key_gets_its_reply_back_not_name_taken(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn an_init_that_fails_leaves_needs_recovery_with_the_instance_failed_until_it_is_abandoned() {
+async fn an_init_that_fails_is_compensated_and_leaves_neither_instance_nor_name() {
     let ev = evidence!(
-        covers = ["AC-013", "AC-029"],
+        covers = ["AC-013", "AC-029", "BR-023"],
         kind = Kind::Fixture,
-        expected = "a create whose init fails ends needs_recovery after the point of no return with the instance failed and not initialized, start is refused with supervisor.not_initialized, and abandon closes the operation",
+        expected = "a create whose init fails ends failed with supervisor.init_failed after the compensation removed the instance row, the instance folder, and its secret reference, so the instance is gone, the name is free for the next create, and no operation waits for recovery",
     );
     let site = Site::new();
     let daemon = site.start().await;
@@ -169,49 +168,43 @@ async fn an_init_that_fails_leaves_needs_recovery_with_the_instance_failed_until
         .parse()
         .expect("an instance id");
     let detail = api
-        .wait_state(accepted.operation.id, OperationState::NeedsRecovery)
+        .wait_state(accepted.operation.id, OperationState::Failed)
         .await;
-    let recovery = detail
-        .operation
-        .recovery
-        .as_ref()
-        .expect("a needs_recovery operation says what to do");
     assert!(
-        recovery
-            .error
+        detail
+            .operation
+            .failure
             .as_ref()
-            .is_some_and(|error| error.code() == "supervisor.init_failed"),
-        "{recovery:?}"
+            .is_some_and(|failure| failure.error.code() == "supervisor.init_failed"),
+        "{detail:?}"
     );
-    let failed = api.get(id).await.expect("the instance stays registered");
-    assert_eq!(failed.lifecycle, InstanceLifecycle::Failed);
-    assert_eq!(failed.initialized, Some(false));
+    assert!(detail.operation.recovery.is_none(), "{detail:?}");
 
-    let refused = api.start(id).await.unwrap_err();
-    assert_eq!(refused.code(), "supervisor.not_initialized", "{refused:?}");
+    let gone = api.get(id).await.unwrap_err();
+    assert_eq!(gone.code(), "resource.not_found", "{gone:?}");
+    assert!(
+        api.list(Default::default()).await.items.is_empty(),
+        "no row of the failed create is left"
+    );
+    assert!(
+        !site
+            .prepared
+            .layout()
+            .instance_paths(stackly_domain::InstanceId::from_uuid(id).expect("a v7 id"))
+            .root
+            .exists(),
+        "the instance folder is gone"
+    );
 
-    // The name stays held until the operation is abandoned.
-    let taken = api
+    // The name is free at once.
+    let again = api
         .create(api.params("broken", json!({})))
         .await
-        .unwrap_err();
-    assert!(
-        taken.is(&instance::NAME_TAKEN) || taken.code() == "operation.recovery_required",
-        "{taken:?}"
-    );
-
-    let reply = api
-        .client
-        .call(Call::OperationAbandon(AbandonOperationParams {
-            operation_id: accepted.operation.id,
-            expected_revision: detail.operation.revision,
-        }))
-        .await
-        .expect("a needs_recovery operation can be abandoned");
-    let Reply::OperationAbandon(abandoned) = reply else {
-        panic!("not an abandon reply");
-    };
-    assert_eq!(abandoned.operation.state, OperationState::Failed);
+        .expect("the same name creates after the failure")
+        .accepted
+        .expect("a create starts an operation");
+    api.wait_state(again.operation.id, OperationState::Succeeded)
+        .await;
     drop(api);
     daemon
         .shutdown(

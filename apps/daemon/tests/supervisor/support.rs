@@ -21,9 +21,11 @@ use stackly_platform::{Clock, Platform, SystemClock, UserId};
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::handshake::{ClientInfo, ClientKind};
 use stackly_protocol::instance::{
-    CreateInstanceParams, EndpointRequest, GetInstanceParams, InstanceActionAccepted, InstancePage,
-    InstanceReadinessState, InstanceSummary, ListInstancesParams, PortRequest, ProviderSelector,
-    SecretFieldInput, SettingsDocument, StartInstanceParams, StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, EndpointRequest, GetCreateFormParams,
+    GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceReadinessState,
+    InstanceSummary, ListInstancesParams, PortRequest, PreflightCreateParams, ProviderSelector,
+    SecretFieldInput, SecretPlan, SecretSource, SettingsDocument, StartInstanceParams,
+    StopInstanceParams,
 };
 use stackly_protocol::operation::{GetOperationParams, OperationDetail, OperationState};
 use stackly_protocol::secret::{SecretInput, SecretText};
@@ -120,6 +122,15 @@ impl Site {
 
     pub fn socket(&self) -> PathBuf {
         self.prepared.layout().daemon_socket()
+    }
+
+    /// Removes the folder of the pinned fake package, which the seed wrote
+    /// with the permissions of a test rather than the private ones `pin`
+    /// writes. A create from the catalog pins it again; the registry row of
+    /// the revision stays.
+    pub fn unpin_fake_package(&self) {
+        std::fs::remove_dir_all(self.prepared.layout().providers_dir().join("testing"))
+            .expect("the pinned fake package folder is removed");
     }
 
     pub fn uid(&self) -> u32 {
@@ -277,6 +288,55 @@ impl Api {
                 field: "authToken".to_owned(),
                 input: SecretInput::Value(SecretText::new(TOKEN.to_owned())),
             }],
+        }
+    }
+
+    /// The params of a preflight of the same draft as [`params`](Self::params),
+    /// with the token as a value to be sent.
+    pub fn preflight_params(&self, name: &str, extra: Value) -> PreflightCreateParams {
+        let create = self.params(name, extra);
+        PreflightCreateParams {
+            name: create.name,
+            display_name: create.display_name,
+            provider: create.provider,
+            runtime_id: create.runtime_id,
+            endpoints: create.endpoints,
+            settings: create.settings,
+            secrets: vec![SecretPlan {
+                field: "authToken".to_owned(),
+                source: SecretSource::Value,
+            }],
+            start: false,
+        }
+    }
+
+    /// `instance.get_create_form`.
+    pub async fn form(
+        &self,
+        runtime_id: Uuid,
+        provider: Option<&str>,
+    ) -> Result<CreateForm, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetCreateForm(GetCreateFormParams {
+                runtime_id,
+                provider: provider.map(str::to_owned),
+            }))
+            .await?
+        {
+            Reply::InstanceGetCreateForm(form) => Ok(*form),
+            other => panic!("not a create form reply: {other:?}"),
+        }
+    }
+
+    /// `instance.preflight`.
+    pub async fn preflight(
+        &self,
+        params: PreflightCreateParams,
+    ) -> Result<CreatePreflight, Box<ErrorBody>> {
+        match self.client.call(Call::InstancePreflight(params)).await? {
+            Reply::InstancePreflight(preflight) => Ok(*preflight),
+            other => panic!("not a preflight reply: {other:?}"),
         }
     }
 
@@ -607,4 +667,31 @@ impl SupervisorLogSink for LogRecorder {
             .push((instance, batch));
         SinkOutcome::Accepted
     }
+}
+
+/// A catalog that holds the fake provider, so a create without a revision
+/// has the revision of the catalog to take (spec 0020).
+pub fn fake_catalog() -> stackly_core::catalog::Catalog {
+    use stackly_core::catalog::{Catalog, CatalogEntry, ProviderEntry, TileColor, TileHint};
+    use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake");
+    let files = read_package(&stackly_platform_macos::MacosFilesystem, &dir)
+        .expect("the fake package reads");
+    let package = ValidatedPackage::from_files(files, NameCheck::FolderName)
+        .expect("the fake package validates");
+    Catalog::for_tests(&[CatalogEntry::Provider(ProviderEntry {
+        package: Arc::new(package),
+        tile: TileHint {
+            mark: "Fk".to_owned(),
+            tile: TileColor::Blue,
+        },
+        notes: Vec::new(),
+    })])
+}
+
+/// The fast config with [`fake_catalog`] as the catalog of the daemon.
+pub fn fast_with_catalog() -> DaemonConfig {
+    let mut config = fast();
+    config.catalog = Some(stacklyd::catalog::CatalogOverride::Preloaded(fake_catalog()));
+    config
 }

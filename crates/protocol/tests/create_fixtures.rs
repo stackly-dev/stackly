@@ -395,3 +395,37 @@ fn the_commands_fixture_is_in_the_wire_form() {
         );
     }
 }
+
+#[test]
+fn a_setting_value_reads_back_from_its_json_and_a_json_no_field_holds_reads_as_none() {
+    use serde_json::json;
+    use stackly_protocol::instance::SettingValue;
+
+    let cases: Cases = decode("instance/commands.json");
+    let mut checked = 0;
+    for case in cases.cases {
+        for setting in case.draft.settings {
+            let json = setting.value.to_json();
+            assert_eq!(
+                SettingValue::from_json(&json),
+                Some(setting.value),
+                "{}: {}",
+                case.name,
+                setting.field
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked >= 4, "the cases cover every kind of setting");
+    for refused in [
+        json!(null),
+        json!(1.5),
+        json!({ "a": 1 }),
+        json!(9_007_199_254_740_992_u64),
+        json!([1]),
+        json!([{ "a": null }]),
+        json!([{ "a": [1] }]),
+    ] {
+        assert_eq!(SettingValue::from_json(&refused), None, "{refused}");
+    }
+}

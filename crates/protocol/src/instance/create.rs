@@ -122,6 +122,33 @@ pub enum ScalarSetting {
     Boolean(bool),
 }
 
+impl ScalarSetting {
+    /// The JSON value of this setting.
+    #[must_use]
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            Self::Text(text) => serde_json::Value::from(text.as_str()),
+            Self::Integer(number) => serde_json::Value::from(number.get()),
+            Self::Boolean(on) => serde_json::Value::from(*on),
+        }
+    }
+
+    /// The setting a JSON value stands for; `None` for `null`, a fraction,
+    /// a number above the safe integers, an array, and an object.
+    #[must_use]
+    pub fn from_json(value: &serde_json::Value) -> Option<Self> {
+        match value {
+            serde_json::Value::String(text) => Some(Self::Text(text.clone())),
+            serde_json::Value::Bool(on) => Some(Self::Boolean(*on)),
+            serde_json::Value::Number(number) => number
+                .as_i64()
+                .and_then(SignedSafeInteger::new)
+                .map(Self::Integer),
+            _ => None,
+        }
+    }
+}
+
 /// One entry of a list item: a key and its scalar value.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -155,6 +182,66 @@ pub enum SettingValue {
     Boolean(bool),
     /// A list of items.
     List(Vec<SettingItem>),
+}
+
+impl SettingValue {
+    /// The JSON value of this setting: a list is an array with an object
+    /// per item.
+    #[must_use]
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            Self::Text(text) => serde_json::Value::from(text.as_str()),
+            Self::Integer(number) => serde_json::Value::from(number.get()),
+            Self::Boolean(on) => serde_json::Value::from(*on),
+            Self::List(items) => serde_json::Value::Array(
+                items
+                    .iter()
+                    .map(|item| {
+                        serde_json::Value::Object(
+                            item.entries
+                                .iter()
+                                .map(|entry| (entry.key.clone(), entry.value.to_json()))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
+    /// The setting a JSON value stands for; `None` for `null`, a fraction,
+    /// a number above the safe integers, an object, and a list whose item
+    /// is not an object of scalars. The entries of a list item come in key
+    /// order.
+    #[must_use]
+    pub fn from_json(value: &serde_json::Value) -> Option<Self> {
+        match value {
+            serde_json::Value::Array(items) => items
+                .iter()
+                .map(|item| {
+                    let serde_json::Value::Object(members) = item else {
+                        return None;
+                    };
+                    members
+                        .iter()
+                        .map(|(key, value)| {
+                            Some(SettingEntry {
+                                key: key.clone(),
+                                value: ScalarSetting::from_json(value)?,
+                            })
+                        })
+                        .collect::<Option<Vec<_>>>()
+                        .map(|entries| SettingItem { entries })
+                })
+                .collect::<Option<Vec<_>>>()
+                .map(Self::List),
+            scalar => ScalarSetting::from_json(scalar).map(|scalar| match scalar {
+                ScalarSetting::Text(text) => Self::Text(text),
+                ScalarSetting::Integer(number) => Self::Integer(number),
+                ScalarSetting::Boolean(on) => Self::Boolean(on),
+            }),
+        }
+    }
 }
 
 /// Params of `instance.get_create_form`.

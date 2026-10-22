@@ -457,38 +457,38 @@ fn an_instance_is_created_started_read_and_stopped_through_the_real_daemon() {
     ev.pass();
 }
 
-/// Spec 0014 AC-10.
+/// Spec 0014 AC-10, with the compensation of spec 0020 AC-11 (D9): a failed
+/// init undoes the whole create, so the operation ends `failed` and nothing
+/// of the instance is left to abandon.
 #[test]
-fn a_failed_init_needs_recovery_and_abandoning_it_leaves_no_instance_to_start() {
+fn a_failed_init_is_compensated_and_leaves_no_instance_and_no_name_taken() {
     let rig = Rig::new();
 
     let (code, created) = rig.create("bad", &["--set-json", "failInit=true"]);
 
     assert_ne!(code, Some(0), "{created}");
     assert_eq!(created["error"]["code"], "supervisor.init_failed");
-    assert_eq!(created["result"]["instance"]["lifecycle"], "failed");
+    assert!(created["result"]["instance"].is_null(), "{created}");
     let operation = &created["result"]["operation"];
     assert_eq!(operation["kind"], "create_instance");
-    assert_eq!(operation["state"], "needs_recovery");
-    assert_eq!(operation["recovery"]["actions"][0], "abandon");
-    let id = instance_id(&created);
-    let operation_id = operation["id"].as_str().expect("an operation ID");
-
-    let (code, abandoned) = rig.json(&["operation", "abandon", operation_id, "--yes"]);
-
-    assert_eq!(code, Some(0), "{abandoned}");
-    let operation = &abandoned["result"]["operation"];
     assert_eq!(operation["state"], "failed");
-    assert_eq!(operation["failure"]["error"]["code"], "operation.abandoned");
-    let (code, start) = rig.json(&["instance", "start", &id, "--wait"]);
-    assert_ne!(code, Some(0), "{start}");
-    assert_eq!(start["error"]["code"], "supervisor.not_initialized");
-    assert!(rig.servers(&id).is_empty());
+    assert_eq!(
+        operation["failure"]["error"]["code"],
+        "supervisor.init_failed"
+    );
+    assert!(operation["recovery"].is_null(), "{operation}");
+    assert!(rig.listed_names().is_empty(), "no instance row is left");
     assert!(
         rig.processes_under_root().is_empty(),
         "{:?}",
         rig.processes_under_root()
     );
+
+    // The name and the port are free at once.
+    let (code, again) = rig.create("bad", &[]);
+    assert_eq!(code, Some(0), "{again}");
+    assert_eq!(again["result"]["operation"]["state"], "succeeded");
+    assert_eq!(rig.listed_names(), ["bad"]);
 }
 
 /// Spec 0014 AC-13.

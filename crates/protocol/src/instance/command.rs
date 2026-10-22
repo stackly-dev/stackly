@@ -11,7 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::PortRequest;
-use super::create::{ScalarSetting, SecretSource, SettingItem, SettingValue};
+use super::create::{SecretSource, SettingValue};
 
 /// What a create command does, in the order of its flags.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -114,9 +114,9 @@ pub fn equivalent_command(draft: &CommandDraft) -> String {
             SettingValue::Text(text) => flag("--set", &format!("{}={text}", setting.field)),
             SettingValue::Integer(number) => flag("--set", &format!("{}={number}", setting.field)),
             SettingValue::Boolean(on) => flag("--set", &format!("{}={on}", setting.field)),
-            SettingValue::List(items) => flag(
+            SettingValue::List(_) => flag(
                 "--set-json",
-                &format!("{}={}", setting.field, list_json(items)),
+                &format!("{}={}", setting.field, setting.value.to_json()),
             ),
         }
     }
@@ -133,30 +133,6 @@ pub fn equivalent_command(draft: &CommandDraft) -> String {
         words.push("--start".to_owned());
     }
     words.join(" ")
-}
-
-/// A list setting as the compact JSON `--set-json` takes: an array with an
-/// object per item.
-fn list_json(items: &[SettingItem]) -> String {
-    let array: Vec<serde_json::Value> = items
-        .iter()
-        .map(|item| {
-            let object: serde_json::Map<String, serde_json::Value> = item
-                .entries
-                .iter()
-                .map(|entry| {
-                    let value = match &entry.value {
-                        ScalarSetting::Text(text) => serde_json::Value::from(text.as_str()),
-                        ScalarSetting::Integer(number) => serde_json::Value::from(number.get()),
-                        ScalarSetting::Boolean(on) => serde_json::Value::from(*on),
-                    };
-                    (entry.key.clone(), value)
-                })
-                .collect();
-            serde_json::Value::Object(object)
-        })
-        .collect();
-    serde_json::Value::Array(array).to_string()
 }
 
 /// Whether `word` can stand in a shell command without quotes.
@@ -181,7 +157,7 @@ fn quote(word: &str) -> String {
 mod tests {
     use super::*;
     use crate::SignedSafeInteger;
-    use crate::instance::create::SettingEntry;
+    use crate::instance::create::{ScalarSetting, SettingEntry, SettingItem};
 
     fn base() -> CommandDraft {
         CommandDraft {

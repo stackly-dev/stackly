@@ -403,7 +403,7 @@ pub fn command_draft(spec: &CommandSpec) -> CommandDraft {
             .filter_map(|(field, value)| {
                 Some(CommandSetting {
                     field: field.clone(),
-                    value: setting_value(value)?,
+                    value: dto::SettingValue::from_json(value)?,
                 })
             })
             .collect(),
@@ -423,48 +423,5 @@ pub fn command_draft(spec: &CommandSpec) -> CommandDraft {
             })
             .collect(),
         start: spec.start,
-    }
-}
-
-/// A settings value as the wire shows it; `None` for a value no field can
-/// hold (`null`, a fraction, a nested object).
-fn setting_value(value: &serde_json::Value) -> Option<dto::SettingValue> {
-    match value {
-        serde_json::Value::String(text) => Some(dto::SettingValue::Text(text.clone())),
-        serde_json::Value::Bool(on) => Some(dto::SettingValue::Boolean(*on)),
-        serde_json::Value::Number(number) => number
-            .as_i64()
-            .map(|number| dto::SettingValue::Integer(SignedSafeInteger::saturating(number))),
-        serde_json::Value::Array(items) => items
-            .iter()
-            .map(|item| {
-                let serde_json::Value::Object(members) = item else {
-                    return None;
-                };
-                members
-                    .iter()
-                    .map(|(key, value)| {
-                        Some(dto::SettingEntry {
-                            key: key.clone(),
-                            value: scalar_of(value)?,
-                        })
-                    })
-                    .collect::<Option<Vec<_>>>()
-                    .map(|entries| dto::SettingItem { entries })
-            })
-            .collect::<Option<Vec<_>>>()
-            .map(dto::SettingValue::List),
-        _ => None,
-    }
-}
-
-fn scalar_of(value: &serde_json::Value) -> Option<dto::ScalarSetting> {
-    match value {
-        serde_json::Value::String(text) => Some(dto::ScalarSetting::Text(text.clone())),
-        serde_json::Value::Bool(on) => Some(dto::ScalarSetting::Boolean(*on)),
-        serde_json::Value::Number(number) => number
-            .as_i64()
-            .map(|number| dto::ScalarSetting::Integer(SignedSafeInteger::saturating(number))),
-        _ => None,
     }
 }

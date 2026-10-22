@@ -113,17 +113,17 @@
                 {
                   "entries": [
                     {
-                      "key": "name",
-                      "value": {
-                        "type": "text",
-                        "content": "a"
-                      }
-                    },
-                    {
                       "key": "limit",
                       "value": {
                         "type": "integer",
                         "content": -3
+                      }
+                    },
+                    {
+                      "key": "name",
+                      "value": {
+                        "type": "text",
+                        "content": "a"
                       }
                     },
                     {
