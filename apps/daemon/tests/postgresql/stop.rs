@@ -7,19 +7,17 @@ use stackly_protocol::instance::InstanceLifecycle;
 use stackly_protocol::operation::OperationState;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, create_instance, stop_and_shutdown};
+use crate::harness::{PG17, PG18, Pg, Site, create_instance, stop_and_shutdown};
 use crate::support::LogRecorder;
 use std::sync::Arc;
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_stops_fast_with_a_session_open_and_starts_again_without_crash_recovery() {
+async fn stops_fast_with_a_session_open_and_starts_again_without_crash_recovery(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
         expected = "with SELECT pg_sleep(600) running, instance.stop finishes in 10 seconds, the pid file, the socket, and its lock are gone, the log shows a fast shutdown, and the next start logs a clean shutdown with no crash recovery",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let recorder = Arc::new(LogRecorder::default());
@@ -114,4 +112,16 @@ async fn postgresql_18_stops_fast_with_a_session_open_and_starts_again_without_c
     ev.pass_with(&format!(
         "stopped in {took:?} with a 600 second query running"
     ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_stops_fast_with_a_session_open_and_starts_again_without_crash_recovery() {
+    stops_fast_with_a_session_open_and_starts_again_without_crash_recovery(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_stops_fast_with_a_session_open_and_starts_again_without_crash_recovery() {
+    stops_fast_with_a_session_open_and_starts_again_without_crash_recovery(PG18).await;
 }

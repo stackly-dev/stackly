@@ -5,17 +5,15 @@ use std::time::Duration;
 use stackly_protocol::instance::InstanceReadinessState;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, Via, create_instance, stop_and_shutdown};
+use crate::harness::{PG17, PG18, Pg, Site, Via, create_instance, stop_and_shutdown};
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_is_not_ready_when_the_port_accepts_but_the_query_fails() {
+async fn is_not_ready_when_the_port_accepts_but_the_query_fails(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
         expected = "the readiness role is unprivileged and read only, ALTER ROLE NOLOGIN makes the instance not_ready with the PostgreSQL message while TCP still accepts, and LOGIN makes it ready again",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let daemon = site.in_process(|_| {}).await;
@@ -79,4 +77,16 @@ async fn postgresql_18_is_not_ready_when_the_port_accepts_but_the_query_fails() 
 
     stop_and_shutdown(&api, daemon, made.id).await;
     ev.pass_with(&format!("not_ready with `{detail}`, then ready again"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_is_not_ready_when_the_port_accepts_but_the_query_fails() {
+    is_not_ready_when_the_port_accepts_but_the_query_fails(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_is_not_ready_when_the_port_accepts_but_the_query_fails() {
+    is_not_ready_when_the_port_accepts_but_the_query_fails(PG18).await;
 }

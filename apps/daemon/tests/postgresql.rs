@@ -22,6 +22,8 @@ mod harness;
 mod install;
 #[path = "postgresql/lifecycle.rs"]
 mod lifecycle;
+#[path = "postgresql/mismatch.rs"]
+mod mismatch;
 #[path = "postgresql/readiness.rs"]
 mod readiness;
 #[path = "postgresql/reload.rs"]

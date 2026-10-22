@@ -10,7 +10,7 @@ use stackly_testkit::SecretOp;
 use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::harness::{
-    PG18, Psql, Site, Via, create_instance, create_params, create_with, files_holding,
+    PG17, PG18, Pg, Psql, Site, Via, create_instance, create_params, create_with, files_holding,
     new_password, output_of, stop_and_shutdown,
 };
 use crate::support::{Api, LogRecorder};
@@ -29,15 +29,13 @@ fn hba_methods(path: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_has_no_trust_and_its_password_stays_out_of_argv_files_and_logs() {
+async fn has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035", "VAL-018"],
         kind = Kind::Native,
-        expected = "neither pg_hba.conf has a trust line, the superuser cannot log in without its password over the socket or TCP, the readiness role cannot use TCP or another database, replication is refused, and the password is in no argv, file, or log line",
+        expected = "neither pg_hba.conf has a trust line, the superuser cannot log in without its password over the socket or TCP, the readiness role cannot use TCP or another database, a replication=true connection is refused and the readiness role cannot open a replication=database connection, and the password is in no argv, file, or log line",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let recorder = Arc::new(LogRecorder::default());
@@ -146,6 +144,29 @@ async fn postgresql_18_has_no_trust_and_its_password_stays_out_of_argv_files_and
         !logical.ok,
         "the readiness role opened a replication connection"
     );
+    assert!(
+        logical
+            .stderr
+            .contains("permission denied to start WAL sender"),
+        "{logical:?}"
+    );
+    let logical_tcp = psql.conninfo(
+        &format!(
+            "host=127.0.0.1 port={} user=stackly_readiness dbname=postgres replication=database",
+            made.port
+        ),
+        "IDENTIFY_SYSTEM",
+    );
+    assert!(
+        !logical_tcp.ok,
+        "the readiness role opened a replication connection over TCP"
+    );
+    assert!(
+        logical_tcp
+            .stderr
+            .contains("pg_hba.conf rejects connection"),
+        "{logical_tcp:?}"
+    );
 
     let processes = output_of("/bin/ps", &["-axww", "-o", "command="]);
     assert!(
@@ -167,20 +188,17 @@ async fn postgresql_18_has_no_trust_and_its_password_stays_out_of_argv_files_and
 
     stop_and_shutdown(&api, daemon, made.id).await;
     ev.pass_with(
-        "no trust rule, no passwordless login, no replication, no password on disk or in argv",
+        "no trust rule, no passwordless login, replication=true refused, the readiness role kept out of replication=database, no password on disk or in argv",
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break()
- {
+async fn takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
         expected = "a superuser password with a space, a single quote, a double quote, and a backslash reaches initdb whole and logs in, and a password with a line break is refused before anything is stored",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let daemon = site.in_process(|_| {}).await;
@@ -225,15 +243,13 @@ async fn postgresql_18_takes_a_password_with_quotes_spaces_and_backslashes_and_r
     ev.pass_with("the odd password logged in over the socket and TCP, the line break was refused");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment() {
+async fn fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
         expected = "with LANG=de_DE.UTF-8 and TZ=Asia/Jakarta in the daemon, postgres and template1 are builtin C.UTF-8, UTF8, collate and ctype C, checksums are on, the time zones are UTC, and lc_messages is C",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let daemon = site.binary(&[
@@ -277,4 +293,42 @@ async fn postgresql_18_fixes_locale_encoding_and_time_zone_whatever_the_daemon_e
     .await;
     daemon.stop();
     ev.pass_with("postgres|b|C.UTF-8|UTF8|C|C under de_DE and Asia/Jakarta");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_has_no_trust_and_its_password_stays_out_of_argv_files_and_logs() {
+    has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_has_no_trust_and_its_password_stays_out_of_argv_files_and_logs() {
+    has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(PG18).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break()
+ {
+    takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break()
+ {
+    takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(PG18).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment() {
+    fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment() {
+    fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(PG18).await;
 }

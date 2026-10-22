@@ -3,17 +3,15 @@
 use stackly_protocol::instance::{InstanceLifecycle, InstanceReadinessState};
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, create_instance, output_of};
+use crate::harness::{PG17, PG18, Pg, Site, create_instance, output_of};
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it() {
+async fn keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
         expected = "after stacklyd is killed with SIGKILL the postmaster keeps running, the next stacklyd adopts the same pid and start time and shows it ready, and the postmaster and its children hold instance.lock at fd 3",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let first = site.binary(&[]);
@@ -71,4 +69,16 @@ async fn postgresql_18_keeps_running_after_sigkill_of_the_daemon_and_the_next_da
     .await;
     second.stop();
     ev.pass_with("the same postmaster was adopted after SIGKILL and stopped by the new daemon");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it() {
+    keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it() {
+    keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(PG18).await;
 }
