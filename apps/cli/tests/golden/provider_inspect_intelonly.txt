@@ -1,0 +1,26 @@
+Name               NATS Intel Build
+ID                 official/intelonly
+Category           messaging
+Description        NATS messaging server with JetStream, one server per instance.
+State              unsupported (no_build_for_arch)
+Publisher          Stackly
+Trust              official
+Provider revision  1.0.0
+Manifest           sha256:364e438781abea11b5ec41a82588968b68128272eb489c7d2a8d4c7f0bece7c2
+Baseline           lifecycle, readiness probe, logs
+
+CAPABILITY              SUPPORT
+Multiple instances      supported
+Persistent data         supported
+Reload without restart  not supported
+Metrics                 supported
+TLS                     not supported
+Cold backup             supported
+Online backup           not supported
+Logical backup          not supported
+
+VERSION  MACOS                            LINUX                   WINDOWS                 INSTALL
+2.15.1   unsupported (no_build_for_arch)  unsupported (no_build)  unsupported (no_build)  no (no_build_for_arch)
+
+ARTIFACT                  TARGET        STATUS     DOWNLOAD  DISK  MIN OS  LICENSE     SOURCE
+nats-2.15.1-macos-x86_64  macos/x86_64  available  6.8 MB    -     13.0    Apache-2.0  github.com/nats-io

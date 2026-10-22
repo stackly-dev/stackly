@@ -1,0 +1,5 @@
+Catalog: official, bundled, revision 1, published 2026-10-20 01:26 +00:00
+PROVIDER              NAME                CATEGORY   STATE                            VERSIONS  LICENSE
+official/blockedhost  NATS Blocked Build  messaging  blocked (artifact_blocked)       -         -
+official/intelonly    NATS Intel Build    messaging  unsupported (no_build_for_arch)  -         -
+official/nats         NATS Server         messaging  available                        2.15.1    Apache-2.0
