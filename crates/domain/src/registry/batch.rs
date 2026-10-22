@@ -463,7 +463,10 @@ impl WriteOp {
 /// With `expected_generation`, the batch applies only while the registry is
 /// still at that generation, which guards checks the caller ran on what it
 /// read (endpoint conflicts, for example). A caller retries the read and
-/// the commit at most five times on `GenerationConflict`.
+/// the commit at most five times on `GenerationConflict`. A caller whose
+/// rules must hold at the moment of the write, against whatever other
+/// operations committed meanwhile, uses `Registry::commit_guarded` instead:
+/// its guard reads and writes in one transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WriteBatch {
     /// The generation the caller read, if the batch depends on it.

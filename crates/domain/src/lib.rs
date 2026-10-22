@@ -91,16 +91,17 @@ pub use provider::{
 };
 pub use registry::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
-    AuditPage, AuditQuery, AuditResource, AuditResult, BatchError, CODES_MAX, Committed,
-    CompatibilityRecordRow, CompatibilityResult, CompatibilityScope, ConfigRevisionId,
+    AuditPage, AuditQuery, AuditResource, AuditResult, BatchError, CODES_MAX, CommitGuard,
+    Committed, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope, ConfigRevisionId,
     ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson, DependencyManifestJson,
-    Generation, InstallDetails, InstanceFilter, InstancePathEntry, InstancePathKind, LeaseFilter,
-    LogicalRoot, NotDeletableReason, OperationCursor, OperationPage, OperationQuery,
-    PlatformStoreKey, ProviderRevisionRecord, ProviderSourceKind, ProviderSourceRecord,
-    ProviderSourceStatus, PruneReport, Registry, RegistryError, RegistryId, RelativePath,
-    ResourceRef, RetentionPolicy, SafeDetails, SafeDetailsError, SecretFieldName,
-    SecretReferenceFilter, SecretReferenceId, SecretReferenceRecord, SecretReferenceView,
-    SecretUse, SecretUser, SignatureInfoJson, Versioned, WriteBatch, WriteOp,
+    Generation, GuardDecision, GuardView, Guarded, InstallDetails, InstanceFilter,
+    InstancePathEntry, InstancePathKind, LeaseFilter, LogicalRoot, NotDeletableReason,
+    OperationCursor, OperationPage, OperationQuery, PlatformStoreKey, ProviderRevisionRecord,
+    ProviderSourceKind, ProviderSourceRecord, ProviderSourceStatus, PruneReport, Registry,
+    RegistryError, RegistryId, RelativePath, ResourceRef, RetentionPolicy, SafeDetails,
+    SafeDetailsError, SecretFieldName, SecretReferenceFilter, SecretReferenceId,
+    SecretReferenceRecord, SecretReferenceView, SecretUse, SecretUser, SignatureInfoJson,
+    Versioned, WriteBatch, WriteOp,
 };
 pub use rule::Rule;
 pub use runtime::{

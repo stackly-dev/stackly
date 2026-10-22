@@ -18,19 +18,17 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 use stackly_core::catalog::{Catalog, CatalogEntry, ProviderEntry, TileColor, TileHint};
 use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
-use stackly_protocol::Call;
 use stackly_protocol::events::ShutdownReason;
 use stackly_protocol::instance::{
     CreateInstanceParams, EndpointRequest, PortRequest, PreflightCreateParams, SecretPlan,
     SecretSource,
 };
 use stackly_protocol::operation::OperationState;
-use stackly_protocol::secret::{SecretInput, SecretMode, SecretText, SetSecretParams};
 use stackly_testkit::evidence::{Kind, evidence};
 use stackly_testkit::{TestRoot, allocate_port};
 use stacklyd::catalog::CatalogOverride;
 
-use crate::support::{Api, Site, fast};
+use crate::support::{Api, Dialog, Site, fast};
 
 const REGISTERED: usize = 10;
 const PREFLIGHTS: usize = 40;
@@ -156,9 +154,8 @@ async fn timed_preflights(api: &Api, label: &str) -> Duration {
 }
 
 /// Sends `count` creates and returns the p95 of their replies. With
-/// `wait` each operation ends before the next create, so the creates do
-/// not race for the generation of the registry; without it the operations
-/// end after [`finish`] is called by the caller.
+/// `wait` each operation ends before the next create; without it the
+/// operations are returned for the caller to wait on.
 async fn timed_creates(
     api: &Api,
     label: &str,
@@ -187,56 +184,13 @@ async fn timed_creates(
     (p95(&mut times), operations)
 }
 
-/// A Keychain call of another action that waits behind its dialog.
-struct Dialog {
-    hold: stackly_testkit::SecretHold,
-    waiting:
-        tokio::task::JoinHandle<Result<stackly_protocol::Reply, Box<stackly_protocol::ErrorBody>>>,
-}
-
-impl Dialog {
-    /// Opens the dialog: the call of another connection reaches the store
-    /// and waits there.
-    async fn open(site: &Site, reference: &str) -> Self {
-        let hold = site.secrets.hold_next();
-        let other = site.api().await;
-        let reference = reference.to_owned();
-        let waiting = tokio::spawn(async move {
-            other
-                .client
-                .call(Call::SecretSet(SetSecretParams {
-                    reference,
-                    input: SecretInput::Value(SecretText::new("perf-fixture-value".to_owned())),
-                    mode: SecretMode::Create,
-                    expected_revision: None,
-                    confirm_stored_only: false,
-                }))
-                .await
-        });
-        assert!(
-            hold.wait_until_held(Duration::from_secs(10)),
-            "the other action reached the Keychain and waits"
-        );
-        Self { hold, waiting }
-    }
-
-    /// Answers the dialog and waits for the other action to end.
-    async fn close(self) {
-        self.hold.release();
-        self.waiting
-            .await
-            .expect("the waiting call ends")
-            .expect("the other action succeeds");
-    }
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn create_and_preflight_with_ten_instances_answer_within_the_bounds_also_behind_a_keychain_dialog()
  {
     let ev = evidence!(
         covers = ["NFR-006"],
         kind = Kind::Fixture,
-        expected = "with ten instances registered and a package with two IP endpoints on fixed ports, the p95 of 40 instance.preflight replies is at most 300 ms and the p95 of 10 instance.create replies, plus 5 behind a dialog, at most 500 ms, with no suggestion search, and again while a Keychain call of another action waits behind its dialog",
+        expected = "with ten instances registered and a package with two IP endpoints on fixed ports, the p95 of 40 instance.preflight replies is at most 300 ms and the p95 of 10 instance.create replies, plus 5 behind a dialog, at most 500 ms, with no suggestion search, and again while a Keychain call of another action waits behind its dialog, and all five creates behind the dialog end succeeded",
     );
     let site = Site::new();
     // The seeded pin has the permissions of a test; the create pins again.
@@ -275,25 +229,21 @@ async fn create_and_preflight_with_ten_instances_answer_within_the_bounds_also_b
     let (create_held, held_operations) = timed_creates(&api, "held", HELD_CREATES, false).await;
     dialog.close().await;
     // The creates were answered while the Keychain waited; they all run
-    // when it answers. Five of them register at once, and the registry
-    // refuses those that lose five times in a row (AC-10, and the full
-    // compensation of AC-11): that is the only failure allowed here, and
-    // how many end succeeded goes in the summary.
+    // when it answers. The register step commits in one registry
+    // transaction, so every one of them ends succeeded (AC-10).
     let mut succeeded = 0;
     for operation in held_operations {
         let ended = api.wait_final(operation).await;
-        match ended.operation.state {
-            OperationState::Succeeded => succeeded += 1,
-            _ => assert_eq!(
-                Api::failure_code(&ended),
-                "registry.generation_conflict",
-                "{ended:?}"
-            ),
-        }
+        assert_eq!(
+            ended.operation.state,
+            OperationState::Succeeded,
+            "a create behind the dialog did not succeed: {ended:?}"
+        );
+        succeeded += 1;
     }
 
     let summary = format!(
-        "p95 of {PREFLIGHTS} preflights with {REGISTERED} registered and of {CREATES} creates (from {REGISTERED} registered) and {HELD_CREATES} creates behind a dialog ({succeeded} of them ended succeeded): preflight {} ms (behind a dialog {} ms), create {} ms (behind a dialog {} ms); {load}",
+        "p95 of {PREFLIGHTS} preflights with {REGISTERED} registered and of {CREATES} creates (from {REGISTERED} registered) and {HELD_CREATES} creates behind a dialog ({succeeded} of {HELD_CREATES} ended succeeded): preflight {} ms (behind a dialog {} ms), create {} ms (behind a dialog {} ms); {load}",
         preflight.as_millis(),
         preflight_held.as_millis(),
         create.as_millis(),

@@ -196,3 +196,28 @@ Tidak ada. Perubahan ini ada di evaluator core, dan teks barisnya muncul di shee
 
 - AC-2 dan AC-9 (kalimat 2026-10-22) · `DryRunRefusal`, dua `PlanContext` di `dry_run`, keterangan baris `settings`, ringkasan dan hint `instance.endpoint_invalid`
 - Tidak teruji: varian `DryRunRefusal::Endpoint` ("Endpoint {nama} can’t be used with these settings."), karena paket yang tervalidasi memaksa `defaultHost` loopback dan setiap endpoint punya port di context run; varian itu hanya pagar untuk `EndpointNotLoopback`
+
+## Milestone 6: Register in one registry transaction
+
+_Langkah 19 dan 20 (update 2026-10-22, Keputusan 21; teks baru AC-10 disetujui user 2026-10-22). Langkah `register` memeriksa ulang aturan registry dan menulis barisnya dalam satu transaksi lewat `commit_guarded`, tanpa `expected_generation` dan tanpa ulang. Jalankan dari root repo pada commit bersih di Mac Apple Silicon._
+
+### UI / manual
+
+Tidak ada. Perubahan ini ada di port registry, engine, dan langkah `register`; sheet dan CLI tidak berubah.
+
+### Commands
+
+- [x] `cargo test -p stackly-testkit -p stackly-storage --test registry` → `registry_conformance` lulus di `FakeRegistry` dan `SqliteRegistry` dengan modul baru `guarded.rs`: guard melihat batch yang di commit sebelumnya dan tulisannya berlaku di generation berikutnya, `Refuse` tidak menerapkan apa pun dan alasannya kembali utuh lewat downcast, op yang gagal kembali dengan index nya tanpa tulisan lain, `Err` dari guard kembali sebagai error batch, guard yang panic menghasilkan `Io` dan registry tetap melayani baca dan commit sesudahnya, dan 16 thread dengan guard "masukkan instance `guard-<run>-<i>` hanya kalau yang tidak retained dengan prefix itu kurang dari 8" menghasilkan tepat 8 `Committed`, 8 `Refused`, dan nol `BatchError` → AC-10
+- [x] `cargo test -p stackly-core --test supervisor_start` → suite tetap hijau dengan `FaultyRegistry::commit_guarded` (`fail_guarded_commits`, `before_guarded_commit`, `guard_calls`); `fail_commits` tidak dimakan commit terjaga → AC-10
+- [x] `cargo test -p stackly-core --test operation_engine guarded` → satu test: `OperationContext::commit_guarded` meneruskan `Committed` dan `Refused` apa adanya (alasan bisa di downcast), dan error registry menjadi `WorkError::Engine(EngineError::Registry)` → AC-10
+- [x] `cargo test -p stackly-core --test create_operation` → 20 test lulus. Empat test baru menggantikan test `GenerationConflict` yang disuntik empat dan lima kali: (a) commit lain yang tidak menyentuh aturan create tepat sebelum `register` tidak menggagalkan create dan `guard_calls()` bernilai 1; (b) instance bernama sama dari operasi lain gagal `instance.name_taken` (bukan `registry.name_taken`); (c) instance lain dengan port `Fixed` yang sama gagal `supervisor.endpoint_conflict`; (d) `Busy` lewat `fail_guarded_commits` gagal `registry.busy` dengan `guard_calls()` bernilai 0. Kasus b, c, dan d berakhir `failed` dengan `assert_clean` (tanpa baris, folder, reference, atau pemakaian secret) → AC-10, AC-11
+- [x] `cargo test -p stacklyd --test supervisor create` → `five_creates_released_together_behind_a_keychain_dialog_all_succeed` lulus: tiga putaran, masing masing lima create dengan nama dan port `Fixed` berbeda yang dikirim selama aksi lain menunggu di dialog Keychain, semuanya `succeeded` setelah dialog dijawab, dan `instance.list` memuat lima belas instance. Ini smoke test pada beban biasa; bukti yang deterministik adalah conformance 16 thread dan kasus b dan c di atas → AC-10, AC-11
+- [x] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test create_perf -- --nocapture` → satu record `PASS` dengan batas spec (300 ms dan 500 ms): lima dari lima create di belakang dialog berakhir `succeeded` (test menggagalkan state final lain dan menulis "5 of 5 ended succeeded" di ringkasan) → AC-24, AC-10
+- [x] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-10 · port `Registry::commit_guarded` (satu transaksi `BEGIN IMMEDIATE` di thread registry, loop terap bersama dengan `commit`), conformance 16 thread, kasus a sampai d di core, dan langkah `register` tanpa `expected_generation`, tanpa ulang, dan tanpa `registry.generation_conflict`; `REGISTER_RETRY_LIMIT` dan `FaultyRegistry::conflict_instance_inserts` sudah dihapus
+- AC-11 · kasus b, c, dan d berakhir `failed` dengan kompensasi penuh lewat kompensator `instance_registration` yang tidak berubah
+- AC-24 · `create_perf` mewajibkan lima dari lima create di belakang dialog `succeeded`, dengan batas waktu yang sama
+- Finalize engine spec 0007 (dipakai install runtime spec 0018) tetap memakai `expected_generation` dengan lima ulang; usulan spec 0005, 0007, dan 0010 dicatat lead sebagai follow-up, bukan bagian milestone ini

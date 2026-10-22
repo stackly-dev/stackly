@@ -9,4 +9,5 @@ mod common;
 mod compensation;
 mod failures;
 mod flow;
+mod guarded;
 mod restart;

@@ -6,9 +6,10 @@ use serde_json::json;
 use stackly_protocol::codes::{instance, operation};
 use stackly_protocol::instance::PortRequest;
 use stackly_protocol::operation::OperationState;
+use stackly_testkit::allocate_port;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::support::{Api, Site, key};
+use crate::support::{Api, Dialog, Site, key};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_create_that_the_registry_or_the_package_refuses_gets_its_own_code_and_no_operation() {
@@ -205,6 +206,56 @@ async fn an_init_that_fails_is_compensated_and_leaves_neither_instance_nor_name(
         .expect("a create starts an operation");
     api.wait_state(again.operation.id, OperationState::Succeeded)
         .await;
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+    ev.pass();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn five_creates_released_together_behind_a_keychain_dialog_all_succeed() {
+    let ev = evidence!(
+        covers = ["REQ-008"],
+        kind = Kind::Fixture,
+        expected = "in three rounds, five creates with different names and different fixed ports sent while a Keychain call of another action waits behind its dialog all end succeeded once the dialog is answered, and the registry lists all fifteen new instances",
+    );
+    const ROUNDS: usize = 3;
+    const PER_ROUND: usize = 5;
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+
+    for round in 0..ROUNDS {
+        let dialog = Dialog::open(&site, &format!("local:guarded/round-{round}/value")).await;
+        let mut operations = Vec::new();
+        for number in 0..PER_ROUND {
+            let mut params = api.params(&format!("round-{round}-{number}"), json!({}));
+            params.endpoints = vec![Api::http_port(allocate_port().expect("a free port"))];
+            let accepted = api
+                .create(params)
+                .await
+                .expect("the create is accepted")
+                .accepted
+                .expect("a create starts an operation");
+            operations.push(accepted.operation.id);
+        }
+        dialog.close().await;
+        for operation in operations {
+            let ended = api.wait_final(operation).await;
+            assert_eq!(
+                ended.operation.state,
+                OperationState::Succeeded,
+                "round {round}: {ended:?}"
+            );
+        }
+    }
+
+    let page = api.list(Default::default()).await;
+    assert_eq!(page.items.len(), ROUNDS * PER_ROUND);
     drop(api);
     daemon
         .shutdown(

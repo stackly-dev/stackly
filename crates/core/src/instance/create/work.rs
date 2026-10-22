@@ -8,17 +8,17 @@ use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
 use stackly_domain::{
-    ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, Generation, InstallMode, Instance,
-    InstanceId, InstanceManifest, JournalPayload, ManifestRuntime, NewInstance,
-    NewInstanceManifest, Operation, OperationId, OperationResource, ProviderSourceId, ReasonCode,
-    Registry, RegistryError, ResourceRef, SecretFieldName, SecretOwner, SecretRef, SecretUser,
-    StageName, StartupPolicy, WriteOp,
+    CommitGuard, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, GuardDecision,
+    GuardView, Guarded, InstallMode, Instance, InstanceId, InstanceManifest, JournalPayload,
+    ManifestRuntime, NewInstance, NewInstanceManifest, Operation, OperationId, OperationResource,
+    ProviderSourceId, ReasonCode, RegistryError, ResourceRef, SecretFieldName, SecretOwner,
+    SecretRef, SecretUser, StageName, StartupPolicy, WriteOp,
 };
 use stackly_platform::{InstancePaths, Platform, SecretValue, WriteMode, check_private_dir};
 
 use super::check::CreateError;
 use super::compensator::registration_key;
-use super::draft::{CreateDraft, ProviderChoice, REGISTER_RETRY_LIMIT, SecretSourceKind};
+use super::draft::{CreateDraft, ProviderChoice, SecretSourceKind};
 use super::error::PinFailure;
 use super::evaluate::{ResolvedCreate, SecretPlan, evaluate_for};
 use super::facts::{CreateDeps, PackageSource, gather};
@@ -26,8 +26,8 @@ use super::port;
 use crate::catalog::{CatalogEntry, CatalogState, PinError, pin_revision};
 use crate::instance::create::compensator::INSTANCE_REGISTRATION;
 use crate::operation::{
-    BoxFuture, FinalBatch, OperationContext, OperationError, OperationOutcome, OperationWork,
-    RebuildError, StepSpec, WorkError, WorkFactory, WorkOutcome, WorkResult,
+    BoxFuture, OperationContext, OperationError, OperationOutcome, OperationWork, RebuildError,
+    StepSpec, WorkError, WorkFactory, WorkOutcome, WorkResult,
 };
 use crate::secret::{
     FieldContext, PutRequest, PutTarget, SecretCaller, SecretInput, SecretService,
@@ -171,8 +171,6 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
         deps,
     } = work;
     let caller = caller.in_operation(ctx.id());
-    let registry: Arc<dyn Registry> = Arc::clone(ctx.registry());
-
     // validate: the same checks as the precheck, now under the lock.
     enter(&mut ctx, StageName::VALIDATE, true).await?;
     let resolved = validate(&ctx, &deps, &draft, id).await?;
@@ -189,9 +187,9 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
     enter(&mut ctx, StageName::LAYOUT, false).await?;
     let (now, paths) = layout(&mut ctx, &deps, id, &resolved).await?;
 
-    // register: one batch, retried on a registry conflict.
+    // register: re-check and write in one registry transaction.
     enter(&mut ctx, StageName::REGISTER, false).await?;
-    let instance = register(&mut ctx, &registry, &deps, id, &resolved, pinned, now).await?;
+    let instance = register(&mut ctx, &deps, id, &resolved, pinned, now).await?;
     deps.events.instance_changed(&instance);
 
     // init: the provider's init plan, under the instance lock.
@@ -562,12 +560,13 @@ fn check_data(
     }
 }
 
-/// Reads the registry, re-checks what comes from it, and commits the
-/// batch at the generation of the read, up to [`REGISTER_RETRY_LIMIT`]
-/// times (AC-10).
+/// Re-checks every rule that comes from the registry and writes the
+/// instance, its first config revision, and its secret uses in one registry
+/// transaction (spec 0020, "Commit terjaga di langkah `register`", AC-10):
+/// no other commit lands between the check and the write, so the step never
+/// meets a generation conflict and never retries.
 async fn register(
     ctx: &mut OperationContext,
-    registry: &Arc<dyn Registry>,
     deps: &Arc<CreateWorkDeps>,
     id: InstanceId,
     resolved: &ResolvedCreate,
@@ -608,73 +607,64 @@ async fn register(
         .map(|plan| (plan.field.clone(), plan.reference.clone()))
         .collect::<std::collections::BTreeMap<SecretFieldName, SecretRef>>();
 
-    let mut attempt = 0;
-    loop {
-        attempt += 1;
-        let (generation, record) = {
-            let registry = Arc::clone(registry);
-            let resolved = resolved.clone();
-            let pinned = pinned.clone();
-            blocking(move || recheck(&*registry, &resolved, id, pinned))
-                .await?
-                .map_err(failed)?
-        };
-        let mut ops = Vec::new();
-        ops.extend(record.map(WriteOp::InsertProviderRevision));
-        ops.push(WriteOp::InsertInstance(instance.clone()));
-        ops.push(WriteOp::InsertConfigRevision(config.clone()));
-        ops.push(WriteOp::ReplaceSecretUses {
-            user: SecretUser::Instance(id),
-            uses: uses.clone(),
-        });
-        let batch = FinalBatch {
-            expected_generation: Some(generation),
-            ops,
-        };
-        match ctx.commit(batch).await {
-            Ok(_) => break,
-            Err(WorkError::Engine(crate::operation::EngineError::Registry(error)))
-                if attempt < REGISTER_RETRY_LIMIT
-                    && matches!(
-                        error,
-                        RegistryError::GenerationConflict { .. }
-                            | RegistryError::DuplicateResource {
-                                resource: ResourceRef::ProviderRevision(_),
-                            }
-                    ) => {}
-            Err(WorkError::Engine(crate::operation::EngineError::Registry(error))) => {
-                return Err(failed(SupervisorError::Registry(error)));
-            }
-            Err(other) => return Err(other),
+    let guard: CommitGuard = {
+        let resolved = resolved.clone();
+        let instance = instance.clone();
+        Box::new(move |view| {
+            Ok(match recheck(view, &resolved, id, pinned) {
+                Err(error) => GuardDecision::Refuse(Box::new(error)),
+                Ok(record) => {
+                    let mut ops = Vec::new();
+                    ops.extend(record.map(WriteOp::InsertProviderRevision));
+                    ops.push(WriteOp::InsertInstance(instance));
+                    ops.push(WriteOp::InsertConfigRevision(config));
+                    ops.push(WriteOp::ReplaceSecretUses {
+                        user: SecretUser::Instance(id),
+                        uses,
+                    });
+                    GuardDecision::Write(ops)
+                }
+            })
+        })
+    };
+    match ctx.commit_guarded(guard).await {
+        Ok(Guarded::Committed(_)) => {}
+        Ok(Guarded::Refused(reason)) => {
+            return Err(match reason.downcast::<CreateError>() {
+                Ok(error) => failed(*error),
+                Err(_) => internal("the register guard refused with an unknown reason"),
+            });
         }
+        Err(WorkError::Engine(crate::operation::EngineError::Registry(error))) => {
+            return Err(failed(SupervisorError::Registry(error)));
+        }
+        Err(other) => return Err(other),
     }
     ctx.confirm_created(handle).await?;
     Ok(instance)
 }
 
-/// Reads the registry at one generation and checks every rule that comes
-/// from it again: the name, `multi_instance`, the runtime, and the fixed
-/// ports against the other instances (spec 0020, AC-10). Returns the
-/// generation, and the provider revision to insert when the registry still
+/// Reads the registry through the guarded commit's own transaction and
+/// checks every rule that comes from it again: the name, `multi_instance`,
+/// the runtime, and the fixed ports against the other instances (spec 0020,
+/// AC-10). Returns the provider revision to insert when the registry still
 /// lacks it.
 fn recheck(
-    registry: &dyn Registry,
+    view: &dyn GuardView,
     resolved: &ResolvedCreate,
     id: InstanceId,
     pinned: Option<stackly_domain::ProviderRevisionRecord>,
-) -> Result<(Generation, Option<stackly_domain::ProviderRevisionRecord>), CreateError> {
+) -> Result<Option<stackly_domain::ProviderRevisionRecord>, CreateError> {
     let read = |error: RegistryError| CreateError::DataUnavailable {
         path: ".".to_owned(),
         reason: error.to_string(),
     };
-    let instances = registry
+    let instances = view
         .instances(stackly_domain::InstanceFilter {
             include_retained: false,
         })
         .map_err(read)?;
-    let generation = instances.generation;
     let others: Vec<Instance> = instances
-        .value
         .into_iter()
         .filter(|other| other.id() != id)
         .collect();
@@ -698,7 +688,7 @@ fn recheck(
             existing: existing.id(),
         });
     }
-    match registry.runtime(resolved.runtime.id()).map_err(read)?.value {
+    match view.runtime(resolved.runtime.id()).map_err(read)? {
         Some(runtime)
             if runtime.state() == stackly_domain::RuntimeState::Installed
                 && runtime.software() == resolved.runtime.software() => {}
@@ -731,15 +721,14 @@ fn recheck(
         }
     }
     let record = match pinned {
-        Some(record) => registry
+        Some(record) => view
             .provider_revision(record.revision.key())
             .map_err(read)?
-            .value
             .is_none()
             .then_some(record),
         None => None,
     };
-    Ok((generation, record))
+    Ok(record)
 }
 
 /// The errors the `layout` step reports that are not a [`CreateError`] row.

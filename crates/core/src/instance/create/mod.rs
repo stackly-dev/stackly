@@ -23,7 +23,7 @@ pub use compensator::{
 pub use draft::{
     CREATE_MIN_FREE_BYTES, CreateDraft, NAME_SUGGESTION_MAX_SUFFIX, PORT_SUGGESTION_ATTEMPTS,
     PORT_SUGGESTION_MIN, PREFLIGHT_PLACEHOLDER_ID, PortRequestDraft, ProviderChoice,
-    REGISTER_RETRY_LIMIT, SecretSourceKind, SecretValueShape, placeholder_instance_id,
+    SecretSourceKind, SecretValueShape, placeholder_instance_id,
 };
 pub use error::PinFailure;
 pub use evaluate::{Evaluation, ResolvedCreate, SecretPlan, evaluate, evaluate_for};

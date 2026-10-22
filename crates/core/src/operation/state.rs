@@ -267,6 +267,21 @@ impl Inner {
         self.commit_releasing(batch, None).await
     }
 
+    /// Runs a guarded commit on a blocking thread: the guard reads and the
+    /// ops it returns write in one registry transaction.
+    pub(crate) async fn commit_guarded(
+        &self,
+        guard: stackly_domain::CommitGuard,
+    ) -> Result<stackly_domain::Guarded, EngineError> {
+        let registry = Arc::clone(&self.deps.registry);
+        tokio::task::spawn_blocking(move || registry.commit_guarded(guard))
+            .await
+            .map_err(|_| EngineError::Internal {
+                reason: "a registry commit task stopped",
+            })?
+            .map_err(|err| EngineError::Registry(err.error))
+    }
+
     /// [`Inner::commit`] that, with `release`, also releases that
     /// operation's keys in the same critical section of the lock table
     /// ([`LockTable::release_with`]): a reader that sees the commit in the

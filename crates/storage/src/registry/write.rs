@@ -7,20 +7,22 @@
 //! transaction, so a SQL constraint that still refuses a write means a
 //! check was missed (`Integrity`).
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
+
 use jiff::Timestamp;
-use rusqlite::{Connection, TransactionBehavior, params};
+use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use stackly_domain::{
-    ArtifactFormat, ArtifactRecord, BatchError, Committed, CompatibilityRecordRow,
-    DependencyManifestJson, Endpoint, Environment, Generation, InstallMode, Instance, Lease,
-    LeaseHolder, LeaseState, Operation, Ownership, PortRequest, Progress, ProviderRevisionKey,
-    ProviderRevisionRecord, RegistryError, ResourceRef, ResourceRevision, Runtime,
-    SignatureInfoJson, SoftwareName, WriteBatch, WriteOp,
+    ArtifactFormat, ArtifactRecord, BatchError, CommitGuard, Committed, CompatibilityRecordRow,
+    DependencyManifestJson, Endpoint, Environment, Generation, GuardDecision, GuardView, Guarded,
+    InstallMode, Instance, InstanceFilter, Lease, LeaseHolder, LeaseState, Operation, Ownership,
+    PortRequest, Progress, ProviderRevisionKey, ProviderRevisionRecord, RegistryError, ResourceRef,
+    ResourceRevision, Runtime, RuntimeId, SignatureInfoJson, SoftwareName, WriteBatch, WriteOp,
 };
 use stackly_platform::instance_path_entries;
 
 use super::column::{corrupt, exists, first, int, opt_ts, sql_error, ts};
 use super::journal;
-use super::read::{self, resource_columns};
+use super::read::{self, InstanceSelect, resource_columns};
 use super::{secret, source, supervision};
 
 /// Applies `batch` in one transaction stamped `now`: all of it, or none.
@@ -29,10 +31,7 @@ pub(super) fn commit(
     batch: &WriteBatch,
     now: Timestamp,
 ) -> Result<Committed, BatchError> {
-    let batch_error = |err| BatchError::batch(sql_error(err));
-    let tx = conn
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(batch_error)?;
+    let tx = begin(conn)?;
     let current = read::generation(&tx).map_err(BatchError::batch)?;
     if let Some(expected) = batch.expected_generation
         && expected != current
@@ -42,9 +41,74 @@ pub(super) fn commit(
             actual: current,
         }));
     }
+    apply_batch(tx, current, &batch.ops, now)
+}
+
+/// Runs `guard` against the write transaction itself, then applies the ops
+/// it returns in that same transaction (spec 0020, "Commit terjaga di
+/// langkah `register`"). A refusal, an error, and a panic of the guard
+/// apply nothing: the transaction rolls back when it drops.
+pub(super) fn commit_guarded(
+    conn: &mut Connection,
+    guard: CommitGuard,
+    now: Timestamp,
+    loaded_at: Timestamp,
+) -> Result<Guarded, BatchError> {
+    let tx = begin(conn)?;
+    let current = read::generation(&tx).map_err(BatchError::batch)?;
+    let view = TransactionView { tx: &tx, loaded_at };
+    let decision = catch_unwind(AssertUnwindSafe(|| guard(&view)));
+    match decision {
+        Err(_) => Err(BatchError::batch(RegistryError::Io {
+            detail: "the commit guard panicked".to_owned(),
+        })),
+        Ok(Err(error)) => Err(BatchError::batch(error)),
+        Ok(Ok(GuardDecision::Refuse(reason))) => Ok(Guarded::Refused(reason)),
+        Ok(Ok(GuardDecision::Write(ops))) => {
+            apply_batch(tx, current, &ops, now).map(Guarded::Committed)
+        }
+    }
+}
+
+/// What a guard reads: the registry through the write transaction that will
+/// also hold its writes.
+struct TransactionView<'a> {
+    tx: &'a Transaction<'a>,
+    loaded_at: Timestamp,
+}
+
+impl GuardView for TransactionView<'_> {
+    fn instances(&self, filter: InstanceFilter) -> Result<Vec<Instance>, RegistryError> {
+        read::instances(self.tx, &InstanceSelect::List(filter), self.loaded_at)
+    }
+
+    fn runtime(&self, id: RuntimeId) -> Result<Option<Runtime>, RegistryError> {
+        Ok(read::runtimes(self.tx, Some(id))?.into_iter().next())
+    }
+
+    fn provider_revision(
+        &self,
+        key: &ProviderRevisionKey,
+    ) -> Result<Option<ProviderRevisionRecord>, RegistryError> {
+        read::provider_revision(self.tx, key)
+    }
+}
+
+fn begin(conn: &mut Connection) -> Result<Transaction<'_>, BatchError> {
+    conn.transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|err| BatchError::batch(sql_error(err)))
+}
+
+/// Applies `ops` in order, raises the generation by 1, and commits `tx`.
+fn apply_batch(
+    tx: Transaction<'_>,
+    current: Generation,
+    ops: &[WriteOp],
+    now: Timestamp,
+) -> Result<Committed, BatchError> {
     let stamp = ts(now);
     let mut revisions = Vec::new();
-    for (index, op) in batch.ops.iter().enumerate() {
+    for (index, op) in ops.iter().enumerate() {
         apply(&tx, op, &stamp).map_err(|err| locate(index, err))?;
         if let Some(revision) = op.revision() {
             revisions.push((op.resource(), revision));
@@ -52,7 +116,8 @@ pub(super) fn commit(
     }
     let generation = current.next();
     write_generation(&tx, generation).map_err(BatchError::batch)?;
-    tx.commit().map_err(batch_error)?;
+    tx.commit()
+        .map_err(|err| BatchError::batch(sql_error(err)))?;
     Ok(Committed {
         generation,
         revisions,
