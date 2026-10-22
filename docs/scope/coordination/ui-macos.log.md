@@ -2,8 +2,8 @@
 
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `abe61d48`
-- **Wave aktif:** `7` (`dev-f12-fix`, `arc-ui-sync`, `dbg-f13-conn`, dimulai user `2026-10-22`; wave 6 selesai)
-- **Diperbarui:** `2026-10-22 20:55`
+- **Wave aktif:** tidak ada (wave 7 selesai `2026-10-22`; sisa: teks spec 0013 untuk muat ulang store lewat architect, langkah manual user)
+- **Diperbarui:** `2026-10-22 21:33`
 
 ## Sub sesi wave `1`
 
@@ -41,7 +41,7 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `dev-f12-fix` | developer | `DelayedProgress` menggambar spinner di frame pertama saat `loadingDelay` nol (flake `overview-operations-failed`), token `StacklyColor.selectionRing` (nama dipilih lead) dan penggantian `ProviderCard.swift:53` | `ui-macos.md` | `State/DelayedProgress.swift`, `State/StateView.swift`, `Tokens/StacklyColor.swift`, satu baris `ProviderCard.swift`, aturan accent di `SourceRuleTests.swift`, test nya, baris `verify.md` 0012 dan 0068 | worktree sendiri | `sonnet-5-5 · high` | `aktif` |
+| `dev-f12-fix` | developer | `DelayedProgress` menggambar spinner di frame pertama saat `loadingDelay` nol (flake `overview-operations-failed`), token `StacklyColor.selectionRing` (nama dipilih lead) dan penggantian `ProviderCard.swift:53` | `ui-macos.md` | `State/DelayedProgress.swift`, `State/StateView.swift`, `Tokens/StacklyColor.swift`, satu baris `ProviderCard.swift`, aturan accent di `SourceRuleTests.swift`, test nya, baris `verify.md` 0012 dan 0068 | `claude/angry-franklin-598395` | `sonnet-5-5 · high` | `merged` (`9065a938`) |
 | `arc-ui-sync` | architect (update) | spec 0012, 0013, 0067, 0068 dan `design.md` sesuai yang dibangun: posisi relay K15, kolom inspector tanpa vibrancy, ukuran halaman, `selectionRing`, `DelayedProgress` frame pertama, usulan spec 0016 untuk 0013 (`didFail`, `agentDidFail`), centang Follow-up yang terjawab | `ui-macos.md`, `02-instalasi-pertama.md` | `index.md`, `rationale.md`, `verify.md` spec 0012, 0013, 0067, 0068; `apps/macos/design.md` (kecuali bagian F20) | `claude/quizzical-kowalevski-6aa181` | `opus-5-5 · xhigh` | `merged` (`97e093f9`) |
 | `dbg-f13-conn` | debugger | race jalur close `DaemonConnection`: `callsAboveTheInFlightLimitWaitForASlot` (`ipc.connection_closed`) dan `aCallAfterTheConnectionClosedIsNotSent` (`ipc.protocol_violation` setelah 0,09 s), sekali masing masing di run penuh `clients/swift` | `ui-macos.md` | `clients/swift/Sources/StacklyClient/Connection/`, `Transport/`, `Wire/`, `Link/`, `Tests/StacklyClientTests/`, baris `verify.md` 0013 | `claude/awesome-chatelet-698296` | `opus-5-5 · xhigh` | `merged` (`5e8347c0`) |
 | `dev-f69-m3` | developer | F69 milestone 3 (langkah 6 dan 7): menu Instance, penerbit halaman Instances dan Catalog yang belum terdaftar, `InstancesCommands` dihapus, `helpText`, test penerbit; evidence manual `NOT_RUN` | `ui-macos.md` | `Commands/`, bagian penerbitan dan `helpText` di `Instances/InstancesPage.swift`, `InstancesCommandActions.swift`, `InstanceInspector.swift`, penerbitan `find` di halaman Catalog, `AppShell.swift` bila perlu, baris `CommandMap` di `design.md`, test nya, `verify.md` 0069 M3 | `claude/competent-mcclintock-1a2887` | `sonnet-5-5 · high` | `merged` (`b8f575c9`) |
@@ -209,6 +209,8 @@
 
 | `2026-10-22` | `dev-f13-followups` (`d8c9872c`, `4c134d77`, `3ca3a960`, `ffbcdcfc`): (A) `FrameDecoder` memeriksa frame yang dibaca bersama `HandshakeAccepted` terhadap `maxFrameBytes` daemon, bukan 1 MiB (dua test baru gagal sebelum fix, lulus 500 dari 500 sesudah); (B) empat test koneksi berurutan secara deterministik, masing masing gagal 10 sampai 20 dari 10 sampai 20 bila urutan dipaksa salah, tanpa sleep, retry, atau tenggat baru; (C) varian (ii): `ShellSync` memuat ulang store dengan `error` sekali per `.caughtUp`, `completedRounds` naik setelah snapshot itu selesai, `complete()` menghapus `error` dan `unsupported`. Gerbang lead setelah `git merge main` (`b2322d3e`): `clients/swift` 221 test, StacklyUI penuh 1499 test tanpa kegagalan, lint, `evidence check`. Merge `9ee06a25`. Lead scope 02 boleh menghapus retry Overview langkah 9a spec 0022. Teks desain spec 0013 varian (ii) dari laporan developer diantrikan untuk architect berikutnya. | `lead` |
 
+| `2026-10-22` | `dev-f12-fix` (`cfb6d491`, `c1c193ff`, `1ccbc80a`, `b529f512`): `DelayedProgress` menggambar spinner di frame pertama saat delay nol tanpa task atau transisi, dan `DelayedProgress()` tanpa argumen kini mengikuti `loadingDelay` dari environment (aturan spec 0068), yang menutup flake `overview-operations-failed` dan `new-instance-loading`; token `StacklyColor.selectionRing` menggantikan `controlAccentColor` di `ProviderCard.swift:53` (`// provisional: F12` hilang), aturan sumber accent menangkap `controlAccentColor`. 11 PNG `NewInstanceSnapshotTests` (`new-instance-loading` dan `new-instance-preflight-checking`) direkam ulang karena spinner kini di referensi; `overview-operations-loading` dari 9a tidak bergeser. Bukti developer: Overview dan NewInstance 10 dari 10 setelah merge 9a, suite penuh 1495, `build-app`. Flake lain `new-instance-ready` (light, 2194 px, load 92) bukan spinner, milik F20, dicatat untuk lead scope 02 bila muncul lagi. Gerbang lead setelah `git merge main` (`cb0efc8a`): Overview dan NewInstance 3 dari 3, StacklyUI penuh 1510 test tanpa kegagalan, lint, `evidence check`; setelah F22 retry removal masuk, merge dipentaskan dan 75 test di 8 suite terkait lulus pada kode gabungan di load 129. Merge `9065a938`; pembekuan ui-macos terakhir dicabut. Wave 7 selesai. | `lead` |
+
 ## Blocker terbuka
 
 - (selesai) Test flaky `SkeletonEndToEndTests.theInstanceStoreFollowsChangesAnotherClientMakes` diperbaiki `dbg-f14-trail` (`edd197d`).
@@ -221,7 +223,7 @@
 - (selesai) `arc-f126768-fix` di-merge `e0408db`.
 - (selesai) Kotak build K15 di F68 dan cek Inspector demo di `docs/manual.md` I.2: disetujui user dan diterapkan.
 - (selesai) `dbg-f67-inspector` bagian 2: `ace13361`, pembekuan dicabut.
-- `DelayedProgress` frame pertama dan token `selectionRing`: `dev-f12-fix` berjalan.
+- (selesai) `DelayedProgress` frame pertama dan token `selectionRing`: `9065a938`.
 - (selesai) Race close `DaemonConnection`: `5e8347c0`.
 - (selesai) F13 muat ulang store dan sibling koneksi: `9ee06a25`.
 - Teks desain spec 0013 untuk muat ulang store (varian ii: butir `.caughtUp` di ShellSync dan butir aturan snapshot gagal), teks usulan ada di laporan `dev-f13-followups`: menunggu architect berikutnya.
@@ -266,5 +268,6 @@
 - Wave `3` (`2026-10-21` sampai `2026-10-22`, hash awal `0605c50`, akhir `39efaab`): selesai. Satu architect `arc-f1368-update`: update gabungan spec 0013 dan perbaikan kata spec 0068 di-merge `c23568a`, enam teks AC disetujui user, AC-23 tetap; tiga gap spec 0015 diteruskan ke lead scope 02. Tanpa kode, jadi `/sync` tidak mengubah `AGENTS.md`; graph dokumen wave ini ditunda dan dikumpulkan dengan run dokumen berikutnya. Terbuka di scope ini: langkah manual user (`docs/manual.md` F, I, J, K) untuk F12, F13, F67, F68, dan F69 milestone 3 yang menunggu F17, F21, F22 milestone 3 di `02-instalasi-pertama.md`.
 - Wave `4` (`2026-10-22`, hash awal `4d5d177`, akhir `453850d`): selesai. Dibuka atas permintaan lead scope 02. `dev-f68-fix`: pin protokol fixture (`dc88025`) dan spinner `CheckList` yang mengikuti `loadingDelay` (`386f512`, lima referensi `components-sheet` direkam ulang). Kasus fixture runtime diserahkan ke `dev-f18-m3`. Build di `distracted-bartik` dihapus setelah merge (disk 66 GB). Tanpa kotak `ui-macos.md` baru; `/sync` tidak perlu mengubah `AGENTS.md`.
 - Wave `5` (`2026-10-22`, hash awal `bef659e`, akhir `19f0f8b`): selesai. Satu architect `arc-f1368-0015` di-merge `36bce94` (spec 0013 dan 0068 dari usulan spec 0015, K14 Option A, AC-10 0013 dan AC-14 0068 disetujui user). Juga: lima baris *Selisih* spec 0024 (`2b1e4f3`), pembersihan disk atas permintaan user (sembilan sesi diarsipkan, cache `arc-f15-update` dihapus), dan graph dokumen. Tanpa kode, jadi `/sync` tidak mengubah `AGENTS.md`.
+- Wave `7` (`2026-10-22`, hash awal `abe61d48`, akhir `9065a938`): selesai. `arc-ui-sync` (`97e093f9`, spec 0012, 0013, 0067, 0068 dan `design.md` sesuai yang dibangun), `dbg-f13-conn` (`5e8347c0`, race close `DaemonConnection`, bug produksi), `dev-f69-m3` (`b8f575c9`, F69 milestone 3; evidence keyboard dan VoiceOver menunggu user), `dev-f13-followups` (`9ee06a25`, `FrameDecoder`, test deterministik, muat ulang store varian ii), `dev-f12-fix` (`9065a938`, spinner frame pertama, `selectionRing`). Semua sesi diarsipkan. Sisa: teks desain spec 0013 untuk muat ulang store.
 
 ## Penutupan
