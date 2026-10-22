@@ -10,7 +10,7 @@ use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, create_with, new_password, package_dir};
 
-fn copy_tree(from: &Path, to: &Path) {
+pub fn copy_tree(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).expect("a folder can be made");
     for entry in std::fs::read_dir(from)
         .expect("a folder can be read")

@@ -32,6 +32,8 @@ mod phases;
 mod readiness;
 #[path = "postgresql/reload.rs"]
 mod reload;
+#[path = "postgresql/role_failure.rs"]
+mod role_failure;
 #[path = "postgresql/security.rs"]
 mod security;
 #[path = "postgresql/stop.rs"]
