@@ -65,7 +65,7 @@
 
 ## Blocker terbuka
 
-- F24 milestone 3 (GUI duplicate) ← `02-instalasi-pertama.md`: F20 milestone 3, F21 milestone 3, dan F22 milestone 3 (update spec 0021 untuk item More "Duplicate…" sudah masuk di `ca18158`); `ui-macos.md`: F69 milestone 3 dan F67; `01-foundation.md`: F11 milestone "Swift client and GUI secret flows".
+- F24 milestone 3 (GUI duplicate) ← `02-instalasi-pertama.md`: F20 milestone 3 dan F21 milestone 3 (F22 milestone 3 sudah di `main`, `44f95915`; update spec 0021 untuk item More "Duplicate…" sudah masuk di `ca18158`); `ui-macos.md`: F69 milestone 3 dan F67; `01-foundation.md`: F11 milestone "Swift client and GUI secret flows".
 - F24 milestone 4 (PostgreSQL 17 native) ← milestone 2 F24; isi F19 milestone 3 (PostgreSQL 17 lewat daemon dan catalog) sudah di `main` (`dfc51c7`) walau kotaknya belum dicentang; hardware/akun: artefak PostgreSQL 17 di cache runtime xtask, run native dan sesi GUI atas izin user.
 - F25 milestone 3 (PostgreSQL 17 dan 18 native) ← milestone 4 F24 (langkah 8 dan 9 spec 0024); F18 milestone 3 dan F19 langkah 9 sudah di `main`; hardware/akun: kedua artefak PostgreSQL di cache xtask, run native atas izin user.
 - F25 milestone 4 (JOURNEY-03 manual di aplikasi) ← milestone 3 F25; `02-instalasi-pertama.md`: F18 milestone 4, F20 milestone 3, F21 milestone 3, F22 milestone 3; unduhan lewat Get hanya atas izin user.
