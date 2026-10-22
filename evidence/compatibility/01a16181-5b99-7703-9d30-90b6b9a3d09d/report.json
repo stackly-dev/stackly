@@ -1,0 +1,144 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a16181-5b99-7703-9d30-90b6b9a3d09d",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "116e269edf9c64c41ea1758c583af38c655349ee",
+    "sourceDirty": false,
+    "runId": "01a16181-5b99-7703-9d30-90b6b9a3d09d",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "nats",
+      "--locked",
+      "--",
+      "--ignored"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-10-22T02:47:09.977195Z",
+  "finishedAt": "2026-10-22T02:49:09.240744Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 1
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a16182-2a3d-760a-947e-13c4cc91b238",
+      "covers": [
+        "BR-025",
+        "REQ-029",
+        "REQ-036",
+        "AC-029",
+        "REQ-012",
+        "REQ-013"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "nats",
+        "name": "compatibility::nats_compatibility",
+        "file": "apps/daemon/tests/nats/compatibility.rs",
+        "line": 113
+      },
+      "status": "PASS",
+      "expected": "behind the stacklyd binary with the default probe interval, a NATS 2.15.1 instance is created and ready through nats-readiness, a SIGSTOP turns readiness to not_ready with reason timeout while the port still accepts and the process stays running, SIGCONT makes it ready again, foreign servers give identity_mismatch, jetstream_disabled, jetstream_unexpected, and auth_required while matching ones succeed, an instance with JetStream off is ready without a jetstream folder, a SIGKILL of the daemon leaves the server running and the next daemon adopts the same process holding instance.lock, and a stop leaves no process",
+      "actual": "NATS 2.15.1: ready through nats-readiness, not_ready with reason timeout under SIGSTOP and ready again after SIGCONT, foreign servers refused, adopted after SIGKILL, and stopped with no process left",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "nats",
+          "version": "2.15.1",
+          "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-22T02:48:02.877428Z",
+      "finishedAt": "2026-10-22T02:48:46.05732Z",
+      "evidencePath": "artifacts/01a16182-2a3d-760a-947e-13c4cc91b238/",
+      "context": {
+        "sourceCommit": "116e269edf9c64c41ea1758c583af38c655349ee",
+        "sourceDirty": false,
+        "runId": "01a16181-5b99-7703-9d30-90b6b9a3d09d",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "nats",
+          "--locked",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.0 (27A266a)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}
