@@ -20,20 +20,20 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - [ ] Keyboard saja (Keyboard navigation menyala): Tab melewati titik langkah, Back, dan tombol utama; Space menekannya; Return menekan tombol utama; Escape melewati → AC-10
 - [ ] VoiceOver: titik langkah dibaca "Step {n} of 5, {label}" dengan trait terpilih untuk langkah aktif; saat langkah berganti fokus pindah ke judul langkah dan "Step {n} of 5, {label}." terucap sekali → AC-10
 - [ ] Jendela 900 × 600 pt, light, dark, Increase Contrast, dan Reduce Transparency → konten tidak terpotong (digulir bila perlu), teks terbaca, tanpa glass atau warna sistem sekunder → AC-10
-- [ ] Baca ulang semua teks langkah 1 sampai 3 terhadap AC-061 → tidak ada janji sandbox, isolasi dari file user, atau fitur yang belum ada → AC-9
+- [x] Baca ulang semua teks langkah 1 sampai 3 terhadap AC-061 → tidak ada janji sandbox, isolasi dari file user, atau fitur yang belum ada → AC-9
 
 ### Commands
 
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingModelTests` → test lulus: record kosong dan true, key `onboarding.finished` di `UserDefaults`, lima langkah dan label, `next` dan `back` berhenti di ujung, titik langkah, label `primaryLabel` per langkah dan per state agent (nil dan keenam state), Back mulai langkah 2, `finish` kedua alasan menulis record yang sama, `present` mulai dari langkah 1 atau menjaga langkah → AC-1, AC-2, AC-3
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter MainWindowRootTests` → test lulus: onboarding menjadi seluruh isi jendela (tanpa split view) sampai selesai, shell saat record true, pindah ke shell saat onboarding selesai, runtime menyimpan langkah, aksi Help "Welcome to Stackly" menampilkan langkah 1 tanpa menulis record dan menjaga langkah yang sedang tampil, baris `welcome` built tanpa shortcut → AC-1, AC-3
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter StorageContentTests` → test lulus: default spec 0004 dengan `~`, roots daemon, daemon dengan override jatuh ke default, varian override tanpa nilai variabel, home `/Users/a` dengan path `/Users/ab/x` tidak disingkat → AC-6
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingActionsTests` → test lulus: Get Started memanggil `FeedbackCenter.show` sekali dengan "Setup complete." dan pengumuman sekali; Continue hanya pindah; Escape di setiap langkah menulis record yang sama tanpa umpan balik → AC-2, AC-3, AC-11
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → test lulus: teks sama persis dengan tabel *Copy*, baris Verified runtimes hanya saat `runtimeInstallAvailable`, tanpa baris Environments, tanpa frasa terlarang, tanpa `URLSession` atau literal `http://` dan `https://`, tanpa `MutationPath` dan `publishesCommands`, `announce(` hanya di `OnboardingFlow.swift` → AC-4, AC-9, AC-11
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "ShellStructureTests|ShellLayoutTests|CommandMapTests|CommandSourceRuleTests|ShellCommandsTests"` → lulus: `MainWindowRoot` membuat satu `FeedbackCenter`, split view mengisi jendela terkecil, peta perintah dengan `welcome` built, penerbit shell → AC-3
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingSnapshotTests` → test lulus (Welcome dan Storage, lima varian masing masing) terhadap PNG di `__Snapshots__/OnboardingSnapshotTests/` → AC-4, AC-6, AC-10
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
-- [ ] `cargo xtask build-app` → build sukses
-- [ ] `xcrun swift-format lint --strict -r apps/macos/Packages/StacklyUI/Sources apps/macos/Packages/StacklyUI/Tests apps/macos/Stackly` → tanpa temuan
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingModelTests` → test lulus: record kosong dan true, key `onboarding.finished` di `UserDefaults`, lima langkah dan label, `next` dan `back` berhenti di ujung, titik langkah, label `primaryLabel` per langkah dan per state agent (nil dan keenam state), Back mulai langkah 2, `finish` kedua alasan menulis record yang sama, `present` mulai dari langkah 1 atau menjaga langkah → AC-1, AC-2, AC-3
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter MainWindowRootTests` → test lulus: onboarding menjadi seluruh isi jendela (tanpa split view) sampai selesai, shell saat record true, pindah ke shell saat onboarding selesai, runtime menyimpan langkah, aksi Help "Welcome to Stackly" menampilkan langkah 1 tanpa menulis record dan menjaga langkah yang sedang tampil, baris `welcome` built tanpa shortcut → AC-1, AC-3
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter StorageContentTests` → test lulus: default spec 0004 dengan `~`, roots daemon, daemon dengan override jatuh ke default, varian override tanpa nilai variabel, home `/Users/a` dengan path `/Users/ab/x` tidak disingkat → AC-6
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingActionsTests` → test lulus: Get Started memanggil `FeedbackCenter.show` sekali dengan "Setup complete." dan pengumuman sekali; Continue hanya pindah; Escape di setiap langkah menulis record yang sama tanpa umpan balik → AC-2, AC-3, AC-11
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → test lulus: teks sama persis dengan tabel *Copy*, baris Verified runtimes hanya saat `runtimeInstallAvailable`, tanpa baris Environments, tanpa frasa terlarang, tanpa `URLSession` atau literal `http://` dan `https://`, tanpa `MutationPath` dan `publishesCommands`, `announce(` hanya di `OnboardingFlow.swift` → AC-4, AC-9, AC-11
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "ShellStructureTests|ShellLayoutTests|CommandMapTests|CommandSourceRuleTests|ShellCommandsTests"` → lulus: `MainWindowRoot` membuat satu `FeedbackCenter`, split view mengisi jendela terkecil, peta perintah dengan `welcome` built, penerbit shell → AC-3
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingSnapshotTests` → test lulus (Welcome dan Storage, lima varian masing masing) terhadap PNG di `__Snapshots__/OnboardingSnapshotTests/` → AC-4, AC-6, AC-10
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [x] `cargo xtask build-app` → build sukses
+- [x] `xcrun swift-format lint --strict -r apps/macos/Packages/StacklyUI/Sources apps/macos/Packages/StacklyUI/Tests apps/macos/Stackly` → tanpa temuan
 
 ### Acceptance-criteria coverage
 
@@ -82,3 +82,28 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - AC-8 · langkah Command Line dengan toggle berkonfirmasi, Repair, catatan PATH, baris "Or run it directly", dan blok contoh; evidence di akun nyata di Milestone 4
 - AC-10 · pengumuman `not_found` oleh `OnboardingFlow`, aturan fokus aksi kartu, dan Last error diumumkan `DaemonModel`; evidence keyboard dan VoiceOver penuh di Milestone 4
 - AC-7 · belum, milik Milestone 3
+
+## Milestone 3: Catalog Trust
+
+### UI / manual
+
+- [ ] Bangun app (`cargo xtask build-app`), buka dengan `-onboarding.finished NO` dan daemon berjalan, pindah ke langkah 4 → judul "Catalog sources", subjudul, satu baris berlabel "official" dengan detail "Maintained by the Stackly project and bundled with this app.", baris "Revision {n} · published {tanggal}", toggle menyala dan nonaktif, dan catatan trust di bawahnya; revision dan tanggal sama dengan `stackly provider list` → AC-7
+- [ ] Arahkan pointer ke toggle dan baca dengan VoiceOver → help dan label "The official catalog is always on."; toggle tidak bisa diubah → AC-7, AC-10
+- [ ] Jalankan stacklyd dengan `STACKLY_CATALOG_DIR` (catalog pengembangan) → label "development", detail menyebut STACKLY_CATALOG_DIR dan bahwa itu bukan catalog official, toggle "The development catalog is always on." → AC-7
+- [ ] Buka langkah 4 saat daemon belum berjalan → label "Catalog", detail "Stackly shows where its catalog comes from once stacklyd is running.", tanpa toggle; nyalakan daemon → baris berubah menjadi "official" tanpa pindah langkah → AC-7
+- [ ] Baca seluruh teks langkah 4 terhadap AC-061 → tidak ada baris community, tidak ada "Signed manifests", tidak ada kalimat tentang catalog terbaru atau up to date, tidak ada kalimat digest (`runtimeInstallAvailable` masih false) → AC-7, AC-9
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogTrustContentTests` → test lulus: setiap baris tabel *Baris Catalog Trust* (official, official outdated, development, `source` dan `trust` `unrecognized`, unsupported, error dengan dan tanpa hint, menunggu), kalimat digest mengikuti `runtimeInstallAvailable`, tanpa toggle saat `info` nil, `info` lama menang atas refresh yang gagal, tanpa community dan frasa terlarang, catatan trust sama dengan tabel *Copy*, dan baris dibangun dari `CatalogStore` di atas fixture `protocols/fixtures/catalog/` → AC-7, AC-9
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → lulus, pindaian frasa terlarang meliputi `CatalogTrustContent.swift`, `CatalogTrustStep.swift`, dan bagian Catalog Trust `OnboardingCopy.swift` → AC-9
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogTrustSnapshotTests` → lulus (tujuh baris dalam satu susunan, lima varian) terhadap PNG di `__Snapshots__/CatalogTrustSnapshotTests/` → AC-7, AC-10
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [ ] `cargo xtask build-app` → build sukses
+- [ ] `xcrun swift-format lint --strict -r apps/macos/Packages/StacklyUI/Sources apps/macos/Packages/StacklyUI/Tests apps/macos/Stackly` → tanpa temuan
+
+### Acceptance-criteria coverage
+
+- AC-7 · `CatalogTrustContent.make`, `CatalogTrustStep` dan `CatalogTrustRow`; baris yang bergantung pada `runtimeInstallAvailable` (kalimat digest) menunggu fitur 18
+- AC-9 · bagian Catalog Trust `OnboardingCopy` dan test per nilai; pembacaan ulang seluruh copy terhadap AC-061 menunggu Milestone 4
+- AC-10 · label dan help toggle; snapshot langkah di jendela penuh dan evidence VoiceOver di Milestone 4

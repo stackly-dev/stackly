@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `abe61d48`
 - **Wave aktif:** `7` (`dev-f12-fix`, `arc-ui-sync`, `dbg-f13-conn`, dimulai user `2026-10-22`; wave 6 selesai)
-- **Diperbarui:** `2026-10-22 19:13`
+- **Diperbarui:** `2026-10-22 20:09`
 
 ## Sub sesi wave `1`
 
@@ -44,6 +44,8 @@
 | `dev-f12-fix` | developer | `DelayedProgress` menggambar spinner di frame pertama saat `loadingDelay` nol (flake `overview-operations-failed`), token `StacklyColor.selectionRing` (nama dipilih lead) dan penggantian `ProviderCard.swift:53` | `ui-macos.md` | `State/DelayedProgress.swift`, `State/StateView.swift`, `Tokens/StacklyColor.swift`, satu baris `ProviderCard.swift`, aturan accent di `SourceRuleTests.swift`, test nya, baris `verify.md` 0012 dan 0068 | worktree sendiri | `sonnet-5-5 · high` | `aktif` |
 | `arc-ui-sync` | architect (update) | spec 0012, 0013, 0067, 0068 dan `design.md` sesuai yang dibangun: posisi relay K15, kolom inspector tanpa vibrancy, ukuran halaman, `selectionRing`, `DelayedProgress` frame pertama, usulan spec 0016 untuk 0013 (`didFail`, `agentDidFail`), centang Follow-up yang terjawab | `ui-macos.md`, `02-instalasi-pertama.md` | `index.md`, `rationale.md`, `verify.md` spec 0012, 0013, 0067, 0068; `apps/macos/design.md` (kecuali bagian F20) | `claude/quizzical-kowalevski-6aa181` | `opus-5-5 · xhigh` | `merged` (`97e093f9`) |
 | `dbg-f13-conn` | debugger | race jalur close `DaemonConnection`: `callsAboveTheInFlightLimitWaitForASlot` (`ipc.connection_closed`) dan `aCallAfterTheConnectionClosedIsNotSent` (`ipc.protocol_violation` setelah 0,09 s), sekali masing masing di run penuh `clients/swift` | `ui-macos.md` | `clients/swift/Sources/StacklyClient/Connection/`, `Transport/`, `Wire/`, `Link/`, `Tests/StacklyClientTests/`, baris `verify.md` 0013 | `claude/awesome-chatelet-698296` | `opus-5-5 · xhigh` | `merged` (`5e8347c0`) |
+| `dev-f69-m3` | developer | F69 milestone 3 (langkah 6 dan 7): menu Instance, penerbit halaman Instances dan Catalog yang belum terdaftar, `InstancesCommands` dihapus, `helpText`, test penerbit; evidence manual `NOT_RUN` | `ui-macos.md` | `Commands/`, bagian penerbitan dan `helpText` di `Instances/InstancesPage.swift`, `InstancesCommandActions.swift`, `InstanceInspector.swift`, penerbitan `find` di halaman Catalog, `AppShell.swift` bila perlu, baris `CommandMap` di `design.md`, test nya, `verify.md` 0069 M3 | worktree sendiri | `sonnet-5-5 · high` | `aktif` |
+| `dev-f13-followups` | developer | F13: (A) `FrameDecoder` memeriksa header sesudah handshake terhadap `limits.maxFrameBytes` (AC-3), (B) empat test berurutan lewat sleep menjadi deterministik, (C) `ShellSync` memuat ulang store yang gagal saat `.caughtUp` dan `ResourceStore` menghapus `unsupported` setelah snapshot berhasil | `ui-macos.md` | `clients/swift` Wire, Transport, Connection, Link, Sync dan test nya; untuk C `Connection/ShellSync.swift`, `ResourceStore.swift` dan test nya; baris `verify.md` 0013 | worktree sendiri | `opus-5-5 · high` | `aktif` |
 
 ## Sub sesi wave `6`
 
@@ -201,6 +203,8 @@
 
 | `2026-10-22` | Lead meninjau diff `Shell/` dan `Commands/` F16 milestone 1 sebelum merge: `MainWindowRoot` (di `Shell/`) menggantikan `LiveShell` dan menyimpan semua sambungan nya (environment model, `commandLineTool`, `feedbackCenter`); kunci jendela, `MainWindowAccessor` dengan `windowWillClose`, tangkapan `windowOpener`, dan ukuran minimum 900 × 600 naik ke root sehingga onboarding ikut mendapatkannya; `AppShell` tetap `.actionHost()`; `.welcome` baris `CommandMap` `built` di `CommandGroup(replacing: .help)` tanpa shortcut di view. Disetujui, dengan baris Help di tabel struktur menu `design.md` ikut dibalik ke built. Merge `c4032edd` (dengan `784d12dd`): StacklyUI 1382 test tanpa kegagalan, 10 PNG Onboarding baru, tanpa PNG bergeser. F69 milestone 3 kini tidak terhalang lagi; menunggu persetujuan user. F16 milestone 2 dan 3 (di `Onboarding/`) berikutnya tanpa `Shell/` atau `Commands/`. | `lead` |
 
+| `2026-10-22` | User memulai `dev-f69-m3` dan `dev-f13-followups` (pilihan a). `dev-f12-fix` (`cfb6d491`, `c1c193ff`): Overview 10 dari 10 lulus tanpa PNG berubah; flake `new-instance-loading` punya sebab lain (`NewInstanceSheet.swift:96` dan `PreflightSection.swift:62` memanggil `DelayedProgress()` tanpa argumen yang mengabaikan `loadingDelay`); lead menyetujui `DelayedProgress()` mengikuti `loadingDelay` dari environment (aturan spec 0068) dan rekaman ulang 11 PNG `NewInstanceSnapshotTests` oleh perubahan kita, tanpa menyentuh file F20; lead scope 02 diberi tahu. Keputusan C `dev-f13-followups`: varian (ii), hanya store dengan `error` dicoba ulang sekali per `.caughtUp`, `completedRounds` naik setelah snapshot ulang itu selesai, `complete()` menghapus `error` dan `unsupported`, tanpa timer baru, teks AC tidak berubah; teks desain spec 0013 menyusul lewat architect. F16 milestone 2 dan 3 dan F22 langkah 9a (Overview) milik lead scope 02 tidak menyentuh file sesi ini. | `lead` |
+
 ## Blocker terbuka
 
 - (selesai) Test flaky `SkeletonEndToEndTests.theInstanceStoreFollowsChangesAnotherClientMakes` diperbaiki `dbg-f14-trail` (`edd197d`).
@@ -215,9 +219,8 @@
 - (selesai) `dbg-f67-inspector` bagian 2: `ace13361`, pembekuan dicabut.
 - `DelayedProgress` frame pertama dan token `selectionRing`: `dev-f12-fix` berjalan.
 - (selesai) Race close `DaemonConnection`: `5e8347c0`.
-- F13 sibling dari `dbg-f13-conn`: tiga test berurutan lewat sleep, satu sleep yang kini tidak perlu, dan `FrameDecoder.push` yang memeriksa header di chunk handshake terhadap 1 MiB alih alih `limits.maxFrameBytes` (AC-3): belum diarahkan.
-- F13: `ShellSync` memuat ulang store yang gagal saat `.caughtUp` dan `ResourceStore` menghapus `unsupported` setelah snapshot berhasil (usulan lead scope 02 dari spec 0022): keputusan spec 0013 lalu build, setelah wave 7.
-- F69 milestone 3: tidak terhalang lagi (F16 milestone 1 `c4032edd`); menunggu persetujuan user untuk developer; beri tahu lead scope 03 saat mendarat.
+- F13 muat ulang store dan sibling koneksi: `dev-f13-followups` berjalan (C diputuskan varian ii); teks desain spec 0013 menyusul lewat architect.
+- F69 milestone 3: `dev-f69-m3` berjalan; beri tahu lead scope 03 saat mendarat.
 - Teks spec 0067 baris 518, 0068 baris 264, dan `design.md` masih menyebut relay "on content before .inspector" dan belum memuat baris "Not vibrant" untuk kolom inspector: diarahkan ke architect setelah bagian 2, bersama token tint pilihan (F12).
 - (selesai) Teks spec sesuai yang dibangun: `97e093f9`.
 - (selesai) Perbaikan kode K15 dan `StaleNote`: `582afd51`.
