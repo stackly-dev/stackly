@@ -19,6 +19,7 @@ Kamu boleh mengerjakannya kapan saja dan tidak harus sekaligus. Setiap bagian be
 | [K. Automation Mode dan UI test](#k-automation-mode-dan-ui-test) | F68 milestone 3 di [scope/ui-macos.md](scope/ui-macos.md) | 10 menit, butuh password admin | wajib untuk F68 |
 | [G. Dua akun macOS](#g-dua-akun-macos) | F6 (sudah done) | 30 menit, butuh password admin | opsional |
 | [H. Folder temp setelah beberapa hari idle](#h-folder-temp-setelah-beberapa-hari-idle) | F6 (sudah done) | beberapa hari menunggu | opsional |
+| [T. JOURNEY-03: PostgreSQL 17 dan 18 di aplikasi](#t-journey-03-postgresql-17-dan-18-di-aplikasi-fitur-25) | F25 milestone 4, AC-10 di [scope/03-multi-versi-dan-instance.md](scope/03-multi-versi-dan-instance.md) | 30 menit | wajib untuk F25 |
 
 Urutan yang aku sarankan: E dulu karena paling singkat, lalu A, lalu B. Setelah itu kerjakan C, D, dan F sekali jalan, karena ketiganya memakai root dan jendela app yang sama. Untuk `ui-macos`: F dan J sekali jalan (keduanya menyalakan Keyboard navigation dan VoiceOver), lalu I, lalu K.
 
@@ -256,6 +257,58 @@ Opsional. Untuk F6, yang sudah `done`. Record yang masih terbuka: `evidence/manu
 5. Bila `stacklyd` sedang berjalan selama periode itu, cek juga log daemon untuk `socket_rebound`, dan pastikan `stackly daemon status` masih berfungsi.
 
 **Yang dikirim:** tanggal penanda dibuat, tanggal dicek, apakah penanda masih ada, dan hasil langkah 5 bila ada.
+
+## T. JOURNEY-03: PostgreSQL 17 dan 18 di aplikasi (fitur 25)
+
+Untuk F25 milestone 4 (spec 0025 AC-10, REQ-035 dan REQ-043). Record: `evidence/manual/2026-10-22-journey-03-in-the-app-postgresql-18-beside-17-on.json`.
+
+Bagian ini memakai root dev sementara dan tidak memakai jaringan: tombol Get memakai artefak PostgreSQL 17.11 dan 18.6 yang sudah ada di cache xtask (`~/Library/Caches/dev.stackly.xtask/runtime/`). Root sementara memakai keychain file, jadi login Keychain tidak disentuh. Siapkan tiga terminal: A untuk perintah, B untuk daemon, dan C untuk app. Siapkan checkout dan terminal seperti di *Persiapan umum*.
+
+1. Terminal A: `cargo build -p stacklyd -p stackly-cli && cargo xtask build-app`. Tunggu sampai muncul `BUILD SUCCEEDED`.
+2. Terminal A: cek bahwa kedua artefak ada di cache:
+   - `export CACHE=~/Library/Caches/dev.stackly.xtask/runtime PG17=04b1eff117441c0b6f1cbefa42ded6cf5726d656e54881674defea04b515d6d3 PG18=88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590`
+   - `ls -l $CACHE/$PG17 $CACHE/$PG18` harus menampilkan dua file, 27984415 dan 28311215 byte.
+   - Bila salah satu tidak ada, berhenti dan kirim "BLOCKED: artefak hilang di cache". Jangan mengunduh sendiri; unduhan butuh persetujuan.
+3. Terminal A: buat root dan catalog: `export R="$(mktemp -d /tmp/stk-pg1718.XXXXXX)"`, lalu `export CAT="$R.catalog" S=target/debug/stackly STACKLY_ROOT="$R"`, lalu `cargo xtask catalog build --out "$CAT"`. Harus mencetak `catalog: revision <n>, 2 provider(s), 4 planned -> ...`.
+4. Terminal B: `cd` ke root repo, lalu `STACKLY_ROOT="<nilai R>" STACKLY_CATALOG_DIR="<nilai CAT>" target/debug/stacklyd`. Tulis path itu langsung (ketik `echo $R $CAT` di Terminal A bila perlu), lalu biarkan tetap jalan. Pada start pertama daemon membuat `$R/cache/downloads` dengan mode 0700. Jangan membuat folder itu sendiri dengan `mkdir`: mode bawaan `mkdir` ditolak daemon (`is not a private Stackly folder`).
+5. Terminal A: salin artefak ke cache unduhan root dev, tanpa mengganti nama (daemon membaca file bernama sha256 persis):
+   - `cp $CACHE/$PG17 $CACHE/$PG18 "$R/cache/downloads/"`
+   - `$S runtime list` tidak boleh menampilkan runtime, dan `$S daemon status` harus menyebut daemon berjalan.
+6. Terminal C: `STACKLY_ROOT="<nilai R>" target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly`. Bila onboarding muncul, lewati dengan Continue; di langkah Background Agent pilih Not Now. Footer harus menampilkan `stacklyd running`.
+7. Pasang PostgreSQL 17:
+   1. Pilih Catalog, buka PostgreSQL, lihat matriks versi. Baris 17.11 dan 18.6 sama sama punya tombol Get.
+   2. Klik Get di baris 17.11. Progress tampil di sel itu, lalu berubah menjadi Installed dalam sekitar 10 detik.
+   3. Pilih Runtimes. Harus ada satu baris PostgreSQL 17.11. Cek `$S runtime list`: satu baris, versi 17.11, state `installed`.
+8. Buat dan jalankan `pg17-dev`:
+   1. Pilih Instances, klik New Instance di toolbar. Pada Runtime hanya ada `PostgreSQL 17.11`.
+   2. Isi Name `pg17-dev`. Pada Superuser password biarkan Generate. Nyalakan Start after creating, lalu klik Create.
+   3. Tunggu baris `pg17-dev` menjadi Ready tanpa kamu klik apa pun. Catat PID: `$S instance list` memberi ID, lalu `$S instance get <ID>` memberi PID dan waktu start. Simpan ID sebagai ID17.
+9. Pasang PostgreSQL 18 saat `pg17-dev` berjalan:
+   1. Pilih Catalog, PostgreSQL, lalu klik Get di baris 18.6.
+   2. Selama install berjalan (sekitar 10 detik), pindah ke Instances. Baris `pg17-dev` harus tetap Ready, tanpa pernah berubah menjadi Starting atau Stopped. Ambil tangkapan layar halaman ini bila install masih berjalan, tetapi tidak wajib.
+   3. Setelah Installed muncul di Catalog, `$S instance get $ID17` harus menunjukkan PID dan waktu start yang sama dengan langkah 8.3, dan status masih Ready.
+   4. Pilih Runtimes: harus ada dua baris, PostgreSQL 17.11 dan 18.6.
+10. Klik New Instance lagi. Buka daftar Runtime: harus berisi `PostgreSQL 17.11` dan `PostgreSQL 18.6`. Ambil tangkapan layar sheet dengan daftar terbuka.
+11. Buat `pg18-dev`: pilih `PostgreSQL 18.6`, Name `pg18-dev`, password Generate, nyalakan Start after creating, klik Create. Biarkan port seperti bawaan sheet; port kedua instance harus berbeda. Tunggu `pg18-dev` Ready. Baris `pg17-dev` harus tetap Ready, dengan PID yang sama dengan langkah 8.3.
+12. Di halaman Instances (lebarkan jendela supaya kolom Provider, Version, dan Endpoints tampil), kolom Version harus menampilkan `17.11` untuk `pg17-dev` dan `18.6` untuk `pg18-dev`, dan kolom Endpoints menampilkan dua port yang berbeda. Ambil tangkapan layar halaman ini.
+13. Klik kanan baris `pg18-dev`, pilih Open, lalu buka tab Summary. Kartu Connection harus menampilkan endpoint dan connection `pg18-dev` sendiri, dengan port yang sama dengan kolom Endpoints baris itu. Ambil tangkapan layar tab Summary.
+14. Klik Copy di baris Connection string (nilai tersamar, jadi tidak perlu Show). Pasteboard hanya hidup 90 detik, jadi langsung jalankan di Terminal A:
+    - `P18=$(ls -d "$R"/data/runtimes/postgresql/18.6/macos-aarch64/*/bin/psql)`
+    - `"$P18" "$(pbpaste)" -Atc 'SELECT version()'`
+
+    Keluarannya harus satu baris yang berisi `PostgreSQL 18.6`. Password fixture ikut tampil di `ps` selama perintah ini jalan; itu tidak masalah untuk root dev ini. Bila Keychain atau macOS memunculkan dialog, catat teksnya.
+15. Ulangi untuk `pg17-dev`: buka detailnya, tab Summary, klik Copy, lalu `P17=$(ls -d "$R"/data/runtimes/postgresql/17.11/macos-aarch64/*/bin/psql)` dan `"$P17" "$(pbpaste)" -Atc 'SELECT version()'`. Keluarannya harus berisi `PostgreSQL 17.11`.
+16. Terminal A: `ps -axww -o pid=,args= | grep "$R" | grep "bin/postgres" | grep -v grep` harus menampilkan dua postmaster, satu dari folder runtime `17.11` dan satu dari `18.6`, masing masing dengan folder data instance sendiri.
+17. Bersihkan:
+    - `$S instance stop <ID18> --wait` dan `$S instance stop $ID17 --wait`. ID18 dari `$S instance list`.
+    - ⌘Q app di Terminal C, lalu Ctrl+C daemon di Terminal B.
+    - `ps -axww -o pid=,args= | grep -E "$R|stk-pg1718" | grep -v grep` harus kosong. Bila masih ada proses `postgres`, hentikan lewat PID yang tampil; jangan pakai `pkill -f` atau `killall`.
+    - `STACKLY_ROOT="$R" target/debug/stacklyd --print-roots` mencetak `runtime_root`; catat path-nya, lalu `rm -rf "$R" "$CAT"`, dan hapus folder `runtime_root` itu bila masih ada.
+    - Cache xtask di `~/Library/Caches/dev.stackly.xtask/runtime/` tidak disentuh: yang kamu hapus hanya salinannya di `$R/cache/downloads`.
+
+**Tangkapan layar:** ambil dengan ⇧⌘4 (simpan di Desktop) dan sebutkan path-nya ke Claude, supaya Claude menyalinnya ke `evidence/manual/files/`: (1) halaman Runtimes dengan dua runtime (langkah 9.4), (2) sheet New Instance dengan daftar Runtime terbuka (langkah 10), (3) halaman Instances dengan kolom Version (langkah 12), (4) tab Summary `pg18-dev` (langkah 13).
+
+**Yang dikirim:** versi macOS, hasil langkah 2 (kedua artefak ada atau tidak), PID `pg17-dev` di langkah 8.3 dan 9.3, apa yang terlihat di baris `pg17-dev` selama langkah 9.2, daftar Runtime di langkah 10, kolom Version di langkah 12, port di tab Summary dan kolom Endpoints (langkah 13), keluaran `SELECT version()` di langkah 14 dan 15, hasil langkah 16, path empat tangkapan layar, serta nomor dan apa yang terlihat untuk setiap langkah yang tidak sesuai atau "semua sesuai".
 
 ## Cara mengirim hasil
 
