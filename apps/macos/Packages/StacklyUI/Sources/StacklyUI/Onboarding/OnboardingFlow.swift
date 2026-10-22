@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The onboarding: the whole content of the main window until Get Started or Escape
@@ -10,6 +11,8 @@ struct OnboardingFlow: View {
     static let columnWidth: CGFloat = 520
 
     let onboarding: OnboardingModel
+    /// The icon the Welcome step shows; the app's own by default, a fixed image in tests.
+    var appIcon: NSImage = NSApplication.shared.applicationIconImage
 
     @Environment(\.feedbackCenter) private var feedbackCenter
     @AccessibilityFocusState private var titleFocused: Bool
@@ -31,8 +34,8 @@ struct OnboardingFlow: View {
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         // Escape skips from any step; an open confirmation takes the key first.
-        .onExitCommand { onboarding.finish(.skipped) }
-        .accessibilityAction(.escape) { onboarding.finish(.skipped) }
+        .onExitCommand { OnboardingActions.skip(onboarding: onboarding) }
+        .accessibilityAction(.escape) { OnboardingActions.skip(onboarding: onboarding) }
         .onChange(of: onboarding.step) { _, step in
             titleFocused = true
             announce(OnboardingFooter.announcement(step))
@@ -41,15 +44,11 @@ struct OnboardingFlow: View {
 
     @ViewBuilder private var stepContent: some View {
         switch onboarding.step {
-        // provisional: F16 steps 3 and later milestones replace these with their steps.
         case .welcome:
-            OnboardingStepHeader(
-                title: OnboardingCopy.welcomeTitle, subtitle: OnboardingCopy.welcomeSubtitle,
-                style: .welcome, focus: $titleFocused)
+            WelcomeStep(focus: $titleFocused, icon: appIcon)
         case .storage:
-            OnboardingStepHeader(
-                title: OnboardingCopy.storageTitle, subtitle: OnboardingCopy.storageSubtitle,
-                focus: $titleFocused)
+            StorageStep(focus: $titleFocused)
+        // provisional: F16 milestones 2 and 3 replace these three with their steps.
         case .backgroundAgent:
             OnboardingStepHeader(
                 title: OnboardingCopy.agentTitle, subtitle: OnboardingCopy.agentSubtitle,
@@ -88,13 +87,7 @@ struct OnboardingFlow: View {
         OnboardingFooter.primaryLabel(step: onboarding.step, agentState: nil)
     }
 
-    /// Continue and Not Now only move on; Get Started finishes and shows the good news.
     private func primaryAction() {
-        if onboarding.step == .commandLine {
-            onboarding.finish(.getStarted)
-            feedbackCenter?.show(.success(OnboardingCopy.setupComplete))
-        } else {
-            onboarding.next()
-        }
+        OnboardingActions.primary(onboarding: onboarding, feedback: feedbackCenter)
     }
 }
