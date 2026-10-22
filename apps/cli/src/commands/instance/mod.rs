@@ -43,12 +43,10 @@ use super::execute;
 #[derive(Debug, Subcommand)]
 pub enum InstanceCommand {
     /// Create an instance from a provider and an installed runtime
-    // provisional: F20 (--runtime takes software@version, --provider and
-    // --revision turn optional, --set follows the field kind)
     #[command(
-        after_help = "Examples:\n  stackly instance create demo --runtime 0192f3a5-0000-7000-8000-0000000000a1 --provider fake --revision 0.3.0 --wait\n  stackly instance create demo --runtime 0192f3a5-0000-7000-8000-0000000000a1 --provider fake --revision 0.3.0 --port http=auto --set-json readyDelayMs=1500 --json"
+        after_help = "Examples:\n  stackly instance create orders --runtime postgresql@18 --port postgres=5432 --wait\n  stackly instance create orders --runtime postgresql@18 --dry-run --json\n  stackly instance create queue --runtime nats@2.15 --set jetstream=true --start --wait"
     )]
-    Create(CreateArgs),
+    Create(Box<CreateArgs>),
     /// Start an instance
     #[command(
         after_help = "Examples:\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001 --wait --timeout 5m"
@@ -80,7 +78,7 @@ impl InstanceCommand {
     /// Runs the verb and returns the exit code.
     pub async fn run(self, cx: &mut Context) -> u8 {
         match self {
-            Self::Create(args) => execute(args, cx).await,
+            Self::Create(args) => execute(*args, cx).await,
             Self::Start(args) => execute(args, cx).await,
             Self::Stop(args) => execute(args, cx).await,
             Self::List(args) => execute(args, cx).await,
@@ -138,6 +136,16 @@ pub struct InstanceAction {
     verb: Verb,
     #[serde(skip)]
     instance_id: Option<Uuid>,
+}
+
+impl InstanceAction {
+    /// Whether the request started an operation that ended `succeeded`.
+    fn succeeded(&self) -> bool {
+        !self.already
+            && self.operation.as_ref().is_some_and(|operation| {
+                operation.state == stackly_protocol::operation::OperationState::Succeeded
+            })
+    }
 }
 
 impl Render for InstanceAction {

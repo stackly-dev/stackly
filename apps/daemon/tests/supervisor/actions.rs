@@ -159,16 +159,31 @@ async fn a_fixed_port_someone_else_uses_fails_the_start_before_a_spawn_and_a_cla
     let ev = evidence!(
         covers = ["AC-010", "AC-055"],
         kind = Kind::Fixture,
-        expected = "a Fixed port held by an outside listener fails the start with supervisor.endpoint_in_use before any spawn and leaves the listener alone, and a second create with the same Fixed port fails with supervisor.endpoint_conflict",
+        expected = "a create judged while an outside listener holds its Fixed port is refused with supervisor.endpoint_in_use, a Fixed port that passes the create and is taken before the start fails the start with supervisor.endpoint_in_use before any spawn and leaves the listener alone, and a second create with the same Fixed port is refused with supervisor.endpoint_conflict",
     );
     let site = Site::new();
     let daemon = site.start().await;
     let api = site.api().await;
-    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("a free port binds");
-    let port = listener
+    // A port that is free when the create is judged: the outside program
+    // takes it afterwards, before the start (spec 0020 AC-16). Judged while
+    // it holds the port, the create itself is refused.
+    let held = TcpListener::bind(("127.0.0.1", 0)).expect("a free port binds");
+    let port = held
         .local_addr()
         .expect("the listener has an address")
         .port();
+    let mut refused = api.params("held", json!({}));
+    refused.endpoints = vec![Api::http_port(port)];
+    let error = api.create(refused).await.unwrap_err();
+    assert_eq!(error.code(), "supervisor.endpoint_in_use", "{error:?}");
+    assert!(
+        error
+            .fields()
+            .iter()
+            .any(|field| field.path() == "endpoints[0].port"),
+        "{error:?}"
+    );
+    drop(held);
 
     let mut params = api.params("fixed", json!({}));
     params.endpoints = vec![Api::http_port(port)];
@@ -180,6 +195,7 @@ async fn a_fixed_port_someone_else_uses_fails_the_start_before_a_spawn_and_a_cla
         .expect("a create begins an operation");
     api.wait_state(created.operation.id, OperationState::Succeeded)
         .await;
+    let listener = TcpListener::bind(("127.0.0.1", port)).expect("the freed port binds again");
     let id: Uuid = created
         .operation
         .resource
@@ -213,15 +229,8 @@ async fn a_fixed_port_someone_else_uses_fails_the_start_before_a_spawn_and_a_cla
     // The same Fixed port again is a clash with the first instance.
     let mut clash = api.params("clash", json!({}));
     clash.endpoints = vec![Api::http_port(port)];
-    let accepted = api
-        .create(clash)
-        .await
-        .expect("the create is accepted")
-        .accepted
-        .expect("a create begins an operation");
-    let failed = api.wait_final(accepted.operation.id).await;
-    assert_eq!(failed.operation.state, OperationState::Failed);
-    assert_eq!(Api::failure_code(&failed), "supervisor.endpoint_conflict");
+    let error = api.create(clash).await.unwrap_err();
+    assert_eq!(error.code(), "supervisor.endpoint_conflict", "{error:?}");
     assert_eq!(api.list(Default::default()).await.items.len(), 1);
     drop((api, listener));
     daemon

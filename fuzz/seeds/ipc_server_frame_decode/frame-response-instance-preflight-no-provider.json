@@ -1,0 +1,90 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000913",
+    "reply": {
+      "type": "instance.preflight",
+      "content": {
+        "ready": false,
+        "provider": null,
+        "checks": [
+          {
+            "id": "provider",
+            "kind": "provider",
+            "status": "error",
+            "title": "Provider official/zenith",
+            "detail": "no pinned package or provider revision with that name",
+            "subject": null,
+            "suggestedPort": null,
+            "error": {
+              "code": "instance.provider_not_found",
+              "category": "not_found",
+              "message": "no pinned package or provider revision with that name",
+              "retryable": false,
+              "resource": null,
+              "fields": [],
+              "hint": null,
+              "details": [
+                {
+                  "key": "provider",
+                  "value": "official/zenith"
+                }
+              ],
+              "operationId": null,
+              "rule": null,
+              "items": []
+            }
+          },
+          {
+            "id": "runtime",
+            "kind": "runtime",
+            "status": "ok",
+            "title": "Runtime PostgreSQL 18.6",
+            "detail": "Verified 88bb7533e639",
+            "subject": null,
+            "suggestedPort": null,
+            "error": null
+          },
+          {
+            "id": "name",
+            "kind": "name",
+            "status": "ok",
+            "title": "Name available",
+            "detail": "orders-db",
+            "subject": null,
+            "suggestedPort": null,
+            "error": null
+          },
+          {
+            "id": "data",
+            "kind": "data",
+            "status": "ok",
+            "title": "Empty data directory",
+            "detail": "instances/<new instance id>/data · created new for this instance",
+            "subject": null,
+            "suggestedPort": null,
+            "error": null
+          },
+          {
+            "id": "disk",
+            "kind": "disk",
+            "status": "ok",
+            "title": "Disk space",
+            "detail": "41 GB free · needs at least 256 MB",
+            "subject": null,
+            "suggestedPort": null,
+            "error": null
+          }
+        ],
+        "fields": [
+          {
+            "path": "provider.name",
+            "code": "unknown_value",
+            "message": "value is not one of the known values"
+          }
+        ],
+        "command": "stackly instance create orders-db --runtime postgresql@18.6 --provider official/zenith"
+      }
+    }
+  }
+}

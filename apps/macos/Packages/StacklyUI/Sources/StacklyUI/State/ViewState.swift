@@ -42,7 +42,9 @@ public enum ViewState<Value> {
     ///     results when the filtered result is empty), or `nil` when there is something
     ///     to show.
     ///   - outdated: When the source last updated the data and the source's name, when the
-    ///     daemon reports the data as out of date.
+    ///     daemon reports the data as out of date. The name may start with a lower case
+    ///     letter ("the bundled catalog"): the banner sentence capitalizes its first
+    ///     character, so a screen never writes the capital itself.
     ///   - partial: The items that are not ready yet, when only part of the data is ready.
     public static func resolve(
         unsupported: UnsupportedContent? = nil,

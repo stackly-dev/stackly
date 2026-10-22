@@ -1295,6 +1295,525 @@ public struct CountedProgress: Codable, Sendable, Equatable {
 	}
 }
 
+/// The transport of an endpoint. Open.
+public enum EndpointTransport: String, Codable, Sendable, Equatable {
+	/// TCP.
+	case tcp
+	/// UDP.
+	case udp
+	/// A Unix domain socket.
+	case unix
+	/// A transport this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What an endpoint of the package is for. Open. The form lists endpoints
+/// by purpose: `client`, `admin`, `monitoring`, then by name.
+public enum EndpointPurpose: String, Codable, Sendable, Equatable {
+	/// Where applications connect.
+	case client
+	/// Where an administrator connects.
+	case admin
+	/// Where metrics and health are read.
+	case monitoring
+	/// A purpose this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One endpoint of the package, as the form shows it.
+public struct CreateEndpoint: Codable, Sendable, Equatable {
+	/// The endpoint name from the manifest.
+	public let name: String
+	/// `tcp`, `udp`, or `unix`.
+	public let transport: EndpointTransport
+	/// What it is for.
+	public let purpose: EndpointPurpose
+	/// The loopback host, for `tcp` and `udp`.
+	public let host: String?
+	/// The port the form starts with, for `tcp` and `udp`.
+	public let defaultPort: UInt16?
+	/// The `socketName` template as the manifest writes it, for `unix`.
+	public let socketName: String?
+
+	public init(name: String, transport: EndpointTransport, purpose: EndpointPurpose, host: String?, defaultPort: UInt16?, socketName: String?) {
+		self.name = name
+		self.transport = transport
+		self.purpose = purpose
+		self.host = host
+		self.defaultPort = defaultPort
+		self.socketName = socketName
+	}
+}
+
+/// The category of a provider. Open.
+public enum ProviderCategory: String, Codable, Sendable, Equatable {
+	/// A database server.
+	case database
+	/// A message broker.
+	case messaging
+	/// An analytics store.
+	case analytics
+	/// A cache.
+	case cache
+	/// A proxy.
+	case proxy
+	/// A test provider.
+	case testing
+	/// A category this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Where the package of a form comes from. Open.
+public enum CreateProviderSource: String, Codable, Sendable, Equatable {
+	/// The catalog that ships with Stackly.
+	case bundledCatalog = "bundled_catalog"
+	/// A development catalog.
+	case developmentCatalog = "development_catalog"
+	/// A package already pinned in the data folder.
+	case pinned
+	/// A source this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The provider a form was built from.
+public struct CreateProvider: Codable, Sendable, Equatable {
+	/// The provider ID, such as `official/nats`.
+	public let name: String
+	/// The revision of the loaded catalog entry.
+	public let revision: String
+	/// SHA-256 of the package, in lowercase hex.
+	public let manifestSha256: String
+	/// The name to show.
+	public let displayName: String
+	/// The category.
+	public let category: ProviderCategory
+	/// Where the package comes from.
+	public let source: CreateProviderSource
+
+	public init(name: String, revision: String, manifestSha256: String, displayName: String, category: ProviderCategory, source: CreateProviderSource) {
+		self.name = name
+		self.revision = revision
+		self.manifestSha256 = manifestSha256
+		self.displayName = displayName
+		self.category = category
+		self.source = source
+	}
+}
+
+/// How a runtime was installed. Open.
+public enum InstallModeKind: String, Codable, Sendable, Equatable {
+	/// Stackly downloaded and installed it.
+	case managed
+	/// Found on the system and registered.
+	case external
+	/// A mode this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The state of a runtime. Open.
+public enum RuntimeState: String, Codable, Sendable, Equatable {
+	/// Removed.
+	case absent
+	/// The selector resolved to an exact identity.
+	case resolving
+	/// The artifact is downloading.
+	case downloading
+	/// The artifact is being verified.
+	case verifying
+	/// The files are being installed.
+	case installing
+	/// Ready to use.
+	case installed
+	/// A step before `installed` failed.
+	case failed
+	/// The installed files are gone.
+	case missing
+	/// The installed files changed.
+	case drifted
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// An instance that uses a runtime.
+public struct RuntimeUser: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+	/// True for a removed instance whose data is kept.
+	public let retained: Bool
+
+	public init(instanceId: UUID, name: String, retained: Bool) {
+		self.instanceId = instanceId
+		self.name = name
+		self.retained = retained
+	}
+}
+
+/// One runtime as a list row or a card shows it.
+public struct RuntimeSummary: Codable, Sendable, Equatable {
+	/// The runtime.
+	public let id: UUID
+	/// Its revision, raised by every change.
+	public let revision: UInt64
+	/// The software, such as `postgresql`.
+	public let software: String
+	/// The catalog's display name for the software; the software name when
+	/// the catalog has none.
+	public let displayName: String
+	/// The exact version.
+	public let version: String
+	/// The line.
+	public let line: String
+	/// The OS and architecture.
+	public let target: HostTarget
+	/// How it was installed.
+	public let installMode: InstallModeKind
+	/// Its state.
+	public let state: RuntimeState
+	/// The SHA-256 of the artifact it came from; null for an external
+	/// runtime.
+	public let artifactSha256: String?
+	/// When it was installed.
+	public let installedAt: Date?
+	/// When it was last verified.
+	public let lastVerifiedAt: Date?
+	/// How supported it is on this Mac.
+	public let support: SupportStatus
+	/// Why.
+	public let supportReason: SupportReason
+	/// The instances that use it, retained ones included.
+	public let usedBy: [RuntimeUser]?
+	/// The runtimes that depend on it.
+	public let dependentRuntimes: [UUID]?
+
+	public init(id: UUID, revision: UInt64, software: String, displayName: String, version: String, line: String, target: HostTarget, installMode: InstallModeKind, state: RuntimeState, artifactSha256: String?, installedAt: Date?, lastVerifiedAt: Date?, support: SupportStatus, supportReason: SupportReason, usedBy: [RuntimeUser]?, dependentRuntimes: [UUID]?) {
+		self.id = id
+		self.revision = revision
+		self.software = software
+		self.displayName = displayName
+		self.version = version
+		self.line = line
+		self.target = target
+		self.installMode = installMode
+		self.state = state
+		self.artifactSha256 = artifactSha256
+		self.installedAt = installedAt
+		self.lastVerifiedAt = lastVerifiedAt
+		self.support = support
+		self.supportReason = supportReason
+		self.usedBy = usedBy
+		self.dependentRuntimes = dependentRuntimes
+	}
+}
+
+/// The kind of control a settings field gets. Open.
+public enum FieldKind: String, Codable, Sendable, Equatable {
+	/// Text.
+	case text
+	/// A whole number.
+	case integer
+	/// True or false.
+	case boolean
+	/// One of a fixed set of texts.
+	case choice
+	/// A list of items, each with scalar entries.
+	case list
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Whether a settings field is shown at first or under Advanced. Open.
+public enum FieldVisibility: String, Codable, Sendable, Equatable {
+	/// Shown with the other fields.
+	case basic
+	/// Hidden in a closed group unless it has an error.
+	case advanced
+	/// A visibility this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// How a change to a settings field takes effect. Open.
+public enum FieldApply: String, Codable, Sendable, Equatable {
+	/// A running instance reloads it.
+	case reload
+	/// A running instance restarts to apply it.
+	case restart
+	/// Only the first initialization reads it; the form marks it "Set once".
+	case immutableAfterInit = "immutable_after_init"
+	/// A way this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// A settings value, tagged `type` and `content`.
+public enum SettingValue: Codable, Sendable, Equatable {
+	/// Text.
+	case text(String)
+	/// A whole number.
+	case integer(Int64)
+	/// True or false.
+	case boolean(Bool)
+	/// A list of items.
+	case list([SettingItem])
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case text,
+			integer,
+			boolean,
+			list
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .text:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .text(content)
+					return
+				}
+			case .integer:
+				if let content = try? container.decode(Int64.self, forKey: .content) {
+					self = .integer(content)
+					return
+				}
+			case .boolean:
+				if let content = try? container.decode(Bool.self, forKey: .content) {
+					self = .boolean(content)
+					return
+				}
+			case .list:
+				if let content = try? container.decode([SettingItem].self, forKey: .content) {
+					self = .list(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(SettingValue.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SettingValue"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .text(let content):
+			try container.encode(CodingKeys.text, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .integer(let content):
+			try container.encode(CodingKeys.integer, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .boolean(let content):
+			try container.encode(CodingKeys.boolean, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .list(let content):
+			try container.encode(CodingKeys.list, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// A scalar settings value, tagged `type` and `content`:
+/// `{ "type": "integer", "content": 5 }`.
+public enum ScalarSetting: Codable, Sendable, Equatable {
+	/// Text.
+	case text(String)
+	/// A whole number.
+	case integer(Int64)
+	/// True or false.
+	case boolean(Bool)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case text,
+			integer,
+			boolean
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .text:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .text(content)
+					return
+				}
+			case .integer:
+				if let content = try? container.decode(Int64.self, forKey: .content) {
+					self = .integer(content)
+					return
+				}
+			case .boolean:
+				if let content = try? container.decode(Bool.self, forKey: .content) {
+					self = .boolean(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(ScalarSetting.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for ScalarSetting"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .text(let content):
+			try container.encode(CodingKeys.text, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .integer(let content):
+			try container.encode(CodingKeys.integer, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .boolean(let content):
+			try container.encode(CodingKeys.boolean, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// One scalar field of a list item.
+public struct FormItemField: Codable, Sendable, Equatable {
+	/// The key inside the item.
+	public let key: String
+	/// The title to show.
+	public let title: String
+	/// A sentence under the control.
+	public let description: String?
+	/// The kind of control: `text`, `integer`, `boolean`, or `choice`.
+	public let kind: FieldKind
+	/// Whether every item must set it.
+	public let required: Bool
+	/// The value a new item starts with.
+	public let `default`: ScalarSetting?
+	/// The fewest characters of a text.
+	public let minLength: UInt64?
+	/// The most characters of a text.
+	public let maxLength: UInt64?
+	/// The smallest integer.
+	public let minimum: Int64?
+	/// The largest integer.
+	public let maximum: Int64?
+	/// The values of a `choice`; empty otherwise.
+	public let choices: [String]
+
+	public init(key: String, title: String, description: String?, kind: FieldKind, required: Bool, default: ScalarSetting?, minLength: UInt64?, maxLength: UInt64?, minimum: Int64?, maximum: Int64?, choices: [String]) {
+		self.key = key
+		self.title = title
+		self.description = description
+		self.kind = kind
+		self.required = required
+		self.default = `default`
+		self.minLength = minLength
+		self.maxLength = maxLength
+		self.minimum = minimum
+		self.maximum = maximum
+		self.choices = choices
+	}
+}
+
+/// One settings field, typed from the settings schema in the order the
+/// schema declares it (VAL-012).
+public struct FormField: Codable, Sendable, Equatable {
+	/// The key in the settings document.
+	public let key: String
+	/// The title to show.
+	public let title: String
+	/// A sentence under the control.
+	public let description: String?
+	/// The kind of control.
+	public let kind: FieldKind
+	/// Whether the settings must set it.
+	public let required: Bool
+	/// Whether the value is a secret, sent in `secrets` and never in
+	/// `settings`.
+	public let secret: Bool
+	/// Whether a secret refuses control characters.
+	public let printableOnly: Bool
+	/// Whether Stackly sets it; the form locks the control.
+	public let managed: Bool
+	/// Whether the field is shown at first.
+	public let visibility: FieldVisibility
+	/// How a later change takes effect.
+	public let apply: FieldApply?
+	/// The value the form starts with.
+	public let `default`: SettingValue?
+	/// The fewest characters of a text, or of a secret.
+	public let minLength: UInt64?
+	/// The most characters of a text, or of a secret.
+	public let maxLength: UInt64?
+	/// The smallest integer.
+	public let minimum: Int64?
+	/// The largest integer.
+	public let maximum: Int64?
+	/// The values of a `choice`; empty otherwise.
+	public let choices: [String]
+	/// The fewest items of a `list`.
+	public let minItems: UInt64?
+	/// The most items of a `list`.
+	public let maxItems: UInt64?
+	/// The item field whose value must be unique across the items.
+	public let itemKey: String?
+	/// The fields of one item of a `list`; empty otherwise.
+	public let items: [FormItemField]
+
+	public init(key: String, title: String, description: String?, kind: FieldKind, required: Bool, secret: Bool, printableOnly: Bool, managed: Bool, visibility: FieldVisibility, apply: FieldApply?, default: SettingValue?, minLength: UInt64?, maxLength: UInt64?, minimum: Int64?, maximum: Int64?, choices: [String], minItems: UInt64?, maxItems: UInt64?, itemKey: String?, items: [FormItemField]) {
+		self.key = key
+		self.title = title
+		self.description = description
+		self.kind = kind
+		self.required = required
+		self.secret = secret
+		self.printableOnly = printableOnly
+		self.managed = managed
+		self.visibility = visibility
+		self.apply = apply
+		self.default = `default`
+		self.minLength = minLength
+		self.maxLength = maxLength
+		self.minimum = minimum
+		self.maximum = maximum
+		self.choices = choices
+		self.minItems = minItems
+		self.maxItems = maxItems
+		self.itemKey = itemKey
+		self.items = items
+	}
+}
+
+/// Reply of `instance.get_create_form`.
+public struct CreateForm: Codable, Sendable, Equatable {
+	/// The provider the form was built from.
+	public let provider: CreateProvider
+	/// The runtime the instance will run on.
+	public let runtime: RuntimeSummary
+	/// The name the form starts with; absent when every candidate is taken.
+	public let suggestedName: String?
+	/// Where the data lives, relative to the data root:
+	/// `instances/<new instance id>/data`.
+	public let dataPath: String
+	/// The endpoints of the package: purpose `client`, `admin`,
+	/// `monitoring`, then name.
+	public let endpoints: [CreateEndpoint]
+	/// The settings fields, in the order the schema declares them.
+	public let fields: [FormField]
+	/// The capabilities of the package, in the order of spec 0017.
+	public let capabilities: [CapabilityStatus]
+
+	public init(provider: CreateProvider, runtime: RuntimeSummary, suggestedName: String?, dataPath: String, endpoints: [CreateEndpoint], fields: [FormField], capabilities: [CapabilityStatus]) {
+		self.provider = provider
+		self.runtime = runtime
+		self.suggestedName = suggestedName
+		self.dataPath = dataPath
+		self.endpoints = endpoints
+		self.fields = fields
+		self.capabilities = capabilities
+	}
+}
+
 /// The provider an instance is created from.
 public struct ProviderSelector: Codable, Sendable, Equatable {
 	/// The provider ID, such as `official/nats`.
@@ -1480,6 +1999,114 @@ public struct CreateInstanceParams: Codable, Sendable, Equatable {
 		self.endpoints = endpoints
 		self.settings = settings
 		self.secrets = secrets
+	}
+}
+
+/// The package a preflight resolved.
+public struct ResolvedProvider: Codable, Sendable, Equatable {
+	/// The provider ID.
+	public let name: String
+	/// The revision.
+	public let revision: String
+	/// SHA-256 of the package, in lowercase hex.
+	public let manifestSha256: String
+
+	public init(name: String, revision: String, manifestSha256: String) {
+		self.name = name
+		self.revision = revision
+		self.manifestSha256 = manifestSha256
+	}
+}
+
+/// What kind of row a preflight check is. Open.
+public enum PreflightCheckKind: String, Codable, Sendable, Equatable {
+	/// The provider package.
+	case provider
+	/// The runtime.
+	case runtime
+	/// The instance name.
+	case name
+	/// One endpoint.
+	case endpoint
+	/// The settings.
+	case settings
+	/// The data folder.
+	case data
+	/// The free disk space.
+	case disk
+	/// One secret field.
+	case secret
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// How a preflight row went. Open.
+public enum PreflightStatus: String, Codable, Sendable, Equatable {
+	/// Fine.
+	case ok
+	/// Fine as far as Stackly can tell, with a note.
+	case caution
+	/// Create would be refused.
+	case error
+	/// A status this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One row of a preflight. The English `title` and `detail` are the daemon's
+/// text, the same in the sheet and on the command line.
+public struct PreflightCheck: Codable, Sendable, Equatable {
+	/// `provider`, `runtime`, `name`, `endpoint.<name>`,
+	/// `endpoint.request.<i>`, `settings`, `data`, `disk`, or
+	/// `secret.<field>`.
+	public let id: String
+	/// What the row is about.
+	public let kind: PreflightCheckKind
+	/// How it went.
+	public let status: PreflightStatus
+	/// The short title, at most 200 characters.
+	public let title: String
+	/// The sentence under the title, at most 200 characters.
+	public let detail: String
+	/// The endpoint name or the field key the row is about.
+	public let subject: String?
+	/// A free port offered for a fixed port that is taken. The form uses it
+	/// only when the person asks.
+	public let suggestedPort: UInt16?
+	/// The error `instance.create` answers with for this row; only for the
+	/// status `error`.
+	public let error: ErrorBody?
+
+	public init(id: String, kind: PreflightCheckKind, status: PreflightStatus, title: String, detail: String, subject: String?, suggestedPort: UInt16?, error: ErrorBody?) {
+		self.id = id
+		self.kind = kind
+		self.status = status
+		self.title = title
+		self.detail = detail
+		self.subject = subject
+		self.suggestedPort = suggestedPort
+		self.error = error
+	}
+}
+
+/// Reply of `instance.preflight`.
+public struct CreatePreflight: Codable, Sendable, Equatable {
+	/// True exactly when no row is an error.
+	public let ready: Bool
+	/// The package the draft resolved to, when one could be determined.
+	public let provider: ResolvedProvider?
+	/// The rows, in the order of spec 0020.
+	public let checks: [PreflightCheck]
+	/// Every field issue of the draft, sorted by path.
+	public let fields: [FieldError]
+	/// The `stackly instance create` command that does the same.
+	public let command: String
+
+	public init(ready: Bool, provider: ResolvedProvider?, checks: [PreflightCheck], fields: [FieldError], command: String) {
+		self.ready = ready
+		self.provider = provider
+		self.checks = checks
+		self.fields = fields
+		self.command = command
 	}
 }
 
@@ -1839,18 +2466,6 @@ public struct DeleteSecretReply: Codable, Sendable, Equatable {
 	}
 }
 
-/// The transport of an endpoint. Open.
-public enum EndpointTransport: String, Codable, Sendable, Equatable {
-	/// TCP.
-	case tcp
-	/// UDP.
-	case udp
-	/// A Unix domain socket.
-	case unix
-	/// A transport this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
 /// How an IP endpoint asked for its port. Open.
 public enum EndpointPortMode: String, Codable, Sendable, Equatable {
 	/// Exactly the requested port.
@@ -2142,6 +2757,20 @@ public struct Gap: Codable, Sendable, Equatable {
 
 	public init(reason: GapReason) {
 		self.reason = reason
+	}
+}
+
+/// Params of `instance.get_create_form`.
+public struct GetCreateFormParams: Codable, Sendable, Equatable {
+	/// The installed runtime the instance will run on.
+	public let runtimeId: UUID
+	/// The provider to use, such as `official/nats`. Absent means the
+	/// catalog entry whose software is the software of the runtime.
+	public let provider: String?
+
+	public init(runtimeId: UUID, provider: String?) {
+		self.runtimeId = runtimeId
+		self.provider = provider
 	}
 }
 
@@ -3001,24 +3630,6 @@ public struct ListOperationsParams: Codable, Sendable, Equatable {
 	}
 }
 
-/// The category of a provider. Open.
-public enum ProviderCategory: String, Codable, Sendable, Equatable {
-	/// A database server.
-	case database
-	/// A message broker.
-	case messaging
-	/// An analytics store.
-	case analytics
-	/// A cache.
-	case cache
-	/// A proxy.
-	case proxy
-	/// A test provider.
-	case testing
-	/// A category this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
 /// What this Mac can do with a catalog entry. Open.
 public enum CatalogEntryState: String, Codable, Sendable, Equatable {
 	/// At least one version installs on this Mac.
@@ -3445,6 +4056,116 @@ public struct PlatformNoteDto: Codable, Sendable, Equatable {
 	}
 }
 
+/// Where a secret field gets its value, without the value. Tagged `type`
+/// and `content`.
+public enum SecretSource: Codable, Sendable, Equatable {
+	/// The daemon generates a value.
+	case generate
+	/// The client sends a value with `instance.create`.
+	case value
+	/// A copy of the value stored under this reference.
+	case copyFrom(String)
+	/// The instance uses this reference.
+	case bind(String)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case generate,
+			value,
+			copyFrom,
+			bind
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .generate:
+				self = .generate
+				return
+			case .value:
+				self = .value
+				return
+			case .copyFrom:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .copyFrom(content)
+					return
+				}
+			case .bind:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .bind(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(SecretSource.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SecretSource"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .generate:
+			try container.encode(CodingKeys.generate, forKey: .type)
+		case .value:
+			try container.encode(CodingKeys.value, forKey: .type)
+		case .copyFrom(let content):
+			try container.encode(CodingKeys.copyFrom, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .bind(let content):
+			try container.encode(CodingKeys.bind, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// The source of one secret field in a preflight.
+public struct SecretPlan: Codable, Sendable, Equatable {
+	/// The settings field the secret fills.
+	public let field: String
+	/// Where its value comes from.
+	public let source: SecretSource
+
+	public init(field: String, source: SecretSource) {
+		self.field = field
+		self.source = source
+	}
+}
+
+/// Params of `instance.preflight`: the draft of `instance.create` without
+/// any secret value.
+public struct PreflightCreateParams: Codable, Sendable, Equatable {
+	/// The unique instance name.
+	public let name: String
+	/// The name to show.
+	public let displayName: String?
+	/// The provider to create it from.
+	public let provider: ProviderSelector
+	/// The installed runtime to run it on.
+	public let runtimeId: UUID
+	/// One request per manifest endpoint that asks for a port.
+	public let endpoints: [EndpointRequest]?
+	/// The settings, without secret values.
+	public let settings: JSONObject
+	/// The source of each secret field.
+	public let secrets: [SecretPlan]?
+	/// Whether the equivalent command ends with `--start`.
+	public let start: Bool?
+
+	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretPlan]?, start: Bool?) {
+		self.name = name
+		self.displayName = displayName
+		self.provider = provider
+		self.runtimeId = runtimeId
+		self.endpoints = endpoints
+		self.settings = settings
+		self.secrets = secrets
+		self.start = start
+	}
+}
+
 /// Reply of `catalog.get_provider`: one entry with its versions, its
 /// artifacts, and what is wrong with it.
 public struct ProviderDetail: Codable, Sendable, Equatable {
@@ -3545,6 +4266,11 @@ public enum Call: Codable, Sendable, Equatable {
 	case runtimeList(ListRuntimesParams)
 	/// One runtime in detail.
 	case runtimeGet(GetRuntimeParams)
+	/// The create form of an installed runtime: the provider, its
+	/// endpoints, and its settings fields, typed from the package.
+	case instanceGetCreateForm(GetCreateFormParams)
+	/// Judges a create draft without any secret value and changes nothing.
+	case instancePreflight(PreflightCreateParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -3576,7 +4302,9 @@ public enum Call: Codable, Sendable, Equatable {
 			runtimeInstall = "runtime.install",
 			runtimeResolve = "runtime.resolve",
 			runtimeList = "runtime.list",
-			runtimeGet = "runtime.get"
+			runtimeGet = "runtime.get",
+			instanceGetCreateForm = "instance.get_create_form",
+			instancePreflight = "instance.preflight"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -3725,6 +4453,16 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .runtimeGet(content)
 					return
 				}
+			case .instanceGetCreateForm:
+				if let content = try? container.decode(GetCreateFormParams.self, forKey: .content) {
+					self = .instanceGetCreateForm(content)
+					return
+				}
+			case .instancePreflight:
+				if let content = try? container.decode(PreflightCreateParams.self, forKey: .content) {
+					self = .instancePreflight(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -3817,6 +4555,12 @@ public enum Call: Codable, Sendable, Equatable {
 		case .runtimeGet(let content):
 			try container.encode(CodingKeys.runtimeGet, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceGetCreateForm(let content):
+			try container.encode(CodingKeys.instanceGetCreateForm, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instancePreflight(let content):
+			try container.encode(CodingKeys.instancePreflight, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -3902,6 +4646,10 @@ public enum Reply: Codable, Sendable, Equatable {
 	case runtimeList(RuntimeListPage)
 	/// The runtime.
 	case runtimeGet(RuntimeDetail)
+	/// The form for a new instance.
+	case instanceGetCreateForm(CreateForm)
+	/// The preflight rows, the field issues, and the equivalent command.
+	case instancePreflight(CreatePreflight)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -3933,7 +4681,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			runtimeInstall = "runtime.install",
 			runtimeResolve = "runtime.resolve",
 			runtimeList = "runtime.list",
-			runtimeGet = "runtime.get"
+			runtimeGet = "runtime.get",
+			instanceGetCreateForm = "instance.get_create_form",
+			instancePreflight = "instance.preflight"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -4092,6 +4842,16 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .runtimeGet(content)
 					return
 				}
+			case .instanceGetCreateForm:
+				if let content = try? container.decode(CreateForm.self, forKey: .content) {
+					self = .instanceGetCreateForm(content)
+					return
+				}
+			case .instancePreflight:
+				if let content = try? container.decode(CreatePreflight.self, forKey: .content) {
+					self = .instancePreflight(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -4189,6 +4949,12 @@ public enum Reply: Codable, Sendable, Equatable {
 		case .runtimeGet(let content):
 			try container.encode(CodingKeys.runtimeGet, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceGetCreateForm(let content):
+			try container.encode(CodingKeys.instanceGetCreateForm, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instancePreflight(let content):
+			try container.encode(CodingKeys.instancePreflight, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -4254,113 +5020,6 @@ public struct RevealSecretReply: Codable, Sendable, Equatable {
 	public init(reference: String, value: SecretText) {
 		self.reference = reference
 		self.value = value
-	}
-}
-
-/// How a runtime was installed. Open.
-public enum InstallModeKind: String, Codable, Sendable, Equatable {
-	/// Stackly downloaded and installed it.
-	case managed
-	/// Found on the system and registered.
-	case external
-	/// A mode this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// The state of a runtime. Open.
-public enum RuntimeState: String, Codable, Sendable, Equatable {
-	/// Removed.
-	case absent
-	/// The selector resolved to an exact identity.
-	case resolving
-	/// The artifact is downloading.
-	case downloading
-	/// The artifact is being verified.
-	case verifying
-	/// The files are being installed.
-	case installing
-	/// Ready to use.
-	case installed
-	/// A step before `installed` failed.
-	case failed
-	/// The installed files are gone.
-	case missing
-	/// The installed files changed.
-	case drifted
-	/// A state this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// An instance that uses a runtime.
-public struct RuntimeUser: Codable, Sendable, Equatable {
-	/// The instance.
-	public let instanceId: UUID
-	/// Its name.
-	public let name: String
-	/// True for a removed instance whose data is kept.
-	public let retained: Bool
-
-	public init(instanceId: UUID, name: String, retained: Bool) {
-		self.instanceId = instanceId
-		self.name = name
-		self.retained = retained
-	}
-}
-
-/// One runtime as a list row or a card shows it.
-public struct RuntimeSummary: Codable, Sendable, Equatable {
-	/// The runtime.
-	public let id: UUID
-	/// Its revision, raised by every change.
-	public let revision: UInt64
-	/// The software, such as `postgresql`.
-	public let software: String
-	/// The catalog's display name for the software; the software name when
-	/// the catalog has none.
-	public let displayName: String
-	/// The exact version.
-	public let version: String
-	/// The line.
-	public let line: String
-	/// The OS and architecture.
-	public let target: HostTarget
-	/// How it was installed.
-	public let installMode: InstallModeKind
-	/// Its state.
-	public let state: RuntimeState
-	/// The SHA-256 of the artifact it came from; null for an external
-	/// runtime.
-	public let artifactSha256: String?
-	/// When it was installed.
-	public let installedAt: Date?
-	/// When it was last verified.
-	public let lastVerifiedAt: Date?
-	/// How supported it is on this Mac.
-	public let support: SupportStatus
-	/// Why.
-	public let supportReason: SupportReason
-	/// The instances that use it, retained ones included.
-	public let usedBy: [RuntimeUser]?
-	/// The runtimes that depend on it.
-	public let dependentRuntimes: [UUID]?
-
-	public init(id: UUID, revision: UInt64, software: String, displayName: String, version: String, line: String, target: HostTarget, installMode: InstallModeKind, state: RuntimeState, artifactSha256: String?, installedAt: Date?, lastVerifiedAt: Date?, support: SupportStatus, supportReason: SupportReason, usedBy: [RuntimeUser]?, dependentRuntimes: [UUID]?) {
-		self.id = id
-		self.revision = revision
-		self.software = software
-		self.displayName = displayName
-		self.version = version
-		self.line = line
-		self.target = target
-		self.installMode = installMode
-		self.state = state
-		self.artifactSha256 = artifactSha256
-		self.installedAt = installedAt
-		self.lastVerifiedAt = lastVerifiedAt
-		self.support = support
-		self.supportReason = supportReason
-		self.usedBy = usedBy
-		self.dependentRuntimes = dependentRuntimes
 	}
 }
 
@@ -4546,6 +5205,29 @@ public struct SetSecretReply: Codable, Sendable, Equatable {
 		self.summary = summary
 		self.warnings = warnings
 		self.effects = effects
+	}
+}
+
+/// One entry of a list item: a key and its scalar value.
+public struct SettingEntry: Codable, Sendable, Equatable {
+	/// The key of the entry, one of the item fields of the schema.
+	public let key: String
+	/// Its value.
+	public let value: ScalarSetting
+
+	public init(key: String, value: ScalarSetting) {
+		self.key = key
+		self.value = value
+	}
+}
+
+/// One item of a list setting, as ordered entries.
+public struct SettingItem: Codable, Sendable, Equatable {
+	/// The entries, in the order the schema declares its item fields.
+	public let entries: [SettingEntry]
+
+	public init(entries: [SettingEntry]) {
+		self.entries = entries
 	}
 }
 

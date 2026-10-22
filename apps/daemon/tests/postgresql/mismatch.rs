@@ -3,7 +3,7 @@
 //! in both directions, and a missing or changed `PG_VERSION` is refused too.
 
 use stackly_protocol::operation::OperationState;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, create_instance, output_of, stop_and_shutdown};
 use crate::support::Api;
@@ -41,15 +41,11 @@ fn nothing_was_spawned(data: &std::path::Path) {
 
 /// Data initialized by `pg` is refused by a runtime of `other`, and
 /// `PG_VERSION` is checked on its own runtime.
-async fn refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(pg: Pg, other: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035", "BR-009"],
-        kind = Kind::Native,
-        expected = &format!(
-            "data initialized by PostgreSQL {} is refused by a runtime of {} with supervisor.data_incompatible before any process is spawned, a missing PG_VERSION is marker_missing, PG_VERSION 16 is marker_mismatch, and the instance starts again once the marker is back",
-            pg.major, other.major
-        ),
-    );
+async fn refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(
+    pg: Pg,
+    other: Pg,
+    ev: Evidence,
+) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -121,12 +117,32 @@ async fn refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(p
 #[ignore = "native: needs both managed PostgreSQL artifacts in the runtime cache"]
 async fn postgresql_17_data_is_refused_by_a_runtime_18_and_a_missing_or_changed_marker_is_refused()
 {
-    refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(PG17, PG18).await;
+    let pg = PG17;
+    let other = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035", "BR-009"],
+        kind = Kind::Native,
+        expected = &format!(
+            "data initialized by PostgreSQL {} is refused by a runtime of {} with supervisor.data_incompatible before any process is spawned, a missing PG_VERSION is marker_missing, PG_VERSION 16 is marker_mismatch, and the instance starts again once the marker is back",
+            pg.major, other.major
+        ),
+    );
+    refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(pg, other, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs both managed PostgreSQL artifacts in the runtime cache"]
 async fn postgresql_18_data_is_refused_by_a_runtime_17_and_a_missing_or_changed_marker_is_refused()
 {
-    refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(PG18, PG17).await;
+    let pg = PG18;
+    let other = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035", "BR-009"],
+        kind = Kind::Native,
+        expected = &format!(
+            "data initialized by PostgreSQL {} is refused by a runtime of {} with supervisor.data_incompatible before any process is spawned, a missing PG_VERSION is marker_missing, PG_VERSION 16 is marker_mismatch, and the instance starts again once the marker is back",
+            pg.major, other.major
+        ),
+    );
+    refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(pg, other, ev).await;
 }

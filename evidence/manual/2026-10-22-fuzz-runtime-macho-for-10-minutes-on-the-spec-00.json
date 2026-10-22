@@ -1,0 +1,64 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a16199-dd51-76ec-aad3-88f2088a77b0",
+  "covers": [
+    "NFR-009",
+    "VAL-011",
+    "AC-019"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Fuzz runtime_macho for 10 minutes on the spec 0018 load command parser",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "cargo xtask fuzz run runtime_macho --time 600 runs for 600 seconds from the committed seeds and finds no crash, hang, or out of memory.",
+  "actual": "no crash, hang, or out of memory and fuzz/artifacts/runtime_macho is empty; 1867869 runs in 601 s (3107 exec/s), cov 559, ft 1166, corpus 242 inputs (109 Kb), peak RSS 527 MB; 390 new units added",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "use the pinned fuzz toolchain nightly-2026-10-17 and cargo-fuzz 0.13.2 on commit 27e4135 (spec 0018 step 16 landed, fuzz code unchanged since milestone 1)",
+    "`cargo xtask fuzz seed` first: no seed file changed (54 runtime_archive seeds, 9 runtime_macho seeds)",
+    "run the two targets one after the other, `cargo xtask fuzz run <target> --time 600`, starting from the committed seeds and an empty fuzz/corpus, with -max_len 1048576 as xtask sets it",
+    "check that each command exits 0 with `ran for 600 s without a crash`, that fuzz/artifacts/<target>/ is empty, and read the libFuzzer final stats",
+    "both runs shared the Mac with other sessions building and testing, so exec/s is a floor; the logs live in the session scratchpad and are not kept here; fuzz/target was deleted afterwards"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5)",
+  "startedAt": "2026-10-22T03:02:12.000000Z",
+  "finishedAt": "2026-10-22T03:13:06.000000Z",
+  "evidencePath": "evidence/manual/2026-10-22-fuzz-runtime-macho-for-10-minutes-on-the-spec-00.json",
+  "context": {
+    "sourceCommit": "27e41351b3ba2a683d708ab0dda3e3176717eec8",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

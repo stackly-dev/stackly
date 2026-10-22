@@ -51,8 +51,72 @@ impl CreateError {
 }
 
 impl std::fmt::Display for CreateError {
+    /// The message of the error: fixed English text that names neither a
+    /// value of the settings nor a secret (spec 0020, *Kode error*).
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "create refused: {}", self.code())
+        match self {
+            Self::CatalogUnavailable { .. } => f.write_str("the provider catalog is not available"),
+            Self::ProviderNotFound { .. } => {
+                f.write_str("no pinned package or provider revision with that name")
+            }
+            Self::ProviderAmbiguous { .. } => {
+                f.write_str("more than one package digest matches the provider and revision")
+            }
+            Self::ProviderUnavailable { provider, .. } => {
+                write!(f, "{provider} can't be used to create instances")
+            }
+            Self::CapabilityUnsupported { provider, .. } => {
+                write!(f, "{provider} runs one instance at a time")
+            }
+            Self::RuntimeNotFound { .. } => f.write_str("no runtime has that id"),
+            Self::RuntimeMismatch { .. } => {
+                f.write_str("the runtime runs other software than the provider")
+            }
+            Self::RuntimeUnavailable { .. } => f.write_str("the runtime is not installed"),
+            Self::RuntimeIncompatible { .. } => {
+                f.write_str("the runtime lacks a program the provider needs")
+            }
+            Self::NameInvalid => f.write_str("the instance name is not valid"),
+            Self::NameTaken { .. } => f.write_str("another instance has the name"),
+            Self::EndpointInvalid { endpoint } => {
+                write!(f, "the port request for endpoint {endpoint} is not valid")
+            }
+            Self::EndpointConflict { endpoint, port, .. } => write!(
+                f,
+                "port {port} of endpoint {endpoint} is used by another instance"
+            ),
+            Self::EndpointInUse {
+                endpoint,
+                address,
+                port,
+            } => write!(
+                f,
+                "port {port} of endpoint {endpoint} is in use at {address}"
+            ),
+            Self::EndpointUnavailable { endpoint, port, .. } => write!(
+                f,
+                "the operating system refused port {port} for endpoint {endpoint}"
+            ),
+            Self::SettingsInvalid => f.write_str("the settings break the schema of the package"),
+            Self::DataUnavailable { .. } => {
+                f.write_str("the instance folder is missing, not the user's, or not private")
+            }
+            Self::StorageUnsupported { .. } => {
+                f.write_str("the data folder is on an unsupported file system")
+            }
+            Self::InsufficientSpace { .. } => {
+                f.write_str("not enough free disk space to create an instance")
+            }
+            Self::SecretStoreUnsupported => f.write_str("this Mac has no supported secret store"),
+            Self::SecretInvalidReference { .. } => f.write_str("the secret reference is not valid"),
+            Self::SecretNotFound { .. } => f.write_str("no secret has that reference"),
+            Self::SecretNeedsSecret { .. } => {
+                f.write_str("a secret the instance needs has no value")
+            }
+            Self::SecretInvalidValue { .. } => {
+                f.write_str("a secret value breaks the rules of its field")
+            }
+        }
     }
 }
 

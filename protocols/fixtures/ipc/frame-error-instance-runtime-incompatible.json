@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000923",
+    "error": {
+      "code": "instance.runtime_incompatible",
+      "category": "conflict",
+      "message": "the runtime lacks a program the provider needs",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "reinstall the runtime with stackly runtime install",
+      "details": [
+        {
+          "key": "runtimeId",
+          "value": "0192f3a6-0000-7000-8000-0000000000a1"
+        },
+        {
+          "key": "executable",
+          "value": "bin/initdb"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

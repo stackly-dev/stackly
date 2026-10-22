@@ -930,6 +930,220 @@
         "total"
       ]
     },
+    "CreateEndpoint": {
+      "description": "One endpoint of the package, as the form shows it.",
+      "type": "object",
+      "properties": {
+        "defaultPort": {
+          "description": "The port the form starts with, for `tcp` and `udp`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "host": {
+          "description": "The loopback host, for `tcp` and `udp`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The endpoint name from the manifest.",
+          "type": "string"
+        },
+        "purpose": {
+          "description": "What it is for.",
+          "$ref": "#/$defs/EndpointPurpose"
+        },
+        "socketName": {
+          "description": "The `socketName` template as the manifest writes it, for `unix`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "transport": {
+          "description": "`tcp`, `udp`, or `unix`.",
+          "$ref": "#/$defs/EndpointTransport"
+        }
+      },
+      "required": [
+        "name",
+        "transport",
+        "purpose"
+      ]
+    },
+    "CreateForm": {
+      "description": "Reply of `instance.get_create_form`.",
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "description": "The capabilities of the package, in the order of spec 0017.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityStatus"
+          }
+        },
+        "dataPath": {
+          "description": "Where the data lives, relative to the data root:\n`instances/<new instance id>/data`.",
+          "type": "string"
+        },
+        "endpoints": {
+          "description": "The endpoints of the package: purpose `client`, `admin`,\n`monitoring`, then name.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CreateEndpoint"
+          }
+        },
+        "fields": {
+          "description": "The settings fields, in the order the schema declares them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FormField"
+          }
+        },
+        "provider": {
+          "description": "The provider the form was built from.",
+          "$ref": "#/$defs/CreateProvider"
+        },
+        "runtime": {
+          "description": "The runtime the instance will run on.",
+          "$ref": "#/$defs/RuntimeSummary"
+        },
+        "suggestedName": {
+          "description": "The name the form starts with; absent when every candidate is taken.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "provider",
+        "runtime",
+        "dataPath",
+        "endpoints",
+        "fields",
+        "capabilities"
+      ]
+    },
+    "CreatePreflight": {
+      "description": "Reply of `instance.preflight`.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "The rows, in the order of spec 0020.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PreflightCheck"
+          }
+        },
+        "command": {
+          "description": "The `stackly instance create` command that does the same.",
+          "type": "string"
+        },
+        "fields": {
+          "description": "Every field issue of the draft, sorted by path.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          }
+        },
+        "provider": {
+          "description": "The package the draft resolved to, when one could be determined.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolvedProvider"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ready": {
+          "description": "True exactly when no row is an error.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ready",
+        "checks",
+        "fields",
+        "command"
+      ]
+    },
+    "CreateProvider": {
+      "description": "The provider a form was built from.",
+      "type": "object",
+      "properties": {
+        "category": {
+          "description": "The category.",
+          "$ref": "#/$defs/ProviderCategory"
+        },
+        "displayName": {
+          "description": "The name to show.",
+          "type": "string"
+        },
+        "manifestSha256": {
+          "description": "SHA-256 of the package, in lowercase hex.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The provider ID, such as `official/nats`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision of the loaded catalog entry.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where the package comes from.",
+          "$ref": "#/$defs/CreateProviderSource"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "manifestSha256",
+        "displayName",
+        "category",
+        "source"
+      ]
+    },
+    "CreateProviderSource": {
+      "description": "Where the package of a form comes from. Open.",
+      "oneOf": [
+        {
+          "description": "The catalog that ships with Stackly.",
+          "type": "string",
+          "const": "bundled_catalog"
+        },
+        {
+          "description": "A development catalog.",
+          "type": "string",
+          "const": "development_catalog"
+        },
+        {
+          "description": "A package already pinned in the data folder.",
+          "type": "string",
+          "const": "pinned"
+        },
+        {
+          "description": "A source this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "CreatedItemInfo": {
       "description": "One thing an operation created or claimed, which a cancel or an abandon\nmay undo. A custom item's payload is never sent.",
       "type": "object",
@@ -1464,6 +1678,31 @@
         },
         {
           "description": "A mode this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "EndpointPurpose": {
+      "description": "What an endpoint of the package is for. Open. The form lists endpoints\nby purpose: `client`, `admin`, `monitoring`, then by name.",
+      "oneOf": [
+        {
+          "description": "Where applications connect.",
+          "type": "string",
+          "const": "client"
+        },
+        {
+          "description": "Where an administrator connects.",
+          "type": "string",
+          "const": "admin"
+        },
+        {
+          "description": "Where metrics and health are read.",
+          "type": "string",
+          "const": "monitoring"
+        },
+        {
+          "description": "A purpose this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
         }
@@ -2029,6 +2268,31 @@
         "kind"
       ]
     },
+    "FieldApply": {
+      "description": "How a change to a settings field takes effect. Open.",
+      "oneOf": [
+        {
+          "description": "A running instance reloads it.",
+          "type": "string",
+          "const": "reload"
+        },
+        {
+          "description": "A running instance restarts to apply it.",
+          "type": "string",
+          "const": "restart"
+        },
+        {
+          "description": "Only the first initialization reads it; the form marks it \"Set once\".",
+          "type": "string",
+          "const": "immutable_after_init"
+        },
+        {
+          "description": "A way this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "FieldError": {
       "description": "One params field that failed to decode or validate. An error carries at\nmost 32 of them (`FIELD_ERRORS_MAX`) and counts the rest in its\n`omitted` detail.",
       "type": "object",
@@ -2050,6 +2314,331 @@
         "path",
         "code",
         "message"
+      ]
+    },
+    "FieldKind": {
+      "description": "The kind of control a settings field gets. Open.",
+      "oneOf": [
+        {
+          "description": "Text.",
+          "type": "string",
+          "const": "text"
+        },
+        {
+          "description": "A whole number.",
+          "type": "string",
+          "const": "integer"
+        },
+        {
+          "description": "True or false.",
+          "type": "string",
+          "const": "boolean"
+        },
+        {
+          "description": "One of a fixed set of texts.",
+          "type": "string",
+          "const": "choice"
+        },
+        {
+          "description": "A list of items, each with scalar entries.",
+          "type": "string",
+          "const": "list"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "FieldVisibility": {
+      "description": "Whether a settings field is shown at first or under Advanced. Open.",
+      "oneOf": [
+        {
+          "description": "Shown with the other fields.",
+          "type": "string",
+          "const": "basic"
+        },
+        {
+          "description": "Hidden in a closed group unless it has an error.",
+          "type": "string",
+          "const": "advanced"
+        },
+        {
+          "description": "A visibility this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "FormField": {
+      "description": "One settings field, typed from the settings schema in the order the\nschema declares it (VAL-012).",
+      "type": "object",
+      "properties": {
+        "apply": {
+          "description": "How a later change takes effect.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FieldApply"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "choices": {
+          "description": "The values of a `choice`; empty otherwise.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default": {
+          "description": "The value the form starts with.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SettingValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "description": "A sentence under the control.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "itemKey": {
+          "description": "The item field whose value must be unique across the items.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "items": {
+          "description": "The fields of one item of a `list`; empty otherwise.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FormItemField"
+          }
+        },
+        "key": {
+          "description": "The key in the settings document.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "The kind of control.",
+          "$ref": "#/$defs/FieldKind"
+        },
+        "managed": {
+          "description": "Whether Stackly sets it; the form locks the control.",
+          "type": "boolean"
+        },
+        "maxItems": {
+          "description": "The most items of a `list`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "maxLength": {
+          "description": "The most characters of a text, or of a secret.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "maximum": {
+          "description": "The largest integer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991
+        },
+        "minItems": {
+          "description": "The fewest items of a `list`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "minLength": {
+          "description": "The fewest characters of a text, or of a secret.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "minimum": {
+          "description": "The smallest integer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991
+        },
+        "printableOnly": {
+          "description": "Whether a secret refuses control characters.",
+          "type": "boolean"
+        },
+        "required": {
+          "description": "Whether the settings must set it.",
+          "type": "boolean"
+        },
+        "secret": {
+          "description": "Whether the value is a secret, sent in `secrets` and never in\n`settings`.",
+          "type": "boolean"
+        },
+        "title": {
+          "description": "The title to show.",
+          "type": "string"
+        },
+        "visibility": {
+          "description": "Whether the field is shown at first.",
+          "$ref": "#/$defs/FieldVisibility"
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "kind",
+        "required",
+        "secret",
+        "printableOnly",
+        "managed",
+        "visibility",
+        "choices",
+        "items"
+      ]
+    },
+    "FormItemField": {
+      "description": "One scalar field of a list item.",
+      "type": "object",
+      "properties": {
+        "choices": {
+          "description": "The values of a `choice`; empty otherwise.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default": {
+          "description": "The value a new item starts with.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScalarSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "description": "A sentence under the control.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "key": {
+          "description": "The key inside the item.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "The kind of control: `text`, `integer`, `boolean`, or `choice`.",
+          "$ref": "#/$defs/FieldKind"
+        },
+        "maxLength": {
+          "description": "The most characters of a text.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "maximum": {
+          "description": "The largest integer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991
+        },
+        "minLength": {
+          "description": "The fewest characters of a text.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "minimum": {
+          "description": "The smallest integer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991
+        },
+        "required": {
+          "description": "Whether every item must set it.",
+          "type": "boolean"
+        },
+        "title": {
+          "description": "The title to show.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "kind",
+        "required",
+        "choices"
       ]
     },
     "Gap": {
@@ -4076,6 +4665,145 @@
         "note"
       ]
     },
+    "PreflightCheck": {
+      "description": "One row of a preflight. The English `title` and `detail` are the daemon's\ntext, the same in the sheet and on the command line.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "The sentence under the title, at most 200 characters.",
+          "type": "string"
+        },
+        "error": {
+          "description": "The error `instance.create` answers with for this row; only for the\nstatus `error`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorBody"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "description": "`provider`, `runtime`, `name`, `endpoint.<name>`,\n`endpoint.request.<i>`, `settings`, `data`, `disk`, or\n`secret.<field>`.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "What the row is about.",
+          "$ref": "#/$defs/PreflightCheckKind"
+        },
+        "status": {
+          "description": "How it went.",
+          "$ref": "#/$defs/PreflightStatus"
+        },
+        "subject": {
+          "description": "The endpoint name or the field key the row is about.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "suggestedPort": {
+          "description": "A free port offered for a fixed port that is taken. The form uses it\nonly when the person asks.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "title": {
+          "description": "The short title, at most 200 characters.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "status",
+        "title",
+        "detail"
+      ]
+    },
+    "PreflightCheckKind": {
+      "description": "What kind of row a preflight check is. Open.",
+      "oneOf": [
+        {
+          "description": "The provider package.",
+          "type": "string",
+          "const": "provider"
+        },
+        {
+          "description": "The runtime.",
+          "type": "string",
+          "const": "runtime"
+        },
+        {
+          "description": "The instance name.",
+          "type": "string",
+          "const": "name"
+        },
+        {
+          "description": "One endpoint.",
+          "type": "string",
+          "const": "endpoint"
+        },
+        {
+          "description": "The settings.",
+          "type": "string",
+          "const": "settings"
+        },
+        {
+          "description": "The data folder.",
+          "type": "string",
+          "const": "data"
+        },
+        {
+          "description": "The free disk space.",
+          "type": "string",
+          "const": "disk"
+        },
+        {
+          "description": "One secret field.",
+          "type": "string",
+          "const": "secret"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PreflightStatus": {
+      "description": "How a preflight row went. Open.",
+      "oneOf": [
+        {
+          "description": "Fine.",
+          "type": "string",
+          "const": "ok"
+        },
+        {
+          "description": "Fine as far as Stackly can tell, with a note.",
+          "type": "string",
+          "const": "caution"
+        },
+        {
+          "description": "Create would be refused.",
+          "type": "string",
+          "const": "error"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "ProtocolVersion": {
       "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
       "type": "object",
@@ -5124,6 +5852,40 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The form for a new instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CreateForm"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_create_form"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The preflight rows, the field issues, and the equivalent command.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CreatePreflight"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.preflight"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -5212,6 +5974,29 @@
         "stable",
         "support",
         "supportReason"
+      ]
+    },
+    "ResolvedProvider": {
+      "description": "The package a preflight resolved.",
+      "type": "object",
+      "properties": {
+        "manifestSha256": {
+          "description": "SHA-256 of the package, in lowercase hex.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The provider ID.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "manifestSha256"
       ]
     },
     "ResourceKind": {
@@ -5583,6 +6368,65 @@
         "instanceId",
         "name",
         "retained"
+      ]
+    },
+    "ScalarSetting": {
+      "description": "A scalar settings value, tagged `type` and `content`:\n`{ \"type\": \"integer\", \"content\": 5 }`.",
+      "oneOf": [
+        {
+          "description": "Text.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A whole number.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991
+            },
+            "type": {
+              "type": "string",
+              "const": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "True or false.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
       ]
     },
     "SecretChangeStatus": {
@@ -6036,6 +6880,119 @@
       },
       "required": [
         "summary"
+      ]
+    },
+    "SettingEntry": {
+      "description": "One entry of a list item: a key and its scalar value.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "The key of the entry, one of the item fields of the schema.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Its value.",
+          "$ref": "#/$defs/ScalarSetting"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ]
+    },
+    "SettingItem": {
+      "description": "One item of a list setting, as ordered entries.",
+      "type": "object",
+      "properties": {
+        "entries": {
+          "description": "The entries, in the order the schema declares its item fields.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SettingEntry"
+          }
+        }
+      },
+      "required": [
+        "entries"
+      ]
+    },
+    "SettingValue": {
+      "description": "A settings value, tagged `type` and `content`.",
+      "oneOf": [
+        {
+          "description": "Text.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A whole number.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991
+            },
+            "type": {
+              "type": "string",
+              "const": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "True or false.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A list of items.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SettingItem"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
       ]
     },
     "ShutdownAccepted": {

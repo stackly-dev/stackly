@@ -4,8 +4,11 @@
 use std::path::PathBuf;
 
 use serde_json::Value;
-use stackly_protocol::instance::{InstanceActionAccepted, InstanceSummary};
+use stackly_protocol::instance::{
+    CreateForm, CreatePreflight, InstanceActionAccepted, InstanceSummary,
+};
 use stackly_protocol::operation::{OperationAccepted, OperationKind, OperationState};
+use stackly_protocol::runtime::RuntimeListPage;
 use stackly_protocol::{Call, Reply, ResourceKind, ResourceRef};
 use uuid::Uuid;
 
@@ -29,6 +32,36 @@ pub fn fixture(name: &str) -> Value {
         .unwrap_or_else(|error| panic!("fixture {} reads: {error}", path.display()));
     let frame: Value = serde_json::from_str(&text).expect("a fixture is JSON");
     frame["content"]["reply"]["content"].clone()
+}
+
+/// The create form every scripted `instance.get_create_form` answers: the
+/// PostgreSQL package of the fixtures.
+pub fn create_form() -> CreateForm {
+    serde_json::from_value(fixture("frame-response-instance-get-create-form.json"))
+        .expect("the create form fixture decodes")
+}
+
+/// The preflight every scripted `instance.preflight` answers: ready.
+pub fn preflight_ready() -> CreatePreflight {
+    serde_json::from_value(fixture("frame-response-instance-preflight-ready.json"))
+        .expect("the preflight fixture decodes")
+}
+
+/// The preflight with a port conflict.
+pub fn preflight_blocked() -> CreatePreflight {
+    serde_json::from_value(fixture(
+        "frame-response-instance-preflight-port-conflict.json",
+    ))
+    .expect("the preflight fixture decodes")
+}
+
+/// The runtimes `runtime.list` answers: PostgreSQL 18.6 and NATS 2.15.1.
+pub fn runtimes() -> RuntimeListPage {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../protocols/fixtures/runtime/list.json");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("fixture {} reads: {error}", path.display()));
+    serde_json::from_str(&text).expect("the runtime list fixture decodes")
 }
 
 /// The instance of `frame-response-instance-get-<kind>.json`, or the plain
@@ -124,6 +157,13 @@ pub fn scripted(
                 "no instance has this id",
             ))],
         },
+        Call::InstanceGetCreateForm(_) => vec![Step::Reply(Reply::InstanceGetCreateForm(
+            Box::new(create_form()),
+        ))],
+        Call::InstancePreflight(_) => vec![Step::Reply(Reply::InstancePreflight(Box::new(
+            preflight_ready(),
+        )))],
+        Call::RuntimeList(_) => vec![Step::Reply(Reply::RuntimeList(Box::new(runtimes())))],
         Call::EventsSubscribe(_) => vec![subscribed(ctx.connection)],
         other => play(other, ctx),
     }

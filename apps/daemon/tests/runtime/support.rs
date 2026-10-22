@@ -273,3 +273,22 @@ pub async fn wait_state(client: &Client, id: Uuid, state: OperationState) -> Box
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
+
+/// Makes every folder under `providers/` private (0700), as `pin` writes
+/// them. The fixture seed writes the pinned fake package with the
+/// permissions of a test, which a create from the catalog refuses to pin
+/// into (spec 0020, K-1).
+pub fn make_pinned_folders_private(providers: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut pending = vec![providers.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
+            .expect("a provider folder can be made private");
+        for entry in std::fs::read_dir(&dir).expect("a provider folder can be read") {
+            let path = entry.expect("an entry can be read").path();
+            if path.is_dir() {
+                pending.push(path);
+            }
+        }
+    }
+}

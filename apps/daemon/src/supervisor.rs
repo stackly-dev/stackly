@@ -19,7 +19,7 @@ use stackly_protocol::codes::registry;
 use stackly_protocol::daemon::{SubsystemHealth, SubsystemStatus, subsystem};
 use stackly_protocol::events::EventKind;
 use stackly_protocol::instance::{
-    DaemonReconciling, InstanceStateChanged, ReconcilePhase as WirePhase,
+    DaemonReconciling, InstanceRemoved, InstanceStateChanged, ReconcilePhase as WirePhase,
 };
 use stackly_protocol::{Count, ErrorBody, ResourceKind, ResourceRef};
 
@@ -27,6 +27,7 @@ use crate::events::EventBus;
 use crate::ipc::instance::dto;
 use crate::ipc::operation::dto::revision;
 use crate::ipc::operation::starting;
+use crate::map::socket::SocketPaths;
 
 /// Where the supervisor stands in this daemon run.
 #[derive(Clone)]
@@ -75,6 +76,7 @@ pub struct Supervision {
     slot: Mutex<Slot>,
     report: Arc<Mutex<Report>>,
     events: Mutex<Option<Arc<BusSupervisorEvents>>>,
+    sockets: Mutex<Option<Arc<SocketPaths>>>,
 }
 
 impl std::fmt::Debug for Supervision {
@@ -89,6 +91,7 @@ impl Default for Supervision {
             slot: Mutex::new(Slot::Waiting),
             report: Arc::new(Mutex::new(Report::default())),
             events: Mutex::new(None),
+            sockets: Mutex::new(None),
         }
     }
 }
@@ -99,10 +102,15 @@ impl Supervision {
     #[must_use]
     pub fn build(&self, input: BuildInput<'_>) -> Supervisor {
         let handle = Arc::new(OnceLock::new());
+        let sockets = Arc::new(SocketPaths::new(
+            input.platform.clone(),
+            input.prepared.clone(),
+        ));
         let events = Arc::new(BusSupervisorEvents {
             bus: Arc::clone(input.bus),
             supervisor: Arc::clone(&handle),
             report: Arc::clone(&self.report),
+            sockets: Arc::clone(&sockets),
         });
         let mut deps = SupervisorDeps::new(
             input.registry,
@@ -119,8 +127,15 @@ impl Supervision {
         let supervisor = Supervisor::new(deps);
         let _ = handle.set(supervisor.downgrade());
         *self.lock_events() = Some(events);
+        *self.lock_sockets() = Some(sockets);
         *self.lock() = Slot::Reconciling(supervisor.clone());
         supervisor
+    }
+
+    /// The reader of socket paths, once the supervisor is built.
+    #[must_use]
+    pub fn sockets(&self) -> Option<Arc<SocketPaths>> {
+        self.lock_sockets().clone()
     }
 
     /// The events the supervisor publishes, once it is built.
@@ -231,6 +246,10 @@ impl Supervision {
         *self.lock_events() = None;
     }
 
+    fn lock_sockets(&self) -> MutexGuard<'_, Option<Arc<SocketPaths>>> {
+        self.sockets.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn lock_events(&self) -> MutexGuard<'_, Option<Arc<BusSupervisorEvents>>> {
         self.events.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -253,6 +272,7 @@ pub struct BusSupervisorEvents {
     /// be a cycle that keeps the registry open past the stop.
     supervisor: Arc<OnceLock<WeakSupervisor>>,
     report: Arc<Mutex<Report>>,
+    sockets: Arc<SocketPaths>,
 }
 
 impl std::fmt::Debug for BusSupervisorEvents {
@@ -286,7 +306,7 @@ impl SupervisorEvents for BusSupervisorEvents {
         } else {
             Vec::new()
         };
-        let summary = dto::summary(instance, &status, excerpt);
+        let summary = dto::summary(instance, &status, excerpt, &self.sockets.of(instance));
         self.bus.publish_resource(
             EventKind::InstanceStateChanged(Box::new(InstanceStateChanged { instance: summary })),
             Self::resource(instance.id()),
@@ -334,6 +354,18 @@ impl SupervisorEvents for BusSupervisorEvents {
         };
         self.bus
             .publish_daemon(EventKind::DaemonReconciling(content));
+    }
+}
+
+impl stackly_core::instance::create::InstanceRemoved for BusSupervisorEvents {
+    fn removed(&self, instance: InstanceId, at: ResourceRevision) {
+        self.bus.publish_resource(
+            EventKind::InstanceRemoved(InstanceRemoved {
+                instance_id: instance.as_uuid(),
+            }),
+            Self::resource(instance),
+            revision(at),
+        );
     }
 }
 

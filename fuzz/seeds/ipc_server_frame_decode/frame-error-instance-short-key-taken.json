@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000928",
+    "error": {
+      "code": "instance.short_key_taken",
+      "category": "conflict",
+      "message": "the new instance ID collided with another instance",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "try again, a new ID is generated",
+      "details": [
+        {
+          "key": "shortKey",
+          "value": "0192f3a7"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

@@ -4,8 +4,10 @@
 //! in what the daemon sends.
 
 pub mod catalog;
+pub mod create;
 pub mod redact;
 pub mod runtime;
+pub mod socket;
 
 use std::path::Path;
 

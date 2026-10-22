@@ -243,6 +243,36 @@ impl CliFailure {
         )
     }
 
+    /// `cli.runtime_not_found`: no installed runtime matches `selector`
+    /// (`software@version`).
+    #[must_use]
+    pub fn runtime_not_found(selector: &str) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::RUNTIME_NOT_FOUND,
+                format!("no installed runtime matches {selector}"),
+            )
+            .with_detail("selector", selector)
+            .with_hint("run stackly runtime list"),
+        )
+    }
+
+    /// `cli.runtime_ambiguous`: more than one installed runtime matches
+    /// `selector`; `candidates` are their IDs.
+    #[must_use]
+    pub fn runtime_ambiguous(selector: &str, candidates: &[Uuid]) -> Self {
+        let ids: Vec<String> = candidates.iter().map(ToString::to_string).collect();
+        Self::local(
+            ErrorBody::new(
+                &cli::RUNTIME_AMBIGUOUS,
+                format!("more than one installed runtime matches {selector}"),
+            )
+            .with_detail("selector", selector)
+            .with_detail("candidates", ids.join(","))
+            .with_hint("pass the runtime ID instead"),
+        )
+    }
+
     /// `cli.panic`: the CLI panicked. The panic message is never shown.
     #[must_use]
     pub fn panic() -> Self {
@@ -522,6 +552,8 @@ mod tests {
             CliFailure::operation_cancelled(OPERATION),
             CliFailure::operation_needs_recovery(OPERATION),
             CliFailure::instance_not_found("orders-db"),
+            CliFailure::runtime_not_found("postgresql@18"),
+            CliFailure::runtime_ambiguous("postgresql@18", &[Uuid::nil(), Uuid::max()]),
             CliFailure::panic(),
             CliFailure::agent_root_override(),
             CliFailure::agent_not_bundled("/work/target/debug/stackly"),

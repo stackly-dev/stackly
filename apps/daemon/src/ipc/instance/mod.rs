@@ -1,6 +1,7 @@
-//! The `instance` area of the daemon (spec 0010 build step 13): the five
-//! methods `instance.create`, `instance.start`, `instance.stop`,
-//! `instance.get`, and `instance.list`.
+//! The `instance` area of the daemon (spec 0010 build step 13, spec 0020
+//! build step 9): the seven methods `instance.create`, `instance.start`,
+//! `instance.stop`, `instance.get`, `instance.list`,
+//! `instance.get_create_form`, and `instance.preflight`.
 //!
 //! Every method that starts an operation goes through
 //! [`start_operation`](crate::ipc::operation::start_operation): the key
@@ -11,7 +12,9 @@
 //! conversion of a wire secret is `ipc::secret`'s.
 
 mod create;
+mod draft;
 pub mod dto;
+mod form;
 
 use stackly_core::operation::{
     BeginRequest, BusyPolicy, FinalBatch, NO_OP_STAGE, NoOpReply, Origin, Precheck, PrecheckOutcome,
@@ -34,7 +37,8 @@ use stackly_protocol::{ErrorBody, ResourceKind, ResourceRef};
 use stackly_storage::SqliteRegistry;
 use uuid::Uuid;
 
-pub use create::create;
+pub use create::{create, work_deps};
+pub use form::{get_create_form, preflight};
 
 use crate::dispatch::{HandlerFuture, RequestContext};
 use crate::ipc::operation::{StartOutcome, StartRequest as OperationStart, start_operation};
@@ -47,7 +51,7 @@ pub fn get(core: &DaemonCore, params: GetInstanceParams) -> HandlerFuture<'_, In
     Box::pin(async move {
         let supervisor = core.supervision().supervisor()?;
         let instance = read_instance(core, instance_id(params.instance_id)?).await?;
-        Ok(summary_of(&supervisor, &instance))
+        Ok(summary_of(core, &supervisor, &instance))
     })
 }
 
@@ -79,7 +83,7 @@ pub fn list(core: &DaemonCore, params: ListInstancesParams) -> HandlerFuture<'_,
         let mut items = Vec::new();
         let mut bytes = 0;
         for instance in &remaining {
-            let summary = summary_of(&supervisor, instance);
+            let summary = summary_of(core, &supervisor, instance);
             let size = serde_json::to_vec(&summary).map_or(0, |encoded| encoded.len());
             if !items.is_empty() && (items.len() >= limit || bytes + size > INSTANCE_PAGE_BYTES_MAX)
             {
@@ -389,7 +393,7 @@ fn expected_revision(
 }
 
 /// The snapshot of `instance` with the status the supervisor shows now.
-fn summary_of(supervisor: &Supervisor, instance: &Instance) -> InstanceSummary {
+fn summary_of(core: &DaemonCore, supervisor: &Supervisor, instance: &Instance) -> InstanceSummary {
     let status = supervisor.status(instance.id());
     let excerpt = if instance.last_failure().is_some() {
         supervisor
@@ -400,7 +404,12 @@ fn summary_of(supervisor: &Supervisor, instance: &Instance) -> InstanceSummary {
     } else {
         Vec::new()
     };
-    dto::summary(instance, &status, excerpt)
+    let sockets = core
+        .supervision()
+        .sockets()
+        .map(|sockets| sockets.of(instance))
+        .unwrap_or_default();
+    dto::summary(instance, &status, excerpt, &sockets)
 }
 
 /// Reads one instance, retained ones included.

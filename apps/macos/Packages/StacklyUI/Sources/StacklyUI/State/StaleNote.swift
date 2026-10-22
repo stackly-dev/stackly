@@ -82,6 +82,10 @@ nonisolated public struct StaleNote: Hashable, Sendable {
 
     /// The banner message: "Couldn’t refresh: <message>." for a failed refresh, or
     /// "<source> last updated <time>." for outdated data.
+    ///
+    /// The outdated sentence always starts with a capital letter, so a `source` such as
+    /// "the bundled catalog" reads "The bundled catalog last updated …"; only its first
+    /// character changes.
     func bannerMessage(now: Date, calendar: Calendar, locale: Locale, timeZone: TimeZone) -> String
     {
         switch reason {
@@ -95,11 +99,20 @@ nonisolated public struct StaleNote: Hashable, Sendable {
                 timeZone: timeZone
             )
             return "\(source) last updated \(time)."
+                .withFirstCharacterUppercased
         }
     }
 }
 
 extension String {
+    /// The string with its first character in upper case, whatever the locale: a character
+    /// without an upper case form (a digit, a symbol, a space) and the empty string stay
+    /// as they are.
+    nonisolated fileprivate var withFirstCharacterUppercased: String {
+        guard let first else { return self }
+        return first.uppercased() + dropFirst()
+    }
+
     /// The string ending in one period: daemon messages have none, but a screen's copy may.
     nonisolated fileprivate var withFinalPeriod: String {
         hasSuffix(".") ? self : self + "."
