@@ -49,7 +49,7 @@ _Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalan
 ### Commands
 
 - [x] `cargo test -p stackly-cli --lib group` → tiga test lulus: setiap pasangan lifecycle dan state readiness di `protocols/fixtures/instance/groups.json` (30 kasus, `retained` selalu `None`) masuk ke kelompok yang sama dengan tabel spec, filter Running sama dengan `ready` ditambah `notReady`, dan baris jumlah hanya menyebut kelompok di atas 0 (`1 instance:` untuk satu) → AC-1, AC-10
-- [x] `cargo test -p stackly-cli --lib resolve` → UUID 36 karakter bertanda hubung (huruf besar atau kecil) menjadi ID, argumen lain menjadi nama → AC-11
+- [x] `cargo test -p stackly-cli --bin stackly resolve` → UUID 36 karakter bertanda hubung (huruf besar atau kecil) menjadi ID, argumen lain menjadi nama → AC-11
 - [x] `cargo build -p stacklyd -p stackly-fake-server` lalu `cargo test -p stackly-cli --test instance` → semua test lulus, termasuk golden `instance_list.txt`, `instance_list.json`, `instance_list_failed.txt`, `instance_list_empty.txt`, `instance_inspect.txt`, `instance_inspect.json` (dari `list-mixed.json`, `TZ=UTC`), semua halaman `instance.list` dibaca (limit 200), halaman yang gagal di tengah menggagalkan perintah tanpa tabel, nama tidak ketemu keluar 10 tanpa `instance.get`, daemon mati keluar 6, dan satu test terhadap `stacklyd` asli dengan dua instance fake → AC-1, AC-10, AC-11
 - [x] `cargo xtask codegen --check` → "20 generated files are up to date"; `cli.instance_not_found` ada di `protocols/error-codes.json` dan digest kontrak tidak berubah → AC-11
 - [x] `cargo clippy -p stackly-cli -p stackly-protocol --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, dan `cargo xtask check-deps` → lulus
@@ -70,17 +70,19 @@ _Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalan
 
 ### UI / manual
 
-- [ ] Di root sementara yang sudah di-seed dengan `stacklyd` jalan dan satu instance fake bernama `alpha`, jalankan `STACKLY_ROOT=<R> stackly instance start alpha --wait`, lalu `stackly instance stop alpha --wait` → keluar 0, teks `alpha running, readiness ready` lalu `alpha stopped, readiness unknown` → AC-15
-- [ ] Jalankan `stackly instance start <UUID huruf besar> --wait` → sama dengan memakai nama, dan tanpa panggilan `instance.list` → AC-15
-- [ ] Jalankan `stackly instance start gamma` dan `stackly instance stop 0192f3a5` → keluar 10, `cli.instance_not_found`, details `name`, dan tidak ada operasi baru di `stackly operation list` → AC-15
+- [x] Di root sementara yang sudah di-seed dengan `stacklyd` jalan dan satu instance fake bernama `alpha`, jalankan `STACKLY_ROOT=<R> stackly instance start alpha --wait`, lalu `stackly instance stop alpha --wait` → keluar 0, teks `alpha running, readiness ready` lalu `alpha stopped, readiness unknown` → AC-15
+- [x] Jalankan `stackly instance start <UUID huruf besar> --wait` → sama dengan memakai nama, dan tanpa panggilan `instance.list` → AC-15
+- [x] Jalankan `stackly instance start gamma` dan `stackly instance stop 0192f3a5` → keluar 10, `cli.instance_not_found`, details `name`, dan tidak ada operasi baru di `stackly operation list` → AC-15
 - [x] Jalankan `stackly instance start --help` → `INSTANCE` sebagai nama argumen, doc "The instance name, or its whole ID", dan contoh dengan nama serta satu UUID → AC-15
 
 ### Commands
 
-- [x] `cargo test -p stackly-cli --lib resolve` → UUID 36 karakter bertanda hubung menjadi ID, argumen lain menjadi nama → AC-15
+- [x] `cargo test -p stackly-cli --bin stackly resolve` → UUID 36 karakter bertanda hubung menjadi ID, argumen lain menjadi nama → AC-15
 - [x] `cargo build -p stacklyd -p stackly-fake-server` lalu `cargo test -p stackly-cli --test instance -- action` → start dan stop dengan nama menulis golden `instance_start` dan `instance_stop` yang sama dengan UUID, `instance.list` dibaca sebelum `instance.start` dan `instance.stop`, nama yang tidak dikenal, awalan hex pendek, dan 34 hex keluar 10 tanpa operasi, UUID huruf besar dikirim langsung tanpa `instance.list`, key atau timeout yang tidak sah dan argumen kosong keluar 2 tanpa koneksi, dan satu test terhadap `stacklyd` asli → AC-15
 - [x] `cargo test -p stackly-cli --test instance -- exit_codes` → baris `cli.usage` memakai `--idempotency-key` yang tidak sah dan tetap keluar 2 → AC-15
 - [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo xtask evidence check` → lulus
+
+Status checker 2026-10-23 (chk-f22-s5a, `native`, CLI asli terhadap `stacklyd` dev di root sementara dari `skeleton_seed`): `start alpha --wait` keluar 0 dengan `alpha running, readiness ready`, `stop alpha --wait` dengan `alpha stopped, readiness unknown`; UUID huruf besar `01A16604-...` start dan stop berhasil dengan teks yang sama; `start gamma` dan `stop 0192f3a5` keluar 10 `cli.instance_not_found` (details `name` = `gamma`), `start Alpha` juga 10 (huruf besar kecil dibedakan), dan `operation list` tetap 5 operasi sebelum dan sesudah; `--idempotency-key "a b"` dan `--timeout abc` keluar 2; dengan daemon mati `start alpha` dan `stop <UUID>` keluar 6 `ipc.endpoint_missing`, sedangkan key tidak sah dan argumen kosong tetap keluar 2 (tidak ada koneksi). `cargo test -p stackly-cli --test instance -- action` 14 lulus (termasuk `action_real`), `-- exit_codes` lulus. Perintah `--lib resolve` di Commands diganti `--bin stackly resolve` karena `stackly-cli` tidak punya target library.
 
 ### Value sourcing
 
