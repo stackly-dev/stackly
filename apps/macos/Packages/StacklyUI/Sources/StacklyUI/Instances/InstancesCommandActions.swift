@@ -25,6 +25,8 @@ enum InstancesCommandActions {
     ///   - sort: The comparator that orders the table now.
     ///   - setSort: Orders the table by another comparator.
     ///   - focusSearch: Puts the cursor in the search field.
+    ///   - hasSearch: Whether the search field is in the toolbar. It is not while a detail page
+    ///     is open, and then Find is not published, so it shows disabled (AC-10).
     ///   - target: The main action of the instance in view and what it stands for, or `nil`
     ///     when there is none. The instance in view is the one whose detail page is open, else
     ///     the selected row. Start and Retry are `startInstance`, Stop is `stopInstance`; the
@@ -40,15 +42,18 @@ enum InstancesCommandActions {
         sort: InstanceSortComparator,
         setSort: @escaping @MainActor (InstanceSortComparator) -> Void,
         focusSearch: @escaping @MainActor () -> Void,
+        hasSearch: Bool = true,
         target: (action: StacklyAction, verb: InstanceVerb?)?,
         open: StacklyAction? = nil,
         back: (@MainActor () -> Void)? = nil,
         copyConnection: StacklyAction? = nil
     ) -> (actions: [CommandID: StacklyAction], checked: Set<CommandID>) {
         var actions: [CommandID: StacklyAction] = [:]
-        actions[.find] = StacklyAction(
-            id: CommandID.find.rawValue, title: CommandMap.entry(for: .find).title, mutates: false,
-            perform: focusSearch)
+        if hasSearch {
+            actions[.find] = StacklyAction(
+                id: CommandID.find.rawValue, title: CommandMap.entry(for: .find).title,
+                mutates: false, perform: focusSearch)
+        }
         actions[.toggleInspector] = StacklyAction(
             id: CommandID.toggleInspector.rawValue,
             title: showsInspector ? "Hide Inspector" : "Show Inspector", mutates: false,

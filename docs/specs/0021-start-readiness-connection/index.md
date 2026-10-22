@@ -269,7 +269,7 @@ Folder baru `StacklyUI/InstanceDetail/`: `InstanceDetailPage`, `InstanceDetailMo
 | Runtime | `detail.runtime.id` | UUID |
 | Digest | `detail.runtime.artifactSha256`, `installMode` | "sha256:" ditambah 12 hex pertama (GUI: lengkap di `.help` dan label VoiceOver; CLI `inspect`: lengkap); external "External runtime" |
 | Provider | `detail.provider` | GUI Details "{name} {revision}"; CLI tetap baris spec 0022 |
-| Data | `detail.dataPath` | GUI: path dengan home disingkat `~` dan dipotong di tengah; CLI: path lengkap |
+| Data | `detail.dataPath` | GUI: path dengan home disingkat `~`, membungkus per karakter tanpa dipotong seperti nilai monospace lain (AC-16, *Aksesibilitas*), dengan path lengkap di `.help` dan label VoiceOver *(diubah 2026-10-22, keputusan lead: AC-16 menang atas "dipotong di tengah")*; CLI: path lengkap |
 | Data size | `DataUsage` | "{ukuran}", "at least {ukuran}" kalau tidak lengkap, "Calculating…" selama dimuat, "—" kalau `usage` null, "Unavailable" kalau error; ukuran: di bawah 1 000 byte "{n} bytes", selain itu kB, MB, GB, atau TB desimal (1 000) dengan satu angka desimal, misalnya "1.2 GB" |
 | Uptime | `InstanceSummary.process.startedAt` | `UptimeText` spec 0022, atau "—" tanpa proses |
 | Restart attempts | `InstanceSummary.restart` | "{attempts} in the last {menit} min" kalau lebih dari 0, "Stopped restarting" kalau `exhausted`, selain itu baris tidak tampil |
@@ -800,6 +800,7 @@ Sesi paralel: milestone 3 bisa berjalan bersamaan dengan langkah 7 dan 8 karena 
 - [ ] Fitur 33: banner crash loop yang lebih kaya di atas banner I1 spec ini.
 - [ ] Fitur 39: credential NATS di template `uri` NATS.
 - [ ] Fitur 59: instance yang di pin ke paket tanpa blok `connection` mendapat connection setelah update provider revision.
+- [ ] Lead (temuan F21 milestone 4, dicatat 2026-10-22): `stackly instance start` dan `stop` hanya menerima ID penuh (`InstanceArg`, pesan "expected a whole instance id"), sedangkan `connection`, `inspect`, dan `get` menerima nama atau ID lewat resolver `TargetArg` spec 0022. Catatan verify milestone 4 menyebut `get` juga, tetapi di `main` `9df6beee` `get` sudah alias `inspect` dengan `TargetArg` (langkah 5 spec 0022), jadi yang tersisa hanya `start` dan `stop`. Alur journey di spec ini menulis `stackly instance start <instance> --wait` lalu `stackly instance connection <instance>`, jadi pengguna wajar mengetik nama di keduanya. Usulan: pemilik spec 0022 (pemilik resolver) menambah satu langkah kecil yang memakai `TargetArg` di `StartArgs` dan `StopArgs` (`apps/cli/src/commands/instance/action.rs`), dengan golden dan test CLI untuk nama, nama yang tidak dikenal (`cli.instance_not_found`), dan UUID; tanpa perubahan kontrak, kode error, atau AC. Runner up: langkah susulan fitur 21, karena journey CLI nya ada di spec ini.
 - [ ] `/sync` setelah build: catat `instance.get_detail`, `instance.get_data_usage`, blok `connection` manifest, `stackly instance connection`, dan folder `InstanceDetail/` di `AGENTS.md` root dan `apps/macos/AGENTS.md`.
 
 ## Rationale

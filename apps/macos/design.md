@@ -692,8 +692,8 @@ Where Stackly puts its items. The order of the system items (About, Services, Hi
 | Stackly | Reconnect to stacklyd, after Settings… ⌘, and before Services |
 | File | New Instance… ⌘N (built, spec 0020), then the system Close ⌘W. `CommandGroup(replacing: .newItem)` removes New Window |
 | Edit | the system items, then Find ▸ Find… ⌘F. `CommandGroup(replacing: .textEditing)` removes the Spelling and Grammar, Substitutions, Transformations, and Speech submenus |
-| View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; Back, Show or Hide Inspector, and Sort Instances By follow with the Instances page |
-| Instance | Start ⌘R and Stop ⇧⌘R (built, spec 0022); Open, Restart, Reload, Copy Connection String, Duplicate…, and Remove… are planned. `CommandMenu("Instance")` sits between View and Window |
+| View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; then Back ⌘[ (spec 0021), Show or Hide Inspector ⌥⌘I, and Sort Instances By (spec 0022), all published by the Instances page |
+| Instance | Open ⌘O (built, spec 0021), Start ⌘R and Stop ⇧⌘R (built, spec 0022), Copy Connection String ⇧⌘C (built, spec 0021); Restart, Reload, Duplicate…, and Remove… are planned. `CommandMenu("Instance")` sits between View and Window |
 | Window | the system items, then Stackly ⌘0 (the shortcut sits on the main `Window` scene) and, in Debug, Design Gallery |
 | Help | the system search field; Welcome to Stackly (built, spec 0016) and Stackly Help ⌘? (planned, feature 66). `CommandGroup(replacing: .help)` removes the item that opens nothing |
 
@@ -709,13 +709,13 @@ An item is never hidden because of state: one that does not apply is disabled. A
 | `newInstance` | File | 1 | New Instance… | ⌘N | shell | 20 | built |
 | `find` | Edit ▸ Find | 1 | Find… | ⌘F | page (all) | 69 | built |
 | `showOverview` to `showDiagnostics` | View | 1 | Overview, Instances, Environments, Catalog, Runtimes, Operations, Diagnostics | ⌘1 to ⌘7 | shell | 69 | built |
-| `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | planned |
+| `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | built |
 | `toggleInspector` | View | 3 | Show Inspector or Hide Inspector | ⌥⌘I | page (Instances) | 22 | built |
 | `sortInstancesBy…` and `sortInstancesAscending`, `sortInstancesDescending` | View ▸ Sort Instances By | 1 and 2 | Name, Provider, Version, Endpoints, Status, then Ascending, Descending | | page (Instances) | 22 | built |
-| `openInstance` | Instance | 1 | Open | ⌘O | page (Instances) | 21 | planned |
+| `openInstance` | Instance | 1 | Open | ⌘O | page (Instances) | 21 | built |
 | `startInstance`, `stopInstance` | Instance | 2 | Start, Stop | ⌘R, ⇧⌘R | page (Instances) | 22 | built |
 | `restartInstance`, `reloadInstance` | Instance | 2 | Restart, Reload | ⌥⌘R, none | page (Instances) | 26 | planned |
-| `copyConnectionString` | Instance | 3 | Copy Connection String | ⇧⌘C | page (Instances) | 21 | planned |
+| `copyConnectionString` | Instance | 3 | Copy Connection String | ⇧⌘C | page (Instances) | 21 | built |
 | `duplicateInstance` | Instance | 4 | Duplicate… | ⌘D | page (Instances) | 24 | planned |
 | `removeInstance` | Instance | 4 | Remove… | none | page (Instances) | 54 | planned |
 | `stacklyHelp` | Help | 1 | Stackly Help | ⌘? | app | 66 | planned |
@@ -834,7 +834,7 @@ Spec 0022, `StacklyUI/Overview/`. A `ScrollView` on `surfaceWindow` with a 22 pt
 - **Cards**: Running, Stopped, and Failed (the Runtimes card joins with feature 18) in `LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12)])`. Each is a plain `Button` on `.cardSurface(radius: .large)` that opens Instances with the filter of the card: a 7 pt dot in the tone fill, the label in `.callout` `textSecondary`, the number in `.largeTitle.weight(.semibold).monospacedDigit()`, and a note line. Running counts `ready` and notes "{n} not ready" in the `caution` text tone; the Failed number is `critical` text above zero. Before the instance store loaded, a small `DelayedProgress` stands where the number goes, never a zero.
 - **Layout**: cards, then two columns at a content width of 820 pt or more (Needs Attention above Instances on the left, Operations 300 to 360 pt on the right), one column below that (Needs Attention, Instances, Operations). Section titles are `.headline`; each section is a card with a divider between its rows.
 - **Subtitle**: "{ready} running · {stopped} stopped", then " · {failed} failed", " · {notReady} not ready", and " · {unknown} unknown" for each above zero.
-- **Needs Attention** (`AttentionRules.items`, a pure function): at most one item per instance, from the first rule that matches. Items order by tone (critical, caution, neutral), then category (disk, operation, instance), then rule number, then name. Six show; "Show {n} More" opens the rest in place, then "Show Less". Each item is one button: the tone symbol, the title in `.body.weight(.semibold)`, the body in `.callout` `textSecondary`, and a chevron. VoiceOver reads "{Critical|Warning|Info}: {title}. {body}" with the hint "Opens {destination}." Until the instances, the operations (or their failure), and the first disk reading are in, the section shows a delayed spinner, and after that "Nothing needs attention." when empty.
+- **Needs Attention** (`AttentionRules.items`, a pure function): at most one item per instance, from the first rule that matches. Items order by tone (critical, caution, neutral), then category (disk, operation, instance), then rule number, then name. Six show; "Show {n} More" opens the rest in place, then "Show Less". Each item is one button: the tone symbol, the title in `.body.weight(.semibold)`, the body in `.callout` `textSecondary`, and a chevron. VoiceOver reads "{Critical|Warning|Info}: {title}. {body}" with the hint "Opens {destination}." Until the instances, the operations, and the first disk reading have answered, the section shows a delayed spinner (operations that are unsupported or failed with nothing loaded do not wait: they are item O2), and after that "Nothing needs attention." when empty.
 
 | Rule | Condition | Tone | Title | Opens |
 | --- | --- | --- | --- | --- |
@@ -849,6 +849,7 @@ Spec 0022, `StacklyUI/Overview/`. A `ScrollView` on `surfaceWindow` with a 22 pt
 | I9 | running, readiness `unknown` with reason `stale` | caution | "Readiness of {name} is unknown" | instance |
 | I10 | running and the process is not adoptable | neutral | "{name} can’t be adopted again" | instance |
 | O1 | operation `needs_recovery` whose hint is not `auto_compensate` | critical | "{operation} needs recovery" | Operations |
+| O2 | operations unsupported (with or without old data), or failed with nothing loaded | neutral | "Operations unavailable" | Operations |
 | S1 to S3 | disk level `critical`, `low`, or `filling` | critical, caution, neutral | "Disk is almost full", "Disk space is low", "Disk is {n}% full" | Diagnostics |
 | S4 | no disk report and the call failed or is unsupported, or a level this build does not know | neutral | "Disk space unavailable" or "Disk state not recognized" | Diagnostics |
 

@@ -90,3 +90,31 @@ Diperiksa di macOS 27.0.1 (26A434), Xcode 27.0 (27A266a), dari merge `e2a8ce4`. 
 - AC-13 · ⌘0 dan Settings di record check 2; Welcome to Stackly menunggu spec 0016, Stackly Help menunggu fitur 66
 - AC-15 · menunggu milestone 3 langkah 7 dan VoiceOver
 - AC-16 · bagian "Commands and shortcuts" di `design.md` (struktur menu, peta, shortcut sistem, aturan menambah perintah, hasil probe) dan `grep` kosong; tidak ada `CommandGroup` atau `.commands` di luar `Commands/` dan `StacklyApp.swift` (source rule)
+
+## Milestone 3: Page and instance commands
+
+Langkah build 6 dan 7 dari spec 0069. Saat milestone ini dimulai, sebagian besar penerbit sudah ada di `main`: `CommandMenu("Instance")` dan `InstancesCommandActions` datang dengan fitur 22 dan 21 (`InstancesCommands` sudah tidak ada), Catalog menerbitkan `find` sejak fitur 17, dan baris `showOverview` sampai `welcome` sudah built. Yang milestone ini kerjakan: baris `back`, `openInstance`, dan `copyConnectionString` menjadi `built` di tabel `design.md` (di `CommandMap` sudah built sejak fitur 21), Find tidak diterbitkan selama detail instance terbuka (AC-10), tooltip tombol aksi utama inspector lewat `CommandMap.helpText` (AC-14), dan test penerbit. Evidence manual (langkah 7) adalah langkah user dan tercatat `NOT_RUN`.
+
+### UI / manual
+
+- [ ] Hanya keyboard, dengan `stacklyd` dan app Debug yang memakai `STACKLY_ROOT` sementara yang sama (`skeleton_seed` menyiapkan root; jangan pakai Application Support asli): ⌘N lalu isi sheet dan Return membuat instance; ⌘2, Tab ke tabel, panah ke baris, ⇧⌘R menghentikannya; ⌘R menjalankannya; ⌘O membuka detail; ⇧⌘C menyalin connection string; ⌘[ kembali ke tabel; ⌥⌘I menyembunyikan dan menampilkan inspector; View > Sort Instances By mengurutkan dan menandai kolom dan arah aktif; saat sheet New Instance terbuka ⌘1 dan ⌘R tidak melakukan apa pun → AC-4, AC-9, AC-11, AC-12, AC-15 (cek manual 5, `NOT_RUN`: langkah user)
+- [ ] ⌘F di Instances dan Catalog memfokuskan field pencarian toolbar; Edit > Find > Find… nonaktif di Overview, selama detail instance terbuka, dan di halaman tanpa pencarian; menekan ⌘F saat field sudah fokus tidak mengubah teksnya → AC-10 (cek manual 5, `NOT_RUN`: langkah user)
+- [ ] Probe P4 (sheet dan `NSAlert` sheet terbuka di jendela utama: shortcut halaman tidak jalan), P5 (`.searchFocused`), P6 (⌘R, ⇧⌘R, ⌥⌘R, ⌘O, ⌘D, ⌘1, ⌘[ di field pencarian toolbar sampai ke menu tanpa mengubah teks), dan P7 (state berubah sekitar penekanan tombol) diulang di app Stackly sekarang setelah shell punya sheet, `.searchable`, dan perintah halaman. Sisa langkah ke-6 milestone 2 → AC-2, AC-3, AC-10 (`NOT_RUN`: langkah user)
+- [ ] Skenario fixture: dengan `STACKLY_UI_SCENARIO=connected-mixed`, menu Instance aktif dan nonaktif sesuai baris yang dipilih (Start untuk instance berhenti, Stop untuk instance berjalan, Stop nonaktif dengan alasan untuk instance `unknown`, semua nonaktif tanpa pilihan); dengan `daemon-offline`, Start, Stop, dan New Instance… nonaktif tanpa subtitle karena gate, sedangkan Open, Copy Connection String, Back, Find, urutan, dan inspector tetap mengikuti ada tidaknya target (record oleh developer di laporan sesi, bukan record evidence) → AC-5, AC-11, AC-12 (`BLOCKED` di sesi developer 2026-10-22: layar terkunci, `CGSSessionScreenIsLocked` true, jadi app Debug tidak dijalankan; yang tercakup tanpa layar: `ShellCommandsTests` per baris status daemon untuk gate dan `InstancesPageTests` per lifecycle untuk Start dan Stop)
+- [ ] VoiceOver: buka menu Instance, View, dan Edit dengan ⌃F2 → setiap item terbaca dengan judul, shortcut, dan "dimmed" saat nonaktif; ⌘F di Instances dan Catalog memfokuskan field pencarian dan VoiceOver membacakannya; tombol Start, Stop, dan Show atau Hide Inspector terbaca dengan tooltip yang menyebut shortcut (cek manual 6, `NOT_RUN`: langkah user, VoiceOver tidak dinyalakan oleh developer) → AC-10, AC-14, AC-15
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter InstancesPageTests` → penerbit Instances: Find, inspector, tujuh baris urut (centang untuk kolom dan arah aktif, sort mempertahankan arah dan kolom lainnya), Start atau Stop dengan alasan dan busy yang sama dengan tombol aksi utama, Open, Back, dan Copy Connection String hanya saat targetnya ada, Find tidak diterbitkan selama detail terbuka, dan tooltip inspector menyebut shortcut → AC-10, AC-11, AC-12, AC-14
+- [x] `swift test ... --filter InstanceDetailCommandsTests` → penerbit target detail (Open, Back, Copy Connection String, tooltip aksi utama detail) → AC-11, AC-12, AC-14
+- [x] `swift test ... --filter CommandMapTests`, `--filter CommandSourceRuleTests`, `--filter ShellCommandsTests`, dan `--filter ShellStructureTests` → tetap hijau; status built persis sama dengan `design.md` (peta tidak berubah di milestone ini) dan tidak ada `.keyboardShortcut` literal di view → AC-1, AC-2, AC-16
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (dengan `STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN`), `cargo xtask build-app`, `xcrun swift-format lint --strict` atas file yang diubah, dan `cargo xtask evidence check` → semuanya lulus
+
+### Acceptance-criteria coverage
+
+- AC-2 · test peta (milestone 1); probe di app Stackly dan cek manual 1 menunggu langkah user (`NOT_RUN`)
+- AC-10 · `InstancesPageTests` (Find tidak diterbitkan selama detail terbuka), `CatalogPage` menerbitkan `find`; fokus nyata ke field `.searchable` menunggu cek manual (`NOT_RUN`)
+- AC-11 · `InstancesPageTests` dan `InstanceDetailCommandsTests`; item Restart, Reload, Duplicate…, dan Remove… tampil sejak fitur 26, 24, dan 54 membangunnya
+- AC-12 · `InstancesPageTests` (urut, inspector, Back) dan `InstanceDetailCommandsTests`
+- AC-14 · `InstancesPageTests`, `InstanceDetailCommandsTests`, dan `CommandMapTests` (`helpText`)
+- AC-15 · menunggu cek manual 5 dan 6 (`NOT_RUN`: keyboard saja dan VoiceOver)
