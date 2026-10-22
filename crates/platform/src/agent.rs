@@ -1,14 +1,16 @@
-//! The background agent port (spec 0015).
+//! The background agent port and the agent state model (spec 0015).
 //!
 //! [`BackgroundAgent`] reads and changes the OS registration of the daemon's
 //! LaunchAgent. Only `stackly-cli` calls it, and only from explicit user
 //! actions (`daemon install`, `daemon start`); `stacklyd` installs it so its
 //! capability report stays honest and never calls it.
 //!
-//! [`LaunchContext::detect`] tells the daemon whether launchd started it.
+//! [`classify`] turns what a client knows (the OS registration, a root
+//! override, the launch record) into one of six product states with a
+//! recovery step. The Swift app has the same table, and both are checked
+//! against one shared fixture.
 //!
-//! The mapping from an OS answer to a product state (`classify` in spec
-//! 0015) is held back until the spec reflects the step 0 spike.
+//! [`LaunchContext::detect`] tells the daemon whether launchd started it.
 
 use std::ffi::OsStr;
 use std::fmt;
@@ -70,7 +72,7 @@ pub enum AgentProbe {
     Registration {
         /// The registration state the OS reported.
         registration: AgentRegistration,
-        /// The bundle the OS used (the process's main bundle).
+        /// The canonical bundle the adapter was given.
         bundle: PathBuf,
     },
     /// The process does not run from inside the Stackly app bundle, so the
@@ -95,9 +97,12 @@ pub enum AgentRegistration {
     /// Registered, but the user has not allowed it (or switched it off) in
     /// System Settings.
     RequiresApproval,
-    /// Not registered.
+    /// Unregistered by the user's action (`unregister`); a bundle that was
+    /// never registered reads [`AgentRegistration::NotFound`] instead.
     NotRegistered,
-    /// The OS could not find the service for this bundle.
+    /// The OS has no service for this bundle's identity: the answer for a
+    /// bundle that was never registered, and after a registration the OS
+    /// accepted but still cannot find.
     NotFound,
     /// A status value this build does not know.
     Unrecognized(i64),
@@ -250,6 +255,233 @@ impl BackgroundAgent for UnsupportedBackgroundAgent {
     }
 }
 
+/// The outcome of asking for the agent's status, as [`classify`] takes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProbeOutcome {
+    /// The OS was not asked, which happens only with a root override.
+    NotChecked,
+    /// The OS has no background agent adapter.
+    Unsupported,
+    /// The status call failed: with the OS code, or `None` for a time out.
+    Failed {
+        /// The OS error code, or `None` when the call timed out.
+        code: Option<i64>,
+    },
+    /// The OS answered.
+    Probe(AgentProbe),
+}
+
+/// Everything [`classify`] needs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentInput {
+    /// Whether `STACKLY_ROOT` is set; the agent only ever serves the default
+    /// root.
+    pub root_override: bool,
+    /// What the OS reported.
+    pub probe: ProbeOutcome,
+    /// Whether the launch record of the default root exists, which proves
+    /// the agent ran under launchd before.
+    pub launch_record: bool,
+    /// Whether the probe was read inside one registration action, right after
+    /// `register` or `relaunch` succeeded, failed with `AlreadyRegistered`,
+    /// or failed with [`AgentOsErrorKind::NotFound`]. Only then does a
+    /// `NotFound` mean the OS cannot find the service; otherwise the bundle
+    /// was never registered.
+    pub just_registered: bool,
+}
+
+/// One of the six product states of the background agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BackgroundAgentState {
+    /// Registered and allowed to run.
+    Enabled,
+    /// Waiting for the user's approval in Login Items.
+    RequiresApproval,
+    /// Switched off in Login Items after it ran before.
+    Disabled,
+    /// Not registered, including a bundle that was never registered.
+    NotRegistered,
+    /// The OS accepted a registration in the same action but still cannot
+    /// find the service for this copy of the app.
+    NotFound,
+    /// The state cannot be known here; [`UnavailableReason`] says why.
+    Unavailable,
+}
+
+impl BackgroundAgentState {
+    /// Returns the stable snake_case code, for example `requires_approval`.
+    #[must_use]
+    pub const fn as_code(self) -> &'static str {
+        match self {
+            Self::Enabled => "enabled",
+            Self::RequiresApproval => "requires_approval",
+            Self::Disabled => "disabled",
+            Self::NotRegistered => "not_registered",
+            Self::NotFound => "not_found",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
+/// Why the state is [`BackgroundAgentState::Unavailable`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnavailableReason {
+    /// `STACKLY_ROOT` is set.
+    RootOverride,
+    /// The OS has no background agent adapter.
+    UnsupportedOs,
+    /// The status call failed or timed out.
+    StatusFailed,
+    /// The process does not run from inside the Stackly app bundle.
+    NotBundled,
+    /// The bundle lacks the LaunchAgent property list or `stacklyd`.
+    HelperMissing,
+    /// The OS reported a status value this build does not know.
+    StatusUnrecognized,
+}
+
+impl UnavailableReason {
+    /// Returns the stable snake_case code, for example `root_override`.
+    #[must_use]
+    pub const fn as_code(self) -> &'static str {
+        match self {
+            Self::RootOverride => "root_override",
+            Self::UnsupportedOs => "unsupported_os",
+            Self::StatusFailed => "status_failed",
+            Self::NotBundled => "not_bundled",
+            Self::HelperMissing => "helper_missing",
+            Self::StatusUnrecognized => "status_unrecognized",
+        }
+    }
+}
+
+/// The next step a client offers for a state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RecoveryStep {
+    /// Nothing to do.
+    None,
+    /// Start the daemon; [`classify`] never returns it, a caller that knows
+    /// the daemon is unreachable uses it for [`BackgroundAgentState::Enabled`].
+    Start,
+    /// Register the agent.
+    Register,
+    /// Allow Stackly in System Settings > General > Login Items & Extensions.
+    ApproveInLoginItems,
+    /// Turn Stackly on again in Login Items.
+    EnableInLoginItems,
+    /// Move the app to the Applications folder or install it again.
+    MoveOrReinstallApp,
+    /// Use the `stackly` inside `Stackly.app`, or start `stacklyd` by hand.
+    UseBundledCli,
+    /// Start `stacklyd` by hand for the root override.
+    ManualDaemonForOverride,
+    /// Build the app with `cargo xtask build-app`.
+    BuildWithXtask,
+    /// Check again.
+    CheckAgain,
+}
+
+impl RecoveryStep {
+    /// Returns the stable snake_case code, for example
+    /// `approve_in_login_items`.
+    #[must_use]
+    pub const fn as_code(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Start => "start",
+            Self::Register => "register",
+            Self::ApproveInLoginItems => "approve_in_login_items",
+            Self::EnableInLoginItems => "enable_in_login_items",
+            Self::MoveOrReinstallApp => "move_or_reinstall_app",
+            Self::UseBundledCli => "use_bundled_cli",
+            Self::ManualDaemonForOverride => "manual_daemon_for_override",
+            Self::BuildWithXtask => "build_with_xtask",
+            Self::CheckAgain => "check_again",
+        }
+    }
+}
+
+/// The result of [`classify`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AgentAssessment {
+    /// The product state.
+    pub state: BackgroundAgentState,
+    /// Why the state is unavailable, set only for
+    /// [`BackgroundAgentState::Unavailable`].
+    pub reason: Option<UnavailableReason>,
+    /// The next step to offer.
+    pub recovery: RecoveryStep,
+}
+
+impl AgentAssessment {
+    const fn of(state: BackgroundAgentState, recovery: RecoveryStep) -> Self {
+        Self {
+            state,
+            reason: None,
+            recovery,
+        }
+    }
+
+    const fn unavailable(reason: UnavailableReason, recovery: RecoveryStep) -> Self {
+        Self {
+            state: BackgroundAgentState::Unavailable,
+            reason: Some(reason),
+            recovery,
+        }
+    }
+}
+
+/// Maps what a client knows to a product state, with the rows of the table
+/// *State background agent* in spec 0015, evaluated from the top.
+///
+/// `classify` does not know whether the daemon answers; a caller that knows
+/// it does not and gets [`BackgroundAgentState::Enabled`] offers
+/// [`RecoveryStep::Start`].
+#[must_use]
+pub fn classify(input: &AgentInput) -> AgentAssessment {
+    use AgentAssessment as A;
+    use BackgroundAgentState as S;
+    use RecoveryStep as R;
+    use UnavailableReason as U;
+
+    if input.root_override {
+        return A::unavailable(U::RootOverride, R::ManualDaemonForOverride);
+    }
+    match &input.probe {
+        ProbeOutcome::Unsupported => A::unavailable(U::UnsupportedOs, R::None),
+        ProbeOutcome::Failed { .. } | ProbeOutcome::NotChecked => {
+            A::unavailable(U::StatusFailed, R::CheckAgain)
+        }
+        ProbeOutcome::Probe(AgentProbe::NotBundled { .. }) => {
+            A::unavailable(U::NotBundled, R::UseBundledCli)
+        }
+        ProbeOutcome::Probe(AgentProbe::HelperMissing { .. }) => {
+            A::unavailable(U::HelperMissing, R::BuildWithXtask)
+        }
+        ProbeOutcome::Probe(AgentProbe::Registration { registration, .. }) => match registration {
+            AgentRegistration::Unrecognized(_) => {
+                A::unavailable(U::StatusUnrecognized, R::CheckAgain)
+            }
+            AgentRegistration::Enabled => A::of(S::Enabled, R::None),
+            AgentRegistration::NotRegistered => A::of(S::NotRegistered, R::Register),
+            AgentRegistration::NotFound => {
+                if input.just_registered {
+                    A::of(S::NotFound, R::MoveOrReinstallApp)
+                } else {
+                    A::of(S::NotRegistered, R::Register)
+                }
+            }
+            AgentRegistration::RequiresApproval => {
+                if !input.launch_record || input.just_registered {
+                    A::of(S::RequiresApproval, R::ApproveInLoginItems)
+                } else {
+                    A::of(S::Disabled, R::EnableInLoginItems)
+                }
+            }
+        },
+    }
+}
+
 /// Who started the daemon process.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LaunchContext {
@@ -311,6 +543,179 @@ impl LaunchContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn registered(registration: AgentRegistration) -> ProbeOutcome {
+        ProbeOutcome::Probe(AgentProbe::Registration {
+            registration,
+            bundle: PathBuf::from("/Applications/Stackly.app"),
+        })
+    }
+
+    fn input(probe: ProbeOutcome) -> AgentInput {
+        AgentInput {
+            root_override: false,
+            probe,
+            launch_record: false,
+            just_registered: false,
+        }
+    }
+
+    fn assess(input: &AgentInput) -> (&'static str, Option<&'static str>, &'static str) {
+        let a = classify(input);
+        (
+            a.state.as_code(),
+            a.reason.map(UnavailableReason::as_code),
+            a.recovery.as_code(),
+        )
+    }
+
+    #[test]
+    fn a_root_override_wins_over_every_os_answer() {
+        let mut i = input(registered(AgentRegistration::Enabled));
+        i.root_override = true;
+        assert_eq!(
+            assess(&i),
+            (
+                "unavailable",
+                Some("root_override"),
+                "manual_daemon_for_override"
+            )
+        );
+    }
+
+    #[test]
+    fn a_root_override_without_an_os_call_is_unavailable() {
+        let mut i = input(ProbeOutcome::NotChecked);
+        i.root_override = true;
+        assert_eq!(classify(&i).reason, Some(UnavailableReason::RootOverride));
+    }
+
+    #[test]
+    fn not_checked_without_a_root_override_counts_as_a_failed_status() {
+        assert_eq!(
+            assess(&input(ProbeOutcome::NotChecked)),
+            ("unavailable", Some("status_failed"), "check_again")
+        );
+    }
+
+    #[test]
+    fn an_unsupported_os_has_no_recovery() {
+        assert_eq!(
+            assess(&input(ProbeOutcome::Unsupported)),
+            ("unavailable", Some("unsupported_os"), "none")
+        );
+    }
+
+    #[test]
+    fn a_timed_out_status_asks_to_check_again() {
+        assert_eq!(
+            assess(&input(ProbeOutcome::Failed { code: None })),
+            ("unavailable", Some("status_failed"), "check_again")
+        );
+    }
+
+    #[test]
+    fn a_cli_outside_the_bundle_points_to_the_bundled_cli() {
+        let probe = ProbeOutcome::Probe(AgentProbe::NotBundled {
+            executable: PathBuf::from("/work/target/debug/stackly"),
+        });
+        assert_eq!(
+            assess(&input(probe)),
+            ("unavailable", Some("not_bundled"), "use_bundled_cli")
+        );
+    }
+
+    #[test]
+    fn a_bundle_without_the_helper_points_to_build_app() {
+        let probe = ProbeOutcome::Probe(AgentProbe::HelperMissing {
+            bundle: PathBuf::from("/DerivedData/Stackly.app"),
+        });
+        assert_eq!(
+            assess(&input(probe)),
+            ("unavailable", Some("helper_missing"), "build_with_xtask")
+        );
+    }
+
+    #[test]
+    fn an_unknown_os_status_is_unavailable() {
+        assert_eq!(
+            assess(&input(registered(AgentRegistration::Unrecognized(9)))),
+            ("unavailable", Some("status_unrecognized"), "check_again")
+        );
+    }
+
+    #[test]
+    fn enabled_has_no_recovery() {
+        assert_eq!(
+            assess(&input(registered(AgentRegistration::Enabled))),
+            ("enabled", None, "none")
+        );
+    }
+
+    #[test]
+    fn not_registered_offers_to_register() {
+        assert_eq!(
+            assess(&input(registered(AgentRegistration::NotRegistered))),
+            ("not_registered", None, "register")
+        );
+    }
+
+    #[test]
+    fn a_never_registered_bundle_offers_to_register() {
+        for launch_record in [false, true] {
+            let mut i = input(registered(AgentRegistration::NotFound));
+            i.launch_record = launch_record;
+            assert_eq!(assess(&i), ("not_registered", None, "register"));
+        }
+    }
+
+    #[test]
+    fn not_found_right_after_registering_offers_to_move_or_reinstall() {
+        for launch_record in [false, true] {
+            let mut i = input(registered(AgentRegistration::NotFound));
+            i.launch_record = launch_record;
+            i.just_registered = true;
+            assert_eq!(assess(&i), ("not_found", None, "move_or_reinstall_app"));
+        }
+    }
+
+    #[test]
+    fn requires_approval_without_a_launch_record_waits_for_approval() {
+        assert_eq!(
+            assess(&input(registered(AgentRegistration::RequiresApproval))),
+            ("requires_approval", None, "approve_in_login_items")
+        );
+    }
+
+    #[test]
+    fn requires_approval_with_a_launch_record_is_disabled() {
+        let mut i = input(registered(AgentRegistration::RequiresApproval));
+        i.launch_record = true;
+        assert_eq!(assess(&i), ("disabled", None, "enable_in_login_items"));
+    }
+
+    #[test]
+    fn a_registration_in_the_same_action_is_never_disabled() {
+        let mut i = input(registered(AgentRegistration::RequiresApproval));
+        i.launch_record = true;
+        i.just_registered = true;
+        assert_eq!(
+            assess(&i),
+            ("requires_approval", None, "approve_in_login_items")
+        );
+    }
+
+    #[test]
+    fn only_the_unavailable_state_carries_a_reason() {
+        for registration in [
+            AgentRegistration::Enabled,
+            AgentRegistration::RequiresApproval,
+            AgentRegistration::NotRegistered,
+            AgentRegistration::NotFound,
+        ] {
+            assert_eq!(classify(&input(registered(registration))).reason, None);
+        }
+    }
 
     #[test]
     fn the_unsupported_port_answers_not_supported_for_its_os() {
@@ -397,5 +802,7 @@ mod tests {
             AgentOsErrorKind::AlreadyRegistered.as_code(),
             "already_registered"
         );
+        assert_eq!(BackgroundAgentState::Disabled.as_code(), "disabled");
+        assert_eq!(RecoveryStep::Start.as_code(), "start");
     }
 }

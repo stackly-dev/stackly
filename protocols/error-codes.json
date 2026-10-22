@@ -121,6 +121,122 @@
       "summary": "the provider has no such version in the catalog"
     },
     {
+      "code": "cli.agent_call_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "op",
+        "seconds"
+      ],
+      "items": null,
+      "summary": "a macOS call about the agent took longer than 10 seconds (spec 0015)"
+    },
+    {
+      "code": "cli.agent_disabled",
+      "category": "unauthorized",
+      "retryable": false,
+      "details": [
+        "label"
+      ],
+      "items": null,
+      "summary": "the background agent was switched off in Login Items after it ran before (spec 0015)"
+    },
+    {
+      "code": "cli.agent_helper_missing",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "bundlePath"
+      ],
+      "items": null,
+      "summary": "the app bundle lacks the LaunchAgent property list or stacklyd (spec 0015)"
+    },
+    {
+      "code": "cli.agent_invalid_signature",
+      "category": "unauthorized",
+      "retryable": false,
+      "details": [
+        "label",
+        "osCode"
+      ],
+      "items": null,
+      "summary": "macOS rejected the code signature of the app bundle (spec 0015)"
+    },
+    {
+      "code": "cli.agent_not_bundled",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "executable"
+      ],
+      "items": null,
+      "summary": "the cli does not run from inside the Stackly app bundle, so macOS cannot be asked about the agent (spec 0015)"
+    },
+    {
+      "code": "cli.agent_not_found",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "label",
+        "bundlePath"
+      ],
+      "items": null,
+      "summary": "macOS cannot find the service for this copy of the app right after the registration (spec 0015)"
+    },
+    {
+      "code": "cli.agent_not_registered",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "label"
+      ],
+      "items": null,
+      "summary": "the background agent is not registered, so there is nothing to start (spec 0015)"
+    },
+    {
+      "code": "cli.agent_os_error",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "op",
+        "osDomain",
+        "osCode"
+      ],
+      "items": null,
+      "summary": "a register, unregister, or relaunch call failed in macOS (spec 0015)"
+    },
+    {
+      "code": "cli.agent_requires_approval",
+      "category": "unauthorized",
+      "retryable": false,
+      "details": [
+        "label"
+      ],
+      "items": null,
+      "summary": "the background agent waits for the user's approval in Login Items (spec 0015)"
+    },
+    {
+      "code": "cli.agent_root_override",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "variable"
+      ],
+      "items": null,
+      "summary": "an agent command was asked while STACKLY_ROOT is set, and the agent only serves the default root (spec 0015)"
+    },
+    {
+      "code": "cli.agent_status_unavailable",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "op",
+        "osCode"
+      ],
+      "items": null,
+      "summary": "the agent status cannot be read or holds a value this build does not know (spec 0015)"
+    },
+    {
       "code": "cli.cancel_not_applied",
       "category": "conflict",
       "retryable": false,
@@ -149,6 +265,17 @@
       "summary": "a confirmation is needed while the cli runs noninteractive without the approval flag"
     },
     {
+      "code": "cli.daemon_wait_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "action",
+        "seconds"
+      ],
+      "items": null,
+      "summary": "the daemon did not appear or disappear within the limit of the command (spec 0015)"
+    },
+    {
       "code": "cli.input_required",
       "category": "invalid_input",
       "retryable": false,
@@ -157,6 +284,16 @@
       ],
       "items": null,
       "summary": "a prompt is needed while the cli runs noninteractive"
+    },
+    {
+      "code": "cli.instance_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "name"
+      ],
+      "items": null,
+      "summary": "no instance has the name the command was given"
     },
     {
       "code": "cli.interrupted",
@@ -264,6 +401,16 @@
       ],
       "items": null,
       "summary": "another daemon holds the lock, only ever printed to stderr"
+    },
+    {
+      "code": "daemon.restart_unavailable",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "launchContext"
+      ],
+      "items": null,
+      "summary": "a restart was asked of a daemon that launchd did not start, so nothing would start it again"
     },
     {
       "code": "daemon.shutting_down",

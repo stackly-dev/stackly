@@ -1,7 +1,6 @@
 //! The text of one instance: a `kv` block, the endpoint table, and the
-//! failure output (spec 0014 AC-7, spec 0022 *CLI*). `get` writes it now
-//! and `inspect` will write the same text, so label, order, and format
-//! stay here.
+//! failure output (spec 0014 AC-7, spec 0022 *CLI*). `inspect` and its
+//! alias `get` write it, so label, order, and format stay here.
 
 use stackly_protocol::instance::{
     EndpointStatus, EndpointTransport, InstanceBlocker, InstanceHealth, InstanceLastFailure,
@@ -247,6 +246,11 @@ fn endpoint(endpoint: &EndpointStatus) -> Vec<Cell> {
         Cell::text(&wire_name(&endpoint.port_mode)),
         Cell::fixed(if endpoint.bound { "yes" } else { "no" }),
     ]
+}
+
+/// `<name>=<address>`, one endpoint as the list writes it.
+pub fn endpoint_text(endpoint: &EndpointStatus) -> String {
+    format!("{}={}", endpoint.name, address(endpoint))
 }
 
 /// `<host>:<port>` (IPv6 in brackets, `auto` for a port not known yet), the

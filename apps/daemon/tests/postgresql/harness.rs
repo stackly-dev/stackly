@@ -18,7 +18,9 @@ use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
 use stackly_core::runtime::fixture::install_cached_artifact;
 use stackly_core::supervisor::fixture::pin_package;
 use stackly_core::{PreparedLayout, daemon_info, prepare_layout};
-use stackly_domain::{InstanceId, Registry, WriteBatch, WriteOp};
+use stackly_domain::{
+    InstanceId, LineCompatibility, Registry, RuntimeId, RuntimeLine, WriteBatch, WriteOp,
+};
 use stackly_platform::{Clock, Platform, SystemClock};
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::Timestamp;
@@ -208,6 +210,76 @@ impl Site {
             runtime_dir,
             artifact_sha256: sha256,
         })
+    }
+
+    /// Installs `other` from the runtime cache into the registry of this
+    /// root, next to the runtime of the site. The daemon must be stopped.
+    /// Notes `evidence` as `BLOCKED` and returns `None` when the cache does
+    /// not hold the artifact.
+    pub fn install_other(
+        &self,
+        evidence: &Evidence,
+        other: Pg,
+    ) -> Option<(RuntimeId, RuntimeLine)> {
+        let Some(cache_file) = cached_artifact(&artifact_sha256(other)) else {
+            evidence.blocked(
+                &format!("artifact {} is not in the runtime cache", other.artifact),
+                OWNER,
+            );
+            return None;
+        };
+        let registry = self.open_registry();
+        let package = package(&self.platform, &package_dir());
+        let (runtime, _) = install_cached_artifact(
+            &self.platform,
+            &self.prepared,
+            &registry,
+            &package,
+            other.artifact,
+            &cache_file,
+        )
+        .expect("the cached artifact installs, exec check included");
+        Some((runtime.id(), runtime.line().clone()))
+    }
+
+    /// Binds the stopped instance `id` to `runtime` by writing the registry
+    /// the way no contract method does, so a test can start data of one
+    /// major on a runtime of another. The daemon must be stopped.
+    pub fn rebind_instance(&self, id: Uuid, runtime: &(RuntimeId, RuntimeLine)) {
+        let registry = self.open_registry();
+        let mut instance = registry
+            .instance(instance_id(id))
+            .expect("the instance can be read")
+            .value
+            .expect("the instance exists");
+        let expected = instance.revision();
+        let software = instance.software().clone();
+        let compat =
+            LineCompatibility::default().allow(instance.data_line().clone(), runtime.1.clone());
+        instance
+            .rebind(runtime.0, &software, &runtime.1, &compat)
+            .expect("the stopped instance can be rebound");
+        registry
+            .commit(WriteBatch::new(vec![WriteOp::UpdateInstance {
+                instance,
+                expected,
+            }]))
+            .expect("the rebound instance can be committed");
+    }
+
+    /// Opens the registry of this root. The daemon must be stopped.
+    fn open_registry(&self) -> impl Registry + use<> {
+        let RegistryOpen::Ready { registry, .. } = OpenOptions::new()
+            .open(
+                &self.platform,
+                self.prepared.layout(),
+                daemon_info().version,
+            )
+            .expect("the registry opens")
+        else {
+            panic!("the registry opens ready");
+        };
+        registry
     }
 
     /// The paths the binary daemon computes for this root.

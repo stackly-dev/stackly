@@ -85,6 +85,8 @@ Plist di `Contents/Library/LaunchAgents/`, didaftarkan dengan `SMAppService.agen
 **Cons**:
 - Sama dengan Keputusan 1 Option 2.
 
+*(2026-10-22: Option 1 tetap, tetapi file CLI di `Contents/MacOS` bernama `stackly-cli`; lihat bagian Update 2026-10-22 tentang nama file CLI di bundle.)*
+
 ### Keputusan 3: cara start, stop, dan restart daemon
 
 #### Option 1: stop dan restart lewat IPC, `KeepAlive` yang hanya menyalakan ulang exit gagal, start lewat daftar ulang `SMAppService` (rekomendasi)
@@ -672,6 +674,22 @@ Usulan untuk spec 0013 (nama, seam, dan environment), spec 0016 (`MainWindowRoot
 | S6 | Turn On beberapa menit setelah launch langsung menawarkan Start stacklyd karena ambang dihitung dari `since` presence | `turnOn()` yang berhasil menunggu daemon seperti `start()`, dan baris `enabled` memakai `isStarting`; ambang AC-13 tetap dari `since` |
 
 Yang tidak diambil: `DaemonBanner(contentAt:...)` yang diisi `LiveShell` (lebih mudah di preview, tetapi menyimpang dari rekomendasi lead yang memakai environment; preview dan snapshot baris agent tetap bisa lewat runtime fixture spec 0068), dan memindahkan ambang 15 detik dari `since` presence ke waktu aksi (mengubah arti AC-13). Teks AC tetap tidak berubah; yang bergeser hanya waktu: pengumuman transisi bisa tertunda sampai probe pertama (biasanya milidetik, paling lama 12 detik), dan baris `enabled` menunggu selama `isStarting`.
+
+## Update 2026-10-22 (nama file CLI di bundle)
+
+**Temuan.** Saat langkah 7 milestone 1 dibangun, test isi bundle gagal di Mac ini: menulis `Contents/MacOS/Stackly` lalu `Contents/MacOS/stackly` meninggalkan satu entri berisi byte CLI. APFS yang tidak membedakan huruf besar kecil adalah format default volume Mac, jadi tata letak *Isi bundle* versi sebelumnya tidak bisa ada: `cargo xtask build-app` akan menimpa executable app dengan CLI tanpa pesan apa pun, dan AC-1, AC-2, serta target symlink AC-14 tidak bisa dipenuhi seperti tertulis. Spike AC-21 tidak menangkapnya karena bundle spike memakai nama tool `spikectl`, dan test `AppBundle` hanya menguji bentuk path, tidak menulis file.
+
+**Option A: ganti nama executable app.** `CFBundleExecutable` dan `EXECUTABLE_NAME` di proyek Xcode menjadi nama lain (misalnya `StacklyApp`), CLI tetap `stackly`. Kekurangan: menyentuh proyek Xcode dan `APP_EXECUTABLE`, nama proses app di Activity Monitor dan laporan crash ikut berubah, dan nama executable app adalah konvensi yang dibaca alat Apple lain.
+
+**Option B: ganti nama file CLI di bundle menjadi `stackly-cli` (dipilih kamu, 2026-10-22).** Perintah tetap `stackly`: clap memakai nama `stackly` yang ditulis eksplisit untuk help, usage, completion, dan man page, symlink terkelola tetap `~/.local/bin/stackly` (sekarang menunjuk `Contents/MacOS/stackly-cli`), dan identifier code signing tetap `com.ojiepermana.stackly.cli`. `AppBundle::enclosing` menerima nama file apa pun di `Contents/MacOS`, jadi penemuan bundle B2 tidak berubah. Yang berubah hanya konstanta `CLI_EXECUTABLE`, nilai `cliExecutable` di `protocols/fixtures/bundle/identifiers.json`, padanan Swift nya saat `AgentIdentifiers.swift` dibuat di milestone 3, dan teks yang menyebut path file (AC-1, AC-2, AC-8, AC-14, AC-20, *Isi bundle*, *Instalasi CLI*, hint `use_bundled_cli`, langkah 14). Belum ada build yang memasang link ke nama lama, jadi tidak perlu aturan peralihan. Kekurangan kecil: orang yang menjalankan file di dalam bundle langsung mengetik `stackly-cli`, dan nama proses CLI yang dijalankan lewat bundle tampil sebagai `stackly-cli`.
+
+**Option C: CLI di folder lain** (`Contents/Helpers` atau `Contents/Resources/bin`). Ditolak dengan alasan Keputusan 2 Option 2: `AppBundle::enclosing` dan pemeriksaan `cli.agent_not_bundled` memakai bentuk `<X>.app/Contents/MacOS/<file>`, dan bundle utama untuk executable di luar `Contents/MacOS` tidak terbukti.
+
+**Option D: syarat volume yang membedakan huruf besar kecil.** Ditolak: bukan pilihan pengguna Mac biasa dan bukan sesuatu yang bisa diperiksa build.
+
+**Perlindungan.** `cargo xtask build-app` memeriksa ketiga nama di `Contents/MacOS` berbeda tanpa melihat huruf besar kecil sebelum langkah pertama dan lagi saat cek isi, sehingga identifier final OQ-001 yang bertabrakan gagal cepat dengan pesan yang menyebut kedua nama, bukan diam diam menimpa app.
+
+**Teks AC yang berubah** (hanya nama file dan akibat langsung nya, ID tetap): AC-1 (`Contents/MacOS/stackly-cli`, `stackly-cli --version`), AC-2 (`stackly-cli` ditandatangani dengan `com.ojiepermana.stackly.cli`), AC-8 (`~/.local/bin/stackly` bekerja seperti `Contents/MacOS/stackly-cli`), AC-14 (target symlink CLI `Contents/MacOS/stackly-cli`), AC-20 (`TeamIdentifier` sama di app, `stacklyd`, dan `stackly-cli`).
 
 ## References
 

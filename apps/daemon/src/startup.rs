@@ -10,7 +10,7 @@
 //! last.
 
 use std::ffi::{OsStr, OsString};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use stackly_core::catalog::CatalogLocation;
@@ -27,6 +27,9 @@ pub const LOG_FILTER_ENV: &str = "STACKLY_LOG";
 pub const CATALOG_DIR_ENV: &str = "STACKLY_CATALOG_DIR";
 /// Exit code when the daemon cannot start.
 pub const EXIT_START_FAILED: u8 = 1;
+/// Exit code of a stop that asked launchd to start the daemon again
+/// (`daemon.shutdown` with mode `restart`, `EX_TEMPFAIL`).
+pub const EXIT_RESTART: u8 = 75;
 /// Exit code when another daemon holds the lock for the same data root.
 pub const EXIT_LOCK_HELD: u8 = 3;
 
@@ -42,6 +45,13 @@ pub struct StartConfig {
     pub print_roots: bool,
     /// The value of `STACKLY_CATALOG_DIR`, or `None` when it is unset.
     pub catalog_dir: Option<OsString>,
+    /// The value of `XPC_SERVICE_NAME`, or `None` when it is unset.
+    pub xpc_service_name: Option<OsString>,
+    /// The parent process ID; 1 means launchd (spec 0015).
+    pub parent_pid: u32,
+    /// The path of the running executable as the OS reports it, or `None`
+    /// when it cannot be read.
+    pub current_exe: Option<PathBuf>,
 }
 
 impl StartConfig {
@@ -57,6 +67,9 @@ impl StartConfig {
             log_filter,
             print_roots,
             catalog_dir: None,
+            xpc_service_name: None,
+            parent_pid: 0,
+            current_exe: None,
         }
     }
 
@@ -64,6 +77,22 @@ impl StartConfig {
     #[must_use]
     pub fn with_catalog_dir(mut self, catalog_dir: Option<OsString>) -> Self {
         self.catalog_dir = catalog_dir;
+        self
+    }
+
+    /// Adds what tells who started the daemon: `XPC_SERVICE_NAME`, the
+    /// parent PID, and the path of the executable (spec 0015). `main` reads
+    /// all three once.
+    #[must_use]
+    pub fn with_launch_environment(
+        mut self,
+        xpc_service_name: Option<OsString>,
+        parent_pid: u32,
+        current_exe: Option<PathBuf>,
+    ) -> Self {
+        self.xpc_service_name = xpc_service_name;
+        self.parent_pid = parent_pid;
+        self.current_exe = current_exe;
         self
     }
 }
@@ -161,8 +190,10 @@ mod imp {
 
     use stackly_core::secret::{Redactor, SecretWorker, WorkerConfig};
     use stackly_core::{daemon_info, prepare_layout};
-    use stackly_platform::{DirectoryLayout, Platform, SecretStore, UserId};
+    use stackly_platform::bundle::AppBundle;
+    use stackly_platform::{DirectoryLayout, LaunchContext, Platform, SecretStore, UserId};
     use stackly_platform_macos::{KeychainTarget, MacosPlatform, MacosSecretStore};
+    use stackly_protocol::daemon::ShutdownMode;
     use stackly_protocol::events::ShutdownReason;
     use stackly_protocol::secret::SecretStoreTarget;
     use stackly_protocol::{CONTRACT_DIGEST, ProtocolVersion, Timestamp};
@@ -170,7 +201,8 @@ mod imp {
     use uuid::Uuid;
 
     use super::{
-        EXIT_LOCK_HELD, EXIT_START_FAILED, StartConfig, parse_catalog_dir, parse_log_filter,
+        EXIT_LOCK_HELD, EXIT_RESTART, EXIT_START_FAILED, StartConfig, parse_catalog_dir,
+        parse_log_filter,
     };
     use crate::lock::{DaemonLock, LockError, LockOwner};
     use crate::log_sink::{LOG_CONTROL_TIMEOUT, LogSink, LogSinkConfig, RedactingMakeWriter};
@@ -250,6 +282,15 @@ mod imp {
                 return EXIT_START_FAILED;
             }
         };
+        // Who started the daemon, and the app bundle it runs from. The
+        // executable path is made canonical so a symlink into the bundle
+        // still finds it; a path that cannot be resolved is no bundle.
+        let launch = LaunchContext::detect(config.xpc_service_name.as_deref(), config.parent_pid);
+        let bundle = config
+            .current_exe
+            .as_deref()
+            .and_then(|exe| platform.fs().canonicalize(exe).ok())
+            .and_then(|exe| AppBundle::enclosing(&exe));
         // Step 3 also checks the catalog folder, which only reads.
         let catalog = match parse_catalog_dir(platform.fs(), config.catalog_dir.as_deref()) {
             Ok(catalog) => catalog,
@@ -316,6 +357,9 @@ mod imp {
             runtime_root = %roots.runtime().display(),
             socket_path = %layout.daemon_socket().display(),
             root_override = has_override,
+            launch_context = if launch.label().is_some() { "launchd" } else { "manual" },
+            launch_label = launch.label(),
+            bundle_path = bundle.as_ref().map(|bundle| bundle.root().display().to_string()),
             "stacklyd started",
         );
 
@@ -379,6 +423,7 @@ mod imp {
 
         let facts = StartFacts::new(server_instance_id, started_at, has_override, pid);
         let deps = DaemonDeps::new(platform, prepared, facts, Arc::clone(sink))
+            .with_launch(launch, bundle)
             .with_catalog_location(catalog)
             .with_redactor(Arc::clone(redactor))
             .with_secret_target(Some(secret_target))
@@ -411,6 +456,16 @@ mod imp {
                 tracing::info!(signal, "stacklyd stopping");
                 (ShutdownReason::Signal, 0)
             }
+            mode = handle.stop_requested() => match mode {
+                ShutdownMode::Restart => {
+                    tracing::info!("stacklyd stopping for a restart that a client asked for");
+                    (ShutdownReason::RestartRequested, EXIT_RESTART)
+                }
+                _ => {
+                    tracing::info!("stacklyd stopping at a client's request");
+                    (ShutdownReason::Requested, 0)
+                }
+            },
             code = handle.fatal() => {
                 tracing::error!(exit_code = code, "stacklyd stopping after a fatal error");
                 (ShutdownReason::Requested, code)

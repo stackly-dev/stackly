@@ -8,7 +8,7 @@ use serde_json::json;
 use stackly_testkit::TestRoot;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, create_with, new_password, package_dir};
+use crate::harness::{PG17, PG18, Pg, Site, create_with, new_password, package_dir};
 
 fn copy_tree(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).expect("a folder can be made");
@@ -59,17 +59,18 @@ fn copy_with_free_text(root: &TestRoot) -> std::path::PathBuf {
     dir
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_reads_back_the_text_the_postgresql_conf_escaper_wrote() {
+async fn reads_back_the_text_the_postgresql_conf_escaper_wrote(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
-        expected = "postgres -C log_line_prefix from runtime 18 reads back a'b\\c d and ü 空 exactly as they were given to the postgresqlConf format",
+        expected = &format!(
+            "postgres -C log_line_prefix from runtime {} reads back a'b\\c d and ü 空 exactly as they were given to the postgresqlConf format",
+            pg.major
+        ),
     );
     let copies = TestRoot::new().expect("a folder for the package copy");
     let dir = copy_with_free_text(&copies);
-    let Some(site) = Site::open_package(&ev, PG18, &dir) else {
+    let Some(site) = Site::open_package(&ev, pg, &dir) else {
         return;
     };
     let daemon = site.in_process(|_| {}).await;
@@ -115,6 +116,18 @@ async fn postgresql_18_reads_back_the_text_the_postgresql_conf_escaper_wrote() {
         assert_eq!(read.trim_end_matches('\n'), value, "{name}");
     }
     daemon.shutdown().await;
-    site.subject(&ev, PG18.version);
+    site.subject(&ev, pg.version);
     ev.pass_with("a'b\\c d and ü 空 came back unchanged from postgres -C log_line_prefix");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_reads_back_the_text_the_postgresql_conf_escaper_wrote() {
+    reads_back_the_text_the_postgresql_conf_escaper_wrote(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_reads_back_the_text_the_postgresql_conf_escaper_wrote() {
+    reads_back_the_text_the_postgresql_conf_escaper_wrote(PG18).await;
 }

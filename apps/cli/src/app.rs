@@ -12,8 +12,11 @@ use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use jiff::tz::TimeZone;
 use stackly_protocol::ProtocolVersion;
 
+use crate::commands::completion::CompletionArgs;
 use crate::commands::daemon::DaemonCommand;
+use crate::commands::execute;
 use crate::commands::instance::InstanceCommand;
+use crate::commands::manpage::ManpageArgs;
 use crate::commands::operation::OperationCommand;
 use crate::commands::secret::SecretCommand;
 use crate::context::Context;
@@ -107,7 +110,7 @@ impl ColorWhen {
 /// under `commands/`.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Look at the Stackly daemon
+    /// Install, start, stop, or look at the Stackly daemon
     #[command(subcommand, arg_required_else_help = true)]
     Daemon(DaemonCommand),
     /// Create, start, stop, or show instances
@@ -119,6 +122,15 @@ pub enum Command {
     /// Store, inspect, reveal, or delete secrets in the Keychain
     #[command(subcommand, arg_required_else_help = true)]
     Secret(SecretCommand),
+    /// Write the completion script of a shell
+    #[command(after_help = "Examples:\n  stackly completion zsh\n  stackly completion bash --json")]
+    Completion(CompletionArgs),
+    /// Write the man pages
+    #[command(
+        hide = true,
+        after_help = "Examples:\n  stackly manpage\n  stackly manpage --json"
+    )]
+    Manpage(ManpageArgs),
 }
 
 impl Command {
@@ -129,6 +141,8 @@ impl Command {
             Self::Instance(command) => command.run(cx).await,
             Self::Operation(command) => command.run(cx).await,
             Self::Secret(command) => command.run(cx).await,
+            Self::Completion(args) => execute(args, cx).await,
+            Self::Manpage(args) => execute(args, cx).await,
         }
     }
 }
@@ -253,7 +267,7 @@ pub fn run() -> u8 {
     panic::set_command(&command, cli.global.verbose);
     let global = cli.global.clone();
     let mut output = real_output(&global, command);
-    let environment = match env::read() {
+    let environment = match env::read(env::executable()) {
         Ok(environment) => environment,
         Err(failure) => return output.emit(CommandOutput::<()>::failed(failure)),
     };
@@ -267,6 +281,7 @@ pub fn run() -> u8 {
         uid: environment.uid,
         interactive,
     };
+    let agent = environment.agent;
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -284,9 +299,13 @@ pub fn run() -> u8 {
         Box::new(BufReader::new(std::io::stdin())),
         progress,
         connector,
+        agent,
     );
     let joined = runtime
         .block_on(async move { tokio::spawn(async move { cli.command.run(&mut cx).await }).await });
+    // A macOS call that hangs cannot be cancelled and keeps its thread, so
+    // the runtime is not waited for (spec 0015).
+    runtime.shutdown_timeout(std::time::Duration::ZERO);
     panic::join(joined)
 }
 

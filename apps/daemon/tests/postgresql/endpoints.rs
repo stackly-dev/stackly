@@ -6,7 +6,9 @@ use std::os::unix::fs::PermissionsExt;
 use stackly_protocol::instance::EndpointPortMode;
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, create_auto, create_instance, output_of, stop_and_shutdown};
+use crate::harness::{
+    PG17, PG18, Pg, Site, create_auto, create_instance, output_of, stop_and_shutdown,
+};
 
 fn mode_of(path: &std::path::Path) -> u32 {
     std::fs::metadata(path)
@@ -16,15 +18,13 @@ fn mode_of(path: &std::path::Path) -> u32 {
         & 0o777
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns() {
+async fn listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
         expected = "the postmaster listens only on 127.0.0.1 at the endpoint port and on one private socket in a 0700 folder, ALTER SYSTEM SET port does not move it, and an Auto port is stored and named by the socket",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let daemon = site.in_process(|_| {}).await;
@@ -105,4 +105,16 @@ async fn postgresql_18_listens_only_on_its_endpoint_and_keeps_the_settings_stack
 
     stop_and_shutdown(&api, daemon, made.id).await;
     ev.pass_with("one TCP listener on 127.0.0.1 and one 0700 socket, port fixed by argv, Auto port named the socket");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns() {
+    listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns() {
+    listens_only_on_its_endpoint_and_keeps_the_settings_stackly_owns(PG18).await;
 }

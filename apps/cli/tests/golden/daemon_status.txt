@@ -12,3 +12,6 @@ Cache       /stackly/cache
 Runtime     /stackly/run
 Socket      /stackly/run/stacklyd.sock
 Override    no
+Agent       unavailable (root_override)
+App         -
+Next        start stacklyd yourself for STACKLY_ROOT

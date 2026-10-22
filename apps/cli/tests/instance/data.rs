@@ -128,3 +128,13 @@ pub fn scripted(
         other => play(other, ctx),
     }
 }
+
+/// The page of `protocols/fixtures/instance/list-mixed.json`: one instance
+/// for each group and lifecycle, ordered by name.
+pub fn list_mixed() -> stackly_protocol::instance::InstancePage {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../protocols/fixtures/instance/list-mixed.json");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("fixture {} reads: {error}", path.display()));
+    serde_json::from_str(&text).expect("the list-mixed fixture decodes")
+}

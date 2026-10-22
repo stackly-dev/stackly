@@ -7,7 +7,7 @@
   "testAgentLabelPrefix": "dev.stackly.test.agent.",
   "appExecutable": "Stackly",
   "daemonExecutable": "stacklyd",
-  "cliExecutable": "stackly",
+  "cliExecutable": "stackly-cli",
   "macosDir": "Contents/MacOS",
   "launchAgentsDir": "Contents/Library/LaunchAgents",
   "resourcesDir": "Contents/Resources",

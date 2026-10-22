@@ -1,6 +1,6 @@
 # Verify: Overview dan daftar instance · spec 0022 · updated 2026-10-21
 
-_Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah; saat ini hanya Milestone 1._
+_Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah; saat ini Milestone 1 dan 2._
 
 ## Milestone 1: Daemon contract
 
@@ -36,3 +36,32 @@ _Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalan
 - AC-1: data test bersama `groups.json`, `list-mixed.json`, dan `attention-operations.json` ada dan terbaca di Rust dan Swift (milestone ini); fungsi `InstanceGroup.of` dan `instance::group::of` serta tesnya milik milestone 2 dan 3.
 - AC-4: sisi daemon lengkap (port `volume_space`, level di domain, core `storage::capacity`, handler dengan single flight dan timeout, test daemon). `CapacityModel` dan item S1 sampai S4 di GUI milik milestone 3, dan cek disk APFS kecil milik milestone 4.
 - AC-12: kontrak lengkap (modul `storage`, method `storage.get_capacity` `recovery allowed`, `storage.capacity_unavailable` dengan hint, fixture, protokol 1.9, codegen, test Rust dan Swift); penanganan nilai asing di GUI dan CLI milik milestone 2 dan 3.
+
+## Milestone 2: stackly instance list and inspect
+
+### UI / manual
+
+- [x] Di root sementara yang sudah di-seed (`cargo run -q -p stacklyd --example skeleton_seed -- --root <R>`) dengan `stacklyd` jalan dan dua instance fake, jalankan `STACKLY_ROOT=<R> stackly instance list` → tabel `NAME` sampai `OWNERSHIP` urut nama, baris kosong, lalu `2 instances: 1 running, 1 stopped` sebagai baris terakhir; tanpa instance stdout hanya `No instances.` → AC-10
+- [x] Jalankan `stackly instance list --status failed` saat tidak ada instance gagal → `No failed instances.` lalu baris jumlah, keluar 0 → AC-10
+- [x] Jalankan `stackly instance inspect <nama>`, lalu `stackly instance inspect <UUID huruf besar>`, lalu `stackly instance get <nama>` → blok `kv`, tabel endpoint, dan teks yang sama di ketiganya → AC-11
+- [x] Jalankan `stackly instance inspect tidak-ada` → keluar 10, `cli.instance_not_found`, pesan `no instance named tidak-ada`, hint `list instances with stackly instance list` → AC-11
+
+### Commands
+
+- [x] `cargo test -p stackly-cli --lib group` → tiga test lulus: setiap pasangan lifecycle dan state readiness di `protocols/fixtures/instance/groups.json` (30 kasus, `retained` selalu `None`) masuk ke kelompok yang sama dengan tabel spec, filter Running sama dengan `ready` ditambah `notReady`, dan baris jumlah hanya menyebut kelompok di atas 0 (`1 instance:` untuk satu) → AC-1, AC-10
+- [x] `cargo test -p stackly-cli --lib resolve` → UUID 36 karakter bertanda hubung (huruf besar atau kecil) menjadi ID, argumen lain menjadi nama → AC-11
+- [x] `cargo build -p stacklyd -p stackly-fake-server` lalu `cargo test -p stackly-cli --test instance` → semua test lulus, termasuk golden `instance_list.txt`, `instance_list.json`, `instance_list_failed.txt`, `instance_list_empty.txt`, `instance_inspect.txt`, `instance_inspect.json` (dari `list-mixed.json`, `TZ=UTC`), semua halaman `instance.list` dibaca (limit 200), halaman yang gagal di tengah menggagalkan perintah tanpa tabel, nama tidak ketemu keluar 10 tanpa `instance.get`, daemon mati keluar 6, dan satu test terhadap `stacklyd` asli dengan dua instance fake → AC-1, AC-10, AC-11
+- [x] `cargo xtask codegen --check` → "20 generated files are up to date"; `cli.instance_not_found` ada di `protocols/error-codes.json` dan digest kontrak tidak berubah → AC-11
+- [x] `cargo clippy -p stackly-cli -p stackly-protocol --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, dan `cargo xtask check-deps` → lulus
+
+### Value sourcing
+
+- [x] Kelompok datang dari `lifecycle` dan `readiness.state` saja (`instance::group::of`); ubah `process`, `endpoints`, atau `restart` di summary dan kelompok tidak berubah → AC-1
+- [x] `counts` di `--json` dihitung dari semua halaman, bukan dari `items` yang sudah disaring `--status`; bandingkan `--status failed --json` dengan `list --json` → AC-10
+- [x] Nama dicari lewat semua halaman `instance.list` (`name` sama persis, huruf besar kecil dibedakan); `inspect Cache` tidak menemukan `cache` → AC-11
+
+### Acceptance-criteria coverage
+
+- AC-1: sisi CLI lengkap (`instance::group::of`, `InstanceCounts`, `StatusFilter`, test atas `groups.json`); sisi Swift (`InstanceGroup.of`) milik milestone 3.
+- AC-10: lengkap (tabel, baris jumlah, `--json`, `--status`, semua halaman, kasus kosong dan gagal, golden). Test view model Swift atas `list-mixed.json` milik milestone 3.
+- AC-11: lengkap (UUID, nama, `cli.instance_not_found`, `resource.not_found` dari daemon, exit 6, alias `get`). Key `detail`, `dataUsage`, dan flag `--size` milik spec 0021.

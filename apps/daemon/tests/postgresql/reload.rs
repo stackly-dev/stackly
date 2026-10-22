@@ -20,7 +20,7 @@ use stackly_domain::{
 use stackly_storage::{OpenOptions, RegistryOpen};
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{PG18, Site, create_instance, instance_id, stop_and_shutdown};
+use crate::harness::{PG17, PG18, Pg, Site, create_instance, instance_id, stop_and_shutdown};
 
 struct AnyField;
 
@@ -36,15 +36,13 @@ impl SecretEvents for NoEvents {
     fn changed(&self, _change: &SecretChange) {}
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
-async fn postgresql_18_applies_a_reloadable_setting_with_sighup_and_keeps_its_pid() {
+async fn applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(pg: Pg) {
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
         expected = "after logStatement is changed to all in a new config revision, execute_reload makes SHOW log_statement say all with the same postmaster pid and start time",
     );
-    let Some(site) = Site::open(&ev, PG18) else {
+    let Some(site) = Site::open(&ev, pg) else {
         return;
     };
     let daemon = site.in_process(|_| {}).await;
@@ -159,4 +157,16 @@ async fn postgresql_18_applies_a_reloadable_setting_with_sighup_and_keeps_its_pi
     );
     stop_and_shutdown(&api, daemon, made.id).await;
     ev.pass_with(&format!("log_statement became all on postmaster {pid}"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
+async fn postgresql_17_applies_a_reloadable_setting_with_sighup_and_keeps_its_pid() {
+    applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(PG17).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
+async fn postgresql_18_applies_a_reloadable_setting_with_sighup_and_keeps_its_pid() {
+    applies_a_reloadable_setting_with_sighup_and_keeps_its_pid(PG18).await;
 }

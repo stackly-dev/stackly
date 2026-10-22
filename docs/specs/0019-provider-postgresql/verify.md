@@ -81,3 +81,34 @@ _Semua langkah di bagian ini native: butuh kedua artefak PostgreSQL (17.11 dan 1
 
 - `covers` memakai `REQ-035`, `AC-035`, `BR-009`, `VAL-018`, dan `BR-025`; `JOURNEY-01` ditolak guard evidence (bukan ID PRD tiga digit).
 - Reload tidak punya method IPC sebelum fitur 29, jadi test menghentikan daemon dalam proses (postmaster tetap hidup), membangun `Supervisor` milik test di registry yang sama, mengadopsi postmaster lewat `reconcile`, menulis revisi config lewat registry, dan memanggil `execute_reload`.
+
+## Milestone 3: PostgreSQL 17, major mismatch refusal, evidence, and catalog
+
+_Langkah 9 dan 10 Build plan. Langkah 11 (guard evidence dengan `compatibility.json` per artefak dan `cargo xtask runtime compat-record`) belum masuk: ia menunggu blok `connection` spec 0021 supaya evidence dibuat dari `provider.yaml` final, jadi bagian ini belum menutup AC-14. Semua langkah native butuh kedua artefak (17.11 dan 18.6) di cache runtime xtask dan tidak mengunduh apa pun; tanpa artefak, test berakhir `BLOCKED` dengan alasan `artifact <id> is not in the runtime cache` dan owner `@ojiepermana`. Test dasar Milestone 2 kini ada dalam dua fungsi per test, `postgresql_17_*` dan `postgresql_18_*`, dari satu skenario yang sama; filter nama di Milestone 2 (`lifecycle`, `security`, dan seterusnya) kini mencakup keduanya._
+
+### UI / manual
+
+- [ ] Buka `providers/catalog.toml` → `official/postgresql` ada sebagai `[[provider]]` dengan `mark = "Pg"` dan `tile = "blue"`, tidak lagi di `[[planned]]`, `revision = 2` dan `published_at` baru; buka `providers/catalog-revisions.json` → ada entri `revision` 2 dengan `contentSha256` yang sama dengan keluaran `cargo xtask catalog check` → AC-1 (bagian catalog)
+- [ ] Baca `target/evidence/<runId>/report.json` dari perintah evidence di bawah → 27 record `native`, semuanya `PASS`, 0 problem; 13 record bersubject `postgresql` `17.11` dan 13 `18.6` (versi dari `SHOW server_version`) dengan digest artefak masing masing, dan satu record `install` dengan kedua subject → AC-5 sampai AC-11, AC-13, AC-14 (bagian guard)
+- [ ] Cek proses setelah run: `ps -axo command | grep stackly-test` dan `pgrep -x postgres` dibanding sebelum run → tidak ada proses `postgres` milik test yang tersisa → AC-13
+
+### Commands
+
+- [ ] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql --locked -- --ignored` → `27 passed`, `evidence: 27 native records (… PASS 27, FAIL 0, BLOCKED 0 …), 0 problems` → AC-5, AC-6, AC-7, AC-8, AC-9, AC-10, AC-11, AC-13
+- [ ] `cargo test -p stacklyd --test postgresql -- --ignored postgresql_17` → 14 test lulus: skenario Milestone 2 pada PostgreSQL 17.11 (`lifecycle`, `security` tiga, `endpoints`, `readiness`, `stop`, `failure`, `tools`, `adoption`, `reload`, `format`), penolakan mayor, dan exec check install kedua artefak; `data.initializedLine` `17`, `SHOW server_version` `17.11` → AC-5, AC-6, AC-7, AC-8, AC-9, AC-10, AC-13
+- [ ] `cargo test -p stacklyd --test postgresql -- --ignored postgresql_18` → 13 test lulus (skenario yang sama pada 18.6 dan penolakan mayor) → AC-5, AC-6, AC-7, AC-8, AC-9, AC-10, AC-11, AC-13
+- [ ] `cargo test -p stacklyd --test postgresql -- --ignored mismatch` → dua test lulus: data 17 pada runtime 18 dan data 18 pada runtime 17 gagal start dengan `supervisor.data_incompatible` (`outcome` `incompatible`, `data` dan `runtime` sesuai arahnya), tanpa proses `postgres` untuk folder data itu dan tanpa `postmaster.pid`; `PG_VERSION` yang dihapus menghasilkan `marker_missing`, yang diubah menjadi `16` menghasilkan `marker_mismatch`, dan sesudah `PG_VERSION` dikembalikan instance start sampai `ready` → AC-11
+- [ ] `cargo test -p stacklyd --test postgresql -- --ignored postgresql_17_has_no_trust` → lulus pada 17.11 dengan pesan PostgreSQL yang dikutip spec: `no pg_hba.conf entry for replication connection` untuk `replication=true`, `permission denied to start WAL sender` untuk `stackly_readiness` dengan `replication=database` lewat socket, dan `pg_hba.conf rejects connection` lewat TCP → AC-6 (teks AC-6 setelah update spec 2026-10-22; pesan di 18.6 dan 17.11 sama)
+- [ ] `cargo test -p stackly-core --test provider_packages data_marker` → dua test lulus, termasuk `the_postgresql_data_marker_names_the_major_and_refuses_the_other_one`: isi `PG_VERSION` asli (`17\n`, `18\n`) menjadi line, data 17 pada runtime 17 `Compatible`, 17 pada 18 dan 18 pada 17 `Incompatible`, marker hilang `MarkerMissing`, `16\n` `MarkerMismatch`, dan `17.11`, `v17`, `17 18`, teks kosong `MarkerMismatch` tanpa line → AC-11
+- [ ] `cargo xtask catalog check` → `ok catalog revision 2 <sha256>`; ubah `tile` entri PostgreSQL di `providers/catalog.toml` lalu jalankan lagi tanpa menaikkan `revision` → `catalog content changed: bump revision and published_at ...` (kembalikan sesudahnya) → AC-1 (bagian catalog, *Aturan masuk catalog* spec 0017)
+- [ ] Jalur `BLOCKED`: `HOME=/nonexistent STACKLY_EVIDENCE_DIR=<folder yang ada> STACKLY_EVIDENCE_KIND=native target/debug/deps/postgresql-<hash> --ignored postgresql_17_is_created` → test lulus, record `BLOCKED` dengan alasan `artifact postgresql-17.11-r2-macos-aarch64 is not in the runtime cache` dan owner `@ojiepermana`, tanpa mengunduh apa pun → AC-14
+- [ ] `cargo fmt --all --check`, `cargo clippy -p stacklyd -p stackly-core --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo test --workspace --locked --no-fail-fast` (setelah `cargo build -p stacklyd -p stackly-fake-server`) → lulus → AC-12
+
+### Acceptance-criteria coverage
+
+- AC-1 · bagian catalog: `providers/catalog.toml` dan ledger, `cargo xtask catalog check`; bagian paket sudah di Milestone 1
+- AC-5 sampai AC-10, AC-13 · skenario Milestone 2 pada PostgreSQL 17.11 dan 18.6, satu fungsi test per mayor (`postgresql_17_*`, `postgresql_18_*`)
+- AC-6 · tambahan teks setelah update spec 2026-10-22: `replication=true` ditolak dan `stackly_readiness` ditolak untuk `replication=database` lewat socket dan TCP, pesan dicek di 17.11 dan 18.6
+- AC-11 · `mismatch` pada kedua arah, kedua kasus marker, dan unit test preflight dengan isi `PG_VERSION` asli
+- AC-14 · guard `native` pada setiap test dan jalur `BLOCKED` untuk 17; `compatibility.json`, `covers` BR-025 per mayor, dan `cargo xtask runtime compat-record` menunggu langkah 11
+- AC-1 bagian paket, AC-2, AC-3, AC-4, AC-12 dan AC-15 · sudah dicakup Milestone 1 dan 2 (suite 17 mengulang AC-4 dan AC-12 pada artefak 17.11 lewat `security` dan `tools`)

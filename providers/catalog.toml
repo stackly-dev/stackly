@@ -7,14 +7,11 @@
 # published_at, then `cargo xtask catalog check --update`.
 
 schema = "stackly.catalog-source/v1"
-revision = 1
-published_at = 2026-10-20T01:26:00Z
+revision = 2
+published_at = 2026-10-21T23:06:00Z
 
-[[planned]]
+[[provider]]
 id = "official/postgresql"
-display_name = "PostgreSQL"
-category = "database"
-description = "Relational database. Multiple majors and multiple clusters per version, each with its own data area."
 mark = "Pg"
 tile = "blue"
 
