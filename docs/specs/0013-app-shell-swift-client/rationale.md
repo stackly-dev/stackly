@@ -641,3 +641,22 @@ Update `/architect` sesi `arc-f1368-0015` setelah spec 0015 memutuskan G1 sampai
 | AC-10 | "Saat koneksi pulih, banner, gate, dan pengumuman ditahan sampai snapshot semua store selesai;" | "Saat koneksi pulih, banner, gate, dan pengumuman ditahan sampai snapshot semua store selesai (atau sampai reconnect menyusul tanpa snapshot lewat `.caughtUp`);" |
 
 Alasannya: perilaku `.caughtUp` sudah dibangun sejak `90b3650`, dan reconnect ke daemon yang sama dengan cursor yang masih valid mengakhiri `refreshing` tanpa snapshot. Spec 0068 K14 Option A juga dipilih user di hari yang sama, sehingga *Skenario agent* spec 0068 yang dirujuk *Build plan* spec ini kini final.
+
+## Perubahan 2026-10-22 (langkah 12a fitur 15 seperti yang dibangun, wave 7)
+
+Update `/architect` sesi `arc-ui-sync`, bersama spec 0012, 0067, 0068, dan `apps/macos/design.md`. Spec ini menerapkan baris 0013 di *Usulan untuk spec lain* spec 0016 (merge `a8afd4fb`, disetujui user) dan baris 0013 langkah 12a di usulan spec 0015, sesudah langkah 12a masuk `main` (`6f9b4672`, `9ed53afa`, merge `abe61d48`). Tidak ada perilaku baru di spec ini di luar tabel *Pengumuman* spec 0015, dan tidak ada ID atau teks AC yang berubah: AC-21 tidak menyebut siapa yang mengumumkan banner critical, hanya bahwa perubahan status koneksi diumumkan sekali per transisi.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| *Model shell di main actor*, titik sambung agent | `attach(presence:now:sleep:didAssess:didFail:systemRetry:)`, closure `didFail`, `DaemonModel.agentDidFail` mengumumkan `AgentActionError.message` | usulan spec 0016 dan spec 0015; `6f9b4672` |
+| *Model shell*, butir pengumuman VoiceOver | kalimat `not_found` "tidak diumumkan `DaemonModel`" menjadi bersyarat; dua kejadian agent baru di announcer | sama |
+| *Aksesibilitas*, butir "Tambahan fase 02" | kalimat "bukan `DaemonModel`" menjadi bersyarat: `StateBanner` saat baris agent tampil, `DaemonModel` saat tidak, `OnboardingFlow` spec 0016 selama onboarding | usulan spec 0016 |
+| *Key invariants*, butir "tepat satu pengumuman" | judul `not_found` diumumkan tepat satu sumber menurut syarat yang sama | usulan spec 0016 |
+| *Critical test scenarios* | baris langkah 12a | `6f9b4672` |
+| *Diagnostics koneksi* | teks lama "Start it with stacklyd" dicatat berlaku sampai langkah 11; tambahan petunjuk agent ditandai dibangun | `d851d10e`, merge `bfb60e79` |
+| Penanda "belum dibangun" | diganti "dibangun" untuk `agent`, `unreachableCode`, `bannerContent(now:)`, pengumuman agent, banner per state, dua aturan sumber fitur 15, dan blok usulan fondasi butir 5 (kecuali butir fitur 16) | `d851d10e`, `5e32bdcd`; dicek di kode `main` |
+| Follow-up | dicentang: fitur 15 (petunjuk Start it with stacklyd), fitur 22 (Overview dan Instances), fitur 18 (Runtimes) | hash di baris masing masing |
+
+Kalimat ketiga yang sama maknanya (butir pengumuman di *Model shell*, "Judul banner critical (`not_found`) tidak diumumkan `DaemonModel`") ikut dibuat bersyarat, walau usulan spec 0016 hanya menyebut dua kalimat, supaya ketiganya tidak saling bertentangan.
+
+**Ditunda.** Penanda "belum dibangun" lain di spec ini yang bukan milik fitur 15 (misalnya `itemFailures` spec 0022, `MainWindowRoot` spec 0016, `ShellNavigator`) tidak diperiksa di update ini dan dibiarkan; penyelarasannya lewat `/sync` atau update berikutnya. Penanda diterapkan di baris spec 0016 (Follow-up langkah 12a) dan baris 0013 di usulan spec 0015 milik pemilik spec itu, jadi teksnya dikirim di laporan.
