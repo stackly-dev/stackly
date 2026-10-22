@@ -26,10 +26,13 @@ struct ResourceStoreTests {
         var gate: CheckedContinuation<Void, Never>?
         var holdNextFetch = false
         var fetchCount = 0
+        /// Fetches that returned or threw, held ones included.
+        var fetchesEnded = 0
         var sleeps: [Duration] = []
 
         func fetch(_ token: PageToken?) async throws(ClientError) -> Page<Thing> {
             fetchCount += 1
+            defer { fetchesEnded += 1 }
             if holdNextFetch {
                 holdNextFetch = false
                 await withCheckedContinuation { gate = $0 }
@@ -418,6 +421,142 @@ struct ResourceStoreTests {
         await retry.value
         #expect(script.fetchCount == 2)
         #expect(store.error == nil)
+    }
+
+    @Test func aRetryDuringAResnapshotRoundWaitsForItAndTheRoundEndsOnce() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let fixture = DaemonModelTests.Fixture()
+        let model = fixture.model!
+        model.sync.register(store)
+        try await fixture.push(.connected(DaemonModelTests.daemon(.ready)))
+        await fixture.send(.resnapshot(.noCursor))
+        try await waitUntil { model.presence == .connected(health: .ready) }
+        try await fixture.push(DaemonModelTests.unreachable(40))
+        try await fixture.push(.connected(DaemonModelTests.daemon(.ready, at: 50)))
+        script.holdNextFetch = true
+        await fixture.send(.resnapshot(.gap(.overflow)))
+        try await waitUntil { script.gate != nil }
+        // The page's Retry while the shell's snapshot of the same store loads.
+        let retry = Task { await store.refresh() }
+        try await waitUntil { store.snapshotWaiterCount == 1 }
+        #expect(model.presence == .refreshing)
+        script.open()
+        await retry.value
+        #expect(model.sync.isSettled)
+        #expect(model.sync.completedRounds == 2)
+        #expect(model.presence == .connected(health: .ready))
+        #expect(
+            fixture.announced == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
+        #expect(script.fetchCount == 2, "the Retry loads no second snapshot")
+        #expect(store.snapshotWaiterCount == 0)
+    }
+
+    @Test func aRetryDuringACaughtUpReloadWaitsForItAndTheRoundEndsOnce() async throws {
+        script.failures = [.rejected(Self.error("resource.busy"))]
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let fixture = DaemonModelTests.Fixture()
+        let model = fixture.model!
+        model.sync.register(store)
+        try await fixture.push(.connected(DaemonModelTests.daemon(.ready)))
+        await fixture.send(.resnapshot(.noCursor))
+        try await waitUntil { model.presence == .connected(health: .ready) }
+        #expect(store.error?.code == "resource.busy")
+        try await fixture.push(DaemonModelTests.unreachable(40))
+        try await fixture.push(.connected(DaemonModelTests.daemon(.ready, at: 50)))
+        script.holdNextFetch = true
+        await fixture.send(.caughtUp)
+        try await waitUntil { script.gate != nil }
+        // The error stays until the reload ends, so the page still offers Retry.
+        #expect(store.error != nil)
+        let retry = Task { await store.refresh() }
+        try await waitUntil { store.snapshotWaiterCount == 1 }
+        #expect(model.presence == .refreshing)
+        script.open()
+        await retry.value
+        #expect(store.error == nil)
+        #expect(model.sync.isSettled)
+        #expect(model.sync.completedRounds == 2)
+        #expect(model.presence == .connected(health: .ready))
+        #expect(
+            fixture.announced == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
+        #expect(script.fetchCount == 2, "the Retry loads no second snapshot")
+    }
+
+    @Test func aRetryWaitingOnASnapshotThatATakeoverMadeStaleWaitsForTheNewerOne() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let sync = ShellSync()
+        sync.register(store)
+        script.holdNextFetch = true
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { script.gate != nil }
+        let stale = script.gate
+        script.gate = nil
+        let retry = Task { await store.refresh() }
+        try await waitUntil { store.snapshotWaiterCount == 1 }
+        script.holdNextFetch = true
+        sync.handle(.resnapshot(.gap(.overflow)))
+        try await waitUntil { script.gate != nil }
+        // The older generation comes back stale: it neither completes nor fails.
+        stale?.resume()
+        try await waitUntil { script.fetchesEnded == 1 }
+        #expect(store.snapshotWaiterCount == 1)
+        #expect(store.isRefreshing)
+        #expect(sync.isSettled == false)
+        script.open()
+        await retry.value
+        #expect(store.snapshotWaiterCount == 0)
+        #expect(store.isRefreshing == false)
+        #expect(sync.isSettled)
+        #expect(sync.completedRounds == 1)
+        #expect(script.fetchCount == 2)
+    }
+
+    @Test func aRetryWaitingOnASnapshotWhoseConnectionClosesEndsWithItsError() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let sync = ShellSync()
+        sync.register(store)
+        script.holdNextFetch = true
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { script.gate != nil }
+        let retry = Task { await store.refresh() }
+        try await waitUntil { store.snapshotWaiterCount == 1 }
+        // Closing the connection (`stopNow()`, a lost daemon) fails every waiting call.
+        script.failures = [.outcomeUnknown(ClientErrorCatalog.connectionClosed())]
+        script.open()
+        await retry.value
+        #expect(store.error?.code == "ipc.connection_closed")
+        #expect(store.isRefreshing == false)
+        #expect(store.snapshotWaiterCount == 0)
+        #expect(sync.isSettled)
+        #expect(sync.completedRounds == 1)
+    }
+
+    @Test func aResnapshotDuringARetryTakesItOverAndTheRoundEndsOnce() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let sync = ShellSync()
+        sync.register(store)
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { sync.isSettled }
+        script.holdNextFetch = true
+        let retry = Task { await store.refresh() }
+        try await waitUntil { script.gate != nil }
+        let held = script.gate
+        script.gate = nil
+        sync.handle(.resnapshot(.gap(.overflow)))
+        #expect(sync.isSettled == false)
+        try await waitUntil { sync.isSettled }
+        #expect(sync.completedRounds == 2)
+        #expect(script.fetchCount == 3)
+        held?.resume()
+        await retry.value
+        #expect(sync.isSettled)
+        #expect(sync.completedRounds == 2)
+        #expect(store.items["a"] != nil)
     }
 
     @Test func shellSyncWithoutStoresSettlesAtOnce() {

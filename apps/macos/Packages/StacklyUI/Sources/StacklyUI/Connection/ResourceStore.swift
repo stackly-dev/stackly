@@ -112,6 +112,8 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
     /// Events held while a snapshot runs.
     @ObservationIgnored private var buffer: [Event]?
     @ObservationIgnored private var bufferOverflowed = false
+    /// Callers of ``refresh()`` that wait for the snapshot running when they called.
+    @ObservationIgnored private var snapshotWaiters: [CheckedContinuation<Void, Never>] = []
     /// Called after every change the store applied, so an owner such as
     /// ``OperationCenter`` can follow the items.
     @ObservationIgnored var didApply: ((StoreChange<Item>) -> Void)?
@@ -230,9 +232,30 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         }
     }
 
-    /// Loads a snapshot for this store only, as the page's Retry does.
+    /// Loads a snapshot for this store only, as the page's Retry does. While a
+    /// snapshot runs, it waits for that one to settle instead of taking over its
+    /// generation, so a shell round that loads this store still ends (spec 0013).
     public func refresh() async {
-        await resnapshot()
+        guard isRefreshing else {
+            await resnapshot()
+            return
+        }
+        // Only `complete` and `fail` end `isRefreshing`, and both let the waiters go. A
+        // generation that a newer one made stale ends in neither, and leaves that to
+        // the newer one, which always ends in one of them.
+        await withCheckedContinuation { snapshotWaiters.append($0) }
+    }
+
+    /// How many callers of ``refresh()`` wait for the running snapshot, for tests.
+    var snapshotWaiterCount: Int { snapshotWaiters.count }
+
+    /// Lets every caller of ``refresh()`` that waits for the running snapshot go on.
+    private func settleWaiters() {
+        let waiters = snapshotWaiters
+        snapshotWaiters = []
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
 
     /// Starts holding events for a snapshot.
@@ -282,6 +305,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         unsupported = false
         isRefreshing = false
         didApply?(.reloaded)
+        settleWaiters()
     }
 
     /// Ends a snapshot that failed: the old data stays, the held events
@@ -294,6 +318,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         }
         error = body
         isRefreshing = false
+        settleWaiters()
     }
 
     // MARK: - Events
