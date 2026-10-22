@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 16:08`
+- **Diperbarui:** `2026-10-22 16:11`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -318,6 +318,7 @@
 
 ## Blocker terbuka
 
+- Sisa langkah 9 spec 0019 (teks update 2026-10-22): harness PostgreSQL masih memakai `cached_artifact` lokal (`apps/daemon/tests/postgresql/harness.rs` sekitar L91, dipakai di L183 dan L257); hanya jalur `Site::in_process_offline` milik scope 03 (`f106a254`) yang memakai `RuntimeCache::open()`. Perpindahan pemanggil lain ke `stackly_testkit::RuntimeCache` plus `artifact_size` masih terbuka. Item kecil test-only untuk sesi F19 berikutnya; koordinasikan dengan lead scope 03 karena mereka juga menyentuh `harness.rs`.
 - `RLIMIT_NOFILE` stacklyd: daemon tidak menaikkan batas descriptor (batas lunak launchd 256), padahal `remove_tree` bisa memegang 128 descriptor folder saat purge dan `tree_usage` sampai 32 per scan. Pemilik: spec 0010 dan 0006 (temuan `arc-f21-update` 2026-10-22). Tidak mendesak, perlu keputusan sebelum banyak instance berjalan bersamaan.
 - F15 `classify`, fixture `agent/states.json`, adapter `MacosBackgroundAgent` (patch di `docs/scope/coordination/held-patches/f15/`): menunggu `architect (update)` spec 0015 dari hasil spike langkah 0 (rekaman manual FAIL di empat titik: `notFound` untuk bundle yang belum didaftarkan, `NSBundle.mainBundle` tanpa identifier lewat symlink CLI, switch Login Items tanpa efek pada build ad hoc, respawn KeepAlive gagal setelah binary agent diganti).
 
