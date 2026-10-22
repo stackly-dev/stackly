@@ -13,6 +13,7 @@
 
 pub mod command;
 mod create;
+mod duplicate;
 
 pub use create::{
     CreateEndpoint, CreateForm, CreatePreflight, CreateProvider, CreateProviderSource,
@@ -21,6 +22,7 @@ pub use create::{
     PreflightStatus, ResolvedProvider, ScalarSetting, SecretPlan, SecretSource, SettingEntry,
     SettingItem, SettingValue,
 };
+pub use duplicate::{DuplicateForm, DuplicateSecret, DuplicateSource, GetDuplicateFormParams};
 
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};

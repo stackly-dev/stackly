@@ -1,0 +1,375 @@
+{
+  "draft": {
+    "displayName": null,
+    "endpoints": [
+      {
+        "name": "http",
+        "port": {
+          "type": "auto"
+        }
+      }
+    ],
+    "name": "fake-a-copy-2",
+    "provider": {
+      "name": "testing/fake",
+      "revision": "0.3.0"
+    },
+    "runtimeId": "0192f3a6-0000-7000-8000-0000000000a1",
+    "secrets": [
+      {
+        "field": "authToken",
+        "source": {
+          "type": "generate"
+        }
+      }
+    ],
+    "settings": {
+      "crashAfterMs": 0,
+      "crashExitCode": 70,
+      "failInit": false,
+      "greeting": "hello from fake-a",
+      "ignoreTerm": false,
+      "initDelayMs": 0,
+      "label": "fake",
+      "logLinesPerSecond": 0,
+      "readyDelayMs": 0
+    },
+    "start": false
+  },
+  "form": {
+    "capabilities": [
+      {
+        "capability": "multi_instance",
+        "supported": true
+      },
+      {
+        "capability": "persistence",
+        "supported": true
+      },
+      {
+        "capability": "reload",
+        "supported": true
+      },
+      {
+        "capability": "metrics",
+        "supported": false
+      },
+      {
+        "capability": "tls",
+        "supported": false
+      },
+      {
+        "capability": "cold_backup",
+        "supported": true
+      },
+      {
+        "capability": "online_backup",
+        "supported": false
+      },
+      {
+        "capability": "logical_backup",
+        "supported": false
+      }
+    ],
+    "dataPath": "instances/<new instance id>/data",
+    "endpoints": [
+      {
+        "defaultPort": 18080,
+        "host": "127.0.0.1",
+        "name": "http",
+        "purpose": "client",
+        "socketName": null,
+        "transport": "tcp"
+      }
+    ],
+    "fields": [
+      {
+        "apply": "reload",
+        "choices": [],
+        "default": {
+          "content": "hello from stackly",
+          "type": "text"
+        },
+        "description": "Text the server returns from GET /config.",
+        "itemKey": null,
+        "items": [],
+        "key": "greeting",
+        "kind": "text",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": 256,
+        "maximum": null,
+        "minItems": null,
+        "minLength": 0,
+        "minimum": null,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Greeting",
+        "visibility": "basic"
+      },
+      {
+        "apply": "restart",
+        "choices": [],
+        "default": {
+          "content": "fake",
+          "type": "text"
+        },
+        "description": "Free text passed as --label, to prove arguments never go through a shell.",
+        "itemKey": null,
+        "items": [],
+        "key": "label",
+        "kind": "text",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": 256,
+        "maximum": null,
+        "minItems": null,
+        "minLength": 0,
+        "minimum": null,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Label",
+        "visibility": "basic"
+      },
+      {
+        "apply": "restart",
+        "choices": [],
+        "default": {
+          "content": 0,
+          "type": "integer"
+        },
+        "description": "How long GET /ready answers 503 after start; 0 is ready at once.",
+        "itemKey": null,
+        "items": [],
+        "key": "readyDelayMs",
+        "kind": "integer",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": null,
+        "maximum": 600000,
+        "minItems": null,
+        "minLength": null,
+        "minimum": 0,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Ready delay (ms)",
+        "visibility": "basic"
+      },
+      {
+        "apply": "restart",
+        "choices": [],
+        "default": {
+          "content": 0,
+          "type": "integer"
+        },
+        "description": "Exit with the crash exit code after this long; 0 never crashes.",
+        "itemKey": null,
+        "items": [],
+        "key": "crashAfterMs",
+        "kind": "integer",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": null,
+        "maximum": 86400000,
+        "minItems": null,
+        "minLength": null,
+        "minimum": 0,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Crash after (ms)",
+        "visibility": "advanced"
+      },
+      {
+        "apply": "restart",
+        "choices": [],
+        "default": {
+          "content": 70,
+          "type": "integer"
+        },
+        "description": null,
+        "itemKey": null,
+        "items": [],
+        "key": "crashExitCode",
+        "kind": "integer",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": null,
+        "maximum": 255,
+        "minItems": null,
+        "minLength": null,
+        "minimum": 1,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Crash exit code",
+        "visibility": "advanced"
+      },
+      {
+        "apply": "restart",
+        "choices": [],
+        "default": {
+          "content": 0,
+          "type": "integer"
+        },
+        "description": "Log lines written to stdout and stderr in turn; 0 writes none.",
+        "itemKey": null,
+        "items": [],
+        "key": "logLinesPerSecond",
+        "kind": "integer",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": null,
+        "maximum": 10000,
+        "minItems": null,
+        "minLength": null,
+        "minimum": 0,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Log lines per second",
+        "visibility": "advanced"
+      },
+      {
+        "apply": "restart",
+        "choices": [],
+        "default": {
+          "content": false,
+          "type": "boolean"
+        },
+        "description": null,
+        "itemKey": null,
+        "items": [],
+        "key": "ignoreTerm",
+        "kind": "boolean",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": null,
+        "maximum": null,
+        "minItems": null,
+        "minLength": null,
+        "minimum": null,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Ignore SIGTERM",
+        "visibility": "advanced"
+      },
+      {
+        "apply": "immutable_after_init",
+        "choices": [],
+        "default": {
+          "content": false,
+          "type": "boolean"
+        },
+        "description": null,
+        "itemKey": null,
+        "items": [],
+        "key": "failInit",
+        "kind": "boolean",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": null,
+        "maximum": null,
+        "minItems": null,
+        "minLength": null,
+        "minimum": null,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Fail initialization",
+        "visibility": "advanced"
+      },
+      {
+        "apply": "immutable_after_init",
+        "choices": [],
+        "default": {
+          "content": 0,
+          "type": "integer"
+        },
+        "description": "How long init waits after reading the token and before touching the data folder; 0 does not wait.",
+        "itemKey": null,
+        "items": [],
+        "key": "initDelayMs",
+        "kind": "integer",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": null,
+        "maximum": 600000,
+        "minItems": null,
+        "minLength": null,
+        "minimum": 0,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Init delay (ms)",
+        "visibility": "advanced"
+      },
+      {
+        "apply": "immutable_after_init",
+        "choices": [],
+        "default": null,
+        "description": "Written into the sensitive config and passed to init on stdin.",
+        "itemKey": null,
+        "items": [],
+        "key": "authToken",
+        "kind": "text",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": 256,
+        "maximum": null,
+        "minItems": null,
+        "minLength": 1,
+        "minimum": null,
+        "printableOnly": false,
+        "required": true,
+        "secret": true,
+        "title": "Auth token",
+        "visibility": "basic"
+      }
+    ],
+    "provider": {
+      "category": "testing",
+      "displayName": "Fake Provider",
+      "manifestSha256": "95cfdc4db1839631d3d16b3366b9b2f57896a3abc06b169fadf918cd49b313a1",
+      "name": "testing/fake",
+      "revision": "0.3.0",
+      "source": "pinned"
+    },
+    "runtime": {
+      "artifactSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+      "dependentRuntimes": [],
+      "displayName": "Fake",
+      "id": "0192f3a6-0000-7000-8000-0000000000a1",
+      "installMode": "managed",
+      "installedAt": "2026-01-01T00:00:00.000Z",
+      "lastVerifiedAt": null,
+      "line": "1",
+      "revision": 1,
+      "software": "fake",
+      "state": "installed",
+      "support": "unverified",
+      "supportReason": "untested",
+      "target": {
+        "arch": "aarch64",
+        "os": "macos"
+      },
+      "usedBy": [],
+      "version": "1.0.0"
+    },
+    "suggestedName": "fake-a-copy-2"
+  },
+  "secrets": [
+    {
+      "field": "authToken",
+      "sourceReference": "local:instance/0192f3a6-0000-7000-8000-0000000000b1/auth-token"
+    }
+  ],
+  "source": {
+    "instanceId": "0192f3a6-0000-7000-8000-0000000000b1",
+    "name": "fake-a"
+  }
+}
