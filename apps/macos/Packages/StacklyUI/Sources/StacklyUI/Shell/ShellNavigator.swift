@@ -8,6 +8,8 @@ public enum ShellDestination: Hashable, Sendable {
     case overview
     /// The Instances page, with a filter and optionally an instance to select.
     case instances(filter: InstanceFilter = .all, select: UUID? = nil)
+    /// The detail page of an instance, inside the Instances page (spec 0021).
+    case instance(UUID)
     /// The Catalog.
     case catalog
     /// The Runtimes page.
@@ -21,7 +23,7 @@ public enum ShellDestination: Hashable, Sendable {
     public var section: SidebarSection {
         switch self {
         case .overview: .overview
-        case .instances: .instances
+        case .instances, .instance: .instances
         case .catalog: .catalog
         case .runtimes: .runtimes
         case .operations: .operations
@@ -43,6 +45,16 @@ public struct InstancesRequest: Equatable, Sendable {
     public let select: UUID?
 }
 
+/// What the Instances page is asked to open: the detail page of an instance (spec 0021).
+///
+/// Every request is new even for the same instance, so the page opens it again.
+public struct InstanceRequest: Equatable, Sendable {
+    /// Tells one request from another.
+    public let id = UUID()
+    /// The instance to open.
+    public let instance: UUID
+}
+
 /// The one way a page sends the person to another page of the window (spec 0022, *Navigasi*).
 ///
 /// ``AppShell`` creates one per window, puts it in the environment, and mirrors
@@ -56,6 +68,11 @@ public final class ShellNavigator {
     public var section: SidebarSection
     /// The request the Instances page has not applied yet.
     public private(set) var instancesRequest: InstancesRequest?
+    /// The detail page the Instances page has not opened yet.
+    public private(set) var instanceRequest: InstanceRequest?
+    /// Counts the times the person asked for the table of Instances again, such as a second
+    /// click on its sidebar row: the page closes the detail page when it changes.
+    public private(set) var instancesResets = 0
 
     /// Creates a navigator.
     ///
@@ -66,24 +83,38 @@ public final class ShellNavigator {
 
     /// Shows a destination.
     public func show(_ destination: ShellDestination) {
-        if case .instances(let filter, let select) = destination {
+        switch destination {
+        case .instances(let filter, let select):
             instancesRequest = InstancesRequest(filter: filter, select: select)
+        case .instance(let id):
+            instanceRequest = InstanceRequest(instance: id)
+        default:
+            break
         }
         section = destination.section
     }
 
-    // provisional: F21
-    /// Shows an instance. Until feature 21 builds the detail page this selects its row in
-    /// Instances and shows the inspector.
+    /// Opens the detail page of an instance: the Instances page applies the request to its
+    /// navigation stack, also when it was not showing yet.
     ///
     /// - Parameter id: The instance.
     public func openInstance(_ id: UUID) {
-        show(.instances(filter: .all, select: id))
+        show(.instance(id))
+    }
+
+    /// Asks the Instances page to go back to its table.
+    public func showInstancesTable() {
+        instancesResets += 1
     }
 
     /// Clears the request after the page applied it.
     public func consumeInstancesRequest() {
         instancesRequest = nil
+    }
+
+    /// Clears the request after the page opened the detail page.
+    public func consumeInstanceRequest() {
+        instanceRequest = nil
     }
 }
 

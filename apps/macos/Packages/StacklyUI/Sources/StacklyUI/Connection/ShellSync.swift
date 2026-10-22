@@ -16,6 +16,12 @@ protocol SyncedStore: AnyObject {
 
 extension ResourceStore: SyncedStore {}
 
+/// A view that follows the events of one kind prefix without owning a store.
+private struct EventObserver {
+    let prefix: String
+    let continuation: AsyncStream<Event>.Continuation
+}
+
 /// Applies the sync engine's signals to the shell's stores, in one ordered
 /// loop on the main actor (spec 0013, *Sinkronisasi snapshot plus cursor*).
 ///
@@ -28,6 +34,7 @@ public final class ShellSync {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var pending: Set<ObjectIdentifier> = []
     @ObservationIgnored private var loop: Task<Void, Never>?
+    @ObservationIgnored private var observers: [UUID: EventObserver] = [:]
 
     /// Whether no snapshot runs: every store settled the latest generation.
     public private(set) var isSettled = true
@@ -53,6 +60,31 @@ public final class ShellSync {
         }
     }
 
+    /// The events whose kind starts with `kindPrefix` (spec 0013, *ShellSync*, added by spec
+    /// 0021): for a view that follows a kind without a store of its own, such as the detail
+    /// page for `secret.`.
+    ///
+    /// Each call returns a stream of its own. It yields the events that arrive after the call
+    /// and stops being fed when the stream is dropped or `ShellSync` is stopped. It does not
+    /// replay anything a snapshot or a reconnect missed; the observer reads its own state
+    /// again after a resnapshot.
+    ///
+    /// - Parameter kindPrefix: The start of the event kind, such as `secret.`.
+    /// - Returns: The stream of events of that kind.
+    public func events(kindPrefix: String) -> AsyncStream<Event> {
+        let (stream, continuation) = AsyncStream.makeStream(
+            of: Event.self, bufferingPolicy: .bufferingNewest(64))
+        let id = UUID()
+        observers[id] = EventObserver(prefix: kindPrefix, continuation: continuation)
+        continuation.onTermination = { [weak self] _ in
+            Task { @MainActor in self?.observers[id] = nil }
+        }
+        return stream
+    }
+
+    /// How many views follow a kind prefix now, for tests.
+    var observerCount: Int { observers.count }
+
     /// Starts applying `signals`, in order, until they end.
     public func start(_ signals: AsyncStream<SyncSignal>) {
         loop?.cancel()
@@ -67,6 +99,10 @@ public final class ShellSync {
     public func stop() {
         loop?.cancel()
         loop = nil
+        for observer in observers.values {
+            observer.continuation.finish()
+        }
+        observers.removeAll()
     }
 
     /// Applies one signal.
@@ -93,6 +129,9 @@ public final class ShellSync {
             let kind = event.kind.kindName
             for store in stores where store.follows(kind) {
                 store.receive(event)
+            }
+            for observer in observers.values where kind.hasPrefix(observer.prefix) {
+                observer.continuation.yield(event)
             }
         case .caughtUp:
             if isSettled {

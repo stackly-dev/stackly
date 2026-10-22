@@ -14,6 +14,9 @@ struct InstanceInspector: View {
     let row: InstanceRowModel
     let action: StacklyAction
     let isPrimary: Bool
+    let open: StacklyAction
+    let model: InstanceDetailModel
+    let secrets: SecretsClient
 
     var body: some View {
         let summary = row.summary
@@ -26,6 +29,8 @@ struct InstanceInspector: View {
             } else {
                 ActionButton(action, prominence: .secondary, showsReason: true)
             }
+            ActionButton(open, prominence: .secondary, showsReason: false)
+                .help(CommandMap.helpText(for: .openInstance, title: open.title))
         }
         banner
         CardSection {
@@ -43,10 +48,16 @@ struct InstanceInspector: View {
             if summary.logsUnavailable {
                 LabeledContent("Logs") { Text("Unavailable") }
             }
+            dataRow
+            connectionRow
             idRow
         }
         .labeledContentStyle(.stackly)
         .accessibilityIdentifier(AccessibilityID.Instances.inspector)
+        .task(id: row.id) { await model.openForInspector() }
+        .onChange(of: summary, initial: true) { _, new in
+            model.observe(new, announcesReady: false)
+        }
     }
 
     // MARK: - Banner
@@ -109,6 +120,46 @@ struct InstanceInspector: View {
                 Text("Not running")
             }
         }
+    }
+
+    /// The size the daemon already measured, or "—", and the folder on the line under it.
+    private var dataRow: some View {
+        LabeledContent("Data") {
+            VStack(alignment: .trailing, spacing: Spacing.s2) {
+                Text(DetailFormat.dataSize(.loaded(model.usage)))
+                if let path = model.detail?.dataPath {
+                    Text(DetailFormat.dataPath(path, home: NSHomeDirectory()))
+                        .font(.footnote.monospaced())
+                        .help(path)
+                }
+            }
+        }
+    }
+
+    /// The first connection string, masked, with Show Password and Copy, or the reason there
+    /// is none to copy.
+    private var connectionRow: some View {
+        VStack(alignment: .leading, spacing: Spacing.s6) {
+            Text("Connection")
+            if let detail = model.detail {
+                if let text = DetailFormat.connectionUnavailableText(detail) {
+                    reason(text)
+                } else if let first = detail.connections.first {
+                    ConnectionEntryRow(connection: first, detail: detail, secrets: secrets)
+                } else {
+                    reason(DetailFormat.noConnectionText)
+                }
+            } else {
+                Text("—").foregroundStyle(StacklyColor.textSecondary)
+            }
+        }
+    }
+
+    private func reason(_ text: String) -> some View {
+        Text(text)
+            .font(.callout)
+            .foregroundStyle(StacklyColor.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var idRow: some View {

@@ -41,12 +41,44 @@ struct ShellNavigatorTests {
         #expect(navigator.instancesRequest == nil)
     }
 
-    @Test func openingAnInstanceSelectsItsRowUnderAll() {
+    @Test func openingAnInstanceLeavesARequestForTheDetailPage() {
         let navigator = ShellNavigator()
         let id = UUID()
         navigator.openInstance(id)
         #expect(navigator.section == .instances)
-        #expect(navigator.instancesRequest?.filter == .all)
-        #expect(navigator.instancesRequest?.select == id)
+        #expect(navigator.instanceRequest?.instance == id)
+        #expect(navigator.instancesRequest == nil)
+        navigator.consumeInstanceRequest()
+        #expect(navigator.instanceRequest == nil)
+    }
+
+    @Test func theInstanceDestinationShowsTheInstancesSection() {
+        let navigator = ShellNavigator(section: .catalog)
+        navigator.show(.instance(UUID()))
+        #expect(navigator.section == .instances)
+        #expect(ShellDestination.instance(UUID()).section == .instances)
+    }
+
+    @Test func aSecondRequestForTheSameInstanceIsANewRequest() {
+        let navigator = ShellNavigator()
+        let id = UUID()
+        navigator.openInstance(id)
+        let first = navigator.instanceRequest
+        navigator.openInstance(id)
+        #expect(navigator.instanceRequest != first)
+    }
+
+    @Test func otherDestinationsLeaveNoInstanceRequest() {
+        let navigator = ShellNavigator()
+        navigator.show(.instances(select: UUID()))
+        navigator.show(.catalog)
+        #expect(navigator.instanceRequest == nil)
+    }
+
+    @Test func askingForTheTableAgainCountsUp() {
+        let navigator = ShellNavigator()
+        let before = navigator.instancesResets
+        navigator.showInstancesTable()
+        #expect(navigator.instancesResets == before + 1)
     }
 }
