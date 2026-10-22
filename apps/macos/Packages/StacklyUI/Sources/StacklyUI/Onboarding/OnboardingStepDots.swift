@@ -31,6 +31,7 @@ struct OnboardingStepDots: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(OnboardingFooter.stepSpoken(step))
+                .accessibilityIdentifier(AccessibilityID.Onboarding.step(step.number))
                 .accessibilityAddTraits(isCurrent ? .isSelected : [])
             }
         }

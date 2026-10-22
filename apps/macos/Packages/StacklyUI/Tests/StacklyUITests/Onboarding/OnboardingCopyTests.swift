@@ -152,4 +152,29 @@ struct OnboardingCopyTests {
             #expect(code.contains(#"announce("Setup complete.")"#) == false)
         }
     }
+
+    // MARK: - One file holds the text (AC-9)
+
+    /// A string literal of English prose: it starts with a capital letter and holds a space.
+    /// Paths and identifiers do not match.
+    private static let prose = /"[A-Z][^"\\]* [^"\\]*"/
+
+    @Test func everyPhraseOfTheOnboardingLivesInTheCopyFile() throws {
+        for file in try Self.onboardingFiles()
+        where file.path.hasSuffix("/OnboardingCopy.swift") == false {
+            // The names of previews are for the person who reads the canvas, not UI text.
+            for line in file.codeLines
+            where line.contains("#Preview(") == false && line.firstMatch(of: Self.prose) != nil {
+                Issue.record("\(file.path) holds text of its own: \(line)")
+            }
+        }
+    }
+
+    @Test func theProseScanFindsASentenceAndSkipsPathsAndIdentifiers() {
+        #expect(#"Text("Turn it on so stacklyd runs")"#.firstMatch(of: Self.prose) != nil)
+        #expect(
+            #"let a = "/Library/Application Support/Stackly""#.firstMatch(of: Self.prose) == nil)
+        #expect(#"let b = "onboarding.finished""#.firstMatch(of: Self.prose) == nil)
+        #expect(#"let c = "keyboard""#.firstMatch(of: Self.prose) == nil)
+    }
 }

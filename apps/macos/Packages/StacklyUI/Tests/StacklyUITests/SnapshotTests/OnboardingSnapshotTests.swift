@@ -62,6 +62,15 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["REQ-032", "NFR-012"],
+                expected: "The Catalog Trust step before a catalog loaded renders in every variant"
+            ))
+        func catalogTrustStep() async throws {
+            try await check(.catalogTrust, named: "onboarding-catalog-trust")
+        }
+
+        @Test(
+            .evidence(
                 covers: ["REQ-024", "NFR-012"],
                 expected: "The Storage step renders in every variant"
             ))
