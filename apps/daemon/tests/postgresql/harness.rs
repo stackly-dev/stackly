@@ -135,6 +135,10 @@ pub struct Site {
     pub runtime_id: Uuid,
     pub runtime_dir: PathBuf,
     pub artifact_sha256: String,
+    /// The revision of the package, as `pin_package` recorded it.
+    pub revision: String,
+    /// The SHA-256 of the manifest of that revision.
+    pub manifest_sha256: String,
 }
 
 impl Site {
@@ -186,6 +190,7 @@ impl Site {
         .expect("the cached artifact installs, exec check included");
         let revision =
             pin_package(&platform, prepared.layout(), dir).expect("the package can be pinned");
+        let revision_key = revision.revision.key().clone();
         registry
             .commit(WriteBatch::new(vec![WriteOp::InsertProviderRevision(
                 revision,
@@ -209,6 +214,8 @@ impl Site {
             runtime_id: runtime.id().as_uuid(),
             runtime_dir,
             artifact_sha256: sha256,
+            revision: revision_key.revision().to_string(),
+            manifest_sha256: revision_key.manifest_sha256().to_string(),
         })
     }
 
@@ -265,6 +272,18 @@ impl Site {
                 expected,
             }]))
             .expect("the rebound instance can be committed");
+    }
+
+    /// The runtime and line of the site itself.
+    #[must_use]
+    pub fn own_runtime(&self) -> (RuntimeId, RuntimeLine) {
+        (
+            self.runtime_id
+                .to_string()
+                .parse::<RuntimeId>()
+                .expect("a runtime id"),
+            self.pg.major.parse().expect("a runtime line"),
+        )
     }
 
     /// Opens the registry of this root. The daemon must be stopped.
