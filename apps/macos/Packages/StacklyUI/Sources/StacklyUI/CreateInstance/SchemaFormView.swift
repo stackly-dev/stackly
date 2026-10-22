@@ -43,11 +43,19 @@ struct SchemaFormSections: View {
         }
     }
 
+    /// The draft a secret row starts from: Generate, with Copy from pointing at the reference
+    /// the form offers first (the reference the source of a duplicate uses), or at none.
+    private func startingDraft(of row: SchemaRow) -> SecretDraft {
+        var draft = SecretDraft()
+        draft.copyFromReference = schema.secretChoice(row.id).reference
+        return draft
+    }
+
     /// The draft of a secret row. Setting it also tells the model the source and whether the
     /// typed text fits, never the text.
     private func draft(_ row: SchemaRow) -> Binding<SecretDraft> {
         Binding(
-            get: { drafts[row.id] ?? SecretDraft() },
+            get: { drafts[row.id] ?? startingDraft(of: row) },
             set: { newValue in
                 drafts[row.id] = newValue
                 guard case .secret(let limits) = row.control else { return }
@@ -94,7 +102,8 @@ struct SchemaFieldRow: View {
         case .secret(let limits):
             SecretField(
                 title, draft: $draft, limits: limits, allowsGenerate: true,
-                copyFromOptions: schema.copyFromOptions, copyFromLabels: schema.copyFromLabels)
+                copyFromOptions: schema.copyFromOptions(for: row.id),
+                copyFromLabels: schema.copyFromLabels)
         case .text:
             TextField(title, text: text)
                 .accessibilityLabel(row.spokenLabel)

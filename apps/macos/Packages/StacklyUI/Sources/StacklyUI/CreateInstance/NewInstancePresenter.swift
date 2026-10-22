@@ -5,7 +5,8 @@ import SwiftUI
 
 /// Presents the New Instance sheet for a window (spec 0020, *Titik masuk*): every entry point
 /// (the toolbar and empty state buttons through ``SwiftUI/EnvironmentValues/newInstanceAction``,
-/// the Catalog detail panel, and ⌘N) calls ``present(software:)``, and the shell shows the
+/// the Catalog detail panel, and ⌘N) calls ``present(software:)``, and Duplicate… (spec 0024)
+/// calls ``presentDuplicate(of:)``, and the shell shows the
 /// sheet while ``isPresented`` is true.
 ///
 /// The presenter owns the one ``CreateInstanceModel`` of the window, so a create that is
@@ -54,6 +55,23 @@ public final class NewInstancePresenter {
         isPresented = true
     }
 
+    /// Opens the sheet on the settings of an instance (spec 0024).
+    ///
+    /// - Parameter source: The instance to copy the settings of.
+    public func presentDuplicate(of source: DuplicateSourceRef) {
+        guard !isPresented else { return }
+        switch model.phase {
+        case .submitting, .creating:
+            // A create that runs keeps its model; the sheet comes back to follow it.
+            isPresented = true
+            return
+        default:
+            break
+        }
+        model.beginDuplicate(of: source)
+        isPresented = true
+    }
+
     /// The create succeeded: closes the sheet and tells the shell.
     public func finished(_ outcome: CreateOutcome) {
         isPresented = false
@@ -64,6 +82,11 @@ public final class NewInstancePresenter {
         // A create that is still running keeps its model; anything else is dropped.
         if case .creating = model.phase { return }
         model.end()
+    }
+
+    /// The action of the Duplicate… item and command.
+    public var duplicateAction: DuplicateInstanceAction {
+        DuplicateInstanceAction { [self] in presentDuplicate(of: $0) }
     }
 
     /// The action of the New Instance button, command, and empty state.

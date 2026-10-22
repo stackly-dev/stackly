@@ -9,11 +9,15 @@
     final class FixtureCreateService: CreateInstanceService {
         /// The calls made, in order.
         private(set) var formCalls: [UUID] = []
+        private(set) var duplicateCalls: [UUID] = []
         private(set) var preflightCalls: [PreflightCreateParams] = []
         private(set) var listCalls = 0
 
         var onForm: (UUID) async throws(ClientError) -> CreateForm = { _ in
             FixtureCreateForm.database
+        }
+        var onDuplicate: (UUID) async throws(ClientError) -> DuplicateForm = { _ in
+            FixtureCreateDuplicate.pg17
         }
         var onPreflight: (PreflightCreateParams) async throws(ClientError) -> CreatePreflight = {
             _ in FixtureCreateForm.ready
@@ -27,6 +31,11 @@
         {
             formCalls.append(runtimeId)
             return try await onForm(runtimeId)
+        }
+
+        func getDuplicateForm(instanceId: UUID) async throws(ClientError) -> DuplicateForm {
+            duplicateCalls.append(instanceId)
+            return try await onDuplicate(instanceId)
         }
 
         func preflight(_ draft: PreflightCreateParams) async throws(ClientError)

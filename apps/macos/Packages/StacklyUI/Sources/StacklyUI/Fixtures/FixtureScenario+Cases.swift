@@ -289,7 +289,8 @@
                 replies: data.0.isEmpty
                     ? [:]
                     : FixtureRuntime.replies.merging(FixtureCreateForm.replies) { first, _ in first
-                    },
+                    }
+                    .merging(FixtureCreateDuplicate.replies) { first, _ in first },
                 expectedPresence: presence)
         }
     }
