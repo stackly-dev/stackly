@@ -11,6 +11,7 @@ mod common;
 mod actions;
 mod budget;
 mod create;
+mod data_compat;
 mod lifecycle;
 mod logs;
 mod process;
