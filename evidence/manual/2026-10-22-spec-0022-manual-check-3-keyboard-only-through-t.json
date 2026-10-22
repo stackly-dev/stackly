@@ -1,0 +1,57 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a16314-a3bd-75f8-bcec-ff62567447b7",
+  "covers": [
+    "NFR-012",
+    "AC-027"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0022 manual check 3: keyboard only through the Overview and Instances",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "With Keyboard navigation on and only the keyboard, the Overview, the Failed card, Instances, a row, the inspector, Stop through the inspector button, and sorting through the View menu all work.",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-22T10:07:39.452805Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-22-spec-0022-manual-check-3-keyboard-only-through-t.json",
+  "context": {
+    "sourceCommit": "01381aede595d221f48be65bce5770495786bc77",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

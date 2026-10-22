@@ -1,0 +1,56 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a16314-acb1-714c-89a3-ea4eff0c1fd9",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0022 manual check 5: 640 pt content width, light, dark, and Increase Contrast",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "At a content width of 640 pt the Overview is one column with no cut text and Instances with the inspector open shows Name and Status without scrolling, in light, dark, and Increase Contrast; at a 900 pt window with the inspector open (384 pt page column) Instances shows Name, Status, and the action without scrolling or cut text.",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-22T10:07:41.745222Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-22-spec-0022-manual-check-5-640-pt-content-width-li.json",
+  "context": {
+    "sourceCommit": "01381aede595d221f48be65bce5770495786bc77",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}
