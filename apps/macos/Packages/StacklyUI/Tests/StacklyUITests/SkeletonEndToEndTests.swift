@@ -261,14 +261,14 @@ struct SkeletonEndToEndTests {
     }
 
     @Test func aProcessThatOutlivesItsLimitIsKilledAndReportedAsTimedOut() async throws {
-        let started = ContinuousClock.now
-
         let outcome = try await ProcessRunner.run(
             URL(filePath: "/bin/sleep"), arguments: ["60"], timeout: .milliseconds(300))
 
         #expect(outcome.timedOut)
         #expect(outcome.status == SIGKILL)
-        #expect(ContinuousClock.now - started < .seconds(20))
+        // The run time of the process itself, so a main actor that another test holds in
+        // a full run does not count; the kill is what keeps it far below the 60 s sleep.
+        #expect(outcome.ranFor < .seconds(20))
     }
 }
 
