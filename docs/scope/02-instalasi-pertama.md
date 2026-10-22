@@ -50,7 +50,7 @@ Catalog bawaan (official) yang menampilkan publisher, revision, kategori, OS/arc
 
 **Trace:** REQ-002, REQ-033 (catalog bawaan), PAGE-08, BR-016, BR-025, NFR-014, AC-002, OQ-009, OQ-012
 
-**Pointer:** spec [0017](../specs/0017-catalog-provider-detail/index.md)
+**Pointer:** spec [0017](../specs/0017-catalog-provider-detail/index.md) · code in `crates/core/src/catalog/`, `xtask/src/catalog/`, `providers/catalog.toml`, `crates/protocol/src/catalog.rs`, `apps/daemon/src/catalog.rs`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/`
 
 - [x] Design it (spec): `/architect catalog & provider detail`
 - [ ] Build it: `/develop catalog & provider detail`
