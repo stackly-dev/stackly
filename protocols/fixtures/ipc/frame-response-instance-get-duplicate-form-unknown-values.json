@@ -223,7 +223,7 @@
           "provider": {
             "category": "database",
             "displayName": "PostgreSQL",
-            "manifestSha256": "3ec1b8baf35e23dbbf74f053f1f7710157f4722b900fafecba64de65c083b7bb",
+            "manifestSha256": "123e3fc6ad565cbc57f8f70a3a06a93ffab62a831b00ca0d1b33f85f88071df1",
             "name": "official/postgresql",
             "revision": "1.0.0",
             "source": "future_source"
