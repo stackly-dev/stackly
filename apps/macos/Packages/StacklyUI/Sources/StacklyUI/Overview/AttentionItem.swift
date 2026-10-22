@@ -36,7 +36,7 @@ nonisolated public enum AttentionCategory: Int, Comparable, Hashable, Sendable {
 
 /// One line of Needs Attention (spec 0022, *Aturan Needs Attention*).
 nonisolated public struct AttentionItem: Identifiable, Hashable, Sendable {
-    /// A stable ID: `instance:<uuid>`, `operation:<uuid>`, or `disk`.
+    /// A stable ID: `instance:<uuid>`, `operation:<uuid>`, `operations` (rule O2), or `disk`.
     public let id: String
     /// The rule that made the item, such as `I3` or `S2`.
     public let rule: String

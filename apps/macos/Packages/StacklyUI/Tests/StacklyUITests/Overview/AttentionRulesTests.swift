@@ -13,10 +13,12 @@ struct AttentionRulesTests {
 
     private func items(
         instances: [InstanceSummary]? = nil, operations: [OperationSummary] = [],
+        state: AttentionOperations? = nil,
         capacity: CapacityState = CapacityState(attempted: true)
     ) throws -> [AttentionItem] {
         AttentionRules.items(
-            instances: try instances ?? InstanceContractFixture.mixed(), operations: operations,
+            instances: try instances ?? InstanceContractFixture.mixed(),
+            operations: state ?? .loaded(operations),
             runtimes: .none, capacity: capacity, now: now, locale: locale, timeZone: timeZone)
     }
 
