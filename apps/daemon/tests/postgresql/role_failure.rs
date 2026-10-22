@@ -38,7 +38,7 @@ async fn init_whose_role_step_fails_is_failed_and_the_instance_never_starts(pg: 
     let daemon = site.in_process(|_| {}).await;
     let api = site.api().await;
 
-    let (id, detail) = failed_create(&site, &api, "norole").await;
+    let (id, detail) = failed_create(&site, &api, "norole", &crate::harness::new_password()).await;
 
     let error = &detail
         .operation

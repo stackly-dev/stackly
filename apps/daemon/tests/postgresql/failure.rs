@@ -22,13 +22,14 @@ pub async fn failed_create(
     site: &Site,
     api: &crate::support::Api,
     name: &str,
+    password: &str,
 ) -> (uuid::Uuid, stackly_protocol::operation::OperationDetail) {
     let accepted = api
         .create(create_params(
             site,
             name,
             PortRequest::Auto,
-            &new_password(),
+            password,
             serde_json::json!({}),
         ))
         .await
@@ -68,7 +69,7 @@ async fn init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_is_compen
         .await;
     let api = site.api().await;
 
-    let (id, detail) = failed_create(&site, &api, "broken").await;
+    let (id, detail) = failed_create(&site, &api, "broken", &new_password()).await;
 
     let error = &detail
         .operation
@@ -157,7 +158,8 @@ async fn init_that_initdb_refuses_shows_the_initdb_error_as_its_excerpt(pg: Pg, 
         .await;
     let api = site.api().await;
 
-    let (id, _) = failed_create(&site, &api, "excerpt").await;
+    let password = new_password();
+    let (id, _) = failed_create(&site, &api, "excerpt", &password).await;
 
     let written = recorder.text_of(id);
     assert!(
@@ -166,6 +168,10 @@ async fn init_that_initdb_refuses_shows_the_initdb_error_as_its_excerpt(pg: Pg, 
             .any(|line| line.contains("exists but is not empty")),
         "initdb said nothing that reached the sinks about the folder it refused: {written:#?}"
     );
+    assert!(
+        !written.iter().any(|line| line.contains(&password)),
+        "the superuser password reached the log sinks"
+    );
     daemon.shutdown().await;
     ev.subject(
         "postgresql",
@@ -173,7 +179,7 @@ async fn init_that_initdb_refuses_shows_the_initdb_error_as_its_excerpt(pg: Pg, 
         Some(&site.artifact_sha256),
         stackly_testkit::evidence::Source::Managed,
     );
-    ev.pass_with("the initdb error line reached the log sinks");
+    ev.pass_with("the initdb error line reached the log sinks, without the password");
 }
 
 #[tokio::test(flavor = "multi_thread")]
