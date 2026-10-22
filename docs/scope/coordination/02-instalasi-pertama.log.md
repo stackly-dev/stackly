@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 14:26`
+- **Diperbarui:** `2026-10-22 14:28`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -91,6 +91,8 @@
 | `tst-f19-test` (sesi F19 dipakai ulang) | `tester` | 19 · Test it (penegasan detail error AC-5 native, kasus tepi *Critical test scenarios*) | `02-instalasi-pertama.md` | `apps/daemon/tests/postgresql/`, test core terkait PostgreSQL | `claude/dev-f19-m1-bf9875` | `sonnet-5-5 · high` | `done-with-findings` (`c6ccdf74`): dua test cuplikan sengaja gagal sampai fix `dbg-f19-fix` |
 | `chk-f23-m3` (sesi F17 dipakai ulang) | `checker (verify)` | 23 · verify milestone 3 | `02-instalasi-pertama.md` | bagian Milestone 3 `verify.md` 0023 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | PASS tanpa commit; sesi idle |
 | `dbg-f19-fix` (sesi arc-f16 dipakai ulang) | `debugger` | 19 · cuplikan langkah init yang gagal tidak pernah terisi (spec 0019 AC-5, spec 0010) | `02-instalasi-pertama.md` | `crates/core/src/supervisor/` (minimal `init.rs`), test regresi core | `claude/arc-f16-update-19d886` | `opus-5-5 · xhigh` | `aktif` |
+| `dev-f21-m2` (sesi F21 dipakai ulang) | `developer` | 21 · Contract, daemon, CLI, and offline proof (spec 0021 milestone 2, langkah 6 sampai 8, protokol 1.14) | `02-instalasi-pertama.md` | `crates/protocol/` (detail, data usage), fixture `detail-*.json`, `Generated/` Swift, `detail.rs` core, handler daemon, `apps/cli/src/commands/instance/` (connection, inspect) | `claude/arc-f21-update-cc228d` | `sonnet-5-5 · high` | `aktif` |
+| `arc-f16-update-2` (sesi F15 dipakai ulang) | `architect (update)` | 16 · baris usulan baru spec 0015 untuk spec 0016 (langkah 12a sebagai prasyarat langkah 4) | `02-instalasi-pertama.md` | `docs/specs/0016-onboarding/`, penanda di spec 0015 | `claude/arc-f15-update-92bf17` | `opus-5-5 · xhigh` | `aktif` |
 
 ## Keputusan
 
@@ -296,6 +298,7 @@
 | `2026-10-22` | `chk-f23-m3` PASS tanpa commit (AC-15, bagian `Auto` AC-8, AC-9 sampai AC-12, AC-4 dengan nilai AC-15); F23 milestone 3 dicentang (`92201ffe`). | `lead` |
 | `2026-10-22` | `tst-f19-test` (`c6ccdf74`) menemukan bug produksi: langkah init yang gagal tidak pernah mengisi cuplikan error atau log sink, karena `run_init_command` di `crates/core/src/supervisor/init.rs` menangkap keluaran tetapi `ExitNotice.captured` tidak pernah dibaca. AC-5 spec 0019 ("exit code dan cuplikan") jadi tidak terpenuhi penuh, padahal verify penuh menilainya met karena test lama hanya menegaskan kode. `Build it` dan `Verify it` F19 dibuka kembali (`ade7a899`) sampai fix masuk. Fix diserahkan ke `dbg-f19-fix` (Opus xhigh); dua test native `as_its_excerpt` milik tester sengaja tetap gagal dan di-merge bersama fix supaya main tidak merah. Tambahan tester: penegasan langkah `initdb`, exit 1, test native kegagalan skrip role (17 dan 18), dan test core penolakan `stdin.text` pada stop dan reload. | `lead` |
 | `2026-10-22` | Urutan merge berikutnya (disepakati dengan lead ui-macos): fix F67 ui-macos (relay di `ZStack` sendiri, kolom inspector tanpa vibrancy, ukuran minimum lebar 0; merekam ulang 50 PNG Catalog dan 24 Instances, menghapus relay F22), lalu F18 milestone 4 (`dev-f18-m4` sudah memasang penanda interim; setelah fix F67 di main ia menghapus wrapper dan `minWidth` bila tidak dibutuhkan lagi, lalu merekam ulang HC Runtimes dan 10 referensi Catalog di kode gabungan). | `lead` |
+| `2026-10-22` | Dimulai `dev-f21-m2` (milestone 2 F21 terbuka: update spec 0021 dan protokol 1.13 di main; mengambil 1.14, sudah diumumkan ke lead scope 03) dan `arc-f16-update-2` (baris usulan spec 0015 untuk spec 0016, dibutuhkan sebelum langkah 4 F16). Antrian: milestone 5 F20 (init port guard, setelah langkah 13 F23 yang kini di main), langkah 12a F15 (setelah F18 milestone 4 karena keduanya mengubah `DaemonModel.swift`), milestone 1 F16 dan milestone 3 F20 (setelah F18 milestone 4, `AppShell.swift`). | `lead` |
 
 ## Blocker terbuka
 
