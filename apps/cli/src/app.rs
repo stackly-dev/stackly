@@ -18,6 +18,7 @@ use crate::commands::execute;
 use crate::commands::instance::InstanceCommand;
 use crate::commands::manpage::ManpageArgs;
 use crate::commands::operation::OperationCommand;
+use crate::commands::provider::ProviderCommand;
 use crate::commands::secret::SecretCommand;
 use crate::context::Context;
 use crate::env;
@@ -119,6 +120,9 @@ pub enum Command {
     /// List, inspect, cancel, resume, or abandon operations
     #[command(subcommand, arg_required_else_help = true)]
     Operation(OperationCommand),
+    /// List or inspect the providers in the catalog
+    #[command(subcommand, arg_required_else_help = true)]
+    Provider(ProviderCommand),
     /// Store, inspect, reveal, or delete secrets in the Keychain
     #[command(subcommand, arg_required_else_help = true)]
     Secret(SecretCommand),
@@ -140,6 +144,7 @@ impl Command {
             Self::Daemon(command) => command.run(cx).await,
             Self::Instance(command) => command.run(cx).await,
             Self::Operation(command) => command.run(cx).await,
+            Self::Provider(command) => command.run(cx).await,
             Self::Secret(command) => command.run(cx).await,
             Self::Completion(args) => execute(args, cx).await,
             Self::Manpage(args) => execute(args, cx).await,
