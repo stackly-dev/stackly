@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `b818e61`
 - **Wave aktif:** `6` (architect `arc-f126768-fix` dan debugger `dbg-f13-stall`, dimulai user `2026-10-22`; perbaikan kode inspector dan `StaleNote` menyusul setelah architect)
-- **Diperbarui:** `2026-10-22 10:35`
+- **Diperbarui:** `2026-10-22 11:47`
 
 ## Sub sesi wave `1`
 
@@ -43,6 +43,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `arc-f126768-fix` | architect (update) | keputusan nilai aksesibilitas fixture di bawah `.stacklyInspector` (bukti probe, rekomendasi relay di `FixtureAppearance.swift`), `StaleNote` kapital (0012), `bundledTool` `stackly-cli` (0068), penanda usulan 0015 di 0068 | `ui-macos.md` | `index.md`, `rationale.md`, `verify.md` spec 0012, 0067, 0068; probe sementara tanpa commit | `claude/ecstatic-volhard-38870f` (kartu `task_0293af01`) | `opus-5-5 · xhigh` | `merged` (`e0408db`) |
 | `dbg-f13-stall` | debugger, pemilik pengganti test skeleton | jeda sekitar 22 detik di run penuh StacklyUI yang menggagalkan `ShellEndToEndTests.theShellWaitsForStacklydThenConnectsByItself` dan `aProcessThatOutlivesItsLimitIsKilledAndReportedAsTimedOut` (`SkeletonEndToEndTests.swift:271`) | `ui-macos.md`, `01-foundation.md` | `ShellEndToEndTests.swift`, `SkeletonEndToEndTests.swift`, file test penahan (fitur lain lewat lead dulu), helper `Support/` dengan tenggat responsif, baris `verify.md` 0013 | worktree sendiri (kartu `task_d66ffff7`) | `opus-5-5 · xhigh` | `aktif` |
+| `dev-f68-k15` | developer | K15: relay `fixtureAccessibility` di `.stacklyInspector`, test penjaga tiga tempat, pemeriksaan pasangan HC di `assertSnapshot`, `StaleNote` kapital, rekaman ulang 23 PNG Catalog | `ui-macos.md` | `FixtureAppearance.swift`, `StacklyInspector.swift`, `StaleNote.swift`, `Support/Snapshot/`, `RenderProbeTests`, `SnapshotHelperTests`, `ViewStateTests`, PNG yang bergeser, centang `verify.md` 0012 dan 0068 | `claude/sharp-banach-564a8b` (kartu `task_d8301510`) | `sonnet-5-5 · high` | `merged` (`582afd51`) |
 
 ## Sub sesi wave `5`
 
@@ -167,6 +168,8 @@
 
 | `2026-10-22` | User menyetujui kotak build K15 di bawah `Build it` fitur 68 `ui-macos.md` dan teks cek Inspector demo dengan Increase Contrast asli di `docs/manual.md` bagian I.2, persis usulan `arc-f126768-fix`; Follow-up manual.md spec 0068 dicentang. Kartu developer `dev-f68-k15` (`task_d8301510`) menunggu user. `dbg-f13-stall` melapor fix korban `0cad9a1` lulus 7 dari 7 run penuh dan prototipe pilihan A menurunkan jeda run penuh dari 40 sampai 60 s ke sekitar 5 s; lead menambah `ConfirmationPresentationTests.settle` (F12) dan dua test regresi ke pekerjaannya. `evidence check` di `main` gagal dengan 39 pelanggaran di `apps/daemon/tests/postgresql/` dari F19 langkah 9 (`3d84938`); lead scope 02 mengarahkan perbaikannya ke `dev-f19-m3`. | `user` |
 
+| `2026-10-22` | `dev-f68-k15` (`20a0fa7b`, `b4850bd2`, `3432254b`) membangun K15 dan `StaleNote` kapital: 23 PNG berubah (20 HC Catalog yang kini berbeda dari standar, tiga `catalog-outdated`), tanpa `contrastInvariant` di suite nyata, uji hapus relay menggagalkan penjaga di kedua posisi. Penyimpangan yang lead terima: doc comment di `State/ViewState.swift` (di luar daftar, hanya komentar); dua commit pertama sendiri tidak hijau, tetapi masuk sebagai satu merge; catatan doc comment `CatalogCopy.sourceName` diteruskan ke lead scope 02 untuk brief F17 milestone 4. Gerbang lead setelah `git merge main` (`a5cb3109`, di atas F20 milestone 2 `aa9177c0` protokol 1.12): StacklyUI penuh 888 test di 88 suite lulus, 23 known issue semuanya dari tiga test helper yang memang mencatatnya (10, 6, 7), dua baris "identical" hanya dari view uji "plain" di test helper, `build-app` lulus, `evidence check` lulus, build Release tanpa simbol relay dan tanpa kode fixture (file `Fixtures/` menjadi objek kosong). Merge `582afd51` dengan `graphify update .`. Build worktree K15 dihapus (4,9 GB), sesi diarsipkan. Lead scope 02 melaporkan F22 milestone 3 menunggu K15: 16 state Instances HC identik karena inspector selalu terpasang, `overview-loading` hanya spinner. | `lead` |
+
 ## Blocker terbuka
 
 - (selesai) Test flaky `SkeletonEndToEndTests.theInstanceStoreFollowsChangesAnotherClientMakes` diperbaiki `dbg-f14-trail` (`edd197d`).
@@ -178,8 +181,8 @@
 - (selesai) Graph dokumen wave 3 sampai 5 diperbarui (lihat Keputusan).
 - (selesai) `arc-f126768-fix` di-merge `e0408db`.
 - (selesai) Kotak build K15 di F68 dan cek Inspector demo di `docs/manual.md` I.2: disetujui user dan diterapkan.
-- Kartu `dev-f68-k15` (`task_d8301510`): menunggu user.
-- Perbaikan kode inspector HC (F67, F68) dan `StaleNote` (F12) dalam satu commit dengan rekaman ulang referensi: setelah `arc-f126768-fix` di-merge.
+- Temuan `dev-f22-m3` untuk komponen ui-macos: ikon tombol aksi di kolom `.inspector` putih di atas putih di snapshot (diduga vibrancy), periksa ulang setelah K15; prompt `.searchable` tanpa label VoiceOver terpisah.
+- (selesai) Perbaikan kode K15 dan `StaleNote`: `582afd51`.
 - Jeda run penuh StacklyUI (flake `ShellEndToEndTests` dan `SkeletonEndToEndTests`): `dbg-f13-stall` berjalan (wave 6).
 - Usulan `/scope` dari spec 0067, 0068, 0069 dan teks AC-11 spec 0016 disetujui user 2026-10-21; `/scope` diterapkan lead, AC-11 lewat architect update spec 0016 (setelah F67 milestone 1 di-merge).
 - F12 `Verify it`: empat cek setting sistem asli menunggu user (`docs/manual.md` bagian I).
