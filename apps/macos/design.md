@@ -692,8 +692,8 @@ Where Stackly puts its items. The order of the system items (About, Services, Hi
 | Stackly | Reconnect to stacklyd, after Settings… ⌘, and before Services |
 | File | New Instance… ⌘N (built, spec 0020), then the system Close ⌘W. `CommandGroup(replacing: .newItem)` removes New Window |
 | Edit | the system items, then Find ▸ Find… ⌘F. `CommandGroup(replacing: .textEditing)` removes the Spelling and Grammar, Substitutions, Transformations, and Speech submenus |
-| View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; Back, Show or Hide Inspector, and Sort Instances By follow with the Instances page |
-| Instance | Start ⌘R and Stop ⇧⌘R (built, spec 0022); Open, Restart, Reload, Copy Connection String, Duplicate…, and Remove… are planned. `CommandMenu("Instance")` sits between View and Window |
+| View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; then Back ⌘[ (spec 0021), Show or Hide Inspector ⌥⌘I, and Sort Instances By (spec 0022), all published by the Instances page |
+| Instance | Open ⌘O (built, spec 0021), Start ⌘R and Stop ⇧⌘R (built, spec 0022), Copy Connection String ⇧⌘C (built, spec 0021); Restart, Reload, Duplicate…, and Remove… are planned. `CommandMenu("Instance")` sits between View and Window |
 | Window | the system items, then Stackly ⌘0 (the shortcut sits on the main `Window` scene) and, in Debug, Design Gallery |
 | Help | the system search field; Welcome to Stackly (built, spec 0016) and Stackly Help ⌘? (planned, feature 66). `CommandGroup(replacing: .help)` removes the item that opens nothing |
 
@@ -709,13 +709,13 @@ An item is never hidden because of state: one that does not apply is disabled. A
 | `newInstance` | File | 1 | New Instance… | ⌘N | shell | 20 | built |
 | `find` | Edit ▸ Find | 1 | Find… | ⌘F | page (all) | 69 | built |
 | `showOverview` to `showDiagnostics` | View | 1 | Overview, Instances, Environments, Catalog, Runtimes, Operations, Diagnostics | ⌘1 to ⌘7 | shell | 69 | built |
-| `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | planned |
+| `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | built |
 | `toggleInspector` | View | 3 | Show Inspector or Hide Inspector | ⌥⌘I | page (Instances) | 22 | built |
 | `sortInstancesBy…` and `sortInstancesAscending`, `sortInstancesDescending` | View ▸ Sort Instances By | 1 and 2 | Name, Provider, Version, Endpoints, Status, then Ascending, Descending | | page (Instances) | 22 | built |
-| `openInstance` | Instance | 1 | Open | ⌘O | page (Instances) | 21 | planned |
+| `openInstance` | Instance | 1 | Open | ⌘O | page (Instances) | 21 | built |
 | `startInstance`, `stopInstance` | Instance | 2 | Start, Stop | ⌘R, ⇧⌘R | page (Instances) | 22 | built |
 | `restartInstance`, `reloadInstance` | Instance | 2 | Restart, Reload | ⌥⌘R, none | page (Instances) | 26 | planned |
-| `copyConnectionString` | Instance | 3 | Copy Connection String | ⇧⌘C | page (Instances) | 21 | planned |
+| `copyConnectionString` | Instance | 3 | Copy Connection String | ⇧⌘C | page (Instances) | 21 | built |
 | `duplicateInstance` | Instance | 4 | Duplicate… | ⌘D | page (Instances) | 24 | planned |
 | `removeInstance` | Instance | 4 | Remove… | none | page (Instances) | 54 | planned |
 | `stacklyHelp` | Help | 1 | Stackly Help | ⌘? | app | 66 | planned |
