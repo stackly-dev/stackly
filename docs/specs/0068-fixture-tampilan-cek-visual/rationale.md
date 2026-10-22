@@ -536,7 +536,7 @@ Update `/architect` sesi `arc-f126768-fix`, dari temuan sesi F17 lead scope 02 d
 
 | Butir | Perubahan | Sumber |
 | --- | --- | --- |
-| Decision | K15 disebut, menunggu penerimaan lead | keputusan ini |
+| Decision | K15 disebut; final setelah lead menerima (G1 sampai G7) dan user menyetujui teks AC-5 dengan G5 | keputusan ini |
 | Model data | `FixtureAppearance` juga mengisi `fixtureAccessibility`; baris `EnvironmentValues.fixtureAccessibility` | K15 |
 | Nilai skenario | `bundledTool` `/fixture/Applications/Stackly.app/Contents/MacOS/stackly-cli`; link tetap `~/.local/bin/stackly`; Points to di referensi Diagnostics menyebut `stackly-cli` | spec 0015 *Instalasi CLI* dan *Usulan update untuk spec lain* baris 0068 (nama file CLI) di `main` |
 | *Environment fixture di dalam wadah yang menampung ulang isi* (subbagian baru) | relay, posisi nya, dan hasil probe per wadah | K15, *Bukti probe K15* |
@@ -620,11 +620,11 @@ Kesimpulan: yang hilang hanya `colorSchemeContrast`. Kunci biasa selalu sampai, 
 
 ### Teks AC K15
 
-Diusulkan ke lead sebelum ditulis final (lead meneruskannya ke user). Sampai disetujui, AC-5 di index.md tetap teks lama, dan test penjaga yang diperluas tetap dibangun lewat *Key invariants* dan Build plan. AC-7 tidak berubah: setter tetap hanya di `FixtureAppearance.swift`. AC-18 spec 0067 tidak berubah, karena perilaku Release `.stacklyInspector` tidak berubah.
+Diusulkan ke lead dan diteruskan ke user. **Keputusan user (2026-10-22, lewat lead):** teks baru plus kalimat G5, persis seperti usulan; ditulis di AC-5 index.md, ID tetap. AC-7 tidak berubah: setter tetap hanya di `FixtureAppearance.swift`. AC-18 spec 0067 tidak berubah, karena perilaku Release `.stacklyInspector` tidak berubah.
 
 | AC | Teks lama (bagian yang berubah) | Teks baru |
 | --- | --- | --- |
-| AC-5 | "Satu test penjaga merender view uji dan gagal dengan pesan yang menyebut SDK kalau di varian HC view tidak membaca `colorSchemeContrast == .increased`, atau di varian RT tidak membaca `accessibilityReduceTransparency == true`." | "Nilai yang dipaku `fixtureAppearance` juga sampai ke isi yang ditampung ulang `.stacklyInspector` (K15). Satu test penjaga merender view uji di tiga tempat (langsung, di isi utama `.stacklyInspector`, dan di kolom inspector nya) dan gagal dengan pesan yang menyebut SDK dan tempat itu kalau di varian HC view tidak membaca `colorSchemeContrast == .increased`, atau di varian RT tidak membaca `accessibilityReduceTransparency == true`." |
+| AC-5 | "Satu test penjaga merender view uji dan gagal dengan pesan yang menyebut SDK kalau di varian HC view tidak membaca `colorSchemeContrast == .increased`, atau di varian RT tidak membaca `accessibilityReduceTransparency == true`." | "Nilai yang dipaku `fixtureAppearance` juga sampai ke isi yang ditampung ulang `.stacklyInspector` (K15). Satu test penjaga merender view uji di tiga tempat (langsung, di isi utama `.stacklyInspector`, dan di kolom inspector nya) dan gagal dengan pesan yang menyebut SDK dan tempat itu kalau di varian HC view tidak membaca `colorSchemeContrast == .increased`, atau di varian RT tidak membaca `accessibilityReduceTransparency == true`. `assertSnapshot` gagal kalau gambar `hc-light` identik dengan `light` atau `hc-dark` identik dengan `dark`, kecuali pemanggil menyatakan `contrastInvariant: true` dengan alasan." |
 
 ### Cross check K15
 
@@ -648,3 +648,14 @@ Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas draft update
 | G10 | Teks usang di spec lain | `verify.md` spec 0017 (Follow-up lead di spec 0012) dan Follow-up spec 0015 baris nama file CLI di fixture 0068 (dicentang pemilik spec 0015 atau `/sync`) |
 
 **Keputusan lead atas update ini (2026-10-22).** "Accept" untuk K15 sesuai laporan, dan "apply all" untuk G1, G2, G3, G4, G6, dan G7 persis seperti rekomendasi di tabel *Cross check K15*; semuanya kini tertulis di index.md (*Environment fixture di dalam wadah yang menampung ulang isi*, Build plan *Tambahan 2026-10-22 (K15)*, *Critical test scenarios*) dan di spec 0012 (*Pola state*, G7). G5 (`assertSnapshot` gagal bila gambar `hc` identik dengan gambar standard, dengan `contrastInvariant: true` plus alasan) disetujui lead sebagai rancangan, tetapi karena menambah satu kalimat di AC-5, ia menunggu jawaban user bersama teks AC-5 dan belum ditulis di index.md. G10: lead meneruskan catatan `verify.md` spec 0017 dan centang Follow-up spec 0015 ke lead scope 02; spec ini tidak mengubah keduanya. Teks `docs/manual.md` dan blok scope dari laporan diterapkan lead.
+
+**Keputusan user (2026-10-22, lewat lead).** Teks AC-5 baru beserta kalimat G5 disetujui persis seperti usulan, jadi K15 dan G5 final dan Decision index.md tidak lagi bertanda menunggu. Lead meminta rancangan G5 di *Helper snapshot*, langkah verify nya, catatan bahwa developer memeriksa ulang semua pasangan HC di `main`, dan aturan bahwa setiap `contrastInvariant` butuh alasan tertulis; semuanya ditulis di commit ini.
+
+**Keputusan kecil rancangan G5.**
+
+- Yang dibandingkan adalah gambar yang baru dirender di pemanggilan yang sama, bukan referensi di disk, supaya pemeriksaan bekerja di mode rekam, saat referensi belum ada, dan di run evidence. Runner up: membandingkan file referensi, yang tidak berjalan sebelum referensi direkam.
+- Identik berarti sama persis, tanpa toleransi AC-6, karena Increase Contrast yang sampai ke view mengubah banyak piksel sekaligus, sedangkan yang tidak sampai menghasilkan gambar yang sama byte. Runner up: memakai ambang AC-6, yang bisa menyembunyikan perubahan HC yang sangat kecil tanpa manfaat.
+- Alasan dibawa argumen `contrastInvariantReason: String?` di samping `contrastInvariant: Bool` (nama di teks AC-5), bukan komentar, supaya helper bisa menolak tanda tanpa alasan. Runner up: satu argumen `contrastInvariant: String?`, yang lebih ringkas tetapi tidak cocok dengan teks AC-5 yang disetujui.
+- Tanda pada view yang ternyata berbeda di HC juga menjadi issue ("remove it"), supaya tanda tidak tertinggal setelah view berubah. Runner up: mengabaikannya, yang membiarkan pengecualian usang menyembunyikan regresi berikutnya.
+- Setiap pemakaian baru diajukan ke lead di laporan developer, seperti baris `AuditExceptions.swift` (AC-17), karena tanda itu mematikan bukti HC untuk satu nama.
+- Pemeriksaan pasangan di `main` (`0bfde56`, 2026-10-22) lewat blob git: 54 pasangan di `CatalogSnapshotTests` (20), `GallerySnapshotTests` (24), `DiagnosticsSnapshotTests` (6), dan `ShellSnapshotTests` (4); hanya 20 pasangan Catalog yang identik, jadi G5 tidak membuat suite lain merah.
