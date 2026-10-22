@@ -15,7 +15,9 @@ struct OnboardingFlow: View {
     var appIcon: NSImage = NSApplication.shared.applicationIconImage
 
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(DaemonModel.self) private var model: DaemonModel?
     @AccessibilityFocusState private var titleFocused: Bool
+    @FocusState private var keyFocus: OnboardingFocusTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +42,15 @@ struct OnboardingFlow: View {
             titleFocused = true
             announce(OnboardingFooter.announcement(step))
         }
+        // The banner this window hides would say `not_found`, so the flow says it, on every
+        // step, and only when the window banner would show the agent row.
+        .onChange(of: model?.agent?.assessment?.state) { old, new in
+            if let text = OnboardingAnnouncements.agentNotFound(
+                old: old ?? nil, new: new, input: model?.agentBannerInput, now: Date.now)
+            {
+                announce(text)
+            }
+        }
     }
 
     @ViewBuilder private var stepContent: some View {
@@ -48,11 +59,9 @@ struct OnboardingFlow: View {
             WelcomeStep(focus: $titleFocused, icon: appIcon)
         case .storage:
             StorageStep(focus: $titleFocused)
-        // provisional: F16 milestones 2 and 3 replace these three with their steps.
         case .backgroundAgent:
-            OnboardingStepHeader(
-                title: OnboardingCopy.agentTitle, subtitle: OnboardingCopy.agentSubtitle,
-                focus: $titleFocused)
+            BackgroundAgentStep(focus: $titleFocused, keyFocus: $keyFocus)
+        // provisional: F16 milestones 2 and 3 replace these two with their steps.
         case .catalogTrust:
             OnboardingStepHeader(
                 title: OnboardingCopy.catalogTitle, subtitle: OnboardingCopy.catalogSubtitle,
@@ -77,14 +86,15 @@ struct OnboardingFlow: View {
             Button(primaryLabel) { primaryAction() }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
+                .focused($keyFocus, equals: .primary)
         }
         .padding(.horizontal, Spacing.pageHorizontal)
         .padding(.vertical, Spacing.s12)
     }
 
-    // provisional: F16 milestone 2 passes the agent state of the daemon model here.
     private var primaryLabel: String {
-        OnboardingFooter.primaryLabel(step: onboarding.step, agentState: nil)
+        OnboardingFooter.primaryLabel(
+            step: onboarding.step, agentState: model?.agent?.assessment?.state)
     }
 
     private func primaryAction() {

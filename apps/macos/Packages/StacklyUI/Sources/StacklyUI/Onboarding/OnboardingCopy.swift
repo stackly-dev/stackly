@@ -128,3 +128,77 @@ nonisolated public enum OnboardingCopy {
     static let storageOverrideNote =
         "STACKLY_ROOT is set, so stacklyd keeps data, cache, and logs inside that folder."
 }
+
+// MARK: - Background Agent card (spec 0016, *Kartu Background Agent*)
+
+nonisolated extension OnboardingCopy {
+    /// The title of an enabled row.
+    static let agentAllowedTitle = "Allowed in Login Items"
+    /// The title of the row while the status is read.
+    static let agentCheckingTitle = "Checking the background service…"
+    /// The detail of the connected row.
+    static let agentConnectedDetail = "stacklyd starts when you log in."
+    /// The detail of the row while stacklyd starts.
+    static let agentStartingDetail = "stacklyd is starting…"
+    /// The title of the row when stacklyd is missing for 15 seconds or more.
+    static let agentNotRunningTitle = "Allowed, but stacklyd isn’t running"
+    /// The detail of that row.
+    static let agentNotRunningDetail =
+        "It was stopped or it exited. Start it again here, or run stackly daemon start in Terminal."
+    /// The detail of the row while the link connects.
+    static let agentConnectingDetail = "Connecting to stacklyd…"
+    /// The detail of an enabled row in any other presence.
+    static let agentCannotReachDetail =
+        "Stackly can’t reach stacklyd right now. Diagnostics has the details after setup."
+    /// The title of the row of an agent that is off.
+    static let agentOffTitle = "Background service is off"
+    /// The detail of that row.
+    static let agentOffDetail =
+        "Turn it on so stacklyd can run your instances, even when this window is closed. macOS may ask you to allow it."
+    /// The title of the row that waits for approval.
+    static let agentApprovalTitle = "Waiting for approval"
+    /// The detail of that row.
+    static let agentApprovalDetail =
+        "Turn on Stackly in System Settings > General > Login Items & Extensions. stacklyd can’t run until you do."
+    /// The title of the row of an agent the user turned off.
+    static let agentDisabledTitle = "Turned off in Login Items"
+    /// The detail of that row.
+    static let agentDisabledDetail =
+        "Turn on Stackly in System Settings > General > Login Items & Extensions to run stacklyd again."
+    /// The title of the row of a service macOS cannot find.
+    static let agentNotFoundTitle = "Stackly can’t find its background service"
+    /// The detail of that row.
+    static let agentNotFoundDetail =
+        "macOS couldn’t find stacklyd for this copy of Stackly. Move Stackly to the Applications folder, or install it again."
+    /// The title of the row of a build without stacklyd.
+    static let agentNoHelperTitle = "This build doesn’t include stacklyd"
+    /// The detail of that row.
+    static let agentNoHelperDetail =
+        "Start stacklyd yourself, or build the app with cargo xtask build-app."
+    /// The title of the row while `STACKLY_ROOT` is set.
+    static let agentRootOverrideTitle = "STACKLY_ROOT is set"
+    /// The detail of that row.
+    static let agentRootOverrideDetail =
+        "The background service only runs the default Stackly folder. Start stacklyd yourself for this folder."
+    /// The title of the row when the status cannot be read.
+    static let agentUnavailableTitle = "Stackly couldn’t check its background service"
+
+    /// The detail of that row.
+    ///
+    /// - Parameter detail: What the model knows, such as "timed out", or `nil`.
+    static func agentUnavailableDetail(_ detail: String?) -> String {
+        detail.map { "macOS didn’t answer (\($0)). Check again in a moment." }
+            ?? "macOS didn’t answer. Check again in a moment."
+    }
+
+    /// The reason the card action is disabled while an action runs.
+    static let working = "Working…"
+    /// The action that turns the agent on.
+    static let actionTurnOn = "Turn On"
+    /// The action that opens Login Items.
+    static let actionOpenSettings = "Open System Settings…"
+    /// The action that starts stacklyd.
+    static let actionStart = "Start stacklyd"
+    /// The action that reads the status again.
+    static let actionCheckAgain = "Check Again"
+}
