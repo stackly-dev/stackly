@@ -159,7 +159,7 @@ extension DaemonModelTests {
         await fixture.send(.resnapshot(.noCursor))
         try await waitUntil { model.presence == .connected(health: .degraded) }
         let firstConnected = try #require(values()["Last connected"])
-        try await fixture.push(Self.unreachable(40))
+        try await fixture.push(DaemonModelTests.closed(40))
         let lost = values()
         #expect(lost["Next attempt"] != nil)
         #expect(lost["What to do"] != nil)

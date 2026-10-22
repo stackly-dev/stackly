@@ -14,7 +14,8 @@ struct FixtureScenarioTests {
         "daemon-refreshing", "daemon-starting", "daemon-stopping", "daemon-connecting",
         "daemon-offline", "daemon-unreachable", "daemon-incompatible-major",
         "daemon-incompatible-rejected", "daemon-untrusted", "daemon-recovery",
-        "daemon-misconfigured", "onboarding",
+        "daemon-misconfigured", "onboarding", "agent-requires-approval", "agent-disabled",
+        "agent-enabled", "agent-not-found", "agent-unavailable",
     ]
 
     @Test func theCatalogHasEveryScenarioOfTheSpecWithItsFixedName() {

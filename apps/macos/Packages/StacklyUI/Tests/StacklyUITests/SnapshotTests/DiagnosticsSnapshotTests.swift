@@ -15,7 +15,10 @@ extension SnapshotTests {
                     diagnostics: model.diagnostics.pinningFixtureContract(),
                     isReconnecting: model.presentation.isReconnecting,
                     reconnect: {},
-                    refresh: {}),
+                    refresh: {}
+                )
+                .environment(model)
+                .environment(runtime.commandLineTool),
                 named: name)
         }
 
@@ -44,6 +47,16 @@ extension SnapshotTests {
             ))
         func diagnosticsWhenUntrusted() async throws {
             try await check(.daemonUntrusted, named: "diagnostics-daemon-untrusted")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-014", "NFR-012"],
+                expected:
+                    "Diagnostics with the background agent turned off in Login Items renders in every variant"
+            ))
+        func diagnosticsWhenTheAgentIsDisabled() async throws {
+            try await check(.agentDisabled, named: "diagnostics-agent-disabled")
         }
     }
 }

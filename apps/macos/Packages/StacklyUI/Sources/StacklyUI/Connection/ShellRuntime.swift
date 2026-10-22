@@ -12,19 +12,36 @@ public final class ShellRuntime {
     public let windowOpener = WindowOpener()
     /// The notice shown the first time the main window closes.
     public let closeNotice: CloseNotice
+    /// The command line tool, or `nil` for a shell without one (spec 0015).
+    public let commandLineTool: CommandLineToolModel?
     private var observers: [any NSObjectProtocol] = []
 
     /// Wraps `model`, starts it, and listens for the app becoming active and
     /// the Mac waking, which retry a lost connection.
-    public init(model: DaemonModel, closeNotice: CloseNotice = CloseNotice()) {
+    ///
+    /// - Parameters:
+    ///   - model: The daemon model.
+    ///   - closeNotice: The notice shown the first time the main window closes.
+    ///   - commandLineTool: The command line tool model, or `nil`.
+    public init(
+        model: DaemonModel, closeNotice: CloseNotice = CloseNotice(),
+        commandLineTool: CommandLineToolModel? = nil
+    ) {
         self.model = model
         self.closeNotice = closeNotice
+        self.commandLineTool = commandLineTool
         model.start()
         observers.append(
             NotificationCenter.default.addObserver(
                 forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated { self?.didBecomeActive() }
+            })
+        observers.append(
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.didResignActive() }
             })
         observers.append(
             NSWorkspace.shared.notificationCenter.addObserver(
@@ -34,9 +51,23 @@ public final class ShellRuntime {
             })
     }
 
-    /// The app became active: retry now when not connected.
+    /// The app became active: retry now when not connected, and read the background
+    /// agent's status again (spec 0015). Neither changes the registration.
     public func didBecomeActive() {
         model.systemRetry()
+        if let agent = model.agent {
+            agent.resumePolling()
+            Task { await agent.refresh() }
+        }
+        if let commandLineTool {
+            Task { await commandLineTool.refresh() }
+        }
+    }
+
+    /// The app became inactive: the agent's polling pauses, so the status is not read
+    /// while the user is in System Settings.
+    public func didResignActive() {
+        model.agent?.pausePolling()
     }
 
     /// The Mac woke from sleep: retry now when not connected.
@@ -72,7 +103,10 @@ public enum ShellBootstrap {
         clientVersion: String,
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> ShellRuntime {
-        assemble(rootOverride: rootOverride, clientVersion: clientVersion, now: now).runtime
+        assemble(
+            rootOverride: rootOverride, clientVersion: clientVersion, now: now,
+            agentController: SMAppServiceAgent(), commandLineTool: CommandLineTool.live()
+        ).runtime
     }
 
     /// Builds the live shell and returns its link and sync engine too, for the end to
@@ -84,12 +118,19 @@ public enum ShellBootstrap {
     ///   - now: The wall clock.
     ///   - announce: Posts a VoiceOver announcement.
     ///   - closeNotice: The notice shown the first time the main window closes.
+    ///   - agentController: The OS side of the background agent, or `nil` for a shell
+    ///     without an agent (the banner then is the one of spec 0013). `live` gives
+    ///     ``SMAppServiceAgent``.
+    ///   - commandLineTool: The command line tool, or `nil` for a shell without one. `live`
+    ///     gives ``CommandLineTool``.
     static func assemble(
         rootOverride: String?,
         clientVersion: String,
         now: @escaping @Sendable () -> Date = { Date() },
         announce: @escaping (String) -> Void = { StacklyUI.announce($0) },
-        closeNotice: CloseNotice = CloseNotice()
+        closeNotice: CloseNotice = CloseNotice(),
+        agentController: (any BackgroundAgentControlling)? = nil,
+        commandLineTool: (any CommandLineToolControlling)? = nil
     ) -> LiveShellParts {
         let endpoint = Result { () throws(RootOverrideProblem) -> SocketEndpoint in
             try SocketPathResolver.current(rootOverride: rootOverride)
@@ -101,15 +142,25 @@ public enum ShellBootstrap {
             now: now)
         let engine = SyncEngine(link: link, now: now)
         Task { await engine.start() }
+        let rootOverrideActive = rootOverride != nil
+        let agent = agentController.map {
+            BackgroundAgentModel(
+                controller: $0, launchRecord: LaunchRecordReader(home: UserHome.current()),
+                rootOverrideActive: rootOverrideActive)
+        }
         let model = DaemonModel(
             link: .live(link),
             signals: engine.signals,
             endpoint: try? endpoint.get(),
             launchedAt: now(),
             now: now,
-            announce: announce)
+            announce: announce,
+            agent: agent)
+        model.rootOverrideActive = rootOverrideActive
         return LiveShellParts(
-            runtime: ShellRuntime(model: model, closeNotice: closeNotice),
+            runtime: ShellRuntime(
+                model: model, closeNotice: closeNotice,
+                commandLineTool: commandLineTool.map { CommandLineToolModel(controller: $0) }),
             link: link,
             engine: engine)
     }
