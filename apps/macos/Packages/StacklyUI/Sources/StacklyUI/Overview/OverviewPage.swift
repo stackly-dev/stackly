@@ -17,6 +17,8 @@ public struct OverviewPage: View {
     @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
+    @State private var ownDerivation = OverviewDerivation()
+    private var sharedDerivation: OverviewDerivation?
 
     private let instances: InstanceStore
     private let catalog: CatalogStore?
@@ -79,6 +81,13 @@ public struct OverviewPage: View {
         self.openDiagnostics = openDiagnostics
     }
 
+    /// The page with a derivation its caller owns, so a test can read its recompute counter.
+    func derivation(_ derivation: OverviewDerivation) -> OverviewPage {
+        var copy = self
+        copy.sharedDerivation = derivation
+        return copy
+    }
+
     private var context: InstanceActionContext {
         InstanceActionContext.make(feedbackCenter: feedbackCenter, navigator: navigator)
     }
@@ -87,7 +96,13 @@ public struct OverviewPage: View {
     public var body: some View {
         let loaded = instances.loadedCount != nil
         let summaries = instances.instances
-        let counts = loaded ? InstanceCounts(of: summaries) : nil
+        let derived =
+            loaded
+            ? (sharedDerivation ?? ownDerivation).value(
+                summaries: summaries, providers: catalog?.providers,
+                failures: Set(instances.store.itemFailures.keys))
+            : nil
+        let counts = derived?.counts
         StateView(
             state: Self.state(
                 counts: counts, error: instances.store.error,
@@ -97,7 +112,7 @@ public struct OverviewPage: View {
             retry: retry,
             openDiagnostics: openDiagnostics
         ) { counts in
-            content(counts: counts, summaries: summaries)
+            content(counts: counts, rows: derived?.rows ?? [], summaries: summaries)
         }
         .pageChrome(
             title: SidebarSection.overview.title, subtitle: counts.map(OverviewCopy.subtitle)
@@ -127,10 +142,9 @@ public struct OverviewPage: View {
 
     // MARK: - Content
 
-    private func content(counts: InstanceCounts, summaries: [InstanceSummary]) -> some View {
-        let rows = InstanceRowModel.rows(
-            of: summaries, catalog: catalog?.providers,
-            failures: Set(instances.store.itemFailures.keys))
+    private func content(
+        counts: InstanceCounts, rows: [InstanceRowModel], summaries: [InstanceSummary]
+    ) -> some View {
         let names = Dictionary(
             summaries.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         let attention = attentionItems(summaries)

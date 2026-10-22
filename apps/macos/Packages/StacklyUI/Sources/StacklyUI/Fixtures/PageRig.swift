@@ -172,15 +172,16 @@
 
         /// The Overview over these stores, inside the action host of a window.
         func overviewPage(
-            isConnected: Bool = true, waiting: FailureContent? = nil, hasConnection: Bool = true
+            isConnected: Bool = true, waiting: FailureContent? = nil, hasConnection: Bool = true,
+            derivation: OverviewDerivation? = nil
         ) -> some View {
-            OverviewPage(
+            let page = OverviewPage(
                 instances: instances, catalog: catalog, runtimes: runtimes, operations: operations,
                 capacity: capacity, actions: actions, isConnected: isConnected,
                 waiting: waiting, hasConnection: hasConnection, reconnect: {},
                 openDiagnostics: {}
             )
-            .actionHost()
+            return (derivation.map { page.derivation($0) } ?? page).actionHost()
         }
     }
 
