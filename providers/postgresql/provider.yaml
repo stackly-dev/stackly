@@ -127,3 +127,10 @@ permissions:
   managedFilesystem: [data, config, temp, run]
   executeRuntimeBinary: true
   additionalExecutables: { initdb: bin/initdb, psql: bin/psql }
+connection:
+  - name: uri
+    title: Connection string
+    template: "postgresql://postgres:${secret.superuserPassword}@${endpoint.client.address}/postgres"
+  - name: socket
+    title: Unix socket
+    template: "postgresql://postgres:${secret.superuserPassword}@/postgres?host=${endpoint.socket.socketDir}&port=${endpoint.client.port}"

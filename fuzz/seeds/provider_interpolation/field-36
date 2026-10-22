@@ -1,1 +1,1 @@
-${instance.logs}/fake.log
+${runtime.executables.fakeCli}

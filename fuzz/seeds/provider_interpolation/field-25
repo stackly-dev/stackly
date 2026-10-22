@@ -1,1 +1,1 @@
-${instance.config}/dynamic
+--configFile=${instance.config}/traefik.yaml

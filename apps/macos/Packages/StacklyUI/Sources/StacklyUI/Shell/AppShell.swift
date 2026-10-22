@@ -23,6 +23,7 @@ public struct AppShell: View {
     @SceneStorage("shell.section") private var section: SidebarSection = .overview
     @State private var windowKey = MainWindowKey()
     @State private var windowWidth: CGFloat?
+    @State private var navigator = ShellNavigator()
     @Environment(\.openWindow) private var openWindow
 
     private let presentation: ShellPresentation
@@ -30,6 +31,10 @@ public struct AppShell: View {
     private let counts: SidebarCounts
     private let instances: InstanceStore?
     private let catalog: CatalogStore?
+    private let operations: OperationCenter?
+    private let capacity: CapacityModel?
+    private let instanceActions: InstanceActionModel?
+    private let completedRounds: Int
     private let windowOpener: WindowOpener
     private let windowWillClose: (NSWindow) -> Void
     private let reconnect: @MainActor () -> Void
@@ -48,6 +53,13 @@ public struct AppShell: View {
     ///     placeholder (previews).
     ///   - catalog: The catalog store behind the Catalog page, or `nil` to show the
     ///     placeholder (previews).
+    ///   - operations: The operation center behind the Overview, or `nil` to show the
+    ///     placeholder (previews).
+    ///   - capacity: The disk reading behind the Overview, or `nil` for the placeholder.
+    ///   - instanceActions: Start, Stop, and Retry for the Overview and Instances, or `nil`
+    ///     for the placeholders.
+    ///   - completedRounds: How many snapshot rounds completed; the pages read it to end a
+    ///     pending click and to read the disk again.
     ///   - windowOpener: Receives the scene's `openWindow` action.
     ///   - windowWillClose: Called with the main window right before it closes.
     ///   - reconnect: Tries to connect now (banner, Diagnostics).
@@ -60,6 +72,10 @@ public struct AppShell: View {
         counts: SidebarCounts = SidebarCounts(),
         instances: InstanceStore? = nil,
         catalog: CatalogStore? = nil,
+        operations: OperationCenter? = nil,
+        capacity: CapacityModel? = nil,
+        instanceActions: InstanceActionModel? = nil,
+        completedRounds: Int = 0,
         windowOpener: WindowOpener,
         windowWillClose: @escaping (NSWindow) -> Void,
         reconnect: @escaping @MainActor () -> Void,
@@ -71,6 +87,10 @@ public struct AppShell: View {
         self.counts = counts
         self.instances = instances
         self.catalog = catalog
+        self.operations = operations
+        self.capacity = capacity
+        self.instanceActions = instanceActions
+        self.completedRounds = completedRounds
         self.windowOpener = windowOpener
         self.windowWillClose = windowWillClose
         self.reconnect = reconnect
@@ -125,6 +145,14 @@ public struct AppShell: View {
         .actionHost()
         .environment(\.mutationAvailability, presentation.mutationAvailability)
         .environment(\.mainWindowKey, windowKey)
+        .environment(\.shellNavigator, navigator)
+        // `@SceneStorage` only lives in a view, so the navigator mirrors it both ways.
+        .onChange(of: section, initial: true) { _, new in
+            if navigator.section != new { navigator.section = new }
+        }
+        .onChange(of: navigator.section) { _, new in
+            if section != new { section = new }
+        }
         .background(
             MainWindowAccessor(windowKey: windowKey, windowWillClose: windowWillClose)
         )
@@ -187,13 +215,31 @@ public struct AppShell: View {
     @ViewBuilder private var page: some View {
         switch section {
         case .overview:
-            // provisional: F22
-            UnbuiltScrollPage(section: .overview)
+            if let instances, let operations, let capacity, let instanceActions {
+                OverviewPage(
+                    instances: instances,
+                    catalog: catalog,
+                    operations: operations,
+                    capacity: capacity,
+                    actions: instanceActions,
+                    isConnected: presentation.isConnected,
+                    completedRounds: completedRounds,
+                    waiting: presentation.pageFailure,
+                    hasConnection: presentation.hasConnection,
+                    reconnect: reconnect,
+                    openDiagnostics: { select(.diagnostics) }
+                )
+            } else {
+                UnbuiltScrollPage(section: .overview)
+            }
         case .instances:
-            if let instances {
-                // provisional: F22
-                ProvisionalInstanceList(
-                    store: instances,
+            if let instances, let instanceActions {
+                InstancesPage(
+                    instances: instances,
+                    catalog: catalog,
+                    actions: instanceActions,
+                    operations: operations,
+                    completedRounds: completedRounds,
                     waiting: presentation.pageFailure,
                     hasConnection: presentation.hasConnection,
                     reconnect: reconnect,

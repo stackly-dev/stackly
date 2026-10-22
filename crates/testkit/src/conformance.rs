@@ -9,6 +9,7 @@ use stackly_platform::{
 use crate::TestRoot;
 
 mod runtime_files;
+mod tree_usage;
 
 /// Runs the same behavior checks against any [`Filesystem`], so the fake in
 /// this crate and each OS adapter cannot drift apart unnoticed.
@@ -36,6 +37,15 @@ mod runtime_files;
 /// following a symlink, refuses existing entries and every symlink or file
 /// on the way, and opens only an empty, non symlinked root with mode 0700.
 ///
+/// For feature 21 it checks that `tree_usage` adds up `st_blocks * 512` like
+/// a plain count, counts a hard link once and a symlink as itself without
+/// following it, is complete with exactly `max_entries` entries and
+/// incomplete with one more or with `max_entries` 0 on a non empty root, is
+/// complete 32 levels deep and incomplete at level 33, finishes an empty
+/// root and stops a non empty one with a zero deadline, and refuses a
+/// relative root, a slash at the end, a `..` component, a symlink, a file,
+/// and a missing root.
+///
 /// # Panics
 ///
 /// Panics with the name of the first check that fails.
@@ -62,6 +72,7 @@ pub fn fs_conformance(fs: &dyn Filesystem, root: &TestRoot) {
     runtime_files::check_volume_space(fs, &base);
     runtime_files::check_volume_facts(fs, &base);
     runtime_files::check_tree_writer(fs, &base);
+    tree_usage::check_tree_usage(fs, &base);
 }
 
 fn check_directories(fs: &dyn Filesystem, base: &Path, uid: u32) {

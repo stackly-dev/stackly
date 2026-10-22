@@ -387,7 +387,7 @@ nonisolated public enum CommandMap {
                 id, menu: .view, group: 3, title: "Show Inspector",
                 alternateTitle: "Hide Inspector",
                 shortcut: CommandShortcut("i", [.command, .option]), scope: instancesPage,
-                owner: 22)
+                owner: 22, status: .built)
         case .sortInstancesByName:
             sortKey(id, title: "Name")
         case .sortInstancesByProvider:
@@ -411,7 +411,7 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Start",
                 shortcut: CommandShortcut("r", .command), scope: instancesPage,
-                requirements: [.selection, .daemon], owner: 22,
+                requirements: [.selection, .daemon], owner: 22, status: .built,
                 exception:
                     "⌘R is Show Ruler in the Format menu; Stackly has no Format menu, ruler, or styled text"
             )
@@ -419,7 +419,7 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Stop",
                 shortcut: CommandShortcut("r", [.command, .shift]), scope: instancesPage,
-                requirements: [.selection, .daemon], owner: 22)
+                requirements: [.selection, .daemon], owner: 22, status: .built)
         case .restartInstance:
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Restart",
@@ -523,13 +523,13 @@ nonisolated public enum CommandMap {
     private static func sortKey(_ id: CommandID, title: String) -> CommandEntry {
         CommandEntry(
             id, menu: .view, submenu: .sortInstancesBy, group: 1, kind: .toggle, title: title,
-            scope: instancesPage, owner: 22)
+            scope: instancesPage, owner: 22, status: .built)
     }
 
     /// A View > Sort Instances By > direction row.
     private static func sortDirection(_ id: CommandID, title: String) -> CommandEntry {
         CommandEntry(
             id, menu: .view, submenu: .sortInstancesBy, group: 2, kind: .toggle, title: title,
-            scope: instancesPage, owner: 22)
+            scope: instancesPage, owner: 22, status: .built)
     }
 }

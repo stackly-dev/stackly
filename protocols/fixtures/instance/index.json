@@ -27,6 +27,10 @@
     {
       "file": "commands.json",
       "type": "CommandCases"
+    },
+    {
+      "file": "connection-compose.json",
+      "type": "ConnectionComposeCases"
     }
   ]
 }
