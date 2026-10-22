@@ -97,6 +97,29 @@ struct FramingTests {
         #expect(throws: FrameError.self) { try decoder.push([0x7b]) }
     }
 
+    @Test func aLowerLimitRefusesAHeaderAlreadyCheckedButNotHandedOut() throws {
+        var decoder = FrameDecoder(maxLength: 1_024)
+        // One frame of 2 bytes, then the header of one of 256 bytes.
+        try decoder.push([0x00, 0x00, 0x00, 0x02, 0x7b, 0x7d, 0x00, 0x00, 0x01, 0x00])
+        #expect(decoder.nextFrame() == Array("{}".utf8))
+        #expect(decoder.refusal == nil)
+        decoder.setMaxLength(64)
+        #expect(decoder.refusal == .tooLarge(length: 256, max: 64))
+        #expect(decoder.nextFrame() == nil)
+        #expect(throws: FrameError.tooLarge(length: 256, max: 64)) { try decoder.push([0x7b]) }
+    }
+
+    @Test func aHigherLimitAcceptsAHeaderOnlyTheOldLimitRefused() throws {
+        var decoder = FrameDecoder(maxLength: 2)
+        let bytes: [UInt8] = [0x00, 0x00, 0x00, 0x02, 0x7b, 0x7d, 0x00, 0x00, 0x00, 0x03]
+        #expect(throws: FrameError.tooLarge(length: 3, max: 2)) { try decoder.push(bytes) }
+        #expect(decoder.nextFrame() == Array("{}".utf8))
+        decoder.setMaxLength(16)
+        #expect(decoder.refusal == nil)
+        try decoder.push(Array("[1]".utf8))
+        #expect(decoder.nextFrame() == Array("[1]".utf8))
+    }
+
     @Test func encoderRefusesEmptyAndOversizedPayloadsBeforeWriting() throws {
         #expect(throws: FrameError.empty) { try FrameEncoder.encode([UInt8](), maxLength: 16) }
         #expect(throws: FrameError.tooLarge(length: 5, max: 4)) {

@@ -93,6 +93,18 @@ final class ManualClock: Clock, Sendable {
         }
     }
 
+    /// Waits until a sleep wakes exactly `duration` after the current time,
+    /// such as the next interval of a loop that just went back to sleep.
+    func waitForSleeper(dueIn duration: Duration) async {
+        while state.withLock({ state in
+            let deadline = state.now.advanced(by: duration)
+            return state.sleepers.contains { $0.deadline == deadline } == false
+        }) {
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+    }
+
     /// Waits until `count` sleeps wait for the clock.
     func waitForSleepers(_ count: Int) async {
         while sleeperCount < count {

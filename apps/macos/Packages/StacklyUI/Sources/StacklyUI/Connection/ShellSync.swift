@@ -12,9 +12,16 @@ protocol SyncedStore: AnyObject {
     func resnapshot() async -> Bool
     /// The daemon restarted: forget observation bounds before the snapshot starts.
     func serverRestarted()
+    /// Whether the last snapshot failed with an error and none runs now, so a
+    /// reconnect that caught up loads one again.
+    var snapshotFailed: Bool { get }
 }
 
-extension ResourceStore: SyncedStore {}
+extension ResourceStore: SyncedStore {
+    var snapshotFailed: Bool {
+        error != nil && isRefreshing == false
+    }
+}
 
 /// A view that follows the events of one kind prefix without owning a store.
 private struct EventObserver {
@@ -27,7 +34,10 @@ private struct EventObserver {
 ///
 /// A resnapshot signal starts a new generation in every store; each store
 /// loads all pages and drops a result of an older generation. Events go to
-/// the stores that follow their kind.
+/// the stores that follow their kind. A reconnect that caught up loads a
+/// snapshot again only in the stores whose last one failed, once per
+/// `.caughtUp`; an `unsupported` store waits for the next resnapshot, which a
+/// new daemon run always brings.
 @Observable
 public final class ShellSync {
     @ObservationIgnored private var stores: [any SyncedStore] = []
@@ -134,6 +144,14 @@ public final class ShellSync {
                 observer.continuation.yield(event)
             }
         case .caughtUp:
+            let failed = stores.filter(\.snapshotFailed)
+            guard failed.isEmpty else {
+                // The round ends when these snapshots settle, worked or not.
+                for store in failed {
+                    snapshot(store, generation: generation)
+                }
+                return
+            }
             if isSettled {
                 completedRounds += 1
             }

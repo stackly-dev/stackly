@@ -113,6 +113,55 @@ extension DaemonConnectionTests {
         #expect(await reasons.next()?.code == "ipc.protocol_violation")
     }
 
+    @Test func aHeaderReadWithTheHandshakeReplyIsCheckedAgainstASmallerDaemonLimit() async throws {
+        server.serve { session in
+            let request = try session.readRequest()
+            // The next frame's header in the same write as the reply, so the
+            // client reads both in one chunk, before it knows the limit.
+            try session.sendRaw(
+                Self.handshakeReply(to: request, limits: Samples.limits.withFrameBytes(64))
+                    + [0x00, 0x00, 0x01, 0x00])
+            session.close()
+        }
+        let (connection, _) = try await open()
+        var reasons = connection.termination.makeAsyncIterator()
+        #expect(await reasons.next() == ClientErrorCatalog.frame(.tooLarge(length: 256, max: 64)))
+    }
+
+    @Test func aFrameReadWithTheHandshakeReplyMayUseALargerDaemonLimit() async throws {
+        let limit: UInt32 = 2 * ContractLimits.controlFrameMax
+        let padding = String(repeating: "x", count: Int(ContractLimits.controlFrameMax))
+        let event = Array(
+            #"{"type":"event","content":{"subscriptionId":99,"sequence":1,"at":"2026-10-18T03:04:05.123Z","kind":{"type":"instance.future_kind","content":{"pad":"\#(padding)"}}}}"#
+                .utf8)
+        server.serve { session in
+            let request = try session.readRequest()
+            // The reply and the header of a frame above 1 MiB, but within the
+            // daemon's limit, in one write; the payload follows.
+            let frame = try FrameEncoder.encode(event, maxLength: UInt32.max)
+            try session.sendRaw(
+                Self.handshakeReply(to: request, limits: Samples.limits.withFrameBytes(limit))
+                    + frame.prefix(FrameDecoder.headerLength))
+            try session.sendRaw(Array(frame.dropFirst(FrameDecoder.headerLength)))
+            let call = try session.readRequest()
+            try session.reply(to: call, with: .eventsUnsubscribe)
+        }
+        let (connection, _) = try await open()
+        #expect(event.count > Int(ContractLimits.controlFrameMax))
+        #expect(try await connection.call(Samples.unsubscribe(1)) == .eventsUnsubscribe)
+        await connection.close()
+    }
+
+    /// The framed handshake reply to `request` with `limits`.
+    static func handshakeReply(to request: Request, limits: Limits) throws -> [UInt8] {
+        let reply = ServerFrame.response(
+            Response(
+                requestId: request.requestId,
+                reply: .daemonHandshake(Samples.accepted(limits: limits))))
+        return try FrameEncoder.encode(
+            Array(StacklyJSON.encoder().encode(reply)), maxLength: UInt32.max)
+    }
+
     @Test func aCallAfterTheDaemonSentAConnectionErrorIsNotSentWithThatError() async throws {
         let shutdown = Samples.error("daemon.shutting_down", .unavailable)
         server.serve { session in
