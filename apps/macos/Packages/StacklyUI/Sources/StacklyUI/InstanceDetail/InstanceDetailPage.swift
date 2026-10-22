@@ -19,6 +19,7 @@ struct InstanceDetailPage: View {
 
     @Environment(\.feedbackCenter) private var feedbackCenter
     @Environment(\.shellNavigator) private var navigator
+    @Environment(\.duplicateInstanceAction) private var duplicateInstance
     @Environment(\.loadingDelay) private var loadingDelay
     @State private var lookup = Lookup.searching
     @State private var hadSummary = false
@@ -73,7 +74,7 @@ struct InstanceDetailPage: View {
                     .help(CommandMap.helpText(for: Self.command(of: action), title: action.title))
             }
             ToolbarItem(placement: .primaryAction) {
-                ActionMenu([[copyConnection]])
+                ActionMenu([moreItems(summary)])
             }
         }
         .task(id: id) { await model.open() }
@@ -110,6 +111,32 @@ struct InstanceDetailPage: View {
             .accessibilityLabel("Tab")
             .accessibilityIdentifier(AccessibilityID.InstanceDetail.tabs)
         }
+    }
+
+    /// The items of the More menu of the toolbar.
+    private func moreItems(_ summary: InstanceSummary) -> [StacklyAction] {
+        Self.moreItems(
+            copyConnection: copyConnection, duplicate: duplicateInstance,
+            source: DuplicateSourceRef(id: summary.id, name: summary.name))
+    }
+
+    /// The items of the More menu: Copy Connection String, then Duplicate… when the window
+    /// has the sheet for it (spec 0024 AC-13). Neither takes a shortcut here; the commands of
+    /// the Instance menu own them.
+    ///
+    /// - Parameters:
+    ///   - copyConnection: The Copy Connection String action.
+    ///   - duplicate: Opens the sheet on an instance, or `nil` where the window has none.
+    ///   - source: The instance of the page.
+    static func moreItems(
+        copyConnection: StacklyAction, duplicate: DuplicateInstanceAction?,
+        source: DuplicateSourceRef
+    ) -> [StacklyAction] {
+        var items = [copyConnection]
+        if let duplicate {
+            items.append(duplicate.stacklyAction(for: source))
+        }
+        return items
     }
 
     private var copyConnection: StacklyAction {

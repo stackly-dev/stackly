@@ -1,11 +1,11 @@
 import Foundation
 
-/// The two read methods behind the New Instance sheet (spec 0020, *Method IPC*) as typed
-/// calls.
+/// The read methods behind the New Instance sheet (spec 0020 and spec 0024, *Method IPC*) as
+/// typed calls.
 ///
 /// It wraps one `send` closure, the same shape ``SecretsClient`` uses, so a test can answer
-/// with a fixed reply and the app builds it over its link. Both methods only read: neither
-/// takes an idempotency key, and neither changes the registry, the disk, or the Keychain.
+/// with a fixed reply and the app builds it over its link. Every method only reads: none
+/// takes an idempotency key, and none changes the registry, the disk, or the Keychain.
 public struct CreateClient: Sendable {
     /// Sends one call and returns the reply.
     public typealias Send = @Sendable (Call, CallOptions) async throws(ClientError) -> Reply
@@ -35,6 +35,20 @@ public struct CreateClient: Sendable {
             .instanceGetCreateForm(GetCreateFormParams(runtimeId: runtimeId, provider: provider)),
             .standard)
         guard case .instanceGetCreateForm(let form) = reply else { throw Self.unexpectedReply() }
+        return form
+    }
+
+    /// `instance.get_duplicate_form`: the create form of an existing instance and the draft
+    /// that copies its settings (spec 0024).
+    ///
+    /// - Parameter instanceId: The instance whose settings the new one starts from.
+    /// - Throws: ``ClientError``, such as `resource.not_found`, `supervisor.instance_retained`,
+    ///   `supervisor.package_unavailable`, or `instance.capability_unsupported`.
+    public func getDuplicateForm(instanceId: UUID) async throws(ClientError) -> DuplicateForm {
+        let reply = try await send(
+            .instanceGetDuplicateForm(GetDuplicateFormParams(instanceId: instanceId)),
+            .standard)
+        guard case .instanceGetDuplicateForm(let form) = reply else { throw Self.unexpectedReply() }
         return form
     }
 

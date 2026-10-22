@@ -29,7 +29,7 @@ public struct NewInstanceSheet: View {
     /// Creates the sheet over `model`.
     ///
     /// - Parameter model: The model the owner of the sheet keeps. Call
-    ///   ``CreateInstanceModel/begin(software:)`` before presenting.
+    ///   ``CreateInstanceModel/begin(_:)`` before presenting.
     public init(model: CreateInstanceModel) {
         self.init(model: model, initialDrafts: [:])
     }
@@ -45,8 +45,8 @@ public struct NewInstanceSheet: View {
     public var body: some View {
         StacklySheet(
             title: "New Instance",
-            subtitle:
-                "Its own data directory, port and secret. Nothing is shared with other instances.",
+            subtitle: model.duplicateSubtitle
+                ?? "Its own data directory, port and secret. Nothing is shared with other instances.",
             tile: model.tile,
             primary: model.createAction(secrets: secretInputs, didSend: clearDrafts),
             cancel: model.cancelAction(gate: gate, close: { dismiss() }),
@@ -122,23 +122,21 @@ public struct NewInstanceSheet: View {
     /// The controls: the chooser always, the rest once the form is read.
     private var formArea: some View {
         Form {
-            Section {
-                Picker("Category", selection: category) {
-                    ForEach(CreateCategory.allCases, id: \.self) { Text($0.title) }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier(AccessibilityID.CreateInstance.category)
-                Picker("Runtime", selection: runtime) {
-                    ForEach(model.visibleRuntimes, id: \.id) { runtime in
-                        Text(CreateInstanceModel.label(of: runtime)).tag(UUID?.some(runtime.id))
+            if model.duplicateSource == nil || model.form != nil {
+                Section {
+                    if model.duplicateSource == nil {
+                        runtimeChooser
+                    } else if let label = model.duplicateRuntimeLabel {
+                        LabeledContent("Runtime") {
+                            Text(label)
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(model.duplicateRuntimeSpokenLabel ?? label)
+                        .accessibilityIdentifier(AccessibilityID.CreateInstance.runtime)
                     }
-                    if model.runtimeID == nil {
-                        Text("Choose a runtime").tag(UUID?.none)
+                    if model.form != nil {
+                        nameField
                     }
-                }
-                .accessibilityIdentifier(AccessibilityID.CreateInstance.runtime)
-                if model.form != nil {
-                    nameField
                 }
             }
             if let schema = model.schema {
@@ -170,6 +168,24 @@ public struct NewInstanceSheet: View {
         // sheet's margin, so the form gives that margin back to line the two up.
         .padding(.horizontal, -Self.groupedFormInset)
         .disabled(model.isReadOnly)
+    }
+
+    /// The category filter and the runtime picker of a create.
+    @ViewBuilder private var runtimeChooser: some View {
+        Picker("Category", selection: category) {
+            ForEach(CreateCategory.allCases, id: \.self) { Text($0.title) }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier(AccessibilityID.CreateInstance.category)
+        Picker("Runtime", selection: runtime) {
+            ForEach(model.visibleRuntimes, id: \.id) { runtime in
+                Text(CreateInstanceModel.label(of: runtime)).tag(UUID?.some(runtime.id))
+            }
+            if model.runtimeID == nil {
+                Text("Choose a runtime").tag(UUID?.none)
+            }
+        }
+        .accessibilityIdentifier(AccessibilityID.CreateInstance.runtime)
     }
 
     private var nameField: some View {

@@ -28,6 +28,7 @@ Kamu boleh mengerjakannya kapan saja dan tidak harus sekaligus. Setiap bagian be
 | [Q. F21 Start, readiness, dan connection](#q-f21-start-readiness-dan-connection) | F21 milestone 3 dan 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 40 menit, ditambah 20 menit run offline | wajib untuk F21 |
 | [R. F22 Overview dan daftar instance](#r-f22-overview-dan-daftar-instance) | F22 milestone 3 dan 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 40 menit | wajib untuk F22 |
 | [S. F23 Provider NATS](#s-f23-provider-nats) | F23 milestone 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 20 menit, sesudah O | wajib untuk F23 |
+| [U. Duplicate di aplikasi](#u-duplicate-di-aplikasi-fitur-24) | F24 milestone 3 dan 4, AC-14 di [scope/03-multi-versi-dan-instance.md](scope/03-multi-versi-dan-instance.md) | 35 menit dengan fake provider, ditambah 40 menit dengan PostgreSQL 17 | wajib untuk F24 |
 
 Urutan yang aku sarankan: E dulu karena paling singkat, lalu A, lalu B. Setelah itu kerjakan C, D, dan F sekali jalan, karena ketiganya memakai root dan jendela app yang sama. Untuk `ui-macos`: F dan J sekali jalan (keduanya menyalakan Keyboard navigation dan VoiceOver), lalu I, lalu K.
 
@@ -541,6 +542,43 @@ Bagian ini memakai root dev sementara dan tidak memakai jaringan: tombol Get mem
 **Tangkapan layar:** ambil dengan ⇧⌘4 (simpan di Desktop) dan sebutkan path-nya ke Claude, supaya Claude menyalinnya ke `evidence/manual/files/`: (1) halaman Runtimes dengan dua runtime (langkah 9.4), (2) sheet New Instance dengan daftar Runtime terbuka (langkah 10), (3) halaman Instances dengan kolom Version (langkah 12), (4) tab Summary `pg18-dev` (langkah 13).
 
 **Yang dikirim:** versi macOS, hasil langkah 2 (kedua artefak ada atau tidak), PID `pg17-dev` di langkah 8.3 dan 9.3, apa yang terlihat di baris `pg17-dev` selama langkah 9.2, daftar Runtime di langkah 10, kolom Version di langkah 12, port di tab Summary dan kolom Endpoints (langkah 13), keluaran `SELECT version()` di langkah 14 dan 15, hasil langkah 16, path empat tangkapan layar, serta nomor dan apa yang terlihat untuk setiap langkah yang tidak sesuai atau "semua sesuai".
+
+## U. Duplicate di aplikasi (fitur 24)
+
+Untuk F24 (spec 0024) milestone 3 dan 4: Duplicate… dari menu More dan ⌘D, dan JOURNEY-02 lewat GUI (spec 0024 AC-12 sampai AC-14, PRD AC-027 dan NFR-012). Sumber: `docs/specs/0024-instance-kedua-runtime-sama/verify.md`. Dua record sudah ada sebagai `NOT_RUN`: `evidence/manual/2026-10-22-spec-0024-manual-check-duplicate-in-the-app-with.json` (bagian 1, fake provider) dan `evidence/manual/2026-10-22-spec-0024-manual-check-journey-02-in-the-app-a-s.json` (bagian 2, PostgreSQL 17). Claude yang mengisinya dari hasilmu. Keyboard dan VoiceOver seperti F dan J; Increase Contrast seperti I; root dev dan cache seperti T; Automation Mode (K) tidak dibutuhkan.
+
+**Bagian 1, fake provider** (`docs/specs/0024-instance-kedua-runtime-sama/index.md`, AC-12 sampai AC-14). Memakai root sementara dan tidak memakai jaringan.
+
+1. Siapkan seperti C langkah 1 sampai 4 (build, `skeleton_seed`, daemon di Terminal B, app di Terminal C), lalu di Terminal A: `STACKLY_ROOT="$R" $S instance create demo --runtime $RT --provider testing/fake --revision 0.3.0 --set greeting="hello from demo" --wait`. Baris `demo` muncul di Instances dengan status Stopped. Catat ID-nya sebagai ID.
+2. Nyalakan Keyboard navigation dan VoiceOver (F langkah 1). Di app: ⌘2, panah ke baris `demo`, ⌘D. Sheet New Instance terbuka dengan spinner singkat, lalu:
+   - Subjudul: "Settings copied from “demo”. Its own data directory, ports and secrets; no data is copied."
+   - Tidak ada filter kategori dan picker runtime. Satu baris Runtime tanpa kontrol: "{nama tampil} {versi} · same as “demo”".
+   - Name berisi `demo-copy` dan teksnya terpilih. Port memakai Automatic (bukan angka). Field Greeting berisi "hello from demo".
+   - Secret Auth token memakai Generate. Pilih Copy from: pilihan pertama "Auth token of “demo”". Kembalikan ke Generate sebelum lanjut.
+3. Semua baris preflight Passed. Perintah setara memuat `stackly instance create demo-copy ... --port http=auto ... --secret authToken=generate`. Tekan Return: sheet menutup, `demo-copy` terpilih di Instances, dan kartu umpan balik berbunyi "“demo-copy” created from “demo”. Starting it now." (toggle Start after creating menyala dari awal).
+4. Dari detail: ⌘O pada baris `demo`, Tab ke tombol More, Space, panah turun. Item kedua adalah "Duplicate…", tepat sesudah "Copy Connection String", tanpa shortcut di sampingnya. Return membuka sheet dengan Name `demo-copy-2`. Escape menutup sheet tanpa membuat apa pun.
+5. Menu Instance: Duplicate… ⌘D ada di kelompok sesudah Copy Connection String. Tanpa baris terpilih dan tanpa detail terbuka, item itu nonaktif tanpa subjudul. Saat sheet terbuka, ⌘D tidak melakukan apa pun.
+6. Hentikan daemon (Ctrl+C di Terminal B): item Duplicate… di More dan di menu Instance nonaktif. Jalankan lagi: keduanya aktif lagi.
+7. Data tidak ikut tersalin: start `demo` dan `demo-copy` (`STACKLY_ROOT="$R" $S instance start <nama> --wait`), lalu ambil port setiap instance dari `STACKLY_ROOT="$R" $S instance get <nama>` (kolom Endpoints di app memuat angka yang sama). `curl -s -X PUT -d from-demo http://127.0.0.1:<port demo>/sentinel` harus memberi 204 tanpa isi, dan `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<port demo-copy>/sentinel` harus mencetak 404.
+8. VoiceOver, alur yang sama: baris Runtime terbaca "Runtime, {nama tampil} {versi}, same as demo"; subjudul terbaca sebagai bagian header; pilihan Copy from terbaca "Auth token of demo"; setiap field dan baris preflight terbaca seperti P langkah 2; hasil create diumumkan lewat kartu umpan balik.
+9. Lebar sheet 560 pt (lebar minimum) tanpa teks terpotong, di light, dark, dan Increase Contrast (I). Alur penuh dari langkah 2 sampai 3 hanya dengan keyboard, tanpa mouse.
+10. Bersihkan seperti D langkah 5 (stop kedua instance, ⌘Q, Ctrl+C daemon, `rm -rf "$R"`), dan pastikan `ps -axww -o pid=,args= | grep stackly-fake-server | grep -v grep` kosong.
+
+**Bagian 2, JOURNEY-02 dengan PostgreSQL 17** (AC-14, spec 0024 langkah 9 bagian GUI). Sama seperti T: root dev sementara, artefak PostgreSQL 17.11 dari cache xtask (`export CACHE=~/Library/Caches/dev.stackly.xtask/runtime PG17=04b1eff117441c0b6f1cbefa42ded6cf5726d656e54881674defea04b515d6d3`; `ls -l $CACHE/$PG17` harus menampilkan satu file). Bila file itu tidak ada, berhenti dan kirim "BLOCKED: artefak hilang di cache"; jangan mengunduh sendiri.
+
+1. Kerjakan T langkah 1, 3, 4, 5 (hanya `$PG17`, tanpa `$PG18`), dan 6 sampai 7 (Get hanya di baris 17.11). Runtimes harus berisi satu baris PostgreSQL 17.11.
+2. Buat `pg17-dev` lewat New Instance: Runtime `PostgreSQL 17.11`, Name `pg17-dev`, port Fixed dengan angka bawaan (5432; bila terpakai, angka bebas), password Generate, Start after creating menyala, Create. Tunggu Ready.
+3. Instance kedua lewat New Instance: Runtime sama, Name `pg17-new`, port Fixed dengan angka bawaan. Baris Port memuat "In use by pg17-dev" dan tombol "Use {n}"; Create mati dengan "Fix the errors above.". Tekan "Use {n}" (angka terisi), preflight lulus, Create, tunggu Ready.
+4. Instance ketiga lewat Duplicate…: baris `pg17-dev`, ⌘D (atau More di detailnya). Sheet berisi Name `pg17-dev-copy`, port Automatic, `Log statements` dan setting lain sama dengan `pg17-dev`, password Generate, Copy from menawarkan "Superuser password of “pg17-dev”". Biarkan Generate, tekan Create, tunggu Ready.
+5. Instances menampilkan tiga baris Ready dengan versi 17.11 dan tiga port berbeda. `STACKLY_ROOT="$R" $S instance get <nama> --json` untuk ketiganya memuat `runtimeId` yang sama dan `socketPath` yang berbeda. `ps -axww -o pid=,args= | grep "$R" | grep "bin/postgres" | grep -v grep` menampilkan tiga postmaster dari satu folder runtime `17.11` dengan folder data yang berbeda.
+6. Data berbeda. Untuk setiap instance, buka detail, tab Summary, klik Copy di baris Connection string, lalu di Terminal A (dalam 90 detik) `P17=$(ls -d "$R"/data/runtimes/postgresql/17.11/macos-aarch64/*/bin/psql)`:
+   - `pg17-dev`: `"$P17" "$(pbpaste)" -Atc "create table stackly_sentinel(v text); insert into stackly_sentinel values ('dev')"`.
+   - `pg17-new` dan `pg17-dev-copy`: `"$P17" "$(pbpaste)" -Atc "select to_regclass('stackly_sentinel')"` mencetak baris kosong (tabel tidak ada), dan `"$P17" "$(pbpaste)" -Atc "select system_identifier from pg_control_system()"` memberi angka yang berbeda untuk setiap instance. Password fixture ikut tampil di `ps` selama perintah jalan; itu tidak masalah untuk root dev ini.
+7. Bersihkan seperti T langkah 17 (stop ketiga instance dengan `--wait`, ⌘Q, Ctrl+C daemon, `rm -rf "$R" "$CAT"` dan folder `runtime_root`, cek `ps`; jangan pakai `pkill -f` atau `killall`).
+
+**Tangkapan layar (opsional):** ⇧⌘4 untuk sheet Duplicate (langkah 2 bagian 1) dan halaman Instances dengan tiga instance (langkah 5 bagian 2); sebutkan path-nya supaya Claude menyalinnya ke `evidence/manual/files/`.
+
+**Yang dikirim:** versi macOS; untuk bagian 1 nomor serta apa yang terlihat untuk setiap langkah yang tidak sesuai, atau "semua sesuai", plus kode HTTP langkah 7; untuk bagian 2 hasil cek artefak, keluaran langkah 5 dan 6 (`runtimeId`, jumlah postmaster, hasil `to_regclass`, tiga `system_identifier`), atau "BLOCKED: artefak hilang di cache".
 
 ## Cara mengirim hasil
 
