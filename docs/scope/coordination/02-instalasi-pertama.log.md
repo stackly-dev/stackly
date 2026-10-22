@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-23 05:00`
+- **Diperbarui:** `2026-10-23 05:30`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -221,6 +221,7 @@
 | `2026-10-23` | User menjawab "OK" untuk memulai `arc-f21-update` (enam keputusan `tree_usage` dan item "Duplicate…" spec 0024 di spec 0021) dan `arc-f16-update` (baris spec 0015 untuk spec 0016). | `user` |
 | `2026-10-23` | F23 milestone 1 di-merge (`b818e61`; dua flake StacklyUI muncul di run penuh dan lulus sendiri, diterima sesuai aturan; lead ui-macos menemukan seluruh proses test berhenti sekitar 22 detik dan merutekan `dbg-f13-stall`). Dicentang (`45e9f2c`): F17 milestone 2, F18 milestone 1 dan 3, F23 milestone 1 dengan Pointer `code in`. Tiga fakta startup NATS (langkah 0, NOT_RUN di verify milestone 1) dipindah ke run native milestone 2 F23 dan dicatat di `verify.md` oleh `dev-f23-m2`; faktanya diteruskan ke architect untuk rationale. | `lead` |
 | `2026-10-23` | Lead scope 03 me-merge `claude/arc-f25-spec-20a08d` (`f977abd`, docs saja, tanpa perubahan teks AC; lead ini setuju lebih dulu dan menahan main selama merge itu). Hasilnya untuk scope ini: kalimat *Status dan probe* spec 0011 sudah selaras dengan AC-3 (keychain terkunci menjawab present atau missing, `unknown` hanya dari NotSupported, Busy, atau Backend), sehingga Follow-up spec 0020 soal kalimat `unknown` itu selesai isinya; `SecretField.copyFromLabels` sudah tercatat di spec 0011 (baris `SecretField`), sehingga Follow-up spec 0020 soal usulan spec 0024 untuk spec 0011 juga selesai isinya dan prasyarat spec 0011 untuk langkah 14 spec 0020 (milestone 3 F20) terpenuhi. Kedua kotak Follow-up itu ada di file spec 0020, jadi dicentang oleh architect spec 0020 berikutnya atau `/sync` di penutupan wave, bukan oleh lead. | `lead` |
+| `2026-10-23` | User menyetujui run jaringan langkah 16a spec 0018: "Approve the F18 step 16a network run: nats_installs_from_the_network may download NATS 2.15.1 (about 6.8 MB) from GitHub Releases into a TestRoot with STACKLY_NATIVE_NETWORK=1." Diteruskan apa adanya ke `dev-f18-m5`. Batasnya: hanya test itu, setelah langkah 16 (run dari cache) lulus. Unduhan lain, termasuk mengisi ulang cache dengan `cargo xtask runtime spike --id <id>`, tetap butuh persetujuan baru; test lini yang artefaknya hilang dicatat `BLOCKED`. | `user` |
 
 ## Blocker terbuka
 
