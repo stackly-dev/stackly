@@ -1,0 +1,17 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 (/Users/ojiepermana/Worktrees/Stackly/arc-f16-update-19d886/crates/platform-macos)
+   Compiling stackly-cli v0.1.0 (/Users/ojiepermana/Worktrees/Stackly/arc-f16-update-19d886/apps/cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.83s
+     Running tests/nats_journey.rs (target/debug/deps/nats_journey-691dcfe243d487f7)
+
+running 1 test
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.25s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+test nats_created_with_defaults_and_with_jetstream_off_starts_inspects_and_stops_from_the_cli ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.06s
+

@@ -101,3 +101,74 @@ Penyimpangan dari spec, dicatat untuk lead:
 - AC-9 sampai AC-12 · dijalankan ulang di langkah 14 pada paket `1.0.1`
 - AC-4 · digantikan nilai AC-15 (revision `1.0.1`, digest `fe57c6f4…`)
 - AC-13 dan AC-14 · milik milestone 4
+
+## Milestone 4: Journey yang sama dari CLI dan GUI, dan pemeriksaan RISK-07
+
+Langkah Build plan yang tercakup: 10, 11, dan 12 (sesi `dev-f23-m4`, 2026-10-22). Test CLI memakai `stacklyd` dan `stackly` asli, runtime NATS 2.15.1 dari cache runtime xtask, dan tidak mengunduh apa pun; tanpa artefak test berakhir `BLOCKED` seperti di milestone 2.
+
+Penyimpangan dari spec, dicatat untuk lead dan architect:
+
+- Spec menyebut catalog uji dari `CatalogBuilder` (`stackly_core::catalog::testing`). Crate `stackly-cli` tidak boleh bergantung pada `stackly-core`, juga bukan sebagai dev dependency (`cargo xtask check-deps`: "the CLI never runs provider binaries or writes the registry"), jadi `nats_journey` memakai jalur yang sama dengan `apps/cli/tests/provider/stacklyd.rs`: `cargo xtask catalog build` dari `providers/` ke `STACKLY_CATALOG_DIR`, tempat `official/nats` sudah `[[provider]]`. Runtime masuk lewat `stackly runtime install official/nats@2.15.1 --wait`: test menyalin artefak dari cache xtask ke `cache/downloads/<sha256>` di root uji, jadi tahap download adalah cache hit dan seluruh jalur install (verify, extract, validate, commit) tetap nyata.
+- `stackly instance start`, `stop`, dan `get` hanya menerima ID penuh; `inspect` dan `connection` menerima nama. Test mengikuti itu: `start` dan `stop` dengan ID dari hasil create, `inspect` dengan nama.
+- Langkah 11 tidak memerlukan kode form baru. Test Swift milik spec 0020 sudah membuktikan baris, kontrol, dan batas memori. Yang ditambahkan: baris `serverName` managed (tidak dikirim, tidak "Required", ada di grup basic), toggle JetStream (default aktif, `false` terkirim), ketiga integer advanced dengan hint batas, default, dan aturan `restart`, serta dua baris endpoint `client` dan `monitoring` dengan host, tujuan, port default, dan perpindahan Fixed ke Automatic yang dikirim sebagai `auto`.
+
+### UI / manual
+
+- [ ] `NOT_RUN` (langkah 12, butuh izin user) Sheet New Instance untuk NATS di app development dengan root sementara: pilih runtime NATS 2.15.1 yang terpasang, isi nama, dan lihat baris "Server name" terkunci (read only, tidak bisa diketik), toggle JetStream aktif, grup Advanced tertutup dengan tiga angka dan batas nya, dan dua baris endpoint Client (4222) dan Monitoring (8222) dengan pilihan Fixed atau Automatic. Biarkan Automatic, nyalakan "Start after creating", tekan Create → sheet mengikuti operasi sampai selesai, instance muncul di Instances → AC-13
+- [ ] `NOT_RUN` (langkah 12, butuh izin user) Buka halaman detail instance NATS itu → tab Summary menampilkan Process "Running" dan Readiness "Ready" sebagai dua baris terpisah, kartu Endpoints menunjuk port yang dipilih daemon, dan kartu Connection `nats://127.0.0.1:<port>`. Ulangi dengan JetStream dimatikan → readiness tetap "Ready" → AC-13
+- [ ] `NOT_RUN` (langkah 12, butuh izin user) Seluruh alur di atas dengan keyboard saja (Tab melewati nama, runtime, setiap baris form, Advanced, kedua baris endpoint, toggle Start after creating, Create, dan Cancel; Return membuka Advanced; Escape membatalkan) dan dengan VoiceOver (baris managed dibacakan sebagai read only dengan nilai nya, toggle JetStream sebagai switch, setiap batas integer dibacakan, pilihan Fixed atau Automatic berlabel per endpoint, dan hasil Create diumumkan) → AC-13
+
+### Commands
+
+- [x] `cargo test -p stackly-cli --test nats_journey -- --ignored` → lulus dalam sekitar 7 detik: root uji baru, `stacklyd` dengan catalog dari `providers/`, `runtime install official/nats@2.15.1` dari cache, `instance create bus` dengan default (kedua endpoint `Auto`) lalu `start`, `inspect bus --json` dengan `lifecycle` `running`, `readiness.state` `ready`, `reason` `probe_ok`, dua port berbeda, baris INFO dari port `client` dengan `server_name` `bus`, `jetstream` `true`, versi `2.15.1`, lalu `stop` dan `inspect` yang menunjukkan `stopped` dan bukan `ready`; instance kedua `light` dengan `--set jetstream=false` melewati jalur yang sama dan INFO tidak memuat `jetstream: true` → AC-13
+- [x] `cargo xtask evidence run --kind native --out evidence/connection/nats-journey-20261022 -- cargo test -p stackly-cli --test nats_journey --locked -- --ignored` dari `HEAD` bersih (`0122207f`) → `1 native records (NOT_RUN 0, PASS 1, FAIL 0, BLOCKED 0, DEFERRED 0), 0 problems`, subject `nats` `2.15.1` dengan digest artefak; folder di `evidence/connection/nats-journey-20261022/` → AC-13
+- [x] `cargo test -p stacklyd --test create_form_fixtures` → `the_create_form_of_each_real_package_is_its_fixture` lulus, jadi `protocols/fixtures/instance/create-form-nats.json` masih sama dengan jawaban `instance.get_create_form` dari paket NATS `1.0.1`; `swift test --package-path clients/swift` → 217 test lulus → AC-13
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CreateInstance` dan `--filter SchemaFormModel` → lulus, termasuk `theNatsServerNameIsAManagedRowThatStaysInTheBasicGroup`, `theNatsJetStreamToggleStartsOnAndIsSentWhenItIsSwitchedOff`, `eachNatsAdvancedIntegerHasItsBoundsDefaultAndRestartRule`, dan `theNatsFormHasItsClientAndMonitoringRowsWithFixedOrAutomaticPorts`; `xcrun swift-format lint --strict` pada file Swift yang diubah bersih → AC-13
+- [x] `cargo fmt --all --check`, `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, dan `cargo xtask evidence check` → bersih (`59 manual record(s), baseline valid, 797 Rust and 490 Swift file(s) follow the rules`) → AC-13
+
+### Ukuran RISK-07 (AC-14)
+
+Commit dasar: `8aa1b3cb` (commit tepat sebelum commit build pertama fitur ini, `e257d26b`).
+
+Commit build fitur 23 yang dihitung, berurutan: `e257d26b` (langkah 0), `e2651ede` (3), `63d7a54b` (4), `ccbb358f` (4, fuzz run), `06c095c4` (1), `f5c1ea85` (5), `746c1be2` (6), `f98779ae` (evidence run ulang fuzz, langkah 4), `c556ac5f` (2), `37f192c5` (2, xtask test), `a7a03d20` (7), `116e269e` (8), `27e98df3` (9), `4b4b9555` (13), `7e741ffb` (14), `7664295c` (14, evidence), `7e438c9e` (13, xtask test), `82c68c37` (10), dan `0122207f` (11). Commit spec 0018, 0019, 0020, dan 0021 yang berada di antara nya dan commit docs tidak dihitung. Skrip yang dipakai ada di bawah tabel.
+
+Baris yang ditambahkan dan memuat `nats` (tanpa peduli huruf besar) ke file sumber non test, per commit (`git diff -U0 <commit>^ <commit>`, hanya baris berawalan `+`):
+
+| Commit | File allowlist | File di luar allowlist |
+| --- | --- | --- |
+| `e2651ede` | `provider/probe/nats.rs` 22, `provider/probe/mod.rs` 1 | tidak ada |
+| `63d7a54b` | `provider/fuzzing.rs` 21, `xtask/src/fuzz.rs` 18 | tidak ada |
+| `06c095c4` | `provider/probe/native.rs` 19 | tidak ada |
+| `f5c1ea85` | `supervisor/probe/native.rs` 17 | tidak ada |
+| semua commit lain di daftar | tidak ada | tidak ada |
+
+Semua jalur `crates/core/src/...` di atas ditulis tanpa awalan. Tidak ada baris `nats` di file sumber non test mana pun di luar allowlist. Tidak ada commit dalam daftar yang menyentuh file sumber non test di `apps/`, `clients/`, `crates/domain/`, `crates/platform/`, `crates/platform-macos/`, `crates/protocol/`, `crates/storage/`, atau `crates/ipc/`, jadi `ProtocolVersion::CURRENT` tidak berubah dan tidak ada seam baris 4 yang perlu dicatat dengan alasan (`pin_package` dan `DaemonConfig.extra_log_sinks` dibangun spec 0010 langkah 13; `crates/core/src/supervisor/fixture.rs` dan `apps/daemon/src` tidak berubah oleh commit fitur ini). Baris 4 tabel: 0 baris tambah, 0 hapus. Dua commit terakhir (`82c68c37`, `0122207f`) hanya menambah test.
+
+`git diff --numstat` gabungan semua commit di atas, hanya file sumber non test (tambah, hapus):
+
+| Baris tabel | File | Tambah | Hapus |
+| --- | --- | --- | --- |
+| 1 (generik) | `provider/raw.rs` | 92 | 0 |
+| 1 | `provider/validate.rs` | 163 | 5 |
+| 1 | `provider/manifest.rs` | 19 | 0 |
+| 1 | `provider/plan.rs` | 91 | 6 |
+| 1 | `provider/interpolate.rs` | 38 | 0 |
+| 1 | `provider/mod.rs` | 4 | 3 |
+| 1 | `provider/probe/mod.rs` | 40 | 0 |
+| 1 | `provider/probe/native.rs` (termasuk 19 baris varian NATS, baris 2) | 237 | 0 |
+| 1 | `supervisor/probe/native.rs` (driver generik, termasuk 17 baris cabang NATS, baris 2) | 570 | 11 |
+| 1 | `supervisor/probe/mod.rs` | 8 | 2 |
+| 1 | `supervisor/deps.rs`, `readiness.rs`, `reload.rs`, `probe/exec.rs` | 9 | 0 |
+| 2 (khusus NATS) | `provider/probe/nats.rs` | 641 | 1 |
+| 3 (fuzz, test dan tooling) | `provider/fuzzing.rs` | 171 | 0 |
+| 3 | `xtask/src/fuzz.rs` | 78 | 2 |
+| 4 (seam bersama) | `supervisor/fixture.rs`, `apps/daemon/src` | 0 | 0 |
+
+Tabel spec tidak memuat angka target, jadi tidak ada selisih yang dikembalikan ke `/architect`. Tiga hal untuk dibaca: baris 1 sebagian besar adalah engine generik yang dipakai probe native berikutnya (termasuk test inline di `supervisor/probe/native.rs`); khusus NATS di luar baris 3 hanya `nats.rs` (642 baris, state machine dan test transcript nya) ditambah 36 baris `nats` di `native.rs` dan `supervisor/probe/native.rs`; dan tidak ada kode Rust atau Swift khusus NATS di daemon, CLI, protokol, storage, platform, domain, atau SwiftUI.
+
+Skrip hitung (jalankan dari root repo): untuk setiap commit `c` dalam daftar, `git diff -U0 c^ c`, kumpulkan baris `+` yang cocok dengan `/nats/i` per file, abaikan file test (`tests/`, `fixtures`, golden, `docs/`, `evidence/`, `providers/`, `protocols/`, `schemas/`, `fuzz/`, dan berkas non kode), dan bandingkan dengan allowlist.
+
+### Acceptance-criteria coverage
+
+- AC-13 · bagian CLI selesai di langkah 10 (`nats_journey`, PASS native); bagian form selesai di langkah 11 (fixture masih lolos kontrak Rust dan Swift, empat assertion baru); bagian GUI (sheet New Instance, Summary, keyboard, VoiceOver) `NOT_RUN`, tiga langkah manual di atas untuk `/check verify` dan user
+- AC-14 · selesai di langkah 12: commit dasar, daftar commit, baris per commit terhadap allowlist, numstat per baris tabel, dan seam baris 4 tercatat di atas
