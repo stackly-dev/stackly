@@ -119,7 +119,7 @@ _Langkah 8 spec 0016 (evidence manual, kind `native`, status awal `NOT_RUN`). Se
 - [ ] `NOT_RUN` Command Line di akun ini: toggle Install lalu Install, `ls -l ~/.local/bin/stackly` menunjuk ke `…/Stackly.app/Contents/MacOS/stackly-cli`, `~/.local/bin/stackly --version` jalan, Remove, dan file shell tidak berubah (`stat` sebelum dan sesudah) → AC-8
 - [ ] `NOT_RUN` Keyboard saja dan VoiceOver dari langkah 1 sampai Get Started, lalu Escape dari langkah 3; light, dark, Increase Contrast, Reduce Transparency, dan jendela 900 × 600 → AC-10, AC-11
 - [ ] `NOT_RUN` Baca ulang semua copy terhadap AC-061: tidak ada janji sandbox, isolasi dari file user, "up to date", "latest", `/usr/local/bin`, atau "only while the app is open"; catat hasilnya → AC-9
-- [ ] `BLOCKED` `cargo xtask ui-test --only OnboardingUITests` → butuh Automation Mode, yang hanya user yang menyalakan (docs/manual.md bagian K); tanpa itu exit 2 dan tidak ada tes yang jalan. Target `StacklyAppUITests` terkompilasi (`xcodebuild build-for-testing`) → AC-1, AC-2, AC-3, AC-11
+- [ ] `NOT_RUN` `cargo xtask ui-test --only OnboardingUITests` → lulus; test ini tetap `NOT_RUN` sampai kamu menyalakan Automation Mode (docs/manual.md bagian K): tanpa itu task berhenti dengan exit 2 dan tidak ada tes yang jalan. Target `StacklyAppUITests` terkompilasi (`xcodebuild build-for-testing`) → AC-1, AC-2, AC-3, AC-11
 
 ### Commands
 
@@ -133,9 +133,9 @@ _Langkah 8 spec 0016 (evidence manual, kind `native`, status awal `NOT_RUN`). Se
 
 ### Acceptance-criteria coverage
 
-- AC-3 · test jalan lengkap tanpa efek samping (Milestone 4), model dan Escape (Milestone 1); XCUITest Escape di langkah 3 `BLOCKED` sampai Automation Mode
+- AC-3 · test jalan lengkap tanpa efek samping (Milestone 4), model dan Escape (Milestone 1); XCUITest Escape di langkah 3 `NOT_RUN` sampai Automation Mode
 - AC-5 · evidence Turn On sungguhan menunggu persetujuan user dan record AC-17 spec 0015
 - AC-8 · evidence di akun nyata menunggu langkah manual di atas
 - AC-9 · test copy dan pindaian sumber otomatis; baca ulang AC-061 manual
 - AC-10 · preview, snapshot, dan test unit; evidence keyboard dan VoiceOver manual
-- AC-11 · test unit dan jalan lengkap; XCUITest Get Started `BLOCKED` sampai Automation Mode
+- AC-11 · test unit dan jalan lengkap; XCUITest Get Started `NOT_RUN` sampai Automation Mode

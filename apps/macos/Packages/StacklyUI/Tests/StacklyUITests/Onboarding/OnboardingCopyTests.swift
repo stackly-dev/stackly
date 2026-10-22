@@ -162,7 +162,9 @@ struct OnboardingCopyTests {
     @Test func everyPhraseOfTheOnboardingLivesInTheCopyFile() throws {
         for file in try Self.onboardingFiles()
         where file.path.hasSuffix("/OnboardingCopy.swift") == false {
-            for line in file.codeLines where line.firstMatch(of: Self.prose) != nil {
+            // The names of previews are for the person who reads the canvas, not UI text.
+            for line in file.codeLines
+            where line.contains("#Preview(") == false && line.firstMatch(of: Self.prose) != nil {
                 Issue.record("\(file.path) holds text of its own: \(line)")
             }
         }

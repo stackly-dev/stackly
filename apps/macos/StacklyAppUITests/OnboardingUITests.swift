@@ -21,14 +21,9 @@ final class OnboardingUITests: XCTestCase {
 
     /// Launches the app on the `onboarding` scenario and waits for the primary button.
     private func launchOnboarding(appearance: Appearance = .light) -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchEnvironment["STACKLY_UI_SCENARIO"] = FixtureScenario.ID.onboarding.rawValue
-        app.launchEnvironment["STACKLY_UI_APPEARANCE"] = appearance.rawValue
-        app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
-        app.launch()
-        let primary = app.element(AccessibilityID.Onboarding.primary)
-        XCTAssertTrue(primary.waitForExistence(timeout: 10), "the onboarding did not appear")
-        return app
+        launch(
+            .onboarding, appearance: appearance, readyIdentifier: AccessibilityID.Onboarding.primary
+        )
     }
 
     func testTheOnboardingFillsTheWindowWithoutASidebar() throws {
