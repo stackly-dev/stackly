@@ -19,6 +19,8 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 stackly-core = { path = "../crates/core" }
+stackly-platform = { path = "../crates/platform" }
+stackly-platform-macos = { path = "../crates/platform-macos" }
 stackly-protocol = { path = "../crates/protocol" }
 
 [[bin]]
@@ -87,6 +89,13 @@ bench = false
 [[bin]]
 name = "runtime_macho"
 path = "fuzz_targets/runtime_macho.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "instance_path"
+path = "fuzz_targets/instance_path.rs"
 test = false
 doc = false
 bench = false

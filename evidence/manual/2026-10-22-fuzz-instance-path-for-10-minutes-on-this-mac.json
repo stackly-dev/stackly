@@ -1,0 +1,63 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a16363-8ecd-7387-8088-22c35c616665",
+  "covers": [
+    "VAL-007"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Fuzz instance_path for 10 minutes on this Mac",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "cargo xtask fuzz run instance_path --time 600 runs the instance_path target with the pinned nightly and cargo-fuzz and finds no crash, hang, or out of memory.",
+  "actual": "no crash, hang, or out of memory and fuzz/artifacts/ empty after two runs of 600 s each. First run (committed seeds only): instance_path 1709376 runs in 601 s (2844 exec/s), 330 new units, peak RSS 621 MB, /usr/bin/time 603.47 s real, load average 44 at the start and 45 at the end. Second run (on the corpus the first run grew): 1427446 runs in 601 s, 275 new units, peak RSS 546 MB, 603.45 s real, ran for 600 s without a crash. The head and tail of the first log are in the files folder",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit d69dd89 (spec 0020 step 16: the instance_path target, its TARGETS row, and 27 seeds) with a clean tree, use the pinned fuzz toolchain nightly-2026-10-17 and cargo-fuzz 0.13.2; `cargo xtask fuzz build instance_path` builds the target with AddressSanitizer (default)",
+    "start from the 27 committed seeds only (fuzz/corpus was empty before a 20 second smoke run, which found no crash)",
+    "run `/usr/bin/time cargo xtask fuzz run instance_path --time 600` alone, in the background, from 2026-10-22T11:23Z to 11:33Z, while other sessions used the Mac; a second run of the same command followed on the grown corpus",
+    "check that each command exits 0 with `ran for 600 s without a crash`, that fuzz/artifacts/ holds no input, and read the libFuzzer final stats",
+    "keep the head and tail of the first log in this record's files folder (the middle NEW, REDUCE, and pulse progress lines are cut)",
+    "the fixture tree holds symlinks out of the root, to another root, in a loop, to itself, Unicode and spaced names, and a folder 64 levels deep (fixture_tree), judged by check_owned_path and check_data_root_overlap through owned_path"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5)",
+  "startedAt": "2026-10-22T11:33:51.436777Z",
+  "finishedAt": "2026-10-22T11:33:50Z",
+  "evidencePath": "evidence/manual/files/01a16363-8ecd-7387-8088-22c35c616665/",
+  "context": {
+    "sourceCommit": "d69dd89bc21639d8e6703350bba1dfb120d85f8f",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

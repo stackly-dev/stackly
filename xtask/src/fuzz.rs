@@ -80,6 +80,10 @@ const RUNTIME_ARCHIVE_MAX_LEN: usize = 1 << 20;
 /// 4 MiB limit stays reachable through the sizes the header claims.
 const RUNTIME_MACHO_MAX_LEN: usize = 65_536;
 
+/// The longest `instance_path` input: a path a few names deep, well under
+/// the 1024 byte `PATH_MAX` of macOS plus the 64 level fixture folder.
+const INSTANCE_PATH_MAX_LEN: usize = 1024;
+
 const USAGE: &str =
     "cargo xtask fuzz list | build [<target>] | seed | run <target> [--time <seconds>]";
 
@@ -157,6 +161,12 @@ const TARGETS: &[Target] = &[
         crate_dir: "crates/core",
         max_len: RUNTIME_MACHO_MAX_LEN,
         seeds: runtime_macho_seeds,
+    },
+    Target {
+        name: "instance_path",
+        crate_dir: "crates/core",
+        max_len: INSTANCE_PATH_MAX_LEN,
+        seeds: instance_path_seeds,
     },
 ];
 
@@ -730,6 +740,61 @@ fn slug(name: &str) -> String {
         .map(str::to_ascii_lowercase)
         .collect::<Vec<_>>()
         .join("-")
+}
+
+/// `instance_path`: the paths of the regression test of the target
+/// (`crates/core/tests/instance_path_fuzz.rs`) that do not name the
+/// temporary folder of the fixture tree, which the harness joins to the
+/// fixture root: symlinks out, to another root, in a loop, and to the
+/// tree itself, Unicode and spaced names, the 64 level folder, and the data
+/// folders.
+fn instance_path_seeds(_root: &Path) -> Result<Vec<Seed>> {
+    let deep = (0..64)
+        .map(|level| format!("d{level}"))
+        .collect::<Vec<_>>()
+        .join("/");
+    let paths: Vec<(&str, Vec<u8>)> = vec![
+        ("empty", Vec::new()),
+        ("slash", b"/".to_vec()),
+        ("dot", b".".to_vec()),
+        ("dotdot", b"..".to_vec()),
+        ("inner-dotdot", b"a/../b".to_vec()),
+        ("dot-segment", b"./a".to_vec()),
+        ("double-slash", b"//".to_vec()),
+        ("inside", b"inside".to_vec()),
+        ("link-out", b"link-out".to_vec()),
+        ("link-out-below", b"link-out/x/y".to_vec()),
+        ("link-other-root", b"link-other-root".to_vec()),
+        (
+            "link-other-root-below",
+            b"link-other-root/anything".to_vec(),
+        ),
+        ("loop", b"loop-a".to_vec()),
+        ("loop-below", b"loop-a/x".to_vec()),
+        (
+            "link-self-chain",
+            b"link-self/link-self/link-self/inside".to_vec(),
+        ),
+        ("link-inside-dotdot", b"link-inside/../inside".to_vec()),
+        ("unicode", "ünï cödé/with space/x".as_bytes().to_vec()),
+        ("deep", format!("deep/{deep}").into_bytes()),
+        ("deeper", format!("deep/{deep}/more").into_bytes()),
+        ("data", b"instances/one/data".to_vec()),
+        ("data-below", b"instances/one/data/sub".to_vec()),
+        ("data-parent", b"instances/one".to_vec()),
+        ("instances", b"instances".to_vec()),
+        ("data-sibling", b"instances/one/../two/data".to_vec()),
+        ("invalid-utf8", vec![0xff, 0xfe, b'/', 0x80]),
+        ("nul-bytes", vec![0; 3]),
+        ("nul-inside", b"a\0b".to_vec()),
+    ];
+    Ok(paths
+        .into_iter()
+        .map(|(name, bytes)| Seed {
+            name: name.to_owned(),
+            bytes,
+        })
+        .collect())
 }
 
 #[cfg(test)]

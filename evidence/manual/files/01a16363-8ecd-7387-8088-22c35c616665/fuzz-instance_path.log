@@ -1,0 +1,56 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.13s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.06s
+     Running `fuzz/target/aarch64-apple-darwin/release/instance_path -artifact_prefix=fuzz/artifacts/instance_path/ -max_len=1024 -max_total_time=600 -print_final_stats=1 fuzz/corpus/instance_path fuzz/seeds/instance_path`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 401819342
+INFO: Loaded 1 modules   (714829 inline 8-bit counters): 714829 [0x106f9f7b0, 0x10704dffd), 
+INFO: Loaded 1 PC tables (714829 PCs): 714829 [0x10704e000,0x107b364d0), 
+INFO:       88 files found in fuzz/corpus/instance_path
+INFO:       26 files found in fuzz/seeds/instance_path
+INFO: seed corpus: files: 114 min: 1b max: 261b total: 6101b rss: 66Mb
+#115	INITED cov: 317 ft: 914 corp: 77/4372b exec/s: 0 rss: 69Mb
+#163	REDUCE cov: 317 ft: 914 corp: 77/4365b lim: 255 exec/s: 0 rss: 70Mb L: 129/255 MS: 3 ChangeASCIIInt-ChangeASCIIInt-EraseBytes-
+#705	REDUCE cov: 317 ft: 914 corp: 77/4364b lim: 255 exec/s: 0 rss: 77Mb L: 180/255 MS: 2 EraseBytes-CrossOver-
+#858	REDUCE cov: 317 ft: 914 corp: 77/4357b lim: 255 exec/s: 0 rss: 78Mb L: 66/255 MS: 3 InsertByte-ChangeBinInt-EraseBytes-
+#1164	REDUCE cov: 317 ft: 914 corp: 77/4336b lim: 255 exec/s: 0 rss: 82Mb L: 209/255 MS: 1 EraseBytes-
+#1765	REDUCE cov: 317 ft: 914 corp: 77/4325b lim: 255 exec/s: 0 rss: 90Mb L: 14/255 MS: 1 EraseBytes-
+#1997	REDUCE cov: 317 ft: 914 corp: 77/4306b lim: 255 exec/s: 0 rss: 93Mb L: 114/255 MS: 2 CrossOver-EraseBytes-
+#2133	REDUCE cov: 317 ft: 914 corp: 77/4305b lim: 255 exec/s: 0 rss: 95Mb L: 13/255 MS: 1 EraseBytes-
+#2205	REDUCE cov: 317 ft: 914 corp: 77/4302b lim: 255 exec/s: 0 rss: 96Mb L: 75/255 MS: 2 ChangeByte-EraseBytes-
+#2381	REDUCE cov: 317 ft: 914 corp: 77/4300b lim: 255 exec/s: 0 rss: 97Mb L: 11/255 MS: 1 EraseBytes-
+#2493	REDUCE cov: 317 ft: 914 corp: 77/4298b lim: 255 exec/s: 0 rss: 98Mb L: 9/255 MS: 2 CopyPart-EraseBytes-
+#2671	REDUCE cov: 317 ft: 914 corp: 77/4265b lim: 255 exec/s: 0 rss: 100Mb L: 81/255 MS: 3 ChangeByte-ChangeASCIIInt-EraseBytes-
+#4085	REDUCE cov: 317 ft: 914 corp: 77/4264b lim: 262 exec/s: 4085 rss: 118Mb L: 33/255 MS: 5 ChangeBit-ChangeBinInt-CMP-EraseBytes-CMP- DE: "\001\000\000\000\000\000\000\001"-"\000\000\000\000\000\000\000\001"-
+#5192	REDUCE cov: 317 ft: 914 corp: 77/4258b lim: 270 exec/s: 5192 rss: 129Mb L: 77/255 MS: 2 CrossOver-CrossOver-
+#5321	REDUCE cov: 317 ft: 914 corp: 77/4255b lim: 270 exec/s: 5321 rss: 131Mb L: 24/255 MS: 4 ChangeBit-EraseBytes-PersAutoDict-ChangeByte- DE: "\000\000\000\000\000\000\000\001"-
+... (NEW, REDUCE, and pulse progress lines cut) ...
+#1545499	REDUCE cov: 317 ft: 972 corp: 93/8333b lim: 1024 exec/s: 2830 rss: 621Mb L: 122/832 MS: 2 ChangeBinInt-EraseBytes-
+#1558276	REDUCE cov: 317 ft: 972 corp: 93/8330b lim: 1024 exec/s: 2833 rss: 621Mb L: 432/832 MS: 2 ChangeASCIIInt-EraseBytes-
+#1593706	REDUCE cov: 317 ft: 972 corp: 93/8326b lim: 1024 exec/s: 2835 rss: 621Mb L: 95/832 MS: 5 ChangeBinInt-CMP-CrossOver-EraseBytes-InsertRepeatedBytes- DE: "\377\377\377\377"-
+#1598027	REDUCE cov: 317 ft: 972 corp: 93/8324b lim: 1024 exec/s: 2833 rss: 621Mb L: 120/832 MS: 1 EraseBytes-
+#1611188	REDUCE cov: 317 ft: 972 corp: 93/8323b lim: 1024 exec/s: 2836 rss: 621Mb L: 393/832 MS: 1 EraseBytes-
+#1617456	REDUCE cov: 317 ft: 972 corp: 93/8203b lim: 1024 exec/s: 2837 rss: 621Mb L: 116/832 MS: 3 EraseBytes-EraseBytes-InsertRepeatedBytes-
+#1662334	REDUCE cov: 317 ft: 972 corp: 93/8188b lim: 1024 exec/s: 2841 rss: 621Mb L: 597/832 MS: 3 CopyPart-ChangeBit-CrossOver-
+#1687651	REDUCE cov: 317 ft: 972 corp: 93/8187b lim: 1024 exec/s: 2845 rss: 621Mb L: 61/832 MS: 2 EraseBytes-CopyPart-
+#1709376	DONE   cov: 317 ft: 972 corp: 93/8187b lim: 1024 exec/s: 2844 rss: 621Mb
+###### Recommended dictionary. ######
+"\001\000\000\000\000\000\000\001" # Uses: 14409
+"\000\000\000\000\000\000\000\001" # Uses: 14572
+"\001\000\000\000\000\000\000\200" # Uses: 14086
+"\000\000\000\336" # Uses: 14633
+"\001\000\000\000" # Uses: 14582
+"\377\377\377\377\377\377\377\016" # Uses: 12239
+"y\000" # Uses: 15577
+"\377l" # Uses: 14912
+"\001\000" # Uses: 14800
+"\002\000\000\000\000\000\000\000" # Uses: 8443
+"\377\377\377\377" # Uses: 864
+###### End of recommended dictionary. ######
+Done 1709376 runs in 601 second(s)
+stat::number_of_executed_units: 1709376
+stat::average_exec_per_sec:     2844
+stat::new_units_added:          330
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              621
+fuzz run: instance_path ran for 600 s without a crash
+      603.47 real       416.34 user       161.75 sys
