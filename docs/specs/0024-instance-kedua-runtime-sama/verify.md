@@ -76,3 +76,27 @@ Langkah Build plan 3, 4, dan 5. Tidak ada UI di milestone ini; bagian manual mem
 - AC-10 (kontrak) · lengkap: DTO, method `recovery refused`, fixture, test penjaga Rust, test Swift, minor 1.13, `codegen --check`, seed fuzz. Kasus fixture tampilan spec 0068: folder `Fixtures/` ada di `main`, tetapi spec 0068 tidak mendaftarkan kasus duplicate di *Kasus yang menunggu DTO*, dan `apps/macos/` bukan milik milestone ini, jadi tidak ada yang ditambah.
 - AC-11 (CLI) · lengkap (lihat daftar test di atas).
 - AC-9, AC-12, AC-13, AC-14 menunggu milestone 3 dan 4.
+
+## Milestone 4: PostgreSQL 17 on this Mac
+
+_Langkah 8 (helper sentinel) dan bagian native langkah 9. Run native memakai artefak `postgresql-17.11-r2-macos-aarch64` dari cache runtime xtask, tanpa unduhan; tanpa artefak itu hasilnya `BLOCKED` dengan alasan `artifact postgresql-17.11-r2-macos-aarch64 is not in the runtime cache` dan owner `@ojiepermana`. Evidence manual JOURNEY-02 lewat GUI menunggu milestone 3._
+
+### UI / manual
+
+- [ ] JOURNEY-02 lewat GUI dengan PostgreSQL 17 di Mac ini: buat `pg17-dev`, Duplicate menjadi `pg17-test` dengan Copy from terisi, start keduanya, baca sentinel masing masing → menunggu milestone 3 (GUI) → AC-14
+
+### Commands
+
+- [ ] `cargo test -p stacklyd --test postgresql -- --ignored the_sentinel_helper` → 1 test lulus (native, PostgreSQL 17): `sentinel::the_sentinel_helper_writes_reads_and_names_one_cluster`. Cluster baru membaca daftar kosong (tabel `stackly_sentinel` belum ada), satu baris miliknya sendiri sesudah `write`, nilai baru sesudah `write` kedua, dan `system_identifier` numerik yang tidak berubah → AC-9 (alat bukti)
+- [ ] `cargo test -p stacklyd --test postgresql -- --ignored --exact same_runtime::two_postgresql_17_instances_from_one_runtime_keep_their_sentinels` → 1 test lulus (native, `two_postgresql_17_instances` sebagai penyiapan bersama). `pg17-dev` (create biasa, port `Fixed`) dan `pg17-test` (`instance.get_duplicate_form` lalu `instance.create` atas draft dengan `copyFrom` reference password sumber) memakai runtime ID yang sama, di start bersamaan sampai `ready`, dengan port, folder data, folder run (soket `.s.PGSQL.<port>`), dan PID yang berbeda. Setiap cluster membaca hanya sentinel miliknya lewat TCP, `system_identifier` keduanya berbeda, dan sesudah tiap instance dihentikan lalu di start lagi bergantian (port tetap sama) baca silang tetap bersih. Evidence `native` dengan `covers = ["REQ-009", "AC-009", "AC-025"]`; JOURNEY-02 ada di `expected`, dan `actual` mencatat bahwa bagian mayor 18 AC-009 dibuktikan spec 0025 → AC-6 (soket dan folder berbeda), AC-9
+- [ ] `cargo test -p stacklyd --test postgresql -- --ignored --exact same_runtime::duplicate_postgresql_instance_starts_with_empty_data` → 1 test lulus (native). Sumber `stopped` yang menyimpan sentinel diduplikasi: duplicate tidak punya tabel `stackly_sentinel`, `system_identifier` berbeda dari sumber, daftar (path relatif, ukuran, waktu ubah) folder data sumber sama persis sesudah form, create, dan start serta stop duplicate, folder data duplicate tidak memuat nilai sentinel sumber, dan sumber yang di start lagi masih memegang sentinel dan identifier nya. Evidence `native` dengan `covers = ["REQ-009", "AC-025"]` → AC-7 (bagian PostgreSQL)
+- [ ] `cargo test -p stacklyd --test postgresql` → ketiga test native di atas `ignored` di run biasa, test PostgreSQL lain tidak berubah
+- [ ] `cargo xtask runtime spike --cleanup` setelah run native → 0 proses `postgres` sisa dari test
+- [ ] `cargo fmt --all --check`, `cargo clippy -p stacklyd --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-6 (soket dan folder berbeda) · terbukti native: dua folder run dengan soket `.s.PGSQL.<port>` sendiri dan dua folder data berbeda; milestone 2 sudah membuktikan sembilan path dengan runtime fake.
+- AC-7 (data tidak disalin, bagian PostgreSQL) · terbukti native lewat `duplicate_postgresql_instance_starts_with_empty_data`. Mode 000 di dalam folder data sumber hanya diuji dengan runtime fake (milestone 2); test PostgreSQL ini tidak mengubah mode file sumber.
+- AC-9 (PostgreSQL 17 nyata) · terbukti native, tanpa langkah CLI sungguhan: test memakai method yang sama dengan `stackly instance duplicate pg17-dev pg17-test --secret superuserPassword=copy` (`instance.get_duplicate_form` lalu `instance.create` atas draft). Bagian mayor 18 AC-009 milik spec 0025.
+- AC-14 (GUI) · menunggu milestone 3.
