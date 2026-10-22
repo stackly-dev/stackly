@@ -336,6 +336,45 @@ struct StaleNoteTests {
         )
     }
 
+    /// The outdated banner message for `source`, at 14:02 on the same day in en_GB.
+    static func outdatedMessage(source: String) -> String {
+        Self.note(since: Self.october(18, 14, 2), reason: .outdated(source: source))
+            .bannerMessage(
+                now: Self.october(18, 18, 0),
+                calendar: Self.gregorian,
+                locale: Self.britain,
+                timeZone: Self.utc
+            )
+    }
+
+    @Test func outdatedMessageStartsWithACapitalLetter() {
+        #expect(
+            Self.outdatedMessage(source: "the bundled catalog")
+                == "The bundled catalog last updated 14:02.")
+        #expect(
+            Self.outdatedMessage(source: "the development catalog")
+                == "The development catalog last updated 14:02.")
+        #expect(Self.outdatedMessage(source: "Catalog") == "Catalog last updated 14:02.")
+    }
+
+    @Test func outdatedMessageChangesOnlyTheFirstCharacter() {
+        #expect(
+            Self.outdatedMessage(source: "the NATS catalog")
+                == "The NATS catalog last updated 14:02.")
+        // The rule does not follow the locale: i becomes I, never the Turkish İ.
+        #expect(Self.outdatedMessage(source: "iCloud") == "ICloud last updated 14:02.")
+    }
+
+    @Test func outdatedMessageLeavesAFirstCharacterWithoutACapitalAlone() {
+        #expect(Self.outdatedMessage(source: "2nd catalog") == "2nd catalog last updated 14:02.")
+        #expect(Self.outdatedMessage(source: "#1 catalog") == "#1 catalog last updated 14:02.")
+        #expect(Self.outdatedMessage(source: " catalog") == " catalog last updated 14:02.")
+    }
+
+    @Test func outdatedMessageWithAnEmptySourceDoesNotFail() {
+        #expect(Self.outdatedMessage(source: "") == " last updated 14:02.")
+    }
+
     @Test func staleRetryIsBusyWhileRefreshingAndNeverGated() {
         var retried = false
         let blocked = MutationAvailability.blocked(reason: "stacklyd is unavailable", since: .now)

@@ -321,13 +321,224 @@ extension SnapshotTests {
                 ])
         }
 
+        // MARK: - Increase Contrast must change the image (K15, G5)
+
+        @Test func aHighContrastImageEqualToItsStandardOneIsAnIssueUnlessFlagged() {
+            let image = Self.solid(100)
+            let same: [SnapshotVariant: SnapshotImage] = [
+                .light: image, .dark: image, .hcLight: image, .hcDark: image,
+            ]
+            #expect(
+                SnapshotContrast.issues(name: "page", images: same, invariant: false) == [
+                    "page (hc-light): identical to light; the view does not react to Increase "
+                        + "Contrast. If that is intended, pass contrastInvariant: true with "
+                        + "contrastInvariantReason",
+                    "page (hc-dark): identical to dark; the view does not react to Increase "
+                        + "Contrast. If that is intended, pass contrastInvariant: true with "
+                        + "contrastInvariantReason",
+                ])
+            #expect(SnapshotContrast.issues(name: "page", images: same, invariant: true).isEmpty)
+        }
+
+        @Test func aFlagOnAViewThatReactsToIncreaseContrastIsAnIssue() {
+            let base = Self.solid(100)
+            let other = Self.changing(base, by: 9)
+            let reacts: [SnapshotVariant: SnapshotImage] = [
+                .light: base, .dark: base, .hcLight: other, .hcDark: base,
+            ]
+            #expect(
+                SnapshotContrast.issues(name: "page", images: reacts, invariant: false) == [
+                    "page (hc-dark): identical to dark; the view does not react to Increase "
+                        + "Contrast. If that is intended, pass contrastInvariant: true with "
+                        + "contrastInvariantReason"
+                ])
+            #expect(
+                SnapshotContrast.issues(name: "page", images: reacts, invariant: true) == [
+                    "page: contrastInvariant is set but hc-light differs from light; remove it"
+                ])
+            let both: [SnapshotVariant: SnapshotImage] = [
+                .light: base, .dark: base, .hcLight: other, .hcDark: other,
+            ]
+            #expect(SnapshotContrast.issues(name: "page", images: both, invariant: false).isEmpty)
+            #expect(
+                SnapshotContrast.issues(name: "page", images: both, invariant: true).count == 2)
+        }
+
+        @Test func aPairWithAVariantThatWasNotRenderedIsNotChecked() {
+            let image = Self.solid(100)
+            let onlyLight: [SnapshotVariant: SnapshotImage] = [.light: image, .hcLight: image]
+            #expect(
+                SnapshotContrast.issues(name: "page", images: onlyLight, invariant: false).count
+                    == 1)
+            let noPair: [SnapshotVariant: SnapshotImage] = [
+                .light: image, .dark: image, .narrow: image,
+            ]
+            #expect(SnapshotContrast.issues(name: "page", images: noPair, invariant: false).isEmpty)
+            #expect(SnapshotContrast.issues(name: "page", images: [:], invariant: true).isEmpty)
+        }
+
+        @Test func aFlagNeedsAReasonThatIsNotBlank() {
+            for reason in [nil, "", "   \n"] {
+                #expect(
+                    SnapshotContrast.reasonIssue(name: "page", invariant: true, reason: reason)
+                        == "page: contrastInvariant needs a reason")
+            }
+            #expect(
+                SnapshotContrast.reasonIssue(name: "page", invariant: true, reason: "no borders")
+                    == nil)
+            #expect(
+                SnapshotContrast.reasonIssue(name: "page", invariant: false, reason: nil) == nil)
+        }
+
+        /// The location of a throwaway suite file in `root`, so its references stay out of the repo.
+        private static func location(in root: URL, suite: String) -> SourceLocation {
+            SourceLocation(
+                fileID: "StacklyUITests/\(suite).swift",
+                filePath: root.appending(path: "\(suite).swift").path(percentEncoded: false),
+                line: 1, column: 1)
+        }
+
+        /// Collects the messages of the known issues a matcher sees.
+        nonisolated private final class IssueLog: @unchecked Sendable {
+            private let lock = NSLock()
+            private var storage: [String] = []
+
+            var messages: [String] { lock.withLock { storage } }
+
+            func matcher(_ issue: Issue) -> Bool {
+                lock.withLock { storage.append(issue.comments.map(\.rawValue).joined()) }
+                return true
+            }
+        }
+
+        private static let contrastVariants: [SnapshotVariant] = [
+            .light, .dark, .hcLight, .hcDark,
+        ]
+
+        @Test(
+            .evidence(
+                covers: ["REQ-027"],
+                expected:
+                    "assertSnapshot reports a view that ignores Increase Contrast and accepts it with contrastInvariant and a reason"
+            ),
+            .disabled(
+                if: ProcessInfo.processInfo.environment["STACKLY_EVIDENCE_DIR"] != nil,
+                "an evidence run never records references")
+        )
+        func assertSnapshotReportsAViewThatIgnoresIncreaseContrast() async throws {
+            let (_, root) = try Self.temporaryStore()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let location = Self.location(in: root, suite: "ContrastProbe")
+            let size = SnapshotSize.fitting(width: 320, narrowWidth: 200)
+            defer {
+                try? FileManager.default.removeItem(
+                    at: SourceTree.repositoryRoot.appending(
+                        path: "target/snapshot-failures/ContrastProbe"))
+            }
+
+            // Record the references first, with the flag, so only the check under test speaks.
+            await withKnownIssue {
+                try await assertSnapshot(
+                    PlainLabel(), named: "plain", size: size, variants: Self.contrastVariants,
+                    contrastInvariant: true, contrastInvariantReason: "plain text, no borders",
+                    sourceLocation: location)
+            }
+            // With the flag and a reason, the same view passes.
+            try await assertSnapshot(
+                PlainLabel(), named: "plain", size: size, variants: Self.contrastVariants,
+                contrastInvariant: true, contrastInvariantReason: "plain text, no borders",
+                sourceLocation: location)
+
+            // Without it, both pairs are issues.
+            let log = IssueLog()
+            try await withKnownIssue {
+                try await assertSnapshot(
+                    PlainLabel(), named: "plain", size: size, variants: Self.contrastVariants,
+                    sourceLocation: location)
+            } matching: {
+                log.matcher($0)
+            }
+            let messages = log.messages
+            #expect(messages.count == 2)
+            #expect(messages.contains { $0.hasPrefix("plain (hc-light): identical to light;") })
+            #expect(messages.contains { $0.hasPrefix("plain (hc-dark): identical to dark;") })
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-027"],
+                expected:
+                    "assertSnapshot rejects contrastInvariant without a reason before it renders, and a flag on a view that reacts"
+            ),
+            .disabled(
+                if: ProcessInfo.processInfo.environment["STACKLY_EVIDENCE_DIR"] != nil,
+                "an evidence run never records references")
+        )
+        func assertSnapshotRejectsAFlagWithoutAReasonOrOnAViewThatReacts() async throws {
+            let (_, root) = try Self.temporaryStore()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let location = Self.location(in: root, suite: "ContrastFlagProbe")
+            let size = SnapshotSize.fitting(width: 320, narrowWidth: 200)
+            defer {
+                try? FileManager.default.removeItem(
+                    at: SourceTree.repositoryRoot.appending(
+                        path: "target/snapshot-failures/ContrastFlagProbe"))
+            }
+
+            let missingReason = IssueLog()
+            try await withKnownIssue {
+                try await assertSnapshot(
+                    PlainLabel(), named: "plain", size: size, variants: Self.contrastVariants,
+                    contrastInvariant: true, sourceLocation: location)
+            } matching: {
+                missingReason.matcher($0)
+            }
+            #expect(missingReason.messages == ["plain: contrastInvariant needs a reason"])
+            let references = root.appending(path: "__Snapshots__/ContrastFlagProbe")
+            #expect(
+                FileManager.default.fileExists(atPath: references.path()) == false,
+                "a flag without a reason must not render")
+
+            // A flag on a view that reacts to Increase Contrast is an issue once recorded.
+            await withKnownIssue {
+                try await assertSnapshot(
+                    Label(text: "one"), named: "label", size: size,
+                    variants: Self.contrastVariants, sourceLocation: location)
+            }
+            let staleFlag = IssueLog()
+            try await withKnownIssue {
+                try await assertSnapshot(
+                    Label(text: "one"), named: "label", size: size,
+                    variants: Self.contrastVariants,
+                    contrastInvariant: true, contrastInvariantReason: "stale flag",
+                    sourceLocation: location)
+            } matching: {
+                staleFlag.matcher($0)
+            }
+            #expect(
+                staleFlag.messages == [
+                    "label: contrastInvariant is set but hc-light differs from light; remove it",
+                    "label: contrastInvariant is set but hc-dark differs from dark; remove it",
+                ])
+        }
+
         // MARK: - The whole pipeline
 
         /// A view whose single text can change, for the end to end check.
         struct Label: View {
             let text: String
+            @Environment(\.colorSchemeContrast) private var contrast
             var body: some View {
                 Text(text).font(.largeTitle).padding(24)
+                    .foregroundStyle(contrast == .increased ? Color.red : Color.primary)
+            }
+        }
+
+        /// A view with nothing that reacts to Increase Contrast: a fixed color, no text, whose
+        /// system colors would change.
+        struct PlainLabel: View {
+            var body: some View {
+                Color(red: 0.2, green: 0.4, blue: 0.8).frame(width: 120, height: 60).padding(24)
             }
         }
 

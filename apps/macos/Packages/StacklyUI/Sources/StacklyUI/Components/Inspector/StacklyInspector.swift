@@ -88,6 +88,7 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .relayingFixtureAccessibility()
             .inspector(isPresented: $isPresented) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.s16) {
@@ -99,6 +100,7 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
                         alignment: .top
                     )
                     .padding(InspectorMetrics.padding)
+                    .relayingFixtureAccessibility()
                 }
                 .onGeometryChange(for: CGFloat.self) {
                     $0.size.height
@@ -117,5 +119,22 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
                     InspectorToggle(isPresented: $isPresented, help: help)
                 }
             }
+    }
+}
+
+extension View {
+    /// Pins the fixture's accessibility values again inside the inspector, which holds its
+    /// content again and drops Increase Contrast there (spec 0068, K15). Release builds
+    /// return the view as it is.
+    ///
+    /// It is used at two places only: on the main content before `.inspector`, and on the
+    /// padded column content inside its `ScrollView`. Further out, the column content does
+    /// not get the values (the probe of the spec).
+    fileprivate func relayingFixtureAccessibility() -> some View {
+        #if DEBUG
+            relayFixtureAccessibility()
+        #else
+            self
+        #endif
     }
 }
