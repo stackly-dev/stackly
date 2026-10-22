@@ -240,6 +240,9 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
             await resnapshot()
             return
         }
+        // Only `complete` and `fail` end `isRefreshing`, and both let the waiters go. A
+        // generation that a newer one made stale ends in neither, and leaves that to
+        // the newer one, which always ends in one of them.
         await withCheckedContinuation { snapshotWaiters.append($0) }
     }
 
