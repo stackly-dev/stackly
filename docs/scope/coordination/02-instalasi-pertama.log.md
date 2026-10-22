@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-23 06:31`
+- **Diperbarui:** `2026-10-23 06:47`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -122,6 +122,8 @@
 | `chk-f16-verify` (sesi `arc-f20-update` dipakai ulang) | `checker (verify)` penuh | 16 · verify penuh milestone 1 sampai 4, AC-1 sampai AC-11 | `02-instalasi-pertama.md` | `verify.md` 0016 | `claude/dev-f20-m1-ed6675` | `opus-5-5 · high` | PASS otomatis (`9291b767` → `a6c035df`); 35 langkah UI/manual `NOT_RUN`, Turn On `BLOCKED` |
 | `chk-f20-m6` (sesi `dev-f17-m3` dipakai ulang) | `checker (verify)` | 20 · verify milestone 6 | `02-instalasi-pertama.md` | bagian Milestone 6 `verify.md` 0020 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | PASS (`3ec6c8b1` → `97a35de9`) |
 | `arc-f22-sync` (sesi `chk-f23-m4` dipakai ulang) | `architect (update)` | 22 · catatan retry 9a dihapus, usulan commit terjaga ke spec 0005/0007/0010, Follow-up start/stop dengan nama | `02-instalasi-pertama.md` | index/rationale 0022, index 0005, 0007, 0010, penanda 0020, baris 803 0021 | `claude/arc-f21-update-cc228d` | `opus-5-5 · xhigh` | `merged` 10 commit (`847ba815` sampai `7b4fc282` → `312502e4`), tanpa teks AC |
+| `dev-f22-m2-s5a` (sesi `dev-f20-m6` dipakai ulang) | `developer` | 22 · `stackly instance start` dan `stop` dengan nama (spec 0022 langkah 5a, AC-15) | `02-instalasi-pertama.md` | `apps/cli/src/args.rs`, `commands/instance/{action,mod}.rs`, test `apps/cli/tests/instance/`, verify.md 0022 | `claude/dev-f19-m1-bf9875` | `sonnet-5-5 · high` | `merged` (`ad5f6a8f` → `ede86c30`) |
+| `chk-f22-s5a` (sesi `dev-f17-m3` dipakai ulang) | `checker (verify)` | 22 · verify langkah 5a | `02-instalasi-pertama.md` | langkah 5a `verify.md` 0022 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | `aktif` |
 
 ## Keputusan
 
@@ -375,6 +377,7 @@
 | `2026-10-22` | `chk-f20-m6` PASS (`97a35de9`): AC-10, AC-11, AC-24 terbukti lewat run mandiri; kotak milestone 6 F20 bisa dicentang (tanpa langkah manual). Bagian M `docs/manual.md` mendapat langkah milestone 4 F16 dan baris `OnboardingUITests` dengan rujukan ke K (`1cd470ae`). `arc-f22-sync` (8 commit, tanpa teks AC) diterima lead atas delegasi "Accept this spec?"; gap 1 sampai 5 Follow-up `stackly instance start/stop` dengan nama diterapkan sesuai rekomendasi architect (tiga kasus exit 2 menjadi exit 10 `cli.instance_not_found`, `InstanceIdArg` dan `InstanceArg` dihapus, help memakai `TargetArg`, instance retained lewat nama memberi `cli.instance_not_found`, satu AC baru di spec 0022 yang menunggu persetujuan user saat langkah 5a dijadwalkan); architect juga boleh membetulkan baris 803 spec 0021. Langkah 5a belum dijadwalkan: butuh persetujuan user atas scope dan AC baru. | `lead` |
 | `2026-10-22` | `arc-f22-sync` di-merge `312502e4`: spec 0022 menandai retry 9a dihapus di `28cbe678` (merujuk item `.caughtUp` spec 0013), Follow-up `stackly instance start/stop` dengan nama dirinci dengan draf AC-15 (hanya di Follow-up, belum di Requirements); blok usulan commit terjaga diterapkan di spec 0005, 0007, 0010 dan ditandai di spec 0020; baris 803 spec 0021 diselaraskan. Usulan scope (belum ditempel, menunggu user): kotak langkah 5a di bawah Build it fitur 22. Dua baris spec 0014 (Consequences UUID saja, Critical test scenarios `cli.usage` tanpa koneksi) usang saat 5a selesai, untuk `/sync`. | `lead` |
 | `2026-10-23` | User: "Yes: approve AC-15 for spec 0022 and add step 5a (stackly instance start and stop by name through TargetArg) to this wave." `arc-f22-sync` memindahkan draf AC-15 ke Requirements spec 0022 dan menambah langkah Build plan 5a; lead menempel kotak scope setelah commit spec itu masuk, lalu memulai developer langkah 5a (Rust CLI: `apps/cli/src/args.rs`, `commands/instance/`, test exit 2 ke exit 10, golden). Lead Scope 03 ditanya apakah branch nya menyentuh `apps/cli/src/args.rs` atau `InstanceIdArg`. Aplikasi restart: alamat lead program ini sekarang `Scope 02 · Instalasi pertama [ecea8f]`; lead lain `[d98412]` (Scope 03) dan `[509ebf]` (ui-macos). Lead ui-macos me-merge fix kecil F13 `fda9392e` (`ResourceStore.refresh()` menunggu snapshot yang sedang berjalan). Lead Scope 03 me-merge spec 0024 milestone 3 (`e5e34439`, bagian U `docs/manual.md`). | `lead` |
+| `2026-10-23` | Spec 0022 AC-15 dan langkah 5a di-merge `7d66f250`, kotak scope ditempel `ca276594`. Langkah 5a di-merge `ede86c30`: `StartArgs`/`StopArgs` memakai `TargetArg` dan `InstanceTarget::resolve` sebelum `cx.submit`, UUID 36 karakter dikirim langsung, `InstanceArg` dan `InstanceIdArg` dihapus, varian `Duplicate` Scope 03 utuh; di luar daftar BOLEH dua baris `apps/cli/tests/instance/exit_codes.rs` (`start demo` kini exit 10, diganti key tidak sah agar tetap menguji `cli.usage`), diterima lead. Gate: fmt, clippy workspace, build, `cargo test -p stackly-cli` 352 lulus (termasuk `action_real` terhadap `stacklyd` asli), check-deps, evidence check. `chk-f22-s5a` dimulai. | `lead` |
 
 ## Blocker terbuka
 
