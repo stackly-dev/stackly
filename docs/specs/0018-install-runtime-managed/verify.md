@@ -1,6 +1,37 @@
 # Verify: Install runtime managed · spec 0018 · updated 2026-10-21
 
-_Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Bagian Milestone 1 ditulis sesi milestone itu._
+_Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Bagian Milestone 1 dan 3 ditulis sesi milestone itu._
+
+## Milestone 1: Catalog data, safe extractor, and fuzz
+
+### UI / manual
+
+- [ ] Buka `providers/fake/provider.yaml`, `providers/nats/provider.yaml`, dan `providers/traefik/provider.yaml` → masing masing punya blok `runtime.versionCheck` dengan `args` literal (`["version"]`, `["--version"]`, `["version"]`), `pattern` dengan tepat satu capture group, dan `timeoutSeconds: 10`; PostgreSQL membawa blok nya sendiri dari spec 0019 → AC-12, AC-21
+- [ ] Buka `runtimes/inventory.toml` → setiap entri `available` punya `unpacked_size` dan `entry_count` berdampingan (misalnya PostgreSQL 18.6 80668813 dan 2030, MySQL 9.7.2 713257358 dan 376), diukur dari cache spike tanpa jaringan → AC-21
+- [ ] Buka `providers/nats/versions.json` → artefak `available` membawa `stable`, `unpackedSize`, `entryCount`, `dependencies`, dan `compatibility` (satu record scope `runtime`), dan artefak `blocked` tidak membawa satu pun field fase 02 → AC-21
+- [ ] Buka `fuzz/seeds/runtime_archive/` dan `fuzz/seeds/runtime_macho/` → 54 dan 9 seed, byte pertama seed archive memilih format dan pengupasan folder; isinya hasil `cargo xtask fuzz seed`, tidak ditulis tangan → AC-19
+
+### Commands
+
+- [ ] `cargo xtask runtime check` → aturan 1 sampai 12 lulus atas inventory dan seluruh evidence (aturan 11 aktif, aturan 12 membaca `evidence/compatibility/`) → AC-21
+- [ ] `cargo xtask codegen --check` dan `cargo xtask provider check` dan `cargo xtask catalog check` → file generate tidak berbeda dan ketiga paket serta catalog lulus tanpa ledger baru → AC-21
+- [ ] `cargo test -p stackly-core --lib provider::versions` → field fase 02 (`stable`, `build`, `unpackedSize`, `entryCount`, `dependencies`, `compatibility`) di `versions.json` lolos dan setiap aturan yang dilanggar menunjuk lokasinya → AC-21
+- [ ] `cargo test -p stackly-core --test provider_packages` → paket fake, nats, traefik, dan PostgreSQL membaca versinya dari keluaran harfiah binary lewat `runtime.versionCheck`, dan golden rencana tidak berubah → AC-12, AC-21
+- [ ] `cargo test -p stackly-core --lib runtime::archive` → tiga format, normalisasi nama, symlink, batas, AppleDouble, mode, dan satu sampel untuk setiap `RejectReason` → AC-7, AC-8, AC-9
+- [ ] `cargo test -p stackly-core --lib runtime::macho` dan `cargo test -p stackly-core --lib runtime::closure` → Mach-O tipis dan universal, minos, library, rpath, closure atas entri → AC-10
+- [ ] `cargo test -p xtask --bin xtask runtime::` → `pin` mencetak `unpacked_size` dan `entry_count` dari `scan` (zip dengan satu folder puncak, zip tanpa folder, binary, tar.gz sungguhan), `verify` menolak angka yang berbeda atau hilang, dan aturan 11 menolak salah satu saja, nol dengan entri, dan negatif → AC-21
+- [ ] `cargo test -p stackly-core --test fuzz_regressions` → input regresi dan seed `runtime_archive` dan `runtime_macho` lolos harness mereka, juga dengan satu byte dibalik di sebaran posisi → AC-19
+- [ ] `cargo xtask fuzz build runtime_archive` lalu `cargo xtask fuzz build runtime_macho` lalu `cargo xtask fuzz run runtime_archive --time 40` dan `cargo xtask fuzz run runtime_macho --time 40` → keduanya build di nightly yang dipin dan berjalan tanpa crash; run 10 menit dan record evidence menunggu Milestone 5 → AC-19
+- [ ] `cargo test --workspace --locked --no-fail-fast` → semuanya lulus → AC-21
+
+### Acceptance-criteria coverage
+
+- AC-7 sampai AC-9 · extractor dan sampel nya (langkah 3 awal); tes race symlink di adapter macOS dari langkah 2
+- AC-10 · parser Mach-O dan closure (langkah 4); keputusan arsitektur dan `minos` di pipeline ada di Milestone 2
+- AC-12 · pembacaan versi dari keluaran harfiah setiap paket (langkah 1); exec check nya sendiri ada di Milestone 2
+- AC-19 · target dan harness dibangun dan di-smoke 40 detik tanpa crash; dua run 10 menit dan record evidence manual menunggu Milestone 5 langkah 17
+- AC-21 · field inventory dan `versions.json`, aturan `runtime check` 10 sampai 12, `pin` dan `verify` dengan `scan`; `runtime verify` terhadap jaringan (membandingkan angka dengan unduhan baru) tidak dijalankan di sini karena butuh jaringan, angkanya diukur dari cache spike
+- AC-1 (bagian `stable`) · `stable` di inventory dan `versions.json`
 
 ## Milestone 2: Install pipeline in core
 
