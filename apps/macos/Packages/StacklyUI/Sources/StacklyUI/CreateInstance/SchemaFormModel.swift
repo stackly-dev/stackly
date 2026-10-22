@@ -163,8 +163,12 @@ public final class SchemaFormModel {
     public private(set) var values: [String: FieldValue]
     /// The choice of each secret field.
     public private(set) var secretChoices: [String: SecretChoice]
-    /// The references Copy from offers, the same for every secret field.
+    /// The references Copy from offers, the same for every secret field that has no list of
+    /// its own in ``copyFromOptionsByField``.
     public var copyFromOptions: [String] = []
+    /// The references Copy from offers for a secret field that differs from the rest, by
+    /// field key (a duplicate puts the reference of its source first).
+    public var copyFromOptionsByField: [String: [String]] = [:]
     /// The labels of the references that have one.
     public var copyFromLabels: [String: String] = [:]
     /// The field issues of the last preflight for the current draft.
@@ -303,6 +307,73 @@ public final class SchemaFormModel {
         secretChoices[key] = choice
         // Typing a value changes nothing the preflight sees; its source and reference do.
         if sourceChanged { onChange?() }
+    }
+
+    /// The references Copy from offers for a secret field.
+    ///
+    /// - Parameter key: The key of the field.
+    public func copyFromOptions(for key: String) -> [String] {
+        copyFromOptionsByField[key] ?? copyFromOptions
+    }
+
+    // MARK: - Starting from a draft
+
+    /// Fills the fields from a settings document, as a duplicate starts from the settings of
+    /// its source. A member the form has no field for, or a value of the wrong shape, is
+    /// left out, and the preflight reports what is wrong. It tells nobody: the owner runs
+    /// the first preflight itself.
+    ///
+    /// - Parameter settings: The `settings` of a draft.
+    public func load(settings: JSONObject) {
+        for row in rows {
+            guard let member = settings.members[row.id] else { continue }
+            switch row.control {
+            case .secret, .managed, .unrecognized:
+                continue
+            case .toggle:
+                if case .bool(let on) = member { values[row.id] = .toggle(on) }
+            case .text, .integer, .choice:
+                if let text = Self.text(of: member) { values[row.id] = .text(text) }
+            case .list:
+                guard case .array(let elements) = member else { continue }
+                values[row.id] = .items(
+                    elements.compactMap { Self.item(of: $0, fields: row.field.items) })
+            }
+        }
+    }
+
+    /// Points Copy from of each secret field at a reference while the field still generates.
+    ///
+    /// - Parameter references: The reference for each field key.
+    public func preselectCopyFrom(_ references: [String: String]) {
+        for (key, reference) in references {
+            guard var choice = secretChoices[key] else { continue }
+            choice.reference = reference
+            secretChoices[key] = choice
+        }
+    }
+
+    private static func text(of value: JSONValue) -> String? {
+        switch value {
+        case .string(let text): text
+        case .number(let number):
+            number.rounded() == number && abs(number) < 9_007_199_254_740_992
+                ? String(Int64(number)) : String(number)
+        case .null, .bool, .array, .object: nil
+        }
+    }
+
+    private static func item(of value: JSONValue, fields: [FormItemField]) -> ListItemDraft? {
+        guard case .object(let members) = value else { return nil }
+        var entries = initialEntries(of: fields)
+        for field in fields {
+            switch members[field.key] {
+            case .bool(let on)?: entries[field.key] = .toggle(on)
+            case let member?: if let text = text(of: member) { entries[field.key] = .text(text) }
+            case nil: continue
+            }
+        }
+        return ListItemDraft(entries: entries)
     }
 
     // MARK: - Issues

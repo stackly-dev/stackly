@@ -58,6 +58,47 @@ struct CreateClientTests {
                     GetCreateFormParams(runtimeId: Self.runtime, provider: nil)))
     }
 
+    @Test func getDuplicateFormSendsTheInstanceAndReadsTheForm() async throws {
+        let reply = try CreateContractTests.reply("frame-response-instance-get-duplicate-form.json")
+        let fake = Fake(.success(reply))
+        let source = UUID(uuidString: "0192f3a6-0000-7000-8000-0000000000b2")!
+        let form = try await fake.client.getDuplicateForm(instanceId: source)
+
+        let (call, timeout) = try #require(fake.made.first)
+        #expect(call == .instanceGetDuplicateForm(GetDuplicateFormParams(instanceId: source)))
+        #expect(timeout == ContractLimits.callTimeout)
+        guard case .instanceGetDuplicateForm(let expected) = reply else {
+            Issue.record("the fixture frame is not an instance.get_duplicate_form reply")
+            return
+        }
+        #expect(form == expected)
+        #expect(form.source.instanceId == source)
+    }
+
+    @Test func getDuplicateFormTreatsAReplyOfAnotherKindAsABrokenContract() async throws {
+        let reply = try CreateContractTests.reply(
+            "frame-response-instance-preflight-port-conflict.json")
+        let fake = Fake(.success(reply))
+        await #expect(throws: ClientError.self) {
+            _ = try await fake.client.getDuplicateForm(instanceId: Self.runtime)
+        }
+    }
+
+    @Test func getDuplicateFormPassesADaemonErrorThrough() async throws {
+        let error = ClientError.rejected(
+            ErrorBody(
+                code: "instance.capability_unsupported", category: .conflict,
+                message: "runs one instance at a time", retryable: false, resource: nil,
+                fields: nil, hint: nil, details: nil, operationId: nil, rule: nil, items: nil))
+        let fake = Fake(.failure(error))
+        do {
+            _ = try await fake.client.getDuplicateForm(instanceId: Self.runtime)
+            Issue.record("expected the daemon error")
+        } catch {
+            #expect(error.body.code == "instance.capability_unsupported")
+        }
+    }
+
     @Test func preflightSendsTheDraftAndReadsTheChecks() async throws {
         let reply = try CreateContractTests.reply(
             "frame-response-instance-preflight-port-conflict.json")
