@@ -16,6 +16,7 @@ public struct SecretField: View {
     private let limits: SecretLimits
     private let allowsGenerate: Bool
     private let copyFromOptions: [String]
+    private let copyFromLabels: [String: String]
     @Binding private var draft: SecretDraft
 
     @State private var showsTypedText = false
@@ -30,18 +31,22 @@ public struct SecretField: View {
     ///   - allowsGenerate: Whether Generate is offered. A field that cannot take a generated
     ///     value passes `false`.
     ///   - copyFromOptions: The references Copy from offers; Copy from is hidden when empty.
+    ///   - copyFromLabels: The words to show for a reference that has some, such as “Admin
+    ///     password of “pg17-dev””. A reference without a label shows as its own text.
     public init(
         _ title: String,
         draft: Binding<SecretDraft>,
         limits: SecretLimits = .base,
         allowsGenerate: Bool = true,
-        copyFromOptions: [String] = []
+        copyFromOptions: [String] = [],
+        copyFromLabels: [String: String] = [:]
     ) {
         self.title = title
         self._draft = draft
         self.limits = limits
         self.allowsGenerate = allowsGenerate
         self.copyFromOptions = copyFromOptions
+        self.copyFromLabels = copyFromLabels
     }
 
     /// The choices on offer, in order.
@@ -76,7 +81,9 @@ public struct SecretField: View {
             case .copyFrom:
                 Picker("Copy from", selection: $draft.copyFromReference) {
                     Text("Choose a secret").tag(String?.none)
-                    ForEach(copyFromOptions, id: \.self) { Text($0).tag(String?.some($0)) }
+                    ForEach(copyFromOptions, id: \.self) {
+                        Text(copyFromLabels[$0] ?? $0).tag(String?.some($0))
+                    }
                 }
                 .accessibilityLabel("\(title), copy from")
             }

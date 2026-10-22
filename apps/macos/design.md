@@ -686,7 +686,7 @@ Where Stackly puts its items. The order of the system items (About, Services, Hi
 | Menu | Stackly items |
 | --- | --- |
 | Stackly | Reconnect to stacklyd, after Settings… ⌘, and before Services |
-| File | New Instance… ⌘N (planned, spec 0020), then the system Close ⌘W. `CommandGroup(replacing: .newItem)` removes New Window |
+| File | New Instance… ⌘N (built, spec 0020), then the system Close ⌘W. `CommandGroup(replacing: .newItem)` removes New Window |
 | Edit | the system items, then Find ▸ Find… ⌘F. `CommandGroup(replacing: .textEditing)` removes the Spelling and Grammar, Substitutions, Transformations, and Speech submenus |
 | View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; Back, Show or Hide Inspector, and Sort Instances By follow with the Instances page |
 | Instance | Start ⌘R and Stop ⇧⌘R (built, spec 0022); Open, Restart, Reload, Copy Connection String, Duplicate…, and Remove… are planned. `CommandMenu("Instance")` sits between View and Window |
@@ -702,7 +702,7 @@ An item is never hidden because of state: one that does not apply is disabled. A
 | Command | Menu | Grp | Title | Shortcut | Scope | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `reconnect` | Stackly | 1 | Reconnect to stacklyd | | shell | 69 | built |
-| `newInstance` | File | 1 | New Instance… | ⌘N | shell | 20 | planned |
+| `newInstance` | File | 1 | New Instance… | ⌘N | shell | 20 | built |
 | `find` | Edit ▸ Find | 1 | Find… | ⌘F | page (all) | 69 | built |
 | `showOverview` to `showDiagnostics` | View | 1 | Overview, Instances, Environments, Catalog, Runtimes, Operations, Diagnostics | ⌘1 to ⌘7 | shell | 69 | built |
 | `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | planned |
@@ -862,6 +862,19 @@ Spec 0022, `StacklyUI/Instances/`.
 - **Actions**: Start, Stop, and Retry go through `InstanceActionModel` and `MutationPath`, without a confirmation. The button is busy from the click until its operation ends, and a disabled one says why (in the inspector, in the row help, and in the menu).
 - **Inspector**: the header with the main action, the banner of rules I1 to I4 (with the excerpt of the failed process), then Provider, Version, Endpoints, Ownership, Readiness, Health, Process, Restarts, Desired, Logs, and the ID with a copy button. "No Selection" when nothing is chosen or the choice is filtered out.
 - **Menu**: View > Show or Hide Inspector (⌥⌘I) and Sort Instances By; Instance > Start (⌘R) and Stop (⇧⌘R) for the selected instance.
+
+### New Instance sheet
+
+Spec 0020, `StacklyUI/CreateInstance/`. A `StacklySheet` of at least 560 pt with a `.grouped` `Form` inside, the sheet's own scroll view around it, and the margin of the grouped form given back so its cards line up with the Preflight card.
+
+- **Order**: the Category segments (All, Databases, Messaging, Analytics, Cache, Proxy), Runtime, Name; Ports (one row per IP endpoint: Fixed or Automatic, then the number or "Assigned when the instance starts"); Settings from the daemon's schema; the closed Advanced group, which opens by itself when a field in it has an error; "Start after creating"; then the Preflight card (`CardSection` with a `CheckList`) and the equivalent command (`ConsoleBlock`). That is also the VoiceOver and keyboard order.
+- **Fields**: drawn from `FormField` alone, so there is no branch per provider: a secret is a `SecretField` (Generate by default, Enter, Copy from with the references of `secret.list` and the label "{Purpose} of “{name}”" for an instance of this window), a managed field is a read only row with a lock and "Set by Stackly", a field that cannot change later has the neutral "Set once" badge and the words "Can’t be changed after the instance is created.", and a kind this build does not know is a read only line. "Required" is written, never only a symbol.
+- **Errors**: a sentence with the critical symbol under the control. The text is written from the code and the bounds of the field (`FieldErrorText`), because the wire `message` is one fixed text per code. A taken Fixed port says "Fixed ports are never changed silently." and offers "Use {n}", which only the person's click applies.
+- **Preflight rows**: the status table of *Checklist* applies unchanged (`ok` passed, `caution` warning, `error` failed, an unknown status unrecognized); the symbol shape tells them apart, never only the color. Create is on only when the preflight of this very draft is ready; its footer reason follows the order of spec 0020 (*Footer*).
+- **Create**: while the operation runs the form is read only, the card "Creating" shows the six stages (`StagedProgress`), and the secret rows read "Stored in Keychain" once the `secrets` stage is done. Cancel becomes "Cancel…" and asks "Stop creating this instance?"; while the daemon cannot be reached it becomes Close, so the sheet is never locked. A failed or cancelled create returns the form with a banner and marks the preflight rows of the stage that failed.
+- **Secrets**: the typed text lives only in the sheet's `@State`, is handed over once at the click, and is cleared at once and when the sheet goes away. The model learns the source of each secret, never the text.
+- **Entry points**: the toolbar and empty state buttons through `newInstanceAction`, "New Instance…" under the description in the Catalog detail panel (off with "Install a version first." while no version of that software is installed), and File > New Instance… ⌘N. All are off while the daemon cannot be reached.
+- **Snapshots**: `NewInstanceSnapshotTests` covers the form (ready, a taken port, a warning, an error in Advanced, Copy from), the card in each status, the operation, a failed create, and the states without a form. A tall form scrolls under the footer, so the card has snapshots of its own; the height of the body follows the visible height of the screen the suite runs on.
 
 ### Diagnostics connection section
 

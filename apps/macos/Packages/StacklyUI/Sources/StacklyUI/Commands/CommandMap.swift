@@ -356,7 +356,8 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .file, group: 1, title: "New Instance…",
                 shortcut: CommandShortcut("n", .command), needsInput: true,
-                scope: .shell, requirements: [.daemon], owner: 20, standardMeaning: .new)
+                scope: .shell, requirements: [.daemon], owner: 20, status: .built,
+                standardMeaning: .new)
         case .find:
             CommandEntry(
                 id, menu: .edit, submenu: .find, group: 1, title: "Find…",

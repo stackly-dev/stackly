@@ -20,6 +20,9 @@ struct BackgroundAgentModelTests {
         var clock = BackgroundAgentModelTests.start
         var retries = 0
         var assessed: [AgentAssessment] = []
+        var failed: [AgentActionError] = []
+        /// `assessed` and `failed` in the order the closures ran: "assessed" or "failed".
+        var events: [String] = []
 
         init(
             status: Result<AgentProbe, AgentActionError>? = nil,
@@ -44,7 +47,14 @@ struct BackgroundAgentModelTests {
                 presence: presence,
                 now: { [weak self] in self?.clock ?? BackgroundAgentModelTests.start },
                 sleep: { try await sleeper.sleep(for: $0) },
-                didAssess: { [weak self] assessment, _ in self?.assessed.append(assessment) },
+                didAssess: { [weak self] assessment, _ in
+                    self?.assessed.append(assessment)
+                    self?.events.append("assessed")
+                },
+                didFail: { [weak self] error in
+                    self?.failed.append(error)
+                    self?.events.append("failed")
+                },
                 systemRetry: { [weak self] in self?.retries += 1 })
         }
 
@@ -404,6 +414,147 @@ struct BackgroundAgentModelTests {
         await rig.model.refresh()
         #expect(rig.assessed.count == before + 1)
         #expect(rig.model.lastCheckedAt == Self.start.addingTimeInterval(42))
+    }
+
+    // MARK: - Failures are reported (step 12a)
+
+    @Test func aWaitThatReachesTheLimitReportsDaemonDidNotStartOnce() async throws {
+        let rig = Rig(status: Self.probe(.enabled), afterRegister: Self.probe(.enabled))
+        try await rig.attachAndSettle(.unreachable(lastKnownAt: nil))
+        let action = Task { await rig.model.start() }
+        while rig.model.isStarting == false { await Task.yield() }
+        await rig.sleeper.waitUntilSleeping(2)  // the poll and the wait
+        #expect(rig.failed.isEmpty)
+        rig.sleeper.fire()
+        await action.value
+        #expect(rig.failed == [.daemonDidNotStart(seconds: 30)])
+    }
+
+    @Test func anOSErrorIsReportedOnceAfterTheProbeOfTheSameAction() async throws {
+        let rig = Rig()
+        try await rig.attachAndSettle()
+        let error = AgentActionError.os(
+            op: .register, kind: .invalidSignature, domain: "d", code: 3)
+        rig.controller.setAfterRegister(.failure(error))
+        rig.events = []
+        await rig.model.turnOn()
+        #expect(rig.failed == [error])
+        #expect(rig.events == ["assessed", "failed"])
+        #expect(rig.model.lastError == error)
+    }
+
+    @Test func aTimedOutRegisterIsReported() async throws {
+        let rig = Rig()
+        try await rig.attachAndSettle()
+        rig.controller.setAfterRegister(.failure(.timedOut(op: .register)))
+        await rig.model.turnOn()
+        #expect(rig.failed == [.timedOut(op: .register)])
+    }
+
+    @Test func aRegistrationTheOSDidNotKeepIsReported() async throws {
+        let rig = Rig(afterRegister: Self.probe(.notRegistered))
+        try await rig.attachAndSettle()
+        await rig.model.turnOn()
+        #expect(rig.failed == [.registrationNotKept])
+    }
+
+    @Test func aRefreshThatFailsReportsNothingThroughDidFail() async throws {
+        let rig = Rig(status: .failure(.timedOut(op: .status)))
+        try await rig.attachAndSettle()
+        await rig.model.refresh()
+        #expect(rig.model.assessment?.state == .unavailable)
+        #expect(rig.model.lastError == nil)
+        #expect(rig.failed.isEmpty)
+    }
+
+    @Test func clearingTheLastErrorAtTheStartOfTheNextActionReportsNothing() async throws {
+        let rig = Rig()
+        try await rig.attachAndSettle()
+        rig.controller.setAfterRegister(.failure(.timedOut(op: .register)))
+        await rig.model.turnOn()
+        #expect(rig.failed.count == 1)
+        rig.controller.setAfterRegister(Self.probe(.requiresApproval))
+        await rig.model.turnOn()
+        #expect(rig.model.lastError == nil)
+        #expect(rig.failed.count == 1)
+    }
+
+    // MARK: - The wait ends when launchd cannot start the job (step 12a)
+
+    /// Runs Turn On into the wait for the daemon, then changes the status the next refresh
+    /// reads to `next` (with a launch record) and refreshes, as `didBecomeActive()` does.
+    private func waitThenRefresh(
+        into next: Result<AgentProbe, AgentActionError>, record: Bool = true
+    ) async throws -> Rig {
+        let rig = Rig(afterRegister: Self.probe(.enabled))
+        try await rig.attachAndSettle(.unreachable(lastKnownAt: nil))
+        let action = Task { await rig.model.turnOn() }
+        while rig.model.isStarting == false { await Task.yield() }
+        await rig.sleeper.waitUntilSleeping(2)  // the poll and the wait
+        rig.record.set(
+            record ? LaunchRecordStatus(exists: true, lastLaunchedAt: Self.start) : .missing)
+        rig.controller.setStatus(next)
+        await rig.model.refresh()
+        await action.value
+        return rig
+    }
+
+    @Test func aProbeThatNeedsApprovalEndsTheWaitWithoutAnError() async throws {
+        let rig = try await waitThenRefresh(into: Self.probe(.requiresApproval), record: false)
+        #expect(rig.model.assessment?.state == .requiresApproval)
+        #expect(rig.model.isStarting == false)
+        #expect(rig.model.isWorking == false)
+        #expect(rig.model.lastError == nil)
+        #expect(rig.failed.isEmpty)
+        // The wait's own sleep was cancelled; only the poll still waits.
+        #expect(rig.sleeper.waiting == 1)
+    }
+
+    @Test func aProbeThatSaysDisabledEndsTheWaitWithoutAnError() async throws {
+        let rig = try await waitThenRefresh(into: Self.probe(.requiresApproval))
+        #expect(rig.model.assessment?.state == .disabled)
+        #expect(rig.model.isStarting == false)
+        #expect(rig.model.isWorking == false)
+        #expect(rig.model.lastError == nil)
+        #expect(rig.sleeper.waiting == 1)
+    }
+
+    @Test func aProbeThatSaysNotRegisteredEndsTheWaitWithoutAnError() async throws {
+        let rig = try await waitThenRefresh(into: Self.probe(.notFound), record: false)
+        // `justRegistered` is false after an `enabled` result, so `notFound` reads as off.
+        #expect(rig.model.assessment?.state == .notRegistered)
+        #expect(rig.model.isStarting == false)
+        #expect(rig.model.isWorking == false)
+        #expect(rig.model.lastError == nil)
+    }
+
+    @Test func aStatusThatTimesOutDuringTheWaitDoesNotEndItAndTheLimitStillApplies()
+        async throws
+    {
+        let rig = Rig(afterRegister: Self.probe(.enabled))
+        try await rig.attachAndSettle(.unreachable(lastKnownAt: nil))
+        let action = Task { await rig.model.turnOn() }
+        while rig.model.isStarting == false { await Task.yield() }
+        await rig.sleeper.waitUntilSleeping(2)
+        rig.controller.setStatus(.failure(.timedOut(op: .status)))
+        await rig.model.refresh()
+        #expect(rig.model.assessment?.state == .unavailable)
+        #expect(rig.model.isStarting)
+        #expect(rig.model.isWorking)
+        rig.sleeper.fire()
+        await action.value
+        #expect(rig.model.lastError == .daemonDidNotStart(seconds: 30))
+        #expect(rig.failed == [.daemonDidNotStart(seconds: 30)])
+    }
+
+    @Test func aStateThatBecomesEnabledAfterTheWaitEndedStartsANewWait() async throws {
+        let rig = try await waitThenRefresh(into: Self.probe(.requiresApproval))
+        #expect(rig.model.isStarting == false)
+        #expect(rig.retries == 1)
+        rig.controller.setStatus(Self.probe(.enabled))
+        await rig.model.refresh()
+        #expect(rig.model.isStarting)
+        #expect(rig.retries == 2)
     }
 
     // MARK: - Polling
