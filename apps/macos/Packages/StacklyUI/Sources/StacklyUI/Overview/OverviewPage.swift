@@ -20,6 +20,7 @@ public struct OverviewPage: View {
 
     private let instances: InstanceStore
     private let catalog: CatalogStore?
+    private let runtimes: RuntimeStore?
     private let operations: OperationCenter
     private let capacity: CapacityModel
     private let actions: InstanceActionModel
@@ -35,6 +36,8 @@ public struct OverviewPage: View {
     /// - Parameters:
     ///   - instances: The instance store.
     ///   - catalog: The catalog, for the provider names and tiles, or `nil`.
+    ///   - runtimes: The runtime store, for the Runtimes card and the names of the install
+    ///     operations, or `nil`: the card is then not drawn.
     ///   - operations: The operation center.
     ///   - capacity: The disk reading.
     ///   - actions: Start, Stop, and Retry.
@@ -51,6 +54,7 @@ public struct OverviewPage: View {
     public init(
         instances: InstanceStore,
         catalog: CatalogStore? = nil,
+        runtimes: RuntimeStore? = nil,
         operations: OperationCenter,
         capacity: CapacityModel,
         actions: InstanceActionModel,
@@ -63,6 +67,7 @@ public struct OverviewPage: View {
     ) {
         self.instances = instances
         self.catalog = catalog
+        self.runtimes = runtimes
         self.operations = operations
         self.capacity = capacity
         self.actions = actions
@@ -131,7 +136,10 @@ public struct OverviewPage: View {
         let attention = attentionItems(summaries)
         return ScrollView {
             VStack(alignment: .leading, spacing: Spacing.sectionGap) {
-                SummaryCards(counts: counts, show: { navigator?.show(.instances(filter: $0)) })
+                SummaryCards(
+                    counts: counts, runtimes: RuntimesCardState.of(runtimes),
+                    show: { navigator?.show(.instances(filter: $0)) },
+                    showRuntimes: { navigator?.show(.runtimes) })
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: Spacing.sectionGap) {
                         VStack(alignment: .leading, spacing: Spacing.sectionGap) {
@@ -188,8 +196,8 @@ public struct OverviewPage: View {
             openDiagnostics: { navigator?.show(.diagnostics) })
     }
 
-    /// The runtime names the titles use; the `RuntimeStore` of feature 18 fills them.
-    private var runtimeNames: OperationTitle.RuntimeNames { .none }
+    /// The runtime names the titles use, from the `RuntimeStore`.
+    private var runtimeNames: OperationTitle.RuntimeNames { .init(store: runtimes) }
 
     // MARK: - Sources
 

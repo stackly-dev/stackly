@@ -15,11 +15,15 @@
             var instanceFailure: ClientError?
             var operationFailure: ClientError?
             var oneFailure: ClientError?
+            /// What `runtime.list` answers.
+            var runtimePage: RuntimeListPage
+            var runtimeFailure: ClientError?
 
             init(
                 instances: [InstanceSummary], operations: [OperationSummary],
-                providers: [ProviderSummary]
+                providers: [ProviderSummary], runtimePage: RuntimeListPage
             ) {
+                self.runtimePage = runtimePage
                 self.instances = instances
                 self.operations = operations
                 self.providers = providers
@@ -47,6 +51,9 @@
         let script: Script
         let instances: InstanceStore
         let catalog: CatalogStore
+        /// The runtime store, or `nil` when the rig was built without runtimes: the Overview
+        /// then draws no Runtimes card.
+        let runtimes: RuntimeStore?
         let operations: OperationCenter
         let capacity: CapacityModel
         let actions: InstanceActionModel
@@ -58,9 +65,12 @@
             instances items: [InstanceSummary] = FixtureScenario.instanceCases,
             operations ops: [OperationSummary] = FixtureScenario.operationCases,
             providers: [ProviderSummary] = PageRig.providers,
-            capacity report: CapacityReport? = nil
+            capacity report: CapacityReport? = nil,
+            runtimes runtimePage: RuntimeListPage? = nil
         ) {
-            let script = Script(instances: items, operations: ops, providers: providers)
+            let script = Script(
+                instances: items, operations: ops, providers: providers,
+                runtimePage: runtimePage ?? RuntimeListPage(items: [], next: nil, installing: []))
             self.script = script
             let now: () -> Date = { FixtureClock.now }
             instances = InstanceStore(
@@ -81,6 +91,19 @@
                     return .catalogListProviders(
                         ListProvidersReply(catalog: .fixture, items: script.providers))
                 }, now: now, sleep: { _ in })
+            runtimes =
+                runtimePage == nil
+                ? nil
+                : RuntimeStore(
+                    call: { call throws(ClientError) in
+                        guard case .runtimeList = call else {
+                            throw .rejected(PageRig.unknownMethod)
+                        }
+                        if let failure = script.runtimeFailure { throw failure }
+                        return .runtimeList(script.runtimePage)
+                    },
+                    send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
+                    now: now, sleep: { _ in })
             operations = OperationCenter(
                 fetchPage: { _ throws(ClientError) in
                     if let failure = script.operationFailure { throw failure }
@@ -122,6 +145,7 @@
             await instances.store.resnapshot()
             await catalog.store.resnapshot()
             await operations.store.resnapshot()
+            await runtimes?.store.resnapshot()
             await capacity.refresh()
         }
 
@@ -151,7 +175,7 @@
             isConnected: Bool = true, waiting: FailureContent? = nil, hasConnection: Bool = true
         ) -> some View {
             OverviewPage(
-                instances: instances, catalog: catalog, operations: operations,
+                instances: instances, catalog: catalog, runtimes: runtimes, operations: operations,
                 capacity: capacity, actions: actions, isConnected: isConnected,
                 waiting: waiting, hasConnection: hasConnection, reconnect: {},
                 openDiagnostics: {}
