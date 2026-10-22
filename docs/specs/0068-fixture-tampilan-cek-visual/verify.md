@@ -149,3 +149,11 @@ _Langkah dari update spec 2026-10-22 (*Environment fixture di dalam wadah yang m
 
 - [ ] `NOT_RUN` · buka `catalog-available.light.png` dan `catalog-available.hc-light.png` di `__Snapshots__/CatalogSnapshotTests/` → di HC, teks sekunder (`textSecondary`) dan teks tone lebih gelap, dan permukaan bertone (badge, banner) mendapat garis tepi warna tone, baik di grid halaman maupun di kolom inspector (garis kartu sudah 1 pt di skala 1, jadi tidak dipakai sebagai tanda) → AC-5
 - [ ] `NOT_RUN` (manual user, setting sistem) · nyalakan Increase Contrast asli di System Settings, buka app Debug, Window > Design Gallery > Components, tekan Open Inspector Demo → teks halaman demo dan kolom inspector memakai warna HC token spec 0012 (teks sekunder halaman demo dan baris kartu Summary lebih gelap, label status di header inspector memakai teks tone HC; di layar Retina garis kartu Summary juga menebal dari hairline ke 1 pt); matikan Increase Contrast → kembali ke tampilan normal. Ini membuktikan bahwa app nyata, tanpa relay, membaca setting asli di dalam inspector → AC-5 (cek lead di `docs/manual.md`)
+
+## `loadingDelay` nol dan spinner `StateView` (ditambah 2026-10-22, dev-f12-fix)
+
+### Commands
+
+- [x] sepuluh kali berturut turut `swift test --package-path apps/macos/Packages/StacklyUI --filter OverviewSnapshotTests` → lulus setiap kali, termasuk `overview-operations-failed` hc-dark yang gagal sekali di "Needs Attention" (325 px) dalam run penuh, karena `DelayedProgress` kini menggambar spinner di frame pertama pada jeda nol; tidak ada PNG berubah → AC-4
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (sekali, STACKLY_DAEMON_BIN dan STACKLY_SEED_BIN dari checkout utama) → 1245 test lulus dengan 23 known issues, tanpa PNG berubah → AC-4
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter DelayedProgressTests` → lulus: `DelayedProgress()` tanpa argumen mengikuti `loadingDelay` dari environment (nol: spinner di frame pertama; `nil`: 300 ms) dan jeda eksplisit menang atas environment. Dengan `DelayedProgress.swift` sebelumnya kedua test gagal. Sheet New Instance (`NewInstanceSheet`, `PreflightSection`) memakai `DelayedProgress()`, jadi spinner nya kini ada di frame pertama snapshot → AC-4

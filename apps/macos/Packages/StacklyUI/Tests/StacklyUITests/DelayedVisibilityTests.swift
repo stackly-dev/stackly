@@ -14,6 +14,24 @@ struct DelayedVisibilityTests {
         #expect(visibility.isVisible == false)
     }
 
+    @Test func zeroDelayIsVisibleInTheFirstFrameBeforeAnyTaskRuns() {
+        let visibility = DelayedVisibility(delay: .zero)
+        #expect(visibility.showsInFirstFrame)
+        #expect(visibility.isVisible)
+        #expect(DelayedVisibility(delay: .milliseconds(1)).showsInFirstFrame == false)
+        #expect(DelayedVisibility(delay: .milliseconds(1)).isVisible == false)
+    }
+
+    @Test func zeroDelayNeverSleepsAndStaysVisible() async {
+        let sleep = FakeSleep()
+        let visibility = DelayedVisibility(delay: .zero, sleep: { try await sleep.sleep(for: $0) })
+
+        await visibility.run()
+
+        #expect(sleep.durations.isEmpty)
+        #expect(visibility.isVisible)
+    }
+
     @Test func spinnerNeverShowsWhenDataArrivesWithinTheDelay() async {
         let sleep = FakeSleep()
         let visibility = DelayedVisibility(sleep: { try await sleep.sleep(for: $0) })

@@ -87,3 +87,18 @@ _Dari update spec 2026-10-22 (*Pola state*, butir huruf pertama kalimat outdated
 ### UI / manual
 
 - [x] buka `apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/__Snapshots__/CatalogSnapshotTests/catalog-outdated.light.png` → banner caution berjudul "Showing the last known state from …" dengan isi "The bundled catalog last updated …", huruf T kapital → AC-12
+
+## Spinner di frame pertama dengan jeda nol (ditambah 2026-10-22, dev-f12-fix)
+
+_Dari update spec 2026-10-22 (*Pola state*, `DelayedProgress` mengikuti `loadingDelay ?? DelayedVisibility.defaultDelay`, jeda nol berarti spinner ada di frame pertama tanpa task dan tanpa transisi)._
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "DelayedVisibilityTests|DelayedProgressTests"` → lulus: `zeroDelayIsVisibleInTheFirstFrameBeforeAnyTaskRuns`, `zeroDelayNeverSleepsAndStaysVisible`, dan `aZeroDelayDrawsTheSpinnerInTheFirstFrame` (frame pertama `DelayedProgress(delay: .zero)` beda dari jeda 300 ms, dan jeda 300 ms sama dengan jeda satu jam). Dengan `DelayedProgress.swift` lama test frame pertama dan test `isVisible` gagal; tidak ada jam dinding → AC-9
+- [x] sepuluh kali berturut turut `swift test --package-path apps/macos/Packages/StacklyUI --filter OverviewSnapshotTests` → 17 test lulus setiap kali, load 1 menit 31 sampai 106, tidak ada PNG berubah → AC-9
+
+## Token cincin pilihan (ditambah 2026-10-22, dev-f12-fix)
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter SourceRuleTests` → lulus: aturan "secondary, tertiary, or accent text color outside the token file (AC-3)" kini juga menangkap `controlAccentColor` (contoh terlarang `Color(nsColor: .controlAccentColor)`); uji balik: baris lama di `ProviderCard.swift` dipasang lagi sementara → `sourcesFollowTheRule` gagal pada aturan itu; `StacklyColor.selectionRing` di `Tokens/StacklyColor.swift` adalah satu satunya tempat → AC-3

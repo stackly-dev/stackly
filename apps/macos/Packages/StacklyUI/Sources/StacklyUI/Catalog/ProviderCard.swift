@@ -61,9 +61,8 @@ struct ProviderCard: View {
             .cardSurface()
             .overlay {
                 if isSelected {
-                    // provisional: F12 (a design-system selection token replaces the system accent)
                     RoundedRectangle(cornerRadius: Radius.medium.value, style: .continuous)
-                        .strokeBorder(Color(nsColor: .controlAccentColor), lineWidth: 2)
+                        .strokeBorder(StacklyColor.selectionRing, lineWidth: 2)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: Radius.medium.value))
