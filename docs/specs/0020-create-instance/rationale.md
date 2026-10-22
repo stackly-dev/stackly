@@ -727,3 +727,101 @@ Dijalankan 2026-10-22 oleh model lain (Sonnet, read only) atas draft update ini,
 | RISK-1 | Pemegang port di matriks tidak memasang `SO_REUSEADDR` atau `SO_REUSEPORT` | Checker menjalankan ulang dengan opsi itu, hasil sama; dicatat di *Percobaan di Mac ini* |
 | RISK-2 | Dua probe bersamaan bisa saling melihat socket percobaan | Dicatat di *Consequences* (risiko lama langkah 4, jendela sedikit lebih lebar) |
 | NIT-1 | Sel langkah 5 berkata listener wildcard "juga menerima koneksi ke A", padahal server yang bind `A:p` menang selama ia berjalan | Sel dan kalimat penjelasan diperbaiki |
+
+## Update 2026-10-22: usulan spec 0024 dan sumber Copy from
+
+Update `/architect` (sesi `arc-f20-update-2`, wave 4) atas *Usulan update untuk spec lain* dan satu baris Follow-up spec 0024 (fitur 24, duplicate config, milik program Scope 03). ID AC dan nomor langkah tetap; teks AC-20 bertambah satu kalimat dan menunggu persetujuan user lewat lead.
+
+### Usulan yang diterapkan apa adanya
+
+- **Baris *Batas dengan spec lain*** untuk duplicate config: `instance.get_duplicate_form`, `build_form_from_package`, mode duplicate `CreateInstanceModel` dan `NewInstanceSheet`, dan `stackly instance duplicate` milik fitur 24. Konsisten dengan spec ini: duplicate hanya mengisi draft lalu memanggil `instance.preflight` dan `instance.create` tanpa perubahan, jadi kontrak, evaluator, dan operasi create tetap milik spec ini dan tidak berubah.
+- **Catatan di butir `build_form`**: `build_form` memanggil `build_form_from_package(package, source, runtime, suggested_name)`, yang juga dipakai form duplicate dengan sumber `Pinned`. Konsisten: isi form create tetap sama dan selalu bersumber catalog, test form spec ini tetap lulus tanpa perubahan (spec 0024 langkah 2), dan signature `build_form` di blok Rust tetap. Atas temuan cross check GAP-4, satu kalimat ditambah sesudah teks usulan: pemisahan isi `build_form` dibangun langkah 2 spec 0024, bukan langkah 6 spec ini, dan baris `source` di *Value sourcing* menyebut bahwa `Pinned` hanya muncul di form duplicate.
+
+### Keputusan 19: sumber daftar Copy from di mode create
+
+#### Masalah
+
+`SecretField` spec 0011 menawarkan Copy from hanya kalau `copyFromOptions` tidak kosong, dan spec 0011 menyebut sheet New Instance menawarkan Generate, Enter, dan Copy from tanpa Bind. Spec ini tidak pernah menyebut dari mana daftar itu diisi. Spec 0024 butuh jawabannya, karena mode duplicate menaruh reference sumber di depan "daftar yang dipakai mode create". Yang perlu diputuskan: siapa yang membangun daftar, reference mana yang masuk, bagaimana ia dibaca manusia, kapan dibaca, dan apa yang terjadi saat pembacaan gagal. Batasannya: daemon tetap satu satunya yang memvalidasi (*Key invariants*), nilai secret tidak pernah ke client, `copyFrom` ke reference yang tidak terdaftar atau tanpa nilai sudah menjadi baris error preflight (AC-7), dan teks sheet tidak boleh terpotong di lebar 560 pt (AC-22), padahal reference instance berbentuk `local:instance/<uuid>/<purpose>`.
+
+#### Option A: client membaca `secret.list` yang sudah ada (dipilih)
+
+`CreateInstanceModel` memanggil `secret.list` spec 0011 bersama method form setiap kali form dimuat, memakai reference yang statusnya `present` atau `unknown` dalam urutan balasan, dan memberi label nama instance pemiliknya lewat `copyFromLabels`.
+
+**Pros**:
+
+- Tanpa method, field, atau fixture kontrak baru: `secret.list`, `ListSecretsReply`, dan `SecretsClient.listSecrets` sudah ada (spec 0011 langkah 9), jadi langkah 8 dan milestone 2 tidak berubah.
+- `secret.list` hanya membaca cache dan tidak menyentuh Keychain (spec 0011 *Status dan probe*), jadi daftar tidak pernah tertahan dialog Keychain.
+- Form create tetap hanya bergantung pada runtime dan paket; state secret yang berubah sendiri tidak masuk `CreateForm`.
+- `SecretRefSummary` sudah membawa `ownerKind`, `ownerId`, dan `purpose`, dan `InstanceStore` sudah ada di sheet, jadi label bisa dibangun tanpa data baru.
+- Mode duplicate spec 0024 cukup menaruh reference sumber di depan daftar yang sama.
+
+**Cons**:
+
+- Satu panggilan tambahan per form, dan penyaringan status di model Swift. Penyaringan itu memilih apa yang ditawarkan, bukan aturan validasi: daemon tetap memeriksa setiap `copyFrom`.
+- Label butuh parameter `copyFromLabels` di `SecretField`, yang diusulkan spec 0024 untuk spec 0011; update spec 0011 itu harus masuk sebelum langkah 14 spec ini.
+- Daftar adalah potret; tidak mengikuti `secret.changed` selama sheet terbuka.
+
+#### Option B: field `copyFromReferences` di `CreateForm`
+
+Daemon menambah daftar reference, beserta label, ke `CreateForm` saat `instance.get_create_form`.
+
+**Pros**:
+
+- Satu panggilan; daemon yang memutuskan isi daftar dan label; `DuplicateForm.form` ikut membawanya.
+
+**Cons**:
+
+- Field kontrak baru di langkah 8, fixture `create-form-*.json` berubah, dan teks AC-1 (isi form dan apa yang dibaca method itu) ikut berubah.
+- `instance.get_create_form` mulai membaca tabel secret dan nama instance, padahal isinya sudah tersedia lewat `secret.list` dan `InstanceStore`; dua jalan untuk data yang sama.
+- Form yang sebelumnya statis per runtime menjadi bergantung pada state secret yang berubah sendiri, dan `SecretField` tetap butuh parameter label.
+
+#### Option C: tanpa Copy from di mode create
+
+`copyFromOptions` selalu kosong di create; hanya mode duplicate yang memberi reference sumber.
+
+**Pros**:
+
+- Paling sederhana; tidak ada panggilan, penyaringan, atau label tambahan, dan tidak ada ketergantungan pada update spec 0011.
+
+**Cons**:
+
+- Bertentangan dengan spec 0011 (sheet New Instance menawarkan Copy from), dan GUI kehilangan jalan yang CLI punya (`--secret <field>=copy:<ref>`): pengguna yang ingin password sama untuk instance kedua harus mengetiknya ulang.
+
+#### Keputusan
+
+Option A. Kekuatan utamanya ada di batasan yang sudah ada: daemon tetap satu satunya yang memutuskan apakah reference bisa disalin (baris preflight `secret.<field>` dan `put` di tahap `secrets`), jadi daftar di client hanya kemudahan memilih, dan datanya sudah tersedia lewat method baca yang tidak menyentuh Keychain. Runner up: Option B, yang memberi daftar dari daemon tetapi menambah field kontrak dan mengubah AC-1 untuk data yang sudah punya method sendiri.
+
+Rincian yang diputuskan bersama opsi ini, semuanya rekomendasi update ini (dan, untuk yang ditandai, perbaikan cross check yang diterapkan dengan aturan brief):
+
+- **Status yang masuk**: `present` dan `unknown`. `unknown` berarti probe gagal (worker sibuk saat start, error backend, atau store yang tidak didukung), bukan bahwa nilainya hilang; daemon memeriksa lagi saat preflight (`SecretStore::probe`) dan saat `put`, dan memberi baris error kalau reference itu tidak punya nilai *(alasan diperbaiki, RISK-1)*. `missing` dibuang karena pasti ditolak `secret.needs_secret`; `unrecognized` dibuang karena client tidak tahu artinya. Runner up: hanya `present` lewat filter params `status`, yang menyembunyikan reference yang sebenarnya bisa disalin.
+- **Prefix**: reference yang segmen pertamanya `stackly` dibuang, karena segmen itu dicadangkan untuk secret internal (spec 0011 *Format secret reference*) *(RISK-2)*.
+- **Pemilik**: semua jenis pemilik (instance, environment, user), karena `put` dengan `copyFrom` membaca reference mana pun yang terdaftar dan aturan field diperiksa saat `put` (spec 0011 AC-5 dan langkah 3 *Use case isi atau ganti nilai*) *(rujukan diperbaiki, NIT-2)*.
+- **Urutan**: urutan balasan daemon (urut reference), tanpa urutan kedua di client.
+- **Label** *(RISK-2)*: "{purpose} of “{nama}”" untuk reference ber `ownerKind` `instance` yang `ownerId` nya ada di `InstanceStore`, dengan purpose yang tanda hubungnya diganti spasi dan huruf pertamanya dibesarkan; reference lain tampil sebagai teks reference. Untuk reference sumber PostgreSQL, hasilnya sama dengan label mode duplicate spec 0024 ("Superuser password of “pg17-dev”"). Label lewat `copyFromLabels`, parameter yang diusulkan spec 0024 untuk spec 0011, sehingga satu mekanisme melayani kedua mode. Runner up: teks reference apa adanya dengan Follow-up label, yang membuat Copy from hampir tidak terpakai (UUID tidak bisa dibedakan) dan berisiko terpotong di 560 pt (AC-22).
+- **Waktu baca** *(GAP-2)*: setiap kali model masuk `loadingForm`, satu tugas muat bertoken memanggil method form dan `listSecrets` bersamaan; tugas lama dibatalkan dan balasan token lama dibuang. Model masuk `editing` begitu form kembali, tanpa menunggu daftar, supaya batas `.standard` 10 detik `SecretsClient.listSecrets` tidak pernah menahan sheet; Copy from muncul saat daftar kembali. Form yang dimuat membangun ulang draft, jadi pilihan Copy from lama hilang. Tanpa langganan `secret.changed`. Runner up: menunggu keduanya dengan batas waktu sendiri di model, yang menambah konstanta dan tetap menahan form selama batas itu.
+- **Pemilik data di model** *(GAP-3)*: `CreateInstanceModel.copyFromOptions` dan `copyFromLabels`, diteruskan `SchemaFormModel` ke setiap `SecretField`. `store` di balasan tidak dipakai, karena keadaan store tampil di baris preflight.
+- **Gagal**: daftar kosong, Copy from tersembunyi, tanpa banner, Create tidak tertahan. Runner up: banner caution, yang menambah state di sheet untuk fitur kemudahan.
+- **Mode duplicate** *(GAP-1)*: spec 0024 memanggil `listSecrets` bersama `getDuplicateForm` lewat tugas muat yang sama dan menaruh reference sumber setiap field di depan daftar ini; label sumbernya menang untuk reference itu. Spec 0024 milik Scope 03, jadi penggabungan label itu dicatat sebagai Follow-up untuk lead.
+- **Nilai yang melanggar batas field** *(RISK-3)*: preflight tidak pernah membaca nilai, jadi `copyFrom` dari reference yang nilainya di luar `minLength`, `maxLength`, atau `printableOnly` baru gagal `secret.invalid_value` di tahap `secrets`, sebelum folder dibuat, lalu dikompensasi. Dicatat di *Consequences* dan diuji di test secret daemon dan test model.
+
+Dampak ke spec ini: AC-20 bertambah satu kalimat (teks di bawah; AC-21 tetap karena ia hanya tentang render dari DTO, NIT-1); *Sheet New Instance* mendapat butir Copy from, `listSecrets` di `CreateInstanceService`, dan `InstanceStore` di masukan model; *Form dari settings schema*, *Value sourcing*, *Security model*, *Critical test scenarios*, *Consequences*, *Follow-up*, dan langkah 13 dan 14 milestone 3 ikut; prasyarat milestone 3 menyebut fitur 11 langkah 9 dan update spec 0011 untuk `copyFromLabels` sebelum langkah 14. Tidak ada method, field, kode error, atau fixture baru, jadi langkah 8 dan milestone 2 tidak berubah. Spec ini tidak mengubah spec lain; tiga hal untuk pemiliknya ada di *Follow-up* `index.md` (jadwal usulan `copyFromLabels` spec 0011, penggabungan label di spec 0024, dan kalimat `unknown` di spec 0011 *Status dan probe* yang bertentangan dengan AC-3 spec itu).
+
+Teks AC-20 lama (bagian yang berubah): "Create yang hanya aktif saat preflight terakhir `ready` untuk nilai form saat ini dan daemon tersambung. Sheet dibuka dari aksi"
+
+Teks AC-20 baru: "Create yang hanya aktif saat preflight terakhir `ready` untuk nilai form saat ini dan daemon tersambung. Copy from di setiap secret field menawarkan reference dari `secret.list` spec 0011 berstatus `present` atau `unknown` yang segmen pertamanya bukan `stackly`, dalam urutan balasan daemon, dibaca setiap kali form dimuat tanpa menunda form, dengan label "{purpose} of “{nama}”" untuk reference milik instance di `InstanceStore`, dan tersembunyi tanpa menahan Create selama daftar itu belum kembali, kosong, atau gagal dibaca *(ditambah 2026-10-22, Follow-up spec 0024)*. Sheet dibuka dari aksi"
+
+### Cross check
+
+Dijalankan 2026-10-22 oleh model lain (Sonnet, read only) atas draft update ini, dengan jawaban tetap brief `Another model`. Verdict: Option A sehat dan tidak bertentangan dengan aturan inti spec 0011; nama `SecretsClient.listSecrets`, `DaemonLink.secrets`, `SecretRefSummary`, dan `SecretStatus` cocok dengan repo, `SecretField` memang menyembunyikan Copy from saat daftar kosong, `copyFrom` tidak membatasi jenis pemilik, dan `secret.list` tidak menyentuh store. Temuan diterapkan dengan rekomendasi checker sesuai aturan brief (gap keputusan memakai opsi rekomendasi):
+
+| ID | Temuan | Yang diterapkan |
+| --- | --- | --- |
+| GAP-1 | Mode duplicate memuat lewat `getDuplicateForm`, dan tidak jelas apakah ia memanggil `listSecrets` dan bagaimana reference sumber digabung | Tugas muat memanggil method form mode itu bersama `listSecrets`; reference sumber di depan dengan label sumbernya; penggabungan label sebagai Follow-up spec 0024 |
+| GAP-2 | "Tidak menahan form" salah kalau `editing` menunggu keduanya, karena batas `.standard` 10 detik; balasan basi dan reset draft tidak disebut | `editing` tanpa menunggu daftar, tugas muat bertoken yang membuang balasan lama, draft dibangun ulang saat form dimuat |
+| GAP-3 | Pemilik `copyFromOptions` di model, `store` yang diabaikan, kasus test, sumber data preview, dan state snapshot tidak disebut | `CreateInstanceModel.copyFromOptions` dan `copyFromLabels` lewat `SchemaFormModel`; `store` tidak dipakai; kasus test lengkap; preview dengan service tiruan; state snapshot Copy from terpilih |
+| GAP-4 | Catatan `build_form` terbaca seolah sudah dibangun; baris `source` *Value sourcing* hanya menyebut catalog | Kalimat sesudah teks usulan (signature tetap, pemisahan di langkah 2 spec 0024); baris `source` menyebut `Pinned` hanya di form duplicate |
+| RISK-1 | Alasan `unknown` saat Keychain terkunci bertentangan dengan spec 0011 AC-3 (probe di keychain terkunci menjawab `Present` atau `Missing`) | Alasan diganti (probe gagal karena worker sibuk, error backend, atau store tidak didukung); aturannya tetap; kalimat spec 0011 yang bertentangan dicatat sebagai Follow-up |
+| RISK-2 | Reference instance berbentuk UUID tidak bisa dibedakan dan berisiko terpotong; prefix `stackly` dicadangkan | Label "{purpose} of “{nama}”" lewat `copyFromLabels` sekarang, bukan Follow-up; prefix `stackly` dibuang |
+| RISK-3 | Pelanggaran batas field pada nilai `copyFrom` baru terlihat setelah Create | Dicatat di *Consequences*; test daemon di skenario secret dan test model untuk banner |
+| NIT-1 | Kalimat muat lebih cocok di AC-20 daripada AC-21; status "diterapkan" terbaca final padahal teks AC menunggu persetujuan | Kalimat pindah ke AC-20; Follow-up menyebut teks AC-20 menunggu persetujuan |
+| NIT-2 | Rujukan spec 0011 kurang tepat | *Status dan probe* untuk cache, AC-5 dan langkah 3 *Use case isi atau ganti nilai* untuk jenis pemilik |
