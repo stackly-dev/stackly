@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use stackly_core::PreparedLayout;
 use stackly_core::catalog::CatalogState;
+use stackly_core::instance::create::CreateHooks;
 use stackly_core::secret::Redactor;
 use stackly_platform::Platform;
 use stackly_protocol::Count;
@@ -125,6 +126,8 @@ pub struct DaemonCore {
     registry_state: Mutex<RegistryState>,
     registry: Mutex<Option<SqliteRegistry>>,
     catalog: OnceLock<Arc<CatalogState>>,
+    catalog_source: Arc<catalog::CatalogSource>,
+    create_hooks: OnceLock<CreateHooks>,
     ipc_problem: Mutex<Option<String>>,
     counters: Counters,
     drain: Drain,
@@ -174,6 +177,8 @@ impl DaemonCore {
             registry_state: Mutex::new(RegistryState::Opening),
             registry: Mutex::new(None),
             catalog: OnceLock::new(),
+            catalog_source: Arc::new(catalog::CatalogSource::default()),
+            create_hooks: OnceLock::new(),
             ipc_problem: Mutex::new(None),
             counters: Counters::default(),
             drain: Drain::default(),
@@ -363,6 +368,24 @@ impl DaemonCore {
         self.catalog.get().cloned()
     }
 
+    /// The row of the loaded catalog in `provider_sources` (spec 0020
+    /// AC-14).
+    #[must_use]
+    pub fn catalog_source(&self) -> &Arc<catalog::CatalogSource> {
+        &self.catalog_source
+    }
+
+    /// The hooks a test hung on `instance.create`; none in a normal run.
+    #[must_use]
+    pub fn create_hooks(&self) -> CreateHooks {
+        self.create_hooks.get().cloned().unwrap_or_default()
+    }
+
+    /// Records the create hooks of this run. The first call wins.
+    pub fn set_create_hooks(&self, hooks: CreateHooks) {
+        let _ = self.create_hooks.set(hooks);
+    }
+
     /// Records the catalog of this run. The first call wins: the catalog
     /// never changes while the daemon runs.
     pub fn set_catalog(&self, state: CatalogState) {
@@ -480,7 +503,10 @@ impl DaemonCore {
             registry,
             self.operations.health(),
             self.supervision.health(),
-            catalog::health(self.catalog.get().map(AsRef::as_ref)),
+            catalog::health(
+                self.catalog.get().map(AsRef::as_ref),
+                self.catalog_source.degraded().as_deref(),
+            ),
         ];
         let status = match self.phase() {
             Phase::Starting => DaemonHealthStatus::Starting,

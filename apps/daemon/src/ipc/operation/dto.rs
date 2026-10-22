@@ -209,8 +209,8 @@ pub fn catalog_body(
         Some(rule) => body.with_rule(rule.id()),
         None => body,
     };
-    crate::map::runtime::with_runtime_hint(crate::ipc::secret::with_secret_hint(
-        with_supervisor_hint(body),
+    crate::map::create::with_create_hint(crate::map::runtime::with_runtime_hint(
+        crate::ipc::secret::with_secret_hint(with_supervisor_hint(body)),
     ))
 }
 

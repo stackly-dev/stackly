@@ -536,6 +536,40 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The create form of an installed runtime: the provider, its\nendpoints, and its settings fields, typed from the package.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetCreateFormParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_create_form"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Judges a create draft without any secret value and changes nothing.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/PreflightCreateParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.preflight"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -725,6 +759,28 @@
       "required": [
         "serverInstanceId",
         "sequence"
+      ]
+    },
+    "GetCreateFormParams": {
+      "description": "Params of `instance.get_create_form`.",
+      "type": "object",
+      "properties": {
+        "provider": {
+          "description": "The provider to use, such as `official/nats`. Absent means the\ncatalog entry whose software is the software of the runtime.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "runtimeId": {
+          "description": "The installed runtime the instance will run on.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "runtimeId"
       ]
     },
     "GetInstanceParams": {
@@ -988,6 +1044,65 @@
             "type"
           ]
         }
+      ]
+    },
+    "PreflightCreateParams": {
+      "description": "Params of `instance.preflight`: the draft of `instance.create` without\nany secret value.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "The name to show.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "endpoints": {
+          "description": "One request per manifest endpoint that asks for a port.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EndpointRequest"
+          }
+        },
+        "name": {
+          "description": "The unique instance name.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "The provider to create it from.",
+          "$ref": "#/$defs/ProviderSelector"
+        },
+        "runtimeId": {
+          "description": "The installed runtime to run it on.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "secrets": {
+          "description": "The source of each secret field.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretPlan"
+          }
+        },
+        "settings": {
+          "description": "The settings, without secret values.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "start": {
+          "description": "Whether the equivalent command ends with `--start`.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "name",
+        "provider",
+        "runtimeId",
+        "settings"
       ]
     },
     "ProtocolVersion": {
@@ -1299,6 +1414,89 @@
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
+        }
+      ]
+    },
+    "SecretPlan": {
+      "description": "The source of one secret field in a preflight.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field the secret fills.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where its value comes from.",
+          "$ref": "#/$defs/SecretSource"
+        }
+      },
+      "required": [
+        "field",
+        "source"
+      ]
+    },
+    "SecretSource": {
+      "description": "Where a secret field gets its value, without the value. Tagged `type`\nand `content`.",
+      "oneOf": [
+        {
+          "description": "The daemon generates a value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "generate"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "The client sends a value with `instance.create`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "value"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A copy of the value stored under this reference.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "copyFrom"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The instance uses this reference.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "bind"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },

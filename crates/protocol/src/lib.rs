@@ -45,7 +45,9 @@ pub use error::{ErrorBody, ErrorCategory, ErrorDetail, ErrorItem, FieldError};
 pub use limits::Limits;
 pub use message::{Call, ErrorFrame, Reply, Request, Response, ServerFrame};
 pub use version::ProtocolVersion;
-pub use wire::{Count, ResourceKind, ResourceRef, Revision, Sequence, Timestamp};
+pub use wire::{
+    Count, ResourceKind, ResourceRef, Revision, Sequence, SignedSafeInteger, Timestamp,
+};
 
 /// Returns the JSON Schema of every top level contract type, keyed by file
 /// stem.

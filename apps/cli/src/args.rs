@@ -195,6 +195,53 @@ impl FromStr for InstanceIdArg {
     }
 }
 
+/// `--runtime`: a runtime ID, a whole UUID in its hyphenated form, or
+/// `software@version`, a selector the CLI resolves among the installed
+/// runtimes (spec 0020, *CLI*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeArg {
+    /// A runtime ID.
+    Id(Uuid),
+    /// `software@x`: the runtime of that software whose exact version is
+    /// `x`, else whose line is `x`.
+    Selector {
+        /// The software, such as `postgresql`.
+        software: String,
+        /// The version or line, such as `18.6` or `18`.
+        version: String,
+    },
+}
+
+impl RuntimeArg {
+    /// The text as it was typed.
+    #[must_use]
+    pub fn text(&self) -> String {
+        match self {
+            Self::Id(id) => id.to_string(),
+            Self::Selector { software, version } => format!("{software}@{version}"),
+        }
+    }
+}
+
+impl FromStr for RuntimeArg {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        if let Some((software, version)) = text.split_once('@') {
+            if software.is_empty() || version.is_empty() || version.contains('@') {
+                return Err("expected software@version, such as postgresql@18".to_owned());
+            }
+            return Ok(Self::Selector {
+                software: software.to_owned(),
+                version: version.to_owned(),
+            });
+        }
+        runtime_id(text).map(Self::Id).map_err(|_| {
+            "expected a runtime id or software@version, such as postgresql@18".to_owned()
+        })
+    }
+}
+
 /// `--runtime`: a runtime ID, a whole UUID in its hyphenated form.
 ///
 /// # Errors
@@ -207,6 +254,29 @@ pub fn runtime_id(text: &str) -> Result<Uuid, String> {
         );
     }
     Uuid::try_parse(text).map_err(|_| "expected a whole runtime id in hex with hyphens".to_owned())
+}
+
+/// `--settings-file`: a JSON object read from a regular file, at most
+/// 256 KiB like a settings document.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SettingsFileArg(pub serde_json::Map<String, serde_json::Value>);
+
+impl FromStr for SettingsFileArg {
+    type Err = String;
+
+    fn from_str(path: &str) -> Result<Self, String> {
+        let unreadable = || "cannot read that file".to_owned();
+        let metadata = std::fs::metadata(path).map_err(|_| unreadable())?;
+        if !metadata.is_file() || metadata.len() > 256 * 1024 {
+            return Err("expected a regular JSON file of at most 256 KiB".to_owned());
+        }
+        let bytes = std::fs::read(path).map_err(|_| unreadable())?;
+        match serde_json::from_slice(&bytes) {
+            Ok(serde_json::Value::Object(map)) => Ok(Self(map)),
+            Ok(_) => Err("expected a JSON object".to_owned()),
+            Err(_) => Err("the file is not JSON".to_owned()),
+        }
+    }
 }
 
 /// `--port <endpoint>=<port|auto>`: the shape only. The number is 0 to

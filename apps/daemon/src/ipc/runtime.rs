@@ -662,6 +662,35 @@ async fn installed_runtime(
     ))
 }
 
+/// The summary of `runtime` as `runtime.get` shows it, for the create form
+/// (spec 0020, AC-1): the same facts, read now.
+///
+/// # Errors
+///
+/// Returns the error body of a failed registry read, and
+/// `internal.unexpected` when the runtime is gone from the registry.
+pub(crate) async fn summary_of_runtime(
+    core: &DaemonCore,
+    registry: &SqliteRegistry,
+    runtime: &Runtime,
+) -> Result<RuntimeSummary, Box<ErrorBody>> {
+    let registry = registry.clone();
+    let catalog = core.catalog();
+    let host = core.platform().info().host_facts();
+    let id = runtime.id();
+    let read = tokio::task::spawn_blocking(move || read_runtimes(&registry, false))
+        .await
+        .map_err(|_| unexpected("the runtime read task failed"))?
+        .map_err(|error| Box::new(map::registry_error(&error)))?;
+    let found = read
+        .runtimes
+        .iter()
+        .find(|candidate| candidate.id() == id)
+        .ok_or_else(|| unexpected("the runtime vanished while the reply was built"))?;
+    let names = DisplayNames::new(catalog.as_deref());
+    Ok(summary_of(found, &read, &names, catalog.as_deref(), &host))
+}
+
 fn registry_of(core: &DaemonCore) -> Result<SqliteRegistry, Box<ErrorBody>> {
     core.registry().ok_or_else(|| {
         Box::new(ErrorBody::new(

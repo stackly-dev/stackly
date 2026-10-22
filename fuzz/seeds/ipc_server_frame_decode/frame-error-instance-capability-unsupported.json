@@ -1,0 +1,32 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000922",
+    "error": {
+      "code": "instance.capability_unsupported",
+      "category": "unsupported",
+      "message": "official/traefik runs one instance at a time",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "remove the existing instance first",
+      "details": [
+        {
+          "key": "capability",
+          "value": "multi_instance"
+        },
+        {
+          "key": "provider",
+          "value": "official/traefik"
+        },
+        {
+          "key": "existing",
+          "value": "0192f3a5-0000-7000-8000-000000000001"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

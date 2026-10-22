@@ -179,6 +179,83 @@ extension CompatibilityResult {
 	}
 }
 
+extension EndpointTransport {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension EndpointPurpose {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension ProviderCategory {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension CreateProviderSource {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension InstallModeKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension RuntimeState {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension FieldKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension FieldVisibility {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension FieldApply {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension PreflightCheckKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension PreflightStatus {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
 extension DaemonHealthStatus {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
@@ -228,13 +305,6 @@ extension ReconcilePhase {
 	}
 }
 
-extension EndpointTransport {
-	public init(from decoder: Decoder) throws {
-		let value = try decoder.singleValueContainer().decode(String.self)
-		self = Self(rawValue: value) ?? .unrecognized
-	}
-}
-
 extension EndpointPortMode {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
@@ -271,13 +341,6 @@ extension InstanceLockState {
 }
 
 extension InstanceOwnership {
-	public init(from decoder: Decoder) throws {
-		let value = try decoder.singleValueContainer().decode(String.self)
-		self = Self(rawValue: value) ?? .unrecognized
-	}
-}
-
-extension ProviderCategory {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
 		self = Self(rawValue: value) ?? .unrecognized
@@ -334,20 +397,6 @@ extension StepState {
 }
 
 extension RevealPurpose {
-	public init(from decoder: Decoder) throws {
-		let value = try decoder.singleValueContainer().decode(String.self)
-		self = Self(rawValue: value) ?? .unrecognized
-	}
-}
-
-extension InstallModeKind {
-	public init(from decoder: Decoder) throws {
-		let value = try decoder.singleValueContainer().decode(String.self)
-		self = Self(rawValue: value) ?? .unrecognized
-	}
-}
-
-extension RuntimeState {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
 		self = Self(rawValue: value) ?? .unrecognized
