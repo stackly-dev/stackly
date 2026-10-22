@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use stackly_core::catalog::CatalogLocation;
+use stackly_platform::bundle::AppBundle;
 use stackly_platform::{FileKind, Filesystem};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
@@ -171,6 +172,24 @@ pub fn parse_catalog_dir(
     }
 }
 
+/// The catalog folder a daemon loads (spec 0017, *Lokasi catalog saat
+/// start*): the development folder of `STACKLY_CATALOG_DIR` when there is
+/// one, otherwise `Contents/Resources/catalog` of the app bundle the daemon
+/// runs from, and `None` outside a bundle. The bundled folder is not checked
+/// here: one that is missing loads as `Unavailable` with reason `missing`.
+///
+/// `bundle` is the one derived from `StartConfig.current_exe`, the same one
+/// `DaemonDeps.bundle` carries, so the bundle is found once.
+#[must_use]
+pub fn catalog_location(
+    development: Option<CatalogLocation>,
+    bundle: Option<&AppBundle>,
+) -> Option<CatalogLocation> {
+    development.or_else(|| {
+        bundle.map(|bundle| CatalogLocation::Bundled(bundle.resources_dir().join("catalog")))
+    })
+}
+
 /// Runs the daemon until SIGTERM or SIGINT and returns its exit code: 0
 /// after a normal stop or `--print-roots`, [`EXIT_START_FAILED`] when it
 /// cannot start, and [`EXIT_LOCK_HELD`] when another daemon holds the lock.
@@ -201,8 +220,8 @@ mod imp {
     use uuid::Uuid;
 
     use super::{
-        EXIT_LOCK_HELD, EXIT_RESTART, EXIT_START_FAILED, StartConfig, parse_catalog_dir,
-        parse_log_filter,
+        EXIT_LOCK_HELD, EXIT_RESTART, EXIT_START_FAILED, StartConfig, catalog_location,
+        parse_catalog_dir, parse_log_filter,
     };
     use crate::lock::{DaemonLock, LockError, LockOwner};
     use crate::log_sink::{LOG_CONTROL_TIMEOUT, LogSink, LogSinkConfig, RedactingMakeWriter};
@@ -293,7 +312,7 @@ mod imp {
             .and_then(|exe| AppBundle::enclosing(&exe));
         // Step 3 also checks the catalog folder, which only reads.
         let catalog = match parse_catalog_dir(platform.fs(), config.catalog_dir.as_deref()) {
-            Ok(catalog) => catalog,
+            Ok(development) => catalog_location(development, bundle.as_ref()),
             Err(error) => {
                 tracing::error!(error = %error, "cannot start stacklyd");
                 return EXIT_START_FAILED;
@@ -597,6 +616,29 @@ mod tests {
                 std::fs::canonicalize(&dir).unwrap()
             ))
         );
+    }
+
+    #[test]
+    fn the_catalog_location_is_the_development_folder_then_the_bundle_then_none() {
+        let bundle = AppBundle::enclosing(Path::new("/A/Stackly.app/Contents/MacOS/stacklyd"))
+            .expect("the path has the shape of an app bundle");
+        let development = CatalogLocation::Development(PathBuf::from("/dev/catalog"));
+
+        assert_eq!(
+            catalog_location(Some(development.clone()), Some(&bundle)),
+            Some(development.clone())
+        );
+        assert_eq!(
+            catalog_location(None, Some(&bundle)),
+            Some(CatalogLocation::Bundled(PathBuf::from(
+                "/A/Stackly.app/Contents/Resources/catalog"
+            )))
+        );
+        assert_eq!(
+            catalog_location(Some(development.clone()), None),
+            Some(development)
+        );
+        assert_eq!(catalog_location(None, None), None);
     }
 
     #[test]
