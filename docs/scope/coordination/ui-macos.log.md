@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `b818e61`
 - **Wave aktif:** `6` (architect `arc-f126768-fix` dan debugger `dbg-f13-stall`, dimulai user `2026-10-22`; perbaikan kode inspector dan `StaleNote` menyusul setelah architect)
-- **Diperbarui:** `2026-10-22 16:08`
+- **Diperbarui:** `2026-10-22 16:45`
 
 ## Sub sesi wave `1`
 
@@ -44,7 +44,7 @@
 | `arc-f126768-fix` | architect (update) | keputusan nilai aksesibilitas fixture di bawah `.stacklyInspector` (bukti probe, rekomendasi relay di `FixtureAppearance.swift`), `StaleNote` kapital (0012), `bundledTool` `stackly-cli` (0068), penanda usulan 0015 di 0068 | `ui-macos.md` | `index.md`, `rationale.md`, `verify.md` spec 0012, 0067, 0068; probe sementara tanpa commit | `claude/ecstatic-volhard-38870f` (kartu `task_0293af01`) | `opus-5-5 · xhigh` | `merged` (`e0408db`) |
 | `dbg-f13-stall` | debugger, pemilik pengganti test skeleton | jeda sekitar 22 detik di run penuh StacklyUI yang menggagalkan `ShellEndToEndTests.theShellWaitsForStacklydThenConnectsByItself` dan `aProcessThatOutlivesItsLimitIsKilledAndReportedAsTimedOut` (`SkeletonEndToEndTests.swift:271`) | `ui-macos.md`, `01-foundation.md` | `ShellEndToEndTests.swift`, `SkeletonEndToEndTests.swift`, file test penahan (fitur lain lewat lead dulu), helper `Support/` dengan tenggat responsif, baris `verify.md` 0013 | `claude/loving-varahamihira-0153ba` (kartu `task_d66ffff7`) | `opus-5-5 · xhigh` | `merged` (`fda8275a`) |
 | `dev-f68-k15` | developer | K15: relay `fixtureAccessibility` di `.stacklyInspector`, test penjaga tiga tempat, pemeriksaan pasangan HC di `assertSnapshot`, `StaleNote` kapital, rekaman ulang 23 PNG Catalog | `ui-macos.md` | `FixtureAppearance.swift`, `StacklyInspector.swift`, `StaleNote.swift`, `Support/Snapshot/`, `RenderProbeTests`, `SnapshotHelperTests`, `ViewStateTests`, PNG yang bergeser, centang `verify.md` 0012 dan 0068 | `claude/sharp-banach-564a8b` (kartu `task_d8301510`) | `sonnet-5-5 · high` | `merged` (`582afd51`) |
-| `dbg-f67-inspector` | debugger | (1) relay HC hilang di `GeometryReader` di bawah `.stacklyInspector` (hapus relay `// provisional: F67` di `InstancesPage.swift`), (2) ikon `ActionButton` putih di atas putih di slot `InspectorHeader` | `ui-macos.md` | `Components/Inspector/`, file `ActionButton`, `FixtureAppearance.swift`, baris provisional `InstancesPage.swift`, `RenderProbeTests`, test komponen, PNG yang bergeser, baris `verify.md` 0067 dan 0068 | `claude/upbeat-noyce-8399d1` (dimulai user) | `opus-5-5 · xhigh` | bagian 1 `merged` (`61d4e0ac`); bagian 2 `aktif` |
+| `dbg-f67-inspector` | debugger | (1) relay HC hilang di `GeometryReader` di bawah `.stacklyInspector` (hapus relay `// provisional: F67` di `InstancesPage.swift`), (2) ikon `ActionButton` putih di atas putih di slot `InspectorHeader` | `ui-macos.md` | `Components/Inspector/`, file `ActionButton`, `FixtureAppearance.swift`, baris provisional `InstancesPage.swift`, `RenderProbeTests`, test komponen, PNG yang bergeser, baris `verify.md` 0067 dan 0068 | `claude/upbeat-noyce-8399d1` (dimulai user) | `opus-5-5 · xhigh` | `merged` (bagian 1 `61d4e0ac`, bagian 2 `ace13361`) |
 
 ## Sub sesi wave `5`
 
@@ -180,6 +180,8 @@
 
 | `2026-10-22` | `dbg-f13-stall` selesai (`0cad9a1`, `a41650b`, `0dce6ef`, `06542be`, `c2505b6`, `d6aefba`): `SourceTree` dan `SourceFile` `nonisolated`, ketiga suite aturan sumber `@Suite(.serialized) nonisolated struct`, `ConfirmationPresentationTests.settle` dengan `ResponsiveTimer`, tiga test regresi. Bukti debugger: 56 dari 56 contoh terlarang dari 13 aturan tetap tertangkap, komponen duplikat sementara tetap menggagalkan kontrak, test regresi gagal saat fix dikembalikan, 3 run penuh 874 test lulus dengan separuh test selesai 6,4 sampai 7,0 s (sebelumnya 14 sampai 61 s), sample main thread tanpa frame scan, tanpa `@unchecked Sendable` baru dan tanpa perubahan produksi. Gerbang lead setelah `git merge main` (`2a066217`) di load 25 sampai 49: StacklyUI penuh 1121 test di 107 suite lulus, 23 known issue test helper, nol "Time limit was exceeded", `theShellWaits…` 12,6 s dan `aProcessThatOutlives…` 5,2 s, lint dan `evidence check` lulus. Merge `fda8275a`. Aturan "korban stall diulang sendiri" di gerbang lead lain tidak diperlukan lagi. | `lead` |
 
+| `2026-10-22` | `dbg-f67-inspector` bagian 2 (`5d12cb22`, `85da6489`, `9ce8e2f9`, `e99c6061`, `47ac008f`): split view `.inspector` mengusulkan 0 × 0 ke halaman, jadi halaman dengan teks yang membungkus diukur ribuan poin tinggi (Catalog dengan panel NATS panjang menjadi split view 1492 pt, kolom inspector tidak bisa scroll); perbaikan frame 0 sampai tak hingga pada isi utama di `StacklyInspectorModifier`, test `InspectorTests.pageTakesTheSizeTheColumnOffers`. Test penjaga kini empat posisi (ScrollView dan GeometryReader, inspector terbuka dan tertutup). `.frame(minWidth: 384)` provisional di `RuntimesPage.swift` dihapus tanpa referensi runtimes bergeser. 35 PNG kolom inspector direkam ulang. Gerbang lead di atas `main` (`1b35c0e7`): lint, `build-app`, `evidence check` lulus; run penuh pertama dihentikan SIGTERM dari luar (sesi lead scope 02 yang membersihkan proses; lead scope 02 lalu melarang `pkill` dan `killall` berdasarkan nama di semua sesi nya), run kedua 1122 test dengan satu kegagalan di luar perubahan ini: `overview-operations-failed` hc-dark hanya spinner "Needs Attention" (Overview tidak memakai inspector, suite lulus 3 dari 3 sendiri). Merge `ace13361`, pembekuan file F67 dicabut. Akar flake: `DelayedProgress` di `StateView` menampilkan spinner lewat task walau `loadingDelay` nol, melanggar aturan spec 0068 (spinner di frame pertama); perbaikan kecil F12 menyusul. Pertanyaan ke lead scope 02: apakah "Needs Attention" seharusnya berputar terus saat operasi gagal dimuat (keputusan spec 0022). Sisa untuk F18: `RuntimesPage.minimumWidth` dan `#expect(... == 384)` tidak dipakai lagi. | `lead` |
+
 ## Blocker terbuka
 
 - (selesai) Test flaky `SkeletonEndToEndTests.theInstanceStoreFollowsChangesAnotherClientMakes` diperbaiki `dbg-f14-trail` (`edd197d`).
@@ -191,7 +193,8 @@
 - (selesai) Graph dokumen wave 3 sampai 5 diperbarui (lihat Keputusan).
 - (selesai) `arc-f126768-fix` di-merge `e0408db`.
 - (selesai) Kotak build K15 di F68 dan cek Inspector demo di `docs/manual.md` I.2: disetujui user dan diterapkan.
-- `dbg-f67-inspector` bagian 2 (berjalan): test penjaga inspector tertutup, ukuran minimum lebar 0, hapus `minWidth` provisional di `RuntimesPage.swift`; pembekuan file F67 tetap.
+- (selesai) `dbg-f67-inspector` bagian 2: `ace13361`, pembekuan dicabut.
+- `DelayedProgress` (F12) dengan `loadingDelay` nol belum menggambar spinner di frame pertama (flake `overview-operations-failed`): perbaikan kecil F12, belum diarahkan.
 - Teks spec 0067 baris 518, 0068 baris 264, dan `design.md` masih menyebut relay "on content before .inspector" dan belum memuat baris "Not vibrant" untuk kolom inspector: diarahkan ke architect setelah bagian 2, bersama token tint pilihan (F12).
 - Token tint pilihan (F12) dan penggantian `ProviderCard.swift:53` (`// provisional: F12`): belum diarahkan.
 - (selesai) Perbaikan kode K15 dan `StaleNote`: `582afd51`.
