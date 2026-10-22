@@ -20,6 +20,25 @@ public struct InstanceActionContext {
     }
 }
 
+extension InstanceActionContext {
+    /// The context of a page: the card goes to the window's feedback center and Show
+    /// Operations to the navigator, each only when the window has one.
+    ///
+    /// - Parameters:
+    ///   - feedbackCenter: The window's feedback center, or `nil`.
+    ///   - navigator: The window's navigator, or `nil`.
+    public static func make(feedbackCenter: FeedbackCenter?, navigator: ShellNavigator?)
+        -> InstanceActionContext
+    {
+        var showOperations: (@MainActor () -> Void)?
+        if let navigator {
+            showOperations = { navigator.show(.operations) }
+        }
+        return InstanceActionContext(
+            report: { feedbackCenter?.show($0) }, showOperations: showOperations)
+    }
+}
+
 /// Start, Stop, and Retry for instances (spec 0022, *Aksi instance*): one per
 /// ``DaemonModel``, so a click survives a change of page.
 ///

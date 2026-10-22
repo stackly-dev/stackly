@@ -668,7 +668,7 @@ Where Stackly puts its items. The order of the system items (About, Services, Hi
 | File | New Instance… ⌘N (planned, spec 0020), then the system Close ⌘W. `CommandGroup(replacing: .newItem)` removes New Window |
 | Edit | the system items, then Find ▸ Find… ⌘F. `CommandGroup(replacing: .textEditing)` removes the Spelling and Grammar, Substitutions, Transformations, and Speech submenus |
 | View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; Back, Show or Hide Inspector, and Sort Instances By follow with the Instances page |
-| Instance | Open, Start, Stop, Restart, Reload, Copy Connection String, Duplicate…, Remove… (planned; `CommandMenu("Instance")` appears between View and Window with the first built row) |
+| Instance | Start ⌘R and Stop ⇧⌘R (built, spec 0022); Open, Restart, Reload, Copy Connection String, Duplicate…, and Remove… are planned. `CommandMenu("Instance")` sits between View and Window |
 | Window | the system items, then Stackly ⌘0 (the shortcut sits on the main `Window` scene) and, in Debug, Design Gallery |
 | Help | the system search field; Welcome to Stackly (planned, spec 0016) and Stackly Help ⌘? (planned, feature 66). `CommandGroup(replacing: .help)` removes the item that opens nothing |
 
@@ -685,10 +685,10 @@ An item is never hidden because of state: one that does not apply is disabled. A
 | `find` | Edit ▸ Find | 1 | Find… | ⌘F | page (all) | 69 | built |
 | `showOverview` to `showDiagnostics` | View | 1 | Overview, Instances, Environments, Catalog, Runtimes, Operations, Diagnostics | ⌘1 to ⌘7 | shell | 69 | built |
 | `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | planned |
-| `toggleInspector` | View | 3 | Show Inspector or Hide Inspector | ⌥⌘I | page (Instances) | 22 | planned |
-| `sortInstancesBy…` and `sortInstancesAscending`, `sortInstancesDescending` | View ▸ Sort Instances By | 1 and 2 | Name, Provider, Version, Endpoints, Status, then Ascending, Descending | | page (Instances) | 22 | planned |
+| `toggleInspector` | View | 3 | Show Inspector or Hide Inspector | ⌥⌘I | page (Instances) | 22 | built |
+| `sortInstancesBy…` and `sortInstancesAscending`, `sortInstancesDescending` | View ▸ Sort Instances By | 1 and 2 | Name, Provider, Version, Endpoints, Status, then Ascending, Descending | | page (Instances) | 22 | built |
 | `openInstance` | Instance | 1 | Open | ⌘O | page (Instances) | 21 | planned |
-| `startInstance`, `stopInstance` | Instance | 2 | Start, Stop | ⌘R, ⇧⌘R | page (Instances) | 22 | planned |
+| `startInstance`, `stopInstance` | Instance | 2 | Start, Stop | ⌘R, ⇧⌘R | page (Instances) | 22 | built |
 | `restartInstance`, `reloadInstance` | Instance | 2 | Restart, Reload | ⌥⌘R, none | page (Instances) | 26 | planned |
 | `copyConnectionString` | Instance | 3 | Copy Connection String | ⇧⌘C | page (Instances) | 21 | planned |
 | `duplicateInstance` | Instance | 4 | Duplicate… | ⌘D | page (Instances) | 24 | planned |

@@ -58,6 +58,23 @@ public struct StacklyCommands: Commands {
             CommandItem(.showRuntimes, context: context)
             CommandItem(.showOperations, context: context)
             CommandItem(.showDiagnostics, context: context)
+            GroupDivider(.view, before: 3)
+            CommandItem(.toggleInspector, context: context)
+            Menu("Sort Instances By") {
+                CommandItem(.sortInstancesByName, context: context)
+                CommandItem(.sortInstancesByProvider, context: context)
+                CommandItem(.sortInstancesByVersion, context: context)
+                CommandItem(.sortInstancesByEndpoints, context: context)
+                CommandItem(.sortInstancesByStatus, context: context)
+                Divider()
+                CommandItem(.sortInstancesAscending, context: context)
+                CommandItem(.sortInstancesDescending, context: context)
+            }
+        }
+        CommandMenu("Instance") {
+            GroupDivider(.instance, before: 2)
+            CommandItem(.startInstance, context: context)
+            CommandItem(.stopInstance, context: context)
         }
         // Replaced so the Stackly Help item that opens nothing goes away; the search field
         // stays. Welcome to Stackly joins with spec 0016.

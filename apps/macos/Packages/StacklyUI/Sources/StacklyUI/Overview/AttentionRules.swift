@@ -41,6 +41,24 @@ nonisolated public enum AttentionRules {
         return items.sorted(by: ordered)
     }
 
+    /// The banner the inspector shows for an instance: the item of rules I1 to I4, the
+    /// problems a person can fix, or `nil` for an instance whose item comes from another
+    /// rule or who has none.
+    ///
+    /// - Parameters:
+    ///   - instance: The instance.
+    ///   - now: The clock.
+    ///   - locale: The locale of the texts.
+    ///   - timeZone: The time zone of the texts.
+    public static func banner(
+        for instance: InstanceSummary, now: Date, locale: Locale, timeZone: TimeZone
+    ) -> AttentionItem? {
+        guard let item = instanceItem(instance, now: now, locale: locale, timeZone: timeZone),
+            ["I1", "I2", "I3", "I4"].contains(item.rule)
+        else { return nil }
+        return item
+    }
+
     // MARK: - Order
 
     private static func toneRank(_ tone: Tone) -> Int {
