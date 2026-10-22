@@ -13,8 +13,10 @@ public enum FrameError: Error, Hashable, Sendable {
 /// It refuses a header that announces 0 or more than the limit as soon as the
 /// header is complete, before any payload byte is kept for it, and keeps
 /// refusing after that. Frames before the refused header can still be taken.
-/// The caller takes every complete frame before it pushes more, so the buffer
-/// never holds more than one frame plus one read chunk.
+/// A new limit applies to every header not handed out yet, including those of
+/// the chunk that carried the handshake reply (spec 0013 AC-3). The caller
+/// takes every complete frame before it pushes more, so the buffer never holds
+/// more than one frame plus one read chunk.
 public struct FrameDecoder: Sendable {
     /// The length of a frame header, in bytes.
     public static let headerLength = 4
@@ -40,11 +42,24 @@ public struct FrameDecoder: Sendable {
         self.maxLength = maxLength
     }
 
-    /// Changes the limit, after the handshake gave the daemon's.
+    /// Changes the limit, after the handshake gave the daemon's, and checks
+    /// again every header not handed out yet against it. A header the new
+    /// limit refuses shows in ``refusal`` and makes the next ``push(_:)``
+    /// throw; one only the old limit refused is accepted now.
     ///
     /// - Parameter maxLength: The new largest payload accepted.
     public mutating func setMaxLength(_ maxLength: UInt32) {
         self.maxLength = maxLength
+        // Every frame before `start` was handed out, so a refusal is never
+        // before it: checking from `start` on decides every header again.
+        checked = start
+        failure = nil
+        checkHeaders()
+    }
+
+    /// The refused header, after which nothing more is accepted, or `nil`.
+    public var refusal: FrameError? {
+        failure
     }
 
     /// Bytes received and not yet handed out. Above 0 between frames means a
@@ -67,11 +82,18 @@ public struct FrameDecoder: Sendable {
         }
         buffer.append(contentsOf: bytes)
         peakBufferedCount = max(peakBufferedCount, buffer.count)
+        checkHeaders()
+        if let failure { throw failure }
+    }
+
+    /// Checks every complete header from `checked` on, and stops at the first
+    /// refused one.
+    private mutating func checkHeaders() {
         while checked + Self.headerLength <= buffer.count {
             let length = Self.readLength(buffer, at: checked)
             if let error = Self.check(UInt64(length), max: maxLength) {
                 failure = error
-                throw error
+                return
             }
             checked += Self.headerLength + Int(length)
         }

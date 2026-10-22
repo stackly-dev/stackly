@@ -77,11 +77,13 @@ struct OnboardingFlow: View {
             Spacer(minLength: Spacing.s12)
             if OnboardingFooter.showsBack(step: onboarding.step) {
                 Button(OnboardingCopy.back) { onboarding.back() }
+                    .accessibilityIdentifier(AccessibilityID.Onboarding.back)
             }
             Button(primaryLabel) { primaryAction() }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .focused($keyFocus, equals: .primary)
+                .accessibilityIdentifier(AccessibilityID.Onboarding.primary)
         }
         .padding(.horizontal, Spacing.pageHorizontal)
         .padding(.vertical, Spacing.s12)

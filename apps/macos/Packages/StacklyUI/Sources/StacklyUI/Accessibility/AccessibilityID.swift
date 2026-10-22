@@ -100,6 +100,19 @@ nonisolated public enum AccessibilityID {
         public static let list = "diff.list"
     }
 
+    /// The onboarding in the main window (spec 0016).
+    public enum Onboarding {
+        /// The step dot of the step counted `number` from 1, such as `onboarding.step.3`.
+        public static func step(_ number: Int) -> String {
+            "onboarding.step.\(number)"
+        }
+
+        /// The primary button of the footer.
+        public static let primary = "onboarding.primary"
+        /// The Back button of the footer.
+        public static let back = "onboarding.back"
+    }
+
     /// The copy button.
     public enum Copy {
         /// The copy button with the screen's key `key`. Set only when the screen gives

@@ -24,11 +24,16 @@ struct InstanceInspector: View {
             title: summary.name, subtitle: summary.displayName, tile: row.tile,
             status: row.appearance
         ) {
-            if isPrimary {
-                ActionButton(action, prominence: .primary, showsReason: true)
-            } else {
-                ActionButton(action, prominence: .secondary, showsReason: true)
+            Group {
+                if isPrimary {
+                    ActionButton(action, prominence: .primary, showsReason: true)
+                } else {
+                    ActionButton(action, prominence: .secondary, showsReason: true)
+                }
             }
+            .help(
+                CommandMap.helpText(
+                    for: InstanceDetailPage.command(of: action), title: action.title))
             ActionButton(open, prominence: .secondary, showsReason: false)
                 .help(CommandMap.helpText(for: .openInstance, title: open.title))
         }

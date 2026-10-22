@@ -319,6 +319,107 @@ struct ResourceStoreTests {
         #expect(sync.lastFrameAt == Date(timeIntervalSince1970: 5))
     }
 
+    @Test func aCaughtUpReloadsAStoreWhoseSnapshotFailedAndCountsTheRoundAfterIt() async throws {
+        script.failures = [.rejected(Self.error("resource.busy"))]
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let sync = ShellSync()
+        sync.register(store)
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { sync.isSettled }
+        #expect(store.error?.code == "resource.busy")
+        #expect(sync.completedRounds == 1)
+        script.holdNextFetch = true
+        sync.handle(.caughtUp)
+        // The round ends after the reload, not when the replay caught up.
+        #expect(sync.isSettled == false)
+        try await waitUntil { script.gate != nil }
+        #expect(sync.completedRounds == 1)
+        script.open()
+        try await waitUntil { sync.isSettled }
+        #expect(script.fetchCount == 2)
+        #expect(store.error == nil)
+        #expect(store.items["a"] != nil)
+        #expect(sync.completedRounds == 2)
+    }
+
+    @Test func aCaughtUpLeavesAHealthyStoreAlone() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let sync = ShellSync()
+        sync.register(store)
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { sync.isSettled }
+        sync.handle(.caughtUp)
+        #expect(sync.isSettled)
+        #expect(sync.completedRounds == 2)
+        #expect(script.fetchCount == 1)
+    }
+
+    @Test func aCaughtUpLeavesAnUnsupportedStoreAndAResnapshotThatWorksClearsIt() async throws {
+        script.failures = [.rejected(Self.error("request.unknown_method"))]
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let sync = ShellSync()
+        sync.register(store)
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { sync.isSettled }
+        #expect(store.unsupported)
+        // Only a new daemon run knows the method, and it always starts a resnapshot.
+        sync.handle(.caughtUp)
+        #expect(sync.isSettled)
+        #expect(sync.completedRounds == 2)
+        #expect(script.fetchCount == 1)
+        sync.handle(.resnapshot(.gap(.serverRestarted)))
+        try await waitUntil { sync.isSettled }
+        #expect(store.unsupported == false)
+        #expect(store.items["a"] != nil)
+        #expect(sync.completedRounds == 3)
+    }
+
+    @Test func aReloadThatFailsAgainEndsTheRoundAndWaitsForTheNextCaughtUp() async throws {
+        script.failures = [
+            .rejected(Self.error("resource.busy")), .rejected(Self.error("resource.busy")),
+        ]
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let sync = ShellSync()
+        sync.register(store)
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { sync.isSettled }
+        sync.handle(.caughtUp)
+        try await waitUntil { sync.isSettled }
+        #expect(sync.completedRounds == 2)
+        #expect(script.fetchCount == 2)
+        #expect(store.error?.code == "resource.busy")
+        sync.handle(.caughtUp)
+        try await waitUntil { sync.isSettled }
+        #expect(sync.completedRounds == 3)
+        #expect(script.fetchCount == 3)
+        #expect(store.error == nil)
+    }
+
+    @Test func aCaughtUpDoesNotStartASecondSnapshotOfARefreshingStore() async throws {
+        script.failures = [.rejected(Self.error("resource.busy"))]
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        let sync = ShellSync()
+        sync.register(store)
+        sync.handle(.resnapshot(.noCursor))
+        try await waitUntil { sync.isSettled }
+        script.holdNextFetch = true
+        let retry = Task { await store.refresh() }
+        try await waitUntil { script.gate != nil }
+        #expect(store.isRefreshing)
+        #expect(store.error != nil)
+        sync.handle(.caughtUp)
+        #expect(sync.completedRounds == 2)
+        script.open()
+        await retry.value
+        #expect(script.fetchCount == 2)
+        #expect(store.error == nil)
+    }
+
     @Test func shellSyncWithoutStoresSettlesAtOnce() {
         let sync = ShellSync()
         sync.handle(.resnapshot(.gap(.overflow)))

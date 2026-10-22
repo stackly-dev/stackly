@@ -150,8 +150,9 @@ extension DaemonLinkTests {
         await clock.waitForSleepers(1)
         clock.advance(by: .seconds(15))
         try await waitUntil { rejected.withLock { $0 } }
-        // Let the link take the rejection and go back to sleep.
-        try await Task.sleep(for: .milliseconds(300))
+        // The link took the rejection and went back to sleep for the next
+        // interval, not the call's 10 second limit.
+        await clock.waitForSleeper(dueIn: .seconds(15))
         clock.advance(by: .seconds(15))
         var seen: [ConnectionState] = []
         while let state = await states.next({ _ in true }) {

@@ -107,3 +107,35 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - AC-7 · `CatalogTrustContent.make`, `CatalogTrustStep` dan `CatalogTrustRow`; baris yang bergantung pada `runtimeInstallAvailable` (kalimat digest) menunggu fitur 18
 - AC-9 · bagian Catalog Trust `OnboardingCopy` dan test per nilai; pembacaan ulang seluruh copy terhadap AC-061 menunggu Milestone 4
 - AC-10 · label dan help toggle; snapshot langkah di jendela penuh dan evidence VoiceOver di Milestone 4
+
+## Milestone 4: jalan lengkap dan bukti manual
+
+### UI / manual
+
+_Langkah 8 spec 0016 (evidence manual, kind `native`, status awal `NOT_RUN`). Semuanya di bundle nyata dari `cargo xtask build-app --install` di `~/Applications`, dan hanya kamu yang menjalankannya. Sesi pembangun tidak menjalankan `--install` dan tidak menekan Turn On._
+
+- [ ] `NOT_RUN` Buka bundle dengan `-onboarding.finished NO` → lima langkah tampil; langkah 2 menampilkan state agent yang sebenarnya di Mac ini (biasanya "Background service is off", termasuk untuk bundle yang belum pernah didaftarkan) tanpa menekan Turn On; `stackly daemon status --json` sebelum dan sesudah jalan lengkap memberi blok `agent` yang sama; bila daemon berjalan, Storage menampilkan roots yang sama dengan `info.roots` di output itu, dan Catalog Trust menampilkan revision dan tanggal yang sama dengan `stackly provider list` → AC-3, AC-5, AC-6, AC-7
+- [ ] `NOT_RUN` Turn On dari onboarding, hanya setelah persetujuan user lewat lead (mendaftarkan agent sungguhan; dicatat bersama record AC-17 spec 0015, cabang A, B, atau C, dan tetap `BLOCKED` sampai ada signing identity, OQ-012, bila build ad hoc ditolak) → bila hasilnya `enabled`, kartu menampilkan progress dan "stacklyd is starting…" sampai daemon tersambung, tanpa menawarkan Start stacklyd → AC-5
+- [ ] `NOT_RUN` Command Line di akun ini: toggle Install lalu Install, `ls -l ~/.local/bin/stackly` menunjuk ke `…/Stackly.app/Contents/MacOS/stackly-cli`, `~/.local/bin/stackly --version` jalan, Remove, dan file shell tidak berubah (`stat` sebelum dan sesudah) → AC-8
+- [ ] `NOT_RUN` Keyboard saja dan VoiceOver dari langkah 1 sampai Get Started, lalu Escape dari langkah 3; light, dark, Increase Contrast, Reduce Transparency, dan jendela 900 × 600 → AC-10, AC-11
+- [ ] `NOT_RUN` Baca ulang semua copy terhadap AC-061: tidak ada janji sandbox, isolasi dari file user, "up to date", "latest", `/usr/local/bin`, atau "only while the app is open"; catat hasilnya → AC-9
+- [ ] `NOT_RUN` `cargo xtask ui-test --only OnboardingUITests` → lulus; test ini tetap `NOT_RUN` sampai kamu menyalakan Automation Mode (docs/manual.md bagian K): tanpa itu task berhenti dengan exit 2 dan tidak ada tes yang jalan. Target `StacklyAppUITests` terkompilasi (`xcodebuild build-for-testing`) → AC-1, AC-2, AC-3, AC-11
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingWalkTests` → test lulus: jalan lengkap dengan Continue, Not Now, Back, titik, dan Get Started, lalu Escape di setiap langkah, dengan view nyata di jendela, di atas `FakeBackgroundAgentController`, `CommandLineTool` di home sementara, dan `CountingLink`: log agent hanya `status` (dan setidaknya satu saat langkah 2 tampil), home sementara tidak berubah, link tidak mengirim satu pun call, record ditulis sekali, "Setup complete." hanya sesudah Get Started dan tidak sesudah Escape; menu Help dari shell dan saat onboarding tampil; folder `Onboarding/` tidak menyentuh `shell.section` atau `FileManager` → AC-3, AC-11
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → test lulus: setiap nilai sama dengan tabel *Copy*, tanpa frasa terlarang, tanpa jaringan, dan tidak ada kalimat di luar `OnboardingCopy.swift` → AC-4, AC-9
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "BackgroundAgentStepContentTests|CatalogTrustContentTests|CommandLineStepContentTests|StorageContentTests"` → test lulus: setiap tabel copy (*Kartu Background Agent*, *Baris Catalog Trust*, *Kontrol Command Line*, Storage) sama persis dengan spec → AC-5, AC-6, AC-7, AC-8, AC-9
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "OnboardingSnapshotTests|OnboardingAgentSnapshotTests|OnboardingCommandLineSnapshotTests|CatalogTrustSnapshotTests"` → test lulus terhadap PNG: satu per langkah (kelima langkah) dan satu matriks per tabel (kartu agent, baris catalog trust, kontrol Command Line), lima varian masing masing; varian Reduce Transparency sama dengan light karena onboarding tidak memakai material sistem → AC-5, AC-7, AC-8, AC-10
+- [ ] `xcodebuild build-for-testing -project apps/macos/Stackly.xcodeproj -scheme Stackly -configuration Debug -destination "platform=macOS,arch=arm64" -derivedDataPath target/xcode -only-testing StacklyAppUITests` → `TEST BUILD SUCCEEDED` dengan `OnboardingUITests` → AC-1, AC-2, AC-3, AC-11
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [ ] `cargo xtask build-app` → build sukses
+
+### Acceptance-criteria coverage
+
+- AC-3 · test jalan lengkap tanpa efek samping (Milestone 4), model dan Escape (Milestone 1); XCUITest Escape di langkah 3 `NOT_RUN` sampai Automation Mode
+- AC-5 · evidence Turn On sungguhan menunggu persetujuan user dan record AC-17 spec 0015
+- AC-8 · evidence di akun nyata menunggu langkah manual di atas
+- AC-9 · test copy dan pindaian sumber otomatis; baca ulang AC-061 manual
+- AC-10 · preview, snapshot, dan test unit; evidence keyboard dan VoiceOver manual
+- AC-11 · test unit dan jalan lengkap; XCUITest Get Started `NOT_RUN` sampai Automation Mode

@@ -169,13 +169,16 @@ struct DaemonConnectionTests {
 
     @Test func aTimeoutFailsOnlyThatCallAsOutcomeUnknown() async throws {
         let clock = ManualClock()
+        let slowTimedOut = DispatchSemaphore(value: 0)
         server.serve { session in
             try session.acceptHandshake()
-            let slow = try session.readRequest()
-            let fast = try session.readRequest()
-            try session.reply(to: fast, with: .eventsUnsubscribe)
-            // A late reply for the abandoned call is dropped quietly.
-            Thread.sleep(forTimeInterval: 0.2)
+            // Calls 1 and 2 may arrive in either order: tell them apart by their params.
+            let requests = [try session.readRequest(), try session.readRequest()]
+            let slow = try requests.named(Samples.unsubscribe(1))
+            try session.reply(to: requests.named(Samples.unsubscribe(2)), with: .eventsUnsubscribe)
+            // The reply for the abandoned call comes only after it timed out,
+            // and is dropped quietly.
+            try slowTimedOut.waitForTest("the slow call to time out")
             try session.reply(to: slow, with: .eventsUnsubscribe)
             let after = try session.readRequest()
             try session.reply(to: after, with: .eventsUnsubscribe)
@@ -190,35 +193,48 @@ struct DaemonConnectionTests {
         let timeout = ClientErrorCatalog.callTimeout(
             method: "events.unsubscribe", limit: .seconds(10))
         #expect(throws: ClientError.outcomeUnknown(timeout)) { try result.get() }
-        try await Task.sleep(for: .milliseconds(400))
+        slowTimedOut.signal()
+        // The late reply is read before this call's reply: had it closed the
+        // connection, this call would fail.
         #expect(try await connection.call(Samples.unsubscribe(3)) == .eventsUnsubscribe)
         await connection.close()
     }
 
     @Test func aCallCancelledBeforeItHasASlotIsNotSent() async throws {
+        let clock = ManualClock()
+        let firstRead = Mutex(false)
+        let secondEnded = DispatchSemaphore(value: 0)
+        let nothingElseSent = Mutex(false)
         server.serve { session in
             try session.acceptHandshake(limits: Samples.limits.withInFlight(1))
             let first = try session.readRequest()
-            Thread.sleep(forTimeInterval: 0.3)
+            firstRead.withLock { $0 = true }
+            try secondEnded.waitForTest("the second call to end")
             try session.reply(to: first, with: .eventsUnsubscribe)
+            // The next thing the client does is close: the cancelled call was never written.
+            let next = try session.readPayload()
+            nothingElseSent.withLock { $0 = next == nil }
         }
         let (connection, _) = try await open()
-        let first = Task { try await connection.call(Samples.unsubscribe(1)) }
-        try await Task.sleep(for: .milliseconds(50))
-        let second = Task { try await connection.call(Samples.unsubscribe(2)) }
-        try await Task.sleep(for: .milliseconds(50))
+        let options = CallOptions(timeout: .seconds(10), clock: clock)
+        let first = Task { try await connection.call(Samples.unsubscribe(1), options: options) }
+        try await waitUntil { firstRead.withLock { $0 } }
+        let second = Task { try await connection.call(Samples.unsubscribe(2), options: options) }
+        // Both time limits run: the second call waits for the slot the first holds.
+        await clock.waitForSleepers(2)
         second.cancel()
         let result = await second.result
         #expect(
             throws: ClientError.notSent(
-                ClientErrorCatalog.callTimeout(
-                    method: "events.unsubscribe", limit: ContractLimits.callTimeout))
+                ClientErrorCatalog.callTimeout(method: "events.unsubscribe", limit: .seconds(10)))
         ) {
             try result.get()
         }
+        secondEnded.signal()
         #expect(try await first.value == .eventsUnsubscribe)
-        #expect(server.bytesReceived > 0)
         await connection.close()
+        await server.waitForFinishedConnections(1)
+        #expect(nothingElseSent.withLock { $0 })
     }
 
     @Test func anErrorWithoutRequestIdAfterTheHandshakeFailsWaitingCalls() async throws {
@@ -266,9 +282,15 @@ struct DaemonConnectionTests {
 
     @Test func aReplyForAnUnknownRequestIdIsAProtocolViolation() async throws {
         server.serve { session in
-            try session.acceptHandshake()
-            Thread.sleep(forTimeInterval: 0.2)
-            try session.send(.response(Response(requestId: "not-asked", reply: .eventsUnsubscribe)))
+            let request = try session.readRequest()
+            // In the same read as the handshake reply, so it is handled before
+            // `open` gets the reply back.
+            try session.sendTogether([
+                .response(
+                    Response(
+                        requestId: request.requestId, reply: .daemonHandshake(Samples.accepted()))),
+                .response(Response(requestId: "not-asked", reply: .eventsUnsubscribe)),
+            ])
         }
         let (connection, _) = try await open()
         var reasons = connection.termination.makeAsyncIterator()
@@ -291,8 +313,6 @@ struct DaemonConnectionTests {
     @Test func aFrameAboveTheLimitClosesTheConnection() async throws {
         server.serve { session in
             try session.acceptHandshake(limits: Samples.limits.withFrameBytes(64))
-            // Later than the handshake reply, so the daemon's limit applies.
-            Thread.sleep(forTimeInterval: 0.2)
             try session.sendRaw([0x00, 0x00, 0x01, 0x00])
         }
         let (connection, _) = try await open()
@@ -333,6 +353,28 @@ struct DaemonConnectionTests {
             #expect(event.sequence == 2)
         } else {
             Issue.record("the second frame is not an event")
+        }
+    }
+}
+
+extension [Request] {
+    /// The request that carries `call`, so a script does not depend on the
+    /// order calls started at the same time arrive in.
+    func named(_ call: Call) throws -> Request {
+        guard let request = first(where: { $0.call == call }) else {
+            throw FakeServerError.unexpected("no request for \(call.methodName) with those params")
+        }
+        return request
+    }
+}
+
+extension DispatchSemaphore {
+    /// Blocks a fake server script until the test signals `what`. The bound
+    /// only keeps a failed test from leaving the script thread behind; it
+    /// orders nothing.
+    func waitForTest(_ what: String) throws {
+        guard wait(timeout: .now() + .seconds(30)) == .success else {
+            throw FakeServerError.unexpected("the test never signalled \(what)")
         }
     }
 }

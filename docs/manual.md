@@ -227,7 +227,14 @@ Untuk F67 (spec 0067 milestone 1 sampai 4: Tab, Space, fokus yang menahan umpan 
    - Inspector demo tanpa pilihan: `InspectorPlaceholder` dibaca sebagai satu kelompok (judul lalu pesan).
    - View log: setiap baris dibaca waktu, sumber, tingkat, lalu teks.
 4. VoiceOver di menu bar (F69): tekan ⌃F2, buka menu Stackly, File, Edit, View, dan Window; setiap item terbaca dengan judul, shortcut, dan "dimmed" saat nonaktif (misalnya ⌘1 sampai ⌘7 saat Design Gallery di depan).
-5. Matikan VoiceOver dan Keyboard navigation bila tadinya mati, lalu tutup app.
+5. Perintah halaman dan instance (F69 milestone 3, spec 0069 cek manual 1, 5, dan 6; AC-2, AC-4, AC-9, AC-10, AC-11, AC-12, AC-14, AC-15), dengan app yang tersambung ke daemon di root sementara hasil `skeleton_seed` (seperti bagian C), hanya keyboard:
+   - ⌘N, isi sheet, Return membuat instance. Lalu ⌘2, Tab ke tabel, panah memilih baris, ⇧⌘R menghentikan instance, ⌘R menjalankannya lagi, ⌘O membuka detail, ⇧⌘C menyalin connection string, ⌘[ kembali ke tabel, ⌥⌘I menyembunyikan dan menampilkan inspector.
+   - View › Sort Instances By menandai kolom dan arah yang aktif.
+   - Saat sheet New Instance terbuka, ⌘1 dan ⌘R tidak melakukan apa pun.
+6. Find (F69, AC-10): ⌘F memfokuskan field pencarian di Instances dan Catalog; Find nonaktif di Overview, saat halaman detail terbuka, dan di halaman tanpa pencarian; ⌘F saat field sudah fokus tidak mengubah teksnya.
+7. Probe P4 sampai P7 di app Stackly (spec 0069, AC-2, AC-3): shortcut tidak melakukan apa pun saat sheet atau sheet `NSAlert` terbuka di jendela utama (P4); `.searchFocused` memfokuskan field pencarian di toolbar (P5); ⌘R, ⇧⌘R, ⌥⌘R, ⌘O, ⌘D, ⌘1, dan ⌘[ di field pencarian sampai ke menu tanpa mengubah teks (P6); menu dan penjaga `run` tetap benar saat state berubah tepat di sekitar tombol ditekan (P7).
+8. VoiceOver (⌃F2) di menu Instance, View, dan Edit: setiap item terbaca dengan judul, shortcut, dan "dimmed"; ⌘F di Instances dan Catalog diumumkan; tombol Start, Stop, dan inspector membacakan tooltip nya beserta shortcut (AC-14, AC-15).
+9. Matikan VoiceOver dan Keyboard navigation bila tadinya mati, lalu tutup app.
 
 **Yang dikirim:** versi macOS, plus nomor dan yang terlihat untuk setiap butir yang tidak sesuai, atau "semua sesuai".
 
