@@ -17,6 +17,25 @@ extension SnapshotTests {
 
         private static let size = SnapshotSize.fitting(width: 600, narrowWidth: 560)
 
+        private static var isPrimed = false
+
+        /// Renders the sheet once and keeps nothing. The first sheet a process draws looks
+        /// different from every later one (its first control shows a focus mark), and the
+        /// tests of a suite run in any order, so the one that goes first would differ from its
+        /// reference. Priming makes every test see the later look, alone or in the full run.
+        @MainActor
+        private static func prime() async throws {
+            guard !isPrimed else { return }
+            isPrimed = true
+            let rig = CreateRig()
+            await rig.load()
+            rig.model.begin(software: "postgresql")
+            await settle("the primer form") { rig.model.currentPreflight != nil }
+            _ = try await render(
+                NewInstanceSheet(model: rig.model, initialDrafts: [:]), variant: .light,
+                size: Self.size)
+        }
+
         /// A rig opened on the first runtime and waiting for its first preflight.
         @MainActor
         private func rig(
@@ -24,6 +43,7 @@ extension SnapshotTests {
             software: String? = "postgresql",
             prepare: (CreateRig) -> Void = { _ in }
         ) async -> CreateRig {
+            try? await Self.prime()
             let rig = CreateRig(runtimes: runtimes)
             prepare(rig)
             await rig.load()
