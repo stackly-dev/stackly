@@ -61,6 +61,7 @@ async fn the_postgresql_endpoint_row_matches_the_table_against_real_listeners() 
     let Some(site) = Site::open(&ev, PG18) else {
         return;
     };
+    site.subject(&ev, PG18.version);
     let daemon = site.in_process(|_| {}).await;
     let api = site.api().await;
 
@@ -154,5 +155,7 @@ async fn the_postgresql_endpoint_row_matches_the_table_against_real_listeners() 
 
     drop(api);
     daemon.shutdown().await;
-    ev.pass();
+    ev.pass_with(
+        "on this Mac the endpoint.client row of PostgreSQL gave the table result for every listener kind: 127.0.0.1 error, 0.0.0.0, [::] dual stack and [::1] caution, TIME_WAIT on 127.0.0.1 and [::1], an open connection, and UDP ok, and TIME_WAIT next to a dual stack listener caution",
+    );
 }
