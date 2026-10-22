@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 11:47`
+- **Diperbarui:** `2026-10-22 11:51`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -77,7 +77,7 @@
 | `chk-f23-m2` (sesi F23 dipakai ulang) | `checker (verify)` | 23 · verify milestone 2 | `02-instalasi-pertama.md` | bagian Milestone 2 `verify.md` 0023 | `claude/dev-f23-m1-762e0f` | `sonnet-5-5 · high` | PASS tanpa commit; sesi lalu `arc-f23-update` |
 | `dev-f21-m1` (sesi arc-f21 dipakai ulang) | `developer` | 21 · Connection and data size in core (spec 0021 milestone 1, langkah 2 sampai 5) | `02-instalasi-pertama.md` | paket `providers/postgresql/` dan `providers/fake/`, catalog revision 5, `crates/platform/src/fs.rs`, `crates/platform-macos/src/fs.rs`, `crates/testkit/src/fake_fs.rs`; setelah F20 M2: `crates/core/src/instance/connection.rs`, `compose` di `crates/protocol/src/instance/`, fixture `connection-compose.json`, `crates/core/src/instance/detail.rs` | `claude/arc-f21-update-cc228d` | `sonnet-5-5 · high` | `aktif` |
 | `arc-f23-update` (sesi F23 dipakai ulang) | `architect (update)` | 23 · tiga fakta startup NATS 2.15.1 dan endpoint `Auto` AC-8 | `02-instalasi-pertama.md` | `docs/specs/0023-provider-nats-manifest/` | `claude/dev-f23-m1-762e0f` | `opus-5-5 · xhigh` | spec di-commit `73322b32`; menunggu persetujuan user untuk AC-4, AC-8, dan AC-15 baru |
-| `chk-f20-m2` (sesi F20 dipakai ulang) | `checker (verify)` | 20 · verify milestone 2 | `02-instalasi-pertama.md` | bagian Milestone 2 `verify.md` 0020 | `claude/dev-f20-m1-ed6675` | `sonnet-5-5 · high` | `aktif` |
+| `chk-f20-m2` (sesi F20 dipakai ulang) | `checker (verify)` | 20 · verify milestone 2 | `02-instalasi-pertama.md` | bagian Milestone 2 `verify.md` 0020 | `claude/dev-f20-m1-ed6675` | `sonnet-5-5 · high` | PASS (`ee2c7d2d`, `04fe60c5` → `d1dc0397`); sesi idle |
 | `chk-f15-m3` (sesi F15 dipakai ulang) | `checker (verify)` | 15 · verify milestone 3 | `02-instalasi-pertama.md` | bagian Milestone 3 `verify.md` 0015 | `claude/arc-f15-update-92bf17` | `sonnet-5-5 · high` | `aktif` |
 
 ## Keputusan
@@ -256,6 +256,7 @@
 | `2026-10-22` | `chk-f15-m3` dimulai di sesi F15 yang dipakai ulang. Run StacklyUI penuh yang tertunda untuk F15 milestone 3 sudah hijau di gate `aa9177c0`. XCUITest dan langkah dengan agent sungguhan dicatat `NOT_RUN` atau `BLOCKED`. | `lead` |
 | `2026-10-22` | Disk turun lagi ke 14 GiB (`chk-f15-m3` berhenti di batas 15 GiB sebelum build). `target/` dan `.build/` worktree F23, F19, dan F18 yang idle dihapus (jadi 23 GiB); lead scope 03 dan ui-macos ikut membersihkan worktree mereka yang sudah merge (sekitar 34 GiB bebas). `chk-f15-m3` dilanjutkan. | `lead` |
 | `2026-10-22` | K15 ui-macos masuk main (`582afd51`): relay kontras `.stacklyInspector`, cek identitas HC AC-5 0068, `StaleNote` huruf kapital, dan 23 PNG Catalog direkam ulang. `dev-f22-m3` diminta merge main, merekam ulang HC Instances, memastikan dengan `cmp` bahwa setiap pasangan HC berbeda, memakai `contrastInvariant` untuk `overview-loading` hanya bila isinya murni spinner sistem, memeriksa ulang ikon putih di inspector, dan memakai prompt terlihat "Search instances" bila spec 0022 meminta label VoiceOver itu. Baris verify spec 0017 "The development catalog last updated" (huruf kapital) masuk brief F17 milestone 4. Merge terpisah langkah 2 F21 ditunda sampai milestone 1 F21 lengkap, supaya tidak menambah satu gate penuh di load sekitar 60; `dev-f19-m3` tetap menunggu. | `lead` |
+| `2026-10-22` | `chk-f20-m2` PASS untuk AC-1, 2, 3, 7, 10, 11, 12, 13, 14, 16, 17, 18, 19, 21 (bagian check-deps), 24, dan test keamanan AC-26 (review fresh model menunggu Review it): workspace 3331/0, StacklyUI 875/876 dengan satu korban stall yang lulus sendiri, native PostgreSQL `init_that_finds_a_file` 17 dan 18 PASS, ukur preflight p95 13,9 ms dan create p95 24,3 ms di load 42. Langkah 52 gagal karena satu penanda `provisional: F20` tersisa di `apps/daemon/tests/nats/harness.rs` (`create_params`, port `Fixed`). Keputusan lead: penanda itu milik milestone endpoint `Auto` spec 0023, karena create penuh F20 pun belum bisa melayani NATS `Auto` sampai paket NATS 1.0.1 (temuan `arc-f23-update`). Langkah 52 dicentang dengan catatan (`04fe60c5`); milestone `Auto` F23 menghapus penanda itu. Di-merge `d1dc0397`, F20 milestone 2 dicentang (`436ba35a`), dan Pointer F20 ditambah path kontrak, daemon, dan CLI. | `lead` |
 
 ## Blocker terbuka
 
