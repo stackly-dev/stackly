@@ -97,6 +97,19 @@
                     subject: check.subject, suggestedPort: nil, error: nil)
             }, fields: [], command: ready.command)
 
+        /// The replies a scenario gives to the create methods: the form, a ready preflight, and
+        /// the references Copy from offers.
+        public static let replies: [String: FixtureReply] = [
+            "instance.get_create_form": .reply(.instanceGetCreateForm(database)),
+            "instance.preflight": .reply(.instancePreflight(ready)),
+            "secret.list": .reply(
+                .secretList(
+                    ListSecretsReply(
+                        items: secrets,
+                        store: SecretStoreStatus(
+                            backend: .fake, state: .available, target: nil)))),
+        ]
+
         /// A reference of the Keychain that Copy from offers: the secret of an instance of
         /// the scenarios.
         public static let copyFromReference = "local:instance/\(instanceOne)/superuser-password"
