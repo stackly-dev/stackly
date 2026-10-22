@@ -128,3 +128,119 @@ nonisolated public enum OnboardingCopy {
     static let storageOverrideNote =
         "STACKLY_ROOT is set, so stacklyd keeps data, cache, and logs inside that folder."
 }
+
+// MARK: - Background Agent card (spec 0016, *Kartu Background Agent*)
+
+nonisolated extension OnboardingCopy {
+    /// The title of an enabled row.
+    static let agentAllowedTitle = "Allowed in Login Items"
+    /// The title of the row while the status is read.
+    static let agentCheckingTitle = "Checking the background service…"
+    /// The detail of the connected row.
+    static let agentConnectedDetail = "stacklyd starts when you log in."
+    /// The detail of the row while stacklyd starts.
+    static let agentStartingDetail = "stacklyd is starting…"
+    /// The title of the row when stacklyd is missing for 15 seconds or more.
+    static let agentNotRunningTitle = "Allowed, but stacklyd isn’t running"
+    /// The detail of that row.
+    static let agentNotRunningDetail =
+        "It was stopped or it exited. Start it again here, or run stackly daemon start in Terminal."
+    /// The detail of the row while the link connects.
+    static let agentConnectingDetail = "Connecting to stacklyd…"
+    /// The detail of an enabled row in any other presence.
+    static let agentCannotReachDetail =
+        "Stackly can’t reach stacklyd right now. Diagnostics has the details after setup."
+    /// The title of the row of an agent that is off.
+    static let agentOffTitle = "Background service is off"
+    /// The detail of that row.
+    static let agentOffDetail =
+        "Turn it on so stacklyd can run your instances, even when this window is closed. macOS may ask you to allow it."
+    /// The title of the row that waits for approval.
+    static let agentApprovalTitle = "Waiting for approval"
+    /// The detail of that row.
+    static let agentApprovalDetail =
+        "Turn on Stackly in System Settings > General > Login Items & Extensions. stacklyd can’t run until you do."
+    /// The title of the row of an agent the user turned off.
+    static let agentDisabledTitle = "Turned off in Login Items"
+    /// The detail of that row.
+    static let agentDisabledDetail =
+        "Turn on Stackly in System Settings > General > Login Items & Extensions to run stacklyd again."
+    /// The title of the row of a service macOS cannot find.
+    static let agentNotFoundTitle = "Stackly can’t find its background service"
+    /// The detail of that row.
+    static let agentNotFoundDetail =
+        "macOS couldn’t find stacklyd for this copy of Stackly. Move Stackly to the Applications folder, or install it again."
+    /// The title of the row of a build without stacklyd.
+    static let agentNoHelperTitle = "This build doesn’t include stacklyd"
+    /// The detail of that row.
+    static let agentNoHelperDetail =
+        "Start stacklyd yourself, or build the app with cargo xtask build-app."
+    /// The title of the row while `STACKLY_ROOT` is set.
+    static let agentRootOverrideTitle = "STACKLY_ROOT is set"
+    /// The detail of that row.
+    static let agentRootOverrideDetail =
+        "The background service only runs the default Stackly folder. Start stacklyd yourself for this folder."
+    /// The title of the row when the status cannot be read.
+    static let agentUnavailableTitle = "Stackly couldn’t check its background service"
+
+    /// The detail of that row.
+    ///
+    /// - Parameter detail: What the model knows, such as "timed out", or `nil`.
+    static func agentUnavailableDetail(_ detail: String?) -> String {
+        detail.map { "macOS didn’t answer (\($0)). Check again in a moment." }
+            ?? "macOS didn’t answer. Check again in a moment."
+    }
+
+    /// The reason the card action is disabled while an action runs.
+    static let working = "Working…"
+    /// The action that turns the agent on.
+    static let actionTurnOn = "Turn On"
+    /// The action that opens Login Items.
+    static let actionOpenSettings = "Open System Settings…"
+    /// The action that starts stacklyd.
+    static let actionStart = "Start stacklyd"
+    /// The action that reads the status again.
+    static let actionCheckAgain = "Check Again"
+}
+
+// MARK: - Command Line step (spec 0016, *Kontrol Command Line*)
+
+nonisolated extension OnboardingCopy {
+    /// The row title of the Command Line step.
+    static let commandLineRowTitle = "Install stackly in ~/.local/bin"
+    /// The detail while nothing is installed.
+    static let commandLineNotInstalled =
+        "No password needed. Stackly doesn’t change your PATH or shell files."
+    /// The detail while the link points to this copy.
+    static let commandLineInstalled = "~/.local/bin/stackly points to this copy of Stackly."
+    /// The detail while the link points to another copy.
+    static let commandLineStale = "~/.local/bin/stackly points to another copy of Stackly."
+    /// The detail while the link points to a copy that is gone.
+    static let commandLineBroken =
+        "~/.local/bin/stackly points to a copy of Stackly that’s gone."
+    /// The detail, and the reason the toggle is off, while something else is there.
+    static let commandLineConflict =
+        "~/.local/bin/stackly already exists and wasn’t made by Stackly. Stackly won’t change it."
+    /// The title of the Repair button.
+    static let commandLineRepair = "Repair…"
+    /// What introduces the PATH line.
+    static let commandLinePathNote =
+        "If Terminal can’t find stackly, add this line to your shell profile:"
+    /// The line to add to a shell profile.
+    static let commandLinePathLine = #"export PATH="$HOME/.local/bin:$PATH""#
+    /// What the Copy button of the PATH line names.
+    static let commandLinePathWhat = "PATH line"
+    /// What VoiceOver says after the PATH line is copied.
+    static let copied = "Copied."
+    /// What introduces the path of the command inside the app.
+    static let commandLineRunDirectly = "Or run it directly:"
+    /// The VoiceOver label of the example block.
+    static let commandExamplesLabel = "Example commands"
+    /// The commands of the example block; commands of later features join with them
+    /// (spec 0016, *Fitur yang belum ada*).
+    static let commandExamples = ["stackly daemon status", "stackly provider list"]
+    /// The example block as it shows: one command per line, each after `$ `.
+    static var commandExamplesText: String {
+        commandExamples.map { "$ " + $0 }.joined(separator: "\n")
+    }
+}

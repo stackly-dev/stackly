@@ -132,7 +132,10 @@ struct OnboardingCopyTests {
     @Test func theFolderHasNoWayToAMutationOrACommandOfTheShell() throws {
         for file in try Self.onboardingFiles() {
             let code = file.codeLines.joined(separator: "\n")
-            for token in ["MutationPath", "publishesCommands", "idempotencyKey", "ProcessInfo"] {
+            for token in [
+                "MutationPath", "publishesCommands", "idempotencyKey", "ProcessInfo",
+                ".register(", ".unregister(", ".relaunch(",
+            ] {
                 #expect(code.contains(token) == false, "\(file.path) uses \(token)")
             }
         }

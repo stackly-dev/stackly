@@ -26,6 +26,8 @@ extension SnapshotTests {
             runtime.onboarding.go(to: step)
             try await assertSnapshot(
                 OnboardingFlow(onboarding: runtime.onboarding, appIcon: Self.icon)
+                    .environment(\.fixtureNow, FixtureClock.now)
+                    .environment(\.loadingDelay, .seconds(3600))
                     .environment(model)
                     .environment(runtime.commandLineTool),
                 named: name, size: .fitting(width: 1280, narrowWidth: 900))
@@ -38,6 +40,24 @@ extension SnapshotTests {
             ))
         func welcomeStep() async throws {
             try await check(.welcome, named: "onboarding-welcome")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-014", "NFR-012"],
+                expected: "The Background Agent step of a fresh install renders in every variant"
+            ))
+        func agentStep() async throws {
+            try await check(.backgroundAgent, named: "onboarding-agent")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-032", "NFR-012"],
+                expected: "The Command Line step of a fresh install renders in every variant"
+            ))
+        func commandLineStep() async throws {
+            try await check(.commandLine, named: "onboarding-command-line")
         }
 
         @Test(

@@ -46,3 +46,39 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - AC-10 · titik langkah, fokus judul, pengumuman langkah, Escape, dan ukuran minimum; pengumuman `not_found` dan aturan fokus aksi kartu di Milestone 2; evidence keyboard dan VoiceOver di Milestone 4
 - AC-11 · Get Started dan umpan balik "Setup complete."
 - AC-5, AC-7, AC-8 · belum, milik Milestone 2 dan 3
+
+## Milestone 2: langkah Background Agent dan Command Line
+
+### UI / manual
+
+- [ ] Bangun app (`cargo xtask build-app`), buka dengan `-onboarding.finished NO`, pindah ke langkah 2 tanpa menekan apa pun → kartu menampilkan state agent yang sebenarnya di Mac ini (biasanya "Background service is off" dengan tombol Turn On); `stackly daemon status --json` sebelum dan sesudah memberi blok `agent` yang sama → AC-3, AC-5
+- [ ] Di langkah 2 baca footer → tombol utama "Not Now" selama state bukan `enabled`, "Continue" saat `enabled` → AC-2
+- [ ] Dengan daemon tersambung dan agent `enabled` → kartu "Allowed in Login Items", "stacklyd starts when you log in.", dan status daemon "stacklyd running" di bawahnya; tanpa tombol aksi → AC-5
+- [ ] Hentikan daemon (agent `enabled`) → kartu "stacklyd is starting…" dengan status "stacklyd unavailable"; tepat di detik ke 15 berganti ke "Allowed, but stacklyd isn’t running" dengan tombol Start stacklyd, tanpa menunggu polling → AC-5
+- [ ] Tekan Turn On hanya setelah persetujuan lewat lead (mendaftarkan agent sungguhan; dicatat bersama record AC-17 spec 0015) → progress dan "stacklyd is starting…" sampai daemon tersambung, tanpa tombol Start stacklyd; hasil `requires_approval` menampilkan "Waiting for approval" dengan Open System Settings… dan fokus keyboard kembali ke tombol itu → AC-5, AC-10
+- [ ] Di langkah 2 tanpa `STACKLY_ROOT` dan dengan `STACKLY_ROOT` → varian "STACKLY_ROOT is set" tanpa aksi pada yang kedua → AC-5
+- [ ] VoiceOver di langkah 2: masuk langkah hanya mengucapkan "Step 2 of 5, Background Agent."; perubahan state agent diumumkan sekali (oleh app, bukan dua kali); `not_found` saat daemon tidak ada diumumkan sekali dengan "Stackly can’t find its background service." → AC-10
+- [ ] Langkah 5 (Command Line) pada akun ini: toggle "Install stackly in ~/.local/bin" mati dan detail "No password needed. Stackly doesn’t change your PATH or shell files."; menyalakan toggle membuka konfirmasi "Install the stackly command?" dan Cancel tidak mengubah apa pun (`ls -l ~/.local/bin/stackly` tetap tidak ada, toggle kembali mati) → AC-8
+- [ ] Ulangi dan tekan Install → `ls -l ~/.local/bin/stackly` menunjuk ke `…/Stackly.app/Contents/MacOS/stackly-cli`, `~/.local/bin/stackly --version` jalan, baris PATH `export PATH="$HOME/.local/bin:$PATH"` dengan tombol Copy ("Copied." terucap) dan "Or run it directly: …/Contents/MacOS/stackly-cli" tampil; matikan toggle dan Remove → link hilang, file shell tidak berubah (`stat` sebelum dan sesudah) → AC-8
+- [ ] Blok contoh di langkah 5 hanya berisi `stackly daemon status` dan `stackly provider list`, tanpa `/usr/local/bin` dan tanpa "Requires your password once" → AC-8, AC-9
+- [ ] Tekan Escape saat konfirmasi Command Line terbuka → hanya konfirmasi tertutup (Cancel); Escape berikutnya melewati onboarding → AC-3, AC-8
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter BackgroundAgentStepContentTests` → test lulus: setiap baris tabel *Kartu Background Agent* dengan jam yang disuntik (14 dan 15 detik), kedua kode koneksi, `ipc.call_timeout` dan `ipc.io_error`, `stopping`, `incompatible`, `untrusted`, `recovery`, `misconfigured` tanpa Start stacklyd, `unavailableDetail` nil dan ada, `isStarting` di 15 detik atau lebih tetap "stacklyd is starting…", `.refreshing(after:)` sebagai baris tersambung, `isWorking`, dan `lastError` → AC-5
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter BackgroundAgentFlowTests` → test lulus di atas `FakeBackgroundAgentController` dan `ManualSleep`: instalasi baru `not_registered` hanya memanggil `status`, Turn On memanggil `register` saja dan kartu menunggu daemon, `.daemonDidNotStart`, Turn On yang berakhir `requires_approval` atau `not_found`, state yang menjadi `enabled` di luar aksi, penantian yang berakhir saat `requires_approval`, Last error diumumkan `DaemonModel` sekali → AC-5, AC-10
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingAnnouncementsTests` → test lulus: tabel `agentNotFound` per presence dan per pasangan state, dan untuk setiap presence tepat satu dari onboarding dan `DaemonModel` yang mengumumkan `not_found` → AC-10
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CardFocusRuleTests` → test lulus: aturan fokus setelah aksi kartu (kembali ke aksi, ke tombol utama, tidak menarik fokus) → AC-10
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CommandLineStepContentTests` → test lulus: setiap baris tabel *Kontrol Command Line* untuk kelima status, `bundledTool` nil, `isWorking`, error, dan teks blok contoh → AC-8
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CommandLineFlowTests` → test lulus di home sementara: toggle lalu Cancel tidak menulis, Install membuat link, toggle mati lalu Remove, stale dan broken lewat Repair, conflict nonaktif dan file tidak tersentuh, error folder tidak aman tampil, `didBecomeActive()` membaca ulang status → AC-8
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "OnboardingSnapshotTests|OnboardingAgentSnapshotTests|OnboardingCommandLineSnapshotTests"` → test lulus terhadap PNG di `__Snapshots__` (langkah 2 dan 5 dan setiap baris kartu dan kontrol, lima varian) → AC-5, AC-8, AC-10
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [ ] `cargo xtask build-app` → build sukses
+
+### Acceptance-criteria coverage
+
+- AC-2 · label tombol utama `Not Now` dan `Continue` di langkah 2 dari `DaemonModel.agent?.assessment?.state`
+- AC-5 · kartu Background Agent, semua baris tabel, jadwal per detik, aksi hanya lewat `turnOn()`, `openLoginItems()`, `start()`, `refresh()`; bukti alur Turn On sungguhan menunggu persetujuan di Milestone 4
+- AC-8 · langkah Command Line dengan toggle berkonfirmasi, Repair, catatan PATH, baris "Or run it directly", dan blok contoh; evidence di akun nyata di Milestone 4
+- AC-10 · pengumuman `not_found` oleh `OnboardingFlow`, aturan fokus aksi kartu, dan Last error diumumkan `DaemonModel`; evidence keyboard dan VoiceOver penuh di Milestone 4
+- AC-7 · belum, milik Milestone 3
