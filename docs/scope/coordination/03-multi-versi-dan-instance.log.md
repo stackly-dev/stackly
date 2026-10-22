@@ -2,7 +2,7 @@
 
 - **Scope:** `docs/scope/03-multi-versi-dan-instance.md`
 - **Hash awal:** `4d5d177` · **Hash awal wave aktif:** `aa9177c0`
-- **Wave aktif:** `2`, mulai `2026-10-22` (wave 1 selesai)
+- **Wave aktif:** `2` selesai `2026-10-22`; wave `3` menunggu layar fase 02 (F20 dan F21 milestone 3), F69 milestone 3, dan F11 milestone Swift
 - **Diperbarui:** `2026-10-22 07:30`
 
 ## Sub sesi wave `1`
@@ -79,10 +79,11 @@
 
 ## Blocker terbuka
 
-- F24 milestone 3 (GUI duplicate) ← `02-instalasi-pertama.md`: F20 milestone 3 dan F21 milestone 3 (F22 milestone 3 sudah di `main`, `44f95915`; update spec 0021 untuk item More "Duplicate…" sudah masuk di `ca18158`); `ui-macos.md`: F69 milestone 3 dan F67; `01-foundation.md`: F11 milestone "Swift client and GUI secret flows".
+- F24 milestone 3 (GUI duplicate) ← `02-instalasi-pertama.md`: F20 milestone 3 (sheet New Instance) dan F21 milestone 3 (halaman detail dan menu More); `ui-macos.md`: F69 milestone 3 (perintah halaman dan instance); `01-foundation.md`: F11 milestone "Swift client and GUI secret flows" (`SecretField`). Sudah di `main`: F22 milestone 3 (`44f95915`), F67 milestone 1 sampai 4, update spec 0021 (`ca18158`), kontrak duplicate (`3839b462`).
 - F24 milestone 4: bagian native sudah di `main` (`c38af4d7`, verify `7d1cee6c`); tinggal evidence manual JOURNEY-02 lewat GUI ← milestone 3 F24.
-- F25 milestone 4 (JOURNEY-03 manual di aplikasi) ← milestone 3 F25; `02-instalasi-pertama.md`: F18 milestone 4, F20 milestone 3, F21 milestone 3, F22 milestone 3; unduhan lewat Get hanya atas izin user.
+- F25 milestone 4 (JOURNEY-03 manual di aplikasi) ← `02-instalasi-pertama.md`: F20 milestone 3 dan F21 milestone 3 (F18 milestone 4 `4c7bb053` dan F22 milestone 3 sudah di `main`); unduhan lewat Get hanya atas izin user, selain itu cache root dev diisi dari cache xtask.
 - `Verify it` dan `Test it` fitur 24 dan 25 ← `Build it` masing masing.
+- Update spec kecil untuk wave berikutnya (lead, `architect (update)` sebelum verify penuh): spec 0025 *Lingkungan test native* menyebut `CatalogOverride::Preloaded(Catalog::for_tests(..))` dan folder pin 0700 yang dipakai `dev-f25-m3`; spec 0024 *Critical test scenarios* atau *Consequences* menyebut preflight `ready: false` untuk sumber berpaket NATS 1.0.0 setelah F20 milestone 5 (`7cd4d1a9`).
 - Sesi dan branch yang tidak di-merge: `local_13ef30aa` (duplikat `dev-f24-m1`, branch `claude/mystifying-rosalind-5cf45e` dengan `dff1410` dan edit belum di-commit) dicatat `tidak di-merge`; keputusan arsip atau hapus ke user saat penutupan.
 
 ## Dicentang pada wave ini
@@ -101,5 +102,7 @@
 - `25` · milestone `PostgreSQL 17 and 18 side by side on this Mac` · laporan `dev-f25-m3` STATUS done (`49ec191f`, `4014947a`, `29f303d8`) dan `chk-f25-m3` STATUS done (PASS 8 dari 8: journey 32,1 detik, penolakan 33,7 detik, jalur `BLOCKED` dengan `HOME` kosong, dua record `cargo xtask evidence run --kind native` PASS dengan subject 17.11 dan 18.6, test lama `mismatch` dan `same_runtime` tetap lulus) · `claude/objective-wiles-3dc614` → `f106a254`, `claude/arc-f24-spec-b9ee1e` → `99381df3` · gate di `main`: tanpa penanda konflik, fmt, clippy workspace, `cargo test -p stacklyd --test postgresql` (38 ignored, kompilasi bersih), check-deps, `evidence check`; `graphify update .` · Pointer code in `apps/daemon/tests/postgresql/side_by_side.rs`, `apps/daemon/tests/postgresql/harness.rs` · commit `docs(scope): tick 25 milestone PostgreSQL 17 and 18 side by side`
 
 ## Riwayat wave
+
+- Wave `2` (`2026-10-22`, hash awal `e4e6d0b5`, akhir `ee145a9d`): selesai milestone 2 F24 (`3839b462`, protokol 1.13, verify `608aa023`), bagian native milestone 4 F24 (`c38af4d7`, verify `7d1cee6c`; kotak menunggu evidence GUI), milestone 3 F25 (`f106a254`, verify `99381df3`), dan penandaan usulan spec 0021 (`8031d01`). Run native PostgreSQL atas izin user lulus seluruhnya (tiga test spec 0024, dua test spec 0025, record native PASS). Terbuka: milestone 3 dan evidence GUI milestone 4 F24, milestone 4 F25, `Verify it` dan `Test it` keduanya, semuanya terblokir layar fase 02 dan foundation (lihat Blocker terbuka). Usulan wave 3: `dev-f24-m3` begitu F20 milestone 3, F21 milestone 3, F69 milestone 3, dan F11 milestone Swift masuk `main`; update spec kecil 0024 dan 0025 bisa diambil kapan saja sebagai pengisi slot.
 
 - Wave `1` (`2026-10-22`, hash awal `4d5d177`, akhir `168d250`): selesai spec 0024 (`002c9fe`) dan 0025 (`0afcd9b`) dengan Pointer dan milestone di scope, dua update spec additive (`975b349`, `f977abd`), milestone 1 F24 (`910f4ec`, verify `bda462a`), milestone 1 dan 2 F25 (`adac984`); fitur 24 dan 25 `in-progress`. Terbuka: milestone 2 sampai 4 F24, milestone 3 dan 4 F25, `Verify it` dan `Test it` keduanya, semuanya terblokir build fase 02 (lihat Blocker terbuka). Tidak ada kotak di file scope lain yang terbuka karena merge wave ini. Usulan wave 2: `dev-f24-m2` (langkah 3 sampai 5 spec 0024) begitu F20 milestone 2 masuk `main`, lalu checker-nya; sisanya menunggu blocker. Hash awal wave 2 = `168d250` atau commit log berikutnya.
