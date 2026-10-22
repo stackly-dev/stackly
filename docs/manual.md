@@ -21,7 +21,7 @@ Kamu boleh mengerjakannya kapan saja dan tidak harus sekaligus. Setiap bagian be
 | [H. Folder temp setelah beberapa hari idle](#h-folder-temp-setelah-beberapa-hari-idle) | F6 (sudah done) | beberapa hari menunggu | opsional |
 | [T. JOURNEY-03: PostgreSQL 17 dan 18 di aplikasi](#t-journey-03-postgresql-17-dan-18-di-aplikasi-fitur-25) | F25 milestone 4, AC-10 di [scope/03-multi-versi-dan-instance.md](scope/03-multi-versi-dan-instance.md) | 30 menit | wajib untuk F25 |
 | [L. F15 Background agent dan install CLI](#l-f15-background-agent-dan-install-cli) | F15 milestone 1 dan 3 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 40 menit, butuh persetujuanmu untuk agent dan `~/Applications` | wajib untuk F15 |
-| [M. F16 Onboarding](#m-f16-onboarding) | F16 milestone 1 sampai 3 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 45 menit, sesudah L | wajib untuk F16 |
+| [M. F16 Onboarding](#m-f16-onboarding) | F16 milestone 1 sampai 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 60 menit, sesudah L | wajib untuk F16 |
 | [N. F17 Catalog dan provider detail](#n-f17-catalog-dan-provider-detail) | F17 milestone 3 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 30 menit | wajib untuk F17 |
 | [O. F18 Install runtime managed](#o-f18-install-runtime-managed) | F18 milestone 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 35 menit, memakai jaringan atau cache xtask | wajib untuk F18 |
 | [P. F20 Create instance](#p-f20-create-instance) | F20 milestone 3 dan 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 35 menit, sesudah O | wajib untuk F20 |
@@ -319,7 +319,7 @@ export R="$(mktemp -d /tmp/stk-s02.XXXXXX)"; APP=target/app/Debug/Stackly.app/Co
 
 ## M. F16 Onboarding
 
-Untuk F16 (spec 0016) milestone 1 sampai 3 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md). Sumber: `docs/specs/0016-onboarding/verify.md`. Milestone 4 belum ada di verify.md dan ditambahkan nanti. Pakai *Persiapan bersama L sampai S* di bagian L. Onboarding dibuka dengan argumen launch `-onboarding.finished NO`:
+Untuk F16 (spec 0016) milestone 1 sampai 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md). Sumber: `docs/specs/0016-onboarding/verify.md`. Milestone 4 (bundle nyata dari `--install`) ada di akhir bagian ini. Pakai *Persiapan bersama L sampai S* di bagian L. Onboarding dibuka dengan argumen launch `-onboarding.finished NO`:
 
 ```bash
 STACKLY_ROOT="$R" $APP/Stackly -onboarding.finished NO
@@ -364,9 +364,18 @@ Keyboard navigation dan VoiceOver menyala seperti F dan J; Increase Contrast dan
 2. Arahkan pointer ke toggle dan baca dengan VoiceOver: help dan label "The official catalog is always on."; toggle tidak bisa diubah (`docs/specs/0016-onboarding/verify.md:91`).
 3. Hentikan daemon, lalu jalankan dengan catalog pengembangan: `cargo xtask catalog build --out "$R/catalog"`, kemudian `STACKLY_ROOT="$R" STACKLY_CATALOG_DIR="$R/catalog" target/debug/stacklyd`. Label "development", detail menyebut `STACKLY_CATALOG_DIR` dan bahwa itu bukan catalog official, toggle "The development catalog is always on." (`docs/specs/0016-onboarding/verify.md:92`).
 4. Buka langkah 4 saat daemon belum berjalan: label "Catalog", detail "Stackly shows where its catalog comes from once stacklyd is running.", tanpa toggle. Nyalakan daemon: baris berubah menjadi "official" tanpa pindah langkah (`docs/specs/0016-onboarding/verify.md:93`).
-5. Baca seluruh teks langkah 4 terhadap AC-061: tidak ada baris community, tidak ada "Signed manifests", tidak ada kalimat tentang catalog terbaru atau up to date, tidak ada kalimat digest (`docs/specs/0016-onboarding/verify.md:94`).
+Pembacaan teks langkah 4 terhadap AC-061 (`docs/specs/0016-onboarding/verify.md:94`) sudah dicentang Claude; kamu mengulangnya di bundle nyata pada Milestone 4 langkah 5.
 
-**Yang dikirim:** versi macOS, dan per milestone nomor serta apa yang terlihat untuk setiap langkah yang tidak sesuai, atau "semua sesuai"; tulis "dilewati" untuk langkah agent yang tidak bisa kamu capai.
+**Milestone 4: jalan lengkap dan bukti manual** (`docs/specs/0016-onboarding/verify.md:117` sampai `:122`). Semuanya di bundle nyata dari `cargo xtask build-app --install` di `~/Applications` (lihat L langkah 1 untuk bundle dan keadaan awal `~`), dan hanya kamu yang menjalankannya; sesi pembangun tidak menjalankan `--install` dan tidak menekan Turn On. Buka bundle itu dengan `~/Applications/Stackly.app/Contents/MacOS/Stackly -onboarding.finished NO`. Perintah CLI di bawah memakai `~/Applications/Stackly.app/Contents/MacOS/stackly-cli`.
+
+1. Lima langkah tampil; langkah 2 menampilkan state agent yang sebenarnya di Mac ini (biasanya "Background service is off", termasuk untuk bundle yang belum pernah didaftarkan) tanpa menekan Turn On. `stackly-cli daemon status --json` sebelum dan sesudah jalan lengkap memberi blok `agent` yang sama. Bila daemon berjalan, Storage menampilkan roots yang sama dengan `info.roots` di keluaran itu, dan Catalog Trust menampilkan revision dan tanggal yang sama dengan `stackly-cli provider list` (`docs/specs/0016-onboarding/verify.md:117`).
+2. Turn On dari onboarding, hanya setelah kamu menyetujuinya (mendaftarkan agent sungguhan; verify.md menulis "persetujuan user lewat lead", dicatat bersama record AC-17 spec 0015, cabang A, B, atau C). Langkah ini tetap `BLOCKED` sampai ada signing identity (OQ-012) bila build ad hoc ditolak; tulis apa yang macOS lakukan. Bila hasilnya `enabled`, kartu menampilkan progress dan "stacklyd is starting…" sampai daemon tersambung, tanpa menawarkan Start stacklyd (`docs/specs/0016-onboarding/verify.md:118`).
+3. Command Line di akun ini: toggle Install lalu Install, `ls -l ~/.local/bin/stackly` menunjuk ke `…/Stackly.app/Contents/MacOS/stackly-cli`, `~/.local/bin/stackly --version` jalan, Remove, dan file shell tidak berubah (`stat -f '%N %m' ~/.zshrc ~/.zprofile ~/.zshenv ~/.bash_profile` sebelum dan sesudah) (`docs/specs/0016-onboarding/verify.md:119`).
+4. Keyboard saja dan VoiceOver dari langkah 1 sampai Get Started, lalu Escape dari langkah 3; light, dark, Increase Contrast, Reduce Transparency, dan jendela 900 × 600 pt (`docs/specs/0016-onboarding/verify.md:120`).
+5. Baca ulang semua copy terhadap AC-061: tidak ada janji sandbox, isolasi dari file user, "up to date", "latest", `/usr/local/bin`, atau "only while the app is open"; catat hasilnya (`docs/specs/0016-onboarding/verify.md:121`).
+6. `cargo xtask ui-test --only OnboardingUITests` harus lulus. Test ini tetap `NOT_RUN` sampai kamu menyalakan Automation Mode (bagian K): tanpa itu task berhenti dengan exit 2 dan tidak ada tes yang jalan. Target `StacklyAppUITests` sudah terkompilasi (`docs/specs/0016-onboarding/verify.md:122`).
+
+**Yang dikirim:** versi macOS, dan per milestone nomor serta apa yang terlihat untuk setiap langkah yang tidak sesuai, atau "semua sesuai"; tulis "dilewati" untuk langkah agent yang tidak bisa kamu capai. Untuk Milestone 4 langkah 2: hasil Turn On atau "BLOCKED" dengan alasannya; untuk langkah 6: exit code dan nama test yang gagal bila ada.
 
 ## N. F17 Catalog dan provider detail
 
