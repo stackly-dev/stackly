@@ -490,7 +490,9 @@ Cross check `Another model` (Sonnet, baca saja, 2026-10-22). Putusan: keempat bu
 
 Alternatif yang lebih sederhana dari cross check, tidak diambil di update ini dan dikirim ke lead sebagai pilihan: flag di `DaemonModel` (misalnya `windowBannerHidden`, diisi `ShellRuntime` dari `onboarding.isPresented`), sehingga `DaemonModel` mengumumkan `not_found` saat baris agent banner nil atau banner tersembunyi, dan onboarding tidak mengumumkan state agent sama sekali. Itu menghapus `OnboardingAnnouncements`, celah waktu render, test XOR, dan pengecualian AC-10, dan murah selama langkah 12a belum dibangun. Tidak diambil karena mengubah lagi spec 0015 dan 0013 (di luar izin brief update ini) dan membalik runner up lama ("`DaemonModel` tidak tahu onboarding menutupi banner"); lead dan pemilik spec 0015 yang memutuskan.
 
-### Perubahan teks AC (menunggu persetujuan user lewat lead)
+### Perubahan teks AC (disetujui user 2026-10-22)
+
+Kedua perubahan di bawah disetujui user langsung di sesi update ini ("lakukan", 2026-10-22), setelah lead menerima spec nya atas aturan delegasi.
 
 - **AC-5**: progress penantian juga berakhir saat state yang dibaca menjadi `requires_approval`, `disabled`, `not_registered`, atau `not_found`, tanpa Last error, dan `unavailable` tidak mengakhiri nya (butir 3).
 - **AC-10**: kegagalan aksi agent (teks Last error) masuk daftar yang diumumkan announcer `DaemonModel` (butir 2), dan pengecualian `not_found` menjadi bersyarat: onboarding mengumumkan judul baris banner agent nya ("Stackly can’t find its background service.") di langkah mana pun selagi onboarding tampil, hanya saat banner jendela yang tersembunyi akan menampilkan baris agent; di presence lain `DaemonModel` yang mengumumkan nya (butir 1 dan keputusan kecil pertama dan kedua).
