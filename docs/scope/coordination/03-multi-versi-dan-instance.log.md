@@ -1,8 +1,8 @@
 # Log koordinasi: `03-multi-versi-dan-instance`
 
 - **Scope:** `docs/scope/03-multi-versi-dan-instance.md`
-- **Hash awal:** `4d5d177` · **Hash awal wave aktif:** `4d5d177`
-- **Wave aktif:** `1` selesai `2026-10-22`; wave `2` menunggu F20 milestone 2
+- **Hash awal:** `4d5d177` · **Hash awal wave aktif:** `aa9177c0`
+- **Wave aktif:** `2`, mulai `2026-10-22` (wave 1 selesai)
 - **Diperbarui:** `2026-10-22 07:30`
 
 ## Sub sesi wave `1`
@@ -19,6 +19,12 @@
 | `dev-f25-m2` | `developer` | 25 · milestone 2 Installing a runtime leaves existing instances alone, on fixtures (spec 0025 langkah 5) | `03-multi-versi-dan-instance.md` | modul test baru di `apps/daemon/tests/runtime/` plus satu baris `#[path]` di `apps/daemon/tests/runtime.rs`, tambahan kecil additive di `runtime/support.rs`, `verify.md` 0025 Milestone 2 | `claude/recursing-shaw-3463e7` | `sonnet-5-5 · high` | `merged` (`414844e` lewat branch checker → `adac984`; sesi `local_48077849`) |
 | `chk-f25-m2` (sesi `chk-f24-m1` dipakai ulang: clear, judul baru, Sonnet high tetap) | `checker (verify)` | 25 · milestone 2 `verify.md` bagian Milestone 2 dari branch `claude/recursing-shaw-3463e7` | `03-multi-versi-dan-instance.md` | centang `docs/specs/0025-postgresql-17-18-berdampingan/verify.md` Milestone 2 | `claude/arc-f24-spec-b9ee1e` | `sonnet-5-5 · high` | `merged` (PASS semua langkah Milestone 2 plus probe sensitivitas; merge lokal `1b2cef1` → `adac984`; `local_547daa0c` dipakai ulang) |
 | `chk-f25-m1` (sesi checker yang sama dipakai ulang lagi) | `checker (verify)` | 25 · milestone 1 `verify.md` bagian Milestone 1 dari branch `claude/objective-wiles-3dc614`, plus gabungan add/add `verify.md` spec 0025 dengan bagian Milestone 2 | `03-multi-versi-dan-instance.md` | centang dan resolusi konflik `docs/specs/0025-postgresql-17-18-berdampingan/verify.md` | `claude/arc-f24-spec-b9ee1e` | `sonnet-5-5 · high` | `merged` (PASS Milestone 1 plus tiga probe sensitivitas, resolusi add/add `verify.md` di `6ac3836` → `adac984`; `local_547daa0c` dipakai ulang) |
+
+## Sub sesi wave `2`
+
+| Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `dev-f24-m2` | `developer` | 24 · milestone 2 Contract, daemon, CLI, and fixture proof (spec 0024 langkah 3 sampai 5) | `03-multi-versi-dan-instance.md` | `crates/protocol/` (DTO duplicate, `methods!`, versi 1.13), `protocols/fixtures/`, `protocols/contract-versions.json`, hasil codegen, test kontrak Swift, `fuzz/seeds/`; handler baru `apps/daemon/src/ipc/instance/`, `apps/daemon/tests/supervisor/support.rs` (additive), `same_runtime.rs`; `apps/cli/src/commands/instance/` (`duplicate`), golden CLI; `verify.md` 0024 Milestone 2 | `-` | `sonnet-5-5 · high` | `kartu` (`task_d3cbeaf9`) |
 
 ## Keputusan
 
@@ -54,10 +60,10 @@
 | `2026-10-22` | Akhir wave 1 (lead, pengganti `/sync` untuk rentang wave ini): baris Follow-up yang dijawab dicentang: spec 0011 "Fitur 24: duplicate memakai `generate` atau `copyFrom` …" (dijawab spec 0024 AC-5), spec 0024 "catat *Selisih mockup yang disengaja* …" (`2b1e4f3`), spec 0024 "Spec 0025: pakai *Helper sentinel* …" (spec 0025 `0afcd9b`). Baris multi fitur spec 0021 L767 dan spec 0069 L540 dibiarkan terbuka karena fitur lain di dalamnya belum dikerjakan. `AGENTS.md` tidak diubah: Follow-up `/sync` spec 0024 dan 0025 meminta pencatatan perintah setelah build fitur selesai, dan perintah baru wave ini (`cargo test -p stackly-core --test instance_duplicate`, `--test instance_rebind`, `cargo test -p stacklyd --test runtime`) mengikuti pola perintah per crate yang sudah ada. Graph dokumen untuk file wave ini menyusul di slot berikutnya. | `lead` |
 | `2026-10-22` | Graph dokumen (alur `/graphify . --update` dibatasi ke dokumen wave ini: spec 0024, 0025, catatan di 0004, 0009, 0010, 0011, 0019, scope 03, log) ditunda ke batas wave berikutnya atau penutupan, satu kali untuk semua dokumen Scope 03, karena butuh ekstraksi semantik dan lead lain sering menjalankan graphify di checkout yang sama; brief sub sesi wave 2 tetap memuat pointer lokasi spec secara langsung. Kode wave ini sudah masuk graph lewat `graphify update .` di tiap merge kode. Lead Scope 02 me-merge F19 evidence, F23 milestone 2 (NATS `[[provider]]`, catalog revision 4), dan F18 milestone 5 (`stackly_testkit::runtime_cache`, dipakai milestone 3 F25) di `81d49b1`. | `lead` |
 | `2026-10-22` | Lead Scope 02 menerapkan usulan spec 0024 untuk spec 0021 (item More "Duplicate…" sesudah Copy Connection String, satu bagian tanpa pemisah) di `70e580e` (merge `ca18158`, teks AC disetujui user mereka). Lead menandai blok usulan 0021 di spec 0024 "Diterapkan" dan mencentang Follow-up-nya; semua usulan spec 0024 untuk spec lain kini sudah diterapkan, jadi prasyarat "update spec 0021" milestone 3 F24 terpenuhi. | `lead` |
+| `2026-10-22` | Wave 2 mulai (hash awal `aa9177c0`): F20 milestone 2 masuk `main` (`aa9177c0`, protokol 1.12), jadi milestone 2 F24 SIAP. `dev-f24-m2` diajukan sebagai kartu `task_d3cbeaf9` (satu sesi untuk langkah 3, 4, 5). Urutan protokol disepakati dengan lead Scope 02: `dev-f24-m2` memakai 1.13 dan melapor ke lead sebelum commit kenaikan; bila F21 langkah 3 Scope 02 (`connection::compose`) mengubah digest dan masuk lebih dulu, `dev-f24-m2` naik ke 1.14; yang di-merge belakangan menaikkan ulang lewat `codegen --amend`. | `lead` |
 
 ## Blocker terbuka
 
-- F24 milestone 2 (kontrak, daemon, CLI, bukti fixture) ← `02-instalasi-pertama.md`: F20 milestone 2 (`dev-f20-m2`, protokol 1.12, sedang dibangun Scope 02); F22 milestone 2 sudah di `main` (`f24134f`).
 - F24 milestone 3 (GUI duplicate) ← `02-instalasi-pertama.md`: F20 milestone 3, F21 milestone 3, dan F22 milestone 3 (update spec 0021 untuk item More "Duplicate…" sudah masuk di `ca18158`); `ui-macos.md`: F69 milestone 3 dan F67; `01-foundation.md`: F11 milestone "Swift client and GUI secret flows".
 - F24 milestone 4 (PostgreSQL 17 native) ← milestone 2 F24; isi F19 milestone 3 (PostgreSQL 17 lewat daemon dan catalog) sudah di `main` (`dfc51c7`) walau kotaknya belum dicentang; hardware/akun: artefak PostgreSQL 17 di cache runtime xtask, run native dan sesi GUI atas izin user.
 - F25 milestone 3 (PostgreSQL 17 dan 18 native) ← milestone 4 F24 (langkah 8 dan 9 spec 0024); F18 milestone 3 dan F19 langkah 9 sudah di `main`; hardware/akun: kedua artefak PostgreSQL di cache xtask, run native atas izin user.
