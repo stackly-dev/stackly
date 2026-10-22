@@ -83,7 +83,7 @@ Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke st
 - [ ] Review it (fresh model): `/check review install runtime managed`
 - [ ] Document it: `/document install runtime managed`
 
-### 19. Provider PostgreSQL · in-progress
+### 19. Provider PostgreSQL · done
 
 Manifest dan adapter PostgreSQL resmi: `initdb` dari runtime yang cocok, auth lokal yang aman, locale dan encoding eksplisit, endpoint dan Unix socket per instance, readiness lewat query terautentikasi dengan role berhak minimum, dan shutdown terkontrol. Termasuk deteksi versi mayor data directory dan preflight kompatibilitas data dan runtime yang dipakai start, rebind, adoption, dan restore.
 

@@ -11,7 +11,9 @@ The native macOS GUI: the `Stackly` app target plus the local `StacklyUI` packag
 | `Stackly.xcodeproj` | App project, created once from the Xcode 27 macOS app template and committed |
 | `Stackly/` | App target, a synchronized folder |
 | `Packages/StacklyUI/` | Reusable views and screens, previewable without the app |
-| `Packages/StacklyUI/Sources/StacklyUI/Shell/` | Main window shell: `AppShell`, `LiveShell`, sidebar, footer, daemon banner, page chrome, close notice (spec 0013) |
+| `Packages/StacklyUI/Sources/StacklyUI/Shell/` | Main window shell: `MainWindowRoot` (window content: onboarding or `AppShell`), `AppShell`, sidebar, footer, daemon banner, page chrome, close notice (spec 0013) |
+| `Packages/StacklyUI/Sources/StacklyUI/Onboarding/` | First run onboarding: `OnboardingModel`, `OnboardingFlow`, the five steps, and every user facing string in `OnboardingCopy.swift` (spec 0016) |
+| `Packages/StacklyUI/Sources/StacklyUI/InstanceDetail/` | Instance detail page and Summary tab: `InstanceDetailModel`, `InstanceDetailService`, `ConnectionComposer`, `DetailFormat`, and the cards (spec 0021) |
 | `Packages/StacklyUI/Sources/StacklyUI/Connection/` | `DaemonModel`, `ResourceStore`, `ShellSync`, `ShellRuntime`, and `MutationPath`, the only way a screen reads or mutates (spec 0013) |
 | `Packages/StacklyUI/Sources/StacklyUI/Tokens/`, `Status/`, `State/`, `Confirmation/` | Design tokens, status labels, state patterns, and confirmations (spec 0012) |
 | `Packages/StacklyUI/Sources/StacklyUI/Components/` | Shared components for every screen: tile, key value, copy and console, actions and menus, feedback, sheet, checklist, staged progress, inspector, log, diff (spec 0067) |
