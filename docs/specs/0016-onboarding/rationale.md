@@ -356,7 +356,7 @@ Bentuk tampilan mengikuti mockup sejauh tidak bertentangan dengan dua hal di ata
 Cross check `Another model` (Fable 5.1, baca saja) pada draft 2026-10-20 menemukan satu blocker, 19 gap kelengkapan keputusan, dan 7 nit. Nit wording langsung diperbaiki (`76a45cf`). Lead menyetujui semua 20 rekomendasi atas nama user pada hari yang sama, dan semuanya diterapkan di spec ini:
 
 - Blocker: di bawah `STACKLY_ROOT`, secret ada di keychain file `R/data/keychain/` (spec 0011 AC-2), jadi Storage memakai subjudul dan nilai Secrets varian override.
-- Kartu Background Agent: `{detail}` dari `BackgroundAgentModel.unavailableDetail` (usulan ke spec 0015), `since` dari `ShellPresentation.status`, Start stacklyd hanya untuk `ipc.endpoint_missing` dan `ipc.connection_refused`, baris untuk presence lain dan `connecting`, `TimelineView` untuk ambang 15 detik, dan pengumuman state tetap milik `BackgroundAgentModel`.
+- Kartu Background Agent: `{detail}` dari `BackgroundAgentModel.unavailableDetail` (usulan ke spec 0015), `since` dari `ShellPresentation.status`, Start stacklyd hanya untuk `ipc.endpoint_missing` dan `ipc.connection_refused`, baris untuk presence lain dan `connecting`, `TimelineView` untuk ambang 15 detik, dan pengumuman state tetap milik `BackgroundAgentModel` (diganti 2026-10-22: milik announcer `DaemonModel`, lihat *Update 2026-10-22 dari spec 0015*).
 - Command Line: `CommandLineToolModel` bersama Diagnostics (usulan ke spec 0015), status menentukan baris dan CLI yang hilang dari bundle hanya menonaktifkan Install dan Repair.
 - Catalog Trust: label "Catalog" sebelum ada `CatalogInfo`, toggle hanya saat `info` ada, baris `info` menang atas error refresh, dan label untuk sumber `unrecognized`.
 - Fitur yang belum ada: "Verified runtimes" dan kalimat digest menunggu milestone 3 spec 0018; milestone 2 butuh langkah build 7 spec 0017.
@@ -386,3 +386,60 @@ Dari daftar `docs/scope/coordination/post-alignment/post-0016.md` (tidak ada kep
 - **Label baru.** "Copy PATH line" dan "Example commands" ditambah ke tabel *Copy* karena `CopyButton` dan `ConsoleBlock` butuh label VoiceOver dari layar.
 - **Item menu Help dan snapshot punya dua jalur.** Spec 0069 milestone 2 dan milestone 1 spec 0068 belum di `main`, jadi langkah 2 dan 7 menulis jalur untuk kedua urutan merge, seperti usulan spec 0069 dan aturan *Key invariants* spec 0068.
 - **Cross check (2026-10-21).** Cross check `Another model` (Sonnet 5.5) atas update ini dan perbaikannya diterima lead atas delegasi user (2026-10-21): `FeedbackCenter` dibuat `MainWindowRoot` kalau belum ada, teks `CopyButton` dari `OnboardingCopy` dengan gaya `.text`, `CardSection` tanpa judul untuk baris Storage dan Catalog Trust (D15), dan ukuran snapshot `.fitting(width: 1280, narrowWidth: 900)` serta identifier dan assertion XCUITest onboarding di langkah 7 (D10).
+
+## Update 2026-10-22 dari spec 0015
+
+Sumber nya dua baris spec 0016 di *Usulan update untuk spec lain* spec 0015 (`main`, merge `c27cca1`), ditambah hasil spike AC-21 di update spec 0015 tanggal 2026-10-21 (B1) dan update tanggal 2026-10-22 (nama file CLI di bundle, Follow-up spec 0013, dan update spec 0013 dan 0068). Spec ini diselaraskan dengan spec 0015, 0013, dan 0068 di `main` (`c27cca1`, `36bce94`). ID AC, ID keputusan, dan status `Proposed` tidak berubah. Tidak ada perubahan protokol atau Rust.
+
+| No | Sumber | Perubahan di spec ini |
+| --- | --- | --- |
+| 1 | nama file CLI di bundle, opsi B (dipilih user 2026-10-22) | setiap `Contents/MacOS/stackly` menjadi `Contents/MacOS/stackly-cli` (AC-8, *Kontrol Command Line*, *Value sourcing*, cek manual 3); perintah, nama link, dan teks yang menyebut `~/.local/bin/stackly` tetap |
+| 2 | G3 spec 0015 | `MainWindowRoot` memasang `.environment(runtime.commandLineTool)` di samping `.environment(runtime.model)`, untuk kedua urutan merge dengan langkah 12 spec 0015 |
+| 3 | G1 spec 0015 | pengumuman state agent milik announcer `DaemonModel` (AC-10 dan butir pengumuman di *Kartu Background Agent*) |
+| 4 | G2, G7, G9 spec 0015 (`isStarting`, `sawHandshake`, state menjadi `enabled` di luar aksi) | baris `enabled` kartu memakai `isStarting`; progress tampil selama penantian daemon (AC-5, tabel kartu, butir `isWorking`) |
+| 5 | B1 spec 0015 | `not_registered` untuk bundle yang belum pernah didaftarkan dan `not_found` hanya tepat setelah Turn On atau Start stacklyd, di tabel kartu, *Critical test scenarios*, dan cek manual 1; teks kartu tidak berubah, karena kartu mengikuti state |
+| 6 | pemilik model di spec 0013 dan 0015 | `BackgroundAgentModel` dimiliki `DaemonModel` (`DaemonModel.agent`), `CommandLineToolModel` dimiliki `ShellRuntime` (`ShellRuntime.commandLineTool`), keduanya opsional; `ShellRuntime.init(model:closeNotice:commandLineTool:onboardingStore:)` |
+
+### Keputusan kecil update ini
+
+Opsi rekomendasi diambil menurut aturan user; yang mengubah teks AC dikirim ke lead lebih dulu.
+
+- **Input kartu sama dengan banner.** `BackgroundAgentStepContent.make` menerima `AgentBanner.Input` dari `DaemonModel.agentBannerInput`, bukan enam parameter terpisah. Alasan: spec 0015 membuat satu properti itu supaya banner, `ConnectionHint`, dan predikat jadwal tidak pernah berbeda, dan kartu adalah tempat keempat yang membaca hal yang sama. Kode koneksi ikut pindah dari `DaemonModel.lastError?.code` ke `unreachableCode`, yang memang dibuat untuk itu. Runner up: hanya menambah parameter `isStarting`, yang lebih kecil tetapi membiarkan dua sumber kode koneksi.
+- **Jam kartu sama dengan banner.** `now` = `fixtureNow ?? context.date` dan jadwal `DaemonBanner.ticksEverySecond(_:now:)` spec 0013, menggantikan `TimelineView(.explicit([since + startGrace]))` dengan "jam yang disuntik" yang tidak punya nama. Alasan: runtime fixture spec 0068 memakai `FixtureClock` tetap, dan tanpa `fixtureNow` snapshot kartu di detik ke 14 akan memakai jam nyata. Runner up: `.explicit` dengan `fixtureNow`, yang lebih hemat render tetapi menjadi mekanisme kedua untuk ambang yang sama.
+- **`refreshing` tetap baris tersambung di kartu.** Banner membuka `.refreshing(after:)` supaya baris agent tetap tampil selama snapshot (aturan spec 0013 untuk banner). Kartu tidak, karena `refreshing` berarti daemon sudah menjawab handshake, dan progress penantian tetap tampil lewat `isWorking` sampai presence keluar dari `refreshing`. Runner up: membuka `refreshing` seperti banner, yang membuat kartu menulis "stacklyd is starting…" untuk daemon yang sudah menjawab.
+- **Kartu `not_found` mengumumkan dirinya.** Tabel *Pengumuman* spec 0015 tidak memberi `not_found` teks per state karena banner critical nya yang mengumumkan, tetapi banner jendela tidak tampil selama onboarding (AC-1). Tanpa pengecualian, Turn On yang berakhir `not_found` di onboarding tidak terdengar, dan fokus VoiceOver hilang karena tombol Turn On ikut hilang. Kartu critical mengumumkan judulnya sekali, mengikuti aturan banner critical spec 0012. Runner up: usul ke spec 0015 supaya `DaemonModel` mengumumkan nya, ditolak karena `DaemonModel` tidak tahu onboarding sedang menutupi banner.
+- **Kegagalan aksi agent diusulkan ke spec 0015, bukan diumumkan onboarding.** `lastError` setelah Turn On atau Start stacklyd tidak terdengar di mana pun hari ini, termasuk banner dan Diagnostics. Pemilik nya announcer `DaemonModel`, jadi spec ini mengusulkannya ke spec 0015 dan tidak menambah announcer kedua. Runner up: kartu onboarding mengumumkan `lastError` sendiri, yang akan terdengar dua kali begitu spec 0015 menambahkannya.
+- **Model dari environment sebagai opsional.** View onboarding membaca `DaemonModel` dan `CommandLineToolModel` dari environment seperti seksi Diagnostics spec 0015, dan tanpa model kartu atau baris CLI tidak tampil. Runner up: memberi `runtime` ke `OnboardingFlow` lewat init, yang memaksa preview dan test membuat runtime lengkap.
+- **"Or run it directly" dari `bundledTool`.** Path baris itu diambil dari `CommandLineToolModel.bundledTool`, bukan dari `Bundle.main.bundleURL` ditambah akhiran, dan baris itu hilang kalau `bundledTool` nil. Alasan: spec 0015 menjaga model di atas fake tidak pernah membaca `Bundle.main`, dan path yang ditampilkan harus file yang benar ada. Runner up: `Bundle.main` dengan akhiran `stackly-cli`, yang di runtime fixture menampilkan bundle Xcode yang sedang berjalan.
+- **Urutan parameter `ShellRuntime.init`.** `commandLineTool:` sebelum `onboardingStore:`, mana pun yang masuk lebih dulu, supaya pemanggil di kedua urutan merge tidak berubah dua kali.
+- **Larangan berjalan bersamaan diperluas.** Langkah 2 dan 3 tidak berjalan bersamaan dengan langkah 10 sampai 12 spec 0015 (sebelumnya 10 dan 12), karena langkah 11 juga mengubah `ShellBootstrap.fixture` dan `DaemonModel.swift`, dan langkah 12 menulis `LiveShell.swift`, yang dihapus langkah 2.
+
+### Cross check update ini
+
+Cross check `Another model` (Sonnet 5.5, baca saja, 2026-10-22). Putusan: kedua baris spec 0016 di tabel usulan spec 0015 sudah diterapkan penuh, dan tidak ada teks lama yang tertinggal di `index.md`. Tiga belas temuan, semuanya diisi dengan rekomendasi saya (aturan opsi rekomendasi; yang mengubah teks AC hanya penajaman pemicu pengumuman di AC-10, yang ikut dikirim ke lead):
+
+| No | Temuan | Yang diterapkan |
+| --- | --- | --- |
+| 1 | `make` tidak punya sumber tone footer dan `StatusLabel`; label critical "stacklyd unavailable" di bawah baris "stacklyd is starting…" | parameter `footer: StatusAppearance` dari `DaemonModel.presentation.footer`; label itu diterima apa adanya karena jujur |
+| 2 | mekanisme pengumuman kartu `not_found` tidak disebut, dan bisa memotong pengumuman langkah | `onChange(of: content.row)` tanpa `initial`, hanya saat berubah menjadi `not_found`; tidak saat langkah dibuka |
+| 3 | `lastError` tertinggal di samping daemon yang sudah tersambung | baris `enabled` tersambung tidak menampilkan `lastError`; Diagnostics tetap |
+| 4 | fokus keyboard hilang saat tombol aksi kartu hilang | `@FocusState` `cardAction` dan `primary` di `OnboardingFlow` |
+| 5 | langkah Command Line tanpa `isWorking`, modifier prompt, dan init `OnboardingFlow` | `make(...isWorking:)` dengan "Working…", `.stacklyConfirmation(item:)`, `OnboardingFlow(onboarding:)` |
+| 6 | snapshot per baris tabel tidak punya cara | view isi yang menerima nilai `make(...)` dan pembungkus tipis; snapshot per langkah lewat skenario `onboarding` |
+| 7 | nama presence di tabel kartu tidak dipetakan ke `ShellStatus`; `failureCode` nil; kunci `fixtureNow` | pemetaan case `ShellStatus`, nil masuk "presence lain", `@Environment(\.fixtureNow)` |
+| 8 | nilai fixture `bundledTool` berbeda dengan spec 0068 di `main` | Follow-up yang menunjuk baris 0068 di usulan spec 0015 |
+| 9 | Storage masih membaca `runtime.model` | `model?.lastDaemon?.info?.roots` dan `model?.rootOverrideActive ?? false` dari environment |
+| 10 | spec 0015 langkah 12 hanya menyebut `LiveShell` | butir (d) di baris usulan spec 0015 |
+| 11 | urutan baris selama penantian dan arti "tersambung" | butir `isWorking` mengikuti presence dan menyebut arti "sampai daemon tersambung" di AC-5 |
+| 12 | pengumuman `DaemonModel` saat banner tersembunyi; pergantian di detik ke 15 | diterima dan ditulis; pergantian di detik ke 15 tidak diumumkan |
+| 13 | catatan lama di rationale bagian *Cross check* | ditandai diganti |
+
+Yang tidak diambil: meminta spec 0015 memakai pemetaan `refreshing` milik kartu untuk banner (aturan banner milik spec 0013, dan risiko sisanya sudah dicatat di spec 0015), dan predikat "daemon tidak ada" bersama di `AgentBanner` (dua baris logika yang sama dengan banner, dijaga test per baris; kalau banner berubah, test kartu ikut gagal). Satu catatan soundness dijadikan usulan untuk spec 0015, butir (e): penantian daemon yang tetap berjalan saat assessment berubah dari `enabled` di tengah nya.
+
+### Perubahan teks AC (menunggu persetujuan user lewat lead)
+
+- **AC-5**: `isStarting` masuk daftar kombinasi, dan kalimat "Kartu berganti tepat di detik ke 15 tanpa menunggu polling" menjadi berlaku selama tidak `isStarting`, dengan kalimat baru untuk penantian daemon (G2, G7, G9).
+- **AC-8**: `Contents/MacOS/stackly` menjadi `Contents/MacOS/stackly-cli`, dan "path lengkap `stackly` di bundle" menjadi path lengkap CLI di bundle (opsi B nama file CLI).
+- **AC-10**: pengumuman state agent milik announcer `DaemonModel` (G1), dengan satu pengecualian untuk kartu `not_found`.
+
+AC lain tidak berubah. AC-2 tetap benar: label tombol utama tetap dari state assessment, hanya jalurnya sekarang `DaemonModel.agent`.
