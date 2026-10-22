@@ -1,6 +1,6 @@
 # 0020. Create instance
 
-**Date**: 2026-10-20 (update 2026-10-22: dry run `init_plan` tanpa port `Auto`, dari spec 0023, langkah 17)
+**Date**: 2026-10-20 (update 2026-10-22: dry run `init_plan` tanpa port `Auto`, dari spec 0023, langkah 17; update 2026-10-22: langkah `register` dalam satu transaksi registry, temuan milestone 4, langkah 19 dan 20)
 **Status**: In Progress
 
 ## Summary
@@ -49,7 +49,7 @@ Spec ini menetapkan cara pengguna membuat instance baru dari GUI dan CLI: memili
 
 ## Decision
 
-**Chosen option**: opsi yang direkomendasikan di setiap keputusan di [rationale.md](rationale.md), ditambah semua perbaikan cross check yang disetujui lead atas nama user (2026-10-20): dua method baca baru (`instance.get_create_form` dan `instance.preflight`) di atas satu evaluator core murni yang juga menjadi precheck `instance.create`, dengan IO dikumpulkan `gather` di luar gerbang `begin`; form bertipe dari settings schema dalam urutan deklarasi; revision catalog saat create yang di pin pada saat itu; port fixed yang konflik ditolak dengan saran yang hanya dipakai lewat aksi pengguna, dengan semua bind percobaan memakai `SO_REUSEADDR` seperti server, bind tepat di alamat endpoint sebagai error, dan bind wildcard keluarga yang sama serta loopback dan wildcard keluarga lain sebagai caution (diperbaiki 2026-10-22 supaya sisa `TIME_WAIT` dan koneksi yang masih terbuka tidak menjadi caution); create yang seluruhnya bisa dibalik, termasuk init yang gagal, dengan kompensator pendaftaran registry dan event `instance.removed`; `BusyPolicy::Reject` untuk create bernama sama; "Start after creating" sebagai rangkaian di client dengan key turunan; Start at login ditunda ke fitur 31; perintah setara dibangun satu fungsi di `stackly-protocol`; sheet yang tetap terbuka selama operasi; socket path yang dihitung saat dibaca dari template paket pinned; dan daftar Copy from di sheet yang dibaca dari `secret.list` spec 0011 dengan label nama instance, tanpa perubahan kontrak (update 2026-10-22, Keputusan 19).
+**Chosen option**: opsi yang direkomendasikan di setiap keputusan di [rationale.md](rationale.md), ditambah semua perbaikan cross check yang disetujui lead atas nama user (2026-10-20): dua method baca baru (`instance.get_create_form` dan `instance.preflight`) di atas satu evaluator core murni yang juga menjadi precheck `instance.create`, dengan IO dikumpulkan `gather` di luar gerbang `begin`; form bertipe dari settings schema dalam urutan deklarasi; revision catalog saat create yang di pin pada saat itu; port fixed yang konflik ditolak dengan saran yang hanya dipakai lewat aksi pengguna, dengan semua bind percobaan memakai `SO_REUSEADDR` seperti server, bind tepat di alamat endpoint sebagai error, dan bind wildcard keluarga yang sama serta loopback dan wildcard keluarga lain sebagai caution (diperbaiki 2026-10-22 supaya sisa `TIME_WAIT` dan koneksi yang masih terbuka tidak menjadi caution); create yang seluruhnya bisa dibalik, termasuk init yang gagal, dengan kompensator pendaftaran registry dan event `instance.removed`; `BusyPolicy::Reject` untuk create bernama sama; "Start after creating" sebagai rangkaian di client dengan key turunan; Start at login ditunda ke fitur 31; perintah setara dibangun satu fungsi di `stackly-protocol`; sheet yang tetap terbuka selama operasi; socket path yang dihitung saat dibaca dari template paket pinned; dan daftar Copy from di sheet yang dibaca dari `secret.list` spec 0011 dengan label nama instance, tanpa perubahan kontrak (update 2026-10-22, Keputusan 19); dan langkah `register` yang memeriksa ulang aturan registry dan menulis barisnya dalam satu transaksi registry lewat commit terjaga, tanpa `expected_generation` dan tanpa ulang, supaya create yang berjalan bersamaan tidak gagal karena tulisan operasi lain (update 2026-10-22, Keputusan 21).
 
 Daemon adalah satu satunya yang memvalidasi dan memutuskan; GUI dan CLI hanya mengirim draft dan menampilkan hasil evaluasi yang sama.
 
@@ -361,7 +361,7 @@ Untuk endpoint IP dengan port `Fixed` p di alamat A (`defaultHost`) dan transpor
 - `Denied` atau `Unavailable` di langkah 4 menjadi error `supervisor.endpoint_unavailable` (detail `endpoint`, `address`, `port`, `reason` `denied` atau `unavailable`), sama dengan tahap `endpoints` start (spec 0010, K2), karena server juga tidak akan bisa bind di alamat itu. Di langkah 5 dan 6 keduanya menjadi `caution` "couldn’t check this port", tidak pernah `ok`.
 - Langkah 4 sampai 6 hanya jalan kalau langkah 1 sampai 3 lolos. Pencarian saran (AC-5) memakai langkah 2 sampai 6 untuk setiap kandidat.
 - Endpoint `Auto` hanya menjalankan langkah 1 dan berstatus `ok` dengan keterangan bahwa port dipilih saat start; alokasi dan probe nya milik start (spec 0010).
-- Langkah `validate` menjalankan pemeriksaan yang sama; langkah `register` hanya mengulang langkah 2 dan 3 atas data registry yang dibaca bersama generation nya.
+- Langkah `validate` menjalankan pemeriksaan yang sama; langkah `register` hanya mengulang langkah 2 dan 3, atas data registry yang dibaca di dalam transaksi yang sama dengan tulisannya (*Commit terjaga di langkah `register`*) *(diubah 2026-10-22, Keputusan 21)*.
 
 *Hasil yang diharapkan* untuk endpoint TCP `127.0.0.1:p` (semantik bind BSD yang diamati di Mac ini dengan macOS 27 pada 2026-10-22: bind dengan `SO_REUSEADDR` gagal hanya saat socket lain yang belum terhubung memegang alamat yang persis sama, dan untuk bind `0.0.0.0` juga listener dual stack `[::]`; socket terhubung, termasuk sisa `TIME_WAIT`, tidak pernah membuatnya gagal):
 
@@ -398,7 +398,7 @@ Semua langkah `reversible: true`, jadi operasi ini tidak punya titik tak bisa di
 | `pin` | ya | untuk sumber catalog: `ensure_source` kalau sumber belum tercatat (K-2), lalu `pin_revision` (K-1); sumber `pinned` dilewati | `catalog.pin_failed` |
 | `secrets` | tidak | per secret field, berurutan: untuk sumber selain `bind`, `record_secret_intent(ref)`; lalu `SecretService::put(PutTarget::New { .., field: Some(FieldContext) }, input, Create, None, interaksi pemicu)` (untuk `Bind`, `put` hanya membaca sekali dan memeriksa aturan field, spec 0011 AC-23); untuk sumber selain `bind`, `confirm_created`. Kegagalan `put` dipetakan `classify_create_failure` | `secret.needs_secret` (item hanya untuk reference sumber), `secret.invalid_value`, `secret.conflict`, `secret.not_found`, `secret.store_locked`, `secret.store_access_denied`, `secret.store_busy`, `secret.store_*` lain |
 | `layout` | tidak | baca `Clock` sekali (`created_at`), `claim_resource`, `InstanceManifest::new`, `create_instance_layout(platform, prepared, manifest, known)`, `check_data_root_overlap`, pemeriksaan folder data (folder, bukan symlink, milik user, privat, nol entri), lalu `confirm_created`; `AlreadyExists` berarti `not_created(already_exists)`, isi tidak kosong setelah pembuatan berarti `not_created(data_not_empty)`, `ShortKeyTaken` berarti `not_created(short_key_taken)` | `instance.data_not_empty`, `instance.data_overlap`, `instance.short_key_taken`, `supervisor.data_unavailable` |
-| `register` | tidak | `record_custom_intent(instance_registration, <id>)`, lalu paling banyak lima kali: baca registry dan generation, periksa ulang semua aturan yang bersumber dari registry (AC-10), `ctx.commit(FinalBatch { expected_generation, ops: [InsertProviderRevision?, InsertInstance, InsertConfigRevision, ReplaceSecretUses] })`; `GenerationConflict` dan `DuplicateResource` provider revision diulang; sukses berarti `confirm_created` | `instance.name_taken`, `instance.capability_unsupported`, `supervisor.runtime_unavailable`, `supervisor.endpoint_conflict`, `registry.generation_conflict` setelah lima kali, kode registry lain |
+| `register` | tidak | `record_custom_intent(instance_registration, <id>)`, lalu satu `ctx.commit_guarded` (*Commit terjaga di langkah `register`*): di dalam satu transaksi registry, guard memeriksa ulang semua aturan yang bersumber dari registry (AC-10) lalu menulis `[InsertProviderRevision?, InsertInstance, InsertConfigRevision, ReplaceSecretUses]`, tanpa `expected_generation` dan tanpa ulang; sukses berarti `confirm_created` *(diubah 2026-10-22, langkah 20)* | `instance.name_taken`, `instance.capability_unsupported`, `instance.runtime_not_found`, `supervisor.runtime_unavailable`, `supervisor.endpoint_conflict`, `supervisor.data_unavailable` (baca registry gagal), kode registry lain |
 | `init` | tidak | `execute_init` spec 0010 dengan interaksi pemicu: lock instance, `resolve_for_start`, `init_begin`, langkah `InitPlan`, `init_succeeded`, manifest dengan `data.initializedAt` | `supervisor.init_failed` (dengan cuplikan), `supervisor.data_in_use`, `secret.*` dari `resolve_for_start`, `secret.delivery_rejected` |
 
 - `finalize` tidak menulis apa pun selain yang ditambahkan engine; `result.resources` berisi `Instance(id)`.
@@ -408,6 +408,69 @@ Semua langkah `reversible: true`, jadi operasi ini tidak punya titik tak bisa di
 - Kompensator `instance_tree` spec 0007 mengikuti urutan K10 (usulan spec 0007, dibangun langkah 3): pemeriksaan manifest (manifest operasi lain berarti `not_owned`, manifest yang tidak terbaca berarti `compensation_failed` detail `manifest_unreadable`), `symlink_metadata(InstancePaths.lock)` (tidak ada berarti bebas, probe dilewati), `probe_lock` (`Free` lanjut; `Held` atau state lain menjadi `compensation_failed` detail `instance_locked`; error probe menjadi `compensation_failed` detail `lock_probe_failed`; keduanya tanpa menghapus apa pun), lalu `remove_owned_tree`. Penolakan itu hanya mungkin saat pembantu init masih berjalan setelah daemon mati, karena `execute_init` melepas `InstanceLock` daemon sebelum mengembalikan error (langkah 7 spec 0010, K10).
 - Cancel di langkah mana pun menjalankan kompensasi; cancel saat `init` berlaku setelah `execute_init` kembali, karena langkah `Run` init tidak dibatalkan di tengah.
 - `WorkFactory` create membangun ulang operasi antri yang belum mulai setelah daemon restart dari `input`; input dengan sumber `value` atau `settingsOmitted` menghasilkan `NotRebuildable`, sehingga operasi itu ditutup `failed interrupted`.
+
+### Commit terjaga di langkah `register`
+
+*(update 2026-10-22, Keputusan 21, langkah 19 dan 20)*
+
+Masalah nya: `generation` registry naik untuk setiap commit, termasuk progress dan journal operasi lain (spec 0005), jadi `expected_generation` yang dibaca `register` hampir selalu basi saat beberapa operasi berjalan bersamaan. Di milestone 4, lima create berbeda yang dilepas bersamaan setelah dialog Keychain dijawab hampir semuanya berakhir `failed` dengan `registry.generation_conflict` dan dikompensasi (`apps/daemon/tests/create_perf.rs`, nol atau satu dari lima berhasil pada load average 66 sampai 101). Perbaikan nya: pemeriksaan ulang dan tulisan `register` berjalan dalam satu transaksi registry, sebagai satu job di thread registry yang memang satu satunya pemegang koneksi, sehingga tidak ada commit lain yang bisa masuk di antara keduanya. Langkah ini tidak lagi memakai `expected_generation`, tidak pernah mendapat `GenerationConflict`, dan tidak mengulang.
+
+**Port registry** (domain, modul baru `crates/domain/src/registry/guard.rs`, diekspor ulang dari `registry` seperti tipe registry lain):
+
+```rust
+/// What a commit guard may read: the registry inside the guarded commit's
+/// own write transaction.
+pub trait GuardView {
+    fn instances(&self, filter: InstanceFilter) -> Result<Vec<Instance>, RegistryError>;
+    fn runtime(&self, id: RuntimeId) -> Result<Option<Runtime>, RegistryError>;
+    fn provider_revision(&self, key: &ProviderRevisionKey) -> Result<Option<ProviderRevisionRecord>, RegistryError>;
+}
+
+/// What a guard decided after reading.
+pub enum GuardDecision {
+    /// Apply these ops, in order, in the same transaction.
+    Write(Vec<WriteOp>),
+    /// Apply nothing; the reason is the caller's own type.
+    Refuse(Box<dyn std::any::Any + Send>),
+}
+
+/// A guard: called once, on the registry's thread, inside the transaction.
+pub type CommitGuard =
+    Box<dyn FnOnce(&dyn GuardView) -> Result<GuardDecision, RegistryError> + Send>;
+
+/// What a guarded commit returns.
+pub enum Guarded {
+    /// The ops applied and the generation rose by 1.
+    Committed(Committed),
+    /// The guard refused: nothing applied and the generation did not move.
+    Refused(Box<dyn std::any::Any + Send>),
+}
+
+// trait Registry, after `commit`:
+fn commit_guarded(&self, guard: CommitGuard) -> Result<Guarded, BatchError>;
+```
+
+`Guarded` dan `GuardDecision` punya `Debug` manual yang tidak mencetak alasan, dan keduanya tidak `#[non_exhaustive]`: himpunan nya tertutup, jadi `match` di core lengkap tanpa cabang `_`. Keempat nama baru juga masuk daftar `pub use registry::{..}` yang eksplisit di `crates/domain/src/lib.rs`, seperti tipe registry lain. Aturan untuk setiap implementasi (`SqliteRegistry`, `FakeRegistry`, dan pembungkus test seperti `FaultyRegistry`, yang hanya mendelegasikan; implementasi `GuardView` hanya dua, view transaksi SQLite dan view state fake):
+
+1. **Satu transaksi.** `SqliteRegistry` menjalankan guard dan op nya sebagai satu job di thread registry di dalam satu transaksi `BEGIN IMMEDIATE`: guard membaca lewat `GuardView` di atas transaksi itu (fungsi `read::` yang sama dengan method baca, dengan `opened_at` registry sebagai `loaded_at` seperti `instances`), lalu op diterapkan dengan urutan cek yang sama dengan `commit` (bentuk nilai, keberadaan, revision, reference, lalu aturan unik), generation naik 1, lalu commit. Loop terap op dan kenaikan generation dipakai bersama oleh `commit` dan `commit_guarded` (satu jalur di `write.rs`, bukan salinan). `FakeRegistry` melakukan hal yang sama di bawah satu kali kunci state nya, dengan `GuardView` di atas state yang terkunci itu, bukan lewat method baca nya sendiri (yang akan mengunci lagi); view itu membangun instance lewat `FakeRegistry::restored` seperti baca fake lain, dan tulisan nya memakai loop terap yang sama dengan `commit` fake.
+2. **Tanpa `expected_generation`.** Commit terjaga tidak pernah mengembalikan `GenerationConflict`.
+3. **Menolak atau gagal berarti tidak ada yang diterapkan.** `Refuse` kembali sebagai `Guarded::Refused` dengan alasan yang sama persis (pemanggil men downcast ke tipe nya sendiri), dan generation tetap. `Err(error)` dari guard kembali sebagai `BatchError::batch(error)`. Op yang gagal kembali sebagai `BatchError::at(index, error)` seperti `commit`, tanpa op lain yang diterapkan.
+4. **Guard itu murni.** Ia hanya membaca lewat `GuardView`, tanpa IO lain, tanpa tidur, tanpa menunggu (`await`, channel, atau lock selain milik nya sendiri), dan tidak pernah memanggil `Registry` (thread registry akan menunggu dirinya sendiri). Ia dipanggil tepat sekali per `commit_guarded`.
+5. **Guard yang panic.** Implementasi menangkap panic itu (`catch_unwind` dengan `AssertUnwindSafe`), membatalkan transaksi atau membuang salinan state, tetap melayani panggilan berikutnya, dan mengembalikan `BatchError::batch(RegistryError::Io { detail: "the commit guard panicked" })`.
+6. **Fault test.** `FakeRegistry::fail_next_commit` juga berlaku untuk `commit_guarded`: error nya kembali sebelum guard dipanggil. `FaultyRegistry` (test core) punya kait sendiri yang hanya dipakai `commit_guarded`, karena `fail_commits` dimakan commit apa pun berikutnya, termasuk commit journal dan tahap engine: `fail_guarded_commits(errors)` (satu error per commit terjaga, yang tertua dulu), `before_guarded_commit(batch)` (satu batch yang di commit lewat fake sebelum commit terjaga berikutnya saja), dan `guard_calls()` (berapa kali guard dipanggil, dihitung dengan membungkus guard dalam closure penghitung sebelum delegasi). Urutan di `FaultyRegistry::commit_guarded`: batch kait lebih dulu, lalu error `fail_guarded_commits` kalau ada (guard tidak dipanggil), lalu delegasi ke fake dengan guard yang dibungkus. `fail_commits` tidak dimakan `commit_guarded`.
+7. **Biaya.** Guard `register` membaca instance yang tidak retained, satu runtime, dan satu provider revision. Itu baca yang sama yang dulu dijalankan job baca terpisah di thread yang sama, jadi waktu thread registry per create tidak bertambah, dan AC-24 tidak terpengaruh.
+
+**Engine** (spec 0007): `OperationContext::commit_guarded(&mut self, guard: CommitGuard) -> Result<Guarded, WorkError>` sama dengan `commit`: cek `healthy`, ia commit di tengah pekerjaan, dan semua yang ia sisipkan butuh kompensator kustom kecuali `InsertProviderRevision`. Ia memanggil `Inner::commit_guarded`, yang menjalankan `registry.commit_guarded` di `spawn_blocking`; error registry menjadi `WorkError::Engine(EngineError::Registry(error))` seperti `commit`.
+
+**Create** (`crates/core/src/instance/create/work.rs`):
+
+- `register` mencatat `record_custom_intent(instance_registration, <id>)` dan membangun `Instance`, config revision awal, dan `uses` seperti sekarang, lalu memanggil `ctx.commit_guarded` sekali. Guard nya memanggil `recheck(view, &resolved, id, pinned)`. Kalau lolos, guard mengembalikan `GuardDecision::Write` dengan `InsertProviderRevision` (hanya kalau `view` tidak menemukan key itu), `InsertInstance`, `InsertConfigRevision`, dan `ReplaceSecretUses`, dalam urutan itu. Kalau `recheck` menolak, guard mengembalikan `GuardDecision::Refuse(Box::new(error))` dengan `CreateError` nya.
+- `recheck` menerima `&dyn GuardView`, bukan `&dyn Registry`, dan tidak lagi mengembalikan `Generation`. Pemetaan error baca nya tetap (`CreateError::DataUnavailable { path: ".", reason }`), jadi kode setiap penolakan tidak berubah.
+- `Guarded::Committed` berarti `confirm_created`. `Guarded::Refused` di downcast ke `CreateError` dan menjadi kegagalan langkah dengan kode nya; downcast yang gagal menjadi error `internal`. Error registry menjadi `failed(SupervisorError::Registry(error))` seperti sekarang.
+- Loop ulang, konstanta `REGISTER_RETRY_LIMIT` (`draft.rs` dan ekspor ulang di `mod.rs`), dan cabang `GenerationConflict` serta `DuplicateResource` provider revision dihapus. Provider revision yang dimasukkan create lain tidak bisa lagi bentrok, karena guard melihat nya di transaksi yang sama.
+- Kompensasi tidak berubah: niat `instance_registration` dicatat sebelum commit dan dikonfirmasi sesudahnya, jadi guard yang menolak, commit yang gagal, dan daemon yang mati di antaranya ditangani kompensator yang sama (AC-11).
+
+Pemakai `expected_generation` lain (finalize engine spec 0007, yang dipakai install runtime spec 0018) tetap memakai pola optimistik dengan lima ulang sampai spec pemiliknya memutuskan lain (*Usulan update spec lain*, blok 2026-10-22).
 
 ### Pin dan sumber catalog
 
@@ -435,7 +498,7 @@ Area `instance` milik spec 0010, area `catalog` milik spec 0017, area `registry`
 | `cli.runtime_not_found` | `not_found` | `--runtime software@versi` tidak cocok | `selector` | `no installed runtime matches {selector}` | "run stackly runtime list" |
 | `cli.runtime_ambiguous` | `conflict` | lebih dari satu runtime cocok | `selector`, `candidates` | `more than one installed runtime matches {selector}` | "pass the runtime ID instead" |
 
-Kode yang dipakai ulang: `instance.name_taken`, `instance.provider_not_found`, `instance.provider_ambiguous`, `instance.runtime_not_found`, `instance.runtime_mismatch`, `instance.settings_invalid`, `instance.endpoint_invalid` (spec 0010), `supervisor.endpoint_conflict`, `supervisor.endpoint_in_use`, `supervisor.endpoint_unavailable` (K2), `supervisor.runtime_unavailable`, `supervisor.data_unavailable`, `supervisor.data_in_use`, `supervisor.init_failed` (spec 0010), `secret.*` (spec 0011), `catalog.unavailable` (spec 0017), `registry.generation_conflict` (spec 0005), dan `resource.busy` (spec 0006 dan 0007). Path di `details` selalu relatif terhadap root data, tidak pernah path home penuh. Kode yang bisa membawa `fields` mendaftarkan `omitted` (aturan spec 0006): `instance.name_invalid` di tabel ini, serta `instance.settings_invalid`, `instance.endpoint_invalid`, `supervisor.endpoint_in_use`, `supervisor.endpoint_conflict`, dan `supervisor.endpoint_unavailable` di tabel spec 0010 dan `secret.invalid_value` di tabel spec 0011, yang ditambah pemiliknya (D7).
+Kode yang dipakai ulang: `instance.name_taken`, `instance.provider_not_found`, `instance.provider_ambiguous`, `instance.runtime_not_found`, `instance.runtime_mismatch`, `instance.settings_invalid`, `instance.endpoint_invalid` (spec 0010), `supervisor.endpoint_conflict`, `supervisor.endpoint_in_use`, `supervisor.endpoint_unavailable` (K2), `supervisor.runtime_unavailable`, `supervisor.data_unavailable`, `supervisor.data_in_use`, `supervisor.init_failed` (spec 0010), `secret.*` (spec 0011), `catalog.unavailable` (spec 0017), dan `resource.busy` (spec 0006 dan 0007). Sejak langkah 20, create tidak lagi menghasilkan `registry.generation_conflict` (spec 0005), karena langkah `register` memakai commit terjaga *(2026-10-22, Keputusan 21)*. Path di `details` selalu relatif terhadap root data, tidak pernah path home penuh. Kode yang bisa membawa `fields` mendaftarkan `omitted` (aturan spec 0006): `instance.name_invalid` di tabel ini, serta `instance.settings_invalid`, `instance.endpoint_invalid`, `supervisor.endpoint_in_use`, `supervisor.endpoint_conflict`, dan `supervisor.endpoint_unavailable` di tabel spec 0010 dan `secret.invalid_value` di tabel spec 0011, yang ditambah pemiliknya (D7).
 
 ### CLI
 
@@ -533,10 +596,11 @@ Ditulis daemon (`title`, `detail`), sama di GUI dan CLI. Ukuran memakai satuan d
 | `CREATE_MIN_FREE_BYTES` | 256 000 000 byte, ditampilkan "256 MB" | `instance::create` |
 | `PORT_SUGGESTION_ATTEMPTS` | 64 | `instance::create` |
 | `PORT_SUGGESTION_MIN` | 1024 | `instance::create` |
-| `REGISTER_RETRY_LIMIT` | 5 (aturan spec 0005) | `instance::create` |
 | `NAME_SUGGESTION_MAX_SUFFIX` | 99 | `instance::create` |
 | `PREFLIGHT_DEBOUNCE` | 300 ms | `CreateInstanceModel` |
 | `PREFLIGHT_PLACEHOLDER_ID` | UUID v7 tetap `00000000-0000-7000-8000-000000000000` untuk dry run plan di `evaluate` | `instance::create` |
+
+`REGISTER_RETRY_LIMIT` (5) dihapus di langkah 20, karena `register` tidak lagi mengulang *(2026-10-22, Keputusan 21)*.
 
 ### Value sourcing
 
@@ -586,7 +650,7 @@ Ditulis daemon (`title`, `detail`), sama di GUI dan CLI. Ukuran memakai satuan d
 | create | `data_line`, `data_version` | record runtime |
 | create | `created_at` dan `createdAt` manifest | satu pembacaan `Clock::now()` di langkah `layout` |
 | create | `data.initializedAt` | `Clock` saat `init_succeeded` (spec 0010) |
-| create | `expected_generation` | `Versioned.generation` dari baca registry di `register` |
+| create | data registry yang diperiksa ulang `register` | `GuardView` di dalam transaksi commit terjaga (*Commit terjaga di langkah `register`*); tanpa `expected_generation` sejak langkah 20 *(diubah 2026-10-22, Keputusan 21)* |
 | start setelah create | idempotency key start | SHA-256 hex dari `<key create>:start` |
 | summary | `socketPath` | template `socketName` paket pinned, port efektif endpoint rujukan, folder run |
 | event `instance.removed` | revision | revision terakhir instance yang dihapus ditambah 1 |
@@ -603,6 +667,7 @@ Ditulis daemon (`title`, `detail`), sama di GUI dan CLI. Ukuran memakai satuan d
 - Port `Fixed` tidak pernah diganti oleh daemon; hanya permintaan `Auto` yang menghasilkan port pilihan Stackly (BR-005).
 - Preflight dan create memakai `gather` dan `evaluate` yang sama; selain angka port di luar `u16`, tidak ada aturan validasi yang hanya ada di GUI atau hanya di CLI.
 - Selama operasi create belum selesai, setiap efeknya bisa dibalik dan dibalik dengan tepat (reference secret, folder instance, baris registry); folder paket pinned dan baris provider revision tidak pernah dihapus create, dan kompensasi tidak pernah menghapus apa pun yang bukan buatan operasi itu (BR-023).
+- Langkah `register` memeriksa ulang aturan yang bersumber dari registry dan menulis barisnya dalam satu transaksi registry. Tidak ada commit lain yang masuk di antara keduanya, jadi create tidak pernah gagal hanya karena operasi lain menulis registry pada saat yang sama, dan tidak pernah menulis baris yang melanggar aturan yang baru saja diperiksa *(2026-10-22, Keputusan 21)*.
 - Nilai secret hanya ada di params `instance.create`, di memori daemon selama `put` atau pemeriksaan `bind`, dan di Keychain.
 - Instance yang terdaftar selalu menyimpan provider revision dan runtime exact, bukan selector (BR-001).
 - Semua path yang ditulis create diturunkan dari ID dan layout dan diperiksa `check_owned_path` sebelum IO.
@@ -642,7 +707,9 @@ Seed ada di `fuzz/seeds/instance_path/` dan dijalankan test `instance_path_seeds
 - Saran port: port `Fixed` milik instance `stopped` menghasilkan `supervisor.endpoint_conflict` dengan saran, saran tidak pernah dipakai create, dan setelah port diganti ke saran preflight `ready`; p 65535 dan p di bawah 1024 memberi kandidat yang benar. Memverifikasi **AC-5**.
 - Data tidak kosong: ID dipaksa ke folder yatim (`already_exists`), dan file disisipkan setelah layout (`data_not_empty`). Memverifikasi **AC-8**.
 - Secret: Keychain terkunci (`FakeSecretStore::lock`) saat `put` sumber `generate` menghasilkan `secret.store_locked`, dan saat `put` sumber `copyFrom` menghasilkan `secret.needs_secret` dengan satu item `store_locked` untuk reference sumber, keduanya sebelum folder dibuat dan tanpa dialog kedua; nilai `value` kosong atau ber NUL ditolak `request.invalid_params` di `secrets[<i>].input.content` sebelum precheck; `printableOnly` dengan nilai ber `\n` ditolak sinkron di precheck dengan `reason` `control_characters`; `copyFrom` dari reference yang nilainya lebih pendek dari `minLength` field lolos preflight lalu gagal di langkah `secrets` dengan `secret.invalid_value` sebelum folder dibuat, tanpa reference baru yang tertinggal; `bind` ke reference yang ada memanggil `put(Bind)` yang hanya membaca sekali, lalu pemakaian ditulis batch `register` tanpa reference baru; `bind` ke reference tanpa nilai adalah baris error; prefix fixture credential tidak ada di journal, log, event, dan preflight. Memverifikasi **AC-7**.
-- Balapan: sepuluh create bersamaan dengan nama sama (satu instance, sisanya `resource.busy` atau `instance.name_taken`), dua create dengan port fixed sama, dua create provider tanpa `multi_instance`, dan `GenerationConflict` yang disuntik empat kali lalu berhasil. Memverifikasi **AC-10**, **AC-15**.
+- Balapan: sepuluh create bersamaan dengan nama sama (satu instance, sisanya `resource.busy` atau `instance.name_taken`), dua create dengan port fixed sama, dan dua create provider tanpa `multi_instance`. Memverifikasi **AC-10**, **AC-15**.
+- Commit terjaga di `register` *(2026-10-22, langkah 20; menggantikan test `GenerationConflict` yang disuntik empat dan lima kali)*. Di core (`crates/core/tests/create_operation/cases.rs`), lewat kait `FaultyRegistry` di aturan 6 *Commit terjaga di langkah `register`*: (a) batch `before_guarded_commit` yang tidak menyentuh aturan create (misalnya satu `InsertAuditEvent`) tidak menggagalkan create, operasi `succeeded`, dan `guard_calls()` bernilai 1; (b) batch `before_guarded_commit` dengan instance bernama sama milik operasi lain membuat create gagal `instance.name_taken` (bukan `registry.name_taken`, karena guard yang menolak, bukan aturan unik registry); (c) batch `before_guarded_commit` dengan instance lain yang memakai port `Fixed` yang sama membuat create gagal `supervisor.endpoint_conflict`; (d) `Busy` lewat `fail_guarded_commits` membuat create gagal dengan kode registry itu dan `guard_calls()` bernilai 0. Kasus b, c, dan d berakhir `failed` dengan kompensasi penuh (`assert_clean`: tanpa baris, folder, reference, atau pemakaian secret milik operasi itu). Di daemon (`apps/daemon/tests/supervisor/create.rs`, test `five_creates_released_together_behind_a_keychain_dialog_all_succeed`, `Kind::Fixture`, tanpa batas waktu): tiga putaran, masing masing lima create dengan nama berbeda dan port `Fixed` berbeda dari `allocate_port` yang dikirim selama aksi lain menunggu di dialog Keychain (`Dialog` dari `supervisor/support.rs`), lalu dialog dijawab; kelima operasi di setiap putaran berakhir `succeeded`, `instance.list` memuat lima belas instance baru, dan tidak ada operasi yang gagal. Test daemon ini adalah smoke test pada beban biasa (temuan aslinya butuh load average 66 sampai 101); bukti yang deterministik adalah conformance 16 thread di butir berikut dan kasus b dan c. Memverifikasi **AC-10**, **AC-11**.
+- Commit terjaga di registry *(2026-10-22, langkah 19)*: skenario baru di `registry_conformance` (modul `guarded.rs`) untuk `FakeRegistry` dan `SqliteRegistry`: guard melihat batch yang di commit sebelumnya dan tulisannya berlaku di generation berikutnya; `Refuse` tidak menerapkan apa pun, generation tetap, dan alasan nya kembali utuh lewat downcast; op yang gagal tidak menerapkan apa pun dan kembali dengan index nya; `Err` dari guard kembali sebagai error batch tanpa tulisan; guard yang panic menghasilkan `Io` dan registry tetap melayani baca dan commit sesudahnya; 16 thread yang masing masing menjalankan guard "masukkan instance `guard-<run>-<i>` hanya kalau instance yang tidak retained dengan prefix nama `guard-<run>-` kurang dari 8" (`<run>` delapan karakter hex huruf kecil yang baru per run, karena suite berbagi satu registry yang sudah berisi data skenario lain) menghasilkan tepat 8 `Committed`, sisanya `Refused`, dan nol `BatchError`. Memverifikasi **AC-10**.
 - Gagal, cancel, dan terputus: kegagalan disuntik di setiap langkah termasuk `init` (`failInit` fake) dan sebelum `init_begin` (store terkunci saat `resolve_for_start`): registry, folder, dan reference bersih, folder pinned tetap, event `instance.removed` terkirim kalau baris sempat terdaftar; cancel saat `init` berakhir `cancelled` tanpa sisa; daemon dimatikan saat `secrets`, `layout`, `register`, dan `init` lalu dikompensasi setelah start berikutnya; pembantu init yang masih memegang lock membuat operasi `needs_recovery` dengan baris registry tetap ada (`instance_registration` dan `instance_tree` menolak dengan `instance_locked`) dan abandon membersihkannya setelah lock bebas; probe yang error menjadi `lock_probe_failed`, file lock yang tidak ada melewati probe, dan init yang gagal biasa dikompensasi penuh tanpa `needs_recovery` karena lock daemon sudah dilepas. Memverifikasi **AC-11**.
 - Pin: setiap kriteria K-1 dan K-2 sebagai test terpisah di `stackly-core` dan `stacklyd`. Memverifikasi **AC-13**, **AC-14**.
 - Dry run init tanpa port `Auto` (update 2026-10-22, langkah 17), di `crates/core/tests/create_evaluate/` lewat `Site::with_provider_edit("fake", …)` yang menambah `"--port=${endpoint.http.port}"` ke `args` langkah `runExecutable` init paket fake (langkah `lifecycle.initialize[2]`; paket fake asli tidak memakai port di init): draft tanpa permintaan port memberi baris `settings` error `instance.endpoint_invalid` (detail `endpoint` `http`) dengan keterangan "This provider needs a fixed port for http when the instance is created. Choose a port for it." dan tanpa field issue; draft dengan `http` `auto` eksplisit memberi hal yang sama ditambah field `endpoints[0].port` `invalid_value`; draft dengan `http` `Fixed` bebas `ready`; draft dengan `http` `Fixed` 70000 hanya memberi error baris `endpoint.http` (`out_of_range`) tanpa keterangan "needs a fixed port"; error sinkron `instance.create` untuk kedua draft pertama sama dengan baris error pertama preflight, dengan `fields` sama persis (D7). Paket fake, PostgreSQL, dan NATS `1.0.1` dengan semua endpoint `Auto` tetap `ready`. Test yang ada untuk dry run dengan port `Fixed` dan settings salah tidak berubah. Memverifikasi **AC-2**, **AC-9**.
@@ -653,7 +720,7 @@ Seed ada di `fuzz/seeds/instance_path/` dan dijalankan test `instance_path_seeds
 - Paritas AC-028: matriks input buruk (nama `Bad_Name`, nama 64 karakter, port 0, port dipakai, port milik instance lain, setting integer `"abc"`, key asing, secret field di settings, secret field tidak dikenal, runtime tidak ada, runtime software lain, provider planned) lewat `Client` dan lewat CLI `--json`. Memverifikasi **AC-19**.
 - GUI: test Swift `CreateInstanceModel` dengan service tiruan (debounce, generasi, Create aktif dan `disabledReason` untuk setiap kondisi di *Footer* dalam urutannya, port bukan angka, progress, gagal, cancel, sukses dengan dan tanpa start beserta `Feedback` yang dikirim ke `FeedbackCenter` tiruan, start lanjutan yang gagal, Close menggantikan `Cancel…` saat gate blocked di mode progress, dan pengumuman preflight hanya saat ringkasan berubah), daftar Copy from dari `listSecrets` tiruan (`present` dan `unknown` tetap, `missing`, `unrecognized`, dan segmen pertama `stackly` dibuang, urutan balasan tetap, label "{purpose} of “{nama}”" hanya untuk reference instance yang ada di `InstanceStore`, `editing` tanpa menunggu daftar, `listSecrets` yang gagal menyembunyikan Copy from tanpa banner dan tanpa menahan Create, daftar dibaca lagi saat runtime diganti dan saat Retry, balasan form dan daftar dari token lama dibuang, dan `secret.invalid_value` dari tahap `secrets` setelah Copy from mengembalikan mode edit dengan banner), `SchemaFormModel` dari tiga fixture dengan assertion NATS, `InstanceStore` menghapus baris pada `instance.removed`, dan evidence manual keyboard dan VoiceOver. Memverifikasi **AC-20**, **AC-21**, **AC-22**.
 - Fuzz: 10 menit di Mac ini dan test seed. Memverifikasi **AC-23**.
-- Kinerja: pengukuran di Mac ini dengan 10 instance fake terdaftar, juga saat dialog Keychain lain terbuka. Memverifikasi **AC-24**.
+- Kinerja: pengukuran di Mac ini dengan 10 instance fake terdaftar, juga saat dialog Keychain lain terbuka. Aturan `create_perf` sejak langkah 20 *(2026-10-22)*: kelima create di belakang dialog wajib berakhir `succeeded`; state final lain menggagalkan test dengan operasi itu di pesan nya (tidak ada lagi kegagalan `registry.generation_conflict` yang diterima). Ringkasan tetap menulis berapa yang `succeeded`, kalimat `expected` evidence ditambah "and all five creates behind the dialog end succeeded", dan aturan ini berlaku juga di `cargo test` biasa (pelonggaran ×10 hanya untuk waktu). Memverifikasi **AC-24**, dan **AC-10** untuk kelima create itu.
 - PostgreSQL nyata: create 18 dan 17 lewat CLI dan GUI, konflik nyata, start sampai `ready`. Memverifikasi **AC-25**.
 - Keamanan: nama `../x`, `a b`, `a;rm`, dan Unicode ditolak VAL-001; symlink di `providers/official/postgresql/` ditolak pin; symlink `instances/<id>` ditolak layout; grep nilai secret dan settings teks di log daemon kosong. Memverifikasi **AC-26**.
 
@@ -665,7 +732,7 @@ Seed ada di `fuzz/seeds/instance_path/` dan dijalankan test `instance_path_seeds
 | 0010: perluas `instance.create` secara additive (preflight, form dari schema, autostart) | dua method baca baru, precheck, langkah baru (*Operasi `create_instance`*), dan langkah 9 yang mengganti create sementara spec 0010; `provider.revision` opsional sudah dikirim langkah 12 spec 0010; autostart: Start after creating di client, Start at login ditunda ke fitur 31 |
 | 0011: `SecretInput` per secret field, `put` dengan `PutTarget::New` sebelum `initdb`, gagal simpan `secret.needs_secret`, kompensasi reference | AC-7 (`classify_create_failure`), langkah `secrets`, AC-11 |
 | 0011: `SecretField` di sheet dengan `generate` default; preflight membaca hasil `put` | *Form dari settings schema*; baris secret berubah setelah tahap `secrets` (*Sheet New Instance*) |
-| 0005: `known_instance_ids` sebelum layout, `InsertInstance` di batch operasi, `endpoints_conflict`, `expected_generation`, ulang lima kali | langkah `layout` dan `register`, AC-10 |
+| 0005: `known_instance_ids` sebelum layout, `InsertInstance` di batch operasi, `endpoints_conflict`, `expected_generation`, ulang lima kali | langkah `layout` dan `register`, AC-10; sejak langkah 20, `register` memakai commit terjaga sebagai pengganti `expected_generation` dan ulang lima kali (*Commit terjaga di langkah `register`*, Keputusan 21, 2026-10-22) |
 | 0004: tulis ulang manifest dengan `data.initializedAt` setelah `init_succeeded` | dilakukan `execute_init` spec 0010 (AC-13 spec 0010); spec ini membuktikannya ujung ke ujung (AC-12) |
 | 0004: guard evidence `VAL-001` di test ujung ke ujung | AC-3 |
 | 0004: BR-002, BR-004, BR-005, BR-008, `create_instance_layout`, `resolve_port`, validasi endpoint `Instance::new` | AC-4 sampai AC-8, *Endpoint di aggregate*; `resolve_port` tetap dipanggil start (spec 0010) karena create tidak memilih port `Auto` |
@@ -1028,6 +1095,105 @@ Diterapkan di spec 0011 pada 2026-10-20 (sesi `upd-0011`, `4827440`), dengan kep
 
 Tidak ada update untuk spec 0006 (kode baru masuk area pemiliknya lewat aturan pemakai pertama, dan hint memakai `codes::<area>::hint` yang sudah ada) dan spec 0008 (kode `cli` baru lewat aturan yang sama; `CLI_SCHEMA_VERSION` tetap karena hasil baru hanya menambah key).
 
+#### Usulan 2026-10-22: commit terjaga (Keputusan 21)
+
+Teks lama di blok ini dikutip persis dari spec target di `main` pada 2026-10-22 (`9df6beee`). Langkah 19 dan 20 tidak menunggu blok ini diterapkan, karena bentuk port dan API nya sudah ditetapkan di *Commit terjaga di langkah `register`*; blok ini menyamakan teks spec pemiliknya.
+
+**Spec 0005 (data model registry)**
+
+1. *Port registry*, trait `Registry`. Sisipkan sesudah:
+
+   ```text
+       fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError>;
+   ```
+
+   baris:
+
+   ```text
+       fn commit_guarded(&self, guard: CommitGuard) -> Result<Guarded, BatchError>;  // spec 0020, Keputusan 21
+   ```
+
+2. *Port registry*, aturan commit. Ganti:
+
+   ```text
+   - Generation naik tepat 1 per commit yang berhasil, apa pun isinya. Pemanggil yang memakai `expected_generation` mencoba ulang baca dan commit paling banyak lima kali saat `GenerationConflict`, lalu menyerah dengan error itu. Create instance (spec 0020, langkah `register`) juga mengulang saat `DuplicateResource` untuk provider revision yang baru saja dimasukkan create lain, dengan batas lima kali yang sama (AC-10 spec 0020).
+   ```
+
+   dengan:
+
+   ```text
+   - Generation naik tepat 1 per commit yang berhasil, apa pun isinya, termasuk commit terjaga. Pemanggil yang memakai `expected_generation` mencoba ulang baca dan commit paling banyak lima kali saat `GenerationConflict`, lalu menyerah dengan error itu. Pemanggil yang aturannya harus diperiksa dalam transaksi yang sama dengan tulisannya memakai `commit_guarded`, tanpa `expected_generation` dan tanpa ulang; create instance (spec 0020, langkah `register`) memakainya sejak langkah 20 spec 0020.
+   - `commit_guarded(guard)` menjalankan `guard: CommitGuard` dan op yang ia kembalikan dalam satu transaksi `BEGIN IMMEDIATE`, sebagai satu job di thread registry (di `FakeRegistry`, di bawah satu kali kunci state). Guard membaca lewat `GuardView` (`instances`, `runtime`, `provider_revision`) di atas transaksi itu, lalu mengembalikan `GuardDecision::Write(ops)` atau `GuardDecision::Refuse(alasan)`. Op diterapkan dengan urutan cek yang sama dengan `commit`. `Refuse` dan `Err` dari guard tidak menerapkan apa pun dan tidak menaikkan generation; `Refuse` kembali sebagai `Guarded::Refused` dengan alasan utuh, dan `Err` sebagai `BatchError::batch`. Guard itu murni (tanpa IO lain, tanpa menunggu, tidak pernah memanggil `Registry`) dan dipanggil tepat sekali; guard yang panic menjadi `BatchError::batch(Io { detail: "the commit guard panicked" })` tanpa menghentikan thread registry. `GuardView` hanya punya baca yang dibutuhkan pemakainya; pemakai baru menambah baca lewat update spec ini. Tipe lengkapnya ada di spec 0020, *Commit terjaga di langkah `register`*.
+   ```
+
+3. *Fake dan conformance*. Sisipkan sesudah:
+
+   ```text
+   - `registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, clock: &FakeClock)` menjalankan satu set skenario yang sama untuk implementasi apa pun dan panic dengan nama skenario yang gagal. Registry yang diuji dibuat dengan `FakeClock` yang sama. Testkit menjalankannya untuk `FakeRegistry`; `stackly-storage` menjalankannya untuk `SqliteRegistry` di `crates/storage/tests/`.
+   ```
+
+   baris:
+
+   ```text
+   - Conformance commit terjaga (spec 0020 langkah 19, modul `guarded.rs`): guard melihat batch yang di commit sebelumnya dan tulisannya berlaku di generation berikutnya; `Refuse` tidak menerapkan apa pun, generation tetap, dan alasan nya kembali utuh; op yang gagal tidak menerapkan apa pun dan kembali dengan index nya; `Err` dari guard kembali sebagai error batch; guard yang panic menghasilkan `Io` dan registry tetap melayani sesudahnya; 16 thread dengan guard "masukkan hanya kalau instance yang tidak retained kurang dari 8" menghasilkan tepat 8 `Committed`, sisanya `Refused`, dan nol `BatchError`. `FakeRegistry::fail_next_commit` juga berlaku untuk `commit_guarded`.
+   ```
+
+4. *Consequences*. Ganti:
+
+   ```text
+   - Satu generation untuk seluruh registry berarti commit apa pun, termasuk progress operasi, membuat commit lain yang memakai `expected_generation` gagal dan diulang; ini dibatasi lewat batas ulang lima kali dan pembatasan commit progress di spec 0007.
+   ```
+
+   dengan:
+
+   ```text
+   - Satu generation untuk seluruh registry berarti commit apa pun, termasuk progress operasi, membuat commit lain yang memakai `expected_generation` gagal dan diulang; ini dibatasi lewat batas ulang lima kali dan pembatasan commit progress di spec 0007. Di bawah beban dengan beberapa operasi bersamaan, lima ulang bisa habis (temuan milestone 4 spec 0020), jadi pemanggil yang sering berjalan bersamaan memakai `commit_guarded`, yang tidak bisa bentrok.
+   ```
+
+**Spec 0007 (operation engine)**
+
+1. *API engine (dipakai fitur 10, 18, 20, dan seterusnya)*, blok `OperationContext`. Sisipkan sesudah:
+
+   ```text
+       pub async fn commit(&mut self, batch: FinalBatch) -> Result<Committed, WorkError>;
+   ```
+
+   baris:
+
+   ```text
+       pub async fn commit_guarded(&mut self, guard: CommitGuard) -> Result<Guarded, WorkError>;  // spec 0020, Keputusan 21
+   ```
+
+2. *API engine*, butir **Commit registry terakhir**. Sisipkan sesudah kalimat:
+
+   ```text
+   `ctx.commit` di tengah operasi hanya untuk keadaan yang memang harus terlihat sebelum selesai, dan apa pun yang ia sisipkan wajib punya kompensator kustom, kecuali baris bersama yang immutable dan idempoten (`InsertProviderRevision`), yang sengaja tidak dikompensasi (spec 0020).
+   ```
+
+   kalimat:
+
+   ```text
+   `ctx.commit_guarded` mengikuti aturan yang sama, tetapi menjalankan guard dan tulisannya dalam satu transaksi registry lewat `Registry::commit_guarded` (spec 0005), sehingga tidak pernah mendapat `GenerationConflict` dan tidak mengulang; create instance memakainya di langkah `register` (spec 0020).
+   ```
+
+**Spec 0018 (install runtime), catatan saja.** `finalize` install memakai `FinalBatch.expected_generation` dengan `FINALIZE_RETRIES` 5 milik engine (spec 0007), jadi ia terpapar masalah yang sama saat beberapa operasi berjalan bersamaan, misalnya dua install, atau install yang selesai saat beberapa create berjalan. Risikonya lebih kecil dari create: jendela antara baca `finalize` dan commit nya pendek, install lebih jarang dan lebih lambat, dan kegagalan di `finalize` berakhir `needs_recovery` dengan hint `resume` (spec 0018), jadi tidak ada data yang hilang, tetapi pengguna melihat recovery. Rekomendasi: tanpa perubahan sekarang. Kalau pengukuran menunjukkan nya (misalnya test dua install bersamaan selagi create berjalan), pemilik spec 0007 memindahkan `finalize` ke dalam `commit_guarded` (dengan `GuardView` yang ditambah `runtimes` dan `artifact`), bukan menambah ulang. Pemilik: spec 0007 dan spec 0018, lewat lead.
+
+**Spec 0024 dan 0025 (scope 03), catatan saja, tidak diedit.** Duplicate (spec 0024) mengirim `instance.create` tanpa perubahan (AC-6 spec 0024) dan tidak punya commit registry sendiri, jadi ia mendapat perbaikan ini tanpa perubahan teks; test spec 0024 dan 0025 yang membuat atau men duplicate beberapa instance bersamaan boleh mengharapkan semuanya berhasil, dan tidak perlu menerima `registry.generation_conflict`.
+
+**Spec 0010 (process supervisor).** Commit actor supervisor tidak terkena: ia memakai konflik revision atas aggregate instance dan tidak memasang `expected_generation`, jadi tulisan journal operasi lain tidak membuatnya gagal. Satu kata kata di tabel method berubah:
+
+1. *Permukaan IPC*, baris `instance.create`, kolom kegagalan operasi. Ganti:
+
+   ```text
+   `instance.capability_unsupported`, `registry.generation_conflict`, dan `secret.invalid_value`) |
+   ```
+
+   dengan:
+
+   ```text
+   `instance.capability_unsupported`, dan `secret.invalid_value`; sejak langkah 20 spec 0020, create tidak lagi menghasilkan `registry.generation_conflict`) |
+   ```
+
 ### Selisih mockup yang disengaja
 
 Untuk dicatat lead di `ui-macos.md`:
@@ -1089,6 +1255,13 @@ Sesi paralel: langkah 16 bagian fuzz bisa berjalan sebagai sesi sendiri begitu l
 
 Sesi paralel: langkah 17 dan 18 menyentuh file berbeda (`instance::create` dan `provider`, xtask, `providers/traefik`) dan bisa menjadi dua sesi, atau satu sesi berurutan. Keduanya tidak berjalan bersamaan dengan sesi lain yang mengubah `crates/core/src/instance/create/evaluate.rs` (langkah 17) atau paket provider, golden, dan seed fuzz (langkah 18). Milestone ini sebaiknya di `main` sebelum milestone 4 fitur 23 (journey NATS dari CLI dan GUI) dan sebelum duplicate spec 0024 dibangun, supaya create dan duplicate dengan port `Auto` untuk paket yang init nya butuh port ditolak di preflight, bukan di langkah `init`.
 
+**Milestone 6: Register dalam satu transaksi registry** *(update 2026-10-22, Keputusan 21, temuan milestone 4 di `create_perf`; after langkah 16 milestone 4 di `main`; needs persetujuan user atas teks baru AC-10 lewat lead; tidak menunggu update spec 0005 dan 0007, karena bentuk port dan API nya ditetapkan di *Commit terjaga di langkah `register`*, dan blok 2026-10-22 di *Usulan update spec lain* hanya menyamakan teks spec pemiliknya)*
+
+19. Port dan adapter registry. Di `crates/domain/src/registry/guard.rs` (baru, diekspor ulang dari `registry` dan dari daftar `pub use registry::{..}` di `crates/domain/src/lib.rs`): `GuardView`, `GuardDecision`, `CommitGuard`, dan `Guarded`, dengan `Debug` manual yang tidak mencetak alasan. Di `crates/domain/src/registry/mod.rs`: `Registry::commit_guarded` dan bagian `# Commits` doc comment trait yang menyebut commit terjaga; doc comment `WriteBatch` di `batch.rs` menyebut bahwa pemanggil yang aturannya harus diperiksa dalam transaksi tulisan memakai `commit_guarded`. Di `crates/storage/src/registry/`: `commit_guarded` di `mod.rs` sebagai satu job di thread registry dengan `catch_unwind`, `GuardView` di atas `Transaction` yang memanggil fungsi `read::` yang sama dengan method baca, dan loop terap op plus kenaikan generation yang dipakai bersama `commit` di `write.rs`. Di `crates/testkit/src/registry/fake.rs`: `commit_guarded` di bawah satu kali kunci state dengan `GuardView` atas state itu, dan `fail_next_commit` yang juga berlaku untuknya. Di `crates/testkit/src/registry/conformance/`: modul baru `guarded.rs` dengan keenam skenario *Critical test scenarios* butir commit terjaga di registry, didaftarkan di suite. Di `crates/core/tests/supervisor_start/common.rs`: `FaultyRegistry::commit_guarded` dengan `fail_guarded_commits`, `before_guarded_commit`, dan `guard_calls` menurut aturan 6 *Commit terjaga di langkah `register`* (`fail_commits` tidak dimakan nya); `conflict_instance_inserts` tetap ada sampai langkah 20, karena test lama di `create_operation` masih memakai nya. Selesai bila `cargo test -p stackly-testkit`, `cargo test -p stackly-storage --test registry`, `cargo test -p stackly-core --test supervisor_start`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` lulus. Memenuhi **AC-10**.
+20. Engine dan create. `Inner::commit_guarded` di `crates/core/src/operation/state.rs` dan `OperationContext::commit_guarded` di `context.rs`, dengan satu test di `crates/core/tests/operation_engine/` bahwa `Committed` dan `Refused` diteruskan apa adanya dan error registry menjadi `EngineError::Registry`. Di `crates/core/src/instance/create/work.rs`: `register` dan `recheck` seperti *Commit terjaga di langkah `register`*, dengan doc comment yang mengikuti, dan import yang tidak terpakai lagi (misalnya `Generation` dan `FinalBatch`) dihapus; `REGISTER_RETRY_LIMIT` dihapus dari `draft.rs` dan ekspor ulang `mod.rs`. Di `crates/core/tests/create_operation/cases.rs`: `a_generation_conflict_at_register_is_retried_up_to_five_times` diganti test kasus a sampai d di butir commit terjaga di `register` *Critical test scenarios*, dan di commit yang sama `FaultyRegistry::conflict_instance_inserts` beserta field `insert_conflicts` dihapus dari `crates/core/tests/supervisor_start/common.rs`. Di daemon: `Dialog` pindah dari `apps/daemon/tests/create_perf.rs` ke `apps/daemon/tests/supervisor/support.rs` (yang sudah dipakai `create_perf` lewat `#[path]`); test baru `five_creates_released_together_behind_a_keychain_dialog_all_succeed` di `apps/daemon/tests/supervisor/create.rs`; dan aturan baru `create_perf` di butir Kinerja *Critical test scenarios*. Selesai bila `cargo test -p stackly-core --test create_operation`, `cargo test -p stackly-core --test operation_engine`, `cargo test -p stackly-core --test supervisor_start`, `cargo test -p stacklyd --test supervisor create`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core`, dan `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test create_perf -- --nocapture` lulus di Mac ini, yang terakhir dengan lima dari lima create di belakang dialog `succeeded` dan batas waktu AC-24 tetap. Memenuhi **AC-10**, **AC-11**, **AC-24**.
+
+Sesi paralel: langkah 19 dan 20 satu sesi berurutan, karena langkah 20 memakai port dari langkah 19. Langkah 19 tidak berjalan bersamaan dengan sesi lain yang mengubah trait `Registry`, `FakeRegistry`, `crates/storage/src/registry/write.rs`, atau suite conformance (misalnya build yang menambah `WriteOp`), dan langkah 20 tidak bersamaan dengan sesi yang mengubah `crates/core/src/instance/create/work.rs` atau `apps/daemon/tests/create_perf.rs`. Milestone ini tidak menunggu milestone 3 (GUI); sheet hanya melihat create yang lebih jarang gagal.
+
 ## Consequences
 
 **Positive**:
@@ -1098,6 +1271,7 @@ Sesi paralel: langkah 17 dan 18 menyentuh file berbeda (`instance::create` dan `
 - Create yang gagal, dibatalkan, atau terputus tidak meninggalkan apa pun selain folder paket pinned yang memang boleh dipakai ulang, jadi pengguna bisa langsung mencoba lagi dengan nama dan port yang sama, tanpa menunggu purge fitur 54.
 - Konflik port terlihat sebelum Create, termasuk listener wildcard dan `localhost` yang bisa salah sasaran, tanpa salah alarm dari sisa `TIME_WAIT` atau koneksi yang masih terbuka, dan port fixed tidak pernah berubah diam diam.
 - Paket provider yang dipakai instance tetap ada di folder data walau catalog di app berubah, jadi start offline tetap bisa.
+- Sejak langkah 20, create yang berjalan bersamaan (lima create di belakang satu dialog Keychain, atau create selagi install dan start berjalan) tidak lagi gagal karena tulisan operasi lain: aturan registry diperiksa ulang dan baris ditulis dalam satu transaksi, jadi yang gagal hanya create yang memang melanggar aturan (nama, port, runtime, `multi_instance`) *(2026-10-22)*.
 
 **Negative / tradeoffs**:
 
@@ -1117,6 +1291,9 @@ Sesi paralel: langkah 17 dan 18 menyentuh file berbeda (`instance::create` dan `
 - Milestone 3 kini butuh update spec 0011 untuk `copyFromLabels` (usulan spec 0024) sebelum langkah 14, lebih awal dari jadwal spec 0024 sendiri.
 - Sejak langkah 17, draft dengan endpoint `Auto` untuk paket yang init nya butuh port (hari ini salinan pinned NATS `1.0.0`, atau paket baru yang lolos validasi tetapi punya `init_port_issues` spec 0009) ditolak preflight dengan `instance.endpoint_invalid`, dan pengguna harus memilih port `Fixed` untuk endpoint itu. Itu lebih jujur dari sebelumnya (preflight hijau lalu `supervisor.config_invalid` di langkah `init` dan kompensasi), tetapi duplicate spec 0024 dari instance seperti itu, yang selalu mengirim `auto`, tidak lagi `ready` tanpa pengguna mengubah port. Keterangan baris `settings` menyebut nama endpoint, sedangkan pesan field `endpoints[<i>].port` tetap teks tetap `invalid_value` (spec 0006), dan error sinkron create hanya membawa ringkasan katalog dan hint statis yang umum untuk semua sebab `instance.endpoint_invalid`, jadi kalimat yang menyebut nama endpoint dan sebab persis nya hanya ada di baris preflight *(2026-10-22)*.
 - Preflight kini membangun dua context plan, bukan satu, dan menjalankan `init_plan` di context yang lebih ketat; biaya nya beberapa mikrodetik tanpa IO tambahan.
+- Commit terjaga menjalankan kode milik pemanggil (guard) di thread registry, di dalam transaksi tulis. Guard yang lambat atau yang menunggu akan menahan setiap baca dan commit daemon selama ia berjalan, jadi aturan "guard itu murni" harus dijaga di review; guard `register` hanya menjalankan baca yang dulu juga berjalan di thread yang sama *(2026-10-22)*.
+- Trait `Registry` mendapat satu method lagi yang wajib diimplementasikan setiap registry (hari ini `SqliteRegistry`, `FakeRegistry`, dan `FaultyRegistry` di test core), dan `GuardView` hanya punya tiga baca; pemakai berikutnya menambah baca lewat update spec 0005 *(2026-10-22)*.
+- Alasan penolakan guard melewati port sebagai `Box<dyn Any + Send>`, jadi tipe nya hanya diperiksa saat downcast di core; downcast yang gagal adalah bug, dan dilaporkan sebagai error `internal` *(2026-10-22)*.
 
 **Neutral**:
 
@@ -1125,6 +1302,7 @@ Sesi paralel: langkah 17 dan 18 menyentuh file berbeda (`instance::create` dan `
 - Kompensator kustom pertama di luar engine (`instance_registration`).
 - Aturan `check-deps` baru yang ikut memindai kode Swift.
 - Satu panggilan `secret.list` tambahan setiap kali form dimuat, tanpa method atau field kontrak baru (update 2026-10-22).
+- Create tidak lagi menghasilkan `registry.generation_conflict`; kode itu tetap ada untuk pemakai `expected_generation` lain (finalize engine, install runtime). Tanpa perubahan kontrak, kode error, atau `ProtocolVersion` (update 2026-10-22).
 
 ## Follow-up
 
@@ -1143,12 +1321,17 @@ Sesi paralel: langkah 17 dan 18 menyentuh file berbeda (`instance::create` dan `
 - [ ] Fitur 23: tidak ada perubahan create; AC-13 spec 0023 memakai ulang fixture `create-form-nats.json` dan test render Swift AC-21, fixture dibangkitkan ulang setelah perubahan paket NATS fitur 23, dan NATS pindah ke `[[provider]]` di milestone 2 fitur 23 sebelum create GUI untuk NATS (disepakati dengan arc-f23-spec).
 - [x] Usulan spec 0023 butir 2 (*Usulan update spec lain (2026-10-22)*): dry run init tanpa port `Auto`. Diterapkan 2026-10-22 (AC-9, *Evaluator create*, *Copy preflight*, *Value sourcing*, langkah 17, milestone 5), bersama butir 1 spec 0009 yang dibangun langkah 18 milestone yang sama.
 - [ ] Lead scope 03 (lewat lead scope 02): langkah 17 mengubah hasil preflight untuk draft duplicate yang semua endpoint nya `auto` (AC-4 spec 0024) bila paket pinned sumber butuh port di init: `ready: false` dengan baris `settings` error `instance.endpoint_invalid` dan field `endpoints[<i>].port` `invalid_value`. AC-6 spec 0024 (preflight dan create tanpa perubahan kode atau kontrak) tetap benar. Test spec 0024 yang men duplicate instance dari paket seperti itu mengharapkan penolakan ini.
+- [ ] Lead: minta persetujuan user atas teks baru AC-10 (commit terjaga di `register`, lima create bersamaan di belakang dialog semuanya `succeeded`; teks lama dan baru di catatan bersama `arc-f20-update-ac10-and-scope.md`), lalu tugaskan milestone 6 (langkah 19 dan 20) *(2026-10-22, Keputusan 21)*.
+- [ ] Lead: bawa blok *Usulan 2026-10-22: commit terjaga* (spec 0005 butir 1 sampai 4, spec 0007 butir 1 dan 2, spec 0010 butir 1) ke pemilik spec 0005, 0007, dan 0010 sebagai item `architect (update)`; build langkah 19 dan 20 tidak menunggu nya *(2026-10-22)*.
+- [ ] Spec 0007 dan 0018 (lewat lead): putuskan apakah `finalize` engine pindah ke `commit_guarded` kalau pengukuran install bersamaan menunjukkan lima ulang habis (catatan spec 0018 di blok 2026-10-22) *(2026-10-22)*.
+- [ ] Lead scope 03 (lewat lead scope 02): duplicate spec 0024 dan create spec 0025 mendapat commit terjaga lewat `instance.create` tanpa perubahan teks; test nya yang membuat beberapa instance bersamaan tidak perlu menerima `registry.generation_conflict` (catatan spec 0024 dan 0025 di blok 2026-10-22) *(2026-10-22)*.
+- [ ] Checker milestone 6: jalankan ulang `create_perf` di bawah `cargo xtask evidence run` dan catat lima dari lima create di belakang dialog `succeeded`; temuan terbuka milestone 4 di `verify.md` ditutup dari sana *(2026-10-22)*.
 - [ ] Fitur 31: tambah `startup` ke params `instance.create` (minor), toggle "Start at login" di sheet, dan perintah setara `--start-at-login`.
 - [ ] Fitur 32: path data yang bisa diganti untuk instance baru melewati baris `data` dan pemeriksaan `volume_facts` yang sama.
 - [ ] Fitur 54: purge memakai event `instance.removed` dan lock instance spec 0010.
 - [x] Fitur 67: adopsi `PreflightSection`, footer sheet, dan `CreateProgressSection` kalau fitur ini membangunnya lebih dulu. Diterapkan (2026-10-21): spec fase 02 tidak membuat versi sementara; `PreflightSection` dan `CreateProgressSection` adalah pembungkus layar di atas `CheckList` dan `StagedProgress`, dan footer milik `StacklySheet` spec 0067.
 - [ ] Fitur 69: daftarkan New Instance… (⌘N) di peta perintah dan hapus `CommandGroup` sementara. Diputuskan spec 0069 AC-9 dan AC-16 dan aturan dua jalur di langkah 14 (2026-10-21); tetap terbuka sampai baris `newInstance` built.
-- [ ] `/sync` setelah build: catat `instance.get_create_form`, `instance.preflight`, event `instance.removed`, fuzz target `instance_path`, aturan `check-deps` baru, dan folder `CreateInstance/` di `AGENTS.md` root dan `apps/macos/AGENTS.md`.
+- [ ] `/sync` setelah build: catat `instance.get_create_form`, `instance.preflight`, event `instance.removed`, fuzz target `instance_path`, aturan `check-deps` baru, dan folder `CreateInstance/` di `AGENTS.md` root dan `apps/macos/AGENTS.md`; setelah milestone 6, juga aturan bahwa pemeriksaan ulang yang harus satu transaksi dengan tulisannya memakai `Registry::commit_guarded` dan guard nya murni *(2026-10-22)*.
 
 ## Rationale
 
