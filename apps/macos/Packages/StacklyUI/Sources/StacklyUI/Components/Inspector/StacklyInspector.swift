@@ -89,6 +89,10 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .relayingFixtureAccessibilityInContainer()
+            // The split view of `.inspector` measures the page at 0 × 0, where wrapping
+            // text is thousands of points tall, and lays the page out at that height. The
+            // page takes the size the column offers instead, open or closed.
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .inspector(isPresented: $isPresented) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.s16) {
