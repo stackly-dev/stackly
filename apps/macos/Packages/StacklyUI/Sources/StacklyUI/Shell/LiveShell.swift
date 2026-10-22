@@ -34,6 +34,7 @@ public struct LiveShell: View {
             counts: model.sidebarCounts,
             instances: model.instances,
             catalog: model.catalog,
+            runtimes: model.runtimes,
             operations: model.operations,
             capacity: model.capacity,
             instanceActions: model.instanceActions,
