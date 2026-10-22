@@ -49,7 +49,7 @@ _Langkah 8 sampai 11 (`dev-f20-m2`, 2026-10-22), protokol 1.12. Test daemon mema
 - [x] Buka `protocols/fixtures/instance/` → `create-form-fake.json`, `create-form-nats.json`, dan `create-form-postgresql.json` dibangun dari paket nyata (`providers/fake`, `providers/nats`, `providers/postgresql`); field `nats` urut `serverName` (managed), `jetstream` (boolean), tiga integer advanced dengan batas; field PostgreSQL `superuserPassword` secret dengan `printableOnly` dan panjang 8 sampai 128 tanpa default; `commands.json` memuat tujuh kasus perintah setara → AC-17, AC-18
 - [x] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Fixtures/FixtureCreateCases.swift` → file baru saja; `FixtureScenario`, builder, dan `FixtureContract` tidak berubah (`git diff main -- apps/macos` hanya menambah `FixtureCreateCases.swift` dan `FixtureCreateTests.swift`) → AC-17
 - [x] Buka `crates/core/src/instance/create/` di `git diff main` → hanya dua perubahan kecil milik langkah 9, dilaporkan ke lead: teks `Display` setiap `CreateError` (pesan tabel *Kode error*) di `error.rs`, dan `bind` yang gagal di reference sumbernya menjadi `secret.needs_secret` (target tiruan untuk `classify_create_failure`) di `work.rs` → AC-7, AC-11
-- [ ] `grep -rn "provisional: F20" apps crates` → hanya penanda milik langkah 9 yang sudah hilang; tidak ada lagi di `apps/daemon`; `apps/cli` tidak punya penanda F20 → AC-10 · FAIL (checker 2026-10-22): `apps/daemon/tests/nats/harness.rs:384` (`create_params`, harness NATS spec 0023) masih memuat `// provisional: F20`; `apps/cli` bersih, tidak melanggar teks AC-10, lead memutuskan: hapus penanda atau ubah teks langkah
+- [x] `grep -rn "provisional: F20" apps crates` → hanya penanda milik langkah 9 yang sudah hilang; tidak ada lagi di `apps/daemon`; `apps/cli` tidak punya penanda F20 → AC-10 · lulus dengan catatan (keputusan lead 2026-10-22): penanda terakhir di `apps/daemon/tests/nats/harness.rs:384` (`create_params`, port `Fixed`) milik milestone `Auto` endpoints spec 0023, yang mengganti harness ke `Auto` dan menghapus penanda; kode F20 di `apps/daemon` dan `apps/cli` tidak punya penanda tersisa
 
 ### Commands
 
@@ -75,7 +75,7 @@ _Langkah 8 sampai 11 (`dev-f20-m2`, 2026-10-22), protokol 1.12. Test daemon mema
 ### Hasil verify (checker `chk-f20-m2`, 2026-10-22)
 
 - Mac sibuk saat dijalankan (load average 40 sampai 78). Pengukuran `measure_create` (load 42): preflight p95 13,9 ms, create p95 24,3 ms, batas 300 dan 500 terpenuhi.
-- Selisih angka dari teks langkah, bukan kegagalan: `stackly-protocol` 182 unit test (tertulis 180), suite `supervisor` 35 (tertulis 34), workspace 3331 lulus dan 50 ignored (tertulis 3312 dan 36).
+- Selisih angka dari teks langkah, bukan kegagalan: `stackly-protocol` 182 unit test (tertulis 180), suite `supervisor` 35 (tertulis 34), workspace 3331 lulus dan 50 ignored (tertulis 3312 dan 36). Angka di teks langkah (180, 34, 3312, p95 20,5 dan 45,2 ms) berubah bersama merge main.
 - `swift test` StacklyUI sekali jalan penuh: 875 dari 876 lulus; `SkeletonProcessRunnerTests` melewati batas 20 detik saat beban tinggi (flake yang diketahui) dan lulus bila dijalankan sendiri, begitu juga `ShellEndToEndTests`. Tidak ada PNG snapshot yang bergeser.
 
 ### Acceptance-criteria coverage
