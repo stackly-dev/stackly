@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-23 04:00`
+- **Diperbarui:** `2026-10-23 05:00`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -220,6 +220,7 @@
 | `2026-10-22` | F18 sisa milestone 1 dan milestone 3 di-merge (`abcd33f`, protokol 1.11, revision catalog 3) setelah dua konflik semantik: revision catalog (F19 mengambil revision 2) dan digest manifest NATS di golden `provider inspect` F17. Konflik registrasi di `apps/cli/src/app.rs` dan `commands/mod.rs` (grup `provider` dan `runtime`, keep both) diselesaikan lead sebagai setara pengecualian baris `mod`, lalu developer mengulang di branch-nya. Lead Scope 03 diberi tahu bahwa fallback hint `FailureError` langkah 11 spec 0018 sudah di main. Langkah 2 F23 (paket NATS) dibuka. | `lead` |
 | `2026-10-23` | User menjawab "OK" untuk memulai `arc-f21-update` (enam keputusan `tree_usage` dan item "Duplicate…" spec 0024 di spec 0021) dan `arc-f16-update` (baris spec 0015 untuk spec 0016). | `user` |
 | `2026-10-23` | F23 milestone 1 di-merge (`b818e61`; dua flake StacklyUI muncul di run penuh dan lulus sendiri, diterima sesuai aturan; lead ui-macos menemukan seluruh proses test berhenti sekitar 22 detik dan merutekan `dbg-f13-stall`). Dicentang (`45e9f2c`): F17 milestone 2, F18 milestone 1 dan 3, F23 milestone 1 dengan Pointer `code in`. Tiga fakta startup NATS (langkah 0, NOT_RUN di verify milestone 1) dipindah ke run native milestone 2 F23 dan dicatat di `verify.md` oleh `dev-f23-m2`; faktanya diteruskan ke architect untuk rationale. | `lead` |
+| `2026-10-23` | Lead scope 03 me-merge `claude/arc-f25-spec-20a08d` (`f977abd`, docs saja, tanpa perubahan teks AC; lead ini setuju lebih dulu dan menahan main selama merge itu). Hasilnya untuk scope ini: kalimat *Status dan probe* spec 0011 sudah selaras dengan AC-3 (keychain terkunci menjawab present atau missing, `unknown` hanya dari NotSupported, Busy, atau Backend), sehingga Follow-up spec 0020 soal kalimat `unknown` itu selesai isinya; `SecretField.copyFromLabels` sudah tercatat di spec 0011 (baris `SecretField`), sehingga Follow-up spec 0020 soal usulan spec 0024 untuk spec 0011 juga selesai isinya dan prasyarat spec 0011 untuk langkah 14 spec 0020 (milestone 3 F20) terpenuhi. Kedua kotak Follow-up itu ada di file spec 0020, jadi dicentang oleh architect spec 0020 berikutnya atau `/sync` di penutupan wave, bukan oleh lead. | `lead` |
 
 ## Blocker terbuka
 
