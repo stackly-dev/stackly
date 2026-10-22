@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use std::io::Write;
 
 use stackly_platform::{
-    EntryPath, Filesystem, PlatformError, RemoveReport, VolumeFacts, VolumeSpace,
+    EntryPath, Filesystem, PlatformError, RemoveReport, UsageLimits, VolumeFacts, VolumeSpace,
 };
 use stackly_testkit::{FakeFilesystem, FakeVolume, Fault, FsOp, TestRoot, fs_conformance};
 
@@ -489,4 +489,84 @@ fn a_hook_runs_once_inside_the_next_call_of_its_operation_only() {
     assert_eq!(runs.load(Ordering::SeqCst), 1, "the next call of its own");
     fs.volume_space(root.path()).unwrap();
     assert_eq!(runs.load(Ordering::SeqCst), 1, "never a second time");
+}
+
+/// Limits no test tree reaches.
+const ROOMY: UsageLimits = UsageLimits::new(1_000_000, Duration::from_secs(60));
+
+#[test]
+fn tree_usage_counts_its_calls_the_failed_ones_too() {
+    let (root, fs) = fake();
+    assert_eq!(fs.tree_usage_calls(), 0);
+
+    fs.tree_usage(root.path(), ROOMY).unwrap();
+    fs.fail_next(FsOp::TreeUsage, Fault::PermissionDenied);
+    let denied = fs.tree_usage(root.path(), ROOMY);
+    let relative = fs.tree_usage(Path::new("relative"), ROOMY);
+
+    assert!(matches!(
+        denied,
+        Err(PlatformError::PermissionDenied { .. })
+    ));
+    assert!(matches!(relative, Err(PlatformError::Io { .. })));
+    assert_eq!(fs.tree_usage_calls(), 3);
+    assert_eq!(
+        fs.violations(),
+        0,
+        "an invalid root is not a confinement violation"
+    );
+}
+
+#[test]
+fn tree_usage_peak_is_the_most_calls_running_at_once() {
+    let (root, fs) = fake();
+    let fs = Arc::new(fs);
+    fs.set_delay(FsOp::TreeUsage, Duration::from_millis(200));
+    assert_eq!(fs.tree_usage_peak(), 0);
+
+    fs.tree_usage(root.path(), ROOMY).unwrap();
+    assert_eq!(fs.tree_usage_peak(), 1);
+    let handles: Vec<_> = (0..3)
+        .map(|_| {
+            let fs = Arc::clone(&fs);
+            let path = root.path().to_path_buf();
+            std::thread::spawn(move || fs.tree_usage(&path, ROOMY).unwrap())
+        })
+        .collect();
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    assert_eq!(fs.tree_usage_calls(), 4);
+    assert_eq!(fs.tree_usage_peak(), 3);
+}
+
+#[test]
+fn the_delay_of_tree_usage_runs_before_the_deadline_starts() {
+    let (root, fs) = fake();
+    std::fs::write(root.path().join("file"), vec![0_u8; 8192]).unwrap();
+    fs.set_delay(FsOp::TreeUsage, Duration::from_millis(150));
+
+    let slow = fs
+        .tree_usage(
+            root.path(),
+            UsageLimits::new(1000, Duration::from_millis(100)),
+        )
+        .unwrap();
+
+    assert!(slow.complete, "{slow:?}");
+}
+
+#[test]
+fn tree_usage_stays_inside_the_test_roots() {
+    let (_root, fs) = fake();
+    let other = TestRoot::new().unwrap();
+
+    let outside = fs.tree_usage(other.path(), ROOMY);
+
+    assert!(matches!(
+        outside,
+        Err(PlatformError::OutsideTestRoots { .. })
+    ));
+    assert_eq!(fs.violations(), 1);
 }

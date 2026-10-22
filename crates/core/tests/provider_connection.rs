@@ -44,6 +44,9 @@ fn files_of(dir: &Path) -> BTreeMap<String, Vec<u8>> {
     files
 }
 
+/// The start of the top-level `connection` block of `providers/fake`.
+const CONNECTION_BLOCK: &[u8] = b"\nconnection:\n";
+
 /// A package with extra manifest text appended at the top level.
 struct Package {
     folder: &'static str,
@@ -51,12 +54,22 @@ struct Package {
 }
 
 impl Package {
-    /// `providers/fake`: one tcp endpoint `http` and the secret field
-    /// `authToken`.
+    /// `providers/fake` without its own `connection` block (the last
+    /// block of its manifest), so each test adds the block it checks: one
+    /// tcp endpoint `http` and the secret field `authToken`.
     fn fake() -> Self {
+        let mut files = files_of(&fake_dir());
+        let manifest = files
+            .get_mut("provider.yaml")
+            .expect("the package has a manifest");
+        let at = manifest
+            .windows(CONNECTION_BLOCK.len())
+            .position(|window| window == CONNECTION_BLOCK)
+            .expect("providers/fake ends with a connection block");
+        manifest.truncate(at + 1);
         Self {
             folder: "fake",
-            files: files_of(&fake_dir()),
+            files,
         }
     }
 

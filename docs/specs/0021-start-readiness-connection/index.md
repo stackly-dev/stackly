@@ -1,7 +1,7 @@
 # 0021. Start, readiness, dan connection
 
 **Date**: 2026-10-20
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

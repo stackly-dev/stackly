@@ -1,1 +1,1 @@
-${secret.authToken}
+${endpoint.http.address}
