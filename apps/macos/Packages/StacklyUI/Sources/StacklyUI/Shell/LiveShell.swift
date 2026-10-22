@@ -33,6 +33,7 @@ public struct LiveShell: View {
             diagnostics: model.diagnostics,
             counts: model.sidebarCounts,
             instances: model.instances,
+            catalog: model.catalog,
             windowOpener: runtime.windowOpener,
             windowWillClose: windowWillClose,
             reconnect: { model.reconnect() },

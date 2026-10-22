@@ -318,6 +318,33 @@ fn request(port: u16, method: &str, path: &str) -> io::Result<(u16, String)> {
     )
 }
 
+/// Sends `PUT <path>` with `body` and returns the status and body.
+fn put(port: u16, path: &str, body: &[u8]) -> io::Result<(u16, String)> {
+    let mut raw = format!(
+        "PUT {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    raw.extend_from_slice(body);
+    // Not through `raw_request`, because a body is not always UTF 8.
+    let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port))?;
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.write_all(&raw)?;
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response)?;
+    let response = String::from_utf8_lossy(&response).into_owned();
+    let status = response
+        .split(' ')
+        .nth(1)
+        .and_then(|status| status.parse().ok())
+        .ok_or_else(|| io::Error::other(format!("no status line in {response:?}")))?;
+    let body = response
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body.to_owned())
+        .unwrap_or_default();
+    Ok((status, body))
+}
+
 /// Polls `GET <path>` until `accept` is true for its answer.
 fn wait_for(setup: &Setup, path: &str, accept: impl Fn(u16, &str) -> bool) {
     let started = Instant::now();
@@ -625,6 +652,103 @@ fn serve_with_no_delay_answers_every_route() {
     assert_eq!(request(setup.port, "POST", "/health").unwrap().0, 404);
     assert_eq!(raw_request(setup.port, "NONSENSE\r\n\r\n").unwrap().0, 400);
     assert_eq!(setup.get("/health").0, 200);
+}
+
+#[test]
+fn sentinel_is_written_and_read_back_from_the_data_folder() {
+    let mut setup = Setup::new();
+    let _fake = setup.serve(&[]);
+
+    assert_eq!(setup.get("/sentinel"), (404, "not found\n".to_owned()));
+    assert_eq!(
+        put(setup.port, "/sentinel", b"alpha").unwrap(),
+        (204, String::new())
+    );
+    assert_eq!(setup.get("/sentinel"), (200, "alpha".to_owned()));
+    assert_eq!(
+        std::fs::read(setup.data.join("SENTINEL")).unwrap(),
+        b"alpha"
+    );
+
+    assert_eq!(
+        put(setup.port, "/sentinel", "βeta ✓".as_bytes()).unwrap().0,
+        204
+    );
+    assert_eq!(setup.get("/sentinel"), (200, "βeta ✓".to_owned()));
+    let mut names: Vec<_> = std::fs::read_dir(&setup.data)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        ["SENTINEL", "argv-serve.json"],
+        "no temporary file is left behind"
+    );
+}
+
+#[test]
+fn sentinel_accepts_one_to_two_hundred_fifty_six_bytes() {
+    let mut setup = Setup::new();
+    let _fake = setup.serve(&[]);
+
+    assert_eq!(put(setup.port, "/sentinel", b"x").unwrap().0, 204);
+    let longest = "y".repeat(256);
+    assert_eq!(
+        put(setup.port, "/sentinel", longest.as_bytes()).unwrap().0,
+        204
+    );
+    assert_eq!(setup.get("/sentinel"), (200, longest.clone()));
+
+    for body in [&b""[..], "z".repeat(257).as_bytes(), &[0xff, 0xfe, 0x41]] {
+        assert_eq!(
+            put(setup.port, "/sentinel", body).unwrap().0,
+            400,
+            "{body:?}"
+        );
+    }
+    assert_eq!(
+        setup.get("/sentinel"),
+        (200, longest),
+        "a refused body leaves the stored sentinel alone"
+    );
+}
+
+#[test]
+fn sentinel_routes_answer_only_their_methods() {
+    let mut setup = Setup::new();
+    let _fake = setup.serve(&[]);
+
+    assert_eq!(request(setup.port, "POST", "/sentinel").unwrap().0, 404);
+    assert_eq!(request(setup.port, "DELETE", "/sentinel").unwrap().0, 404);
+    assert_eq!(put(setup.port, "/other", b"x").unwrap().0, 404);
+    assert_eq!(setup.get("/sentinel").0, 404);
+}
+
+#[test]
+fn two_servers_keep_their_own_sentinels() {
+    let mut first = Setup::new();
+    let mut second = Setup::new();
+    let _one = first.serve(&[]);
+    let _two = second.serve(&[]);
+
+    assert_eq!(put(first.port, "/sentinel", b"one").unwrap().0, 204);
+    assert_eq!(second.get("/sentinel").0, 404);
+    assert_eq!(put(second.port, "/sentinel", b"two").unwrap().0, 204);
+    assert_eq!(first.get("/sentinel"), (200, "one".to_owned()));
+    assert_eq!(second.get("/sentinel"), (200, "two".to_owned()));
+}
+
+#[test]
+fn sentinel_survives_a_restart_on_the_same_data_folder() {
+    let mut setup = Setup::new();
+    let fake = setup.serve(&[]);
+    assert_eq!(put(setup.port, "/sentinel", b"kept").unwrap().0, 204);
+    drop(fake);
+
+    let _again = setup.serve(&[]);
+
+    assert_eq!(setup.get("/sentinel"), (200, "kept".to_owned()));
 }
 
 #[test]

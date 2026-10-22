@@ -150,6 +150,7 @@ mod tests {
                 platform: &self.platform,
                 redactor: &self.redactor,
                 config: &self.config,
+                native: &crate::supervisor::probe::TcpConnect,
             }
         }
 

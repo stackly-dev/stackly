@@ -22,6 +22,7 @@ use stackly_core::secret::{
     PutRequest, PutTarget, Redactor, SecretCaller, SecretChange, SecretDeps, SecretEvents,
     SecretFieldRule, SecretFieldRules, SecretInput, SecretService,
 };
+use stackly_core::supervisor::probe::NativeConnect;
 use stackly_core::supervisor::{
     BindOptions, BindOutcome, InstanceStatus, LogBatch, LogSink, PortProbe, SinkOutcome, SinkSet,
     SocketPortProbe, Supervisor, SupervisorDeps, SupervisorEvents,
@@ -616,10 +617,28 @@ impl Rig {
         Self::build_with(tweak, patch, |text| text.to_owned()).await
     }
 
+    /// A rig whose provider.yaml went through `patch` and whose `native`
+    /// probes connect through `connector` (spec 0023).
+    pub async fn with_connector(
+        connector: Arc<dyn NativeConnect>,
+        patch: impl Fn(&str) -> String,
+    ) -> Self {
+        Self::build_full(|_| {}, patch, |text| text.to_owned(), Some(connector)).await
+    }
+
     pub async fn build_with(
         tweak: impl FnOnce(&mut stackly_core::supervisor::SupervisorConfig),
         patch: impl Fn(&str) -> String,
         schema_patch: impl Fn(&str) -> String,
+    ) -> Self {
+        Self::build_full(tweak, patch, schema_patch, None).await
+    }
+
+    async fn build_full(
+        tweak: impl FnOnce(&mut stackly_core::supervisor::SupervisorConfig),
+        patch: impl Fn(&str) -> String,
+        schema_patch: impl Fn(&str) -> String,
+        connector: Option<Arc<dyn NativeConnect>>,
     ) -> Self {
         let root = TestRoot::new().expect("a test root can be created");
         let fake = FakePlatform::new(&root);
@@ -657,6 +676,9 @@ impl Rig {
             Arc::clone(&redactor),
         );
         deps.ports = Arc::clone(&ports) as Arc<dyn PortProbe>;
+        if let Some(connector) = connector {
+            deps.native = connector;
+        }
         deps.events = Arc::clone(&events) as Arc<dyn SupervisorEvents>;
         let logs = Arc::new(LogRecorder::default());
         deps.sinks = Arc::new(SinkSet::new(vec![

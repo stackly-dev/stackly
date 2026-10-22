@@ -729,7 +729,7 @@ Langkah yang mengubah file shell yang sama (`AppShell.swift`, `StacklyApp.swift`
 - [ ] Fitur 48: tampilkan isi `RecoveryReport` dan alur restore; ganti petunjuk recovery di Diagnostics.
 - [ ] Fitur 22, 34, 35, 44, 17, 18: ganti `UnbuiltPage` dan daftar instance sementara masing masing; fitur 34 menaruh hasil doctor di bawah seksi Connection; fitur 35 memakai `OperationCenter`. *Dipecah per fitur (2026-10-21, usulan fondasi butir 13); centang masing masing lewat `/sync` saat fitur itu mendarat:*
   - [ ] Fitur 22: Overview dan Instances menggantikan `UnbuiltPage(.overview)` dan `ProvisionalInstanceList` (spec 0022 AC-2, AC-5, AC-6).
-  - [ ] Fitur 17: Catalog menggantikan `UnbuiltPage(.catalog)` (spec 0017 AC-10).
+  - [x] Fitur 17: Catalog menggantikan `UnbuiltPage(.catalog)` (spec 0017 AC-10). Diterapkan lewat `/sync` (2026-10-22, merge `377c1f6`).
   - [ ] Fitur 18: Runtimes menggantikan `UnbuiltPage(.runtimes)` (spec 0018 AC-17).
   - [ ] Fitur 35: halaman Operations di atas `OperationCenter` menggantikan `UnbuiltPage(.operations)`.
   - [ ] Fitur 34: hasil doctor di bawah seksi Connection dan seksi agent spec 0015, menggantikan `UnbuiltPage(.diagnostics)`.

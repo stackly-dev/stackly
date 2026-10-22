@@ -10,6 +10,7 @@ use stackly_domain::{Instance, InstanceId, Registry, ResourceRevision};
 use stackly_platform::Platform;
 
 use super::actor::InstanceActor;
+use super::probe::{NativeConnect, TcpConnect};
 use super::sink::{LogSink, SinkSet, TailSink};
 use super::status::InstanceStatus;
 use super::{PortProbe, SupervisorConfig};
@@ -89,6 +90,9 @@ pub struct SupervisorDeps {
     pub sinks: Arc<dyn LogSink>,
     /// Trial binds, injectable in tests.
     pub ports: Arc<dyn PortProbe>,
+    /// Opens the connection of a `native` probe; tests replace it with an
+    /// in memory stream.
+    pub native: Arc<dyn NativeConnect>,
     /// Where changes are reported.
     pub events: Arc<dyn SupervisorEvents>,
     /// The constants.
@@ -118,6 +122,7 @@ impl SupervisorDeps {
             tail,
             sinks,
             ports: Arc::new(super::SocketPortProbe::new()),
+            native: Arc::new(TcpConnect),
             events: Arc::new(NoSupervisorEvents),
             config: SupervisorConfig::default(),
         }

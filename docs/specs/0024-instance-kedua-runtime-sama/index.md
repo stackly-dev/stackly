@@ -1,7 +1,7 @@
 # 0024. Instance kedua dari runtime yang sama
 
 **Date**: 2026-10-22
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
@@ -163,7 +163,7 @@ pub struct DuplicateModel { pub source: (InstanceId, InstanceName), pub form: Cr
 pub enum DuplicateError { NotFound, Retained, PackageUnavailable { provider: String, reason: String },
                           ProviderAmbiguous { provider: ProviderName, revision: RevisionLabel },
                           CapabilityUnsupported { provider: ProviderName, existing: InstanceName },
-                          RuntimeNotFound, RuntimeUnavailable { state: RuntimeState }, Registry(RegistryError) }
+                          RuntimeNotFound { runtime_id: RuntimeId }, RuntimeUnavailable { runtime_id: RuntimeId, state: RuntimeState }, Registry(RegistryError) }
 pub fn duplicate_name(source: &InstanceName, taken: &[InstanceName]) -> Option<InstanceName>;
 ```
 

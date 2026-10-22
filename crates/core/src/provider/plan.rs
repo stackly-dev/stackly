@@ -25,10 +25,11 @@ use super::interpolate::{
     EndpointTransport, ExecRef, InstanceDir, Interp, PathBase, PathExpr, Piece, SECRETS_DIR, Token,
 };
 use super::manifest::{
-    CommandSpec, InitStepSpec, Manifest, ProbeDef, ReloadActionSpec, StdinSpec, StopSignal,
-    StopSpec,
+    CommandSpec, InitStepSpec, Manifest, NativeParamDef, ProbeDef, ReloadActionSpec, StdinSpec,
+    StopSignal, StopSpec,
 };
 use super::names::SettingName;
+use super::probe::native::{self, NativeParamKind, NativeParamValue, NativeProbe};
 use super::settings::{ScalarValue, SettingValue, SettingsError, SettingsItem, SettingsValues};
 use super::template::{self, OUTPUT_MAX_LEN, TemplateFormat};
 use super::validate::ValidatedPackage;
@@ -375,6 +376,28 @@ pub enum ProbeSpec {
     },
     /// A runtime executable whose exit code decides; stdin is always null.
     Exec(RunSpec),
+    /// A probe from the native registry that speaks a protocol to an
+    /// endpoint (spec 0023).
+    Native(NativeProbeSpec),
+}
+
+/// A native probe attempt: where to connect and what to check.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct NativeProbeSpec {
+    /// Where to connect.
+    pub target: ProbeTarget,
+    /// The probe with its params, after interpolation.
+    pub probe: NativeProbe,
+}
+
+impl NativeProbeSpec {
+    /// A native probe attempt at `target`.
+    #[must_use]
+    pub const fn new(target: ProbeTarget, probe: NativeProbe) -> Self {
+        Self { target, probe }
+    }
 }
 
 /// Where a TCP probe connects.
@@ -873,7 +896,14 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn probe(&self, probe: &ProbeDef, attempt: Duration) -> Result<ProbeSpec, PlanError> {
+    /// Builds the probe of the block at `position`, `readiness.probe` or
+    /// `health.probe`, which names a param whose value cannot be used.
+    fn probe(
+        &self,
+        probe: &ProbeDef,
+        attempt: Duration,
+        position: &str,
+    ) -> Result<ProbeSpec, PlanError> {
         Ok(match probe {
             ProbeDef::Tcp { endpoint } => {
                 let target = match self
@@ -908,7 +938,54 @@ impl<'a> Resolver<'a> {
             ProbeDef::Exec { command, success } => {
                 ProbeSpec::Exec(self.run(command, Stdin::Null, attempt, success)?)
             }
+            ProbeDef::Native {
+                kind,
+                endpoint,
+                params,
+            } => {
+                let (host, port) = self.endpoint(endpoint)?;
+                let mut values = Vec::with_capacity(params.len());
+                for ((name, def), param) in params.iter().zip(kind.descriptor().params) {
+                    let field = format!("{position}.params.{name}");
+                    values.push((*name, self.native_param(def, param.kind, field)?));
+                }
+                ProbeSpec::Native(NativeProbeSpec {
+                    target: ProbeTarget::Ip { host, port },
+                    probe: native::build(*kind, &values),
+                })
+            }
         })
+    }
+
+    /// Renders one native probe param, checking the limits of its kind.
+    fn native_param(
+        &self,
+        def: &NativeParamDef,
+        kind: NativeParamKind,
+        field: String,
+    ) -> Result<NativeParamValue, PlanError> {
+        match (def, kind) {
+            (NativeParamDef::Text(interp), NativeParamKind::Text { max_bytes }) => {
+                let text = self.render(interp, &field)?;
+                if text.is_empty() || text.len() > max_bytes || text.chars().any(char::is_control) {
+                    return Err(PlanError::UnrepresentableValue { field });
+                }
+                Ok(NativeParamValue::Text(text))
+            }
+            (NativeParamDef::Literal(flag), NativeParamKind::Boolean) => {
+                Ok(NativeParamValue::Boolean(*flag))
+            }
+            (NativeParamDef::Token(interp), NativeParamKind::Boolean) => {
+                match interp.pieces.as_slice() {
+                    [Piece::Token(token)] => match self.value(token)? {
+                        Value::Boolean(flag) => Ok(NativeParamValue::Boolean(flag)),
+                        _ => Err(PlanError::UnrepresentableValue { field }),
+                    },
+                    _ => Err(PlanError::UnrepresentableValue { field }),
+                }
+            }
+            _ => Err(PlanError::UnrepresentableValue { field }),
+        }
     }
 
     /// The folders a config file's destination needs, parent first: the
@@ -1169,14 +1246,18 @@ impl ValidatedPackage {
             render: resolver.render_steps(self)?,
             spawn: resolver.command(&manifest.start)?,
             readiness: ProbePlan {
-                probe: resolver.probe(&readiness.probe, millis(readiness.attempt_ms))?,
+                probe: resolver.probe(
+                    &readiness.probe,
+                    millis(readiness.attempt_ms),
+                    "readiness.probe",
+                )?,
                 interval: millis(readiness.interval_ms),
                 attempt_timeout: millis(readiness.attempt_ms),
                 deadline: secs(timeouts.readiness),
             },
             recovery_deadline: secs(timeouts.recovery),
             health: HealthPlan {
-                probe: resolver.probe(&health.probe, millis(health.attempt_ms))?,
+                probe: resolver.probe(&health.probe, millis(health.attempt_ms), "health.probe")?,
                 interval: secs(health.interval_seconds),
                 attempt_timeout: millis(health.attempt_ms),
                 failure_threshold: NonZeroU8::new(health.failure_threshold)
@@ -1221,7 +1302,11 @@ impl ValidatedPackage {
         let readiness = &manifest.readiness;
         let verify = if reload.verify {
             Some(ProbePlan {
-                probe: resolver.probe(&readiness.probe, millis(readiness.attempt_ms))?,
+                probe: resolver.probe(
+                    &readiness.probe,
+                    millis(readiness.attempt_ms),
+                    "readiness.probe",
+                )?,
                 interval: millis(readiness.interval_ms),
                 attempt_timeout: millis(readiness.attempt_ms),
                 deadline: secs(timeouts.reload),

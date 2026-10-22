@@ -162,6 +162,7 @@ impl Supervisor {
                 platform: &deps.platform,
                 redactor: &deps.redactor,
                 config: &deps.config,
+                native: deps.native.as_ref(),
             };
             loop {
                 let left = remaining();

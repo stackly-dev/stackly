@@ -300,6 +300,98 @@ pub(crate) struct RawProbe {
     pub(crate) expect_status: Option<RawStatusRange>,
     pub(crate) command: Option<RawCommand>,
     pub(crate) success_exit_codes: Option<Vec<u8>>,
+    /// The registry name of a `native` probe (spec 0023).
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(r"^[a-z][a-z0-9-]{0,31}$"), length(max = 32))
+    )]
+    pub(crate) name: Option<String>,
+    /// The params of a `native` probe, by name.
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::MANIFEST_NAME }, "maxProperties" = 8)))]
+    pub(crate) params: Option<BTreeMap<String, RawParam>>,
+}
+
+/// One param value of a `native` probe: a YAML scalar. Anything else
+/// decodes as [`RawParam::Other`], so the semantic pass can name the
+/// field instead of the decoder failing on its type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RawParam {
+    Text(String),
+    Boolean(bool),
+    Integer(i64),
+    Other,
+}
+
+impl<'de> Deserialize<'de> for RawParam {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ParamVisitor;
+
+        impl<'de> Visitor<'de> for ParamVisitor {
+            type Value = RawParam;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("a string, a boolean, or an integer")
+            }
+
+            fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(RawParam::Boolean(v))
+            }
+
+            fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(RawParam::Integer(v))
+            }
+
+            fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(i64::try_from(v).map_or(RawParam::Other, RawParam::Integer))
+            }
+
+            fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(RawParam::Other)
+            }
+
+            fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(RawParam::Text(v.to_owned()))
+            }
+
+            fn visit_string<E: de::Error>(self, v: String) -> Result<Self::Value, E> {
+                Ok(RawParam::Text(v))
+            }
+
+            fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+                Ok(RawParam::Other)
+            }
+
+            fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+                Ok(RawParam::Other)
+            }
+
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                while seq.next_element::<de::IgnoredAny>()?.is_some() {}
+                Ok(RawParam::Other)
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                while map
+                    .next_entry::<de::IgnoredAny, de::IgnoredAny>()?
+                    .is_some()
+                {}
+                Ok(RawParam::Other)
+            }
+        }
+
+        deserializer.deserialize_any(ParamVisitor)
+    }
+}
+
+#[cfg(feature = "json-schema")]
+impl schemars::JsonSchema for RawParam {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ProbeParam".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": ["string", "boolean", "integer"] })
+    }
 }
 
 #[derive(Debug, Deserialize)]

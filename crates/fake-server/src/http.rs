@@ -9,7 +9,7 @@ use std::time::Duration;
 pub(crate) const IO_TIMEOUT: Duration = Duration::from_secs(5);
 /// Largest request line plus headers the server reads.
 const MAX_HEAD_BYTES: usize = 16 * 1024;
-/// Largest request body the server reads and throws away.
+/// Largest request body the server reads.
 const MAX_BODY_BYTES: usize = 64 * 1024;
 /// Largest response the shutdown client reads.
 const MAX_RESPONSE_BYTES: u64 = 64 * 1024;
@@ -21,6 +21,8 @@ pub(crate) struct Request {
     pub(crate) method: String,
     /// The target without its query string, such as `/ready`.
     pub(crate) path: String,
+    /// The body, empty when the request has none.
+    pub(crate) body: Vec<u8>,
 }
 
 /// Why no request could be read.
@@ -39,7 +41,7 @@ impl From<io::Error> for RequestError {
     }
 }
 
-/// Reads one request head and drains its body, if it has one.
+/// Reads one request head and its body, if it has one.
 pub(crate) fn read_request(stream: &mut impl Read) -> Result<Request, RequestError> {
     let mut buffer = Vec::new();
     let head_end = loop {
@@ -58,12 +60,17 @@ pub(crate) fn read_request(stream: &mut impl Read) -> Result<Request, RequestErr
     };
     let head = std::str::from_utf8(&buffer[..head_end]).map_err(|_| RequestError::Malformed)?;
     let mut lines = head.split("\r\n");
-    let request = parse_request_line(lines.next().unwrap_or_default())?;
+    let mut request = parse_request_line(lines.next().unwrap_or_default())?;
     let body_length = content_length(lines)?;
 
-    let already_read = buffer.len() - (head_end + 4);
-    let remaining = body_length.saturating_sub(already_read);
-    io::copy(&mut stream.take(remaining as u64), &mut io::sink())?;
+    let mut body = buffer.split_off(head_end + 4);
+    let remaining = body_length.saturating_sub(body.len());
+    stream.take(remaining as u64).read_to_end(&mut body)?;
+    if body.len() < body_length {
+        return Err(RequestError::Closed);
+    }
+    body.truncate(body_length);
+    request.body = body;
     Ok(request)
 }
 
@@ -82,6 +89,7 @@ fn parse_request_line(line: &str) -> Result<Request, RequestError> {
     Ok(Request {
         method: method.to_owned(),
         path: path.to_owned(),
+        body: Vec::new(),
     })
 }
 
@@ -124,8 +132,10 @@ pub(crate) fn write_response(
 fn reason(status: u16) -> &'static str {
     match status {
         200 => "OK",
+        204 => "No Content",
         400 => "Bad Request",
         404 => "Not Found",
+        500 => "Internal Server Error",
         503 => "Service Unavailable",
         _ => "Unknown",
     }
@@ -189,18 +199,27 @@ mod tests {
             request,
             Request {
                 method: "GET".to_owned(),
-                path: "/ready".to_owned()
+                path: "/ready".to_owned(),
+                body: Vec::new()
             }
         );
     }
 
     #[test]
-    fn drains_a_small_body() {
-        let mut raw: &[u8] = b"POST /shutdown HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello";
+    fn reads_a_small_body() {
+        let mut raw: &[u8] = b"PUT /sentinel HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello";
         let request = read_request(&mut raw).unwrap();
 
-        assert_eq!(request.path, "/shutdown");
+        assert_eq!(request.path, "/sentinel");
+        assert_eq!(request.body, b"hello");
         assert!(raw.is_empty());
+    }
+
+    #[test]
+    fn a_body_cut_short_is_a_closed_connection() {
+        let raw = "PUT /sentinel HTTP/1.1\r\nContent-Length: 9\r\n\r\nhello";
+
+        assert!(matches!(read(raw), Err(RequestError::Closed)));
     }
 
     #[test]

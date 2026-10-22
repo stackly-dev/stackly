@@ -83,6 +83,7 @@ impl Probes {
             platform: &deps.platform,
             redactor: &deps.redactor,
             config: &deps.config,
+            native: deps.native.as_ref(),
         };
         probe::run(&plan.probe, plan.attempt_timeout, context).await
     }
@@ -261,6 +262,7 @@ impl HealthLoop {
                 platform: &deps.platform,
                 redactor: &deps.redactor,
                 config: &deps.config,
+                native: deps.native.as_ref(),
             };
             let outcome = probe::run(&self.plan.probe, self.plan.attempt_timeout, context).await;
             if *self.stop.borrow() {
