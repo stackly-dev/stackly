@@ -719,7 +719,7 @@ An item is never hidden because of state: one that does not apply is disabled. A
 | `duplicateInstance` | Instance | 4 | Duplicate… | ⌘D | page (Instances) | 24 | planned |
 | `removeInstance` | Instance | 4 | Remove… | none | page (Instances) | 54 | planned |
 | `stacklyHelp` | Help | 1 | Stackly Help | ⌘? | app | 66 | planned |
-| `welcome` | Help | 2 | Welcome to Stackly | | app | 16 | planned |
+| `welcome` | Help | 2 | Welcome to Stackly | | app | 16 | built |
 | `showMainWindow` | Window | | Stackly (system item of the `Window` scene) | ⌘0 | app | 69 | built |
 
 Three shortcuts reuse a macOS shortcut with another meaning, each with a written reason in the map: ⌘R (Show Ruler, no Format menu), ⇧⌘C (Show Colors, no Format menu), and ⌘0 (Actual Size, no zoom).
