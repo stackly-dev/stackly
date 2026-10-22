@@ -1,6 +1,6 @@
 # Verify: Overview dan daftar instance · spec 0022 · updated 2026-10-21
 
-_Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah; saat ini Milestone 1 dan 2._
+_Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah; saat ini Milestone 1, 2, dan 3._
 
 ## Milestone 1: Daemon contract
 
@@ -65,3 +65,46 @@ _Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalan
 - AC-1: sisi CLI lengkap (`instance::group::of`, `InstanceCounts`, `StatusFilter`, test atas `groups.json`); sisi Swift (`InstanceGroup.of`) milik milestone 3.
 - AC-10: lengkap (tabel, baris jumlah, `--json`, `--status`, semua halaman, kasus kosong dan gagal, golden). Test view model Swift atas `list-mixed.json` milik milestone 3.
 - AC-11: lengkap (UUID, nama, `cli.instance_not_found`, `resource.not_found` dari daemon, exit 6, alias `get`). Key `detail`, `dataUsage`, dan flag `--size` milik spec 0021.
+
+## Milestone 3: Overview and Instances pages
+
+### UI / manual
+
+- [ ] Jalankan app Debug dengan `STACKLY_UI_SCENARIO=connected-mixed` dan buka Overview → empat kartu menjadi tiga (Running, Stopped, Failed; kartu Runtimes menunggu milestone 4), Running memuat "{n} not ready", angka Failed merah, subtitle toolbar "{ready} running · {stopped} stopped · ...", Needs Attention memuat enam item dengan "Show {n} More", Instances enam baris dengan "Show All {n} Instances", dan Operations hanya operasi yang berjalan → AC-2, AC-3, AC-5
+- [ ] Klik kartu Failed → Instances terbuka dengan filter Failed, pencarian kosong, dan jumlah baris sama dengan angka kartu; ulangi untuk Running (jumlah baris sama dengan `ready` ditambah `notReady`) dan Stopped → AC-2
+- [ ] Di Instances: ketik "5432 pg" di pencarian → hanya instance yang cocok di kedua kata; klik header Version dua kali → urutan naik lalu turun dengan nilai kosong selalu di akhir; menu View > Sort Instances By memberi checkmark di kolom dan arah yang aktif; ⌥⌘I menyembunyikan dan menampilkan inspector → AC-6, AC-7, AC-13
+- [ ] Pilih instance gagal → inspector memuat banner "{name} failed" dengan cuplikan output per baris; pilih instance running → tombol Stop; menu Instance > Stop (⇧⌘R) menghentikannya tanpa konfirmasi dan tombolnya sibuk sampai operasi selesai → AC-7, AC-8
+- [ ] Hanya keyboard (Keyboard navigation menyala): Tab ke kartu Failed, Space, pilih baris dengan panah, ⌥⌘I, Tab ke tombol aksi di inspector, Space → AC-13 (evidence manual penuh milik milestone 4)
+- [ ] Lebar konten 640 pt: Overview satu kolom tanpa teks terpotong; Instances dengan inspector tertutup menampilkan Name dan Status tanpa menggulir; jendela 900 pt dengan inspector terbuka menampilkan Name, Status, dan aksi → AC-13
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "InstanceGroupTests|InstanceTextTests|InstanceSearchSortTests|InstanceActionTests|InstanceActionModelTests"` → semua kasus `groups.json`, jumlah dan filter dari `list-mixed.json`, teks port, pencarian banyak kata, setiap pembanding naik dan turun, setiap baris tabel aksi, klik kedua saat `inFlight` tanpa kiriman, key dipakai ulang setelah `outcomeUnknown` (revision sama, di bawah 5 menit) lalu dibuang, `pending` dibersihkan oleh state akhir dan oleh resnapshot, dan umpan balik `rejected`, `notSent`, `outcomeUnknown`, operasi `failed` dan `cancelled` → AC-1, AC-6, AC-8
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "AttentionRulesTests|OperationTitleTests|CapacityModelTests"` → setiap aturan I1 sampai I10, O1, dan S1 sampai S4 dari `list-mixed.json`, `attention-operations.json`, dan laporan kapasitas; urutan item, `id` stabil, satu item per instance; judul setiap `OperationKind`; panggilan kapasitas satu per satu, balasan lama diabaikan, poll 60 detik hanya saat tersambung, `unknown_method` menjadi unsupported → AC-3, AC-4
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "ResourceStoreTests|InstanceStoreTests|ShellNavigatorTests"` → `itemFailures` terisi saat refetch gagal dan bersih saat item diterapkan, dihapus, atau resnapshot selesai; `retry` mengulang pada revision kegagalan dan menghapus item yang kini hilang; `ShellNavigator` dengan permintaan Instances → AC-9
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "InstancesPageTests|OverviewPageTests"` → state halaman (loading, failed, waiting, unsupported, stale, partial, empty, no results), gerbang seksi Needs Attention dan Operations, kata inspector, `ReadinessText`, dan perintah yang diterbitkan halaman → AC-2, AC-5, AC-6, AC-7, AC-9
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "InstancesSnapshotTests|OverviewSnapshotTests"` → 16 state Instances dan 14 state Overview cocok dengan referensi di `SnapshotTests/__Snapshots__/` pada enam varian → AC-13
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "SourceRuleTests|CommandMapTests|CommandSourceRuleTests"` → file baru lulus aturan sumber (tanpa `.secondary`, font tetap, `.inspector` di luar komponen), setiap halaman punya suite snapshot, dan baris `toggleInspector`, `sortInstances…`, `startInstance`, `stopInstance` built dengan tepat satu `CommandItem` → AC-13
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → 1022 test di 99 suite; satu kegagalan waktu, `SkeletonEndToEndTests.aProcessThatOutlivesItsLimitIsKilledAndReportedAsTimedOut` (23 detik dari batas 20) saat load rata rata mesin di atas 40, lulus saat suite itu dijalankan sendiri; `swift test --package-path clients/swift` → 185 test Swift Testing dan 35 XCTest lulus → AC-9
+- [x] `cargo xtask build-app` → `** BUILD SUCCEEDED **`; `xcrun swift-format lint --strict` pada file Swift yang berubah bersih → AC-13
+
+### Value sourcing
+
+- [x] Kelompok, jumlah, dan filter datang dari `lifecycle` dan `readiness.state` lewat `InstanceGroup.of`; di `list-mixed.json` `analytics-db` (proses hidup, `not_ready`) terhitung `notReady` dan ada di filter Running tetapi bukan di angka Running kartu → AC-1, AC-2
+- [x] Judul, isi, tone, dan tujuan Needs Attention datang dari tabel aturan di `AttentionRules`; ubah `restart.nextAttemptAt` ke hari lain dan jam I7 menyertakan tanggal; `lastFailure.code` memilih kalimat I1 lewat `InstanceFailureCopy` → AC-3
+- [x] Level dan ukuran disk datang dari `CapacityReport` daemon lewat `CapacityModel`; GUI tidak menghitung ambang, dan laporan sukses terakhir tetap dipakai saat panggilan berikutnya gagal → AC-4
+- [x] Nama tampil dan tile provider datang dari entri `CatalogStore` dengan `provider` sama dengan `InstanceSummary.provider.name`; tanpa entri baris memakai `software` dan tile abu abu → AC-6
+- [x] Teks readiness datang dari `ReadinessText`, hanya untuk `running` dan `recovering`; uptime dari `process.startedAt` dikurangi `fixtureNow ?? context.date` → AC-7
+- [x] Judul operasi datang dari `OperationTitle` (`kind`, `resource.id`, nama instance dari `InstanceStore`), persen install dari `StagedProgressValue.from` atas lima tahap spec 0018 → AC-5
+- [x] Status menunggu tombol datang dari `accepted.operation.id`, `OperationCenter.updates(for:)`, `OperationCenter.active` setelah resnapshot, dan satu `operation.get` → AC-8
+
+### Acceptance-criteria coverage
+
+- AC-1: sisi Swift lengkap (`InstanceGroup.of`, `InstanceCounts`, test atas `groups.json`); sisi CLI di milestone 2.
+- AC-2: kartu Running, Stopped, dan Failed lengkap dengan angka tertunda, keterangan not ready, dan navigasi berfilter. Kartu Runtimes menunggu `RuntimeStore` (milestone 4, langkah 9).
+- AC-3: lengkap (aturan, urutan, batas enam, Show More, gerbang sumber). Event `instance.health_changed` memperbarui daftar lewat `InstanceStore` (test spec 0013); jalur lengkap dibuktikan di cek manual milestone 4.
+- AC-4: sisi GUI lengkap (`CapacityModel`, S1 sampai S4); cek disk APFS kecil milik milestone 4.
+- AC-5: seksi Instances dan Operations lengkap dengan state seksi; judul dan persen `install_runtime` dari baris `installing` menunggu `RuntimeStore` (milestone 4, langkah 9), sampai itu judul memakai "Install runtime".
+- AC-6, AC-7, AC-8: halaman Instances, inspector, dan aksi lengkap. Penerbitan perintah menu lewat `CommandMap` (Follow-up fitur 69).
+- AC-9: state halaman, state seksi, `itemFailures`, dan Retry lengkap; daemon mati dibuktikan di cek manual milestone 4.
+- AC-13: bagian otomatis (label VoiceOver, aturan sumber, snapshot enam varian, 640 pt dan 664 pt); evidence manual keyboard dan VoiceOver milik milestone 4.

@@ -310,6 +310,9 @@ public struct InstancesPage: View {
             }
             TableColumn("Status", sortUsing: InstanceSortComparator(.status)) { row in
                 StatusLabel(row.appearance, context: .row)
+                    .help(
+                        row.appearance.detail.map { "\(row.appearance.label): \($0.text)" }
+                            ?? row.appearance.label)
             }
             .width(min: 110, ideal: 190, max: 280)
             TableColumn("") { row in
