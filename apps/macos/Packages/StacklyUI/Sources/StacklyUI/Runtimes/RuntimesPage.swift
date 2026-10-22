@@ -15,11 +15,6 @@ import SwiftUI
 public struct RuntimesPage: View {
     /// The table width below which Source and Digest are not drawn (spec 0018, 2026-10-21).
     nonisolated static let sourceAndDigestMinWidth: CGFloat = 560
-    /// The narrowest the content is measured at: the page column next to an open inspector
-    /// in the smallest window (spec 0018, 2026-10-21). The split view also asks for the
-    /// minimum size at a width of zero, where wrapped text would be one word to a line and
-    /// push the window taller than the screen.
-    nonisolated static let minimumWidth: CGFloat = 384
 
     /// What makes a new table: the columns it draws and whether the inspector narrows it.
     private struct TableIdentity: Hashable {
