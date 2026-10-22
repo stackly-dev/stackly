@@ -1,7 +1,7 @@
 # 0025. PostgreSQL 17 dan 18 berdampingan
 
 **Date**: 2026-10-22
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

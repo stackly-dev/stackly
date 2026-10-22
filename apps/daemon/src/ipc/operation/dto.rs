@@ -209,7 +209,22 @@ pub fn catalog_body(
         Some(rule) => body.with_rule(rule.id()),
         None => body,
     };
-    crate::map::runtime::with_runtime_hint(crate::ipc::secret::with_secret_hint(body))
+    crate::map::runtime::with_runtime_hint(crate::ipc::secret::with_secret_hint(
+        with_supervisor_hint(body),
+    ))
+}
+
+/// `body` with the static hint of its `supervisor.*` code, unless it
+/// carries one (spec 0025, *Hint migrasi*): a start that meets data of
+/// another major version says why it needs a migration.
+fn with_supervisor_hint(body: ErrorBody) -> ErrorBody {
+    if body.hint().is_some() {
+        return body;
+    }
+    match stackly_protocol::codes::supervisor::hint(body.code(), body.details()) {
+        Some(hint) => body.with_hint(hint),
+        None => body,
+    }
 }
 
 /// The items `spec` allows, as wire items; the rest are logged and left out.
