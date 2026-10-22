@@ -11,6 +11,17 @@
 //! `stacklyd` maps the domain and core types to these DTOs and never sends
 //! a domain type.
 
+pub mod command;
+mod create;
+
+pub use create::{
+    CreateEndpoint, CreateForm, CreatePreflight, CreateProvider, CreateProviderSource,
+    EndpointPurpose, FieldApply, FieldKind, FieldVisibility, FormField, FormItemField,
+    GetCreateFormParams, PreflightCheck, PreflightCheckKind, PreflightCreateParams,
+    PreflightStatus, ResolvedProvider, ScalarSetting, SecretPlan, SecretSource, SettingEntry,
+    SettingItem, SettingValue,
+};
+
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

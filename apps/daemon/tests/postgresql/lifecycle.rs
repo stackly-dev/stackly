@@ -7,20 +7,12 @@ use stackly_protocol::instance::{
     InstanceDesired, InstanceHealthState, InstanceLifecycle, InstanceReadinessState,
 };
 use stackly_protocol::operation::OperationState;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, Via, create_instance, stop_and_shutdown};
 use crate::support::LogRecorder;
 
-async fn is_created_started_served_and_stopped_through_the_daemon(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = &format!(
-            "a PostgreSQL {} instance is created with its superuser password, initialized with data.initializedLine {}, starts to ready, shows lifecycle, desired, readiness, health, and process apart, answers queries over the socket and TCP, sends UTC stamped log lines to the sink, keeps a row over a stop and a start, and stops",
-            pg.major, pg.major
-        ),
-    );
+async fn is_created_started_served_and_stopped_through_the_daemon(pg: Pg, ev: Evidence) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -134,11 +126,29 @@ async fn is_created_started_served_and_stopped_through_the_daemon(pg: Pg) {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_is_created_started_served_and_stopped_through_the_daemon() {
-    is_created_started_served_and_stopped_through_the_daemon(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = &format!(
+            "a PostgreSQL {} instance is created with its superuser password, initialized with data.initializedLine {}, starts to ready, shows lifecycle, desired, readiness, health, and process apart, answers queries over the socket and TCP, sends UTC stamped log lines to the sink, keeps a row over a stop and a start, and stops",
+            pg.major, pg.major
+        ),
+    );
+    is_created_started_served_and_stopped_through_the_daemon(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_is_created_started_served_and_stopped_through_the_daemon() {
-    is_created_started_served_and_stopped_through_the_daemon(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = &format!(
+            "a PostgreSQL {} instance is created with its superuser password, initialized with data.initializedLine {}, starts to ready, shows lifecycle, desired, readiness, health, and process apart, answers queries over the socket and TCP, sends UTC stamped log lines to the sink, keeps a row over a stop and a start, and stops",
+            pg.major, pg.major
+        ),
+    );
+    is_created_started_served_and_stopped_through_the_daemon(pg, ev).await;
 }

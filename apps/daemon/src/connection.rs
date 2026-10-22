@@ -1034,6 +1034,22 @@ async fn dispatch(
             .map(|reply| Reply::InstanceCreate(Box::new(reply))),
             None,
         ),
+        Call::InstanceGetCreateForm(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_create_form(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceGetCreateForm),
+            None,
+        ),
+        Call::InstancePreflight(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.preflight_create(c, x, p)
+            })
+            .await
+            .map(Reply::InstancePreflight),
+            None,
+        ),
         Call::InstanceStart(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.start_instance(c, x, p)

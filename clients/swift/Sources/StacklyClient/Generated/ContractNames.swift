@@ -53,6 +53,8 @@ extension Call {
 		case .runtimeResolve: "runtime.resolve"
 		case .runtimeList: "runtime.list"
 		case .runtimeGet: "runtime.get"
+		case .instanceGetCreateForm: "instance.get_create_form"
+		case .instancePreflight: "instance.preflight"
 		}
 	}
 }
@@ -91,6 +93,8 @@ extension Reply {
 		case .runtimeResolve: "runtime.resolve"
 		case .runtimeList: "runtime.list"
 		case .runtimeGet: "runtime.get"
+		case .instanceGetCreateForm: "instance.get_create_form"
+		case .instancePreflight: "instance.preflight"
 		}
 	}
 }

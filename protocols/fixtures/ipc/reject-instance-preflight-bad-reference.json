@@ -1,0 +1,44 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000915",
+  "idempotencyKey": null,
+  "call": {
+    "type": "instance.preflight",
+    "content": {
+      "name": "orders-db",
+      "displayName": "Orders database",
+      "provider": {
+        "name": "official/postgresql",
+        "revision": "2026.10.1"
+      },
+      "runtimeId": "0192f3a6-0000-7000-8000-0000000000a1",
+      "endpoints": [
+        {
+          "name": "postgres",
+          "port": {
+            "type": "fixed",
+            "content": 5432
+          }
+        },
+        {
+          "name": "admin",
+          "port": {
+            "type": "auto"
+          }
+        }
+      ],
+      "settings": {
+        "logStatement": "ddl"
+      },
+      "secrets": [
+        {
+          "field": "auditPassword",
+          "source": {
+            "type": "copyFrom",
+            "content": "erp/db/audit"
+          }
+        }
+      ],
+      "start": true
+    }
+  }
+}

@@ -388,6 +388,8 @@ Diterapkan di spec 0011 pada 2026-10-22 (`975b349`), persis seperti teks di bawa
 
 #### Spec 0021 (start, readiness, dan connection)
 
+Diterapkan di spec 0021 pada 2026-10-22 (`70e580e`, merge `ca18158`): menu More satu bagian, "Duplicate…" sesudah Copy Connection String tanpa pemisah.
+
 1. *Halaman detail*, butir toolbar yang diawali "Toolbar: tombol aksi utama", sisipkan sesudah kalimat yang berakhir "nonaktif dengan alasan "No connection string available." atau alasan entri).": "*(fitur 24, spec 0024: item More kedua adalah "Duplicate…", sesudah Copy Connection String.)*"
 
 Tidak ada update untuk spec 0010 (kode yang dipakai ulang sudah ada), 0022 (halaman Instances hanya menerbitkan action baru lewat aturan spec 0069), dan 0069 (baris `duplicateInstance` sudah ada di peta; fitur ini mengikuti aturan *Menambah perintah*).
@@ -463,7 +465,7 @@ Sesi paralel: langkah 8 bisa dimulai begitu milestone 2 masuk. Milestone tiga cl
 
 ## Follow-up
 
-- [ ] Lead: bawa *Usulan update untuk spec lain* untuk spec 0021 ke pemiliknya sebelum milestone 3; blok spec 0020 dan 0011 sudah diterapkan (2026-10-22).
+- [x] Lead: bawa *Usulan update untuk spec lain* untuk spec 0021 ke pemiliknya sebelum milestone 3; blok spec 0020 dan 0011 sudah diterapkan (2026-10-22). Blok spec 0021 diterapkan lead Scope 02 di `70e580e` (merge `ca18158`, 2026-10-22).
 - [x] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`. Dicatat lead `ui-macos` di `2b1e4f3` (2026-10-22).
 - [x] Lead: spec 0020 tidak menyebut dari mana `copyFromOptions` `SecretField` di mode create diisi (misalnya `secret.list`); mode duplicate spec ini hanya menambahkan reference sumber di depan daftar itu. Putuskan lewat `/architect` update spec 0020 sebelum milestone 3 spec 0020; dijawab spec 0020 Keputusan 19 (`49f0f4f`, 2026-10-22).
 - [x] Spec 0025: pakai *Helper sentinel* dan `two_postgresql_17_instances` (disepakati dengan arc-f25-spec, 2026-10-22); milestone tiga cluster after langkah 9. Diterapkan di spec 0025 (`0afcd9b`, milestone 3 langkah 6).

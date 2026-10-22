@@ -64,7 +64,7 @@ async fn a_fake_instance_is_created_started_until_ready_and_stopped() {
     let create_stages: Vec<&str> = create.steps.iter().map(|step| step.name.as_str()).collect();
     assert_eq!(
         create_stages,
-        ["validate", "secrets", "layout", "register", "init"]
+        ["validate", "pin", "secrets", "layout", "register", "init"]
     );
     let created = api.get(id).await.expect("the created instance can be read");
     assert_eq!(created.lifecycle, InstanceLifecycle::Stopped);

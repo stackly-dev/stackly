@@ -324,9 +324,16 @@ async fn secrets(
         let who = caller.clone();
         let put = blocking(move || service.put(request, &who)).await?;
         if let Err(error) = put {
+            // A `bind` writes nothing, so a failure on its reference is
+            // always one on the source: the reference this create would have
+            // written stands as the target (AC-7).
+            let target = if is_bind {
+                SecretRef::for_instance(id, &plan.purpose)
+            } else {
+                plan.reference.clone()
+            };
             return Err(failed(SupervisorError::Secret(classify_create_failure(
-                error,
-                &plan.reference,
+                error, &target,
             ))));
         }
         if let Some(handle) = handle {

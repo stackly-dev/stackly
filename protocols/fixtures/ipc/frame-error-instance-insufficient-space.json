@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000925",
+    "error": {
+      "code": "instance.insufficient_space",
+      "category": "unavailable",
+      "message": "not enough free disk space to create an instance",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "free up disk space, then try again",
+      "details": [
+        {
+          "key": "needed",
+          "value": "256000000"
+        },
+        {
+          "key": "available",
+          "value": "120000000"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

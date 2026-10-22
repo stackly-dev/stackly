@@ -1,0 +1,36 @@
+{
+ "mode": "lameduck",
+ "before": {
+  "connected_ms": 13.4,
+  "info_jetstream": true,
+  "info_server_name": "golden",
+  "pong_ms": 13.7,
+  "js_api": "io.nats.jetstream.api.v1.account_info_response",
+  "js_api_ms": 13.8
+ },
+ "after_sigusr2_new_connections": [
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null
+ ],
+ "old_connection_js_api": "timeout('timed out')",
+ "log_tail": [
+  "[39953] 2026/10/22 09:54:44.968057 [INF] -------------------------------------------",
+  "[39953] 2026/10/22 09:54:44.968407 [INF] Took 555.542\u00b5s to start JetStream",
+  "[39953] 2026/10/22 09:54:44.968483 [INF] Listening for client connections on 127.0.0.1:61465",
+  "[39953] 2026/10/22 09:54:44.968491 [INF] Server is ready",
+  "[39953] 2026/10/22 09:54:44.995076 [INF] Trapped \"user defined signal 2\" signal",
+  "[39953] 2026/10/22 09:54:44.995142 [INF] Entering lame duck mode, stop accepting new clients",
+  "[39953] 2026/10/22 09:54:44.995172 [INF] Initiating JetStream Shutdown...",
+  "[39953] 2026/10/22 09:54:44.995198 [INF] JetStream Shutdown",
+  "[39953] 2026/10/22 09:54:49.042136 [INF] Trapped \"terminated\" signal",
+  "[39953] 2026/10/22 09:54:55.000203 [INF] Closing existing clients",
+  "[39953] 2026/10/22 09:54:55.000282 [INF] Initiating Shutdown...",
+  "[39953] 2026/10/22 09:54:55.000480 [INF] Server Exiting.."
+ ]
+}
