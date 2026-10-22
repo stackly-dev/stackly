@@ -50,7 +50,7 @@ Catalog bawaan (official) yang menampilkan publisher, revision, kategori, OS/arc
 
 **Trace:** REQ-002, REQ-033 (catalog bawaan), PAGE-08, BR-016, BR-025, NFR-014, AC-002, OQ-009, OQ-012
 
-**Pointer:** spec [0017](../specs/0017-catalog-provider-detail/index.md) · code in `crates/core/src/catalog/`, `xtask/src/catalog/`, `providers/catalog.toml`, `crates/protocol/src/catalog.rs`, `apps/daemon/src/catalog.rs`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/`, `apps/cli/src/commands/provider/`
+**Pointer:** spec [0017](../specs/0017-catalog-provider-detail/index.md) · code in `crates/core/src/catalog/`, `xtask/src/catalog/`, `providers/catalog.toml`, `crates/protocol/src/catalog.rs`, `apps/daemon/src/catalog.rs`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/`, `apps/cli/src/commands/provider/`, `apps/daemon/src/startup.rs`, `xtask/src/build_app/`
 
 - [x] Design it (spec): `/architect catalog & provider detail`
 - [ ] Build it: `/develop catalog & provider detail`
@@ -130,7 +130,7 @@ Menjalankan instance, menunggu readiness, dan menampilkan ringkasan instance: ID
 
 **Trace:** REQ-012, REQ-046 (offline), PAGE-05, BR-010, AC-012, AC-027, AC-046, NFR-012, JOURNEY-01
 
-**Pointer:** spec [0021](../specs/0021-start-readiness-connection/index.md)
+**Pointer:** spec [0021](../specs/0021-start-readiness-connection/index.md) · code in `crates/core/src/provider/connection.rs`, `crates/core/src/instance/connection.rs`, `crates/core/src/instance/detail.rs`, `crates/protocol/src/instance/connection.rs`, `crates/platform/src/fs.rs`, `crates/platform-macos/src/fs/tree_usage.rs`, `crates/testkit/src/fake_fs.rs`
 
 - [ ] Build it: `/develop start, readiness & connection`
   - [ ] Connection and data size in core: manifest `connection` block with validation and `IssueCode`s, blocks in the PostgreSQL and fake packages (the NATS block is written by feature 23 step 2), `Issue.reason` on the wire when step 1 is the first step to send a reasoned issue (D2), `render` on `PlanContext`, `compose` plus the shared fixture, `Filesystem::tree_usage` with the walk rules of the 2026-10-22 update (`TREE_USAGE_MAX_DEPTH` 32, every name read counts as an entry, names streamed one at a time with one descriptor per level, deadline checked per returned name, fake call and peak counters), and `instance::detail::build` (spec 0021 AC-1 to AC-5; build steps 1 to 5; step 1 is on main (`15a5641`); the spec updates for 0004, 0009, 0011, 0019, 0022, and 0023 are already on main; needs feature 9 build; step 2 needs feature 19 step 4 (the PostgreSQL package) and, for the NATS golden check, feature 23 step 2, which itself waits for step 1 here; steps 1 and 4 can run as two parallel sessions)
@@ -148,7 +148,7 @@ Halaman Overview (ringkasan ready, stopped, failed, operasi aktif, peringatan ka
 
 **Trace:** PAGE-02, PAGE-03, REQ-028, NFR-002, NFR-012, AC-027
 
-**Pointer:** spec [0022](../specs/0022-overview-daftar-instance/index.md) · code in `crates/domain/src/capacity.rs`, `crates/core/src/storage/`, `crates/protocol/src/storage.rs`, `apps/daemon/src/storage.rs`, `protocols/fixtures/instance/`, `apps/cli/src/commands/instance/`
+**Pointer:** spec [0022](../specs/0022-overview-daftar-instance/index.md) · code in `crates/domain/src/capacity.rs`, `crates/core/src/storage/`, `crates/protocol/src/storage.rs`, `apps/daemon/src/storage.rs`, `protocols/fixtures/instance/`, `apps/cli/src/commands/instance/`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Instances/`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Overview/`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Shell/ShellNavigator.swift`
 
 - [x] Design it (spec): `/architect overview & daftar instance`
 - [ ] Build it: `/develop overview & daftar instance`
