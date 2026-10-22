@@ -393,7 +393,7 @@ Untuk item `architect (update)` spec 0010 berikutnya; tidak mengubah keputusan s
 
 ### Usulan update spec lain (2026-10-22)
 
-**Diterapkan** 2026-10-22 (sesi `arc-f15-update-4`): butir 1 di spec 0009 (AC-21, `init_port_issues`, dengan init Traefik diperbaiki di langkah yang sama), butir 2 di spec 0020 (AC-9, langkah 17), butir 3 di spec 0010, butir 4 di spec 0018, butir 5 di spec 0021, dan butir 6 di spec 0019.
+**Diterapkan** 2026-10-22 (sesi `arc-f15-update-4`): butir 1 di spec 0009 (AC-21, `init_port_issues`, dengan init Traefik diperbaiki di langkah 22 spec 0009, yang juga menghapus pengecualian Traefik di test langkah 13 spec ini dan menjawab Follow-up fitur 41 tentang init Traefik), butir 2 di spec 0020 (AC-9, langkah 17), butir 3 di spec 0010, butir 4 di spec 0018, butir 5 di spec 0021, dan butir 6 di spec 0019.
 
 Dari update endpoint `Auto` dan fakta startup. Tidak ada yang menjadi prasyarat fitur ini: AC-15 menyelesaikan NATS di paket. Usulan ini menjaga paket berikutnya (Traefik, Valkey, MySQL, ClickHouse) dari lubang yang sama, untuk dibawa lead ke pemilik spec.
 

@@ -761,3 +761,15 @@ Sumber nya *Usulan update spec lain (2026-10-22)* butir 1 di spec 0023 (commit `
 - **Kode issue dan wire.** `token_not_allowed_here` yang sudah ada, tanpa `reason`; tidak ada kode, kontrak, atau bump `ProtocolVersion` baru.
 
 **Teks AC yang berubah (menunggu persetujuan kamu lewat lead).** AC-21 baru. AC-1 sampai AC-20 tidak berubah; AC-14 tetap benar sesudah langkah 22 (keempat paket lolos `provider check`). Teks lengkap di catatan bersama `arc-f15-update-4-ac-and-scope.md`.
+
+**Cross check update ini (2026-10-22, model lain: Sonnet 5.5, baca saja).** Temuan untuk spec ini, semuanya diisi dengan rekomendasi saya (aturan delegasi user di brief; tidak satu pun mengubah keputusan P1 sampai P3):
+
+| Temuan | Yang diterapkan |
+| --- | --- |
+| bug: `Resolver::value` untuk `endpoint.<n>.host` lewat `Resolver::endpoint`, yang menolak endpoint tanpa port, jadi host di init tetap gagal `EndpointUnresolved` dan janji AC-21 patah | perubahan kedua di *Plan builder* (host dibaca tanpa port), kalimat AC-21, baris *Value sourcing*, dan test `init_plan` dengan `${endpoint.http.host}` di init. Runner up: melaporkan host sebagai token yang butuh port, yang melarang hal yang sebenarnya aman |
+| test Traefik `traefik_plans_with_three_routes_match_the_golden_files` meng assert dua render dari `init.steps` | langkah 22 mengambil `render-staticConfig.txt` dari `run.render` |
+| test fitur 23 langkah 13 yang meng assert Traefik masih gagal "sampai fitur 41" | langkah 22 menghapus pengecualian itu; baris Follow-up fitur 41 di spec 0023 dijawab langkah 22 (diteruskan ke lead) |
+| salinan NATS `1.0.0` tidak ada sesudah fitur 23 langkah 13 | test menyalin `providers/nats` lalu menyisipkan lagi `renderConfig natsConf` |
+| posisi issue `peers.yaml.tmpl` | baris 2 kolom 7 (awal tag) |
+| `# Examples` doctest butuh paket utuh | tidak dipakai |
+| `Resolver::without_managed` (spec 0021) ada di `main` | disebut di *Plan builder*; perubahan field `managed` ada di `Resolver::new` di atas nya |

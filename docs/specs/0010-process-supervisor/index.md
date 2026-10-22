@@ -427,7 +427,7 @@ Semua `retryable` false kecuali disebut. Pesan bahasa Inggris, huruf kecil di aw
 | `instance.runtime_not_found` | `not_found` | runtime tidak ada | `runtimeId` |
 | `instance.runtime_mismatch` | `conflict` | software runtime berbeda dengan provider | `runtimeSoftware`, `providerSoftware` |
 | `instance.settings_invalid` | `invalid_input` | `SettingsError`; `fields[]` per issue | `omitted` |
-| `instance.endpoint_invalid` | `invalid_input` | endpoint tidak ada di manifest, port di luar 1 sampai 65535, permintaan untuk endpoint `unix`, atau *(fitur 20, spec 0020)* permintaan ganda untuk endpoint yang sama dan konflik antar endpoint draft itu sendiri | `endpoint`, `omitted` |
+| `instance.endpoint_invalid` | `invalid_input` | endpoint tidak ada di manifest, port di luar 1 sampai 65535, permintaan untuk endpoint `unix`, atau *(fitur 20, spec 0020)* permintaan ganda untuk endpoint yang sama dan konflik antar endpoint draft itu sendiri, atau *(spec 0020 langkah 17, 2026-10-22)* endpoint `Auto` yang dibutuhkan initialize paket (dry run init) | `endpoint`, `omitted` |
 | `instance.name_invalid` *(fitur 20, spec 0020)* | `invalid_input` | nama atau nama tampil tidak valid; `fields` | `omitted` |
 | `instance.provider_unavailable` *(fitur 20, spec 0020)* | `unsupported` | entri catalog planned atau invalid | `provider`, `state` |
 | `instance.capability_unsupported` *(fitur 20, spec 0020)* | `unsupported` | `multi_instance` tidak ada dan instance provider itu sudah ada (BR-016) | `capability`, `provider`, `existing` |

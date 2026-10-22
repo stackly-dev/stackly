@@ -850,3 +850,14 @@ Draft duplicate mengirim setiap endpoint sebagai `auto` (AC-4 spec 0024) dan mem
 ### Teks AC yang berubah (menunggu persetujuan kamu lewat lead)
 
 AC-9: kalimat dry run. Teks lama dan baru lengkap di catatan bersama `arc-f15-update-4-ac-and-scope.md`. ID tetap.
+
+### Cross check update ini (2026-10-22, model lain: Sonnet 5.5, baca saja)
+
+Temuan untuk spec ini, diisi dengan rekomendasi saya (aturan delegasi user di brief; Keputusan 20 tetap):
+
+| Temuan | Yang diterapkan |
+| --- | --- |
+| `dry_run` mengembalikan `Option<CreateError>`, dan `EndpointInvalid` hanya membawa nama endpoint, jadi `settings_row` tidak bisa memilih keterangan per sebab | enum privat `DryRunRefusal` (`InitNeedsFixedPort`, `Endpoint`), dipetakan `settings_row` ke kode yang sama; `subject` tetap `None` |
+| permintaan `Fixed` yang tidak valid menjadi `None` di context init, jadi terbaca sebagai `Auto` dan memunculkan keterangan "needs a fixed port" di samping error endpoint | `defaultPort` untuk permintaan seperti itu di kedua context; test untuk port 70000 |
+| cadangan 49152 di context run tidak tertulis | ditulis, dengan catatan bahwa ia tidak terpakai untuk paket tervalidasi |
+| `stackly instance create` tanpa `--port` yang ditolak sinkron tidak mendapat penjelasan, karena teks nya hanya di baris preflight | ringkasan katalog `ENDPOINT_INVALID` mendapat sebab baru dan `codes::instance::hint` mendapat hint statis; keduanya di luar digest kontrak, jadi tanpa kenaikan `ProtocolVersion`; baris `instance.endpoint_invalid` spec 0010 *Kode error* mendapat klausa sebab yang sama. Runner up: kunci `details` `reason` (`request`, `init_needs_port`) dengan hint per reason, lebih tepat tetapi mengubah digest dan menambah kenaikan minor di langkah 17 |

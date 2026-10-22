@@ -764,6 +764,17 @@ Sumber nya baris 0015 *Banner, pengumuman, dan environment* di *Usulan untuk spe
 
 **Dampak ke spec lain.** Spec 0016: baris usulan baru (syarat pengumuman kartu `not_found`, `lastError` tidak diumumkan kartu, akhir penantian di butir `isWorking`, dan langkah 12a sebagai prasyarat langkah 4). Spec 0013: `didFail` di daftar titik sambung, lewat `/sync`. Dua baris usulan 0016 yang lama ditandai diterapkan (`ca18158`).
 
+**Cross check update ini (2026-10-22, model lain: Sonnet 5.5, baca saja).** Temuan untuk spec ini, diisi dengan rekomendasi saya (aturan delegasi user di brief; keputusan O1 dan butir a sampai e tetap):
+
+| Temuan | Yang diterapkan |
+| --- | --- |
+| test "penantian berakhir saat `disabled` lewat polling" tidak bisa ditulis: `ManualSleep.fire()` melepas semua `sleep`, termasuk `startWait`, jadi test berbalapan ke `.daemonDidNotStart` | test memakai `await model.refresh()` (jalur `didBecomeActive()`), yang lewat `apply(_:)` yang sama dengan polling |
+| `didFail` tanpa keterangan default, urutan terhadap `endWait()`, dan "ketiga error pertama" yang ambigu | parameter wajib tanpa default; `Rig.attach` di test memberi closure yang mencatat; urutan `apply`, `lastError`, `didFail` di akhir aksi, dan `lastError`, `didFail`, `endWait()` di `startWaitElapsed()`; daftar error ditulis eksplisit |
+| kalimat AC-13 baru seolah berada di bawah premis "saat presence `unreachable` dengan kedua kode", padahal berlaku di presence apa pun; penantian yang dimulai refresh juga bisa berakhir `.daemonDidNotStart` | kalimat nya menyebut "di presence apa pun" dan mencakup penantian itu |
+| cabang pengumuman tertunda dengan kode lain mencatat `not_found` tanpa teks | diterima dan dicatat di *Consequences* (tepi yang butuh Turn On dan putus koneksi dengan kode lain di jendela waktu yang sama) |
+| kalimat spec 0013 "bukan `DaemonModel`" untuk banner critical menjadi bersyarat | ditambah ke baris usulan 0013 (lewat `/sync`) |
+| penanda (e) di spec 0016 menyembunyikan pengecualian `unavailable` | penanda menyebut nya |
+
 ## References
 
 **Project sources**:
