@@ -65,15 +65,15 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 
 ### Commands
 
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter BackgroundAgentStepContentTests` → test lulus: setiap baris tabel *Kartu Background Agent* dengan jam yang disuntik (14 dan 15 detik), kedua kode koneksi, `ipc.call_timeout` dan `ipc.io_error`, `stopping`, `incompatible`, `untrusted`, `recovery`, `misconfigured` tanpa Start stacklyd, `unavailableDetail` nil dan ada, `isStarting` di 15 detik atau lebih tetap "stacklyd is starting…", `.refreshing(after:)` sebagai baris tersambung, `isWorking`, dan `lastError` → AC-5
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter BackgroundAgentFlowTests` → test lulus di atas `FakeBackgroundAgentController` dan `ManualSleep`: instalasi baru `not_registered` hanya memanggil `status`, Turn On memanggil `register` saja dan kartu menunggu daemon, `.daemonDidNotStart`, Turn On yang berakhir `requires_approval` atau `not_found`, state yang menjadi `enabled` di luar aksi, penantian yang berakhir saat `requires_approval`, Last error diumumkan `DaemonModel` sekali → AC-5, AC-10
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingAnnouncementsTests` → test lulus: tabel `agentNotFound` per presence dan per pasangan state, dan untuk setiap presence tepat satu dari onboarding dan `DaemonModel` yang mengumumkan `not_found` → AC-10
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CardFocusRuleTests` → test lulus: aturan fokus setelah aksi kartu (kembali ke aksi, ke tombol utama, tidak menarik fokus) → AC-10
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CommandLineStepContentTests` → test lulus: setiap baris tabel *Kontrol Command Line* untuk kelima status, `bundledTool` nil, `isWorking`, error, dan teks blok contoh → AC-8
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CommandLineFlowTests` → test lulus di home sementara: toggle lalu Cancel tidak menulis, Install membuat link, toggle mati lalu Remove, stale dan broken lewat Repair, conflict nonaktif dan file tidak tersentuh, error folder tidak aman tampil, `didBecomeActive()` membaca ulang status → AC-8
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "OnboardingSnapshotTests|OnboardingAgentSnapshotTests|OnboardingCommandLineSnapshotTests"` → test lulus terhadap PNG di `__Snapshots__` (langkah 2 dan 5 dan setiap baris kartu dan kontrol, lima varian) → AC-5, AC-8, AC-10
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
-- [ ] `cargo xtask build-app` → build sukses
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter BackgroundAgentStepContentTests` → test lulus: setiap baris tabel *Kartu Background Agent* dengan jam yang disuntik (14 dan 15 detik), kedua kode koneksi, `ipc.call_timeout` dan `ipc.io_error`, `stopping`, `incompatible`, `untrusted`, `recovery`, `misconfigured` tanpa Start stacklyd, `unavailableDetail` nil dan ada, `isStarting` di 15 detik atau lebih tetap "stacklyd is starting…", `.refreshing(after:)` sebagai baris tersambung, `isWorking`, dan `lastError` → AC-5
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter BackgroundAgentFlowTests` → test lulus di atas `FakeBackgroundAgentController` dan `ManualSleep`: instalasi baru `not_registered` hanya memanggil `status`, Turn On memanggil `register` saja dan kartu menunggu daemon, `.daemonDidNotStart`, Turn On yang berakhir `requires_approval` atau `not_found`, state yang menjadi `enabled` di luar aksi, penantian yang berakhir saat `requires_approval`, Last error diumumkan `DaemonModel` sekali → AC-5, AC-10
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingAnnouncementsTests` → test lulus: tabel `agentNotFound` per presence dan per pasangan state, dan untuk setiap presence tepat satu dari onboarding dan `DaemonModel` yang mengumumkan `not_found` → AC-10
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CardFocusRuleTests` → test lulus: aturan fokus setelah aksi kartu (kembali ke aksi, ke tombol utama, tidak menarik fokus) → AC-10
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CommandLineStepContentTests` → test lulus: setiap baris tabel *Kontrol Command Line* untuk kelima status, `bundledTool` nil, `isWorking`, error, dan teks blok contoh → AC-8
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CommandLineFlowTests` → test lulus di home sementara: toggle lalu Cancel tidak menulis, Install membuat link, toggle mati lalu Remove, stale dan broken lewat Repair, conflict nonaktif dan file tidak tersentuh, error folder tidak aman tampil, `didBecomeActive()` membaca ulang status → AC-8
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "OnboardingSnapshotTests|OnboardingAgentSnapshotTests|OnboardingCommandLineSnapshotTests"` → test lulus terhadap PNG di `__Snapshots__` (langkah 2 dan 5 dan setiap baris kartu dan kontrol, lima varian) → AC-5, AC-8, AC-10
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [x] `cargo xtask build-app` → build sukses
 
 ### Acceptance-criteria coverage
 
@@ -91,16 +91,16 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - [ ] Arahkan pointer ke toggle dan baca dengan VoiceOver → help dan label "The official catalog is always on."; toggle tidak bisa diubah → AC-7, AC-10
 - [ ] Jalankan stacklyd dengan `STACKLY_CATALOG_DIR` (catalog pengembangan) → label "development", detail menyebut STACKLY_CATALOG_DIR dan bahwa itu bukan catalog official, toggle "The development catalog is always on." → AC-7
 - [ ] Buka langkah 4 saat daemon belum berjalan → label "Catalog", detail "Stackly shows where its catalog comes from once stacklyd is running.", tanpa toggle; nyalakan daemon → baris berubah menjadi "official" tanpa pindah langkah → AC-7
-- [ ] Baca seluruh teks langkah 4 terhadap AC-061 → tidak ada baris community, tidak ada "Signed manifests", tidak ada kalimat tentang catalog terbaru atau up to date, tidak ada kalimat digest (`runtimeInstallAvailable` masih false) → AC-7, AC-9
+- [x] Baca seluruh teks langkah 4 terhadap AC-061 → tidak ada baris community, tidak ada "Signed manifests", tidak ada kalimat tentang catalog terbaru atau up to date, tidak ada kalimat digest (`runtimeInstallAvailable` masih false) → AC-7, AC-9
 
 ### Commands
 
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogTrustContentTests` → test lulus: setiap baris tabel *Baris Catalog Trust* (official, official outdated, development, `source` dan `trust` `unrecognized`, unsupported, error dengan dan tanpa hint, menunggu), kalimat digest mengikuti `runtimeInstallAvailable`, tanpa toggle saat `info` nil, `info` lama menang atas refresh yang gagal, tanpa community dan frasa terlarang, catatan trust sama dengan tabel *Copy*, dan baris dibangun dari `CatalogStore` di atas fixture `protocols/fixtures/catalog/` → AC-7, AC-9
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → lulus, pindaian frasa terlarang meliputi `CatalogTrustContent.swift`, `CatalogTrustStep.swift`, dan bagian Catalog Trust `OnboardingCopy.swift` → AC-9
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogTrustSnapshotTests` → lulus (tujuh baris dalam satu susunan, lima varian) terhadap PNG di `__Snapshots__/CatalogTrustSnapshotTests/` → AC-7, AC-10
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
-- [ ] `cargo xtask build-app` → build sukses
-- [ ] `xcrun swift-format lint --strict -r apps/macos/Packages/StacklyUI/Sources apps/macos/Packages/StacklyUI/Tests apps/macos/Stackly` → tanpa temuan
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogTrustContentTests` → test lulus: setiap baris tabel *Baris Catalog Trust* (official, official outdated, development, `source` dan `trust` `unrecognized`, unsupported, error dengan dan tanpa hint, menunggu), kalimat digest mengikuti `runtimeInstallAvailable`, tanpa toggle saat `info` nil, `info` lama menang atas refresh yang gagal, tanpa community dan frasa terlarang, catatan trust sama dengan tabel *Copy*, dan baris dibangun dari `CatalogStore` di atas fixture `protocols/fixtures/catalog/` → AC-7, AC-9
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → lulus, pindaian frasa terlarang meliputi `CatalogTrustContent.swift`, `CatalogTrustStep.swift`, dan bagian Catalog Trust `OnboardingCopy.swift` → AC-9
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogTrustSnapshotTests` → lulus (tujuh baris dalam satu susunan, lima varian) terhadap PNG di `__Snapshots__/CatalogTrustSnapshotTests/` → AC-7, AC-10
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [x] `cargo xtask build-app` → build sukses
+- [x] `xcrun swift-format lint --strict -r apps/macos/Packages/StacklyUI/Sources apps/macos/Packages/StacklyUI/Tests apps/macos/Stackly` → tanpa temuan
 
 ### Acceptance-criteria coverage
 
@@ -123,13 +123,13 @@ _Langkah 8 spec 0016 (evidence manual, kind `native`, status awal `NOT_RUN`). Se
 
 ### Commands
 
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingWalkTests` → test lulus: jalan lengkap dengan Continue, Not Now, Back, titik, dan Get Started, lalu Escape di setiap langkah, dengan view nyata di jendela, di atas `FakeBackgroundAgentController`, `CommandLineTool` di home sementara, dan `CountingLink`: log agent hanya `status` (dan setidaknya satu saat langkah 2 tampil), home sementara tidak berubah, link tidak mengirim satu pun call, record ditulis sekali, "Setup complete." hanya sesudah Get Started dan tidak sesudah Escape; menu Help dari shell dan saat onboarding tampil; folder `Onboarding/` tidak menyentuh `shell.section` atau `FileManager` → AC-3, AC-11
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → test lulus: setiap nilai sama dengan tabel *Copy*, tanpa frasa terlarang, tanpa jaringan, dan tidak ada kalimat di luar `OnboardingCopy.swift` → AC-4, AC-9
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "BackgroundAgentStepContentTests|CatalogTrustContentTests|CommandLineStepContentTests|StorageContentTests"` → test lulus: setiap tabel copy (*Kartu Background Agent*, *Baris Catalog Trust*, *Kontrol Command Line*, Storage) sama persis dengan spec → AC-5, AC-6, AC-7, AC-8, AC-9
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "OnboardingSnapshotTests|OnboardingAgentSnapshotTests|OnboardingCommandLineSnapshotTests|CatalogTrustSnapshotTests"` → test lulus terhadap PNG: satu per langkah (kelima langkah) dan satu matriks per tabel (kartu agent, baris catalog trust, kontrol Command Line), lima varian masing masing; varian Reduce Transparency sama dengan light karena onboarding tidak memakai material sistem → AC-5, AC-7, AC-8, AC-10
-- [ ] `xcodebuild build-for-testing -project apps/macos/Stackly.xcodeproj -scheme Stackly -configuration Debug -destination "platform=macOS,arch=arm64" -derivedDataPath target/xcode -only-testing StacklyAppUITests` → `TEST BUILD SUCCEEDED` dengan `OnboardingUITests` → AC-1, AC-2, AC-3, AC-11
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
-- [ ] `cargo xtask build-app` → build sukses
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingWalkTests` → test lulus: jalan lengkap dengan Continue, Not Now, Back, titik, dan Get Started, lalu Escape di setiap langkah, dengan view nyata di jendela, di atas `FakeBackgroundAgentController`, `CommandLineTool` di home sementara, dan `CountingLink`: log agent hanya `status` (dan setidaknya satu saat langkah 2 tampil), home sementara tidak berubah, link tidak mengirim satu pun call, record ditulis sekali, "Setup complete." hanya sesudah Get Started dan tidak sesudah Escape; menu Help dari shell dan saat onboarding tampil; folder `Onboarding/` tidak menyentuh `shell.section` atau `FileManager` → AC-3, AC-11
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → test lulus: setiap nilai sama dengan tabel *Copy*, tanpa frasa terlarang, tanpa jaringan, dan tidak ada kalimat di luar `OnboardingCopy.swift` → AC-4, AC-9
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "BackgroundAgentStepContentTests|CatalogTrustContentTests|CommandLineStepContentTests|StorageContentTests"` → test lulus: setiap tabel copy (*Kartu Background Agent*, *Baris Catalog Trust*, *Kontrol Command Line*, Storage) sama persis dengan spec → AC-5, AC-6, AC-7, AC-8, AC-9
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "OnboardingSnapshotTests|OnboardingAgentSnapshotTests|OnboardingCommandLineSnapshotTests|CatalogTrustSnapshotTests"` → test lulus terhadap PNG: satu per langkah (kelima langkah) dan satu matriks per tabel (kartu agent, baris catalog trust, kontrol Command Line), lima varian masing masing; varian Reduce Transparency sama dengan light karena onboarding tidak memakai material sistem → AC-5, AC-7, AC-8, AC-10
+- [x] `xcodebuild build-for-testing -project apps/macos/Stackly.xcodeproj -scheme Stackly -configuration Debug -destination "platform=macOS,arch=arm64" -derivedDataPath target/xcode -only-testing StacklyAppUITests` → `TEST BUILD SUCCEEDED` dengan `OnboardingUITests` → AC-1, AC-2, AC-3, AC-11
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [x] `cargo xtask build-app` → build sukses
 
 ### Acceptance-criteria coverage
 
@@ -139,3 +139,41 @@ _Langkah 8 spec 0016 (evidence manual, kind `native`, status awal `NOT_RUN`). Se
 - AC-9 · test copy dan pindaian sumber otomatis; baca ulang AC-061 manual
 - AC-10 · preview, snapshot, dan test unit; evidence keyboard dan VoiceOver manual
 - AC-11 · test unit dan jalan lengkap; XCUITest Get Started `NOT_RUN` sampai Automation Mode
+
+## Verify penuh (2026-10-22)
+
+_Verify penuh `Build it` dan `Verify it` fitur 16 oleh sub sesi `chk-f16-verify`, di `main` `3d8b8e26` (sesudah merge M1 `c4032edd`, M2 `aaaf81d9`, M3 `d2c29ce1`, M4 `8bb2ec6f`). Lingkup otomatis: PASS. Langkah UI dan manual tetap terbuka untuk kamu._
+
+Perintah yang dijalankan ulang (build dingin), semuanya exit 0:
+
+- `swift test --package-path apps/macos/Packages/StacklyUI` → 1506 test di 142 suite lulus (23 known issue milik `SnapshotHelperTests`, memang sengaja)
+- filter `OnboardingModelTests` 18, `MainWindowRootTests` 7, `StorageContentTests` 8, `OnboardingActionsTests` 4, `OnboardingCopyTests` 13, `ShellStructureTests|ShellLayoutTests|CommandMapTests|CommandSourceRuleTests|ShellCommandsTests` 65, `BackgroundAgentStepContentTests` 22, `BackgroundAgentFlowTests` 10, `OnboardingAnnouncementsTests` 8, `CardFocusRuleTests` 9, `CommandLineStepContentTests` 10, `CommandLineFlowTests` 9, `CatalogTrustContentTests` 19, `OnboardingWalkTests` 4 → semua lulus
+- filter keempat suite snapshot → 8 test lulus (lima langkah dan tiga matriks tabel), masing masing lima PNG (`light`, `dark`, `hc-light`, `hc-dark`, `narrow`)
+- `cargo xtask build-app` → `target/app/Debug/Stackly.app`, ad hoc
+- `xcodebuild build-for-testing ... -only-testing StacklyAppUITests` → `TEST BUILD SUCCEEDED`, `OnboardingUITests` terkompilasi
+- `xcrun swift-format lint --strict -r ...` → tanpa temuan
+- `cargo xtask evidence check` → 60 record manual, baseline valid; belum ada record manual untuk spec 0016
+
+Baca ulang copy terhadap AC-061 dari `OnboardingCopy.swift` (sumber, bukan bundle): tidak ada janji sandbox (teks isolasi menyebut "not in a sandbox" dan bahwa app lain bisa membaca file instance), tidak ada "up to date", "latest", `/usr/local/bin`, "only while the app is open", community, atau "Signed manifests"; baris Verified runtimes dan kalimat digest mati selama `runtimeInstallAvailable` false. Langkah Milestone 4 yang sama tetap terbuka untuk dibaca di bundle nyata.
+
+| AC | Status | Bukti |
+| --- | --- | --- |
+| AC-1 | PASS otomatis · manual `NOT_RUN` | `MainWindowRootTests`, `OnboardingModelTests`; tutup dan buka jendela, Quit, dan XCUITest menunggu kamu |
+| AC-2 | PASS otomatis · manual `NOT_RUN` | `OnboardingModelTests` (label per langkah dan per state agent), `OnboardingActionsTests`, snapshot footer |
+| AC-3 | PASS otomatis · manual `NOT_RUN` | `OnboardingWalkTests` (log agent hanya `status`, home sementara tetap, link tanpa call, record sekali), `OnboardingCopyTests` (tanpa `MutationPath`) |
+| AC-4 | PASS | `OnboardingCopyTests`, snapshot `onboarding-welcome` |
+| AC-5 | PASS otomatis · Turn On `BLOCKED` | `BackgroundAgentStepContentTests`, `BackgroundAgentFlowTests`, snapshot kartu; Turn On sungguhan menunggu persetujuan kamu dan signing identity (OQ-012) bila ad hoc ditolak |
+| AC-6 | PASS otomatis · manual `NOT_RUN` | `StorageContentTests`, snapshot `onboarding-storage`; roots dari daemon nyata menunggu kamu |
+| AC-7 | PASS otomatis · manual `NOT_RUN` | `CatalogTrustContentTests`, snapshot baris catalog trust; revision dari `stackly provider list` menunggu kamu |
+| AC-8 | PASS otomatis · manual `NOT_RUN` | `CommandLineStepContentTests`, `CommandLineFlowTests` di home sementara; akun nyata menunggu kamu |
+| AC-9 | PASS | `OnboardingCopyTests`, `CatalogTrustContentTests`, baca ulang sumber di atas |
+| AC-10 | PASS otomatis · manual `NOT_RUN` | `OnboardingAnnouncementsTests`, `CardFocusRuleTests`, snapshot lima varian; keyboard, VoiceOver, dan Reduce Transparency menunggu kamu |
+| AC-11 | PASS otomatis · XCUITest `NOT_RUN` | `OnboardingActionsTests`, `OnboardingWalkTests`; Automation Mode mati (`automationmodetool`: disabled) |
+
+Catatan untuk `/test` dan `/check review` (tidak membuat verdict FAIL):
+
+- `OnboardingCopyTests` belum memaku beberapa teks ke literal tabel: subjudul Background Agent, Catalog Trust, dan Command Line, "Copied.", "PATH line", "Turn On" di kartu, dan "Or run it directly:". Nilainya hari ini sama dengan spec.
+- Dua teks onboarding ada di luar `OnboardingCopy.swift`: alasan `CommandLineToolModel.missingToolReason` (dipakai bersama Diagnostics) dan judul Help di `CommandMap.swift` (dijaga sama dengan `OnboardingCopy.helpMenuItem` oleh `MainWindowRootTests`).
+- "Or run it directly:" dan path tampil di dua baris, bukan satu baris seperti tabel *Kontrol Command Line*; katanya sama.
+- `/usr/local/bin` masih ada di doc comment `Agent/CommandLineTool.swift:7` (komentar, bukan teks UI).
+- `docs/manual.md` bagian M masih menulis "Milestone 4 belum ada di verify.md" dan belum punya langkah Milestone 4 (bundle `--install`, Turn On, Command Line, keyboard dan VoiceOver, baca ulang AC-061, `cargo xtask ui-test --only OnboardingUITests`); bagian K belum menyebut `OnboardingUITests`. Langkah Milestone 1 sampai 3 dan nomor barisnya cocok.
