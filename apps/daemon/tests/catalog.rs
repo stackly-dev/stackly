@@ -124,7 +124,16 @@ fn the_default_spawned_daemon_has_an_ok_empty_catalog() {
     let root = TestRoot::new().unwrap();
     let daemon = start_daemon(&root);
 
-    let health = health(daemon.socket());
+    // The start slot may still run when the socket answers, most of all on
+    // a busy Mac, so the daemon gets a moment to say it is ready.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let health = loop {
+        let health = health(daemon.socket());
+        if health.status != DaemonHealthStatus::Starting || std::time::Instant::now() > deadline {
+            break health;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
 
     assert_eq!(catalog_status(&health), SubsystemStatus::Ok);
     assert_eq!(health.status, DaemonHealthStatus::Ready);
