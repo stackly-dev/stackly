@@ -611,7 +611,7 @@ Kesimpulan: yang hilang hanya `colorSchemeContrast`. Kunci biasa selalu sampai, 
 
 **Keputusan kecil yang diambil.**
 
-- Relay memasang keempat nilai yang dipaku `fixtureAppearance`, bukan hanya `_colorSchemeContrast`, lewat satu fungsi pribadi bersama, supaya kalau SDK berikutnya juga menjatuhkan nilai lain di wadah ini, relay sudah menutupnya, dan kedua tempat tidak bisa berbeda isi. `colorScheme` tidak dipasang lagi karena sampai (probe) dan jendela harness sudah memakai appearance yang sama. Runner up: hanya `_colorSchemeContrast`, yang lebih sempit tetapi harus diubah lagi bila SDK berubah.
+- Relay memasang kelima nilai yang dipaku `fixtureAppearance` (termasuk `colorScheme`), bukan hanya `_colorSchemeContrast`, lewat satu fungsi pribadi bersama, supaya kalau SDK berikutnya juga menjatuhkan nilai lain di wadah ini, relay sudah menutupnya, kedua tempat tidak bisa berbeda isi, dan bentuknya sama persis dengan relay yang diprobe (keputusan lead, G1). Runner up: hanya `_colorSchemeContrast`, yang lebih sempit tetapi harus diubah lagi bila SDK berubah.
 - Isi kunci adalah `FixtureAppearance?`, tipe yang sudah ada, bukan tipe baru. Runner up: struct baru berisi empat Bool, yang menduplikasi tipe itu.
 - Sel `Table`, `.sheet`, dan `.popover` tidak diberi relay. Sheet dan popover membuka jendela yang tidak ditangkap snapshot, dan `Table` adalah kontrol native di kode layar (relay per sel berarti blok `#if DEBUG` di setiap layar). Batas sel `Table` dicatat, dan `/architect` spec ini memutuskan bila fitur 18 atau 22 butuh bukti HC di sel. Runner up: relay di setiap sel `Table`, yang membuktikan lebih banyak dengan biaya kode Debug di setiap layar.
 - Test penjaga menaruh spy isi utama bersarang di `ScrollView` dan `VStack`, seperti halaman sungguhan. Spy kolom diberikan langsung sebagai isi `.stacklyInspector`, karena modifier itu sendiri sudah menaruhnya di `ScrollView` dan `VStack`; spy langsung di kolom `.inspector` mentah membaca `.increased` tanpa relay (probe), jadi test tidak boleh memakai `.inspector` mentah.
@@ -632,7 +632,7 @@ Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas draft update
 
 **Diperbaiki langsung (soundness dan kata).** Alasan huruf kapital `StaleNote` tidak lagi mengklaim frasa sumber dipakai di tengah kalimat, dan runner up yang lebih sederhana (kapital di dua string `CatalogCopy`) ditulis; baris *API surface* `StaleNote` tidak menyebut fungsi internal; spy kolom di test penjaga adalah isi langsung `.stacklyInspector` (modifier sudah menaruhnya di `ScrollView` dan `VStack`); bukti di modifier sungguhan baru ada saat build; app dalam mode skenario tidak mengisi kunci, jadi relay diam; "kedua puluh pasang" di `verify.md`; `ProviderCard` disebut lewat simbol, bukan nomor baris; satu kalimat yang berulang di *Key invariants* dihapus; Follow-up lead untuk teks AC-5 dan untuk harapan "the development catalog" di `verify.md` spec 0017. Catatan: `bundledTool` baru berpengaruh saat langkah 12 milestone 3 fitur 15 membangun `FakeCommandLineTool` (baris tabel sudah bertanda "mulai langkah 12").
 
-**Gap kelengkapan keputusan, dikirim ke lead dengan rekomendasi (menunggu jawaban).**
+**Gap kelengkapan keputusan, dikirim ke lead dengan rekomendasi (dijawab lead 2026-10-22, lihat *Keputusan lead atas update ini*; G5 menunggu user).**
 
 | # | Gap | Rekomendasi |
 | --- | --- | --- |
@@ -646,3 +646,5 @@ Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas draft update
 | G8 | Preview dan mode skenario | diterapkan langsung sebagai fakta (lihat di atas); tanpa preview HC baru |
 | G9 | Penerimaan teks AC-5 tanpa pemilik | diterapkan langsung sebagai Follow-up lead |
 | G10 | Teks usang di spec lain | `verify.md` spec 0017 (Follow-up lead di spec 0012) dan Follow-up spec 0015 baris nama file CLI di fixture 0068 (dicentang pemilik spec 0015 atau `/sync`) |
+
+**Keputusan lead atas update ini (2026-10-22).** "Accept" untuk K15 sesuai laporan, dan "apply all" untuk G1, G2, G3, G4, G6, dan G7 persis seperti rekomendasi di tabel *Cross check K15*; semuanya kini tertulis di index.md (*Environment fixture di dalam wadah yang menampung ulang isi*, Build plan *Tambahan 2026-10-22 (K15)*, *Critical test scenarios*) dan di spec 0012 (*Pola state*, G7). G5 (`assertSnapshot` gagal bila gambar `hc` identik dengan gambar standard, dengan `contrastInvariant: true` plus alasan) disetujui lead sebagai rancangan, tetapi karena menambah satu kalimat di AC-5, ia menunggu jawaban user bersama teks AC-5 dan belum ditulis di index.md. G10: lead meneruskan catatan `verify.md` spec 0017 dan centang Follow-up spec 0015 ke lead scope 02; spec ini tidak mengubah keduanya. Teks `docs/manual.md` dan blok scope dari laporan diterapkan lead.

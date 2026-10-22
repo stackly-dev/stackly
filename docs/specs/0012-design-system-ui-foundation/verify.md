@@ -81,7 +81,7 @@ _Dari update spec 2026-10-22 (*Pola state*, butir huruf pertama kalimat outdated
 
 ### Commands
 
-- [ ] `NOT_RUN` · `swift test --package-path apps/macos/Packages/StacklyUI --filter "StaleNote|ViewState"` → lulus, termasuk test baru: `source` "the bundled catalog" memberi isi yang diawali "The bundled catalog last updated", "Catalog" tetap "Catalog last updated", dan `source` kosong tidak gagal → AC-12
+- [ ] `NOT_RUN` · `swift test --package-path apps/macos/Packages/StacklyUI --filter "StaleNote|ViewState"` → lulus, termasuk test baru di `ViewStateTests.swift`: `source` "the bundled catalog" memberi isi yang diawali "The bundled catalog last updated", "Catalog" tetap "Catalog last updated", `source` yang diawali angka atau spasi tidak berubah, dan `source` kosong memberi " last updated <waktu>." tanpa gagal → AC-12
 - [ ] `NOT_RUN` · `cargo xtask snapshot review --base main` → di antara PNG yang berubah, `catalog-outdated.light.png`, `.dark.png`, dan `.narrow.png` hanya berbeda di huruf pertama isi banner stale ("The bundled catalog last updated …"); referensi halaman States galeri tidak berubah → AC-12
 
 ### UI / manual
