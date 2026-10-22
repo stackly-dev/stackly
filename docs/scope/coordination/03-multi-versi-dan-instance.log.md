@@ -2,7 +2,7 @@
 
 - **Scope:** `docs/scope/03-multi-versi-dan-instance.md`
 - **Hash awal:** `4d5d177` · **Hash awal wave aktif:** `4d5d177`
-- **Wave aktif:** `1`, mulai `2026-10-22`
+- **Wave aktif:** `1` selesai `2026-10-22`; wave `2` menunggu F20 milestone 2
 - **Diperbarui:** `2026-10-22 07:30`
 
 ## Sub sesi wave `1`
@@ -55,9 +55,13 @@
 
 ## Blocker terbuka
 
-- F24 `Build it`: menunggu spec 0024 (wave 1), lalu build fase 02 yang dikoordinasi lead Scope 02 (paling tidak F20 milestone 2 sampai 4, F21, F22); daftar persisnya menyusul dari Build plan spec 0024.
-- F25 `Build it`: menunggu spec 0025 (wave 1), lalu F18 milestone 2 dan 3, F19 milestone 2 dan 3, F20 milestone 4, dan F21 di `02-instalasi-pertama.md`; daftar persisnya menyusul dari Build plan spec 0025.
-- Commit log ini: menunggu merge `dev-f22-m1` lead Scope 02 di checkout utama selesai.
+- F24 milestone 2 (kontrak, daemon, CLI, bukti fixture) ← `02-instalasi-pertama.md`: F20 milestone 2 (`dev-f20-m2`, protokol 1.12, sedang dibangun Scope 02); F22 milestone 2 sudah di `main` (`f24134f`).
+- F24 milestone 3 (GUI duplicate) ← `02-instalasi-pertama.md`: F20 milestone 3, F21 milestone 3, F22 milestone 3, dan update spec 0021 (item More "Duplicate…", antrian Scope 02); `ui-macos.md`: F69 milestone 3 dan F67; `01-foundation.md`: F11 milestone "Swift client and GUI secret flows".
+- F24 milestone 4 (PostgreSQL 17 native) ← milestone 2 F24; isi F19 milestone 3 (PostgreSQL 17 lewat daemon dan catalog) sudah di `main` (`dfc51c7`) walau kotaknya belum dicentang; hardware/akun: artefak PostgreSQL 17 di cache runtime xtask, run native dan sesi GUI atas izin user.
+- F25 milestone 3 (PostgreSQL 17 dan 18 native) ← milestone 4 F24 (langkah 8 dan 9 spec 0024); F18 milestone 3 dan F19 langkah 9 sudah di `main`; hardware/akun: kedua artefak PostgreSQL di cache xtask, run native atas izin user.
+- F25 milestone 4 (JOURNEY-03 manual di aplikasi) ← milestone 3 F25; `02-instalasi-pertama.md`: F18 milestone 4, F20 milestone 3, F21 milestone 3, F22 milestone 3; unduhan lewat Get hanya atas izin user.
+- `Verify it` dan `Test it` fitur 24 dan 25 ← `Build it` masing masing.
+- Sesi dan branch yang tidak di-merge: `local_13ef30aa` (duplikat `dev-f24-m1`, branch `claude/mystifying-rosalind-5cf45e` dengan `dff1410` dan edit belum di-commit) dicatat `tidak di-merge`; keputusan arsip atau hapus ke user saat penutupan.
 
 ## Dicentang pada wave ini
 
@@ -71,3 +75,5 @@
 - `25` · milestone `Installing a runtime leaves existing instances alone, on fixtures` · laporan `dev-f25-m2` STATUS done (`414844e`) dan `chk-f25-m2` STATUS done (PASS, probe sensitivitas) · `claude/recursing-shaw-3463e7` lewat `claude/arc-f24-spec-b9ee1e` → `adac984` · gate yang sama dengan milestone 1 (test binary `runtime` 14 lulus di dalam 209) · Pointer code in `apps/daemon/tests/runtime/instances_untouched.rs` · commit `docs(scope): tick 25 milestone installing a runtime leaves existing instances alone`
 
 ## Riwayat wave
+
+- Wave `1` (`2026-10-22`, hash awal `4d5d177`, akhir `168d250`): selesai spec 0024 (`002c9fe`) dan 0025 (`0afcd9b`) dengan Pointer dan milestone di scope, dua update spec additive (`975b349`, `f977abd`), milestone 1 F24 (`910f4ec`, verify `bda462a`), milestone 1 dan 2 F25 (`adac984`); fitur 24 dan 25 `in-progress`. Terbuka: milestone 2 sampai 4 F24, milestone 3 dan 4 F25, `Verify it` dan `Test it` keduanya, semuanya terblokir build fase 02 (lihat Blocker terbuka). Tidak ada kotak di file scope lain yang terbuka karena merge wave ini. Usulan wave 2: `dev-f24-m2` (langkah 3 sampai 5 spec 0024) begitu F20 milestone 2 masuk `main`, lalu checker-nya; sisanya menunggu blocker. Hash awal wave 2 = `168d250` atau commit log berikutnya.
