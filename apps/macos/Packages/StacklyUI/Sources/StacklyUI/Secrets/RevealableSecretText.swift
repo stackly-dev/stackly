@@ -18,8 +18,16 @@ import SwiftUI
 ///
 /// Show, Hide, and Copy are native buttons, reachable with Tab and activated with Space.
 public struct RevealableSecretText: View {
+    /// What VoiceOver reads for a masked text by default.
+    public static let defaultMaskedLabel = "Password, hidden"
+    /// What VoiceOver reads for the Copy button by default.
+    public static let defaultCopyLabel = "Copy Password"
+
     @State private var model: RevealModel
     private let maskedText: String
+    private let maskedLabel: String
+    private let copyLabel: String
+    private let copyAnnouncement: String?
 
     /// Creates the view.
     ///
@@ -29,14 +37,24 @@ public struct RevealableSecretText: View {
     ///   - client: The secret methods.
     ///   - compose: Builds the full text from the revealed values, keyed by reference. It may
     ///     throw; the action then shows and copies nothing.
+    ///   - maskedLabel: What VoiceOver reads for the hidden text; the references follow as its
+    ///     value. "Password, hidden" by default.
+    ///   - copyLabel: What VoiceOver reads for the Copy button, such as "Copy Connection
+    ///     string". "Copy Password" by default.
+    ///   - copyAnnouncement: What VoiceOver says once after a copy, or `nil` for nothing, as
+    ///     before.
     public init(
         _ maskedText: String,
         references: [String],
         client: SecretsClient,
+        maskedLabel: String = RevealableSecretText.defaultMaskedLabel,
+        copyLabel: String = RevealableSecretText.defaultCopyLabel,
+        copyAnnouncement: String? = nil,
         compose: @escaping RevealModel.Compose
     ) {
         self.init(
             maskedText,
+            maskedLabel: maskedLabel, copyLabel: copyLabel, copyAnnouncement: copyAnnouncement,
             model: RevealModel(
                 references: references,
                 reveal: { reference, purpose throws(ClientError) in
@@ -45,8 +63,17 @@ public struct RevealableSecretText: View {
                 compose: compose))
     }
 
-    init(_ maskedText: String, model: RevealModel) {
+    init(
+        _ maskedText: String,
+        maskedLabel: String = RevealableSecretText.defaultMaskedLabel,
+        copyLabel: String = RevealableSecretText.defaultCopyLabel,
+        copyAnnouncement: String? = nil,
+        model: RevealModel
+    ) {
         self.maskedText = maskedText
+        self.maskedLabel = maskedLabel
+        self.copyLabel = copyLabel
+        self.copyAnnouncement = copyAnnouncement
         _model = State(initialValue: model)
     }
 
@@ -68,7 +95,7 @@ public struct RevealableSecretText: View {
                 Button("Copy") {
                     Task { await model.copy() }
                 }
-                .accessibilityLabel("Copy Password")
+                .accessibilityLabel(copyLabel)
                 .disabled(model.phase == .working)
             }
             note
@@ -82,6 +109,9 @@ public struct RevealableSecretText: View {
         .onChange(of: model.isShown) { wasShown, isShown in
             if wasShown && !isShown { announce("Password hidden") }
         }
+        .onChange(of: model.phase) { _, phase in
+            if phase == .copied, let copyAnnouncement { announce(copyAnnouncement) }
+        }
     }
 
     @ViewBuilder private var text: some View {
@@ -94,7 +124,7 @@ public struct RevealableSecretText: View {
             Text(maskedText)
                 .font(.callout.monospaced())
                 .foregroundStyle(StacklyColor.textSecondary)
-                .accessibilityLabel("Password, hidden")
+                .accessibilityLabel(maskedLabel)
                 .accessibilityValue(model.references.joined(separator: ", "))
         }
     }

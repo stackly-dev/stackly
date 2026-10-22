@@ -26,11 +26,21 @@ struct SecretViewsAccessibilityTests {
     @Test func aHiddenValueIsLabelledPasswordHiddenWithItsReferences() throws {
         let file = try source("RevealableSecretText.swift")
         #expect(
-            file.codeLines.contains { $0.contains(#".accessibilityLabel("Password, hidden")"#) })
+            file.codeLines.contains { $0.contains(".accessibilityLabel(maskedLabel)") })
+        #expect(RevealableSecretText.defaultMaskedLabel == "Password, hidden")
         #expect(
             file.codeLines.contains {
                 $0.contains(".accessibilityValue(model.references.joined(separator:")
             })
+    }
+
+    @Test func theDefaultsOfTheLabelParametersKeepTheWordsOfSpec0011() throws {
+        #expect(RevealableSecretText.defaultMaskedLabel == "Password, hidden")
+        #expect(RevealableSecretText.defaultCopyLabel == "Copy Password")
+        let code = try source("RevealableSecretText.swift").codeLines.joined(separator: "\n")
+        #expect(code.contains("copyAnnouncement: String? = nil"))
+        #expect(code.contains(".accessibilityLabel(copyLabel)"))
+        #expect(code.contains(#"announce("Password hidden")"#))
     }
 
     @Test func aShownValueIsReadByVoiceOverAsTheLabelsValue() throws {
