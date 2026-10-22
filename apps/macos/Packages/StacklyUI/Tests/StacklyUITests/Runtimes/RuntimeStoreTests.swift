@@ -340,6 +340,33 @@ struct RuntimeStoreTests {
         #expect(action.isBusy == false)
     }
 
+    // MARK: - Following the operation center
+
+    @Test func anInstallThatStartsElsewhereReadsTheListAgain() async throws {
+        script.page = RuntimeListPage(items: FixtureRuntime.summaries, next: nil, installing: [])
+        let store = await loaded()
+        #expect(store.installing.isEmpty)
+        let center = OperationCenter(
+            fetchPage: { _ throws(ClientError) in StacklyUI.Page(items: [], next: nil) },
+            fetchOne: { _ throws(ClientError) in nil }, now: { FixtureClock.now },
+            sleep: { _ in })
+        await center.store.resnapshot()
+        store.follow(center)
+        script.page = FixtureRuntime.page
+        center.store.offer(
+            .fixture(number: 1, kind: .installRuntime, state: .running, stage: "download"))
+        for _ in 0..<400 where store.installing.isEmpty {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(store.installing == [Self.installing])
+        // An operation of another kind does not read the list again.
+        let reads = script.reads.count
+        center.store.offer(.fixture(number: 7, kind: .startInstance, state: .running))
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(script.reads.count == reads)
+        store.stop()
+    }
+
     // MARK: - Recorded installs
 
     private func finish(_ state: OperationState, failure: OperationFailureInfo? = nil) async

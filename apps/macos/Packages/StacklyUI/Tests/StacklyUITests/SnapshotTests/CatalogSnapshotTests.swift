@@ -44,9 +44,19 @@ extension SnapshotTests {
             for provider in store.providers ?? [] {
                 await store.detail.load(provider.provider, revision: provider.revision)
             }
+            // The running app always has the runtime store, so the Get column shows (spec 0018).
+            let runtimes = RuntimeStore(
+                call: { call throws(ClientError) in
+                    guard case .runtimeList = call else {
+                        throw .rejected(ClientErrorCatalog.protocolViolation())
+                    }
+                    return .runtimeList(RuntimeListPage(items: [], next: nil, installing: []))
+                }, now: { Date(timeIntervalSince1970: 100) }, sleep: { _ in })
+            await runtimes.store.resnapshot()
             return CatalogPage(
-                catalog: store, waiting: nil, hasConnection: true, reconnect: {},
-                openDiagnostics: {}, selection: setup.selection, filter: setup.filter
+                catalog: store, runtimes: runtimes, waiting: nil, hasConnection: true,
+                reconnect: {}, openDiagnostics: {}, selection: setup.selection,
+                filter: setup.filter
             )
             .actionHost()
         }

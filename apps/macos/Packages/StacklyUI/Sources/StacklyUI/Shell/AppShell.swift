@@ -25,12 +25,14 @@ public struct AppShell: View {
     @State private var windowWidth: CGFloat?
     @State private var navigator = ShellNavigator()
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.feedbackCenter) private var feedbackCenter
 
     private let presentation: ShellPresentation
     private let diagnostics: ConnectionDiagnostics
     private let counts: SidebarCounts
     private let instances: InstanceStore?
     private let catalog: CatalogStore?
+    private let runtimes: RuntimeStore?
     private let operations: OperationCenter?
     private let capacity: CapacityModel?
     private let instanceActions: InstanceActionModel?
@@ -53,6 +55,8 @@ public struct AppShell: View {
     ///     placeholder (previews).
     ///   - catalog: The catalog store behind the Catalog page, or `nil` to show the
     ///     placeholder (previews).
+    ///   - runtimes: The runtime store behind the Runtimes page and the Get column of the
+    ///     Catalog, or `nil` to show the placeholder (previews).
     ///   - operations: The operation center behind the Overview, or `nil` to show the
     ///     placeholder (previews).
     ///   - capacity: The disk reading behind the Overview, or `nil` for the placeholder.
@@ -72,6 +76,7 @@ public struct AppShell: View {
         counts: SidebarCounts = SidebarCounts(),
         instances: InstanceStore? = nil,
         catalog: CatalogStore? = nil,
+        runtimes: RuntimeStore? = nil,
         operations: OperationCenter? = nil,
         capacity: CapacityModel? = nil,
         instanceActions: InstanceActionModel? = nil,
@@ -87,6 +92,7 @@ public struct AppShell: View {
         self.counts = counts
         self.instances = instances
         self.catalog = catalog
+        self.runtimes = runtimes
         self.operations = operations
         self.capacity = capacity
         self.instanceActions = instanceActions
@@ -158,6 +164,20 @@ public struct AppShell: View {
         )
         .onAppear {
             windowOpener.capture(openWindow)
+        }
+        .task(id: runtimes.map(ObjectIdentifier.init)) {
+            await showFinishedInstalls()
+        }
+    }
+
+    /// Reports how each install the person started ended, also after they left the Catalog
+    /// (spec 0018, *Kolom aksi Catalog*). A failure shows in the detail panel, not here.
+    private func showFinishedInstalls() async {
+        guard let runtimes else { return }
+        for await finished in runtimes.finishedInstalls {
+            if let feedback = finished.feedback {
+                feedbackCenter?.show(feedback)
+            }
         }
     }
 
@@ -255,6 +275,8 @@ public struct AppShell: View {
             if let catalog {
                 CatalogPage(
                     catalog: catalog,
+                    runtimes: runtimes,
+                    operations: operations,
                     waiting: presentation.pageFailure,
                     hasConnection: presentation.hasConnection,
                     reconnect: reconnect,
@@ -264,8 +286,19 @@ public struct AppShell: View {
                 UnbuiltScrollPage(section: .catalog)
             }
         case .runtimes:
-            // provisional: F18
-            UnbuiltScrollPage(section: .runtimes)
+            if let runtimes {
+                RuntimesPage(
+                    runtimes: runtimes,
+                    catalog: catalog,
+                    operations: operations,
+                    waiting: presentation.pageFailure,
+                    hasConnection: presentation.hasConnection,
+                    reconnect: reconnect,
+                    openDiagnostics: { select(.diagnostics) }
+                )
+            } else {
+                UnbuiltScrollPage(section: .runtimes)
+            }
         case .operations:
             // provisional: F35
             UnbuiltScrollPage(

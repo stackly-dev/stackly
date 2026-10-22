@@ -238,6 +238,27 @@ The mockup has five of these labels (Running, Stopped, Starting…, Stopping…,
 
 Another open enum of the catalog shows as neutral text and is never guessed into a value: a category is "Other" (only under All), trust is "Unknown trust", the source is "Unknown source", a capability is "Unknown capability", an OS or architecture is "Unknown", and a reason is "Reason not recognized by this version of Stackly." (`CatalogCopy`).
 
+### Runtime status
+
+`RuntimeAppearance.appearance(of: RuntimeState)` (spec 0018, AC-17). The daemon decides every state; the GUI only shows it. A runtime state shows as a `StatusLabel` (the inspector of the Runtimes page) or as the second line of a table row, always with the label written. The four states that are being worked on are `informative` because the person asked for them; a runtime that cannot run is `critical` when its files are gone and `caution` when they changed, because a changed runtime may still work. Each state has its own symbol, so states of one tone stay apart with Differentiate Without Color.
+
+| Value | Label | Tone | Status symbol |
+| --- | --- | --- | --- |
+| `RuntimeState.installed` | Installed | `positive` | `checkmark.circle.fill` |
+| `RuntimeState.resolving` | Resolving… | `informative` | `magnifyingglass.circle.fill` |
+| `RuntimeState.downloading` | Downloading… | `informative` | `arrow.down.circle.fill` |
+| `RuntimeState.verifying` | Verifying… | `informative` | `checkmark.seal.fill` |
+| `RuntimeState.installing` | Installing… | `informative` | `arrow.triangle.2.circlepath.circle.fill` |
+| `RuntimeState.failed` | Failed | `critical` | `xmark.circle.fill` |
+| `RuntimeState.missing` | Missing | `critical` | `exclamationmark.octagon.fill` |
+| `RuntimeState.drifted` | Drifted | `caution` | `exclamationmark.triangle.fill` |
+| `RuntimeState.absent` | Removed | `neutral` | `minus.circle.fill` |
+| `RuntimeState.unrecognized` | Unrecognized State | `caution` | `questionmark.diamond.fill` (detail "Update Stackly to see this state", `caution`) |
+
+An install that has not ended shows as an Installing row on the Runtimes page and as a small progress in the Get column of the Catalog, with the stage and the percent of `StagedProgressValue`: the five stages Download, Verify digest, Extract, Validate binary, and Commit. A Catalog card whose software has installed runtimes shows "{n} installed" (`positive`, `checkmark.circle.fill`) instead of Available; it is not shown for 0. The Get column shows Get, the progress, or Installed (`positive` text with `checkmark.circle.fill`) for the artifact built for this Mac, matched to runtimes and running installs by the digest of the artifact.
+
+On the Runtimes page the table drops the Source and Digest columns when it is narrower than 560 pt, which is the case in the 384 pt page column next to an open inspector in the smallest window; their values stay in the inspector and in what VoiceOver reads for the row.
+
 ### StatusLabel
 
 `StatusLabel(_ appearance: StatusAppearance, context: StatusContext = .standard)` draws a dot, the label, and the optional detail (mockup: a 7 px dot, a 6 px gap, the label, then " · " and the readiness text).

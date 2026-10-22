@@ -14,6 +14,8 @@ struct VersionMatrix: View {
     static let systems: [TargetOs] = [.macos, .linux, .windows]
 
     let versions: [CatalogVersion]
+    /// What the Get column needs, or `nil` for a matrix without actions.
+    var runtimeGet: RuntimeGetSource?
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -30,6 +32,9 @@ struct VersionMatrix: View {
                 ForEach(Self.systems, id: \.self) { os in
                     header(CatalogCopy.osName(os))
                 }
+                if runtimeGet != nil {
+                    header("Runtime")
+                }
             }
             ForEach(versions, id: \.version) { version in
                 GridRow {
@@ -37,6 +42,9 @@ struct VersionMatrix: View {
                         .font(.body.weight(.semibold))
                     ForEach(Self.systems, id: \.self) { os in
                         cell(of: version, on: os)
+                    }
+                    if let runtimeGet {
+                        RuntimeGetAction(source: runtimeGet, version: version)
                     }
                 }
             }
@@ -58,6 +66,17 @@ struct VersionMatrix: View {
                                 .foregroundStyle(StacklyColor.textSecondary)
                                 .frame(width: 64, alignment: .leading)
                             cell(of: version, on: os)
+                        }
+                    }
+                    if let runtimeGet,
+                        RuntimeGetCell.hostArtifact(of: version, host: runtimeGet.host) != nil
+                    {
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.s8) {
+                            Text("Runtime")
+                                .font(.callout)
+                                .foregroundStyle(StacklyColor.textSecondary)
+                                .frame(width: 64, alignment: .leading)
+                            RuntimeGetAction(source: runtimeGet, version: version)
                         }
                     }
                 }

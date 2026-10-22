@@ -33,6 +33,18 @@ public struct FinishedInstall: Equatable, Sendable {
     }
 }
 
+extension FinishedInstall {
+    /// What the window says when the install ended, or `nil` for a failure, which the
+    /// Catalog detail panel shows instead (spec 0018, *Kolom aksi Catalog*).
+    public var feedback: Feedback? {
+        switch outcome {
+        case .succeeded: .success("\(name) \(version) installed and verified.")
+        case .cancelled: .neutral("Install of \(name) \(version) was cancelled. Nothing was kept.")
+        case .failed: nil
+        }
+    }
+}
+
 /// Why an install did not start or did not finish, kept per provider for the Catalog detail
 /// panel (spec 0018, *Kolom aksi Catalog*): the daemon's words, never a card.
 public struct RuntimeInstallFailure: Equatable, Sendable {
@@ -101,7 +113,7 @@ public final class RuntimeStore {
 
     @ObservationIgnored private let held: Held
     @ObservationIgnored private let call: (Call) async throws(ClientError) -> Reply
-    @ObservationIgnored private let send: @MainActor (Call, String) async -> MutationOutcome
+    @ObservationIgnored let send: @MainActor (Call, String) async -> MutationOutcome
     @ObservationIgnored private let updates: @MainActor (UUID) -> AsyncStream<OperationSnapshot>
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let continuation: AsyncStream<FinishedInstall>.Continuation
@@ -366,6 +378,9 @@ public final class RuntimeStore {
                 recordStarted(
                     operationId: accepted.operation.id, provider: provider, name: displayName,
                     version: version)
+                // Keep the button busy until the install shows in the list, so it does not
+                // flash back to Get.
+                await reloadInstalling()
                 context.report(
                     .started(
                         "Installing \(displayName) \(version). Staged, verified, then committed."))
