@@ -18,6 +18,8 @@ pub mod catalog;
 #[cfg(unix)]
 pub mod connection;
 #[cfg(unix)]
+pub mod detail;
+#[cfg(unix)]
 pub mod dispatch;
 #[cfg(unix)]
 pub mod events;

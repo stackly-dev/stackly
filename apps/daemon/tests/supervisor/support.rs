@@ -25,9 +25,10 @@ use stackly_platform::{Clock, Platform, SystemClock, UserId};
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::handshake::{ClientInfo, ClientKind};
 use stackly_protocol::instance::{
-    CreateForm, CreateInstanceParams, CreatePreflight, DuplicateForm, EndpointRequest,
-    GetCreateFormParams, GetDuplicateFormParams, GetInstanceParams, InstanceActionAccepted,
-    InstancePage, InstanceReadinessState, InstanceSummary, ListInstancesParams, PortRequest,
+    CreateForm, CreateInstanceParams, CreatePreflight, DataUsage, DuplicateForm, EndpointRequest,
+    GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams, GetInstanceDetailParams,
+    GetInstanceParams, InstanceActionAccepted, InstanceDetail, InstancePage,
+    InstanceReadinessState, InstanceSummary, ListInstancesParams, PortRequest,
     PreflightCreateParams, ProviderSelector, SecretFieldInput, SecretPlan, SecretSource,
     SettingsDocument, StartInstanceParams, StopInstanceParams,
 };
@@ -81,11 +82,24 @@ pub struct Site {
 impl Site {
     /// A root with the fake runtime and the fake provider seeded.
     pub fn new() -> Self {
+        Self::build(false)
+    }
+
+    /// The same, laid out as `STACKLY_ROOT` lays out a root, so the real
+    /// `stackly` binary with that override finds the daemon socket.
+    pub fn for_cli() -> Self {
+        Self::build(true)
+    }
+
+    fn build(as_override: bool) -> Self {
         let root = TestRoot::new().expect("a test root can be created");
         let secrets = Arc::new(FakeSecretStore::new());
-        let platform = MacosPlatform::with_roots(root.roots())
-            .expect("this Mac reports its OS version")
-            .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
+        let platform = if as_override {
+            MacosPlatform::new(Some(root.path().into())).expect("a test root is a valid override")
+        } else {
+            MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version")
+        }
+        .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
         let prepared = prepare_layout(&platform).expect("the test root layout can be prepared");
         let owner = LockOwner::new(
             std::process::id(),
@@ -112,7 +126,7 @@ impl Site {
         .expect("the fake runtime and package are seeded");
         // The registry closes here, so the daemon opens it alone.
         drop(registry);
-        let reap = ReapGuard::new(root.path(), root.roots().runtime());
+        let reap = ReapGuard::new(root.path(), prepared.layout().roots().runtime());
         Self {
             _reap: reap,
             root,
@@ -646,6 +660,41 @@ impl Api {
         {
             Reply::InstanceGet(summary) => Ok(*summary),
             other => panic!("not a get reply: {other:?}"),
+        }
+    }
+
+    /// `instance.get_detail`.
+    pub async fn detail(&self, id: Uuid) -> Result<InstanceDetail, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDetail(GetInstanceDetailParams {
+                instance_id: id,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDetail(detail) => Ok(*detail),
+            other => panic!("not a detail reply: {other:?}"),
+        }
+    }
+
+    /// `instance.get_data_usage`; `None` is a reply without a size.
+    pub async fn data_usage(
+        &self,
+        id: Uuid,
+        refresh: bool,
+        cached_only: bool,
+    ) -> Result<Option<DataUsage>, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDataUsage(GetDataUsageParams {
+                instance_id: id,
+                refresh,
+                cached_only,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDataUsage(reply) => Ok(reply.usage),
+            other => panic!("not a data usage reply: {other:?}"),
         }
     }
 
