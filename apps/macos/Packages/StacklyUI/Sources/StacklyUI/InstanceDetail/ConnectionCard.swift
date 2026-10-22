@@ -103,6 +103,9 @@ struct ConnectionEntryRow: View {
             } else {
                 RevealableSecretText(
                     masked, references: references, client: secrets,
+                    maskedLabel: DetailFormat.spoken(masked: masked),
+                    copyLabel: "Copy \(connection.title)",
+                    copyAnnouncement: "\(connection.title) copied.",
                     compose: ConnectionComposer.composer(for: connection.parts))
             }
         }
@@ -130,12 +133,13 @@ struct ConnectionEntryRow: View {
                 Text(masked)
                     .font(.callout.monospaced())
                     .foregroundStyle(StacklyColor.textSecondary)
+                    .accessibilityLabel(DetailFormat.spoken(masked: masked))
                 Spacer(minLength: Spacing.s8)
                 Button("Show") {}
                     .accessibilityLabel("Show Password")
                     .disabled(true)
                 Button("Copy") {}
-                    .accessibilityLabel("Copy Password")
+                    .accessibilityLabel("Copy \(connection.title)")
                     .disabled(true)
             }
             DisabledReasonText(DetailFormat.missingValueReason(missing))

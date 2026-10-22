@@ -142,14 +142,14 @@ struct ShellCommandsTests {
         var shell = AppShell(
             presentation: presentation,
             diagnostics: ConnectionDiagnostics(status: status, appProtocol: "1.3"),
-            windowOpener: WindowOpener(),
-            windowWillClose: { _ in },
             reconnect: {},
             refreshDiagnostics: {}
         )
         var latest: PublishedCommands?
         shell.onPublishCommands = { latest = $0 }
-        let controller = NSHostingController(rootView: shell)
+        // `MainWindowRoot` holds the key state of the window and puts it in the environment.
+        let controller = NSHostingController(
+            rootView: shell.environment(\.mainWindowKey, MainWindowKey()))
         let window = NSWindow(contentViewController: controller)
         defer { window.close() }
         window.setContentSize(AppShell.minimumSize)

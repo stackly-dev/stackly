@@ -23,10 +23,15 @@ public struct StacklyCommands: Commands {
     /// The actions of the `app` scope items of kind `button`. They are always on, also with
     /// the main window closed.
     ///
-    /// None is built yet: Welcome to Stackly joins with the onboarding of spec 0016, and
-    /// Stackly Help with feature 66.
+    /// Welcome to Stackly shows the onboarding at its first step and opens the main window,
+    /// or brings it to the front (spec 0016, AC-3). Stackly Help joins with feature 66.
     static func appActions(runtime: ShellRuntime) -> [CommandID: @MainActor () -> Void] {
-        [:]
+        [
+            .welcome: {
+                runtime.onboarding.present()
+                runtime.windowOpener.openMain()
+            }
+        ]
     }
 
     private var context: CommandContext {
@@ -84,7 +89,9 @@ public struct StacklyCommands: Commands {
             CommandItem(.copyConnectionString, context: context)
         }
         // Replaced so the Stackly Help item that opens nothing goes away; the search field
-        // stays. Welcome to Stackly joins with spec 0016.
-        CommandGroup(replacing: .help) {}
+        // stays. Stackly Help joins with feature 66.
+        CommandGroup(replacing: .help) {
+            CommandItem(.welcome, context: context)
+        }
     }
 }

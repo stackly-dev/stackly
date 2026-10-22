@@ -86,7 +86,8 @@ struct CommandMapTests {
 
     /// The commands whose menu item exists after the Instances page (spec 0022), with New
     /// Instance… of spec 0020 and the detail page of spec 0021 (Open, Back, and Copy Connection
-    /// String). Welcome to Stackly waits for spec 0016, and the rest for their owner features.
+    /// String), and Welcome to Stackly of the onboarding (spec 0016). The rest wait for their
+    /// owner features.
     private static let builtCommands: Set<CommandID> = [
         .reconnect, .newInstance, .find, .showOverview, .showInstances, .showEnvironments,
         .showCatalog,
@@ -94,7 +95,7 @@ struct CommandMapTests {
         .sortInstancesByName, .sortInstancesByProvider, .sortInstancesByVersion,
         .sortInstancesByEndpoints, .sortInstancesByStatus, .sortInstancesAscending,
         .sortInstancesDescending, .startInstance, .stopInstance, .openInstance, .back,
-        .copyConnectionString,
+        .copyConnectionString, .welcome,
     ]
 
     @Test func aRowIsBuiltExactlyWhenItsMenuItemExists() {
@@ -286,7 +287,7 @@ struct CommandMapTests {
                 [.openInstance], [.startInstance, .stopInstance], [.copyConnectionString],
             ]
         )
-        #expect(ids(.help).isEmpty)
+        #expect(ids(.help) == [[.welcome]])
         #expect(ids(.window).isEmpty)
     }
 

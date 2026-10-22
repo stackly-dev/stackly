@@ -1,0 +1,37 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1638a-9730-719f-a6d2-788f002a7c38",
+  "covers": [
+    "REQ-029",
+    "REQ-036",
+    "AC-029"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stackly-cli",
+    "target": "nats_journey",
+    "name": "nats_created_with_defaults_and_with_jetstream_off_starts_inspects_and_stops_from_the_cli",
+    "file": "apps/cli/tests/nats_journey.rs",
+    "line": 259
+  },
+  "status": "PASS",
+  "expected": "against a real stacklyd and NATS 2.15.1, stackly instance create for official/nats with the defaults and with --set jetstream=false, instance start, instance inspect <name> --json with readiness ready and reason probe_ok, and instance stop all exit 0; the server named after the instance answers INFO with JetStream on for the defaults and off for the second instance, and a stopped instance is not ready",
+  "actual": "NATS 2.15.1 was created from the CLI with the defaults and with JetStream off, started until ready, inspected by name, and stopped; INFO showed JetStream on for the first and off for the second",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "nats",
+      "version": "2.15.1",
+      "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-22T12:16:29.488324Z",
+  "finishedAt": "2026-10-22T12:16:38.533271Z",
+  "evidencePath": "output.log"
+}

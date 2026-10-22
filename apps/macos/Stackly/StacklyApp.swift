@@ -11,7 +11,7 @@ struct StacklyApp: App {
 
     var body: some Scene {
         Window("Stackly", id: WindowOpener.mainWindowID) {
-            LiveShell(
+            MainWindowRoot(
                 runtime: appDelegate.runtime,
                 windowWillClose: { appDelegate.mainWindowWillClose($0) }
             )

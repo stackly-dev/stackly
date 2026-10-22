@@ -1,7 +1,7 @@
 # 0016. Onboarding
 
 **Date**: 2026-10-20
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

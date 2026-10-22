@@ -1,4 +1,5 @@
 import Foundation
+import StacklyClient
 import Testing
 
 @testable import StacklyUI
@@ -26,11 +27,39 @@ struct SecretViewsAccessibilityTests {
     @Test func aHiddenValueIsLabelledPasswordHiddenWithItsReferences() throws {
         let file = try source("RevealableSecretText.swift")
         #expect(
-            file.codeLines.contains { $0.contains(#".accessibilityLabel("Password, hidden")"#) })
+            file.codeLines.contains { $0.contains(".accessibilityLabel(maskedLabel)") })
+        #expect(RevealableSecretText.defaultMaskedLabel == "Password, hidden")
         #expect(
             file.codeLines.contains {
                 $0.contains(".accessibilityValue(model.references.joined(separator:")
             })
+    }
+
+    @Test func theDefaultsOfTheLabelParametersKeepTheWordsOfSpec0011() throws {
+        #expect(RevealableSecretText.defaultMaskedLabel == "Password, hidden")
+        #expect(RevealableSecretText.defaultCopyLabel == "Copy Password")
+        let code = try source("RevealableSecretText.swift").codeLines.joined(separator: "\n")
+        #expect(code.contains("copyAnnouncement: String? = nil"))
+        #expect(code.contains(".accessibilityLabel(copyLabel)"))
+        #expect(code.contains(#"announce("Password hidden")"#))
+    }
+
+    @Test func theViewKeepsTheDefaultLabelsAndTakesCustomOnes() {
+        let client = SecretsClient { _, _ throws(ClientError) in
+            throw .notSent(ClientErrorCatalog.notConnected())
+        }
+        let plain = RevealableSecretText(
+            "x:****", references: ["r"], client: client, compose: { _ in "" })
+        #expect(plain.maskedLabel == "Password, hidden")
+        #expect(plain.copyLabel == "Copy Password")
+        #expect(plain.copyAnnouncement == nil)
+
+        let custom = RevealableSecretText(
+            "x:****", references: ["r"], client: client, maskedLabel: "x:password hidden",
+            copyLabel: "Copy URI", copyAnnouncement: "URI copied.", compose: { _ in "" })
+        #expect(custom.maskedLabel == "x:password hidden")
+        #expect(custom.copyLabel == "Copy URI")
+        #expect(custom.copyAnnouncement == "URI copied.")
     }
 
     @Test func aShownValueIsReadByVoiceOverAsTheLabelsValue() throws {

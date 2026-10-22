@@ -104,24 +104,41 @@ struct DaemonConnectionTests {
     }
 
     @Test func callsAboveTheInFlightLimitWaitForASlot() async throws {
-        let seen = Mutex(0)
+        // Each call starts only after the one before it reached the daemon:
+        // tasks started together reach it in any order.
+        let clock = ManualClock()
+        let options = CallOptions(timeout: .seconds(10), clock: clock)
+        let (arrivals, arrived) = AsyncStream<Request>.makeStream()
+        let thirdWaits = DispatchSemaphore(value: 0)
+        let seen = Mutex(-1)
         server.serve { session in
             try session.acceptHandshake(limits: Samples.limits.withInFlight(2))
-            let first = try session.readRequest()
-            _ = try session.readRequest()
+            let held = try session.readRequest()
+            arrived.yield(held)
+            let answered = try session.readRequest()
+            arrived.yield(answered)
             // The third call must wait: nothing more arrives until one ends.
+            thirdWaits.wait()
             seen.withLock { $0 = session.pendingByteCount() }
-            try session.reply(to: first, with: .eventsUnsubscribe)
+            try session.reply(to: answered, with: .eventsUnsubscribe)
             let third = try session.readRequest()
+            arrived.yield(third)
             try session.reply(to: third, with: .eventsUnsubscribe)
         }
         let (connection, _) = try await open()
-        async let one = connection.call(Samples.unsubscribe(1))
-        let two = Task { try await connection.call(Samples.unsubscribe(2)) }
-        try await Task.sleep(for: .milliseconds(100))
-        async let three = connection.call(Samples.unsubscribe(3))
+        var reached = arrivals.makeAsyncIterator()
+        let two = Task { try await connection.call(Samples.unsubscribe(2), options: options) }
+        #expect(await reached.next()?.call == Samples.unsubscribe(2))
+        async let one = connection.call(Samples.unsubscribe(1), options: options)
+        #expect(await reached.next()?.call == Samples.unsubscribe(1))
+        async let three = connection.call(Samples.unsubscribe(3), options: options)
+        // A call's timer starts only after the call holds a slot or waits
+        // for one.
+        await clock.waitForSleepers(3)
+        thirdWaits.signal()
         #expect(try await one == .eventsUnsubscribe)
         #expect(try await three == .eventsUnsubscribe)
+        #expect(await reached.next()?.call == Samples.unsubscribe(3))
         #expect(seen.withLock { $0 } == 0)
         two.cancel()
         await connection.close()

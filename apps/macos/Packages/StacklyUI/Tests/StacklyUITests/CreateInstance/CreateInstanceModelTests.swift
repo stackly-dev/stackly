@@ -171,6 +171,29 @@ struct CreateInstanceModelTests {
                 == EndpointRequest(name: "admin", port: .auto))
     }
 
+    @Test func theNatsFormHasItsClientAndMonitoringRowsWithFixedOrAutomaticPorts() async throws {
+        let form = try contractForm("nats")
+        let rig = await editing { $0.service.onForm = { _ in form } }
+        let model = rig.model
+        #expect(model.endpoints.map(\.name) == ["client", "monitoring"])
+        #expect(model.endpoints.map(\.purpose) == [.client, .monitoring])
+        #expect(model.endpoints.map(\.host) == ["127.0.0.1", "127.0.0.1"])
+        #expect(model.endpoints.map(\.mode) == [.fixed, .fixed])
+        #expect(model.endpoints.map(\.portText) == ["4222", "8222"])
+        #expect(
+            model.endpoints.compactMap(\.request) == [
+                EndpointRequest(name: "client", port: .fixed(4222)),
+                EndpointRequest(name: "monitoring", port: .fixed(8222)),
+            ])
+        model.setMode(.automatic, of: "client")
+        model.setMode(.automatic, of: "monitoring")
+        #expect(
+            model.endpoints.compactMap(\.request) == [
+                EndpointRequest(name: "client", port: .auto),
+                EndpointRequest(name: "monitoring", port: .auto),
+            ])
+    }
+
     // MARK: - Create gate
 
     @Test func theGateGivesTheFirstReasonThatApplies() async {
