@@ -112,6 +112,11 @@ pub struct DetailProvider {
     /// `metadata.displayName` of the pinned package, or `None` when the
     /// package cannot be read. Never taken from the catalog.
     pub display_name: Option<String>,
+    /// Whether the pinned package was read: false when the snapshot has no
+    /// package or holds one that is not the pinned one, and then
+    /// `display_name` is `None` and `connections` is empty. True for a
+    /// readable package without a `connection` block too.
+    pub package_readable: bool,
 }
 
 /// The runtime of an instance.
@@ -200,6 +205,7 @@ pub fn build(snapshot: &DetailSnapshot<'_>) -> Result<InstanceDetailData, Detail
         provider: DetailProvider {
             key: instance.provider_revision().clone(),
             display_name: package.map(|package| package.manifest().display_name().to_owned()),
+            package_readable: package.is_some(),
         },
         runtime: DetailRuntime {
             id: runtime.id(),

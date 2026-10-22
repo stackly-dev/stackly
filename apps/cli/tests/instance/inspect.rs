@@ -31,6 +31,16 @@ fn serving() -> (TestRoot, ScriptedDaemon) {
                 ))],
             }
         }
+        Call::InstanceGetDetail(params) => {
+            let item = listed.iter().find(|item| item.id == params.instance_id);
+            item.and_then(|item| data::detail_steps(call, item))
+                .unwrap_or_default()
+        }
+        Call::InstanceGetDataUsage(params) => {
+            let item = listed.iter().find(|item| item.id == params.instance_id);
+            item.and_then(|item| data::detail_steps(call, item))
+                .unwrap_or_default()
+        }
         _ => Vec::new(),
     });
     (root, daemon)
@@ -75,7 +85,7 @@ fn inspect_by_id_in_either_case_calls_instance_get_once_and_writes_the_block() {
             .unwrap()
             .keys()
             .collect::<Vec<_>>(),
-        ["instance"]
+        ["dataUsage", "detail", "instance"]
     );
     assert_eq!(value["result"]["instance"]["name"], "broken-db");
     assert_eq!(
@@ -83,8 +93,12 @@ fn inspect_by_id_in_either_case_calls_instance_get_once_and_writes_the_block() {
         [
             "daemon.handshake",
             "instance.get",
+            "instance.get_detail",
+            "instance.get_data_usage",
             "daemon.handshake",
-            "instance.get"
+            "instance.get",
+            "instance.get_detail",
+            "instance.get_data_usage"
         ]
     );
     assert_eq!(daemon.log()[3].raw["call"]["content"]["instanceId"], id);
@@ -108,8 +122,12 @@ fn inspect_by_name_finds_the_id_in_the_list_and_reads_the_instance() {
             "daemon.handshake",
             "instance.list",
             "instance.get",
+            "instance.get_detail",
+            "instance.get_data_usage",
             "daemon.handshake",
-            "instance.get"
+            "instance.get",
+            "instance.get_detail",
+            "instance.get_data_usage"
         ]
     );
     assert_eq!(daemon.log()[2].raw["call"]["content"]["instanceId"], id);
@@ -184,7 +202,7 @@ fn get_is_the_alias_of_inspect_with_the_same_output() {
     assert_eq!(get.code, Some(0), "{get:?}");
     assert_eq!(get.stdout, inspect.stdout);
     assert_eq!(envelope(&get_json)["command"], "instance get");
-    assert_eq!(daemon.methods().len(), 3 + 3 + 2);
+    assert_eq!(daemon.methods().len(), 5 + 5 + 4);
 }
 
 /// Spec 0022 AC-11.

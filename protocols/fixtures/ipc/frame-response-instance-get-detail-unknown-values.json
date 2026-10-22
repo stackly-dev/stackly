@@ -1,0 +1,121 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000931",
+    "reply": {
+      "type": "instance.get_detail",
+      "content": {
+        "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+        "revision": 4,
+        "provider": {
+          "name": "official/postgresql",
+          "revision": "2026.10.1",
+          "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed",
+          "displayName": "PostgreSQL",
+          "packageReadable": true
+        },
+        "runtime": {
+          "id": "0192f3a5-0000-7000-8000-0000000000a1",
+          "version": "17.2.0",
+          "target": {
+            "os": "macos",
+            "arch": "aarch64"
+          },
+          "installMode": "from_the_future",
+          "artifactSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+        },
+        "dataPath": "/Users/test/Library/Application Support/Stackly/instances/orders-db/data",
+        "startup": "from_the_future",
+        "secrets": [
+          {
+            "field": "superuserPassword",
+            "title": "Superuser password",
+            "reference": "local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password",
+            "status": "from_the_future"
+          }
+        ],
+        "dependents": [
+          {
+            "environmentId": "0192f3a7-0000-7000-8000-0000000000e1",
+            "name": "erp-dev",
+            "ownership": "from_the_future",
+            "leaseActive": true
+          },
+          {
+            "environmentId": "0192f3a7-0000-7000-8000-0000000000e2",
+            "name": "reporting",
+            "ownership": "shared",
+            "leaseActive": false
+          }
+        ],
+        "connections": [
+          {
+            "name": "uri",
+            "title": "Connection string",
+            "state": "from_the_future",
+            "reason": null,
+            "masked": "postgresql://postgres:****@127.0.0.1:5432/postgres",
+            "parts": [
+              {
+                "kind": "text",
+                "text": "postgresql://postgres:",
+                "secret": null
+              },
+              {
+                "kind": "secret",
+                "text": null,
+                "secret": {
+                  "field": "superuserPassword",
+                  "reference": "local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password"
+                }
+              },
+              {
+                "kind": "text",
+                "text": "@127.0.0.1:5432/postgres",
+                "secret": null
+              }
+            ],
+            "portMayChange": false
+          },
+          {
+            "name": "socket",
+            "title": "Unix socket",
+            "state": "available",
+            "reason": null,
+            "masked": "postgresql://postgres:****@/postgres?host=/Users/test/Library/Application%20Support/Stackly/run/ab12cd34&port=5432",
+            "parts": [
+              {
+                "kind": "text",
+                "text": "postgresql://postgres:",
+                "secret": null
+              },
+              {
+                "kind": "from_the_future",
+                "text": null,
+                "secret": {
+                  "field": "superuserPassword",
+                  "reference": "local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password"
+                }
+              },
+              {
+                "kind": "text",
+                "text": "@/postgres?host=/Users/test/Library/Application%20Support/Stackly/run/ab12cd34&port=5432",
+                "secret": null
+              }
+            ],
+            "portMayChange": false
+          },
+          {
+            "name": "later",
+            "title": "Later",
+            "state": "unavailable",
+            "reason": "from_the_future",
+            "masked": null,
+            "parts": [],
+            "portMayChange": false
+          }
+        ]
+      }
+    }
+  }
+}

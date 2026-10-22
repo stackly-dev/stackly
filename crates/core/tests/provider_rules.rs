@@ -28,6 +28,10 @@ fn fake_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake")
 }
 
+fn nats_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/nats")
+}
+
 fn fake_command_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/packages/fake-command")
 }
@@ -74,6 +78,13 @@ impl Edit {
         Self {
             folder: "fake-command".into(),
             files: files_of(&fake_command_dir()),
+        }
+    }
+
+    fn nats() -> Self {
+        Self {
+            folder: "nats".into(),
+            files: files_of(&nats_dir()),
         }
     }
 
@@ -2790,5 +2801,291 @@ fn a_native_text_param_that_renders_empty_or_too_long_fails_the_plan() {
         );
         assert!(!err.to_string().contains("nnnn"), "{err}");
     }
+    ev.pass();
+}
+
+/// The init port issues of a package as `(file, location, message)`.
+fn init_port_issues(package: &ValidatedPackage) -> Vec<(String, String, String)> {
+    package
+        .init_port_issues()
+        .into_iter()
+        .map(|issue| {
+            assert_eq!(issue.code, IssueCode::TokenNotAllowedHere);
+            assert_eq!(issue.reason, None);
+            (issue.file, issue.location.to_string(), issue.message)
+        })
+        .collect()
+}
+
+/// `context` with every TCP and UDP endpoint stripped of its port, the state
+/// of an `Auto` endpoint at initialize.
+fn without_ports(mut context: PlanContext) -> PlanContext {
+    for resolved in context.endpoints.values_mut() {
+        if let ResolvedEndpoint::Ip { port, .. } = resolved {
+            *port = None;
+        }
+    }
+    context
+}
+
+#[test]
+fn init_port_issues_name_the_managed_port_the_fixture_renders_in_its_peers_template() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "the fake-command fixture has exactly one init port issue, at the start of the settings.listenPort tag in templates/peers.yaml.tmpl, and fake has none",
+    );
+    let fixture = Edit::fake_command()
+        .validate()
+        .expect("the fixture is valid");
+
+    let issues = init_port_issues(&fixture);
+
+    assert_eq!(
+        issues,
+        [(
+            "templates/peers.yaml.tmpl".to_owned(),
+            "2:7".to_owned(),
+            "config file peers is rendered by initialize, but settings.listenPort is managed from an endpoint port, which is chosen when the instance starts; every config file is rendered again before each spawn".to_owned(),
+        )]
+    );
+    assert!(init_port_issues(&Edit::fake().validate().expect("fake validates")).is_empty());
+    ev.pass();
+}
+
+#[test]
+fn init_port_issues_cover_args_env_and_the_templates_a_step_renders() {
+    let package = Edit::fake()
+        .replace(
+            "provider.yaml",
+            "stdin: { secret: authToken }",
+            "stdin: { secret: authToken }\n      env:\n        FAKE_ADDRESS: \"${endpoint.http.address}\"",
+        )
+        .replace(
+            "provider.yaml",
+            "- --token-stdin",
+            "- --token-stdin\n        - \"--port=${endpoint.http.port}\"",
+        )
+        .replace(
+            "templates/fake.json.tmpl",
+            "\"authToken\": {{ secret.authToken }}",
+            "\"authToken\": {{ secret.authToken }},\n  \"port\": {{ endpoint.http.port }}",
+        )
+        .validate()
+        .expect("a port token in initialize is still a valid package");
+
+    let issues = init_port_issues(&package);
+
+    let places: Vec<(&str, &str)> = issues
+        .iter()
+        .map(|(file, location, _)| (file.as_str(), location.as_str()))
+        .collect();
+    assert_eq!(
+        places,
+        [
+            ("templates/fake.json.tmpl", "5:11"),
+            ("provider.yaml", "lifecycle.initialize[2].args[3]"),
+            ("provider.yaml", "lifecycle.initialize[2].env.FAKE_ADDRESS"),
+        ]
+    );
+    assert_eq!(
+        issues[1].2,
+        "endpoint.http.port is chosen when the instance starts, so initialize can't use it; every config file is rendered again before each spawn"
+    );
+    assert_eq!(
+        issues[2].2,
+        "endpoint.http.address is chosen when the instance starts, so initialize can't use it; every config file is rendered again before each spawn"
+    );
+    assert_eq!(
+        issues[0].2,
+        "config file fakeConfig is rendered by initialize, but endpoint.http.port is chosen when the instance starts; every config file is rendered again before each spawn"
+    );
+}
+
+#[test]
+fn a_config_file_rendered_only_before_the_spawn_has_no_init_port_issue() {
+    let package = Edit::fake()
+        .replace(
+            "provider.yaml",
+            "    - { primitive: renderConfig, file: fakeConfig }\n",
+            "",
+        )
+        .replace(
+            "templates/fake.json.tmpl",
+            "\"authToken\": {{ secret.authToken }}",
+            "\"authToken\": {{ secret.authToken }},\n  \"port\": {{ endpoint.http.port }}",
+        )
+        .validate()
+        .expect("the package validates");
+
+    assert!(init_port_issues(&package).is_empty());
+}
+
+#[test]
+fn the_host_and_the_socket_folder_need_no_port_at_initialize() {
+    let package = Edit::fake_command()
+        .replace(
+            "provider.yaml",
+            "    - { primitive: renderConfig, file: peers }\n",
+            "",
+        )
+        .replace(
+            "provider.yaml",
+            "args: [init, \"--data=${instance.data}\"]",
+            "args: [init, \"--data=${instance.data}\", \"--host=${endpoint.http.host}\", \"--sockets=${endpoint.control.socketDir}\"]",
+        )
+        .validate()
+        .expect("the package validates");
+    let portless = without_ports(context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/T",
+    ));
+
+    let init = package
+        .init_plan(&portless)
+        .expect("host and socketDir resolve while the endpoint has no port");
+
+    assert!(init_port_issues(&package).is_empty());
+    let run = init
+        .steps
+        .iter()
+        .find_map(|step| match step {
+            InitStep::Run(run) => Some(run),
+            _ => None,
+        })
+        .expect("the init step runs");
+    assert_eq!(run.command.args[2], "--host=127.0.0.1");
+    assert!(
+        run.command.args[3].starts_with("--sockets=/private/tmp/skt-rules/"),
+        "{:?}",
+        run.command.args
+    );
+}
+
+#[test]
+fn a_socket_whose_name_holds_the_port_is_an_init_port_issue() {
+    let package = Edit::fake_command()
+        .replace(
+            "provider.yaml",
+            "    - { primitive: renderConfig, file: peers }\n",
+            "",
+        )
+        .replace(
+            "provider.yaml",
+            "args: [init, \"--data=${instance.data}\"]",
+            "args: [init, \"--socket=${endpoint.control.socket}\"]",
+        )
+        .validate()
+        .expect("the package validates");
+
+    let issues = init_port_issues(&package);
+
+    assert_eq!(issues.len(), 1, "{issues:#?}");
+    assert_eq!(issues[0].0, "provider.yaml");
+    assert_eq!(issues[0].1, "lifecycle.initialize[3].args[1]");
+    assert!(
+        issues[0].2.starts_with(
+            "endpoint.control.socket holds a port, which is chosen when the instance starts"
+        ),
+        "{}",
+        issues[0].2
+    );
+}
+
+#[test]
+fn the_nats_1_0_0_shape_loads_but_reports_its_client_and_monitoring_addresses() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "a copy of providers/nats with renderConfig natsConf put back in initialize still validates, and init_port_issues reports the client and monitoring addresses in templates/nats.conf.tmpl",
+    );
+    let package = Edit::nats()
+        .replace(
+            "provider.yaml",
+            "- { primitive: createManagedDirectories }",
+            "- { primitive: createManagedDirectories }\n    - { primitive: renderConfig, file: natsConf }",
+        )
+        .validate()
+        .expect("the 1.0.0 shape still validates");
+
+    let issues = init_port_issues(&package);
+
+    assert!(!issues.is_empty());
+    for (file, _, message) in &issues {
+        assert_eq!(file, "templates/nats.conf.tmpl");
+        assert!(
+            message.starts_with("config file natsConf is rendered by initialize, but endpoint."),
+            "{message}"
+        );
+    }
+    let tokens: Vec<&str> = issues
+        .iter()
+        .map(|(_, _, message)| {
+            message
+                .split("but ")
+                .nth(1)
+                .and_then(|rest| rest.split(' ').next())
+                .expect("the message names a token")
+        })
+        .collect();
+    assert!(tokens.contains(&"endpoint.client.address"), "{tokens:?}");
+    assert!(
+        tokens.contains(&"endpoint.monitoring.address"),
+        "{tokens:?}"
+    );
+    ev.pass();
+}
+
+#[test]
+fn a_managed_port_field_fails_only_where_its_token_is_rendered() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "fake-command fails its init plan with EndpointUnresolved through the peers template while the endpoint has no port, and a package that uses the managed port only at start plans initialize without it and puts its value in the run plan",
+    );
+    let fixture = Edit::fake_command()
+        .validate()
+        .expect("the fixture is valid");
+    let settings = serde_json::json!({ "authToken": SECRET_REF });
+    let http: EndpointName = "http".parse().expect("valid name");
+    let portless = without_ports(context_for(&fixture, settings.clone(), "/Volumes/T"));
+
+    assert_eq!(
+        fixture.init_plan(&portless).unwrap_err(),
+        PlanError::EndpointUnresolved { endpoint: http }
+    );
+
+    let patched = Edit::fake_command()
+        .replace(
+            "provider.yaml",
+            "    - { primitive: renderConfig, file: peers }\n",
+            "",
+        )
+        .replace(
+            "provider.yaml",
+            "      - \"--port=${endpoint.http.port}\"\n",
+            "      - \"--listen=${settings.listenPort}\"\n",
+        )
+        .validate()
+        .expect("the package validates");
+    let context = context_for(&patched, settings.clone(), "/Volumes/T");
+    let portless = without_ports(context.clone());
+
+    patched
+        .init_plan(&portless)
+        .expect("the init plan builds without a port");
+    let run = patched.run_plan(&context).expect("the run plan builds");
+    assert!(
+        run.spawn.args.contains(&"--listen=18081".to_owned()),
+        "{:?}",
+        run.spawn.args
+    );
+    assert_eq!(
+        patched.run_plan(&portless).unwrap_err(),
+        PlanError::EndpointUnresolved {
+            endpoint: "http".parse().expect("valid name")
+        }
+    );
     ev.pass();
 }

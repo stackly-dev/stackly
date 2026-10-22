@@ -39,6 +39,22 @@
     {
       "file": "connection-compose.json",
       "type": "ConnectionComposeCases"
+    },
+    {
+      "file": "detail-postgresql.json",
+      "type": "DetailTriple"
+    },
+    {
+      "file": "detail-nats.json",
+      "type": "DetailTriple"
+    },
+    {
+      "file": "detail-unavailable.json",
+      "type": "DetailTriple"
+    },
+    {
+      "file": "detail-package-unreadable.json",
+      "type": "DetailTriple"
     }
   ]
 }

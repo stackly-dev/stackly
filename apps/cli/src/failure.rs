@@ -447,6 +447,54 @@ impl CliFailure {
         )
     }
 
+    /// `cli.connection_not_found` (spec 0021): no connection string is
+    /// named `format`, or, with `format` `None`, the provider describes none.
+    /// `available` are the names the instance has.
+    #[must_use]
+    pub fn connection_not_found(format: Option<&str>, available: &[&str]) -> Self {
+        let message = match format {
+            Some(format) if !available.is_empty() => format!("no connection named {format}"),
+            _ => "this provider describes no connection strings".to_owned(),
+        };
+        let mut body = ErrorBody::new(&cli::CONNECTION_NOT_FOUND, message);
+        if let Some(format) = format {
+            body = body.with_detail("format", format);
+        }
+        Self::local(
+            body.with_detail("available", available.join(","))
+                .with_hint("list them with stackly instance connection <instance> --all"),
+        )
+    }
+
+    /// `cli.connection_unavailable` (spec 0021): the connection string
+    /// `format` cannot be built now, for `reason` (`port_not_assigned`,
+    /// `package_unavailable`, `retained`, or `unrecognized`). `format` is
+    /// `None` only when the package of the instance cannot be read and no
+    /// `--format` was sent; `package_unreadable` words that case.
+    #[must_use]
+    pub fn connection_unavailable(
+        format: Option<&str>,
+        reason: &str,
+        package_unreadable: bool,
+    ) -> Self {
+        let message = match (format, package_unreadable) {
+            (_, true) => "the provider package of this instance can't be read".to_owned(),
+            (Some(format), false) => format!("the {format} connection is not available yet"),
+            (None, false) => "the connection is not available yet".to_owned(),
+        };
+        let hint = match reason {
+            "port_not_assigned" => "start the instance to assign its port",
+            "package_unavailable" => "run stackly doctor",
+            "retained" => "the instance was removed",
+            _ => "update Stackly",
+        };
+        let mut body = ErrorBody::new(&cli::CONNECTION_UNAVAILABLE, message);
+        if let Some(format) = format {
+            body = body.with_detail("format", format);
+        }
+        Self::local(body.with_detail("reason", reason).with_hint(hint))
+    }
+
     /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
     /// (`waiting_for_daemon`, or `agent_call` after a macOS call that
     /// Ctrl+C had to wait for), which changes nothing by itself. Exits 130.
@@ -567,6 +615,8 @@ mod tests {
             CliFailure::agent_status_unavailable(AgentOp::Status, "cannot read", None),
             CliFailure::agent_call_timeout(AgentOp::Relaunch, Duration::from_secs(10)),
             CliFailure::daemon_wait_timeout("start", Duration::from_secs(30)),
+            CliFailure::connection_not_found(Some("nope"), &["uri", "socket"]),
+            CliFailure::connection_unavailable(Some("uri"), "port_not_assigned", false),
         ]
     }
 

@@ -248,3 +248,39 @@ struct ShellEndToEndTests {
         await daemon.stop()
     }
 }
+
+/// ``waitFor(_:seconds:state:sourceLocation:until:)`` against a main actor that another
+/// test holds for longer than the limit, as the source rule scans did in a full run
+/// (2026-10-22): the hold counts as one check, so a change queued behind it still lands.
+@Suite struct WaitForTests {
+    /// A flag that a main actor task sets.
+    final class Flag {
+        var isSet = false
+    }
+
+    @Test func aMainActorHeldPastTheLimitStillSeesTheChangeQueuedBehindTheHold() async throws {
+        let flag = Flag()
+        var checks = 0
+        try await waitFor("the queued change", seconds: 0.1) {
+            checks += 1
+            if checks == 1 {
+                // The change waits behind the hold, as a model update waits behind a test
+                // that holds the main actor.
+                Task { flag.isSet = true }
+                Self.holdMainActor(for: .milliseconds(250))
+            }
+            return flag.isSet
+        }
+        #expect(checks >= 2)
+    }
+
+    /// Keeps the main actor busy for `duration`, the way seconds of synchronous work in
+    /// another test hold it.
+    static func holdMainActor(for duration: Duration) {
+        let clock = ContinuousClock()
+        let end = clock.now + duration
+        while clock.now < end {
+            usleep(1_000)
+        }
+    }
+}

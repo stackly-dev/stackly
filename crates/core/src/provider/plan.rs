@@ -632,19 +632,24 @@ pub(crate) enum Value {
 pub(crate) struct Resolver<'a> {
     manifest: &'a Manifest,
     context: &'a PlanContext,
-    managed: BTreeMap<SettingName, Value>,
+    managed: BTreeMap<SettingName, Result<Value, PlanError>>,
 }
 
 impl<'a> Resolver<'a> {
-    /// Checks the context's endpoints and computes managed fields.
+    /// Checks the context's endpoints and computes managed fields. A managed
+    /// field that cannot be computed (it needs the port of an endpoint the
+    /// context holds no port for) fails only when its `settings.<field>`
+    /// token is rendered, so a plan that never uses the field still builds.
     pub(crate) fn new(manifest: &'a Manifest, context: &'a PlanContext) -> Result<Self, PlanError> {
         let mut resolver = Self::without_managed(manifest, context)?;
         let mut managed = BTreeMap::new();
         for field in &manifest.managed_fields {
             let position = format!("settings.{}", field.name);
             let value = match (field.integer, field.expression.pieces.as_slice()) {
-                (true, [Piece::Token(token)]) => resolver.value(token)?,
-                _ => Value::Text(resolver.render(&field.expression, &position)?),
+                (true, [Piece::Token(token)]) => resolver.value(token),
+                _ => resolver
+                    .render(&field.expression, &position)
+                    .map(Value::Text),
             };
             managed.insert(field.name.clone(), value);
         }
@@ -715,6 +720,17 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    /// The host of an IP endpoint, which `defaultHost` fixes at create time,
+    /// so it does not need the port the `Auto` endpoints get at start.
+    fn endpoint_host(&self, name: &EndpointName) -> Result<IpAddr, PlanError> {
+        match self.context.endpoints.get(name) {
+            Some(ResolvedEndpoint::Ip { host, .. }) => Ok(*host),
+            _ => Err(PlanError::EndpointUnresolved {
+                endpoint: name.clone(),
+            }),
+        }
+    }
+
     fn socket(&self, name: &EndpointName) -> Result<PathBuf, PlanError> {
         let spec = self
             .manifest
@@ -771,7 +787,7 @@ impl<'a> Resolver<'a> {
             }
             Token::RuntimeVersion => Ok(Value::Text(self.context.runtime.version.to_string())),
             Token::RuntimeLine => Ok(Value::Text(self.context.runtime.line.to_string())),
-            Token::EndpointHost(name) => Ok(Value::Text(self.endpoint(name)?.0.to_string())),
+            Token::EndpointHost(name) => Ok(Value::Text(self.endpoint_host(name)?.to_string())),
             Token::EndpointPort(name) => {
                 Ok(Value::Integer(i64::from(self.endpoint(name)?.1.get())))
             }
@@ -783,7 +799,7 @@ impl<'a> Resolver<'a> {
             Token::EndpointSocketDir(_) => text(self.dir(InstanceDir::Run)?),
             Token::Setting(name) => {
                 if let Some(value) = self.managed.get(name) {
-                    return Ok(value.clone());
+                    return value.clone();
                 }
                 match self.context.settings.get(name.as_str()) {
                     Some(SettingValue::Scalar(ScalarValue::Text(value))) => {

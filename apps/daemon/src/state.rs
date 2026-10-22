@@ -22,6 +22,7 @@ use tokio::sync::watch;
 
 use crate::catalog;
 use crate::connection::Connections;
+use crate::detail::{DataUsageService, PinnedPackages};
 use crate::events::EventBus;
 use crate::log_sink::LogSink;
 use crate::operations::Operations;
@@ -127,6 +128,9 @@ pub struct DaemonCore {
     registry: Mutex<Option<SqliteRegistry>>,
     catalog: OnceLock<Arc<CatalogState>>,
     catalog_source: Arc<catalog::CatalogSource>,
+    catalog_accesses: AtomicU64,
+    pinned_packages: PinnedPackages,
+    data_usage: DataUsageService,
     create_hooks: OnceLock<CreateHooks>,
     ipc_problem: Mutex<Option<String>>,
     counters: Counters,
@@ -178,6 +182,9 @@ impl DaemonCore {
             registry: Mutex::new(None),
             catalog: OnceLock::new(),
             catalog_source: Arc::new(catalog::CatalogSource::default()),
+            catalog_accesses: AtomicU64::new(0),
+            pinned_packages: PinnedPackages::default(),
+            data_usage: DataUsageService::default(),
             create_hooks: OnceLock::new(),
             ipc_problem: Mutex::new(None),
             counters: Counters::default(),
@@ -365,6 +372,7 @@ impl DaemonCore {
     /// The catalog the start slot loaded, or `None` while it loads.
     #[must_use]
     pub fn catalog(&self) -> Option<Arc<CatalogState>> {
+        self.catalog_accesses.fetch_add(1, Ordering::Relaxed);
         self.catalog.get().cloned()
     }
 
@@ -372,7 +380,30 @@ impl DaemonCore {
     /// AC-14).
     #[must_use]
     pub fn catalog_source(&self) -> &Arc<catalog::CatalogSource> {
+        self.catalog_accesses.fetch_add(1, Ordering::Relaxed);
         &self.catalog_source
+    }
+
+    /// How many times code asked for the loaded catalog or its source row
+    /// since the daemon started. The offline test of spec 0021 (AC-10)
+    /// reads it before and after start, status, detail, and connection to
+    /// show they never look at the catalog.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn catalog_accesses(&self) -> u64 {
+        self.catalog_accesses.load(Ordering::Relaxed)
+    }
+
+    /// The pinned packages the detail methods have read (spec 0021).
+    #[must_use]
+    pub const fn pinned_packages(&self) -> &PinnedPackages {
+        &self.pinned_packages
+    }
+
+    /// The sizes of data folders (spec 0021).
+    #[must_use]
+    pub const fn data_usage(&self) -> &DataUsageService {
+        &self.data_usage
     }
 
     /// The hooks a test hung on `instance.create`; none in a normal run.

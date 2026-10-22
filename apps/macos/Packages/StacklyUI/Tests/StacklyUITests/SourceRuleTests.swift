@@ -7,7 +7,11 @@ import Testing
 ///
 /// The scan is text based. Line comments are skipped; anything else that matches,
 /// including a string literal, counts.
-struct SourceRuleTests {
+///
+/// The suite is `nonisolated` and serialized: its regex scans take seconds of CPU, which on
+/// the main actor would hold every other test of a full run, and one test at a time keeps
+/// them from filling the cooperative pool.
+@Suite(.serialized) nonisolated struct SourceRuleTests {
     /// One forbidden pattern family and the only places that may use it.
     nonisolated struct Rule: CustomTestStringConvertible, Sendable {
         /// What the rule forbids, with the acceptance criterion it guards.
@@ -398,7 +402,7 @@ struct SourceRuleTests {
 
 extension String {
     /// The string without leading and trailing white space.
-    fileprivate var trimmed: String {
+    fileprivate nonisolated var trimmed: String {
         trimmingCharacters(in: .whitespaces)
     }
 }

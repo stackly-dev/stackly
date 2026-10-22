@@ -1058,6 +1058,22 @@ async fn dispatch(
             .map(Reply::InstanceGetDuplicateForm),
             None,
         ),
+        Call::InstanceGetDetail(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_instance_detail(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceGetDetail),
+            None,
+        ),
+        Call::InstanceGetDataUsage(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_data_usage(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceGetDataUsage),
+            None,
+        ),
         Call::InstanceStart(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.start_instance(c, x, p)

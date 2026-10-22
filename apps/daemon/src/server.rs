@@ -38,6 +38,7 @@ use tokio::time::{Instant, MissedTickBehavior, timeout};
 
 use crate::catalog::{self, CatalogOverride};
 use crate::connection;
+use crate::detail::DataUsageConfig;
 use crate::dispatch::{DefaultHandlers, Handlers};
 use crate::events::EventBus;
 use crate::launch::{self, writes_launch_record};
@@ -107,6 +108,9 @@ pub struct DaemonConfig {
     /// The hooks a test hangs on the `layout` and `init` steps of
     /// `instance.create` (spec 0020 AC-8, D9); none by default.
     pub create_hooks: CreateHooks,
+    /// The limits and lifetimes of the data folder scans of
+    /// `instance.get_data_usage`; tests shrink them (spec 0021).
+    pub data_usage: DataUsageConfig,
 }
 
 impl std::fmt::Debug for DaemonConfig {
@@ -136,6 +140,7 @@ impl Default for DaemonConfig {
             supervisor: SupervisorConfig::default(),
             capacity_read_timeout: CAPACITY_READ_TIMEOUT,
             create_hooks: CreateHooks::default(),
+            data_usage: DataUsageConfig::default(),
         }
     }
 }
@@ -700,6 +705,7 @@ async fn start_slot(
     // sees it until `set_catalog`, after the registry steps (spec 0017).
     let loaded = catalog::load(&core, catalog, config.catalog.take()).await;
     core.set_create_hooks(config.create_hooks.clone());
+    core.data_usage().configure(config.data_usage);
     let opened = open_with_retries(
         &core,
         &version,

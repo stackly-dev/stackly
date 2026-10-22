@@ -839,7 +839,7 @@ fn nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run() {
 }
 
 #[test]
-fn every_package_initializes_with_endpoints_that_have_no_port_except_traefik() {
+fn every_package_initializes_with_endpoints_that_have_no_port() {
     let packages = [
         ("fake", fake_dir(), fake_settings()),
         ("nats", nats_dir(), serde_json::json!({})),
@@ -849,18 +849,31 @@ fn every_package_initializes_with_endpoints_that_have_no_port_except_traefik() {
     for (name, dir, settings) in packages {
         let package = validated(&dir);
         let context = without_ports(golden_context(&package, settings));
-        let result = package.init_plan(&context);
-        if name == "traefik" {
-            // Follow-up of spec 0023, feature 41: the Traefik init renders
-            // `staticConfig` with the endpoint addresses.
-            assert!(
-                matches!(result, Err(PlanError::EndpointUnresolved { .. })),
-                "traefik still fails at initialize with EndpointUnresolved until feature 41 drops its renderConfig step: {result:?}"
-            );
-        } else {
-            result.unwrap_or_else(|err| panic!("{name} init plan without ports: {err}"));
-        }
+        package
+            .init_plan(&context)
+            .unwrap_or_else(|err| panic!("{name} init plan without ports: {err}"));
     }
+}
+
+#[test]
+fn every_folder_in_providers_has_no_init_port_issue() {
+    let providers = repo_root().join("providers");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(&providers).expect("the providers folder lists") {
+        let entry = entry.expect("the entry reads");
+        if !entry.file_type().expect("the entry has a type").is_dir() {
+            continue;
+        }
+        let package = validated(&entry.path());
+        assert!(
+            package.init_port_issues().is_empty(),
+            "{}: {:?}",
+            entry.path().display(),
+            package.init_port_issues()
+        );
+        checked += 1;
+    }
+    assert!(checked >= 4, "only {checked} package folders found");
 }
 
 /// The first `count` of the three example routes of the golden context.
@@ -927,11 +940,23 @@ fn traefik_plans_with_three_routes_match_the_golden_files() {
     assert_golden("traefik", "init.json", &pretty(&init));
     assert_golden("traefik", "run.json", &pretty(&run));
     assert_golden("traefik", "reload.json", &pretty(&reload));
-    let renders = rendered(&package, &init.steps);
-    assert_eq!(renders.len(), 2);
-    for (config, text) in renders {
-        assert_golden("traefik", &format!("render-{config}.txt"), &text);
-    }
+    // `staticConfig` holds the endpoint addresses, so only the run renders
+    // it; initialize renders the routes alone.
+    let init_renders = rendered(&package, &init.steps);
+    assert_eq!(
+        init_renders
+            .iter()
+            .map(|(config, _)| config.as_str())
+            .collect::<Vec<_>>(),
+        ["routes"]
+    );
+    assert_golden("traefik", "render-routes.txt", &init_renders[0].1);
+    let run_renders = rendered(&package, &run.render);
+    let static_config = run_renders
+        .iter()
+        .find(|(config, _)| config == "staticConfig")
+        .expect("the run renders staticConfig before the spawn");
+    assert_golden("traefik", "render-staticConfig.txt", &static_config.1);
 }
 
 #[test]
