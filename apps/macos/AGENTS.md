@@ -53,6 +53,12 @@ cargo xtask ui-test           # XCUITest; needs Automation Mode turned on by the
 - Shortcuts live only in `CommandMap`; screens publish actions through `.publishesCommands`, and menus inside a window set no shortcut. To add a command, follow *Menambah perintah* in spec 0069 and the "Commands and shortcuts" section of `design.md`.
 - Every page has a snapshot suite on the spec 0068 harness (a source rule checks it). Underscored SwiftUI setters (`_colorSchemeContrast`, `_accessibilityReduceTransparency`) are allowed only in tests and `#if DEBUG` code. The UI test target uses `SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated` with `@MainActor` test classes, because `XCTestCase` initializers are nonisolated.
 - `StacklyUI` depends on the `StacklyClient` product, and its tests also on `StacklyTestSupport`. Screens read stores registered through `ShellSync` and mutate only through `MutationPath`, gated by `MutationAvailability` (spec 0013).
+- `assertSnapshot` fails when an `hc-light` or `hc-dark` image equals its standard image; only a view that truly ignores Increase Contrast (a system spinner alone) passes `contrastInvariant: true` with `contrastInvariantReason` (spec 0068 AC-5). Fixture accessibility values reach content under `.stacklyInspector` through the relay in `FixtureAppearance.swift`, so a page never calls the relay itself.
+- Delayed spinners use `DelayedProgress`, which follows `loadingDelay` (nil in the app, so 300 ms; zero in fixtures and snapshots, so the spinner is in the first frame). A spinner inserted after the first frame never settles in a snapshot (spec 0068).
+- Accent appears only through native controls, native links, and `StacklyColor.selectionRing` for a custom selection ring; `controlAccentColor` or `accentColor` outside `Tokens/StacklyColor.swift` fails the source rule (spec 0012).
+- A page under `.stacklyInspector` takes the size the column offers, since the component sets its frame; the page never sets its own `minWidth` (spec 0067).
+- A screen retries a failed load only through `ResourceStore.refresh()`, which waits for a running snapshot, and never adds its own reload loop; `ShellSync` reloads failed stores once on `.caughtUp` (spec 0013).
+- Tests never rely on wall clock deadlines the main actor can starve: waits use `ResponsiveTimer`, process watchdogs run off the main actor, and source rule suites are `@Suite(.serialized) nonisolated` so their scans leave the main actor free.
 
 ## Gotchas
 

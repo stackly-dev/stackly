@@ -40,6 +40,7 @@ cargo xtask codegen                                      # regenerate after a pr
 - An enum with `case unrecognized` is open: handle `.unrecognized` wherever it shows, apart from any real `unknown` state. `ErrorCategory` is closed and rejects a value it does not know.
 - Fixture tests compare decoded values, not raw JSON text. Swift encodes UUIDs in uppercase while Rust writes lowercase, and every reader treats them as case insensitive.
 - A test that needs a secret value takes it from `FixtureCredential` in `StacklyTestSupport`, which prints as `FixtureCredential(****)`; never a literal credential (spec 0011).
+- Tests order concurrent calls, replies, and closes with `ManualClock` and hooks in `FakeDaemonServer`, never with sleeps, so a test that depends on an order fails when that order is forced wrong.
 
 ## Gotchas
 
