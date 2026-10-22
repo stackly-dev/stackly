@@ -11,8 +11,6 @@ pub const CREATE_MIN_FREE_BYTES: u64 = 256_000_000;
 pub const PORT_SUGGESTION_ATTEMPTS: usize = 64;
 /// The lowest port the suggestion offers.
 pub const PORT_SUGGESTION_MIN: u32 = 1024;
-/// Most tries of the `register` step on a registry conflict (spec 0005).
-pub const REGISTER_RETRY_LIMIT: usize = 5;
 /// Largest suffix of a suggested name (`-2` to `-99`).
 pub const NAME_SUGGESTION_MAX_SUFFIX: u32 = 99;
 /// The instance ID dry run plans use.

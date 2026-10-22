@@ -33,7 +33,7 @@ use stackly_protocol::instance::{
     SettingsDocument, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{GetOperationParams, OperationDetail, OperationState};
-use stackly_protocol::secret::{SecretInput, SecretText};
+use stackly_protocol::secret::{SecretInput, SecretMode, SecretText, SetSecretParams};
 use stackly_protocol::{Call, ErrorBody, Reply, Timestamp};
 use stackly_storage::{OpenOptions, RegistryOpen};
 use stackly_testkit::{FakeSecretStore, ReapGuard, TestRoot, fake_server};
@@ -967,4 +967,47 @@ pub fn fast_with_catalog() -> DaemonConfig {
     let mut config = fast();
     config.catalog = Some(stacklyd::catalog::CatalogOverride::Preloaded(fake_catalog()));
     config
+}
+
+/// A Keychain call of another action that waits behind its dialog.
+pub struct Dialog {
+    hold: stackly_testkit::SecretHold,
+    waiting:
+        tokio::task::JoinHandle<Result<stackly_protocol::Reply, Box<stackly_protocol::ErrorBody>>>,
+}
+
+impl Dialog {
+    /// Opens the dialog: the call of another connection reaches the store
+    /// and waits there.
+    pub async fn open(site: &Site, reference: &str) -> Self {
+        let hold = site.secrets.hold_next();
+        let other = site.api().await;
+        let reference = reference.to_owned();
+        let waiting = tokio::spawn(async move {
+            other
+                .client
+                .call(Call::SecretSet(SetSecretParams {
+                    reference,
+                    input: SecretInput::Value(SecretText::new("perf-fixture-value".to_owned())),
+                    mode: SecretMode::Create,
+                    expected_revision: None,
+                    confirm_stored_only: false,
+                }))
+                .await
+        });
+        assert!(
+            hold.wait_until_held(Duration::from_secs(10)),
+            "the other action reached the Keychain and waits"
+        );
+        Self { hold, waiting }
+    }
+
+    /// Answers the dialog and waits for the other action to end.
+    pub async fn close(self) {
+        self.hold.release();
+        self.waiting
+            .await
+            .expect("the waiting call ends")
+            .expect("the other action succeeds");
+    }
 }

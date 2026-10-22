@@ -5,13 +5,15 @@ use std::sync::{Arc, Mutex, PoisonError};
 use stackly_core::instance::create::{CreateHooks, SecretSourceKind};
 use stackly_core::read_instance_manifest;
 use stackly_domain::{
-    CreatedState, InstanceId, InstanceLifecycle, OperationState, ProviderSourceKind, Registry,
-    SecretPurpose, SecretRef, SecretUser,
+    CreatedState, Endpoint, Instance, InstanceId, InstanceLifecycle, IpEndpoint, OperationState,
+    Port, PortRequest, ProviderSourceKind, Registry, SecretPurpose, SecretRef, SecretUser,
+    Transport,
 };
 use stackly_evidence::{Kind, evidence};
 use stackly_platform::{ChildRole, ExitStatus, InstanceLock, ProcessSupervision, SecretValue};
+use stackly_testkit::{InstanceBuilder, ProviderRevisionBuilder};
 
-use crate::common::Rig;
+use crate::common::{LOOPBACK, Rig};
 use crate::harness::CreateRig;
 
 fn reference_of(id: InstanceId, field: &str) -> SecretRef {
@@ -571,39 +573,159 @@ async fn a_copy_from_a_locked_store_needs_the_source_and_nothing_else_is_made() 
     assert!(!rig.paths(id).root.exists(), "no folder");
 }
 
+/// A create of `name` that finishes: it is accepted, its init helper
+/// exits, and it ends `succeeded`.
+async fn create_to_the_end(cr: &CreateRig, name: &str) -> InstanceId {
+    let id = InstanceId::generate();
+    let op = cr
+        .begin(id, cr.draft(name), Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    finish_init(&cr.rig, 0).await;
+    cr.rig.wait_state(op, OperationState::Succeeded).await;
+    id
+}
+
+/// The batch of an instance of the rig's runtime with `name` and, when
+/// given, a fixed loopback port, on a provider revision of its own, as
+/// another operation would have written it. Returns the instance with it.
+fn rival(cr: &CreateRig, name: &str, port: Option<u16>) -> (Instance, stackly_domain::WriteBatch) {
+    let provider = ProviderRevisionBuilder::new().software(cr.rig.runtime.software().as_str());
+    let mut builder =
+        InstanceBuilder::new(&cr.rig.runtime, provider.clone().build().key()).name(name);
+    if let Some(port) = port {
+        builder = builder.endpoints(vec![Endpoint::Ip(IpEndpoint::new(
+            "http".parse().expect("an endpoint name"),
+            Transport::Tcp,
+            LOOPBACK,
+            PortRequest::Fixed(Port::new(port).expect("a test port is not 0")),
+            None,
+        ))]);
+    }
+    let instance = builder.build();
+    let batch = stackly_domain::WriteBatch::new(vec![
+        stackly_domain::WriteOp::InsertProviderRevision(provider.record()),
+        stackly_domain::WriteOp::InsertInstance(instance.clone()),
+    ]);
+    (instance, batch)
+}
+
 #[tokio::test]
-async fn a_generation_conflict_at_register_is_retried_up_to_five_times() {
+async fn a_commit_that_lands_before_register_but_breaks_no_rule_does_not_fail_the_create() {
     let ev = evidence!(
         covers = ["REQ-008"],
         kind = Kind::Fixture,
-        expected = "a register commit that meets a generation conflict four times still succeeds on the fifth try, and five conflicts end the operation failed with registry.generation_conflict and a full compensation",
+        expected = "a commit of another operation that touches no create rule lands right before the register commit, and the create still succeeds with exactly one guard call",
     );
     let cr = CreateRig::new().await;
     let rig = &cr.rig;
+    rig.registry
+        .before_guarded_commit(stackly_domain::WriteBatch::new(vec![
+            stackly_domain::WriteOp::InsertAuditEvent(stackly_domain::AuditEventRecord::new(
+                stackly_domain::AuditEventId::generate(),
+                stackly_domain::AuditActor::Daemon,
+                stackly_domain::AuditAction::from_static("test.other"),
+                stackly_domain::AuditResult::Succeeded,
+                rig.fake_now(),
+            )),
+        ]));
 
-    rig.registry.conflict_instance_inserts(4);
-    let id = InstanceId::generate();
-    let op = cr
-        .begin(id, cr.draft("retried"), Vec::new(), CreateHooks::default())
-        .await
-        .expect("accepted");
-    finish_init(rig, 0).await;
-    rig.wait_state(op, OperationState::Succeeded).await;
+    let id = create_to_the_end(&cr, "unbothered").await;
+
     assert!(rig.registry.instance(id).expect("it reads").value.is_some());
+    assert_eq!(rig.registry.guard_calls(), 1);
+    ev.pass();
+}
 
-    rig.registry.conflict_instance_inserts(5);
+#[tokio::test]
+async fn an_instance_with_the_same_name_that_lands_before_register_fails_the_create_name_taken() {
+    let ev = evidence!(
+        covers = ["REQ-008"],
+        kind = Kind::Fixture,
+        expected = "an instance with the same name written by another operation right before the register commit fails the create instance.name_taken from the guard, not registry.name_taken, with a full compensation",
+    );
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let (other, batch) = rival(&cr, "contested", None);
+    rig.registry.before_guarded_commit(batch);
     let id = InstanceId::generate();
+
     let op = cr
         .begin(
             id,
-            cr.draft("conflicted"),
+            cr.draft("contested"),
             Vec::new(),
             CreateHooks::default(),
         )
         .await
         .expect("accepted");
     let failed = rig.wait_state(op, OperationState::Failed).await;
-    assert_eq!(Rig::failure_code(&failed), "registry.generation_conflict");
+
+    assert_eq!(Rig::failure_code(&failed), "instance.name_taken");
+    assert_eq!(rig.registry.guard_calls(), 1);
+    assert_clean(&cr, id);
+    assert!(
+        rig.registry
+            .instance(other.id())
+            .expect("it reads")
+            .value
+            .is_some(),
+        "the other operation's instance stays"
+    );
+    ev.pass();
+}
+
+#[tokio::test]
+async fn an_instance_with_the_same_fixed_port_that_lands_before_register_fails_the_create() {
+    let ev = evidence!(
+        covers = ["REQ-008"],
+        kind = Kind::Fixture,
+        expected = "an instance with the same fixed port written by another operation right before the register commit fails the create supervisor.endpoint_conflict from the guard, with a full compensation",
+    );
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let port = Rig::free_port();
+    let (_, batch) = rival(&cr, "port-holder", Some(port));
+    rig.registry.before_guarded_commit(batch);
+    let mut draft = cr.draft("late-port");
+    draft.endpoints = vec![(
+        "http".to_owned(),
+        stackly_core::instance::create::PortRequestDraft::Fixed(port),
+    )];
+    let id = InstanceId::generate();
+
+    let op = cr
+        .begin(id, draft, Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    let failed = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(Rig::failure_code(&failed), "supervisor.endpoint_conflict");
+    assert_clean(&cr, id);
+    ev.pass();
+}
+
+#[tokio::test]
+async fn a_registry_error_at_the_guarded_commit_fails_the_create_without_calling_the_guard() {
+    let ev = evidence!(
+        covers = ["REQ-008"],
+        kind = Kind::Fixture,
+        expected = "a busy registry at the register commit fails the create with that registry code before the guard runs, and compensates in full",
+    );
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    rig.registry
+        .fail_guarded_commits(vec![stackly_domain::RegistryError::Busy]);
+    let id = InstanceId::generate();
+
+    let op = cr
+        .begin(id, cr.draft("busy"), Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    let failed = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(Rig::failure_code(&failed), "registry.busy");
+    assert_eq!(rig.registry.guard_calls(), 0);
     assert_clean(&cr, id);
     ev.pass();
 }

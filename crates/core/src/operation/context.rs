@@ -6,10 +6,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use stackly_domain::{
-    Committed, CompensatorName, CreatedItem, CreatedRecord, CreatedSeq, CreatedState,
-    CustomItemKey, EnvironmentId, InstanceId, JournalPayload, JournalStep, NewStep, OperationId,
-    OperationKind, OperationResource, OperationState, OperationTrigger, Progress, ReasonCode,
-    Registry, SecretRef, StageName, StepSeq, StepState, WriteBatch,
+    CommitGuard, Committed, CompensatorName, CreatedItem, CreatedRecord, CreatedSeq, CreatedState,
+    CustomItemKey, EnvironmentId, Guarded, InstanceId, JournalPayload, JournalStep, NewStep,
+    OperationId, OperationKind, OperationResource, OperationState, OperationTrigger, Progress,
+    ReasonCode, Registry, SecretRef, StageName, StepSeq, StepState, WriteBatch,
 };
 use stackly_platform::{Platform, PlatformError, SecretPresence};
 use tokio::sync::watch;
@@ -788,6 +788,26 @@ impl OperationContext {
         let mut write = WriteBatch::new(batch.ops);
         write.expected_generation = batch.expected_generation;
         self.inner.commit(write).await.map_err(WorkError::Engine)
+    }
+
+    /// Commits in the middle of the work like [`OperationContext::commit`],
+    /// but the writes come from a guard that reads the registry in the same
+    /// transaction (spec 0020, "Commit terjaga di langkah `register`"): no
+    /// commit lands between its reads and its writes, and the commit never
+    /// fails with `GenerationConflict`. A refusal comes back as
+    /// [`Guarded::Refused`] with the guard's own reason, and applies
+    /// nothing. Everything the guard inserts needs a custom compensator,
+    /// except a provider revision.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkError::Engine`] when the commit fails.
+    pub async fn commit_guarded(&mut self, guard: CommitGuard) -> Result<Guarded, WorkError> {
+        self.healthy()?;
+        self.inner
+            .commit_guarded(guard)
+            .await
+            .map_err(WorkError::Engine)
     }
 }
 
