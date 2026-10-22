@@ -12,7 +12,10 @@
 //! in `stackly-platform-macos`, and the clap completion and man page crates
 //! only in `stackly-cli`, and the step 15 rules from spec 0010: the process
 //! API and `SIGKILL` source rules, and the `fixture` feature of
-//! `stackly-core` (spec 0014), which only a dev dependency may turn on.
+//! `stackly-core` (spec 0014), which only a dev dependency may turn on, and
+//! the provider identity rule of spec 0020: no provider name in
+//! `instance::create` of `stackly-core` or in the Swift `CreateInstance/`
+//! folder.
 //!
 //! Only direct dependencies are checked, each with its kind (normal, dev,
 //! build). Transitive dependencies are left alone: portability is proven by
@@ -119,7 +122,7 @@ pub fn run(root: &Path) -> Result<()> {
         eprintln!("  {violation}");
     }
     bail!(
-        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, 0008, 0009, 0010, 0011, and 0014",
+        "{} dependency rule violation(s), see specs 0001, 0002, 0004, 0005, 0006, 0008, 0009, 0010, 0011, 0014, and 0020",
         violations.len()
     )
 }
@@ -148,6 +151,7 @@ fn find_violations(root: &Path) -> Result<(usize, Vec<String>)> {
         let rules = source_scan::Rules::for_crate(package.name.as_str());
         violations.extend(source_scan::scan_package(root, package, rules)?);
     }
+    violations.extend(source_scan::scan_swift_create(root)?);
     Ok((packages.len(), violations))
 }
 
@@ -1345,6 +1349,7 @@ mod tests {
                 process_allowed: None,
                 sigkill_allowed: None,
                 system_paths_allowed: None,
+                provider_free: None,
             };
             let calls = source_scan::scan_package(root, package, nothing_allowed).unwrap();
             for module in modules {

@@ -5,14 +5,20 @@
 //! The catalog never changes while the daemon runs. Loading it reads files
 //! only; it never writes, spawns, or resolves a secret.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use stackly_core::catalog::{Catalog, CatalogLocation, CatalogOptions, CatalogState, load_catalog};
-use stackly_domain::ProviderName;
+use stackly_core::catalog::{
+    Catalog, CatalogLocation, CatalogMeta, CatalogOptions, CatalogState, ensure_source,
+    load_catalog,
+};
+use stackly_core::instance::create::SourceRecorder;
+use stackly_domain::{ProviderName, ProviderSourceId, Registry, RegistryError};
+use stackly_platform::Clock;
 use stackly_protocol::ErrorBody;
 use stackly_protocol::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use stackly_protocol::codes::daemon;
 use stackly_protocol::daemon::{SubsystemHealth, SubsystemStatus, subsystem};
+use stackly_storage::SqliteRegistry;
 
 use crate::dispatch::HandlerFuture;
 use crate::map;
@@ -99,11 +105,140 @@ pub fn log_loaded(state: &CatalogState) {
     }
 }
 
+/// The row of the loaded catalog in `provider_sources` (spec 0017 K-2,
+/// spec 0020 AC-14): the ID the start slot recorded, or why it could not.
+///
+/// A catalog that is loaded gets exactly one row; a restart finds the same
+/// one. A failed write shows as a `degraded` part of the `catalog`
+/// subsystem and is tried once more right before the first pin.
+#[derive(Debug, Default)]
+pub struct CatalogSource {
+    state: Mutex<SourceState>,
+}
+
+#[derive(Debug, Default)]
+struct SourceState {
+    id: Option<ProviderSourceId>,
+    error: Option<String>,
+}
+
+impl CatalogSource {
+    fn lock(&self) -> MutexGuard<'_, SourceState> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The ID of the recorded row, once there is one.
+    #[must_use]
+    pub fn id(&self) -> Option<ProviderSourceId> {
+        self.lock().id
+    }
+
+    /// Why the row could not be recorded, in the words of the `degraded`
+    /// part: `catalog source not recorded: <code>`.
+    #[must_use]
+    pub fn degraded(&self) -> Option<String> {
+        self.lock().error.clone()
+    }
+
+    /// Writes the row of `meta` unless it is there, and remembers the ID or
+    /// the reason it could not.
+    ///
+    /// # Errors
+    ///
+    /// Returns the registry error when the row cannot be read or written.
+    pub fn record(
+        &self,
+        registry: &dyn Registry,
+        clock: &dyn Clock,
+        meta: &CatalogMeta,
+    ) -> Result<ProviderSourceId, RegistryError> {
+        if let Some(id) = self.id() {
+            return Ok(id);
+        }
+        match ensure_source(registry, clock, meta) {
+            Ok(id) => {
+                let mut state = self.lock();
+                state.id = Some(id);
+                state.error = None;
+                Ok(id)
+            }
+            Err(error) => {
+                tracing::warn!(error = %error, "cannot record the catalog source");
+                self.lock().error = Some(format!(
+                    "catalog source not recorded: {}",
+                    crate::map::registry_error(&error).code()
+                ));
+                Err(error)
+            }
+        }
+    }
+}
+
+/// Records the source of the loaded catalog for the start slot: nothing for
+/// a daemon without a catalog.
+pub async fn record_source(core: &DaemonCore, source: &Arc<CatalogSource>) {
+    let (Some(registry), Some(state)) = (core.registry(), core.catalog()) else {
+        return;
+    };
+    let CatalogState::Loaded(catalog) = state.as_ref() else {
+        return;
+    };
+    let catalog = Arc::clone(catalog);
+    let source = Arc::clone(source);
+    let clock = core.platform().shared_clock();
+    let recorded = tokio::task::spawn_blocking(move || {
+        source.record(&registry, &*clock, catalog.meta()).map(drop)
+    })
+    .await;
+    if recorded.is_err() {
+        tracing::error!("the catalog source task failed");
+    }
+}
+
+/// The recorder the create work calls right before its first pin: the same
+/// row, written again when the start slot could not write it.
+pub struct SourceHandle {
+    source: Arc<CatalogSource>,
+    registry: SqliteRegistry,
+    clock: Arc<dyn Clock>,
+    catalog: CatalogState,
+}
+
+impl SourceHandle {
+    /// A recorder for the catalog `catalog` of this run.
+    #[must_use]
+    pub fn new(
+        source: Arc<CatalogSource>,
+        registry: SqliteRegistry,
+        clock: Arc<dyn Clock>,
+        catalog: CatalogState,
+    ) -> Self {
+        Self {
+            source,
+            registry,
+            clock,
+            catalog,
+        }
+    }
+}
+
+impl SourceRecorder for SourceHandle {
+    fn ensure(&self) -> Result<ProviderSourceId, RegistryError> {
+        match &self.catalog {
+            CatalogState::Loaded(catalog) => {
+                self.source
+                    .record(&self.registry, &*self.clock, catalog.meta())
+            }
+            _ => Err(RegistryError::Unavailable),
+        }
+    }
+}
+
 /// The `catalog` subsystem health: `unavailable` while loading, without a
 /// catalog, or with an unusable one; `degraded` while an entry failed
-/// validation; `ok` otherwise.
+/// validation or the source row could not be recorded; `ok` otherwise.
 #[must_use]
-pub fn health(state: Option<&CatalogState>) -> SubsystemHealth {
+pub fn health(state: Option<&CatalogState>, source_problem: Option<&str>) -> SubsystemHealth {
     let (status, detail) = match state {
         None => (
             SubsystemStatus::Unavailable,
@@ -117,13 +252,21 @@ pub fn health(state: Option<&CatalogState>) -> SubsystemHealth {
             SubsystemStatus::Unavailable,
             Some(format!("catalog {}: {detail}", reason.as_code())),
         ),
-        Some(CatalogState::Loaded(catalog)) => match catalog.invalid_count() {
-            0 => (SubsystemStatus::Ok, None),
-            invalid => (
-                SubsystemStatus::Degraded,
-                Some(format!("{invalid} catalog providers failed validation")),
-            ),
-        },
+        Some(CatalogState::Loaded(catalog)) => {
+            let mut parts = Vec::new();
+            if catalog.invalid_count() > 0 {
+                parts.push(format!(
+                    "{} catalog providers failed validation",
+                    catalog.invalid_count()
+                ));
+            }
+            parts.extend(source_problem.map(str::to_owned));
+            if parts.is_empty() {
+                (SubsystemStatus::Ok, None)
+            } else {
+                (SubsystemStatus::Degraded, Some(parts.join("; ")))
+            }
+        }
     };
     SubsystemHealth {
         name: subsystem::CATALOG.to_owned(),
@@ -197,4 +340,60 @@ pub fn get_provider(
             }
         }
     })
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use stackly_core::prepare_layout;
+    use stackly_platform_macos::MacosPlatform;
+    use stackly_storage::{OpenOptions, RegistryOpen};
+    use stackly_testkit::TestRoot;
+
+    use super::*;
+
+    fn loaded() -> CatalogState {
+        CatalogState::Loaded(Arc::new(Catalog::for_tests(&[])))
+    }
+
+    #[test]
+    fn a_source_that_could_not_be_recorded_degrades_the_catalog_subsystem() {
+        let clean = health(Some(&loaded()), None);
+        assert_eq!(clean.status, SubsystemStatus::Ok);
+        let problem = "catalog source not recorded: registry.busy";
+
+        let degraded = health(Some(&loaded()), Some(problem));
+
+        assert_eq!(degraded.status, SubsystemStatus::Degraded);
+        assert_eq!(degraded.detail.as_deref(), Some(problem));
+        // A catalog that is not usable stays unavailable whatever the source says.
+        let missing = health(Some(&CatalogState::NotConfigured), Some(problem));
+        assert_eq!(missing.status, SubsystemStatus::Unavailable);
+    }
+
+    #[test]
+    fn the_source_row_is_written_once_and_found_again() {
+        let root = TestRoot::new().expect("a test root");
+        let platform = MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS");
+        let prepared = prepare_layout(&platform).expect("the layout prepares");
+        let RegistryOpen::Ready { registry, .. } = OpenOptions::new()
+            .open(&platform, prepared.layout(), "0.1.0")
+            .expect("a fresh registry opens")
+        else {
+            panic!("a fresh registry opens ready");
+        };
+        let catalog = Catalog::for_tests(&[]);
+        let source = CatalogSource::default();
+        assert_eq!(source.id(), None);
+
+        let first = source
+            .record(&registry, platform.clock(), catalog.meta())
+            .expect("the row is written");
+        let again = CatalogSource::default()
+            .record(&registry, platform.clock(), catalog.meta())
+            .expect("the row is found");
+
+        assert_eq!(first, again, "a second holder finds the same row");
+        assert_eq!(source.id(), Some(first));
+        assert_eq!(source.degraded(), None);
+    }
 }

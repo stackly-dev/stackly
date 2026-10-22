@@ -11,6 +11,22 @@
     {
       "file": "attention-operations.json",
       "type": "OperationPage"
+    },
+    {
+      "file": "create-form-fake.json",
+      "type": "CreateForm"
+    },
+    {
+      "file": "create-form-nats.json",
+      "type": "CreateForm"
+    },
+    {
+      "file": "create-form-postgresql.json",
+      "type": "CreateForm"
+    },
+    {
+      "file": "commands.json",
+      "type": "CommandCases"
     }
   ]
 }

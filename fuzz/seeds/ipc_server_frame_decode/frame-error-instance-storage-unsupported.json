@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000924",
+    "error": {
+      "code": "instance.storage_unsupported",
+      "category": "unsupported",
+      "message": "the data folder is on an unsupported file system",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "keep the Stackly data folder on a local APFS volume",
+      "details": [
+        {
+          "key": "fsType",
+          "value": "exfat"
+        },
+        {
+          "key": "root",
+          "value": "/Volumes/Backup/Stackly"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}
