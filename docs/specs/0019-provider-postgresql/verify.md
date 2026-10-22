@@ -49,7 +49,7 @@ _Semua langkah di bagian ini native: butuh kedua artefak PostgreSQL (17.11 dan 1
 - [x] `cargo test -p stacklyd --test postgresql -- --ignored endpoints` → satu listener TCP di `127.0.0.1:<port>` dan satu socket 0700 di folder 0700 dengan file lock; `ALTER SYSTEM SET port` tidak menggeser port; port `Auto` tersimpan dan nama socket mengikutinya → AC-8
 - [x] `cargo test -p stacklyd --test postgresql -- --ignored readiness` → atribut role `stackly_readiness` sesuai, `CREATE TABLE` oleh role itu gagal, `ALTER ROLE … NOLOGIN` membuat `not_ready` dengan `not permitted to log in` selagi TCP tetap menerima, `LOGIN` mengembalikan `ready` → AC-9
 - [x] `cargo test -p stacklyd --test postgresql -- --ignored stop` → dengan `SELECT pg_sleep(600)` berjalan, stop selesai di bawah 10 detik, `postmaster.pid`, socket, dan lock nya hilang, log memuat `received fast shutdown request`, start berikutnya mencatat `database system was shut down at` tanpa `not properly shut down` → AC-10
-- [x] `cargo test -p stacklyd --test postgresql -- --ignored failure` → folder data berisi `stray.txt` membuat `initdb` gagal, operasi `needs_recovery` dengan `supervisor.init_failed`, instance `failed` dengan `init_step_failed`, file utuh, `superuser-password` tidak ada, start ditolak `supervisor.not_initialized`, lalu abandon → AC-5
+- [x] `cargo test -p stacklyd --test postgresql -- --ignored failure` → folder data berisi `stray.txt` membuat `initdb` gagal, operasi `needs_recovery` dengan `supervisor.init_failed`, instance `failed` dengan `init_step_failed`, file utuh, `superuser-password` tidak ada, start ditolak `supervisor.not_initialized`, lalu abandon → AC-5 (sejak spec 0020 langkah 9 (D9) test ini memeriksa hal lain: file disisipkan lewat `create_hooks.before_init` sesudah pemeriksaan isi folder, operasi berakhir `failed` dengan `supervisor.init_failed` tanpa `recovery`, `instance.get` memberi `resource.not_found`, folder instance dan `superuser-password` hilang; dicek ulang di full verify 2026-10-22)
 - [x] `cargo test -p stacklyd --test postgresql -- --ignored tools` → dengan `psql`, `initdb`, `postgres`, dan `pg_ctl` palsu di depan `PATH` daemon, create, start, readiness, dan stop berhasil dan file penanda tidak pernah dibuat → AC-12
 - [x] `cargo test -p stacklyd --test postgresql -- --ignored adoption` → `SIGKILL` ke `stacklyd` saat `ready`, daemon baru mengadopsi postmaster yang sama (PID dan waktu start sama) dan readiness kembali `ready`; `lsof -d 3` pada postmaster dan child nya menunjukkan `instance.lock` → AC-13
 - [x] `cargo test -p stacklyd --test postgresql -- --ignored reload` → setelah revisi config baru dengan `logStatement` `all`, `execute_reload` membuat `SHOW log_statement` bernilai `all` dengan `pg_postmaster_start_time()` dan PID yang sama → AC-13
@@ -117,3 +117,50 @@ _Langkah 9, 10, dan 11 Build plan. Semua langkah native butuh kedua artefak (17.
 - AC-11 · `mismatch` pada kedua arah, kedua kasus marker, dan unit test preflight dengan isi `PG_VERSION` asli
 - AC-14 · guard `native` pada setiap test, jalur `BLOCKED` untuk 17, test `runs_the_package` per mayor yang menulis `compatibility.json` (7 check) untuk paket final, `cargo xtask runtime compat-record`, dan record `provider` di `versions.json` lewat `cargo xtask codegen`. Test install (AC-15) tidak lagi memuat `BR-025`, karena ia tidak menulis `compatibility.json`
 - AC-1 bagian paket, AC-2, AC-3, AC-4, AC-12 dan AC-15 · sudah dicakup Milestone 1 dan 2 (suite 17 mengulang AC-4 dan AC-12 pada artefak 17.11 lewat `security` dan `tools`)
+
+## Full verify (Build it dan Verify it), 2026-10-22
+
+_Dijalankan di commit `34ca7bca` (main sesudah `994bceb5`, sudah memuat create penuh F20 milestone 2, blok `connection` F21 milestone 1, dan catalog revision 6), dari cache runtime tanpa jaringan dan tanpa agent. Semua langkah Milestone 1, 2, dan 3 di atas dijalankan ulang di sini dan tetap lulus; jumlah test di beberapa langkah naik karena test baru dari fitur lain (dicatat di bawah). Report native disalin ke scratchpad sesi `chk-f19-verify`._
+
+### Commands
+
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql --locked -- --ignored` → `29 passed`, `evidence: 29 native records (NOT_RUN 0, PASS 29, FAIL 0, BLOCKED 0, DEFERRED 0), 0 problems`, run `01a16251-9ab0-7491-937c-857af6574daa`, `sourceCommit` `34ca7bca`, `sourceDirty` `false`; 14 record `17.11` (digest `04b1eff1…`), 14 record `18.6` (digest `88bb7533…`), dan record `install` dengan kedua subject; `pgrep -x postgres` sebelum dan sesudah sama (hanya pid 2098 dan 2099 milik Herd) → AC-2 sampai AC-15
+- [x] `cargo xtask provider check` dan `cargo xtask provider check providers/postgresql` → `ok official/postgresql 1.0.0 123e3fc6ad565cbc57f8f70a3a06a93ffab62a831b00ca0d1b33f85f88071df1`, sama dengan `manifestSha256` di kedua record `provider` `versions.json`, jadi evidence kompatibilitas yang dikeep masih berlaku untuk paket di main → AC-1, AC-14
+- [x] `cargo xtask codegen --check` → `codegen: 20 generated files are up to date`; `cargo xtask runtime check` → `8 artifact(s), 7 evidence run(s), and 2 compatibility run(s) follow the rules` → AC-1, AC-14
+- [x] `cargo xtask catalog check` → `ok catalog revision 6 4ec929d7…`; `tile` PostgreSQL diubah sementara ke `green` → `catalog content changed: bump revision and published_at ...`, exit 1, lalu file dikembalikan dan `git status` bersih → AC-1
+- [x] `cargo test -p stackly-core --lib provider::template` (14 lulus), `--test provider_rules` (55 lulus, sebelumnya 47), `--test secret_service printable` (8 lulus), `--test provider_packages` (31 lulus; filter `postgresql` 9, filter `data_marker` 2), `--lib supervisor::steps` (3 lulus), `--test supervisor_start text_stdin` (1 lulus) → AC-2, AC-3, AC-4, AC-11, AC-12, AC-15
+- [x] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stackly-core --test provider_packages postgresql` lalu `git status` → tidak ada perubahan; `cargo xtask fuzz seed` lalu `git status` → tidak ada perubahan → AC-1, AC-2
+- [x] Jalur `BLOCKED`: `HOME=/nonexistent STACKLY_EVIDENCE_DIR=<scratch> STACKLY_EVIDENCE_KIND=native target/debug/deps/postgresql-<hash> --ignored postgresql_17_is_created` → test lulus, record `BLOCKED` dengan `reason` `artifact postgresql-17.11-r2-macos-aarch64 is not in the runtime cache` dan `owner` `@ojiepermana`; `postgresql_18_is_created` dengan `HOME=/nonexistent` juga lulus tanpa unduhan → AC-14
+- [x] `cargo fmt --all --check`, `cargo clippy -p stacklyd -p stackly-core --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus → AC-1, AC-12
+- [x] `cargo build -p stacklyd -p stackly-fake-server --locked` lalu `cargo test --workspace --locked --no-fail-fast` → 133 binary test, 3373 lulus, 0 gagal, 52 ignored → AC-12
+
+### Putusan per AC
+
+- AC-1 · met: paket, `provider check`, `codegen --check`, golden stabil, dan catalog (`[[provider]]` `Pg` `blue`, revision 6, ledger cocok, perubahan tanpa bump ditolak)
+- AC-2 · met: escaper dan format `plain` di unit dan `provider_rules`; round trip `postgres -C log_line_prefix` di 18.6 dan juga 17.11 (`format`)
+- AC-3 · met: validasi dan digest `stdin.text` (`provider_rules`), arm executor init dan `init_step_failed` (`supervisor::steps`, `text_stdin`), role `stackly_readiness` terbentuk di cluster nyata (`readiness`)
+- AC-4 · met: `printableOnly` di model settings dan `SecretFieldRule::from_setting` (`secret_service printable`), login dengan password berspasi, `'`, `"`, dan `\` di 17.11 dan 18.6; password ber baris baru ditolak sinkron oleh create dengan `secret.invalid_value` (`control_characters`), sesuai keputusan lead
+- AC-5 · met: urutan init dan `superuser-password` hilang (`lifecycle`); init gagal di `initdb` sekarang mengikuti D9 (operasi `failed`, kompensasi penuh, instance `resource.not_found`). Catatan untuk `/test`: test native hanya menegaskan kode `supervisor.init_failed`, belum nama langkah `initdb`, exit code 1, dan cuplikan error yang disebut teks `expected` nya; kegagalan langkah role baru dibuktikan di fake (`supervisor_start` `a_text_stdin_reaches_the_init_step_as_its_exact_bytes_and_a_failing_step_is_init_step_failed`)
+- AC-6 · met: `security` `has_no_trust` di 17.11 dan 18.6 (tanpa `trust`, superuser tanpa password ditolak, `replication=true` dan `replication=database` ditolak, password tidak ada di argv, file, atau log)
+- AC-7 · met: `security` `fixes_locale_encoding_and_time_zone` di kedua mayor
+- AC-8 · met: `endpoints` di kedua mayor
+- AC-9 · met: `readiness` di kedua mayor
+- AC-10 · met: `stop` di kedua mayor
+- AC-11 · met: `mismatch` kedua arah plus `marker_missing` dan `marker_mismatch`; unit `data_marker`
+- AC-12 · met: `tools` (daemon dengan `PATH` umpan) di kedua mayor dan test program plan di `provider_packages`
+- AC-13 · met: `lifecycle`, `reload`, `adoption`, dan `tools` di kedua mayor
+- AC-14 · met: guard `native` di 29 test, `compat` (`runs_the_package`) per mayor dengan `covers` BR-025 lulus lagi di run ini, record `provider` di `versions.json` dari run yang dikeep `01a16223…` dengan `manifestSha256` yang masih sama dengan paket sekarang, `runtime check` lulus, jalur `BLOCKED` lulus. `compat-record` tidak dijalankan ulang (tidak ada folder compatibility baru, sesuai brief). `JOURNEY-01` tetap di luar `covers` karena guard evidence menolaknya (penyimpangan Milestone 2)
+- AC-15 · met: pattern di `provider_packages` dan exec check install kedua artefak (`install`)
+
+### Langkah BLOCKED dan NOT_RUN
+
+Tidak ada. Semua langkah Milestone 1, 2, dan 3 tercentang dan lulus lagi di run ini. Satu catatan: langkah `failure` Milestone 2 menyebut perilaku sebelum D9; teksnya diberi catatan di tempat, perilakunya diperiksa dengan perilaku D9.
+
+### Follow-up spec 0019 yang ternyata sudah selesai
+
+- Fitur 21: bentuk connection string PostgreSQL sudah ada di `providers/postgresql/provider.yaml` (blok `connection`, `uri` `postgresql://postgres:${secret.superuserPassword}@${endpoint.client.address}/postgres` dan `socket` dengan `host=${endpoint.socket.socketDir}`), dari F21 milestone 1. Kotaknya di *Follow-up* belum dicentang; itu milik `/sync` atau `/architect`.
+- `/sync`: root `AGENTS.md` belum mencatat paket PostgreSQL, role readiness, dan perintah test native; masih terbuka.
+
+### Rekomendasi
+
+Kotak `Build it` dan `Verify it` fitur 19 siap dicentang. `Test it` tetap terbuka (`/test provider PostgreSQL`, termasuk penegasan detail error AC-5 di atas).

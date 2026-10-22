@@ -26,7 +26,7 @@ async fn nats_lifecycle_in_process() {
     let ev = evidence!(
         covers = ["REQ-029", "REQ-036", "AC-029"],
         kind = Kind::Native,
-        expected = "a NATS 2.15.1 instance in a data root with a space and Unicode in its name is created with default settings, starts, shows not_ready before ready through nats-readiness, shows lifecycle, desired, readiness, health, and process apart, listens only on its client and monitoring endpoints on loopback, reports its name, store folder, and limits on /varz, sends its log lines to the sink without one line per probe attempt, stops with no process left, and is ready again after the next start",
+        expected = "a NATS 2.15.1 instance with both endpoints on Auto in a data root with a space and Unicode in its name is created with default settings, starts, shows not_ready before ready through nats-readiness, shows lifecycle, desired, readiness, health, and process apart, listens only on its client and monitoring endpoints on loopback, reports its name, store folder, and limits on /varz, sends its log lines to the sink without one line per probe attempt, stops with no process left, and is ready again after the next start",
     );
     let Some(site) = Site::open(&ev, Serve::InProcess) else {
         return;
@@ -52,11 +52,10 @@ async fn nats_lifecycle_in_process() {
     assert_eq!(created.lifecycle, InstanceLifecycle::Stopped);
     assert_eq!(created.initialized, Some(true));
     let paths = site.instance_paths(id);
-    let conf = std::fs::read_to_string(paths.config.join("nats.conf"))
-        .expect("nats.conf is rendered by the init");
+    assert!(paths.config.is_dir(), "the init creates the config folder");
     assert!(
-        conf.contains("Test Root Ünï cödé"),
-        "store_dir keeps the space and the Unicode: {conf}"
+        !paths.config.join("nats.conf").exists(),
+        "nats.conf is written by the first start, not by the init (spec 0023 AC-15)"
     );
 
     let running = api.start_ready(id).await;
@@ -91,6 +90,21 @@ async fn nats_lifecycle_in_process() {
     expected.sort();
     assert_eq!(listening, expected, "only the two endpoints listen");
     assert_eq!(udp, 0, "no UDP socket");
+
+    let conf = std::fs::read_to_string(paths.config.join("nats.conf"))
+        .expect("nats.conf is rendered before the first spawn");
+    assert!(
+        conf.contains(&format!("listen: \"127.0.0.1:{client}\"\n")),
+        "listen names the effective client port {client}: {conf}"
+    );
+    assert!(
+        conf.contains(&format!("http: \"127.0.0.1:{monitoring}\"\n")),
+        "http names the effective monitoring port {monitoring}: {conf}"
+    );
+    assert!(
+        conf.contains("Test Root Ünï cödé"),
+        "store_dir keeps the space and the Unicode: {conf}"
+    );
 
     let report = varz(monitoring);
     assert_eq!(report["server_name"], name);

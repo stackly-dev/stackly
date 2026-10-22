@@ -35,7 +35,7 @@ use stackly_protocol::json::DecodedFrame;
 use stackly_storage::{OpenOptions, RegistryOpen};
 use stackly_testkit::evidence::{Evidence, Source};
 use stackly_testkit::{
-    FakeSecretStore, ReapGuard, SpawnCatalog, SpawnedDaemon, TestRoot, allocate_port,
+    FakeSecretStore, ReapGuard, RuntimeCache, SpawnCatalog, SpawnedDaemon, TestRoot, allocate_port,
 };
 use stacklyd::lock::{DaemonLock, LockOwner};
 use stacklyd::server::{self, DaemonConfig, DaemonHandle};
@@ -69,17 +69,6 @@ pub fn package_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/nats")
 }
 
-/// The runtime cache of `cargo xtask` (spec 0003): where the artifact with
-/// `sha256` is, if it was downloaded.
-#[must_use]
-pub fn cached_artifact(sha256: &str) -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    let file = Path::new(&home)
-        .join("Library/Caches/dev.stackly.xtask/runtime")
-        .join(sha256);
-    file.is_file().then_some(file)
-}
-
 /// Reads and validates the package under test.
 #[must_use]
 pub fn package(platform: &Platform) -> ValidatedPackage {
@@ -87,18 +76,33 @@ pub fn package(platform: &Platform) -> ValidatedPackage {
     ValidatedPackage::from_files(files, NameCheck::Skip).expect("the package validates")
 }
 
-/// The SHA-256 of [`ARTIFACT`] in `versions.json`.
-#[must_use]
-pub fn artifact_sha256() -> String {
+/// The `field` of [`ARTIFACT`] in `versions.json`.
+fn artifact_field(field: &str) -> Value {
     let text = std::fs::read_to_string(package_dir().join("versions.json"))
         .expect("versions.json can be read");
     let versions: Value = serde_json::from_str(&text).expect("versions.json is JSON");
     versions["artifacts"]
         .as_array()
         .and_then(|artifacts| artifacts.iter().find(|artifact| artifact["id"] == ARTIFACT))
-        .and_then(|artifact| artifact["sha256"].as_str())
+        .map(|artifact| artifact[field].clone())
         .unwrap_or_else(|| panic!("versions.json has {ARTIFACT}"))
+}
+
+/// The SHA-256 of [`ARTIFACT`] in `versions.json`.
+#[must_use]
+pub fn artifact_sha256() -> String {
+    artifact_field("sha256")
+        .as_str()
+        .expect("an artifact has a sha256")
         .to_owned()
+}
+
+/// The size in bytes of [`ARTIFACT`] in `versions.json`.
+#[must_use]
+pub fn artifact_size() -> u64 {
+    artifact_field("size")
+        .as_u64()
+        .expect("an artifact has a size")
 }
 
 /// One test's root with the runtime installed and the package pinned.
@@ -147,7 +151,9 @@ impl Site {
         .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
         let package = package(&platform);
         let sha256 = artifact_sha256();
-        let Some(cache_file) = cached_artifact(&sha256) else {
+        let Some(cache_file) =
+            RuntimeCache::open().and_then(|cache| cache.entry(&sha256, artifact_size()))
+        else {
             evidence.blocked(
                 &format!("artifact {ARTIFACT} is not in the runtime cache"),
                 OWNER,
@@ -372,16 +378,7 @@ impl InProcess {
     }
 }
 
-/// The params of a create of the NATS package, both endpoints on free
-/// loopback ports.
-///
-/// Spec 0023 AC-8 asks for `Auto` endpoints, but the temporary create of
-/// spec 0010 (K1) runs the init with no bound port, and the init of the NATS
-/// package renders `nats.conf` from the endpoint addresses, so an `Auto`
-/// endpoint ends the init in `supervisor.config_invalid` ("endpoint client has
-/// no concrete address"). The full create of spec 0020 allocates the ports
-/// before the init; until it replaces the temporary one, the ports are `Fixed`.
-// provisional: F20
+/// The params of a create of the NATS package, both endpoints `Auto`.
 #[must_use]
 pub fn create_params(site: &Site, name: &str, settings: Value) -> CreateInstanceParams {
     let map = match settings {
@@ -401,7 +398,7 @@ pub fn create_params(site: &Site, name: &str, settings: Value) -> CreateInstance
             .into_iter()
             .map(|endpoint| EndpointRequest {
                 name: endpoint.to_owned(),
-                port: PortRequest::Fixed(allocate_port().expect("a free port can be allocated")),
+                port: PortRequest::Auto,
             })
             .collect(),
         settings: SettingsDocument::new(map),
