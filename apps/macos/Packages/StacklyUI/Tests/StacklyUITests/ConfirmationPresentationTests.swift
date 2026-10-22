@@ -235,13 +235,17 @@ struct ConfirmationPresentationTests {
 
     /// Waits, letting main actor tasks and AppKit run, until `condition` holds or `timeout`
     /// passes. Returns whether it holds.
+    ///
+    /// The timeout counts responsive time only (``ResponsiveTimer``): another test that holds
+    /// the main actor in a full run counts as one check, not as the whole stall.
     static func settle(
         _ timeout: Duration = .seconds(3),
         until condition: () -> Bool
     ) async -> Bool {
-        let deadline = ContinuousClock.now + timeout
-        while condition() == false, ContinuousClock.now < deadline {
+        var timer = ResponsiveTimer(maxCharge: .milliseconds(70))
+        while condition() == false, timer.counted < timeout {
             try? await Task.sleep(for: .milliseconds(20))
+            timer.lap()
         }
         return condition()
     }

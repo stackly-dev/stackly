@@ -7,8 +7,9 @@ import Testing
 /// folder and the app's scene file, and every built command has exactly one menu item.
 ///
 /// This suite reuses the `Rule` type and the source scan of `SourceRuleTests`, so the scan
-/// is text based and skips line comments.
-struct CommandSourceRuleTests {
+/// is text based and skips line comments. Like that suite it is `nonisolated` and
+/// serialized, so the scans stay off the main actor.
+@Suite(.serialized) nonisolated struct CommandSourceRuleTests {
     nonisolated static let commandsFolder = SourceRuleTests.stacklyUI + "Commands/"
     nonisolated static let appScene = "apps/macos/Stackly/StacklyApp.swift"
 
