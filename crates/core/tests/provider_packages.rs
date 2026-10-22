@@ -662,6 +662,42 @@ fn preflight_reads_the_fake_data_marker() {
 }
 
 #[test]
+fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "the postgresql, nats, and fake packages validate with their connection block (sentinel render included) and traefik declares none",
+    );
+    let entries = |dir: &Path| -> Vec<(String, String)> {
+        validated(dir)
+            .manifest()
+            .connections()
+            .iter()
+            .map(|entry| (entry.name().to_owned(), entry.title().to_owned()))
+            .collect()
+    };
+    let pair = |name: &str, title: &str| (name.to_owned(), title.to_owned());
+
+    assert_eq!(
+        entries(&postgresql_dir()),
+        [
+            pair("uri", "Connection string"),
+            pair("socket", "Unix socket")
+        ]
+    );
+    assert_eq!(
+        entries(&nats_dir()),
+        [
+            pair("uri", "Client URL"),
+            pair("monitoring", "Monitoring URL")
+        ]
+    );
+    assert_eq!(entries(&fake_dir()), [pair("uri", "Connection string")]);
+    assert!(entries(&traefik_dir()).is_empty());
+    ev.pass();
+}
+
+#[test]
 fn the_nats_package_reads_without_writes_and_validates() {
     let ev = evidence!(
         covers = ["REQ-029"],

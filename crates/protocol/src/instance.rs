@@ -12,6 +12,7 @@
 //! a domain type.
 
 pub mod command;
+pub mod connection;
 mod create;
 mod duplicate;
 

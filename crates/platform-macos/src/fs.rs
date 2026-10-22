@@ -7,13 +7,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use stackly_platform::{
     AppendFile, DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, ReadSeekFile,
-    RemoveReport, TreeWriter, VolumeFacts, VolumeSpace,
+    RemoveReport, TreeUsage, TreeWriter, UsageLimits, VolumeFacts, VolumeSpace,
 };
 
 mod fd;
 mod handles;
 mod remove_tree;
 mod rename;
+mod tree_usage;
 mod tree_writer;
 mod volume;
 
@@ -28,8 +29,9 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// (`openat`, `mkdirat`, `symlinkat`, `fchmodat`), so a folder swapped for
 /// a symlink while they run is never followed.
 /// [`rename_no_replace`](Filesystem::rename_no_replace) uses
-/// `renamex_np(RENAME_EXCL)`, and [`volume_space`](Filesystem::volume_space)
-/// reads `statfs`.
+/// `renamex_np(RENAME_EXCL)`, [`volume_space`](Filesystem::volume_space)
+/// reads `statfs`, and [`tree_usage`](Filesystem::tree_usage) walks with
+/// `openat`, `fstatat`, and one `fdopendir` stream per level.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct MacosFilesystem;
 
@@ -144,6 +146,10 @@ impl Filesystem for MacosFilesystem {
 
     fn volume_facts(&self, path: &Path) -> Result<VolumeFacts, PlatformError> {
         volume::volume_facts(path)
+    }
+
+    fn tree_usage(&self, root: &Path, limits: UsageLimits) -> Result<TreeUsage, PlatformError> {
+        tree_usage::tree_usage(root, limits)
     }
 }
 

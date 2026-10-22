@@ -532,6 +532,14 @@ impl stackly_platform::Filesystem for Swapping {
     ) -> Result<stackly_platform::VolumeFacts, stackly_platform::PlatformError> {
         self.inner.volume_facts(path)
     }
+
+    fn tree_usage(
+        &self,
+        root: &Path,
+        limits: stackly_platform::UsageLimits,
+    ) -> Result<stackly_platform::TreeUsage, stackly_platform::PlatformError> {
+        self.inner.tree_usage(root, limits)
+    }
 }
 
 /// A site whose filesystem replaces the pinned `provider.yaml` as `swap`

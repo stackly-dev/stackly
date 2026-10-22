@@ -70,3 +70,32 @@ _Langkah 10 sampai 12 Build plan, dibangun 2026-10-22 (`d851d10` langkah 10 dan 
 - Spec 0068 AC-2, AC-3, dan AC-14 (bagian agent, K14) · skenario settle dengan baris agent tanpa menunggu probe, fake tidak memanggil `SMAppService` dan runtime fixture tidak membaca file pengguna, matriks dan Diagnostics lulus; XCUITest agent dan tiga alur `NOT_RUN` sampai Automation Mode menyala
 - AC-15, AC-16 · belum, milik Milestone 2
 - AC-17 sampai AC-20 · belum, milik Milestone 4 (`BLOCKED` sampai OQ-012)
+
+### Hasil checker (chk-f15-m3, 2026-10-22, di main `75568196`)
+
+Enam langkah `[x]` dijalankan ulang di worktree bersih (build dari nol, `CARGO_INCREMENTAL=0`, load 40 sampai 65). Lima langkah yang terbuka butuh user dan tidak dijalankan, jadi tetap tanpa centang.
+
+| Langkah | Hasil | Evidence |
+| --- | --- | --- |
+| `swift test` StacklyUI penuh | `PASS` dengan catatan: 876 test, 88 suite, 10 known issue (probe pipeline snapshot), dan 3 issue di load 60 yang terkenal. `ShellEndToEndTests.theShellWaitsForStacklydThenConnectsByItself` (`CancellationError`) dan `SkeletonProcessRunnerTests.aProcessThatOutlivesItsLimitIsKilledAndReportedAsTimedOut` (20 detik terlampaui, 38 detik) gagal, tidak ada test agent atau CLI yang gagal | log run penuh di scratchpad sesi |
+| Ulang dengan `--filter "ShellEndToEndTests\|SkeletonProcessRunnerTests\|SkeletonEndToEndTests"` | `PASS`: 12 test, 4 suite, 4,4 detik | exit 0 |
+| `swift test --package-path clients/swift` | `PASS`: 192 test, 27 suite, ditambah 48 test dengan 1 known issue | exit 0 |
+| `cargo xtask build-app` | `PASS`: `Stackly.app` terbangun dan ditandatangani ad hoc; `apps/macos/Stackly/` tidak berubah di `d851d10~1..5e32bdc` | exit 0 |
+| `xcrun swift-format lint --strict` pada semua `.swift` yang berubah di `d851d10~1..5e32bdc` | `PASS` | exit 0 |
+| `cargo xtask snapshot review --base d851d10~1` | `PASS`: 25 PNG berubah atau baru (15 diagnostics yang direkam ulang, 5 `diagnostics-agent-disabled`, 5 `agent-banner-matrix`); `daemon-status-matrix` dan referensi lain tidak berubah; tidak ada PNG HC yang identik byte dengan padanan standar | `target/snapshot-review/index.html` |
+| `cargo xtask ui-test --only ShellUITests` | `NOT_RUN`, exit 2: "Automation Mode is not enabled on this Mac" (hanya user yang bisa menyalakan; `docs/manual.md` bagian K). `AuditUITests` dan `MenuUITests` memakai jalur yang sama | log sesi |
+
+Tinjauan PNG (lihat langsung): `agent-banner-matrix` (terang, HC gelap, dan `narrow` 640 pt) memuat 15 baris dengan judul dan aksi persis tabel *Banner per state*, tidak ada yang terpotong, tone caution, informatif untuk "stacklyd is starting…", dan critical dengan Open Diagnostics saja untuk `not_found`. `diagnostics-agent-disabled` dan tiga Diagnostics yang direkam ulang memuat seksi Background Agent utuh di semua lebar, dengan petunjuk What to do yang benar.
+
+Temuan non fatal (tidak mengubah verdict AC):
+
+- Semua lima Diagnostics snapshot berukuran tetap 1044 × 748 px, jadi seksi Command Line Tool terpotong: baris `export PATH` terlihat di lebar standar tetapi tidak di `narrow`, dan tombol Install dan Copy Details tidak pernah tampil di referensi mana pun. Teks langkah teks besar di atas ("`narrow` memuat semua baris tanpa terpotong") benar untuk seksi Background Agent (lingkup AC-13), tetapi tidak untuk halaman Diagnostics utuh. Tampilan seksi CLI hanya terbukti oleh test model; saran: snapshot yang lebih tinggi atau yang terpisah untuk seksi itu (milik developer, bukan perbaikan checker).
+
+Putusan per AC:
+
+- AC-4 `PASS`: `AgentClassifierTests` lulus semua baris `protocols/fixtures/agent/states.json`
+- AC-11 `PASS` di Swift (`BackgroundAgentModelTests` dan dua aturan sumber di `SourceRuleTests`); bukti dengan agent sungguhan `NOT_RUN` (langkah manual, menunggu milestone 2 dan persetujuan)
+- AC-13 `PASS` oleh kode, test, dan snapshot dengan fake; XCUITest `NOT_RUN` (Automation Mode), keyboard dan VoiceOver `NOT_RUN` (evidence manual user)
+- AC-14 `PASS` oleh `CommandLineToolTests` di home sementara dan teks prompt (tidak menyentuh PATH atau file shell); Install, Repair, Remove di `~` sungguhan `NOT_RUN` (menunggu persetujuan)
+- Spec 0068 AC-14, bagian agent: `PASS` di sisi fixture, snapshot, dan test model; XCUITest agent dan tiga alur `NOT_RUN` (Automation Mode)
+- Penyimpangan developer yang diterima lead: tidak ada yang melanggar teks AC. `DaemonModel*` memakai `ipc.connection_closed` sesuai AC-13 (aksi agent hanya untuk `ipc.endpoint_missing` dan `ipc.connection_refused`), `initialLaunchRecord` dan `rows(now:)` tidak mengubah perilaku yang ditentukan AC, dan sisanya tidak bersinggungan dengan AC.

@@ -27,6 +27,22 @@ public struct Page<Item: Sendable>: Sendable {
     }
 }
 
+/// Why one item could not be fetched again (spec 0022, *Usulan update spec lain*): the
+/// error of the failed refetch and the revision the change announced, so Retry asks for the
+/// same change again.
+public struct ItemFailure: Equatable, Sendable {
+    /// The error of the refetch.
+    public let error: ErrorBody
+    /// The revision the event announced.
+    public let revision: UInt64
+
+    /// Creates a failure.
+    public init(error: ErrorBody, revision: UInt64) {
+        self.error = error
+        self.revision = revision
+    }
+}
+
 /// What one event does to a store.
 public enum StoreEffect<Item: Identifiable & Sendable> {
     /// The item, whole, at its revision.
@@ -82,6 +98,9 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
     public private(set) var isRefreshing = false
     /// Whether the daemon does not know the list method (an older daemon).
     public private(set) var unsupported = false
+    /// The items whose refetch failed, by ID. An entry goes away when the item is applied or
+    /// removed, and when a snapshot completes; the old item stays in ``items`` meanwhile.
+    public private(set) var itemFailures: [Item.ID: ItemFailure] = [:]
 
     /// The revision held for each item.
     private(set) var revisions: [Item.ID: UInt64] = [:]
@@ -256,6 +275,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
             apply(event)
         }
         tombstones.removeAll()
+        itemFailures.removeAll()
         loadedAt = now()
         error = nil
         isRefreshing = false
@@ -336,6 +356,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         items[item.id] = item
         revisions[item.id] = itemRevision
         tombstones[item.id] = nil
+        itemFailures[item.id] = nil
         didApply?(.changed(item))
     }
 
@@ -358,6 +379,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         items[id] = nil
         revisions[id] = nil
         tombstones[id] = newRevision
+        itemFailures[id] = nil
         didApply?(.removed(id))
     }
 
@@ -382,23 +404,39 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
 
     private func refetch(_ id: Item.ID, revision newRevision: UInt64) {
         guard newRevision > floor(of: id) else { return }
-        Task {
-            let fetched: Item?
-            do {
-                fetched = try await fetchOne(id)
-            } catch {
-                // The next snapshot brings the item; nothing changes now.
-                return
-            }
-            guard let fetched else {
-                // Gone: the change it announced was a delete.
-                if newRevision > floor(of: id) {
-                    remove(id, revision: newRevision)
-                }
-                return
-            }
-            upsert(fetched)
+        Task { await fetchAndApply(id, revision: newRevision) }
+    }
+
+    /// Fetches one item and applies it under the revision rule. A failure keeps the held
+    /// item and is recorded in ``itemFailures``; the next snapshot brings the item too.
+    private func fetchAndApply(_ id: Item.ID, revision newRevision: UInt64) async {
+        let fetched: Item?
+        do {
+            fetched = try await fetchOne(id)
+        } catch {
+            itemFailures[id] = ItemFailure(error: error.body, revision: newRevision)
+            return
         }
+        guard let fetched else {
+            // Gone: the change it announced was a delete.
+            if newRevision > floor(of: id) {
+                remove(id, revision: newRevision)
+            } else {
+                itemFailures[id] = nil
+            }
+            return
+        }
+        upsert(fetched)
+        itemFailures[id] = nil
+    }
+
+    /// Asks again for an item whose refetch failed, at the revision of that failure. A
+    /// retained or deleted item is removed, as a first refetch would have done.
+    ///
+    /// - Parameter id: The item. Nothing happens when it has no recorded failure.
+    public func retry(_ id: Item.ID) async {
+        guard let failure = itemFailures[id] else { return }
+        await fetchAndApply(id, revision: failure.revision)
     }
 
     /// The error a store keeps when its snapshot could not catch up with the

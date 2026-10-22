@@ -5,11 +5,12 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use stackly_platform::{
     AppendFile, DirEntryInfo, FileInfo, FileKind, Filesystem, PlatformError, REMOVE_TREE_MAX_DEPTH,
-    ReadSeekFile, RemoveReport, TreeWriter, VolumeFacts, VolumeSpace, remove_tree_names,
+    ReadSeekFile, RemoveReport, TREE_USAGE_MAX_DEPTH, TreeUsage, TreeWriter, UsageLimits,
+    VolumeFacts, VolumeSpace, remove_tree_names, tree_usage_root,
 };
 
 use crate::TestRoot;
@@ -51,6 +52,8 @@ pub enum FsOp {
     VolumeSpace,
     /// [`Filesystem::volume_facts`].
     VolumeFacts,
+    /// [`Filesystem::tree_usage`].
+    TreeUsage,
     /// [`TreeWriter::create_dir`], matched against the root joined with
     /// the entry path.
     TreeCreateDir,
@@ -83,6 +86,7 @@ impl FsOp {
             Self::OpenTreeWriter => "open_tree_writer",
             Self::VolumeSpace => "volume_space",
             Self::VolumeFacts => "volume_facts",
+            Self::TreeUsage => "tree_usage",
             Self::TreeCreateDir => "create_dir",
             Self::TreeCreateFile => "create_file",
             Self::TreeCreateSymlink => "create_symlink",
@@ -274,6 +278,9 @@ pub struct FakeFilesystem {
     roots: Vec<PathBuf>,
     violations: AtomicUsize,
     state: Shared,
+    tree_usage_calls: AtomicUsize,
+    tree_usage_active: AtomicUsize,
+    tree_usage_peak: AtomicUsize,
 }
 
 impl FakeFilesystem {
@@ -284,7 +291,25 @@ impl FakeFilesystem {
             roots: vec![root.path().to_path_buf(), root.run_dir().to_path_buf()],
             violations: AtomicUsize::new(0),
             state: Shared::default(),
+            tree_usage_calls: AtomicUsize::new(0),
+            tree_usage_active: AtomicUsize::new(0),
+            tree_usage_peak: AtomicUsize::new(0),
         }
+    }
+
+    /// Returns how many [`tree_usage`](Filesystem::tree_usage) calls were
+    /// made so far, the ones that failed included.
+    #[must_use]
+    pub fn tree_usage_calls(&self) -> usize {
+        self.tree_usage_calls.load(Ordering::SeqCst)
+    }
+
+    /// Returns the most [`tree_usage`](Filesystem::tree_usage) calls that
+    /// ran at the same time so far, a call counting from its start until it
+    /// returns, delay included.
+    #[must_use]
+    pub fn tree_usage_peak(&self) -> usize {
+        self.tree_usage_peak.load(Ordering::SeqCst)
     }
 
     /// Returns how many calls touched a path outside the test roots.
@@ -561,6 +586,103 @@ impl Filesystem for FakeFilesystem {
         let volume = self.volume_of("volume_facts", path)?;
         Ok(VolumeFacts::new(volume.fs_type, volume.local))
     }
+
+    fn tree_usage(&self, root: &Path, limits: UsageLimits) -> Result<TreeUsage, PlatformError> {
+        self.tree_usage_calls.fetch_add(1, Ordering::SeqCst);
+        let active = self.tree_usage_active.fetch_add(1, Ordering::SeqCst) + 1;
+        self.tree_usage_peak.fetch_max(active, Ordering::SeqCst);
+        let _running = ActiveCall(&self.tree_usage_active);
+        tree_usage_root(root)?;
+        // The delay of `enter` runs before the deadline starts.
+        self.enter(FsOp::TreeUsage, root)?;
+        tree_usage_portable(root, limits)
+    }
+}
+
+/// Counts one running `tree_usage` call down when it returns.
+struct ActiveCall<'a>(&'a AtomicUsize);
+
+impl Drop for ActiveCall<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// One open folder of the portable `tree_usage` walk.
+struct UsageLevel {
+    entries: fs::ReadDir,
+    path: PathBuf,
+}
+
+/// The portable walk of [`Filesystem::tree_usage`] with the rules of the
+/// macOS adapter, on `std::fs`: one open folder per level, names read one at
+/// a time, and every check reads a path with `symlink_metadata` semantics
+/// and acts on it afterwards, so it is not safe against a folder swapped
+/// during the walk.
+fn tree_usage_portable(root: &Path, limits: UsageLimits) -> Result<TreeUsage, PlatformError> {
+    let deadline = Instant::now().checked_add(limits.deadline);
+    let io_err = |path: &Path, err: &io::Error| PlatformError::from_io("tree_usage", path, err);
+    let root_info = fs::symlink_metadata(root).map_err(|err| io_err(root, &err))?;
+    if root_info.file_type().is_symlink() {
+        return Err(PlatformError::SymlinkInPath {
+            path: root.to_path_buf(),
+        });
+    }
+    if !root_info.is_dir() {
+        return Err(PlatformError::NotADirectory {
+            path: root.to_path_buf(),
+        });
+    }
+    let device = root_info.dev();
+    let mut bytes = root_info.blocks().saturating_mul(512);
+    let mut entries = 0_u64;
+    let mut complete = true;
+    let mut linked = std::collections::HashSet::new();
+    let mut stack = vec![UsageLevel {
+        entries: fs::read_dir(root).map_err(|err| io_err(root, &err))?,
+        path: root.to_path_buf(),
+    }];
+    while let Some(level) = stack.last_mut() {
+        let Some(entry) = level.entries.next() else {
+            stack.pop();
+            continue;
+        };
+        let entry = entry.map_err(|err| io_err(&level.path, &err))?;
+        entries += 1;
+        if entries > limits.max_entries || deadline.is_some_and(|at| Instant::now() >= at) {
+            complete = false;
+            break;
+        }
+        let path = entry.path();
+        let info = match fs::symlink_metadata(&path) {
+            Ok(info) => info,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
+            Err(err) => return Err(io_err(&path, &err)),
+        };
+        if info.dev() != device {
+            continue;
+        }
+        if !info.is_dir() {
+            if info.nlink() <= 1 || linked.insert((info.dev(), info.ino())) {
+                bytes = bytes.saturating_add(info.blocks().saturating_mul(512));
+            }
+            continue;
+        }
+        bytes = bytes.saturating_add(info.blocks().saturating_mul(512));
+        if stack.len() >= TREE_USAGE_MAX_DEPTH {
+            complete = false;
+            continue;
+        }
+        match fs::read_dir(&path) {
+            Ok(entries) => stack.push(UsageLevel { entries, path }),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                bytes = bytes.saturating_sub(info.blocks().saturating_mul(512));
+            }
+            Err(err) if err.kind() == io::ErrorKind::NotADirectory => {}
+            Err(err) => return Err(io_err(&path, &err)),
+        }
+    }
+    Ok(TreeUsage::new(bytes, complete))
 }
 
 /// Removes `root` joined with `names` the way [`Filesystem::remove_tree`]

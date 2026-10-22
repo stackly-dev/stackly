@@ -1,6 +1,7 @@
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 
 use crate::error::PlatformError;
 use crate::identity::UserId;
@@ -9,6 +10,11 @@ use crate::tree::TreeWriter;
 /// The deepest directory nesting [`Filesystem::remove_tree`] walks, with
 /// the target counted as the first level.
 pub const REMOVE_TREE_MAX_DEPTH: usize = 128;
+
+/// The deepest directory nesting [`Filesystem::tree_usage`] opens, with the
+/// root counted as the first level and one file descriptor per level
+/// (spec 0021, *Ukuran data*).
+pub const TREE_USAGE_MAX_DEPTH: usize = 32;
 
 /// The filesystem operations Stackly's use cases need, on paths the caller
 /// already derived from the layout.
@@ -184,6 +190,108 @@ pub trait Filesystem: Send + Sync {
     /// Returns [`PlatformError::NotFound`] when the path does not exist,
     /// and other variants when the volume cannot be read.
     fn volume_facts(&self, path: &Path) -> Result<VolumeFacts, PlatformError>;
+
+    /// Adds up the disk space the tree at `root` uses: `st_blocks * 512`
+    /// of every entry below it, folders and the root itself included,
+    /// without following a symlink (a symlink counts as itself) and without
+    /// crossing onto another device. A hard link counts once.
+    ///
+    /// The walk stops with [`complete`](TreeUsage::complete) false when it
+    /// has read [`max_entries`](UsageLimits::max_entries) names and reads
+    /// one more, when [`deadline`](UsageLimits::deadline) passes (checked
+    /// once for every name read), or at a folder deeper than
+    /// [`TREE_USAGE_MAX_DEPTH`] levels, which is counted but not opened.
+    /// The root is not an entry. The order of the walk is unspecified, so
+    /// the bytes of an incomplete result can differ between adapters
+    /// (spec 0004, *Port platform*).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::Io`] with kind `InvalidInput` and op
+    /// `tree_usage` when `root` is relative, holds a `.` or `..` component
+    /// or a NUL byte, or ends with a slash (see [`tree_usage_root`]),
+    /// [`PlatformError::SymlinkInPath`] when `root` is a symlink,
+    /// [`PlatformError::NotADirectory`] when it is not a folder,
+    /// [`PlatformError::NotFound`] when it does not exist, and any other
+    /// variant when an entry cannot be read. An entry that disappears during
+    /// the walk is skipped.
+    fn tree_usage(&self, root: &Path, limits: UsageLimits) -> Result<TreeUsage, PlatformError>;
+}
+
+/// The limits of one [`Filesystem::tree_usage`] walk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct UsageLimits {
+    /// How many names the walk reads below the root before it stops with an
+    /// incomplete result. A tree with exactly this many entries is
+    /// complete.
+    pub max_entries: u64,
+    /// How long the walk may run, measured on the monotonic clock from the
+    /// start of the call.
+    pub deadline: Duration,
+}
+
+impl UsageLimits {
+    /// Bundles the two limits.
+    #[must_use]
+    pub const fn new(max_entries: u64, deadline: Duration) -> Self {
+        Self {
+            max_entries,
+            deadline,
+        }
+    }
+}
+
+/// What one [`Filesystem::tree_usage`] walk found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct TreeUsage {
+    /// The bytes the entries use on disk (`st_blocks * 512` each).
+    pub bytes: u64,
+    /// False when a limit stopped the walk, so `bytes` is a lower bound.
+    pub complete: bool,
+}
+
+impl TreeUsage {
+    /// Bundles the two results.
+    #[must_use]
+    pub const fn new(bytes: u64, complete: bool) -> Self {
+        Self { bytes, complete }
+    }
+}
+
+/// Checks the `root` argument of [`Filesystem::tree_usage`]: an absolute
+/// path with no `.` or `..` component, no NUL byte, and no slash at the end
+/// (which would make `O_NOFOLLOW` follow a symlink root).
+///
+/// # Errors
+///
+/// Returns [`PlatformError::Io`] with kind `InvalidInput` and op
+/// `tree_usage` when the path breaks these rules.
+pub fn tree_usage_root(root: &Path) -> Result<(), PlatformError> {
+    let bytes = root.as_os_str().as_encoded_bytes();
+    let invalid = |message: &str| PlatformError::Io {
+        op: "tree_usage",
+        path: root.to_path_buf(),
+        kind: io::ErrorKind::InvalidInput,
+        message: message.to_owned(),
+    };
+    if !root.is_absolute() {
+        return Err(invalid("the root must be an absolute path"));
+    }
+    if bytes.contains(&0) {
+        return Err(invalid("the root holds a NUL byte"));
+    }
+    if bytes.len() > 1 && bytes.ends_with(b"/") {
+        return Err(invalid("the root must not end with a slash"));
+    }
+    if bytes
+        .split(|byte| *byte == b'/')
+        .any(|name| name == b"." || name == b"..")
+    {
+        return Err(invalid("the root must not hold a `.` or `..` component"));
+    }
+    Ok(())
 }
 
 /// A regular file opened by [`Filesystem::open_read`].
@@ -545,5 +653,35 @@ mod tests {
         );
         assert!(!RemoveReport::removed(2, 1).missing);
         assert_eq!(RemoveReport::default(), RemoveReport::removed(0, 0));
+    }
+
+    #[test]
+    fn tree_usage_root_accepts_an_absolute_path_without_dots() {
+        assert!(tree_usage_root(Path::new("/data/instances/a b/data")).is_ok());
+        assert!(tree_usage_root(Path::new("/")).is_ok());
+        assert!(tree_usage_root(Path::new("/data/.hidden/..name")).is_ok());
+    }
+
+    #[test]
+    fn tree_usage_root_rejects_relative_dotted_nul_and_trailing_slash_paths() {
+        for root in [
+            "data",
+            "",
+            "/data/./x",
+            "/data/../x",
+            "/data/x/.",
+            "/data/x/",
+            "/data//x/..",
+            "/data/\0x",
+        ] {
+            match tree_usage_root(Path::new(root)) {
+                Err(PlatformError::Io {
+                    op: "tree_usage",
+                    kind: io::ErrorKind::InvalidInput,
+                    ..
+                }) => {}
+                other => panic!("{root:?} gave {other:?}"),
+            }
+        }
     }
 }

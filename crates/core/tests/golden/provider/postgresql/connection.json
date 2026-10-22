@@ -1,0 +1,48 @@
+[
+  {
+    "masked": "postgresql://postgres:****@127.0.0.1:14000/postgres",
+    "name": "uri",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "postgresql://postgres:"
+      },
+      {
+        "kind": "secret",
+        "secret": {
+          "field": "superuserPassword",
+          "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+        }
+      },
+      {
+        "kind": "text",
+        "text": "@127.0.0.1:14000/postgres"
+      }
+    ],
+    "portMayChange": true,
+    "title": "Connection string"
+  },
+  {
+    "masked": "postgresql://postgres:****@/postgres?host=%2Fprivate%2Ftmp%2Fskt-golden%2Fstackly-0000000a%2Fi%2F0000000a&port=14000",
+    "name": "socket",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "postgresql://postgres:"
+      },
+      {
+        "kind": "secret",
+        "secret": {
+          "field": "superuserPassword",
+          "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+        }
+      },
+      {
+        "kind": "text",
+        "text": "@/postgres?host=%2Fprivate%2Ftmp%2Fskt-golden%2Fstackly-0000000a%2Fi%2F0000000a&port=14000"
+      }
+    ],
+    "portMayChange": true,
+    "title": "Unix socket"
+  }
+]

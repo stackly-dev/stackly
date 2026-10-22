@@ -1,1 +1,1 @@
-http://${endpoint.monitoring.address}
+nats://${endpoint.client.address}

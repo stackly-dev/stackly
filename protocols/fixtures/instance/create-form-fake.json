@@ -296,7 +296,7 @@
   "provider": {
     "category": "testing",
     "displayName": "Fake Provider",
-    "manifestSha256": "95cfdc4db1839631d3d16b3366b9b2f57896a3abc06b169fadf918cd49b313a1",
+    "manifestSha256": "c621f093548dc59fddfdf8f825ab524821f3f33ed50f5d632b2d1bd2d7357e43",
     "name": "testing/fake",
     "revision": "0.3.0",
     "source": "bundled_catalog"
