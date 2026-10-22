@@ -131,7 +131,7 @@ fn every_problem_in_a_package_gets_its_own_line_next_to_the_valid_ones() {
     let root = TestRoot::new().expect("a test root can be created");
     let broken = broken_copy(&root, "nats", &|text| {
         text.replace("primitive: renderConfig", "primitive: runShell")
-            .replace("type: http", "type: script")
+            .replace("type: native", "type: script")
     });
     let valid = repo_root().join("providers/traefik");
 
