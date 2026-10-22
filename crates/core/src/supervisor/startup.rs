@@ -45,11 +45,11 @@ use super::{
     BindOptions, BindOutcome, DrainContext, DrainOutcome, SpoolDrain, Supervisor, SupervisorDeps,
     secrets,
 };
+use crate::instance::data_compat::check_data_compatibility;
 use crate::operation::{
     BoxFuture, OperationContext, OperationOutcome, OperationWork, StepSpec, WorkError, WorkOutcome,
     WorkResult,
 };
-use crate::provider::{MarkerRead, PreflightOutcome};
 use crate::runtime::launch::{LaunchRefusal, check_launchable, classify_early_exit};
 use crate::secret::{ResolvedSecrets, SecretCaller};
 use crate::{ensure_instance_run_dir, remove_owned_tree};
@@ -379,7 +379,7 @@ fn ctx_instance(ctx: &OperationContext) -> InstanceId {
 async fn verify(sup: &Supervisor, prepared: &Prepared) -> Result<(), SupervisorError> {
     let deps = sup.deps().clone();
     let key = prepared.key;
-    let marker_path = prepared.package.data_marker_path(&prepared.paths);
+    let paths = prepared.paths.clone();
     let recorded = prepared.instance.data_line().clone();
     let runtime_line = prepared.runtime.line().clone();
     let package = prepared.package.clone();
@@ -395,34 +395,14 @@ async fn verify(sup: &Supervisor, prepared: &Prepared) -> Result<(), SupervisorE
                 reason: error.to_string(),
             }
         })?;
-        let marker = marker_path.map_or(MarkerRead::NotDeclared, |path| {
-            MarkerRead::from_read(
-                deps.platform
-                    .fs()
-                    .read_file_limited(&path, crate::provider::DATA_MARKER_MAX_LEN),
-            )
-        });
-        match package.preflight(Some(recorded), marker, &runtime_line) {
-            PreflightOutcome::Compatible => Ok(()),
-            PreflightOutcome::Incompatible { data, runtime } => {
-                Err(SupervisorError::DataIncompatible {
-                    outcome: "incompatible".to_owned(),
-                    data: Some(data.to_string()),
-                    runtime: runtime.to_string(),
-                })
-            }
-            other => Err(SupervisorError::DataIncompatible {
-                outcome: match other {
-                    PreflightOutcome::MarkerMismatch { .. } => "marker_mismatch",
-                    PreflightOutcome::MarkerMissing => "marker_missing",
-                    PreflightOutcome::MarkerUnreadable => "marker_unreadable",
-                    _ => "unknown",
-                }
-                .to_owned(),
-                data: None,
-                runtime: runtime_line.to_string(),
-            }),
-        }
+        check_data_compatibility(
+            deps.platform.fs(),
+            &package,
+            &paths,
+            &recorded,
+            &runtime_line,
+        )?;
+        Ok(())
     })
     .await?
 }

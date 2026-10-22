@@ -21,6 +21,22 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["REQ-014", "REQ-027"],
+                expected:
+                    "The agent banner matrix renders every state's window banner in every variant"
+            ))
+        func agentBannerMatrix() async throws {
+            #expect(
+                AgentBannerMatrix.rows.allSatisfy {
+                    AgentBanner.content($0.input, now: FixtureClock.now) != nil
+                }, "every row of the matrix must have a banner")
+            try await assertSnapshot(
+                AgentBannerMatrix(), named: "agent-banner-matrix",
+                size: .fitting(width: 1044, narrowWidth: 640))
+        }
+
+        @Test(
+            .evidence(
                 covers: ["REQ-024", "REQ-027"],
                 expected: "The unbuilt page placeholder of Overview renders in every variant"
             ))

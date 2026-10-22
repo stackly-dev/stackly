@@ -515,6 +515,7 @@ Untuk baris yang memakai rumus AC-14, `fraction` adalah `Double` dari pembilang 
 - `InspectorHeader`: kolom rata tengah, jarak 6, teks rata tengah dan membungkus; aksi di slot `actions` (biasanya `ActionButton`).
 - `InspectorPlaceholder`: judul `.title3.weight(.semibold)` warna teks utama dan pesan `.callout` `textSecondary`, rata tengah di kolom, identifier `inspector.placeholder`.
 - Isi inspector dirakit layar dari `CardSection`, `.labeledContentStyle(.stackly)`, `StateBanner`, dan `ActionButton`.
+- *Environment fixture (2026-10-22, spec 0068 K15):* `.inspector` menampung ulang isi utama dan isi kolom, dan di sana `colorSchemeContrast` yang dipaku `fixtureAppearance` spec 0068 kembali ke nilai sistem, sehingga varian HC snapshot halaman dengan inspector identik dengan varian standard. Karena itu `StacklyInspectorModifier` memanggil `relayFixtureAccessibility()` spec 0068 di `#if DEBUG` di dua posisi: pada `content` sebelum `.inspector(isPresented:)`, dan pada `VStack { inspector }` (sesudah `.frame` dan `.padding`) di dalam `ScrollView` kolom. Posisi lain tidak sampai ke isi kolom. Setter bergaris bawah tetap hanya ditulis di `FixtureAppearance.swift`, dan di Release modifier ini tidak berubah, jadi AC-18 tetap. Detail, bukti probe, dan langkah verify ada di spec 0068 (*Environment fixture di dalam wadah yang menampung ulang isi*).
 
 ### Aksesibilitas
 
@@ -645,6 +646,7 @@ Kesalahan tidak dilempar oleh API ini; error datang dari daemon lewat `MutationO
 - Tombol capability unsupported tidak pernah disembunyikan, dan alasannya terlihat tanpa hover di tombol (teks di bawahnya atau di konten halaman) dan di menu (subtitle).
 - Copy hanya menulis saat ditekan, tidak pernah untuk secret, dan tidak pernah di gate.
 - Tidak ada versi kedua komponen ini di folder layar.
+- *(2026-10-22, spec 0068 K15)* Komponen yang menyerahkan isi ke wadah SwiftUI yang menampung ulang isi di jendela yang sama dan ikut dirender snapshot (hari ini hanya `.stacklyInspector`) memanggil `relayFixtureAccessibility()` spec 0068 di `#if DEBUG` pada isi itu, dan komponen baru seperti itu menambah tempatnya ke test penjaga AC-5 spec 0068 di commit yang sama.
 
 ### Security model
 

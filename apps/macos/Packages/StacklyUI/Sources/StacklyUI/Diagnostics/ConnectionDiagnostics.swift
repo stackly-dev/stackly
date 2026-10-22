@@ -142,6 +142,10 @@ nonisolated public struct ConnectionDiagnostics: Hashable, Sendable {
     public var contractDrift: Bool?
     /// The daemon's health from the last heartbeat.
     public var health: HealthFacts?
+    /// What the agent's banner row is built from, only while the daemon is unreachable
+    /// with `ipc.endpoint_missing` or `ipc.connection_refused`. The What to do row takes
+    /// its words from the row, so it never differs from the banner (spec 0015).
+    public var agentHint: AgentBanner.Input?
 
     /// Creates the diagnostics.
     public init(
@@ -154,7 +158,8 @@ nonisolated public struct ConnectionDiagnostics: Hashable, Sendable {
         daemonProtocol: String? = nil,
         appProtocol: String?,
         contractDrift: Bool? = nil,
-        health: HealthFacts? = nil
+        health: HealthFacts? = nil,
+        agentHint: AgentBanner.Input? = nil
     ) {
         self.status = status
         self.socketPath = socketPath
@@ -166,6 +171,7 @@ nonisolated public struct ConnectionDiagnostics: Hashable, Sendable {
         self.appProtocol = appProtocol
         self.contractDrift = contractDrift
         self.health = health
+        self.agentHint = agentHint
     }
 
     /// The rows of the Connection section, in order. A row without a value is left out,
@@ -177,7 +183,10 @@ nonisolated public struct ConnectionDiagnostics: Hashable, Sendable {
     ///   - calendar: The calendar of the times.
     ///   - locale: The locale of the times.
     ///   - timeZone: The time zone of the times.
-    public func rows(calendar: Calendar, locale: Locale, timeZone: TimeZone) -> [DiagnosticsRow] {
+    ///   - now: The time the agent hint is worked out at, for its 15 second limit.
+    public func rows(
+        calendar: Calendar, locale: Locale, timeZone: TimeZone, now: Date = Date()
+    ) -> [DiagnosticsRow] {
         func time(_ date: Date) -> String {
             DiagnosticsTime.format(date, calendar: calendar, locale: locale, timeZone: timeZone)
         }
@@ -188,7 +197,8 @@ nonisolated public struct ConnectionDiagnostics: Hashable, Sendable {
                 ?? DiagnosticsRow("Socket", text: "Unavailable"),
             lastErrorRow,
         ]
-        if let hint = ConnectionHint.text(status: status, error: lastError) {
+        let agentText = agentHint.flatMap { AgentBanner.hint($0, now: now) }
+        if let hint = ConnectionHint.text(status: status, error: lastError, agent: agentText) {
             rows.append(DiagnosticsRow("What to do", text: hint))
         }
         if let nextAttempt, presentation.hasConnection == false {

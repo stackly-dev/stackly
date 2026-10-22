@@ -39,3 +39,34 @@ _Langkah diturunkan dari acceptance criteria spec 0015. `/check verify` menjalan
 - AC-17 sampai AC-20 · belum, milik Milestone 4 (`BLOCKED` sampai OQ-012)
 - AC-21 · selesai sebelum milestone ini (langkah 0)
 - AC-22 · `--install` terbukti dengan folder sementara pada bundle hasil `build-app` sungguhan
+
+## Milestone 3: GUI and CLI install
+
+_Langkah 10 sampai 12 Build plan, dibangun 2026-10-22 (`d851d10` langkah 10 dan 11 dalam satu commit, `5e32bdc` langkah 12). Tidak ada langkah di bagian ini yang memanggil `SMAppService` sungguhan, mengubah Login Items, atau menulis ke `~/.local/bin` atau `~/Applications` sungguhan: test memakai `FakeBackgroundAgentController`, `FakeCommandLineTool`, dan home sementara. Yang butuh itu, atau Automation Mode, ditulis sebagai langkah yang menunggu._
+
+### UI / manual
+
+- [ ] **Menunggu Automation Mode (docs/manual.md bagian K), dijalankan user:** `cargo xtask ui-test --only ShellUITests` → `STATUS NOT_RUN`. Memeriksa lima skenario agent (`agent-requires-approval`, `agent-disabled`, `agent-enabled`, `agent-not-found`, `agent-unavailable`) dengan footer "stacklyd unavailable", judul dan aksi baris tabel *Banner per state*; `daemon-offline` dan `daemon-unreachable` yang kini menampilkan "Stackly’s background service is off." dengan Turn On dan Open Diagnostics; dan tiga alur: Turn On di `daemon-unreachable` memberi banner `requires_approval`, Turn On di `agent-not-found` memberi banner critical `not_found` dengan Open Diagnostics saja, Start stacklyd di `agent-enabled` memberi "stacklyd is starting…" tanpa aksi (tanpa menunggu batas 30 detik). Helper pemeriksa memeriksa keenam judul aksi: yang ada di baris harus ada dan aktif, yang lain tidak boleh ada → AC-13 (spec 0015), AC-14 dan AC-16 (spec 0068)
+- [ ] **Menunggu Automation Mode:** `cargo xtask ui-test --only AuditUITests` dan `--only MenuUITests` tetap lulus dengan banner agent baru (audit `daemon-offline` kini mencakup tombol Turn On); daftar skenario keduanya tidak berubah → AC-17 dan AC-16 (spec 0068)
+- [ ] **Manual, keyboard dan VoiceOver (evidence untuk user):** di app Debug dengan `STACKLY_UI_SCENARIO=daemon-unreachable`, Tab melewati Turn On dan Open Diagnostics di banner, Space menekan nya; dengan VoiceOver aktif, perubahan state agent diumumkan satu kali ("Background service needs your approval.") dan banner critical `not_found` diumumkan oleh `StateBanner`; fokus tetap di tombol yang baru ditekan karena hanya banner critical yang dibuat ulang → AC-13
+- [x] Cek teks besar dan kontras: referensi `agent-banner-matrix` (lima PNG, lebar 1044 dan 640 pt, terang, gelap, dan kontras tinggi) dan `diagnostics-agent-disabled` di suite snapshot, ditinjau satu per satu (`narrow` 640 pt memuat semua baris tanpa terpotong) → AC-13
+- [ ] **Setelah persetujuan, manual:** app hasil `cargo xtask build-app --install` di `~/Applications`, lalu Turn On dan Start stacklyd dari banner dengan agent sungguhan dan, di Terminal, `stackly daemon install` selagi GUI membuka Diagnostics (state menjadi `enabled` di luar aksi: banner "stacklyd is starting…" tanpa `register` dari GUI). Tidak dijalankan di sesi ini → AC-11, AC-13
+- [ ] **Setelah persetujuan, manual:** Install, Repair, dan Remove dari seksi Command Line Tool di Diagnostics terhadap `~` sungguhan; periksa hanya `~/.local/bin/stackly` dan `~/.local/share/man/man1/stackly*.1` yang berubah, dan tidak ada file shell yang disentuh. Tidak dijalankan di sesi ini → AC-14
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (setelah `cargo build -p stacklyd -p stackly-fake-server` dan `cargo build -p stacklyd --example skeleton_seed`) → 864 test lulus, 10 known issue dari probe pipeline snapshot. Baru di milestone ini: `AgentClassifierTests` (setiap dari 29 baris `protocols/fixtures/agent/states.json`, fixture identifier, teks `AgentActionError`), `AgentSupportTests` (`UserHome.tildePath` dengan batas komponen, `CanonicalPath`, pembaca launch record, `locate` pada folder bundle palsu tanpa memanggil OS, kode error terhadap konstanta `SMErrors.h`), `BackgroundAgentModelTests` (34 test: refresh tidak pernah mendaftar, Turn On dan Start stacklyd, `notFound` sebelum dan sesudah Turn On, penantian daemon dengan `sawHandshake` dan `startWait`, polling lewat `ManualSleep`, `stop()`), `AgentBannerTests` (setiap baris tabel, detik 14 dan 15, jadwal `ticksEverySecond`), `DaemonModelAgentTests` (baris agent, `unreachableCode`, petunjuk, pengumuman), `CommandLineToolTests` (home sementara: install, stale, broken, conflict, remove, folder yang bisa ditulis group, tidak ada file shell yang berubah) dan `CommandLineToolModelTests`; tiga aturan sumber baru di `SourceRuleTests` → AC-4, AC-11, AC-13, AC-14
+- [x] `swift test --package-path clients/swift` → lulus, tidak ada perubahan di `clients/swift`
+- [x] `cargo xtask build-app` → lulus; `DaemonModel`, `ShellRuntime`, dan `LiveShell` dipakai app target tanpa perubahan di `apps/macos/Stackly/`
+- [x] `xcrun swift-format lint --strict` pada semua file Swift yang berubah → lulus
+- [x] `cargo xtask snapshot review` → referensi yang berubah: `diagnostics-connected-mixed`, `diagnostics-daemon-offline`, `diagnostics-daemon-untrusted` (lima PNG masing masing, karena seksi Background Agent dan Command Line Tool, dan petunjuk What to do yang kini kosong tanpa agent atau diisi baris agent); baru: `diagnostics-agent-disabled` dan `agent-banner-matrix` (lima PNG masing masing). `daemon-status-matrix` dan semua referensi lain tidak berubah
+
+### Acceptance-criteria coverage
+
+- AC-4 · padanan Swift `BackgroundAgentClassifier` lulus semua baris fixture bersama (milestone 1 mencatat padanan Rust)
+- AC-11 · di Swift: test model membuktikan refresh, aktivasi app, dan polling hanya memanggil `status()`, `register()` hanya dari `turnOn()` dan `relaunch()` hanya dari `start()`, dan dua aturan sumber membatasi `ServiceManagement` ke `SMAppServiceAgent.swift` dan `register`, `unregister`, dan `relaunch` ke folder `Agent/`. Bukti dengan agent sungguhan menunggu persetujuan (langkah manual di atas)
+- AC-13 · terpenuhi oleh kode dan test dengan fake; XCUITest menunggu Automation Mode, dan keyboard dan VoiceOver menunggu evidence manual user
+- AC-14 · terpenuhi oleh kode dan test di home sementara; Install, Repair, dan Remove di `~` sungguhan menunggu persetujuan
+- Spec 0068 AC-2, AC-3, dan AC-14 (bagian agent, K14) · skenario settle dengan baris agent tanpa menunggu probe, fake tidak memanggil `SMAppService` dan runtime fixture tidak membaca file pengguna, matriks dan Diagnostics lulus; XCUITest agent dan tiga alur `NOT_RUN` sampai Automation Mode menyala
+- AC-15, AC-16 · belum, milik Milestone 2
+- AC-17 sampai AC-20 · belum, milik Milestone 4 (`BLOCKED` sampai OQ-012)

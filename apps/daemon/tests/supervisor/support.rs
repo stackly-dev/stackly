@@ -12,10 +12,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 use stackly_core::supervisor::fixture::seed_fake;
 use stackly_core::supervisor::{LogBatch, LogSink as SupervisorLogSink, SinkOutcome};
 use stackly_core::{PreparedLayout, daemon_info, prepare_layout};
-use stackly_domain::InstanceId;
+use stackly_domain::{
+    ArtifactRecord, InstallMode, InstanceId, Registry, ResourceRevision, Runtime, RuntimeId,
+    RuntimeState, Sha256Digest, StoredInstance, WriteBatch, WriteOp,
+};
 use stackly_ipc::{CallOptions, Client, ConnectPolicy};
 use stackly_platform::{Clock, Platform, SystemClock, UserId};
 use stackly_platform_macos::MacosPlatform;
@@ -131,6 +135,141 @@ impl Site {
     pub fn unpin_fake_package(&self) {
         std::fs::remove_dir_all(self.prepared.layout().providers_dir().join("testing"))
             .expect("the pinned fake package folder is removed");
+    }
+
+    /// The folders of the instance `id` the daemon made.
+    pub fn instance_paths(&self, id: Uuid) -> stackly_platform::InstancePaths {
+        self.prepared
+            .layout()
+            .instance_paths(InstanceId::from_uuid(id).expect("an instance id the daemon made"))
+    }
+
+    /// Opens the registry of the root for a test write. No daemon may hold
+    /// the root meanwhile; the registry is closed again when the caller
+    /// drops it.
+    pub fn open_registry(&self) -> impl Registry + use<> {
+        let RegistryOpen::Ready { registry, .. } = OpenOptions::new()
+            .open(
+                &self.platform,
+                self.prepared.layout(),
+                daemon_info().version,
+            )
+            .expect("the registry of the root opens")
+        else {
+            panic!("the registry of the root opens ready");
+        };
+        registry
+    }
+
+    /// [`install_fake_runtime`](stackly_core::supervisor::fixture::install_fake_runtime)
+    /// for a runtime of `version` and `line` in place of the first artifact
+    /// of the package, committed with the daemon stopped (spec 0025, step
+    /// 4). The registry keeps one managed runtime per artifact digest, so
+    /// the folder holds a stand in that differs per version instead of a
+    /// copy of the dummy server; a refused start never reaches its spawn.
+    /// Returns the runtime ID.
+    pub fn install_fake_runtime_line(&self, version: &str, line: &str) -> Uuid {
+        let layout = self.prepared.layout();
+        let registry = self.open_registry();
+        let first = registry
+            .runtimes()
+            .expect("the registry reads")
+            .value
+            .into_iter()
+            .next()
+            .expect("the root holds the seeded fake runtime");
+        let version: stackly_domain::ExactVersion = version.parse().expect("an exact version");
+        let bytes =
+            format!("#!/bin/sh\n# stand in for the fake runtime {version}, never run\nexit 0\n");
+        let digest = Sha256Digest::from_bytes(Sha256::digest(bytes.as_bytes()).into());
+        let dir = layout.runtime_dir(first.software(), &version, first.target(), &digest);
+        std::fs::create_dir_all(&dir).expect("the runtime folder is made");
+        let executable = dir.join(stackly_core::supervisor::fixture::FAKE_EXECUTABLE);
+        std::fs::write(&executable, bytes).expect("the stand in is written");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))
+                .expect("the executable bit is set");
+        }
+        let runtime = Runtime::restore(stackly_domain::StoredRuntime {
+            id: RuntimeId::generate(),
+            software: first.software().clone(),
+            version: version.clone(),
+            line: line.parse().expect("a runtime line"),
+            target: first.target(),
+            install: InstallMode::Managed {
+                artifact_sha256: digest,
+            },
+            state: RuntimeState::Installed,
+            installed_at: first.installed_at(),
+            last_verified_at: None,
+            depends_on: std::collections::BTreeSet::new(),
+            revision: ResourceRevision::INITIAL,
+        })
+        .expect("the runtime row is consistent");
+        let artifact = ArtifactRecord::new(
+            digest,
+            first.software().clone(),
+            version,
+            first.target(),
+            None,
+            None,
+        );
+        let id = runtime.id().as_uuid();
+        registry
+            .commit(WriteBatch::new(vec![
+                WriteOp::InsertArtifact(artifact),
+                WriteOp::InsertRuntime(runtime),
+            ]))
+            .expect("the second runtime is committed");
+        id
+    }
+
+    /// Binds instance `id` to runtime `runtime_id` in the registry, with
+    /// the daemon stopped: a test only write, because a rebind to another
+    /// line is exactly what the domain refuses. The revision rises by 1
+    /// like any mutation, and no file of the instance changes.
+    pub fn bind_runtime(&self, id: Uuid, runtime_id: Uuid) {
+        let registry = self.open_registry();
+        let instance_id = InstanceId::from_uuid(id).expect("an instance id the daemon made");
+        let instance = registry
+            .instance(instance_id)
+            .expect("the registry reads")
+            .value
+            .expect("the instance exists");
+        let expected = instance.revision();
+        let bound = stackly_domain::Instance::restore(
+            StoredInstance {
+                id: instance.id(),
+                name: instance.name().clone(),
+                display_name: instance.display_name().cloned(),
+                provider_revision: instance.provider_revision().clone(),
+                software: instance.software().clone(),
+                runtime_id: RuntimeId::from_uuid(runtime_id).expect("a runtime id"),
+                data_line: instance.data_line().clone(),
+                data_version: instance.data_version().clone(),
+                data_initialized_at: instance.data_initialized_at(),
+                endpoints: instance.endpoints().to_vec(),
+                desired: instance.desired(),
+                startup: instance.startup(),
+                lifecycle: instance.lifecycle(),
+                last_failure: instance.last_failure().cloned(),
+                revision: ResourceRevision::new(expected.get() + 1)
+                    .expect("the next revision is valid"),
+                created_at: instance.created_at(),
+                created_by: instance.created_by(),
+                retained_at: instance.retained_at(),
+                retained_by: instance.retained_by(),
+            },
+            SystemClock.now(),
+        )
+        .expect("the bound instance is consistent");
+        registry
+            .commit(WriteBatch::new(vec![WriteOp::UpdateInstance {
+                instance: bound,
+                expected,
+            }]))
+            .expect("the instance row is rewritten");
     }
 
     pub fn uid(&self) -> u32 {

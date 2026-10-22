@@ -228,7 +228,7 @@ Urutan:
 - Saat start, daemon memanggil `probe_all`: setiap reference terdaftar dicek dengan `probe` lewat worker, lalu cache status dan `platform_store_key` diperbarui tanpa menaikkan revision, dalam satu batch berisi satu `ObserveSecretReference` per reference (spec 0005), bukan satu commit per reference. Log hanya mencatat jumlah per status.
 - `probe_one` memegang lock per reference yang sama dengan `put` dan `delete`, jadi observasi lama tidak pernah menimpa hasil `put` yang lebih baru.
 - `secret.status` selalu probe ulang satu reference. `secret.list` membaca cache.
-- Status `unknown` berarti probe gagal (keychain terkunci, store tidak didukung, worker sibuk, atau error backend).
+- Status `unknown` berarti probe gagal: store tidak didukung (`NotSupported`), worker sibuk (`Busy`), atau error backend (`Backend`). Keychain yang terkunci tidak membuat status `unknown`: pencarian atribut tetap berjalan, jadi probe tetap menjawab `present` atau `missing` (AC-3), dan keadaan store `locked` di respons yang sama menjelaskan bahwa nilainya belum tentu bisa dibaca (*Consequences*). Store yang memang tidak bisa mengecek saat terkunci menjawab `Locked` (*Port `SecretStore`*), dan itu juga terbaca `unknown` (diselaraskan dengan AC-3, 2026-10-22).
 - Kalau `platform_store_key` yang tersimpan berbeda dengan `store_key` yang dihitung (misalnya registry disalin ke root lain), probe memakai kunci yang dihitung, status menjadi `missing` bila item tidak ada di sana, dan daemon mencatat satu peringatan berisi kedua kunci. Kunci lama tidak pernah dibaca diam diam; kamu mengisi ulang lewat `secret.set`.
 - `DaemonInfo` (`daemon.get_info`, spec 0006) mendapat field opsional `secretStore { backend, state, target }`, dengan `target` bernilai `login` atau `file`.
 
@@ -595,7 +595,7 @@ Untuk fitur dan spec lain:
 - [ ] Fitur 20, 46, dan 51: permintaan create instance, env up, dan restore membawa `SecretInput` per secret field dan memanggil `SecretService::put` dengan `PutTarget::New` (dengan `field` untuk create dan restore); secret dibuat sebelum `initdb`, kegagalan dipetakan `classify_create_failure` (sumber yang tidak terbaca menjadi `secret.needs_secret`, tulisan target yang gagal menjadi `secret.store_*`), dan kompensasi operasi menghapus reference yang dibuat operasi itu. Bagian fitur 20 dicentang `/sync` setelah build fitur 20 (spec 0020 AC-7, langkah `secrets`, dan AC-11).
 - [ ] Fitur 20: `SecretField` di sheet New Instance dengan `generate` sebagai default; preflight "Secret stored in Keychain" membaca hasil `put`.
 - [ ] Fitur 21: connection URI tersamar secara default dan `RevealableSecretText` untuk Show Password dan Copy.
-- [ ] Fitur 24: duplicate memakai `generate` atau `copyFrom` ke reference baru, tidak pernah `bind` diam diam.
+- [x] Fitur 24: duplicate memakai `generate` atau `copyFrom` ke reference baru, tidak pernah `bind` diam diam. Dijawab spec 0024 AC-5 (2026-10-22); kodenya dibangun milestone 2 sampai 4 spec 0024.
 - [ ] Fitur 26 dan 29: reload merender ulang file `secrets/` lebih dulu; tampilan config, diff, dan `config-history` tidak pernah membaca folder `secrets/`.
 - [ ] Fitur 27: setiap baris log instance lewat `Redactor` sebelum disimpan, dengan test dummy server yang mencetak fixture credential.
 - [ ] Fitur 31: autostart memakai interaksi `Never`, Keychain yang terkunci menghasilkan blocker needs secret, dan kebijakan kapan mencoba lagi setelah blocker hilang.

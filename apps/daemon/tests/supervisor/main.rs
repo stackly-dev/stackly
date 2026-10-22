@@ -13,6 +13,7 @@ mod budget;
 mod create;
 mod create_flow;
 mod create_form;
+mod data_compat;
 mod lifecycle;
 mod logs;
 mod process;

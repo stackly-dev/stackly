@@ -6,23 +6,23 @@ _Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalan
 
 ### UI / manual
 
-- [ ] Buka `providers/fake/provider.yaml`, `providers/nats/provider.yaml`, dan `providers/traefik/provider.yaml` → masing masing punya blok `runtime.versionCheck` dengan `args` literal (`["version"]`, `["--version"]`, `["version"]`), `pattern` dengan tepat satu capture group, dan `timeoutSeconds: 10`; PostgreSQL membawa blok nya sendiri dari spec 0019 → AC-12, AC-21
-- [ ] Buka `runtimes/inventory.toml` → setiap entri `available` punya `unpacked_size` dan `entry_count` berdampingan (misalnya PostgreSQL 18.6 80668813 dan 2030, MySQL 9.7.2 713257358 dan 376), diukur dari cache spike tanpa jaringan → AC-21
-- [ ] Buka `providers/nats/versions.json` → artefak `available` membawa `stable`, `unpackedSize`, `entryCount`, `dependencies`, dan `compatibility` (satu record scope `runtime`), dan artefak `blocked` tidak membawa satu pun field fase 02 → AC-21
-- [ ] Buka `fuzz/seeds/runtime_archive/` dan `fuzz/seeds/runtime_macho/` → 54 dan 9 seed, byte pertama seed archive memilih format dan pengupasan folder; isinya hasil `cargo xtask fuzz seed`, tidak ditulis tangan → AC-19
+- [x] Buka `providers/fake/provider.yaml`, `providers/nats/provider.yaml`, dan `providers/traefik/provider.yaml` → masing masing punya blok `runtime.versionCheck` dengan `args` literal (`["version"]`, `["--version"]`, `["version"]`), `pattern` dengan tepat satu capture group, dan `timeoutSeconds: 10`; PostgreSQL membawa blok nya sendiri dari spec 0019 → AC-12, AC-21
+- [x] Buka `runtimes/inventory.toml` → setiap entri `available` punya `unpacked_size` dan `entry_count` berdampingan (misalnya PostgreSQL 18.6 80668813 dan 2030, MySQL 9.7.2 713257358 dan 376), diukur dari cache spike tanpa jaringan → AC-21
+- [x] Buka `providers/nats/versions.json` → artefak `available` membawa `stable`, `unpackedSize`, `entryCount`, `dependencies`, dan `compatibility` (satu record scope `runtime`), dan artefak `blocked` tidak membawa satu pun field fase 02 → AC-21
+- [x] Buka `fuzz/seeds/runtime_archive/` dan `fuzz/seeds/runtime_macho/` → 54 dan 9 seed, byte pertama seed archive memilih format dan pengupasan folder; isinya hasil `cargo xtask fuzz seed`, tidak ditulis tangan → AC-19
 
 ### Commands
 
-- [ ] `cargo xtask runtime check` → aturan 1 sampai 12 lulus atas inventory dan seluruh evidence (aturan 11 aktif, aturan 12 membaca `evidence/compatibility/`) → AC-21
-- [ ] `cargo xtask codegen --check` dan `cargo xtask provider check` dan `cargo xtask catalog check` → file generate tidak berbeda dan ketiga paket serta catalog lulus tanpa ledger baru → AC-21
-- [ ] `cargo test -p stackly-core --lib provider::versions` → field fase 02 (`stable`, `build`, `unpackedSize`, `entryCount`, `dependencies`, `compatibility`) di `versions.json` lolos dan setiap aturan yang dilanggar menunjuk lokasinya → AC-21
-- [ ] `cargo test -p stackly-core --test provider_packages` → paket fake, nats, traefik, dan PostgreSQL membaca versinya dari keluaran harfiah binary lewat `runtime.versionCheck`, dan golden rencana tidak berubah → AC-12, AC-21
-- [ ] `cargo test -p stackly-core --lib runtime::archive` → tiga format, normalisasi nama, symlink, batas, AppleDouble, mode, dan satu sampel untuk setiap `RejectReason` → AC-7, AC-8, AC-9
-- [ ] `cargo test -p stackly-core --lib runtime::macho` dan `cargo test -p stackly-core --lib runtime::closure` → Mach-O tipis dan universal, minos, library, rpath, closure atas entri → AC-10
-- [ ] `cargo test -p xtask --bin xtask runtime::` → `pin` mencetak `unpacked_size` dan `entry_count` dari `scan` (zip dengan satu folder puncak, zip tanpa folder, binary, tar.gz sungguhan), `verify` menolak angka yang berbeda atau hilang, dan aturan 11 menolak salah satu saja, nol dengan entri, dan negatif → AC-21
-- [ ] `cargo test -p stackly-core --test fuzz_regressions` → input regresi dan seed `runtime_archive` dan `runtime_macho` lolos harness mereka, juga dengan satu byte dibalik di sebaran posisi → AC-19
-- [ ] `cargo xtask fuzz build runtime_archive` lalu `cargo xtask fuzz build runtime_macho` lalu `cargo xtask fuzz run runtime_archive --time 40` dan `cargo xtask fuzz run runtime_macho --time 40` → keduanya build di nightly yang dipin dan berjalan tanpa crash; run 10 menit dan record evidence menunggu Milestone 5 → AC-19
-- [ ] `cargo test --workspace --locked --no-fail-fast` → semuanya lulus → AC-21
+- [x] `cargo xtask runtime check` → aturan 1 sampai 12 lulus atas inventory dan seluruh evidence (aturan 11 aktif, aturan 12 membaca `evidence/compatibility/`) → AC-21
+- [x] `cargo xtask codegen --check` dan `cargo xtask provider check` dan `cargo xtask catalog check` → file generate tidak berbeda dan ketiga paket serta catalog lulus tanpa ledger baru → AC-21
+- [x] `cargo test -p stackly-core --lib provider::versions` → field fase 02 (`stable`, `build`, `unpackedSize`, `entryCount`, `dependencies`, `compatibility`) di `versions.json` lolos dan setiap aturan yang dilanggar menunjuk lokasinya → AC-21
+- [x] `cargo test -p stackly-core --test provider_packages` → paket fake, nats, traefik, dan PostgreSQL membaca versinya dari keluaran harfiah binary lewat `runtime.versionCheck`, dan golden rencana tidak berubah → AC-12, AC-21
+- [x] `cargo test -p stackly-core --lib runtime::archive` → tiga format, normalisasi nama, symlink, batas, AppleDouble, mode, dan satu sampel untuk setiap `RejectReason` → AC-7, AC-8, AC-9
+- [x] `cargo test -p stackly-core --lib runtime::macho` dan `cargo test -p stackly-core --lib runtime::closure` → Mach-O tipis dan universal, minos, library, rpath, closure atas entri → AC-10
+- [x] `cargo test -p xtask --bin xtask runtime::` → `pin` mencetak `unpacked_size` dan `entry_count` dari `scan` (zip dengan satu folder puncak, zip tanpa folder, binary, tar.gz sungguhan), `verify` menolak angka yang berbeda atau hilang, dan aturan 11 menolak salah satu saja, nol dengan entri, dan negatif → AC-21
+- [x] `cargo test -p stackly-core --test fuzz_regressions` → input regresi dan seed `runtime_archive` dan `runtime_macho` lolos harness mereka, juga dengan satu byte dibalik di sebaran posisi → AC-19
+- [x] `cargo xtask fuzz build runtime_archive` lalu `cargo xtask fuzz build runtime_macho` lalu `cargo xtask fuzz run runtime_archive --time 40` dan `cargo xtask fuzz run runtime_macho --time 40` → keduanya build di nightly yang dipin dan berjalan tanpa crash; run 10 menit dan record evidence menunggu Milestone 5 → AC-19
+- [x] `cargo test --workspace --locked --no-fail-fast` → semuanya lulus → AC-21
 
 ### Acceptance-criteria coverage
 
@@ -82,24 +82,24 @@ _Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalan
 
 ### UI / manual
 
-- [ ] Buka `crates/protocol/src/runtime.rs` → empat method (`runtime.install`, `resolve`, `list`, `get`) dengan params yang divalidasi (`provider` ProviderName, `selector` 1 sampai 80 byte, `expectedSha256` 64 hex huruf kecil, `limit` 1 sampai 200), semua enum terbuka berakhir `Unrecognized`, dan `InstallOutcome` bertag `type` dan `content` dengan `started` dan `alreadyInstalled` → AC-18
-- [ ] Buka `crates/protocol/src/codes.rs` bagian `runtime` → 26 kode dengan kategori dan kunci `details` seperti tabel *Kode error*, semuanya `retryable false`, dan fungsi `hint` yang memberi satu kalimat statis di bawah 200 karakter untuk setiap kode; `catalog.not_installable` mendapat hint `requires_newer_os` → AC-1, AC-10
-- [ ] Buka `apps/daemon/src/ipc/runtime.rs` → `install` menanyakan replay ke engine lebih dulu (tanpa membaca catalog), baru resolusi, `expectedSha256`, lalu `begin` dengan lock `artifact:<sha256>`, `BusyPolicy::Queue`, dan precheck yang menjawab `alreadyInstalled` tanpa operasi atau menolak `runtime.already_registered`; `operations.rs` mendaftarkan `InstallRuntimeFactory` → AC-1, AC-2, AC-3, AC-13
-- [ ] Buka `apps/daemon/src/ipc/operation.rs` (`announce_runtime`) → `runtime.state_changed` diterbitkan hanya untuk runtime yang dibuat operasi `install_runtime` yang `succeeded`, dengan revision 1 → AC-18
-- [ ] Buka `protocols/fixtures/runtime/` dan `protocols/fixtures/ipc/*runtime*` → daftar, halaman terakhir, detail, artefak terpilih, balasan `started` dan `alreadyInstalled`, event, dua error, dan balasan dengan nilai asing; semuanya dibaca Rust dan Swift → AC-18
-- [ ] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Fixtures/FixtureRuntimeCases.swift` → data kasus runtime managed dari DTO hasil generate, `FixtureClock`, dan `FixtureID` (kind 3, nomor kasus instance), tanpa `Date.now` atau `ContractInfo`, dan belum terdaftar sebagai skenario karena daftar nama skenario dipaku test spec 0068 → AC-18
-- [ ] Jalankan `stackly runtime install official/postgresql@18 --dry-run` terhadap daemon dengan catalog uji → teks `Provider`, `Artifact`, `Digest`, dan seterusnya; `--output id` bersama `--json` atau `--dry-run` keluar dengan kode 2 → AC-16
+- [x] Buka `crates/protocol/src/runtime.rs` → empat method (`runtime.install`, `resolve`, `list`, `get`) dengan params yang divalidasi (`provider` ProviderName, `selector` 1 sampai 80 byte, `expectedSha256` 64 hex huruf kecil, `limit` 1 sampai 200), semua enum terbuka berakhir `Unrecognized`, dan `InstallOutcome` bertag `type` dan `content` dengan `started` dan `alreadyInstalled` → AC-18
+- [x] Buka `crates/protocol/src/codes.rs` bagian `runtime` → 26 kode dengan kategori dan kunci `details` seperti tabel *Kode error*, semuanya `retryable false`, dan fungsi `hint` yang memberi satu kalimat statis di bawah 200 karakter untuk setiap kode; `catalog.not_installable` mendapat hint `requires_newer_os` → AC-1, AC-10
+- [x] Buka `apps/daemon/src/ipc/runtime.rs` → `install` menanyakan replay ke engine lebih dulu (tanpa membaca catalog), baru resolusi, `expectedSha256`, lalu `begin` dengan lock `artifact:<sha256>`, `BusyPolicy::Queue`, dan precheck yang menjawab `alreadyInstalled` tanpa operasi atau menolak `runtime.already_registered`; `operations.rs` mendaftarkan `InstallRuntimeFactory` → AC-1, AC-2, AC-3, AC-13
+- [x] Buka `apps/daemon/src/ipc/operation.rs` (`announce_runtime`) → `runtime.state_changed` diterbitkan hanya untuk runtime yang dibuat operasi `install_runtime` yang `succeeded`, dengan revision 1 → AC-18
+- [x] Buka `protocols/fixtures/runtime/` dan `protocols/fixtures/ipc/*runtime*` → daftar, halaman terakhir, detail, artefak terpilih, balasan `started` dan `alreadyInstalled`, event, dua error, dan balasan dengan nilai asing; semuanya dibaca Rust dan Swift → AC-18
+- [x] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Fixtures/FixtureRuntimeCases.swift` → data kasus runtime managed dari DTO hasil generate, `FixtureClock`, dan `FixtureID` (kind 3, nomor kasus instance), tanpa `Date.now` atau `ContractInfo`, dan belum terdaftar sebagai skenario karena daftar nama skenario dipaku test spec 0068 → AC-18
+- [x] Jalankan `stackly runtime install official/postgresql@18 --dry-run` terhadap daemon dengan catalog uji → teks `Provider`, `Artifact`, `Digest`, dan seterusnya; `--output id` bersama `--json` atau `--dry-run` keluar dengan kode 2 → AC-16
 
 ### Commands
 
-- [ ] `cargo test -p stackly-protocol` → kontrak (tabel `methods!`, kode dan hint, batas, fixture runtime dan ipc, nilai asing, versi 1.11) lulus → AC-18
-- [ ] `cargo xtask codegen --check` dan `cargo xtask fuzz seed` → file generate dan seed tidak berbeda (`protocols/contract-versions.json` mencatat 1.11) → AC-18
-- [ ] `cargo test -p stacklyd --test runtime` → resolve (stable, line, versi, digest), penolakan (`selector_unresolved`, `selector_changed`, provider tidak ada dengan saran, entri `Planned`, target Linux dan Intel dari fixture catalog tanpa operasi), install lima tahap sampai satu runtime `installed` yang bisa dibaca dan di list, event `runtime.state_changed`, `alreadyInstalled`, replay key, digest salah dengan hint, `already_registered`, paging, install yang belum berakhir di halaman pertama saja, restart di tengah unduhan, dan cancel yang menyisakan `.part` → AC-1, AC-2, AC-3, AC-10, AC-13, AC-14, AC-18
-- [ ] `cargo test -p stacklyd --lib map::runtime` dan `cargo test -p stacklyd --lib map::catalog` → setiap kode `runtime.*` yang dilempar core ada di katalog dengan hint, pemetaan error resolusi, dan `requires_newer_os` di `catalog.not_installable` → AC-1, AC-10
-- [ ] `cargo test -p stackly-cli --test runtime` → `install` (resolve lalu install dengan `expectedSha256`, `--wait`, `alreadyInstalled`, `--dry-run`, `--output id`, argumen salah, baris exit code), `list` (semua halaman, kosong), dan `inspect` dengan golden teks dan JSON → AC-16
-- [ ] `swift test --package-path clients/swift` → `RuntimeContractTests` dan fixture `ipc/index.json` (30 method) lulus → AC-18
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus, tidak ada referensi snapshot lama yang bergeser, dan `FixtureRuntimeTests` lulus → AC-18
-- [ ] `cargo test --workspace --locked --no-fail-fast`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask runtime check`, `cargo xtask provider check`, `cargo xtask catalog check` → semuanya lulus → AC-15
+- [x] `cargo test -p stackly-protocol` → kontrak (tabel `methods!`, kode dan hint, batas, fixture runtime dan ipc, nilai asing, versi 1.11) lulus → AC-18
+- [x] `cargo xtask codegen --check` dan `cargo xtask fuzz seed` → file generate dan seed tidak berbeda (`protocols/contract-versions.json` mencatat 1.11) → AC-18
+- [x] `cargo test -p stacklyd --test runtime` → resolve (stable, line, versi, digest), penolakan (`selector_unresolved`, `selector_changed`, provider tidak ada dengan saran, entri `Planned`, target Linux dan Intel dari fixture catalog tanpa operasi), install lima tahap sampai satu runtime `installed` yang bisa dibaca dan di list, event `runtime.state_changed`, `alreadyInstalled`, replay key, digest salah dengan hint, `already_registered`, paging, install yang belum berakhir di halaman pertama saja, restart di tengah unduhan, dan cancel yang menyisakan `.part` → AC-1, AC-2, AC-3, AC-10, AC-13, AC-14, AC-18
+- [x] `cargo test -p stacklyd --lib map::runtime` dan `cargo test -p stacklyd --lib map::catalog` → setiap kode `runtime.*` yang dilempar core ada di katalog dengan hint, pemetaan error resolusi, dan `requires_newer_os` di `catalog.not_installable` → AC-1, AC-10
+- [x] `cargo test -p stackly-cli --test runtime` → `install` (resolve lalu install dengan `expectedSha256`, `--wait`, `alreadyInstalled`, `--dry-run`, `--output id`, argumen salah, baris exit code), `list` (semua halaman, kosong), dan `inspect` dengan golden teks dan JSON → AC-16
+- [x] `swift test --package-path clients/swift` → `RuntimeContractTests` dan fixture `ipc/index.json` (30 method) lulus → AC-18
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus, tidak ada referensi snapshot lama yang bergeser, dan `FixtureRuntimeTests` lulus → AC-18
+- [x] `cargo test --workspace --locked --no-fail-fast`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask runtime check`, `cargo xtask provider check`, `cargo xtask catalog check` → semuanya lulus → AC-15
 
 ### Acceptance-criteria coverage
 

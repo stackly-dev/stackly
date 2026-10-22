@@ -655,6 +655,34 @@ area! {
             details ["capability"], "the provider lacks the capability for an action on an existing instance";
         INIT_FAILED = "supervisor.init_failed", Failed, retryable false,
             details ["reason", "step", "exitCode"], "the init plan ended failed";
+
+        @functions
+
+        /// The static hint of a supervisor error, chosen from its code and
+        /// the values of its `details` (spec 0025, *Hint migrasi*): only
+        /// `supervisor.data_incompatible` has one, by `outcome`. The text
+        /// holds no value; lines and paths are in the message and the
+        /// details. `None` for `unknown`, an `outcome` it does not know, and
+        /// any other code.
+        #[must_use]
+        pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
+            if code != DATA_INCOMPATIBLE.code {
+                return None;
+            }
+            let outcome = details
+                .iter()
+                .find(|detail| detail.key() == "outcome")
+                .map(crate::error::ErrorDetail::value)?;
+            match outcome {
+                "incompatible" => Some(
+                    "This data belongs to another major version, so this runtime never runs it. Moving it needs a migration: create an instance on this runtime and move the data with a dump and restore.",
+                ),
+                "marker_missing" | "marker_mismatch" | "marker_unreadable" => Some(
+                    "The version marker in the data folder is missing, unreadable, or not what Stackly recorded, so Stackly can’t tell which runtime may run this data and won’t run it until the marker matches.",
+                ),
+                _ => None,
+            }
+        }
     }
 }
 
@@ -1790,6 +1818,53 @@ mod tests {
         ];
         assert_eq!(table, expected);
         assert!(instance::ALL.iter().all(|spec| !spec.retryable));
+    }
+
+    fn supervisor_hint(code: &ErrorSpec, outcome: Option<&str>) -> Option<&'static str> {
+        let details: Vec<_> = outcome
+            .map(|outcome| crate::error::ErrorDetail::new("outcome", outcome))
+            .into_iter()
+            .collect();
+        supervisor::hint(code.code, &details)
+    }
+
+    #[test]
+    fn supervisor_hint_names_the_migration() {
+        let incompatible = supervisor_hint(&supervisor::DATA_INCOMPATIBLE, Some("incompatible"))
+            .expect("an incompatible line has a hint");
+        assert_eq!(
+            incompatible,
+            "This data belongs to another major version, so this runtime never runs it. Moving it needs a migration: create an instance on this runtime and move the data with a dump and restore."
+        );
+        let marker = "The version marker in the data folder is missing, unreadable, or not what Stackly recorded, so Stackly can’t tell which runtime may run this data and won’t run it until the marker matches.";
+        for outcome in ["marker_missing", "marker_mismatch", "marker_unreadable"] {
+            assert_eq!(
+                supervisor_hint(&supervisor::DATA_INCOMPATIBLE, Some(outcome)),
+                Some(marker),
+                "{outcome}"
+            );
+        }
+        for hint in [incompatible, marker] {
+            assert!(hint.len() <= 200, "{} bytes: {hint}", hint.len());
+            assert!(!hint.contains('{'), "{hint}");
+            assert!(hint.is_ascii() || hint.contains('’'), "{hint}");
+        }
+    }
+
+    #[test]
+    fn supervisor_hint_stays_silent_without_a_known_outcome() {
+        for outcome in [Some("unknown"), Some("from_the_future"), Some(""), None] {
+            assert_eq!(
+                supervisor_hint(&supervisor::DATA_INCOMPATIBLE, outcome),
+                None,
+                "{outcome:?}"
+            );
+        }
+        assert_eq!(
+            supervisor_hint(&supervisor::DATA_UNAVAILABLE, Some("incompatible")),
+            None
+        );
+        assert_eq!(supervisor::hint("supervisor.from_the_future", &[]), None);
     }
 
     #[test]
