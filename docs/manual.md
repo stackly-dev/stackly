@@ -19,7 +19,7 @@ Kamu boleh mengerjakannya kapan saja dan tidak harus sekaligus. Setiap bagian be
 | [K. Automation Mode dan UI test](#k-automation-mode-dan-ui-test) | F68 milestone 3 di [scope/ui-macos.md](scope/ui-macos.md) | 10 menit, butuh password admin | wajib untuk F68 |
 | [G. Dua akun macOS](#g-dua-akun-macos) | F6 (sudah done) | 30 menit, butuh password admin | opsional |
 | [H. Folder temp setelah beberapa hari idle](#h-folder-temp-setelah-beberapa-hari-idle) | F6 (sudah done) | beberapa hari menunggu | opsional |
-| [L. JOURNEY-03: PostgreSQL 17 dan 18 di aplikasi](#l-journey-03-postgresql-17-dan-18-di-aplikasi-fitur-25) | F25 milestone 4, AC-10 di [scope/03-multi-versi-dan-instance.md](scope/03-multi-versi-dan-instance.md) | 30 menit | wajib untuk F25 |
+| [T. JOURNEY-03: PostgreSQL 17 dan 18 di aplikasi](#t-journey-03-postgresql-17-dan-18-di-aplikasi-fitur-25) | F25 milestone 4, AC-10 di [scope/03-multi-versi-dan-instance.md](scope/03-multi-versi-dan-instance.md) | 30 menit | wajib untuk F25 |
 
 Urutan yang aku sarankan: E dulu karena paling singkat, lalu A, lalu B. Setelah itu kerjakan C, D, dan F sekali jalan, karena ketiganya memakai root dan jendela app yang sama. Untuk `ui-macos`: F dan J sekali jalan (keduanya menyalakan Keyboard navigation dan VoiceOver), lalu I, lalu K.
 
@@ -258,11 +258,11 @@ Opsional. Untuk F6, yang sudah `done`. Record yang masih terbuka: `evidence/manu
 
 **Yang dikirim:** tanggal penanda dibuat, tanggal dicek, apakah penanda masih ada, dan hasil langkah 5 bila ada.
 
-## L. JOURNEY-03: PostgreSQL 17 dan 18 di aplikasi (fitur 25)
+## T. JOURNEY-03: PostgreSQL 17 dan 18 di aplikasi (fitur 25)
 
 Untuk F25 milestone 4 (spec 0025 AC-10, REQ-035 dan REQ-043). Record: `evidence/manual/2026-10-22-journey-03-in-the-app-postgresql-18-beside-17-on.json`.
 
-Bagian ini memakai root dev sementara dan tidak memakai jaringan: tombol Get memakai artefak PostgreSQL 17.11 dan 18.6 yang sudah ada di cache xtask (`~/Library/Caches/dev.stackly.xtask/runtime/`). Root sementara memakai keychain file, jadi login Keychain tidak disentuh. Siapkan tiga terminal: A untuk perintah, B untuk daemon, dan C untuk app. Semua perintah dari root repo, di `main` yang bersih.
+Bagian ini memakai root dev sementara dan tidak memakai jaringan: tombol Get memakai artefak PostgreSQL 17.11 dan 18.6 yang sudah ada di cache xtask (`~/Library/Caches/dev.stackly.xtask/runtime/`). Root sementara memakai keychain file, jadi login Keychain tidak disentuh. Siapkan tiga terminal: A untuk perintah, B untuk daemon, dan C untuk app. Siapkan checkout dan terminal seperti di *Persiapan umum*.
 
 1. Terminal A: `cargo build -p stacklyd -p stackly-cli && cargo xtask build-app`. Tunggu sampai muncul `BUILD SUCCEEDED`.
 2. Terminal A: cek bahwa kedua artefak ada di cache:

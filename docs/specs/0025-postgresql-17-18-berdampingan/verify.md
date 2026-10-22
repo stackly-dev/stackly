@@ -85,23 +85,23 @@ Langkah Build plan 9. Native dan manual: butuh `postgresql-17.11-r2-macos-aarch6
 
 ### UI / manual
 
-Semua langkah ada di [docs/manual.md](../../manual.md) bagian L; jangan salin ulang ke sini.
+Semua langkah ada di [docs/manual.md](../../manual.md) bagian T; jangan salin ulang ke sini.
 
-- [ ] `docs/manual.md` bagian L, langkah 7 dan 9: tombol Get di Catalog, PostgreSQL, memasang 17.11 lalu 18.6 dari cache root dev, dan Runtimes menampilkan kedua runtime → AC-10
-- [ ] Bagian L, langkah 8, 9.2, 9.3, dan 11: `pg17-dev` Ready sebelum, selama, dan sesudah install PostgreSQL 18 (PID dan waktu start sama di `stackly instance get`) → AC-10, AC-1 (sisi aplikasi)
-- [ ] Bagian L, langkah 10: sheet New Instance menawarkan `PostgreSQL 17.11` dan `PostgreSQL 18.6` → AC-10
-- [ ] Bagian L, langkah 11 dan 12: `pg18-dev` dibuat dari 18.6 dan Ready; kolom Version halaman Instances menampilkan `17.11` dan `18.6` berdampingan, dengan port berbeda → AC-10, AC-2 (sisi aplikasi)
-- [ ] Bagian L, langkah 13 sampai 15: tab Summary `pg18-dev` menampilkan endpoint dan connection nya sendiri; connection yang disalin terhubung lewat `psql` runtime 18 dengan `SELECT version()` berisi `18.6`, dan hal yang sama untuk `pg17-dev` berisi `17.11` → AC-10
-- [ ] Bagian L, langkah 16 dan 17: dua postmaster berjalan dari folder runtime berbeda, lalu pembersihan tuntas (tanpa proses atau folder sisa) → AC-10
+- [ ] `docs/manual.md` bagian T, langkah 7 dan 9: tombol Get di Catalog, PostgreSQL, memasang 17.11 lalu 18.6 dari cache root dev, dan Runtimes menampilkan kedua runtime → AC-10
+- [ ] Bagian T, langkah 8, 9.2, 9.3, dan 11: `pg17-dev` Ready sebelum, selama, dan sesudah install PostgreSQL 18 (PID dan waktu start sama di `stackly instance get`) → AC-10, AC-1 (sisi aplikasi)
+- [ ] Bagian T, langkah 10: sheet New Instance menawarkan `PostgreSQL 17.11` dan `PostgreSQL 18.6` → AC-10
+- [ ] Bagian T, langkah 11 dan 12: `pg18-dev` dibuat dari 18.6 dan Ready; kolom Version halaman Instances menampilkan `17.11` dan `18.6` berdampingan, dengan port berbeda → AC-10, AC-2 (sisi aplikasi)
+- [ ] Bagian T, langkah 13 sampai 15: tab Summary `pg18-dev` menampilkan endpoint dan connection nya sendiri; connection yang disalin terhubung lewat `psql` runtime 18 dengan `SELECT version()` berisi `18.6`, dan hal yang sama untuk `pg17-dev` berisi `17.11` → AC-10
+- [ ] Bagian T, langkah 16 dan 17: dua postmaster berjalan dari folder runtime berbeda, lalu pembersihan tuntas (tanpa proses atau folder sisa) → AC-10
 - [ ] Empat tangkapan layar (Runtimes, New Instance dengan daftar Runtime, Instances dengan kolom Version, Summary `pg18-dev`) disalin ke `evidence/manual/files/01a163bd-1573-774e-8367-c3db3d283798/` → AC-10
 
 ### Commands
 
 - [ ] `cargo xtask evidence check` → bersih, dan record `evidence/manual/2026-10-22-journey-03-in-the-app-postgresql-18-beside-17-on.json` (`kind` `native`, `covers` REQ-035 dan REQ-043, JOURNEY-03 di `expected`, owner `@ojiepermana`) terisi: `steps`, `actual`, `status` `PASS` (atau `BLOCKED` dengan alasan dan owner bila artefak tidak ada di cache), `reviewer`, dan `finishedAt` → AC-10, AC-9
-- [ ] `ps -axww -o pid=,args= | grep -E "stk-pg1718" | grep -v grep` → kosong sesudah pembersihan bagian L
+- [ ] `ps -axww -o pid=,args= | grep -E "stk-pg1718" | grep -v grep` → kosong sesudah pembersihan bagian T
 
 ### Acceptance-criteria coverage
 
-- AC-10 · satu record manual `native` berstatus `NOT_RUN` menunggu user menjalankan bagian L; tanpa artefak di cache, status akhirnya `BLOCKED`.
+- AC-10 · satu record manual `native` berstatus `NOT_RUN` menunggu user menjalankan bagian T; tanpa artefak di cache, status akhirnya `BLOCKED`.
 - AC-1 dan AC-2 · bukti native sudah di milestone 3; langkah di atas hanya menambah sisi aplikasi (PID `pg17-dev` tidak berubah dan kolom Version).
 - AC-1 sampai AC-9 lainnya selesai di milestone 1 sampai 3.
