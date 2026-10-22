@@ -11,13 +11,14 @@ use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::PathBuf;
 
-use stackly_domain::Port;
+use stackly_domain::{EndpointName, Port};
 
 use super::interpolate::{Interp, Piece, Token, TypeEnv, check_connection_template};
 use super::issue::{FileIssues, Issue, IssueCode, Issues, Location};
 use super::manifest::Manifest;
+use super::names::SettingName;
 use super::package::MANIFEST_FILE;
-use super::plan::{PlanError, ResolvedEndpoint, Resolver, Value};
+use super::plan::{PlanContext, PlanError, ResolvedEndpoint, Resolver, Value};
 use super::raw::RawConnection;
 use super::settings::SettingsSchema;
 use super::validate::sample_context;
@@ -237,20 +238,148 @@ pub(crate) fn check_sentinels(manifest: &Manifest, settings: &SettingsSchema, is
 /// sentinel secret.
 fn render_sentinel(template: &Interp, resolver: &Resolver<'_>) -> Result<String, PlanError> {
     let mut out = String::new();
-    for piece in &template.pieces {
+    for piece in render_pieces(template, resolver)? {
         match piece {
-            Piece::Literal(text) => out.push_str(text),
-            Piece::Token(Token::Secret(_)) => out.push_str(&encode_value(SENTINEL_SECRET)),
-            Piece::Token(token) => match resolver.value(token)? {
-                Value::Text(text) if is_inserted_raw(token) => out.push_str(&text),
-                Value::Text(text) => out.push_str(&encode_value(&text)),
-                Value::Integer(number) => out.push_str(&number.to_string()),
-                Value::Boolean(flag) => out.push_str(if flag { "true" } else { "false" }),
-                Value::Secret(_) => out.push_str(&encode_value(SENTINEL_SECRET)),
-            },
+            RenderedPiece::Text(text) => out.push_str(&text),
+            RenderedPiece::Secret(_) => out.push_str(&encode_value(SENTINEL_SECRET)),
         }
     }
     Ok(out)
+}
+
+/// One piece of a rendered connection template: text that is already
+/// percent encoded (adjacent texts are joined), or the secret field a
+/// client fills in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RenderedPiece {
+    Text(String),
+    Secret(SettingName),
+}
+
+/// Why a connection template did not render.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RenderFailure {
+    /// An endpoint the template names has no effective port yet.
+    PortNotAssigned,
+    /// Anything else: the context does not fit the package.
+    Unresolvable,
+}
+
+impl RenderFailure {
+    fn of(err: &PlanError) -> Self {
+        match err {
+            PlanError::EndpointUnresolved { .. } => Self::PortNotAssigned,
+            _ => Self::Unresolvable,
+        }
+    }
+}
+
+/// One entry of the `connection` block after a render.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RenderedEntry {
+    pub(crate) name: String,
+    pub(crate) title: String,
+    pub(crate) pieces: Result<Vec<RenderedPiece>, RenderFailure>,
+    /// The endpoints the template names, the ones a socket name names
+    /// included.
+    pub(crate) endpoints: BTreeSet<EndpointName>,
+}
+
+/// Renders every `connection` entry of the manifest against `context`, in
+/// manifest order, without settings (a template cannot name one, spec
+/// 0021). Secrets stay as their field.
+pub(crate) fn render_entries(manifest: &Manifest, context: &PlanContext) -> Vec<RenderedEntry> {
+    let resolver = Resolver::without_managed(manifest, context);
+    manifest
+        .connections
+        .iter()
+        .map(|spec| RenderedEntry {
+            name: spec.name.clone(),
+            title: spec.title.clone(),
+            pieces: match &resolver {
+                Ok(resolver) => {
+                    render_pieces(&spec.template, resolver).map_err(|err| RenderFailure::of(&err))
+                }
+                Err(err) => Err(RenderFailure::of(err)),
+            },
+            endpoints: spec.endpoints(manifest),
+        })
+        .collect()
+}
+
+impl ConnectionSpec {
+    /// The endpoints the template names, and for a `socket` token the
+    /// endpoints its socket name names (the port it is named after).
+    fn endpoints(&self, manifest: &Manifest) -> BTreeSet<EndpointName> {
+        let mut names = BTreeSet::new();
+        for token in self.template.tokens() {
+            match token {
+                Token::EndpointHost(name)
+                | Token::EndpointPort(name)
+                | Token::EndpointAddress(name)
+                | Token::EndpointSocketDir(name) => {
+                    names.insert(name.clone());
+                }
+                Token::EndpointSocket(name) => {
+                    names.insert(name.clone());
+                    let socket_name = manifest
+                        .endpoints
+                        .get(name)
+                        .and_then(|endpoint| endpoint.socket_name.as_ref());
+                    for inner in socket_name.into_iter().flat_map(Interp::tokens) {
+                        if let Token::EndpointHost(name)
+                        | Token::EndpointPort(name)
+                        | Token::EndpointAddress(name) = inner
+                        {
+                            names.insert(name.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        names
+    }
+}
+
+/// Renders a checked template with the resolver's values: every token value
+/// percent encoded except endpoint ports and addresses (spec 0021, AC-2),
+/// literal text as written, and a secret as its field, never a value.
+pub(crate) fn render_pieces(
+    template: &Interp,
+    resolver: &Resolver<'_>,
+) -> Result<Vec<RenderedPiece>, PlanError> {
+    let mut pieces = Vec::new();
+    for piece in &template.pieces {
+        match piece {
+            Piece::Literal(text) => push_text(&mut pieces, text),
+            Piece::Token(Token::Secret(field)) => pieces.push(RenderedPiece::Secret(field.clone())),
+            Piece::Token(token) => match resolver.value(token)? {
+                Value::Text(text) if is_inserted_raw(token) => push_text(&mut pieces, &text),
+                Value::Text(text) => push_text(&mut pieces, &encode_value(&text)),
+                Value::Integer(number) => push_text(&mut pieces, &number.to_string()),
+                Value::Boolean(flag) => push_text(&mut pieces, if flag { "true" } else { "false" }),
+                Value::Secret(_) => {
+                    return Err(PlanError::UnrepresentableValue {
+                        field: token.to_string(),
+                    });
+                }
+            },
+        }
+    }
+    Ok(pieces)
+}
+
+/// Appends text, joining it to a text piece that comes right before.
+fn push_text(pieces: &mut Vec<RenderedPiece>, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    if let Some(RenderedPiece::Text(last)) = pieces.last_mut() {
+        last.push_str(text);
+    } else {
+        pieces.push(RenderedPiece::Text(text.to_owned()));
+    }
 }
 
 /// Whether a connection token's value goes into the URI as is: endpoint

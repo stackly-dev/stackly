@@ -1,0 +1,33 @@
+Name          locked-db
+Display name  -
+ID            0192f3a5-0000-7000-8000-000000000008
+Provider      official/postgresql revision 2026.10.1
+Manifest      sha256:3f786850e387
+Software      postgresql
+Runtime       0192f3a5-0000-7000-8000-0000000000a8
+Version       17.2.0
+Digest        sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90
+Data          /Users/test/Library/Application Support/Stackly/instances/locked-db/data
+Data size     at least 52.4 MB
+Autostart     Off
+Ownership     manual
+Initialized   yes
+Lifecycle     retained
+Desired       stopped
+Readiness     unknown (not_running), checked <age>
+Health        unknown (not_running), checked <age>
+Process       -
+Restarts      0 of 5 in 1m
+Last failure  -
+Blocker       -
+Logs          available
+Dependents    none
+Secrets       superuserPassword: local:instance/0192f3a5-0000-7000-8000-000000000008/superuser-password (missing)
+Revision      11
+
+ENDPOINT  TRANSPORT  ADDRESS         PORT MODE  BOUND
+client    tcp        127.0.0.1:5433  fixed      no
+
+CONNECTION  VALUE
+uri         unavailable (retained)
+socket      unavailable (retained)

@@ -8,21 +8,24 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use stackly_domain::{FailureCode, InstanceId, InstanceLifecycle, LifecycleEvent};
-use stackly_platform::{ChildRole, ExitStatus, InstanceLock};
+use stackly_platform::{CapturedOutput, ChildRole, ExitStatus, InstanceLock, OutputStream};
 use tokio::time::Instant;
 
+use super::deps::SupervisorDeps;
 use super::error::SupervisorError;
 use super::helper::HelperEnd;
 use super::lock::take_lock;
 use super::persist::{CommitMode, apply_event, blocking, commit_instance};
 use super::prepare::{Checks, Prepared, prepare};
+use super::sink::{LogBatch, LogLine, SinkOutcome};
+use super::spool::char_cut;
 use super::steps::{
     ensure_directories, materialize_all, materialize_secret, run_command, write_config,
 };
 use super::{Supervisor, secrets};
 use crate::provider::{InitStep, PlanError, RunSpec};
 use crate::secret::delivery::{SecretFile, ensure_not_in_argv};
-use crate::secret::{ResolvedSecrets, SecretCaller};
+use crate::secret::{Redactor, ResolvedSecrets, SecretCaller};
 use crate::{read_instance_manifest, remove_owned_tree, write_instance_manifest};
 
 /// What [`Supervisor::execute_init`] needs.
@@ -289,26 +292,112 @@ impl Supervisor {
         match ended {
             HelperEnd::TimedOut if remaining < spec.timeout => Err(InitFault::Deadline),
             HelperEnd::TimedOut => Err(InitFault::StepTimeout { step: index }),
-            HelperEnd::Exited(notice) => match notice.status {
-                Some(ExitStatus::Exited(code))
-                    if u8::try_from(code)
-                        .is_ok_and(|code| spec.success_exit_codes.contains(&code)) =>
-                {
-                    Ok(())
+            HelperEnd::Exited(notice) => {
+                let fault = match notice.status {
+                    Some(ExitStatus::Exited(code))
+                        if u8::try_from(code)
+                            .is_ok_and(|code| spec.success_exit_codes.contains(&code)) =>
+                    {
+                        return Ok(());
+                    }
+                    Some(ExitStatus::Exited(code)) => InitFault::Step {
+                        step: index,
+                        exit_code: Some(code),
+                        reason: format!("the step exited with code {code}"),
+                    },
+                    other => InitFault::Step {
+                        step: index,
+                        exit_code: None,
+                        reason: format!("the step ended without an exit code: {other:?}"),
+                    },
+                };
+                if let Some(captured) = &notice.captured {
+                    deliver_output(deps, prepared.instance.id(), captured);
                 }
-                Some(ExitStatus::Exited(code)) => Err(InitFault::Step {
-                    step: index,
-                    exit_code: Some(code),
-                    reason: format!("the step exited with code {code}"),
-                }),
-                other => Err(InitFault::Step {
-                    step: index,
-                    exit_code: None,
-                    reason: format!("the step ended without an exit code: {other:?}"),
-                }),
-            },
+                Err(fault)
+            }
         }
     }
+}
+
+/// Hands the output a failed step left in its exit notice to the log
+/// sinks, so the failure excerpt of the instance shows it (spec 0010: the
+/// output of a helper never enters a spool; core redacts it and uses it
+/// for the failure).
+fn deliver_output(deps: &SupervisorDeps, id: InstanceId, captured: &CapturedOutput) {
+    for stream in OutputStream::ALL {
+        let bytes = match stream {
+            OutputStream::Stdout => &captured.stdout,
+            OutputStream::Stderr => &captured.stderr,
+        };
+        let lines = output_lines(
+            &deps.redactor,
+            bytes,
+            deps.config.helper_capture_max,
+            deps.config.log_line_max,
+        );
+        if lines.is_empty() {
+            continue;
+        }
+        let batch = LogBatch::new(stream, deps.platform.clock().now(), lines);
+        if deps.sinks.accept(id, batch) == SinkOutcome::Busy {
+            tracing::warn!(
+                instance = %id,
+                stream = stream.as_code(),
+                "a log sink was busy, so the output of the failed init step did not reach it"
+            );
+        }
+    }
+}
+
+/// Cuts the captured tail of one stream into lines by the rules of a
+/// spool: lossy UTF-8, one line per newline without its `\r`, each whole
+/// line redacted before it is cut into pieces of at most `line_max` bytes,
+/// and a last line without a newline marked `partial`. A tail as long as
+/// `capture_max` may start inside a line, and inside a secret value the
+/// redactor would then miss, so that first line is dropped.
+fn output_lines(
+    redactor: &Redactor,
+    bytes: &[u8],
+    capture_max: usize,
+    line_max: usize,
+) -> Vec<LogLine> {
+    let mut rest = bytes;
+    if bytes.len() >= capture_max {
+        rest = bytes
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(&[][..], |at| &bytes[at + 1..]);
+    }
+    let mut lines = Vec::new();
+    while !rest.is_empty() {
+        let (line, ended) = match rest.iter().position(|byte| *byte == b'\n') {
+            Some(at) => {
+                let line = &rest[..at];
+                rest = &rest[at + 1..];
+                (line, true)
+            }
+            None => (std::mem::take(&mut rest), false),
+        };
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        let redacted = redactor.redact(&String::from_utf8_lossy(line)).into_owned();
+        let mut piece_rest = redacted.as_str();
+        let mut continued = false;
+        loop {
+            let (piece, tail) = piece_rest.split_at(char_cut(piece_rest, line_max));
+            lines.push(LogLine {
+                text: piece.to_owned(),
+                partial: !ended && tail.is_empty(),
+                continued,
+            });
+            if tail.is_empty() {
+                break;
+            }
+            continued = true;
+            piece_rest = tail;
+        }
+    }
+    lines
 }
 
 /// Maps a [`PlanError`] to the dry run error of the start and init
@@ -365,4 +454,60 @@ async fn record_initialized(
             "the instance manifest could not record the initialization: {error}"
         ))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use stackly_platform::SecretValue;
+
+    use super::*;
+
+    const SECRET: &str = "correct-horse-battery-staple";
+
+    fn redactor() -> Redactor {
+        let redactor = Redactor::new();
+        redactor.learn(&SecretValue::new(SECRET.to_owned()).unwrap());
+        redactor
+    }
+
+    fn texts(lines: &[LogLine]) -> Vec<&str> {
+        lines.iter().map(|line| line.text.as_str()).collect()
+    }
+
+    #[test]
+    fn whole_lines_are_redacted_and_only_a_last_line_without_a_newline_is_partial() {
+        let bytes = format!("one\r\nthe password {SECRET}\n\nlast").into_bytes();
+
+        let lines = output_lines(&redactor(), &bytes, 1024, 64);
+
+        assert_eq!(texts(&lines), ["one", "the password ****", "", "last"]);
+        let partial: Vec<bool> = lines.iter().map(|line| line.partial).collect();
+        assert_eq!(partial, [false, false, false, true]);
+        assert!(lines.iter().all(|line| !line.continued));
+    }
+
+    #[test]
+    fn a_line_longer_than_the_limit_is_cut_into_continued_pieces() {
+        let lines = output_lines(&redactor(), "abcdéfg\n".as_bytes(), 1024, 5);
+
+        assert_eq!(texts(&lines), ["abcd", "éfg"]);
+        let continued: Vec<bool> = lines.iter().map(|line| line.continued).collect();
+        assert_eq!(continued, [false, true]);
+    }
+
+    #[test]
+    fn a_tail_as_long_as_the_capture_limit_drops_its_first_line() {
+        // The tail starts inside the secret, so its end would escape the
+        // redactor if the first line were kept.
+        let bytes = format!("{}\nnext\n", &SECRET[10..]).into_bytes();
+
+        let lines = output_lines(&redactor(), &bytes, bytes.len(), 64);
+
+        assert_eq!(texts(&lines), ["next"]);
+    }
+
+    #[test]
+    fn an_empty_stream_has_no_lines() {
+        assert!(output_lines(&redactor(), b"", 1024, 64).is_empty());
+    }
 }

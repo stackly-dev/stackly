@@ -1,0 +1,213 @@
+{
+  "cases": [
+    {
+      "name": "smallest",
+      "draft": {
+        "name": "orders-db",
+        "runtime": "postgresql@18.6",
+        "provider": null,
+        "revision": null,
+        "displayName": null,
+        "ports": [],
+        "settings": [],
+        "secrets": [],
+        "start": false
+      },
+      "command": "stackly instance create orders-db --runtime postgresql@18.6"
+    },
+    {
+      "name": "provider and revision",
+      "draft": {
+        "name": "orders-db",
+        "runtime": "postgresql@18.6",
+        "provider": "official/postgresql",
+        "revision": "2026.10.1",
+        "displayName": null,
+        "ports": [],
+        "settings": [],
+        "secrets": [],
+        "start": false
+      },
+      "command": "stackly instance create orders-db --runtime postgresql@18.6 --provider official/postgresql --revision 2026.10.1"
+    },
+    {
+      "name": "display name needs quotes",
+      "draft": {
+        "name": "orders-db",
+        "runtime": "postgresql@18.6",
+        "provider": null,
+        "revision": null,
+        "displayName": "Orders DB (it's live)",
+        "ports": [],
+        "settings": [],
+        "secrets": [],
+        "start": false
+      },
+      "command": "stackly instance create orders-db --runtime postgresql@18.6 --display-name 'Orders DB (it'\\''s live)'"
+    },
+    {
+      "name": "ports fixed and auto",
+      "draft": {
+        "name": "orders-db",
+        "runtime": "postgresql@18.6",
+        "provider": "official/postgresql",
+        "revision": null,
+        "displayName": null,
+        "ports": [
+          {
+            "endpoint": "postgres",
+            "port": {
+              "type": "fixed",
+              "content": 5432
+            }
+          },
+          {
+            "endpoint": "admin",
+            "port": {
+              "type": "auto"
+            }
+          }
+        ],
+        "settings": [],
+        "secrets": [],
+        "start": false
+      },
+      "command": "stackly instance create orders-db --runtime postgresql@18.6 --provider official/postgresql --port postgres=5432 --port admin=auto"
+    },
+    {
+      "name": "settings of every kind",
+      "draft": {
+        "name": "search",
+        "runtime": "nats@2.15",
+        "provider": "official/nats",
+        "revision": null,
+        "displayName": null,
+        "ports": [],
+        "settings": [
+          {
+            "field": "serverName",
+            "value": {
+              "type": "text",
+              "content": "search node"
+            }
+          },
+          {
+            "field": "jetstream",
+            "value": {
+              "type": "boolean",
+              "content": false
+            }
+          },
+          {
+            "field": "maxPayloadBytes",
+            "value": {
+              "type": "integer",
+              "content": 2097152
+            }
+          },
+          {
+            "field": "limits",
+            "value": {
+              "type": "list",
+              "content": [
+                {
+                  "entries": [
+                    {
+                      "key": "limit",
+                      "value": {
+                        "type": "integer",
+                        "content": -3
+                      }
+                    },
+                    {
+                      "key": "name",
+                      "value": {
+                        "type": "text",
+                        "content": "a"
+                      }
+                    },
+                    {
+                      "key": "on",
+                      "value": {
+                        "type": "boolean",
+                        "content": true
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "secrets": [],
+        "start": false
+      },
+      "command": "stackly instance create search --runtime nats@2.15 --provider official/nats --set 'serverName=search node' --set jetstream=false --set maxPayloadBytes=2097152 --set-json 'limits=[{\"limit\":-3,\"name\":\"a\",\"on\":true}]'"
+    },
+    {
+      "name": "every secret source",
+      "draft": {
+        "name": "orders-db",
+        "runtime": "postgresql@18.6",
+        "provider": "official/postgresql",
+        "revision": null,
+        "displayName": null,
+        "ports": [],
+        "settings": [],
+        "secrets": [
+          {
+            "field": "superuserPassword",
+            "source": {
+              "type": "generate"
+            }
+          },
+          {
+            "field": "replicaPassword",
+            "source": {
+              "type": "value"
+            }
+          },
+          {
+            "field": "auditPassword",
+            "source": {
+              "type": "copyFrom",
+              "content": "local:erp/db/audit"
+            }
+          },
+          {
+            "field": "backupPassword",
+            "source": {
+              "type": "bind",
+              "content": "local:erp/db/backup"
+            }
+          }
+        ],
+        "start": false
+      },
+      "command": "stackly instance create orders-db --runtime postgresql@18.6 --provider official/postgresql --secret superuserPassword=generate --secret replicaPassword=prompt --secret auditPassword=copy:local:erp/db/audit --secret backupPassword=bind:local:erp/db/backup"
+    },
+    {
+      "name": "runtime by id and start",
+      "draft": {
+        "name": "orders-db",
+        "runtime": "0192f3a6-0000-7000-8000-0000000000a1",
+        "provider": null,
+        "revision": null,
+        "displayName": null,
+        "ports": [
+          {
+            "endpoint": "postgres",
+            "port": {
+              "type": "fixed",
+              "content": 5432
+            }
+          }
+        ],
+        "settings": [],
+        "secrets": [],
+        "start": true
+      },
+      "command": "stackly instance create orders-db --runtime 0192f3a6-0000-7000-8000-0000000000a1 --port postgres=5432 --start"
+    }
+  ]
+}

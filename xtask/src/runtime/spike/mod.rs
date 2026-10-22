@@ -124,9 +124,11 @@ fn cleanup_now() -> Result<ExitCode> {
     }
     let cache = Cache::open()?;
     let _lock = SpikeLock::acquire_within(cache.dir(), LOCK_WAIT)?;
-    let swept = cleanup::sweep(launchd::uid()?)?;
+    let uid = launchd::uid()?;
+    let swept = cleanup::sweep(uid)?;
+    let tests = cleanup::sweep_test_processes(uid)?;
     println!(
-        "spike cleanup: {} process(es) stopped, agent {}, {} folder(s) deleted",
+        "spike cleanup: {} process(es) stopped, agent {}, {} folder(s) deleted, {tests} native test process(es) stopped",
         swept.processes,
         if swept.agent { "removed" } else { "not loaded" },
         swept.folders

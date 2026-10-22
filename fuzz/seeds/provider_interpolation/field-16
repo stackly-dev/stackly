@@ -1,1 +1,1 @@
-${instance.config}/nats.conf
+http://stackly:${secret.authToken}@${endpoint.http.address}/

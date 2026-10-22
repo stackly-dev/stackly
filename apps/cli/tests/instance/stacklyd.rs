@@ -14,7 +14,7 @@ use crate::common::{detail, envelope, paths, run};
 
 /// Seeds `root` with the fake runtime and provider and returns the runtime
 /// ID.
-fn seed(root: &TestRoot) -> String {
+pub(crate) fn seed(root: &TestRoot) -> String {
     let fake = fake_server::binary();
     let output = Command::new(cargo_example("stacklyd", "skeleton_seed"))
         .args(["--root".as_ref(), root.path().as_os_str()])

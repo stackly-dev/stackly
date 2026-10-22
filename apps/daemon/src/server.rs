@@ -12,7 +12,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use stackly_core::catalog::CatalogLocation;
+use stackly_core::catalog::{CatalogLocation, CatalogState};
+use stackly_core::instance::create::{
+    CreateHooks, CreateWorkFactory, INSTANCE_REGISTRATION, InstanceRegistrationCompensator,
+};
 use stackly_core::operation::{EngineError, OperationEngine};
 use stackly_core::secret::{
     Redactor, SECRET_REF_COMPENSATOR, SecretRefCompensator, SecretService, SecretWorker,
@@ -35,6 +38,7 @@ use tokio::time::{Instant, MissedTickBehavior, timeout};
 
 use crate::catalog::{self, CatalogOverride};
 use crate::connection;
+use crate::detail::DataUsageConfig;
 use crate::dispatch::{DefaultHandlers, Handlers};
 use crate::events::EventBus;
 use crate::launch::{self, writes_launch_record};
@@ -101,6 +105,12 @@ pub struct DaemonConfig {
     /// How long one `storage.get_capacity` read may take before it answers
     /// `timeout`; tests shorten it (spec 0022).
     pub capacity_read_timeout: Duration,
+    /// The hooks a test hangs on the `layout` and `init` steps of
+    /// `instance.create` (spec 0020 AC-8, D9); none by default.
+    pub create_hooks: CreateHooks,
+    /// The limits and lifetimes of the data folder scans of
+    /// `instance.get_data_usage`; tests shrink them (spec 0021).
+    pub data_usage: DataUsageConfig,
 }
 
 impl std::fmt::Debug for DaemonConfig {
@@ -129,6 +139,8 @@ impl Default for DaemonConfig {
             extra_log_sinks: Vec::new(),
             supervisor: SupervisorConfig::default(),
             capacity_read_timeout: CAPACITY_READ_TIMEOUT,
+            create_hooks: CreateHooks::default(),
+            data_usage: DataUsageConfig::default(),
         }
     }
 }
@@ -688,6 +700,12 @@ async fn start_slot(
     if let Some(mut gate) = config.start_gate {
         let _ = gate.wait_for(|open| *open).await;
     }
+    // The catalog is read before the registry opens, because the factory
+    // that rebuilds a queued create needs it when `recover` runs; nothing
+    // sees it until `set_catalog`, after the registry steps (spec 0017).
+    let loaded = catalog::load(&core, catalog, config.catalog.take()).await;
+    core.set_create_hooks(config.create_hooks.clone());
+    core.data_usage().configure(config.data_usage);
     let opened = open_with_retries(
         &core,
         &version,
@@ -769,9 +787,15 @@ async fn start_slot(
                     extra_sinks: &config.extra_log_sinks,
                     config: config.supervisor.clone(),
                 });
-                recovered =
-                    recover_operations(&core, registry, handlers.as_ref(), service, &supervisor)
-                        .await;
+                recovered = recover_operations(
+                    &core,
+                    registry,
+                    handlers.as_ref(),
+                    service,
+                    &supervisor,
+                    &loaded,
+                )
+                .await;
                 // Spec 0010's reconciliation runs here, between `recover`
                 // and `ready`; what it decided to run again starts once
                 // the engine does.
@@ -816,11 +840,15 @@ async fn start_slot(
             core.fail(EXIT_START_FAILED);
         }
     }
-    // The catalog loads after the registry, in recovery mode too (spec
+    // The catalog shows after the registry, in recovery mode too (spec
     // 0017); its methods answer `daemon.starting` until then.
-    let loaded = catalog::load(&core, catalog, config.catalog.take()).await;
     catalog::log_loaded(&loaded);
     core.set_catalog(loaded);
+    // A ready registry gets the row of the catalog source (spec 0020 AC-14);
+    // a registry in recovery gets none.
+    if matches!(core.registry_state(), RegistryState::Ready { .. }) {
+        catalog::record_source(&core, core.catalog_source()).await;
+    }
     core.mark_ready();
     // A stop that began during the start slot leaves the dispatcher closed:
     // what `recover` queued runs at the next start.
@@ -862,9 +890,10 @@ async fn recover_operations(
     handlers: &dyn Handlers,
     secrets: Arc<SecretService>,
     supervisor: &Supervisor,
+    catalog: &CatalogState,
 ) -> Option<OperationEngine> {
     let engine = core.operations().create(
-        registry,
+        registry.clone(),
         core.platform(),
         core.prepared(),
         core.bus(),
@@ -872,8 +901,28 @@ async fn recover_operations(
     );
     engine.register_compensator(
         SECRET_REF_COMPENSATOR,
-        Arc::new(SecretRefCompensator::new(secrets)),
+        Arc::new(SecretRefCompensator::new(Arc::clone(&secrets))),
     );
+    // The registry row of a create, and the factory that builds a queued
+    // create again (spec 0020).
+    if let Some(events) = core.supervision().events() {
+        engine.register_compensator(
+            INSTANCE_REGISTRATION,
+            Arc::new(InstanceRegistrationCompensator::new(events)),
+        );
+    }
+    if let Some(deps) = crate::ipc::instance::work_deps(
+        core,
+        &registry,
+        secrets,
+        supervisor.clone(),
+        catalog.clone(),
+    ) {
+        engine.register_factory(
+            stackly_domain::OperationKind::CreateInstance,
+            Arc::new(CreateWorkFactory::new(deps)),
+        );
+    }
     // The actors begin their own operations (a respawn, the starts of
     // reconciliation) through this engine.
     supervisor.attach_operations(engine.clone());

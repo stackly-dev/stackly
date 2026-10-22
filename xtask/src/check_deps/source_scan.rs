@@ -33,6 +33,11 @@
 //!   [`SYSTEM_PATH_PREFIXES`] is `/usr/bin/codesign` and sits in the
 //!   `codesign` module, nothing else. It completes the machine paths of the
 //!   library rules.
+//! - Provider identity rule (spec 0020, AC-21, step 11), for `stackly-core`
+//!   module `instance::create`: no identifier or string literal names a
+//!   provider ([`PROVIDER_WORDS`]), because the create evaluator, the form
+//!   model, and the operation work from the package alone. The Swift folder
+//!   `CreateInstance/` follows the same rule through [`scan_swift_create`].
 //! - `SIGKILL` rule (spec 0010, AC-15, step 15), for every crate: the token
 //!   is named only in [`SIGKILL_ALLOWED`], so a signal that cannot be
 //!   caught reaches a process only through a `HelperHandle` or
@@ -122,6 +127,26 @@ const CODESIGN_PATH: &str = "/usr/bin/codesign";
 const CODESIGN_MODULES: [&str; 1] = ["codesign"];
 /// The system path rule's message.
 const SYSTEM_PATH_RULE: &str = "stackly-platform-macos names only /usr/bin/codesign among the system program paths, and only in its codesign module (spec 0018)";
+/// Provider names the create code never writes (spec 0020, AC-21): one for
+/// each folder of `providers/` and each id of `providers/catalog.toml`,
+/// plus `postgres`, the common short form. A test keeps this list as long
+/// as the folder.
+pub const PROVIDER_WORDS: [&str; 8] = [
+    "postgresql",
+    "postgres",
+    "mysql",
+    "nats",
+    "valkey",
+    "clickhouse",
+    "traefik",
+    "fake",
+];
+/// The modules of `stackly-core` that name no provider.
+const PROVIDER_FREE_MODULES: [&str; 1] = ["instance::create"];
+/// The provider identity rule's message.
+const PROVIDER_IDENTITY_RULE: &str = "the create code names no provider; the form, the evaluation, and the work come from the package alone (spec 0020, AC-21)";
+/// The Swift folder that names no provider, from the repository root.
+pub const SWIFT_CREATE_DIR: &str = "apps/macos/Packages/StacklyUI/Sources/StacklyUI/CreateInstance";
 /// The `SIGKILL` rule's message.
 const SIGKILL_RULE: &str = "SIGKILL is named only in stackly-platform-macos process::kill, which hands it to a helper handle or a discarded suspended child (spec 0010, AC-15)";
 /// The print macros the CLI never calls.
@@ -134,10 +159,14 @@ const CLI_CODES_RULE: &str = "only the cli and the protocol name codes::cli, so 
 /// *Penjaga di kode*), each with its submodules: exactly the call sites
 /// that exist. A crate of the spec's table adds its module here once it
 /// has a call site (`stackly-platform` `secret`,
-/// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input` and
-/// `commands::secret`).
+/// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input`,
+/// `commands::secret`, and `commands::instance::connection`, which joins the
+/// revealed password into a connection string, spec 0021).
 pub const EXPOSE_ALLOWED: [(&str, &[&str]); 6] = [
-    ("stackly-cli", &["commands::secret"]),
+    (
+        "stackly-cli",
+        &["commands::secret", "commands::instance::connection"],
+    ),
     ("stackly-core", &["secret::redact", "secret::delivery"]),
     ("stackly-platform-macos", &["secret", "process::stdin"]),
     ("stackly-protocol", &["secret"]),
@@ -179,6 +208,9 @@ pub struct Rules {
     /// that start with a system program folder to [`CODESIGN_PATH`] inside
     /// the modules listed; `None` leaves the crate alone.
     pub system_paths_allowed: Option<&'static [&'static str]>,
+    /// The provider identity rule: `Some(modules)` bans a provider name in
+    /// the modules listed; `None` leaves the crate alone.
+    pub provider_free: Option<&'static [&'static str]>,
 }
 
 impl Rules {
@@ -206,6 +238,7 @@ impl Rules {
                     .map_or(&[], |(_, modules)| *modules),
             ),
             system_paths_allowed: (name == MACOS_ADAPTER).then_some(&CODESIGN_MODULES[..]),
+            provider_free: (name == "stackly-core").then_some(&PROVIDER_FREE_MODULES[..]),
         }
     }
 }
@@ -343,6 +376,9 @@ impl Scan {
     }
 
     fn check_text(&mut self, span: proc_macro2::Span, text: &str) {
+        if self.names_provider_here(text) {
+            self.report_once(span, PROVIDER_IDENTITY_RULE);
+        }
         if let Some(modules) = self.rules.system_paths_allowed
             && SYSTEM_PATH_PREFIXES
                 .iter()
@@ -379,6 +415,9 @@ impl Scan {
 
     /// Reports a TCP or UDP socket name, once per line.
     fn check_ident(&mut self, ident: &proc_macro2::Ident) {
+        if self.names_provider_here(&ident.to_string()) {
+            self.report_once(ident.span(), PROVIDER_IDENTITY_RULE);
+        }
         if let Some(allowed) = self.rules.sigkill_allowed
             && ident == "SIGKILL"
             && !self.in_modules(allowed)
@@ -402,6 +441,14 @@ impl Scan {
         {
             self.findings.push((line, SOCKET_RULE.to_owned()));
         }
+    }
+
+    /// Whether `text` names a provider while the node being scanned sits in
+    /// a module that names none.
+    fn names_provider_here(&self, text: &str) -> bool {
+        self.rules
+            .provider_free
+            .is_some_and(|modules| self.in_modules(modules) && names_provider(text))
     }
 
     /// True when the node being scanned sits in one of `modules` (`a::b`
@@ -821,6 +868,66 @@ fn names_cli_codes(segments: &[String]) -> bool {
         .any(|pair| pair[0] == "codes" && pair[1] == "cli")
 }
 
+/// Whether `text` names a provider: a word of it, split at anything that is
+/// not a letter or a digit, is a [`PROVIDER_WORDS`] entry, or holds a
+/// word of six letters or more (`postgresql`, `clickhouse`, `traefik`).
+#[must_use]
+pub fn names_provider(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    lower
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|word| {
+            PROVIDER_WORDS
+                .iter()
+                .any(|name| word == *name || (name.len() >= 6 && word.contains(name)))
+        })
+}
+
+/// Scans the Swift folder `CreateInstance/` under `root` for a provider
+/// name in code: every line of every `.swift` file, without what follows a
+/// `//`. A folder that does not exist yet has nothing to report. Messages
+/// read `<file>:<line>: <rule>`, with `file` relative to `root`.
+///
+/// # Errors
+///
+/// Returns an error when the folder or a file in it cannot be read.
+pub fn scan_swift_create(root: &Path) -> Result<Vec<String>> {
+    let dir = root.join(SWIFT_CREATE_DIR);
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut violations = Vec::new();
+    let mut pending = vec![dir];
+    while let Some(next) = pending.pop() {
+        let mut entries: Vec<PathBuf> = fs::read_dir(&next)
+            .with_context(|| format!("cannot read {}", next.display()))?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<std::io::Result<_>>()
+            .with_context(|| format!("cannot list {}", next.display()))?;
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "swift") {
+                let source = fs::read_to_string(&path)
+                    .with_context(|| format!("cannot read {}", path.display()))?;
+                let shown = path
+                    .strip_prefix(root)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string();
+                for (index, line) in source.lines().enumerate() {
+                    let code = line.split_once("//").map_or(line, |(code, _)| code);
+                    if names_provider(code) {
+                        violations.push(format!("{shown}:{}: {PROVIDER_IDENTITY_RULE}", index + 1));
+                    }
+                }
+            }
+        }
+    }
+    Ok(violations)
+}
+
 /// The attributes of the item kinds that can carry `#[cfg(test)]`.
 fn item_attrs(item: &Item) -> Option<&[Attribute]> {
     Some(match item {
@@ -1210,6 +1317,7 @@ mod tests {
                 process_allowed: None,
                 sigkill_allowed: Some(&[]),
                 system_paths_allowed: None,
+                provider_free: None,
             }
         );
         assert_eq!(
@@ -1223,6 +1331,7 @@ mod tests {
                 process_allowed: None,
                 sigkill_allowed: Some(&[]),
                 system_paths_allowed: None,
+                provider_free: None,
             }
         );
     }
@@ -1506,7 +1615,10 @@ mod tests {
         assert_eq!(
             EXPOSE_ALLOWED,
             [
-                ("stackly-cli", &["commands::secret"][..]),
+                (
+                    "stackly-cli",
+                    &["commands::secret", "commands::instance::connection"][..]
+                ),
                 ("stackly-core", &["secret::redact", "secret::delivery"][..]),
                 ("stackly-platform-macos", &["secret", "process::stdin"][..]),
                 ("stackly-protocol", &["secret"][..]),
@@ -1717,6 +1829,131 @@ mod tests {
                 format!("stackly-platform-macos src/process.rs:1: {SYSTEM_PATH_RULE}"),
                 format!("stackly-platform-macos src/process.rs:2: {SYSTEM_PATH_RULE}"),
                 format!("stackly-platform-macos src/process.rs:3: {SYSTEM_PATH_RULE}"),
+            ]
+        );
+    }
+
+    // covers: AC-021
+    #[test]
+    fn the_create_module_names_no_provider_in_an_identifier_or_a_literal() {
+        let mut found = scan(&[
+            ("src/lib.rs", "pub mod instance;\npub mod other;\n"),
+            ("src/instance.rs", "pub mod create;\n"),
+            (
+                "src/instance/create.rs",
+                "pub fn a() -> &'static str { \"official/postgresql\" }\n\
+                 pub fn b() { let _nats = 1; }\n\
+                 pub fn c() -> &'static str { \"Fake runtime\" }\n\
+                 pub fn d() -> &'static str { \"a package\" }\n\
+                 /// PostgreSQL in a doc comment is prose.\n\
+                 pub fn e() -> &'static str { \"clickhousefoo\" }\n\
+                 #[cfg(test)]\nmod tests { fn t() { let _ = \"postgresql\"; } }\n",
+            ),
+            ("src/other.rs", "pub const P: &str = \"postgresql\";\n"),
+        ]);
+
+        found.sort();
+
+        assert_eq!(
+            found,
+            [
+                format!("stackly-core src/instance/create.rs:1: {PROVIDER_IDENTITY_RULE}"),
+                format!("stackly-core src/instance/create.rs:2: {PROVIDER_IDENTITY_RULE}"),
+                format!("stackly-core src/instance/create.rs:3: {PROVIDER_IDENTITY_RULE}"),
+                format!("stackly-core src/instance/create.rs:6: {PROVIDER_IDENTITY_RULE}"),
+            ]
+        );
+    }
+
+    #[test]
+    fn other_crates_and_other_modules_may_name_a_provider() {
+        let files = [
+            ("src/lib.rs", "pub mod instance;\n"),
+            (
+                "src/instance.rs",
+                "pub mod create;\npub const A: &str = \"nats\";\n",
+            ),
+            ("src/instance/create.rs", "pub const B: u8 = 1;\n"),
+        ];
+        assert!(scan(&files).is_empty());
+        let named = [
+            ("src/lib.rs", "pub mod instance;\n"),
+            ("src/instance.rs", "pub mod create;\n"),
+            ("src/instance/create.rs", "pub const B: &str = \"nats\";\n"),
+        ];
+        assert!(scan_as("stackly-protocol", &named).is_empty());
+    }
+
+    #[test]
+    fn a_word_is_a_provider_by_itself_or_inside_a_long_name_only() {
+        for text in [
+            "postgresql",
+            "PostgreSQL 18",
+            "official/nats",
+            "fake_runtime",
+            "MySQL",
+            "traefik-config",
+            "my_clickhouse_server",
+        ] {
+            assert!(names_provider(text), "{text}");
+        }
+        for text in ["natsuki", "fakery", "pgvector", "the package", "cat"] {
+            assert!(!names_provider(text), "{text}");
+        }
+    }
+
+    #[test]
+    fn the_provider_words_cover_every_provider_folder_and_catalog_id() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut known = 0;
+        for entry in fs::read_dir(root.join("providers")).unwrap() {
+            let path = entry.unwrap().path();
+            if path.join("provider.yaml").is_file() {
+                let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+                assert!(
+                    PROVIDER_WORDS.contains(&name.as_str()),
+                    "{name} is not listed"
+                );
+                known += 1;
+            }
+        }
+        assert!(known >= 4);
+        let catalog = fs::read_to_string(root.join("providers/catalog.toml")).unwrap();
+        for line in catalog.lines() {
+            if let Some(id) = line.strip_prefix("id = \"") {
+                let name = id.trim_end_matches('"').rsplit('/').next().unwrap();
+                assert!(PROVIDER_WORDS.contains(&name), "{name} is not listed");
+            }
+        }
+    }
+
+    #[test]
+    fn the_swift_create_folder_names_no_provider_in_code() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(scan_swift_create(dir.path()).unwrap(), Vec::<String>::new());
+        let folder = dir.path().join(SWIFT_CREATE_DIR);
+        fs::create_dir_all(folder.join("Rows")).unwrap();
+        fs::write(
+            folder.join("NewInstanceSheet.swift"),
+            "struct Sheet {}\n// the postgresql form is built by the daemon\nlet name = \"nats\"\n",
+        )
+        .unwrap();
+        fs::write(
+            folder.join("Rows/PortRow.swift"),
+            "let a = 1\nenum Mark { case traefik }\n",
+        )
+        .unwrap();
+        fs::write(folder.join("Notes.md"), "postgresql\n").unwrap();
+
+        let mut found = scan_swift_create(dir.path()).unwrap();
+        found.sort();
+
+        let base = SWIFT_CREATE_DIR;
+        assert_eq!(
+            found,
+            [
+                format!("{base}/NewInstanceSheet.swift:3: {PROVIDER_IDENTITY_RULE}"),
+                format!("{base}/Rows/PortRow.swift:2: {PROVIDER_IDENTITY_RULE}"),
             ]
         );
     }

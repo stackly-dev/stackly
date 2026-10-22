@@ -26,8 +26,10 @@ use stackly_protocol::daemon::{
 };
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::{
-    CreateInstanceParams, GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceSummary,
-    ListInstancesParams, StartInstanceParams, StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, DataUsageReply, DuplicateForm,
+    GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams, GetInstanceDetailParams,
+    GetInstanceParams, InstanceActionAccepted, InstanceDetail, InstancePage, InstanceSummary,
+    ListInstancesParams, PreflightCreateParams, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
@@ -290,6 +292,61 @@ pub trait Handlers: Send + Sync + 'static {
         params: CreateInstanceParams,
     ) -> HandlerFuture<'a, InstanceActionAccepted> {
         instance::create(core, context, params)
+    }
+
+    /// `instance.get_create_form`.
+    fn get_create_form<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetCreateFormParams,
+    ) -> HandlerFuture<'a, Box<CreateForm>> {
+        let _ = context;
+        instance::get_create_form(core, params)
+    }
+
+    /// `instance.preflight`.
+    fn preflight_create<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: PreflightCreateParams,
+    ) -> HandlerFuture<'a, Box<CreatePreflight>> {
+        let _ = context;
+        instance::preflight(core, params)
+    }
+
+    /// `instance.get_duplicate_form`.
+    fn get_duplicate_form<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetDuplicateFormParams,
+    ) -> HandlerFuture<'a, Box<DuplicateForm>> {
+        let _ = context;
+        instance::get_duplicate_form(core, params)
+    }
+
+    /// `instance.get_detail`.
+    fn get_instance_detail<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetInstanceDetailParams,
+    ) -> HandlerFuture<'a, Box<InstanceDetail>> {
+        let _ = context;
+        instance::get_instance_detail(core, params)
+    }
+
+    /// `instance.get_data_usage`.
+    fn get_data_usage<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetDataUsageParams,
+    ) -> HandlerFuture<'a, DataUsageReply> {
+        let _ = context;
+        instance::get_data_usage(core, params)
     }
 
     /// `instance.start`.

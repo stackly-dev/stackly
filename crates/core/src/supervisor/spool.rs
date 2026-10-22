@@ -461,7 +461,7 @@ fn utf8_cut(bytes: &[u8], max: usize) -> usize {
 }
 
 /// Returns where to cut `text` at `max` bytes on a character boundary.
-fn char_cut(text: &str, max: usize) -> usize {
+pub(super) fn char_cut(text: &str, max: usize) -> usize {
     if text.len() <= max {
         return text.len();
     }

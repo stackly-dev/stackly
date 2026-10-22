@@ -7,13 +7,28 @@
 # published_at, then `cargo xtask catalog check --update`.
 
 schema = "stackly.catalog-source/v1"
-revision = 3
-published_at = 2026-10-22T01:08:22Z
+revision = 7
+published_at = 2026-10-22T06:25:00Z
 
 [[provider]]
 id = "official/postgresql"
 mark = "Pg"
 tile = "blue"
+
+[[provider]]
+id = "official/nats"
+mark = "Na"
+tile = "green"
+
+[[provider.platform_note]]
+os = "linux"
+status = "planned"
+note = "Linux releases exist upstream; Stackly supports macOS first."
+
+[[provider.platform_note]]
+os = "windows"
+status = "planned"
+note = "Windows releases exist upstream; per version verification is pending."
 
 [[planned]]
 id = "official/mysql"
@@ -22,14 +37,6 @@ category = "database"
 description = "Relational server with isolated datadir, socket and tmpdir per instance. Never bound to an existing system service."
 mark = "My"
 tile = "teal"
-
-[[planned]]
-id = "official/nats"
-display_name = "NATS Server"
-category = "messaging"
-description = "Core messaging with optional JetStream. Client and monitoring endpoints are configured separately."
-mark = "Na"
-tile = "green"
 
 [[planned]]
 id = "official/clickhouse"

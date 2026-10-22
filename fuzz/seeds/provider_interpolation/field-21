@@ -1,1 +1,1 @@
-${instance.name}
+http://${endpoint.monitoring.address}

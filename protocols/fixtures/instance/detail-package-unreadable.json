@@ -1,0 +1,90 @@
+{
+  "instance": {
+    "id": "0192f3a5-0000-7000-8000-000000000009",
+    "name": "secretive",
+    "displayName": null,
+    "revision": 12,
+    "software": "postgresql",
+    "provider": {
+      "name": "official/postgresql",
+      "revision": "2026.10.1",
+      "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed"
+    },
+    "runtimeId": "0192f3a5-0000-7000-8000-0000000000a9",
+    "runtimeVersion": "17.2.0",
+    "lifecycle": "stopped",
+    "desired": "running",
+    "readiness": {
+      "state": "unknown",
+      "reason": "not_running",
+      "detail": null,
+      "observedAt": "2026-10-20T09:00:05.000Z"
+    },
+    "health": {
+      "state": "unknown",
+      "reason": "not_running",
+      "detail": null,
+      "observedAt": "2026-10-20T09:00:05.000Z"
+    },
+    "statusSeq": 9,
+    "process": null,
+    "lastFailure": null,
+    "restart": {
+      "attempts": 0,
+      "budget": 5,
+      "windowSeconds": 60,
+      "nextAttemptAt": null,
+      "exhausted": false
+    },
+    "blocker": null,
+    "endpoints": [
+      {
+        "name": "client",
+        "transport": "tcp",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "portMode": "fixed",
+        "bound": false,
+        "socketPath": null
+      }
+    ],
+    "leftoverProcesses": [],
+    "logsUnavailable": false,
+    "ownership": "manual",
+    "initialized": true
+  },
+  "detail": {
+    "instanceId": "0192f3a5-0000-7000-8000-000000000009",
+    "revision": 12,
+    "provider": {
+      "name": "official/postgresql",
+      "revision": "2026.10.1",
+      "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed",
+      "displayName": null,
+      "packageReadable": false
+    },
+    "runtime": {
+      "id": "0192f3a5-0000-7000-8000-0000000000a9",
+      "version": "17.2.0",
+      "target": {
+        "os": "macos",
+        "arch": "aarch64"
+      },
+      "installMode": "managed",
+      "artifactSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    },
+    "dataPath": "/Users/test/Library/Application Support/Stackly/instances/secretive/data",
+    "startup": "manual",
+    "secrets": [
+      {
+        "field": "superuserPassword",
+        "title": "superuserPassword",
+        "reference": "local:instance/0192f3a5-0000-7000-8000-000000000009/superuser-password",
+        "status": "present"
+      }
+    ],
+    "dependents": [],
+    "connections": []
+  },
+  "dataUsage": null
+}

@@ -1,0 +1,33 @@
+Name          queue
+Display name  Job queue
+ID            0192f3a5-0000-7000-8000-000000000004
+Provider      official/nats revision 2026.10.1
+Manifest      sha256:3f786850e387
+Software      nats
+Runtime       0192f3a5-0000-7000-8000-0000000000a4
+Version       2.15.1
+Digest        External runtime
+Data          /Users/test/Library/Application Support/Stackly/instances/queue/data
+Data size     -
+Autostart     Off
+Ownership     manual
+Initialized   yes
+Lifecycle     stopped
+Desired       stopped
+Readiness     unknown (not_running), checked <age>
+Health        unknown (not_running), checked <age>
+Process       -
+Restarts      0 of 5 in 1m
+Last failure  -
+Blocker       -
+Logs          available
+Dependents    none
+Revision      7
+
+ENDPOINT    TRANSPORT  ADDRESS         PORT MODE  BOUND
+client      tcp        127.0.0.1:auto  auto       no
+monitoring  tcp        127.0.0.1:auto  auto       no
+
+CONNECTION  VALUE
+uri         unavailable (port_not_assigned)
+monitoring  unavailable (port_not_assigned)

@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use stackly_core::PreparedLayout;
 use stackly_core::catalog::CatalogState;
+use stackly_core::instance::create::CreateHooks;
 use stackly_core::secret::Redactor;
 use stackly_platform::Platform;
 use stackly_protocol::Count;
@@ -21,6 +22,7 @@ use tokio::sync::watch;
 
 use crate::catalog;
 use crate::connection::Connections;
+use crate::detail::{DataUsageService, PinnedPackages};
 use crate::events::EventBus;
 use crate::log_sink::LogSink;
 use crate::operations::Operations;
@@ -125,6 +127,11 @@ pub struct DaemonCore {
     registry_state: Mutex<RegistryState>,
     registry: Mutex<Option<SqliteRegistry>>,
     catalog: OnceLock<Arc<CatalogState>>,
+    catalog_source: Arc<catalog::CatalogSource>,
+    catalog_accesses: AtomicU64,
+    pinned_packages: PinnedPackages,
+    data_usage: DataUsageService,
+    create_hooks: OnceLock<CreateHooks>,
     ipc_problem: Mutex<Option<String>>,
     counters: Counters,
     drain: Drain,
@@ -174,6 +181,11 @@ impl DaemonCore {
             registry_state: Mutex::new(RegistryState::Opening),
             registry: Mutex::new(None),
             catalog: OnceLock::new(),
+            catalog_source: Arc::new(catalog::CatalogSource::default()),
+            catalog_accesses: AtomicU64::new(0),
+            pinned_packages: PinnedPackages::default(),
+            data_usage: DataUsageService::default(),
+            create_hooks: OnceLock::new(),
             ipc_problem: Mutex::new(None),
             counters: Counters::default(),
             drain: Drain::default(),
@@ -360,7 +372,49 @@ impl DaemonCore {
     /// The catalog the start slot loaded, or `None` while it loads.
     #[must_use]
     pub fn catalog(&self) -> Option<Arc<CatalogState>> {
+        self.catalog_accesses.fetch_add(1, Ordering::Relaxed);
         self.catalog.get().cloned()
+    }
+
+    /// The row of the loaded catalog in `provider_sources` (spec 0020
+    /// AC-14).
+    #[must_use]
+    pub fn catalog_source(&self) -> &Arc<catalog::CatalogSource> {
+        self.catalog_accesses.fetch_add(1, Ordering::Relaxed);
+        &self.catalog_source
+    }
+
+    /// How many times code asked for the loaded catalog or its source row
+    /// since the daemon started. The offline test of spec 0021 (AC-10)
+    /// reads it before and after start, status, detail, and connection to
+    /// show they never look at the catalog.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn catalog_accesses(&self) -> u64 {
+        self.catalog_accesses.load(Ordering::Relaxed)
+    }
+
+    /// The pinned packages the detail methods have read (spec 0021).
+    #[must_use]
+    pub const fn pinned_packages(&self) -> &PinnedPackages {
+        &self.pinned_packages
+    }
+
+    /// The sizes of data folders (spec 0021).
+    #[must_use]
+    pub const fn data_usage(&self) -> &DataUsageService {
+        &self.data_usage
+    }
+
+    /// The hooks a test hung on `instance.create`; none in a normal run.
+    #[must_use]
+    pub fn create_hooks(&self) -> CreateHooks {
+        self.create_hooks.get().cloned().unwrap_or_default()
+    }
+
+    /// Records the create hooks of this run. The first call wins.
+    pub fn set_create_hooks(&self, hooks: CreateHooks) {
+        let _ = self.create_hooks.set(hooks);
     }
 
     /// Records the catalog of this run. The first call wins: the catalog
@@ -480,7 +534,10 @@ impl DaemonCore {
             registry,
             self.operations.health(),
             self.supervision.health(),
-            catalog::health(self.catalog.get().map(AsRef::as_ref)),
+            catalog::health(
+                self.catalog.get().map(AsRef::as_ref),
+                self.catalog_source.degraded().as_deref(),
+            ),
         ];
         let status = match self.phase() {
             Phase::Starting => DaemonHealthStatus::Starting,

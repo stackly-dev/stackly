@@ -1114,6 +1114,222 @@
       "file": "frame-error-runtime-download-offline.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-get-create-form.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-get-create-form-without-provider.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "reject-instance-get-create-form-provider.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "request-instance-preflight.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-preflight-without-fields.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "reject-instance-preflight-bad-reference.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-instance-preflight-empty-name.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-instance-get-create-form.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-create-form-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-instance-preflight-ready.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-preflight-port-conflict.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-preflight-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-instance-preflight-no-provider.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-get-duplicate-form.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-duplicate-form.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-duplicate-form-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-error-instance-name-invalid.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-provider-unavailable.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-capability-unsupported.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-runtime-incompatible.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-storage-unsupported.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-insufficient-space.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-data-not-empty.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-data-overlap.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-short-key-taken.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-catalog-pin-failed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-registry-not-deletable.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-get-detail.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-get-data-usage.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-get-data-usage-refresh.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-instance-get-data-usage-refresh-and-cached-only.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-instance-get-detail.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-detail-package-unreadable.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-detail-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-instance-get-data-usage.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-data-usage-incomplete.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-data-usage-empty.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-data-usage-unavailable-missing.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-data-usage-unavailable-not-private.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-data-usage-unavailable-io.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
     }
   ]
 }

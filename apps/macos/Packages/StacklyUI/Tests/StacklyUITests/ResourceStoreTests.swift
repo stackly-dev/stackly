@@ -20,6 +20,8 @@ struct ResourceStoreTests {
         var pages: [[Thing]] = []
         var failures: [ClientError] = []
         var one: [String: Thing] = [:]
+        var oneFailures: [ClientError] = []
+        var fetchedOne: [String] = []
         var effects: [UInt64: StoreEffect<Thing>] = [:]
         var gate: CheckedContinuation<Void, Never>?
         var holdNextFetch = false
@@ -52,7 +54,11 @@ struct ResourceStoreTests {
         return ResourceStore<Thing>(
             kinds: ["events."],
             fetchPage: { token throws(ClientError) in try await script.fetch(token) },
-            fetchOne: { id in script.one[id] },
+            fetchOne: { id throws(ClientError) in
+                script.fetchedOne.append(id)
+                if script.oneFailures.isEmpty == false { throw script.oneFailures.removeFirst() }
+                return script.one[id]
+            },
             revision: \.revision,
             reduce: { event in script.effects[event.sequence] ?? .ignore },
             now: { Date(timeIntervalSince1970: 100) },
@@ -154,6 +160,93 @@ struct ResourceStoreTests {
         store.receive(Self.event(1))
         try await waitUntil { store.items["a"] == nil }
         #expect(store.tombstones["a"] == 2)
+    }
+
+    // MARK: - Item failures (spec 0022, AC-9)
+
+    @Test func aFailedRefetchIsRecordedAndKeepsTheHeldItem() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        await store.resnapshot()
+        script.oneFailures = [.rejected(Self.error("resource.busy"))]
+        script.effects[1] = .refetch("a", revision: 2)
+        store.receive(Self.event(1))
+        try await waitUntil { store.itemFailures["a"] != nil }
+        #expect(store.itemFailures["a"]?.error.code == "resource.busy")
+        #expect(store.itemFailures["a"]?.revision == 2)
+        #expect(store.items["a"]?.name == "a")
+    }
+
+    @Test func retryAsksAgainAtTheRevisionOfTheFailureAndClearsIt() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        await store.resnapshot()
+        script.oneFailures = [.notSent(Self.error("ipc.not_connected"))]
+        script.effects[1] = .refetch("a", revision: 2)
+        store.receive(Self.event(1))
+        try await waitUntil { store.itemFailures["a"] != nil }
+        script.one["a"] = Thing(id: "a", revision: 2, name: "fetched")
+        await store.retry("a")
+        #expect(store.itemFailures.isEmpty)
+        #expect(store.items["a"]?.name == "fetched")
+        #expect(script.fetchedOne == ["a", "a"])
+    }
+
+    @Test func aRetryThatFailsAgainKeepsTheFailure() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        await store.resnapshot()
+        script.oneFailures = [
+            .rejected(Self.error("resource.busy")), .rejected(Self.error("resource.locked")),
+        ]
+        script.effects[1] = .refetch("a", revision: 2)
+        store.receive(Self.event(1))
+        try await waitUntil { store.itemFailures["a"] != nil }
+        await store.retry("a")
+        #expect(store.itemFailures["a"]?.error.code == "resource.locked")
+        #expect(store.items["a"]?.name == "a")
+    }
+
+    @Test func aRetryOfAnItemThatIsGoneRemovesItAndItsFailure() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        await store.resnapshot()
+        script.oneFailures = [.rejected(Self.error("resource.busy"))]
+        script.effects[1] = .refetch("a", revision: 2)
+        store.receive(Self.event(1))
+        try await waitUntil { store.itemFailures["a"] != nil }
+        // The fetcher now answers nil: a retained instance, or one the daemon deleted.
+        await store.retry("a")
+        #expect(store.items["a"] == nil)
+        #expect(store.itemFailures.isEmpty)
+        #expect(store.tombstones["a"] == 2)
+    }
+
+    @Test func aRetryWithoutAFailureAsksNothing() async {
+        let store = makeStore()
+        await store.resnapshot()
+        await store.retry("a")
+        #expect(script.fetchedOne.isEmpty)
+    }
+
+    @Test func aNewerEventOrASnapshotClearsTheFailure() async throws {
+        script.pages = [[Thing(id: "a", revision: 1, name: "a")]]
+        let store = makeStore()
+        await store.resnapshot()
+        script.oneFailures = [.rejected(Self.error("resource.busy"))]
+        script.effects[1] = .refetch("a", revision: 2)
+        store.receive(Self.event(1))
+        try await waitUntil { store.itemFailures["a"] != nil }
+        script.effects[2] = .upsert(Thing(id: "a", revision: 3, name: "event"))
+        store.receive(Self.event(2))
+        #expect(store.itemFailures.isEmpty)
+
+        script.oneFailures = [.rejected(Self.error("resource.busy"))]
+        script.effects[3] = .refetch("a", revision: 4)
+        store.receive(Self.event(3))
+        try await waitUntil { store.itemFailures["a"] != nil }
+        await store.resnapshot()
+        #expect(store.itemFailures.isEmpty)
     }
 
     @Test func aFullBufferStartsOverThreeTimesThenKeepsAnError() async {

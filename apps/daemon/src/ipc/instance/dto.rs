@@ -2,6 +2,8 @@
 //! from the registry row and the supervisor's status. A domain type never
 //! reaches the wire.
 
+use std::collections::BTreeMap;
+
 use stackly_core::supervisor::{FAILURE_EXCERPT_LINE_CHARS, InstanceStatus, ProcessStatus};
 use stackly_domain::{
     DesiredState, Endpoint, HealthState, IdentityCheck, IdentityCheckName as DomainCheckName,
@@ -33,6 +35,7 @@ pub fn summary(
     instance: &Instance,
     status: &InstanceStatus,
     excerpt: Vec<String>,
+    sockets: &BTreeMap<String, String>,
 ) -> InstanceSummary {
     let key = instance.provider_revision();
     InstanceSummary {
@@ -68,7 +71,7 @@ pub fn summary(
         endpoints: instance
             .endpoints()
             .iter()
-            .map(|endpoint| endpoint_status(endpoint, status.ports_final))
+            .map(|endpoint| endpoint_status(endpoint, status.ports_final, sockets))
             .collect(),
         leftover_processes: status.leftover.iter().map(|pid| pid.get()).collect(),
         logs_unavailable: status.logs_unavailable,
@@ -241,7 +244,11 @@ const fn check_result(result: IdentityCheck) -> IdentityCheckResult {
     }
 }
 
-fn endpoint_status(endpoint: &Endpoint, ports_final: bool) -> EndpointStatus {
+fn endpoint_status(
+    endpoint: &Endpoint,
+    ports_final: bool,
+    sockets: &BTreeMap<String, String>,
+) -> EndpointStatus {
     match endpoint {
         Endpoint::Ip(ip) => EndpointStatus {
             name: ip.name().to_string(),
@@ -267,9 +274,9 @@ fn endpoint_status(endpoint: &Endpoint, ports_final: bool) -> EndpointStatus {
             port: None,
             port_mode: EndpointPortMode::Fixed,
             bound: false,
-            // The path is rendered from the pinned package by the full
-            // create of feature 20 (spec 0020 step 9).
-            socket_path: None,
+            // Rendered from the pinned package with the effective ports, or
+            // null while one of them is not known (spec 0020 AC-12).
+            socket_path: sockets.get(unix.name().as_str()).cloned(),
         },
     }
 }

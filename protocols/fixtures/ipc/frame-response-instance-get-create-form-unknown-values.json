@@ -1,0 +1,218 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000910",
+    "reply": {
+      "type": "instance.get_create_form",
+      "content": {
+        "capabilities": [
+          {
+            "capability": "teleport",
+            "supported": true
+          },
+          {
+            "capability": "persistence",
+            "supported": true
+          },
+          {
+            "capability": "reload",
+            "supported": false
+          },
+          {
+            "capability": "metrics",
+            "supported": true
+          },
+          {
+            "capability": "tls",
+            "supported": false
+          },
+          {
+            "capability": "cold_backup",
+            "supported": true
+          },
+          {
+            "capability": "online_backup",
+            "supported": false
+          },
+          {
+            "capability": "logical_backup",
+            "supported": false
+          }
+        ],
+        "dataPath": "instances/<new instance id>/data",
+        "endpoints": [
+          {
+            "defaultPort": 4222,
+            "host": "127.0.0.1",
+            "name": "client",
+            "purpose": "billing",
+            "socketName": null,
+            "transport": "sctp"
+          },
+          {
+            "defaultPort": 8222,
+            "host": "127.0.0.1",
+            "name": "monitoring",
+            "purpose": "monitoring",
+            "socketName": null,
+            "transport": "tcp"
+          }
+        ],
+        "fields": [
+          {
+            "apply": null,
+            "choices": [],
+            "default": null,
+            "description": "The NATS server_name, always the instance name.",
+            "itemKey": null,
+            "items": [],
+            "key": "serverName",
+            "kind": "matrix",
+            "managed": true,
+            "maxItems": null,
+            "maxLength": 63,
+            "maximum": null,
+            "minItems": null,
+            "minLength": 0,
+            "minimum": null,
+            "printableOnly": false,
+            "required": false,
+            "secret": false,
+            "title": "Server name",
+            "visibility": "basic"
+          },
+          {
+            "apply": "restart",
+            "choices": [],
+            "default": {
+              "content": true,
+              "type": "boolean"
+            },
+            "description": "Persist streams and key value buckets in the instance's data folder.",
+            "itemKey": null,
+            "items": [],
+            "key": "jetstream",
+            "kind": "boolean",
+            "managed": false,
+            "maxItems": null,
+            "maxLength": null,
+            "maximum": null,
+            "minItems": null,
+            "minLength": null,
+            "minimum": null,
+            "printableOnly": false,
+            "required": false,
+            "secret": false,
+            "title": "JetStream",
+            "visibility": "pinned"
+          },
+          {
+            "apply": "hot",
+            "choices": [],
+            "default": {
+              "content": 1073741824,
+              "type": "integer"
+            },
+            "description": "Most memory JetStream memory streams may use.",
+            "itemKey": null,
+            "items": [],
+            "key": "jetstreamMaxMemoryBytes",
+            "kind": "integer",
+            "managed": false,
+            "maxItems": null,
+            "maxLength": null,
+            "maximum": 1099511627776,
+            "minItems": null,
+            "minLength": null,
+            "minimum": 1048576,
+            "printableOnly": false,
+            "required": false,
+            "secret": false,
+            "title": "JetStream memory limit (bytes)",
+            "visibility": "advanced"
+          },
+          {
+            "apply": "restart",
+            "choices": [],
+            "default": {
+              "content": 10737418240,
+              "type": "integer"
+            },
+            "description": "Most disk space JetStream file streams may use in the data folder.",
+            "itemKey": null,
+            "items": [],
+            "key": "jetstreamMaxFileBytes",
+            "kind": "integer",
+            "managed": false,
+            "maxItems": null,
+            "maxLength": null,
+            "maximum": 1099511627776,
+            "minItems": null,
+            "minLength": null,
+            "minimum": 1048576,
+            "printableOnly": false,
+            "required": false,
+            "secret": false,
+            "title": "JetStream file limit (bytes)",
+            "visibility": "advanced"
+          },
+          {
+            "apply": "restart",
+            "choices": [],
+            "default": {
+              "content": 1048576,
+              "type": "integer"
+            },
+            "description": "Largest message payload a client may publish.",
+            "itemKey": null,
+            "items": [],
+            "key": "maxPayloadBytes",
+            "kind": "integer",
+            "managed": false,
+            "maxItems": null,
+            "maxLength": null,
+            "maximum": 67108864,
+            "minItems": null,
+            "minLength": null,
+            "minimum": 1024,
+            "printableOnly": false,
+            "required": false,
+            "secret": false,
+            "title": "Largest message (bytes)",
+            "visibility": "advanced"
+          }
+        ],
+        "provider": {
+          "category": "quantum",
+          "displayName": "NATS Server",
+          "manifestSha256": "d115e2ad7cd0658bb40735bdb7808a8c4ffa1323dacec49f931e0a573f1a656d",
+          "name": "official/nats",
+          "revision": "1.0.0",
+          "source": "mars"
+        },
+        "runtime": {
+          "artifactSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+          "dependentRuntimes": [],
+          "displayName": "NATS",
+          "id": "0192f3a6-0000-7000-8000-0000000000a1",
+          "installMode": "managed",
+          "installedAt": "2026-01-01T00:00:00.000Z",
+          "lastVerifiedAt": null,
+          "line": "2.15",
+          "revision": 1,
+          "software": "nats",
+          "state": "installed",
+          "support": "unverified",
+          "supportReason": "untested",
+          "target": {
+            "arch": "aarch64",
+            "os": "macos"
+          },
+          "usedBy": [],
+          "version": "2.15.1"
+        },
+        "suggestedName": "nats-2-15"
+      }
+    }
+  }
+}

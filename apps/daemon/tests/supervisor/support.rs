@@ -25,9 +25,12 @@ use stackly_platform::{Clock, Platform, SystemClock, UserId};
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::handshake::{ClientInfo, ClientKind};
 use stackly_protocol::instance::{
-    CreateInstanceParams, EndpointRequest, GetInstanceParams, InstanceActionAccepted, InstancePage,
-    InstanceReadinessState, InstanceSummary, ListInstancesParams, PortRequest, ProviderSelector,
-    SecretFieldInput, SettingsDocument, StartInstanceParams, StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, DataUsage, DuplicateForm, EndpointRequest,
+    GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams, GetInstanceDetailParams,
+    GetInstanceParams, InstanceActionAccepted, InstanceDetail, InstancePage,
+    InstanceReadinessState, InstanceSummary, ListInstancesParams, PortRequest,
+    PreflightCreateParams, ProviderSelector, SecretFieldInput, SecretPlan, SecretSource,
+    SettingsDocument, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{GetOperationParams, OperationDetail, OperationState};
 use stackly_protocol::secret::{SecretInput, SecretText};
@@ -79,11 +82,24 @@ pub struct Site {
 impl Site {
     /// A root with the fake runtime and the fake provider seeded.
     pub fn new() -> Self {
+        Self::build(false)
+    }
+
+    /// The same, laid out as `STACKLY_ROOT` lays out a root, so the real
+    /// `stackly` binary with that override finds the daemon socket.
+    pub fn for_cli() -> Self {
+        Self::build(true)
+    }
+
+    fn build(as_override: bool) -> Self {
         let root = TestRoot::new().expect("a test root can be created");
         let secrets = Arc::new(FakeSecretStore::new());
-        let platform = MacosPlatform::with_roots(root.roots())
-            .expect("this Mac reports its OS version")
-            .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
+        let platform = if as_override {
+            MacosPlatform::new(Some(root.path().into())).expect("a test root is a valid override")
+        } else {
+            MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version")
+        }
+        .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
         let prepared = prepare_layout(&platform).expect("the test root layout can be prepared");
         let owner = LockOwner::new(
             std::process::id(),
@@ -110,7 +126,7 @@ impl Site {
         .expect("the fake runtime and package are seeded");
         // The registry closes here, so the daemon opens it alone.
         drop(registry);
-        let reap = ReapGuard::new(root.path(), root.roots().runtime());
+        let reap = ReapGuard::new(root.path(), prepared.layout().roots().runtime());
         Self {
             _reap: reap,
             root,
@@ -124,6 +140,15 @@ impl Site {
 
     pub fn socket(&self) -> PathBuf {
         self.prepared.layout().daemon_socket()
+    }
+
+    /// Removes the folder of the pinned fake package, which the seed wrote
+    /// with the permissions of a test rather than the private ones `pin`
+    /// writes. A create from the catalog pins it again; the registry row of
+    /// the revision stays.
+    pub fn unpin_fake_package(&self) {
+        std::fs::remove_dir_all(self.prepared.layout().providers_dir().join("testing"))
+            .expect("the pinned fake package folder is removed");
     }
 
     /// The folders of the instance `id` the daemon made.
@@ -419,6 +444,89 @@ impl Api {
         }
     }
 
+    /// The params of a preflight of the same draft as [`params`](Self::params),
+    /// with the token as a value to be sent.
+    pub fn preflight_params(&self, name: &str, extra: Value) -> PreflightCreateParams {
+        let create = self.params(name, extra);
+        PreflightCreateParams {
+            name: create.name,
+            display_name: create.display_name,
+            provider: create.provider,
+            runtime_id: create.runtime_id,
+            endpoints: create.endpoints,
+            settings: create.settings,
+            secrets: vec![SecretPlan {
+                field: "authToken".to_owned(),
+                source: SecretSource::Value,
+            }],
+            start: false,
+        }
+    }
+
+    /// `instance.get_create_form`.
+    pub async fn form(
+        &self,
+        runtime_id: Uuid,
+        provider: Option<&str>,
+    ) -> Result<CreateForm, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetCreateForm(GetCreateFormParams {
+                runtime_id,
+                provider: provider.map(str::to_owned),
+            }))
+            .await?
+        {
+            Reply::InstanceGetCreateForm(form) => Ok(*form),
+            other => panic!("not a create form reply: {other:?}"),
+        }
+    }
+
+    /// `instance.get_duplicate_form`.
+    pub async fn duplicate_form(&self, source: Uuid) -> Result<DuplicateForm, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDuplicateForm(GetDuplicateFormParams {
+                instance_id: source,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDuplicateForm(form) => Ok(*form),
+            other => panic!("not a duplicate form reply: {other:?}"),
+        }
+    }
+
+    /// `instance.create` with the draft of a preflight and the secret
+    /// inputs a client builds from the choices of the user, as the sheet
+    /// and `stackly instance duplicate` do.
+    pub async fn create_from_draft(
+        &self,
+        draft: PreflightCreateParams,
+        secrets: Vec<SecretFieldInput>,
+    ) -> Result<InstanceActionAccepted, Box<ErrorBody>> {
+        self.create(CreateInstanceParams {
+            name: draft.name,
+            display_name: draft.display_name,
+            provider: draft.provider,
+            runtime_id: draft.runtime_id,
+            endpoints: draft.endpoints,
+            settings: draft.settings,
+            secrets,
+        })
+        .await
+    }
+
+    /// `instance.preflight`.
+    pub async fn preflight(
+        &self,
+        params: PreflightCreateParams,
+    ) -> Result<CreatePreflight, Box<ErrorBody>> {
+        match self.client.call(Call::InstancePreflight(params)).await? {
+            Reply::InstancePreflight(preflight) => Ok(*preflight),
+            other => panic!("not a preflight reply: {other:?}"),
+        }
+    }
+
     /// A request for a fixed port on the `http` endpoint.
     pub fn http_port(port: u16) -> EndpointRequest {
         EndpointRequest {
@@ -555,6 +663,41 @@ impl Api {
         }
     }
 
+    /// `instance.get_detail`.
+    pub async fn detail(&self, id: Uuid) -> Result<InstanceDetail, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDetail(GetInstanceDetailParams {
+                instance_id: id,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDetail(detail) => Ok(*detail),
+            other => panic!("not a detail reply: {other:?}"),
+        }
+    }
+
+    /// `instance.get_data_usage`; `None` is a reply without a size.
+    pub async fn data_usage(
+        &self,
+        id: Uuid,
+        refresh: bool,
+        cached_only: bool,
+    ) -> Result<Option<DataUsage>, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstanceGetDataUsage(GetDataUsageParams {
+                instance_id: id,
+                refresh,
+                cached_only,
+            }))
+            .await?
+        {
+            Reply::InstanceGetDataUsage(reply) => Ok(reply.usage),
+            other => panic!("not a data usage reply: {other:?}"),
+        }
+    }
+
     /// `instance.list`.
     pub async fn list(&self, params: ListInstancesParams) -> InstancePage {
         match self.client.call(Call::InstanceList(params)).await {
@@ -663,6 +806,57 @@ impl Api {
     }
 }
 
+/// One request to the dummy server on `port`: the status code and the body.
+fn http_exchange(port: u16, request: &str) -> (u16, String) {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port))
+        .expect("the dummy server accepts connections");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("a read timeout is set");
+    stream
+        .write_all(request.as_bytes())
+        .expect("the request is written");
+    let mut text = String::new();
+    stream.read_to_string(&mut text).expect("the reply is read");
+    let status = text
+        .split(' ')
+        .nth(1)
+        .and_then(|code| code.parse().ok())
+        .expect("a status line");
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body.to_owned())
+        .unwrap_or_default();
+    (status, body)
+}
+
+/// `PUT /sentinel` of the dummy server on `port`; returns the status code.
+pub fn put_sentinel(port: u16, value: &str) -> u16 {
+    http_exchange(
+        port,
+        &format!(
+            "PUT /sentinel HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{value}",
+            value.len()
+        ),
+    )
+    .0
+}
+
+/// `GET /sentinel` of the dummy server on `port`: the value it holds, or
+/// `None` for a 404.
+pub fn get_sentinel(port: u16) -> Option<String> {
+    let (status, body) = http_exchange(
+        port,
+        "GET /sentinel HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n",
+    );
+    match status {
+        200 => Some(body),
+        404 => None,
+        other => panic!("GET /sentinel answered {other}"),
+    }
+}
+
 /// A fresh idempotency key.
 pub fn key() -> String {
     Uuid::now_v7().to_string()
@@ -746,4 +940,31 @@ impl SupervisorLogSink for LogRecorder {
             .push((instance, batch));
         SinkOutcome::Accepted
     }
+}
+
+/// A catalog that holds the fake provider, so a create without a revision
+/// has the revision of the catalog to take (spec 0020).
+pub fn fake_catalog() -> stackly_core::catalog::Catalog {
+    use stackly_core::catalog::{Catalog, CatalogEntry, ProviderEntry, TileColor, TileHint};
+    use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake");
+    let files = read_package(&stackly_platform_macos::MacosFilesystem, &dir)
+        .expect("the fake package reads");
+    let package = ValidatedPackage::from_files(files, NameCheck::FolderName)
+        .expect("the fake package validates");
+    Catalog::for_tests(&[CatalogEntry::Provider(ProviderEntry {
+        package: Arc::new(package),
+        tile: TileHint {
+            mark: "Fk".to_owned(),
+            tile: TileColor::Blue,
+        },
+        notes: Vec::new(),
+    })])
+}
+
+/// The fast config with [`fake_catalog`] as the catalog of the daemon.
+pub fn fast_with_catalog() -> DaemonConfig {
+    let mut config = fast();
+    config.catalog = Some(stacklyd::catalog::CatalogOverride::Preloaded(fake_catalog()));
+    config
 }

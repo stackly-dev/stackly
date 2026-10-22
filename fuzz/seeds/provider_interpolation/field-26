@@ -1,1 +1,1 @@
-fake.${endpoint.http.port}
+${instance.config}/dynamic

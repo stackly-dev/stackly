@@ -71,6 +71,29 @@ impl InstanceTarget {
     }
 }
 
+impl InstanceTarget {
+    /// The ID of the instance and its name when the lookup already showed
+    /// it: a name gives both, an ID gives only the ID.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`resolve`](Self::resolve).
+    pub async fn resolve_named(
+        &self,
+        cx: &mut Context,
+    ) -> Result<(Uuid, Option<String>), CliFailure> {
+        match self {
+            Self::Id(id) => Ok((*id, None)),
+            Self::Name(name) => all_instances(cx)
+                .await?
+                .into_iter()
+                .find(|instance| instance.name == *name)
+                .map(|instance| (instance.id, Some(instance.name)))
+                .ok_or_else(|| CliFailure::instance_not_found(name)),
+        }
+    }
+}
+
 /// Every instance the daemon lists, page after page until `next` is null.
 ///
 /// # Errors

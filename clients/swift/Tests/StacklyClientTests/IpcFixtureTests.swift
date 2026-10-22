@@ -70,7 +70,12 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .runtimeResolve = $0 { true } else { false } })
         #expect(methods.contains { if case .runtimeList = $0 { true } else { false } })
         #expect(methods.contains { if case .runtimeGet = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 30)
+        #expect(methods.contains { if case .instanceGetCreateForm = $0 { true } else { false } })
+        #expect(methods.contains { if case .instancePreflight = $0 { true } else { false } })
+        #expect(methods.contains { if case .instanceGetDuplicateForm = $0 { true } else { false } })
+        #expect(methods.contains { if case .instanceGetDetail = $0 { true } else { false } })
+        #expect(methods.contains { if case .instanceGetDataUsage = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 35)
     }
 
     private func check<Value: Codable & Equatable>(

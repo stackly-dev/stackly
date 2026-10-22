@@ -737,3 +737,39 @@ Cross check: Sonnet 5.5 membaca update ini secara read only terhadap kode (`inte
 - "Ketiga paket" di AC-20 diperjelas menjadi fake, NATS, dan Traefik, dengan fixture `fake-command` disebut terpisah.
 
 Sisa risiko yang dinyatakan: kalau future init dibatalkan paksa (daemon mati di tengah init), `cleanup` tidak berjalan, tetapi sweep rekonsiliasi berikutnya menghapus folder secrets instance itu karena `initializing` dan `failed` tidak dihitung berjalan. Saran untuk spec 0014 (memindai atau menegaskan folder `secrets/` kosong setelah stop) melewati teks AC-18 yang disetujui user, jadi dicatat di rationale spec 0014 dan diteruskan ke lead. User menyetujuinya 2026-10-21: AC-18 kini menegaskan folder itu tidak ada setelah stop, dan langkah 21 membangun cek nya.
+
+## Update 2026-10-22 (port endpoint saat initialize, usulan spec 0023)
+
+Sumber nya *Usulan update spec lain (2026-10-22)* butir 1 di spec 0023 (commit `73322b32`, merge `d94c4c87`), dibawa lead scope 02 lewat brief `arc-f15-update-4`. Temuan nya: create penuh spec 0020 menjalankan initialize tanpa port untuk endpoint `Auto` (`execute_init` lewat `Prepared::context`), sehingga paket yang init nya merender port (NATS `1.0.0` dengan `nats.conf`) lolos preflight lalu gagal `supervisor.config_invalid` di langkah `init`. Spec 0023 memperbaiki NATS di paket (revision `1.0.1`) dan mengusulkan penjaga generik di spec ini supaya Traefik, Valkey, MySQL, dan ClickHouse tidak jatuh ke lubang yang sama.
+
+**Keputusan P1: di mana aturan nya hidup.**
+
+- **Option 1: aturan validasi di `from_files`**, seperti teks usulan (token ditolak `token_not_allowed_here` saat validasi semantik). Kelebihan: satu tempat, setiap pemuat paket kena. Kekurangan: start (spec 0010 `prepare`) membaca ulang salinan pinned di `<data>/providers/` lewat `from_files` dengan `NameCheck::Skip`, jadi setiap instance yang dibuat dari NATS `1.0.0` dengan port `Fixed` tidak bisa start lagi (`manifest.invalid`), dan duplicate spec 0024 dari instance itu ikut gagal sebelum preflight. Itu melanggar janji di *Perluasan additive fase 02* bahwa paket yang sudah valid tetap valid.
+- **Option 2: laporan terpisah `init_port_issues` (dipilih).** Fungsi murni di `ValidatedPackage`, dipanggil `cargo xtask provider check` dan test core atas setiap folder `providers/`, dengan kode dan format issue yang sama dengan validasi. Kelebihan: penulis paket di repo melihat masalah nya di tempat yang sama dengan masalah validasi, salinan pinned lama tetap termuat, dan penjaga runtime untuk create ada di dry run spec 0020. Kekurangan: paket yang tidak pernah lewat `provider check` (import fitur 37) tidak ditolak saat dimuat; dicatat di Consequences dan Follow-up fitur 37.
+- **Option 3: hanya dry run spec 0020**, tanpa apa pun di spec ini. Kekurangan: masalah baru ketahuan saat pengguna membuat instance, bukan saat paket ditulis, dan Traefik yang sudah salah tetap salah.
+
+**Keputusan P2: field `managed` yang butuh port.** Usulan spec 0023 hanya menyebut token endpoint langsung. Field `managed` boleh memakai `endpoint.*`, dan `fake-command` memakai `listenPort: ${endpoint.http.port}` lalu merender nya di `peers` saat init, jadi pemakaian tidak langsung harus ikut dilaporkan. Lebih jauh, `Resolver::new` menghitung semua field `managed` untuk setiap plan, sehingga satu field yang butuh port membuat setiap `init_plan` tanpa port gagal walau init tidak memakai nya. Dipilih: laporan mencakup `settings.<f>` untuk field `managed` yang butuh port, dan `Resolver::new` menyimpan hasil per field lalu gagal hanya saat field itu dirender. Runner up: melarang token port di ekspresi `managed`. Kekurangan nya: mematahkan aturan "integer managed adalah tepat satu token `${endpoint.<name>.port}`" yang sengaja ada, dan fixture `fake-command`.
+
+**Keputusan P3: Traefik di perubahan yang sama atau di fitur 41.** Dipilih: perubahan yang sama (langkah 22). Kalau Traefik menunggu fitur 41, `cargo xtask provider check` tanpa argumen keluar 1 sejak langkah 22, dan test core atas setiap folder `providers/` gagal, jadi langkah 22 tidak bisa hijau. Perubahan nya kecil (satu langkah `renderConfig` dihapus; render sebelum spawn sudah menulis `staticConfig`), dan paket itu belum terbit, jadi revision tetap `1.0.0` tanpa ledger catalog. Runner up: fitur 41 dengan pengecualian sementara di test. Kekurangan nya: pengecualian yang mudah terlupa dan paket contoh yang tetap salah.
+
+**Keputusan kecil.**
+
+- **Siapa membangun langkah 22.** Fitur 9 sudah ditutup. Mengikuti pola *Perluasan additive fase 02* (perluasan dibangun fitur yang membutuhkannya), langkah 22 dikerjakan di milestone "Init port guard" fitur 20 bersama dry run init spec 0020 (langkah 17), karena kegagalan nya muncul di create. Runner up: fitur 23 milestone 3 (sesi yang sama dengan perubahan paket NATS). Kekurangan nya: perubahan core generik masuk ke ledger RISK-07 NATS dan mengaburkan ukuran nya.
+- **Urutan.** Langkah 22 sesudah fitur 23 langkah 13, karena NATS `1.0.0` di `main` punya issue.
+- **`cwd`.** Usulan menyebut `cwd`; matriks posisi sudah hanya menerima token folder di sana, jadi tidak ada yang perlu diperiksa.
+- **`destination`.** Sama seperti usulan: hanya token folder.
+- **Kode issue dan wire.** `token_not_allowed_here` yang sudah ada, tanpa `reason`; tidak ada kode, kontrak, atau bump `ProtocolVersion` baru.
+
+**Teks AC yang berubah (menunggu persetujuan kamu lewat lead).** AC-21 baru. AC-1 sampai AC-20 tidak berubah; AC-14 tetap benar sesudah langkah 22 (keempat paket lolos `provider check`). Teks lengkap di catatan bersama `arc-f15-update-4-ac-and-scope.md`.
+
+**Cross check update ini (2026-10-22, model lain: Sonnet 5.5, baca saja).** Temuan untuk spec ini, semuanya diisi dengan rekomendasi saya (aturan delegasi user di brief; tidak satu pun mengubah keputusan P1 sampai P3):
+
+| Temuan | Yang diterapkan |
+| --- | --- |
+| bug: `Resolver::value` untuk `endpoint.<n>.host` lewat `Resolver::endpoint`, yang menolak endpoint tanpa port, jadi host di init tetap gagal `EndpointUnresolved` dan janji AC-21 patah | perubahan kedua di *Plan builder* (host dibaca tanpa port), kalimat AC-21, baris *Value sourcing*, dan test `init_plan` dengan `${endpoint.http.host}` di init. Runner up: melaporkan host sebagai token yang butuh port, yang melarang hal yang sebenarnya aman |
+| test Traefik `traefik_plans_with_three_routes_match_the_golden_files` meng assert dua render dari `init.steps` | langkah 22 mengambil `render-staticConfig.txt` dari `run.render` |
+| test fitur 23 langkah 13 yang meng assert Traefik masih gagal "sampai fitur 41" | langkah 22 menghapus pengecualian itu; baris Follow-up fitur 41 di spec 0023 dijawab langkah 22 (diteruskan ke lead) |
+| salinan NATS `1.0.0` tidak ada sesudah fitur 23 langkah 13 | test menyalin `providers/nats` lalu menyisipkan lagi `renderConfig natsConf` |
+| posisi issue `peers.yaml.tmpl` | baris 2 kolom 7 (awal tag) |
+| `# Examples` doctest butuh paket utuh | tidak dipakai |
+| `Resolver::without_managed` (spec 0021) ada di `main` | disebut di *Plan builder*; perubahan field `managed` ada di `Resolver::new` di atas nya |

@@ -1,4 +1,4 @@
-//! `stackly instance create`, `start`, `stop`, and `get` (spec 0014,
+//! `stackly instance create`, `duplicate` (spec 0024), `start`, `stop`, and `get` (spec 0014,
 //! *CLI*, AC-5 to AC-8), and `list` and `inspect` (spec 0022, AC-10 and
 //! AC-11). They only talk to the daemon: the CLI never reads
 //! a provider package or starts a process.
@@ -9,7 +9,9 @@
 //! nothing is left to wait for (AC-6).
 
 mod action;
+mod connection;
 mod create;
+mod duplicate;
 mod get;
 pub mod group;
 mod inspect;
@@ -19,13 +21,18 @@ pub mod resolve;
 
 use clap::{Args, Subcommand};
 use serde::Serialize;
-use stackly_protocol::instance::{GetInstanceParams, InstanceActionAccepted, InstanceSummary};
+use stackly_protocol::instance::{
+    DataUsage, GetDataUsageParams, GetInstanceDetailParams, GetInstanceParams,
+    InstanceActionAccepted, InstanceDetail, InstanceSummary,
+};
 use stackly_protocol::operation::OperationSummary;
 use stackly_protocol::{Call, Reply, ResourceKind};
 use uuid::Uuid;
 
 use self::action::{StartArgs, StopArgs};
+use self::connection::ConnectionArgs;
 use self::create::CreateArgs;
+use self::duplicate::DuplicateArgs;
 use self::get::GetArgs;
 use self::inspect::InspectArgs;
 use self::list::ListArgs;
@@ -43,12 +50,15 @@ use super::execute;
 #[derive(Debug, Subcommand)]
 pub enum InstanceCommand {
     /// Create an instance from a provider and an installed runtime
-    // provisional: F20 (--runtime takes software@version, --provider and
-    // --revision turn optional, --set follows the field kind)
     #[command(
-        after_help = "Examples:\n  stackly instance create demo --runtime 0192f3a5-0000-7000-8000-0000000000a1 --provider fake --revision 0.3.0 --wait\n  stackly instance create demo --runtime 0192f3a5-0000-7000-8000-0000000000a1 --provider fake --revision 0.3.0 --port http=auto --set-json readyDelayMs=1500 --json"
+        after_help = "Examples:\n  stackly instance create orders --runtime postgresql@18 --port postgres=5432 --wait\n  stackly instance create orders --runtime postgresql@18 --dry-run --json\n  stackly instance create queue --runtime nats@2.15 --set jetstream=true --start --wait"
     )]
-    Create(CreateArgs),
+    Create(Box<CreateArgs>),
+    /// Create an instance from the settings of another, on the same runtime; no data is copied
+    #[command(
+        after_help = "Examples:\n  stackly instance duplicate pg17-dev pg17-test\n  stackly instance duplicate pg17-dev pg17-test --secret superuserPassword=copy --start --wait\n  stackly instance duplicate pg17-dev --set maxConnections=300 --dry-run --json"
+    )]
+    Duplicate(Box<DuplicateArgs>),
     /// Start an instance
     #[command(
         after_help = "Examples:\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001 --wait --timeout 5m"
@@ -69,6 +79,11 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance inspect orders-db\n  stackly instance inspect 0192f3a5-0000-7000-8000-000000000001 --json"
     )]
     Inspect(InspectArgs),
+    /// Show a connection string of an instance, with the password hidden unless asked
+    #[command(
+        after_help = "Examples:\n  stackly instance connection orders-db\n  stackly instance connection orders-db --format socket\n  stackly instance connection orders-db --all\n  stackly instance connection orders-db --show-password --json"
+    )]
+    Connection(ConnectionArgs),
     /// Show one instance; the same as inspect
     #[command(
         after_help = "Examples:\n  stackly instance get orders-db\n  stackly instance get 0192f3a5-0000-7000-8000-000000000001 --json"
@@ -80,11 +95,13 @@ impl InstanceCommand {
     /// Runs the verb and returns the exit code.
     pub async fn run(self, cx: &mut Context) -> u8 {
         match self {
-            Self::Create(args) => execute(args, cx).await,
+            Self::Create(args) => execute(*args, cx).await,
+            Self::Duplicate(args) => execute(*args, cx).await,
             Self::Start(args) => execute(args, cx).await,
             Self::Stop(args) => execute(args, cx).await,
             Self::List(args) => execute(args, cx).await,
             Self::Inspect(args) => execute(args, cx).await,
+            Self::Connection(args) => execute(args, cx).await,
             Self::Get(args) => execute(args, cx).await,
         }
     }
@@ -138,6 +155,16 @@ pub struct InstanceAction {
     verb: Verb,
     #[serde(skip)]
     instance_id: Option<Uuid>,
+}
+
+impl InstanceAction {
+    /// Whether the request started an operation that ended `succeeded`.
+    fn succeeded(&self) -> bool {
+        !self.already
+            && self.operation.as_ref().is_some_and(|operation| {
+                operation.state == stackly_protocol::operation::OperationState::Succeeded
+            })
+    }
 }
 
 impl Render for InstanceAction {
@@ -211,6 +238,34 @@ async fn read_instance(cx: &mut Context, id: Uuid) -> Result<InstanceSummary, Cl
     let call = Call::InstanceGet(GetInstanceParams { instance_id: id });
     match cx.call(call, CallSpec::control()).await? {
         Reply::InstanceGet(instance) => Ok(*instance),
+        _ => Err(CliFailure::unexpected_reply(None)),
+    }
+}
+
+/// `instance.get_detail` for `id`.
+async fn read_detail(cx: &mut Context, id: Uuid) -> Result<InstanceDetail, CliFailure> {
+    let call = Call::InstanceGetDetail(GetInstanceDetailParams { instance_id: id });
+    match cx.call(call, CallSpec::control()).await? {
+        Reply::InstanceGetDetail(detail) => Ok(*detail),
+        _ => Err(CliFailure::unexpected_reply(None)),
+    }
+}
+
+/// `instance.get_data_usage` for `id`: from the cache, or measured again
+/// with `refresh`. A failure is an error here; the caller decides whether it
+/// stops the command.
+async fn read_usage(
+    cx: &mut Context,
+    id: Uuid,
+    refresh: bool,
+) -> Result<Option<DataUsage>, CliFailure> {
+    let call = Call::InstanceGetDataUsage(GetDataUsageParams {
+        instance_id: id,
+        refresh,
+        cached_only: !refresh,
+    });
+    match cx.call(call, CallSpec::control()).await? {
+        Reply::InstanceGetDataUsage(reply) => Ok(reply.usage),
         _ => Err(CliFailure::unexpected_reply(None)),
     }
 }

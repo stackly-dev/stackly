@@ -11,7 +11,8 @@ use std::path::Path;
 use std::time::Duration;
 
 use common::{
-    STACKLYD, client, daemon_paths, field, json_lines, runtime, start_daemon, start_daemon_with,
+    STACKLYD, client, daemon_paths, field, json_lines, runtime, start_daemon, start_daemon_binary,
+    start_daemon_with,
 };
 use stackly_core::catalog::testing::{CatalogBuilder, CatalogFixture};
 use stackly_core::provider::read_package;
@@ -124,7 +125,16 @@ fn the_default_spawned_daemon_has_an_ok_empty_catalog() {
     let root = TestRoot::new().unwrap();
     let daemon = start_daemon(&root);
 
-    let health = health(daemon.socket());
+    // The start slot may still run when the socket answers, most of all on
+    // a busy Mac, so the daemon gets a moment to say it is ready.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let health = loop {
+        let health = health(daemon.socket());
+        if health.status != DaemonHealthStatus::Starting || std::time::Instant::now() > deadline {
+            break health;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
 
     assert_eq!(catalog_status(&health), SubsystemStatus::Ok);
     assert_eq!(health.status, DaemonHealthStatus::Ready);
@@ -193,6 +203,98 @@ fn a_built_catalog_folder_is_served_as_a_development_catalog() {
     assert_eq!(
         catalog_status(&health(daemon.socket())),
         SubsystemStatus::Ok
+    );
+    assert_eq!(daemon.stop().unwrap().code(), Some(0));
+}
+
+/// Copies the daemon into `<root>/Stackly.app/Contents/MacOS` and returns
+/// the copy and the app's `Contents/Resources`.
+fn daemon_in_a_fake_bundle(root: &TestRoot) -> (std::path::PathBuf, std::path::PathBuf) {
+    let macos = root.path().join("Stackly.app/Contents/MacOS");
+    std::fs::create_dir_all(&macos).expect("the bundle folder is made");
+    let copy = macos.join("stacklyd");
+    std::fs::copy(STACKLYD, &copy).expect("the daemon binary is copied");
+    let resources = root.path().join("Stackly.app/Contents/Resources");
+    std::fs::create_dir_all(&resources).expect("the resources folder is made");
+    (copy, resources)
+}
+
+// covers: REQ-033
+#[test]
+fn a_daemon_inside_an_app_bundle_serves_its_bundled_catalog_as_official() {
+    let ev = evidence!(
+        covers = ["REQ-033"],
+        kind = Kind::Fixture,
+        expected = "stacklyd run from <X>.app/Contents/MacOS without STACKLY_CATALOG_DIR loads Contents/Resources/catalog and serves it with source bundled and trust official",
+    );
+    let root = TestRoot::new().unwrap();
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
+    let (bin, resources) = daemon_in_a_fake_bundle(&root);
+    CatalogBuilder::new()
+        .fixture(CatalogFixture::LinuxOnly)
+        .write(platform.fs(), &resources.join("catalog"))
+        .expect("the test catalog is written");
+    let daemon = start_daemon_binary(&root, &bin, SpawnCatalog::Unset);
+
+    let Ok(Reply::CatalogListProviders(reply)) = call(daemon.socket(), Call::CatalogListProviders)
+    else {
+        panic!("not a list reply");
+    };
+
+    assert_eq!(reply.catalog.source, CatalogSourceKind::Bundled);
+    assert_eq!(reply.catalog.trust, TrustLevel::Official);
+    assert_eq!(reply.items.len(), 1);
+    assert_eq!(reply.items[0].provider, "official/linuxonly");
+    assert_eq!(reply.items[0].state, CatalogEntryState::Unsupported);
+    assert_eq!(
+        catalog_status(&health(daemon.socket())),
+        SubsystemStatus::Ok
+    );
+    assert_eq!(daemon.stop().unwrap().code(), Some(0));
+    ev.pass();
+}
+
+#[test]
+fn a_catalog_dir_wins_over_the_bundled_catalog_of_the_bundle() {
+    let root = TestRoot::new().unwrap();
+    let platform =
+        MacosPlatform::with_roots(root.roots()).expect("this Mac reports its OS version");
+    let (bin, resources) = daemon_in_a_fake_bundle(&root);
+    CatalogBuilder::new()
+        .fixture(CatalogFixture::LinuxOnly)
+        .write(platform.fs(), &resources.join("catalog"))
+        .expect("the bundled test catalog is written");
+    let development = root.path().join("development");
+    CatalogBuilder::new()
+        .fixture(CatalogFixture::IntelOnly)
+        .write(platform.fs(), &development)
+        .expect("the development test catalog is written");
+    let daemon = start_daemon_binary(&root, &bin, SpawnCatalog::Dir(development));
+
+    let Ok(Reply::CatalogListProviders(reply)) = call(daemon.socket(), Call::CatalogListProviders)
+    else {
+        panic!("not a list reply");
+    };
+
+    assert_eq!(reply.catalog.source, CatalogSourceKind::Development);
+    assert_eq!(reply.items[0].provider, "official/intelonly");
+    assert_eq!(daemon.stop().unwrap().code(), Some(0));
+}
+
+#[test]
+fn a_bundle_without_a_catalog_folder_reports_the_catalog_missing() {
+    let root = TestRoot::new().unwrap();
+    let (bin, _resources) = daemon_in_a_fake_bundle(&root);
+    let daemon = start_daemon_binary(&root, &bin, SpawnCatalog::Unset);
+
+    let error = call(daemon.socket(), Call::CatalogListProviders).unwrap_err();
+
+    assert_eq!(error.code(), catalog::UNAVAILABLE.code);
+    assert_eq!(error.detail("reason"), Some("missing"));
+    assert_eq!(
+        catalog_status(&health(daemon.socket())),
+        SubsystemStatus::Unavailable
     );
     assert_eq!(daemon.stop().unwrap().code(), Some(0));
 }

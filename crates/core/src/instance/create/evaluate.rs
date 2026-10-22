@@ -142,6 +142,35 @@ struct Judge<'a> {
 }
 
 /// What `settings` produced.
+/// Why the dry run refused an endpoint, which picks the keterangan of the
+/// `settings` row (spec 0020, *Copy preflight*).
+enum DryRunRefusal {
+    /// `init_plan` needs the port of an `Auto` endpoint, which is chosen
+    /// only when the instance starts.
+    InitNeedsFixedPort { endpoint: EndpointName },
+    /// Another endpoint the plans refuse: unresolved or not loopback.
+    Endpoint { endpoint: EndpointName },
+}
+
+impl DryRunRefusal {
+    fn endpoint(&self) -> &EndpointName {
+        match self {
+            Self::InitNeedsFixedPort { endpoint } | Self::Endpoint { endpoint } => endpoint,
+        }
+    }
+
+    fn detail(&self) -> String {
+        match self {
+            Self::InitNeedsFixedPort { endpoint } => format!(
+                "This provider needs a fixed port for {endpoint} when the instance is created. Choose a port for it."
+            ),
+            Self::Endpoint { endpoint } => {
+                format!("Endpoint {endpoint} can’t be used with these settings.")
+            }
+        }
+    }
+}
+
 struct SettingsOutcome {
     values: SettingsValues,
     secrets: Vec<SecretPlan>,
@@ -670,7 +699,7 @@ impl Judge<'_> {
         let package = &found.package;
         let schema = package.settings_schema();
         let before = self.issues.len();
-        let mut bad_endpoint: Option<CreateError> = None;
+        let mut refusal: Option<DryRunRefusal> = None;
 
         let document = match &self.draft.settings {
             serde_json::Value::Object(map) => map.clone(),
@@ -753,22 +782,33 @@ impl Judge<'_> {
             }
         }
         if let Some(valid) = &values {
-            bad_endpoint = self.dry_run(found, valid, name);
+            refusal = self.dry_run(found, valid, name);
         }
 
         let count = self.issues.len() - before;
-        if count == 0 && bad_endpoint.is_none() {
+        if count == 0 && refusal.is_none() {
             return values.map(|values| SettingsOutcome {
                 values,
                 secrets: plans,
             });
         }
-        let error = bad_endpoint.unwrap_or(CreateError::SettingsInvalid);
+        let (detail, error) = match &refusal {
+            Some(refusal) => (
+                refusal.detail(),
+                CreateError::EndpointInvalid {
+                    endpoint: refusal.endpoint().to_string(),
+                },
+            ),
+            None => (
+                format!("{count} settings need attention"),
+                CreateError::SettingsInvalid,
+            ),
+        };
         self.error_row(
             "settings",
             CheckKind::Settings,
             "Settings",
-            format!("{count} settings need attention"),
+            detail,
             None,
             error,
         );
@@ -776,44 +816,55 @@ impl Judge<'_> {
     }
 
     /// Builds the init and run plans for the placeholder instance, as the
-    /// operation will, and turns a plan error into field issues. Returns an
-    /// endpoint error when an endpoint is what the plan refuses.
+    /// operation will, and turns a plan error into field issues. The init
+    /// plan gets the context of `execute_init`, where an `Auto` endpoint has
+    /// no port yet; the run plan gets a port for every endpoint. Returns the
+    /// refusal when an endpoint is what a plan refuses.
     fn dry_run(
         &mut self,
         found: &ProviderFound,
         values: &SettingsValues,
         name: Option<&(InstanceName, Option<DisplayName>)>,
-    ) -> Option<CreateError> {
+    ) -> Option<DryRunRefusal> {
         let facts = self.facts;
         let package = &found.package;
         let id = placeholder_instance_id();
         let layout = &facts.layout;
-        let endpoints: BTreeMap<EndpointName, ResolvedEndpoint> = package
-            .endpoints()
-            .map(|spec| {
-                let resolved = match spec.transport() {
-                    EndpointTransport::Unix => ResolvedEndpoint::Unix,
-                    _ => {
-                        let requested = self
-                            .draft
-                            .endpoints
-                            .iter()
-                            .find(|(requested, _)| requested == spec.name().as_str())
-                            .and_then(|(_, request)| match request {
-                                PortRequestDraft::Fixed(port) => Port::new(*port).ok(),
-                                PortRequestDraft::Auto => None,
-                            });
-                        ResolvedEndpoint::Ip {
-                            host: spec
-                                .default_host()
-                                .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)),
-                            port: requested.or(spec.default_port()).or(Port::new(49_152).ok()),
+        let ip_endpoints = |for_init: bool| -> BTreeMap<EndpointName, ResolvedEndpoint> {
+            package
+                .endpoints()
+                .map(|spec| {
+                    let resolved = match spec.transport() {
+                        EndpointTransport::Unix => ResolvedEndpoint::Unix,
+                        _ => {
+                            let request = self
+                                .draft
+                                .endpoints
+                                .iter()
+                                .find(|(requested, _)| requested == spec.name().as_str())
+                                .map(|(_, request)| request);
+                            // A fixed port that is out of range already has
+                            // an error row, so it reads like the default.
+                            let fallback = spec.default_port().or(Port::new(49_152).ok());
+                            let port = match request {
+                                Some(PortRequestDraft::Fixed(port)) => {
+                                    Port::new(*port).ok().or(fallback)
+                                }
+                                Some(PortRequestDraft::Auto) | None if for_init => None,
+                                Some(PortRequestDraft::Auto) | None => fallback,
+                            };
+                            ResolvedEndpoint::Ip {
+                                host: spec
+                                    .default_host()
+                                    .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)),
+                                port,
+                            }
                         }
-                    }
-                };
-                (spec.name().clone(), resolved)
-            })
-            .collect();
+                    };
+                    (spec.name().clone(), resolved)
+                })
+                .collect()
+        };
         let runtime_root = facts
             .runtime_root
             .clone()
@@ -830,7 +881,7 @@ impl Judge<'_> {
         ) else {
             return None;
         };
-        let context = PlanContext {
+        let context = |endpoints| PlanContext {
             instance_id: id,
             instance_name: name.map_or_else(
                 || {
@@ -842,18 +893,19 @@ impl Judge<'_> {
             ),
             paths: layout.instance_paths(id),
             runtime: RuntimeContext {
-                root: runtime_root,
-                version,
-                line,
+                root: runtime_root.clone(),
+                version: version.clone(),
+                line: line.clone(),
             },
             endpoints,
             settings: values.clone(),
         };
-        let error = package
-            .init_plan(&context)
-            .map(drop)
-            .and_then(|()| package.run_plan(&context).map(drop))
-            .err()?;
+        let init_context = context(ip_endpoints(true));
+        let run_context = context(ip_endpoints(false));
+        let (error, init_failed) = match package.init_plan(&init_context) {
+            Err(error) => (error, true),
+            Ok(_) => (package.run_plan(&run_context).err()?, false),
+        };
         match error {
             PlanError::Settings(settings) => {
                 for issue in &settings.issues {
@@ -864,14 +916,16 @@ impl Judge<'_> {
                 }
                 None
             }
-            PlanError::EndpointUnresolved { endpoint }
-            | PlanError::EndpointNotLoopback { endpoint } => {
-                if let Some(index) = self.request_index(&endpoint) {
-                    self.issue(format!("endpoints[{index}].port"), FieldCode::InvalidValue);
-                }
-                Some(CreateError::EndpointInvalid {
-                    endpoint: endpoint.to_string(),
-                })
+            PlanError::EndpointUnresolved { endpoint } => {
+                let needs_port = init_failed
+                    && matches!(
+                        init_context.endpoints.get(&endpoint),
+                        Some(ResolvedEndpoint::Ip { port: None, .. })
+                    );
+                Some(self.refuse_endpoint(endpoint, needs_port))
+            }
+            PlanError::EndpointNotLoopback { endpoint } => {
+                Some(self.refuse_endpoint(endpoint, false))
             }
             other => {
                 let path = match &other {
@@ -881,6 +935,19 @@ impl Judge<'_> {
                 self.issue(path, FieldCode::InvalidValue);
                 None
             }
+        }
+    }
+
+    /// Marks the port field of an endpoint a plan refused, when the draft
+    /// names that endpoint, and returns the refusal.
+    fn refuse_endpoint(&mut self, endpoint: EndpointName, needs_port: bool) -> DryRunRefusal {
+        if let Some(index) = self.request_index(&endpoint) {
+            self.issue(format!("endpoints[{index}].port"), FieldCode::InvalidValue);
+        }
+        if needs_port {
+            DryRunRefusal::InitNeedsFixedPort { endpoint }
+        } else {
+            DryRunRefusal::Endpoint { endpoint }
         }
     }
 

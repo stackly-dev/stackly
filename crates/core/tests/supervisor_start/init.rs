@@ -8,7 +8,7 @@ use std::time::Duration;
 use stackly_core::secret::delivery::stdin_payload;
 use stackly_core::supervisor::{InitRequest, SupervisorError};
 use stackly_domain::{InstanceLifecycle, Registry};
-use stackly_platform::{ChildRole, ExitStatus, LockState, ProcessSupervision};
+use stackly_platform::{CapturedOutput, ChildRole, ExitStatus, LockState, ProcessSupervision};
 use stackly_testkit::ProcessOp;
 
 use crate::common::{Rig, Spec, TOKEN, config_file, replace};
@@ -117,6 +117,56 @@ async fn a_step_that_exits_with_another_code_fails_the_init_and_frees_the_lock()
     assert!(
         !config_file(&rig, id).exists(),
         "the sensitive config is removed when the init fails"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_step_hands_its_output_redacted_to_the_sinks_as_the_failure_excerpt() {
+    let rig = Arc::new(Rig::new().await);
+    let id = rig.instance(&uninitialized());
+    let init = {
+        let rig = Arc::clone(&rig);
+        tokio::spawn(async move {
+            rig.sup
+                .execute_init(InitRequest::new(id, Rig::user()))
+                .await
+        })
+    };
+    let step = rig.helper_spawn(ChildRole::InitStep, 0).await;
+    rig.processes().exit_with_output(
+        step.pid,
+        Some(ExitStatus::Exited(1)),
+        CapturedOutput {
+            stdout: b"fixing permissions on existing directory\n".to_vec(),
+            stderr: format!(
+                "init: error: directory \"/data\" exists but is not empty\r\n\
+                 init: hint: the token {TOKEN} was not used\nno newline at the end"
+            )
+            .into_bytes(),
+        },
+    );
+
+    let error = init.await.unwrap().expect_err("the step failed");
+
+    assert!(
+        matches!(&error, SupervisorError::InitFailed { reason, exit_code: Some(1), .. } if reason == "init_step_failed"),
+        "{error:?}"
+    );
+    let lines = rig.logs.lines_of(id);
+    assert!(
+        lines.contains(&"init: error: directory \"/data\" exists but is not empty".to_owned()),
+        "{lines:#?}"
+    );
+    assert!(lines.iter().all(|line| !line.contains(TOKEN)), "{lines:#?}");
+    // The excerpt lists stderr first, then stdout, without the `\r`.
+    assert_eq!(
+        rig.sup.failure_excerpt(id),
+        [
+            "init: error: directory \"/data\" exists but is not empty",
+            "init: hint: the token **** was not used",
+            "no newline at the end",
+            "fixing permissions on existing directory",
+        ]
     );
 }
 

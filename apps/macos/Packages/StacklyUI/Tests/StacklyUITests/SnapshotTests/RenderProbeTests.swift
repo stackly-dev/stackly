@@ -224,5 +224,155 @@ extension SnapshotTests {
             #expect(standard.increased == false)
             #expect(standard.reduceTransparency == false)
         }
+
+        // MARK: Guard for the fixture values inside the inspector (spec 0068, K15)
+
+        /// Records what the environment says at one place, as optional values, so a body
+        /// that never ran cannot pass for the standard settings.
+        private struct PlacedSpy: View {
+            final class Seen {
+                var contrast: ColorSchemeContrast?
+                var reduceTransparency: Bool?
+            }
+            let seen: Seen
+            @Environment(\.colorSchemeContrast) private var contrast
+            @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+            var body: some View {
+                seen.contrast = contrast
+                seen.reduceTransparency = reduceTransparency
+                return Color.clear
+            }
+        }
+
+        /// The places of the guard: outside the inspector, in its main content, and in its
+        /// column.
+        private struct Places {
+            /// How the page holds its main content.
+            enum Main: CaseIterable {
+                /// A `ScrollView` and a `VStack`.
+                case scrolling
+                /// A `GeometryReader` that sizes the content to the page, as Instances does.
+                case geometry
+            }
+
+            let main: Main
+            let direct = PlacedSpy.Seen()
+            let mainContent = PlacedSpy.Seen()
+            let column = PlacedSpy.Seen()
+
+            var all: [(name: String, seen: PlacedSpy.Seen)] {
+                [
+                    ("outside the inspector", direct),
+                    ("inspector main content (\(main))", mainContent),
+                    ("inspector column (\(main))", column),
+                ]
+            }
+
+            /// A page the way a screen builds one, with the column as the direct content of
+            /// `.stacklyInspector`.
+            var view: some View {
+                mainView
+                    .stacklyInspector(isPresented: .constant(true)) { PlacedSpy(seen: column) }
+                    .overlay(alignment: .topLeading) { PlacedSpy(seen: direct) }
+            }
+
+            @ViewBuilder private var mainView: some View {
+                switch main {
+                case .scrolling:
+                    ScrollView { VStack { PlacedSpy(seen: mainContent) } }
+                case .geometry:
+                    GeometryReader { proxy in
+                        VStack { PlacedSpy(seen: mainContent) }
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    }
+                }
+            }
+        }
+
+        /// Renders the places through ``SnapshotRoot``, the way `assertSnapshot` renders a
+        /// variant, so the page sits under the same containers as in a snapshot.
+        private static func renderPlaces(
+            _ main: Places.Main, _ variant: SnapshotVariant
+        ) async throws -> Places {
+            let places = Places(main: main)
+            _ = try await SnapshotRender.render(
+                SnapshotRoot(
+                    content: places.view, variant: variant, width: 900, height: .fixed(500)),
+                width: 900,
+                height: .fixed(500),
+                scheme: variant.appearance.scheme
+            )
+            return places
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-027", "NFR-012"],
+                expected:
+                    "Increase Contrast and Reduce Transparency of the fixture reach views outside the inspector, in its main content, and in its column, with the main content in a ScrollView or a GeometryReader"
+            )
+        )
+        func theFixtureAppearanceReachesTheInspectorContent() async throws {
+            let sdk = ProcessInfo.processInfo.operatingSystemVersionString
+            for main in Places.Main.allCases {
+                let highContrast = try await Self.renderPlaces(main, .hcLight)
+                for (place, seen) in highContrast.all {
+                    guard let contrast = seen.contrast else {
+                        Issue.record("\(place) was never evaluated")
+                        continue
+                    }
+                    #expect(
+                        contrast == .increased,
+                        "\(place) does not read colorSchemeContrast == .increased on \(sdk); the fixture values no longer reach it, go back to /architect"
+                    )
+                }
+                let transparent = try await Self.renderPlaces(main, .reduceTransparency)
+                for (place, seen) in transparent.all {
+                    guard let reduceTransparency = seen.reduceTransparency else {
+                        Issue.record("\(place) was never evaluated")
+                        continue
+                    }
+                    #expect(
+                        reduceTransparency,
+                        "\(place) does not read accessibilityReduceTransparency == true on \(sdk); the fixture values no longer reach it, go back to /architect"
+                    )
+                }
+                let standard = try await Self.renderPlaces(main, .light)
+                for (place, seen) in standard.all {
+                    guard let contrast = seen.contrast,
+                        let reduceTransparency = seen.reduceTransparency
+                    else {
+                        Issue.record("\(place) was never evaluated")
+                        continue
+                    }
+                    #expect(contrast == .standard, "\(place) reads increased contrast in light")
+                    #expect(
+                        reduceTransparency == false, "\(place) reads reduced transparency in light")
+                }
+            }
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-027", "NFR-012"],
+                expected:
+                    "Without fixtureAppearance the relay changes nothing, so a Debug app keeps the system settings"
+            )
+        )
+        func theRelayDoesNothingWithoutTheFixtureAppearance() async throws {
+            let seen = PlacedSpy.Seen()
+            _ = try await SnapshotRender.render(
+                PlacedSpy(seen: seen)
+                    .relayFixtureAccessibility()
+                    .environment(\._colorSchemeContrast, .increased)
+                    .environment(\._accessibilityReduceTransparency, true),
+                width: 200,
+                height: .fixed(100),
+                scheme: .light
+            )
+            #expect(seen.contrast == .increased, "the relay pinned a value it was not given")
+            #expect(seen.reduceTransparency == true, "the relay pinned a value it was not given")
+        }
     }
 }

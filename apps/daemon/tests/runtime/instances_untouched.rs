@@ -239,6 +239,7 @@ impl Site {
             &package_dir(),
         )
         .expect("the fake runtime and package are seeded");
+        crate::support::make_pinned_folders_private(&prepared.layout().providers_dir());
         // The registry closes here, so the daemon opens it alone.
         drop(registry);
         let reap = ReapGuard::new(root.path(), root.roots().runtime());

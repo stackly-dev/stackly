@@ -84,11 +84,15 @@ struct CommandMapTests {
         #expect(CommandMap.entry(for: .showMainWindow).kind == .system)
     }
 
-    /// The commands whose menu item exists after milestone 2. New Instance… waits for spec
-    /// 0020, Welcome to Stackly for spec 0016, and the rest for their owner features.
+    /// The commands whose menu item exists after milestone 2 and the Instances page (spec
+    /// 0022). New Instance… waits for spec 0020, Welcome to Stackly for spec 0016, and the
+    /// rest for their owner features.
     private static let builtCommands: Set<CommandID> = [
         .reconnect, .find, .showOverview, .showInstances, .showEnvironments, .showCatalog,
-        .showRuntimes, .showOperations, .showDiagnostics, .showMainWindow,
+        .showRuntimes, .showOperations, .showDiagnostics, .showMainWindow, .toggleInspector,
+        .sortInstancesByName, .sortInstancesByProvider, .sortInstancesByVersion,
+        .sortInstancesByEndpoints, .sortInstancesByStatus, .sortInstancesAscending,
+        .sortInstancesDescending, .startInstance, .stopInstance,
     ]
 
     @Test func aRowIsBuiltExactlyWhenItsMenuItemExists() {
@@ -264,10 +268,18 @@ struct CommandMapTests {
                 [
                     .showOverview, .showInstances, .showEnvironments, .showCatalog,
                     .showRuntimes, .showOperations, .showDiagnostics,
-                ]
+                ],
+                [.toggleInspector],
             ])
-        #expect(ids(.view, .sortInstancesBy).isEmpty)
-        #expect(ids(.instance).isEmpty)
+        #expect(
+            ids(.view, .sortInstancesBy) == [
+                [
+                    .sortInstancesByName, .sortInstancesByProvider, .sortInstancesByVersion,
+                    .sortInstancesByEndpoints, .sortInstancesByStatus,
+                ],
+                [.sortInstancesAscending, .sortInstancesDescending],
+            ])
+        #expect(ids(.instance) == [[.startInstance, .stopInstance]])
         #expect(ids(.help).isEmpty)
         #expect(ids(.window).isEmpty)
     }

@@ -50,6 +50,10 @@
 //! so [`fs_cross_device_conformance`] can check that a removal never
 //! crosses onto another device (spec 0007).
 //!
+//! Native tests of the runtime install read the artifacts the spike of
+//! `cargo xtask` downloaded through [`RuntimeCache`], and never download
+//! anything themselves (spec 0018).
+//!
 //! The fakes need Unix file ownership and modes, and the dummy server
 //! handles Unix signals, so they exist only on Unix; [`TestRoot`] and
 //! [`allocate_port`] work everywhere.
@@ -83,6 +87,7 @@ mod process_table;
 mod reap_guard;
 #[cfg(unix)]
 mod registry;
+mod runtime_cache;
 #[cfg(unix)]
 mod spawned_daemon;
 mod test_root;
@@ -122,6 +127,7 @@ pub use registry::{
     ProviderRevisionBuilder, RegistrySeed, RuntimeBuilder, SEEDED_EXECUTABLE, WrittenAt,
     registry_conformance, seeded_observation,
 };
+pub use runtime_cache::RuntimeCache;
 #[cfg(unix)]
 pub use spawned_daemon::{
     DAEMON_START_TIMEOUT, DAEMON_STOP_TIMEOUT, EMPTY_CATALOG_JSON, SpawnCatalog, SpawnedDaemon,

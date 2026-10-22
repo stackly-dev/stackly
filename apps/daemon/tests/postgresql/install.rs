@@ -12,7 +12,7 @@ use crate::harness::{OWNER, PG17, PG18, Site, artifact_sha256, cached_artifact};
 #[ignore = "native: needs both managed PostgreSQL artifacts in the runtime cache"]
 fn postgresql_17_and_18_pass_the_install_exec_check_with_the_version_of_their_artifact() {
     let ev = evidence!(
-        covers = ["REQ-035", "BR-025"],
+        covers = ["REQ-035"],
         kind = Kind::Native,
         expected = "the install pipeline installs both PostgreSQL artifacts with the exec check of runtime.versionCheck, and bin/postgres --version prints postgres (PostgreSQL) 17.11 and 18.6",
     );

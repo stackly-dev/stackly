@@ -9,12 +9,16 @@
 mod common;
 
 mod action;
+mod connection;
 mod create;
 mod data;
+mod duplicate;
+mod duplicate_real;
 mod exit_codes;
 mod get;
 mod inspect;
 mod list;
+mod parity;
 #[path = "../operation/play.rs"]
 mod play;
 mod secrets;

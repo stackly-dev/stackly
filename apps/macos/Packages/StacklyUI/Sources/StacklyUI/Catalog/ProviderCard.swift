@@ -10,11 +10,23 @@ import SwiftUI
 /// the tile is decoration.
 struct ProviderCard: View {
     let provider: ProviderSummary
+    var installedCount = 0
     let isSelected: Bool
     let select: () -> Void
 
     private var isPlanned: Bool { provider.state == .planned }
-    private var status: StatusAppearance { CatalogAppearance.appearance(of: provider.state) }
+    private var status: StatusAppearance {
+        Self.status(of: provider, installedCount: installedCount)
+    }
+
+    /// The status of the card: "{n} installed" once a runtime of the provider's software is
+    /// installed (spec 0018), else the state of the entry.
+    static func status(of provider: ProviderSummary, installedCount: Int) -> StatusAppearance {
+        if installedCount > 0, provider.state == .available {
+            return RuntimeAppearance.installedCount(installedCount)
+        }
+        return CatalogAppearance.appearance(of: provider.state)
+    }
 
     var body: some View {
         Button(action: select) {
@@ -49,6 +61,7 @@ struct ProviderCard: View {
             .cardSurface()
             .overlay {
                 if isSelected {
+                    // provisional: F12 (a design-system selection token replaces the system accent)
                     RoundedRectangle(cornerRadius: Radius.medium.value, style: .continuous)
                         .strokeBorder(Color(nsColor: .controlAccentColor), lineWidth: 2)
                 }
@@ -57,15 +70,15 @@ struct ProviderCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spokenLabel(for: provider))
+        .accessibilityLabel(Self.spokenLabel(for: provider, installedCount: installedCount))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier(AccessibilityID.Catalog.card(provider.provider))
     }
 
     /// What VoiceOver reads: "{name}, {category}, {status}".
-    static func spokenLabel(for provider: ProviderSummary) -> String {
+    static func spokenLabel(for provider: ProviderSummary, installedCount: Int = 0) -> String {
         let category = CatalogCopy.categoryName(provider.category)
-        let status = CatalogAppearance.appearance(of: provider.state).label
+        let status = status(of: provider, installedCount: installedCount).label
         return "\(provider.displayName), \(category), \(status)"
     }
 

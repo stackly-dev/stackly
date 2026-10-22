@@ -123,6 +123,104 @@ safe_integer! {
     Count
 }
 
+/// A signed integer between minus and plus [`MAX_SAFE_INTEGER`], the signed
+/// counterpart of [`Count`]: a setting value or a schema bound that may be
+/// negative. `typeshare.toml` maps it to `Int64`, and decoding rejects a
+/// value outside the range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
+#[serde(transparent)]
+pub struct SignedSafeInteger(i64);
+
+impl SignedSafeInteger {
+    /// Zero.
+    pub const ZERO: Self = Self(0);
+    /// The smallest value the wire carries, minus [`MAX_SAFE_INTEGER`].
+    pub const MIN: Self = Self(-(MAX_SAFE_INTEGER as i64));
+    /// The largest value the wire carries, [`MAX_SAFE_INTEGER`].
+    pub const MAX: Self = Self(MAX_SAFE_INTEGER as i64);
+
+    /// Wraps `value`, or returns `None` when its size is above
+    /// [`MAX_SAFE_INTEGER`].
+    #[must_use]
+    pub const fn new(value: i64) -> Option<Self> {
+        if value.unsigned_abs() <= MAX_SAFE_INTEGER {
+            Some(Self(value))
+        } else {
+            None
+        }
+    }
+
+    /// Wraps `value`, clamped to the range of the wire.
+    #[must_use]
+    pub const fn saturating(value: i64) -> Self {
+        if value < Self::MIN.0 {
+            Self::MIN
+        } else if value > Self::MAX.0 {
+            Self::MAX
+        } else {
+            Self(value)
+        }
+    }
+
+    /// The plain number.
+    #[must_use]
+    pub const fn get(self) -> i64 {
+        self.0
+    }
+}
+
+impl From<SignedSafeInteger> for i64 {
+    fn from(value: SignedSafeInteger) -> Self {
+        value.0
+    }
+}
+
+impl TryFrom<i64> for SignedSafeInteger {
+    type Error = OutsideSafeInteger;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        Self::new(value).ok_or(OutsideSafeInteger(value))
+    }
+}
+
+impl fmt::Display for SignedSafeInteger {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<'de> Deserialize<'de> for SignedSafeInteger {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = i64::deserialize(deserializer)?;
+        Self::new(value).ok_or_else(|| D::Error::custom(OutsideSafeInteger(value)))
+    }
+}
+
+impl JsonSchema for SignedSafeInteger {
+    fn schema_name() -> Cow<'static, str> {
+        "SignedSafeInteger".into()
+    }
+
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "integer",
+            "format": "int64",
+            "minimum": -(MAX_SAFE_INTEGER as i64),
+            "maximum": MAX_SAFE_INTEGER,
+        })
+    }
+}
+
+/// An `i64` whose size is above [`MAX_SAFE_INTEGER`] cannot travel on the
+/// wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("integer {0} is outside -(2^53 - 1) to 2^53 - 1")]
+pub struct OutsideSafeInteger(pub i64);
+
 /// A `u64` above [`MAX_SAFE_INTEGER`] cannot travel on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("integer {0} is above 2^53 - 1")]
@@ -299,6 +397,33 @@ mod tests {
         assert_eq!(Count::saturating(u64::MAX), Count::MAX);
         assert_eq!(Sequence::MAX.next(), None);
         assert_eq!(Sequence::ZERO.next(), Sequence::new(1));
+    }
+
+    #[test]
+    fn signed_safe_integers_accept_the_range_and_reject_one_more_either_way() {
+        let max: SignedSafeInteger = serde_json::from_str("9007199254740991").unwrap();
+        assert_eq!(max, SignedSafeInteger::MAX);
+        let min: SignedSafeInteger = serde_json::from_str("-9007199254740991").unwrap();
+        assert_eq!(min, SignedSafeInteger::MIN);
+        for text in ["9007199254740992", "-9007199254740992", "1.5"] {
+            assert!(
+                serde_json::from_str::<SignedSafeInteger>(text).is_err(),
+                "{text}"
+            );
+        }
+        assert_eq!(SignedSafeInteger::new(i64::MIN), None);
+        assert_eq!(
+            SignedSafeInteger::saturating(i64::MIN),
+            SignedSafeInteger::MIN
+        );
+        assert_eq!(
+            SignedSafeInteger::saturating(i64::MAX),
+            SignedSafeInteger::MAX
+        );
+        assert_eq!(
+            serde_json::to_string(&SignedSafeInteger::new(-7).unwrap()).unwrap(),
+            "-7"
+        );
     }
 
     #[test]

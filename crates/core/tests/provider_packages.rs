@@ -662,6 +662,42 @@ fn preflight_reads_the_fake_data_marker() {
 }
 
 #[test]
+fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "the postgresql, nats, and fake packages validate with their connection block (sentinel render included) and traefik declares none",
+    );
+    let entries = |dir: &Path| -> Vec<(String, String)> {
+        validated(dir)
+            .manifest()
+            .connections()
+            .iter()
+            .map(|entry| (entry.name().to_owned(), entry.title().to_owned()))
+            .collect()
+    };
+    let pair = |name: &str, title: &str| (name.to_owned(), title.to_owned());
+
+    assert_eq!(
+        entries(&postgresql_dir()),
+        [
+            pair("uri", "Connection string"),
+            pair("socket", "Unix socket")
+        ]
+    );
+    assert_eq!(
+        entries(&nats_dir()),
+        [
+            pair("uri", "Client URL"),
+            pair("monitoring", "Monitoring URL")
+        ]
+    );
+    assert_eq!(entries(&fake_dir()), [pair("uri", "Connection string")]);
+    assert!(entries(&traefik_dir()).is_empty());
+    ev.pass();
+}
+
+#[test]
 fn the_nats_package_reads_without_writes_and_validates() {
     let ev = evidence!(
         covers = ["REQ-029"],
@@ -672,7 +708,7 @@ fn the_nats_package_reads_without_writes_and_validates() {
 
     let key = package.key();
     assert_eq!(key.provider().as_str(), "official/nats");
-    assert_eq!(key.revision().as_str(), "1.0.0");
+    assert_eq!(key.revision().as_str(), "1.0.1");
     assert_eq!(package.software().as_str(), "nats");
     assert_eq!(
         package
@@ -708,7 +744,7 @@ fn nats_plans_match_the_golden_files() {
 
     assert_golden("nats", "init.json", &pretty(&init));
     assert_golden("nats", "run.json", &pretty(&run));
-    let renders = rendered(&package, &init.steps);
+    let renders = rendered(&package, &run.render);
     assert_eq!(renders.len(), 1);
     for (config, text) in renders {
         assert_golden("nats", &format!("render-{config}.txt"), &text);
@@ -720,11 +756,11 @@ fn nats_without_jetstream_renders_no_jetstream_block() {
     let package = validated(&nats_dir());
     let context = golden_context(&package, serde_json::json!({ "jetstream": false }));
 
-    let init = package
-        .init_plan(&context)
-        .expect("the nats init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds");
 
-    let (_, text) = rendered(&package, &init.steps)
+    let (_, text) = rendered(&package, &run.render)
         .into_iter()
         .next()
         .expect("nats renders nats.conf");
@@ -754,13 +790,90 @@ fn a_quote_in_the_data_folder_fails_the_nats_plan_without_the_value() {
         serde_json::json!({}),
     );
 
-    let err = package.init_plan(&context).unwrap_err();
+    let err = package.run_plan(&context).unwrap_err();
 
     let PlanError::UnrepresentableValue { field } = &err else {
         panic!("expected UnrepresentableValue, got {err:?}");
     };
     assert!(field.contains("instance.data"), "{field}");
     assert!(!err.to_string().contains("o\"q"), "{err}");
+}
+
+/// `context` with every TCP and UDP endpoint stripped of its port, the state
+/// of an `Auto` endpoint at initialize.
+fn without_ports(mut context: PlanContext) -> PlanContext {
+    for resolved in context.endpoints.values_mut() {
+        if let ResolvedEndpoint::Ip { port, .. } = resolved {
+            *port = None;
+        }
+    }
+    context
+}
+
+#[test]
+fn nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run() {
+    let package = validated(&nats_dir());
+    let context = golden_context(&package, serde_json::json!({}));
+    let portless = without_ports(context.clone());
+
+    let init = package
+        .init_plan(&portless)
+        .expect("the nats init plan builds while the endpoints have no port");
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds with ports");
+
+    assert!(
+        matches!(init.steps.as_slice(), [InitStep::EnsureDirectories(_)]),
+        "initialize only creates the folders: {:?}",
+        init.steps
+    );
+    let renders = rendered(&package, &run.render);
+    assert_eq!(renders.len(), 1);
+    assert_eq!(renders[0].0, "natsConf");
+    assert!(renders[0].1.contains("listen: \"127.0.0.1:14000\""));
+    assert!(matches!(
+        package.run_plan(&portless).unwrap_err(),
+        PlanError::EndpointUnresolved { .. }
+    ));
+}
+
+#[test]
+fn every_package_initializes_with_endpoints_that_have_no_port() {
+    let packages = [
+        ("fake", fake_dir(), fake_settings()),
+        ("nats", nats_dir(), serde_json::json!({})),
+        ("postgresql", postgresql_dir(), postgresql_settings()),
+        ("traefik", traefik_dir(), traefik_settings(1)),
+    ];
+    for (name, dir, settings) in packages {
+        let package = validated(&dir);
+        let context = without_ports(golden_context(&package, settings));
+        package
+            .init_plan(&context)
+            .unwrap_or_else(|err| panic!("{name} init plan without ports: {err}"));
+    }
+}
+
+#[test]
+fn every_folder_in_providers_has_no_init_port_issue() {
+    let providers = repo_root().join("providers");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(&providers).expect("the providers folder lists") {
+        let entry = entry.expect("the entry reads");
+        if !entry.file_type().expect("the entry has a type").is_dir() {
+            continue;
+        }
+        let package = validated(&entry.path());
+        assert!(
+            package.init_port_issues().is_empty(),
+            "{}: {:?}",
+            entry.path().display(),
+            package.init_port_issues()
+        );
+        checked += 1;
+    }
+    assert!(checked >= 4, "only {checked} package folders found");
 }
 
 /// The first `count` of the three example routes of the golden context.
@@ -827,11 +940,23 @@ fn traefik_plans_with_three_routes_match_the_golden_files() {
     assert_golden("traefik", "init.json", &pretty(&init));
     assert_golden("traefik", "run.json", &pretty(&run));
     assert_golden("traefik", "reload.json", &pretty(&reload));
-    let renders = rendered(&package, &init.steps);
-    assert_eq!(renders.len(), 2);
-    for (config, text) in renders {
-        assert_golden("traefik", &format!("render-{config}.txt"), &text);
-    }
+    // `staticConfig` holds the endpoint addresses, so only the run renders
+    // it; initialize renders the routes alone.
+    let init_renders = rendered(&package, &init.steps);
+    assert_eq!(
+        init_renders
+            .iter()
+            .map(|(config, _)| config.as_str())
+            .collect::<Vec<_>>(),
+        ["routes"]
+    );
+    assert_golden("traefik", "render-routes.txt", &init_renders[0].1);
+    let run_renders = rendered(&package, &run.render);
+    let static_config = run_renders
+        .iter()
+        .find(|(config, _)| config == "staticConfig")
+        .expect("the run renders staticConfig before the spawn");
+    assert_golden("traefik", "render-staticConfig.txt", &static_config.1);
 }
 
 #[test]

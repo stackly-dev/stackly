@@ -906,6 +906,178 @@
         }
       ]
     },
+    "ConnectionAvailability": {
+      "description": "Whether a connection string could be built. Open.",
+      "oneOf": [
+        {
+          "description": "The string is ready except for its secrets.",
+          "type": "string",
+          "const": "available"
+        },
+        {
+          "description": "The string cannot be built now; `reason` says why.",
+          "type": "string",
+          "const": "unavailable"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ConnectionPart": {
+      "description": "One piece of a connection string: [`text`](Self::text) for a text part,\n[`secret`](Self::secret) for a secret part.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What the part holds.",
+          "$ref": "#/$defs/ConnectionPartKind"
+        },
+        "secret": {
+          "description": "The secret of a secret part: its field and its reference, never its\nvalue.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionSecretPart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "description": "The text of a text part, already percent encoded, written as is.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "ConnectionPartKind": {
+      "description": "What one [`ConnectionPart`] holds. Open.",
+      "oneOf": [
+        {
+          "description": "Text that is already percent encoded.",
+          "type": "string",
+          "const": "text"
+        },
+        {
+          "description": "A secret value the client fills in.",
+          "type": "string",
+          "const": "secret"
+        },
+        {
+          "description": "A kind this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ConnectionSecretPart": {
+      "description": "The secret a secret part stands for.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field of the secret.",
+          "type": "string"
+        },
+        "reference": {
+          "description": "The reference `secret.reveal` takes.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "reference"
+      ]
+    },
+    "ConnectionString": {
+      "description": "One connection string of an instance, in manifest order.\n\nWhen `state` is `available`, `masked` holds the string with every secret\nas `****`, `parts` is not empty, and `reason` is null. When it is\n`unavailable`, `reason` is set, `masked` is null, and `parts` is empty.\n[`ConnectionString::is_consistent`] checks that.",
+      "type": "object",
+      "properties": {
+        "masked": {
+          "description": "The string with each secret as four stars; set if and only if the\nstring is available.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The entry name from the manifest, such as `uri`.",
+          "type": "string"
+        },
+        "parts": {
+          "description": "The string in order: encoded text and secret references, never a\nvalue. Empty when unavailable.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectionPart"
+          }
+        },
+        "portMayChange": {
+          "description": "True when the port may differ the next time the instance starts.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Set if and only if the string is unavailable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionUnavailableReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "state": {
+          "description": "Whether the string could be built.",
+          "$ref": "#/$defs/ConnectionAvailability"
+        },
+        "title": {
+          "description": "The label a client shows.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "title",
+        "state",
+        "parts",
+        "portMayChange"
+      ]
+    },
+    "ConnectionUnavailableReason": {
+      "description": "Why a connection string cannot be built. Open.",
+      "oneOf": [
+        {
+          "description": "An endpoint the string names has no effective port yet.",
+          "type": "string",
+          "const": "port_not_assigned"
+        },
+        {
+          "description": "The package of the instance cannot be used to render the string.",
+          "type": "string",
+          "const": "package_unavailable"
+        },
+        {
+          "description": "The instance was removed and kept.",
+          "type": "string",
+          "const": "retained"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "CountedProgress": {
       "description": "Content of a `counted` progress.",
       "type": "object",
@@ -928,6 +1100,220 @@
       "required": [
         "done",
         "total"
+      ]
+    },
+    "CreateEndpoint": {
+      "description": "One endpoint of the package, as the form shows it.",
+      "type": "object",
+      "properties": {
+        "defaultPort": {
+          "description": "The port the form starts with, for `tcp` and `udp`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "host": {
+          "description": "The loopback host, for `tcp` and `udp`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The endpoint name from the manifest.",
+          "type": "string"
+        },
+        "purpose": {
+          "description": "What it is for.",
+          "$ref": "#/$defs/EndpointPurpose"
+        },
+        "socketName": {
+          "description": "The `socketName` template as the manifest writes it, for `unix`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "transport": {
+          "description": "`tcp`, `udp`, or `unix`.",
+          "$ref": "#/$defs/EndpointTransport"
+        }
+      },
+      "required": [
+        "name",
+        "transport",
+        "purpose"
+      ]
+    },
+    "CreateForm": {
+      "description": "Reply of `instance.get_create_form`.",
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "description": "The capabilities of the package, in the order of spec 0017.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityStatus"
+          }
+        },
+        "dataPath": {
+          "description": "Where the data lives, relative to the data root:\n`instances/<new instance id>/data`.",
+          "type": "string"
+        },
+        "endpoints": {
+          "description": "The endpoints of the package: purpose `client`, `admin`,\n`monitoring`, then name.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CreateEndpoint"
+          }
+        },
+        "fields": {
+          "description": "The settings fields, in the order the schema declares them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FormField"
+          }
+        },
+        "provider": {
+          "description": "The provider the form was built from.",
+          "$ref": "#/$defs/CreateProvider"
+        },
+        "runtime": {
+          "description": "The runtime the instance will run on.",
+          "$ref": "#/$defs/RuntimeSummary"
+        },
+        "suggestedName": {
+          "description": "The name the form starts with; absent when every candidate is taken.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "provider",
+        "runtime",
+        "dataPath",
+        "endpoints",
+        "fields",
+        "capabilities"
+      ]
+    },
+    "CreatePreflight": {
+      "description": "Reply of `instance.preflight`.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "The rows, in the order of spec 0020.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PreflightCheck"
+          }
+        },
+        "command": {
+          "description": "The `stackly instance create` command that does the same.",
+          "type": "string"
+        },
+        "fields": {
+          "description": "Every field issue of the draft, sorted by path.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          }
+        },
+        "provider": {
+          "description": "The package the draft resolved to, when one could be determined.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolvedProvider"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ready": {
+          "description": "True exactly when no row is an error.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ready",
+        "checks",
+        "fields",
+        "command"
+      ]
+    },
+    "CreateProvider": {
+      "description": "The provider a form was built from.",
+      "type": "object",
+      "properties": {
+        "category": {
+          "description": "The category.",
+          "$ref": "#/$defs/ProviderCategory"
+        },
+        "displayName": {
+          "description": "The name to show.",
+          "type": "string"
+        },
+        "manifestSha256": {
+          "description": "SHA-256 of the package, in lowercase hex.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The provider ID, such as `official/nats`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision of the loaded catalog entry.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where the package comes from.",
+          "$ref": "#/$defs/CreateProviderSource"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "manifestSha256",
+        "displayName",
+        "category",
+        "source"
+      ]
+    },
+    "CreateProviderSource": {
+      "description": "Where the package of a form comes from. Open.",
+      "oneOf": [
+        {
+          "description": "The catalog that ships with Stackly.",
+          "type": "string",
+          "const": "bundled_catalog"
+        },
+        {
+          "description": "A development catalog.",
+          "type": "string",
+          "const": "development_catalog"
+        },
+        {
+          "description": "A package already pinned in the data folder.",
+          "type": "string",
+          "const": "pinned"
+        },
+        {
+          "description": "A source this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "CreatedItemInfo": {
@@ -1364,6 +1750,51 @@
         "rootOverride"
       ]
     },
+    "DataUsage": {
+      "description": "The size of a data folder.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "The allocated bytes (blocks times 512) of every entry counted.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "complete": {
+          "description": "False when the scan stopped at a limit, so `bytes` is a lower bound.",
+          "type": "boolean"
+        },
+        "scannedAt": {
+          "description": "When the scan finished.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "bytes",
+        "complete",
+        "scannedAt"
+      ]
+    },
+    "DataUsageReply": {
+      "description": "Reply of `instance.get_data_usage`.",
+      "type": "object",
+      "properties": {
+        "usage": {
+          "description": "The measured size; null when `cachedOnly` found no fresh result.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      }
+    },
     "DeleteSecretReply": {
       "description": "Reply of `secret.delete`.",
       "type": "object",
@@ -1449,6 +1880,227 @@
         }
       ]
     },
+    "DependentOwnership": {
+      "description": "Whether an environment owns an instance it holds. Open.",
+      "oneOf": [
+        {
+          "description": "Only this environment uses the instance.",
+          "type": "string",
+          "const": "dedicated"
+        },
+        {
+          "description": "Other environments may use it too.",
+          "type": "string",
+          "const": "shared"
+        },
+        {
+          "description": "An ownership this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "DetailDependent": {
+      "description": "An environment that holds the instance.",
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "description": "The environment.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "leaseActive": {
+          "description": "Whether the environment holds an active lease on the instance.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        },
+        "ownership": {
+          "description": "Whether the environment owns the instance.",
+          "$ref": "#/$defs/DependentOwnership"
+        }
+      },
+      "required": [
+        "environmentId",
+        "name",
+        "ownership",
+        "leaseActive"
+      ]
+    },
+    "DetailProvider": {
+      "description": "The pinned provider revision of an instance.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "`metadata.displayName` of the pinned package; null when the package\ncannot be read. Never taken from the catalog.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "manifestSha256": {
+          "description": "The SHA-256 of the pinned manifest.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The provider name, such as `official/postgresql`.",
+          "type": "string"
+        },
+        "packageReadable": {
+          "description": "False when the pinned package cannot be read, or the package found\nis not the pinned one; then `displayName` is null and the detail has\nno connection. True otherwise, also for a package without a\n`connection` block.",
+          "type": "boolean"
+        },
+        "revision": {
+          "description": "The pinned revision.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "manifestSha256",
+        "packageReadable"
+      ]
+    },
+    "DetailRuntime": {
+      "description": "The runtime an instance runs on.",
+      "type": "object",
+      "properties": {
+        "artifactSha256": {
+          "description": "The SHA-256 of the installed artifact; null for an external runtime.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "id": {
+          "description": "The runtime ID.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "installMode": {
+          "description": "Whether Stackly installed it or it lives in a folder the user owns.",
+          "$ref": "#/$defs/InstallModeKind"
+        },
+        "target": {
+          "description": "The OS and architecture it was built for.",
+          "$ref": "#/$defs/HostTarget"
+        },
+        "version": {
+          "description": "The exact version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "target",
+        "installMode"
+      ]
+    },
+    "DetailSecret": {
+      "description": "One secret an instance uses.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field.",
+          "type": "string"
+        },
+        "reference": {
+          "description": "The reference `secret.reveal` takes.",
+          "type": "string"
+        },
+        "status": {
+          "description": "What the store held when the daemon last looked; `unknown` before the\nfirst look.",
+          "$ref": "#/$defs/SecretStatus"
+        },
+        "title": {
+          "description": "The title from the schema of the pinned package, else the field name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "title",
+        "reference",
+        "status"
+      ]
+    },
+    "DuplicateForm": {
+      "description": "Reply of `instance.get_duplicate_form`.",
+      "type": "object",
+      "properties": {
+        "draft": {
+          "description": "The draft the form starts with: every port `auto`, every secret\n`generate`, the settings of the source, no display name, no start.",
+          "$ref": "#/$defs/PreflightCreateParams"
+        },
+        "form": {
+          "description": "The create form of the pinned package and the runtime of the source;\n`suggestedName` is the duplicate name.",
+          "$ref": "#/$defs/CreateForm"
+        },
+        "secrets": {
+          "description": "One entry per secret field, in form order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DuplicateSecret"
+          }
+        },
+        "source": {
+          "description": "The instance the form copies the settings of.",
+          "$ref": "#/$defs/DuplicateSource"
+        }
+      },
+      "required": [
+        "source",
+        "form",
+        "draft",
+        "secrets"
+      ]
+    },
+    "DuplicateSecret": {
+      "description": "The reference the source uses for one secret field.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field the secret fills.",
+          "type": "string"
+        },
+        "sourceReference": {
+          "description": "The reference the source uses for the field; absent when it uses\nnone. It is a reference, never a value.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "field"
+      ]
+    },
+    "DuplicateSource": {
+      "description": "The instance a duplicate form was built from.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The source instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name"
+      ]
+    },
     "EndpointPortMode": {
       "description": "How an IP endpoint asked for its port. Open.",
       "oneOf": [
@@ -1467,6 +2119,49 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "EndpointPurpose": {
+      "description": "What an endpoint of the package is for. Open. The form lists endpoints\nby purpose: `client`, `admin`, `monitoring`, then by name.",
+      "oneOf": [
+        {
+          "description": "Where applications connect.",
+          "type": "string",
+          "const": "client"
+        },
+        {
+          "description": "Where an administrator connects.",
+          "type": "string",
+          "const": "admin"
+        },
+        {
+          "description": "Where metrics and health are read.",
+          "type": "string",
+          "const": "monitoring"
+        },
+        {
+          "description": "A purpose this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "EndpointRequest": {
+      "description": "The port request of one manifest endpoint.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The endpoint name from the manifest.",
+          "type": "string"
+        },
+        "port": {
+          "description": "The port it asks for.",
+          "$ref": "#/$defs/PortRequest"
+        }
+      },
+      "required": [
+        "name",
+        "port"
       ]
     },
     "EndpointStatus": {
@@ -2029,6 +2724,31 @@
         "kind"
       ]
     },
+    "FieldApply": {
+      "description": "How a change to a settings field takes effect. Open.",
+      "oneOf": [
+        {
+          "description": "A running instance reloads it.",
+          "type": "string",
+          "const": "reload"
+        },
+        {
+          "description": "A running instance restarts to apply it.",
+          "type": "string",
+          "const": "restart"
+        },
+        {
+          "description": "Only the first initialization reads it; the form marks it \"Set once\".",
+          "type": "string",
+          "const": "immutable_after_init"
+        },
+        {
+          "description": "A way this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "FieldError": {
       "description": "One params field that failed to decode or validate. An error carries at\nmost 32 of them (`FIELD_ERRORS_MAX`) and counts the rest in its\n`omitted` detail.",
       "type": "object",
@@ -2050,6 +2770,331 @@
         "path",
         "code",
         "message"
+      ]
+    },
+    "FieldKind": {
+      "description": "The kind of control a settings field gets. Open.",
+      "oneOf": [
+        {
+          "description": "Text.",
+          "type": "string",
+          "const": "text"
+        },
+        {
+          "description": "A whole number.",
+          "type": "string",
+          "const": "integer"
+        },
+        {
+          "description": "True or false.",
+          "type": "string",
+          "const": "boolean"
+        },
+        {
+          "description": "One of a fixed set of texts.",
+          "type": "string",
+          "const": "choice"
+        },
+        {
+          "description": "A list of items, each with scalar entries.",
+          "type": "string",
+          "const": "list"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "FieldVisibility": {
+      "description": "Whether a settings field is shown at first or under Advanced. Open.",
+      "oneOf": [
+        {
+          "description": "Shown with the other fields.",
+          "type": "string",
+          "const": "basic"
+        },
+        {
+          "description": "Hidden in a closed group unless it has an error.",
+          "type": "string",
+          "const": "advanced"
+        },
+        {
+          "description": "A visibility this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "FormField": {
+      "description": "One settings field, typed from the settings schema in the order the\nschema declares it (VAL-012).",
+      "type": "object",
+      "properties": {
+        "apply": {
+          "description": "How a later change takes effect.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FieldApply"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "choices": {
+          "description": "The values of a `choice`; empty otherwise.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default": {
+          "description": "The value the form starts with.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SettingValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "description": "A sentence under the control.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "itemKey": {
+          "description": "The item field whose value must be unique across the items.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "items": {
+          "description": "The fields of one item of a `list`; empty otherwise.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FormItemField"
+          }
+        },
+        "key": {
+          "description": "The key in the settings document.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "The kind of control.",
+          "$ref": "#/$defs/FieldKind"
+        },
+        "managed": {
+          "description": "Whether Stackly sets it; the form locks the control.",
+          "type": "boolean"
+        },
+        "maxItems": {
+          "description": "The most items of a `list`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "maxLength": {
+          "description": "The most characters of a text, or of a secret.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "maximum": {
+          "description": "The largest integer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991
+        },
+        "minItems": {
+          "description": "The fewest items of a `list`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "minLength": {
+          "description": "The fewest characters of a text, or of a secret.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "minimum": {
+          "description": "The smallest integer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991
+        },
+        "printableOnly": {
+          "description": "Whether a secret refuses control characters.",
+          "type": "boolean"
+        },
+        "required": {
+          "description": "Whether the settings must set it.",
+          "type": "boolean"
+        },
+        "secret": {
+          "description": "Whether the value is a secret, sent in `secrets` and never in\n`settings`.",
+          "type": "boolean"
+        },
+        "title": {
+          "description": "The title to show.",
+          "type": "string"
+        },
+        "visibility": {
+          "description": "Whether the field is shown at first.",
+          "$ref": "#/$defs/FieldVisibility"
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "kind",
+        "required",
+        "secret",
+        "printableOnly",
+        "managed",
+        "visibility",
+        "choices",
+        "items"
+      ]
+    },
+    "FormItemField": {
+      "description": "One scalar field of a list item.",
+      "type": "object",
+      "properties": {
+        "choices": {
+          "description": "The values of a `choice`; empty otherwise.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default": {
+          "description": "The value a new item starts with.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScalarSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "description": "A sentence under the control.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "key": {
+          "description": "The key inside the item.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "The kind of control: `text`, `integer`, `boolean`, or `choice`.",
+          "$ref": "#/$defs/FieldKind"
+        },
+        "maxLength": {
+          "description": "The most characters of a text.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "maximum": {
+          "description": "The largest integer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991
+        },
+        "minLength": {
+          "description": "The fewest characters of a text.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "minimum": {
+          "description": "The smallest integer.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991
+        },
+        "required": {
+          "description": "Whether every item must set it.",
+          "type": "boolean"
+        },
+        "title": {
+          "description": "The title to show.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "kind",
+        "required",
+        "choices"
       ]
     },
     "Gap": {
@@ -2556,6 +3601,72 @@
           "type": "string",
           "const": "stopped"
         }
+      ]
+    },
+    "InstanceDetail": {
+      "description": "Reply of `instance.get_detail`.",
+      "type": "object",
+      "properties": {
+        "connections": {
+          "description": "The connection strings, in manifest order; none when the pinned\npackage cannot be read or declares none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConnectionString"
+          }
+        },
+        "dataPath": {
+          "description": "The absolute path of the data folder.",
+          "type": "string"
+        },
+        "dependents": {
+          "description": "The environments that hold the instance, ordered by name and then ID.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailDependent"
+          }
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "provider": {
+          "description": "The pinned provider revision.",
+          "$ref": "#/$defs/DetailProvider"
+        },
+        "revision": {
+          "description": "The revision of the instance this detail was built from. A client\ndrops a detail older than the one it holds.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "runtime": {
+          "description": "The runtime.",
+          "$ref": "#/$defs/DetailRuntime"
+        },
+        "secrets": {
+          "description": "One row per secret the instance uses, ordered by field.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailSecret"
+          }
+        },
+        "startup": {
+          "description": "When the instance starts on its own.",
+          "$ref": "#/$defs/StartupPolicyKind"
+        }
+      },
+      "required": [
+        "instanceId",
+        "revision",
+        "provider",
+        "runtime",
+        "dataPath",
+        "startup",
+        "secrets",
+        "dependents",
+        "connections"
       ]
     },
     "InstanceHealth": {
@@ -4076,6 +5187,242 @@
         "note"
       ]
     },
+    "PortRequest": {
+      "description": "How an IP endpoint asks for its port. Tagged `type` and `content`:\n`{ \"type\": \"fixed\", \"content\": 5432 }` or `{ \"type\": \"auto\" }`.",
+      "oneOf": [
+        {
+          "description": "Exactly this port, never a substitute.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "fixed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Any free port, picked when the process starts.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "auto"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "PreflightCheck": {
+      "description": "One row of a preflight. The English `title` and `detail` are the daemon's\ntext, the same in the sheet and on the command line.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "The sentence under the title, at most 200 characters.",
+          "type": "string"
+        },
+        "error": {
+          "description": "The error `instance.create` answers with for this row; only for the\nstatus `error`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorBody"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "description": "`provider`, `runtime`, `name`, `endpoint.<name>`,\n`endpoint.request.<i>`, `settings`, `data`, `disk`, or\n`secret.<field>`.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "What the row is about.",
+          "$ref": "#/$defs/PreflightCheckKind"
+        },
+        "status": {
+          "description": "How it went.",
+          "$ref": "#/$defs/PreflightStatus"
+        },
+        "subject": {
+          "description": "The endpoint name or the field key the row is about.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "suggestedPort": {
+          "description": "A free port offered for a fixed port that is taken. The form uses it\nonly when the person asks.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "title": {
+          "description": "The short title, at most 200 characters.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "status",
+        "title",
+        "detail"
+      ]
+    },
+    "PreflightCheckKind": {
+      "description": "What kind of row a preflight check is. Open.",
+      "oneOf": [
+        {
+          "description": "The provider package.",
+          "type": "string",
+          "const": "provider"
+        },
+        {
+          "description": "The runtime.",
+          "type": "string",
+          "const": "runtime"
+        },
+        {
+          "description": "The instance name.",
+          "type": "string",
+          "const": "name"
+        },
+        {
+          "description": "One endpoint.",
+          "type": "string",
+          "const": "endpoint"
+        },
+        {
+          "description": "The settings.",
+          "type": "string",
+          "const": "settings"
+        },
+        {
+          "description": "The data folder.",
+          "type": "string",
+          "const": "data"
+        },
+        {
+          "description": "The free disk space.",
+          "type": "string",
+          "const": "disk"
+        },
+        {
+          "description": "One secret field.",
+          "type": "string",
+          "const": "secret"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PreflightCreateParams": {
+      "description": "Params of `instance.preflight`: the draft of `instance.create` without\nany secret value.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "The name to show.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "endpoints": {
+          "description": "One request per manifest endpoint that asks for a port.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EndpointRequest"
+          }
+        },
+        "name": {
+          "description": "The unique instance name.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "The provider to create it from.",
+          "$ref": "#/$defs/ProviderSelector"
+        },
+        "runtimeId": {
+          "description": "The installed runtime to run it on.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "secrets": {
+          "description": "The source of each secret field.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretPlan"
+          }
+        },
+        "settings": {
+          "description": "The settings, without secret values.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "start": {
+          "description": "Whether the equivalent command ends with `--start`.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "name",
+        "provider",
+        "runtimeId",
+        "settings"
+      ]
+    },
+    "PreflightStatus": {
+      "description": "How a preflight row went. Open.",
+      "oneOf": [
+        {
+          "description": "Fine.",
+          "type": "string",
+          "const": "ok"
+        },
+        {
+          "description": "Fine as far as Stackly can tell, with a note.",
+          "type": "string",
+          "const": "caution"
+        },
+        {
+          "description": "Create would be refused.",
+          "type": "string",
+          "const": "error"
+        },
+        {
+          "description": "A status this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "ProtocolVersion": {
       "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
       "type": "object",
@@ -4301,6 +5648,27 @@
         "id",
         "revision",
         "manifestSha256"
+      ]
+    },
+    "ProviderSelector": {
+      "description": "The provider an instance is created from.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The provider ID, such as `official/nats`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision to pin. Absent means the revision of the loaded\ncatalog. The first daemon builds refuse an absent revision with\n`request.invalid_params` at `provider.revision`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name"
       ]
     },
     "ProviderSummary": {
@@ -5124,6 +6492,91 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The form for a new instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CreateForm"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_create_form"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The preflight rows, the field issues, and the equivalent command.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CreatePreflight"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.preflight"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The form and the draft of a duplicate.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DuplicateForm"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_duplicate_form"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The detail of an instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_detail"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The size of a data folder, or null when none is cached.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DataUsageReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_data_usage"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -5212,6 +6665,29 @@
         "stable",
         "support",
         "supportReason"
+      ]
+    },
+    "ResolvedProvider": {
+      "description": "The package a preflight resolved.",
+      "type": "object",
+      "properties": {
+        "manifestSha256": {
+          "description": "SHA-256 of the package, in lowercase hex.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The provider ID.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "manifestSha256"
       ]
     },
     "ResourceKind": {
@@ -5585,6 +7061,65 @@
         "retained"
       ]
     },
+    "ScalarSetting": {
+      "description": "A scalar settings value, tagged `type` and `content`:\n`{ \"type\": \"integer\", \"content\": 5 }`.",
+      "oneOf": [
+        {
+          "description": "Text.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A whole number.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991
+            },
+            "type": {
+              "type": "string",
+              "const": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "True or false.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
     "SecretChangeStatus": {
       "description": "The status in `secret.changed`: a [`SecretStatus`] or `deleted`.",
       "oneOf": [
@@ -5715,6 +7250,24 @@
         }
       ]
     },
+    "SecretPlan": {
+      "description": "The source of one secret field in a preflight.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The settings field the secret fills.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where its value comes from.",
+          "$ref": "#/$defs/SecretSource"
+        }
+      },
+      "required": [
+        "field",
+        "source"
+      ]
+    },
     "SecretRefSummary": {
       "description": "One reference row, without any value.",
       "type": "object",
@@ -5796,6 +7349,71 @@
         "purpose",
         "status",
         "revision"
+      ]
+    },
+    "SecretSource": {
+      "description": "Where a secret field gets its value, without the value. Tagged `type`\nand `content`.",
+      "oneOf": [
+        {
+          "description": "The daemon generates a value.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "generate"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "The client sends a value with `instance.create`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "value"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A copy of the value stored under this reference.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "copyFrom"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The instance uses this reference.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "bind"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
       ]
     },
     "SecretStatus": {
@@ -6038,6 +7656,119 @@
         "summary"
       ]
     },
+    "SettingEntry": {
+      "description": "One entry of a list item: a key and its scalar value.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "The key of the entry, one of the item fields of the schema.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Its value.",
+          "$ref": "#/$defs/ScalarSetting"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ]
+    },
+    "SettingItem": {
+      "description": "One item of a list setting, as ordered entries.",
+      "type": "object",
+      "properties": {
+        "entries": {
+          "description": "The entries, in the order the schema declares its item fields.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SettingEntry"
+          }
+        }
+      },
+      "required": [
+        "entries"
+      ]
+    },
+    "SettingValue": {
+      "description": "A settings value, tagged `type` and `content`.",
+      "oneOf": [
+        {
+          "description": "Text.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A whole number.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991
+            },
+            "type": {
+              "type": "string",
+              "const": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "True or false.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A list of items.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SettingItem"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
     "ShutdownAccepted": {
       "description": "Reply of `daemon.shutdown`, queued before the first step of the stop\norder so it is flushed with the connections.",
       "type": "object",
@@ -6196,6 +7927,26 @@
           "description": "Always sign every Mach-O file ad hoc.",
           "type": "string",
           "const": "adhoc_pipeline"
+        },
+        {
+          "description": "A policy this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "StartupPolicyKind": {
+      "description": "When an instance starts on its own. Open.",
+      "oneOf": [
+        {
+          "description": "Only when the user starts it.",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "When the user logs in.",
+          "type": "string",
+          "const": "at_login"
         },
         {
           "description": "A policy this build does not know. The daemon never sends it.",

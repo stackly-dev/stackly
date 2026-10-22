@@ -2,16 +2,11 @@
 
 use std::os::unix::fs::PermissionsExt;
 
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, create_instance};
 
-async fn never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = "with decoy psql, initdb, and postgres first on the daemon's PATH, create, start, readiness, and stop work and no decoy ever runs",
-    );
+async fn never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(pg: Pg, ev: Evidence) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -61,11 +56,23 @@ async fn never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(pg: Pg)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path() {
-    never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "with decoy psql, initdb, and postgres first on the daemon's PATH, create, start, readiness, and stop work and no decoy ever runs",
+    );
+    never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path() {
-    never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "with decoy psql, initdb, and postgres first on the daemon's PATH, create, start, readiness, and stop work and no decoy ever runs",
+    );
+    never_runs_a_decoy_psql_initdb_or_postgres_from_the_daemon_path(pg, ev).await;
 }

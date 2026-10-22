@@ -11,6 +11,26 @@
 //! `stacklyd` maps the domain and core types to these DTOs and never sends
 //! a domain type.
 
+pub mod command;
+pub mod connection;
+mod create;
+mod detail;
+mod duplicate;
+
+pub use create::{
+    CreateEndpoint, CreateForm, CreatePreflight, CreateProvider, CreateProviderSource,
+    EndpointPurpose, FieldApply, FieldKind, FieldVisibility, FormField, FormItemField,
+    GetCreateFormParams, PreflightCheck, PreflightCheckKind, PreflightCreateParams,
+    PreflightStatus, ResolvedProvider, ScalarSetting, SecretPlan, SecretSource, SettingEntry,
+    SettingItem, SettingValue,
+};
+pub use detail::{
+    ConnectionAvailability, ConnectionString, ConnectionUnavailableReason, DataUsage,
+    DataUsageReply, DependentOwnership, DetailDependent, DetailProvider, DetailRuntime,
+    DetailSecret, GetDataUsageParams, GetInstanceDetailParams, InstanceDetail, StartupPolicyKind,
+};
+pub use duplicate::{DuplicateForm, DuplicateSecret, DuplicateSource, GetDuplicateFormParams};
+
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

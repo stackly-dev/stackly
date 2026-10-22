@@ -6,11 +6,11 @@ use std::process::Command;
 
 use serde_json::json;
 use stackly_testkit::TestRoot;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, create_with, new_password, package_dir};
 
-fn copy_tree(from: &Path, to: &Path) {
+pub fn copy_tree(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).expect("a folder can be made");
     for entry in std::fs::read_dir(from)
         .expect("a folder can be read")
@@ -59,15 +59,7 @@ fn copy_with_free_text(root: &TestRoot) -> std::path::PathBuf {
     dir
 }
 
-async fn reads_back_the_text_the_postgresql_conf_escaper_wrote(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = &format!(
-            "postgres -C log_line_prefix from runtime {} reads back a'b\\c d and ü 空 exactly as they were given to the postgresqlConf format",
-            pg.major
-        ),
-    );
+async fn reads_back_the_text_the_postgresql_conf_escaper_wrote(pg: Pg, ev: Evidence) {
     let copies = TestRoot::new().expect("a folder for the package copy");
     let dir = copy_with_free_text(&copies);
     let Some(site) = Site::open_package(&ev, pg, &dir) else {
@@ -123,11 +115,29 @@ async fn reads_back_the_text_the_postgresql_conf_escaper_wrote(pg: Pg) {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_reads_back_the_text_the_postgresql_conf_escaper_wrote() {
-    reads_back_the_text_the_postgresql_conf_escaper_wrote(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = &format!(
+            "postgres -C log_line_prefix from runtime {} reads back a'b\\c d and ü 空 exactly as they were given to the postgresqlConf format",
+            pg.major
+        ),
+    );
+    reads_back_the_text_the_postgresql_conf_escaper_wrote(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_reads_back_the_text_the_postgresql_conf_escaper_wrote() {
-    reads_back_the_text_the_postgresql_conf_escaper_wrote(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = &format!(
+            "postgres -C log_line_prefix from runtime {} reads back a'b\\c d and ü 空 exactly as they were given to the postgresqlConf format",
+            pg.major
+        ),
+    );
+    reads_back_the_text_the_postgresql_conf_escaper_wrote(pg, ev).await;
 }

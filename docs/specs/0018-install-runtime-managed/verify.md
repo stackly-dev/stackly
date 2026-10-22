@@ -1,4 +1,4 @@
-# Verify: Install runtime managed · spec 0018 · updated 2026-10-21
+# Verify: Install runtime managed · spec 0018 · updated 2026-10-22
 
 _Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Bagian Milestone 1 dan 3 ditulis sesi milestone itu._
 
@@ -114,3 +114,78 @@ _Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalan
 - AC-16 · `install`, `list`, dan `inspect` dengan golden; `--timeout` dan `--idempotency-key` datang dari `AsyncArgs` milik spec 0008
 - AC-18 · kontrak 1.11, fixture, test Rust dan Swift; kasus fixture tampilan berupa data tanpa skenario sampai halaman Runtimes (Milestone 4)
 - AC-4, AC-5, AC-7 sampai AC-9, AC-11, AC-12 · Milestone 1 dan 2; AC-17 · Milestone 4; AC-19 · Milestone 5; AC-20 · Milestone 5
+
+## Milestone 4: Runtimes page and the Get button
+
+### UI / manual
+
+- [ ] Buka app dengan `STACKLY_UI_SCENARIO=connected-mixed`, pilih Runtimes di sidebar → subjudul "4 installed", bagian Installing dengan satu baris "Install PostgreSQL 18.1" (tanda Pg, tahap dan persen, bar), tabel MySQL, NATS Server, PostgreSQL, dan Traefik dengan kolom Runtime, Source, Digest, dan Used By, tombol hapus abu abu di tiap baris, dan catatan kaki mockup di bawah → AC-17 · NOT_RUN, menunggu user (docs/manual.md)
+- [ ] Pilih satu baris lalu tekan Return atau pilih Show Inspector → inspector membuka dengan ID (tombol salin), Software, Version, Line, Target, Source, State, Support dan record penentunya, Digest penuh, ukuran, Path, Signature, Installed, Verified, Used By, Executables, Dependencies, dan Warnings → AC-17 · NOT_RUN, menunggu user
+- [ ] Arahkan pointer ke tombol hapus → bantuan "Used by 1 instance" untuk runtime yang dipakai dan "Removing runtimes arrives in a later build" untuk yang tidak dipakai; tombol tetap nonaktif → AC-17 · NOT_RUN, menunggu user
+- [ ] Klik kanan baris Installing (atau pilih lewat keyboard dan buka menu konteksnya) → Cancel Install; selama tahap Commit item nonaktif dengan alasan "Can’t be cancelled during Commit" → AC-17 · NOT_RUN, menunggu user
+- [ ] Persempit jendela ke 900 pt dengan sidebar dan inspector terbuka (kolom halaman 384 pt) → kolom Source dan Digest hilang, teks Runtime dan Used By membungkus, bagian Installing dan catatan kaki membungkus tanpa teks terpotong → AC-17 · NOT_RUN, menunggu user
+- [ ] Buka Catalog, pilih provider `available` dengan runtime terpasang → kartu menampilkan "{n} installed" dengan nada positive (bukan Available), dan tidak tampil untuk provider tanpa runtime → AC-17 · NOT_RUN, menunggu user
+- [ ] Di panel detail Catalog, kolom Runtime di matrix versi: versi tanpa runtime menampilkan tombol Get, versi yang sedang dipasang menampilkan persen dan bar kecil 76 pt, versi yang terpasang menampilkan "Installed" → AC-17 · NOT_RUN, menunggu user
+- [ ] Klik Get lalu pindah ke Overview sebelum selesai → kartu "Installing {name} {version}. Staged, verified, then committed." muncul saat mulai, dan "{name} {version} installed and verified." muncul di jendela yang mana pun saat selesai; cancel menampilkan "Install of {name} {version} was cancelled. Nothing was kept." → AC-17 · NOT_RUN, menunggu daemon nyata (Milestone 5 memasang NATS dari jaringan setelah persetujuan)
+- [ ] Klik Get saat daemon tidak tersambung → tombol nonaktif dengan alasan gerbang mutasi; saat daemon menolak (misalnya `runtime.selector_changed`) panel detail menampilkan banner critical dengan pesan, hint, kode, dan Show Operations, tanpa kartu → AC-17 · NOT_RUN, menunggu user
+- [ ] Keyboard dan VoiceOver: Tab sampai tabel, panah memilih baris, VoiceOver membaca "PostgreSQL 17.6, managed, installed, verified, used by pg17-dev", baris Installing membacakan "Stage 1 of 5, Download, 8 percent" dan mengumumkan tiap tahap sekali → AC-17 · NOT_RUN, menunggu user
+- [x] Buka `apps/macos/design.md`, bagian Runtime status → tabel sepuluh state dengan label, tone, dan simbol, serta aturan lebar tabel 560 pt → AC-17
+- [x] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Runtimes/` → `RuntimeStore` (`ResourceStore<RuntimeSummary>` dengan `runtime.` dan `fetchPage` `runtime.list`, `fetchOne` `runtime.get`, `.refetch` untuk `runtime.state_changed`), `RuntimesPage`, `InstallingRow`, `RuntimeInspector`, `RuntimeGetAction`, dan tanpa banner umpan balik sementara → AC-17, AC-18
+
+### Commands
+
+- [x] `swift test --package-path clients/swift` → `RuntimeIdentityTests` (nama method empat call runtime, `RuntimeSummary` dan `InstallingRuntime` punya identitas) dan `RuntimeContractTests` lulus → AC-18
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter RuntimeStoreTests` → snapshot, event, join digest dan software, urutan, Get (key, busy, rejected, notSent, outcomeUnknown dengan key dipakai ulang lima menit, `alreadyInstalled`), install yang berakhir (succeeded, cancelled, failed) → AC-17, AC-18
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "RuntimeCopyTests|RuntimeAppearanceTests|RuntimeGetCellTests|RuntimesPageTests"` → teks kolom, label VoiceOver, tabel status, persen dan label tahap, urutan tiga state kolom Get, state halaman dalam urutan tetap, detail model, dan Cancel Install → AC-17
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "RuntimesSnapshotTests|CatalogSnapshotTests"` → state halaman Runtimes dan empat state kolom Get dalam light, dark, Increase Contrast, lebar 640 pt, dan Reduce Transparency; inspector terbuka di 664 pt (kolom 384 pt) → AC-17. State dengan inspector tertutup gagal cek identitas Increase Contrast sampai komponen `.stacklyInspector` memperbaiki konten utama (lihat laporan)
+- [x] `cargo xtask build-app` dan `xcrun swift-format lint --strict` pada file yang berubah → lulus → AC-17
+
+### Hasil /check verify (2026-10-22, sesi chk-f18-m4, kind `fixture`)
+
+Semua langkah Commands dijalankan ulang dari awal pada `claude/dev-f18-m2-f7a13e` (`target/` dan `.build/` kosong): `swift test --package-path clients/swift` 198 test lulus; `RuntimeStoreTests` 21 test lulus; `RuntimeCopyTests`, `RuntimeAppearanceTests`, `RuntimeGetCellTests`, dan `RuntimesPageTests` 42 test di 4 suite lulus; `RuntimesSnapshotTests` dan `CatalogSnapshotTests` 25 test lulus; `cargo xtask build-app` lulus; `xcrun swift-format lint --strict` pada `StacklyUI` (Sources dan Tests) bersih, dan `clients/swift` bersih di luar `Generated/` (yang memang dilewati hook). Run penuh `swift test --package-path apps/macos/Packages/StacklyUI`: 1118 test di 106 suite lulus dengan 23 known issue, semuanya di `SnapshotHelperTests` (tes harness); tidak ada `withKnownIssue` di `RuntimesSnapshotTests` atau `CatalogSnapshotTests`. Cek `cmp` pada 25 pasang HC: hanya `runtimes-loading` identik dengan standarnya (`contrastInvariant` hanya di sana); 24 pasang lain berbeda. Semua langkah UI dan manual yang bertanda `NOT_RUN` tetap menunggu user (keyboard, VoiceOver, Get sungguhan).
+
+### Acceptance-criteria coverage
+
+- AC-17 · halaman Runtimes, kolom Get, kartu "{n} installed", state, inspector, tabel status di `design.md`, snapshot, dan test unit; cek manual keyboard dan VoiceOver menunggu `/check verify` dan user
+- AC-18 · method dan tipe hasil generate dipakai `RuntimeStore` lewat `Call` dan `Reply` (`runtime.list`, `runtime.get`, `runtime.install`), event `runtime.state_changed` mengambil ulang lewat `runtime.get`; fixture, test kontrak Swift, dan `codegen --check` sudah dari Milestone 3
+
+## Milestone 5: Native proof
+
+_Dari cache spike xtask tanpa jaringan. Run jaringan `nats_installs_from_the_network` (langkah 16a) disetujui user lewat lead pada 2026-10-22 dan lulus; tanpa `STACKLY_NATIVE_NETWORK=1` test itu tetap `BLOCKED` `network run not approved`. Fuzz dan test native memakai ruang disk; hapus `fuzz/target` setelah run fuzz._
+
+### UI / manual
+
+- [x] Buka `apps/daemon/tests/native_runtime_install.rs` → satu test per lini dari cache: `nats_2_15_installs_from_the_cache`, `traefik_3_7_installs_from_the_cache`, `postgresql_17_installs_from_the_cache`, `postgresql_18_installs_from_the_cache`; empat test `mysql_8_4_`, `mysql_9_7_`, `clickhouse_`, dan `valkey_9_1_installs_from_the_cache` selalu berakhir `BLOCKED` `no provider package (features 40 to 43)` dengan owner `@ojiepermana`; `nats_installs_from_the_network` berakhir `BLOCKED` `network run not approved` tanpa `STACKLY_NATIVE_NETWORK=1` → AC-20
+- [x] Buka `apps/daemon/tests/native_runtime_install/recorders.rs` → pencatat ada di port, bukan di adapter (adapter macOS tidak punya hook spawn): `RecordingProcesses` mencatat program, argumen, peran, dan environment setiap `spawn_main` dan `spawn_helper`; `RecordingCodeSigning` mencatat `assess`, `sign_adhoc`, dan `quarantine`; `NoNetwork` menolak dan mencatat setiap permintaan unduh. `MacosCodeSigning` hanya menjalankan `/usr/bin/codesign` (konstanta di `crates/platform-macos/src/codesign.rs`) → AC-20
+- [x] Buka `crates/testkit/src/runtime_cache.rs` → `RuntimeCache` membuka cache xtask (`~/Library/Caches/dev.stackly.xtask/runtime`), menganggap hanya file biasa dengan ukuran dan digest yang cocok sebagai entri, dan menyalin ke `downloads_dir()` daemon sebagai `<sha256>` → AC-20
+- [x] Buka `xtask/src/runtime/spike/cleanup.rs` → `sweep_test_processes` (TERM, tunggu 5 detik, KILL) untuk proses milik user ini yang argv nya memuat `/stackly-test-`; hanya `runtime spike --cleanup` yang memanggilnya (di dalam lock spike), driver spike tidak → AC-20
+- [x] Buka `evidence/manual/*runtime-archive*` dan `evidence/manual/*runtime-macho*` → dua record manual run fuzz 600 detik dengan statistik libFuzzer, commit sumber, dan tanpa crash, hang, atau out of memory (kind `fixture`, seperti record fuzz sebelumnya, karena `evidence check` menolak record native PASS tanpa subject) → AC-19
+
+### Commands
+
+- [x] `cargo xtask runtime spike --cleanup`, lalu `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_runtime_install --locked -- --ignored`, lalu `--cleanup` lagi → 12 record native: 7 PASS (empat lini dari cache, offline, tanda tangan rusak, quarantine), 5 BLOCKED (empat tanpa paket, satu jaringan tanpa `STACKLY_NATIVE_NETWORK=1`), 0 masalah → AC-20, AC-6, AC-12
+- [x] `cargo test -p stacklyd --test native_runtime_install --locked` → test sumber `no_daemon_code_names_a_developer_tool_to_run` lulus tanpa native: tidak ada baris bukan komentar di `stackly-core`, `stackly-platform-macos`, dan `stacklyd` yang menyebut `otool`, `lipo`, `xcrun`, `xcodebuild`, atau `clang` sebagai program → AC-20
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_runtime_install --locked -- --ignored a_binary_with_a_damaged_signature` → `nats-server` dari artefak cache keluar 0 lewat `spawn_main`; salinan dengan satu byte instruksi pertama diubah dimatikan `SIGKILL` oleh OS dan `classify_early_exit` menyebutnya `binary_rejected_by_os` → AC-12
+- [x] (disetujui, lulus) `STACKLY_NATIVE_NETWORK=1 cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_runtime_install --locked -- --ignored nats_installs_from_the_network` → NATS 2.15.1 (sekitar 6,8 MB, sha256 `ed0fe392…5ffd`, source managed) diunduh ke `TestRoot` sampai `installed` dalam 4,4 detik, 1 exec check, tanpa quarantine; record manual `evidence/manual/2026-10-22-network-install-of-nats-2-15-1-to-a-testroot-thr.json` → AC-20, AC-5
+- [x] `cargo xtask fuzz run runtime_archive --time 600` dan `cargo xtask fuzz run runtime_macho --time 600`, satu per satu → exit 0 dengan `ran for 600 s without a crash`, `fuzz/artifacts/` kosong → AC-19
+- [x] `cargo test -p stackly-testkit --lib runtime_cache` dan `cargo test -p xtask -- the_test_sweep` → `RuntimeCache` dan sweep proses test lulus → AC-20
+- [x] `cargo xtask evidence check` (52 record manual, baseline valid, tanpa pelanggaran; 39 pelanggaran lama milik spec 0019 sudah hilang sejak perbaikan evidence F19), `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-20 · empat lini yang paketnya ada dipasang dari cache lewat daemon in process ke `TestRoot` tanpa satu pun permintaan unduh, dengan exec check `runtime.versionCheck` yang dijalankan di staging (peran `RuntimeCheck`, empat variabel environment tetap), tanpa `com.apple.quarantine` di pohon terpasang (`xattr -lr`), dan setiap pertanyaan ke port code signing menyangkut file di root test; empat lini tanpa paket tercatat `BLOCKED`; `--cleanup` mematikan proses sisa `/stackly-test-`; run jaringan menunggu persetujuan
+- AC-6 · offline tanpa entri cache: `runtime.download_offline` dengan `failure.retryable` true dalam waktu percobaan (test `an_install_without_a_network_and_without_a_cache_entry_is_offline_not_a_hang`); dengan entri cache, install jalan dengan nol permintaan unduh (test lini)
+- AC-12 · quarantine pada executable ditolak `check_launchable` tanpa spawn; binary dengan tanda tangan rusak dimatikan OS dan diklasifikasi `binary_rejected_by_os` lewat `spawn_main`. Yang dibuktikan di sini adalah klasifikasi pada adapter nyata; pemasangan ke `core::supervisor` sudah diuji dengan fake di `crates/core/tests/supervisor_start/launch.rs`
+- AC-19 · dua run fuzz 600 detik, record manual di `evidence/manual/`
+- AC-5 (bagian jaringan) · langkah 16a lulus: unduhan https nyata lewat `MacosFetcher` sampai `installed`; kebijakan redirect, TLS, dan batas ada di integration test `MacosFetcher` (Milestone 2)
+
+### Hasil verify checker (2026-10-22, sesi `chk-f18-m5`, main `dbb5fc7`)
+
+**Putusan: PASS** untuk AC-20, AC-6, AC-12, AC-19, dan AC-5 (bagian jaringan). Semua langkah dijalankan ulang kecuali dua yang lead kecualikan.
+
+- Dijalankan ulang di worktree bersih: `runtime spike --cleanup` sebelum dan sesudah (0 proses, 0 agen, tanpa proses `/stackly-test-`); `evidence run --kind native` tanpa `STACKLY_NATIVE_NETWORK` → 12 record (7 PASS, 5 BLOCKED, 0 masalah), 12 test lulus dalam 17,21 detik, run id `01a161c1-a2eb-70a3-b4ec-cae2749822b4`; `no_daemon_code_names_a_developer_tool_to_run`; `runtime_cache` (3 test); `the_test_sweep` (1 test); `cargo fmt --all --check`; `cargo xtask check-deps`; `cargo xtask evidence check`; `cargo clippy --workspace --all-targets --locked -- -D warnings`.
+- Record native: PASS NATS 2.15.1 (2 pertanyaan codesign, 1 exec check, 0 fetch), Traefik 3.7.15, PostgreSQL 17.11 (132 pertanyaan codesign) dan 18.6 (134), semuanya `source: managed`, tanpa `com.apple.quarantine`; PASS offline (`runtime.download_offline` setelah 140 ms, retryable, tanpa runtime); PASS quarantine (ditolak, agent `Safari`, tidak ada spawn); PASS tanda tangan rusak (kontrol keluar 0, salinan rusak `Signaled(9)`, `binary_rejected_by_os`). BLOCKED: empat lini `no provider package (features 40 to 43)` (owner `@ojiepermana`) dan `nats_installs_from_the_network` `network run not approved`.
+- Tidak dijalankan ulang (keputusan lead): langkah 16a diperiksa dari `evidence/manual/2026-10-22-network-install-of-nats-2-15-1-to-a-testroot-thr.json` (subject nats 2.15.1, sha256 `ed0fe392…5ffd`, `source: managed`, PASS); run fuzz 600 detik diperiksa dari dua record manual `runtime-archive` (882320 run, 1468 exec/s) dan `runtime-macho` (1867869 run, 3107 exec/s), commit sumber `27e4135`, tanpa crash, hang, atau OOM; `fuzz/artifacts/runtime_archive` dan `runtime_macho` kosong.
+- Penyimpangan developer, dinilai terhadap AC: (1) pencatat spawn di port memenuhi AC-20 karena adapter macOS memang tidak punya hook spawn dan `MacosCodeSigning` hanya menjalankan `/usr/bin/codesign` (konstanta); catatan: "hanya codesign dan executable artefak" dibuktikan lewat peran, environment, dan path program yang dicatat di port serta test sumber, bukan lewat pengamatan exec; (2) `sha2` di `crates/testkit` adalah dependency workspace yang dipakai `RuntimeCache` untuk memeriksa digest, `check-deps` lulus; (3) record fuzz ber-kind `fixture` diterima, `evidence check` menolak PASS native tanpa subject dan AC-19 meminta hasil tercatat, bukan kind native.
+- Dipindah, bukan FAIL: bagian a langkah 17 (`--cleanup` mencabut agent `dev.stackly.test.agent.*`) dipindah ke milestone 2 F15 atas keputusan lead (F15 yang pertama membuat LaunchAgent sementara). `--cleanup` saat ini mematikan proses `/stackly-test-` (AC-20) dan agent spike (`agent not loaded` pada kedua run).
+- Catatan kecil: record jaringan punya `finishedAt` (03:12:00) lebih awal dari `startedAt` (03:13:58), dan `sourceDirty: true` di ketiga record manual; tidak mengubah putusan.

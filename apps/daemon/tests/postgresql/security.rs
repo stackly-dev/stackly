@@ -5,15 +5,14 @@ use std::sync::Arc;
 
 use serde_json::json;
 use stackly_protocol::codes::secret;
-use stackly_protocol::operation::OperationState;
 use stackly_testkit::SecretOp;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{
     PG17, PG18, Pg, Psql, Site, Via, create_instance, create_params, create_with, files_holding,
     new_password, output_of, stop_and_shutdown,
 };
-use crate::support::{Api, LogRecorder};
+use crate::support::LogRecorder;
 
 fn hba_methods(path: &std::path::Path) -> Vec<String> {
     std::fs::read_to_string(path)
@@ -29,12 +28,7 @@ fn hba_methods(path: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
-async fn has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035", "VAL-018"],
-        kind = Kind::Native,
-        expected = "neither pg_hba.conf has a trust line, the superuser cannot log in without its password over the socket or TCP, the readiness role cannot use TCP or another database, a replication=true connection is refused and the readiness role cannot open a replication=database connection, and the password is in no argv, file, or log line",
-    );
+async fn has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(pg: Pg, ev: Evidence) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -192,12 +186,10 @@ async fn has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(pg: Pg) 
     );
 }
 
-async fn takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = "a superuser password with a space, a single quote, a double quote, and a backslash reaches initdb whole and logs in, and a password with a line break is refused before anything is stored",
-    );
+async fn takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(
+    pg: Pg,
+    ev: Evidence,
+) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -218,7 +210,8 @@ async fn takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_
     let writes = |site: &Site| site.secrets.count(SecretOp::Write);
     let before = writes(&site);
     let multi = format!("{}\nsecond line", new_password());
-    let accepted = api
+    // The create refuses the value before it starts an operation.
+    let refused = api
         .create(create_params(
             &site,
             "multi",
@@ -227,15 +220,13 @@ async fn takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_
             json!({}),
         ))
         .await
-        .expect("the create is accepted before its secret is checked")
-        .accepted
-        .expect("a create starts an operation");
-    let detail = api.wait_final(accepted.operation.id).await;
-    assert_eq!(detail.operation.state, OperationState::Failed, "{detail:?}");
-    assert_eq!(Api::failure_code(&detail), secret::INVALID_VALUE.code);
+        .expect_err("a password with a line break is refused");
+    assert_eq!(refused.code(), secret::INVALID_VALUE.code, "{refused:?}");
+    assert_eq!(refused.detail("field"), Some("superuserPassword"));
+    assert_eq!(refused.detail("reason"), Some("control_characters"));
     assert_eq!(writes(&site), before, "the keychain was not written");
     assert!(
-        !format!("{detail:?}").contains("second line"),
+        !format!("{refused:?}").contains("second line"),
         "the refusal quotes the value"
     );
 
@@ -243,12 +234,7 @@ async fn takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_
     ev.pass_with("the odd password logged in over the socket and TCP, the line break was refused");
 }
 
-async fn fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = "with LANG=de_DE.UTF-8 and TZ=Asia/Jakarta in the daemon, postgres and template1 are builtin C.UTF-8, UTF8, collate and ctype C, checksums are on, the time zones are UTC, and lc_messages is C",
-    );
+async fn fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(pg: Pg, ev: Evidence) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -298,37 +284,73 @@ async fn fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(pg:
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_has_no_trust_and_its_password_stays_out_of_argv_files_and_logs() {
-    has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035", "VAL-018"],
+        kind = Kind::Native,
+        expected = "neither pg_hba.conf has a trust line, the superuser cannot log in without its password over the socket or TCP, the readiness role cannot use TCP or another database, a replication=true connection is refused and the readiness role cannot open a replication=database connection, and the password is in no argv, file, or log line",
+    );
+    has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_has_no_trust_and_its_password_stays_out_of_argv_files_and_logs() {
-    has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035", "VAL-018"],
+        kind = Kind::Native,
+        expected = "neither pg_hba.conf has a trust line, the superuser cannot log in without its password over the socket or TCP, the readiness role cannot use TCP or another database, a replication=true connection is refused and the readiness role cannot open a replication=database connection, and the password is in no argv, file, or log line",
+    );
+    has_no_trust_and_its_password_stays_out_of_argv_files_and_logs(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break()
  {
-    takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "a superuser password with a space, a single quote, a double quote, and a backslash reaches initdb whole and logs in, and a password with a line break is refused before anything is stored",
+    );
+    takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break()
  {
-    takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "a superuser password with a space, a single quote, a double quote, and a backslash reaches initdb whole and logs in, and a password with a line break is refused before anything is stored",
+    );
+    takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_break(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment() {
-    fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "with LANG=de_DE.UTF-8 and TZ=Asia/Jakarta in the daemon, postgres and template1 are builtin C.UTF-8, UTF8, collate and ctype C, checksums are on, the time zones are UTC, and lc_messages is C",
+    );
+    fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment() {
-    fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "with LANG=de_DE.UTF-8 and TZ=Asia/Jakarta in the daemon, postgres and template1 are builtin C.UTF-8, UTF8, collate and ctype C, checksums are on, the time zones are UTC, and lc_messages is C",
+    );
+    fixes_locale_encoding_and_time_zone_whatever_the_daemon_environment(pg, ev).await;
 }

@@ -115,6 +115,14 @@ public final class DaemonModel {
     public let instances: InstanceStore
     /// The provider catalog, for the Catalog page.
     public let catalog: CatalogStore
+    /// The managed runtimes and the installs that have not ended, for the Runtimes page and
+    /// the Get action of the Catalog (spec 0018).
+    public let runtimes: RuntimeStore
+    /// The space left on the disk that holds Stackly data, for the Overview (spec 0022).
+    public let capacity: CapacityModel
+    /// Start, Stop, and Retry of instances, shared by the Overview and the Instances page
+    /// (spec 0022).
+    public let instanceActions: InstanceActionModel
     /// The background agent, or `nil` when the shell has none (spec 0015).
     public let agent: BackgroundAgentModel?
     /// Whether `STACKLY_ROOT` is set. `ShellBootstrap.assemble` sets it once, right after
@@ -148,6 +156,8 @@ public final class DaemonModel {
     @ObservationIgnored private var unreachableInput: AgentBanner.Input?
     /// The ID of the daemon instance now, for the catalog's detail cache.
     @ObservationIgnored private let serverInstance = ServerInstanceBox()
+    /// The mutation path the instance actions send through, filled once the model exists.
+    @ObservationIgnored private let mutationPathBox: MutationPathBox
 
     /// Creates a model; call ``start()`` to connect.
     ///
@@ -200,11 +210,49 @@ public final class DaemonModel {
             serverInstance: { serverInstance.id },
             now: now)
         sync.register(catalog.store)
+        capacity = CapacityModel(read: { call throws(ClientError) in
+            try await link.call(call, nil, .standard)
+        })
+        let mutations = MutationPathBox()
+        instanceActions = InstanceActionModel(
+            send: { call, key in
+                guard let path = mutations.path else {
+                    return .notSent(ClientErrorCatalog.notConnected())
+                }
+                return await path.perform(call, idempotencyKey: key)
+            },
+            updates: { [operations] id in operations.updates(for: id) },
+            readOperation: { id in
+                do {
+                    return try await OperationCenter.operation(
+                        id,
+                        call: { call throws(ClientError) in
+                            try await link.call(call, nil, .standard)
+                        })
+                } catch {
+                    return nil
+                }
+            },
+            now: now)
+        runtimes = RuntimeStore(
+            call: { call throws(ClientError) in try await link.call(call, nil, .standard) },
+            send: { call, key in
+                guard let path = mutations.path else {
+                    return .notSent(ClientErrorCatalog.notConnected())
+                }
+                return await path.perform(call, idempotencyKey: key)
+            },
+            updates: { [operations] id in operations.updates(for: id) },
+            serverInstance: { serverInstance.id },
+            now: now)
+        sync.register(runtimes.store)
+        mutationPathBox = mutations
         agent?.attach(
             presence: presence, now: now, sleep: sleep,
             didAssess: { [weak self] assessment, _ in self?.agentDidAssess(assessment) },
             systemRetry: { [weak self] in self?.systemRetry() })
         lastAgentState = agent?.assessment?.state
+        mutationPathBox.path = MutationPath(model: self)
     }
 
     /// Whether mutations can run, from the presentation.
@@ -239,6 +287,7 @@ public final class DaemonModel {
                 })
         }
         sync.onChange = { [weak self] in self?.update() }
+        runtimes.follow(operations)
         tasks.append(
             Task { [weak self, sleep] in
                 try? await sleep(.seconds(1))
@@ -253,6 +302,7 @@ public final class DaemonModel {
     public func stop() {
         for task in tasks { task.cancel() }
         tasks.removeAll()
+        runtimes.stop()
         pendingLoss?.cancel()
         pendingLoss = nil
         agent?.stop()
@@ -648,4 +698,9 @@ public final class DaemonModel {
 /// The ID of the daemon instance the link talks to, shared with the catalog's detail cache.
 private final class ServerInstanceBox {
     var id: UUID?
+}
+
+/// Holds the model's mutation path for the closures built before the model is complete.
+@MainActor private final class MutationPathBox {
+    var path: MutationPath?
 }

@@ -430,7 +430,12 @@ fn show(
         &mut cx.output.stderr,
         &Update {
             state: &state,
-            stage: operation.and_then(|operation| operation.stage.as_deref()),
+            stage: operation.and_then(|operation| {
+                operation
+                    .stage
+                    .as_deref()
+                    .map(|stage| crate::progress::stage_text(operation.kind, stage))
+            }),
             counted,
             waited: started.elapsed(),
         },

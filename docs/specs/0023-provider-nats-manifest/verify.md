@@ -1,6 +1,6 @@
 # Verify: Provider NATS lewat manifest · spec 0023 · updated 2026-10-22
 
-_Langkah diturunkan dari acceptance criteria spec 0023. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon. Tidak ada langkah milestone 1 yang membutuhkan server NATS asli atau jaringan._
+_Langkah diturunkan dari acceptance criteria spec 0023. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon. Tidak ada langkah milestone 1 yang membutuhkan jaringan; hanya langkah tiga fakta startup memakai server NATS asli dari cache._
 
 ## Milestone 1: Native probe kind and nats-readiness on fixtures
 
@@ -8,7 +8,7 @@ Langkah Build plan yang tercakup: 0, 3, 4 (sesi sebelumnya), lalu 1, 5, dan 6 (s
 
 ### UI / manual
 
-- [ ] Tiga fakta startup NATS 2.15.1 dari langkah 0 belum tercatat di transcript (semua rekaman diambil setelah server siap), jadi ini langkah yang menunggu. Jalankan `nats-server -n golden -js -sd <folder sementara>` di loopback dan catat (1) apakah INFO pertama sudah memuat `"jetstream":true` sebelum JetStream siap melayani `$JS.API.INFO` (sambungkan sekali segera setelah proses start, lalu ulangi di store yang besar); (2) apakah listener client baru terbuka setelah JetStream aktif atau lebih dulu (poll `lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>` dan hubungkan sekali tiap 10 ms selama start); (3) apakah NATS mematikan JetStream saat berjalan (isi disk store sampai batas, atau `SIGUSR2` dan lihat balasan `$JS.API.INFO`). Hasilnya dicatat di rationale lewat `/architect` (Follow-up spec). Hasil apa pun tidak membuang langkah `$JS.API.INFO` (keputusan lead 2026-10-20) → AC-5, AC-8
+- [x] Tiga fakta startup NATS 2.15.1 dari langkah 0, direkam di Mac ini dari artefak cache runtime (sha256 `ed0fe392…5ffd`), loopback, port bebas, tanpa jaringan; bukti di `evidence/manual/2026-10-22-spec-0023-startup-facts-nats-2-15-1-info-listene.json` dan folder `files/` nya (hasil mentah dan kedua skrip). (1) INFO pertama setelah start memuat `"jetstream":true` hanya sesudah JetStream aktif: setiap koneksi yang dibuat tepat setelah spawn (poll 1 ms) langsung mendapat `jetstream:true`, dan `$JS.API.INFO` menjawab `account_info_response` pada koneksi pertama itu; store kosong 179,7 ms sesudah spawn, store 127 MB dengan 300 stream dan 120000 pesan 102,3 ms (JetStream butuh 85,3 ms). Tidak ada INFO `jetstream:true` yang datang sebelum API JetStream melayani. (2) Listener client baru terbuka sesudah JetStream aktif: log memuat `Starting JetStream`, restore stream, `Took 85.338833ms to start JetStream`, baru `Listening for client connections`, lalu `Server is ready`; jadi tidak ada jendela port terbuka dengan JetStream belum siap (langkah `$JS.API.INFO` tetap dipakai, keputusan lead 2026-10-20). (3) NATS tidak mematikan JetStream saat berjalan karena disk penuh: pada image 16 MB dengan sisa 20 KiB (400 publish 64 KiB) log memuat `Filestore [fill] Critical write error` dan `JetStream failed to store a msg`, tetapi INFO tetap `jetstream:true` dan `$JS.API.INFO` tetap menjawab `account_info_response` tanpa `error` pada dua koneksi baru; hanya stream yang gagal menulis. `SIGUSR2` (lame duck) menghentikan JetStream seketika (`Initiating JetStream Shutdown`) bersama listener: 8 koneksi baru dalam 2 detik ditolak, dan koneksi lama tidak mendapat balasan `$JS.API.INFO` dalam 2 detik. Akibat untuk `nats-readiness`: disk penuh tidak membuat readiness `not_ready` (hanya `ready` palsu terhadap stream yang gagal menulis, yang di luar kontrak probe), sedangkan lame duck terlihat sebagai `connect_failed`, sesuai *Hasil gagal*. Teks rationale tidak diubah di sini (`/architect`, Follow-up spec) → AC-5, AC-8
 
 ### Commands
 
@@ -30,7 +30,74 @@ Langkah Build plan yang tercakup: 0, 3, 4 (sesi sebelumnya), lalu 1, 5, dan 6 (s
 - AC-2 · registry tertutup `NativeProbeKind` dengan `match` exhaustive di `descriptor`, `build`, dan `supervisor::probe::native::attempt`; selesai di langkah 1 dan 5
 - AC-3 · `ProbeSpec::Native` di `run_plan`, `UnrepresentableValue`, dan `Serialize`; selesai di langkah 1
 - AC-4 · menunggu langkah 2 (bergantung pada baris `runtime.versionCheck` NATS dari `dev-f18-m3`)
-- AC-5 · state machine dan transcript selesai di langkah 0 dan 3; driver, timing, dan smoke socket selesai di langkah 5; tiga fakta startup menunggu (langkah manual di atas)
+- AC-5 · state machine dan transcript selesai di langkah 0 dan 3; driver, timing, dan smoke socket selesai di langkah 5; tiga fakta startup selesai (langkah manual di atas, milestone 2)
 - AC-6 · selesai di langkah 6
 - AC-7 · target `nats_readiness_protocol` selesai di langkah 4; run ulang `provider_manifest` dan `provider_interpolation` di atas
-- AC-8 sampai AC-14 · milik milestone 2 dan 3
+- AC-8 sampai AC-12 · milestone 2 (di bawah)
+- AC-13 dan AC-14 · milik milestone 4 (dulu disebut milestone 3)
+
+## Milestone 2: NATS 2.15.1 end to end through the daemon, evidence, and catalog
+
+Langkah Build plan yang tercakup: 7, 8, dan 9 (sesi `dev-f23-m2`). Semua langkah native butuh artefak `nats-2.15.1-macos-aarch64` (sha256 `ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd`) di cache runtime xtask dan tidak mengunduh apa pun; tanpa artefak, kedua test berakhir `BLOCKED` dengan alasan `artifact nats-2.15.1-macos-aarch64 is not in the runtime cache` dan owner `@ojiepermana`. Run lengkap sekitar 70 detik.
+
+Penyimpangan dari spec, dicatat untuk lead dan architect:
+
+- AC-8 meminta kedua endpoint `Auto`. Create sementara spec 0010 (K1) menjalankan init tanpa port yang sudah terikat, dan `initialize` paket NATS merender `nats.conf` dari `endpoint.client.address`, jadi endpoint `Auto` berakhir di `supervisor.config_invalid` ("endpoint client has no concrete address"). Test memakai port `Fixed` dari `allocate_port` untuk `client` dan `monitoring` (ditandai `// provisional: F20`); create penuh spec 0020 yang mengalokasikan port sebelum init menggantikannya. Tidak ada perubahan paket.
+- Seam `stackly_testkit::runtime_cache::cached_artifact(sha256)` (asumsi spec 0018) belum ada; harness memakai fungsi lokal yang sama dengan harness PostgreSQL (`~/Library/Caches/dev.stackly.xtask/runtime/<sha256>`).
+- `nats_compatibility` memakai `SpawnedDaemon` dengan `SpawnCatalog::Unset`, seperti daemon biner di harness PostgreSQL, karena create sementara memilih revision dari record `pin_package`.
+- Langkah 9: `cargo xtask codegen` setelah `compat-record` menulis record provider ke `providers/nats/versions.json`; file itu ikut di commit evidence supaya `codegen --check` lolos.
+
+### UI / manual
+
+- [x] Setelah run native dari `HEAD` bersih, baca `target/evidence/<runId>/report.json` → 2 record `native`, keduanya `PASS`, 0 problem, subject `nats` versi `2.15.1` (dari `GET /varz`) dengan digest artefak → AC-12
+- [x] Langkah 9 berurutan: commit paket dan test (`providers/nats` tidak berubah di milestone ini, `manifestSha256` `91d3c6da2a0c43639d45a354e5f0dc9ddc492398b09b9350b99a25b1689e9235`), run native dari `HEAD` bersih, `cargo xtask runtime compat-record`, lalu satu commit berisi `evidence/compatibility/01a16181-5b99-7703-9d30-90b6b9a3d09d/`, NATS dari `[[planned]]` ke `[[provider]]` di `providers/catalog.toml` (`revision` 4), `providers/catalog-revisions.json` dari `cargo xtask catalog check --update`, dan `providers/nats/versions.json` dari `cargo xtask codegen` → AC-12
+
+### Commands
+
+- [x] `cargo test -p stacklyd --test nats --locked -- --ignored nats_lifecycle_in_process` → lulus: root data `Test Root Ünï cödé` dengan `nats.conf` yang memuat nama itu; create dan init `Stopped`/`initialized`; `instance.health_changed` memberi `not_ready` sebelum `ready` (reason `probe_ok`, urutan `statusSeq` naik), paket yang dipin memuat `name: nats-readiness`; `instance.get` menampilkan lifecycle `running`, desired `running`, readiness `ready`, health `healthy`, dan proses terpisah; `lsof` hanya menunjukkan dua listener `127.0.0.1:<client>` dan `127.0.0.1:<monitoring>` dan tanpa UDP; `/varz` memberi `server_name` sama dengan nama instance, `version` `2.15.1`, `store_dir` di bawah folder data instance, `max_memory` 1073741824 dan `max_storage` 10737418240, dan `<data>/jetstream` ada; log `Server is ready` sampai ke `LogSink` perekam; 60 detik sesudah ready spool tumbuh kurang dari 3 baris (bukan satu per percobaan, sekitar 300); stop membuat PID hilang dalam 10 detik, `stopped`, `lastFailure` null, `leftoverProcesses` kosong; start berikutnya `ready` lagi dengan PID lain → AC-8
+- [x] `cargo test -p stacklyd --test nats --locked -- --ignored nats_compatibility` → lulus: `init`, `start`, `readiness`; `SIGSTOP` membuat readiness `not_ready` dengan reason `timeout` dan detail `no INFO from the server…` sementara connect TCP tetap berhasil, health tidak `healthy`, lifecycle `running` dengan PID dan waktu start sama, dan `SIGCONT` memulihkan `ready` (`honest_readiness`); server asing `-n foreign` memberi `identity_mismatch` (`server_name is "foreign", expected "golden"`), `--user u --pass p` `auth_required`, dan server yang cocok sukses (`identity_check`); `-n golden` tanpa `-js` dengan harapan aktif `jetstream_disabled`, `-js -sd <TestRoot>/foreign-js/store` dengan harapan mati `jetstream_unexpected`, yang cocok sukses, dan instance `{ "jetstream": false }` `ready` dengan `/varz` tanpa `jetstream.config` dan tanpa folder `<data>/jetstream` (`jetstream_mode`); setelah `SIGKILL` daemon kedua server tetap hidup, daemon baru mengadopsi PID dan waktu start yang sama, `lsof -d 3` menunjukkan `instance.lock`, dan readiness `ready` (`adoption`); stop kedua instance tanpa sisa (`stop`) → AC-9, AC-10, AC-11
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test nats --locked -- --ignored` → `2 passed`, `evidence: 2 native records (NOT_RUN 0, PASS 2, FAIL 0, BLOCKED 0, DEFERRED 0), 0 problems` → AC-8, AC-9, AC-10, AC-11, AC-12
+- [x] `cargo xtask runtime compat-record target/evidence/01a16181-5b99-7703-9d30-90b6b9a3d09d/report.json` → mencetak `kept the evidence in evidence/compatibility/01a16181-5b99-7703-9d30-90b6b9a3d09d`; `compatibility.json` memuat `checks` `adoption`, `honest_readiness`, `identity_check`, `init`, `jetstream_mode`, `readiness`, `start`, `stop` dan `knownLimitations` `client_auth_not_configured`, `jetstream_persistence_not_covered`, `multi_instance_not_covered` → AC-12
+- [x] `cargo xtask catalog check`, `cargo xtask provider check`, `cargo xtask runtime check`, dan `cargo xtask codegen --check` → `ok catalog revision 4 75dc6fc6…5c46`, `ok official/nats 1.0.0 91d3c6da…9235`, `runtime check: 8 artifact(s), 7 evidence run(s), and 1 compatibility run(s) follow the rules`, `20 generated files are up to date` → AC-12
+- [x] Setelah run: `pgrep -fl nats-server` tidak menunjukkan proses test dan folder `stackly-test-*` sudah terhapus → AC-8
+
+### Acceptance-criteria coverage
+
+- AC-8 · `nats_lifecycle_in_process`; endpoint `Fixed` bukan `Auto` (penyimpangan di atas)
+- AC-9 · bagian `honest_readiness` di `nats_compatibility`
+- AC-10 · bagian `identity_check` dan `jetstream_mode` di `nats_compatibility`
+- AC-11 · bagian `adoption` di `nats_compatibility`
+- AC-12 · guard `native` di kedua test dengan `covers` sesuai spec (`nats_compatibility`: `BR-025`, `REQ-029`, `REQ-036`, `AC-029`, `REQ-012`, `REQ-013`; `nats_lifecycle_in_process`: `REQ-029`, `REQ-036`, `AC-029`), `compatibility.json` dari `provider.yaml` final, jalur `BLOCKED`, evidence di `evidence/compatibility/`, dan catalog revision 4
+- AC-13 dan AC-14 · milik milestone 4 (dulu disebut milestone 3)
+
+## Milestone 3: Endpoint Auto tanpa render saat init, dan evidence ulang
+
+Langkah Build plan yang tercakup: 13 dan 14 (sesi `dev-f23-m3`). Run native memakai artefak `nats-2.15.1-macos-aarch64` dari cache runtime xtask, tanpa jaringan; tanpa artefak kedua test berakhir `BLOCKED` seperti di milestone 2.
+
+Penyimpangan dari spec, dicatat untuk lead:
+
+- Langkah 13 menyebut `apps/cli/tests/golden/provider_list.json`, `provider_inspect_nats.*`, `apps/cli/tests/provider/inspect.rs`, dan `ProviderFactsTests.swift` sebagai file yang mengikuti revision dan digest NATS. File itu berada di luar daftar "BOLEH diubah" brief, tetapi tanpa pembaruan itu test workspace dan Swift gagal; hanya nilai digest dan `providerRevision`/`Provider revision` entri `official/nats` yang diganti (`1.0.1` dan `fe57c6f49a92…`).
+- `xtask/tests/provider_check.rs` mengubah `primitive: renderConfig` di salinan NATS menjadi `runShell` untuk memicu `unknown_primitive`; langkah itu sudah tidak ada, jadi tes sekarang mengubah `createManagedDirectories`. Hanya satu baris mutasi, di luar daftar "BOLEH diubah" tetapi tes workspace gagal tanpanya.
+- Catalog revision 7 (revision 6 diambil F19) dicatat dua kali: `cargo xtask catalog check --update` di commit paket, lalu `--update --amend` di commit evidence karena `providers/nats/versions.json` menambah record.
+
+### UI / manual
+
+- [x] Setelah run native dari `HEAD` bersih (`7e741ffb`), baca `target/evidence/01a16250-1438-776c-9d1a-91bc752be6a9/report.json` → 2 record `native`, keduanya `PASS`, 0 problem, subject `nats` versi `2.15.1`; `compat-record` menyimpannya ke `evidence/compatibility/01a16250-1438-776c-9d1a-91bc752be6a9/` dengan `providerRevision` `1.0.1` dan `manifestSha256` `fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd`; evidence `1.0.0` tetap sebagai riwayat di `providers/nats/versions.json` → AC-15, AC-12
+- [x] `nats.conf` tidak ada setelah create dan baru ada setelah start pertama dengan `listen` dan `http` pada port efektif dari `instance.get` (cocok dengan `lsof`) → AC-8, AC-15
+
+### Commands
+
+- [x] `cargo test -p stackly-core --test provider_packages` → 33 test lulus, termasuk `nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run` (`init_plan` dengan kedua endpoint tanpa port hanya berisi `EnsureDirectories`, `run_plan` dengan port menulis `nats.conf`, `run_plan` tanpa port `EndpointUnresolved`) dan `every_package_initializes_with_endpoints_that_have_no_port_except_traefik` (fake, nats, postgresql berhasil; traefik masih `EndpointUnresolved` sampai fitur 41); golden `crates/core/tests/golden/provider/nats/init.json` hanya kehilangan `WriteFile` `nats.conf`, `run.json` dan `render-natsConf.txt` tidak berubah → AC-15
+- [x] `cargo xtask provider check` → `ok official/nats 1.0.1 fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd` → AC-15
+- [x] `cargo xtask catalog check`, `cargo xtask runtime check`, `cargo xtask evidence check`, `cargo xtask codegen --check`, `cargo xtask check-deps` → bersih; `ok catalog revision 7 ef635bea…6cdca`, `3 compatibility run(s) follow the rules` → AC-12, AC-15
+- [x] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stacklyd --test create_form_fixtures` → `protocols/fixtures/instance/create-form-nats.json` memuat digest `fe57c6f4…` dan revision `1.0.1`; `swift test --package-path clients/swift` lulus (192 test) → AC-15
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test nats --locked -- --ignored` dari `HEAD` bersih → `2 passed`, `evidence: 2 native records (NOT_RUN 0, PASS 2, FAIL 0, BLOCKED 0, DEFERRED 0), 0 problems`; kedua instance dibuat dengan `PortRequest::Auto` untuk `client` dan `monitoring` → AC-8 (bagian `Auto`), AC-9, AC-10, AC-11, AC-12
+- [x] Setelah run: tidak ada `nats-server` milik test yang tersisa dan folder `stackly-test-*` terhapus → AC-8
+
+### Acceptance-criteria coverage
+
+- AC-15 · paket `1.0.1` dan test core (langkah 13); evidence ulang (langkah 14)
+- AC-8 · bagian `Auto` selesai di langkah 14 (`create_params` memakai `Auto`; penanda `// provisional: F20` dihapus); penyimpangan `Fixed` di milestone 2 tidak berlaku lagi
+- AC-9 sampai AC-12 · dijalankan ulang di langkah 14 pada paket `1.0.1`
+- AC-4 · digantikan nilai AC-15 (revision `1.0.1`, digest `fe57c6f4…`)
+- AC-13 dan AC-14 · milik milestone 4

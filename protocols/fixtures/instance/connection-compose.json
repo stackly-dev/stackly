@@ -1,0 +1,503 @@
+{
+  "compose": [
+    {
+      "name": "a plain password stays as it is",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "hunter2"
+      },
+      "expected": "postgresql://postgres:hunter2@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "a space",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "pass word"
+      },
+      "expected": "postgresql://postgres:pass%20word@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "an at sign",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "a@b"
+      },
+      "expected": "postgresql://postgres:a%40b@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "a colon",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "a:b"
+      },
+      "expected": "postgresql://postgres:a%3Ab@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "a slash",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "a/b"
+      },
+      "expected": "postgresql://postgres:a%2Fb@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "a percent sign",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "50%"
+      },
+      "expected": "postgresql://postgres:50%25@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "a question mark and a number sign",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "a?b#c"
+      },
+      "expected": "postgresql://postgres:a%3Fb%23c@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "quotes and a backslash",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "it's \"q\" \\"
+      },
+      "expected": "postgresql://postgres:it%27s%20%22q%22%20%5C@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "an emoji",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "pin 🙂"
+      },
+      "expected": "postgresql://postgres:pin%20%F0%9F%99%82@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "accented letters",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "café Ünï"
+      },
+      "expected": "postgresql://postgres:caf%C3%A9%20%C3%9Cn%C3%AF@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "only unreserved characters",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "A-z_0.9~"
+      },
+      "expected": "postgresql://postgres:A-z_0.9~@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "every special character together",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "p a@:/%?#'\"\\🙂é"
+      },
+      "expected": "postgresql://postgres:p%20a%40%3A%2F%25%3F%23%27%22%5C%F0%9F%99%82%C3%A9@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "an empty value is a value",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": ""
+      },
+      "expected": "postgresql://postgres:@127.0.0.1:5432/postgres"
+    },
+    {
+      "name": "two secrets in one entry",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "fake://"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "appUser",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/app-user"
+          }
+        },
+        {
+          "kind": "text",
+          "text": ":"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@h/"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/app-user": "us er",
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "p@ss"
+      },
+      "expected": "fake://us%20er:p%40ss@h/"
+    },
+    {
+      "name": "text parts are written as they are",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "http://h/a%20b?x=1&y=%C3%A9"
+        }
+      ],
+      "values": {},
+      "expected": "http://h/a%20b?x=1&y=%C3%A9"
+    },
+    {
+      "name": "a value nobody asked for is ignored",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "nats://h"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password": "unused"
+      },
+      "expected": "nats://h"
+    },
+    {
+      "name": "a missing value is an error, never an empty string",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "postgresql://postgres:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "superuserPassword",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@127.0.0.1:5432/postgres"
+        }
+      ],
+      "values": {},
+      "missingValue": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+    },
+    {
+      "name": "the second of two secrets is missing",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "fake://"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "appUser",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/app-user"
+          }
+        },
+        {
+          "kind": "text",
+          "text": ":"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "apiKey",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/api-key"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@h/"
+        }
+      ],
+      "values": {
+        "local:instance/0192f000-0000-7000-8000-00000000000a/app-user": "u"
+      },
+      "missingValue": "local:instance/0192f000-0000-7000-8000-00000000000a/api-key"
+    }
+  ],
+  "render": [
+    {
+      "name": "the socket folder with spaces and unicode, the name, and a port",
+      "template": "fake://user:${secret.authToken}@localhost/db?dir=${endpoint.control.socketDir}&name=${instance.name}&port=${endpoint.http.port}",
+      "instanceName": "orders-db",
+      "runDir": "/Volumes/Test Root/Ünï cödé/run",
+      "address": "127.0.0.1",
+      "port": 14000,
+      "expectedParts": [
+        {
+          "kind": "text",
+          "text": "fake://user:"
+        },
+        {
+          "kind": "secret",
+          "secret": {
+            "field": "authToken",
+            "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/auth-token"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "@localhost/db?dir=%2FVolumes%2FTest%20Root%2F%C3%9Cn%C3%AF%20c%C3%B6d%C3%A9%2Frun&name=orders-db&port=14000"
+        }
+      ]
+    },
+    {
+      "name": "the socket file path with spaces and unicode",
+      "template": "fake://localhost/?socket=${endpoint.control.socket}",
+      "instanceName": "orders-db",
+      "runDir": "/Volumes/Test Root/Ünï cödé/run",
+      "address": "127.0.0.1",
+      "port": 14000,
+      "expectedParts": [
+        {
+          "kind": "text",
+          "text": "fake://localhost/?socket=%2FVolumes%2FTest%20Root%2F%C3%9Cn%C3%AF%20c%C3%B6d%C3%A9%2Frun%2Ffake.14000"
+        }
+      ]
+    },
+    {
+      "name": "an IPv4 address is inserted as it is",
+      "template": "http://${endpoint.http.address}/",
+      "instanceName": "orders-db",
+      "runDir": "/Volumes/Test Root/Ünï cödé/run",
+      "address": "127.0.0.1",
+      "port": 14000,
+      "expectedParts": [
+        {
+          "kind": "text",
+          "text": "http://127.0.0.1:14000/"
+        }
+      ]
+    },
+    {
+      "name": "an IPv6 address goes in square brackets",
+      "template": "http://${endpoint.http.address}/",
+      "instanceName": "orders-db",
+      "runDir": "/Volumes/Test Root/Ünï cödé/run",
+      "address": "::1",
+      "port": 14000,
+      "expectedParts": [
+        {
+          "kind": "text",
+          "text": "http://[::1]:14000/"
+        }
+      ]
+    }
+  ],
+  "secretReference": "local:instance/0192f000-0000-7000-8000-00000000000a/auth-token"
+}

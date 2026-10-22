@@ -1425,6 +1425,7 @@ dependencies = [
  "rpassword",
  "serde",
  "serde_json",
+ "sha2",
  "stackly-evidence",
  "stackly-ipc",
  "stackly-platform",
@@ -1586,6 +1587,7 @@ version = "0.1.0"
 dependencies = [
  "jiff",
  "serde_json",
+ "sha2",
  "stackly-domain",
  "stackly-evidence",
  "stackly-platform",

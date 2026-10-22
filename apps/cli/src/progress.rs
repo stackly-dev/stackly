@@ -42,6 +42,26 @@ impl ProgressMode {
     }
 }
 
+/// The words a person reads for the stage of an operation: the stages of a
+/// create have a sentence each (spec 0020, *CLI*), every other stage its
+/// wire name.
+#[must_use]
+pub fn stage_text(kind: stackly_protocol::operation::OperationKind, stage: &str) -> &str {
+    use stackly_protocol::operation::OperationKind;
+    if kind != OperationKind::CreateInstance {
+        return stage;
+    }
+    match stage {
+        "validate" => "Checking",
+        "pin" => "Pinning provider package",
+        "secrets" => "Storing secrets in Keychain",
+        "layout" => "Creating folders",
+        "register" => "Registering",
+        "init" => "Initializing",
+        other => other,
+    }
+}
+
 /// One progress update, from an operation's state, stage, and progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Update<'a> {

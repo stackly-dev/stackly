@@ -20,6 +20,8 @@ public struct CatalogPage: View {
     @Environment(\.timeZone) private var timeZone
 
     private let catalog: CatalogStore
+    private let runtimes: RuntimeStore?
+    private let operations: OperationCenter?
     private let waiting: FailureContent?
     private let hasConnection: Bool
     private let reconnect: @MainActor () -> Void
@@ -29,6 +31,9 @@ public struct CatalogPage: View {
     ///
     /// - Parameters:
     ///   - catalog: The catalog store.
+    ///   - runtimes: The runtime store, for "{n} installed" on a card and the Get column of
+    ///     the version matrix, or `nil` for a page without them.
+    ///   - operations: The operation center, for the percent of a running install, or `nil`.
     ///   - waiting: What a page without data shows while the daemon cannot be reached
     ///     ("Waiting for stacklyd"), or `nil` when the daemon is reachable or still loading.
     ///   - hasConnection: Whether a connection to the daemon is open: Retry then loads the
@@ -40,6 +45,8 @@ public struct CatalogPage: View {
     ///   - filter: The filter a new window starts with: All and no search text by default.
     public init(
         catalog: CatalogStore,
+        runtimes: RuntimeStore? = nil,
+        operations: OperationCenter? = nil,
         waiting: FailureContent?,
         hasConnection: Bool,
         reconnect: @escaping @MainActor () -> Void,
@@ -50,6 +57,8 @@ public struct CatalogPage: View {
         _storedSelection = SceneStorage(wrappedValue: selection, "catalog.selection")
         _filter = State(initialValue: filter)
         self.catalog = catalog
+        self.runtimes = runtimes
+        self.operations = operations
         self.waiting = waiting
         self.hasConnection = hasConnection
         self.reconnect = reconnect
@@ -138,7 +147,9 @@ public struct CatalogPage: View {
             ) {
                 ForEach(providers) { provider in
                     ProviderCard(
-                        provider: provider, isSelected: provider.provider == selected,
+                        provider: provider,
+                        installedCount: runtimes?.installedCount(software: provider.software) ?? 0,
+                        isSelected: provider.provider == selected,
                         select: { storedSelection = provider.provider })
                 }
             }
@@ -161,7 +172,8 @@ public struct CatalogPage: View {
                     Task {
                         await catalog.detail.retry(selected.provider, revision: selected.revision)
                     }
-                })
+                },
+                runtimes: runtimes, operations: operations)
         } else {
             InspectorPlaceholder(
                 title: "No Provider Selected", message: "Select a provider to see its details.")

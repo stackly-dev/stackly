@@ -1,6 +1,6 @@
-# Verify: Create instance · spec 0020 · updated 2026-10-21
+# Verify: Create instance · spec 0020 · updated 2026-10-22
 
-_Langkah diturunkan dari acceptance criteria spec 0020. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri, dan baru Milestone 1 yang ada. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27._
+_Langkah diturunkan dari acceptance criteria spec 0020. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri; Milestone 1 dan 2 sudah ada. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27._
 
 ## Milestone 1: Evaluation, pin, and the create operation in core on fakes
 
@@ -39,3 +39,78 @@ _Langkah diturunkan dari acceptance criteria spec 0020. `/check verify` menjalan
 - AC-15 · revision catalog, `multi_instance` (evaluasi dan pemeriksaan ulang di `register`); jalur revision lain yang di pin lewat `gather`
 - AC-17 sampai AC-22, AC-24 sampai AC-26 · belum, milik Milestone 2 sampai 4
 - AC-23 · harness `owned_path` dan test seed ada; target `fuzz` dan 10 menit menunggu langkah 16
+
+## Milestone 2: Contract, daemon, and CLI
+
+_Langkah 8 sampai 11 (`dev-f20-m2`, 2026-10-22), protokol 1.12. Test daemon memakai Mac ini; test native PostgreSQL (langkah 15) tidak dijalankan._
+
+### UI / manual
+
+- [x] Buka `protocols/fixtures/instance/` → `create-form-fake.json`, `create-form-nats.json`, dan `create-form-postgresql.json` dibangun dari paket nyata (`providers/fake`, `providers/nats`, `providers/postgresql`); field `nats` urut `serverName` (managed), `jetstream` (boolean), tiga integer advanced dengan batas; field PostgreSQL `superuserPassword` secret dengan `printableOnly` dan panjang 8 sampai 128 tanpa default; `commands.json` memuat tujuh kasus perintah setara → AC-17, AC-18
+- [x] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Fixtures/FixtureCreateCases.swift` → file baru saja; `FixtureScenario`, builder, dan `FixtureContract` tidak berubah (`git diff main -- apps/macos` hanya menambah `FixtureCreateCases.swift` dan `FixtureCreateTests.swift`) → AC-17
+- [x] Buka `crates/core/src/instance/create/` di `git diff main` → hanya dua perubahan kecil milik langkah 9, dilaporkan ke lead: teks `Display` setiap `CreateError` (pesan tabel *Kode error*) di `error.rs`, dan `bind` yang gagal di reference sumbernya menjadi `secret.needs_secret` (target tiruan untuk `classify_create_failure`) di `work.rs` → AC-7, AC-11
+- [x] `grep -rn "provisional: F20" apps crates` → hanya penanda milik langkah 9 yang sudah hilang; tidak ada lagi di `apps/daemon`; `apps/cli` tidak punya penanda F20 → AC-10 · lulus dengan catatan (keputusan lead 2026-10-22): penanda terakhir di `apps/daemon/tests/nats/harness.rs:384` (`create_params`, port `Fixed`) milik milestone `Auto` endpoints spec 0023, yang mengganti harness ke `Auto` dan menghapus penanda; kode F20 di `apps/daemon` dan `apps/cli` tidak punya penanda tersisa
+
+### Commands
+
+- [x] `cargo test -p stackly-protocol` → 180 unit test, `ipc_fixtures` 52, `create_fixtures` 13 lulus: fixture bentuk wire, tiga form nyata dalam urutan deklarasi, nilai asing enum terbuka menjadi `unrecognized`, preflight `ready` sama dengan tidak ada baris `error`, kesepuluh kode baru membawa `details` dan hint statis katalog, kasus `commands.json` ditulis `equivalent_command` persis dan bolak balik, `SettingValue` bolak balik lewat JSON → AC-17, AC-18
+- [x] `cargo xtask codegen --check` → "20 generated files are up to date"; `ProtocolVersion::CURRENT` 1.12 dan `protocols/contract-versions.json` mencatat 1.12 → AC-17
+- [x] `swift test --package-path clients/swift` → 192 test lulus, termasuk `CreateContractTests` (tiga form, nilai asing, baris konflik port, request preflight tanpa nilai secret, kesepuluh error dengan hint, `SignedSafeInteger` sebagai `Int64`) dan `IpcFixtureTests` (32 method) → AC-17
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → semua lulus, tidak ada PNG lama yang bergeser; dua flake yang diketahui (`ShellEndToEndTests`, `SkeletonProcessRunnerTests`) lulus bila dijalankan sendiri → AC-17
+- [x] `cargo test -p stacklyd --test create_form_fixtures` → form dari tiga paket nyata sama dengan fixture; tulis ulang dengan `STACKLY_UPDATE_GOLDEN=1` → AC-1, AC-17
+- [x] `cargo test -p stacklyd --test supervisor create_form::` → 5 test lulus lewat daemon: form fake menurut urutan `properties`, `catalog.unavailable` tanpa catalog, preflight siap yang tidak menulis apa pun (tanpa baris instance, folder, atau panggilan Keychain), paritas kode dan `fields` preflight dan create untuk nama salah, port dipakai, setting asing, endpoint asing, dan secret asing, dan nama berbahaya (`../x`, `a b`, `a;rm`, Unicode) → AC-1, AC-2, AC-3, AC-10, AC-26
+- [x] `cargo test -p stacklyd --test supervisor create_flow::` → 9 test lulus: revision catalog di pin dan satu baris `provider_sources` yang sama setelah restart, sepuluh create bernama sama menjadi satu instance, dua create dengan port fixed sama menjadi satu, cancel saat init mengompensasi dan mengirim `instance.removed`, `instance.data_not_empty` lewat kait dengan folder yang tidak dihapus dan nol spawn, Keychain terkunci sebelum folder dibuat, port `Auto` `bound` setelah start, symlink di `providers/` dan `instances/` ditolak tanpa menulis lewat symlink, dan satu test ukur (`STACKLY_MEASURE=1`) → AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-16, AC-24, AC-26
+- [x] `STACKLY_MEASURE=1 cargo test -p stacklyd --test supervisor measure_create -- --nocapture` → dengan 10 instance, preflight p95 20,5 ms (batas 300) dan create p95 45,2 ms (batas 500) → AC-24
+- [x] `cargo test -p stacklyd --test supervisor` → 34 test lulus, termasuk `create::an_init_that_fails_is_compensated_and_leaves_neither_instance_nor_name` dan `actions::a_fixed_port_someone_else_uses_fails_the_start_before_a_spawn_and_a_clash_fails_the_create` (create ditolak sinkron saat port dipegang, start gagal `supervisor.endpoint_in_use` saat port direbut sesudah create) → AC-10, AC-11, AC-16
+- [x] `cargo test -p stacklyd --test skeleton` → 10 test lulus: `a_failed_init_is_compensated_and_leaves_no_instance_and_no_name_taken` menggantikan test `needs_recovery`, sedangkan `a_create_cut_off_by_sigkill_ends_needing_recovery_with_one_instance_and_no_stray_process` tetap `needs_recovery` karena pembantu init masih memegang lock (K10) → AC-11
+- [x] `cargo test -p stacklyd --test instance_create_secrets` → 3 test lulus; `bind` ke sumber di Keychain terkunci menjadi `secret.needs_secret` dengan satu item `store_locked` → AC-7
+- [x] `cargo test -p stacklyd --lib` → termasuk `map::socket` (path `.s.PGSQL.<port>` dari paket pinned, null selama port `Auto` belum ada) dan `catalog::` (bagian `degraded` `catalog source not recorded: <kode>`, baris sumber sekali) → AC-12, AC-14
+- [x] `cargo test -p stackly-cli --test instance` → 53 test lulus: form dibaca lebih dulu, `--dry-run` (rows `ok`, `warn`, `fail`, exit dari kategori baris error pertama, golden), `--runtime software@x` (versi dulu, lalu line, `cli.runtime_not_found` exit 10, `cli.runtime_ambiguous` exit 3), `--set` menurut jenis field dan `--settings-file`, `--start` dengan key `sha256(<key>:start)`, tiga aturan `cli.usage`, dan matriks paritas AC-028 (sepuluh input buruk lewat `Client` dan lewat `stackly instance create --json` dari `stacklyd` nyata) → AC-18, AC-19
+- [x] `cargo test -p stackly-cli --bin stackly` → 169 test lulus, termasuk `every_equivalent_command_parses_back_to_the_draft_that_wrote_it` (setiap kasus `commands.json` setelah dipecah seperti shell) → AC-18
+- [x] `cargo test -p xtask check_deps` dan `cargo xtask check-deps` → lulus; aturan baru menolak nama provider di `instance::create` dan folder Swift `CreateInstance/` (fixture melanggar di test), dan daftar nama dijaga sama panjang dengan `providers/` dan `catalog.toml` → AC-21
+- [x] `cargo test --workspace --locked --no-fail-fast` setelah `cargo build -p stacklyd -p stackly-fake-server -p stackly-cli` dan `cargo build -p stacklyd --example skeleton_seed` → lulus (3312 test, 36 ignored native) → semua
+- [x] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus → AC-17
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql --locked -- --ignored init_that_finds_a_file` → lulus (2 test, PostgreSQL 17 dan 18 dari cache runtime xtask, evidence 2 PASS, 0 problem): kait `before_init` menanam file, operasi `failed`, instance dan folder hilang (D9); tidak ada proses postgres test yang tersisa → AC-11
+
+### Hasil verify (checker `chk-f20-m2`, 2026-10-22)
+
+- Mac sibuk saat dijalankan (load average 40 sampai 78). Pengukuran `measure_create` (load 42): preflight p95 13,9 ms, create p95 24,3 ms, batas 300 dan 500 terpenuhi.
+- Selisih angka dari teks langkah, bukan kegagalan: `stackly-protocol` 182 unit test (tertulis 180), suite `supervisor` 35 (tertulis 34), workspace 3331 lulus dan 50 ignored (tertulis 3312 dan 36). Angka di teks langkah (180, 34, 3312, p95 20,5 dan 45,2 ms) berubah bersama merge main.
+- `swift test` StacklyUI sekali jalan penuh: 875 dari 876 lulus; `SkeletonProcessRunnerTests` melewati batas 20 detik saat beban tinggi (flake yang diketahui) dan lulus bila dijalankan sendiri, begitu juga `ShellEndToEndTests`. Tidak ada PNG snapshot yang bergeser.
+
+### Acceptance-criteria coverage
+
+- AC-1 · `instance.get_create_form` lewat daemon (form fake, kesalahan runtime dan provider, catalog tidak ada) dan form tiga paket nyata; bukti PostgreSQL nyata menunggu Milestone 4
+- AC-2 · `instance.preflight` lewat daemon: baris, `command`, tidak menulis apa pun, paritas dengan precheck create (kode dan `fields`); penghitung fake untuk Keychain dan spawn ada di test core Milestone 1
+- AC-10 · handler `instance.create` (gather di luar gerbang, precheck, `BusyPolicy::Reject`, sepuluh create dan dua port yang sama); key replay di `supervisor::create`
+- AC-11 · kompensasi penuh init gagal, cancel saat init, `instance.removed`, dan kasus lock yang dipegang (test kill); daemon mati di setiap langkah menunggu bukti native
+- AC-12 · hasil di registry dan `socketPath` dari paket pinned (unit test `map::socket`); bukti PostgreSQL nyata menunggu Milestone 4
+- AC-13 dan AC-14 · pin lewat daemon (revision catalog, symlink ditolak), baris `provider_sources` sekali dan sama setelah restart, bagian `degraded`; kegagalan menulis yang disuntik ada di test core Milestone 1
+- AC-16 · `bound` setelah start untuk `Auto`; port `Fixed` yang direbut sebelum start gagal `supervisor.endpoint_in_use`
+- AC-17 · kontrak, fixture, test kontrak Rust dan Swift, codegen, fuzz seed, dan kasus fixture tampilan
+- AC-18 dan AC-19 · CLI lengkap dan matriks paritas
+- AC-21 · bagian `check-deps` saja; bagian Swift menunggu Milestone 3
+- AC-24 · diukur dengan `STACKLY_MEASURE=1` (p95 20,5 ms dan 45,2 ms); angka resmi lewat `cargo xtask evidence` di langkah 16
+- AC-26 · test keamanan (nama berbahaya, symlink, secret tidak di argv atau perintah setara); review fresh model menunggu kotak Review it
+- AC-3 sampai AC-9, AC-15 · dari Milestone 1; lewat daemon di test paritas dan test create di atas
+- AC-20, AC-22, AC-23, AC-25 · belum, milik Milestone 3 dan 4
+
+## Milestone 5: Init port guard
+
+_Langkah 17 dan 18 (update 2026-10-22, usulan spec 0023). Langkah 18 adalah langkah 22 spec 0009; bagiannya ada di `docs/specs/0009-provider-engine-manifest-schema/verify.md`. Jalankan dari root repo pada commit bersih._
+
+### UI / manual
+
+Tidak ada. Perubahan ini ada di evaluator core, dan teks barisnya muncul di sheet dan `--dry-run` lewat baris preflight yang sama.
+
+### Commands
+
+- [ ] `cargo test -p stackly-core --test create_evaluate init_port` → lima test lulus: paket fake yang init nya memakai `${endpoint.http.port}` tanpa permintaan port memberi baris `settings` error `instance.endpoint_invalid` (detail `endpoint` `http`) dengan keterangan "This provider needs a fixed port for http when the instance is created. Choose a port for it." dan tanpa field issue; `http` `auto` eksplisit memberi hal yang sama ditambah `endpoints[0].port` `invalid_value`; `first_error` kedua draft sama; `http` `Fixed` 20000 `ready`; `http` `Fixed` 0 hanya memberi error baris `endpoint.http` (`out_of_range`) tanpa keterangan "needs a fixed port"; paket fake, NATS `1.0.1`, dan PostgreSQL dengan semua endpoint `Auto` tetap `ready`; salinan NATS bentuk `1.0.0` meminta port `Fixed` untuk `client`, lalu `monitoring` → AC-2, AC-9
+- [ ] `cargo test -p stackly-core --test create_evaluate` → seluruh suite hijau (46 lama lulus, tidak berubah), termasuk dry run dengan port `Fixed` dan settings salah → AC-9
+- [ ] `cargo test -p stackly-protocol --test create_fixtures endpoint_invalid` → hint `instance.endpoint_invalid` statis dan ringkasan katalog menyebut sebab baru → AC-9
+- [ ] `cargo xtask codegen --check` → `20 generated files are up to date`; `git diff protocols/` hanya mengubah baris `summary` `instance.endpoint_invalid` di `protocols/error-codes.json`, dan `protocols/contract-versions.json` tidak berubah (`ProtocolVersion` tidak naik)
+
+### Acceptance-criteria coverage
+
+- AC-2 dan AC-9 (kalimat 2026-10-22) · `DryRunRefusal`, dua `PlanContext` di `dry_run`, keterangan baris `settings`, ringkasan dan hint `instance.endpoint_invalid`
+- Tidak teruji: varian `DryRunRefusal::Endpoint` ("Endpoint {nama} can’t be used with these settings."), karena paket yang tervalidasi memaksa `defaultHost` loopback dan setiap endpoint punya port di context run; varian itu hanya pagar untuk `EndpointNotLoopback`

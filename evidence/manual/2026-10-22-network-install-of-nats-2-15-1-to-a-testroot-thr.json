@@ -1,0 +1,70 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a16199-e6d3-7426-a397-cce8deb284c8",
+  "covers": [
+    "REQ-004",
+    "REQ-005",
+    "AC-049"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Network install of NATS 2.15.1 to a TestRoot through the daemon",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "With STACKLY_NATIVE_NETWORK=1, nats_installs_from_the_network downloads NATS 2.15.1 over https into an empty TestRoot and installs it to an installed runtime whose exec check printed the artifact version, with no com.apple.quarantine on any file.",
+  "actual": "nats 2.15.1 (sha256 ed0fe392...5ffd, source managed) downloaded over https into an empty TestRoot and installed to an installed runtime in 4.4 s: 1 exec check (nats-server --version printed the artifact version), 2 codesign questions, no com.apple.quarantine on any installed file; the same run recorded as a native PASS with 0 evidence problems",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "nats",
+      "version": "2.15.1",
+      "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "source": "managed"
+    }
+  ],
+  "steps": [
+    "the user approved this one run through the lead (scope 02) for NATS 2.15.1, about 6.8 MB from GitHub Releases, into a TestRoot only",
+    "`STACKLY_NATIVE_NETWORK=1 cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_runtime_install --locked -- --ignored nats_installs_from_the_network` on commit 27e4135 with the cache steps passed first",
+    "the test uses the real MacosFetcher, the real adapters behind recorders, and the daemon in process; it asserts the resolved digest and size, the installed state, the exec check spawn, and `xattr -lr` finding no com.apple.quarantine",
+    "the automatic native record of the run (target/evidence) is PASS with subject nats 2.15.1 and that digest"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5)",
+  "startedAt": "2026-10-22T03:13:58.483167Z",
+  "finishedAt": "2026-10-22T03:12:00.000000Z",
+  "evidencePath": "evidence/manual/2026-10-22-network-install-of-nats-2-15-1-to-a-testroot-thr.json",
+  "context": {
+    "sourceCommit": "27e41351b3ba2a683d708ab0dda3e3176717eec8",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

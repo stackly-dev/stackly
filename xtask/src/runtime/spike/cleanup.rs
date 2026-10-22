@@ -96,6 +96,22 @@ fn is_socket_name(name: &str) -> bool {
     })
 }
 
+/// What every native test process carries in its argv: the folder prefix of
+/// `stackly_testkit::TestRoot` (spec 0018 AC-20).
+const TEST_ROOT_MARK: &str = "/stackly-test-";
+
+/// Stops what the native tests left behind (spec 0003, *Urutan `--cleanup`*,
+/// step c): TERM, a wait of up to five seconds, then KILL for every process
+/// of `uid` whose command line names a `/stackly-test-` folder. Returns how
+/// many there were.
+///
+/// Only `--cleanup` calls it, never the spike driver: it also stops the
+/// processes of a `cargo test` run that is going on, so the caller runs it
+/// while no test run is active.
+pub fn sweep_test_processes(uid: u32) -> Result<usize> {
+    kill_matching(uid, &regex_escape(TEST_ROOT_MARK))
+}
+
 /// TERM, a wait of up to five seconds, then KILL for every process of
 /// `uid` whose command line matches the extended regex `pattern`. Returns
 /// how many there were. The calling process is never one of them.
@@ -362,6 +378,21 @@ mod tests {
             let _ = self.0.kill();
             let _ = self.0.wait();
         }
+    }
+
+    // covers: AC-20 (spec 0018, `--cleanup` stops the processes a native test left)
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_test_sweep_stops_processes_in_a_test_root_and_nothing_else() {
+        let temp = tempfile::tempdir().unwrap();
+        let left = Waiting::start(&format!(
+            "{}/stackly-test-AbC123/data/runtimes/bin/server",
+            temp.path().display()
+        ));
+        let bystander = Waiting::start("/Users/dev/Stackly/target/debug/deps/other-test");
+        let found = matching_pids(launchd::uid().unwrap(), &regex_escape(TEST_ROOT_MARK)).unwrap();
+        assert!(found.contains(&left.pid()), "{found:?}");
+        assert!(!found.contains(&bystander.pid()), "{found:?}");
     }
 
     // covers: AC-4 (Critical test scenarios, Cache: the sweep never stops a download into the cache)

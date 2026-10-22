@@ -1,0 +1,70 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a16189-045c-77d0-8e71-21e3006a5516",
+  "covers": [
+    "REQ-029",
+    "AC-029"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0023 startup facts: NATS 2.15.1 INFO, listener order, and JetStream under lame duck and a full disk",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "On nats-server 2.15.1 from the runtime cache, over loopback: the first INFO after start says jetstream true only once JetStream is on, the client listener opens after JetStream starts (also with a 125 MB store of 300 streams), and JetStream is not switched off at run time by a full disk, while SIGUSR2 lame duck stops it with the listener.",
+  "actual": "(1) the first INFO of every connection made right after start already said jetstream true, and .API.INFO answered account_info_response on that first connection: empty store 179.7 ms after spawn, 127 MB store of 300 streams with 120000 messages 102.3 ms after spawn (JetStream took 85.3 ms to start); no INFO with jetstream true came before JetStream served the API. (2) the client listener opens after JetStream: the log shows Starting JetStream, the stream restores, Took 85.338833ms to start JetStream, and only then Listening for client connections, then Server is ready; the first connect attempt of a 1 ms poll succeeded 102.3 ms after spawn and already got the JetStream API. (3) a full disk (16 MB image, 20 KiB free after 400 publishes of 64 KiB) gave [ERR] Filestore critical write error and JetStream failed to store a msg on the stream, but INFO kept jetstream true and .API.INFO still answered account_info_response without error on two new connections, so NATS did not switch JetStream off; SIGUSR2 (lame duck) logs Entering lame duck mode, Initiating JetStream Shutdown and JetStream Shutdown at once, stops accepting new clients (all 8 attempts in 2 s got connection refused), and an open connection got no .API.INFO reply within 2 s.",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "nats",
+      "version": "2.15.1",
+      "digest": null,
+      "source": "managed"
+    }
+  ],
+  "steps": [
+    "extract nats-2.15.1-macos-aarch64 from the xtask runtime cache (sha256 ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd) into an empty scratch folder and run its nats-server on 127.0.0.1 and a free port with -n golden -js -sd <store>",
+    "startup_facts.py: spawn the server and poll connect every 1 ms; each connection reads INFO, sends the exact nats-readiness CONNECT and PING, waits for PONG, then SUB and PUB of .API.INFO; stop at the first account_info_response; keep the -l log (empty store, then a store with 300 file streams of 400 messages of 1 KiB each, 127 MB)",
+    "runtime_facts.py lameduck: with a config file (jetstream store_dir, max_file_store 1 GiB) send SIGUSR2 to the ready server, try 8 new connections over 2 s, and ask .API.INFO on a connection opened before",
+    "runtime_facts.py fill: mount a 16 MB HFS+ disk image, run the server with the store on it, create a file stream, publish 64 KiB messages until the disk is full, then connect twice and ask .API.INFO",
+    "detach the disk image, delete the scratch stores, and check that no scratch nats-server process is left"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5)",
+  "startedAt": "2026-10-22T02:55:31.931712Z",
+  "finishedAt": "2026-10-22T02:55:53.269Z",
+  "evidencePath": "evidence/manual/files/01a16189-045c-77d0-8e71-21e3006a5516/",
+  "context": {
+    "sourceCommit": "27e98df3447ba87895905d5da01c59b46639bb42",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}
