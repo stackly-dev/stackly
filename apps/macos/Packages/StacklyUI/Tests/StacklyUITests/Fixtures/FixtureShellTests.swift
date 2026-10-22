@@ -26,7 +26,38 @@ struct FixtureShellTests {
         .daemonUntrusted: "Stackly didn’t connect to stacklyd.",
         .daemonRecovery: "Stackly’s registry needs recovery.",
         .daemonMisconfigured: "STACKLY_ROOT is invalid.",
+        .agentRequiresApproval: "Can’t connect to stacklyd.",
+        .agentDisabled: "Can’t connect to stacklyd.",
+        .agentEnabled: "Can’t connect to stacklyd.",
+        .agentNotFound: "Can’t connect to stacklyd.",
+        .agentUnavailable: "Can’t connect to stacklyd.",
     ]
+
+    /// The window banner of each unreachable scenario at `FixtureClock.now`: the row of the
+    /// agent table of spec 0015 (spec 0068, *Skenario agent*), by title and actions.
+    nonisolated static let agentRows:
+        [FixtureScenario.ID: (title: String, actions: [DaemonBannerAction])] = [
+            .daemonOffline: ("Stackly’s background service is off.", [.turnOn, .openDiagnostics]),
+            .daemonUnreachable: (
+                "Stackly’s background service is off.", [.turnOn, .openDiagnostics]
+            ),
+            .agentRequiresApproval: (
+                "Allow Stackly to run in the background.", [.openLoginItems, .checkAgain]
+            ),
+            .agentDisabled: (
+                "Stackly’s background service is turned off.", [.openLoginItems, .checkAgain]
+            ),
+            .agentEnabled: ("stacklyd isn’t running.", [.startDaemon, .openDiagnostics]),
+            .agentNotFound: ("Stackly’s background service is off.", [.turnOn, .openDiagnostics]),
+            .agentUnavailable: (
+                "Stackly couldn’t check its background service.", [.checkAgain, .openDiagnostics]
+            ),
+        ]
+
+    nonisolated static let agentScenarios = agentRows.keys.sorted { $0.rawValue < $1.rawValue }.map
+    {
+        FixtureScenario($0)
+    }
 
     nonisolated static let daemonScenarios = FixtureScenario.all.filter { $0.id != .onboarding }
 
@@ -170,5 +201,90 @@ struct FixtureShellTests {
         } catch {
             #expect(error.body.code == "ipc.not_connected")
         }
+    }
+
+    // MARK: - The agent in the scenarios (spec 0015, spec 0068 *Skenario agent*)
+
+    @Test(
+        .evidence(
+            covers: ["REQ-014", "AC-024"],
+            expected:
+                "Every unreachable scenario settles with the banner row of its agent state, and the status banner stays"
+        ),
+        arguments: agentScenarios
+    )
+    func everyUnreachableScenarioShowsItsAgentRowAndKeepsTheStatusBanner(
+        scenario: FixtureScenario
+    ) async throws {
+        let runtime = try await settledRuntime(scenario)
+        defer { runtime.willTerminate() }
+        let row = try #require(Self.agentRows[scenario.id])
+        let banner = try #require(runtime.model.bannerContent(now: FixtureClock.now))
+        #expect(banner.title == row.title)
+        #expect(banner.actions == row.actions)
+        #expect(runtime.model.presentation.banner?.title == "Can’t connect to stacklyd.")
+        // The state was there from the start, and read with the fixture clock.
+        #expect(runtime.model.agent?.assessment != nil)
+        #expect(runtime.model.agent?.lastCheckedAt == FixtureClock.now)
+        #expect(runtime.model.agent?.isWorking == false)
+    }
+
+    @Test func theOfflineBannerKeepsTheLastKnownStateNoteBeforeTheAgentMessage() async throws {
+        let runtime = try await settledRuntime(FixtureScenario(.daemonOffline))
+        defer { runtime.willTerminate() }
+        let banner = try #require(runtime.model.bannerContent(now: FixtureClock.now))
+        let text = banner.message(
+            now: FixtureClock.now, calendar: Calendar(identifier: .gregorian),
+            locale: Locale(identifier: "en_US"), timeZone: .gmt)
+        #expect(text.hasPrefix("Showing the last known state from "))
+        #expect(text.hasSuffix("macOS may ask you to allow it."))
+    }
+
+    @Test func aConnectedScenarioShowsNoAgentRowButKeepsTheAgentInDiagnostics() async throws {
+        let runtime = try await settledRuntime(FixtureScenario(.connectedMixed))
+        defer { runtime.willTerminate() }
+        #expect(runtime.model.bannerContent(now: FixtureClock.now) == nil)
+        #expect(runtime.model.agent?.assessment?.state == .notRegistered)
+    }
+
+    @Test func theDisabledScenarioHasItsLaunchTimeFromTheFixtureRecord() async throws {
+        let runtime = try await settledRuntime(FixtureScenario(.agentDisabled))
+        defer { runtime.willTerminate() }
+        #expect(runtime.model.agent?.lastLaunchedAt == FixtureClock.minutesAgo(30))
+        #expect(runtime.model.agent?.assessment?.state == .disabled)
+        #expect(runtime.model.agent?.bundlePath == FixtureAgent.bundle)
+    }
+
+    @Test func turnOnInAnUnreachableScenarioGivesTheApprovalBanner() async throws {
+        let runtime = try await settledRuntime(FixtureScenario(.daemonUnreachable))
+        defer { runtime.willTerminate() }
+        await runtime.model.agent?.turnOn()
+        #expect(
+            runtime.model.bannerContent(now: FixtureClock.now)?.title
+                == "Allow Stackly to run in the background.")
+    }
+
+    @Test func turnOnInTheNotFoundScenarioGivesTheCriticalBannerWithDiagnosticsOnly() async throws {
+        let runtime = try await settledRuntime(FixtureScenario(.agentNotFound))
+        defer { runtime.willTerminate() }
+        await runtime.model.agent?.turnOn()
+        let banner = try #require(runtime.model.bannerContent(now: FixtureClock.now))
+        #expect(banner.title == "Stackly can’t find its background service.")
+        #expect(banner.tone == .critical)
+        #expect(banner.actions == [.openDiagnostics])
+    }
+
+    @Test func startInTheEnabledScenarioShowsStartingWithoutActions() async throws {
+        let runtime = try await settledRuntime(FixtureScenario(.agentEnabled))
+        let agent = try #require(runtime.model.agent)
+        let action = Task { await agent.start() }
+        while agent.isStarting == false { await Task.yield() }
+        let banner = try #require(runtime.model.bannerContent(now: FixtureClock.now))
+        #expect(banner.title == "stacklyd is starting…")
+        #expect(banner.actions.isEmpty)
+        // The wait for the daemon (30 seconds of real time) ends with the runtime.
+        runtime.willTerminate()
+        await action.value
+        #expect(agent.isStarting == false)
     }
 }

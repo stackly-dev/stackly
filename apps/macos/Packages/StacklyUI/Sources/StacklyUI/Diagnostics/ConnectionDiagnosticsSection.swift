@@ -11,6 +11,7 @@ public struct ConnectionDiagnosticsSection: View {
     /// Why Reconnect is disabled while the app is misconfigured.
     static let reconnectDisabledReason = "Relaunch Stackly after fixing the problem."
 
+    @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.calendar) private var calendar
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
@@ -40,26 +41,31 @@ public struct ConnectionDiagnosticsSection: View {
         self.refresh = refresh
     }
 
-    /// The section's content.
+    /// The section's content. The hint redraws every second while the agent's banner row
+    /// still counts to its 15th second, like the banner.
     public var body: some View {
-        let rows = diagnostics.rows(calendar: calendar, locale: locale, timeZone: timeZone)
+        let ticks = DaemonBanner.ticksEverySecond(
+            diagnostics.agentHint, now: fixtureNow ?? Date.now)
+        if ticks {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                content(now: fixtureNow ?? context.date)
+            }
+        } else {
+            TimelineView(.everyMinute) { context in
+                content(now: fixtureNow ?? context.date)
+            }
+        }
+    }
+
+    @ViewBuilder private func content(now: Date) -> some View {
+        let rows = diagnostics.rows(
+            calendar: calendar, locale: locale, timeZone: timeZone, now: now)
         let presentation = ShellPresentation(status: diagnostics.status)
         VStack(alignment: .leading, spacing: Spacing.s8) {
             Text("Connection")
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
-            VStack(alignment: .leading, spacing: Spacing.s8) {
-                ForEach(rows) { row in
-                    LabeledContent(row.label) {
-                        DiagnosticsValue(row: row)
-                    }
-                }
-            }
-            .labeledContentStyle(DiagnosticsRowStyle())
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.cardInsets)
-            .cardSurface()
+            DiagnosticsCard(rows: rows)
             HStack(spacing: Spacing.s8) {
                 if presentation.hasConnection {
                     Button("Refresh", action: refresh)
@@ -100,6 +106,27 @@ public struct ConnectionDiagnosticsSection: View {
 
     private static func copy(_ text: String) {
         PlainPasteboard.write(text)
+    }
+}
+
+/// A card of Diagnostics rows: a label in a fixed column and a value that wraps and can be
+/// selected. Every Diagnostics section uses it.
+struct DiagnosticsCard: View {
+    let rows: [DiagnosticsRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s8) {
+            ForEach(rows) { row in
+                LabeledContent(row.label) {
+                    DiagnosticsValue(row: row)
+                }
+            }
+        }
+        .labeledContentStyle(DiagnosticsRowStyle())
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.cardInsets)
+        .cardSurface()
     }
 }
 

@@ -17,6 +17,7 @@ struct DiagnosticsPage: View {
                     reconnect: reconnect,
                     refresh: refresh
                 )
+                BackgroundAgentDiagnosticsSection()
                 // provisional: F34 (the doctor results go below the Connection section)
                 UnbuiltPage(section: .diagnostics)
             }

@@ -167,6 +167,31 @@ struct SourceRuleTests {
             allowedExamples: ["environment[\"STACKLY_ROOT\"]"]
         ),
         Rule(
+            name: "ServiceManagement outside the SMAppService adapter (spec 0015 AC-11)",
+            patterns: [#"\bimport ServiceManagement\b"#, #"\bSMAppService\b"#],
+            allowed: [stacklyUI + "Agent/SMAppServiceAgent.swift"],
+            forbiddenExamples: [
+                "import ServiceManagement",
+                "let service = SMAppService.mainApp",
+                "SMAppService.openSystemSettingsLoginItems()",
+            ],
+            allowedExamples: [
+                "let agent = SMAppServiceAgent()",
+                "controller.openApprovalSettings()",
+            ]
+        ),
+        Rule(
+            name: "registering or relaunching the agent outside the Agent folder (spec 0015 AC-11)",
+            patterns: [#"\.(register|unregister|relaunch)\(\)"#],
+            allowed: [stacklyUI + "Agent/"],
+            forbiddenExamples: [
+                "try await controller.register()",
+                "_ = try await agent.relaunch()",
+                "service.unregister()",
+            ],
+            allowedExamples: ["sync.register(store)", "await agent.turnOn()", "model.start()"]
+        ),
+        Rule(
             name: "inspector outside the inspector components (spec 0067 AC-18)",
             patterns: [#"\.inspector\("#],
             allowed: [stacklyUI + "Components/Inspector/"],
