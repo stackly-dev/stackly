@@ -62,27 +62,39 @@ final class DelayedVisibility {
 ///
 /// The delay starts when the view appears. ``StateView`` inserts a new one each time the
 /// shape enters `loading`, so the delay starts over each time. The spinner keeps spinning
-/// under Reduce Motion. With a zero delay (a snapshot window) the spinner is in the first
-/// frame, with no task and no transition.
+/// under Reduce Motion. The delay is the one given, else `loadingDelay` of the environment,
+/// else 300 ms. With a zero delay (a snapshot window) the spinner is in the first frame,
+/// with no task and no transition.
 public struct DelayedProgress: View {
-    @State private var visibility: DelayedVisibility
+    @Environment(\.loadingDelay) private var loadingDelay
+    private let delay: Duration?
 
-    /// Creates a delayed spinner with the 300 ms delay.
+    /// Creates a delayed spinner that follows `loadingDelay` of the environment, or waits
+    /// 300 ms when the environment sets none.
     public init() {
-        self.init(visibility: DelayedVisibility())
+        delay = nil
     }
 
     /// Creates a delayed spinner that waits `delay` before it shows.
     init(delay: Duration) {
-        self.init(visibility: DelayedVisibility(delay: delay))
-    }
-
-    init(visibility: DelayedVisibility) {
-        _visibility = State(initialValue: visibility)
+        self.delay = delay
     }
 
     /// The view's content.
     public var body: some View {
+        DelayedSpinner(delay: delay ?? loadingDelay ?? DelayedVisibility.defaultDelay)
+    }
+}
+
+/// The spinner of ``DelayedProgress`` once its delay is known.
+private struct DelayedSpinner: View {
+    @State private var visibility: DelayedVisibility
+
+    init(delay: Duration) {
+        _visibility = State(initialValue: DelayedVisibility(delay: delay))
+    }
+
+    var body: some View {
         if visibility.showsInFirstFrame {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
