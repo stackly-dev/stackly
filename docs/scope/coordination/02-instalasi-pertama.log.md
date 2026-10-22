@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-23 06:47`
+- **Diperbarui:** `2026-10-23 06:50`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -123,7 +123,7 @@
 | `chk-f20-m6` (sesi `dev-f17-m3` dipakai ulang) | `checker (verify)` | 20 · verify milestone 6 | `02-instalasi-pertama.md` | bagian Milestone 6 `verify.md` 0020 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | PASS (`3ec6c8b1` → `97a35de9`) |
 | `arc-f22-sync` (sesi `chk-f23-m4` dipakai ulang) | `architect (update)` | 22 · catatan retry 9a dihapus, usulan commit terjaga ke spec 0005/0007/0010, Follow-up start/stop dengan nama | `02-instalasi-pertama.md` | index/rationale 0022, index 0005, 0007, 0010, penanda 0020, baris 803 0021 | `claude/arc-f21-update-cc228d` | `opus-5-5 · xhigh` | `merged` 10 commit (`847ba815` sampai `7b4fc282` → `312502e4`), tanpa teks AC |
 | `dev-f22-m2-s5a` (sesi `dev-f20-m6` dipakai ulang) | `developer` | 22 · `stackly instance start` dan `stop` dengan nama (spec 0022 langkah 5a, AC-15) | `02-instalasi-pertama.md` | `apps/cli/src/args.rs`, `commands/instance/{action,mod}.rs`, test `apps/cli/tests/instance/`, verify.md 0022 | `claude/dev-f19-m1-bf9875` | `sonnet-5-5 · high` | `merged` (`ad5f6a8f` → `ede86c30`) |
-| `chk-f22-s5a` (sesi `dev-f17-m3` dipakai ulang) | `checker (verify)` | 22 · verify langkah 5a | `02-instalasi-pertama.md` | langkah 5a `verify.md` 0022 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | `aktif` |
+| `chk-f22-s5a` (sesi `dev-f17-m3` dipakai ulang) | `checker (verify)` | 22 · verify langkah 5a | `02-instalasi-pertama.md` | langkah 5a `verify.md` 0022 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | PASS (`893fd87f` → `921f60ad`), langkah CLI manual dijalankan terhadap daemon development |
 
 ## Keputusan
 
@@ -378,6 +378,7 @@
 | `2026-10-22` | `arc-f22-sync` di-merge `312502e4`: spec 0022 menandai retry 9a dihapus di `28cbe678` (merujuk item `.caughtUp` spec 0013), Follow-up `stackly instance start/stop` dengan nama dirinci dengan draf AC-15 (hanya di Follow-up, belum di Requirements); blok usulan commit terjaga diterapkan di spec 0005, 0007, 0010 dan ditandai di spec 0020; baris 803 spec 0021 diselaraskan. Usulan scope (belum ditempel, menunggu user): kotak langkah 5a di bawah Build it fitur 22. Dua baris spec 0014 (Consequences UUID saja, Critical test scenarios `cli.usage` tanpa koneksi) usang saat 5a selesai, untuk `/sync`. | `lead` |
 | `2026-10-23` | User: "Yes: approve AC-15 for spec 0022 and add step 5a (stackly instance start and stop by name through TargetArg) to this wave." `arc-f22-sync` memindahkan draf AC-15 ke Requirements spec 0022 dan menambah langkah Build plan 5a; lead menempel kotak scope setelah commit spec itu masuk, lalu memulai developer langkah 5a (Rust CLI: `apps/cli/src/args.rs`, `commands/instance/`, test exit 2 ke exit 10, golden). Lead Scope 03 ditanya apakah branch nya menyentuh `apps/cli/src/args.rs` atau `InstanceIdArg`. Aplikasi restart: alamat lead program ini sekarang `Scope 02 · Instalasi pertama [ecea8f]`; lead lain `[d98412]` (Scope 03) dan `[509ebf]` (ui-macos). Lead ui-macos me-merge fix kecil F13 `fda9392e` (`ResourceStore.refresh()` menunggu snapshot yang sedang berjalan). Lead Scope 03 me-merge spec 0024 milestone 3 (`e5e34439`, bagian U `docs/manual.md`). | `lead` |
 | `2026-10-23` | Spec 0022 AC-15 dan langkah 5a di-merge `7d66f250`, kotak scope ditempel `ca276594`. Langkah 5a di-merge `ede86c30`: `StartArgs`/`StopArgs` memakai `TargetArg` dan `InstanceTarget::resolve` sebelum `cx.submit`, UUID 36 karakter dikirim langsung, `InstanceArg` dan `InstanceIdArg` dihapus, varian `Duplicate` Scope 03 utuh; di luar daftar BOLEH dua baris `apps/cli/tests/instance/exit_codes.rs` (`start demo` kini exit 10, diganti key tidak sah agar tetap menguji `cli.usage`), diterima lead. Gate: fmt, clippy workspace, build, `cargo test -p stackly-cli` 352 lulus (termasuk `action_real` terhadap `stacklyd` asli), check-deps, evidence check. `chk-f22-s5a` dimulai. | `lead` |
+| `2026-10-23` | `chk-f22-s5a` PASS (`921f60ad`): test action dan `action_real`, langkah CLI manual terhadap daemon development di root sementara (nama, nama tak dikenal exit 10, UUID huruf besar, key tidak sah exit 2, daemon mati exit 6, help), cek kode. Kotak langkah 5a F22 dicentang (`0c32f513`). Antrian wave 4 kini tanpa item SIAP: semua kotak terbuka menunggu langkah manual user di `docs/manual.md` bagian L sampai S (dan K untuk Automation Mode), persetujuan user untuk Turn On (F15, F16), run launchd F15, dan run offline F21, atau signing identity (OQ-012). | `lead` |
 
 ## Blocker terbuka
 
