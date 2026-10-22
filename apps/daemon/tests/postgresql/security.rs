@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use serde_json::json;
 use stackly_protocol::codes::secret;
-use stackly_protocol::operation::OperationState;
 use stackly_testkit::SecretOp;
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
@@ -13,7 +12,7 @@ use crate::harness::{
     PG17, PG18, Pg, Psql, Site, Via, create_instance, create_params, create_with, files_holding,
     new_password, output_of, stop_and_shutdown,
 };
-use crate::support::{Api, LogRecorder};
+use crate::support::LogRecorder;
 
 fn hba_methods(path: &std::path::Path) -> Vec<String> {
     std::fs::read_to_string(path)
@@ -211,7 +210,8 @@ async fn takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_
     let writes = |site: &Site| site.secrets.count(SecretOp::Write);
     let before = writes(&site);
     let multi = format!("{}\nsecond line", new_password());
-    let accepted = api
+    // The create refuses the value before it starts an operation.
+    let refused = api
         .create(create_params(
             &site,
             "multi",
@@ -220,15 +220,13 @@ async fn takes_a_password_with_quotes_spaces_and_backslashes_and_refuses_a_line_
             json!({}),
         ))
         .await
-        .expect("the create is accepted before its secret is checked")
-        .accepted
-        .expect("a create starts an operation");
-    let detail = api.wait_final(accepted.operation.id).await;
-    assert_eq!(detail.operation.state, OperationState::Failed, "{detail:?}");
-    assert_eq!(Api::failure_code(&detail), secret::INVALID_VALUE.code);
+        .expect_err("a password with a line break is refused");
+    assert_eq!(refused.code(), secret::INVALID_VALUE.code, "{refused:?}");
+    assert_eq!(refused.detail("field"), Some("superuserPassword"));
+    assert_eq!(refused.detail("reason"), Some("control_characters"));
     assert_eq!(writes(&site), before, "the keychain was not written");
     assert!(
-        !format!("{detail:?}").contains("second line"),
+        !format!("{refused:?}").contains("second line"),
         "the refusal quotes the value"
     );
 
