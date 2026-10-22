@@ -59,14 +59,21 @@
   },
   "readiness": {
     "probe": {
-      "type": "http",
+      "type": "native",
       "content": {
-        "host": "127.0.0.1",
-        "port": 14001,
-        "path": "/healthz",
-        "expectStatus": {
-          "start": 200,
-          "end": 299
+        "target": {
+          "type": "ip",
+          "content": {
+            "host": "127.0.0.1",
+            "port": 14000
+          }
+        },
+        "probe": {
+          "name": "nats-readiness",
+          "params": {
+            "serverName": "golden",
+            "jetstream": true
+          }
         }
       }
     },
@@ -77,14 +84,21 @@
   "recoveryDeadline": "30s",
   "health": {
     "probe": {
-      "type": "http",
+      "type": "native",
       "content": {
-        "host": "127.0.0.1",
-        "port": 14001,
-        "path": "/healthz",
-        "expectStatus": {
-          "start": 200,
-          "end": 299
+        "target": {
+          "type": "ip",
+          "content": {
+            "host": "127.0.0.1",
+            "port": 14000
+          }
+        },
+        "probe": {
+          "name": "nats-readiness",
+          "params": {
+            "serverName": "golden",
+            "jetstream": true
+          }
         }
       }
     },
