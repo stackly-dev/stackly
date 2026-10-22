@@ -223,3 +223,19 @@ Dari `docs/scope/coordination/post-alignment/post-0022.md` (workflow lead `wf_fa
 **Cross check (2026-10-22).** `Another model` (Sonnet 5.5), read only, atas draft update ini dan kode `StacklyUI`. Hasilnya: desain sejalan dengan S4, AC-5, AC-9, dan AC-13, dan klaim tentang `ResourceStore` dan `ShellSync` cocok dengan kode. Semua temuan diterapkan dengan rekomendasi architect (jawaban tetap brief untuk gap): input snapshot yang menyembunyikan O2 di balik Show More diganti; fungsi `operationsState` bersama dan signature `attentionItems` disebut; `AttentionOperations` dilengkapi (visibilitas, protokol, file, doc comment, `sortKey`) dan pemanggil lama masuk langkah 9a; baris tabel O2 dan AC-3 kini membiarkan unsupported menang atas data lama; klaim "hilang begitu snapshot berhasil" dibatasi ke versi error; pilihan `.failed` tanpa data dicatat; pengulangan otomatis di `.task(id: completedRounds)` ditambahkan untuk O2 yang tertinggal; invariant "Nothing needs attention." dipersempit; test `ResourceStore` dengan `fetchPage` yang ditahan ditambahkan; dan alasan snapshot belum termuat diganti dengan snapshot baru, karena `PageRig.loadInstances()` ternyata bisa memuat instance tanpa operasi. Tanda kata kata di dua baris *Pengumuman* spec 0015 kini sama.
 
 **Teks AC.** AC-3 berubah (teks lama dan baru di catatan bersama `arc-f22-update-ac-and-scope.md`); ID AC tidak berubah. Langkah build baru 9a di milestone 4, tanpa mengubah nomor langkah lain.
+
+## Update 2026-10-23: start dan stop dengan nama (AC-15, langkah 5a)
+
+**Konteks.** Temuan verify milestone 4 fitur 21: `stackly instance start` dan `stop` hanya menerima ID penuh (`InstanceArg`), sedangkan `inspect`, `get`, dan `connection` sudah menerima nama lewat `TargetArg` spec ini, dan journey spec 0021 menulis `start <instance>` lalu `connection <instance>`. Spec 0021 (`8660c8ad`) mengusulkan pemilik resolver, yaitu spec ini.
+
+**Opsi.**
+
+- **Opsi 1 (dipilih): langkah 5a di milestone 2 spec ini, dengan AC-15 baru.** Pro: resolver, `cli.instance_not_found`, dan golden CLI instance sudah milik spec ini, jadi satu aturan nama berlaku untuk semua perintah instance; spec 0014 sudah menyebut argumen `<instance-id>` akan menerima nama setelah resolver spec ini ada (*Asumsi lintas spec* dan *Consequences* spec 0014), jadi AC-6 spec 0014 tidak perlu diubah, sama dengan AC-11 yang memperluas `get`. Kontra: tiga kasus test spec 0014 yang dulu keluar 2 tanpa koneksi kini keluar 10 lewat pencarian nama, dan dua baris spec 0014 perlu `/sync`.
+- **Opsi 2: ubah `<instance-id>` di AC-6 spec 0014 menjadi `<instance>`.** Pro: satu AC untuk start dan stop. Kontra: mengubah AC spec lain yang sudah dibangun, dan aturan nama terpecah di dua spec.
+- **Opsi 3: langkah susulan fitur 21.** Pro: journey CLI nya ada di spec 0021. Kontra: spec 0021 bukan pemilik resolver, dan perubahan ini tidak menyentuh readiness atau connection.
+
+**Keputusan kecil.** Nama dicari sebelum `cx.submit`, jadi nama yang tidak ditemukan tidak memakai idempotency key; key yang dipakai ulang untuk instance lain ditolak fingerprint (`operation.idempotency_key_reused`). UUID yang salah ketik menjadi pencarian nama (exit 10), sama dengan `inspect`. Nama instance retained memberi `cli.instance_not_found` dan UUID nya `supervisor.instance_retained`, sama dengan `inspect` dan `connection`. `InstanceArg` dan `InstanceIdArg` dihapus karena tidak ada pemakai lain. Tidak ada kontrak baru.
+
+**Cross check.** `Another model` (Sonnet 5.5) atas Follow-up 2026-10-22: lima gap (test exit 2 yang pindah ke exit 10, `InstanceIdArg`, help, instance retained, jalur AC) dijawab dengan rekomendasi architect dan disetujui lead 2026-10-22.
+
+**Teks AC.** AC-15 baru, disetujui user 2026-10-23 ("approve AC-15 for spec 0022 and add step 5a ... to this wave"); AC lain tidak berubah. Langkah build baru 5a di milestone 2, tanpa mengubah nomor langkah lain.
