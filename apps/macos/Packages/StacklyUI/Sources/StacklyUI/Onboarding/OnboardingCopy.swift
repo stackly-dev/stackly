@@ -244,3 +244,61 @@ nonisolated extension OnboardingCopy {
         commandExamples.map { "$ " + $0 }.joined(separator: "\n")
     }
 }
+
+// MARK: - Catalog Trust
+
+nonisolated extension OnboardingCopy {
+    /// The label of the row until the catalog is known, and when it failed or is unsupported.
+    static let catalogLabelPlain = "Catalog"
+    /// The label of the official catalog.
+    static let catalogLabelOfficial = "official"
+    /// The label of a development catalog.
+    static let catalogLabelDevelopment = "development"
+    /// The label of a catalog source or trust this build does not know.
+    static let catalogLabelUnknown = "Unknown source"
+
+    /// The detail of the official catalog.
+    static let catalogDetailOfficial =
+        "Maintained by the Stackly project and bundled with this app."
+    /// The sentence added to the official detail when the build installs runtimes.
+    static let catalogDetailDigest = " Runtimes are checked against pinned digests."
+    /// The detail of a development catalog.
+    static let catalogDetailDevelopment =
+        "A development catalog from STACKLY_CATALOG_DIR. It isn’t the official catalog."
+    /// The detail of a catalog source or trust this build does not know.
+    static let catalogDetailUnknown =
+        "This version of Stackly doesn’t recognize this catalog source."
+    /// The sentence added to the unknown detail when only the trust is unknown.
+    static let catalogDetailUnknownTrust = " Unknown trust."
+    /// The detail when the daemon does not provide the catalog.
+    static let catalogDetailUnsupported =
+        "This version of stacklyd doesn’t provide the catalog. Update Stackly."
+    /// The detail before the daemon answered.
+    static let catalogDetailWaiting =
+        "Stackly shows where its catalog comes from once stacklyd is running."
+
+    /// The detail when the catalog failed to load.
+    static func catalogDetailError(message: String) -> String {
+        "The catalog isn’t available: \(message)."
+    }
+
+    /// The revision line: `Revision 7 · published Oct 20, 2026`.
+    static func catalogRevision(revision: UInt64, published: String, outdated: Bool) -> String {
+        let line = "Revision \(revision) · published \(published)"
+        return outdated ? line + catalogOutdatedSuffix : line
+    }
+
+    /// The suffix of the revision line of a catalog the daemon marks outdated.
+    static let catalogOutdatedSuffix = " · older than 180 days"
+
+    /// The label and help of the toggle of the official catalog.
+    static let catalogToggleOfficial = "The official catalog is always on."
+    /// The label and help of the toggle of a development catalog.
+    static let catalogToggleDevelopment = "The development catalog is always on."
+    /// The label and help of the toggle of a catalog this build does not know.
+    static let catalogToggleUnknown = "This catalog is always on."
+
+    /// The note under the row.
+    static let catalogNote =
+        "Trust tells you where a provider comes from. It isn’t a sandbox: every server runs with your user’s permissions."
+}

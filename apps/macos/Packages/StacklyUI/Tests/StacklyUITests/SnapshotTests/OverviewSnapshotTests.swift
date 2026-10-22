@@ -196,13 +196,23 @@ extension SnapshotTests {
 
         // MARK: - States of a section
 
+        /// The instances and the disk the three operations snapshots share (spec 0022, 2026-10-22):
+        /// Needs Attention shows I1 of `queue`, S3, and O2 or the progress, with no Show More.
+        private static let unreadableInstances = [
+            FixtureScenario.instanceCases[0], FixtureScenario.instanceCases[4],
+        ]
+
         @Test(
             .evidence(
                 covers: ["NFR-012"],
-                expected: "The Overview whose operations failed to load renders in every variant"
+                expected:
+                    "The Overview whose operations failed to load shows item O2 beside the instance and disk items and renders in every variant"
             ))
         func overviewWhoseOperationsFailedToLoad() async throws {
-            let rig = await rig(load: false) {
+            let rig = await rig(
+                instances: Self.unreadableInstances,
+                capacity: Self.report(.filling, available: 150_000_000_000), load: false
+            ) {
                 $0.script.operationFailure = .rejected(Self.errorBody)
             }
             await rig.load()
@@ -213,14 +223,32 @@ extension SnapshotTests {
             .evidence(
                 covers: ["NFR-012"],
                 expected:
-                    "The Overview of a daemon that cannot list operations renders in every variant"
+                    "The Overview of a daemon that cannot list operations shows item O2 beside the instance and disk items and renders in every variant"
             ))
         func overviewOfADaemonWithoutOperations() async throws {
-            let rig = await rig(load: false) {
+            let rig = await rig(
+                instances: Self.unreadableInstances,
+                capacity: Self.report(.filling, available: 150_000_000_000), load: false
+            ) {
                 $0.script.operationFailure = .rejected(PageRig.unknownMethod)
             }
             await rig.load()
             try await assertSnapshot(rig.overviewPage(), named: "overview-operations-unsupported")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The Overview whose operations have not loaded keeps progress in Needs Attention and Operations while the cards and instances show, in every variant"
+            ))
+        func overviewWhoseOperationsAreLoading() async throws {
+            let rig = await rig(
+                instances: Self.unreadableInstances,
+                capacity: Self.report(.filling, available: 150_000_000_000), load: false)
+            await rig.loadInstances()
+            await rig.capacity.refresh()
+            try await assertSnapshot(rig.overviewPage(), named: "overview-operations-loading")
         }
 
         @Test(

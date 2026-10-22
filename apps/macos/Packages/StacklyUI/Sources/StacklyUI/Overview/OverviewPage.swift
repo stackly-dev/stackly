@@ -137,6 +137,11 @@ public struct OverviewPage: View {
                 names: Dictionary(
                     summaries.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }),
                 context: context)
+            // A connection that recovers through its cursor raises `completedRounds` without
+            // a new snapshot, so a snapshot of operations that failed is read again here.
+            if operationsState == .failed {
+                await operations.store.refresh()
+            }
         }
     }
 
@@ -224,37 +229,71 @@ public struct OverviewPage: View {
             retry: { Task { await operations.store.refresh() } })
     }
 
+    /// What the operation center holds, read one way for the Operations section and for
+    /// Needs Attention (spec 0022, 2026-10-22).
+    ///
+    /// Unsupported comes first, also when the store still holds the data of an earlier daemon,
+    /// because `ResourceStore` marks a store unsupported without dropping `loadedAt`. Loaded
+    /// data wins over a later failed refresh. A failure with nothing loaded is `.failed`, and
+    /// `nil` means the first answer has not come.
+    ///
+    /// - Parameters:
+    ///   - active: The operations that have not ended.
+    ///   - loaded: Whether a snapshot ever loaded.
+    ///   - failed: Whether the store holds an error.
+    ///   - unsupported: Whether the daemon does not know `operation.list`.
+    static func operationsState(
+        active: [OperationSnapshot], loaded: Bool, failed: Bool, unsupported: Bool
+    ) -> AttentionOperations? {
+        if unsupported { return .unsupported }
+        if loaded { return .loaded(active) }
+        return failed ? .failed : nil
+    }
+
+    private var operationsState: AttentionOperations? {
+        Self.operationsState(
+            active: operations.active, loaded: operations.store.loadedAt != nil,
+            failed: operations.store.error != nil, unsupported: operations.store.unsupported)
+    }
+
     /// The Operations section for the state of the center: only queued, running, and
     /// cancelling operations, newest first, at most five.
     static func operationsContent(
         running active: [OperationSnapshot], loaded: Bool, failed: Bool, unsupported: Bool,
         retry: @escaping @MainActor () -> Void
     ) -> OverviewOperationsContent {
-        if unsupported { return .unsupported }
-        let running = active.filter { $0.state != .needsRecovery }
-        if loaded {
+        switch operationsState(
+            active: active, loaded: loaded, failed: failed, unsupported: unsupported)
+        {
+        case .unsupported:
+            return .unsupported
+        case .loaded(let all):
+            let running = all.filter { $0.state != .needsRecovery }
             return .loaded(
                 rows: Array(running.prefix(OverviewCopy.operationLimit)), total: running.count)
+        case .failed:
+            return .failed(title: "Couldn’t Load Operations", retry: retry)
+        case nil:
+            return .loading
         }
-        return failed ? .failed(title: "Couldn’t Load Operations", retry: retry) : .loading
     }
 
     private func attentionItems(_ summaries: [InstanceSummary]) -> [AttentionItem]? {
         Self.attentionItems(
             summaries: summaries, instancesLoaded: instances.loadedCount != nil,
-            operations: operations.active, operationsLoaded: operations.store.loadedAt != nil,
-            capacity: capacity.state, runtimes: runtimeNames, now: fixtureNow ?? Date(),
-            locale: locale, timeZone: timeZone)
+            operations: operationsState, capacity: capacity.state, runtimes: runtimeNames,
+            now: fixtureNow ?? Date(), locale: locale, timeZone: timeZone)
     }
 
-    /// The items, or `nil` while a source has not loaded: the instances, the operations
-    /// (also when they failed), or the first disk reading.
+    /// The items, or `nil` while a source has not answered: the instances, the operations, or
+    /// the first disk reading. Operations that are unsupported or failed without data do not
+    /// wait: they are item O2.
     static func attentionItems(
-        summaries: [InstanceSummary], instancesLoaded: Bool, operations: [OperationSnapshot],
-        operationsLoaded: Bool, capacity: CapacityState, runtimes: OperationTitle.RuntimeNames,
-        now: Date, locale: Locale, timeZone: TimeZone
+        summaries: [InstanceSummary], instancesLoaded: Bool, operations: AttentionOperations?,
+        capacity: CapacityState, runtimes: OperationTitle.RuntimeNames, now: Date,
+        locale: Locale, timeZone: TimeZone
     ) -> [AttentionItem]? {
-        guard instancesLoaded, operationsLoaded, capacity.attempted else { return nil }
+        guard instancesLoaded, let operations, capacity.attempted else { return nil }
         return AttentionRules.items(
             instances: summaries, operations: operations, runtimes: runtimes, capacity: capacity,
             now: now, locale: locale, timeZone: timeZone)
