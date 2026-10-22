@@ -114,3 +114,33 @@ _Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalan
 - AC-16 · `install`, `list`, dan `inspect` dengan golden; `--timeout` dan `--idempotency-key` datang dari `AsyncArgs` milik spec 0008
 - AC-18 · kontrak 1.11, fixture, test Rust dan Swift; kasus fixture tampilan berupa data tanpa skenario sampai halaman Runtimes (Milestone 4)
 - AC-4, AC-5, AC-7 sampai AC-9, AC-11, AC-12 · Milestone 1 dan 2; AC-17 · Milestone 4; AC-19 · Milestone 5; AC-20 · Milestone 5
+
+## Milestone 5: Native proof
+
+_Dari cache spike xtask tanpa jaringan. Run jaringan `nats_installs_from_the_network` (langkah 16a) disetujui user lewat lead pada 2026-10-22 dan lulus; tanpa `STACKLY_NATIVE_NETWORK=1` test itu tetap `BLOCKED` `network run not approved`. Fuzz dan test native memakai ruang disk; hapus `fuzz/target` setelah run fuzz._
+
+### UI / manual
+
+- [x] Buka `apps/daemon/tests/native_runtime_install.rs` → satu test per lini dari cache: `nats_2_15_installs_from_the_cache`, `traefik_3_7_installs_from_the_cache`, `postgresql_17_installs_from_the_cache`, `postgresql_18_installs_from_the_cache`; empat test `mysql_8_4_`, `mysql_9_7_`, `clickhouse_`, dan `valkey_9_1_installs_from_the_cache` selalu berakhir `BLOCKED` `no provider package (features 40 to 43)` dengan owner `@ojiepermana`; `nats_installs_from_the_network` berakhir `BLOCKED` `network run not approved` tanpa `STACKLY_NATIVE_NETWORK=1` → AC-20
+- [x] Buka `apps/daemon/tests/native_runtime_install/recorders.rs` → pencatat ada di port, bukan di adapter (adapter macOS tidak punya hook spawn): `RecordingProcesses` mencatat program, argumen, peran, dan environment setiap `spawn_main` dan `spawn_helper`; `RecordingCodeSigning` mencatat `assess`, `sign_adhoc`, dan `quarantine`; `NoNetwork` menolak dan mencatat setiap permintaan unduh. `MacosCodeSigning` hanya menjalankan `/usr/bin/codesign` (konstanta di `crates/platform-macos/src/codesign.rs`) → AC-20
+- [x] Buka `crates/testkit/src/runtime_cache.rs` → `RuntimeCache` membuka cache xtask (`~/Library/Caches/dev.stackly.xtask/runtime`), menganggap hanya file biasa dengan ukuran dan digest yang cocok sebagai entri, dan menyalin ke `downloads_dir()` daemon sebagai `<sha256>` → AC-20
+- [x] Buka `xtask/src/runtime/spike/cleanup.rs` → `sweep_test_processes` (TERM, tunggu 5 detik, KILL) untuk proses milik user ini yang argv nya memuat `/stackly-test-`; hanya `runtime spike --cleanup` yang memanggilnya (di dalam lock spike), driver spike tidak → AC-20
+- [x] Buka `evidence/manual/*runtime-archive*` dan `evidence/manual/*runtime-macho*` → dua record manual run fuzz 600 detik dengan statistik libFuzzer, commit sumber, dan tanpa crash, hang, atau out of memory (kind `fixture`, seperti record fuzz sebelumnya, karena `evidence check` menolak record native PASS tanpa subject) → AC-19
+
+### Commands
+
+- [x] `cargo xtask runtime spike --cleanup`, lalu `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_runtime_install --locked -- --ignored`, lalu `--cleanup` lagi → 12 record native: 7 PASS (empat lini dari cache, offline, tanda tangan rusak, quarantine), 5 BLOCKED (empat tanpa paket, satu jaringan tanpa `STACKLY_NATIVE_NETWORK=1`), 0 masalah → AC-20, AC-6, AC-12
+- [x] `cargo test -p stacklyd --test native_runtime_install --locked` → test sumber `no_daemon_code_names_a_developer_tool_to_run` lulus tanpa native: tidak ada baris bukan komentar di `stackly-core`, `stackly-platform-macos`, dan `stacklyd` yang menyebut `otool`, `lipo`, `xcrun`, `xcodebuild`, atau `clang` sebagai program → AC-20
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_runtime_install --locked -- --ignored a_binary_with_a_damaged_signature` → `nats-server` dari artefak cache keluar 0 lewat `spawn_main`; salinan dengan satu byte instruksi pertama diubah dimatikan `SIGKILL` oleh OS dan `classify_early_exit` menyebutnya `binary_rejected_by_os` → AC-12
+- [x] (disetujui, lulus) `STACKLY_NATIVE_NETWORK=1 cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_runtime_install --locked -- --ignored nats_installs_from_the_network` → NATS 2.15.1 (sekitar 6,8 MB, sha256 `ed0fe392…5ffd`, source managed) diunduh ke `TestRoot` sampai `installed` dalam 4,4 detik, 1 exec check, tanpa quarantine; record manual `evidence/manual/2026-10-22-network-install-of-nats-2-15-1-to-a-testroot-thr.json` → AC-20, AC-5
+- [x] `cargo xtask fuzz run runtime_archive --time 600` dan `cargo xtask fuzz run runtime_macho --time 600`, satu per satu → exit 0 dengan `ran for 600 s without a crash`, `fuzz/artifacts/` kosong → AC-19
+- [x] `cargo test -p stackly-testkit --lib runtime_cache` dan `cargo test -p xtask -- the_test_sweep` → `RuntimeCache` dan sweep proses test lulus → AC-20
+- [x] `cargo xtask evidence check` (39 pelanggaran yang sudah ada di test `apps/daemon/tests/postgresql/` milik spec 0019, tidak ada dari fitur ini), `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-20 · empat lini yang paketnya ada dipasang dari cache lewat daemon in process ke `TestRoot` tanpa satu pun permintaan unduh, dengan exec check `runtime.versionCheck` yang dijalankan di staging (peran `RuntimeCheck`, empat variabel environment tetap), tanpa `com.apple.quarantine` di pohon terpasang (`xattr -lr`), dan setiap pertanyaan ke port code signing menyangkut file di root test; empat lini tanpa paket tercatat `BLOCKED`; `--cleanup` mematikan proses sisa `/stackly-test-`; run jaringan menunggu persetujuan
+- AC-6 · offline tanpa entri cache: `runtime.download_offline` dengan `failure.retryable` true dalam waktu percobaan (test `an_install_without_a_network_and_without_a_cache_entry_is_offline_not_a_hang`); dengan entri cache, install jalan dengan nol permintaan unduh (test lini)
+- AC-12 · quarantine pada executable ditolak `check_launchable` tanpa spawn; binary dengan tanda tangan rusak dimatikan OS dan diklasifikasi `binary_rejected_by_os` lewat `spawn_main`. Yang dibuktikan di sini adalah klasifikasi pada adapter nyata; pemasangan ke `core::supervisor` sudah diuji dengan fake di `crates/core/tests/supervisor_start/launch.rs`
+- AC-19 · dua run fuzz 600 detik, record manual di `evidence/manual/`
+- AC-5 (bagian jaringan) · langkah 16a lulus: unduhan https nyata lewat `MacosFetcher` sampai `installed`; kebijakan redirect, TLS, dan batas ada di integration test `MacosFetcher` (Milestone 2)
