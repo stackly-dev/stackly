@@ -96,7 +96,8 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
     public private(set) var error: ErrorBody?
     /// Whether a snapshot runs.
     public private(set) var isRefreshing = false
-    /// Whether the daemon does not know the list method (an older daemon).
+    /// Whether the daemon does not know the list method (an older daemon),
+    /// until a snapshot completes.
     public private(set) var unsupported = false
     /// The items whose refetch failed, by ID. An entry goes away when the item is applied or
     /// removed, and when a snapshot completes; the old item stays in ``items`` meanwhile.
@@ -278,6 +279,7 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         itemFailures.removeAll()
         loadedAt = now()
         error = nil
+        unsupported = false
         isRefreshing = false
         didApply?(.reloaded)
     }
