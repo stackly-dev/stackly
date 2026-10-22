@@ -4,7 +4,7 @@ metadata:
   id: official/nats
   software: nats
   displayName: NATS Server
-  revision: "1.0.0"
+  revision: "1.0.1"
   category: messaging
   description: NATS messaging server with JetStream, one server per instance.
 compatibility:
@@ -34,7 +34,6 @@ configFiles:
 lifecycle:
   initialize:
     - { primitive: createManagedDirectories }
-    - { primitive: renderConfig, file: natsConf }
   start:
     executable: "${runtime.executable}"
     args: ["--config", "${instance.config}/nats.conf"]

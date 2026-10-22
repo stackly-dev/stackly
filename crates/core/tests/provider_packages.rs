@@ -708,7 +708,7 @@ fn the_nats_package_reads_without_writes_and_validates() {
 
     let key = package.key();
     assert_eq!(key.provider().as_str(), "official/nats");
-    assert_eq!(key.revision().as_str(), "1.0.0");
+    assert_eq!(key.revision().as_str(), "1.0.1");
     assert_eq!(package.software().as_str(), "nats");
     assert_eq!(
         package
@@ -744,7 +744,7 @@ fn nats_plans_match_the_golden_files() {
 
     assert_golden("nats", "init.json", &pretty(&init));
     assert_golden("nats", "run.json", &pretty(&run));
-    let renders = rendered(&package, &init.steps);
+    let renders = rendered(&package, &run.render);
     assert_eq!(renders.len(), 1);
     for (config, text) in renders {
         assert_golden("nats", &format!("render-{config}.txt"), &text);
@@ -756,11 +756,11 @@ fn nats_without_jetstream_renders_no_jetstream_block() {
     let package = validated(&nats_dir());
     let context = golden_context(&package, serde_json::json!({ "jetstream": false }));
 
-    let init = package
-        .init_plan(&context)
-        .expect("the nats init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds");
 
-    let (_, text) = rendered(&package, &init.steps)
+    let (_, text) = rendered(&package, &run.render)
         .into_iter()
         .next()
         .expect("nats renders nats.conf");
@@ -790,13 +790,77 @@ fn a_quote_in_the_data_folder_fails_the_nats_plan_without_the_value() {
         serde_json::json!({}),
     );
 
-    let err = package.init_plan(&context).unwrap_err();
+    let err = package.run_plan(&context).unwrap_err();
 
     let PlanError::UnrepresentableValue { field } = &err else {
         panic!("expected UnrepresentableValue, got {err:?}");
     };
     assert!(field.contains("instance.data"), "{field}");
     assert!(!err.to_string().contains("o\"q"), "{err}");
+}
+
+/// `context` with every TCP and UDP endpoint stripped of its port, the state
+/// of an `Auto` endpoint at initialize.
+fn without_ports(mut context: PlanContext) -> PlanContext {
+    for resolved in context.endpoints.values_mut() {
+        if let ResolvedEndpoint::Ip { port, .. } = resolved {
+            *port = None;
+        }
+    }
+    context
+}
+
+#[test]
+fn nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run() {
+    let package = validated(&nats_dir());
+    let context = golden_context(&package, serde_json::json!({}));
+    let portless = without_ports(context.clone());
+
+    let init = package
+        .init_plan(&portless)
+        .expect("the nats init plan builds while the endpoints have no port");
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds with ports");
+
+    assert!(
+        matches!(init.steps.as_slice(), [InitStep::EnsureDirectories(_)]),
+        "initialize only creates the folders: {:?}",
+        init.steps
+    );
+    let renders = rendered(&package, &run.render);
+    assert_eq!(renders.len(), 1);
+    assert_eq!(renders[0].0, "natsConf");
+    assert!(renders[0].1.contains("listen: \"127.0.0.1:14000\""));
+    assert!(matches!(
+        package.run_plan(&portless).unwrap_err(),
+        PlanError::EndpointUnresolved { .. }
+    ));
+}
+
+#[test]
+fn every_package_initializes_with_endpoints_that_have_no_port_except_traefik() {
+    let packages = [
+        ("fake", fake_dir(), fake_settings()),
+        ("nats", nats_dir(), serde_json::json!({})),
+        ("postgresql", postgresql_dir(), postgresql_settings()),
+        ("traefik", traefik_dir(), traefik_settings(1)),
+    ];
+    for (name, dir, settings) in packages {
+        let package = validated(&dir);
+        let context = without_ports(golden_context(&package, settings));
+        let result = package.init_plan(&context);
+        if name == "traefik" {
+            // Follow-up of spec 0023, feature 41: the Traefik init renders
+            // `staticConfig` with the endpoint addresses.
+            assert!(
+                matches!(result, Err(PlanError::EndpointUnresolved { .. })),
+                "traefik still fails at initialize with EndpointUnresolved until feature 41 drops its renderConfig step: {result:?}"
+            );
+        } else {
+            result.unwrap_or_else(|err| panic!("{name} init plan without ports: {err}"));
+        }
+    }
 }
 
 /// The first `count` of the three example routes of the golden context.
