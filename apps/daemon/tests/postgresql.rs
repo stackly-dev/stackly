@@ -12,6 +12,10 @@ mod adoption;
 mod common;
 #[path = "postgresql/compat.rs"]
 mod compat;
+#[path = "postgresql/create.rs"]
+mod create;
+#[path = "postgresql/create_ports.rs"]
+mod create_ports;
 #[path = "postgresql/endpoints.rs"]
 mod endpoints;
 #[path = "postgresql/failure.rs"]
