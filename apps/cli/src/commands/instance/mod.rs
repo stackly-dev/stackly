@@ -19,7 +19,7 @@ mod list;
 pub mod render;
 pub mod resolve;
 
-use clap::{Args, Subcommand};
+use clap::Subcommand;
 use serde::Serialize;
 use stackly_protocol::instance::{
     DataUsage, GetDataUsageParams, GetInstanceDetailParams, GetInstanceParams,
@@ -36,7 +36,6 @@ use self::duplicate::DuplicateArgs;
 use self::get::GetArgs;
 use self::inspect::InspectArgs;
 use self::list::ListArgs;
-use crate::args::InstanceIdArg;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
@@ -61,12 +60,12 @@ pub enum InstanceCommand {
     Duplicate(Box<DuplicateArgs>),
     /// Start an instance
     #[command(
-        after_help = "Examples:\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001 --wait --timeout 5m"
+        after_help = "Examples:\n  stackly instance start orders-db\n  stackly instance start orders-db --wait --timeout 5m\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001"
     )]
     Start(StartArgs),
     /// Stop an instance
     #[command(
-        after_help = "Examples:\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001 --wait --json"
+        after_help = "Examples:\n  stackly instance stop orders-db\n  stackly instance stop orders-db --wait --json\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001"
     )]
     Stop(StopArgs),
     /// List instances with their status and endpoints
@@ -105,14 +104,6 @@ impl InstanceCommand {
             Self::Get(args) => execute(args, cx).await,
         }
     }
-}
-
-/// An instance ID argument.
-#[derive(Debug, Args)]
-pub struct InstanceArg {
-    /// The instance ID, a whole UUID
-    #[arg(value_name = "INSTANCE_ID")]
-    pub id: InstanceIdArg,
 }
 
 /// Which verb an [`InstanceAction`] answers, for its text.

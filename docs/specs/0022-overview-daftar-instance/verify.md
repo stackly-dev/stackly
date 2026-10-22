@@ -66,6 +66,30 @@ _Langkah diturunkan dari acceptance criteria spec 0022. `/check verify` menjalan
 - AC-10: lengkap (tabel, baris jumlah, `--json`, `--status`, semua halaman, kasus kosong dan gagal, golden). Test view model Swift atas `list-mixed.json` milik milestone 3.
 - AC-11: lengkap (UUID, nama, `cli.instance_not_found`, `resource.not_found` dari daemon, exit 6, alias `get`). Key `detail`, `dataUsage`, dan flag `--size` milik spec 0021.
 
+## Milestone 2, step 5a: stackly instance start and stop by name
+
+### UI / manual
+
+- [ ] Di root sementara yang sudah di-seed dengan `stacklyd` jalan dan satu instance fake bernama `alpha`, jalankan `STACKLY_ROOT=<R> stackly instance start alpha --wait`, lalu `stackly instance stop alpha --wait` → keluar 0, teks `alpha running, readiness ready` lalu `alpha stopped, readiness unknown` → AC-15
+- [ ] Jalankan `stackly instance start <UUID huruf besar> --wait` → sama dengan memakai nama, dan tanpa panggilan `instance.list` → AC-15
+- [ ] Jalankan `stackly instance start gamma` dan `stackly instance stop 0192f3a5` → keluar 10, `cli.instance_not_found`, details `name`, dan tidak ada operasi baru di `stackly operation list` → AC-15
+- [x] Jalankan `stackly instance start --help` → `INSTANCE` sebagai nama argumen, doc "The instance name, or its whole ID", dan contoh dengan nama serta satu UUID → AC-15
+
+### Commands
+
+- [x] `cargo test -p stackly-cli --lib resolve` → UUID 36 karakter bertanda hubung menjadi ID, argumen lain menjadi nama → AC-15
+- [x] `cargo build -p stacklyd -p stackly-fake-server` lalu `cargo test -p stackly-cli --test instance -- action` → start dan stop dengan nama menulis golden `instance_start` dan `instance_stop` yang sama dengan UUID, `instance.list` dibaca sebelum `instance.start` dan `instance.stop`, nama yang tidak dikenal, awalan hex pendek, dan 34 hex keluar 10 tanpa operasi, UUID huruf besar dikirim langsung tanpa `instance.list`, key atau timeout yang tidak sah dan argumen kosong keluar 2 tanpa koneksi, dan satu test terhadap `stacklyd` asli → AC-15
+- [x] `cargo test -p stackly-cli --test instance -- exit_codes` → baris `cli.usage` memakai `--idempotency-key` yang tidak sah dan tetap keluar 2 → AC-15
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo xtask evidence check` → lulus
+
+### Value sourcing
+
+- [x] ID yang dikirim di `instance.start` dan `instance.stop` datang dari `InstanceTarget::resolve`: UUID dari argumen (lower case), nama dari `id` baris `instance.list` yang `name` nya sama persis; `start Orders-DB` tidak menemukan `orders-db` → AC-15
+
+### Acceptance-criteria coverage
+
+- AC-15: lengkap (nama, UUID huruf besar tanpa baca tambahan, nama tidak dikenal keluar 10 tanpa operasi, key dan timeout tidak sah keluar 2, golden, dan binary test terhadap `stacklyd` asli). `supervisor.instance_retained` untuk UUID retained datang dari daemon (spec 0020/0014), tidak diubah di sini.
+
 ## Milestone 3: Overview and Instances pages
 
 ### UI / manual
