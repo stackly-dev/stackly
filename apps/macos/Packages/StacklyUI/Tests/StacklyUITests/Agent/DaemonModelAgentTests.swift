@@ -167,12 +167,15 @@ struct DaemonModelAgentTests {
     @Test func theScheduleTicksForTheModelInput() async throws {
         let rig = Rig(
             record: LaunchRecordStatus(exists: true, lastLaunchedAt: nil),
-            initialProbe: Self.fresh(.enabled))
+            initialProbe: Self.fresh(.enabled), holdFirstCall: true)
         try await rig.push(Self.refusedState(5))
+        // The refresh the loss starts waits at the gate, so the input is the initial probe's.
+        await rig.controller.waitUntilHolding()
         let input = rig.model.agentBannerInput
         #expect(DaemonBanner.ticksEverySecond(input, now: Self.launch.addingTimeInterval(10)))
         #expect(
             DaemonBanner.ticksEverySecond(input, now: Self.launch.addingTimeInterval(20)) == false)
+        rig.controller.release()
     }
 
     // MARK: - Announcements
@@ -188,11 +191,14 @@ struct DaemonModelAgentTests {
     }
 
     @Test func aLossWithAnOldStateWaitsForTheFirstProbeAndAnnouncesItsTitle() async throws {
-        let rig = Rig(initialProbe: Self.fresh())
+        let rig = Rig(initialProbe: Self.fresh(), holdFirstCall: true)
         rig.clock = Self.launch.addingTimeInterval(600)
         try await rig.push(DaemonModelTests.unreachable(600))
-        // The status is older than a poll, so nothing is said until a probe arrives.
+        // The status is older than a poll, so nothing is said until a probe arrives; the
+        // probe the loss starts waits at the gate until the test lets it return.
+        await rig.controller.waitUntilHolding()
         #expect(rig.announced.isEmpty)
+        rig.controller.release()
         try await waitUntil { rig.controller.count(of: .status) == 1 }
         try await waitUntil { rig.announced == [Self.offTitle] }
         #expect(rig.announced == [Self.offTitle])
@@ -329,7 +335,7 @@ struct DaemonModelAgentTests {
         try await rig.push(DaemonModelTests.unreachable(5))
         let action = Task { await rig.agent?.start() }
         while rig.agent?.isStarting != true { await Task.yield() }
-        await rig.sleeper.waitUntilSleeping(2)  // the poll and the wait
+        await rig.waitForSleep(AgentTiming.startWait)
         rig.sleeper.fire()
         await action.value
         let text = AgentActionError.daemonDidNotStart(seconds: 30).message
