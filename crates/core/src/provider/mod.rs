@@ -31,6 +31,7 @@ mod versions;
 pub use connection::{
     CONNECTION_ENTRIES_MAX, CONNECTION_TEMPLATE_MAX, CONNECTION_TITLE_MAX, ConnectionSpec,
 };
+pub(crate) use connection::{RenderFailure, RenderedEntry, RenderedPiece, render_entries};
 pub use interpolate::{EndpointTransport, InstanceDir};
 pub use issue::{Issue, IssueCode, Location, MAX_ISSUES};
 #[cfg(feature = "json-schema")]

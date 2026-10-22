@@ -638,6 +638,27 @@ pub(crate) struct Resolver<'a> {
 impl<'a> Resolver<'a> {
     /// Checks the context's endpoints and computes managed fields.
     pub(crate) fn new(manifest: &'a Manifest, context: &'a PlanContext) -> Result<Self, PlanError> {
+        let mut resolver = Self::without_managed(manifest, context)?;
+        let mut managed = BTreeMap::new();
+        for field in &manifest.managed_fields {
+            let position = format!("settings.{}", field.name);
+            let value = match (field.integer, field.expression.pieces.as_slice()) {
+                (true, [Piece::Token(token)]) => resolver.value(token)?,
+                _ => Value::Text(resolver.render(&field.expression, &position)?),
+            };
+            managed.insert(field.name.clone(), value);
+        }
+        resolver.managed = managed;
+        Ok(resolver)
+    }
+
+    /// Checks the context's endpoints like [`new`](Self::new) but computes no
+    /// managed field, for the connection templates of spec 0021, which name
+    /// no setting and are rendered without settings.
+    pub(crate) fn without_managed(
+        manifest: &'a Manifest,
+        context: &'a PlanContext,
+    ) -> Result<Self, PlanError> {
         for (name, spec) in &manifest.endpoints {
             match (spec.transport, context.endpoints.get(name)) {
                 (EndpointTransport::Unix, Some(ResolvedEndpoint::Unix)) => {}
@@ -658,22 +679,11 @@ impl<'a> Resolver<'a> {
                 }
             }
         }
-        let mut resolver = Self {
+        Ok(Self {
             manifest,
             context,
             managed: BTreeMap::new(),
-        };
-        let mut managed = BTreeMap::new();
-        for field in &manifest.managed_fields {
-            let position = format!("settings.{}", field.name);
-            let value = match (field.integer, field.expression.pieces.as_slice()) {
-                (true, [Piece::Token(token)]) => resolver.value(token)?,
-                _ => Value::Text(resolver.render(&field.expression, &position)?),
-            };
-            managed.insert(field.name.clone(), value);
-        }
-        resolver.managed = managed;
-        Ok(resolver)
+        })
     }
 
     fn dir(&self, dir: InstanceDir) -> Result<&'a Path, PlanError> {
