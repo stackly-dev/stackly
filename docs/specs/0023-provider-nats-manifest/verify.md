@@ -77,6 +77,7 @@ Langkah Build plan yang tercakup: 13 dan 14 (sesi `dev-f23-m3`). Run native mema
 Penyimpangan dari spec, dicatat untuk lead:
 
 - Langkah 13 menyebut `apps/cli/tests/golden/provider_list.json`, `provider_inspect_nats.*`, `apps/cli/tests/provider/inspect.rs`, dan `ProviderFactsTests.swift` sebagai file yang mengikuti revision dan digest NATS. File itu berada di luar daftar "BOLEH diubah" brief, tetapi tanpa pembaruan itu test workspace dan Swift gagal; hanya nilai digest dan `providerRevision`/`Provider revision` entri `official/nats` yang diganti (`1.0.1` dan `fe57c6f49a92…`).
+- `xtask/tests/provider_check.rs` mengubah `primitive: renderConfig` di salinan NATS menjadi `runShell` untuk memicu `unknown_primitive`; langkah itu sudah tidak ada, jadi tes sekarang mengubah `createManagedDirectories`. Hanya satu baris mutasi, di luar daftar "BOLEH diubah" tetapi tes workspace gagal tanpanya.
 - Catalog revision 7 (revision 6 diambil F19) dicatat dua kali: `cargo xtask catalog check --update` di commit paket, lalu `--update --amend` di commit evidence karena `providers/nats/versions.json` menambah record.
 
 ### UI / manual
