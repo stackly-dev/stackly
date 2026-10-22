@@ -41,10 +41,23 @@ lifecycle:
     cwd: "${instance.data}"
   stop: { strategy: gracefulProcess, signal: term }
 readiness:
-  probe: { type: http, endpoint: monitoring, path: /healthz }
+  probe:
+    type: native
+    name: nats-readiness
+    endpoint: client
+    params:
+      serverName: "${settings.serverName}"
+      jetstream: "${settings.jetstream}"
 timeouts: { readinessSeconds: 30, stopSeconds: 30 }
 backup:
   cold: { paths: [data] }
 permissions:
   managedFilesystem: [data, config, logs, temp]
   executeRuntimeBinary: true
+connection:
+  - name: uri
+    title: Client URL
+    template: "nats://${endpoint.client.address}"
+  - name: monitoring
+    title: Monitoring URL
+    template: "http://${endpoint.monitoring.address}"
