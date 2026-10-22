@@ -48,14 +48,12 @@ struct OnboardingFlow: View {
             WelcomeStep(focus: $titleFocused, icon: appIcon)
         case .storage:
             StorageStep(focus: $titleFocused)
-        // provisional: F16 milestones 2 and 3 replace these three with their steps.
+        case .catalogTrust:
+            CatalogTrustStep(focus: $titleFocused)
+        // provisional: F16 milestone 2 replaces these two with their steps.
         case .backgroundAgent:
             OnboardingStepHeader(
                 title: OnboardingCopy.agentTitle, subtitle: OnboardingCopy.agentSubtitle,
-                focus: $titleFocused)
-        case .catalogTrust:
-            OnboardingStepHeader(
-                title: OnboardingCopy.catalogTitle, subtitle: OnboardingCopy.catalogSubtitle,
                 focus: $titleFocused)
         case .commandLine:
             OnboardingStepHeader(

@@ -46,3 +46,28 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - AC-10 · titik langkah, fokus judul, pengumuman langkah, Escape, dan ukuran minimum; pengumuman `not_found` dan aturan fokus aksi kartu di Milestone 2; evidence keyboard dan VoiceOver di Milestone 4
 - AC-11 · Get Started dan umpan balik "Setup complete."
 - AC-5, AC-7, AC-8 · belum, milik Milestone 2 dan 3
+
+## Milestone 3: Catalog Trust
+
+### UI / manual
+
+- [ ] Bangun app (`cargo xtask build-app`), buka dengan `-onboarding.finished NO` dan daemon berjalan, pindah ke langkah 4 → judul "Catalog sources", subjudul, satu baris berlabel "official" dengan detail "Maintained by the Stackly project and bundled with this app.", baris "Revision {n} · published {tanggal}", toggle menyala dan nonaktif, dan catatan trust di bawahnya; revision dan tanggal sama dengan `stackly provider list` → AC-7
+- [ ] Arahkan pointer ke toggle dan baca dengan VoiceOver → help dan label "The official catalog is always on."; toggle tidak bisa diubah → AC-7, AC-10
+- [ ] Jalankan stacklyd dengan `STACKLY_CATALOG_DIR` (catalog pengembangan) → label "development", detail menyebut STACKLY_CATALOG_DIR dan bahwa itu bukan catalog official, toggle "The development catalog is always on." → AC-7
+- [ ] Buka langkah 4 saat daemon belum berjalan → label "Catalog", detail "Stackly shows where its catalog comes from once stacklyd is running.", tanpa toggle; nyalakan daemon → baris berubah menjadi "official" tanpa pindah langkah → AC-7
+- [ ] Baca seluruh teks langkah 4 terhadap AC-061 → tidak ada baris community, tidak ada "Signed manifests", tidak ada kalimat tentang catalog terbaru atau up to date, tidak ada kalimat digest (`runtimeInstallAvailable` masih false) → AC-7, AC-9
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogTrustContentTests` → test lulus: setiap baris tabel *Baris Catalog Trust* (official, official outdated, development, `source` dan `trust` `unrecognized`, unsupported, error dengan dan tanpa hint, menunggu), kalimat digest mengikuti `runtimeInstallAvailable`, tanpa toggle saat `info` nil, `info` lama menang atas refresh yang gagal, tanpa community dan frasa terlarang, catatan trust sama dengan tabel *Copy*, dan baris dibangun dari `CatalogStore` di atas fixture `protocols/fixtures/catalog/` → AC-7, AC-9
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OnboardingCopyTests` → lulus, pindaian frasa terlarang meliputi `CatalogTrustContent.swift`, `CatalogTrustStep.swift`, dan bagian Catalog Trust `OnboardingCopy.swift` → AC-9
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogTrustSnapshotTests` → lulus (tujuh baris dalam satu susunan, lima varian) terhadap PNG di `__Snapshots__/CatalogTrustSnapshotTests/` → AC-7, AC-10
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [ ] `cargo xtask build-app` → build sukses
+- [ ] `xcrun swift-format lint --strict -r apps/macos/Packages/StacklyUI/Sources apps/macos/Packages/StacklyUI/Tests apps/macos/Stackly` → tanpa temuan
+
+### Acceptance-criteria coverage
+
+- AC-7 · `CatalogTrustContent.make`, `CatalogTrustStep` dan `CatalogTrustRow`; baris yang bergantung pada `runtimeInstallAvailable` (kalimat digest) menunggu fitur 18
+- AC-9 · bagian Catalog Trust `OnboardingCopy` dan test per nilai; pembacaan ulang seluruh copy terhadap AC-061 menunggu Milestone 4
+- AC-10 · label dan help toggle; snapshot langkah di jendela penuh dan evidence VoiceOver di Milestone 4
