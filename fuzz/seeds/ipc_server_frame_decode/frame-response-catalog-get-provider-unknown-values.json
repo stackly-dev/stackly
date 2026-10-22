@@ -15,7 +15,7 @@
           "state": "teleported",
           "stateReason": "moon_phase",
           "stateNote": null,
-          "providerRevision": "1.0.0",
+          "providerRevision": "1.0.1",
           "publisher": "Stackly",
           "trust": "community",
           "versions": [
@@ -29,7 +29,7 @@
           "tile": "magenta"
         },
         "software": "nats",
-        "manifestSha256": "91d3c6da2a0c43639d45a354e5f0dc9ddc492398b09b9350b99a25b1689e9235",
+        "manifestSha256": "fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd",
         "capabilities": [
           {
             "capability": "multi_instance",

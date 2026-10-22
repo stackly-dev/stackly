@@ -34,7 +34,7 @@ Langkah Build plan yang tercakup: 0, 3, 4 (sesi sebelumnya), lalu 1, 5, dan 6 (s
 - AC-6 · selesai di langkah 6
 - AC-7 · target `nats_readiness_protocol` selesai di langkah 4; run ulang `provider_manifest` dan `provider_interpolation` di atas
 - AC-8 sampai AC-12 · milestone 2 (di bawah)
-- AC-13 dan AC-14 · milik milestone 3
+- AC-13 dan AC-14 · milik milestone 4 (dulu disebut milestone 3)
 
 ## Milestone 2: NATS 2.15.1 end to end through the daemon, evidence, and catalog
 
@@ -68,4 +68,36 @@ Penyimpangan dari spec, dicatat untuk lead dan architect:
 - AC-10 · bagian `identity_check` dan `jetstream_mode` di `nats_compatibility`
 - AC-11 · bagian `adoption` di `nats_compatibility`
 - AC-12 · guard `native` di kedua test dengan `covers` sesuai spec (`nats_compatibility`: `BR-025`, `REQ-029`, `REQ-036`, `AC-029`, `REQ-012`, `REQ-013`; `nats_lifecycle_in_process`: `REQ-029`, `REQ-036`, `AC-029`), `compatibility.json` dari `provider.yaml` final, jalur `BLOCKED`, evidence di `evidence/compatibility/`, dan catalog revision 4
-- AC-13 dan AC-14 · milik milestone 3
+- AC-13 dan AC-14 · milik milestone 4 (dulu disebut milestone 3)
+
+## Milestone 3: Endpoint Auto tanpa render saat init, dan evidence ulang
+
+Langkah Build plan yang tercakup: 13 dan 14 (sesi `dev-f23-m3`). Run native memakai artefak `nats-2.15.1-macos-aarch64` dari cache runtime xtask, tanpa jaringan; tanpa artefak kedua test berakhir `BLOCKED` seperti di milestone 2.
+
+Penyimpangan dari spec, dicatat untuk lead:
+
+- Langkah 13 menyebut `apps/cli/tests/golden/provider_list.json`, `provider_inspect_nats.*`, `apps/cli/tests/provider/inspect.rs`, dan `ProviderFactsTests.swift` sebagai file yang mengikuti revision dan digest NATS. File itu berada di luar daftar "BOLEH diubah" brief, tetapi tanpa pembaruan itu test workspace dan Swift gagal; hanya nilai digest dan `providerRevision`/`Provider revision` entri `official/nats` yang diganti (`1.0.1` dan `fe57c6f49a92…`).
+- `xtask/tests/provider_check.rs` mengubah `primitive: renderConfig` di salinan NATS menjadi `runShell` untuk memicu `unknown_primitive`; langkah itu sudah tidak ada, jadi tes sekarang mengubah `createManagedDirectories`. Hanya satu baris mutasi, di luar daftar "BOLEH diubah" tetapi tes workspace gagal tanpanya.
+- Catalog revision 7 (revision 6 diambil F19) dicatat dua kali: `cargo xtask catalog check --update` di commit paket, lalu `--update --amend` di commit evidence karena `providers/nats/versions.json` menambah record.
+
+### UI / manual
+
+- [x] Setelah run native dari `HEAD` bersih (`7e741ffb`), baca `target/evidence/01a16250-1438-776c-9d1a-91bc752be6a9/report.json` → 2 record `native`, keduanya `PASS`, 0 problem, subject `nats` versi `2.15.1`; `compat-record` menyimpannya ke `evidence/compatibility/01a16250-1438-776c-9d1a-91bc752be6a9/` dengan `providerRevision` `1.0.1` dan `manifestSha256` `fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd`; evidence `1.0.0` tetap sebagai riwayat di `providers/nats/versions.json` → AC-15, AC-12
+- [x] `nats.conf` tidak ada setelah create dan baru ada setelah start pertama dengan `listen` dan `http` pada port efektif dari `instance.get` (cocok dengan `lsof`) → AC-8, AC-15
+
+### Commands
+
+- [x] `cargo test -p stackly-core --test provider_packages` → 33 test lulus, termasuk `nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run` (`init_plan` dengan kedua endpoint tanpa port hanya berisi `EnsureDirectories`, `run_plan` dengan port menulis `nats.conf`, `run_plan` tanpa port `EndpointUnresolved`) dan `every_package_initializes_with_endpoints_that_have_no_port_except_traefik` (fake, nats, postgresql berhasil; traefik masih `EndpointUnresolved` sampai fitur 41); golden `crates/core/tests/golden/provider/nats/init.json` hanya kehilangan `WriteFile` `nats.conf`, `run.json` dan `render-natsConf.txt` tidak berubah → AC-15
+- [x] `cargo xtask provider check` → `ok official/nats 1.0.1 fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd` → AC-15
+- [x] `cargo xtask catalog check`, `cargo xtask runtime check`, `cargo xtask evidence check`, `cargo xtask codegen --check`, `cargo xtask check-deps` → bersih; `ok catalog revision 7 ef635bea…6cdca`, `3 compatibility run(s) follow the rules` → AC-12, AC-15
+- [x] `STACKLY_UPDATE_GOLDEN=1 cargo test -p stacklyd --test create_form_fixtures` → `protocols/fixtures/instance/create-form-nats.json` memuat digest `fe57c6f4…` dan revision `1.0.1`; `swift test --package-path clients/swift` lulus (192 test) → AC-15
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test nats --locked -- --ignored` dari `HEAD` bersih → `2 passed`, `evidence: 2 native records (NOT_RUN 0, PASS 2, FAIL 0, BLOCKED 0, DEFERRED 0), 0 problems`; kedua instance dibuat dengan `PortRequest::Auto` untuk `client` dan `monitoring` → AC-8 (bagian `Auto`), AC-9, AC-10, AC-11, AC-12
+- [x] Setelah run: tidak ada `nats-server` milik test yang tersisa dan folder `stackly-test-*` terhapus → AC-8
+
+### Acceptance-criteria coverage
+
+- AC-15 · paket `1.0.1` dan test core (langkah 13); evidence ulang (langkah 14)
+- AC-8 · bagian `Auto` selesai di langkah 14 (`create_params` memakai `Auto`; penanda `// provisional: F20` dihapus); penyimpangan `Fixed` di milestone 2 tidak berlaku lagi
+- AC-9 sampai AC-12 · dijalankan ulang di langkah 14 pada paket `1.0.1`
+- AC-4 · digantikan nilai AC-15 (revision `1.0.1`, digest `fe57c6f4…`)
+- AC-13 dan AC-14 · milik milestone 4

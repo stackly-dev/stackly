@@ -4,6 +4,11 @@ Runs `nats-server` with one rendered `nats.conf` per instance (spec 0009):
 the client listener and the HTTP monitoring listener on loopback, and
 JetStream storing into the instance's data folder (`<data>/jetstream`).
 
+`nats.conf` is written when the instance starts, not when it is created,
+because it names the listener ports and an `Auto` endpoint only has its port
+at start. The config folder exists after create but holds no `nats.conf`
+until the first start.
+
 ## Readiness
 
 Readiness uses the native `nats-readiness` probe (spec 0023), which speaks
@@ -27,6 +32,8 @@ credentials, and closes the connection when the attempt ends.
   the client and monitoring ports on loopback, as with the upstream default.
   Credentials come with feature 39.
 - The monitoring listener is bound to loopback only.
+- Readiness does not notice a full JetStream store: the server stays up and
+  answers the probe while streams fail to write.
 
 ## Connection
 
