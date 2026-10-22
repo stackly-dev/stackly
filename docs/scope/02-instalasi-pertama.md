@@ -69,7 +69,7 @@ Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke st
 
 **Trace:** REQ-003, REQ-004, REQ-005, REQ-028, REQ-046 (cache kosong), VAL-003, VAL-010, VAL-011, PAGE-09, BR-025, AC-003, AC-004, AC-005, AC-049, AC-057, AC-059, AC-060, NFR-009, PRD bagian 27 dan 32.2
 
-**Pointer:** spec [0018](../specs/0018-install-runtime-managed/index.md) · code in `crates/core/src/runtime/`, `crates/platform/src/fetch.rs`, `crates/platform/src/codesign.rs`, `crates/platform/src/info.rs`, `crates/platform-macos/src/fetch.rs`, `crates/platform-macos/src/codesign.rs`, `crates/platform-macos/src/info.rs`, `crates/storage/migrations/0005_runtime_install.sql`, `crates/domain/src/registry/install.rs`, `crates/protocol/src/runtime.rs`, `apps/daemon/src/ipc/runtime.rs`, `apps/cli/src/commands/runtime/`, `xtask/src/runtime/scan.rs`
+**Pointer:** spec [0018](../specs/0018-install-runtime-managed/index.md) · code in `crates/core/src/runtime/`, `crates/platform/src/fetch.rs`, `crates/platform/src/codesign.rs`, `crates/platform/src/info.rs`, `crates/platform-macos/src/fetch.rs`, `crates/platform-macos/src/codesign.rs`, `crates/platform-macos/src/info.rs`, `crates/storage/migrations/0005_runtime_install.sql`, `crates/domain/src/registry/install.rs`, `crates/protocol/src/runtime.rs`, `apps/daemon/src/ipc/runtime.rs`, `apps/cli/src/commands/runtime/`, `xtask/src/runtime/scan.rs`, `apps/daemon/tests/native_runtime_install.rs`, `crates/testkit/src/runtime_cache.rs`
 
 - [x] Design it (spec): `/architect install runtime managed`
 - [ ] Build it: `/develop install runtime managed`
@@ -167,7 +167,7 @@ NATS dasar sebagai provider nyata kedua, hanya lewat manifest, template, dan pri
 
 **Trace:** REQ-029, REQ-036 (dasar), AC-029 (provider nyata), RISK-07, PRD bagian 21.2, 22.2, dan 33.2
 
-**Pointer:** spec [0023](../specs/0023-provider-nats-manifest/index.md) · code in `crates/core/src/provider/probe/`, `crates/core/src/supervisor/probe/native.rs`, `providers/nats/`
+**Pointer:** spec [0023](../specs/0023-provider-nats-manifest/index.md) · code in `crates/core/src/provider/probe/`, `crates/core/src/supervisor/probe/native.rs`, `providers/nats/`, `apps/daemon/tests/nats.rs`, `apps/daemon/tests/nats/`
 
 - [x] Design it (spec): `/architect provider NATS lewat manifest`
 - [ ] Build it: `/develop provider NATS lewat manifest`
