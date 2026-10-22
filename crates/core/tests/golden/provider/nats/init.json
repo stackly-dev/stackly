@@ -8,22 +8,6 @@
         "/Volumes/Test Root/Ünï cödé/logs/instances/0192f000-0000-7000-8000-00000000000a",
         "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
       ]
-    },
-    {
-      "type": "writeFile",
-      "content": {
-        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/nats.conf",
-        "content": {
-          "configFile": "natsConf",
-          "segments": [
-            {
-              "type": "text",
-              "content": "# Written by Stackly from the official/nats provider; edits are replaced.\nserver_name: \"golden\"\nlisten: \"127.0.0.1:14000\"\nhttp: \"127.0.0.1:14001\"\nmax_payload: 1048576\njetstream {\n  store_dir: \"/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data\"\n  max_memory_store: 1073741824\n  max_file_store: 10737418240\n}\n"
-            }
-          ]
-        },
-        "sensitive": false
-      }
     }
   ],
   "deadline": "120s",
