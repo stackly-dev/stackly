@@ -100,6 +100,12 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
                         alignment: .top
                     )
                     .padding(InspectorMetrics.padding)
+                    // The system holds the column in Liquid Glass and gives the content the
+                    // glass material, so SwiftUI would draw its controls, symbols, and text
+                    // vibrant. The column is opaque, so the content draws as on any opaque
+                    // surface, in the token colors. Like the relay, it reaches the content only
+                    // here, inside the `ScrollView`.
+                    .environment(\.backgroundMaterial, nil)
                     .relayingFixtureAccessibility()
                 }
                 .onGeometryChange(for: CGFloat.self) {
