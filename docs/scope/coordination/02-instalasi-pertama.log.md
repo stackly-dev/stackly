@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-22 13:42`
+- **Diperbarui:** `2026-10-22 14:01`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -84,10 +84,12 @@
 | `chk-f22-m3` (sesi F22 dipakai ulang) | `checker (verify)` | 22 · verify milestone 3 | `02-instalasi-pertama.md` | bagian Milestone 3 `verify.md` 0022 | `claude/nifty-joliot-9c338f` | `sonnet-5-5 · high` | PASS otomatis (`1caed289` → `e4869c9e`); sesi idle |
 | `chk-f21-m1` (sesi F21 dipakai ulang) | `checker (verify)` | 21 · verify milestone 1 | `02-instalasi-pertama.md` | bagian Milestone 1 `verify.md` 0021 | `claude/arc-f21-update-cc228d` | `sonnet-5-5 · high` | PASS 21 langkah (`6e7d6cdb` → `534046a3`); sesi idle |
 | `dev-f18-m4` (sesi F18 dipakai ulang) | `developer` | 18 · Runtimes page and the Get button (spec 0018 milestone 4, langkah 14 dan 15, Swift) | `02-instalasi-pertama.md` | `StacklyClient` runtime, StacklyUI `Runtimes/`, `RuntimeStore` di `DaemonModel`, `AppShell.swift`, `Catalog/` (bukan baris cincin), `RuntimesSnapshotTests`, design.md tabel status runtime | `claude/dev-f18-m2-f7a13e` | `sonnet-5-5 · high` | `aktif` |
-| `chk-f17-m4` (sesi F17 dipakai ulang) | `checker (verify)` | 17 · verify milestone 4 | `02-instalasi-pertama.md` | bagian Milestone 4 `verify.md` 0017 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | PASS (`338065f3` → merge); sesi idle |
+| `chk-f17-m4` (sesi F17 dipakai ulang) | `checker (verify)` | 17 · verify milestone 4 | `02-instalasi-pertama.md` | bagian Milestone 4 `verify.md` 0017 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | PASS (`338065f3` → `693fb6f1`); sesi lalu `chk-f23-m3` |
 | `chk-f19-m3` (sesi F19 dipakai ulang) | `checker (verify)` | 19 · verify milestone 3 | `02-instalasi-pertama.md` | bagian Milestone 3 `verify.md` 0019 | `claude/dev-f19-m1-bf9875` | `sonnet-5-5 · high` | PASS (`2352d404`, `86b2b8d6` → `da853d75`); sesi lalu `chk-f19-verify` |
-| `dev-f23-m3` (sesi F23 dipakai ulang) | `developer` | 23 · `Auto` endpoints and refreshed evidence (spec 0023 milestone 3, langkah 13 dan 14) | `02-instalasi-pertama.md` | `providers/nats/`, catalog revision 7, golden dan fixture digest NATS, harness `apps/daemon/tests/nats/`, evidence, verify.md 0023 | `claude/dev-f23-m1-762e0f` | `sonnet-5-5 · high` | `aktif` |
-| `chk-f19-verify` (sesi F19 dipakai ulang) | `checker (verify)` penuh | 19 · verify penuh (menutup Build it dan Verify it) | `02-instalasi-pertama.md` | seluruh `verify.md` 0019, baris Status spec 0019 | `claude/dev-f19-m1-bf9875` | `opus-5-5 · high` | `aktif` |
+| `dev-f23-m3` (sesi F23 dipakai ulang) | `developer` | 23 · `Auto` endpoints and refreshed evidence (spec 0023 milestone 3, langkah 13 dan 14) | `02-instalasi-pertama.md` | `providers/nats/`, catalog revision 7, golden dan fixture digest NATS, harness `apps/daemon/tests/nats/`, evidence, verify.md 0023 | `claude/dev-f23-m1-762e0f` | `sonnet-5-5 · high` | `merged` milestone 3 (`7e438c9e` → `42bd10e9`, NATS 1.0.1, catalog revision 7) |
+| `chk-f19-verify` (sesi F19 dipakai ulang) | `checker (verify)` penuh | 19 · verify penuh (menutup Build it dan Verify it) | `02-instalasi-pertama.md` | seluruh `verify.md` 0019, baris Status spec 0019 | `claude/dev-f19-m1-bf9875` | `opus-5-5 · high` | PASS AC-1 sampai AC-15, spec 0019 Accepted (`4a3f1ea5` → `3acf2eb6`); sesi lalu `tst-f19-test` |
+| `tst-f19-test` (sesi F19 dipakai ulang) | `tester` | 19 · Test it (penegasan detail error AC-5 native, kasus tepi *Critical test scenarios*) | `02-instalasi-pertama.md` | `apps/daemon/tests/postgresql/`, test core terkait PostgreSQL | `claude/dev-f19-m1-bf9875` | `sonnet-5-5 · high` | `aktif` |
+| `chk-f23-m3` (sesi F17 dipakai ulang) | `checker (verify)` | 23 · verify milestone 3 | `02-instalasi-pertama.md` | bagian Milestone 3 `verify.md` 0023 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | `aktif` |
 
 ## Keputusan
 
@@ -285,6 +287,9 @@
 | `2026-10-22` | `chk-f19-m3` PASS: native 29/29 (17.11 dan 18.6), AC-1 (catalog), AC-5 sampai AC-15 terpenuhi, jalur BLOCKED, workspace 3366/0. Keputusan lead: langkah compat-record milestone 3 dicentang dari run yang dikeep developer (01a16223…, HEAD bersih 783c69ca, diterima `compat-record`), karena checker tidak boleh menambah folder evidence dan sisi penolakannya sudah dibuktikan; teks "revision 2" di verify.md diberi catatan revision 6. Di-merge `da853d75`, F19 milestone 3 dicentang (`994bceb5`). Ketiga milestone F19 kini dicentang, jadi `chk-f19-verify` (verify penuh, Opus high) dimulai. | `lead` |
 | `2026-10-22` | Disk turun lagi ke 15 GiB. `target/debug/incremental` dan `target/testkit-bin` di checkout utama dihapus (sekitar 8,7 GB, keduanya dibangun ulang sesuai kebutuhan), serta `target/` worktree F21 (3,2 GB). `chk-f19-m3` menghapus `target/` miliknya (18 GB). Disk 47 GiB. | `lead` |
 | `2026-10-22` | `chk-f17-m4` PASS untuk AC-1, AC-2, AC-7: `build-app` dengan catalog official saja, langkah catalog gagal tanpa bundle tersisa, `stacklyd` dari bundle di root sementara, evidence fixture penolakan install, workspace 3373/0, kedua test timing daemon lulus di load sekitar 30. F17 milestone 4 dicentang. Kotak milestone 3 F17 tetap menunggu langkah manual GUI dan aksesibilitas user, jadi `Build it` F17 belum bisa ditutup. Temuan di luar lingkup: korban stall `SkeletonProcessRunnerTests` di run penuh saat load di atas 100, lulus saat dijalankan sendiri. | `lead` |
+| `2026-10-22` | `chk-f19-verify` (Opus high) PASS verify penuh F19: AC-1 sampai AC-15 terpenuhi di main, native 29/29, jalur BLOCKED, workspace 3373/0; baris Status spec 0019 jadi Accepted. Catatan untuk test: AC-5 native belum menegaskan nama langkah `initdb`, exit 1, dan cuplikan error; kegagalan langkah role hanya di fake. Follow-up spec 0019 fitur 21 (bentuk connection string) sudah selesai di paket, dicentang lewat `/sync`. Di-merge `3acf2eb6` (commit itu saja, bukan ujung branch); `Build it` dan `Verify it` F19 dicentang (`c3e6e28e`). `tst-f19-test` dimulai. | `lead` |
+| `2026-10-22` | F23 milestone 3 di-merge `42bd10e9` (NATS 1.0.1 tanpa render `nats.conf` saat init, harness `Auto`, evidence baru, catalog revision 7). Gate: workspace 3375/0, Windows, swift-format, clients/swift 192, suite Catalog StacklyUI 17 test tanpa PNG bergeser, `build-app`. Cek "tanpa PNG berubah" di gate sempat gagal karena `wc -l` macOS mencetak spasi; tidak ada PNG berubah. Penyimpangan nilai digest di golden CLI, `ProviderFactsTests.swift`, dan test xtask diterima. Disk sempat 11 GiB; `target/` worktree F17 dan F23 dihapus. `chk-f23-m3` dimulai di sesi F17 karena sesi F23 masih memegang tugas latar. | `lead` |
+| `2026-10-22` | `chk-f17-m4` PASS untuk AC-1, AC-2, AC-7; F17 milestone 4 dicentang (`bdd751e1`). | `lead` |
 
 ## Blocker terbuka
 
