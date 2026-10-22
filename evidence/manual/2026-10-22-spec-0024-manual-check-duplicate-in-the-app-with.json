@@ -1,0 +1,57 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1642f-c7d0-7324-af25-6823abd6b571",
+  "covers": [
+    "AC-027",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "spec 0024 manual check: Duplicate in the app with the fake provider, keyboard and VoiceOver",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "Duplicate… from the More menu of the detail page and from ⌘D opens the New Instance sheet on the settings of the source with every port Automatic and every secret on Generate; the whole flow works from the keyboard and with VoiceOver, the Runtime row reads Runtime, {name} {version}, same as {source}, and the sheet at 560 pt shows no clipped text in light, dark, and Increase Contrast",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-22T15:16:55.376428Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-22-spec-0024-manual-check-duplicate-in-the-app-with.json",
+  "context": {
+    "sourceCommit": "30aa40d9b4599cc936215305ec88750ef16b6c51",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

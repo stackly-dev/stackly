@@ -87,9 +87,13 @@ public final class CreateInstanceModel {
     public private(set) var banner: CreateBanner?
     /// The create operation as the sheet last saw it.
     public private(set) var operation: OperationSummary?
-    /// The references Copy from offers.
+    /// How the sheet started.
+    public private(set) var mode: CreateMode = .create(software: nil)
+    /// The references Copy from offers, from the daemon's list. A duplicate puts the
+    /// reference of its source first for the field that uses one: ``copyFromOptions(for:)``.
     public private(set) var copyFromOptions: [String] = []
-    /// The labels of those references that have one.
+    /// The labels of the references that have one; in a duplicate the labels of the source
+    /// win over those of the list.
     public private(set) var copyFromLabels: [String: String] = [:]
     /// The kinds of preflight row the failed stage points at, until the draft changes.
     public private(set) var failedStageKinds: Set<PreflightCheckKind> = []
@@ -107,6 +111,10 @@ public final class CreateInstanceModel {
     @ObservationIgnored private let announcer: @MainActor (String) -> Void
     @ObservationIgnored private let onFinish: @MainActor (CreateOutcome) -> Void
 
+    @ObservationIgnored private var listLabels: [String: String] = [:]
+    @ObservationIgnored private var sourceReferences: [String: String] = [:]
+    @ObservationIgnored private var sourceLabels: [String: String] = [:]
+    @ObservationIgnored private var providerSelector: ProviderSelector?
     @ObservationIgnored private var loadToken = UUID()
     @ObservationIgnored private var formTask: Task<Void, Never>?
     @ObservationIgnored private var listTask: Task<Void, Never>?
@@ -160,9 +168,11 @@ public final class CreateInstanceModel {
         runtimes.runtimes.filter { $0.state == .installed }
     }
 
-    /// Whether no runtime is installed at all: the sheet then shows "No Runtimes".
+    /// Whether no runtime is installed at all: the sheet then shows "No Runtimes". A
+    /// duplicate has the runtime of its source and never shows it.
     public var hasNoInstalledRuntimes: Bool {
-        installedRuntimes.isEmpty
+        if case .duplicate = mode { return false }
+        return installedRuntimes.isEmpty
     }
 
     /// The runtimes the picker offers for the category: by display name, then the newest
@@ -183,9 +193,10 @@ public final class CreateInstanceModel {
             }
     }
 
-    /// The chosen runtime, or `nil`.
+    /// The chosen runtime, or `nil`. A duplicate has the runtime of its form.
     public var runtime: RuntimeSummary? {
-        runtimeID.flatMap { id in installedRuntimes.first { $0.id == id } }
+        if case .duplicate = mode { return form?.runtime }
+        return runtimeID.flatMap { id in installedRuntimes.first { $0.id == id } }
     }
 
     /// The label of a runtime in the picker: "{display name} {version}", with " (external)"
@@ -195,13 +206,45 @@ public final class CreateInstanceModel {
         return runtime.installMode == .external ? "\(base) (external)" : base
     }
 
-    /// The tile of the chosen runtime, from the catalog entry of its software.
+    /// The tile of the chosen runtime, from the catalog entry of its software, or the plain
+    /// tile of the runtime when the catalog does not know it.
     public var tile: TileSpec? {
         guard let runtime else { return nil }
         let entry = catalog?.providers?.first { $0.software == runtime.software }
         return TileSpec(
             mark: entry?.mark, tile: entry?.tile,
             name: entry?.displayName ?? runtime.displayName)
+    }
+
+    /// The source of a duplicate, or `nil` in any other mode.
+    public var duplicateSource: DuplicateSourceRef? {
+        if case .duplicate(let source) = mode { source } else { nil }
+    }
+
+    /// The read only Runtime row of a duplicate: "{display name} {version} · same as
+    /// “{source}”", with " (external)" for a runtime registered from a folder; `nil` before
+    /// the form is read and in any other mode.
+    public var duplicateRuntimeLabel: String? {
+        guard let source = duplicateSource, let form else { return nil }
+        let base = "\(form.provider.displayName) \(form.runtime.version)"
+        let label = form.runtime.installMode == .external ? "\(base) (external)" : base
+        return "\(label) · same as “\(source.name)”"
+    }
+
+    /// What VoiceOver reads for the Runtime row of a duplicate: "Runtime, {display name}
+    /// {version}, same as {source}".
+    public var duplicateRuntimeSpokenLabel: String? {
+        guard let source = duplicateSource, let form else { return nil }
+        let external = form.runtime.installMode == .external ? " (external)" : ""
+        return
+            "Runtime, \(form.provider.displayName) \(form.runtime.version)\(external), same as \(source.name)"
+    }
+
+    /// The line under the title of a duplicate, or `nil` in any other mode.
+    public var duplicateSubtitle: String? {
+        duplicateSource.map {
+            "Settings copied from “\($0.name)”. Its own data directory, ports and secrets; no data is copied."
+        }
     }
 
     private func providerCategory(of runtime: RuntimeSummary) -> ProviderCategory? {
@@ -216,6 +259,7 @@ public final class CreateInstanceModel {
     ///   `nil`. The runtime is the installed one of that software with the newest install.
     public func begin(software: String? = nil) {
         reset()
+        mode = .create(software: software)
         category = .all
         if let software, let runtime = newest(of: software) {
             runtimeID = runtime.id
@@ -228,9 +272,31 @@ public final class CreateInstanceModel {
         startLoad()
     }
 
+    /// Opens the sheet in a mode: ``begin(software:)`` for a create, ``beginDuplicate(of:)``
+    /// for a duplicate.
+    ///
+    /// - Parameter mode: How the sheet starts.
+    public func begin(_ mode: CreateMode) {
+        switch mode {
+        case .create(let software): begin(software: software)
+        case .duplicate(let source): beginDuplicate(of: source)
+        }
+    }
+
+    /// Opens the sheet on the settings of an instance and reads its duplicate form.
+    ///
+    /// - Parameter source: The instance to copy the settings of.
+    public func beginDuplicate(of source: DuplicateSourceRef) {
+        reset()
+        mode = .duplicate(source)
+        category = .all
+        startLoad()
+    }
+
     /// Stops everything the model runs. Call it when the sheet goes away.
     public func end() {
         reset()
+        mode = .create(software: nil)
         phase = .choosingRuntime
     }
 
@@ -283,6 +349,10 @@ public final class CreateInstanceModel {
         failedStageKinds = []
         copyFromOptions = []
         copyFromLabels = [:]
+        listLabels = [:]
+        sourceReferences = [:]
+        sourceLabels = [:]
+        providerSelector = nil
         lastAnnounced = nil
         retryKey = nil
         createKey = nil
@@ -292,6 +362,10 @@ public final class CreateInstanceModel {
     // MARK: - Loading
 
     private func startLoad() {
+        if case .duplicate(let source) = mode {
+            startDuplicateLoad(source)
+            return
+        }
         guard let runtimeID else {
             phase = .choosingRuntime
             return
@@ -307,6 +381,28 @@ public final class CreateInstanceModel {
                 self?.formFailed(error, token: token)
             }
         }
+        startListLoad(token: token)
+    }
+
+    /// Reads the form of the source and the Copy from list together. A list that cannot be
+    /// read never fails the form (spec 0024, *Mulai*).
+    private func startDuplicateLoad(_ source: DuplicateSourceRef) {
+        phase = .loadingForm
+        let token = loadToken
+        let service = service
+        formTask = Task { [weak self] in
+            do throws(ClientError) {
+                let duplicate = try await service.getDuplicateForm(instanceId: source.id)
+                self?.duplicateLoaded(duplicate, token: token)
+            } catch {
+                self?.formFailed(error, token: token)
+            }
+        }
+        startListLoad(token: token)
+    }
+
+    private func startListLoad(token: UUID) {
+        let service = service
         listTask = Task { [weak self] in
             // A list that cannot be read hides Copy from and nothing else.
             if let items = try? await service.listSecrets() {
@@ -315,14 +411,53 @@ public final class CreateInstanceModel {
         }
     }
 
+    private func duplicateLoaded(_ duplicate: DuplicateForm, token: UUID) {
+        guard token == loadToken else { return }
+        let form = duplicate.form
+        self.form = form
+        runtimeID = form.runtime.id
+        providerSelector = duplicate.draft.provider
+        sourceReferences = Dictionary(
+            duplicate.secrets.compactMap { secret in
+                secret.sourceReference.map { (secret.field, $0) }
+            }, uniquingKeysWith: { first, _ in first })
+        sourceLabels = sourceReferences.reduce(into: [:]) { labels, entry in
+            let title = form.fields.first { $0.key == entry.key }?.title ?? entry.key
+            labels[entry.value] = "\(title) of “\(duplicate.source.name)”"
+        }
+        let schema = SchemaFormModel(fields: form.fields)
+        schema.load(settings: duplicate.draft.settings)
+        schema.preselectCopyFrom(sourceReferences)
+        self.schema = schema
+        refreshCopyFrom()
+        schema.onChange = { [weak self] in self?.draftDidChange() }
+        name = duplicate.draft.name
+        let requests = Dictionary(
+            (duplicate.draft.endpoints ?? []).map { ($0.name, $0.port) },
+            uniquingKeysWith: { first, _ in first })
+        endpoints = form.endpoints
+            .filter { $0.transport == .tcp || $0.transport == .udp }
+            .map { endpoint in
+                var row = EndpointDraft(endpoint)
+                switch requests[endpoint.name] {
+                case .fixed(let port)?:
+                    row.mode = .fixed
+                    row.portText = String(port)
+                case .auto?, nil:
+                    row.mode = .automatic
+                }
+                return row
+            }
+        phase = .editing
+        draftDidChange(immediately: true)
+    }
     private func formLoaded(_ form: CreateForm, token: UUID) {
         guard token == loadToken else { return }
         self.form = form
         let schema = SchemaFormModel(fields: form.fields)
-        schema.copyFromOptions = copyFromOptions
-        schema.copyFromLabels = copyFromLabels
         schema.onChange = { [weak self] in self?.draftDidChange() }
         self.schema = schema
+        refreshCopyFrom()
         name = form.suggestedName ?? ""
         endpoints = form.endpoints
             .filter { $0.transport == .tcp || $0.transport == .udp }
@@ -352,9 +487,28 @@ public final class CreateInstanceModel {
             }
             labels[item.reference] = "\(Self.purposeTitle(item.purpose)) of “\(instance.name)”"
         }
-        copyFromLabels = labels
-        schema?.copyFromOptions = copyFromOptions
-        schema?.copyFromLabels = copyFromLabels
+        listLabels = labels
+        refreshCopyFrom()
+    }
+
+    /// The references Copy from offers for a secret field: in a duplicate the reference the
+    /// source uses for it first, then the list without that reference; any other field gets
+    /// the list as it is (spec 0024, *Secret*).
+    ///
+    /// - Parameter field: The key of the secret field, as `secrets[].field`.
+    public func copyFromOptions(for field: String) -> [String] {
+        guard let reference = sourceReferences[field] else { return copyFromOptions }
+        return [reference] + copyFromOptions.filter { $0 != reference }
+    }
+
+    /// Hands the lists and the labels to the form after the list or the form arrived.
+    private func refreshCopyFrom() {
+        copyFromLabels = listLabels.merging(sourceLabels) { _, source in source }
+        guard let schema else { return }
+        schema.copyFromOptions = copyFromOptions
+        schema.copyFromOptionsByField = Dictionary(
+            uniqueKeysWithValues: sourceReferences.keys.map { ($0, copyFromOptions(for: $0)) })
+        schema.copyFromLabels = copyFromLabels
     }
 
     /// Whether a reference belongs to Stackly itself: its first segment is `stackly`
@@ -417,7 +571,7 @@ public final class CreateInstanceModel {
         guard let form, let runtimeID, let schema else { return nil }
         return PreflightCreateParams(
             name: name, displayName: nil,
-            provider: ProviderSelector(name: form.provider.name, revision: nil),
+            provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
             settings: schema.settings(), secrets: schema.secretPlans(), start: startAfterCreating)
     }
@@ -529,7 +683,7 @@ public final class CreateInstanceModel {
         if isCreateBusy { return nil }
         if hasNoInstalledRuntimes { return "Install a runtime first." }
         if case .formFailed = phase { return "Couldn’t load the form." }
-        if runtimeID == nil { return "Choose a runtime." }
+        if case .create = mode, runtimeID == nil { return "Choose a runtime." }
         if hasClientError || preflightHasError { return "Fix the errors above." }
         if preflightFailure != nil, currentPreflight == nil {
             return "Run preflight again to continue."
@@ -615,7 +769,7 @@ public final class CreateInstanceModel {
         createKey = key
         let params = CreateInstanceParams(
             name: name, displayName: nil,
-            provider: ProviderSelector(name: form.provider.name, revision: nil),
+            provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
             settings: schema.settings(), secrets: secrets)
         let outcome = await send(.instanceCreate(params), key)
@@ -724,7 +878,9 @@ public final class CreateInstanceModel {
         if startAfterCreating, let instanceID, let createKey {
             start = await startInstance(instanceID, createKey: createKey)
         }
-        onFinish(CreateOutcome(name: name, instanceID: instanceID, start: start))
+        onFinish(
+            CreateOutcome(
+                name: name, instanceID: instanceID, start: start, source: duplicateSource?.name))
     }
 
     /// The key of the follow up start: the lowercase hex SHA-256 of `<create key>:start`,

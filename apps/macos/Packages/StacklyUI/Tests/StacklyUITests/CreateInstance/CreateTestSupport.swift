@@ -51,3 +51,10 @@ extension ErrorBody {
             fields: nil, hint: nil, details: nil, operationId: nil, rule: nil, items: nil)
     }
 }
+
+/// A duplicate form fixture of the shared contract,
+/// `protocols/fixtures/instance/duplicate-form-<name>.json`.
+func contractDuplicate(_ name: String) throws -> DuplicateForm {
+    let url = SourceTree.url(of: "protocols/fixtures/instance/duplicate-form-\(name).json")
+    return try StacklyJSON.decoder().decode(DuplicateForm.self, from: Data(contentsOf: url))
+}

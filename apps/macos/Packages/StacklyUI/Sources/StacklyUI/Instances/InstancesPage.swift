@@ -57,6 +57,7 @@ public struct InstancesPage: View {
     @FocusState private var searchFocused: Bool
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.newInstanceAction) private var newInstance
+    @Environment(\.duplicateInstanceAction) private var duplicateInstance
     @Environment(\.feedbackCenter) private var feedbackCenter
 
     private let instances: InstanceStore
@@ -471,6 +472,11 @@ public struct InstancesPage: View {
                 secrets: models.detailService.secrets,
                 report: { feedbackCenter?.show($0) })
         }
+        var duplicate: StacklyAction?
+        if let inView, let duplicateInstance {
+            duplicate = duplicateInstance.stacklyAction(
+                for: DuplicateSourceRef(id: inView.id, name: inView.name))
+        }
         return InstancesCommandActions.publish(
             showsInspector: showsInspector,
             toggleInspector: { showsInspector.toggle() },
@@ -478,7 +484,8 @@ public struct InstancesPage: View {
             setSort: { sortOrder = [$0] },
             focusSearch: { searchFocused = true },
             hasSearch: isDetailOpen == false,
-            target: target, open: open, back: back, copyConnection: copyConnection)
+            target: target, open: open, back: back, copyConnection: copyConnection,
+            duplicate: duplicate)
     }
 
     private func apply(_ request: InstancesRequest?) {

@@ -77,6 +77,36 @@ Langkah Build plan 3, 4, dan 5. Tidak ada UI di milestone ini; bagian manual mem
 - AC-11 (CLI) · lengkap (lihat daftar test di atas).
 - AC-9, AC-12, AC-13, AC-14 menunggu milestone 3 dan 4.
 
+## Milestone 3: Duplicate in the GUI
+
+Langkah Build plan 6 dan 7. Semua bagian otomatis jalan di fixture dan service tiruan; bagian manual menunggu kamu (`docs/manual.md` bagian U). Centang oleh `/check verify`, bukan oleh developer.
+
+### UI / manual
+
+- [ ] `docs/manual.md` bagian U bagian 1 (fake provider): ⌘2, panah ke baris, ⌘D → sheet New Instance dengan subjudul duplicate, baris Runtime read only "{nama tampil} {versi} · same as “{sumber}”" tanpa filter kategori dan picker, Name `{sumber}-copy` terpilih, port Automatic, settings sumber, secret Generate dengan Copy from yang lebih dulu menawarkan "{judul field} of “{sumber}”"; Return membuat dan kartu umpan balik berbunyi "“{nama}” created from “{sumber}”. Starting it now." → AC-12, AC-14
+- [ ] Dari detail: Tab ke More, Space, panah ke Duplicate… (tepat sesudah Copy Connection String, tanpa shortcut), Return, Escape; menu Instance memuat Duplicate… ⌘D di kelompok sesudah Copy Connection String, nonaktif tanpa subjudul tanpa target dan saat daemon mati, dan ⌘D tidak berbuat apa pun selama sheet terbuka → AC-13, AC-14
+- [ ] `PUT /sentinel` di `demo`, lalu `GET /sentinel` di `demo-copy` → 404 → AC-7 (lewat GUI)
+- [ ] VoiceOver membaca baris Runtime "Runtime, {nama tampil} {versi}, same as {sumber}", subjudul, pilihan Copy from, dan setiap baris preflight; sheet 560 pt tanpa teks terpotong di light, dark, dan Increase Contrast; seluruh alur hanya dengan keyboard → AC-14 (bagian fake), NFR-012
+- [ ] `docs/manual.md` bagian U bagian 2 (PostgreSQL 17): instance kedua lewat New Instance (port dari "Use {n}") dan lewat Duplicate…, ketiganya Ready dari satu runtime, `psql` memperlihatkan data dan `system_identifier` berbeda → AC-14 (JOURNEY-02 di GUI), AC-027; `BLOCKED` dengan alasan `artifact <id> is not in the runtime cache` bila artefak PostgreSQL 17 tidak ada di cache xtask
+
+### Commands
+
+- [x] `swift test --package-path clients/swift --filter CreateClientTests` → `getDuplicateForm` mengirim `instance.get_duplicate_form` dengan ID sumber, membaca `DuplicateForm` dari frame fixture, menolak balasan jenis lain, dan meneruskan error daemon → AC-12
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CreateInstanceDuplicateTests` → 23 test model mode duplicate atas `duplicate-form-fake.json`, `duplicate-form-postgresql.json`, dan service tiruan: loading dan editing dari draft, settings dan port Automatic, `provider.revision` sumber di preflight dan create, baris Runtime dan subjudul, Copy from (hanya reference sumber selama `listSecrets` belum kembali atau gagal, daftar create di belakangnya tanpa duplikat, `copyFromReference` tetap, reference `missing` tetap di depan, label sumber menang, field tanpa `sourceReference` memakai daftar create), `formFailed` dengan Retry, balasan lama dibuang, sukses dengan umpan balik "created from", start lanjutan gagal → AC-12
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "DuplicateEntryPointTests|CommandMapTests|InstanceDetailCommandsTests|FixtureCreateDuplicateTests"` → aksi Duplicate… (`mutates` true, tanpa konfirmasi, nonaktif saat gate `.blocked`), item More urut sesudah Copy Connection String dan tanpa Duplicate… di jendela tanpa sheet, penerbit Instances hanya dengan target, baris `duplicateInstance` built di kelompok 4 dengan ⌘D, presenter membuka mode duplicate dan menjaga create yang berjalan, dan fixture `FixtureCreateDuplicate` → AC-12, AC-13
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter NewInstanceSnapshotTests` → empat snapshot mode duplicate (`new-instance-duplicate`, `-copy-from`, `-loading`, `-failed`) dalam enam varian, dan semua snapshot New Instance lama tidak berubah (`new-instance-ready` light pernah goyah sekali di beban tinggi; ulangi sendirian sekali, jangan direkam ulang) → AC-12, AC-14 (kontras dan lebar 560 pt)
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (butuh `cargo build -p stacklyd -p stackly-fake-server` dan contoh `skeleton_seed` lebih dulu) → seluruh suite lulus
+- [x] `swift test --package-path clients/swift` → seluruh suite lulus
+- [x] `cargo xtask build-app` → `BUILD SUCCEEDED`
+- [x] `xcrun swift-format lint --strict` untuk file Swift yang berubah, dan `cargo xtask evidence check` → bersih (dua record manual spec 0024 `NOT_RUN` menunggu bagian U)
+
+### Acceptance-criteria coverage
+
+- AC-12 · `getDuplicateForm`, `CreateMode`, mode duplicate `CreateInstanceModel`, sheet (baris Runtime, subjudul, Copy from), tes model, dan snapshot; form gagal dimuat dengan Retry hanya dibuktikan test model dan snapshot `new-instance-duplicate-failed` (daemon nyata tidak punya cara andal untuk memicunya dari GUI)
+- AC-13 · item More, penerbit halaman Instances, baris `duplicateInstance` built dengan ⌘D, dan `DuplicateInstanceAction`; kunci ⌘D selama sheet terbuka dijaga `StacklyCommands` spec 0069 dan dicek manual
+- AC-14 · bagian fake menunggu bagian U bagian 1; JOURNEY-02 dengan PostgreSQL 17 menunggu bagian U bagian 2 (record `NOT_RUN` `evidence/manual/2026-10-22-spec-0024-manual-check-duplicate-in-the-app-with.json` dan `...-journey-02-in-the-app-a-s.json`)
+- AC-1 sampai AC-11 · milestone 1 dan 2; AC-7 lewat GUI ikut langkah manual ketiga; AC-9 menunggu milestone 4
+
 ## Milestone 4: PostgreSQL 17 on this Mac
 
 _Langkah 8 (helper sentinel) dan bagian native langkah 9. Run native memakai artefak `postgresql-17.11-r2-macos-aarch64` dari cache runtime xtask, tanpa unduhan; tanpa artefak itu hasilnya `BLOCKED` dengan alasan `artifact postgresql-17.11-r2-macos-aarch64 is not in the runtime cache` dan owner `@ojiepermana`. Evidence manual JOURNEY-02 lewat GUI menunggu milestone 3._

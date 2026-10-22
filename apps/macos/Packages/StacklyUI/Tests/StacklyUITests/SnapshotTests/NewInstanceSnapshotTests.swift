@@ -144,6 +144,92 @@ extension SnapshotTests {
                 size: Self.size, systemMaterial: true)
         }
 
+        // MARK: - Duplicate
+
+        /// A rig opened on the settings of `pg17-dev`, waiting for its first preflight.
+        @MainActor
+        private func duplicate(
+            prepare: (CreateRig) -> Void = { _ in }
+        ) async -> CreateRig {
+            try? await Self.prime()
+            let rig = CreateRig()
+            rig.service.onPreflight = { _ in FixtureCreateDuplicate.ready }
+            prepare(rig)
+            await rig.load()
+            rig.model.beginDuplicate(of: FixtureCreateDuplicate.source)
+            return rig
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The New Instance form in duplicate mode renders in every variant"
+            ))
+        func theDuplicateForm() async throws {
+            let rig = await duplicate()
+            await settle("the first preflight") { rig.model.currentPreflight != nil }
+            await settle("the Copy from list") { !rig.model.copyFromOptions.isEmpty }
+            try await assertSnapshot(
+                sheet(rig), named: "new-instance-duplicate", size: Self.size, systemMaterial: true)
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The New Instance form in duplicate mode with Copy from chosen renders in every variant"
+            ))
+        func theDuplicateFormWithCopyFromChosen() async throws {
+            let rig = await duplicate()
+            await settle("the first preflight") { rig.model.currentPreflight != nil }
+            var draft = SecretDraft()
+            draft.source = .copyFrom
+            draft.copyFromReference = FixtureCreateForm.copyFromReference
+            try await assertSnapshot(
+                sheet(rig, drafts: ["superuserPassword": draft]),
+                named: "new-instance-duplicate-copy-from", size: Self.size, systemMaterial: true)
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The New Instance sheet in duplicate mode while the form loads renders in every variant"
+            ))
+        func theDuplicateSheetWhileTheFormLoads() async throws {
+            let gate = Gate<DuplicateForm>()
+            let rig = await duplicate { $0.service.onDuplicate = { _ in await gate.wait() } }
+            await settle("the form read") { gate.waiting == 1 }
+            try await assertSnapshot(
+                sheet(rig), named: "new-instance-duplicate-loading", size: Self.size,
+                systemMaterial: true)
+            gate.release(FixtureCreateDuplicate.pg17)
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The New Instance sheet in duplicate mode whose form failed to load renders in every variant"
+            ))
+        func theDuplicateSheetWhoseFormFailed() async throws {
+            let rig = await duplicate {
+                $0.service.onDuplicate = { _ throws(ClientError) in
+                    throw .rejected(
+                        .create(
+                            "instance.capability_unsupported",
+                            "official/example runs one instance at a time"))
+                }
+            }
+            await settle("the failure") {
+                if case .formFailed = rig.model.phase { true } else { false }
+            }
+            try await assertSnapshot(
+                sheet(rig), named: "new-instance-duplicate-failed", size: Self.size,
+                systemMaterial: true)
+        }
+
         // MARK: - The preflight card
 
         /// The Preflight card and the command under it, on the margin of the sheet: the part

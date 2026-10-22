@@ -138,21 +138,27 @@ public struct CreateOutcome: Equatable, Sendable {
     public let instanceID: UUID?
     /// How the follow up start went.
     public let start: CreateStartResult
+    /// The name of the instance a duplicate copied, or `nil` for a plain create.
+    public let source: String?
 
     /// Creates an outcome.
-    public init(name: String, instanceID: UUID?, start: CreateStartResult) {
+    public init(
+        name: String, instanceID: UUID?, start: CreateStartResult, source: String? = nil
+    ) {
         self.name = name
         self.instanceID = instanceID
         self.start = start
+        self.source = source
     }
 
     /// What the window says after the sheet closed.
     public var feedback: Feedback {
+        let created = source.map { "“\(name)” created from “\($0)”." } ?? "“\(name)” created."
         switch start {
-        case .notRequested: .success("“\(name)” created.")
-        case .accepted: .started("“\(name)” created. Starting it now.")
+        case .notRequested: return .success(created)
+        case .accepted: return .started("\(created) Starting it now.")
         case .failed(let detail):
-            Feedback(
+            return Feedback(
                 tone: .caution, message: "“\(name)” created, but it didn’t start.", detail: detail)
         }
     }

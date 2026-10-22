@@ -15,6 +15,12 @@ public protocol CreateInstanceService {
     func getCreateForm(runtimeId: UUID, provider: String?) async throws(ClientError)
         -> CreateForm
 
+    /// `instance.get_duplicate_form`: the form and the draft that copy the settings of an
+    /// instance (spec 0024).
+    ///
+    /// - Parameter instanceId: The instance to copy the settings of.
+    func getDuplicateForm(instanceId: UUID) async throws(ClientError) -> DuplicateForm
+
     /// `instance.preflight`.
     ///
     /// - Parameter draft: The draft, with the kind of every secret source and no value.
@@ -57,6 +63,11 @@ public struct LiveCreateInstanceService: CreateInstanceService {
         -> CreateForm
     {
         try await create.getCreateForm(runtimeId: runtimeId, provider: provider)
+    }
+
+    /// `instance.get_duplicate_form`.
+    public func getDuplicateForm(instanceId: UUID) async throws(ClientError) -> DuplicateForm {
+        try await create.getDuplicateForm(instanceId: instanceId)
     }
 
     /// `instance.preflight`.
