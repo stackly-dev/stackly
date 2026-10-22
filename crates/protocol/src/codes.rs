@@ -829,6 +829,10 @@ area! {
             details [], "fallback for an operation that needs recovery without an error in its summary";
         INSTANCE_NOT_FOUND = "cli.instance_not_found", NotFound, retryable false,
             details ["name"], "no instance has the name the command was given";
+        RUNTIME_NOT_FOUND = "cli.runtime_not_found", NotFound, retryable false,
+            details ["selector"], "no installed runtime matches the software@version the command was given";
+        RUNTIME_AMBIGUOUS = "cli.runtime_ambiguous", Conflict, retryable false,
+            details ["selector", "candidates"], "more than one installed runtime matches the software@version the command was given";
         PANIC = "cli.panic", Internal, retryable false,
             details [], "the cli panicked, and the panic message is never shown";
         AGENT_ROOT_OVERRIDE = "cli.agent_root_override", InvalidInput, retryable false,
@@ -1340,6 +1344,16 @@ mod tests {
             ("cli.operation_cancelled", ErrorCategory::Cancelled, &[]),
             ("cli.operation_needs_recovery", ErrorCategory::Failed, &[]),
             ("cli.instance_not_found", ErrorCategory::NotFound, &["name"]),
+            (
+                "cli.runtime_not_found",
+                ErrorCategory::NotFound,
+                &["selector"],
+            ),
+            (
+                "cli.runtime_ambiguous",
+                ErrorCategory::Conflict,
+                &["selector", "candidates"],
+            ),
             ("cli.panic", ErrorCategory::Internal, &[]),
             (
                 "cli.agent_root_override",

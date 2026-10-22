@@ -33,7 +33,7 @@ pub struct StopArgs {
     pub run: AsyncArgs,
 }
 
-fn extract_start(reply: Reply) -> Option<Accepted> {
+pub(super) fn extract_start(reply: Reply) -> Option<Accepted> {
     match reply {
         Reply::InstanceStart(reply) => Some(accepted(&reply)),
         _ => None,

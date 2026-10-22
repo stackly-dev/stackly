@@ -375,6 +375,27 @@
       "summary": "the platform roots or the socket path cannot be worked out"
     },
     {
+      "code": "cli.runtime_ambiguous",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "selector",
+        "candidates"
+      ],
+      "items": null,
+      "summary": "more than one installed runtime matches the software@version the command was given"
+    },
+    {
+      "code": "cli.runtime_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "selector"
+      ],
+      "items": null,
+      "summary": "no installed runtime matches the software@version the command was given"
+    },
+    {
       "code": "cli.usage",
       "category": "invalid_input",
       "retryable": false,

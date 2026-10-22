@@ -62,7 +62,7 @@ impl RuntimeCommand {
 /// # Errors
 ///
 /// Returns the error of the page that failed.
-async fn all_runtimes(cx: &mut Context) -> Result<RuntimeListPage, CliFailure> {
+pub(crate) async fn all_runtimes(cx: &mut Context) -> Result<RuntimeListPage, CliFailure> {
     let mut all = RuntimeListPage {
         items: Vec::new(),
         next: None,

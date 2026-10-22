@@ -1,0 +1,10 @@
+ok   Runtime PostgreSQL 18.6: Verified 88bb7533e639
+ok   Name available: orders-db
+fail Endpoint 127.0.0.1:5432: In use by orders-db-2
+ok   Endpoint 127.0.0.1 · admin: Port assigned when the instance starts
+ok   Empty data directory: instances/<new instance id>/data · created new for this instance
+ok   Disk space: 41 GB free · needs at least 256 MB
+ok   Superuser password stored in Keychain: Generated on create, never logged
+endpoints[0].port: value does not match the expected type or format
+not ready to create
+command: stackly instance create orders-db --runtime postgresql@18.6 --provider official/postgresql --port postgres=5432 --port admin=auto --secret superuserPassword=generate
