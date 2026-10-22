@@ -85,3 +85,7 @@ backup:
 permissions:
   managedFilesystem: [data, config, logs, temp, run]
   executeRuntimeBinary: true
+connection:
+  - name: uri
+    title: Connection string
+    template: "http://stackly:${secret.authToken}@${endpoint.http.address}/"
