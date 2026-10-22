@@ -920,7 +920,7 @@ Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas diff update 
 
 **Diperbaiki langsung (fakta dan kata).** Penanda "belum dibangun" fitur 15 yang tersisa di spec 0013 (banner per state, dua aturan sumber, blok usulan fondasi butir 5 kecuali butir fitur 16); kalimat `not_found` spec 0013 kini mengikuti spec 0016 persis (`OnboardingFlow` menggantikan `StateBanner` dengan syarat yang sama, "paling banyak sekali", celah jendela tertutup diterima) dan klausa spec 0015 bahwa banner critical lain tidak dihitung; `SectionProgress` Overview sebagai pemakai `DelayedProgress` di semua daftar, dan flake `overview-operations-failed` dicatat lewat pemakai itu, bukan `StateView`; penanda "belum di `main`" di design.md dan spec untuk kerja `dev-f12-fix`; Follow-up fitur 22 spec 0013 tidak mengklaim kartu Runtimes (langkah 9); `.task`, bukan `.task(id:)`, di *Pola state*; dua contoh probe ukuran halaman di spec 0067 dipisah, panduan ukuran minimum yang belum diprobe dihapus, pengecualian demo galeri dicatat, dan Follow-up `RuntimesPage.minimumWidth`; kalimat AC-3 di rationale ini; AC-9 dicatat sebagai perilaku app nyata.
 
-**Gap keputusan, dikirim ke lead dengan rekomendasi (menunggu jawaban).**
+**Gap keputusan, dikirim ke lead dengan rekomendasi. Keputusan lead (2026-10-22): "accept" untuk update ini, W1 dan W2 sesuai rekomendasi.** W1 ditulis di *Warna*, *Consequences*, dan design.md (kalimat "accepted" seperti header `Table`). W2 ditulis di *Pola state*, *Critical test scenarios*, Build plan *Tambahan 2026-10-22*, dan Follow-up, dengan catatan lead bahwa run snapshot berulang belum dijalankan developer karena load, jadi bukti frame pertama `NOT_RUN` sampai `dev-f12-fix` melapor.
 
 | # | Gap | Rekomendasi |
 | --- | --- | --- |

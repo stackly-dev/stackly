@@ -838,7 +838,7 @@ Pendekatan proyek adalah Journey, tapi fitur 67 adalah fondasi tanpa journey sen
 - [x] `/sync`: centang Follow-up spec 0012 :532, 0013 :652 (fitur 67), 0016 :416, 0020 :1106, dan 0022 :560 (fitur 67) yang dijawab spec ini. Diterapkan lewat `/sync` (2026-10-21): 0012, 0016, 0020, 0022 sudah dicentang sebelumnya, 0013 :652 dicentang sekarang.
 - [ ] Fitur 27 dan 29: tulis spec nya di atas `LogView` dan `DiffView`; ubah API komponen itu lewat `/architect` spec ini kalau kebutuhannya berbeda.
 - [ ] Fitur 32: popover menu bar memasang `.actionHost()` sendiri dan memutuskan presentasi umpan baliknya (kartu di popover atau tanpa kartu).
-- [ ] Fitur 18 *(2026-10-22, dari laporan `dbg-f67-inspector`)*: `RuntimesPage.minimumWidth` (`Runtimes/RuntimesPage.swift`) dan `#expect(RuntimesPage.minimumWidth == 384)` di `RuntimesPageTests` tidak dipakai halaman lagi sejak `e99c6061`; hapus keduanya, atau catat pemakaian barunya di spec 0018.
+- [x] Fitur 18 *(2026-10-22, dari laporan `dbg-f67-inspector`)*: `RuntimesPage.minimumWidth` (`Runtimes/RuntimesPage.swift`) dan `#expect(RuntimesPage.minimumWidth == 384)` di `RuntimesPageTests` tidak dipakai halaman lagi sejak `e99c6061`; hapus keduanya, atau catat pemakaian barunya di spec 0018. Diterapkan: keduanya dihapus di `e5684d06` (merge `88a92569`, milestone 4 spec 0022).
 - [ ] Fitur 34 dan 15: hasil doctor memakai `CheckList(.single)`; tombol Copy Details di seksi Diagnostics agent (spec 0015) memakai `CopyButton`.
 
 ## Rationale
