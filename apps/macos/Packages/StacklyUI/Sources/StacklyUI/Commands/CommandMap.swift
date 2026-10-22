@@ -443,7 +443,7 @@ nonisolated public enum CommandMap {
                 id, menu: .instance, group: 4, title: "Duplicate…",
                 shortcut: CommandShortcut("d", .command), needsInput: true,
                 scope: instancesPage, requirements: [.selection, .daemon], owner: 24,
-                standardMeaning: .duplicate)
+                status: .built, standardMeaning: .duplicate)
         case .removeInstance:
             CommandEntry(
                 id, menu: .instance, group: 4, title: "Remove…", needsInput: true,

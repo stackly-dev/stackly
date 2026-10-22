@@ -1,0 +1,66 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a16430-38a5-7348-9c48-6426e6271276",
+  "covers": [
+    "REQ-009",
+    "AC-025",
+    "AC-027",
+    "NFR-012"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "spec 0024 manual check: JOURNEY-02 in the app, a second PostgreSQL 17 instance from New Instance and from Duplicate",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "JOURNEY-02 in the app: a second PostgreSQL 17 instance is created from New Instance (port from the Use button) and another from Duplicate…, both start from the one runtime, and psql of runtime 17 shows different data in each",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "postgresql",
+      "version": "17.11",
+      "digest": null,
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-22T15:17:24.261087Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-10-22-spec-0024-manual-check-journey-02-in-the-app-a-s.json",
+  "context": {
+    "sourceCommit": "30aa40d9b4599cc936215305ec88750ef16b6c51",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

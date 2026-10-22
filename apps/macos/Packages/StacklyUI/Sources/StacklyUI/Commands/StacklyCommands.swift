@@ -87,6 +87,8 @@ public struct StacklyCommands: Commands {
             CommandItem(.stopInstance, context: context)
             GroupDivider(.instance, before: 3)
             CommandItem(.copyConnectionString, context: context)
+            GroupDivider(.instance, before: 4)
+            CommandItem(.duplicateInstance, context: context)
         }
         // Replaced so the Stackly Help item that opens nothing goes away; the search field
         // stays. Stackly Help joins with feature 66.

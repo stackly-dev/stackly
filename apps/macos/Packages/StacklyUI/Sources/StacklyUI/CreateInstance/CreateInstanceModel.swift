@@ -168,9 +168,11 @@ public final class CreateInstanceModel {
         runtimes.runtimes.filter { $0.state == .installed }
     }
 
-    /// Whether no runtime is installed at all: the sheet then shows "No Runtimes".
+    /// Whether no runtime is installed at all: the sheet then shows "No Runtimes". A
+    /// duplicate has the runtime of its source and never shows it.
     public var hasNoInstalledRuntimes: Bool {
-        installedRuntimes.isEmpty
+        if case .duplicate = mode { return false }
+        return installedRuntimes.isEmpty
     }
 
     /// The runtimes the picker offers for the category: by display name, then the newest
@@ -227,6 +229,15 @@ public final class CreateInstanceModel {
         let base = "\(form.provider.displayName) \(form.runtime.version)"
         let label = form.runtime.installMode == .external ? "\(base) (external)" : base
         return "\(label) · same as “\(source.name)”"
+    }
+
+    /// What VoiceOver reads for the Runtime row of a duplicate: "Runtime, {display name}
+    /// {version}, same as {source}".
+    public var duplicateRuntimeSpokenLabel: String? {
+        guard let source = duplicateSource, let form else { return nil }
+        let external = form.runtime.installMode == .external ? " (external)" : ""
+        return
+            "Runtime, \(form.provider.displayName) \(form.runtime.version)\(external), same as \(source.name)"
     }
 
     /// The line under the title of a duplicate, or `nil` in any other mode.
@@ -670,7 +681,7 @@ public final class CreateInstanceModel {
     /// is busy.
     public var createDisabledReason: String? {
         if isCreateBusy { return nil }
-        if case .create = mode, hasNoInstalledRuntimes { return "Install a runtime first." }
+        if hasNoInstalledRuntimes { return "Install a runtime first." }
         if case .formFailed = phase { return "Couldn’t load the form." }
         if case .create = mode, runtimeID == nil { return "Choose a runtime." }
         if hasClientError || preflightHasError { return "Fix the errors above." }

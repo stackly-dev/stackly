@@ -17,11 +17,7 @@
             FixtureCreateForm.database
         }
         var onDuplicate: (UUID) async throws(ClientError) -> DuplicateForm = { _ in
-            throw .rejected(
-                ErrorBody(
-                    code: "resource.not_found", category: .notFound,
-                    message: "no such instance", retryable: false, resource: nil, fields: nil,
-                    hint: nil, details: nil, operationId: nil, rule: nil, items: nil))
+            FixtureCreateDuplicate.pg17
         }
         var onPreflight: (PreflightCreateParams) async throws(ClientError) -> CreatePreflight = {
             _ in FixtureCreateForm.ready

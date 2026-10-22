@@ -148,6 +148,7 @@ public struct AppShell: View {
         .environment(\.mutationAvailability, presentation.mutationAvailability)
         .environment(\.shellNavigator, navigator)
         .environment(\.newInstanceAction, newInstance?.action)
+        .environment(\.duplicateInstanceAction, newInstance?.duplicateAction)
         .environment(\.newInstancePresenter, newInstance)
         .modifier(NewInstanceSheetModifier(presenter: newInstance))
         // `@SceneStorage` only lives in a view, so the navigator mirrors it both ways.
