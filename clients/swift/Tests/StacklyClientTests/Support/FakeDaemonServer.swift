@@ -195,6 +195,16 @@ final class FakeSession: @unchecked Sendable {
         try sendPayload(Array(StacklyJSON.encoder().encode(frame)))
     }
 
+    /// Sends `frames` in one write, so the client reads them in one chunk.
+    func sendTogether(_ frames: [ServerFrame]) throws {
+        var bytes: [UInt8] = []
+        for frame in frames {
+            bytes += try FrameEncoder.encode(
+                Array(StacklyJSON.encoder().encode(frame)), maxLength: UInt32.max)
+        }
+        try sendRaw(bytes)
+    }
+
     /// Frames and sends `payload` as it is.
     func sendPayload(_ payload: [UInt8]) throws {
         try sendRaw(FrameEncoder.encode(payload, maxLength: UInt32.max))
