@@ -129,7 +129,7 @@ _Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalan
 - [ ] Klik Get lalu pindah ke Overview sebelum selesai → kartu "Installing {name} {version}. Staged, verified, then committed." muncul saat mulai, dan "{name} {version} installed and verified." muncul di jendela yang mana pun saat selesai; cancel menampilkan "Install of {name} {version} was cancelled. Nothing was kept." → AC-17 · NOT_RUN, menunggu daemon nyata (Milestone 5 memasang NATS dari jaringan setelah persetujuan)
 - [ ] Klik Get saat daemon tidak tersambung → tombol nonaktif dengan alasan gerbang mutasi; saat daemon menolak (misalnya `runtime.selector_changed`) panel detail menampilkan banner critical dengan pesan, hint, kode, dan Show Operations, tanpa kartu → AC-17 · NOT_RUN, menunggu user
 - [ ] Keyboard dan VoiceOver: Tab sampai tabel, panah memilih baris, VoiceOver membaca "PostgreSQL 17.6, managed, installed, verified, used by pg17-dev", baris Installing membacakan "Stage 1 of 5, Download, 8 percent" dan mengumumkan tiap tahap sekali → AC-17 · NOT_RUN, menunggu user
-- [ ] Buka `apps/macos/design.md`, bagian Runtime status → tabel sepuluh state dengan label, tone, dan simbol, serta aturan lebar tabel 560 pt → AC-17
+- [x] Buka `apps/macos/design.md`, bagian Runtime status → tabel sepuluh state dengan label, tone, dan simbol, serta aturan lebar tabel 560 pt → AC-17
 - [x] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Runtimes/` → `RuntimeStore` (`ResourceStore<RuntimeSummary>` dengan `runtime.` dan `fetchPage` `runtime.list`, `fetchOne` `runtime.get`, `.refetch` untuk `runtime.state_changed`), `RuntimesPage`, `InstallingRow`, `RuntimeInspector`, `RuntimeGetAction`, dan tanpa banner umpan balik sementara → AC-17, AC-18
 
 ### Commands
@@ -139,6 +139,10 @@ _Langkah diturunkan dari acceptance criteria spec 0018. `/check verify` menjalan
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "RuntimeCopyTests|RuntimeAppearanceTests|RuntimeGetCellTests|RuntimesPageTests"` → teks kolom, label VoiceOver, tabel status, persen dan label tahap, urutan tiga state kolom Get, state halaman dalam urutan tetap, detail model, dan Cancel Install → AC-17
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "RuntimesSnapshotTests|CatalogSnapshotTests"` → state halaman Runtimes dan empat state kolom Get dalam light, dark, Increase Contrast, lebar 640 pt, dan Reduce Transparency; inspector terbuka di 664 pt (kolom 384 pt) → AC-17. State dengan inspector tertutup gagal cek identitas Increase Contrast sampai komponen `.stacklyInspector` memperbaiki konten utama (lihat laporan)
 - [x] `cargo xtask build-app` dan `xcrun swift-format lint --strict` pada file yang berubah → lulus → AC-17
+
+### Hasil /check verify (2026-10-22, sesi chk-f18-m4, kind `fixture`)
+
+Semua langkah Commands dijalankan ulang dari awal pada `claude/dev-f18-m2-f7a13e` (`target/` dan `.build/` kosong): `swift test --package-path clients/swift` 198 test lulus; `RuntimeStoreTests` 21 test lulus; `RuntimeCopyTests`, `RuntimeAppearanceTests`, `RuntimeGetCellTests`, dan `RuntimesPageTests` 42 test di 4 suite lulus; `RuntimesSnapshotTests` dan `CatalogSnapshotTests` 25 test lulus; `cargo xtask build-app` lulus; `xcrun swift-format lint --strict` pada `StacklyUI` (Sources dan Tests) bersih, dan `clients/swift` bersih di luar `Generated/` (yang memang dilewati hook). Run penuh `swift test --package-path apps/macos/Packages/StacklyUI`: 1118 test di 106 suite lulus dengan 23 known issue, semuanya di `SnapshotHelperTests` (tes harness); tidak ada `withKnownIssue` di `RuntimesSnapshotTests` atau `CatalogSnapshotTests`. Cek `cmp` pada 25 pasang HC: hanya `runtimes-loading` identik dengan standarnya (`contrastInvariant` hanya di sana); 24 pasang lain berbeda. Semua langkah UI dan manual yang bertanda `NOT_RUN` tetap menunggu user (keyboard, VoiceOver, Get sungguhan).
 
 ### Acceptance-criteria coverage
 
