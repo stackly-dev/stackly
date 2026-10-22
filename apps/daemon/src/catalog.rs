@@ -45,8 +45,9 @@ pub enum CatalogOverride {
 }
 
 /// Loads the catalog for the start slot: the override when a test set one,
-/// otherwise `location` (from `STACKLY_CATALOG_DIR`) with the default
-/// options, and `NotConfigured` without either.
+/// otherwise `location` (`STACKLY_CATALOG_DIR`, or the app bundle's catalog
+/// folder, see `startup::catalog_location`) with the default options, and
+/// `NotConfigured` without either.
 pub async fn load(
     core: &DaemonCore,
     location: Option<CatalogLocation>,
@@ -57,7 +58,6 @@ pub async fn load(
             return CatalogState::Loaded(Arc::new(catalog));
         }
         Some(CatalogOverride::Location { location, options }) => (location, options),
-        // provisional: F17 step 11 (the bundled catalog of `DaemonDeps.bundle`)
         None => (location, CatalogOptions::default()),
     };
     let Some(location) = location else {

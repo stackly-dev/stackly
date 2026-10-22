@@ -90,11 +90,17 @@ pub fn start_daemon(root: &TestRoot) -> SpawnedDaemon {
 /// [`start_daemon`] with a chosen catalog; it also waits for the line the
 /// start slot logs once the catalog loaded (`catalog_state`).
 pub fn start_daemon_with(root: &TestRoot, catalog: SpawnCatalog) -> SpawnedDaemon {
+    start_daemon_binary(root, Path::new(STACKLYD), catalog)
+}
+
+/// [`start_daemon_with`] for a copy of the daemon binary at `bin`, for
+/// example one inside a fake app bundle.
+pub fn start_daemon_binary(root: &TestRoot, bin: &Path, catalog: SpawnCatalog) -> SpawnedDaemon {
     let paths = daemon_paths(root);
     let log = paths.layout.daemon_log_dir().join("stacklyd.log");
     let closed_before = count_messages(&log, CONNECTION_CLOSED);
     let daemon = SpawnedDaemon::start_with_catalog(
-        Path::new(STACKLYD),
+        bin,
         root.path(),
         &paths.socket,
         &paths.runtime,

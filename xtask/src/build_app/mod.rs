@@ -130,7 +130,7 @@ pub fn run(root: &Path, options: &Options) -> Result<()> {
         let bundle = stage.join(BUNDLE_NAME);
         ditto(&product, &bundle)?;
         // Step 3: assembly.
-        assemble::assemble(&bundle, &binaries)?;
+        assemble::assemble(&bundle, &binaries, root)?;
         // Step 4: what the bundle holds.
         check::contents(&bundle, &version)?;
         // Steps 5 and 6: signing and its proof.
