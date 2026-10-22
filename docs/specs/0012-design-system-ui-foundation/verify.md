@@ -74,3 +74,16 @@
 - `ToneBadge` muncul di pohon AX dengan role `AXUnknown` (labelnya benar). VoiceOver tetap membaca labelnya, tapi role statis teks lebih rapi.
 - Setelah Show All ditekan dengan Space, fokus keyboard melompat kembali ke kontrol pertama halaman, karena tombol Show All hilang. Lebih enak kalau fokus pindah ke item pertama yang baru terbuka.
 - `GalleryLayout.narrowWidth` masih bertanda `// provisional: F13`, padahal spec 0013 sudah menetapkan konten tidak pernah lebih sempit dari 640 pt.
+
+## Setelah perbaikan huruf pertama `StaleNote` (ditambah 2026-10-22, `NOT_RUN`)
+
+_Dari update spec 2026-10-22 (*Pola state*, butir huruf pertama kalimat outdated). Jalankan setelah commit developer ui-macos yang memperbaiki `StaleNote` dan merekam ulang referensi (Follow-up spec ini dan spec 0068 K15) di merge._
+
+### Commands
+
+- [ ] `NOT_RUN` · `swift test --package-path apps/macos/Packages/StacklyUI --filter "StaleNote|ViewState"` → lulus, termasuk test baru: `source` "the bundled catalog" memberi isi yang diawali "The bundled catalog last updated", "Catalog" tetap "Catalog last updated", dan `source` kosong tidak gagal → AC-12
+- [ ] `NOT_RUN` · `cargo xtask snapshot review --base main` → di antara PNG yang berubah, `catalog-outdated.light.png`, `.dark.png`, dan `.narrow.png` hanya berbeda di huruf pertama isi banner stale ("The bundled catalog last updated …"); referensi halaman States galeri tidak berubah → AC-12
+
+### UI / manual
+
+- [ ] `NOT_RUN` · buka `apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/__Snapshots__/CatalogSnapshotTests/catalog-outdated.light.png` → banner caution berjudul "Showing the last known state from …" dengan isi "The bundled catalog last updated …", huruf T kapital → AC-12

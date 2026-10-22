@@ -529,3 +529,120 @@ Commit pertama (`a6f17d3`) tidak mengubah teks AC; AC-14 diubah sesudahnya atas 
 | AC-14 | "label VoiceOver `daemonFooter.status` ("Status: <teks footer>") dan judul `daemonBanner.title` sesuai tabel spec 0013, atau tanpa banner bila baris itu tanpa banner; aksi banner (`daemonBanner.action.reconnect`, `daemonBanner.action.openDiagnostics`) ada dan aktif sesuai tabel;" | "label VoiceOver `daemonFooter.status` ("Status: <teks footer>") dan judul banner (label `daemonBanner.container`) sesuai tabel spec 0013, atau tanpa banner bila baris itu tanpa banner, dan mulai langkah 11 milestone 3 fitur 15 sesuai baris *Banner per state* spec 0015 untuk skenario dengan `ipc.endpoint_missing` atau `ipc.connection_refused`; setiap aksi banner (tombol dengan judul nya di dalam `daemonBanner.container`) ada dan aktif sesuai baris itu;" |
 
 Alasannya: `daemonBanner.title` dan `daemonBanner.action.*` tidak pernah dibangun (XCUITest mencari banner lewat label `daemonBanner.container` dan tombol lewat judul), dan setelah langkah 11 skenario dengan kedua kode menampilkan baris agent spec 0015, misalnya Turn On di `daemon-offline`.
+
+## Perubahan 2026-10-22 (environment fixture di bawah inspector, wave 6)
+
+Update `/architect` sesi `arc-f126768-fix`, dari temuan sesi F17 lead scope 02 dan keputusan lead ui-macos. Dua butir kecil ikut: `bundledTool` fixture memakai nama file CLI `stackly-cli` (spec 0015 *Isi bundle*, sejak 2026-10-22), dan butir "Spec 0015 (a) sampai (f)" di *Usulan update untuk spec lain* ditandai diterapkan (commit `dd5f5ad`, merge `c27cca1`). ID AC tetap; satu perubahan teks AC-5 diusulkan ke lead (lihat *Teks AC K15*). Cross check model lain (Sonnet 5.5, baca saja) dijalankan atas draft ini; hasil dan resolusinya di *Cross check K15*.
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| Decision | K15 disebut, menunggu penerimaan lead | keputusan ini |
+| Model data | `FixtureAppearance` juga mengisi `fixtureAccessibility`; baris `EnvironmentValues.fixtureAccessibility` | K15 |
+| Nilai skenario | `bundledTool` `/fixture/Applications/Stackly.app/Contents/MacOS/stackly-cli`; link tetap `~/.local/bin/stackly`; Points to di referensi Diagnostics menyebut `stackly-cli` | spec 0015 *Instalasi CLI* dan *Usulan update untuk spec lain* baris 0068 (nama file CLI) di `main` |
+| *Environment fixture di dalam wadah yang menampung ulang isi* (subbagian baru) | relay, posisi nya, dan hasil probe per wadah | K15, *Bukti probe K15* |
+| Nilai asing dan batas | isi sel `Table` membaca contrast standard dan tidak diberi relay | *Bukti probe K15* |
+| API surface, Value sourcing, Key invariants, Critical test scenarios | baris relay, aturan komponen yang menampung ulang isi, test penjaga di tiga tempat | K15 |
+| Build plan | *Tambahan 2026-10-22* (satu commit developer ui-macos, rekam ulang 20 PNG HC Catalog dan tiga `catalog-outdated`) | K15 dan spec 0012 (huruf pertama `StaleNote`) |
+| Consequences | relay bergantung pada perilaku yang diamati | K15 |
+| Usulan update untuk spec lain | spec 0015 (a) sampai (f) diterapkan; spec 0067 (catatan relay) diterapkan | spec 0015 di `main`; spec 0067 di commit ini |
+| Follow-up | developer ui-macos, fitur 17, fitur 18, 21, 22, dan cek manual lead | K15 |
+| `verify.md` | bagian K15 (`NOT_RUN`) | K15 |
+
+### Keputusan K15: environment fixture di bawah `.stacklyInspector`
+
+**Masalah.** Sesi F17 menemukan bahwa semua sepuluh PNG `hc-light` dan `hc-dark` `CatalogSnapshotTests` identik byte dengan `light` dan `dark`. Sebabnya, `.inspector` SwiftUI (dipakai lewat `.stacklyInspector`, spec 0067 AC-18) menampung ulang isi utama dan isi kolom, dan di sana nilai `_colorSchemeContrast` yang dipaku `fixtureAppearance` (AC-5) hilang. Setiap halaman fase 02 dengan inspector (fitur 17, 18, 21, 22) akan sama, jadi varian HC nya tidak membuktikan apa pun. Mengisi appearance HC AppKit di jendela tidak membantu (sudah terbukti di probe spec ini dan di verify spec 0012). Batas yang tidak boleh dilanggar: AC-7 (setter bergaris bawah hanya di `FixtureAppearance.swift` dan `Tests/`) dan perilaku Release yang tidak berubah.
+
+#### Bukti probe K15
+
+Dijalankan 2026-10-22 di macOS 27.0.1 (26A434), Xcode 27.0 (27A266a), layar 1x, lewat test sementara di `StacklyUITests/SnapshotTests` yang tidak di commit (kode dan keluaran lengkap di catatan bersama `arc-f126768-fix-inspector-probe.md`). Setiap view mata mata (spy) mencatat nilai yang dibacanya. Di luar wadah, test mengisi `colorScheme` dark di jendela light, `_colorSchemeContrast` `.increased`, ketiga setter `_accessibility*` true, `fixtureNow`, `loadingDelay`, `locale` `fr_FR`, `timeZone` `Asia/Jakarta`, `stacklyWindowWidth`, dan dua kunci biasa milik test. Render lewat `SnapshotRender` (jendela yang tidak pernah tampil), kecuali yang disebut jendela tampil.
+
+| Wadah | `colorSchemeContrast` | Kunci lain |
+| --- | --- | --- |
+| tanpa wadah | `.increased` | semua sampai |
+| `.stacklyInspector`, isi utama dan kolom (terbuka atau tertutup, jendela light atau dark, juga di jendela yang tampil) | standard | semua sampai: RT, DWC, RM, `colorScheme`, `fixtureNow`, `loadingDelay`, `locale`, `timeZone`, `stacklyWindowWidth`, kunci biasa |
+| `.inspector` mentah: isi utama | standard | semua sampai |
+| `.inspector` mentah: spy langsung sebagai isi kolom, atau dengan `.background` atau `.inspectorColumnWidth` | `.increased` | semua sampai |
+| `.inspector` mentah: spy di dalam `ScrollView`, atau di dalam `VStack` dengan `.frame` dan `.padding`, di kolom | standard | semua sampai |
+| `.searchable`, `.overlay`, `.background`, `ScrollView`, `ScrollView` bersarang, `LazyVStack`, `List`, `Form`, `GroupBox`, `LabeledContent` `.stackly`, label `Menu`, `ViewThatFits`, `NavigationSplitView` (sidebar dan detail) | `.increased` | semua sampai |
+| sel `Table` | standard | semua sampai |
+| `.sheet` (jendela tidak tampil dan tampil), `.popover` (jendela tampil; di jendela tidak tampil tidak pernah dievaluasi) | standard | `locale` kembali ke nilai sistem; sisanya sampai |
+
+Relay (kunci biasa yang memasang setter lagi), per posisi:
+
+| Posisi relay | Hasil |
+| --- | --- |
+| pada `content` sebelum `.inspector` | isi utama `.increased`, juga untuk spy di `ScrollView` plus `LazyVGrid` plus `VStack` dan di baris `List` |
+| pada `VStack { isi }` di dalam `ScrollView` kolom | isi kolom `.increased`, juga untuk spy bersarang tiga tingkat dan di `ScrollView(.horizontal)` di dalam kolom |
+| pada `ScrollView` kolom, sesudah `.background`, atau sesudah `.inspectorColumnWidth` | isi kolom tetap standard |
+| di dalam sel `Table`, di dalam isi `.sheet` | `.increased` |
+| di dua posisi yang direkomendasikan, lalu `.searchable` dan `.navigationTitle` di luar (bentuk `CatalogPage`) | semua spy `.increased` |
+| di dua posisi yang direkomendasikan, tanpa kunci (app Debug tanpa fixture) | semua nilai mengikuti sistem (standard, false), tidak ada yang dipaku |
+
+Piksel: dengan modifier tiruan `.stacklyInspector` tanpa relay, `light` sama dengan `hc-light` dan `dark` sama dengan `hc-dark` di setengah halaman maupun setengah kolom; dengan relay di dua posisi itu keempatnya berbeda, dan `rt` tetap sama dengan `light` (tanpa material).
+
+Kesimpulan: yang hilang hanya `colorSchemeContrast`. Kunci biasa selalu sampai, jadi bisa membawa nilai fixture melewati wadah, dan setter yang dipasang lagi di dalam bekerja asal posisinya di dalam batas tempat nilai itu hilang.
+
+#### Option 1: `StacklyInspectorModifier` membaca nilai di luar inspector lalu memasang setter lagi di dalam
+
+- Kelebihan: tidak butuh kunci baru; modifier membaca `colorSchemeContrast` dan yang lain lewat getter biasa di posisi nya (di luar inspector, nilainya benar).
+- Kekurangan: setter bergaris bawah ditulis di `StacklyInspector.swift`, jadi AC-7 butuh pengecualian baru dan aturan "satu tempat" hilang. Di app Debug tanpa fixture, modifier tetap memaku nilai yang dibaca di luar inspector, jalur yang tidak ada di Release dan belum terbukti sama dengan nilai sistem di dalam inspector.
+
+#### Option 1b: kunci biasa `fixtureAccessibility` plus relay di `FixtureAppearance.swift`, dipanggil `StacklyInspectorModifier` di `#if DEBUG` (direkomendasikan)
+
+- Kelebihan: AC-7 tetap harfiah, karena setter hanya ditulis di `FixtureAppearance.swift`. Kunci nil di luar snapshot dan preview, jadi app Debug biasa tidak berubah (probe tanpa kunci), dan Release sama persis. Relay yang sama dipakai komponen lain yang menampung ulang isi. Probe membuktikan dua posisinya di isi bersarang dan di susunan modifier seperti `CatalogPage` (`.searchable` dan judul di luar), lewat salinan modifier di test.
+- Kekurangan: posisi relay di kolom ditentukan pengamatan (di dalam `ScrollView`, bukan di luarnya), bukan aturan Apple, jadi SDK baru bisa menggesernya; test penjaga di dalam inspector yang menangkapnya. Satu kunci dan satu modifier Debug bertambah.
+
+#### Option 2: memasang ulang di tingkat harness (`fixtureAppearance` atau `SnapshotRoot`)
+
+- Kelebihan: tidak menyentuh komponen.
+- Kekurangan: ditolak bukti. Harness hanya bisa memasang nilai di luar halaman, dan nilai yang dipasang di luar memang sudah ada lalu hilang di dalam inspector (probe: setter di luar, isi tetap standard). Varian nya, `.stacklyInspector` yang menggambar kolom sebagai `HStack` biasa saat snapshot, merender tata letak yang tidak dikirim ke pengguna (lebar kolom native, pembagi, toggle), jadi snapshot tidak lagi memotret inspector sungguhan.
+
+#### Option 3: snapshot isi inspector terpisah
+
+- Kelebihan: isi kolom bisa dirender sebagai view biasa yang mendapat HC.
+- Kekurangan: isi utama halaman tetap di bawah `.inspector` dan tetap kehilangan HC, jadi PNG halaman penuh tetap identik; setiap layar harus memecah view nya demi test, dan bagian yang benar benar dikirim (halaman dengan inspector) tetap tanpa bukti.
+
+#### Option 4: menerima batas dan mencatatnya
+
+- Kelebihan: tanpa kode.
+- Kekurangan: varian HC tidak berarti untuk hampir semua halaman fase 02 (semuanya punya inspector), padahal border HC dan teks 7:1 adalah janji AC-7 spec 0012.
+
+**Rekomendasi: Option 1b**, rekomendasi lead yang dikuatkan bukti. Ia satu satunya opsi yang menghidupkan varian HC halaman dengan inspector tanpa melonggarkan AC-7 dan tanpa mengubah perilaku app di luar snapshot. Option 1 bekerja secara teknis tetapi memindahkan setter ke komponen dan memaku nilai di setiap app Debug; Option 2 dan 3 dibantah probe; Option 4 membuang bukti yang paling dibutuhkan fase 02.
+
+**Keputusan kecil yang diambil.**
+
+- Relay memasang keempat nilai yang dipaku `fixtureAppearance`, bukan hanya `_colorSchemeContrast`, lewat satu fungsi pribadi bersama, supaya kalau SDK berikutnya juga menjatuhkan nilai lain di wadah ini, relay sudah menutupnya, dan kedua tempat tidak bisa berbeda isi. `colorScheme` tidak dipasang lagi karena sampai (probe) dan jendela harness sudah memakai appearance yang sama. Runner up: hanya `_colorSchemeContrast`, yang lebih sempit tetapi harus diubah lagi bila SDK berubah.
+- Isi kunci adalah `FixtureAppearance?`, tipe yang sudah ada, bukan tipe baru. Runner up: struct baru berisi empat Bool, yang menduplikasi tipe itu.
+- Sel `Table`, `.sheet`, dan `.popover` tidak diberi relay. Sheet dan popover membuka jendela yang tidak ditangkap snapshot, dan `Table` adalah kontrol native di kode layar (relay per sel berarti blok `#if DEBUG` di setiap layar). Batas sel `Table` dicatat, dan `/architect` spec ini memutuskan bila fitur 18 atau 22 butuh bukti HC di sel. Runner up: relay di setiap sel `Table`, yang membuktikan lebih banyak dengan biaya kode Debug di setiap layar.
+- Test penjaga menaruh spy isi utama bersarang di `ScrollView` dan `VStack`, seperti halaman sungguhan. Spy kolom diberikan langsung sebagai isi `.stacklyInspector`, karena modifier itu sendiri sudah menaruhnya di `ScrollView` dan `VStack`; spy langsung di kolom `.inspector` mentah membaca `.increased` tanpa relay (probe), jadi test tidak boleh memakai `.inspector` mentah.
+- Bukti posisi relay datang dari salinan modifier di probe, bukan dari `StacklyInspectorModifier` itu sendiri (yang punya `.frame(minHeight:)` dan `.onGeometryChange` tambahan). Bukti di modifier sungguhan baru ada saat build: test penjaga AC-5 dan perbandingan referensi HC di `verify.md`.
+- Produksi: nilai di dalam inspector kembali ke nilai sistem, jadi dengan Increase Contrast asli isi inspector seharusnya membaca `.increased`. Itu belum dibuktikan (setting sistem tidak boleh diubah sesi ini), jadi lead menambah satu cek manual di `docs/manual.md`.
+
+### Teks AC K15
+
+Diusulkan ke lead sebelum ditulis final (lead meneruskannya ke user). Sampai disetujui, AC-5 di index.md tetap teks lama, dan test penjaga yang diperluas tetap dibangun lewat *Key invariants* dan Build plan. AC-7 tidak berubah: setter tetap hanya di `FixtureAppearance.swift`. AC-18 spec 0067 tidak berubah, karena perilaku Release `.stacklyInspector` tidak berubah.
+
+| AC | Teks lama (bagian yang berubah) | Teks baru |
+| --- | --- | --- |
+| AC-5 | "Satu test penjaga merender view uji dan gagal dengan pesan yang menyebut SDK kalau di varian HC view tidak membaca `colorSchemeContrast == .increased`, atau di varian RT tidak membaca `accessibilityReduceTransparency == true`." | "Nilai yang dipaku `fixtureAppearance` juga sampai ke isi yang ditampung ulang `.stacklyInspector` (K15). Satu test penjaga merender view uji di tiga tempat (langsung, di isi utama `.stacklyInspector`, dan di kolom inspector nya) dan gagal dengan pesan yang menyebut SDK dan tempat itu kalau di varian HC view tidak membaca `colorSchemeContrast == .increased`, atau di varian RT tidak membaca `accessibilityReduceTransparency == true`." |
+
+### Cross check K15
+
+Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas draft update ini (spec 0012, 0067, 0068) dengan kode `StacklyUI` dan log probe. Yang ia periksa ulang dan benar: sepuluh pasang `hc-light` dan `hc-dark` `CatalogSnapshotTests` identik byte dengan `light` dan `dark` hari ini (20 file), `catalog-outdated` satu satunya referensi dengan catatan outdated, halaman Inspector galeri merender `InspectorColumnSample`, `ShellPresentation` hanya memformat waktu dengan `.outdated(source: "stacklyd")`, dan `dd5f5ad` serta `c27cca1` ada di `main`.
+
+**Diperbaiki langsung (soundness dan kata).** Alasan huruf kapital `StaleNote` tidak lagi mengklaim frasa sumber dipakai di tengah kalimat, dan runner up yang lebih sederhana (kapital di dua string `CatalogCopy`) ditulis; baris *API surface* `StaleNote` tidak menyebut fungsi internal; spy kolom di test penjaga adalah isi langsung `.stacklyInspector` (modifier sudah menaruhnya di `ScrollView` dan `VStack`); bukti di modifier sungguhan baru ada saat build; app dalam mode skenario tidak mengisi kunci, jadi relay diam; "kedua puluh pasang" di `verify.md`; `ProviderCard` disebut lewat simbol, bukan nomor baris; satu kalimat yang berulang di *Key invariants* dihapus; Follow-up lead untuk teks AC-5 dan untuk harapan "the development catalog" di `verify.md` spec 0017. Catatan: `bundledTool` baru berpengaruh saat langkah 12 milestone 3 fitur 15 membangun `FakeCommandLineTool` (baris tabel sudah bertanda "mulai langkah 12").
+
+**Gap kelengkapan keputusan, dikirim ke lead dengan rekomendasi (menunggu jawaban).**
+
+| # | Gap | Rekomendasi |
+| --- | --- | --- |
+| G1 | Bentuk relay tidak dipaku; probe memasang `colorScheme` juga, spec tidak | relay memakai fungsi pribadi yang sama dengan `fixtureAppearance` (kelima nilai, termasuk `colorScheme`), dalam `ViewModifier` dengan `if let` seperti probe; `transformEnvironment` tidak dipakai karena belum diprobe |
+| G2 | Bentuk `#if DEBUG` di pemanggil (`StacklyInspector.swift` bukan file Debug) | satu helper `private` di `StacklyInspector.swift` yang memanggil relay di Debug dan mengembalikan `self` di Release, tanpa `#if` di tengah rantai modifier |
+| G3 | Detail test penjaga | nama `theFixtureAppearanceReachesTheInspectorContent` di `RenderProbeTests`, `.evidence(covers: ["REQ-027", "NFR-012"])`, kanvas 900 × 500, `.stacklyInspector(isPresented: .constant(true))`, spy dengan nilai opsional yang gagal kalau body nya tidak pernah dievaluasi |
+| G4 | Tidak ada test kontrol | satu test: tanpa `fixtureAccessibility`, relay tidak mengubah nilai yang diisi test lewat setter langsung (relay diam di app Debug); tanpa test kanari untuk SDK yang berhenti menjatuhkan nilai |
+| G5 | Cek HC berbeda dari standard hanya sekali (`cmp` di verify) | `assertSnapshot` gagal kalau `hc-light` identik dengan `light` atau `hc-dark` dengan `dark`, dengan parameter keluar `contrastInvariant: true` beserta alasan; butuh tambahan di teks AC-5 |
+| G6 | Mekanik rekam ulang | 23 file; perintah `STACKLY_SNAPSHOT_RECORD=1 swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogSnapshotTests`; pasangan yang tetap identik adalah bug yang diperiksa, bukan direkam; `snapshot review --base main` di branch sebelum merge |
+| G7 | Kasus tepi huruf kapital `StaleNote` | karakter pertama dengan `uppercased()` yang tidak bergantung locale; karakter tanpa huruf besar (angka, simbol, spasi) dan `source` kosong tidak berubah; test di `ViewStateTests.swift` di samping `outdatedMessageNamesTheSourceAndItsTime`; doc comment `bannerMessage`, `ViewState.resolve(outdated:)`, dan `CatalogCopy.sourceName` diperbarui |
+| G8 | Preview dan mode skenario | diterapkan langsung sebagai fakta (lihat di atas); tanpa preview HC baru |
+| G9 | Penerimaan teks AC-5 tanpa pemilik | diterapkan langsung sebagai Follow-up lead |
+| G10 | Teks usang di spec lain | `verify.md` spec 0017 (Follow-up lead di spec 0012) dan Follow-up spec 0015 baris nama file CLI di fixture 0068 (dicentang pemilik spec 0015 atau `/sync`) |
