@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a160e1-514d-748f-bfd5-6c8a40c83365",
+  "covers": [
+    "NFR-009"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Rerun provider_manifest and provider_interpolation for 10 minutes each after the spec 0023 step 1 validator change",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "cargo xtask fuzz run runs provider_manifest and provider_interpolation for 600 seconds each, one at a time, on the tree with the native probe branch of validate::probe and the ProbeText and ProbeBoolean interpolation positions, and finds no crash, hang, or out of memory.",
+  "actual": "no crash, hang, or out of memory in either target and fuzz/artifacts/ holds no input; provider_manifest: 445881 runs in 601 s (741 exec/s), cov 14544, ft 36778, corpus 1885 inputs, peak RSS 440 MB; provider_interpolation: 1181823 runs in 601 s (1966 exec/s), cov 1605, ft 4815, corpus 737 inputs, peak RSS 647 MB. Both ran while other sessions built and fuzzed on the same Mac, so exec/s is lower than the earlier 2026-10-20 record.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "after spec 0023 step 1 (commit 06c095c: name and params in RawProbe, the native branch of validate::probe, and the ProbeText and ProbeBoolean interpolation positions) with a clean tree, use the pinned fuzz toolchain nightly-2026-10-17 and cargo-fuzz 0.13.2; the interpolation harness in provider::fuzzing also checks the two new positions (no secret, folder, runtime root, or executable token, and exactly one token for a boolean param)",
+    "`cargo xtask fuzz run provider_manifest --time 600` was built and started on 06c095c at about 23:22Z on 2026-10-21; `cargo xtask fuzz run provider_interpolation --time 600` followed at about 23:35Z on f5c1ea8 (spec 0023 step 5), which changes only supervisor code and tests that neither target runs; HEAD when the record was written is 058a9e4, which adds step 6 tests and docs only",
+    "start from the committed seeds fuzz/seeds/provider_manifest and fuzz/seeds/provider_interpolation only (fuzz/corpus was empty in this fresh worktree), with -max_len 262144 and 4096 as xtask sets them; the seeds were not regenerated because step 2 (the NATS package change) has not landed yet, so `cargo xtask fuzz seed` runs in that step",
+    "check that each command exits 0 with `ran for 600 s without a crash`, that fuzz/artifacts/ holds no input, and read the libFuzzer final stats",
+    "the logs live in the session scratchpad and are not kept in this record's folder"
+  ],
+  "reviewer": "Claude Code (Claude Sonnet 5.5)",
+  "startedAt": "2026-10-21T23:22:00.000000Z",
+  "finishedAt": "2026-10-21T23:52:20.000000Z",
+  "evidencePath": "evidence/manual/2026-10-21-rerun-provider-manifest-and-provider-interpolati.json",
+  "context": {
+    "sourceCommit": "058a9e4ac9bafaec78d92be2bec298c7f2b06c45",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.0 (27A266a)",
+      "swift": "6.4"
+    }
+  }
+}

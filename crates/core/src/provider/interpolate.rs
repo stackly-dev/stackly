@@ -239,6 +239,12 @@ pub(crate) enum ValuePosition {
         secrets: bool,
     },
     Managed,
+    /// A text param of a `native` probe (spec 0023): literal text plus
+    /// text, integer, or boolean tokens, and no folder, runtime root, or
+    /// executable token.
+    ProbeText,
+    /// A boolean param of a `native` probe: exactly one boolean token.
+    ProbeBoolean,
 }
 
 /// What a token may refer to while a package is validated.
@@ -516,11 +522,43 @@ pub(crate) fn check_value(
                 IssueCode::TokenNotAllowedHere,
                 format!("{token} cannot be used in a managed expression"),
             )),
+            (
+                ValuePosition::ProbeText | ValuePosition::ProbeBoolean,
+                TokenType::Folder | TokenType::RuntimeRoot | TokenType::Executable,
+            ) => Some((
+                IssueCode::TokenNotAllowedHere,
+                format!("{token} cannot be used in a probe param"),
+            )),
             _ => None,
         };
         if let Some((code, message)) = problem {
             issues.at(path, code, message);
             ok = false;
+        }
+    }
+    if ok && position == ValuePosition::ProbeBoolean {
+        match pieces.as_slice() {
+            [(Piece::Token(_), Some(TokenType::Boolean))] => {}
+            pieces
+                if pieces
+                    .iter()
+                    .all(|(piece, _)| matches!(piece, Piece::Literal(_))) =>
+            {
+                issues.at(
+                    path,
+                    IssueCode::InvalidValue,
+                    "a boolean param is true, false, or one boolean token",
+                );
+                ok = false;
+            }
+            _ => {
+                issues.at(
+                    path,
+                    IssueCode::TokenNotAllowedHere,
+                    "a boolean param is exactly one boolean token, with no other text",
+                );
+                ok = false;
+            }
         }
     }
     if position == ValuePosition::Arg

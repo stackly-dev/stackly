@@ -9,6 +9,7 @@
 
 use stackly_domain::ReasonCode;
 
+pub mod native;
 pub mod nats;
 
 /// Why one native probe attempt failed.

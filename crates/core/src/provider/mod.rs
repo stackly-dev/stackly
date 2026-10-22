@@ -44,9 +44,9 @@ pub use package::{
 };
 pub use plan::{
     ARGUMENT_MAX_LEN, CHILD_PATH, Command, EnvValue, ExecutablePath, FileWrite, HealthPlan,
-    InitPlan, InitStep, PlanContext, PlanError, PlanSecret, ProbePlan, ProbeSpec, ProbeTarget,
-    ReloadAction, ReloadPlan, RenderedContent, ResolvedEndpoint, RunPlan, RunSpec, RuntimeContext,
-    Segment, Stdin, StopPlan,
+    InitPlan, InitStep, NativeProbeSpec, PlanContext, PlanError, PlanSecret, ProbePlan, ProbeSpec,
+    ProbeTarget, ReloadAction, ReloadPlan, RenderedContent, ResolvedEndpoint, RunPlan, RunSpec,
+    RuntimeContext, Segment, Stdin, StopPlan,
 };
 pub use preflight::{DATA_MARKER_MAX_LEN, MarkerRead, PreflightOutcome};
 pub use settings::{

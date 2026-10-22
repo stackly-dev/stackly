@@ -180,9 +180,9 @@ fn closed_sets_reject_unknown_primitives_probes_formats_signals_and_strategies()
         Edit::fake().replace(
             yaml,
             "{ type: http, endpoint: http, path: /ready }",
-            "{ type: native, endpoint: http }",
+            "{ type: native, name: mystery, endpoint: http }",
         ),
-        "readiness.probe.type",
+        "readiness.probe.name",
         IssueCode::UnknownProbe,
     );
     assert_manifest_issue(
@@ -2417,4 +2417,355 @@ fn init_cleanup_skips_configs_outside_the_secrets_folder() {
         fake_init.cleanup,
         [fake_context.paths.run.join("secrets").join("fake.json")]
     );
+}
+
+/// A readiness probe line for the `fake` package: the `nats-readiness`
+/// native probe on its `http` endpoint, with the given `params` body.
+fn native_fake(probe: &str) -> Edit {
+    Edit::fake().replace(
+        "provider.yaml",
+        "{ type: http, endpoint: http, path: /ready }",
+        probe,
+    )
+}
+
+const NATS_PARAMS_OK: &str = r#"{ type: native, name: nats-readiness, endpoint: http, params: { serverName: "${settings.label}", jetstream: "${settings.ignoreTerm}" } }"#;
+
+#[test]
+fn a_native_probe_with_tokens_or_literals_passes_in_readiness_and_health() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "a native nats-readiness probe with token or literal params is accepted in readiness.probe and health.probe",
+    );
+    assert!(native_fake(NATS_PARAMS_OK).validate().is_ok());
+    assert!(
+        native_fake(
+            r#"{ type: native, name: nats-readiness, endpoint: http, params: { serverName: golden, jetstream: true } }"#
+        )
+        .validate()
+        .is_ok()
+    );
+    let health = Edit::fake().replace(
+        "provider.yaml",
+        "{ type: http, endpoint: http, path: /health }",
+        NATS_PARAMS_OK,
+    );
+    assert!(health.validate().is_ok());
+    ev.pass();
+}
+
+#[test]
+fn a_native_probe_name_must_be_in_the_registry_and_the_message_lists_the_names() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "a native probe name outside the registry is unknown_probe at name and the message names the probes that exist; a missing name is missing_field; type script stays unknown_probe",
+    );
+    let err = native_fake(r"{ type: native, name: mystery, endpoint: http }")
+        .validate()
+        .unwrap_err();
+    let issue = err
+        .issues
+        .iter()
+        .find(|issue| issue.code == IssueCode::UnknownProbe)
+        .expect("an unknown_probe issue");
+    assert_eq!(issue.location.to_string(), "readiness.probe.name");
+    assert!(
+        issue.message.contains("nats-readiness"),
+        "{}",
+        issue.message
+    );
+
+    assert_manifest_issue(
+        native_fake("{ type: native, endpoint: http }"),
+        "readiness.probe.name",
+        IssueCode::MissingField,
+    );
+    assert_manifest_issue(
+        native_fake("{ type: script, name: nats-readiness, endpoint: http }"),
+        "readiness.probe.type",
+        IssueCode::UnknownProbe,
+    );
+    ev.pass();
+}
+
+#[test]
+fn a_native_probe_endpoint_must_exist_and_have_a_transport_the_descriptor_lists() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "a native probe without endpoint is missing_field, with an unknown endpoint or a unix endpoint unknown_endpoint",
+    );
+    let probe = |endpoint: &str| {
+        format!(
+            r#"{{ type: native, name: nats-readiness, {endpoint} params: {{ serverName: golden, jetstream: true }} }}"#
+        )
+    };
+    assert_manifest_issue(
+        native_fake(&probe("")),
+        "readiness.probe.endpoint",
+        IssueCode::MissingField,
+    );
+    assert_manifest_issue(
+        native_fake(&probe("endpoint: nowhere,")),
+        "readiness.probe.endpoint",
+        IssueCode::UnknownEndpoint,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            "provider.yaml",
+            "{ type: tcp, endpoint: http }",
+            &probe("endpoint: control,"),
+        ),
+        "readiness.probe.endpoint",
+        IssueCode::UnknownEndpoint,
+    );
+    ev.pass();
+}
+
+#[test]
+fn native_params_are_checked_by_name_presence_type_and_size() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "an unknown param is unknown_field, a missing one missing_field, a literal of the wrong type, an empty or too long text, or a control character invalid_value, each with the param path",
+    );
+    let with = |params: &str| {
+        native_fake(&format!(
+            "{{ type: native, name: nats-readiness, endpoint: http, params: {{ {params} }} }}"
+        ))
+    };
+    let base = "serverName: golden, jetstream: true";
+    assert_manifest_issue(
+        with(&format!("{base}, extra: 1")),
+        "readiness.probe.params.extra",
+        IssueCode::UnknownField,
+    );
+    assert_manifest_issue(
+        with("jetstream: true"),
+        "readiness.probe.params.serverName",
+        IssueCode::MissingField,
+    );
+    assert_manifest_issue(
+        with("serverName: golden"),
+        "readiness.probe.params.jetstream",
+        IssueCode::MissingField,
+    );
+    for bad_name in [
+        "serverName: 5, jetstream: true",
+        r#"serverName: "", jetstream: true"#,
+        "serverName: true, jetstream: true",
+        "serverName: [a], jetstream: true",
+        "serverName: { a: b }, jetstream: true",
+        "serverName: ~, jetstream: true",
+        r#"serverName: "a\x01b", jetstream: true"#,
+        &format!(r#"serverName: "{}", jetstream: true"#, "n".repeat(256)),
+    ] {
+        assert_manifest_issue(
+            with(bad_name),
+            "readiness.probe.params.serverName",
+            IssueCode::InvalidValue,
+        );
+    }
+    for bad_flag in [
+        "jetstream: 1",
+        r#"jetstream: "yes""#,
+        r#"jetstream: "true""#,
+        "jetstream: [true]",
+        "jetstream: ~",
+    ] {
+        assert_manifest_issue(
+            with(&format!("serverName: golden, {bad_flag}")),
+            "readiness.probe.params.jetstream",
+            IssueCode::InvalidValue,
+        );
+    }
+    assert!(
+        with(&format!(
+            r#"serverName: "{}", jetstream: false"#,
+            "n".repeat(255)
+        ))
+        .validate()
+        .is_ok()
+    );
+    ev.pass();
+}
+
+#[test]
+fn native_param_tokens_follow_the_interpolation_matrix() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "folder, runtime root, and executable tokens are token_not_allowed_here, secret tokens secret_not_allowed_here, unknown tokens unknown_token, a boolean param with text or a non boolean token token_not_allowed_here, and a reload field settings_schema_rule",
+    );
+    let name = |value: &str| {
+        native_fake(&format!(
+            r#"{{ type: native, name: nats-readiness, endpoint: http, params: {{ serverName: "{value}", jetstream: true }} }}"#
+        ))
+    };
+    let flag = |value: &str| {
+        native_fake(&format!(
+            r#"{{ type: native, name: nats-readiness, endpoint: http, params: {{ serverName: golden, jetstream: "{value}" }} }}"#
+        ))
+    };
+    let at_name = "readiness.probe.params.serverName";
+    let at_flag = "readiness.probe.params.jetstream";
+    for folder in [
+        "${instance.data}",
+        "x${instance.config}",
+        "${runtime.root}",
+        "${runtime.executable}",
+        "${instance.secrets}",
+    ] {
+        assert_manifest_issue(name(folder), at_name, IssueCode::TokenNotAllowedHere);
+    }
+    assert_manifest_issue(
+        name("${secret.authToken}"),
+        at_name,
+        IssueCode::SecretNotAllowedHere,
+    );
+    assert_manifest_issue(name("${nope.nothing}"), at_name, IssueCode::UnknownToken);
+    assert_manifest_issue(
+        flag("${secret.authToken}"),
+        at_flag,
+        IssueCode::SecretNotAllowedHere,
+    );
+    for not_a_flag in [
+        "${settings.label}",
+        "x${settings.ignoreTerm}",
+        "${settings.ignoreTerm}${settings.ignoreTerm}",
+        "${endpoint.http.port}",
+    ] {
+        assert_manifest_issue(flag(not_a_flag), at_flag, IssueCode::TokenNotAllowedHere);
+    }
+    assert_issue(
+        &name("${settings.greeting}").issues(),
+        "settings.schema.json",
+        "properties.greeting.x-stackly.apply",
+        IssueCode::SettingsSchemaRule,
+    );
+    assert!(
+        name("${instance.name}-${endpoint.http.port}")
+            .validate()
+            .is_ok()
+    );
+    ev.pass();
+}
+
+#[test]
+fn fields_of_another_probe_kind_are_rejected_on_native_and_native_fields_on_the_others() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "path, expectStatus, command, and successExitCodes on a native probe, and name and params on tcp, http, and exec probes, are unknown_field at that field",
+    );
+    for (field, value) in [
+        ("path", "/ready"),
+        ("expectStatus", "{ min: 200, max: 299 }"),
+        ("command", "{ executable: \"${runtime.executable}\" }"),
+        ("successExitCodes", "[0]"),
+    ] {
+        assert_manifest_issue(
+            native_fake(&format!(
+                r#"{{ type: native, name: nats-readiness, endpoint: http, {field}: {value}, params: {{ serverName: golden, jetstream: true }} }}"#
+            )),
+            &format!("readiness.probe.{field}"),
+            IssueCode::UnknownField,
+        );
+    }
+    for probe in [
+        "{ type: tcp, endpoint: http, name: nats-readiness }",
+        "{ type: http, endpoint: http, path: /ready, params: { a: b } }",
+    ] {
+        let edit = Edit::fake().replace(
+            "provider.yaml",
+            "{ type: http, endpoint: http, path: /ready }",
+            probe,
+        );
+        let issues = edit.issues();
+        let location = if probe.contains("name") {
+            "readiness.probe.name"
+        } else {
+            "readiness.probe.params"
+        };
+        assert_issue(&issues, "provider.yaml", location, IssueCode::UnknownField);
+    }
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            "provider.yaml",
+            "{ type: tcp, endpoint: http }",
+            "{ type: tcp, endpoint: http, params: { a: b } }",
+        ),
+        "readiness.probe.params",
+        IssueCode::UnknownField,
+    );
+    ev.pass();
+}
+
+#[test]
+fn a_native_probe_reaches_the_plan_with_its_target_params_and_serialized_shape() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "run_plan builds ProbeSpec::Native with an Ip target from the endpoint and the interpolated params, and serializes as type native with name and camelCase params",
+    );
+    let package = native_fake(NATS_PARAMS_OK)
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = context_for(
+        &package,
+        serde_json::json!({ "label": "golden", "ignoreTerm": true, "authToken": SECRET_REF }),
+        "/private/tmp/skt-rules-native",
+    );
+
+    let run = package.run_plan(&context).expect("the run plan builds");
+
+    let json = serde_json::to_value(&run.readiness.probe).expect("the probe serializes");
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "type": "native",
+            "content": {
+                "target": { "type": "ip", "content": { "host": "127.0.0.1", "port": 18080 } },
+                "probe": {
+                    "name": "nats-readiness",
+                    "params": { "serverName": "golden", "jetstream": true }
+                }
+            }
+        })
+    );
+    assert_eq!(
+        run.readiness.attempt_timeout,
+        std::time::Duration::from_secs(1)
+    );
+    ev.pass();
+}
+
+#[test]
+fn a_native_text_param_that_renders_empty_or_too_long_fails_the_plan() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "a text param that renders empty or over 255 bytes is UnrepresentableValue with the param path and without the value",
+    );
+    let package = native_fake(NATS_PARAMS_OK)
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    for label in ["".to_owned(), "n".repeat(256)] {
+        let context = context_for(
+            &package,
+            serde_json::json!({ "label": label, "authToken": SECRET_REF }),
+            "/private/tmp/skt-rules-native",
+        );
+        let err = package.run_plan(&context).unwrap_err();
+        assert_eq!(
+            err,
+            PlanError::UnrepresentableValue {
+                field: "readiness.probe.params.serverName".into()
+            }
+        );
+        assert!(!err.to_string().contains("nnnn"), "{err}");
+    }
+    ev.pass();
 }
