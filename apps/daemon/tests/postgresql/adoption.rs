@@ -1,16 +1,14 @@
 //! A postmaster that outlives its daemon (spec 0019 AC-13, spec 0010 AC-9).
 
 use stackly_protocol::instance::{InstanceLifecycle, InstanceReadinessState};
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, create_instance, output_of};
 
-async fn keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = "after stacklyd is killed with SIGKILL the postmaster keeps running, the next stacklyd adopts the same pid and start time and shows it ready, and the postmaster and its children hold instance.lock at fd 3",
-    );
+async fn keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(
+    pg: Pg,
+    ev: Evidence,
+) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -74,11 +72,23 @@ async fn keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it() {
-    keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "after stacklyd is killed with SIGKILL the postmaster keeps running, the next stacklyd adopts the same pid and start time and shows it ready, and the postmaster and its children hold instance.lock at fd 3",
+    );
+    keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it() {
-    keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "after stacklyd is killed with SIGKILL the postmaster keeps running, the next stacklyd adopts the same pid and start time and shows it ready, and the postmaster and its children hold instance.lock at fd 3",
+    );
+    keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(pg, ev).await;
 }

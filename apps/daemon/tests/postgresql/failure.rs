@@ -5,16 +5,14 @@ use std::time::{Duration, Instant};
 use stackly_protocol::instance::{InstanceLifecycle, PortRequest};
 use stackly_protocol::operation::{AbandonOperationParams, OperationState};
 use stackly_protocol::{Call, Reply};
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, create_params, new_password};
 
-async fn init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_starts(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035", "BR-009"],
-        kind = Kind::Native,
-        expected = "a data folder that holds a file makes initdb exit 1, the init fails with init_step_failed, the file is untouched, no password file is left, the instance stays failed and cannot start, and the create operation waits in needs_recovery until it is abandoned",
-    );
+async fn init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_starts(
+    pg: Pg,
+    ev: Evidence,
+) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -133,12 +131,24 @@ async fn init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_sta
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_starts()
 {
-    init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_starts(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035", "BR-009"],
+        kind = Kind::Native,
+        expected = "a data folder that holds a file makes initdb exit 1, the init fails with init_step_failed, the file is untouched, no password file is left, the instance stays failed and cannot start, and the create operation waits in needs_recovery until it is abandoned",
+    );
+    init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_starts(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_starts()
 {
-    init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_starts(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035", "BR-009"],
+        kind = Kind::Native,
+        expected = "a data folder that holds a file makes initdb exit 1, the init fails with init_step_failed, the file is untouched, no password file is left, the instance stays failed and cannot start, and the create operation waits in needs_recovery until it is abandoned",
+    );
+    init_that_finds_a_file_in_the_data_folder_fails_at_initdb_and_never_starts(pg, ev).await;
 }

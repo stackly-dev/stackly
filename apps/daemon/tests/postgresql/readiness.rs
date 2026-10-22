@@ -3,16 +3,11 @@
 use std::time::Duration;
 
 use stackly_protocol::instance::InstanceReadinessState;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, Via, create_instance, stop_and_shutdown};
 
-async fn is_not_ready_when_the_port_accepts_but_the_query_fails(pg: Pg) {
-    let ev = evidence!(
-        covers = ["REQ-035", "AC-035"],
-        kind = Kind::Native,
-        expected = "the readiness role is unprivileged and read only, ALTER ROLE NOLOGIN makes the instance not_ready with the PostgreSQL message while TCP still accepts, and LOGIN makes it ready again",
-    );
+async fn is_not_ready_when_the_port_accepts_but_the_query_fails(pg: Pg, ev: Evidence) {
     let Some(site) = Site::open(&ev, pg) else {
         return;
     };
@@ -82,11 +77,23 @@ async fn is_not_ready_when_the_port_accepts_but_the_query_fails(pg: Pg) {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 17 artifact in the runtime cache"]
 async fn postgresql_17_is_not_ready_when_the_port_accepts_but_the_query_fails() {
-    is_not_ready_when_the_port_accepts_but_the_query_fails(PG17).await;
+    let pg = PG17;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "the readiness role is unprivileged and read only, ALTER ROLE NOLOGIN makes the instance not_ready with the PostgreSQL message while TCP still accepts, and LOGIN makes it ready again",
+    );
+    is_not_ready_when_the_port_accepts_but_the_query_fails(pg, ev).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed PostgreSQL 18 artifact in the runtime cache"]
 async fn postgresql_18_is_not_ready_when_the_port_accepts_but_the_query_fails() {
-    is_not_ready_when_the_port_accepts_but_the_query_fails(PG18).await;
+    let pg = PG18;
+    let ev = evidence!(
+        covers = ["REQ-035", "AC-035"],
+        kind = Kind::Native,
+        expected = "the readiness role is unprivileged and read only, ALTER ROLE NOLOGIN makes the instance not_ready with the PostgreSQL message while TCP still accepts, and LOGIN makes it ready again",
+    );
+    is_not_ready_when_the_port_accepts_but_the_query_fails(pg, ev).await;
 }
