@@ -47,9 +47,11 @@ struct InstanceDetailAccessibilityTests {
         let card = try code("ConnectionCard.swift")
         #expect(card.contains(".accessibilityLabel(connection.title)"))
         #expect(card.contains(#"announcement: "\(connection.title) copied.""#))
-        for label in ["Show Password", "Copy Password"] {
-            #expect(card.contains("\"\(label)\""), "missing the label \(label)")
-        }
+        #expect(card.contains(#"copyLabel: "Copy \(connection.title)""#))
+        #expect(card.contains(#"copyAnnouncement: "\(connection.title) copied.""#))
+        #expect(card.contains("maskedLabel: DetailFormat.spoken(masked: masked)"))
+        #expect(card.contains(#".accessibilityLabel("Copy \(connection.title)")"#))
+        #expect(card.contains(#".accessibilityLabel("Show Password")"#))
     }
 
     @Test func aStringWithASecretNeverHoldsItsValueInTheCard() throws {
