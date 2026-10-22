@@ -34,8 +34,12 @@ mod readiness;
 mod reload;
 #[path = "postgresql/role_failure.rs"]
 mod role_failure;
+#[path = "postgresql/same_runtime.rs"]
+mod same_runtime;
 #[path = "postgresql/security.rs"]
 mod security;
+#[path = "postgresql/sentinel.rs"]
+mod sentinel;
 #[path = "postgresql/stop.rs"]
 mod stop;
 #[path = "supervisor/support.rs"]
