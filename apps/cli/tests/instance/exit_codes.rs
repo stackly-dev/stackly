@@ -86,7 +86,7 @@ fn the_instance_rows_of_the_exit_code_matrix() {
         ),
         (
             "cli.usage",
-            vec!["instance", "start", "demo"],
+            vec!["instance", "start", ID, "--idempotency-key", "a b"],
             2,
             "cli.usage",
             Box::new(|_: &Call, _| Vec::new()),

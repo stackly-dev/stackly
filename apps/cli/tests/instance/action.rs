@@ -408,9 +408,9 @@ fn a_request_that_ran_out_of_time_names_the_key_to_retry_with() {
     ev.pass();
 }
 
-/// Spec 0014 AC-6, AC-8.
+/// Spec 0014 AC-6, AC-8; spec 0022 AC-15.
 #[test]
-fn a_bad_instance_id_or_key_exits_2_without_connecting() {
+fn a_bad_key_or_timeout_or_an_empty_instance_exits_2_without_connecting() {
     let root = TestRoot::new().expect("a test root is made");
     let daemon = ScriptedDaemon::serve(
         &root,
@@ -421,11 +421,11 @@ fn a_bad_instance_id_or_key_exits_2_without_connecting() {
         ),
     );
     for args in [
-        &["instance", "start", "orders-db"][..],
-        &["instance", "start", "0192f3a5"],
-        &["instance", "stop", "0192f3a500007000800000000000000001"],
-        &["instance", "start", ID, "--idempotency-key", "a b"],
+        &["instance", "start", ID, "--idempotency-key", "a b"][..],
         &["instance", "start", ID, "--timeout", "5s"],
+        &["instance", "stop", "orders-db", "--idempotency-key", ""],
+        &["instance", "start", ""],
+        &["instance", "stop", ""],
     ] {
         let mut all = args.to_vec();
         all.push("--json");
@@ -434,6 +434,174 @@ fn a_bad_instance_id_or_key_exits_2_without_connecting() {
         assert_eq!(envelope(&refused)["error"]["code"], "cli.usage");
     }
     assert_eq!(daemon.connections(), 0);
+}
+
+/// A scripted daemon that answers `instance.list` with the instances of
+/// `list-mixed.json` and everything else as `data::scripted` does.
+fn listing(
+    reply: Reply,
+    states: Vec<stackly_protocol::operation::OperationSummary>,
+    instance: Option<stackly_protocol::instance::InstanceSummary>,
+) -> impl Fn(&Call, crate::common::scripted::Ctx) -> Vec<Step> + Send + Sync + 'static {
+    let rest = data::scripted(reply, states, instance);
+    let page = data::list_mixed();
+    move |call, ctx| match call {
+        Call::InstanceList(_) => vec![Step::Reply(Reply::InstanceList(Box::new(
+            stackly_protocol::instance::InstancePage {
+                items: page.items.clone(),
+                next: None,
+            },
+        )))],
+        other => rest(other, ctx),
+    }
+}
+
+/// Spec 0022 AC-15.
+#[test]
+fn start_and_stop_by_name_look_the_name_up_first_and_write_the_same_goldens_as_by_id() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "start and stop of orders-db read instance.list, then send instance.start and instance.stop with the ID of that instance, and write the same text and JSON as the same run by ID",
+    );
+    let root = TestRoot::new().expect("a test root is made");
+    let started = listing(
+        start_reply(OperationState::Queued, false),
+        vec![
+            op(OperationKind::StartInstance, OperationState::Running, 2),
+            op(OperationKind::StartInstance, OperationState::Succeeded, 3),
+        ],
+        Some(data::instance("")),
+    );
+    let daemon = ScriptedDaemon::serve(&root, started);
+    let mut args = vec![
+        "instance",
+        "start",
+        "orders-db",
+        "--wait",
+        "--timeout",
+        "60s",
+        "--idempotency-key",
+        KEY,
+    ];
+    let text = run(root.path(), &args);
+    args.push("--json");
+    let json = run(root.path(), &args);
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    golden::check("instance_start.txt", &text.stdout);
+    golden::check("instance_start.json", &json.stdout);
+    let log = daemon.log();
+    let sent = log
+        .iter()
+        .find(|logged| logged.method == "instance.start")
+        .expect("instance.start was sent");
+    assert_eq!(sent.raw["call"]["content"]["instanceId"], ID);
+    assert_eq!(sent.idempotency_key.as_deref(), Some(KEY));
+    let methods = daemon.methods();
+    let list = methods.iter().position(|m| m == "instance.list");
+    let start = methods.iter().position(|m| m == "instance.start");
+    assert!(list < start, "{methods:?}");
+    drop(daemon);
+
+    let stopping = listing(
+        stop_reply(OperationState::Queued),
+        vec![
+            op(OperationKind::StopInstance, OperationState::Running, 2),
+            op(OperationKind::StopInstance, OperationState::Succeeded, 3),
+        ],
+        Some(stopped()),
+    );
+    let daemon = ScriptedDaemon::serve(&root, stopping);
+    let mut args = vec![
+        "instance",
+        "stop",
+        "orders-db",
+        "--wait",
+        "--timeout",
+        "60s",
+        "--idempotency-key",
+        "stop-demo-0001",
+    ];
+    let text = run(root.path(), &args);
+    args.push("--json");
+    let json = run(root.path(), &args);
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    golden::check("instance_stop.txt", &text.stdout);
+    golden::check("instance_stop.json", &json.stdout);
+    let log = daemon.log();
+    let sent = log
+        .iter()
+        .find(|logged| logged.method == "instance.stop")
+        .expect("instance.stop was sent");
+    assert_eq!(sent.raw["call"]["content"]["instanceId"], ID);
+    assert_eq!(sent.raw["call"]["content"]["overrideLeases"], false);
+    ev.pass();
+}
+
+/// Spec 0022 AC-15.
+#[test]
+fn an_unknown_name_or_a_mistyped_id_exits_10_and_starts_no_operation() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "start and stop of a name no instance has, of a short hex prefix, and of a 34 character hex string exit 10 with cli.instance_not_found and details name, send no instance.start or instance.stop, and leave the key unused",
+    );
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = ScriptedDaemon::serve(
+        &root,
+        listing(start_reply(OperationState::Queued, false), Vec::new(), None),
+    );
+    for args in [
+        &["instance", "start", "Orders-DB"][..],
+        &["instance", "start", "0192f3a5"],
+        &["instance", "stop", "0192f3a500007000800000000000000001"],
+        &["instance", "stop", "gamma", "--idempotency-key", KEY],
+    ] {
+        let mut all = args.to_vec();
+        all.push("--json");
+        let missing = run(root.path(), &all);
+        assert_eq!(missing.code, Some(10), "{args:?}: {missing:?}");
+        let value = envelope(&missing);
+        assert_eq!(value["error"]["code"], "cli.instance_not_found");
+        assert_eq!(value["error"]["category"], "not_found");
+        assert_eq!(detail(&value["error"], "name").as_deref(), Some(args[2]));
+    }
+    let methods = daemon.methods();
+    assert!(
+        !methods.contains(&"instance.start".to_owned()),
+        "{methods:?}"
+    );
+    assert!(
+        !methods.contains(&"instance.stop".to_owned()),
+        "{methods:?}"
+    );
+    ev.pass();
+}
+
+/// Spec 0022 AC-15.
+#[test]
+fn an_upper_case_uuid_is_sent_as_it_is_without_reading_the_list() {
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = ScriptedDaemon::serve(
+        &root,
+        listing(start_reply(OperationState::Queued, false), Vec::new(), None),
+    );
+
+    let started = run(
+        root.path(),
+        &["instance", "start", &ID.to_uppercase(), "--json"],
+    );
+
+    assert_eq!(started.code, Some(0), "{started:?}");
+    assert!(!daemon.methods().contains(&"instance.list".to_owned()));
+    let log = daemon.log();
+    let sent = log
+        .iter()
+        .find(|logged| logged.method == "instance.start")
+        .expect("instance.start was sent");
+    assert_eq!(sent.raw["call"]["content"]["instanceId"], ID);
 }
 
 /// Spec 0014 AC-6.

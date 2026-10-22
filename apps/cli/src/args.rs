@@ -165,36 +165,6 @@ impl FromStr for IdempotencyKeyArg {
     }
 }
 
-/// An instance ID argument: a whole UUID in its hyphenated form, in upper
-/// or lower case, and never a prefix or a name (names arrive with the
-/// resolver of spec 0022).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InstanceIdArg(Uuid);
-
-impl InstanceIdArg {
-    /// The ID; its text form is always lower case.
-    #[must_use]
-    pub const fn get(self) -> Uuid {
-        self.0
-    }
-}
-
-impl FromStr for InstanceIdArg {
-    type Err = String;
-
-    fn from_str(text: &str) -> Result<Self, String> {
-        if text.len() != 36 {
-            return Err(
-                "expected a whole instance id, such as 0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e"
-                    .to_owned(),
-            );
-        }
-        Uuid::try_parse(text)
-            .map(Self)
-            .map_err(|_| "expected a whole instance id in hex with hyphens".to_owned())
-    }
-}
-
 /// `--runtime`: a runtime ID, a whole UUID in its hyphenated form, or
 /// `software@version`, a selector the CLI resolves among the installed
 /// runtimes (spec 0020, *CLI*).
@@ -517,24 +487,6 @@ mod tests {
         }
         for text in ["", " ", "a b", "tab\t", "é", &"a".repeat(129)] {
             assert!(text.parse::<IdempotencyKeyArg>().is_err(), "{text}");
-        }
-    }
-
-    #[test]
-    fn an_instance_id_is_a_whole_hyphenated_uuid_in_either_case() {
-        let lower: InstanceIdArg = ID.parse().unwrap();
-        let upper: InstanceIdArg = ID.to_uppercase().parse().unwrap();
-        assert_eq!(lower, upper);
-        assert_eq!(lower.get().to_string(), ID);
-        for text in [
-            "",
-            "0192f3a0",
-            "orders-db",
-            "0192f3a07c1e7b2a9d4e5f6a7b8c9d0e",
-            "{0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e}",
-            "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0g",
-        ] {
-            assert!(text.parse::<InstanceIdArg>().is_err(), "{text}");
         }
     }
 
