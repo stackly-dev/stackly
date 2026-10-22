@@ -3,14 +3,20 @@
 //! and the [`CreateDraft`] of a duplicate to the `PreflightCreateParams` a
 //! client sends back unchanged to `instance.preflight`.
 
-use stackly_core::instance::create::{CreateDraft, PortRequestDraft, SecretSourceKind};
-use stackly_core::instance::duplicate::DuplicateModel;
+use stackly_core::instance::create::{
+    CreateDraft, CreateError, PortRequestDraft, SecretSourceKind,
+};
+use stackly_core::instance::duplicate::{DuplicateError, DuplicateModel};
+use stackly_core::supervisor::SupervisorError;
 use stackly_protocol::catalog::CapabilityStatus;
+use stackly_protocol::codes::{instance, internal, resource};
 use stackly_protocol::instance::{
     DuplicateForm, DuplicateSecret, DuplicateSource, EndpointRequest, PortRequest,
     PreflightCreateParams, ProviderSelector, SecretPlan, SecretSource, SettingsDocument,
 };
 use stackly_protocol::runtime::RuntimeSummary;
+use stackly_protocol::{ErrorBody, ResourceKind, ResourceRef};
+use uuid::Uuid;
 
 use super::create;
 
@@ -86,5 +92,70 @@ pub fn draft_params(draft: &CreateDraft) -> PreflightCreateParams {
             })
             .collect(),
         start: draft.start,
+    }
+}
+
+/// The error body of a refused duplicate form for the instance `source`.
+///
+/// Each variant answers the code of the same name in the method table of
+/// spec 0024; the supervisor and create codes keep the details they carry
+/// everywhere else.
+#[must_use]
+pub fn duplicate_error(error: &DuplicateError, source: Uuid) -> ErrorBody {
+    match error {
+        DuplicateError::NotFound => {
+            ErrorBody::new(&resource::NOT_FOUND, "the instance does not exist").with_resource(
+                ResourceRef {
+                    kind: ResourceKind::Instance,
+                    id: source.to_string(),
+                },
+            )
+        }
+        DuplicateError::Retained => {
+            crate::supervisor::supervisor_error(&SupervisorError::InstanceRetained)
+        }
+        DuplicateError::PackageUnavailable { provider, reason } => {
+            crate::supervisor::supervisor_error(&SupervisorError::PackageUnavailable {
+                provider: provider.clone(),
+                reason: reason.clone(),
+            })
+        }
+        DuplicateError::ProviderAmbiguous { provider, revision } => {
+            create::with_create_hint(create::create_error(
+                &CreateError::ProviderAmbiguous {
+                    provider: provider.to_string(),
+                    revision: Some(revision.to_string()),
+                },
+                &[],
+            ))
+        }
+        DuplicateError::CapabilityUnsupported { provider, existing } => create::with_create_hint(
+            ErrorBody::new(
+                &instance::CAPABILITY_UNSUPPORTED,
+                format!("{provider} runs one instance at a time, and {existing} is it"),
+            )
+            .with_detail("capability", "multi_instance")
+            .with_detail("provider", provider.to_string())
+            .with_detail("existing", existing.to_string()),
+        ),
+        DuplicateError::RuntimeNotFound { runtime_id } => {
+            create::with_create_hint(create::create_error(
+                &CreateError::RuntimeNotFound {
+                    runtime_id: *runtime_id,
+                },
+                &[],
+            ))
+        }
+        DuplicateError::RuntimeUnavailable { runtime_id, state } => {
+            crate::supervisor::supervisor_error(&SupervisorError::RuntimeUnavailable {
+                runtime_id: runtime_id.to_string(),
+                state: state.as_code().to_owned(),
+            })
+        }
+        DuplicateError::Registry(error) => super::registry_error(error),
+        _ => ErrorBody::new(
+            &internal::UNEXPECTED,
+            "the duplicate form was refused for a reason this build cannot name",
+        ),
     }
 }
