@@ -61,11 +61,8 @@ struct OnboardingFlow: View {
             StorageStep(focus: $titleFocused)
         case .backgroundAgent:
             BackgroundAgentStep(focus: $titleFocused, keyFocus: $keyFocus)
-        // provisional: F16 milestone 3 replaces this with its step.
         case .catalogTrust:
-            OnboardingStepHeader(
-                title: OnboardingCopy.catalogTitle, subtitle: OnboardingCopy.catalogSubtitle,
-                focus: $titleFocused)
+            CatalogTrustStep(focus: $titleFocused)
         case .commandLine:
             CommandLineStep(focus: $titleFocused)
         }
