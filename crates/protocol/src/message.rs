@@ -34,6 +34,10 @@ use crate::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
+use crate::runtime::{
+    GetRuntimeParams, InstallRuntimeParams, InstallRuntimeReply, ListRuntimesParams,
+    ResolvedArtifact, RuntimeDetail, RuntimeListPage,
+};
 use crate::secret::{
     DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
     RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
@@ -142,6 +146,19 @@ pub enum Call {
     /// The space left on the volume that holds the data root.
     #[serde(rename = "storage.get_capacity")]
     StorageGetCapacity,
+    /// Resolves a selector and starts the operation that installs the
+    /// artifact, or answers that it is installed already.
+    #[serde(rename = "runtime.install")]
+    RuntimeInstall(InstallRuntimeParams),
+    /// Resolves a selector to one artifact without installing it.
+    #[serde(rename = "runtime.resolve")]
+    RuntimeResolve(InstallRuntimeParams),
+    /// One page of runtimes, with the installs that have not ended.
+    #[serde(rename = "runtime.list")]
+    RuntimeList(ListRuntimesParams),
+    /// One runtime in detail.
+    #[serde(rename = "runtime.get")]
+    RuntimeGet(GetRuntimeParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -227,6 +244,18 @@ pub enum Reply {
     /// The space left, read now.
     #[serde(rename = "storage.get_capacity")]
     StorageGetCapacity(CapacityReport),
+    /// The artifact the selector resolved to, and what happened to it.
+    #[serde(rename = "runtime.install")]
+    RuntimeInstall(Box<InstallRuntimeReply>),
+    /// The artifact the selector resolved to.
+    #[serde(rename = "runtime.resolve")]
+    RuntimeResolve(Box<ResolvedArtifact>),
+    /// One page of runtimes.
+    #[serde(rename = "runtime.list")]
+    RuntimeList(Box<RuntimeListPage>),
+    /// The runtime.
+    #[serde(rename = "runtime.get")]
+    RuntimeGet(Box<RuntimeDetail>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -323,6 +352,10 @@ methods! {
     "instance.get" => InstanceGet(GetInstanceParams), recovery refused;
     "instance.list" => InstanceList(ListInstancesParams), recovery refused;
     "storage.get_capacity" => StorageGetCapacity, recovery allowed;
+    "runtime.install" => RuntimeInstall(InstallRuntimeParams), recovery refused;
+    "runtime.resolve" => RuntimeResolve(InstallRuntimeParams), recovery allowed;
+    "runtime.list" => RuntimeList(ListRuntimesParams), recovery refused;
+    "runtime.get" => RuntimeGet(GetRuntimeParams), recovery refused;
 }
 
 impl Reply {
@@ -439,6 +472,11 @@ mod tests {
                 provider: "official/nats".to_owned(),
             }),
             Call::StorageGetCapacity,
+            Call::RuntimeResolve(InstallRuntimeParams {
+                provider: "official/nats".to_owned(),
+                selector: "stable".to_owned(),
+                expected_sha256: None,
+            }),
         ];
         assert!(allowed.iter().all(Call::allowed_in_recovery));
         let operation_id = uuid::Uuid::nil();
@@ -486,8 +524,14 @@ mod tests {
                     }),
             "every instance method needs the registry, so none is allowed in recovery"
         );
+        assert!(
+            ["runtime.install", "runtime.list", "runtime.get"]
+                .iter()
+                .all(|method| !methods_allowed_in_recovery().contains(method)),
+            "installing, listing, and reading runtimes need the registry"
+        );
         assert_eq!(
-            allowed.len() + refused.len() + 1 + 5 + 5,
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

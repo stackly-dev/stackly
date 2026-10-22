@@ -15,6 +15,7 @@ public enum ContractNames {
 		"instance.health_changed",
 		"instance.removed",
 		"daemon.reconciling",
+		"runtime.state_changed",
 	]
 }
 
@@ -48,6 +49,10 @@ extension Call {
 		case .instanceGet: "instance.get"
 		case .instanceList: "instance.list"
 		case .storageGetCapacity: "storage.get_capacity"
+		case .runtimeInstall: "runtime.install"
+		case .runtimeResolve: "runtime.resolve"
+		case .runtimeList: "runtime.list"
+		case .runtimeGet: "runtime.get"
 		}
 	}
 }
@@ -82,6 +87,10 @@ extension Reply {
 		case .instanceGet: "instance.get"
 		case .instanceList: "instance.list"
 		case .storageGetCapacity: "storage.get_capacity"
+		case .runtimeInstall: "runtime.install"
+		case .runtimeResolve: "runtime.resolve"
+		case .runtimeList: "runtime.list"
+		case .runtimeGet: "runtime.get"
 		}
 	}
 }
@@ -99,6 +108,7 @@ extension EventKind {
 		case .instanceHealthChanged: "instance.health_changed"
 		case .instanceRemoved: "instance.removed"
 		case .daemonReconciling: "daemon.reconciling"
+		case .runtimeStateChanged: "runtime.state_changed"
 		}
 	}
 }

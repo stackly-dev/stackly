@@ -468,6 +468,74 @@
           "required": [
             "type"
           ]
+        },
+        {
+          "description": "Resolves a selector and starts the operation that installs the\nartifact, or answers that it is installed already.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstallRuntimeParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "runtime.install"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Resolves a selector to one artifact without installing it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstallRuntimeParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "runtime.resolve"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One page of runtimes, with the installs that have not ended.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ListRuntimesParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "runtime.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One runtime in detail.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetRuntimeParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "runtime.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -700,6 +768,20 @@
         "provider"
       ]
     },
+    "GetRuntimeParams": {
+      "description": "Params of `runtime.get`.",
+      "type": "object",
+      "properties": {
+        "runtimeId": {
+          "description": "The runtime.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "runtimeId"
+      ]
+    },
     "HandshakeParams": {
       "description": "Params of `daemon.handshake`.\n\n`protocol` is frozen across majors: a daemon of any major reads\n`protocol.major` before anything else, so a client of another major\nalways receives `protocol.major_mismatch`.",
       "type": "object",
@@ -721,6 +803,32 @@
         "protocol",
         "client",
         "contractDigest"
+      ]
+    },
+    "InstallRuntimeParams": {
+      "description": "Params of `runtime.install` and `runtime.resolve`.",
+      "type": "object",
+      "properties": {
+        "expectedSha256": {
+          "description": "The SHA-256 the person saw when they chose, 64 lowercase hex\ncharacters. A resolution to another artifact is refused with\n`runtime.selector_changed`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "provider": {
+          "description": "The provider ID, such as `official/postgresql`.",
+          "type": "string"
+        },
+        "selector": {
+          "description": "What to install: `stable`, a line such as `18`, an exact version\nsuch as `18.6`, or `sha256:<64 hex>`. 1 to 80 bytes of letters,\ndigits, and `.`, `-`, `_`, `+`, `:`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "selector"
       ]
     },
     "ListInstancesParams": {
@@ -785,6 +893,32 @@
             }
           ],
           "default": null
+        }
+      }
+    },
+    "ListRuntimesParams": {
+      "description": "Params of `runtime.list`.",
+      "type": "object",
+      "properties": {
+        "after": {
+          "description": "The `next` cursor of the previous page, sent back unchanged.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "limit": {
+          "description": "Most runtimes on the page, 1 to 200; absent means 100.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
         }
       }
     },

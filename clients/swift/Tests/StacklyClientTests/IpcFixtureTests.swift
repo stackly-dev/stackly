@@ -66,7 +66,11 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .instanceGet = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceList = $0 { true } else { false } })
         #expect(methods.contains(.storageGetCapacity))
-        #expect(Set(methods.map(\.methodName)).count == 26)
+        #expect(methods.contains { if case .runtimeInstall = $0 { true } else { false } })
+        #expect(methods.contains { if case .runtimeResolve = $0 { true } else { false } })
+        #expect(methods.contains { if case .runtimeList = $0 { true } else { false } })
+        #expect(methods.contains { if case .runtimeGet = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 30)
     }
 
     private func check<Value: Codable & Equatable>(

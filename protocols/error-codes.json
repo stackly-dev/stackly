@@ -45,6 +45,10 @@
       "owner": "spec 0017"
     },
     {
+      "name": "runtime",
+      "owner": "spec 0018"
+    },
+    {
       "name": "secret",
       "owner": "spec 0011"
     },
@@ -1243,6 +1247,305 @@
       ],
       "items": null,
       "summary": "the resource revision is not the expected one, reserved for the registry compare and swap"
+    },
+    {
+      "code": "runtime.already_registered",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "runtimeId",
+        "state"
+      ],
+      "items": null,
+      "summary": "a runtime for the artifact exists in a state other than installed"
+    },
+    {
+      "code": "runtime.architecture_mismatch",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "path",
+        "arches"
+      ],
+      "items": null,
+      "summary": "an executable has no arm64 slice, or macOS refused its architecture"
+    },
+    {
+      "code": "runtime.archive_rejected",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "artifact",
+        "reason",
+        "entry"
+      ],
+      "items": null,
+      "summary": "the archive breaks an extraction rule"
+    },
+    {
+      "code": "runtime.binary_check_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "path",
+        "exitCode",
+        "signal",
+        "errno"
+      ],
+      "items": null,
+      "summary": "the version check exited non zero, died of a signal other than SIGKILL, or could not start"
+    },
+    {
+      "code": "runtime.binary_check_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "path",
+        "seconds"
+      ],
+      "items": null,
+      "summary": "the version check did not finish in time"
+    },
+    {
+      "code": "runtime.binary_rejected_by_os",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "path",
+        "signal"
+      ],
+      "items": null,
+      "summary": "macOS killed the binary with SIGKILL when it ran"
+    },
+    {
+      "code": "runtime.dependency_mismatch",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "missing",
+        "unexpected"
+      ],
+      "items": null,
+      "summary": "the libraries found differ from the dependencies the catalog lists"
+    },
+    {
+      "code": "runtime.dependency_outside_runtime",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "path",
+        "library"
+      ],
+      "items": null,
+      "summary": "a binary loads a library from outside the runtime"
+    },
+    {
+      "code": "runtime.digest_mismatch",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "artifact",
+        "expected",
+        "actual"
+      ],
+      "items": null,
+      "summary": "the SHA-256 of the download is not the catalog's"
+    },
+    {
+      "code": "runtime.download_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "artifact",
+        "host",
+        "status",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the download failed with an HTTP or connection error"
+    },
+    {
+      "code": "runtime.download_offline",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "artifact",
+        "hosts"
+      ],
+      "items": null,
+      "summary": "there is no network and no cached download"
+    },
+    {
+      "code": "runtime.download_too_large",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "artifact",
+        "expected",
+        "received"
+      ],
+      "items": null,
+      "summary": "the download length differs from the catalog or the body is longer"
+    },
+    {
+      "code": "runtime.download_untrusted",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "artifact",
+        "host",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the download failed TLS or redirected away from https"
+    },
+    {
+      "code": "runtime.executable_missing",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "path",
+        "reason"
+      ],
+      "items": null,
+      "summary": "a listed executable is missing or not a regular file"
+    },
+    {
+      "code": "runtime.format_mismatch",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "artifact",
+        "format",
+        "kind"
+      ],
+      "items": null,
+      "summary": "the first bytes of the download are not the format the catalog names"
+    },
+    {
+      "code": "runtime.install_conflict",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "path"
+      ],
+      "items": null,
+      "summary": "the target folder belongs to something else"
+    },
+    {
+      "code": "runtime.insufficient_space",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "root",
+        "needed",
+        "available"
+      ],
+      "items": null,
+      "summary": "there is not enough free space for the download or the extraction"
+    },
+    {
+      "code": "runtime.io_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "op",
+        "root"
+      ],
+      "items": null,
+      "summary": "a platform port failed with another I/O error"
+    },
+    {
+      "code": "runtime.os_too_old",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "path",
+        "required",
+        "host"
+      ],
+      "items": null,
+      "summary": "a binary needs a newer macOS than this Mac runs"
+    },
+    {
+      "code": "runtime.quarantined",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "path"
+      ],
+      "items": null,
+      "summary": "an executable carries the quarantine attribute"
+    },
+    {
+      "code": "runtime.selector_ambiguous",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "selector",
+        "versions"
+      ],
+      "items": null,
+      "summary": "the selector matches more than one version"
+    },
+    {
+      "code": "runtime.selector_changed",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "expectedSha256",
+        "resolvedSha256"
+      ],
+      "items": null,
+      "summary": "the selector now resolves to another artifact than expectedSha256"
+    },
+    {
+      "code": "runtime.selector_unresolved",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "provider",
+        "selector",
+        "reason",
+        "knownLines"
+      ],
+      "items": null,
+      "summary": "the selector matches no version in the catalog"
+    },
+    {
+      "code": "runtime.signature_invalid",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "path",
+        "policy",
+        "detail"
+      ],
+      "items": null,
+      "summary": "a file does not meet the signing policy"
+    },
+    {
+      "code": "runtime.size_mismatch",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "artifact",
+        "expected",
+        "actual"
+      ],
+      "items": null,
+      "summary": "the size of the download is not the catalog's"
+    },
+    {
+      "code": "runtime.version_mismatch",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "expected",
+        "observed"
+      ],
+      "items": null,
+      "summary": "the version the binary reports is not the catalog's"
     },
     {
       "code": "secret.confirmation_required",

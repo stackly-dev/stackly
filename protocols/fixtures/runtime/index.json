@@ -1,0 +1,20 @@
+{
+  "fixtures": [
+    {
+      "file": "list.json",
+      "type": "RuntimeListPage"
+    },
+    {
+      "file": "list-last-page.json",
+      "type": "RuntimeListPage"
+    },
+    {
+      "file": "detail-postgresql.json",
+      "type": "RuntimeDetail"
+    },
+    {
+      "file": "resolved-postgresql.json",
+      "type": "ResolvedArtifact"
+    }
+  ]
+}

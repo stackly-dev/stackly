@@ -1,0 +1,68 @@
+{
+  "items": [
+    {
+      "id": "0192f3a6-0000-7000-8000-0000000000a1",
+      "revision": 1,
+      "software": "postgresql",
+      "displayName": "PostgreSQL",
+      "version": "18.6",
+      "line": "18",
+      "target": {
+        "os": "macos",
+        "arch": "aarch64"
+      },
+      "installMode": "managed",
+      "state": "installed",
+      "artifactSha256": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+      "installedAt": "2026-10-21T08:00:00.000Z",
+      "lastVerifiedAt": "2026-10-21T08:00:00.000Z",
+      "support": "experimental",
+      "supportReason": "runtime_tested",
+      "usedBy": [
+        {
+          "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+          "name": "orders-db",
+          "retained": false
+        }
+      ],
+      "dependentRuntimes": []
+    },
+    {
+      "id": "0192f3a6-0000-7000-8000-0000000000a2",
+      "revision": 1,
+      "software": "nats",
+      "displayName": "NATS Server",
+      "version": "2.15.1",
+      "line": "2.15",
+      "target": {
+        "os": "macos",
+        "arch": "aarch64"
+      },
+      "installMode": "managed",
+      "state": "installed",
+      "artifactSha256": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "installedAt": "2026-10-21T08:00:00.000Z",
+      "lastVerifiedAt": "2026-10-21T08:00:00.000Z",
+      "support": "experimental",
+      "supportReason": "runtime_tested",
+      "usedBy": [],
+      "dependentRuntimes": []
+    }
+  ],
+  "next": null,
+  "installing": [
+    {
+      "operationId": "0192f3a6-0000-7000-8000-0000000000b1",
+      "runtimeId": "0192f3a6-0000-7000-8000-0000000000a3",
+      "provider": "official/traefik",
+      "software": "traefik",
+      "displayName": "Traefik",
+      "version": "3.7.15",
+      "target": {
+        "os": "macos",
+        "arch": "aarch64"
+      },
+      "sha256": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323"
+    }
+  ]
+}

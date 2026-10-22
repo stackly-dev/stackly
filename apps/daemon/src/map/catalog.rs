@@ -811,16 +811,6 @@ mod tests {
             );
         }
         for reason in SupportReason::ALL {
-            // provisional: F18 step 10 gives the three reasons of the
-            // compatibility rules their wire values.
-            if matches!(
-                reason,
-                SupportReason::RequiresNewerOs
-                    | SupportReason::ProviderTested
-                    | SupportReason::RuntimeTested
-            ) {
-                continue;
-            }
             assert_ne!(
                 wire::<dto::SupportReason>(reason.as_code()),
                 dto::SupportReason::Unrecognized
@@ -939,6 +929,34 @@ mod tests {
         let expected: ErrorBody =
             serde_json::from_value(fixture_frame["content"]["error"].clone()).unwrap();
         assert_eq!(body, expected);
+    }
+
+    // covers: AC-10
+    #[test]
+    fn an_artifact_that_needs_a_newer_macos_maps_to_not_installable_with_its_hint() {
+        let provider: ProviderName = "official/nats".parse().unwrap();
+        let version: ExactVersion = "2.15.1".parse().unwrap();
+
+        let body = not_installable(
+            &provider,
+            &version,
+            host().target,
+            NotInstallableReason::RequiresNewerOs,
+            &[host().target],
+        );
+
+        assert_eq!(body.code(), "catalog.not_installable");
+        assert_eq!(
+            details(&body)
+                .iter()
+                .find(|(key, _)| *key == "reason")
+                .map(|(_, value)| *value),
+            Some("requires_newer_os")
+        );
+        assert_eq!(
+            body.hint(),
+            Some("this version needs a newer macOS than this Mac runs")
+        );
     }
 
     #[test]

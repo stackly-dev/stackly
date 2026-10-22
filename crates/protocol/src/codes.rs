@@ -387,10 +387,158 @@ area! {
                     ),
                     "artifact_blocked" => Some("this version is blocked in the catalog"),
                     "fixture_only" => Some("test fixtures are never installable"),
+                    "requires_newer_os" => Some("this version needs a newer macOS than this Mac runs"),
                     _ => None,
                 };
             }
             None
+        }
+    }
+}
+
+area! {
+    /// Runtime install codes (spec 0018). The daemon sends them as the
+    /// error of a `runtime.*` method and as the `failure.error` of an
+    /// `install_runtime` operation; none is retryable on the wire, because
+    /// `retryable` here promises the request had no effect. The operation's
+    /// own `failure.retryable` says whether trying again can help.
+    pub mod runtime = "runtime", owner "spec 0018" {
+        SELECTOR_UNRESOLVED = "runtime.selector_unresolved", NotFound, retryable false,
+            details ["provider", "selector", "reason", "knownLines"], "the selector matches no version in the catalog";
+        SELECTOR_AMBIGUOUS = "runtime.selector_ambiguous", InvalidInput, retryable false,
+            details ["selector", "versions"], "the selector matches more than one version";
+        SELECTOR_CHANGED = "runtime.selector_changed", Conflict, retryable false,
+            details ["expectedSha256", "resolvedSha256"], "the selector now resolves to another artifact than expectedSha256";
+        ALREADY_REGISTERED = "runtime.already_registered", Conflict, retryable false,
+            details ["runtimeId", "state"], "a runtime for the artifact exists in a state other than installed";
+        DOWNLOAD_OFFLINE = "runtime.download_offline", Unavailable, retryable false,
+            details ["artifact", "hosts"], "there is no network and no cached download";
+        DOWNLOAD_FAILED = "runtime.download_failed", Failed, retryable false,
+            details ["artifact", "host", "status", "reason"], "the download failed with an HTTP or connection error";
+        DOWNLOAD_UNTRUSTED = "runtime.download_untrusted", Failed, retryable false,
+            details ["artifact", "host", "reason"], "the download failed TLS or redirected away from https";
+        DOWNLOAD_TOO_LARGE = "runtime.download_too_large", Failed, retryable false,
+            details ["artifact", "expected", "received"], "the download length differs from the catalog or the body is longer";
+        DIGEST_MISMATCH = "runtime.digest_mismatch", Failed, retryable false,
+            details ["artifact", "expected", "actual"], "the SHA-256 of the download is not the catalog's";
+        SIZE_MISMATCH = "runtime.size_mismatch", Failed, retryable false,
+            details ["artifact", "expected", "actual"], "the size of the download is not the catalog's";
+        FORMAT_MISMATCH = "runtime.format_mismatch", Failed, retryable false,
+            details ["artifact", "format", "kind"], "the first bytes of the download are not the format the catalog names";
+        INSUFFICIENT_SPACE = "runtime.insufficient_space", Failed, retryable false,
+            details ["root", "needed", "available"], "there is not enough free space for the download or the extraction";
+        IO_FAILED = "runtime.io_failed", Failed, retryable false,
+            details ["op", "root"], "a platform port failed with another I/O error";
+        ARCHIVE_REJECTED = "runtime.archive_rejected", Failed, retryable false,
+            details ["artifact", "reason", "entry"], "the archive breaks an extraction rule";
+        ARCHITECTURE_MISMATCH = "runtime.architecture_mismatch", Unsupported, retryable false,
+            details ["path", "arches"], "an executable has no arm64 slice, or macOS refused its architecture";
+        OS_TOO_OLD = "runtime.os_too_old", Unsupported, retryable false,
+            details ["path", "required", "host"], "a binary needs a newer macOS than this Mac runs";
+        EXECUTABLE_MISSING = "runtime.executable_missing", Failed, retryable false,
+            details ["path", "reason"], "a listed executable is missing or not a regular file";
+        DEPENDENCY_OUTSIDE_RUNTIME = "runtime.dependency_outside_runtime", Failed, retryable false,
+            details ["path", "library"], "a binary loads a library from outside the runtime";
+        DEPENDENCY_MISMATCH = "runtime.dependency_mismatch", Failed, retryable false,
+            details ["missing", "unexpected"], "the libraries found differ from the dependencies the catalog lists";
+        SIGNATURE_INVALID = "runtime.signature_invalid", Failed, retryable false,
+            details ["path", "policy", "detail"], "a file does not meet the signing policy";
+        QUARANTINED = "runtime.quarantined", Failed, retryable false,
+            details ["path"], "an executable carries the quarantine attribute";
+        BINARY_REJECTED_BY_OS = "runtime.binary_rejected_by_os", Failed, retryable false,
+            details ["path", "signal"], "macOS killed the binary with SIGKILL when it ran";
+        BINARY_CHECK_TIMEOUT = "runtime.binary_check_timeout", Timeout, retryable false,
+            details ["path", "seconds"], "the version check did not finish in time";
+        BINARY_CHECK_FAILED = "runtime.binary_check_failed", Failed, retryable false,
+            details ["path", "exitCode", "signal", "errno"], "the version check exited non zero, died of a signal other than SIGKILL, or could not start";
+        VERSION_MISMATCH = "runtime.version_mismatch", Failed, retryable false,
+            details ["expected", "observed"], "the version the binary reports is not the catalog's";
+        INSTALL_CONFLICT = "runtime.install_conflict", Conflict, retryable false,
+            details ["path"], "the target folder belongs to something else";
+
+        @functions
+
+        /// The static hint of a runtime error, chosen from its code; `None`
+        /// for a code outside the area. A hint never holds a value:
+        /// versions, paths, hosts, and sizes are in the message and the
+        /// details.
+        #[must_use]
+        pub fn hint(code: &str, _details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
+            Some(match code {
+                "runtime.selector_unresolved" => {
+                    "Run stackly provider inspect for this provider to see its versions."
+                }
+                "runtime.selector_ambiguous" => {
+                    "Name an exact version or line so only one version matches."
+                }
+                "runtime.selector_changed" => {
+                    "The catalog changed since you chose. Review the new artifact and try again."
+                }
+                "runtime.already_registered" => {
+                    "A runtime for this artifact exists but is not installed. Inspect it before you try again."
+                }
+                "runtime.download_offline" => {
+                    "Connect to the internet and try again. Stackly keeps any partial download."
+                }
+                "runtime.download_failed" => {
+                    "Check your connection and try again. Stackly keeps any partial download."
+                }
+                "runtime.download_untrusted" => {
+                    "Stackly only downloads over verified HTTPS. Trying again will not help; report this catalog entry."
+                }
+                "runtime.download_too_large" => {
+                    "The download is larger than the catalog says. Try again later, or report this catalog entry."
+                }
+                "runtime.digest_mismatch" | "runtime.size_mismatch" => {
+                    "The download does not match the catalog. Try again; if it repeats, report this catalog entry."
+                }
+                "runtime.format_mismatch" => {
+                    "The download is not the kind of file the catalog names. Report this catalog entry."
+                }
+                "runtime.insufficient_space" => {
+                    "Free space on the disk that holds Stackly data, then try again."
+                }
+                "runtime.io_failed" => {
+                    "Check that Stackly can write to its data folder, then try again."
+                }
+                "runtime.archive_rejected" => {
+                    "The archive breaks Stackly's safety rules, so nothing was extracted. Report this catalog entry."
+                }
+                "runtime.architecture_mismatch" => {
+                    "This artifact is not built for Apple Silicon, and Stackly does not run it under Rosetta."
+                }
+                "runtime.os_too_old" => {
+                    "This build needs a newer macOS than this Mac runs. Update macOS or choose an older version."
+                }
+                "runtime.executable_missing" => {
+                    "The artifact lacks a program the catalog lists. Report this catalog entry."
+                }
+                "runtime.dependency_outside_runtime" => {
+                    "A binary loads a library from outside the runtime, so Stackly refused it. Report this catalog entry."
+                }
+                "runtime.dependency_mismatch" => {
+                    "The libraries in the artifact differ from the catalog's list. Report this catalog entry."
+                }
+                "runtime.signature_invalid" => {
+                    "The files are not signed the way the catalog's policy needs. Try again; if it repeats, report this catalog entry."
+                }
+                "runtime.quarantined" | "runtime.binary_rejected_by_os" => {
+                    "Stackly never removes quarantine. Remove this runtime and install it again from Stackly."
+                }
+                "runtime.binary_check_timeout" => {
+                    "macOS may be showing a security prompt. Check for a dialog, then try again."
+                }
+                "runtime.binary_check_failed" => {
+                    "The runtime did not run for its version check. Read the details, then try again."
+                }
+                "runtime.version_mismatch" => {
+                    "The binary reports another version than the catalog. Report this catalog entry."
+                }
+                "runtime.install_conflict" => {
+                    "A folder Stackly did not create is in the way. Stackly never deletes it; move it away and try again."
+                }
+                _ => return None,
+            })
         }
     }
 }
@@ -657,6 +805,7 @@ pub const AREAS: &[Area] = &[
     manifest::AREA,
     provider::AREA,
     catalog::AREA,
+    runtime::AREA,
     secret::AREA,
     supervisor::AREA,
     process::AREA,
@@ -1064,6 +1213,7 @@ mod tests {
                 ("manifest", "spec 0009"),
                 ("provider", "spec 0009"),
                 ("catalog", "spec 0017"),
+                ("runtime", "spec 0018"),
                 ("secret", "spec 0011"),
                 ("supervisor", "spec 0010"),
                 ("process", "spec 0010"),
@@ -1236,6 +1386,152 @@ mod tests {
         );
     }
 
+    #[test]
+    fn runtime_codes_match_the_spec_0018_table() {
+        use ErrorCategory::{
+            Conflict, Failed, InvalidInput, NotFound, Timeout, Unavailable, Unsupported,
+        };
+        let table: Vec<_> = runtime::ALL
+            .iter()
+            .map(|spec| (spec.code, spec.category, spec.details))
+            .collect();
+        let expected: &[(&str, ErrorCategory, &[&str])] = &[
+            (
+                "runtime.selector_unresolved",
+                NotFound,
+                &["provider", "selector", "reason", "knownLines"],
+            ),
+            (
+                "runtime.selector_ambiguous",
+                InvalidInput,
+                &["selector", "versions"],
+            ),
+            (
+                "runtime.selector_changed",
+                Conflict,
+                &["expectedSha256", "resolvedSha256"],
+            ),
+            (
+                "runtime.already_registered",
+                Conflict,
+                &["runtimeId", "state"],
+            ),
+            (
+                "runtime.download_offline",
+                Unavailable,
+                &["artifact", "hosts"],
+            ),
+            (
+                "runtime.download_failed",
+                Failed,
+                &["artifact", "host", "status", "reason"],
+            ),
+            (
+                "runtime.download_untrusted",
+                Failed,
+                &["artifact", "host", "reason"],
+            ),
+            (
+                "runtime.download_too_large",
+                Failed,
+                &["artifact", "expected", "received"],
+            ),
+            (
+                "runtime.digest_mismatch",
+                Failed,
+                &["artifact", "expected", "actual"],
+            ),
+            (
+                "runtime.size_mismatch",
+                Failed,
+                &["artifact", "expected", "actual"],
+            ),
+            (
+                "runtime.format_mismatch",
+                Failed,
+                &["artifact", "format", "kind"],
+            ),
+            (
+                "runtime.insufficient_space",
+                Failed,
+                &["root", "needed", "available"],
+            ),
+            ("runtime.io_failed", Failed, &["op", "root"]),
+            (
+                "runtime.archive_rejected",
+                Failed,
+                &["artifact", "reason", "entry"],
+            ),
+            (
+                "runtime.architecture_mismatch",
+                Unsupported,
+                &["path", "arches"],
+            ),
+            (
+                "runtime.os_too_old",
+                Unsupported,
+                &["path", "required", "host"],
+            ),
+            ("runtime.executable_missing", Failed, &["path", "reason"]),
+            (
+                "runtime.dependency_outside_runtime",
+                Failed,
+                &["path", "library"],
+            ),
+            (
+                "runtime.dependency_mismatch",
+                Failed,
+                &["missing", "unexpected"],
+            ),
+            (
+                "runtime.signature_invalid",
+                Failed,
+                &["path", "policy", "detail"],
+            ),
+            ("runtime.quarantined", Failed, &["path"]),
+            ("runtime.binary_rejected_by_os", Failed, &["path", "signal"]),
+            (
+                "runtime.binary_check_timeout",
+                Timeout,
+                &["path", "seconds"],
+            ),
+            (
+                "runtime.binary_check_failed",
+                Failed,
+                &["path", "exitCode", "signal", "errno"],
+            ),
+            (
+                "runtime.version_mismatch",
+                Failed,
+                &["expected", "observed"],
+            ),
+            ("runtime.install_conflict", Conflict, &["path"]),
+        ];
+        assert_eq!(table, expected);
+        assert!(
+            runtime::ALL
+                .iter()
+                .all(|spec| !spec.retryable && spec.items.is_none())
+        );
+    }
+
+    #[test]
+    fn every_runtime_code_has_a_short_static_hint_and_no_other_code_has_one() {
+        for spec in runtime::ALL {
+            let hint = runtime::hint(spec.code, &[]).expect("every runtime code has a hint");
+            assert!(hint.len() <= 200, "{}: {hint}", spec.code);
+            assert!(!hint.contains('{'), "{}: {hint}", spec.code);
+        }
+        assert_eq!(runtime::hint("catalog.unavailable", &[]), None);
+        assert_eq!(runtime::hint("runtime.from_the_future", &[]), None);
+        assert_eq!(
+            runtime::hint("runtime.architecture_mismatch", &[]),
+            Some(
+                "This artifact is not built for Apple Silicon, and Stackly does not run it under Rosetta."
+            )
+        );
+    }
+
     fn catalog_hint(code: &ErrorSpec, details: &[(&str, &str)]) -> Option<&'static str> {
         let details: Vec<_> = details
             .iter()
@@ -1271,6 +1567,7 @@ mod tests {
             "no_build_for_arch",
             "artifact_blocked",
             "fixture_only",
+            "requires_newer_os",
         ] {
             hints.push(catalog_hint(
                 &catalog::NOT_INSTALLABLE,

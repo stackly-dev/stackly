@@ -1,0 +1,12 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000805",
+  "idempotencyKey": "install-postgresql-18-0002",
+  "call": {
+    "type": "runtime.install",
+    "content": {
+      "provider": "official/postgresql",
+      "selector": "18 6",
+      "expectedSha256": null
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000805",
+    "error": {
+      "code": "runtime.selector_unresolved",
+      "category": "not_found",
+      "message": "official/postgresql has no version matching 19",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "Run stackly provider inspect for this provider to see its versions.",
+      "details": [
+        {
+          "key": "provider",
+          "value": "official/postgresql"
+        },
+        {
+          "key": "selector",
+          "value": "19"
+        },
+        {
+          "key": "reason",
+          "value": "no_such_line"
+        },
+        {
+          "key": "knownLines",
+          "value": "17,18"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}
