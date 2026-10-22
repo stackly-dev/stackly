@@ -1,0 +1,27 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000930",
+    "error": {
+      "code": "registry.not_deletable",
+      "category": "conflict",
+      "message": "the instance can't be removed by this operation",
+      "retryable": false,
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000001"
+      },
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "reason",
+          "value": "created_by_other_operation"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

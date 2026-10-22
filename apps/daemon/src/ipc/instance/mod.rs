@@ -12,6 +12,7 @@
 
 mod create;
 pub mod dto;
+mod form;
 
 use stackly_core::operation::{
     BeginRequest, BusyPolicy, FinalBatch, NO_OP_STAGE, NoOpReply, Origin, Precheck, PrecheckOutcome,
@@ -35,6 +36,7 @@ use stackly_storage::SqliteRegistry;
 use uuid::Uuid;
 
 pub use create::create;
+pub use form::{get_create_form, preflight};
 
 use crate::dispatch::{HandlerFuture, RequestContext};
 use crate::ipc::operation::{StartOutcome, StartRequest as OperationStart, start_operation};

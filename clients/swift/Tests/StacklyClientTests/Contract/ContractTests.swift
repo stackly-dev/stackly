@@ -135,6 +135,6 @@ struct ContractTests {
     }
 
     @Test func protocolIsOnePointEleven() {
-        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 1, minor: 11))
+        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 1, minor: 12))
     }
 }

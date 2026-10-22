@@ -257,6 +257,8 @@ area! {
             details [], "a database constraint refused a write that an earlier check should have caught";
         RECOVERY_MODE = "registry.recovery_mode", Unavailable, retryable false,
             details ["reason", "reportPath"], "the registry is in recovery mode, so the daemon only answers the methods allowed there";
+        NOT_DELETABLE = "registry.not_deletable", Conflict, retryable false,
+            details ["reason"], "an operation tried to remove an instance it did not create, or one that is no longer new";
     }
 }
 
@@ -342,6 +344,8 @@ area! {
         NOT_INSTALLABLE = "catalog.not_installable", Unsupported, retryable false,
             details ["provider", "version", "target", "availableTargets", "reason"],
             "the provider version can't be installed on this Mac";
+        PIN_FAILED = "catalog.pin_failed", Failed, retryable false,
+            details ["provider", "revision", "reason"], "the provider package could not be pinned into the data folder";
 
         @functions
 
@@ -376,6 +380,9 @@ area! {
             }
             if code == VERSION_NOT_FOUND.code {
                 return Some("run stackly provider inspect for this provider to see its versions");
+            }
+            if code == PIN_FAILED.code {
+                return Some("run stackly doctor");
             }
             if code == NOT_INSTALLABLE.code {
                 return match detail("reason")? {
@@ -686,6 +693,65 @@ area! {
             details ["omitted"], "the settings break the schema of the package; fields lists each issue";
         ENDPOINT_INVALID = "instance.endpoint_invalid", InvalidInput, retryable false,
             details ["endpoint", "omitted"], "an endpoint is not in the manifest, has a port outside 1 to 65535, or asks for a port on a unix endpoint";
+        NAME_INVALID = "instance.name_invalid", InvalidInput, retryable false,
+            details ["omitted"], "the instance name or display name is not valid; fields lists each issue";
+        PROVIDER_UNAVAILABLE = "instance.provider_unavailable", Unsupported, retryable false,
+            details ["provider", "state"], "the catalog entry of the provider is planned or invalid";
+        CAPABILITY_UNSUPPORTED = "instance.capability_unsupported", Unsupported, retryable false,
+            details ["capability", "provider", "existing"], "the provider lacks multi_instance and an instance of it already exists";
+        RUNTIME_INCOMPATIBLE = "instance.runtime_incompatible", Conflict, retryable false,
+            details ["runtimeId", "executable"], "the runtime lacks an executable the package needs";
+        STORAGE_UNSUPPORTED = "instance.storage_unsupported", Unsupported, retryable false,
+            details ["fsType", "root"], "the data root is not on a local apfs or hfs volume";
+        INSUFFICIENT_SPACE = "instance.insufficient_space", Unavailable, retryable false,
+            details ["needed", "available"], "the free space is below the minimum to create an instance";
+        DATA_NOT_EMPTY = "instance.data_not_empty", Conflict, retryable false,
+            details ["path"], "the new instance folder already exists or its data folder is not empty";
+        DATA_OVERLAP = "instance.data_overlap", Conflict, retryable false,
+            details ["path", "otherInstance"], "the new data folder overlaps the data folder of another instance";
+        SHORT_KEY_TAKEN = "instance.short_key_taken", Conflict, retryable false,
+            details ["shortKey"], "the short key of the new instance ID is taken";
+
+        @functions
+
+        /// The static hint of an instance error, chosen from its code and
+        /// the values of its `details`; `None` for a code without a hint or
+        /// a `state` this build does not know. A hint never holds a value.
+        #[must_use]
+        pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
+            Some(match code {
+                "instance.name_invalid" => {
+                    "use lowercase letters, digits, and single hyphens, starting with a letter"
+                }
+                "instance.provider_unavailable" => {
+                    return match details
+                        .iter()
+                        .find(|detail| detail.key() == "state")
+                        .map(crate::error::ErrorDetail::value)?
+                    {
+                        "planned" => Some("this provider is not in this release"),
+                        "invalid" => {
+                            Some("reinstall Stackly, this provider package failed validation")
+                        }
+                        _ => None,
+                    };
+                }
+                "instance.capability_unsupported" => "remove the existing instance first",
+                "instance.runtime_incompatible" => {
+                    "reinstall the runtime with stackly runtime install"
+                }
+                "instance.storage_unsupported" => {
+                    "keep the Stackly data folder on a local APFS volume"
+                }
+                "instance.insufficient_space" => "free up disk space, then try again",
+                "instance.data_not_empty" => {
+                    "run stackly doctor; Stackly never initializes a folder that already holds data"
+                }
+                "instance.data_overlap" => "run stackly doctor",
+                "instance.short_key_taken" => "try again, a new ID is generated",
+                _ => return None,
+            })
+        }
     }
 }
 
@@ -1377,6 +1443,11 @@ mod tests {
                     "reason",
                 ],
             ),
+            (
+                "catalog.pin_failed",
+                ErrorCategory::Failed,
+                &["provider", "revision", "reason"],
+            ),
         ];
         assert_eq!(table, expected);
         assert!(
@@ -1560,6 +1631,10 @@ mod tests {
             &[("provider", "nats"), ("suggestion", "official/nats")],
         ));
         hints.push(catalog_hint(&catalog::VERSION_NOT_FOUND, &[]));
+        hints.push(catalog_hint(
+            &catalog::PIN_FAILED,
+            &[("reason", "existing_differs")],
+        ));
         for reason in [
             "provider_planned",
             "package_invalid",
@@ -1604,6 +1679,103 @@ mod tests {
         );
         assert_eq!(catalog_hint(&catalog::NOT_INSTALLABLE, &[]), None);
         assert_eq!(catalog_hint(&operation::QUEUE_FULL, &[]), None);
+    }
+
+    fn instance_hint(code: &ErrorSpec, details: &[(&str, &str)]) -> Option<&'static str> {
+        let details: Vec<_> = details
+            .iter()
+            .map(|(key, value)| crate::error::ErrorDetail::new(*key, *value))
+            .collect();
+        instance::hint(code.code, &details)
+    }
+
+    #[test]
+    fn the_nine_spec_0020_instance_codes_have_a_short_static_hint() {
+        for spec in [
+            &instance::NAME_INVALID,
+            &instance::CAPABILITY_UNSUPPORTED,
+            &instance::RUNTIME_INCOMPATIBLE,
+            &instance::STORAGE_UNSUPPORTED,
+            &instance::INSUFFICIENT_SPACE,
+            &instance::DATA_NOT_EMPTY,
+            &instance::DATA_OVERLAP,
+            &instance::SHORT_KEY_TAKEN,
+        ] {
+            let hint = instance_hint(spec, &[]).expect("a spec 0020 code has a hint");
+            assert!(hint.len() <= 200, "{}: {hint}", spec.code);
+            assert!(!hint.contains('{'), "{}: {hint}", spec.code);
+        }
+        assert_eq!(
+            instance_hint(&instance::PROVIDER_UNAVAILABLE, &[("state", "planned")]),
+            Some("this provider is not in this release")
+        );
+        assert_eq!(
+            instance_hint(&instance::PROVIDER_UNAVAILABLE, &[("state", "invalid")]),
+            Some("reinstall Stackly, this provider package failed validation")
+        );
+        assert_eq!(
+            instance_hint(&instance::PROVIDER_UNAVAILABLE, &[("state", "later")]),
+            None
+        );
+        assert_eq!(instance_hint(&instance::NAME_TAKEN, &[]), None);
+    }
+
+    #[test]
+    fn spec_0020_instance_codes_match_the_table() {
+        let table: Vec<_> = instance::ALL
+            .iter()
+            .skip(7)
+            .map(|spec| (spec.code, spec.category, spec.details))
+            .collect();
+        let expected: &[(&str, ErrorCategory, &[&str])] = &[
+            (
+                "instance.name_invalid",
+                ErrorCategory::InvalidInput,
+                &["omitted"],
+            ),
+            (
+                "instance.provider_unavailable",
+                ErrorCategory::Unsupported,
+                &["provider", "state"],
+            ),
+            (
+                "instance.capability_unsupported",
+                ErrorCategory::Unsupported,
+                &["capability", "provider", "existing"],
+            ),
+            (
+                "instance.runtime_incompatible",
+                ErrorCategory::Conflict,
+                &["runtimeId", "executable"],
+            ),
+            (
+                "instance.storage_unsupported",
+                ErrorCategory::Unsupported,
+                &["fsType", "root"],
+            ),
+            (
+                "instance.insufficient_space",
+                ErrorCategory::Unavailable,
+                &["needed", "available"],
+            ),
+            (
+                "instance.data_not_empty",
+                ErrorCategory::Conflict,
+                &["path"],
+            ),
+            (
+                "instance.data_overlap",
+                ErrorCategory::Conflict,
+                &["path", "otherInstance"],
+            ),
+            (
+                "instance.short_key_taken",
+                ErrorCategory::Conflict,
+                &["shortKey"],
+            ),
+        ];
+        assert_eq!(table, expected);
+        assert!(instance::ALL.iter().all(|spec| !spec.retryable));
     }
 
     #[test]
@@ -1674,6 +1846,11 @@ mod tests {
                 "registry.recovery_mode",
                 ErrorCategory::Unavailable,
                 &["reason", "reportPath"],
+            ),
+            (
+                "registry.not_deletable",
+                ErrorCategory::Conflict,
+                &["reason"],
             ),
         ];
         assert_eq!(table, expected);

@@ -1,0 +1,214 @@
+{
+  "capabilities": [
+    {
+      "capability": "multi_instance",
+      "supported": true
+    },
+    {
+      "capability": "persistence",
+      "supported": true
+    },
+    {
+      "capability": "reload",
+      "supported": true
+    },
+    {
+      "capability": "metrics",
+      "supported": false
+    },
+    {
+      "capability": "tls",
+      "supported": false
+    },
+    {
+      "capability": "cold_backup",
+      "supported": true
+    },
+    {
+      "capability": "online_backup",
+      "supported": false
+    },
+    {
+      "capability": "logical_backup",
+      "supported": false
+    }
+  ],
+  "dataPath": "instances/<new instance id>/data",
+  "endpoints": [
+    {
+      "defaultPort": 5432,
+      "host": "127.0.0.1",
+      "name": "client",
+      "purpose": "client",
+      "socketName": null,
+      "transport": "tcp"
+    },
+    {
+      "defaultPort": null,
+      "host": null,
+      "name": "socket",
+      "purpose": "client",
+      "socketName": ".s.PGSQL.${endpoint.client.port}",
+      "transport": "unix"
+    }
+  ],
+  "fields": [
+    {
+      "apply": "immutable_after_init",
+      "choices": [],
+      "default": null,
+      "description": "Password of the postgres superuser, set once when the cluster is created.",
+      "itemKey": null,
+      "items": [],
+      "key": "superuserPassword",
+      "kind": "text",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": 128,
+      "maximum": null,
+      "minItems": null,
+      "minLength": 8,
+      "minimum": null,
+      "printableOnly": true,
+      "required": true,
+      "secret": true,
+      "title": "Superuser password",
+      "visibility": "basic"
+    },
+    {
+      "apply": "restart",
+      "choices": [],
+      "default": {
+        "content": 100,
+        "type": "integer"
+      },
+      "description": "Most client connections the server accepts at once.",
+      "itemKey": null,
+      "items": [],
+      "key": "maxConnections",
+      "kind": "integer",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": 1000,
+      "minItems": null,
+      "minLength": null,
+      "minimum": 5,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Max connections",
+      "visibility": "advanced"
+    },
+    {
+      "apply": "restart",
+      "choices": [],
+      "default": {
+        "content": 128,
+        "type": "integer"
+      },
+      "description": "Memory the server reserves for caching data pages.",
+      "itemKey": null,
+      "items": [],
+      "key": "sharedBuffersMb",
+      "kind": "integer",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": 16384,
+      "minItems": null,
+      "minLength": null,
+      "minimum": 16,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Shared buffers (MB)",
+      "visibility": "advanced"
+    },
+    {
+      "apply": "reload",
+      "choices": [
+        "none",
+        "ddl",
+        "mod",
+        "all"
+      ],
+      "default": {
+        "content": "none",
+        "type": "text"
+      },
+      "description": "Which SQL statements are written to the instance log. Statements that set passwords are logged as typed.",
+      "itemKey": null,
+      "items": [],
+      "key": "logStatement",
+      "kind": "choice",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": null,
+      "minItems": null,
+      "minLength": null,
+      "minimum": null,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Log statements",
+      "visibility": "basic"
+    },
+    {
+      "apply": "reload",
+      "choices": [],
+      "default": {
+        "content": -1,
+        "type": "integer"
+      },
+      "description": "Log every statement that runs at least this long; -1 turns it off.",
+      "itemKey": null,
+      "items": [],
+      "key": "logMinDurationStatementMs",
+      "kind": "integer",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": 3600000,
+      "minItems": null,
+      "minLength": null,
+      "minimum": -1,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Log slow statements (ms)",
+      "visibility": "advanced"
+    }
+  ],
+  "provider": {
+    "category": "database",
+    "displayName": "PostgreSQL",
+    "manifestSha256": "3ec1b8baf35e23dbbf74f053f1f7710157f4722b900fafecba64de65c083b7bb",
+    "name": "official/postgresql",
+    "revision": "1.0.0",
+    "source": "bundled_catalog"
+  },
+  "runtime": {
+    "artifactSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "dependentRuntimes": [],
+    "displayName": "PostgreSQL",
+    "id": "0192f3a6-0000-7000-8000-0000000000a1",
+    "installMode": "managed",
+    "installedAt": "2026-01-01T00:00:00.000Z",
+    "lastVerifiedAt": null,
+    "line": "18",
+    "revision": 1,
+    "software": "postgresql",
+    "state": "installed",
+    "support": "unverified",
+    "supportReason": "untested",
+    "target": {
+      "arch": "aarch64",
+      "os": "macos"
+    },
+    "usedBy": [],
+    "version": "18.6"
+  },
+  "suggestedName": "postgresql-18"
+}

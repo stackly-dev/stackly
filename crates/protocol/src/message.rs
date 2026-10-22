@@ -25,8 +25,9 @@ use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
 use crate::instance::{
-    CreateInstanceParams, GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceSummary,
-    ListInstancesParams, StartInstanceParams, StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, GetCreateFormParams, GetInstanceParams,
+    InstanceActionAccepted, InstancePage, InstanceSummary, ListInstancesParams,
+    PreflightCreateParams, StartInstanceParams, StopInstanceParams,
 };
 use crate::json;
 use crate::operation::{
@@ -159,6 +160,13 @@ pub enum Call {
     /// One runtime in detail.
     #[serde(rename = "runtime.get")]
     RuntimeGet(GetRuntimeParams),
+    /// The create form of an installed runtime: the provider, its
+    /// endpoints, and its settings fields, typed from the package.
+    #[serde(rename = "instance.get_create_form")]
+    InstanceGetCreateForm(GetCreateFormParams),
+    /// Judges a create draft without any secret value and changes nothing.
+    #[serde(rename = "instance.preflight")]
+    InstancePreflight(PreflightCreateParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -256,6 +264,12 @@ pub enum Reply {
     /// The runtime.
     #[serde(rename = "runtime.get")]
     RuntimeGet(Box<RuntimeDetail>),
+    /// The form for a new instance.
+    #[serde(rename = "instance.get_create_form")]
+    InstanceGetCreateForm(Box<CreateForm>),
+    /// The preflight rows, the field issues, and the equivalent command.
+    #[serde(rename = "instance.preflight")]
+    InstancePreflight(Box<CreatePreflight>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -356,6 +370,8 @@ methods! {
     "runtime.resolve" => RuntimeResolve(InstallRuntimeParams), recovery allowed;
     "runtime.list" => RuntimeList(ListRuntimesParams), recovery refused;
     "runtime.get" => RuntimeGet(GetRuntimeParams), recovery refused;
+    "instance.get_create_form" => InstanceGetCreateForm(GetCreateFormParams), recovery refused;
+    "instance.preflight" => InstancePreflight(PreflightCreateParams), recovery refused;
 }
 
 impl Reply {
@@ -508,20 +524,11 @@ mod tests {
                 .iter()
                 .filter(|method| method.starts_with("instance."))
                 .count()
-                == 5
+                == 7
                 && Call::METHODS
                     .iter()
                     .filter(|method| method.starts_with("instance."))
-                    .all(|method| {
-                        !matches!(
-                            *method,
-                            "instance.create"
-                                | "instance.start"
-                                | "instance.stop"
-                                | "instance.get"
-                                | "instance.list"
-                        ) || !methods_allowed_in_recovery().contains(method)
-                    }),
+                    .all(|method| !methods_allowed_in_recovery().contains(method)),
             "every instance method needs the registry, so none is allowed in recovery"
         );
         assert!(
@@ -531,7 +538,7 @@ mod tests {
             "installing, listing, and reading runtimes need the registry"
         );
         assert_eq!(
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3,
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 2,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

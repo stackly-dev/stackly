@@ -26,8 +26,9 @@ use stackly_protocol::daemon::{
 };
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::{
-    CreateInstanceParams, GetInstanceParams, InstanceActionAccepted, InstancePage, InstanceSummary,
-    ListInstancesParams, StartInstanceParams, StopInstanceParams,
+    CreateForm, CreateInstanceParams, CreatePreflight, GetCreateFormParams, GetInstanceParams,
+    InstanceActionAccepted, InstancePage, InstanceSummary, ListInstancesParams,
+    PreflightCreateParams, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
@@ -290,6 +291,28 @@ pub trait Handlers: Send + Sync + 'static {
         params: CreateInstanceParams,
     ) -> HandlerFuture<'a, InstanceActionAccepted> {
         instance::create(core, context, params)
+    }
+
+    /// `instance.get_create_form`.
+    fn get_create_form<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetCreateFormParams,
+    ) -> HandlerFuture<'a, Box<CreateForm>> {
+        let _ = context;
+        instance::get_create_form(core, params)
+    }
+
+    /// `instance.preflight`.
+    fn preflight_create<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: PreflightCreateParams,
+    ) -> HandlerFuture<'a, Box<CreatePreflight>> {
+        let _ = context;
+        instance::preflight(core, params)
     }
 
     /// `instance.start`.

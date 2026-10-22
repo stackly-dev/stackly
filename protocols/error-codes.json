@@ -93,6 +93,18 @@
       "summary": "the provider version can't be installed on this Mac"
     },
     {
+      "code": "catalog.pin_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "provider",
+        "revision",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the provider package could not be pinned into the data folder"
+    },
+    {
       "code": "catalog.provider_not_found",
       "category": "not_found",
       "retryable": false,
@@ -455,6 +467,39 @@
       "summary": "no subscription with this id exists on the connection"
     },
     {
+      "code": "instance.capability_unsupported",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "capability",
+        "provider",
+        "existing"
+      ],
+      "items": null,
+      "summary": "the provider lacks multi_instance and an instance of it already exists"
+    },
+    {
+      "code": "instance.data_not_empty",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "path"
+      ],
+      "items": null,
+      "summary": "the new instance folder already exists or its data folder is not empty"
+    },
+    {
+      "code": "instance.data_overlap",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "path",
+        "otherInstance"
+      ],
+      "items": null,
+      "summary": "the new data folder overlaps the data folder of another instance"
+    },
+    {
       "code": "instance.endpoint_invalid",
       "category": "invalid_input",
       "retryable": false,
@@ -464,6 +509,27 @@
       ],
       "items": null,
       "summary": "an endpoint is not in the manifest, has a port outside 1 to 65535, or asks for a port on a unix endpoint"
+    },
+    {
+      "code": "instance.insufficient_space",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "needed",
+        "available"
+      ],
+      "items": null,
+      "summary": "the free space is below the minimum to create an instance"
+    },
+    {
+      "code": "instance.name_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "omitted"
+      ],
+      "items": null,
+      "summary": "the instance name or display name is not valid; fields lists each issue"
     },
     {
       "code": "instance.name_taken",
@@ -498,6 +564,28 @@
       "summary": "no pinned package or provider revision with that name"
     },
     {
+      "code": "instance.provider_unavailable",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "provider",
+        "state"
+      ],
+      "items": null,
+      "summary": "the catalog entry of the provider is planned or invalid"
+    },
+    {
+      "code": "instance.runtime_incompatible",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "runtimeId",
+        "executable"
+      ],
+      "items": null,
+      "summary": "the runtime lacks an executable the package needs"
+    },
+    {
       "code": "instance.runtime_mismatch",
       "category": "conflict",
       "retryable": false,
@@ -527,6 +615,27 @@
       ],
       "items": null,
       "summary": "the settings break the schema of the package; fields lists each issue"
+    },
+    {
+      "code": "instance.short_key_taken",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "shortKey"
+      ],
+      "items": null,
+      "summary": "the short key of the new instance ID is taken"
+    },
+    {
+      "code": "instance.storage_unsupported",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "fsType",
+        "root"
+      ],
+      "items": null,
+      "summary": "the data root is not on a local apfs or hfs volume"
     },
     {
       "code": "internal.unexpected",
@@ -1095,6 +1204,16 @@
       "details": [],
       "items": null,
       "summary": "the disk holding the registry is full"
+    },
+    {
+      "code": "registry.not_deletable",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "an operation tried to remove an instance it did not create, or one that is no longer new"
     },
     {
       "code": "registry.path_not_utf8",
