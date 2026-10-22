@@ -34,6 +34,8 @@ mod readiness;
 mod reload;
 #[path = "postgresql/security.rs"]
 mod security;
+#[path = "postgresql/sentinel.rs"]
+mod sentinel;
 #[path = "postgresql/stop.rs"]
 mod stop;
 #[path = "supervisor/support.rs"]
