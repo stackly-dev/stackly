@@ -137,6 +137,7 @@ public struct InstancesPage: View {
         return GeometryReader { proxy in
             pageContent(all: all, visible: visible, selected: selected)
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+                // provisional: F67 (see `relayingFixtureAccessibility()`)
                 .relayingFixtureAccessibility()
         }
         .stacklyInspector(
@@ -529,6 +530,7 @@ public struct InstancesPage: View {
     }
 }
 
+// provisional: F67 (a `.stacklyInspector` component fix replaces this relay; other pages must not copy it)
 extension View {
     /// Pins the fixture's accessibility values again inside the page's `GeometryReader`,
     /// which holds its content again and drops Increase Contrast there (spec 0068, K15).
