@@ -106,18 +106,18 @@ struct OverviewPageTests {
     // MARK: - Needs Attention waits for its sources
 
     private func items(
-        instancesLoaded: Bool = true, operationsLoaded: Bool = true,
+        instancesLoaded: Bool = true, operations: AttentionOperations? = .loaded([]),
         capacity: CapacityState = CapacityState(attempted: true)
     ) -> [AttentionItem]? {
         OverviewPage.attentionItems(
             summaries: FixtureScenario.instanceCases, instancesLoaded: instancesLoaded,
-            operations: [], operationsLoaded: operationsLoaded, capacity: capacity,
+            operations: operations, capacity: capacity,
             runtimes: .none, now: FixtureClock.now, locale: locale, timeZone: .gmt)
     }
 
     @Test func theItemsWaitForTheInstancesTheOperationsAndTheFirstDiskReading() {
         #expect(items(instancesLoaded: false) == nil)
-        #expect(items(operationsLoaded: false) == nil)
+        #expect(items(operations: nil) == nil)
         #expect(items(capacity: CapacityState()) == nil)
         #expect(items()?.isEmpty == false)
     }

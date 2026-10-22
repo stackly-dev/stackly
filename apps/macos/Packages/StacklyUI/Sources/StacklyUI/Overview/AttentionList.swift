@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// The Needs Attention section of the Overview (spec 0022, *Aturan Needs Attention*): the
-/// first six items, "Show {n} More" for the rest, a spinner until every source loaded, and
-/// "Nothing needs attention." when there is nothing.
+/// first six items, "Show {n} More" for the rest, a spinner while a source has not answered
+/// yet (a source that failed or is unsupported is an item instead), and "Nothing needs
+/// attention." when there is nothing.
 struct AttentionList: View {
     /// The items, or `nil` while a source has not loaded.
     let items: [AttentionItem]?

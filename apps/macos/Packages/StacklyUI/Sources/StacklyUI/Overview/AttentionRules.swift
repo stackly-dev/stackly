@@ -1,6 +1,22 @@
 import Foundation
 import StacklyClient
 
+/// What Needs Attention knows of the operations (spec 0022, *Aturan Needs Attention*, 2026-10-22).
+///
+/// There is no case for operations that have not loaded: Needs Attention waits for them
+/// before it reads anything, so the rules never see that state.
+nonisolated public enum AttentionOperations: Sendable, Equatable {
+    /// The operations that have not ended, from a snapshot that loaded; a later refresh that
+    /// failed keeps them.
+    case loaded([OperationSummary])
+    /// The snapshot failed and nothing was ever loaded. It carries no data: an operation that
+    /// arrives by event after a failed snapshot is not an item, because without the snapshot
+    /// the list is not complete, and item O2 says so.
+    case failed
+    /// The daemon does not know `operation.list`.
+    case unsupported
+}
+
 /// The rules of Needs Attention (spec 0022, *Aturan Needs Attention*): a pure function of
 /// what the stores hold, so the same input gives the same items with the same IDs.
 ///
@@ -12,7 +28,8 @@ nonisolated public enum AttentionRules {
     ///
     /// - Parameters:
     ///   - instances: Every instance in the store.
-    ///   - operations: The operations that have not ended.
+    ///   - operations: What is known of the operations: the ones that have not ended (rule
+    ///     O1 reads those that need recovery), or that they cannot be read (rule O2).
     ///   - runtimes: The runtime names the operation titles use.
     ///   - capacity: What the disk reading holds.
     ///   - now: The clock; a time that is not today gets its date.
@@ -20,7 +37,7 @@ nonisolated public enum AttentionRules {
     ///   - timeZone: The time zone of the times.
     public static func items(
         instances: [InstanceSummary],
-        operations: [OperationSummary],
+        operations: AttentionOperations,
         runtimes: OperationTitle.RuntimeNames = .none,
         capacity: CapacityState,
         now: Date,
@@ -32,8 +49,21 @@ nonisolated public enum AttentionRules {
         var items: [AttentionItem] = instances.compactMap {
             instanceItem($0, now: now, locale: locale, timeZone: timeZone)
         }
-        items += operations.compactMap {
-            operationItem($0, instanceNames: names, runtimes: runtimes)
+        switch operations {
+        case .loaded(let active):
+            items += active.compactMap {
+                operationItem($0, instanceNames: names, runtimes: runtimes)
+            }
+        case .failed:
+            items.append(
+                unreadableOperations(
+                    "Stackly couldn’t read operations. Any that need recovery are missing from this list."
+                ))
+        case .unsupported:
+            items.append(
+                unreadableOperations(
+                    "This version of stacklyd doesn’t list operations. Any that need recovery are missing from this list."
+                ))
         }
         if let disk = diskItem(capacity, locale: locale) {
             items.append(disk)
@@ -203,6 +233,14 @@ nonisolated public enum AttentionRules {
             id: "operation:\(operation.id.uuidString.lowercased())", rule: "O1", tone: .critical,
             category: .operation, title: "\(title) needs recovery", message: message,
             destination: .operations, sortKey: title)
+    }
+
+    /// Rule O2: the operations cannot be read, so the ones that need recovery may be missing.
+    private static func unreadableOperations(_ message: String) -> AttentionItem {
+        AttentionItem(
+            id: "operations", rule: "O2", tone: .neutral, category: .operation,
+            title: "Operations unavailable", message: message, destination: .operations,
+            sortKey: "")
     }
 
     // MARK: - Disk
