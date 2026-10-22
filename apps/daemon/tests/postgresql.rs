@@ -40,6 +40,8 @@ mod same_runtime;
 mod security;
 #[path = "postgresql/sentinel.rs"]
 mod sentinel;
+#[path = "postgresql/side_by_side.rs"]
+mod side_by_side;
 #[path = "postgresql/stop.rs"]
 mod stop;
 #[path = "supervisor/support.rs"]
