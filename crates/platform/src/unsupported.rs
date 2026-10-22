@@ -7,8 +7,8 @@ use crate::capability::{CapabilityStatus, PlatformCapabilities, PlatformCapabili
 use crate::clock::SystemClock;
 use crate::error::PlatformError;
 use crate::fs::{
-    AppendFile, DirEntryInfo, FileInfo, Filesystem, ReadSeekFile, RemoveReport, VolumeFacts,
-    VolumeSpace,
+    AppendFile, DirEntryInfo, FileInfo, Filesystem, ReadSeekFile, RemoveReport, TreeUsage,
+    UsageLimits, VolumeFacts, VolumeSpace,
 };
 use crate::identity::{UserId, UserIdentity};
 use crate::info::{HostFacts, PlatformInfo};
@@ -117,6 +117,10 @@ impl Filesystem for UnsupportedPlatform {
     fn volume_facts(&self, _path: &Path) -> Result<VolumeFacts, PlatformError> {
         Err(self.not_supported(PlatformCapability::Filesystem))
     }
+
+    fn tree_usage(&self, _root: &Path, _limits: UsageLimits) -> Result<TreeUsage, PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
 }
 
 impl UserIdentity for UnsupportedPlatform {
@@ -148,6 +152,8 @@ impl PlatformInfo for UnsupportedPlatform {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use stackly_domain::{Arch, SecretRef};
     use stackly_evidence::{Kind, evidence};
 
@@ -214,6 +220,10 @@ mod tests {
         assert!(is_not_supported(fs.volume_space(path), Fs));
         assert!(is_not_supported(fs.volume_facts(path), Fs));
         assert!(is_not_supported(fs.available_space(path), Fs));
+        assert!(is_not_supported(
+            fs.tree_usage(path, UsageLimits::new(1, Duration::ZERO)),
+            Fs
+        ));
         assert!(is_not_supported(
             platform.identity().current_user(),
             Identity
