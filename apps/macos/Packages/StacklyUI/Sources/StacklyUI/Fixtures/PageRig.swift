@@ -15,11 +15,44 @@
             var instanceFailure: ClientError?
             var operationFailure: ClientError?
             var oneFailure: ClientError?
+            /// What `runtime.list` answers.
+            var runtimePage: RuntimeListPage
+            var runtimeFailure: ClientError?
+            /// What `instance.get_detail` answers instead of the fixture detail, by instance.
+            var detailOverrides: [UUID: InstanceDetail] = [:]
+            /// The failure `instance.get_detail` answers, or `nil`.
+            var detailFailure: ClientError?
+            /// What `instance.get_data_usage` answers instead of the fixture size, by instance;
+            /// a `nil` value is "no fresh result".
+            var usageOverrides: [UUID: DataUsage?] = [:]
+            /// The failure `instance.get_data_usage` answers, or `nil`.
+            var usageFailure: ClientError?
+            /// Whether `instance.get_detail` never answers, so the page stays loading.
+            var detailHangs = false
+
+            func detail(of id: UUID) async throws(ClientError) -> InstanceDetail {
+                while detailHangs, Task.isCancelled == false {
+                    try? await Task.sleep(for: .seconds(3_600))
+                }
+                if let detailFailure { throw detailFailure }
+                if let override = detailOverrides[id] { return override }
+                guard let found = instances.first(where: { $0.id == id }) else {
+                    throw .rejected(.fixtureNotFound(.instance, id: id.uuidString.lowercased()))
+                }
+                return FixtureDetail.detail(of: found)
+            }
+
+            func usage(of id: UUID) throws(ClientError) -> DataUsage? {
+                if let usageFailure { throw usageFailure }
+                if let override = usageOverrides[id] { return override }
+                return instances.first(where: { $0.id == id }).map(FixtureDetail.usage(of:))
+            }
 
             init(
                 instances: [InstanceSummary], operations: [OperationSummary],
-                providers: [ProviderSummary]
+                providers: [ProviderSummary], runtimePage: RuntimeListPage
             ) {
+                self.runtimePage = runtimePage
                 self.instances = instances
                 self.operations = operations
                 self.providers = providers
@@ -47,9 +80,15 @@
         let script: Script
         let instances: InstanceStore
         let catalog: CatalogStore
+        /// The runtime store, or `nil` when the rig was built without runtimes: the Overview
+        /// then draws no Runtimes card.
+        let runtimes: RuntimeStore?
         let operations: OperationCenter
         let capacity: CapacityModel
         let actions: InstanceActionModel
+        /// What the detail page and the inspector read: the fixture detail of each instance,
+        /// or what the script says.
+        let detail: InstanceDetailService
         /// What the actions sent, in order.
         private(set) var sent: [Call] = []
 
@@ -58,9 +97,12 @@
             instances items: [InstanceSummary] = FixtureScenario.instanceCases,
             operations ops: [OperationSummary] = FixtureScenario.operationCases,
             providers: [ProviderSummary] = PageRig.providers,
-            capacity report: CapacityReport? = nil
+            capacity report: CapacityReport? = nil,
+            runtimes runtimePage: RuntimeListPage? = nil
         ) {
-            let script = Script(instances: items, operations: ops, providers: providers)
+            let script = Script(
+                instances: items, operations: ops, providers: providers,
+                runtimePage: runtimePage ?? RuntimeListPage(items: [], next: nil, installing: []))
             self.script = script
             let now: () -> Date = { FixtureClock.now }
             instances = InstanceStore(
@@ -81,6 +123,19 @@
                     return .catalogListProviders(
                         ListProvidersReply(catalog: .fixture, items: script.providers))
                 }, now: now, sleep: { _ in })
+            runtimes =
+                runtimePage == nil
+                ? nil
+                : RuntimeStore(
+                    call: { call throws(ClientError) in
+                        guard case .runtimeList = call else {
+                            throw .rejected(PageRig.unknownMethod)
+                        }
+                        if let failure = script.runtimeFailure { throw failure }
+                        return .runtimeList(script.runtimePage)
+                    },
+                    send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
+                    now: now, sleep: { _ in })
             operations = OperationCenter(
                 fetchPage: { _ throws(ClientError) in
                     if let failure = script.operationFailure { throw failure }
@@ -97,6 +152,16 @@
                 },
                 // The poll waits here until the page goes away: a fixture does not read again.
                 sleep: { _ in try await Task.sleep(for: .seconds(3_600)) })
+            detail = InstanceDetailService(
+                detail: { id throws(ClientError) in try await script.detail(of: id) },
+                usage: { id, _, _ throws(ClientError) in try await script.usage(of: id) },
+                instance: { id throws(ClientError) in
+                    await script.instances.first { $0.id == id }
+                },
+                secretEvents: { AsyncStream { $0.finish() } },
+                secrets: SecretsClient { _, _ throws(ClientError) in
+                    throw .notSent(ClientErrorCatalog.notConnected())
+                })
             actions = InstanceActionModel(
                 send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
                 updates: { _ in AsyncStream { $0.finish() } },
@@ -122,6 +187,7 @@
             await instances.store.resnapshot()
             await catalog.store.resnapshot()
             await operations.store.resnapshot()
+            await runtimes?.store.resnapshot()
             await capacity.refresh()
         }
 
@@ -133,14 +199,15 @@
 
         /// The Instances page over these stores, inside the action host of a window.
         func instancesPage(
-            waiting: FailureContent? = nil, hasConnection: Bool = true, selection: String = "",
-            showsInspector: Bool = true, filter: InstanceFilter = .all, query: String = "",
-            sortOrder: InstanceSortComparator = .default
+            waiting: FailureContent? = nil, hasConnection: Bool = true, opening: UUID? = nil,
+            selection: String = "", showsInspector: Bool = true, filter: InstanceFilter = .all,
+            query: String = "", sortOrder: InstanceSortComparator = .default
         ) -> some View {
             InstancesPage(
                 instances: instances, catalog: catalog, actions: actions, operations: operations,
                 waiting: waiting, hasConnection: hasConnection, reconnect: {}, openDiagnostics: {},
-                selection: selection, showsInspector: showsInspector, filter: filter, query: query,
+                detail: detail, opening: opening, selection: selection,
+                showsInspector: showsInspector, filter: filter, query: query,
                 sortOrder: sortOrder
             )
             .actionHost()
@@ -148,15 +215,16 @@
 
         /// The Overview over these stores, inside the action host of a window.
         func overviewPage(
-            isConnected: Bool = true, waiting: FailureContent? = nil, hasConnection: Bool = true
+            isConnected: Bool = true, waiting: FailureContent? = nil, hasConnection: Bool = true,
+            derivation: OverviewDerivation? = nil
         ) -> some View {
-            OverviewPage(
-                instances: instances, catalog: catalog, operations: operations,
+            let page = OverviewPage(
+                instances: instances, catalog: catalog, runtimes: runtimes, operations: operations,
                 capacity: capacity, actions: actions, isConnected: isConnected,
                 waiting: waiting, hasConnection: hasConnection, reconnect: {},
                 openDiagnostics: {}
             )
-            .actionHost()
+            return (derivation.map { page.derivation($0) } ?? page).actionHost()
         }
     }
 

@@ -356,7 +356,8 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .file, group: 1, title: "New Instance…",
                 shortcut: CommandShortcut("n", .command), needsInput: true,
-                scope: .shell, requirements: [.daemon], owner: 20, standardMeaning: .new)
+                scope: .shell, requirements: [.daemon], owner: 20, status: .built,
+                standardMeaning: .new)
         case .find:
             CommandEntry(
                 id, menu: .edit, submenu: .find, group: 1, title: "Find…",
@@ -381,7 +382,7 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .view, group: 2, title: "Back",
                 shortcut: CommandShortcut("[", .command), scope: instancesPage,
-                requirements: [.detail], owner: 21, standardMeaning: .back)
+                requirements: [.detail], owner: 21, status: .built, standardMeaning: .back)
         case .toggleInspector:
             CommandEntry(
                 id, menu: .view, group: 3, title: "Show Inspector",
@@ -406,7 +407,7 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .instance, group: 1, title: "Open",
                 shortcut: CommandShortcut("o", .command), scope: instancesPage,
-                requirements: [.selection], owner: 21, standardMeaning: .open)
+                requirements: [.selection], owner: 21, status: .built, standardMeaning: .open)
         case .startInstance:
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Start",
@@ -433,7 +434,7 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .instance, group: 3, title: "Copy Connection String",
                 shortcut: CommandShortcut("c", [.command, .shift]), scope: instancesPage,
-                requirements: [.selection], owner: 21,
+                requirements: [.selection], owner: 21, status: .built,
                 exception:
                     "⇧⌘C is Show Colors in the Format menu; Stackly has no Format menu or color panel"
             )

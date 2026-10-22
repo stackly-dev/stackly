@@ -17,9 +17,12 @@ public struct OverviewPage: View {
     @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
+    @State private var ownDerivation = OverviewDerivation()
+    private var sharedDerivation: OverviewDerivation?
 
     private let instances: InstanceStore
     private let catalog: CatalogStore?
+    private let runtimes: RuntimeStore?
     private let operations: OperationCenter
     private let capacity: CapacityModel
     private let actions: InstanceActionModel
@@ -35,6 +38,8 @@ public struct OverviewPage: View {
     /// - Parameters:
     ///   - instances: The instance store.
     ///   - catalog: The catalog, for the provider names and tiles, or `nil`.
+    ///   - runtimes: The runtime store, for the Runtimes card and the names of the install
+    ///     operations, or `nil`: the card is then not drawn.
     ///   - operations: The operation center.
     ///   - capacity: The disk reading.
     ///   - actions: Start, Stop, and Retry.
@@ -51,6 +56,7 @@ public struct OverviewPage: View {
     public init(
         instances: InstanceStore,
         catalog: CatalogStore? = nil,
+        runtimes: RuntimeStore? = nil,
         operations: OperationCenter,
         capacity: CapacityModel,
         actions: InstanceActionModel,
@@ -63,6 +69,7 @@ public struct OverviewPage: View {
     ) {
         self.instances = instances
         self.catalog = catalog
+        self.runtimes = runtimes
         self.operations = operations
         self.capacity = capacity
         self.actions = actions
@@ -74,6 +81,13 @@ public struct OverviewPage: View {
         self.openDiagnostics = openDiagnostics
     }
 
+    /// The page with a derivation its caller owns, so a test can read its recompute counter.
+    func derivation(_ derivation: OverviewDerivation) -> OverviewPage {
+        var copy = self
+        copy.sharedDerivation = derivation
+        return copy
+    }
+
     private var context: InstanceActionContext {
         InstanceActionContext.make(feedbackCenter: feedbackCenter, navigator: navigator)
     }
@@ -82,7 +96,13 @@ public struct OverviewPage: View {
     public var body: some View {
         let loaded = instances.loadedCount != nil
         let summaries = instances.instances
-        let counts = loaded ? InstanceCounts(of: summaries) : nil
+        let derived =
+            loaded
+            ? (sharedDerivation ?? ownDerivation).value(
+                summaries: summaries, providers: catalog?.providers,
+                failures: Set(instances.store.itemFailures.keys))
+            : nil
+        let counts = derived?.counts
         StateView(
             state: Self.state(
                 counts: counts, error: instances.store.error,
@@ -92,7 +112,7 @@ public struct OverviewPage: View {
             retry: retry,
             openDiagnostics: openDiagnostics
         ) { counts in
-            content(counts: counts, summaries: summaries)
+            content(counts: counts, rows: derived?.rows ?? [], summaries: summaries)
         }
         .pageChrome(
             title: SidebarSection.overview.title, subtitle: counts.map(OverviewCopy.subtitle)
@@ -122,16 +142,18 @@ public struct OverviewPage: View {
 
     // MARK: - Content
 
-    private func content(counts: InstanceCounts, summaries: [InstanceSummary]) -> some View {
-        let rows = InstanceRowModel.rows(
-            of: summaries, catalog: catalog?.providers,
-            failures: Set(instances.store.itemFailures.keys))
+    private func content(
+        counts: InstanceCounts, rows: [InstanceRowModel], summaries: [InstanceSummary]
+    ) -> some View {
         let names = Dictionary(
             summaries.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         let attention = attentionItems(summaries)
         return ScrollView {
             VStack(alignment: .leading, spacing: Spacing.sectionGap) {
-                SummaryCards(counts: counts, show: { navigator?.show(.instances(filter: $0)) })
+                SummaryCards(
+                    counts: counts, runtimes: RuntimesCardState.of(runtimes),
+                    show: { navigator?.show(.instances(filter: $0)) },
+                    showRuntimes: { navigator?.show(.runtimes) })
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: Spacing.sectionGap) {
                         VStack(alignment: .leading, spacing: Spacing.sectionGap) {
@@ -188,8 +210,8 @@ public struct OverviewPage: View {
             openDiagnostics: { navigator?.show(.diagnostics) })
     }
 
-    /// The runtime names the titles use; the `RuntimeStore` of feature 18 fills them.
-    private var runtimeNames: OperationTitle.RuntimeNames { .none }
+    /// The runtime names the titles use, from the `RuntimeStore`.
+    private var runtimeNames: OperationTitle.RuntimeNames { .init(store: runtimes) }
 
     // MARK: - Sources
 

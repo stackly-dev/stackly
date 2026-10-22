@@ -19,10 +19,12 @@ extension SnapshotTests {
         private func rig(
             instances: [InstanceSummary] = FixtureScenario.instanceCases,
             operations: [OperationSummary] = FixtureScenario.operationCases,
-            capacity: CapacityReport? = nil, load: Bool = true,
+            capacity: CapacityReport? = nil, runtimes: RuntimeListPage? = nil, load: Bool = true,
             prepare: (PageRig) -> Void = { _ in }
         ) async -> PageRig {
-            let rig = PageRig(instances: instances, operations: operations, capacity: capacity)
+            let rig = PageRig(
+                instances: instances, operations: operations, capacity: capacity,
+                runtimes: runtimes)
             prepare(rig)
             if load { await rig.load() }
             return rig
@@ -242,6 +244,54 @@ extension SnapshotTests {
                 instances: Array(FixtureScenario.instanceCases.prefix(3)), operations: many,
                 capacity: Self.report(.ok, available: 500_000_000_000))
             try await assertSnapshot(rig.overviewPage(), named: "overview-operations-many")
+        }
+
+        // MARK: - The Runtimes card
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The Overview with the Runtimes card and a running install renders in every variant"
+            ))
+        func overviewWithTheRuntimesCardAndARunningInstall() async throws {
+            let rig = await rig(
+                capacity: Self.report(.ok, available: 500_000_000_000),
+                runtimes: FixtureRuntime.page)
+            try await assertSnapshot(rig.overviewPage(), named: "overview-runtimes")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected: "The Overview whose runtimes failed to load renders in every variant"
+            ))
+        func overviewWhoseRuntimesFailedToLoad() async throws {
+            let rig = await rig(
+                capacity: Self.report(.ok, available: 500_000_000_000),
+                runtimes: FixtureRuntime.page, load: false
+            ) {
+                $0.script.runtimeFailure = .rejected(Self.errorBody)
+            }
+            await rig.load()
+            try await assertSnapshot(rig.overviewPage(), named: "overview-runtimes-failed")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The Overview before the runtimes load renders in every variant"
+            ))
+        func overviewBeforeTheRuntimesLoad() async throws {
+            let rig = await rig(
+                capacity: Self.report(.ok, available: 500_000_000_000),
+                runtimes: FixtureRuntime.page, load: false)
+            await rig.instances.store.resnapshot()
+            await rig.catalog.store.resnapshot()
+            await rig.operations.store.resnapshot()
+            await rig.capacity.refresh()
+            try await assertSnapshot(rig.overviewPage(), named: "overview-runtimes-loading")
         }
     }
 }

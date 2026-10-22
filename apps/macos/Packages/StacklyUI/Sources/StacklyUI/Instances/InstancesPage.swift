@@ -52,6 +52,8 @@ public struct InstancesPage: View {
     @State private var query: String
     @State private var sortOrder: [InstanceSortComparator]
     @State private var columns = ColumnSet.full
+    @State private var path: [InstanceRoute] = []
+    @State private var models: InstanceDetailModels
     @FocusState private var searchFocused: Bool
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.newInstanceAction) private var newInstance
@@ -83,6 +85,10 @@ public struct InstancesPage: View {
     ///     list again, else it reconnects.
     ///   - reconnect: Tries to connect now.
     ///   - openDiagnostics: Opens Diagnostics.
+    ///   - detail: What the detail page and the inspector read from the daemon, or `nil` for
+    ///     a window with no daemon, where they show their failed state.
+    ///   - opening: The instance whose detail page the page starts on, or `nil` for the table.
+    ///     Previews and snapshots set it.
     ///   - selection: The instance ID a window with no saved choice starts on; empty selects
     ///     none. Previews and snapshots set it.
     ///   - showsInspector: Whether a window with no saved choice starts with the inspector
@@ -100,6 +106,8 @@ public struct InstancesPage: View {
         hasConnection: Bool,
         reconnect: @escaping @MainActor () -> Void,
         openDiagnostics: @escaping @MainActor () -> Void,
+        detail: InstanceDetailService? = nil,
+        opening: UUID? = nil,
         selection: String = "",
         showsInspector: Bool = true,
         filter: InstanceFilter = .all,
@@ -111,6 +119,8 @@ public struct InstancesPage: View {
         _filter = State(initialValue: filter)
         _query = State(initialValue: query)
         _sortOrder = State(initialValue: [sortOrder])
+        _models = State(initialValue: InstanceDetailModels(service: detail ?? .disconnected))
+        _path = State(initialValue: opening.map { [InstanceRoute($0)] } ?? [])
         self.instances = instances
         self.catalog = catalog
         self.actions = actions
@@ -133,10 +143,23 @@ public struct InstancesPage: View {
         let all = rows
         let visible = all.map(visibleRows) ?? []
         let selected = selectedRow(in: visible)
-        let commands = published(selected: selected)
-        return GeometryReader { proxy in
-            pageContent(all: all, visible: visible, selected: selected)
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+        let inView = detailRow(in: all) ?? selected
+        let commands = published(selected: selected, inView: inView)
+        return NavigationStack(path: $path) {
+            GeometryReader { proxy in
+                pageContent(all: all, visible: visible, selected: selected)
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+            }
+            .searchable(text: $query, placement: .toolbar, prompt: "Search")
+            .searchFocused($searchFocused)
+            .toolbar { newInstanceItem }
+            .pageChrome(title: SidebarSection.instances.title, subtitle: instances.subtitle)
+            .navigationDestination(for: InstanceRoute.self) { route in
+                InstanceDetailPage(
+                    id: route.id, instances: instances, catalog: catalog, actions: actions,
+                    model: models.model(for: route.id), service: models.detailService,
+                    back: { path.removeAll() })
+            }
         }
         .stacklyInspector(
             isPresented: $showsInspector,
@@ -146,13 +169,15 @@ public struct InstancesPage: View {
         ) {
             inspector(selected: selected)
         }
-        .searchable(text: $query, placement: .toolbar, prompt: "Search")
-        .searchFocused($searchFocused)
-        .toolbar { newInstanceItem }
-        .pageChrome(title: SidebarSection.instances.title, subtitle: instances.subtitle)
         .publishesCommands(.page(.instances), commands.actions, checked: commands.checked)
         .onChange(of: navigator?.instancesRequest, initial: true) { _, request in
             apply(request)
+        }
+        .onChange(of: navigator?.instanceRequest, initial: true) { _, request in
+            open(request)
+        }
+        .onChange(of: navigator?.instancesResets) {
+            path.removeAll()
         }
         .task(id: completedRounds) {
             await reconcile()
@@ -202,6 +227,7 @@ public struct InstancesPage: View {
     private func reconcile() async {
         let names = Dictionary(
             instances.instances.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        models.keep(Set(instances.instances.map(\.id)))
         await actions.reconcile(
             activeOperations: Set((operations?.active ?? []).map(\.id)), names: names,
             context: context)
@@ -386,11 +412,22 @@ public struct InstancesPage: View {
             InstanceInspector(
                 row: selected,
                 action: actions.stacklyAction(for: selected.summary, context: context),
-                isPrimary: Self.isPrimary(actions.primaryAction(for: selected.summary)))
+                isPrimary: Self.isPrimary(actions.primaryAction(for: selected.summary)),
+                open: openAction(for: selected),
+                model: models.model(for: selected.id),
+                secrets: models.detailService.secrets)
         } else {
             InspectorPlaceholder(
-                title: "No Selection", message: "Select an instance to see its details.")
+                title: "No Selection",
+                message: "Select an instance to see its details. Double-click a row to open it.")
         }
+    }
+
+    /// Open: the detail page of the instance (spec 0021, AC-15).
+    private func openAction(for row: InstanceRowModel) -> StacklyAction {
+        StacklyAction(
+            id: CommandID.openInstance.rawValue, title: "Open", mutates: false,
+            perform: { navigator?.openInstance(row.id) })
     }
 
     /// Start and Retry are the main action of the place; Stop and a busy button are not.
@@ -400,14 +437,39 @@ public struct InstancesPage: View {
 
     // MARK: - Commands
 
-    private func published(selected: InstanceRowModel?) -> (
+    /// The row of the instance whose detail page is open, or `nil` while the table shows.
+    private func detailRow(in all: [InstanceRowModel]?) -> InstanceRowModel? {
+        guard let id = path.last?.id else { return nil }
+        return all?.first { $0.id == id }
+    }
+
+    /// What the page publishes to the menu bar. The instance in view is the one whose detail
+    /// page is open, else the selected row; Open needs a selected row and a table, Back needs
+    /// a detail page (spec 0069 AC-11 and AC-12).
+    private func published(selected: InstanceRowModel?, inView: InstanceRowModel?) -> (
         actions: [CommandID: StacklyAction], checked: Set<CommandID>
     ) {
-        let target = selected.map { row in
+        let target = inView.map { row in
             (
                 action: actions.stacklyAction(for: row.summary, context: context),
                 verb: actions.primaryAction(for: row.summary).commandVerb
             )
+        }
+        let isDetailOpen = path.isEmpty == false
+        var open: StacklyAction?
+        if isDetailOpen == false, let selected {
+            open = openAction(for: selected)
+        }
+        var back: (@MainActor () -> Void)?
+        if isDetailOpen {
+            back = { path.removeAll() }
+        }
+        var copyConnection: StacklyAction?
+        if let inView {
+            copyConnection = ConnectionCopier.action(
+                detail: models.model(for: inView.id).detail,
+                secrets: models.detailService.secrets,
+                report: { feedbackCenter?.show($0) })
         }
         return InstancesCommandActions.publish(
             showsInspector: showsInspector,
@@ -415,7 +477,7 @@ public struct InstancesPage: View {
             sort: sort,
             setSort: { sortOrder = [$0] },
             focusSearch: { searchFocused = true },
-            target: target)
+            target: target, open: open, back: back, copyConnection: copyConnection)
     }
 
     private func apply(_ request: InstancesRequest?) {
@@ -427,6 +489,21 @@ public struct InstancesPage: View {
             showsInspector = true
         }
         navigator?.consumeInstancesRequest()
+    }
+
+    /// Opens the detail page of an instance and keeps its row selected, so Back returns to
+    /// the table with the row chosen.
+    private func open(_ request: InstanceRequest?) {
+        guard let request else { return }
+        storedSelection = request.instance.uuidString.lowercased()
+        // A request comes from another page, so the detail page is there at once, not pushed
+        // with the animation of a tap.
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            path = [InstanceRoute(request.instance)]
+        }
+        navigator?.consumeInstanceRequest()
     }
 
     private func retry() {

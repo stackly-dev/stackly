@@ -659,3 +659,26 @@ Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas draft update
 - Tanda pada view yang ternyata berbeda di HC juga menjadi issue ("remove it"), supaya tanda tidak tertinggal setelah view berubah. Runner up: mengabaikannya, yang membiarkan pengecualian usang menyembunyikan regresi berikutnya.
 - Setiap pemakaian baru diajukan ke lead di laporan developer, seperti baris `AuditExceptions.swift` (AC-17), karena tanda itu mematikan bukti HC untuk satu nama.
 - Pemeriksaan pasangan di `main` (`0bfde56`, 2026-10-22) lewat blob git: 54 pasangan di `CatalogSnapshotTests` (20), `GallerySnapshotTests` (24), `DiagnosticsSnapshotTests` (6), dan `ShellSnapshotTests` (4); hanya 20 pasangan Catalog yang identik, jadi G5 tidak membuat suite lain merah.
+
+## Perubahan 2026-10-22 (posisi relay seperti yang dibangun, wave 7)
+
+Update `/architect` sesi `arc-ui-sync`, bersama spec 0012, 0013, 0067, dan `apps/macos/design.md`. Spec ini hanya diselaraskan dengan kode yang sudah di `main`; tidak ada keputusan baru, tidak ada ID AC yang berubah, dan teks AC-5 tetap (tiga tempat: langsung, isi utama, kolom; isi utama kini diuji dalam dua bentuk, terbuka dan tertutup, lewat `SnapshotRoot`).
+
+| Butir | Perubahan | Sumber |
+| --- | --- | --- |
+| *Environment fixture di dalam wadah yang menampung ulang isi*, butir posisi | relay isi utama di dalam `ZStack` sendiri, bukan pada `content`; kolom tetap di dalam `ScrollView`, di tempat yang sama dengan `backgroundMaterial` nil; dua helper `fileprivate` | F67 bagian 1 `61d4e0ac`, laporan `dbg-f67-inspector` |
+| Butir bukti dan test penjaga | render lewat `SnapshotRoot`; isi utama `ScrollView` dan `GeometryReader`, inspector terbuka dan tertutup; spy luar di overlay | `61d4e0ac`, F67 bagian 2 `ace13361` (`85da6489`) |
+| *Kunci environment baru*, butir `loadingDelay`, dan *Key invariants* | delay nol berarti frame pertama untuk setiap spinner tertunda, termasuk `DelayedProgress` | keputusan lead ui-macos; dibangun `dev-f12-fix` (belum di `main`) |
+| Value sourcing, Critical test scenarios, Consequences | posisi relay, test penjaga yang diperluas, dan risiko penempatan pertama | sama |
+| Build plan | catatan *Seperti yang dibangun* di bawah *Tambahan K15* | `582afd51`, `61d4e0ac`, `ace13361` |
+| Usulan update untuk spec lain | baris spec 0067 K15 mencatat penyelarasan posisi di update ini | update ini |
+| Follow-up | dicentang: langkah 11 dan 12 fitur 15, developer K15; dicatat: token `selectionRing` untuk fitur 17, kemajuan fitur 18 dan 22 | hash di baris masing masing |
+
+### Bukti posisi relay F67 (sesi `dbg-f67-inspector`, 2026-10-22)
+
+Dijalankan di macOS 27.0.1 dan Xcode 27.0, layar 1x, dengan test sementara yang tidak di commit (sumber di catatan bersama `dbg-f67-inspector-probes.swift.txt`, temuan di `dbg-f67-inspector-findings.md`).
+
+- **Gejala.** Halaman Instances di bawah `.stacklyInspector` membaca contrast standard di varian HC kalau relay sementara halaman dicabut, padahal test penjaga K15 lulus. Grid Catalog sama; kolomnya membaca HC, jadi gambar HC tetap berbeda dari standard dan pemeriksaan G5 tidak menangkapnya.
+- **Akar.** `GeometryReader` bukan pemicunya. Yang menentukan adalah apa yang ada di atas `.stacklyInspector`: `.inspector` memaku ulang contrast sistem di tempat ia menampung isi utama, dan relay yang ditulis pada `content` jatuh di atas titik itu begitu halaman ada di bawah `switch` atau `if` (`SnapshotRoot.framed` adalah `switch`), di dalam `AnyView`, atau di bawah `.background` di antara relay dan `.inspector`. Bahkan setter yang ditulis langsung pada isi utama di bawah `switch` diabaikan. Test penjaga K15 merender tanpa `SnapshotRoot`, dengan struktur yang kebetulan lolos.
+- **Penempatan yang diuji** (lima bentuk isi utama: `VStack`, `GeometryReader`, `ScrollView`, `VStack` bermodifier, view tunggal; konteks harness `hcLight`, `hcDark`, render mentah, dan harness `light`): relay pada `content` gagal di 4 dari 5 bentuk; `Group { content.relay() }` sama; `ZStack { content.relay() }` dan `VStack(spacing: 0) { content.relay() }`, dengan atau tanpa relay tambahan di luar dan dengan `.searchable` sesudahnya, membaca `.increased` di semua bentuk, dan `light` tetap standard.
+- **Pilihan.** `ZStack` dengan satu anak, yang tidak menambah jarak dan tidak mengubah tata letak, dan yang terbaca sebagai wadah tanpa susunan; runner up `VStack(spacing: 0)`, yang sama hasilnya tetapi terbaca seolah halaman disusun vertikal. Sesudah `ZStack`, frame ukuran halaman (spec 0067 *Inspector*) membuat isi utama mengambil ukuran yang ditawarkan. Uji balik: penempatan lama yang dipasang lagi sementara membuat varian HC Catalog dan Instances gagal lagi, dan keempat posisi isi utama di test penjaga yang diperluas gagal.

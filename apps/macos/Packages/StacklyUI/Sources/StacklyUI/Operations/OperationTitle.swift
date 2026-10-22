@@ -4,8 +4,8 @@ import StacklyClient
 /// The title of an operation in a row, an item, and a feedback card (spec 0022, *Seksi
 /// Operations*). A pure function that the Operations page of feature 35 uses too.
 nonisolated public enum OperationTitle {
-    /// The runtime names an operation title can use. The `RuntimeStore` of feature 18 fills
-    /// it; until then both tables are empty and the titles say "runtime".
+    /// The runtime names an operation title can use. ``init(store:)`` fills them from the
+    /// `RuntimeStore`; without one both tables are empty and the titles say "runtime".
     public struct RuntimeNames: Equatable, Sendable {
         /// "{display name} {version}" of the runtime an `install_runtime` operation installs,
         /// by the ID of that operation (the `installing` rows of spec 0018).
@@ -17,6 +17,24 @@ nonisolated public enum OperationTitle {
         public init(installing: [UUID: String] = [:], installed: [UUID: String] = [:]) {
             self.installing = installing
             self.installed = installed
+        }
+
+        /// Reads the names the `RuntimeStore` holds: the installs that have not ended by the
+        /// ID of their operation, and the runtimes by their ID. A `nil` store knows none.
+        ///
+        /// - Parameter store: The store of feature 18, or `nil`.
+        @MainActor public init(store: RuntimeStore?) {
+            guard let store else {
+                self.init()
+                return
+            }
+            self.init(
+                installing: Dictionary(
+                    store.installing.map { ($0.operationId, "\($0.displayName) \($0.version)") },
+                    uniquingKeysWith: { first, _ in first }),
+                installed: Dictionary(
+                    store.runtimes.map { ($0.id, RuntimeCopy.name(of: $0)) },
+                    uniquingKeysWith: { first, _ in first }))
         }
 
         /// No runtime is known.

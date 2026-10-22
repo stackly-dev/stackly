@@ -127,6 +127,20 @@
                         .fixtureNotFound(.instance, id: params.instanceId.uuidString.lowercased()))
                 }
                 return .instanceGet(found)
+            case .instanceGetDetail(let params):
+                guard let found = scenario.instances.first(where: { $0.id == params.instanceId })
+                else {
+                    throw .rejected(
+                        .fixtureNotFound(.instance, id: params.instanceId.uuidString.lowercased()))
+                }
+                return .instanceGetDetail(FixtureDetail.detail(of: found))
+            case .instanceGetDataUsage(let params):
+                guard let found = scenario.instances.first(where: { $0.id == params.instanceId })
+                else {
+                    throw .rejected(
+                        .fixtureNotFound(.instance, id: params.instanceId.uuidString.lowercased()))
+                }
+                return .instanceGetDataUsage(DataUsageReply(usage: FixtureDetail.usage(of: found)))
             case .operationList(let params):
                 let items = scenario.operations.filter { operation in
                     (params.activeOnly != true || Self.hasNotEnded(operation.state))

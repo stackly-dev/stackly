@@ -26,6 +26,7 @@ public struct AppShell: View {
     @State private var navigator = ShellNavigator()
     @Environment(\.openWindow) private var openWindow
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(DaemonModel.self) private var daemon: DaemonModel?
 
     private let presentation: ShellPresentation
     private let diagnostics: ConnectionDiagnostics
@@ -36,6 +37,7 @@ public struct AppShell: View {
     private let operations: OperationCenter?
     private let capacity: CapacityModel?
     private let instanceActions: InstanceActionModel?
+    private let newInstance: NewInstancePresenter?
     private let completedRounds: Int
     private let windowOpener: WindowOpener
     private let windowWillClose: (NSWindow) -> Void
@@ -62,6 +64,8 @@ public struct AppShell: View {
     ///   - capacity: The disk reading behind the Overview, or `nil` for the placeholder.
     ///   - instanceActions: Start, Stop, and Retry for the Overview and Instances, or `nil`
     ///     for the placeholders.
+    ///   - newInstance: Presents the New Instance sheet, or `nil` for a shell without one
+    ///     (previews): then no page draws a New Instance button and ⌘N does nothing.
     ///   - completedRounds: How many snapshot rounds completed; the pages read it to end a
     ///     pending click and to read the disk again.
     ///   - windowOpener: Receives the scene's `openWindow` action.
@@ -80,6 +84,7 @@ public struct AppShell: View {
         operations: OperationCenter? = nil,
         capacity: CapacityModel? = nil,
         instanceActions: InstanceActionModel? = nil,
+        newInstance: NewInstancePresenter? = nil,
         completedRounds: Int = 0,
         windowOpener: WindowOpener,
         windowWillClose: @escaping (NSWindow) -> Void,
@@ -96,6 +101,7 @@ public struct AppShell: View {
         self.operations = operations
         self.capacity = capacity
         self.instanceActions = instanceActions
+        self.newInstance = newInstance
         self.completedRounds = completedRounds
         self.windowOpener = windowOpener
         self.windowWillClose = windowWillClose
@@ -110,7 +116,8 @@ public struct AppShell: View {
             ShellSidebar(
                 selection: selection,
                 counts: counts,
-                isConnected: presentation.isConnected
+                isConnected: presentation.isConnected,
+                reselect: { select($0) }
             )
             .navigationSplitViewColumnWidth(
                 min: Self.sidebarWidth.min,
@@ -152,6 +159,9 @@ public struct AppShell: View {
         .environment(\.mutationAvailability, presentation.mutationAvailability)
         .environment(\.mainWindowKey, windowKey)
         .environment(\.shellNavigator, navigator)
+        .environment(\.newInstanceAction, newInstance?.action)
+        .environment(\.newInstancePresenter, newInstance)
+        .modifier(NewInstanceSheetModifier(presenter: newInstance))
         // `@SceneStorage` only lives in a view, so the navigator mirrors it both ways.
         .onChange(of: section, initial: true) { _, new in
             if navigator.section != new { navigator.section = new }
@@ -164,9 +174,24 @@ public struct AppShell: View {
         )
         .onAppear {
             windowOpener.capture(openWindow)
+            connectNewInstance()
         }
         .task(id: runtimes.map(ObjectIdentifier.init)) {
             await showFinishedInstalls()
+        }
+    }
+
+    /// Tells the New Instance presenter what to do when a create succeeded: show the new
+    /// instance and report the result in this window's feedback card (spec 0020, *Selesai*).
+    private func connectNewInstance() {
+        guard let newInstance else { return }
+        let navigator = navigator
+        let feedbackCenter = feedbackCenter
+        newInstance.finishHandler = { outcome in
+            if let id = outcome.instanceID {
+                navigator.show(.instances(filter: .all, select: id))
+            }
+            feedbackCenter?.show(outcome.feedback)
         }
     }
 
@@ -197,6 +222,9 @@ public struct AppShell: View {
     /// already shows calls ``onReselect`` instead.
     func select(_ newSection: SidebarSection) {
         if newSection == section {
+            // The detail page of an instance is a page of the Instances section; choosing
+            // the section again goes back to its table (spec 0021).
+            if newSection == .instances { navigator.showInstancesTable() }
             onReselect(newSection)
         } else {
             section = newSection
@@ -208,7 +236,9 @@ public struct AppShell: View {
         Self.shellActions(
             presentation: presentation,
             select: { select($0) },
-            reconnect: reconnect
+            reconnect: reconnect,
+            newInstance: newInstance?.action.stacklyAction(
+                title: CommandMap.entry(for: .newInstance).title)
         )
     }
 
@@ -239,6 +269,7 @@ public struct AppShell: View {
                 OverviewPage(
                     instances: instances,
                     catalog: catalog,
+                    runtimes: runtimes,
                     operations: operations,
                     capacity: capacity,
                     actions: instanceActions,
@@ -263,7 +294,8 @@ public struct AppShell: View {
                     waiting: presentation.pageFailure,
                     hasConnection: presentation.hasConnection,
                     reconnect: reconnect,
-                    openDiagnostics: { select(.diagnostics) }
+                    openDiagnostics: { select(.diagnostics) },
+                    detail: daemon.map(InstanceDetailService.live)
                 )
             } else {
                 UnbuiltScrollPage(section: .instances)
@@ -336,6 +368,9 @@ private struct ShellSidebar: View {
     @Binding var selection: SidebarSection?
     let counts: SidebarCounts
     let isConnected: Bool
+    /// Called when the row of the section that already shows is clicked again: a `List`
+    /// does not set a selection that did not change.
+    let reselect: (SidebarSection) -> Void
 
     var body: some View {
         List(selection: $selection) {
@@ -361,6 +396,10 @@ private struct ShellSidebar: View {
                 badge: section.badge(counts: counts, isConnected: isConnected)
             )
             .tag(section)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if selection == section { reselect(section) }
+                })
         }
     }
 }

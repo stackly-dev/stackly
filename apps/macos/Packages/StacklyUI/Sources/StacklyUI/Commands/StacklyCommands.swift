@@ -41,8 +41,10 @@ public struct StacklyCommands: Commands {
             CommandItem(.reconnect, context: context)
             Divider()
         }
-        // Replaced so New Window goes away; File > New Instance… joins with spec 0020.
-        CommandGroup(replacing: .newItem) {}
+        // Replaced so New Window goes away; File > New Instance… takes its place (spec 0020).
+        CommandGroup(replacing: .newItem) {
+            CommandItem(.newInstance, context: context)
+        }
         CommandGroup(replacing: .textEditing) {
             Menu("Find") {
                 CommandItem(.find, context: context)
@@ -58,6 +60,8 @@ public struct StacklyCommands: Commands {
             CommandItem(.showRuntimes, context: context)
             CommandItem(.showOperations, context: context)
             CommandItem(.showDiagnostics, context: context)
+            GroupDivider(.view, before: 2)
+            CommandItem(.back, context: context)
             GroupDivider(.view, before: 3)
             CommandItem(.toggleInspector, context: context)
             Menu("Sort Instances By") {
@@ -72,9 +76,12 @@ public struct StacklyCommands: Commands {
             }
         }
         CommandMenu("Instance") {
+            CommandItem(.openInstance, context: context)
             GroupDivider(.instance, before: 2)
             CommandItem(.startInstance, context: context)
             CommandItem(.stopInstance, context: context)
+            GroupDivider(.instance, before: 3)
+            CommandItem(.copyConnectionString, context: context)
         }
         // Replaced so the Stackly Help item that opens nothing goes away; the search field
         // stays. Welcome to Stackly joins with spec 0016.

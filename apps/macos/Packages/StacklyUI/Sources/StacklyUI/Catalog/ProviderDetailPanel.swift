@@ -8,8 +8,8 @@ import SwiftUI
 /// The header, the description, and the reason come from the card's summary, so they show
 /// at once; the rest waits for `catalog.get_provider`. A planned provider has no matrix,
 /// no capability, and no button, only its note. An invalid one shows why it failed. The
-/// panel has no Get, New Instance, or Import Provider button: those belong to features 18,
-/// 20, and 37.
+/// panel has no Import Provider button, which belongs to feature 37. Get lives in the version
+/// matrix (feature 18) and New Instance… under the description (feature 20).
 struct ProviderDetailPanel: View {
     /// The most issues an invalid provider lists.
     static let issueLimit = 5
@@ -25,6 +25,7 @@ struct ProviderDetailPanel: View {
 
     @Environment(\.locale) private var locale
     @Environment(\.shellNavigator) private var navigator
+    @Environment(\.newInstancePresenter) private var newInstance
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s16) {
@@ -50,6 +51,7 @@ struct ProviderDetailPanel: View {
                     .foregroundStyle(StacklyColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            newInstanceButton
             installFailure
             switch phase {
             case .loading:
@@ -85,6 +87,33 @@ struct ProviderDetailPanel: View {
                         perform: { navigator?.show(.operations) })
                 ])
         }
+    }
+
+    /// The New Instance… button (spec 0020, *Titik masuk*): it opens the sheet on the newest
+    /// installed runtime of this software, and says why it is off while none is installed.
+    @ViewBuilder private var newInstanceButton: some View {
+        if let newInstance, let runtimes, summary.state == .available {
+            let software = summary.software
+            ActionButton(
+                Self.newInstanceAction(
+                    installed: runtimes.installedCount(software: software),
+                    present: { newInstance.present(software: software) }),
+                showsReason: true)
+        }
+    }
+
+    /// The New Instance… action of the panel: off with a reason while no runtime of the
+    /// software is installed.
+    ///
+    /// - Parameters:
+    ///   - installed: How many installed runtimes run the software of the provider.
+    ///   - present: Opens the sheet on that software.
+    static func newInstanceAction(
+        installed: Int, present: @escaping @MainActor () -> Void
+    ) -> StacklyAction {
+        StacklyAction(
+            id: CommandID.newInstance.rawValue, title: "New Instance…", mutates: true,
+            disabledReason: installed > 0 ? nil : "Install a version first.", perform: present)
     }
 
     /// The Get column of the version matrix, when the panel has runtimes to join.
