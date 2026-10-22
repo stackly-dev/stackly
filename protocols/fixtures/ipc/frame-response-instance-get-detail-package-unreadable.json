@@ -1,0 +1,42 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000931",
+    "reply": {
+      "type": "instance.get_detail",
+      "content": {
+        "instanceId": "0192f3a5-0000-7000-8000-000000000009",
+        "revision": 12,
+        "provider": {
+          "name": "official/postgresql",
+          "revision": "2026.10.1",
+          "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed",
+          "displayName": null,
+          "packageReadable": false
+        },
+        "runtime": {
+          "id": "0192f3a5-0000-7000-8000-0000000000a9",
+          "version": "17.2.0",
+          "target": {
+            "os": "macos",
+            "arch": "aarch64"
+          },
+          "installMode": "managed",
+          "artifactSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+        },
+        "dataPath": "/Users/test/Library/Application Support/Stackly/instances/secretive/data",
+        "startup": "manual",
+        "secrets": [
+          {
+            "field": "superuserPassword",
+            "title": "superuserPassword",
+            "reference": "local:instance/0192f3a5-0000-7000-8000-000000000009/superuser-password",
+            "status": "present"
+          }
+        ],
+        "dependents": [],
+        "connections": []
+      }
+    }
+  }
+}

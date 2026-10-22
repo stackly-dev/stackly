@@ -739,6 +739,8 @@ area! {
             details ["path", "otherInstance"], "the new data folder overlaps the data folder of another instance";
         SHORT_KEY_TAKEN = "instance.short_key_taken", Conflict, retryable false,
             details ["shortKey"], "the short key of the new instance ID is taken";
+        DATA_USAGE_UNAVAILABLE = "instance.data_usage_unavailable", Unavailable, retryable false,
+            details ["reason"], "the data folder size can't be measured";
 
         @functions
 
@@ -777,6 +779,20 @@ area! {
                 }
                 "instance.data_overlap" => "run stackly doctor",
                 "instance.short_key_taken" => "try again, a new ID is generated",
+                "instance.data_usage_unavailable" => {
+                    return match details
+                        .iter()
+                        .find(|detail| detail.key() == "reason")
+                        .map(crate::error::ErrorDetail::value)?
+                    {
+                        "missing" => Some("run stackly doctor; the data folder is missing"),
+                        "not_private" => Some(
+                            "run stackly doctor; the data folder isn't a private folder you own, or part of it can't be read",
+                        ),
+                        "io" => Some("try again"),
+                        _ => None,
+                    };
+                }
                 _ => return None,
             })
         }
@@ -887,6 +903,10 @@ area! {
             details ["op", "seconds"], "a macOS call about the agent took longer than 10 seconds (spec 0015)";
         DAEMON_WAIT_TIMEOUT = "cli.daemon_wait_timeout", Timeout, retryable false,
             details ["action", "seconds"], "the daemon did not appear or disappear within the limit of the command (spec 0015)";
+        CONNECTION_NOT_FOUND = "cli.connection_not_found", NotFound, retryable false,
+            details ["format", "available"], "no connection string has the name the command was given, or the provider describes none (spec 0021)";
+        CONNECTION_UNAVAILABLE = "cli.connection_unavailable", Conflict, retryable false,
+            details ["format", "reason"], "the selected connection string cannot be built now, or the pinned package cannot be read (spec 0021)";
     }
 }
 
@@ -1443,6 +1463,16 @@ mod tests {
                 ErrorCategory::Timeout,
                 &["action", "seconds"],
             ),
+            (
+                "cli.connection_not_found",
+                ErrorCategory::NotFound,
+                &["format", "available"],
+            ),
+            (
+                "cli.connection_unavailable",
+                ErrorCategory::Conflict,
+                &["format", "reason"],
+            ),
         ];
         assert_eq!(table, expected);
         assert!(
@@ -1763,6 +1793,27 @@ mod tests {
     }
 
     #[test]
+    fn the_data_usage_code_has_one_static_hint_per_reason() {
+        for (reason, hint) in [
+            ("missing", "run stackly doctor; the data folder is missing"),
+            (
+                "not_private",
+                "run stackly doctor; the data folder isn't a private folder you own, or part of it can't be read",
+            ),
+            ("io", "try again"),
+        ] {
+            let found = instance_hint(&instance::DATA_USAGE_UNAVAILABLE, &[("reason", reason)]);
+            assert_eq!(found, Some(hint));
+            assert!(hint.len() <= 200 && !hint.contains('{'));
+        }
+        assert_eq!(
+            instance_hint(&instance::DATA_USAGE_UNAVAILABLE, &[("reason", "later")]),
+            None
+        );
+        assert_eq!(instance_hint(&instance::DATA_USAGE_UNAVAILABLE, &[]), None);
+    }
+
+    #[test]
     fn spec_0020_instance_codes_match_the_table() {
         let table: Vec<_> = instance::ALL
             .iter()
@@ -1814,6 +1865,11 @@ mod tests {
                 "instance.short_key_taken",
                 ErrorCategory::Conflict,
                 &["shortKey"],
+            ),
+            (
+                "instance.data_usage_unavailable",
+                ErrorCategory::Unavailable,
+                &["reason"],
             ),
         ];
         assert_eq!(table, expected);

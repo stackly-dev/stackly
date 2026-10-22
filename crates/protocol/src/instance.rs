@@ -14,6 +14,7 @@
 pub mod command;
 pub mod connection;
 mod create;
+mod detail;
 mod duplicate;
 
 pub use create::{
@@ -22,6 +23,11 @@ pub use create::{
     GetCreateFormParams, PreflightCheck, PreflightCheckKind, PreflightCreateParams,
     PreflightStatus, ResolvedProvider, ScalarSetting, SecretPlan, SecretSource, SettingEntry,
     SettingItem, SettingValue,
+};
+pub use detail::{
+    ConnectionAvailability, ConnectionString, ConnectionUnavailableReason, DataUsage,
+    DataUsageReply, DependentOwnership, DetailDependent, DetailProvider, DetailRuntime,
+    DetailSecret, GetDataUsageParams, GetInstanceDetailParams, InstanceDetail, StartupPolicyKind,
 };
 pub use duplicate::{DuplicateForm, DuplicateSecret, DuplicateSource, GetDuplicateFormParams};
 

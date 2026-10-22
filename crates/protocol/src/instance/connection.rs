@@ -6,16 +6,17 @@
 //! repeats in Swift; both give the same string for every case of
 //! `protocols/fixtures/instance/connection-compose.json`.
 //!
-//! The part types below are the wire shape of `InstanceDetail.connections`
-//! (spec 0021, *Method IPC*). They carry no wire derives yet: the contract
-//! step (spec 0021 step 6) adds them with the DTOs that hold them.
+//! The part types below are the wire shape of
+//! `InstanceDetail.connections[].parts` (spec 0021, *Method IPC*).
 
 use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use typeshare::typeshare;
 
 /// What one [`ConnectionPart`] holds. Open.
+#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionPartKind {
@@ -30,6 +31,7 @@ pub enum ConnectionPartKind {
 
 /// One piece of a connection string: [`text`](Self::text) for a text part,
 /// [`secret`](Self::secret) for a secret part.
+#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionPart {
@@ -70,6 +72,7 @@ impl ConnectionPart {
 }
 
 /// The secret a secret part stands for.
+#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionSecretPart {
