@@ -17,6 +17,7 @@ mod data_compat;
 mod data_usage;
 mod detail;
 mod lifecycle;
+mod list_performance;
 mod logs;
 mod offline;
 mod process;

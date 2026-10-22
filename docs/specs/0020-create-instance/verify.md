@@ -95,6 +95,44 @@ _Langkah 8 sampai 11 (`dev-f20-m2`, 2026-10-22), protokol 1.12. Test daemon mema
 - AC-3 sampai AC-9, AC-15 · dari Milestone 1; lewat daemon di test paritas dan test create di atas
 - AC-20, AC-22, AC-23, AC-25 · belum, milik Milestone 3 dan 4
 
+## Milestone 3: Sheet New Instance
+
+_Langkah 12 sampai 14 (`dev-f20-m3`, 2026-10-22), protokol 1.13 di branch, 1.14 di main setelah merge; langkah ini tidak mengubah kontrak. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27, dengan Increase Contrast, Reduce Transparency, Differentiate Without Color, dan Reduce Motion mati untuk snapshot. Evidence manual keyboard dan VoiceOver (AC-22) dicatat `NOT_RUN` untuk user dan tidak dijalankan sesi ini._
+
+### UI / manual
+
+- [ ] `NOT_RUN` (owner: user) Buka app dengan daemon development (`STACKLY_ROOT` ke root uji), pasang satu runtime, lalu ⌘N → sheet terbuka dengan fokus di Name dan teksnya terpilih; urutan Tab: kategori, runtime, nama, baris port (Fixed atau Automatic, angka, tombol Use), field settings, Advanced, toggle, baris preflight, Copy, Cancel, Create; Return membuat saat Create aktif dan Escape menutup sheet → AC-20, AC-22
+- [ ] `NOT_RUN` (owner: user) Dengan VoiceOver hidup, jalankan seluruh alur create sampai instance terpilih di Instances → setiap field dibaca "{judul}, {kontrol}, required" dengan "set once at creation" untuk field yang tidak bisa berubah, error dibacakan di field nya, setiap baris preflight dibaca "{judul}, Passed|Warning|Failed: {detail}", perubahan ringkasan preflight diumumkan sekali ("Preflight passed.", "Preflight passed with {n} warnings.", "{n} preflight checks failed."), tahap progress diumumkan, dan hasil create diumumkan lewat kartu umpan balik → AC-22
+- [ ] `NOT_RUN` (owner: user) Pakai port yang dipegang listener uji lalu buka sheet → baris Port memuat simbol silang, "In use by another process" atau nama instance, "Fixed ports are never changed silently." dan tombol "Use {n}" yang hanya mengisi angka saat ditekan; Create mati dengan alasan "Fix the errors above." → AC-20, AC-22
+- [x] Jalankan `cargo xtask snapshot review` dan buka `target/snapshot-review/index.html` untuk suite `NewInstanceSnapshotTests` → 18 keadaan sheet (form siap, port dipakai, peringatan, error di Advanced, Copy from, tiap status baris preflight, progress, gagal, tanpa runtime, kategori kosong, form gagal, memuat) terbaca tanpa teks terpotong di lebar 560 pt (varian `narrow`), dan status hanya dibedakan oleh bentuk simbol dan teks → AC-22
+- [x] Buka `Sources/StacklyUI/CreateInstance/` → tidak ada nama provider di kode (dijaga `cargo xtask check-deps`); `SchemaFormView.swift` hanya membaca `FormField` → AC-21
+
+### Commands
+
+- [x] `swift test --package-path clients/swift --filter CreateClientTests` → 5 test lulus: `getCreateForm` dan `preflight` membangun params kontrak, membaca balasan fixture, balasan jenis lain menjadi error kontrak rusak, dan error daemon diteruskan → AC-17, AC-20
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter SchemaFormModelTests` → 11 test lulus: dari fixture `create-form-nats.json` satu baris per field dengan `serverName` managed terkunci, `jetstream` toggle, tiga integer advanced dengan batasnya; dari `create-form-postgresql.json` secret dengan batas 8 sampai 128 dan `printableOnly`, pilihan `logStatement`; dari `create-form-fake.json` sepuluh baris; jenis tidak dikenal read only; settings tanpa secret dan managed; item list dalam batas `minItems` dan `maxItems`; issue menjadi kalimat tabel *Field error* → AC-21
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CreateInstanceModelTests` → 34 test lulus atas service tiruan: form dan draft awal, generasi (balasan generasi lama dibuang), setiap perubahan memanggil preflight lagi dengan draft yang benar, port bukan angka tidak dikirim dan mematikan Create, saran port hanya dipakai lewat `usePort`, `disabledReason` dalam urutan *Footer*, pengumuman hanya saat ringkasan berubah, Copy from (`present` dan `unknown` tetap, `missing` dan segmen `stackly` dibuang, urutan balasan, label hanya untuk instance di `InstanceStore`, `editing` tanpa menunggu daftar, `listSecrets` gagal tidak menahan Create, dibaca lagi saat runtime diganti dan saat Retry, balasan token lama dibuang), create sukses dengan start (key `sha256("<key>:start")`), tanpa start, start yang gagal (`Feedback` caution), ditolak, `notSent`, `outcomeUnknown` dengan key yang sama sampai draft berubah, operasi gagal (banner dan baris tahap), dibatalkan, Cancel dengan konfirmasi dan Close saat gate blocked → AC-20
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "NewInstancePresenterTests|CreateInstanceCopyTests"` → 25 test lulus: titik masuk (`newInstanceAction`, perintah ⌘N, tombol panel Catalog "Install a version first."), create yang berjalan selamat dari sheet yang ditutup, hasil create ke shell, tabel teks field error, pemetaan status preflight, label VoiceOver, aturan draft → AC-20, AC-21, AC-22
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter InstanceStoreTests` → baris dihapus saat `instance.removed` (sudah dipetakan fitur 13 langkah 16, K16; tidak ada perubahan di langkah 12) → AC-20
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CommandMapTests|ShellCommandsTests|CommandSourceRuleTests"` → baris `newInstance` `built` dan File menampilkan satu item → AC-20
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter NewInstanceSnapshotTests` → 18 test lulus, 101 PNG di `__Snapshots__/NewInstanceSnapshotTests/`; tidak ada pasangan HC yang sama dengan pasangannya dan tidak ada `contrastInvariant` → AC-22
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → run penuh (lihat laporan untuk angka dan flake yang diketahui) → semua
+- [x] `swift test --package-path clients/swift` → run penuh → AC-17
+- [x] `cargo xtask build-app` → `Stackly.app` terbangun dan ditandatangani ad hoc → AC-20
+- [x] `cargo xtask check-deps` → lulus; folder `CreateInstance/` tanpa nama provider → AC-21
+- [x] `xcrun swift-format lint --strict` pada semua file Swift yang berubah → bersih
+
+### Hasil checker (`chk-f20-m3`, 2026-10-22)
+
+Semua langkah otomatis dijalankan ulang dari commit `3cf405de` (main digabung ke branch). Lulus: `CreateClientTests` 5, `SchemaFormModelTests` 11, `CreateInstanceModelTests` 34, `NewInstancePresenterTests` dan `CreateInstanceCopyTests` 25, `InstanceStoreTests` 23, `CommandMapTests` dan `ShellCommandsTests` dan `CommandSourceRuleTests` 46, `NewInstanceSnapshotTests` 18 (101 PNG), StacklyUI penuh 1225 test dengan 23 known issue yang disengaja di `SnapshotHelperTests`, clients/swift penuh 210 test, `cargo xtask build-app`, `cargo xtask check-deps`, dan `swift-format lint --strict` pada 32 file Swift milestone. Tidak ada pasangan HC yang sama (`cmp` pada 18 pasangan `hc-light` lawan `light` dan 18 pasangan `hc-dark` lawan `dark`), dan tidak ada `contrastInvariant` di log. Dilihat langsung: 9 dari 18 PNG `narrow` (port-taken, preflight-failed, preflight-unrecognized, copy-from, advanced-error, creating, failed, warning, no-runtimes), tanpa teks terpotong di lebar 560 pt; status dibedakan simbol dan teks. Tiga langkah manual user (keyboard, VoiceOver, port dipakai di aplikasi nyata) tetap `NOT_RUN`. Catatan: pada snapshot `narrow` port-taken, warning, advanced-error, dan copy-from, bagian Preflight terpotong di tepi bawah kanvas 980 pt (bukan teks terpotong); isinya ada di snapshot `preflight-*`.
+
+### Acceptance-criteria coverage
+
+- AC-17 · `CreateClient` (`getCreateForm`, `preflight`) dan test nya; kontrak tidak berubah
+- AC-20 · model, sheet, progress, cancel, umpan balik, Copy from, dan titik masuk (toolbar dan empty state lewat `newInstanceAction`, panel Catalog, ⌘N); alur penuh dengan daemon development menunggu evidence manual dan Milestone 4
+- AC-21 · `SchemaFormModel` dan `SchemaFormView` dari tiga fixture, assertion NATS, dan aturan `check-deps` untuk Swift
+- AC-22 · bagian otomatis: status dibedakan simbol dan teks, lebar minimum 560 pt di snapshot `narrow`, pasangan warna dari token (`ContrastTests`), label VoiceOver (`spokenLabel`, `CheckItem.accessibilityLabel`); evidence manual keyboard dan VoiceOver `NOT_RUN` untuk user
+
 ## Milestone 5: Init port guard
 
 _Langkah 17 dan 18 (update 2026-10-22, usulan spec 0023). Langkah 18 adalah langkah 22 spec 0009; bagiannya ada di `docs/specs/0009-provider-engine-manifest-schema/verify.md`. Jalankan dari root repo pada commit bersih._

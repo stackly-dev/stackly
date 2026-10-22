@@ -41,8 +41,10 @@ public struct StacklyCommands: Commands {
             CommandItem(.reconnect, context: context)
             Divider()
         }
-        // Replaced so New Window goes away; File > New Instance… joins with spec 0020.
-        CommandGroup(replacing: .newItem) {}
+        // Replaced so New Window goes away; File > New Instance… takes its place (spec 0020).
+        CommandGroup(replacing: .newItem) {
+            CommandItem(.newInstance, context: context)
+        }
         CommandGroup(replacing: .textEditing) {
             Menu("Find") {
                 CommandItem(.find, context: context)

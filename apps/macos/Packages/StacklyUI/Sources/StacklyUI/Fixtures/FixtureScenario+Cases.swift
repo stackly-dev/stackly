@@ -286,7 +286,10 @@
             return FixtureScenario(
                 id: id, connection: steps, handshake: .fixture, daemonInfo: .fixture,
                 health: health, instances: data.0, operations: data.1, providers: data.2,
-                replies: data.0.isEmpty ? [:] : FixtureRuntime.replies,
+                replies: data.0.isEmpty
+                    ? [:]
+                    : FixtureRuntime.replies.merging(FixtureCreateForm.replies) { first, _ in first
+                    },
                 expectedPresence: presence)
         }
     }

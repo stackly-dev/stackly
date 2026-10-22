@@ -6,15 +6,17 @@ import SwiftUI
 struct SummaryCard: View {
     /// What a card counts.
     enum Kind: String {
-        case running, stopped, failed
+        case running, stopped, failed, runtimes
     }
 
     let kind: Kind
     /// The number, or `nil` while the store has not loaded: a small spinner stands there,
     /// never a zero.
     let count: Int?
-    /// "{n} not ready" on the Running card.
+    /// "{n} not ready" on the Running card, "Couldn’t load" on a Runtimes card without data.
     var note: String?
+    /// Whether the store behind the card failed without data: a dash stands for the number.
+    var loadFailed = false
     let open: @MainActor () -> Void
 
     @ScaledMetric(.statusDot) private var dotSize
@@ -52,7 +54,11 @@ struct SummaryCard: View {
     }
 
     @ViewBuilder private var numberView: some View {
-        if let count {
+        if loadFailed {
+            Text("–")
+                .font(.largeTitle.weight(.semibold).monospacedDigit())
+                .foregroundStyle(StacklyColor.textSecondary)
+        } else if let count {
             Text("\(count)")
                 .font(.largeTitle.weight(.semibold).monospacedDigit())
                 .foregroundStyle(
@@ -69,6 +75,7 @@ struct SummaryCard: View {
         case .running: "Running"
         case .stopped: "Stopped"
         case .failed: "Failed"
+        case .runtimes: "Runtimes"
         }
     }
 
@@ -77,6 +84,7 @@ struct SummaryCard: View {
         case .running: Tone.positive.fill
         case .stopped: Tone.neutral.fill
         case .failed: Tone.critical.fill
+        case .runtimes: SectionStyle.runtimes.color
         }
     }
 
@@ -85,21 +93,54 @@ struct SummaryCard: View {
         case .running: "Shows running instances."
         case .stopped: "Shows stopped instances."
         case .failed: "Shows failed instances."
+        case .runtimes: "Shows Runtimes."
         }
     }
 
     /// "Running, 4, 2 not ready", or just the label while the number has not loaded.
     static func spokenLabel(label: String, count: Int?, note: String?) -> String {
-        guard let count else { return "\(label), loading" }
+        guard let count else {
+            return note.map { "\(label), \($0)" } ?? "\(label), loading"
+        }
         return [label, "\(count)", note].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
+/// What the Runtimes card shows (spec 0022, *Kartu ringkasan*).
+enum RuntimesCardState: Equatable {
+    /// The first snapshot has not arrived.
+    case loading
+    /// The number of runtimes, the same as the subtitle of the Runtimes page.
+    case loaded(Int)
+    /// The store failed and has no data.
+    case failed
+
+    /// The state of the card for the store, or `nil` when the card is not drawn: there is no
+    /// store, or the daemon does not know `runtime.list`.
+    static func of(_ runtimes: RuntimeStore?) -> RuntimesCardState? {
+        guard let runtimes, runtimes.store.unsupported == false else { return nil }
+        if let count = runtimes.loadedCount { return .loaded(count) }
+        return runtimes.store.error == nil ? .loading : .failed
+    }
+
+    /// The words under the number.
+    var note: String? {
+        self == .failed ? "Couldn’t load" : nil
+    }
+
+    /// The number, or `nil` while it is not known.
+    var count: Int? {
+        if case .loaded(let count) = self { count } else { nil }
+    }
+}
+
 /// The cards of the Overview in an adaptive grid. The Runtimes card joins when the
-/// `RuntimeStore` of feature 18 is wired (milestone 4 of spec 0022).
+/// `RuntimeStore` is wired and the daemon lists runtimes (milestone 4 of spec 0022).
 struct SummaryCards: View {
     let counts: InstanceCounts?
+    var runtimes: RuntimesCardState?
     let show: @MainActor (InstanceFilter) -> Void
+    var showRuntimes: @MainActor () -> Void = {}
 
     var body: some View {
         LazyVGrid(
@@ -112,6 +153,11 @@ struct SummaryCards: View {
                 open: { show(.running) })
             SummaryCard(kind: .stopped, count: counts?.stopped, open: { show(.stopped) })
             SummaryCard(kind: .failed, count: counts?.failed, open: { show(.failed) })
+            if let runtimes {
+                SummaryCard(
+                    kind: .runtimes, count: runtimes.count, note: runtimes.note,
+                    loadFailed: runtimes == .failed, open: showRuntimes)
+            }
         }
     }
 }
