@@ -150,3 +150,64 @@ fn every_problem_in_a_package_gets_its_own_line_next_to_the_valid_ones() {
         lines[2]
     );
 }
+
+#[test]
+fn a_nats_copy_that_renders_its_config_at_initialize_prints_the_init_port_issues_and_no_ok_line() {
+    let root = TestRoot::new().expect("a test root can be created");
+    let copy = broken_copy(&root, "nats", &|text| {
+        text.replace(
+            "- { primitive: createManagedDirectories }",
+            "- { primitive: createManagedDirectories }\n    - { primitive: renderConfig, file: natsConf }",
+        )
+    });
+
+    let output = provider_check(&[copy]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let lines = stdout_lines(&output);
+    assert!(!lines.is_empty(), "{lines:#?}");
+    for line in &lines {
+        assert!(
+            line.starts_with("nats: templates/nats.conf.tmpl "),
+            "{line}"
+        );
+        assert!(line.contains(": token_not_allowed_here: config file natsConf is rendered by initialize, but endpoint."), "{line}");
+    }
+    assert!(
+        lines.iter().all(|line| !line.starts_with("ok ")),
+        "{lines:#?}"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(&format!("{} problem(s) in 1 of 1 package(s)", lines.len())),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_traefik_copy_that_renders_its_static_config_at_initialize_is_reported_next_to_the_valid_ones()
+{
+    let root = TestRoot::new().expect("a test root can be created");
+    let copy = broken_copy(&root, "traefik", &|text| {
+        text.replace(
+            "- { primitive: renderConfig, file: routes }",
+            "- { primitive: renderConfig, file: staticConfig }\n    - { primitive: renderConfig, file: routes }",
+        )
+    });
+    let valid = repo_root().join("providers/nats");
+
+    let output = provider_check(&[copy, valid]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let lines = stdout_lines(&output);
+    let (problems, oks): (Vec<_>, Vec<_>) =
+        lines.iter().partition(|line| line.starts_with("traefik: "));
+    assert_eq!(problems.len(), 2, "{lines:#?}");
+    assert!(
+        problems
+            .iter()
+            .all(|line| line.contains("traefik.yaml.tmpl"))
+    );
+    assert_eq!(oks.len(), 1, "{lines:#?}");
+    assert!(oks[0].starts_with("ok official/nats 1.0.1 "), "{}", oks[0]);
+}

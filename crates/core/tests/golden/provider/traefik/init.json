@@ -10,22 +10,6 @@
       ]
     },
     {
-      "type": "writeFile",
-      "content": {
-        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/traefik.yaml",
-        "content": {
-          "configFile": "staticConfig",
-          "segments": [
-            {
-              "type": "text",
-              "content": "# Written by Stackly from the official/traefik provider; edits are replaced.\nglobal:\n  checkNewVersion: false\n  sendAnonymousUsage: false\nlog:\n  level: \"ERROR\"\nentryPoints:\n  web:\n    address: \"127.0.0.1:14001\"\n  ping:\n    address: \"127.0.0.1:14000\"\nping:\n  entryPoint: ping\napi:\n  dashboard: false\n  insecure: false\nproviders:\n  file:\n    directory: \"/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic\"\n    watch: true\n"
-            }
-          ]
-        },
-        "sensitive": false
-      }
-    },
-    {
       "type": "ensureDirectories",
       "content": [
         "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic"

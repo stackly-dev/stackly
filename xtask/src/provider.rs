@@ -4,7 +4,9 @@
 //!
 //! Every valid package prints `ok <id> <revision> <manifest_sha256>`;
 //! every problem prints one `<folder>: <file> <location>: <code>: <message>`
-//! line, and the task exits 1.
+//! line, and the task exits 1. A valid package whose initialize uses a
+//! port that is chosen only at start (`init_port_issues`, spec 0009) prints
+//! its issues the same way and no `ok` line.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -100,13 +102,23 @@ mod macos {
         for dir in packages {
             match read_and_validate(dir) {
                 Ok(package) => {
-                    let key = package.key();
-                    report.lines.push(format!(
-                        "ok {} {} {}",
-                        key.provider(),
-                        key.revision(),
-                        key.manifest_sha256()
-                    ));
+                    let init_port = package.init_port_issues();
+                    if init_port.is_empty() {
+                        let key = package.key();
+                        report.lines.push(format!(
+                            "ok {} {} {}",
+                            key.provider(),
+                            key.revision(),
+                            key.manifest_sha256()
+                        ));
+                    } else {
+                        report.failed += 1;
+                        report.problems += init_port.len();
+                        let folder = folder_name(dir);
+                        report
+                            .lines
+                            .extend(init_port.iter().map(|issue| format!("{folder}: {issue}")));
+                    }
                 }
                 Err(err) => {
                     report.failed += 1;
