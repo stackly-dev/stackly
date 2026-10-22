@@ -21,6 +21,11 @@ import Testing
 ///   - variants: The variants to render.
 ///   - systemMaterial: Whether the view draws a system material that Reduce Transparency
 ///     changes.
+///   - contrastInvariant: Whether the view has nothing that reacts to Increase Contrast, so
+///     `hc-light` and `hc-dark` may equal `light` and `dark`. Without it, an identical
+///     pair is an issue; with it, a pair that differs is (``SnapshotContrast``).
+///   - contrastInvariantReason: One sentence on why the view does not react to Increase
+///     Contrast; required with `contrastInvariant`, and reported to the lead.
 ///   - sourceLocation: The suite file, which decides where the references live.
 /// - Throws: The cancellation of a test that is `BLOCKED`, or a render error other than
 ///   a failed check, which is recorded as an issue.
@@ -31,6 +36,8 @@ func assertSnapshot<V: View>(
     size: SnapshotSize = .page,
     variants: [SnapshotVariant] = SnapshotVariant.standard,
     systemMaterial: Bool = false,
+    contrastInvariant: Bool = false,
+    contrastInvariantReason: String? = nil,
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
     guard SnapshotStore.isValid(name: name) else {
@@ -39,15 +46,23 @@ func assertSnapshot<V: View>(
             sourceLocation: sourceLocation)
         return
     }
+    if let issue = SnapshotContrast.reasonIssue(
+        name: name, invariant: contrastInvariant, reason: contrastInvariantReason)
+    {
+        Issue.record(Comment(rawValue: issue), sourceLocation: sourceLocation)
+        return
+    }
     if let reason = SnapshotPreflight.blockedReason(.current()) {
         try Evidence.blocked(reason: reason, owner: "user")
     }
     let store = SnapshotStore.forSuite(at: sourceLocation.filePath)
     store.clearArtifacts(name: name)
     var lightImage: SnapshotImage?
+    var rendered: [SnapshotVariant: SnapshotImage] = [:]
     for variant in variants {
         do {
             let image = try await render(view, variant: variant, size: size)
+            rendered[variant] = image
             if variant == .light { lightImage = image }
             let outcome: SnapshotStore.Outcome
             if variant == .reduceTransparency && systemMaterial == false {
@@ -80,6 +95,11 @@ func assertSnapshot<V: View>(
                 Comment(rawValue: "\(name) (\(variant.suffix)): \(error)"),
                 sourceLocation: sourceLocation)
         }
+    }
+    for message in SnapshotContrast.issues(
+        name: name, images: rendered, invariant: contrastInvariant)
+    {
+        Issue.record(Comment(rawValue: message), sourceLocation: sourceLocation)
     }
 }
 
