@@ -5,11 +5,11 @@ import SwiftUI
 /// the one daemon banner above every page, and the selected page.
 ///
 /// It sets ``MutationAvailability`` for everything inside from the presentation, holds the
-/// one ``ActionHost`` of the window (so a confirmation shows once), shows the feedback card
-/// of the window's ``FeedbackCenter`` under the page, captures the scene's `openWindow`
-/// action into the ``WindowOpener``, and reports when the main window is about to close. The
-/// sidebar selection is restored per window by the system (`@SceneStorage`), Overview by
-/// default.
+/// one ``ActionHost`` of the window (so a confirmation shows once), and shows the feedback
+/// card of the window's ``FeedbackCenter`` under the page. The window itself (the
+/// ``WindowOpener`` capture, the close report, the key state, and the minimum size) belongs to
+/// ``MainWindowRoot``, which also decides between this shell and the onboarding. The sidebar
+/// selection is restored per window by the system (`@SceneStorage`), Overview by default.
 public struct AppShell: View {
     /// The smallest window content size (spec 0013).
     static let minimumSize = CGSize(width: 900, height: 600)
@@ -21,10 +21,8 @@ public struct AppShell: View {
     static let contentIdealWidth: CGFloat = 1044
 
     @SceneStorage("shell.section") private var section: SidebarSection = .overview
-    @State private var windowKey = MainWindowKey()
     @State private var windowWidth: CGFloat?
     @State private var navigator = ShellNavigator()
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.feedbackCenter) private var feedbackCenter
     @Environment(DaemonModel.self) private var daemon: DaemonModel?
 
@@ -39,8 +37,6 @@ public struct AppShell: View {
     private let instanceActions: InstanceActionModel?
     private let newInstance: NewInstancePresenter?
     private let completedRounds: Int
-    private let windowOpener: WindowOpener
-    private let windowWillClose: (NSWindow) -> Void
     private let reconnect: @MainActor () -> Void
     private let refreshDiagnostics: @MainActor () -> Void
     private let onReselect: @MainActor (SidebarSection) -> Void
@@ -68,8 +64,6 @@ public struct AppShell: View {
     ///     (previews): then no page draws a New Instance button and ⌘N does nothing.
     ///   - completedRounds: How many snapshot rounds completed; the pages read it to end a
     ///     pending click and to read the disk again.
-    ///   - windowOpener: Receives the scene's `openWindow` action.
-    ///   - windowWillClose: Called with the main window right before it closes.
     ///   - reconnect: Tries to connect now (banner, Diagnostics).
     ///   - refreshDiagnostics: Asks the connected daemon for its info and health again.
     ///   - onReselect: Called when the section that already shows is chosen again, from the
@@ -86,8 +80,6 @@ public struct AppShell: View {
         instanceActions: InstanceActionModel? = nil,
         newInstance: NewInstancePresenter? = nil,
         completedRounds: Int = 0,
-        windowOpener: WindowOpener,
-        windowWillClose: @escaping (NSWindow) -> Void,
         reconnect: @escaping @MainActor () -> Void,
         refreshDiagnostics: @escaping @MainActor () -> Void,
         onReselect: @escaping @MainActor (SidebarSection) -> Void = { _ in }
@@ -103,8 +95,6 @@ public struct AppShell: View {
         self.instanceActions = instanceActions
         self.newInstance = newInstance
         self.completedRounds = completedRounds
-        self.windowOpener = windowOpener
-        self.windowWillClose = windowWillClose
         self.reconnect = reconnect
         self.refreshDiagnostics = refreshDiagnostics
         self.onReselect = onReselect
@@ -140,7 +130,6 @@ public struct AppShell: View {
                     ideal: Self.contentIdealWidth
                 )
         }
-        .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
         // The inspector's widest column depends on the window width (spec 0067, AC-18).
         .onGeometryChange(for: CGFloat.self) {
             $0.size.width
@@ -157,7 +146,6 @@ public struct AppShell: View {
         )
         .actionHost()
         .environment(\.mutationAvailability, presentation.mutationAvailability)
-        .environment(\.mainWindowKey, windowKey)
         .environment(\.shellNavigator, navigator)
         .environment(\.newInstanceAction, newInstance?.action)
         .environment(\.newInstancePresenter, newInstance)
@@ -169,11 +157,7 @@ public struct AppShell: View {
         .onChange(of: navigator.section) { _, new in
             if section != new { section = new }
         }
-        .background(
-            MainWindowAccessor(windowKey: windowKey, windowWillClose: windowWillClose)
-        )
         .onAppear {
-            windowOpener.capture(openWindow)
             connectNewInstance()
         }
         .task(id: runtimes.map(ObjectIdentifier.init)) {

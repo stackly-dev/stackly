@@ -695,7 +695,7 @@ Where Stackly puts its items. The order of the system items (About, Services, Hi
 | View | the sidebar item ⌃⌘S from `SidebarCommands()`, then Overview ⌘1 to Diagnostics ⌘7; Back, Show or Hide Inspector, and Sort Instances By follow with the Instances page |
 | Instance | Start ⌘R and Stop ⇧⌘R (built, spec 0022); Open, Restart, Reload, Copy Connection String, Duplicate…, and Remove… are planned. `CommandMenu("Instance")` sits between View and Window |
 | Window | the system items, then Stackly ⌘0 (the shortcut sits on the main `Window` scene) and, in Debug, Design Gallery |
-| Help | the system search field; Welcome to Stackly (planned, spec 0016) and Stackly Help ⌘? (planned, feature 66). `CommandGroup(replacing: .help)` removes the item that opens nothing |
+| Help | the system search field; Welcome to Stackly (built, spec 0016) and Stackly Help ⌘? (planned, feature 66). `CommandGroup(replacing: .help)` removes the item that opens nothing |
 
 An item is never hidden because of state: one that does not apply is disabled. A disabled item with a reason of its own shows the reason as a disabled item under it (`MenuReasonPath.current`, `Components/Actions/ActionMenu.swift`); the mutation gate gives no reason because the window banner writes it. Only `planned` rows are left out.
 
@@ -719,7 +719,7 @@ An item is never hidden because of state: one that does not apply is disabled. A
 | `duplicateInstance` | Instance | 4 | Duplicate… | ⌘D | page (Instances) | 24 | planned |
 | `removeInstance` | Instance | 4 | Remove… | none | page (Instances) | 54 | planned |
 | `stacklyHelp` | Help | 1 | Stackly Help | ⌘? | app | 66 | planned |
-| `welcome` | Help | 2 | Welcome to Stackly | | app | 16 | planned |
+| `welcome` | Help | 2 | Welcome to Stackly | | app | 16 | built |
 | `showMainWindow` | Window | | Stackly (system item of the `Window` scene) | ⌘0 | app | 69 | built |
 
 Three shortcuts reuse a macOS shortcut with another meaning, each with a written reason in the map: ⌘R (Show Ruler, no Format menu), ⇧⌘C (Show Colors, no Format menu), and ⌘0 (Actual Size, no zoom).
