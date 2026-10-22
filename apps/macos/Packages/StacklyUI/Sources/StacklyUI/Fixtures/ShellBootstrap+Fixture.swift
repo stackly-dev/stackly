@@ -36,7 +36,11 @@
                     }
                 }
             }
-            return ShellRuntime(model: model, closeNotice: CloseNotice(presentsPanel: false))
+            let tool = FakeCommandLineTool()
+            return ShellRuntime(
+                model: model, closeNotice: CloseNotice(presentsPanel: false),
+                commandLineTool: CommandLineToolModel(
+                    controller: tool, initialStatus: FakeCommandLineTool.fixtureStatus))
         }
     }
 #endif

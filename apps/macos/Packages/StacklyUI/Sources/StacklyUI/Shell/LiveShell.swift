@@ -40,6 +40,7 @@ public struct LiveShell: View {
             refreshDiagnostics: { model.refreshDiagnostics() }
         )
         .environment(model)
+        .environment(runtime.commandLineTool)
         .environment(\.feedbackCenter, feedbackCenter)
     }
 }

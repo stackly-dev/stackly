@@ -18,6 +18,8 @@ struct DiagnosticsPage: View {
                     refresh: refresh
                 )
                 BackgroundAgentDiagnosticsSection()
+                // provisional: F32 (Settings gets its own Command Line row)
+                CommandLineToolSection()
                 // provisional: F34 (the doctor results go below the Connection section)
                 UnbuiltPage(section: .diagnostics)
             }

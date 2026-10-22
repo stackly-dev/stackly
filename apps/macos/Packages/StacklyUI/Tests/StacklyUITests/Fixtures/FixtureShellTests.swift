@@ -287,4 +287,18 @@ struct FixtureShellTests {
         await action.value
         #expect(agent.isStarting == false)
     }
+
+    @Test func theFixtureRuntimeHasAnInMemoryCommandLineTool() async throws {
+        let runtime = try await settledRuntime(FixtureScenario(.connectedMixed))
+        defer { runtime.willTerminate() }
+        let tool = try #require(runtime.commandLineTool)
+        #expect(tool.home == URL(filePath: "/fixture/home"))
+        #expect(
+            tool.bundledTool?.path
+                == "/fixture/Applications/Stackly.app/Contents/MacOS/stackly-cli")
+        #expect(tool.status.command == .notInstalled)
+        #expect(tool.status.manPages.map(\.name) == ["stackly.1"])
+        await tool.refresh()
+        #expect(tool.status.command == .notInstalled)
+    }
 }

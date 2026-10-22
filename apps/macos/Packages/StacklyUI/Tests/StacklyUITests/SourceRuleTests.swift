@@ -192,6 +192,24 @@ struct SourceRuleTests {
             allowedExamples: ["sync.register(store)", "await agent.turnOn()", "model.start()"]
         ),
         Rule(
+            name: "file changes outside the command line tool (spec 0015 AC-14)",
+            patterns: [
+                #"\bcreateSymbolicLink\("#, #"\bcreateDirectory\("#, #"\bremoveItem\("#,
+                #"\bmoveItem\("#, #"\breplaceItem"#, #"\brename\("#,
+            ],
+            allowed: [stacklyUI + "Agent/CommandLineTool.swift"],
+            forbiddenExamples: [
+                "try manager.createSymbolicLink(at: link, withDestinationURL: target)",
+                "try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)",
+                "try FileManager.default.removeItem(at: url)",
+                "rename(from, to)",
+            ],
+            allowedExamples: [
+                "FileManager.default.fileExists(atPath: path)",
+                "let renamed = title",
+            ]
+        ),
+        Rule(
             name: "inspector outside the inspector components (spec 0067 AC-18)",
             patterns: [#"\.inspector\("#],
             allowed: [stacklyUI + "Components/Inspector/"],

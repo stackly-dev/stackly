@@ -17,7 +17,8 @@ extension SnapshotTests {
                     reconnect: {},
                     refresh: {}
                 )
-                .environment(model),
+                .environment(model)
+                .environment(runtime.commandLineTool),
                 named: name)
         }
 
