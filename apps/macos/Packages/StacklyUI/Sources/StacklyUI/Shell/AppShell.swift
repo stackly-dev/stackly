@@ -215,8 +215,23 @@ public struct AppShell: View {
     @ViewBuilder private var page: some View {
         switch section {
         case .overview:
-            // provisional: F22
-            UnbuiltScrollPage(section: .overview)
+            if let instances, let operations, let capacity, let instanceActions {
+                OverviewPage(
+                    instances: instances,
+                    catalog: catalog,
+                    operations: operations,
+                    capacity: capacity,
+                    actions: instanceActions,
+                    isConnected: presentation.isConnected,
+                    completedRounds: completedRounds,
+                    waiting: presentation.pageFailure,
+                    hasConnection: presentation.hasConnection,
+                    reconnect: reconnect,
+                    openDiagnostics: { select(.diagnostics) }
+                )
+            } else {
+                UnbuiltScrollPage(section: .overview)
+            }
         case .instances:
             if let instances, let instanceActions {
                 InstancesPage(

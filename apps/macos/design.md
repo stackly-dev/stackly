@@ -799,8 +799,48 @@ Checked on macOS 27.0 (26A428) with Xcode 27.0 (27A266a), in the Debug app drive
 ### Pages
 
 - Each page sets its toolbar title and subtitle with `.pageChrome(title:subtitle:)` and adds its own actions with `.toolbar`; an action that changes data also takes `.mutationGated()`.
-- `UnbuiltPage(section:)`: a page size `StatePlaceholder` with the section symbol, the section title, and "Coming in a later build.", with no action and no subtitle. Overview, Environments, Catalog, Runtimes, and Operations use it until features 22, 44, 17, 18, and 35; Instances uses it until milestone 4 of feature 13 adds the provisional instance list.
+- `UnbuiltPage(section:)`: a page size `StatePlaceholder` with the section symbol, the section title, and "Coming in a later build.", with no action and no subtitle. Environments, Runtimes, and Operations use it until features 44, 18, and 35. Overview and Instances (feature 22) and Catalog (feature 17) are built; a shell without the stores they read, a preview, shows the placeholder.
 - Diagnostics: the Connection section, then the place for feature 34's doctor results.
+
+### Overview
+
+Spec 0022, `StacklyUI/Overview/`. A `ScrollView` on `surfaceWindow` with a 22 pt inset.
+
+- **Cards**: Running, Stopped, and Failed (the Runtimes card joins with feature 18) in `LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12)])`. Each is a plain `Button` on `.cardSurface(radius: .large)` that opens Instances with the filter of the card: a 7 pt dot in the tone fill, the label in `.callout` `textSecondary`, the number in `.largeTitle.weight(.semibold).monospacedDigit()`, and a note line. Running counts `ready` and notes "{n} not ready" in the `caution` text tone; the Failed number is `critical` text above zero. Before the instance store loaded, a small `DelayedProgress` stands where the number goes, never a zero.
+- **Layout**: cards, then two columns at a content width of 820 pt or more (Needs Attention above Instances on the left, Operations 300 to 360 pt on the right), one column below that (Needs Attention, Instances, Operations). Section titles are `.headline`; each section is a card with a divider between its rows.
+- **Subtitle**: "{ready} running · {stopped} stopped", then " · {failed} failed", " · {notReady} not ready", and " · {unknown} unknown" for each above zero.
+- **Needs Attention** (`AttentionRules.items`, a pure function): at most one item per instance, from the first rule that matches. Items order by tone (critical, caution, neutral), then category (disk, operation, instance), then rule number, then name. Six show; "Show {n} More" opens the rest in place, then "Show Less". Each item is one button: the tone symbol, the title in `.body.weight(.semibold)`, the body in `.callout` `textSecondary`, and a chevron. VoiceOver reads "{Critical|Warning|Info}: {title}. {body}" with the hint "Opens {destination}." Until the instances, the operations (or their failure), and the first disk reading are in, the section shows a delayed spinner, and after that "Nothing needs attention." when empty.
+
+| Rule | Condition | Tone | Title | Opens |
+| --- | --- | --- | --- | --- |
+| I1 | lifecycle `failed` | critical | "{name} failed" (body: "Initialization failed." for an instance never initialized, else the failure copy of `lastFailure.code`) | instance |
+| I2 | lifecycle `unknown`, or blocker `identityUnproven` | caution | "Can’t confirm {name}’s process" | instance |
+| I3 | blocker `dataInUse` | critical | "{name}’s data is in use" | instance |
+| I4 | blocker `needsSecret` | caution | "{name} needs a secret" | instance |
+| I5 | running, ready, health `unhealthy` | critical | "{name} is unhealthy" | instance |
+| I6 | running, `not_ready` with a reason other than `awaiting_probe` | caution | "{name} isn’t ready" | instance |
+| I7 | `recovering` | caution | "{name} is restarting" (body names the attempt and the time) | instance |
+| I8 | running, ready, health `degraded` | caution | "{name} is degraded" | instance |
+| I9 | running, readiness `unknown` with reason `stale` | caution | "Readiness of {name} is unknown" | instance |
+| I10 | running and the process is not adoptable | neutral | "{name} can’t be adopted again" | instance |
+| O1 | operation `needs_recovery` whose hint is not `auto_compensate` | critical | "{operation} needs recovery" | Operations |
+| S1 to S3 | disk level `critical`, `low`, or `filling` | critical, caution, neutral | "Disk is almost full", "Disk space is low", "Disk is {n}% full" | Diagnostics |
+| S4 | no disk report and the call failed or is unsupported, or a level this build does not know | neutral | "Disk space unavailable" or "Disk state not recognized" | Diagnostics |
+
+- **Instances**: the first six by name, each row a button that opens the instance (the tile at 26 pt, the name, "{provider} {version} · {ports}", `StatusLabel` in the standard context) with its main action beside it. "Show All {n} Instances" when there are more; "No Instances" with Browse Catalog when there are none.
+- **Operations**: the operations that queue, run, or are being cancelled, newest first, five at most, with "Show All in Operations" above that. The progress is `StagedProgress` in the compact layout for an install or a create, and the stage label with an indeterminate spinner for any other kind. An operation that needs recovery is an item of Needs Attention, not a row here.
+- **States**: the page is loading, failed ("Couldn’t Load Overview"), unsupported ("Overview Unavailable"), stale, or partial through `ViewState`, never empty. A section that fails on its own (Operations: "Couldn’t Load Operations" with Retry) does not change the shape of the page.
+
+### Instances
+
+Spec 0022, `StacklyUI/Instances/`.
+
+- **Toolbar**: title "Instances", the subtitle "{n} instances", `.searchable` "Search", New Instance when `newInstanceAction` is set, and the inspector toggle. Above the table, a segmented picker (All, Running, Stopped, Failed) labeled "Status filter".
+- **Table**: a native `Table` with Name (tile and name), Provider, Version, Endpoints, Status, and an action column, sorted by the column comparators (the default is Name ascending; a tie is the name then the ID ascending, and a missing value is always last). It is sized to the space the page gives it and made again when its column set or the inspector changes, because a `Table` keeps the widths it was made with. Version and Endpoints are not drawn below a 760 pt table, and Provider not below 480 pt, so the page column of a 900 pt window with the inspector open (384 pt) still shows Name, Status, and the action. The status column shows the status and its detail; "Refresh failed" replaces the detail of an instance whose refetch failed.
+- **Search**: every word must match the name, the display name, the provider, the software, the version, or a port, ignoring case and diacritics.
+- **Actions**: Start, Stop, and Retry go through `InstanceActionModel` and `MutationPath`, without a confirmation. The button is busy from the click until its operation ends, and a disabled one says why (in the inspector, in the row help, and in the menu).
+- **Inspector**: the header with the main action, the banner of rules I1 to I4 (with the excerpt of the failed process), then Provider, Version, Endpoints, Ownership, Readiness, Health, Process, Restarts, Desired, Logs, and the ID with a copy button. "No Selection" when nothing is chosen or the choice is filtered out.
+- **Menu**: View > Show or Hide Inspector (⌥⌘I) and Sort Instances By; Instance > Start (⌘R) and Stop (⇧⌘R) for the selected instance.
 
 ### Diagnostics connection section
 

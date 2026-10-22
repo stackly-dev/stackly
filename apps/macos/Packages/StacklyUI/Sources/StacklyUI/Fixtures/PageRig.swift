@@ -94,7 +94,9 @@
                         throw .rejected(PageRig.unknownMethod)
                     }
                     return .storageGetCapacity(report)
-                }, sleep: { _ in })
+                },
+                // The poll waits here until the page goes away: a fixture does not read again.
+                sleep: { _ in try await Task.sleep(for: .seconds(3_600)) })
             actions = InstanceActionModel(
                 send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
                 updates: { _ in AsyncStream { $0.finish() } },
@@ -140,6 +142,19 @@
                 waiting: waiting, hasConnection: hasConnection, reconnect: {}, openDiagnostics: {},
                 selection: selection, showsInspector: showsInspector, filter: filter, query: query,
                 sortOrder: sortOrder
+            )
+            .actionHost()
+        }
+
+        /// The Overview over these stores, inside the action host of a window.
+        func overviewPage(
+            isConnected: Bool = true, waiting: FailureContent? = nil, hasConnection: Bool = true
+        ) -> some View {
+            OverviewPage(
+                instances: instances, catalog: catalog, operations: operations,
+                capacity: capacity, actions: actions, isConnected: isConnected,
+                waiting: waiting, hasConnection: hasConnection, reconnect: {},
+                openDiagnostics: {}
             )
             .actionHost()
         }
