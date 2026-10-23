@@ -2,8 +2,8 @@
 
 - **Scope:** `docs/scope/03-multi-versi-dan-instance.md`
 - **Hash awal:** `4d5d177` · **Hash awal wave aktif:** `aaaf81d9`
-- **Wave aktif:** `3`, mulai `2026-10-22`
-- **Diperbarui:** `2026-10-23 16:50`
+- **Wave aktif:** `3`, mulai `2026-10-22`, selesai `2026-10-23` (koordinasi ditutup)
+- **Diperbarui:** `2026-10-23 17:40`
 
 ## Sub sesi wave `1`
 
@@ -134,8 +134,18 @@
 
 ## Riwayat wave
 
-- Wave `3` (`2026-10-22` sampai `2026-10-23`, hash awal `aaaf81d9`, akhir penutupan): selesai persiapan manual bagian T (`3e1f81ef`) dan U, milestone 3 F24 (`e5e34439`, verify `37732401`), update spec (`6da43cc4`, `68cb4a8c`), verify penuh F24 dan F25 PASS di `0a86f463`, `Test it` F24 (`9096642f`) dan F25 (`97a0d712`); langkah manual bagian T dan U dilewati user, kotak sisa dicentang (`984a1ef7`); fitur 24 dan 25 `done`, spec `Accepted`.
+- Wave `3` (`2026-10-22` sampai `2026-10-23`, hash awal `aaaf81d9`, akhir `62821515`): selesai persiapan manual bagian T (`3e1f81ef`) dan U, milestone 3 F24 (`e5e34439`, verify `37732401`), update spec (`6da43cc4`, `68cb4a8c`), verify penuh F24 dan F25 PASS di `0a86f463`, `Test it` F24 (`9096642f`) dan F25 (`97a0d712`); langkah manual bagian T dan U dilewati user, kotak sisa dicentang (`984a1ef7`); fitur 24 dan 25 `done`, spec `Accepted`.
 
 - Wave `2` (`2026-10-22`, hash awal `e4e6d0b5`, akhir `ee145a9d`): selesai milestone 2 F24 (`3839b462`, protokol 1.13, verify `608aa023`), bagian native milestone 4 F24 (`c38af4d7`, verify `7d1cee6c`; kotak menunggu evidence GUI), milestone 3 F25 (`f106a254`, verify `99381df3`), dan penandaan usulan spec 0021 (`8031d01`). Run native PostgreSQL atas izin user lulus seluruhnya (tiga test spec 0024, dua test spec 0025, record native PASS). Terbuka: milestone 3 dan evidence GUI milestone 4 F24, milestone 4 F25, `Verify it` dan `Test it` keduanya, semuanya terblokir layar fase 02 dan foundation (lihat Blocker terbuka). Usulan wave 3: `dev-f24-m3` begitu F20 milestone 3, F21 milestone 3, F69 milestone 3, dan F11 milestone Swift masuk `main`; update spec kecil 0024 dan 0025 bisa diambil kapan saja sebagai pengisi slot.
 
 - Wave `1` (`2026-10-22`, hash awal `4d5d177`, akhir `168d250`): selesai spec 0024 (`002c9fe`) dan 0025 (`0afcd9b`) dengan Pointer dan milestone di scope, dua update spec additive (`975b349`, `f977abd`), milestone 1 F24 (`910f4ec`, verify `bda462a`), milestone 1 dan 2 F25 (`adac984`); fitur 24 dan 25 `in-progress`. Terbuka: milestone 2 sampai 4 F24, milestone 3 dan 4 F25, `Verify it` dan `Test it` keduanya, semuanya terblokir build fase 02 (lihat Blocker terbuka). Tidak ada kotak di file scope lain yang terbuka karena merge wave ini. Usulan wave 2: `dev-f24-m2` (langkah 3 sampai 5 spec 0024) begitu F20 milestone 2 masuk `main`, lalu checker-nya; sisanya menunggu blocker. Hash awal wave 2 = `168d250` atau commit log berikutnya.
+
+## Penutupan
+
+- **Tanggal:** `2026-10-23`. Fitur 24 dan 25 `done`, spec 0024 dan 0025 `Accepted` (`62821515`); langkah manual bagian T dan U dilewati user.
+- **Branch yang di-merge ke `main`:** `claude/arc-f24-spec-b9ee1e` (`002c9fe`, `bda462a`, `608aa023`, `7d1cee6c`, `99381df3`, `37732401`), `claude/arc-f25-spec-20a08d` (`0afcd9b`, `975b349`, `f977abd`, `6da43cc4`, `68cb4a8c`), `claude/dev-f24-m1-a325fb` (`910f4ec`), `claude/objective-wiles-3dc614` (`adac984`, `f106a254`, `97a0d712`), `claude/recursing-shaw-3463e7` (`adac984`, `3e1f81ef`), `claude/magical-raman-13ca2a` (`3839b462`, `c38af4d7`, `e5e34439`, `9096642f`), `claude/chk-f24-verify-f037b3` dan `claude/chk-f25-verify-92be4a` (verify tanpa commit, `0a86f463` sudah di `main`).
+- **Kotak yang dicentang:** semua kotak fitur 24 (empat milestone, `Build it`, `Verify it`, `Test it`) dan fitur 25 (empat milestone, `Build it`, `Verify it`, `Test it`).
+- **Push:** `git push origin main` fast forward tanpa force, `origin/main` `a66d2342..62821515`; `main` = `origin/main` sesudahnya.
+- **Pembersihan:** delapan sesi diarsipkan (`local_660b1ac8`, `local_fc4f81a2`, `local_8e91a685`, `local_e857ebad`, `local_f8304145`, `local_547daa0c`, `local_48077849`, `local_4c6892a5`), delapan worktree dihapus dengan `git worktree remove` tanpa `--force` (semua bersih, HEAD sudah di `origin/main`), delapan branch dihapus dengan `git branch -d`, lalu `git worktree prune`.
+- **Tidak di-merge, disimpan untuk keputusan user:** `claude/mystifying-rosalind-5cf45e` (sesi duplikat `local_13ef30aa`, worktree `quizzical-proskuriakova-8512b1`): satu commit `dff14104` (rute sentinel fake server, duplikat dari isi `910f4ec`) plus edit belum di-commit di `crates/core/src/instance/` dan `crates/core/src/supervisor/`. Isinya sudah ada di `main` lewat `claude/dev-f24-m1-a325fb`.
+- **Sisa terbuka:** tiga record `evidence/manual/` `NOT_RUN` dan langkah manual `verify.md` 0024 M3/M4 dan 0025 M4 (bagian T dan U, bisa dijalankan user kapan saja); dua catatan untuk architect (spec 0024 `CreateSheetRequest`, spec 0025 *Lingkungan test native*). Graph dokumen diperbarui untuk tujuh file commit `/sync` (`graphify` incremental, dua agent ekstraksi); dokumen Scope 02 dan ui-macos di luar rentang ini.
