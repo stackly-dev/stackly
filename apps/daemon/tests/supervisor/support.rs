@@ -82,16 +82,22 @@ pub struct Site {
 impl Site {
     /// A root with the fake runtime and the fake provider seeded.
     pub fn new() -> Self {
-        Self::build(false)
+        Self::build(false, &fake_package_dir())
+    }
+
+    /// The same, seeded with the package in `package` in place of
+    /// `providers/fake`, so a test can pin an edited copy of it.
+    pub fn with_package(package: &Path) -> Self {
+        Self::build(false, package)
     }
 
     /// The same, laid out as `STACKLY_ROOT` lays out a root, so the real
     /// `stackly` binary with that override finds the daemon socket.
     pub fn for_cli() -> Self {
-        Self::build(true)
+        Self::build(true, &fake_package_dir())
     }
 
-    fn build(as_override: bool) -> Self {
+    fn build(as_override: bool, package: &Path) -> Self {
         let root = TestRoot::new().expect("a test root can be created");
         let secrets = Arc::new(FakeSecretStore::new());
         let platform = if as_override {
@@ -115,13 +121,12 @@ impl Site {
         else {
             panic!("a fresh registry opens ready");
         };
-        let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake");
         let seeded = seed_fake(
             &platform,
             prepared.layout(),
             &registry,
             &fake_server::binary(),
-            &package,
+            package,
         )
         .expect("the fake runtime and package are seeded");
         // The registry closes here, so the daemon opens it alone.
@@ -1010,4 +1015,95 @@ impl Dialog {
             .expect("the waiting call ends")
             .expect("the other action succeeds");
     }
+}
+
+/// The folder of the fake provider package of the repository.
+pub fn fake_package_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../providers/fake")
+}
+
+/// A copy of the fake provider package edited by `edit`, in a folder named
+/// `fake` inside a scratch root. Keep the root alive as long as the copy is
+/// read.
+pub fn edited_fake_package(edit: impl FnOnce(&Path)) -> (TestRoot, PathBuf) {
+    fn copy_dir(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).expect("the target folder can be made");
+        for entry in std::fs::read_dir(from).expect("the source folder reads") {
+            let entry = entry.expect("an entry reads");
+            let target = to.join(entry.file_name());
+            if entry.file_type().expect("the type reads").is_dir() {
+                copy_dir(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).expect("a file copies");
+            }
+        }
+    }
+    let scratch = TestRoot::new().expect("a scratch root can be created");
+    let dir = scratch.path().join("fake");
+    copy_dir(&fake_package_dir(), &dir);
+    edit(&dir);
+    (scratch, dir)
+}
+
+/// A catalog that holds the package in `dir` as the fake provider.
+pub fn catalog_of(dir: &Path) -> stackly_core::catalog::Catalog {
+    use stackly_core::catalog::{Catalog, CatalogEntry, ProviderEntry, TileColor, TileHint};
+    use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
+    let files =
+        read_package(&stackly_platform_macos::MacosFilesystem, dir).expect("the package reads");
+    let package =
+        ValidatedPackage::from_files(files, NameCheck::FolderName).expect("the package validates");
+    Catalog::for_tests(&[CatalogEntry::Provider(ProviderEntry {
+        package: Arc::new(package),
+        tile: TileHint {
+            mark: "Fk".to_owned(),
+            tile: TileColor::Blue,
+        },
+        notes: Vec::new(),
+    })])
+}
+
+static LOGS: std::sync::OnceLock<Arc<std::sync::Mutex<Vec<u8>>>> = std::sync::OnceLock::new();
+
+/// Installs, once per test binary, a global subscriber that keeps every
+/// line at `debug` and above from every thread, as the daemon writes them
+/// to its log file. Returns the buffer.
+pub fn install_logs() -> Arc<std::sync::Mutex<Vec<u8>>> {
+    use std::io::Write;
+    struct Buffer(Arc<std::sync::Mutex<Vec<u8>>>);
+    impl Write for Buffer {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    Arc::clone(LOGS.get_or_init(|| {
+        let buffer = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = Arc::clone(&buffer);
+        let subscriber = tracing_subscriber::fmt()
+            .json()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_writer(move || Buffer(Arc::clone(&sink)))
+            .finish();
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("no other global subscriber is set in the supervisor tests");
+        buffer
+    }))
+}
+
+/// Every log line this test binary wrote so far, as text.
+pub fn log_text() -> String {
+    let buffer = install_logs();
+    let bytes = buffer
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    String::from_utf8_lossy(&bytes).into_owned()
 }
