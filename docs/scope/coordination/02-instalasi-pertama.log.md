@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
 - **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
 - **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-23 06:53`
+- **Diperbarui:** `2026-10-23 07:20`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -380,6 +380,7 @@
 | `2026-10-23` | Spec 0022 AC-15 dan langkah 5a di-merge `7d66f250`, kotak scope ditempel `ca276594`. Langkah 5a di-merge `ede86c30`: `StartArgs`/`StopArgs` memakai `TargetArg` dan `InstanceTarget::resolve` sebelum `cx.submit`, UUID 36 karakter dikirim langsung, `InstanceArg` dan `InstanceIdArg` dihapus, varian `Duplicate` Scope 03 utuh; di luar daftar BOLEH dua baris `apps/cli/tests/instance/exit_codes.rs` (`start demo` kini exit 10, diganti key tidak sah agar tetap menguji `cli.usage`), diterima lead. Gate: fmt, clippy workspace, build, `cargo test -p stackly-cli` 352 lulus (termasuk `action_real` terhadap `stacklyd` asli), check-deps, evidence check. `chk-f22-s5a` dimulai. | `lead` |
 | `2026-10-23` | `chk-f22-s5a` PASS (`921f60ad`): test action dan `action_real`, langkah CLI manual terhadap daemon development di root sementara (nama, nama tak dikenal exit 10, UUID huruf besar, key tidak sah exit 2, daemon mati exit 6, help), cek kode. Kotak langkah 5a F22 dicentang (`0c32f513`). Antrian wave 4 kini tanpa item SIAP: semua kotak terbuka menunggu langkah manual user di `docs/manual.md` bagian L sampai S (dan K untuk Automation Mode), persetujuan user untuk Turn On (F15, F16), run launchd F15, dan run offline F21, atau signing identity (OQ-012). | `lead` |
 | `2026-10-23` | `/sync` (`65d630c3`), dibatasi ke item Scope 02 wave 4 atas kesepakatan dua lead lain: AGENTS.md root mendapat aturan commit registry terjaga (`OperationContext::commit_guarded`) dan aturan nama atau UUID CLI lewat `TargetArg`; `apps/macos/AGENTS.md` menyebut `MainWindowRoot` dan dua baris folder (`Onboarding/`, `InstanceDetail/`); F19 `done` di scope dan index. Sengaja tidak dicentang oleh `/sync`: kotak milestone yang langkah manual nya masih `NOT_RUN` (aturan wave ini). Ditandai untuk architect: dua baris spec 0014 (Consequences "Argumen `<instance-id>` hanya UUID" dan Critical test scenarios "setiap kasus `cli.usage` tanpa koneksi") usang setelah langkah 5a F22 (item Follow-up `/sync setelah langkah 5a` di spec 0022); `/sync` tidak mengubah isi spec. Graph dokumen (`/graphify . --update`) ditunda ke penutupan wave. | `lead` |
+| `2026-10-23` | User: "Push main to origin now (github.com/stackly-dev/stackly.git), after telling the other two leads." Kedua lead diberi tahu, lalu `main` di-push fast forward tanpa force: `origin/main` `7c495365..110b5735` (206 commit, termasuk merge Scope 03 dan ui-macos sejak 2026-10-22). Worktree dan sesi tetap ada untuk wave lanjutan setelah langkah manual user. | `lead` |
 
 ## Blocker terbuka
 
