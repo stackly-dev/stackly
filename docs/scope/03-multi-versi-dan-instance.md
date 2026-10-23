@@ -4,7 +4,7 @@
 
 Journey PRD JOURNEY-02 dan JOURNEY-03, nilai inti produk (GOAL-01): `pg17-dev`, `pg17-test`, dan `pg18-dev` jalan bersamaan dengan data, config, log, dan port yang terpisah. Fase ini selesai kalau data sentinel tiap instance tidak pernah bocor ke instance lain, termasuk setelah tiap instance dihentikan lalu dijalankan lagi (restart sebagai satu operasi datang di fitur 26).
 
-### 24. Instance kedua dari runtime yang sama · in-progress
+### 24. Instance kedua dari runtime yang sama · done
 
 Buat instance kedua yang memakai runtime ID identik, lewat create biasa atau duplicate config. Duplicate config membuat storage baru, bukan clone data.
 
@@ -22,7 +22,7 @@ Buat instance kedua yang memakai runtime ID identik, lewat create biasa atau dup
 - [x] Verify it: `/check verify instance kedua dari runtime yang sama` · automated and native PASS in chk-f24-verify (0a86f463), manual steps skipped by the user (2026-10-23)
 - [x] Test it: `/test instance kedua dari runtime yang sama`
 
-### 25. PostgreSQL 17 & 18 berdampingan · in-progress
+### 25. PostgreSQL 17 & 18 berdampingan · done
 
 Pasang runtime mayor kedua dan buat instance baru di sampingnya tanpa menyentuh data instance lama. Binary mayor yang salah terhadap data yang sudah ada selalu ditolak.
 
