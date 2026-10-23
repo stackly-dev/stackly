@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/03-multi-versi-dan-instance.md`
 - **Hash awal:** `4d5d177` · **Hash awal wave aktif:** `aaaf81d9`
 - **Wave aktif:** `3`, mulai `2026-10-22`, selesai `2026-10-23` (koordinasi ditutup)
-- **Diperbarui:** `2026-10-23 17:40`
+- **Diperbarui:** `2026-10-23 18:00`
 
 ## Sub sesi wave `1`
 
@@ -147,5 +147,5 @@
 - **Kotak yang dicentang:** semua kotak fitur 24 (empat milestone, `Build it`, `Verify it`, `Test it`) dan fitur 25 (empat milestone, `Build it`, `Verify it`, `Test it`).
 - **Push:** `git push origin main` fast forward tanpa force, `origin/main` `a66d2342..62821515`; `main` = `origin/main` sesudahnya.
 - **Pembersihan:** delapan sesi diarsipkan (`local_660b1ac8`, `local_fc4f81a2`, `local_8e91a685`, `local_e857ebad`, `local_f8304145`, `local_547daa0c`, `local_48077849`, `local_4c6892a5`), delapan worktree dihapus dengan `git worktree remove` tanpa `--force` (semua bersih, HEAD sudah di `origin/main`), delapan branch dihapus dengan `git branch -d`, lalu `git worktree prune`.
-- **Tidak di-merge, disimpan untuk keputusan user:** `claude/mystifying-rosalind-5cf45e` (sesi duplikat `local_13ef30aa`, worktree `quizzical-proskuriakova-8512b1`): satu commit `dff14104` (rute sentinel fake server, duplikat dari isi `910f4ec`) plus edit belum di-commit di `crates/core/src/instance/` dan `crates/core/src/supervisor/`. Isinya sudah ada di `main` lewat `claude/dev-f24-m1-a325fb`.
+- **Tidak di-merge, dihapus atas permintaan user:** `claude/mystifying-rosalind-5cf45e` (sesi duplikat `local_13ef30aa`, worktree `quizzical-proskuriakova-8512b1`): satu commit `dff14104` (rute sentinel fake server, duplikat dari isi `910f4ec`) plus edit belum di-commit di `crates/core/src/instance/` dan `crates/core/src/supervisor/`; isinya sudah ada di `main` lewat `claude/dev-f24-m1-a325fb`. User (2026-10-23): "Yes, delete claude/mystifying-rosalind-5cf45e, its worktree quizzical-proskuriakova-8512b1, and archive session local_13ef30aa, including its uncommitted edits." Sesi diarsipkan, worktree dihapus dengan `git worktree remove --force`, branch dengan `git branch -D` (keduanya hanya atas permintaan user itu).
 - **Sisa terbuka:** tiga record `evidence/manual/` `NOT_RUN` dan langkah manual `verify.md` 0024 M3/M4 dan 0025 M4 (bagian T dan U, bisa dijalankan user kapan saja); dua catatan untuk architect (spec 0024 `CreateSheetRequest`, spec 0025 *Lingkungan test native*). Graph dokumen diperbarui untuk tujuh file commit `/sync` (`graphify` incremental, dua agent ekstraksi); dokumen Scope 02 dan ui-macos di luar rentang ini.
