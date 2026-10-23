@@ -81,6 +81,203 @@ struct OnboardingCopyTests {
         #expect(OnboardingCopy.commandLineTitle == "Command line tool")
     }
 
+    @Test func theStepSubtitlesAreTheTable() {
+        #expect(
+            OnboardingCopy.agentSubtitle
+                == "stacklyd supervises your instances when the window is closed. macOS asks you to allow it in Login Items."
+        )
+        #expect(
+            OnboardingCopy.catalogSubtitle
+                == "Providers describe how to install and run each server. Only trusted sources appear in the catalog."
+        )
+        #expect(
+            OnboardingCopy.commandLineSubtitle
+                == "The app and the CLI talk to the same daemon, so changes in one show up in the other."
+        )
+    }
+
+    @Test func theStorageOverrideRowIsTheTable() {
+        #expect(
+            OnboardingCopy.storageOverrideNote
+                == "STACKLY_ROOT is set, so stacklyd keeps data, cache, and logs inside that folder."
+        )
+    }
+
+    @Test func theStepAnnouncementsAreTheTable() {
+        #expect(
+            OnboardingCopy.stepText(number: 2, label: "Background Agent")
+                == "Step 2 of 5 · Background Agent")
+        #expect(
+            OnboardingCopy.stepSpoken(number: 4, label: "Catalog Trust")
+                == "Step 4 of 5, Catalog Trust")
+        #expect(
+            OnboardingCopy.stepAnnouncement(number: 5, label: "Command Line")
+                == "Step 5 of 5, Command Line.")
+    }
+
+    // MARK: - The Background Agent card table (AC-9)
+
+    @Test func theBackgroundAgentCardRowsAreTheTable() {
+        #expect(OnboardingCopy.agentCheckingTitle == "Checking the background service…")
+        #expect(OnboardingCopy.agentAllowedTitle == "Allowed in Login Items")
+        #expect(OnboardingCopy.agentConnectedDetail == "stacklyd starts when you log in.")
+        #expect(OnboardingCopy.agentStartingDetail == "stacklyd is starting…")
+        #expect(OnboardingCopy.agentConnectingDetail == "Connecting to stacklyd…")
+        #expect(OnboardingCopy.agentNotRunningTitle == "Allowed, but stacklyd isn’t running")
+        #expect(
+            OnboardingCopy.agentNotRunningDetail
+                == "It was stopped or it exited. Start it again here, or run stackly daemon start in Terminal."
+        )
+        #expect(
+            OnboardingCopy.agentCannotReachDetail
+                == "Stackly can’t reach stacklyd right now. Diagnostics has the details after setup."
+        )
+        #expect(OnboardingCopy.agentOffTitle == "Background service is off")
+        #expect(
+            OnboardingCopy.agentOffDetail
+                == "Turn it on so stacklyd can run your instances, even when this window is closed. macOS may ask you to allow it."
+        )
+        #expect(OnboardingCopy.agentApprovalTitle == "Waiting for approval")
+        #expect(
+            OnboardingCopy.agentApprovalDetail
+                == "Turn on Stackly in System Settings > General > Login Items & Extensions. stacklyd can’t run until you do."
+        )
+        #expect(OnboardingCopy.agentDisabledTitle == "Turned off in Login Items")
+        #expect(
+            OnboardingCopy.agentDisabledDetail
+                == "Turn on Stackly in System Settings > General > Login Items & Extensions to run stacklyd again."
+        )
+        #expect(OnboardingCopy.agentNotFoundTitle == "Stackly can’t find its background service")
+        #expect(
+            OnboardingCopy.agentNotFoundDetail
+                == "macOS couldn’t find stacklyd for this copy of Stackly. Move Stackly to the Applications folder, or install it again."
+        )
+        #expect(OnboardingCopy.agentNoHelperTitle == "This build doesn’t include stacklyd")
+        #expect(
+            OnboardingCopy.agentNoHelperDetail
+                == "Start stacklyd yourself, or build the app with cargo xtask build-app.")
+        #expect(OnboardingCopy.agentRootOverrideTitle == "STACKLY_ROOT is set")
+        #expect(
+            OnboardingCopy.agentRootOverrideDetail
+                == "The background service only runs the default Stackly folder. Start stacklyd yourself for this folder."
+        )
+        #expect(
+            OnboardingCopy.agentUnavailableTitle
+                == "Stackly couldn’t check its background service")
+    }
+
+    @Test func theUnavailableDetailNamesWhatTheModelKnowsOrSaysNothingMore() {
+        #expect(
+            OnboardingCopy.agentUnavailableDetail("timed out")
+                == "macOS didn’t answer (timed out). Check again in a moment.")
+        #expect(
+            OnboardingCopy.agentUnavailableDetail("error 5")
+                == "macOS didn’t answer (error 5). Check again in a moment.")
+        #expect(
+            OnboardingCopy.agentUnavailableDetail("unknown status 9")
+                == "macOS didn’t answer (unknown status 9). Check again in a moment.")
+        #expect(
+            OnboardingCopy.agentUnavailableDetail(nil)
+                == "macOS didn’t answer. Check again in a moment.")
+    }
+
+    @Test func theCardActionsAndTheWorkingReasonAreTheTable() {
+        #expect(OnboardingCopy.actionTurnOn == "Turn On")
+        #expect(OnboardingCopy.actionOpenSettings == "Open System Settings…")
+        #expect(OnboardingCopy.actionStart == "Start stacklyd")
+        #expect(OnboardingCopy.actionCheckAgain == "Check Again")
+        #expect(OnboardingCopy.working == "Working…")
+    }
+
+    // MARK: - The Catalog Trust table (AC-9)
+
+    @Test func theCatalogLabelsAndDetailsAreTheTable() {
+        #expect(OnboardingCopy.catalogLabelPlain == "Catalog")
+        #expect(OnboardingCopy.catalogLabelOfficial == "official")
+        #expect(OnboardingCopy.catalogLabelDevelopment == "development")
+        #expect(OnboardingCopy.catalogLabelUnknown == "Unknown source")
+        #expect(
+            OnboardingCopy.catalogDetailOfficial
+                == "Maintained by the Stackly project and bundled with this app.")
+        #expect(
+            OnboardingCopy.catalogDetailDigest == " Runtimes are checked against pinned digests.")
+        #expect(
+            OnboardingCopy.catalogDetailDevelopment
+                == "A development catalog from STACKLY_CATALOG_DIR. It isn’t the official catalog."
+        )
+        #expect(
+            OnboardingCopy.catalogDetailUnknown
+                == "This version of Stackly doesn’t recognize this catalog source.")
+        #expect(OnboardingCopy.catalogDetailUnknownTrust == " Unknown trust.")
+        #expect(
+            OnboardingCopy.catalogDetailUnsupported
+                == "This version of stacklyd doesn’t provide the catalog. Update Stackly.")
+        #expect(
+            OnboardingCopy.catalogDetailWaiting
+                == "Stackly shows where its catalog comes from once stacklyd is running.")
+        #expect(
+            OnboardingCopy.catalogDetailError(message: "no route")
+                == "The catalog isn’t available: no route.")
+    }
+
+    @Test func theCatalogRevisionLineAndTogglesAreTheTable() {
+        #expect(
+            OnboardingCopy.catalogRevision(revision: 7, published: "Oct 20, 2026", outdated: false)
+                == "Revision 7 · published Oct 20, 2026")
+        #expect(
+            OnboardingCopy.catalogRevision(revision: 7, published: "Oct 20, 2026", outdated: true)
+                == "Revision 7 · published Oct 20, 2026 · older than 180 days")
+        #expect(OnboardingCopy.catalogToggleOfficial == "The official catalog is always on.")
+        #expect(OnboardingCopy.catalogToggleDevelopment == "The development catalog is always on.")
+        #expect(OnboardingCopy.catalogToggleUnknown == "This catalog is always on.")
+        #expect(
+            OnboardingCopy.catalogNote
+                == "Trust tells you where a provider comes from. It isn’t a sandbox: every server runs with your user’s permissions."
+        )
+    }
+
+    // MARK: - The Command Line table (AC-9)
+
+    @Test func theCommandLineStatusTextsAreTheTable() {
+        #expect(OnboardingCopy.commandLineRowTitle == "Install stackly in ~/.local/bin")
+        #expect(
+            OnboardingCopy.commandLineNotInstalled
+                == "No password needed. Stackly doesn’t change your PATH or shell files.")
+        #expect(
+            OnboardingCopy.commandLineInstalled
+                == "~/.local/bin/stackly points to this copy of Stackly.")
+        #expect(
+            OnboardingCopy.commandLineStale
+                == "~/.local/bin/stackly points to another copy of Stackly.")
+        #expect(
+            OnboardingCopy.commandLineBroken
+                == "~/.local/bin/stackly points to a copy of Stackly that’s gone.")
+        #expect(
+            OnboardingCopy.commandLineConflict
+                == "~/.local/bin/stackly already exists and wasn’t made by Stackly. Stackly won’t change it."
+        )
+        #expect(OnboardingCopy.commandLineRepair == "Repair…")
+    }
+
+    @Test func thePathNoteAndTheDirectRunLeadInAreTheTable() {
+        #expect(
+            OnboardingCopy.commandLinePathNote
+                == "If Terminal can’t find stackly, add this line to your shell profile:")
+        #expect(OnboardingCopy.commandLinePathLine == #"export PATH="$HOME/.local/bin:$PATH""#)
+        #expect(OnboardingCopy.commandLinePathWhat == "PATH line")
+        #expect(OnboardingCopy.copied == "Copied.")
+        #expect(OnboardingCopy.commandLineRunDirectly == "Or run it directly:")
+    }
+
+    @Test func theExampleBlockHoldsOnlyTheCommandsOfTheTableOneForEachLine() {
+        #expect(OnboardingCopy.commandExamplesLabel == "Example commands")
+        #expect(
+            OnboardingCopy.commandExamples == ["stackly daemon status", "stackly provider list"])
+        #expect(
+            OnboardingCopy.commandExamplesText
+                == "$ stackly daemon status\n$ stackly provider list")
+    }
+
     // MARK: - The source rules over Onboarding/ (AC-4, AC-9, AC-3)
 
     /// The code of every Swift file in `Onboarding/`, with line comments cut off.
