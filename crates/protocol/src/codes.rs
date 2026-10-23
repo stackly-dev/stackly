@@ -1889,6 +1889,7 @@ mod tests {
 
     #[test]
     fn supervisor_hint_names_the_migration() {
+        // covers: spec 0025 AC-5 (exact texts, at most 200 bytes, no brace)
         let incompatible = supervisor_hint(&supervisor::DATA_INCOMPATIBLE, Some("incompatible"))
             .expect("an incompatible line has a hint");
         assert_eq!(
@@ -1912,6 +1913,7 @@ mod tests {
 
     #[test]
     fn supervisor_hint_stays_silent_without_a_known_outcome() {
+        // covers: spec 0025 AC-5 (None for unknown, foreign outcomes, and other codes)
         for outcome in [Some("unknown"), Some("from_the_future"), Some(""), None] {
             assert_eq!(
                 supervisor_hint(&supervisor::DATA_INCOMPATIBLE, outcome),

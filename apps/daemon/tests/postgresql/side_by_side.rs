@@ -269,6 +269,7 @@ fn initialized_line(site: &Site, id: Uuid) -> String {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs both managed PostgreSQL artifacts in the runtime cache"]
 async fn postgresql_18_beside_17_journey() {
+    // covers: spec 0025 AC-1 (install touches nothing), AC-2 (three versions side by side), AC-3 (sentinels over stop and start), AC-9 (native evidence)
     let ev = evidence!(
         covers = ["REQ-035", "AC-035", "AC-009", "REQ-043", "BR-001"],
         kind = Kind::Native,
@@ -603,6 +604,7 @@ async fn adopted_and_ready(api: &Api, id: Uuid) -> InstanceSummary {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs both managed PostgreSQL artifacts in the runtime cache"]
 async fn another_major_is_refused_at_start_and_by_the_rebind_check() {
+    // covers: spec 0025 AC-4 (start refused, neighbours untouched, recovery), AC-7 (rebind check on real data), AC-9 (native evidence)
     let ev = evidence!(
         covers = ["BR-009", "AC-035", "AC-043", "REQ-043"],
         kind = Kind::Native,

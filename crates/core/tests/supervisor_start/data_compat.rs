@@ -143,6 +143,7 @@ fn stored_refusal(
 
 #[tokio::test]
 async fn a_start_refuses_data_its_runtime_may_not_run_before_any_spawn() {
+    // covers: spec 0025 AC-8 (new start cases: incompatible, marker_missing, marker_unreadable)
     for case in Case::ALL {
         let (rig, id) = rig_for(case).await;
         let op = rig.start(id).await;
@@ -170,6 +171,7 @@ async fn a_start_refuses_data_its_runtime_may_not_run_before_any_spawn() {
 
 #[tokio::test]
 async fn an_incompatible_start_names_both_lines() {
+    // covers: spec 0025 AC-8
     let (rig, id) = rig_for(Case::Incompatible).await;
     let op = rig.start(id).await;
     let detail = rig.wait_state(op, OperationState::Failed).await;
@@ -187,6 +189,7 @@ async fn an_incompatible_start_names_both_lines() {
 
 #[tokio::test]
 async fn data_compatibility_is_the_same_for_start_and_rebind() {
+    // covers: spec 0025 AC-8 (one answer for start and rebind)
     for case in Case::ALL {
         let (rig, id) = rig_for(case).await;
         let op = rig.start(id).await;

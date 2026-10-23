@@ -213,6 +213,7 @@ fn detail(error: &RebindCheckError, key: &str) -> Option<String> {
 
 #[test]
 fn rebind_check_refuses_another_postgresql_major() {
+    // covers: AC-6 (another major, both ways, Current, Compatible, no write)
     let ev = evidence!(
         covers = ["REQ-043", "AC-043", "BR-009"],
         kind = Kind::Fixture,
@@ -270,6 +271,7 @@ fn rebind_check_refuses_another_postgresql_major() {
 
 #[test]
 fn a_package_that_allows_the_pair_gives_compatible() {
+    // covers: AC-6 (lineCompatibility gives Compatible)
     let site = Site::with_provider_edit("postgresql", allow_17_on_18);
     pin(&site, allow_17_on_18);
     let seventeen = runtime_of(&site, "17.11", "17", RuntimeState::Installed);
@@ -302,6 +304,7 @@ fn a_package_that_allows_the_pair_gives_compatible() {
 
 #[test]
 fn a_missing_changed_or_unreadable_marker_is_refused_with_its_outcome() {
+    // covers: AC-6 (marker_missing, marker_mismatch, marker_unreadable)
     let ev = evidence!(
         covers = ["REQ-043", "AC-043", "BR-009"],
         kind = Kind::Fixture,
@@ -333,6 +336,7 @@ fn a_missing_changed_or_unreadable_marker_is_refused_with_its_outcome() {
 
 #[test]
 fn the_refusals_come_in_the_order_of_the_spec() {
+    // covers: AC-6 (each row of the table, one at a time)
     let site = site();
     let instance = stopped(&site, "pg-a", Marker::Text("18\n"));
     let seventeen = runtime_of(&site, "17.12", "17", RuntimeState::Installed);
@@ -405,8 +409,151 @@ fn the_refusals_come_in_the_order_of_the_spec() {
     assert_eq!(error.code().to_string(), "supervisor.data_unavailable");
 }
 
+/// The code of the refusal of `check`.
+fn refused_code(site: &Site, id: InstanceId, target: RuntimeId) -> String {
+    checked(site, id, target)
+        .expect_err("the check refuses")
+        .code()
+        .to_string()
+}
+
+#[test]
+fn the_earlier_row_wins_when_two_requirements_fail_at_once() {
+    // covers: AC-6 (the table *Pemeriksaan rebind*: the first refusal wins)
+    let site = site();
+    let seventeen = runtime_of(&site, "17.12", "17", RuntimeState::Installed);
+    let now = site.fake.clock().now();
+
+    // 1 over 4: no such instance and no such runtime.
+    assert_eq!(
+        refused_code(&site, InstanceId::generate(), RuntimeId::generate()),
+        "resource.not_found"
+    );
+
+    // 2 over 4: a retained instance, and a target runtime that is not there.
+    let retained = site.add_instance(|builder| {
+        builder
+            .name("pg-retained")
+            .retained(OperationId::generate(), now)
+    });
+    assert_eq!(
+        refused_code(&site, retained.id(), RuntimeId::generate()),
+        "supervisor.instance_retained"
+    );
+
+    // 2 over 3: a retained instance whose data never initialized.
+    let retained_fresh = site.add_instance(|builder| {
+        builder
+            .name("pg-retained-fresh")
+            .retained(OperationId::generate(), now)
+    });
+    assert!(retained_fresh.data_initialized_at().is_none());
+    assert_eq!(
+        refused_code(&site, retained_fresh.id(), seventeen.id()),
+        "supervisor.instance_retained"
+    );
+
+    // 3 over 4: data that never initialized, and a target runtime that is not
+    // there.
+    let fresh = site.add_instance(|builder| {
+        builder
+            .name("pg-fresh")
+            .lifecycle(InstanceLifecycle::Uninitialized)
+    });
+    assert_eq!(
+        refused_code(&site, fresh.id(), RuntimeId::generate()),
+        "supervisor.not_initialized"
+    );
+
+    // 2 over 5, 3 over 5: the instance's own runtime is no shortcut for a
+    // retained or uninitialized instance.
+    assert_eq!(
+        refused_code(&site, retained.id(), site.runtime.id()),
+        "supervisor.instance_retained"
+    );
+    assert_eq!(
+        refused_code(&site, fresh.id(), site.runtime.id()),
+        "supervisor.not_initialized"
+    );
+
+    // 5 over 10, and over 7: a marker that disagrees with the registry, or a
+    // runtime that is no longer installed, does not matter for the runtime the
+    // instance runs on now.
+    let wrong_marker = stopped(&site, "pg-wrong-marker", Marker::Text("16\n"));
+    assert_eq!(
+        checked(&site, wrong_marker.id(), site.runtime.id()).expect("the current runtime"),
+        RebindVerdict::Current
+    );
+    let on_broken = runtime_of(&site, "18.7", "18", RuntimeState::Failed);
+    let stranded = instance_on(
+        &site,
+        &on_broken,
+        "pg-stranded",
+        InstanceLifecycle::Stopped,
+        Marker::Text("18\n"),
+    );
+    assert_eq!(
+        checked(&site, stranded.id(), on_broken.id()).expect("the current runtime"),
+        RebindVerdict::Current
+    );
+
+    // 6 over 7: another software that is not installed either.
+    let other = RuntimeBuilder::new()
+        .software("nats")
+        .version("2.12.1", "2.12")
+        .state(RuntimeState::Failed)
+        .installed_at(now)
+        .build();
+    let other = commit_runtime(&site, other);
+    let on_eighteen = stopped(&site, "pg-a", Marker::Text("18\n"));
+    assert_eq!(
+        refused_code(&site, on_eighteen.id(), other),
+        "instance.runtime_mismatch"
+    );
+
+    // 7 over 8 and 9 and 10: a target that is not installed, on an instance
+    // with no pinned package, an open folder, and a marker of another major.
+    let broken = runtime_of(&site, "17.13", "17", RuntimeState::Failed);
+    assert_eq!(
+        refused_code(&site, on_eighteen.id(), broken.id()),
+        "supervisor.runtime_unavailable"
+    );
+
+    // 8 over 9 and 10: no pinned package, an open folder, and 17 data.
+    let unpinned = Site::with_provider("postgresql");
+    let lone = stopped(&unpinned, "pg-lone", Marker::Text("17\n"));
+    let target = runtime_of(&unpinned, "17.12", "17", RuntimeState::Installed);
+    open_folder(&unpinned, lone.id());
+    assert_eq!(
+        refused_code(&unpinned, lone.id(), target.id()),
+        "supervisor.package_unavailable"
+    );
+
+    // 9 over 10: an open folder, and data of another major.
+    let old = instance_on(
+        &site,
+        &seventeen,
+        "pg-old",
+        InstanceLifecycle::Stopped,
+        Marker::Text("17\n"),
+    );
+    open_folder(&site, old.id());
+    assert_eq!(
+        refused_code(&site, old.id(), site.runtime.id()),
+        "supervisor.data_unavailable"
+    );
+}
+
+fn open_folder(site: &Site, id: InstanceId) {
+    use std::os::unix::fs::PermissionsExt;
+    let paths = site.prepared.layout().instance_paths(id);
+    fs::set_permissions(&paths.root, fs::Permissions::from_mode(0o755))
+        .expect("the permissions change");
+}
+
 #[test]
 fn a_running_instance_is_checked_like_a_stopped_one() {
+    // covers: AC-6 (lifecycle running is not refused)
     let site = site();
     let seventeen = runtime_of(&site, "17.11", "17", RuntimeState::Installed);
     let later = runtime_of(&site, "17.12", "17", RuntimeState::Installed);
@@ -431,6 +578,7 @@ fn a_running_instance_is_checked_like_a_stopped_one() {
 
 #[test]
 fn rebind_and_start_share_the_answer_of_the_data_check() {
+    // covers: AC-8 (the check and start give one answer)
     let site = site();
     let seventeen = runtime_of(&site, "17.11", "17", RuntimeState::Installed);
     let instance = instance_on(

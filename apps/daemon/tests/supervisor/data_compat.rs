@@ -53,6 +53,7 @@ fn details(error: &ErrorBody) -> Vec<(String, String)> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn data_incompatible_failure_carries_the_hint() {
+    // covers: AC-5 (the hint on the stored failure of the operation)
     let ev = evidence!(
         covers = ["BR-009"],
         kind = Kind::Fixture,
@@ -149,5 +150,68 @@ async fn data_incompatible_failure_carries_the_hint() {
         supervisor::hint(refused.code().as_str(), &details),
         Some(INCOMPATIBLE_HINT)
     );
+    ev.pass();
+}
+
+/// The static hint the daemon would pick for an error of the rebind check.
+fn rebind_hint(error: &rebind::RebindCheckError) -> Option<&'static str> {
+    let details: Vec<_> = error
+        .details()
+        .iter()
+        .map(|(key, value)| ErrorDetail::new(key.as_str(), value.as_str()))
+        .collect();
+    supervisor::hint(error.code().as_str(), &details)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_rebind_check_refusal_carries_the_hint_of_its_outcome() {
+    // covers: AC-6 (the hint of `codes::supervisor::hint` on the error of
+    // `rebind::check`), AC-5 (the same texts)
+    let ev = evidence!(
+        covers = ["REQ-043", "BR-009"],
+        kind = Kind::Fixture,
+        expected = "the read only rebind check refuses data of line 0.1 on a runtime of line 0.2 with outcome incompatible and the migration hint, refuses a changed marker with outcome marker_mismatch and the marker hint, and gives no hint to a refusal that is no data outcome (runtime_not_found); fixture only, the user actions of AC-043 belong to feature 58",
+    );
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let changed = api.create_ready("fake-changed", json!({})).await;
+    let intact = api.create_ready("fake-intact", json!({})).await;
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+    fs::write(
+        site.instance_paths(changed).data.join("FAKE_VERSION"),
+        "0.2\n",
+    )
+    .expect("the marker is changed");
+    let second = site.install_fake_runtime_line("0.2.0", "0.2");
+    let registry = site.open_registry();
+    let check = |id: Uuid, target: Uuid| {
+        rebind::check(
+            &registry,
+            &site.platform,
+            &site.prepared,
+            InstanceId::from_uuid(id).expect("an instance id"),
+            RuntimeId::from_uuid(target).expect("a runtime id"),
+        )
+        .expect_err("the check refuses")
+    };
+
+    let refused = check(intact, second);
+    assert_eq!(refused.code().as_str(), supervisor::DATA_INCOMPATIBLE.code);
+    assert_eq!(rebind_hint(&refused), Some(INCOMPATIBLE_HINT));
+
+    let refused = check(changed, second);
+    assert_eq!(refused.code().as_str(), supervisor::DATA_INCOMPATIBLE.code);
+    assert_eq!(rebind_hint(&refused), Some(MARKER_HINT));
+
+    let refused = check(intact, Uuid::now_v7());
+    assert_eq!(refused.code().as_str(), "instance.runtime_not_found");
+    assert_eq!(rebind_hint(&refused), None);
     ev.pass();
 }
