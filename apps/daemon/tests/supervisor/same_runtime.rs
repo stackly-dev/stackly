@@ -11,18 +11,22 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use stackly_domain::{InstanceId, Registry, SecretUser};
-use stackly_protocol::events::ShutdownReason;
+use stackly_protocol::events::{ShutdownReason, SubscribeParams};
 use stackly_protocol::instance::{
     DuplicateForm, InstanceLifecycle, InstanceReadinessState, InstanceSummary, PortRequest,
     SecretFieldInput, SecretSource,
 };
+use stackly_protocol::json::DecodedFrame;
 use stackly_protocol::operation::{ListOperationsParams, OperationState};
 use stackly_protocol::secret::SecretInput;
 use stackly_protocol::{Call, Reply};
 use stackly_testkit::evidence::{Kind, evidence};
 use uuid::Uuid;
 
-use crate::support::{Api, PROVIDER, REVISION, Site, TOKEN, get_sentinel, put_sentinel, serving};
+use crate::support::{
+    Api, PROVIDER, REVISION, Site, TOKEN, catalog_of, edited_fake_package, fast, get_sentinel,
+    put_sentinel, serving,
+};
 
 fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
@@ -930,5 +934,203 @@ async fn a_duplicate_never_fixes_a_port_and_a_fixed_port_of_the_source_is_refuse
     );
     drop(api);
     stop_daemon(daemon).await;
+    ev.pass();
+}
+
+// covers: AC-1
+#[tokio::test(flavor = "multi_thread")]
+async fn a_duplicate_form_is_ambiguous_when_the_catalog_holds_another_package_for_the_pinned_revision()
+ {
+    let ev = evidence!(
+        covers = ["REQ-025", "AC-025"],
+        kind = Kind::Fixture,
+        expected = "a catalog with the revision label of the pinned package and another digest makes instance.get_duplicate_form answer instance.provider_ambiguous with the provider and the revision, and a catalog that holds the same package does not",
+    );
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let source = api.create_ready("fake-a", json!({})).await;
+    drop(api);
+    stop_daemon(daemon).await;
+
+    // The same revision label with another digest.
+    let (_scratch, other) = edited_fake_package(|dir| {
+        let path = dir.join("provider.yaml");
+        let mut text = fs::read_to_string(&path).expect("the manifest reads");
+        text.push_str("\n# another digest\n");
+        fs::write(&path, text).expect("the manifest writes");
+    });
+    let mut config = fast();
+    config.catalog = Some(stacklyd::catalog::CatalogOverride::Preloaded(catalog_of(
+        &other,
+    )));
+    let daemon = site.start_with(config).await;
+    let api = site.api().await;
+    let refused = api.duplicate_form(source).await.unwrap_err();
+    assert_eq!(refused.code(), "instance.provider_ambiguous", "{refused:?}");
+    assert_eq!(refused.detail("provider"), Some(PROVIDER), "{refused:?}");
+    assert_eq!(refused.detail("revision"), Some(REVISION), "{refused:?}");
+    assert!(
+        api.list(Default::default()).await.items.len() == 1,
+        "the refusal changes nothing"
+    );
+    drop(api);
+    stop_daemon(daemon).await;
+
+    // The package of the repository is the one pinned: no ambiguity.
+    let mut config = fast();
+    config.catalog = Some(stacklyd::catalog::CatalogOverride::Preloaded(
+        crate::support::fake_catalog(),
+    ));
+    let daemon = site.start_with(config).await;
+    let api = site.api().await;
+    api.duplicate_form(source)
+        .await
+        .expect("the same package in the catalog is no problem");
+    drop(api);
+    stop_daemon(daemon).await;
+    ev.pass();
+}
+
+// covers: AC-1
+#[tokio::test(flavor = "multi_thread")]
+async fn a_duplicate_form_of_a_provider_without_multi_instance_is_refused_naming_the_source() {
+    let ev = evidence!(
+        covers = ["REQ-025", "AC-025"],
+        kind = Kind::Fixture,
+        expected = "instance.get_duplicate_form of an instance whose pinned package lacks the multi_instance capability answers instance.capability_unsupported with the capability, the provider, and the name of the source, and builds no operation",
+    );
+    let (_scratch, single) = edited_fake_package(|dir| {
+        let path = dir.join("provider.yaml");
+        let text = fs::read_to_string(&path).expect("the manifest reads");
+        assert!(text.contains("multiInstance: true"));
+        fs::write(
+            &path,
+            text.replace("multiInstance: true", "multiInstance: false"),
+        )
+        .expect("the manifest writes");
+    });
+    let site = Site::with_package(&single);
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let source = api.create_ready("fake-a", json!({})).await;
+
+    let refused = api.duplicate_form(source).await.unwrap_err();
+    assert_eq!(
+        refused.code(),
+        "instance.capability_unsupported",
+        "{refused:?}"
+    );
+    assert_eq!(refused.detail("capability"), Some("multi_instance"));
+    assert_eq!(refused.detail("provider"), Some(PROVIDER));
+    assert_eq!(refused.detail("existing"), Some("fake-a"));
+    let operations = api
+        .client
+        .call(Call::OperationList(ListOperationsParams::default()))
+        .await
+        .expect("the operations list");
+    let Reply::OperationList(page) = operations else {
+        panic!("not an operation list: {operations:?}");
+    };
+    assert_eq!(
+        page.items.len(),
+        1,
+        "only the create of the source made an operation"
+    );
+    drop(api);
+    stop_daemon(daemon).await;
+    ev.pass();
+}
+
+// covers: AC-5
+#[tokio::test(flavor = "multi_thread")]
+async fn no_secret_value_of_a_duplicate_reaches_the_daemon_log_an_event_or_an_operation() {
+    let ev = evidence!(
+        covers = ["REQ-025", "AC-025"],
+        kind = Kind::Fixture,
+        expected = "a duplicate with the generated secret and one with copyFrom leave neither the value of the source, the generated value, nor a prefix of either in the daemon log, the events, the form, the operations, or the log files of the instances",
+    );
+    let site = Site::new();
+    crate::support::install_logs();
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let (_, mut events) = api
+        .client
+        .subscribe(SubscribeParams::default())
+        .await
+        .expect("the subscription is accepted");
+    let source = api.create_ready("fake-a", json!({})).await;
+
+    let form = api.duplicate_form(source).await.expect("the form is built");
+    let mut seen = vec![serde_json::to_string(&form).expect("the form encodes")];
+    let generated_id = duplicate(&api, source).await;
+    let mut draft = form.draft.clone();
+    draft.name = "fake-copied".to_owned();
+    let accepted = api
+        .create_from_draft(draft, copied(&form))
+        .await
+        .expect("the create with copyFrom is accepted");
+    let copy_id = created_id(&api, accepted).await;
+    for id in [source, generated_id, copy_id] {
+        api.start_ready(id).await;
+        api.stop_when_free(id).await;
+    }
+    let listed = api
+        .client
+        .call(Call::OperationList(ListOperationsParams::default()))
+        .await
+        .expect("the operations list");
+    let Reply::OperationList(page) = listed else {
+        panic!("not an operation list: {listed:?}");
+    };
+    for operation in &page.items {
+        seen.push(format!("{operation:?}"));
+        seen.push(format!("{:?}", api.operation(operation.id).await));
+    }
+    while let Ok(Ok(Some(frame))) =
+        tokio::time::timeout(Duration::from_millis(300), events.next()).await
+    {
+        if let DecodedFrame::Event(event) = frame {
+            seen.push(serde_json::to_string(&event).expect("the event encodes"));
+        }
+    }
+    drop((api, events));
+    stop_daemon(daemon).await;
+    let log = crate::support::log_text();
+    seen.push(log.clone());
+    for id in [source, generated_id, copy_id] {
+        let logs = site.instance_paths(id).logs;
+        for entry in fs::read_dir(&logs).into_iter().flatten().flatten() {
+            if entry.path().is_file() {
+                seen.push(fs::read_to_string(entry.path()).unwrap_or_default());
+            }
+        }
+    }
+
+    // The value of the source, and the value the daemon generated for the
+    // duplicate: the one place either may be is the Keychain.
+    let generated = site
+        .secrets
+        .stored_value(
+            &format!("local:instance/{generated_id}/auth-token")
+                .parse()
+                .expect("the reference of the generated secret"),
+        )
+        .expect("the generated secret is in the store");
+    assert_ne!(generated, TOKEN);
+    for value in [TOKEN, generated.as_str()] {
+        assert!(value.len() >= 12, "a value long enough to take a prefix");
+        for text in &seen {
+            assert!(
+                !text.contains(&value[..12]),
+                "a prefix of a secret value leaked into: {}",
+                &text[..text.len().min(200)]
+            );
+        }
+    }
+    assert!(
+        log.contains("stacklyd") || log.contains("\"level\""),
+        "the daemon log was read, not empty"
+    );
     ev.pass();
 }

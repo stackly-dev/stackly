@@ -654,6 +654,7 @@ fn serve_with_no_delay_answers_every_route() {
     assert_eq!(setup.get("/health").0, 200);
 }
 
+// covers: AC-7, AC-8 (spec 0024, the sentinel route is the tool of the proofs)
 #[test]
 fn sentinel_is_written_and_read_back_from_the_data_folder() {
     let mut setup = Setup::new();
@@ -687,6 +688,7 @@ fn sentinel_is_written_and_read_back_from_the_data_folder() {
     );
 }
 
+// covers: AC-8 (spec 0024, the sentinel route is the tool of the proofs)
 #[test]
 fn sentinel_accepts_one_to_two_hundred_fifty_six_bytes() {
     let mut setup = Setup::new();
@@ -714,6 +716,7 @@ fn sentinel_accepts_one_to_two_hundred_fifty_six_bytes() {
     );
 }
 
+// covers: AC-8 (spec 0024, the sentinel route is the tool of the proofs)
 #[test]
 fn sentinel_routes_answer_only_their_methods() {
     let mut setup = Setup::new();
@@ -725,6 +728,7 @@ fn sentinel_routes_answer_only_their_methods() {
     assert_eq!(setup.get("/sentinel").0, 404);
 }
 
+// covers: AC-7, AC-8 (spec 0024, the sentinel route is the tool of the proofs)
 #[test]
 fn two_servers_keep_their_own_sentinels() {
     let mut first = Setup::new();
@@ -739,6 +743,7 @@ fn two_servers_keep_their_own_sentinels() {
     assert_eq!(second.get("/sentinel"), (200, "two".to_owned()));
 }
 
+// covers: AC-7, AC-8 (spec 0024, the sentinel route is the tool of the proofs)
 #[test]
 fn sentinel_survives_a_restart_on_the_same_data_folder() {
     let mut setup = Setup::new();

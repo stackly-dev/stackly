@@ -146,6 +146,10 @@ extension SnapshotTests {
 
         // MARK: - Duplicate
 
+        // Spec 0024 AC-12 and the visual part of AC-14: the sheet at 560 pt without clipped
+        // text, in light, dark, and Increase Contrast. Keyboard and VoiceOver are manual
+        // (docs/manual.md section U).
+
         /// A rig opened on the settings of `pg17-dev`, waiting for its first preflight.
         @MainActor
         private func duplicate(
