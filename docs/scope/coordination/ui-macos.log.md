@@ -2,8 +2,8 @@
 
 - **Scope:** `docs/scope/ui-macos.md`
 - **Hash awal:** `ff6e626` · **Hash awal wave aktif:** `abe61d48`
-- **Wave aktif:** tidak ada (wave 7 selesai `2026-10-22`; sisa: teks spec 0013 untuk muat ulang store lewat architect, langkah manual user)
-- **Diperbarui:** `2026-10-23 06:54`
+- **Wave aktif:** tidak ada (wave 8 selesai `2026-10-23`; semua branch dan worktree sesi ini dihapus atas permintaan user; sisa: langkah manual user dan satu kalimat spec 0013 untuk `refresh()`)
+- **Diperbarui:** `2026-10-23 16:07`
 
 ## Sub sesi wave `1`
 
@@ -216,6 +216,8 @@
 | `2026-10-22` | User memulai `dbg-f13-pending`. Akar masalah: `ResourceStore.refresh()` (Retry halaman) selalu mengambil alih generasi store, sehingga `resnapshot()` milik ShellSync (putaran resnapshot atau muat ulang `.caughtUp`) memberi `false`, store tetap `pending`, `isSettled` false, presence bertahan `refreshing`. Perbaikan `cc277dd2`: `refresh()` menunggu snapshot yang sedang berjalan (continuation dilepas di akhir `complete` dan `fail`), tanpa fetch kedua dan tanpa timer; `ShellSync.swift` tidak berubah. Pertanyaan lead tentang snapshot yang ditinggalkan dijawab (a): semua jalur berakhir di `complete` atau `fail` (generasi basi dilepas oleh generasi terbaru, tidak ada jalur yang membatalkan task snapshot, teardown menutup channel sehingga setiap call gagal dengan `ipc.connection_closed`), dengan dua test tambahan dan uji mutasi (`75f26b1`). Regresi gagal di kode lama dan lulus sesudah, 50 dari 50 run untuk 12 test sinkronisasi. Gerbang lead setelah `git merge main` (`f96b64c3`): StacklyUI penuh 1557 test tanpa kegagalan, lint, `evidence check`. Di-merge. Usulan teks spec 0013 dari debugger (baris `refresh()` di "Sinkronisasi snapshot plus cursor" menunggu snapshot yang berjalan; catatan risiko di rationale diganti rujukan `cc277dd2`) diantrikan untuk architect berikutnya. Lead scope 03 juga di-merge: spec 0024 milestone 3 (`e5e34439`, diff `Shell/` dan `Commands/` sesuai tinjauan lead), `docs/manual.md` bagian U tanpa menyentuh A sampai K. | `user` |
 
 | `2026-10-23` | `/sync` lead untuk wave 6 sampai 8 setelah `/sync` lead scope 02 (`65d630c3`): `apps/macos/AGENTS.md` mendapat enam konvensi (pemeriksaan pasangan HC dan `contrastInvariant`, relay fixture di bawah `.stacklyInspector` yang tidak pernah dipanggil halaman, `DelayedProgress` yang mengikuti `loadingDelay`, accent hanya lewat kontrol native, link native, dan `StacklyColor.selectionRing`, ukuran halaman di bawah inspector tanpa `minWidth` sendiri, Retry hanya lewat `ResourceStore.refresh()`, dan test tanpa tenggat jam dinding yang bisa dilaparkan main actor); `clients/swift/AGENTS.md` satu konvensi (urutan lewat `ManualClock` dan hook `FakeDaemonServer`, tanpa sleep). Scope: kotak K15 di F68 dicentang (kode di `main`, `582afd51`, `61d4e0ac`, `ace13361`). Status spec 0012, 0013, 0067, 0068, 0069 tetap `In Progress`, sesuai fitur `in-progress`. Kotak yang menunggu langkah manual user tidak dicentang. Graph dokumen untuk commit ini dikumpulkan ke run berikutnya. | `lead` |
+
+| `2026-10-23` | Atas permintaan user: semua branch sesi lead ui-macos di-merge ke `main` (satu yang tersisa, `claude/nice-banach-103b7f`, centang verify 0012 dari `chk-f12-verify`, merge `034dea2d` tanpa konflik), `main` di-push ke origin dengan fast forward (`110b5735..034dea2d`, 19 commit, termasuk commit lead lain), sesi `chk-f12-verify` diarsipkan, worktree `awesome-chatelet-698296` dan `nice-banach-103b7f` dihapus tanpa force, dan 21 branch `claude/*` sesi ini dihapus dengan `git branch -d` (semua sudah di-merge). Remote hanya punya `main`, jadi tidak ada yang dihapus di remote. 18 branch dan worktree lain milik lead scope 02 dan 03 (tiga belum di-merge) dibiarkan. Disk 8,6 GB bebas setelahnya; lead lain diberi tahu. | `user` |
 
 ## Blocker terbuka
 
