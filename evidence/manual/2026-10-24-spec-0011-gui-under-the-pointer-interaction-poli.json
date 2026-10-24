@@ -1,0 +1,71 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a17031-1b41-73df-8ec3-dd7aa52df7f5",
+  "covers": [
+    "REQ-016",
+    "AC-016"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0011 GUI under the pointer interaction policy",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "The current pointer based secret GUI validates and stores a fixture in a temporary file Keychain, reveals and hides only through explicit actions and its timer, copies with expiry and preservation of later copies, and leaks no fixture prefix into registry or logs. Retired assistive interaction checks and optional login Keychain dialogs are outside this GUI record.",
+  "actual": "Current source 7e044b14, rebuilt ad hoc Debug bundle, real bundled daemon, disposable root and file Keychain. Pointer controls: short input disabled Save with the minimum-length message; valid fixture saved and status was present revision 1; duplicate Save offered Replace, which saved and status became revision 2. Show displayed the URI and it returned to masked text after the timer (visible at about 25.5 seconds since Copy, concealed by 37.5; Show began a few seconds earlier), and pointer Hide concealed it explicitly. Copy was verified by ordinary Cmd V into a disposable reference field without sending that text to the daemon; it contained the full fixture URI, then pasted nothing at about 100.6 seconds. A later copy of policy-clipboard-check survived after about 97.5 seconds. Copy followed by the regular Quit menu cleared the unchanged URI, observed by pasting into an empty field after relaunch. Current dark narrow layout and light layout were readable. Delete Reference displayed confirmation; deletion succeeded and CLI list reported no secret references. Final scan of eight root/log files excluding the Keychain found no fixture prefix, and Unified Logging scan exited 0 with zero prefix hits in 119204 bytes. App and daemon stopped and test root removed. 77 current Swift tests passed. Previous native evidence additionally covers unchanged view-disappearance and focus-loss behavior; current model tests corroborate those paths. Retired assistive checks are not asserted as passing; login Keychain Deny/Cancel remains blocked in the separate step 7 records. See docs/reviews/2026-10-24-f11-interaction-policy-followup.md.",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "stackly",
+      "version": "0.1.0",
+      "digest": null,
+      "source": "managed"
+    }
+  ],
+  "steps": [
+    "Build the current app with cargo xtask build-app; run swift test --package-path apps/macos/Packages/StacklyUI --filter Secret|Reveal|Concealed and inspect the completed result.",
+    "Launch the bundled daemon and app against the same disposable STACKLY_ROOT, with its file Keychain. Open Window > Design Gallery > Secrets through regular pointer menu actions.",
+    "Use Enter with a short value and then a valid fixture, Save, inspect present revision 1, then exercise the existing-value conflict and Replace to reach revision 2.",
+    "Use pointer Show and Hide, observe the automatic hide, and use Copy. Paste into the disposable Reference field without running a request on that text. Verify the copied URI exists before expiry, is absent after expiry, and a later ordinary Cmd C copy survives the pending expiry.",
+    "Copy again, choose the regular Quit menu action before expiry, relaunch on the same root, and confirm pasting into an empty field inserts nothing. Inspect regular dark and light rendering.",
+    "Delete the test reference through the GUI confirmation, verify the empty CLI list, scan root/registry/log bytes and Unified Logging for the fixture prefix, stop both processes, and remove only the disposable test root."
+  ],
+  "reviewer": "Codex",
+  "startedAt": "2026-10-24T23:13:48.864933Z",
+  "finishedAt": "2026-10-24T23:18:48.530Z",
+  "evidencePath": "evidence/manual/2026-10-24-spec-0011-gui-under-the-pointer-interaction-poli.json",
+  "context": {
+    "sourceCommit": "7e044b14cc39894ee5cba39f31d5fe266085113e",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

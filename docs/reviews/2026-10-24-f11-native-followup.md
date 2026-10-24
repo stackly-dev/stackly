@@ -54,8 +54,12 @@ Reference uji `local:user/manual-f11-check` dibuat melalui daemon default dengan
 Alat computer use menolak akses ke `com.apple.SecurityAgent` dengan pesan `Computer Use is not allowed to use the app 'com.apple.SecurityAgent' for safety reasons.` Karena itu Deny, Cancel, teks dialog, dan hasil masing masing tidak dapat diamati. Pemanggilan ini bukan PASS. CLI dibatalkan, daemon dihentikan, dan reference uji dihapus melalui daemon default, dengan hasil `Deleted`.
 
 
+## Riwayat pemeriksaan interaksi yang telah dicabut
+
+Kebijakan interaksi 2026-10-24 mencabut pemeriksaan berikut. Hasil lama tetap merupakan riwayat, bukan penghambat cakupan GUI yang berlaku sekarang. Lihat [rekonsiliasi kebijakan](2026-10-24-f11-interaction-policy-followup.md).
+
 Ucapan `Password, hidden`, nilai saat shown, dan pengumuman `Password hidden` tidak dapat diamati. Ini tetap BLOCKED, bukan PASS dari source test. Increase Contrast juga sudah kembali off.
 
 ## Batas penutupan
 
-Milestone daemon tetap terbuka sampai dua record dialog login Keychain benar benar terbukti. Milestone GUI tetap terbuka sampai pemeriksaan native yang tersisa pada record langkah 11 lengkap. Build it, Verify it, status fitur, dan status spec belum ditutup. Bukti fixture dan test otomatis tidak diubah menjadi bukti dialog native.
+Milestone daemon tetap terbuka sampai dua record dialog login Keychain benar benar terbukti. Pada revisi laporan asal, milestone GUI masih terbuka untuk record langkah 11 lama. Penutupan cakupan GUI terbaru dinilai terpisah dalam laporan rekonsiliasi kebijakan, tanpa mengubah hasil historis record tersebut. Build it, Verify it, status fitur, dan status spec belum ditutup. Bukti fixture dan test otomatis tidak diubah menjadi bukti dialog native.

@@ -131,15 +131,15 @@ _Build step 9 (`StacklyClient` dan `StacklyTestSupport`) dan step 10 (`StacklyUI
 
 ### UI / manual
 
-- [ ] Buka preview `Secret field`, `Secret field, dark`, `Secret entry sheet`, dan `Revealable secret text` di Xcode (`StacklyUI`, folder `Secrets/`) → Enter memakai field tersembunyi dengan tombol Show; Tab menjangkau picker, field, Show, dan Save; baris yang disimpan menampilkan Saved; teks tersamar berlabel `Password, hidden`; tampilan terbaca di light dan dark → AC-19
-- [ ] Step 11, record manual alur GUI: `evidence/manual/2026-10-20-spec-0011-step-11-secret-entry-and-reveal-flows.json` → ikuti `steps` di record itu di Mac ini: `stacklyd` sungguhan dengan `STACKLY_ROOT` sementara (keychain file), app Debug dari `cargo xtask build-app`, halaman **Secrets** di jendela Window > Design Gallery (hanya build Debug, tersambung ke `DaemonLink` sungguhan).
+- [x] Tinjau komponen secret pada palette light dan dark sesuai kebijakan interaksi terbaru. Empat preview telah dirender dalam laporan native sebelumnya; build terbaru mengompilasi preview dan inspeksi app terbaru membuktikan field tersembunyi, Save, Saved, Show, Hide, serta palette biasa. Bagian label pembaca layar, keyboard khusus, dan override tampilan dari butir lama RETIRED, bukan PASS → AC-19
+- [x] Step 11, cakupan GUI pointer saat ini: `evidence/manual/2026-10-24-spec-0011-gui-under-the-pointer-interaction-poli.json` berstatus PASS, setelah build dan 77 test terkait lulus, lalu entry, replace, reveal, timer, clipboard, palette biasa, dan scan kebocoran diamati melalui app dan daemon nyata. Record langkah 11 lama tetap historis; dialog login Keychain dinilai terpisah pada langkah 7 → AC-16, AC-19, AC-24
 - [x] Konfirmasi `stored_only` lewat sheet tidak bisa dipicu dari halaman Secrets (reference `local:debug/...` tidak dipakai resource mana pun); dialognya dibuktikan `SecretEntryModelTests` dan pratinjau, dan layar produk pertama yang punya reference milik instance (fitur 20 atau 21) membuktikannya di GUI → AC-19 (DEFERRED ke fitur 20/21, owner user, disetujui 2026-10-20; padanan otomatis SecretEntryModelTests lulus)
 
 ### Acceptance-criteria coverage
 
 - AC-18 · `SecretsClientTests`, `RevealedSecretTests`, `FixtureCredentialTests`
 - AC-19 · `SecretLimitsTests`, `SecretDraftTests`, `SecretNeedTests`, `SecretEntryModelTests`, `RevealModelTests` (30 detik), `ConcealedPasteboardTests` (90 detik), `SecretViewsAccessibilityTests`; AC-24 · `RevealModelTests` (semua atau tidak sama sekali)
-- Step 11: record manual kini `BLOCKED` setelah alur daemon nyata, clipboard, keyboard, kontras, serta pemindaian kebocoran dijalankan pada 2026-10-24. Rincian hasil parsial ada pada bagian pemeriksaan native lanjutan di bawah. Test step 9 dan 10 tetap bukti dengan `SecretsClient` palsu, terpisah dari pengamatan native tersebut.
+- Step 11: record lama BLOCKED merupakan riwayat revisi sebelum pencabutan interaksi khusus. Cakupan GUI saat ini PASS melalui record `2026-10-24-spec-0011-gui-under-the-pointer-interaction-poli.json`. Bukti fixture tetap dipisahkan dari pengamatan native.
 - Catatan: prefix `FixtureCredential` dicek terhadap konstanta Rust lewat teks `credential.rs`, sesuai keputusan 2026-10-20 di *Sisi Swift fixture credential* spec ini (tidak ada fixture prefix di `protocols/fixtures/`)
 
 ## Pemeriksaan native lanjutan, 2026-10-24
@@ -155,3 +155,11 @@ Hasil dan batas lengkap: [laporan pemeriksaan](../../reviews/2026-10-24-f11-nati
 - [x] Copy native menghasilkan URI lengkap, clipboard kosong setelah tenggat 90 detik, teks pengganti bertahan setelah 111 detik, dan keluar dari app membersihkan salinan yang belum berubah. → AC-19
 - [x] Periksa app dengan Increase Contrast native lalu kembalikan setting ke keadaan awal. → AC-19
 - [ ] Selesaikan Deny dan Cancel di SecurityAgent. Akses alat ditolak secara eksplisit, jangan ganti hasil ini dengan PASS dari keychain file. → AC-3
+
+## Rekonsiliasi kebijakan interaksi terbaru
+
+- [x] Bangun bundle Debug dari revisi `7e044b14`, jalankan 77 test Swift terkait, lalu buktikan entry, Replace, Show, Hide, timer, expiry dan perlindungan clipboard, quit, penghapusan, palette light dan dark, serta scan root dan log dengan daemon nyata. Record GUI cakupan terbaru PASS. → AC-16, AC-19, AC-24
+- [x] Pisahkan pemeriksaan interaksi yang dicabut (RETIRED) dari pemeriksaan keamanan Keychain yang masih berlaku. Record lama tetap historis dan tidak diubah menjadi PASS.
+- [ ] Dua bukti dialog login Keychain pada langkah 7 tetap BLOCKED karena pembatasan akses alat ke SecurityAgent. Build it dan Verify it F11 tetap terbuka. → AC-3
+
+Rincian: [rekonsiliasi kebijakan dan bukti GUI](../../reviews/2026-10-24-f11-interaction-policy-followup.md).

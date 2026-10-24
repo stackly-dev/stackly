@@ -224,7 +224,8 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
   - [ ] Secret service through the daemon: IPC handlers, `codes::secret` and the error mapping, the redacting log writer, `Redactor` on envelopes and events, and the daemon sentinel suite (spec 0011 AC-3, AC-5, AC-7, AC-8, AC-9, AC-11, AC-13, AC-14, AC-16, AC-21, AC-22; build steps 5 and 7; needs feature 6 and the two milestones above)
     - [x] Implementasi dan regresi sentinel native diuji ulang pada 2026-10-24; bukti dialog login Keychain masih terhalang pembatasan akses alat ke SecurityAgent ([bukti](../reviews/2026-10-24-f11-native-followup.md)).
   - [x] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
-  - [ ] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19, AC-24; build steps 9 to 11; needs features 12 and 13)
+  - [x] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19, AC-24; build steps 9 to 11; needs features 12 and 13)
+    - [x] Cakupan GUI pointer setelah pencabutan interaksi khusus diverifikasi melalui build terbaru, 77 test terkait, dan alur native; record GUI baru PASS, record lama tetap riwayat ([bukti](../reviews/2026-10-24-f11-interaction-policy-followup.md)).
 - [ ] Verify it: `/check verify secret store & redaction`
 - [x] Test it: `/test secret store & redaction`
 - [x] Review it (fresh model): `/check review secret store & redaction`
