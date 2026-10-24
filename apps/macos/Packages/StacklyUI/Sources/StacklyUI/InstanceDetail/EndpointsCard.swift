@@ -20,14 +20,14 @@ struct EndpointsCard: View {
             LabeledContent("Process") {
                 Text(ProcessText.text(for: summary))
             }
-            .accessibilityIdentifier(AccessibilityID.InstanceDetail.process)
+
             LabeledContent("Readiness") {
                 Text(ReadinessText.text(for: summary))
             }
-            .accessibilityIdentifier(AccessibilityID.InstanceDetail.readiness)
+
         }
         .labeledContentStyle(.stackly)
-        .accessibilityIdentifier(AccessibilityID.InstanceDetail.card("endpoints"))
+
     }
 
     private func endpointRow(_ endpoint: EndpointStatus) -> some View {
@@ -38,8 +38,7 @@ struct EndpointsCard: View {
             }
             if let address = DetailFormat.endpointCopyText(endpoint) {
                 CopyButton(
-                    address, what: "\(endpoint.name) address", style: .icon,
-                    announcement: "Address copied.", key: "endpoint.\(endpoint.name)")
+                    address, what: "\(endpoint.name) address", style: .icon)
             }
         }
     }

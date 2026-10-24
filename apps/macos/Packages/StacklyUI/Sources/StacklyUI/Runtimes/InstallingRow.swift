@@ -11,7 +11,6 @@ nonisolated enum RuntimeInstallProgress {
 
     /// The value of an install. Before the operation reaches the store (a click just
     /// accepted, or an install another client started) the install reads as queued.
-    ///
     /// - Parameter operation: The `install_runtime` operation, or `nil` when the operation
     ///   center does not hold it yet.
     static func value(operation: OperationSnapshot?) -> StagedProgressValue {
@@ -28,9 +27,7 @@ nonisolated enum RuntimeInstallProgress {
 /// One install that has not ended, in the Installing section of the Runtimes page (spec
 /// 0018, *Halaman Runtimes*): the provider tile, `Install <name> <version>`, and the
 /// compact staged progress with the stage and the percent.
-///
-/// A context menu holds Cancel Install, and VoiceOver gets the same action. The text wraps,
-/// so nothing is cut in the 384 pt page column next to the inspector.
+/// The text wraps, so nothing is cut in the 384 pt page column next to the inspector.
 struct InstallingRow: View {
     @Environment(\.actionHost) private var host
     @Environment(\.mutationAvailability) private var gate
@@ -48,15 +45,11 @@ struct InstallingRow: View {
                     .font(.body.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
                 StagedProgress(
-                    progress, layout: .compact,
-                    accessibilityLabel: RuntimeCopy.installTitle(install), announcesStages: true)
+                    progress, layout: .compact)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .contextMenu { ActionMenuItems([[cancel]]) }
-        .accessibilityAction(named: cancel.title) {
-            cancel.run(host: host, gate: gate)
-        }
-        .accessibilityIdentifier(AccessibilityID.Runtimes.installingRow(install.operationId))
+
     }
 }

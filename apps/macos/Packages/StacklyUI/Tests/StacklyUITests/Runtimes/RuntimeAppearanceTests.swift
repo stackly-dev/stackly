@@ -51,8 +51,6 @@ struct RuntimeAppearanceTests {
         #expect(ProviderCard.status(of: nats, installedCount: 0).label == "Available")
         let planned = ProviderSummary.fixture(state: .planned, stateReason: .providerPlanned)
         #expect(ProviderCard.status(of: planned, installedCount: 1).label == "Planned")
-        #expect(
-            ProviderCard.spokenLabel(for: nats, installedCount: 1)
-                == "NATS, Database, 1 installed")
+
     }
 }

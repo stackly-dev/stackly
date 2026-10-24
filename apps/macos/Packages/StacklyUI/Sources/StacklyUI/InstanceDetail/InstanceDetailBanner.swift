@@ -3,7 +3,6 @@ import SwiftUI
 
 /// The banners on top of the Summary tab (spec 0021, *Tab Summary*): the problem of the
 /// instance by rules I1 to I4 of spec 0022, and the failed load of the detail.
-///
 /// A failed instance carries the output of its last process and Retry; a blocker that needs a
 /// secret carries "Enter Secret…", which opens the sheet of spec 0011 for the missing
 /// references.

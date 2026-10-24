@@ -180,21 +180,4 @@ import Testing
         #expect(problems.isEmpty)
     }
 
-    @Test func aSystemCommandIsUsedByTheSceneNotByAMenuItem() throws {
-        let scene = ["    .keyboardShortcut(CommandMap.entry(for: .showMainWindow).shortcut)"]
-        let built = entry(.showMainWindow, status: .built)
-        #expect(
-            try Self.usageProblems(entries: [built], commandLines: [], sceneLines: scene).isEmpty)
-        #expect(
-            try Self.usageProblems(entries: [built], commandLines: [], sceneLines: []).count == 1)
-        #expect(
-            try Self.usageProblems(
-                entries: [built], commandLines: ["CommandItem(.showMainWindow)"],
-                sceneLines: scene
-            ).isEmpty)
-        let planned = entry(.showMainWindow, status: .planned)
-        #expect(
-            try Self.usageProblems(entries: [planned], commandLines: [], sceneLines: scene).count
-                == 1)
-    }
 }

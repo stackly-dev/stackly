@@ -9,27 +9,12 @@ import Testing
 nonisolated enum TestAppearance: CaseIterable, CustomTestStringConvertible, Sendable {
     case light
     case dark
-    case highContrastLight
-    case highContrastDark
 
     /// The SwiftUI color scheme of the appearance.
     var scheme: ColorScheme {
         switch self {
-        case .light, .highContrastLight: .light
-        case .dark, .highContrastDark: .dark
-        }
-    }
-
-    /// The SwiftUI color scheme contrast of the appearance.
-    var contrast: ColorSchemeContrast {
-        isHighContrast ? .increased : .standard
-    }
-
-    /// Whether Increase Contrast is on.
-    var isHighContrast: Bool {
-        switch self {
-        case .light, .dark: false
-        case .highContrastLight, .highContrastDark: true
+        case .light: .light
+        case .dark: .dark
         }
     }
 
@@ -38,15 +23,7 @@ nonisolated enum TestAppearance: CaseIterable, CustomTestStringConvertible, Send
         switch self {
         case .light: .aqua
         case .dark: .darkAqua
-        case .highContrastLight: .accessibilityHighContrastAqua
-        case .highContrastDark: .accessibilityHighContrastDarkAqua
         }
-    }
-
-    /// The minimum contrast for text on a plain surface: 4.5:1, or 7:1 under Increase
-    /// Contrast (spec 0012, contrast pairs P1 and P2).
-    var plainSurfaceMinimum: Double {
-        isHighContrast ? 7 : 4.5
     }
 
     /// The SwiftUI environment for this appearance: the color scheme and, through the
@@ -54,7 +31,6 @@ nonisolated enum TestAppearance: CaseIterable, CustomTestStringConvertible, Send
     var environment: EnvironmentValues {
         var environment = EnvironmentValues()
         environment.colorScheme = scheme
-        environment._colorSchemeContrast = contrast
         return environment
     }
 
@@ -78,15 +54,13 @@ nonisolated enum TestAppearance: CaseIterable, CustomTestStringConvertible, Send
 
     /// The custom token's value for this appearance.
     func resolve(_ token: ColorToken) -> SRGBColor {
-        token.components(scheme: scheme, contrast: contrast)
+        token.components(scheme: scheme)
     }
 
     var testDescription: String {
         switch self {
         case .light: "light"
         case .dark: "dark"
-        case .highContrastLight: "high contrast light"
-        case .highContrastDark: "high contrast dark"
         }
     }
 }

@@ -5,28 +5,21 @@ import SwiftUI
 /// the state and turns the card's buttons into calls of `BackgroundAgentModel` and nothing
 /// else; the step appearing only reads the status again.
 struct BackgroundAgentStep: View {
-    let focus: AccessibilityFocusState<Bool>.Binding
-    /// Where keyboard focus sits in the onboarding.
-    let keyFocus: FocusState<OnboardingFocusTarget?>.Binding
 
     @Environment(DaemonModel.self) private var model: DaemonModel?
     @Environment(\.fixtureNow) private var fixtureNow
-    @State private var focusAfterCardAction = false
 
     var body: some View {
         VStack(spacing: Spacing.s14) {
             OnboardingStepHeader(
-                title: OnboardingCopy.agentTitle, subtitle: OnboardingCopy.agentSubtitle,
-                focus: focus)
+                title: OnboardingCopy.agentTitle, subtitle: OnboardingCopy.agentSubtitle)
             card
         }
         .task {
             // The step appearing only reads the status; it never registers anything.
             await model?.agent?.refresh()
         }
-        .onChange(of: keyFocus.wrappedValue) { _, new in
-            if CardFocusRule.releasesFlag(whenFocusMovesTo: new) { focusAfterCardAction = false }
-        }
+
     }
 
     @ViewBuilder private var card: some View {
@@ -59,22 +52,14 @@ struct BackgroundAgentStep: View {
             input, footer: footer, now: fixtureNow ?? date, lastError: lastError,
             isWorking: isWorking)
         return BackgroundAgentCard(
-            content: content, perform: { action in perform(action, on: agent) }, focus: keyFocus
+            content: content, perform: { action in perform(action, on: agent) }
         )
-        .onChange(of: content) { old, new in
-            let outcome = CardFocusRule.outcome(
-                old: old, new: new, focused: keyFocus.wrappedValue,
-                afterAction: focusAfterCardAction
-            )
-            if outcome.releasesFlag { focusAfterCardAction = false }
-            if let target = outcome.target { keyFocus.wrappedValue = target }
-        }
+
     }
 
     private func perform(
         _ action: BackgroundAgentStepContent.Action, on agent: BackgroundAgentModel
     ) {
-        focusAfterCardAction = true
         Task { await agent.run(action) }
     }
 }

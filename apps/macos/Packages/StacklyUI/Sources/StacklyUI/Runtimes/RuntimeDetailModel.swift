@@ -5,7 +5,6 @@ import StacklyClient
 /// The detail of the selected runtime (spec 0018, *Halaman Runtimes*): it calls
 /// `runtime.get` when the selection changes and keeps each answer for the daemon instance,
 /// the runtime, and the revision it came from.
-///
 /// A runtime that changed has a new revision, so it is read again; a snapshot drops the
 /// cache. A runtime that failed to load shows its failure with Retry.
 @Observable
@@ -35,7 +34,6 @@ public final class RuntimeDetailModel {
     private var failures: [Key: FailureContent] = [:]
 
     /// Creates a model with an empty cache.
-    ///
     /// - Parameters:
     ///   - call: Sends one call to the daemon.
     ///   - serverInstance: The ID of the daemon instance the link talks to now, or `nil`

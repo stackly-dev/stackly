@@ -3,7 +3,6 @@ import Observation
 
 /// The state of the background agent and the four things the user can do about it (spec
 /// 0015, *GUI*): Turn On, Open Login Items, Check Again, and Start stacklyd.
-///
 /// ``DaemonModel`` owns it and calls ``attach(presence:now:sleep:didAssess:didFail:systemRetry:)``
 /// once. Reading the status never changes the registration: only ``turnOn()`` registers
 /// and only ``start()`` relaunches. At most one call to the OS runs at a time.
@@ -44,8 +43,6 @@ public final class BackgroundAgentModel {
     @ObservationIgnored private var sleep: (Duration) async throws -> Void = {
         try await Task.sleep(for: $0)
     }
-    @ObservationIgnored private var didAssess: (AgentAssessment, Date) -> Void = { _, _ in }
-    @ObservationIgnored private var didFail: (AgentActionError) -> Void = { _ in }
     @ObservationIgnored private var systemRetry: () -> Void = {}
 
     @ObservationIgnored private var presence: DaemonPresence = .connecting(slow: false)
@@ -60,7 +57,6 @@ public final class BackgroundAgentModel {
     @ObservationIgnored private var sawHandshake = false
 
     /// Creates the model; ``DaemonModel`` attaches it.
-    ///
     /// - Parameters:
     ///   - controller: The OS side.
     ///   - launchRecord: The reader of the launch record.
@@ -85,27 +81,15 @@ public final class BackgroundAgentModel {
 
     // MARK: - Wiring
 
-    /// Connects the model to the daemon model, once. The clock, the `sleep`, the
-    /// announcer, and the retry are the daemon model's own.
-    ///
+    /// Connects the model to the daemon model, once.
     /// Without root override, the initial probe is applied at once, or the status is read
     /// in the background. With root override, the assessment is `unavailable` with no call
     /// to the OS.
-    ///
-    /// - Parameters:
-    ///   - presence: The presence now.
-    ///   - now: The clock; `lastCheckedAt` always comes from it.
-    ///   - sleep: Waits, for the polling and the wait for the daemon.
-    ///   - didAssess: Called after every status read except the initial one.
-    ///   - didFail: Called once each time an action sets ``lastError``, after the `didAssess`
-    ///     of that action's probe.
-    ///   - systemRetry: Asks the link to connect now, without an announcement.
     func attach(
         presence: DaemonPresence,
         now: @escaping () -> Date,
         sleep: @escaping (Duration) async throws -> Void,
-        didAssess: @escaping (AgentAssessment, Date) -> Void,
-        didFail: @escaping (AgentActionError) -> Void,
+
         systemRetry: @escaping () -> Void
     ) {
         guard isAttached == false else { return }
@@ -113,8 +97,6 @@ public final class BackgroundAgentModel {
         self.presence = presence
         self.now = now
         self.sleep = sleep
-        self.didAssess = didAssess
-        self.didFail = didFail
         self.systemRetry = systemRetry
         if rootOverrideActive {
             assessment = BackgroundAgentClassifier.classify(
@@ -277,7 +259,6 @@ public final class BackgroundAgentModel {
     /// Keeps `error` as the Last error and reports it once.
     private func fail(with error: AgentActionError) {
         lastError = error
-        didFail(error)
     }
 
     /// What a registration call left: the status to apply, whether it counts as just
@@ -349,7 +330,6 @@ public final class BackgroundAgentModel {
         } else {
             justRegistered = false
         }
-        if report { didAssess(assessment, checkedAt) }
         if isStarting { endWaitIfLaunchdStopped(assessment.state) }
     }
 

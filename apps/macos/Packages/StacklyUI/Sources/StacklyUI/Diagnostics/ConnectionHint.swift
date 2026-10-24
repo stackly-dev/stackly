@@ -5,7 +5,6 @@ import Foundation
 nonisolated public enum ConnectionHint {
     /// Why the socket failed its security check, in lowercase words for the middle of a
     /// sentence, from the daemon's `details.reason`.
-    ///
     /// - Parameter cause: The untrusted cause.
     public static func untrustedReason(_ cause: ShellStatus.UntrustedCause) -> String {
         switch cause {
@@ -29,7 +28,6 @@ nonisolated public enum ConnectionHint {
     /// What to do about the connection problem: the hint for the status or the last
     /// error's code, then the daemon's own hint when it sent one. `nil` when there is
     /// neither.
-    ///
     /// - Parameters:
     ///   - status: The daemon's state.
     ///   - error: The last connection error, or `nil`.

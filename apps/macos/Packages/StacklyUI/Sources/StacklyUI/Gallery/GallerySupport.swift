@@ -3,10 +3,7 @@
 
     /// Layout values of the design gallery.
     enum GalleryLayout {
-        /// The width large text is checked at: the minimum content width of the main
-        /// window (spec 0013). Text styles do not scale with `dynamicTypeSize` on macOS 27,
-        /// so a narrow width with the longest labels stands in for the large text check
-        /// (see `apps/macos/design.md`, Accessibility).
+        /// The width large text is checked at: the minimum content width of the main window (spec 0013).
         static let narrowWidth: CGFloat = 640
         /// The width of the light and dark previews.
         static let previewWidth: CGFloat = 960
@@ -90,7 +87,7 @@
             VStack(alignment: .leading, spacing: Spacing.s8) {
                 Text(title)
                     .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
+
                 if let note {
                     Text(note)
                         .font(.callout)

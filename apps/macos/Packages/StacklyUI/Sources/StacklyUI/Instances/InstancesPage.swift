@@ -3,7 +3,6 @@ import SwiftUI
 
 /// The Instances page (spec 0022, *Halaman Instances*): a status filter, a native table that
 /// sorts by column, a search field in the toolbar, and the chosen instance in the inspector.
-///
 /// The page only reads the stores. Start, Stop, and Retry go through the
 /// ``InstanceActionModel``; every status, group, and count is a pure function of the
 /// summaries. A failed refetch of one instance shows as a note and a detail on its row, and
@@ -54,7 +53,6 @@ public struct InstancesPage: View {
     @State private var columns = ColumnSet.full
     @State private var path: [InstanceRoute] = []
     @State private var models: InstanceDetailModels
-    @FocusState private var searchFocused: Bool
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.newInstanceAction) private var newInstance
     @Environment(\.duplicateInstanceAction) private var duplicateInstance
@@ -71,7 +69,6 @@ public struct InstancesPage: View {
     private let openDiagnostics: @MainActor () -> Void
 
     /// Creates the page.
-    ///
     /// - Parameters:
     ///   - instances: The instance store.
     ///   - catalog: The catalog, for the display names and tiles of providers, or `nil`.
@@ -152,7 +149,7 @@ public struct InstancesPage: View {
                     .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
             }
             .searchable(text: $query, placement: .toolbar, prompt: "Search")
-            .searchFocused($searchFocused)
+
             .toolbar { newInstanceItem }
             .pageChrome(title: SidebarSection.instances.title, subtitle: instances.subtitle)
             .navigationDestination(for: InstanceRoute.self) { route in
@@ -280,8 +277,7 @@ public struct InstancesPage: View {
             }
         }
         .labelsHidden()
-        .accessibilityLabel("Status filter")
-        .accessibilityIdentifier(AccessibilityID.Instances.filter)
+
     }
 
     private func clearFilters() {
@@ -314,9 +310,7 @@ public struct InstancesPage: View {
                         .truncationMode(.tail)
                 }
                 .help(row.name)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(row.spokenLabel)
-                .accessibilityIdentifier(AccessibilityID.Instances.row(row.id))
+
             }
             .width(min: 120, ideal: 180)
             if columns.showsProvider {
@@ -355,7 +349,7 @@ public struct InstancesPage: View {
         } primaryAction: { ids in
             if let id = ids.first { navigator?.openInstance(id) }
         }
-        .accessibilityIdentifier(AccessibilityID.Instances.table)
+
     }
 
     private func selectionBinding(visible: [InstanceRowModel]) -> Binding<UUID?> {
@@ -401,7 +395,7 @@ public struct InstancesPage: View {
             id: id, title: title, mutates: false,
             perform: {
                 let confirmation = CopyConfirmation()
-                Task { await confirmation.copy(text, announcement: "\(what) copied.") }
+                Task { await confirmation.copy(text) }
             })
     }
 
@@ -482,8 +476,7 @@ public struct InstancesPage: View {
             toggleInspector: { showsInspector.toggle() },
             sort: sort,
             setSort: { sortOrder = [$0] },
-            focusSearch: { searchFocused = true },
-            hasSearch: isDetailOpen == false,
+
             target: target, open: open, back: back, copyConnection: copyConnection,
             duplicate: duplicate)
     }
@@ -552,7 +545,6 @@ public struct InstancesPage: View {
     }
 
     /// The state of the page: the fixed order of ``ViewState/resolve(unsupported:value:error:lastLoadedAt:isRefreshing:emptyContent:outdated:partial:)``.
-    ///
     /// The "Waiting for stacklyd" failure counts only while the store has no data.
     static func state(
         rows: [InstanceRowModel]?,

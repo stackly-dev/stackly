@@ -6,12 +6,6 @@ import Testing
 
 @testable import StacklyUI
 
-/// What the model announced, in order.
-@MainActor
-final class Announcements {
-    var items: [String] = []
-}
-
 /// `InstanceDetailModel` (spec 0021, *Tab Summary*; AC-9, AC-14, AC-18): what the page holds
 /// for one instance, with a scripted daemon and sleeps that never wait.
 @MainActor
@@ -20,7 +14,6 @@ struct InstanceDetailModelTests {
     private let item: DetailFixture.Triple
     private let script: DetailScript
     private let sleeper = ManualSleep()
-    private let announcements = Announcements()
 
     init() throws {
         item = try DetailFixture.triple("postgresql")
@@ -29,11 +22,9 @@ struct InstanceDetailModelTests {
 
     private func model(debounce: Duration = .milliseconds(250)) -> InstanceDetailModel {
         let sleeper = sleeper
-        let announcements = announcements
         return InstanceDetailModel(
             instanceId: item.detail.instanceId, service: script.service, debounce: debounce,
-            sleep: { try await sleeper.sleep(for: $0) },
-            announce: { announcements.items.append($0) })
+            sleep: { try await sleeper.sleep(for: $0) })
     }
 
     // MARK: - Loading
@@ -182,55 +173,6 @@ struct InstanceDetailModelTests {
         try await waitUntil { script.detailCalls == 2 }
         // Only the second event named a reference of this instance.
         #expect(script.detailCalls == 2)
-    }
-
-    // MARK: - Ready announcement
-
-    @Test func readyIsAnnouncedOnceAfterTwoSeconds() async throws {
-        let model = model()
-        await model.open()
-        let waiting = item.instance.testing(
-            readiness: InstanceReadiness(
-                state: .notReady, reason: "awaiting_probe", detail: nil,
-                observedAt: item.instance.readiness.observedAt))
-        model.observe(waiting)
-        model.observe(item.instance)
-        await sleeper.waitUntilSleeping()
-        #expect(sleeper.durations.last == .seconds(2))
-        #expect(announcements.items.isEmpty)
-
-        sleeper.fire()
-        try await waitUntil { announcements.items.count == 1 }
-        #expect(announcements.items == ["orders-db is ready."])
-
-        model.observe(item.instance.testing(statusSeq: 5))
-        #expect(sleeper.waiting == 0, "the same readiness is not announced twice")
-    }
-
-    @Test func readinessThatFlipsBeforeTwoSecondsIsNotAnnounced() async {
-        let model = model()
-        await model.open()
-        let waiting = item.instance.testing(
-            readiness: InstanceReadiness(
-                state: .notReady, reason: "awaiting_probe", detail: nil,
-                observedAt: item.instance.readiness.observedAt))
-        model.observe(waiting)
-        model.observe(item.instance)
-        await sleeper.waitUntilSleeping()
-        model.observe(waiting.testing(statusSeq: 7))
-        sleeper.fire()
-        await Task.yield()
-
-        #expect(announcements.items.isEmpty)
-    }
-
-    @Test func anInstanceThatIsReadyOnArrivalIsNotAnnounced() async {
-        let model = model()
-        await model.open()
-        model.observe(item.instance)
-
-        #expect(sleeper.waiting == 0)
-        #expect(announcements.items.isEmpty)
     }
 
     // MARK: - Secret values

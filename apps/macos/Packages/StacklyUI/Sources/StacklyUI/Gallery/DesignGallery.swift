@@ -4,17 +4,13 @@
 
     /// The design gallery of spec 0012: every token, status, state, and confirmation of
     /// `StacklyUI` on one page each, with sample data from the mockup.
-    ///
-    /// The Debug app opens it in the "Design Gallery" window, so the system accessibility
-    /// settings (Increase Contrast, Reduce Transparency, Differentiate Without Color,
-    /// Reduce Motion) can be checked in the real app. It is not part of Release builds.
+    /// It is not part of Release builds.
     public struct DesignGallery: View {
         @State private var selection: GalleryTopic? = .tokens
         @State private var isNarrow = false
         private let secrets: SecretsClient?
 
         /// Creates the gallery.
-        ///
         /// - Parameter secrets: The secret methods over the app's real daemon link, for the
         ///   Secrets page (spec 0011, step 11). Without it that page says there is no link.
         public init(secrets: SecretsClient? = nil) {
@@ -26,8 +22,7 @@
             NavigationSplitView {
                 List(GalleryTopic.allCases, selection: $selection) { topic in
                     Label(topic.title, systemImage: topic.symbol)
-                        .accessibilityIdentifier(
-                            AccessibilityID.Gallery.topic(String(describing: topic)))
+
                 }
                 .navigationSplitViewColumnWidth(min: 170, ideal: 190)
             } detail: {

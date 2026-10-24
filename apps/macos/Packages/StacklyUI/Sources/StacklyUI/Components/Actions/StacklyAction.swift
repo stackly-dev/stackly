@@ -25,7 +25,6 @@ public struct StacklyAction: Identifiable {
     public var perform: @MainActor () -> Void
 
     /// Creates an action.
-    ///
     /// - Parameters:
     ///   - id: A stable key.
     ///   - title: The title; end it with "…" when the role confirms.
@@ -67,7 +66,6 @@ public struct StacklyAction: Identifiable {
     /// Whether the action can run now, in the order of how specific the reason is: the
     /// action's own reason first (it must be visible), then the mutation gate (the window
     /// banner already writes it), then busy.
-    ///
     /// - Parameter gate: The mutation availability of the window.
     public func availability(gate: MutationAvailability) -> ActionAvailability {
         if let disabledReason {
@@ -81,7 +79,6 @@ public struct StacklyAction: Identifiable {
 
     /// Runs the action: nothing when it cannot run, ``present`` with the confirmation
     /// request when the role carries one, ``perform`` otherwise.
-    ///
     /// - Parameters:
     ///   - gate: The mutation availability of the window.
     ///   - present: Shows a confirmation; it runs ``perform`` only when the user confirms.

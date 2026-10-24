@@ -27,7 +27,6 @@ nonisolated public enum InstanceSearch {
     }
 
     /// Whether a row matches the query. An empty query matches every row.
-    ///
     /// - Parameters:
     ///   - row: The row.
     ///   - query: The text in the search field.

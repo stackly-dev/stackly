@@ -15,7 +15,6 @@ nonisolated public enum StorageLocations {
     }
 
     /// The macOS defaults for `home`.
-    ///
     /// - Parameter home: The home folder, such as `/Users/a`. A trailing slash is ignored.
     /// - Returns: `<home>/Library/Application Support/Stackly`, `<home>/Library/Caches/Stackly`,
     ///   and `<home>/Library/Logs/Stackly`.

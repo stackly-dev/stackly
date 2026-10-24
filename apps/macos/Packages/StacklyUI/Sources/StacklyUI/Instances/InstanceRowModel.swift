@@ -3,7 +3,6 @@ import StacklyClient
 
 /// One instance as a table row, an Overview row, and the inspector read it: the facts
 /// already mapped to the words and types of the UI (spec 0022, *Halaman Instances*).
-///
 /// The provider's display name and tile come from the catalog entry whose `provider` equals
 /// `InstanceSummary.provider.name`; without an entry the row shows the `software` as it is
 /// and a gray tile.
@@ -29,7 +28,6 @@ nonisolated public struct InstanceRowModel: Identifiable, Equatable, Sendable {
     public let refreshFailed: Bool
 
     /// Builds the row of an instance.
-    ///
     /// - Parameters:
     ///   - summary: The instance.
     ///   - provider: The catalog entry of its provider, or `nil` before the catalog loaded.
@@ -55,7 +53,6 @@ nonisolated public struct InstanceRowModel: Identifiable, Equatable, Sendable {
     }
 
     /// The rows of `instances`, in the order given.
-    ///
     /// - Parameters:
     ///   - instances: The instances.
     ///   - catalog: The catalog, or `nil` before it loaded.
@@ -93,11 +90,4 @@ nonisolated public struct InstanceRowModel: Identifiable, Equatable, Sendable {
         "\(providerAndVersion) · \(ports)"
     }
 
-    /// What VoiceOver reads for the row: the name, the provider and version, the ports in
-    /// words, and the status.
-    @MainActor public var spokenLabel: String {
-        let provider = version.map { "\(providerTitle) \($0)" } ?? providerTitle
-        return
-            "\(name), \(provider), \(InstanceText.spokenPorts(summary.endpoints)), \(appearance.spokenStatus)"
-    }
 }

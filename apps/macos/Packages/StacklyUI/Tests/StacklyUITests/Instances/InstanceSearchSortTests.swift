@@ -42,13 +42,6 @@ struct InstanceSearchSortTests {
         #expect(others.contains { $0.appearance.detail?.text == "Refresh failed" } == false)
     }
 
-    @Test func theSpokenLabelNamesTheStatusAndThePortsInWords() throws {
-        let row = try #require(try rows().first { $0.name == "orders-db" })
-        #expect(
-            row.spokenLabel
-                == "orders-db, postgresql 17.2.0, port 5432, Status: Running")
-    }
-
     // MARK: - Search
 
     @Test func everyWordMustMatchOneField() throws {

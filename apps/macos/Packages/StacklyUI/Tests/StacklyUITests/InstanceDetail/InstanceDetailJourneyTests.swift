@@ -65,7 +65,7 @@ struct InstanceDetailJourneyTests {
         let sleeper = ManualSleep()
         let model = InstanceDetailModel(
             instanceId: stopped.detail.instanceId, service: script.service,
-            sleep: { try await sleeper.sleep(for: $0) }, announce: { _ in })
+            sleep: { try await sleeper.sleep(for: $0) })
         await model.open()
         model.observe(stopped.instance)
         #expect(

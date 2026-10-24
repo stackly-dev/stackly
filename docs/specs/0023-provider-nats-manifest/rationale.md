@@ -272,7 +272,7 @@ Tambah artefak CLI `nats` ke inventory dan jalankan `nats server check` lewat pr
 **Pros**:
 
 - Bukti otomatis bahwa model form generik menangani schema provider nyata (field managed, toggle, advanced, dua endpoint), mengikuti aturan proyek bahwa fixture adalah kontrak bersama.
-- Pemeriksaan manual menutup keyboard dan VoiceOver yang tidak bisa dibuktikan fixture.
+- Pemeriksaan manual menutup interaksi desktop yang tidak bisa dibuktikan fixture.
 
 **Cons**:
 

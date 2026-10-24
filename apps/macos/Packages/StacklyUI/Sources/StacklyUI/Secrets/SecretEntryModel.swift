@@ -4,7 +4,6 @@ import StacklyClient
 
 /// The state behind ``SecretEntrySheet``: one row per reference the action needs, each
 /// saved with `secret.set` in mode `create` (spec 0011, *GUI*).
-///
 /// The model never holds a value. The sheet owns each row's ``SecretDraft`` and passes it
 /// to ``save(reference:draft:)``, ``replace(reference:draft:)``, and
 /// ``confirmStoredOnly(reference:draft:)``, which send it and drop it.
@@ -44,7 +43,6 @@ public final class SecretEntryModel {
     @ObservationIgnored private var modes: [String: SecretMode] = [:]
 
     /// Creates a model.
-    ///
     /// - Parameters:
     ///   - needs: The references to fill.
     ///   - client: The secret methods.

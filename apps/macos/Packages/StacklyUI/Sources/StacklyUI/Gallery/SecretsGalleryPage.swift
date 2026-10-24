@@ -5,7 +5,6 @@
     /// The Secrets page of the design gallery (spec 0011, step 11): the secret entry sheet and
     /// the revealable text on the real daemon, so the flows can be tried by hand with a fixture
     /// credential and a temporary `STACKLY_ROOT`.
-    ///
     /// It is a debugging aid, not a product screen. Without a client it says so.
     struct SecretsGalleryPage: View {
         /// The reference the page works on. `local:debug/...` is free for `secret.set`; the

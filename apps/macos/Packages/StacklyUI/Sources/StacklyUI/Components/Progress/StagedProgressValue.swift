@@ -2,7 +2,6 @@ import StacklyClient
 
 /// One stage of an operation: the `stage` value the daemon reports and the title the
 /// screen shows for it.
-///
 /// The screen that owns the operation defines its stages: five for an install (spec
 /// 0018) and six for create (spec 0020).
 nonisolated public struct StageDefinition: Equatable, Sendable {
@@ -12,7 +11,6 @@ nonisolated public struct StageDefinition: Equatable, Sendable {
     public var title: String
 
     /// Creates a stage definition.
-    ///
     /// - Parameters:
     ///   - key: The value of `OperationSummary.stage`.
     ///   - title: The title shown for the stage.
@@ -46,7 +44,6 @@ nonisolated public struct ProgressStage: Equatable, Sendable {
     public var state: StageState
 
     /// Creates a stage with a state.
-    ///
     /// - Parameters:
     ///   - key: The value of `OperationSummary.stage`.
     ///   - title: The title shown for the stage.
@@ -78,7 +75,6 @@ nonisolated public enum ProgressOutcome: Equatable, Sendable {
 
 /// What a staged progress shows, worked out from an operation (spec 0067, AC-14): the state
 /// of every stage, the fraction and percent, the title, and the outcome.
-///
 /// ``from(operation:stages:)`` is a pure function, so every row of the *Pemetaan operasi ke
 /// tahap* table is tested without a view.
 nonisolated public struct StagedProgressValue: Equatable, Sendable {
@@ -96,7 +92,6 @@ nonisolated public struct StagedProgressValue: Equatable, Sendable {
     public var outcome: ProgressOutcome
 
     /// Creates a value.
-    ///
     /// - Parameters:
     ///   - stages: The stages in order, each with its state.
     ///   - runningIndex: The index of the running, failed, or cancelled stage.
@@ -117,7 +112,6 @@ nonisolated public struct StagedProgressValue: Equatable, Sendable {
     }
 
     /// Works the value out from an operation.
-    ///
     /// - Parameters:
     ///   - operation: The operation, from `OperationCenter`.
     ///   - stages: The stages of the operation, in order, from the screen that owns it.
@@ -235,27 +229,4 @@ extension StagedProgressValue {
         }
     }
 
-    /// The value VoiceOver reads, per the *Teks progress* table.
-    public var accessibilityValue: String {
-        switch outcome {
-        case .waiting, .succeeded, .failed, .needsRecovery, .cancelled:
-            return currentTitle
-        case .running:
-            guard let percent, let runningIndex else { return "Working" }
-            return
-                "Stage \(runningIndex + 1) of \(stages.count), \(currentTitle), \(percent) percent"
-        case .cancelling:
-            guard let percent, let runningIndex else { return "Cancelling" }
-            return "Cancelling, stage \(runningIndex + 1) of \(stages.count), \(percent) percent"
-        }
-    }
-
-    /// What to announce when the running stage may have changed: "{title}." for a running
-    /// stage, `nil` otherwise.
-    public var stageAnnouncement: String? {
-        guard outcome == .running, let runningIndex, stages.indices.contains(runningIndex) else {
-            return nil
-        }
-        return "\(stages[runningIndex].title)."
-    }
 }

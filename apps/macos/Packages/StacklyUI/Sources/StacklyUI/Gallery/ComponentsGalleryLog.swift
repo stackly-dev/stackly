@@ -32,7 +32,7 @@
                     }
                     labeled("Live: follow is \(liveFollow ? "on" : "off")") {
                         VStack(alignment: .leading, spacing: Spacing.s8) {
-                            LogView(liveLines, follow: $liveFollow, accessibilityLabel: "Live log")
+                            LogView(liveLines, follow: $liveFollow)
                                 .frame(maxWidth: 720, minHeight: 160, maxHeight: 160)
                             HStack(spacing: Spacing.s12) {
                                 Button("Add Line") {

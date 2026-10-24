@@ -1,4 +1,6 @@
 # Stackly design system
+> Perubahan cakupan 2026-10-24: dukungan pembaca layar khusus, navigasi dan shortcut keyboard khusus, pengaturan tampilan aksesibilitas, dan identifier UI test dihapus atas permintaan pengguna. Ketentuan serta cek khusus kemampuan tersebut di dokumen ini tidak berlaku; nomor kriteria tetap stabil.
+
 
 The visual rules every Stackly screen follows: type, color, spacing, materials, status, page states, confirmation, motion, and accessibility. You build screens from these rules and the `StacklyUI` APIs they name, without deciding colors, states, or confirmation again. The reasons behind each rule live in [spec 0012](../../docs/specs/0012-design-system-ui-foundation/index.md); this file holds the rules. When the mockup disagrees with a rule here, the rule wins.
 
@@ -258,7 +260,6 @@ Another open enum of the catalog shows as neutral text and is never guessed into
 
 An install that has not ended shows as an Installing row on the Runtimes page and as a small progress in the Get column of the Catalog, with the stage and the percent of `StagedProgressValue`: the five stages Download, Verify digest, Extract, Validate binary, and Commit. A Catalog card whose software has installed runtimes shows "{n} installed" (`positive`, `checkmark.circle.fill`) instead of Available; it is not shown for 0. The Get column shows Get, the progress, or Installed (`positive` text with `checkmark.circle.fill`) for the artifact built for this Mac, matched to runtimes and running installs by the digest of the artifact.
 
-On the Runtimes page the table drops the Source and Digest columns when it is narrower than 560 pt, which is the case in the 384 pt page column next to an open inspector in the smallest window; their values stay in the inspector and in what VoiceOver reads for the row.
 
 ### StatusLabel
 
@@ -271,7 +272,7 @@ On the Runtimes page the table drops the Source and Digest columns when it is na
 - **`.row` context** (`List` and `Table` rows, the sidebar, menus, popovers). The label and detail use `.primary`, because an inactive selection or glass behind the row cannot be guaranteed for tone text (red text on a dark inactive selection drops to about 4.03:1). While the row is selected and `backgroundProminence` is `.increased`, the dot and symbols use `.primary` too. Pass `context: .row` in every row; never put tone text in a row.
 - **Differentiate Without Color.** The dot becomes the status symbol in the tone fill, and the detail starts with its tone symbol. Symbols take the font around them.
 - **Truncation.** The label is never cut (`fixedSize(horizontal: true, vertical: false)`); the detail truncates at the tail first, on one line.
-- **VoiceOver.** One element: `Status: <label>`, plus `, <detail>` when there is one ("Status: Starting…, Waiting for probe"). The dot, symbols, and separator are hidden.
+The dot, symbols, and separator are hidden.
 - **Motion.** A change of status crossfades with `StacklyMotion.crossfade`. Nothing moves or scales.
 
 ### ToneBadge
@@ -281,12 +282,12 @@ On the Runtimes page the table drops the Source and Digest columns when it is na
 - At least 20 pt high (`ScaledSize.badgeHeight`) and 9 pt horizontal padding (mockup `padding: 0 9px`; the one padding off the `Spacing` scale, kept inside `ToneBadge`).
 - Increase Contrast adds a 1 pt border in the tone fill, through `toneSurface`.
 - Differentiate Without Color puts the tone symbol before the label. The symbol uses the tone text color, not the fill, so it keeps AA contrast on the tint.
-- VoiceOver reads the label. The label never truncates.
+The label never truncates.
 - Use it for operation states everywhere (Overview, Operations, the menu bar), so one state always has one tone.
 
 ### Section icons
 
-`SectionStyle` gives each top level section a `symbol` and a system `color`. `SectionIcon(_ section: SectionStyle)` draws the symbol in that color with the font around it, hidden from VoiceOver (`accessibilityHidden(true)`), because the section label carries the meaning. The app shell (spec 0013) places it in the sidebar.
+`SectionStyle` gives each top level section a `symbol` and a system `color`. `SectionIcon(_ section: SectionStyle)` draws the symbol in that color with the font around it (`accessibilityHidden(true)`), because the section label carries the meaning. The app shell (spec 0013) places it in the sidebar.
 
 | Section | Swift | Symbol | System color |
 | --- | --- | --- | --- |
@@ -395,14 +396,13 @@ Page banners from `StateView`:
 ### Mutation gate and unsupported actions
 
 - `MutationAvailability` is `.available` or `.blocked(reason:since:)`. The app shell sets it with `.environment(\.mutationAvailability, …)`; the default is `.available`.
-- `.mutationGated()` disables a control while mutations are blocked, with the reason as its help (tooltip and VoiceOver help). Apply it to every control that changes data through the daemon. A `StateAction` with `mutates: true` in a placeholder or banner is gated the same way. Copy, navigation, Retry, Open Diagnostics, and Browse Catalog are never gated. The visible reason is the shell's window banner.
+Apply it to every control that changes data through the daemon. A `StateAction` with `mutates: true` in a placeholder or banner is gated the same way. Copy, navigation, Retry, Open Diagnostics, and Browse Catalog are never gated. The visible reason is the shell's window banner.
 - `.disabled(reason: String?)` disables a control whose capability is not supported, with the reason as its help. Always show the reason as text too: `DisabledReasonText(reason)` (`info.circle`, `.footnote`, `textSecondary`) next to the control or in the section footer, or an unsupported placeholder. Never hide an unsupported control. Draw capability buttons only after the screen's data, capabilities included, has loaded.
 - Apply `.mutationGated()` and `.disabled(reason:)` to the control itself, not to a container. They add the help only while there is a reason, so the control keeps its own `.help` while it is enabled.
 
-### Motion and VoiceOver
 
 - Shape changes, banners appearing, and the delayed spinner crossfade with `StacklyMotion.crossfade`. Nothing moves or scales.
-- A placeholder or banner is one VoiceOver group labeled by its title. Their symbols are decorative and hidden.
+Their symbols are decorative and hidden.
 - `StateView` announces the failure title once when the shape turns `.failed`, and a critical `StateBanner` announces its title once when it appears.
 
 ## Confirmation
@@ -491,7 +491,7 @@ Shared views in `Packages/StacklyUI/Sources/StacklyUI/Components/` ([spec 0067](
 
 ### Tile
 
-`ProviderTile(mark:tile:name:size:)` or `ProviderTile(_:size:)` with a `TileSpec` draws a rounded square (continuous corners, radius `size × 0.27`) in a system color with a bold white mark. It is decoration: hidden from VoiceOver, never counted in the contrast table, and always next to the provider name in text. The fill comes from the catalog `TileColor`; a missing or unrecognized color is gray.
+`ProviderTile(mark:tile:name:size:)` or `ProviderTile(_:size:)` with a `TileSpec` draws a rounded square (continuous corners, radius `size × 0.27`) in a system color with a bold white mark. It is decoration:, never counted in the contrast table, and always next to the provider name in text. The fill comes from the catalog `TileColor`; a missing or unrecognized color is gray.
 
 | `TileColor` | Fill |
 | --- | --- |
@@ -504,15 +504,15 @@ The mark is the catalog mark. When there is none, `ProviderMark.defaultMark(for:
 
 `CardSection` draws an optional `.headline` title with an accessory on its right, then one `.cardSurface()` card in which every subview of the content is a row, then an optional footer (`.footnote` `textSecondary`; a `String` or any view, such as `DisabledReasonText`). Rows have 11 pt above and below, 14 pt at the sides, at least `ScaledSize.rowMinHeight` high, and a divider inset 14 pt from the left. A `ForEach` makes one row per element; a row of several views is wrapped in an `HStack` or `VStack` by the screen.
 
-`.labeledContentStyle(.stackly)` draws the label in `.body` primary text and the value in `.body` `textSecondary`, selectable. When both fit, they are one line with the value flush right; otherwise the label sits above and the value wraps below it, flush left, never cut. A screen may give the value its own font (`.callout.monospaced()` for an endpoint, a path, or a digest); the color stays `textSecondary`. VoiceOver reads the row as one element, "{label}, {value}": selectable text makes `.combine` read the label only (seen in the accessibility tree of the running Debug app), so the style builds the spoken element with `.accessibilityRepresentation` from the same label and value. A row's own button, such as `CopyButton`, stands next to the `LabeledContent` in an `HStack`, never inside it.
+`.labeledContentStyle(.stackly)` draws the label in `.body` primary text and the value in `.body` `textSecondary`, selectable. When both fit, they are one line with the value flush right; otherwise the label sits above and the value wraps below it, flush left, never cut. A screen may give the value its own font (`.callout.monospaced()` for an endpoint, a path, or a digest); the color stays `textSecondary`. A row's own button, such as `CopyButton`, stands next to the `LabeledContent` in an `HStack`, never inside it.
 
 Put the style on a `CardSection` whose rows are all read only, on an inspector, or on one read only row inside a `Form`. **Never on a `Form` itself.** Checked on macOS 27.0.1 by rendering a grouped `Form` with a `TextField`, a `Picker`, a `Toggle`, and a read only row three ways: the style on the read only row leaves the field, picker, and toggle exactly as they are without it; the style on the `Form` turns the field's value gray and regular instead of primary and bold and shifts the row heights.
 
 ### Copy and console
 
-`CopyButton(_:what:style:announcement:key:)` copies plain text to the general pasteboard **only when pressed**, through `PlainPasteboard.write(_:)` (`clearContents()` then a plain string; `NSPasteboard` appears only there and in `ConcealedPasteboard`, a source rule guards it). For two seconds afterwards it shows "Copied" with a `checkmark` (the icon style: only the checkmark) and then goes back to "Copy" or `doc.on.doc`; the width is reserved for the longer label, so the row does not move. Every press writes again and starts the two seconds over. VoiceOver reads "Copy {what}" and, after the write, says the announcement once ("{What} copied." unless the screen gives its own copy, such as "Address copied." or "Command copied."). The text style is a small bordered button; the icon style is borderless with a 24 × 24 pt click area. The checkmark carries the tone fill `positive`; the resting icon is `textSecondary`. A copy button is never gated by `MutationAvailability`, it never copies a secret (a secret copy is always `RevealableSecretText` and `ConcealedPasteboard`), and a screen's own key goes into the identifier `copy.button.<key>`.
+`CopyButton(_:what:style:announcement:key:)` copies plain text to the general pasteboard **only when pressed**, through `PlainPasteboard.write(_:)` (`clearContents()` then a plain string; `NSPasteboard` appears only there and in `ConcealedPasteboard`, a source rule guards it). For two seconds afterwards it shows "Copied" with a `checkmark` (the icon style: only the checkmark) and then goes back to "Copy" or `doc.on.doc`; the width is reserved for the longer label, so the row does not move. Every press writes again and starts the two seconds over. The text style is a small bordered button; the icon style is borderless with a 24 × 24 pt click area. The checkmark carries the tone fill `positive`; the resting icon is `textSecondary`. A copy button is never gated by `MutationAvailability`, it never copies a secret (a secret copy is always `RevealableSecretText` and `ConcealedPasteboard`), and a screen's own key goes into the identifier `copy.button.<key>`.
 
-`ConsoleBlock` draws `.callout.monospaced()` primary text on `.consoleSurface()`: `surfaceConsole`, `Radius.medium`, a hairline `separatorColor` border (1 pt under Increase Contrast), and 12 pt above and below and 14 pt at the sides. Text is selectable and wraps, with no horizontal scroll. `ConsoleBlock(command:)` puts "$ " in `textSecondary` before the command and a Copy button on the right that copies the command without the "$ ". `ConsoleBlock(text:accessibilityLabel:copy:)` shows several lines, with an optional Copy button at the top right. VoiceOver reads the text as one element, the screen's label with the text as its value (the command without "$ "), and the Copy button as its own element. A failure snippet inside a `StateBanner` keeps the banner's own code block.
+`ConsoleBlock` draws `.callout.monospaced()` primary text on `.consoleSurface()`: `surfaceConsole`, `Radius.medium`, a hairline `separatorColor` border (1 pt under Increase Contrast), and 12 pt above and below and 14 pt at the sides. Text is selectable and wraps, with no horizontal scroll. `ConsoleBlock(command:)` puts "$ " in `textSecondary` before the command and a Copy button on the right that copies the command without the "$ ". `ConsoleBlock(text:accessibilityLabel:copy:)` shows several lines, with an optional Copy button at the top right. A failure snippet inside a `StateBanner` keeps the banner's own code block.
 
 ### Actions
 
@@ -521,15 +521,15 @@ Put the style on a `CardSection` whose rows are all read only, on an inspector, 
 - **Availability**, in this order: the action's own `disabledReason` (visible: `.disabled(reason:showsReason: true)`), then the mutation gate for a `mutates` action while the daemon cannot be reached (`.disabled(reason:showsReason: false)`, because the window banner writes it), then `isBusy` (`.busy`), else `.enabled`. `invoke(gate:present:)` does nothing unless the action is `.enabled`.
 - **Role and confirmation.** `ActionRole.standard(confirmation:)` has a confirmation only when the action interrupts work; `ActionRole.destructive` always carries an `ActionConfirmation`, so a destructive action without a dialog cannot be written. The copy follows the Confirmation rules above, and the title of an action that confirms ends with "…" (an `assert` guards it). `invoke` builds the `ConfirmationRequest` and hands it to the host.
 - **One host.** `.actionHost()` holds one confirmation per window or sheet, reads `mutationAvailability` where it sits, and fills the `actionHost` environment value. `AppShell` sets it at its root inside `.environment(\.mutationAvailability, …)`, every `StacklySheet` sets its own, and the menu bar popover (feature 32) will too. A button, a menu item, and a command run through `ActionHost.run(_:)`. Without a host an action with no confirmation still runs; one that confirms asserts and runs nothing.
-- **`ActionButton`.** Primary is `.borderedProminent`, secondary is `.bordered`; a destructive action is `role: .destructive` and `.bordered`, never prominent and never the default. A disabled action keeps its button, with the reason as help and, with `showsReason`, as `DisabledReasonText` right under it; a toolbar button passes `showsReason: false` and the page writes the same `DisabledReasonText` in its content, a section footer, or the item's banner. Gate-blocked: disabled, gate reason as help only. Busy: disabled, the title stays, a small spinner stands next to it, and VoiceOver reads the value "In progress". A capability the provider lacks is never hidden. No keyboard shortcut is set here; feature 69 owns them. The identifier is `action.button.<id>`.
+- **`ActionButton`.** Primary is `.borderedProminent`, secondary is `.bordered`; a destructive action is `role: .destructive` and `.bordered`, never prominent and never the default. A disabled action keeps its button, with the reason as help and, with `showsReason`, as `DisabledReasonText` right under it; a toolbar button passes `showsReason: false` and the page writes the same `DisabledReasonText` in its content, a section footer, or the item's banner. Gate-blocked: disabled, gate reason as help only. A capability the provider lacks is never hidden. No keyboard shortcut is set here; feature 69 owns them. The identifier is `action.button.<id>`.
 
 ### Menus
 
 Actions in a menu come from `StacklyAction` through `ActionMenu` (the More menu in a toolbar) and `ActionMenuItems` (a `.contextMenu`). The reason an item is disabled never lives only in a tooltip, so it is written in the menu.
 
-macOS 27.0.1 was checked with a probe app on 2026-10-21 (spec 0067 rationale, *Temuan langkah 1*): a disabled `Button` with two `Text` children becomes an `NSMenuItem` with a subtitle in a toolbar `Menu`, a `.contextMenu`, and a main menu `CommandMenu`, and the subtitle is drawn under the title in all three. But the accessibility tree of the item holds only its title: there is no description, help, or value, and `.accessibilityHint`, `.accessibilityLabel`, `.accessibilityValue`, and `.help` do not change it. So a spoken reason cannot be proven, and VoiceOver itself was not tried (a manual step, `NOT_RUN`).
+macOS 27.0.1 was checked with a probe app on 2026-10-21 (spec 0067 rationale, *Temuan langkah 1*): a disabled `Button` with two `Text` children becomes an `NSMenuItem` with a subtitle in a toolbar `Menu`, a `.contextMenu`, and a main menu `CommandMenu`, and the subtitle is drawn under the title in all three. But the accessibility tree of the item holds only its title: there is no description, help, or value, and `.accessibilityHint`, `.accessibilityLabel`, `.accessibilityValue`, and `.help` do not change it.
 
-The path in use is therefore the spec's fallback: **a disabled extra item with the reason as its title, right under the item.** The reason is a menu item of its own, so it is both visible and spoken. The switch is one constant, `MenuReasonPath.current` in `Components/Actions/`: if VoiceOver reads the subtitle, change it to `.subtitle`, and the menus get shorter without any API change. Spec 0069 uses the same path for the main menu.
+The path in use is therefore the spec's fallback: **a disabled extra item with the reason as its title, right under the item.** The reason is a menu item of its own, so it is both visible and spoken. Spec 0069 uses the same path for the main menu.
 
 ### Feedback
 
@@ -549,13 +549,12 @@ Checked on macOS 27.0.1 with a probe sheet and real key events (spec 0067 ration
 - **Escape** closes a sheet on its own and does not run the Cancel action, even with `.keyboardShortcut(.cancelAction)`. With `.interactiveDismissDisabled()` Escape runs the Cancel action once and the sheet stays open unless that action closes it. A sheet therefore always sets it, because Cancel may mean something other than closing.
 - A confirmation from inside a sheet shows as a second sheet on top of it, and Escape there cancels only the confirmation.
 - `.presentationBackground` draws the sheet opaque, with nothing of the window behind it showing through.
-- Not checked (manual): Tab and Space with Keyboard navigation on, and VoiceOver.
 
 `StacklySheet(title:subtitle:tile:primary:cancel:minWidth:content:)` draws the opaque `surfaceWindow` background, a header, a body, and a fixed footer.
 
 - **Header.** An optional `ProviderTile` at `mediumSize` (40 pt), the title in `.title3.weight(.semibold)`, and the subtitle in `.callout` `textSecondary`. Padding: 20 above, 22 at the sides, 6 below.
 - **Body.** A `ScrollView` with 12 pt above, 22 pt at the sides, 16 pt below, and 16 pt between children. Its height is the height of its content, at most the visible screen height minus 160 pt, so a short sheet does not scroll and a long one scrolls without cutting text. A screen that puts a `Form` in the body sets `.scrollContentBackground(.hidden)` so the sheet background shows and the rows keep their native background.
-- **Footer.** Outside the scroll area: the reason on the left, then Cancel, then the primary action (12 pt above, 22 at the sides, 18 below). The reason is the `DisabledReasonText` of the primary action when it is disabled with a reason, or the gate's reason when the primary action `mutates` and the gate is `.blocked`, because the sheet covers the window banner. When the primary action is busy the footer shows a small spinner next to it and VoiceOver reads the value "In progress".
+- **Footer.** Outside the scroll area: the reason on the left, then Cancel, then the primary action (12 pt above, 22 at the sides, 18 below). The reason is the `DisabledReasonText` of the primary action when it is disabled with a reason, or the gate's reason when the primary action `mutates` and the gate is `.blocked`, because the sheet covers the window banner.
 - **Buttons.** The primary action is `.borderedProminent` with `.keyboardShortcut(.defaultAction)`; a destructive primary action is `.bordered`, `role: .destructive`, with no shortcut, so Return does nothing there. A disabled or busy primary action does not run on Return. Cancel is `.bordered` with `.keyboardShortcut(.cancelAction)` and stays enabled while the primary action is busy. These are the only two shortcuts the components set. With no `cancel` given, "Cancel" closes the sheet; a screen gives its own `cancel` when it means something else, such as cancelling an operation behind a confirmation. Identifiers: `sheet.cancel` and `sheet.primary`.
 - **Host.** The sheet sets its own `.actionHost()`, so a confirmation raised from inside shows on top of this sheet. A view inside a sheet never sends to the window's `FeedbackCenter`: it shows its result with a `StateBanner`, and the screen that owns the sheet sends feedback after the sheet closed.
 
@@ -563,17 +562,17 @@ Checked on macOS 27.0.1 with a probe sheet and real key events (spec 0067 ration
 
 `CheckList(_:layout:)` shows `CheckItem`s: a symbol, the title in `.callout` primary text, the detail in `.subheadline` `textSecondary` wrapped in full (never an ellipsis), and an optional `ActionButton` under the text. A screen wraps it in a `CardSection` (for example "Preflight") and maps its own result (a preflight check, a doctor result) to a `CheckStatus`. This table replaces the preflight status table of spec 0020.
 
-| `CheckStatus` | VoiceOver word | Tone | Symbol |
-| --- | --- | --- | --- |
-| `passed` | Passed | `positive` | `checkmark.circle.fill` |
-| `warning` | Warning | `caution` | `exclamationmark.triangle.fill` |
-| `failed` | Failed | `critical` | `xmark.circle.fill` |
-| `pending` | Checking | `neutral` | a small `ProgressView` after 300 ms, an empty box before that |
-| `unrecognized` | Unrecognized status | `caution` | `questionmark.diamond.fill` |
+| `CheckStatus` | Tone | Symbol |
+| --- | --- | --- |
+| `passed` | `positive` | `checkmark.circle.fill` |
+| `warning` | `caution` | `exclamationmark.triangle.fill` |
+| `failed` | `critical` | `xmark.circle.fill` |
+| `pending` | `neutral` | a small `ProgressView` after 300 ms, an empty box before that |
+| `unrecognized` | `caution` | `questionmark.diamond.fill` |
 
 - The symbol uses the tone's fill (never `StacklyColor.decorative`), and its shape differs per status, so Differentiate Without Color changes nothing. A status change crossfades.
 - **Layout.** `.adaptive` is a grid with columns at least 200 pt wide and 16 pt apart: two columns in a 560 pt sheet (488 pt inside the card), one in a narrow width. `.single` is one column. `pending` shows its spinner only after 300 ms (`DelayedVisibility`), so a fast check does not flash.
-- **VoiceOver.** One element per row, "{title}, {status}: {detail}" (without the detail when there is none), and the row's action is its own element. The row identifier is `checklist.row.<id>`. Announcing a change of status or a summary is the screen's job.
+The row identifier is `checklist.row.<id>`. Announcing a change of status or a summary is the screen's job.
 
 ### Staged progress
 
@@ -597,16 +596,16 @@ The formula: with `counted(done, total)` and `total` above 0, `percent = (i × t
 
 `StagedProgress(_:layout:accessibilityLabel:announcesStages:)` draws it. The bar is a native linear `ProgressView`, shown only while the outcome is `running` or `cancelling`, indeterminate when `fraction` is none. Under Reduce Motion a change of the value is not animated (`StacklyMotion.progress`).
 
-| `outcome` | `.compact` text | Bar | VoiceOver value |
-| --- | --- | --- | --- |
-| `waiting` | Queued | none | Queued |
-| `running` with a percent | {title} · {percent}% | determinate | Stage {k} of {n}, {title}, {percent} percent |
-| `running` without a percent | Working… | indeterminate | Working |
-| `cancelling` | Cancelling… · {percent}% or Cancelling… | as `running` | Cancelling, stage {k} of {n}, {percent} percent, or Cancelling |
-| `succeeded` | `checkmark.circle.fill` (`positive` fill) and Done | none | Done |
-| `failed` | `xmark.circle.fill` (`critical` fill) and the title | none | the title |
-| `needsRecovery` | `xmark.circle.fill` (`critical` fill) and Needs Recovery | none | Needs Recovery |
-| `cancelled` | `minus.circle.fill` (`neutral` fill) and Cancelled | none | Cancelled |
+| `outcome` | `.compact` text | Bar |
+| --- | --- | --- |
+| `waiting` | Queued | none |
+| `running` with a percent | {title} · {percent}% | determinate |
+| `running` without a percent | Working… | indeterminate |
+| `cancelling` | Cancelling… · {percent}% or Cancelling… | as `running` |
+| `succeeded` | `checkmark.circle.fill` (`positive` fill) and Done | none |
+| `failed` | `xmark.circle.fill` (`critical` fill) and the title | none |
+| `needsRecovery` | `xmark.circle.fill` (`critical` fill) and Needs Recovery | none |
+| `cancelled` | `minus.circle.fill` (`neutral` fill) and Cancelled | none |
 
 `k` is `runningIndex + 1` (stages count from 1). The compact text is `.callout` `textSecondary` with monospaced digits.
 
@@ -620,7 +619,7 @@ The `.stages` layout draws the same bar, then every stage in a wrapping flow (16
 | `failed` | `xmark.circle.fill` | `critical` fill | `critical` text, semibold |
 | `cancelled` | `minus.circle.fill` | `neutral` fill | `textSecondary` |
 
-The whole view is one VoiceOver element: the label is `accessibilityLabel` ("Progress" by default) and the value comes from the table above. With `announcesStages`, each time the running stage changes (not when the view first appears), VoiceOver says "{stage title}." once. The identifier is `progress.view`.
+The identifier is `progress.view`.
 
 ### Inspector
 
@@ -648,25 +647,24 @@ Checked on macOS 27.0.1 on 2026-10-21 (spec 0067 rationale, *Temuan langkah 14*)
 - **Row.** The time and source columns are `.callout.monospaced()` in `textSecondary`, then the level symbol, then the text in `.callout.monospaced()`. Each column is at least as wide as its hidden template (`timeTemplate`, default `00:00:00.000`; `sourceTemplate`, default `stderr`), so rows line up; a longer source shows in full and pushes the text of its own line. A column is drawn only when at least one line has that part, so a log without sources does not waste the space. Text wraps and is selectable per line (a SwiftUI limit); copying several lines is an action of feature 27.
 - **Levels.**
 
-| `LogLevel` | Symbol | Text | VoiceOver word |
-| --- | --- | --- | --- |
-| `normal` | none, an empty box as wide as a symbol | `.primary` | none |
-| `warning` | `exclamationmark.triangle.fill` in the `caution` fill | `Tone.caution.text` | Warning |
-| `error` | `xmark.circle.fill` in the `critical` fill | `Tone.critical.text` | Error |
+| `LogLevel` | Symbol | Text |
+| --- | --- | --- |
+| `normal` | none, an empty box as wide as a symbol | `.primary` |
+| `warning` | `exclamationmark.triangle.fill` in the `caution` fill | `Tone.caution.text` |
+| `error` | `xmark.circle.fill` in the `critical` fill | `Tone.critical.text` |
 
 - **Surface.** `.consoleSurface()` is the background of the scroll view, clipped to its shape, so the lines run edge to edge with 14 pt at the sides and 2 pt above and below each line; the 12 pt above the first line and below the last one are scroll content margins, so scrolling to the end shows them. Tone text on `surfaceConsole` is pair P2 of spec 0012, so there is no new pair.
 - **Follow.** `follow` is the screen's binding. A new last line scrolls to the end without animation while `follow` is on; turning `follow` on scrolls to the end. A scroll by the user that ends (scroll phase from interacting or decelerating to idle) more than 24 pt above the bottom turns `follow` off. A scroll by the program never does, and scrolling back to the bottom does not turn it on again: the toggle of feature 27 does.
-- **VoiceOver.** The list is one element labeled `accessibilityLabel` (identifier `log.list`), and each line is one element, "{time}, {source}, {Error | Warning}: {text}", with an empty part and the normal level left out ("12:04:31.118, stdout: ready", "Error: text" when only the level is known).
 
 ### Diff
 
 `DiffView(_:emptyText:)` shows `DiffLine`s in a `.cardSurface()` (an ordinary card, not the console surface; the mockup used the console). Feature 29 owns where the lines come from.
 
-| `DiffKind` | Sign column | Text | Row background | VoiceOver |
-| --- | --- | --- | --- | --- |
-| `added` | “+” in `Tone.positive.text` | `.primary` | `toneSurface(.positive, on: .card, strength: .banner)` | “Added: {text}” |
-| `removed` | “−” (U+2212) in `Tone.critical.text` | `.primary` | `toneSurface(.critical, on: .card, strength: .banner)` | “Removed: {text}” |
-| `unchanged` | empty, same width | `textSecondary` | none | “Unchanged: {text}” |
+| `DiffKind` | Sign column | Text | Row background |
+| --- | --- | --- | --- |
+| `added` | “+” in `Tone.positive.text` | `.primary` | `toneSurface(.positive, on: .card, strength: .banner)` |
+| `removed` | “−” (U+2212) in `Tone.critical.text` | `.primary` | `toneSurface(.critical, on: .card, strength: .banner)` |
+| `unchanged` | empty, same width | `textSecondary` | none |
 
 - The sign column is always there and one monospace character wide, so a change is never only a color and the text lines up. Rows are `.callout.monospaced()`, wrap, and are selectable; the card has 8 pt padding and rows sit 2 pt apart with 3 pt above and below the text. The tint corners are `Radius.small`.
 - Tone text on its own tint is pair P3 and primary text on a tint is pair P4 of spec 0012, so there is no new pair.
@@ -677,11 +675,11 @@ Checked on macOS 27.0.1 on 2026-10-21 (spec 0067 rationale, *Temuan langkah 14*)
 - `StacklyMotion.crossfade` is the only transition in Stackly's own views: `.opacity` with `StacklyMotion.crossfadeAnimation` (ease in out, 0.2 s). Use it for status changes, banners appearing, and changes of `ViewState` shape, in every setting, including Reduce Motion.
 - Never animate `.move`, `.slide`, `.scale`, or `.offset`.
 - `StacklyMotion.progress(reduceMotion:)` returns the animation for a change of a progress value, or `nil` while `accessibilityReduceMotion` is on, so the value jumps. A spinner keeps spinning.
-- `announce(_:)` posts one VoiceOver announcement (`AccessibilityNotification.Announcement`). State views call it once when a page turns failed and when a critical banner appears.
+State views call it once when a page turns failed and when a critical banner appears.
 
 ## Commands and shortcuts
 
-The menu bar, `CommandMap`, and the keyboard shortcuts of spec 0069. `CommandMap` (`StacklyUI/Commands/CommandMap.swift`) is the only place a shortcut is written down, and `SystemShortcuts` (`Commands/SystemShortcuts.swift`) holds the macOS shortcuts a row may not use; the unit tests refuse a clash. The tables below are the map, the macOS shortcuts a row may not use, and the rules for adding a command. The probe results come after them.
+The menu bar, `CommandMap`, and the keyboard shortcuts of spec 0069. The tables below are the map, the macOS shortcuts a row may not use, and the rules for adding a command. The probe results come after them.
 
 ### Menu structure
 
@@ -726,7 +724,7 @@ Three shortcuts reuse a macOS shortcut with another meaning, each with a written
 
 ### Shortcuts macOS owns
 
-`SystemShortcuts` holds these as data, and the unit tests refuse a clash. Table A may never be used. Table B may be used for the same meaning only, or with a written reason. Table C may be used only with a written reason. Rules D and E cannot be waived.
+Table A may never be used. Table B may be used for the same meaning only, or with a written reason. Table C may be used only with a written reason. Rules D and E cannot be waived.
 
 | Table | Shortcuts | Meaning |
 | --- | --- | --- |
@@ -771,7 +769,7 @@ The menu bar order is Stackly, File, Edit, View, Instance, Window, Help. A close
 - **Stale content is never dimmed.** The mockup's 0.6 opacity fails AA.
 - **Reduce Motion.** See [Motion](#motion).
 - **Keyboard.** Every button in placeholders, banners, and dialogs can be focused and pressed (Tab and Space). Custom click areas are at least 24 × 24 pt.
-- **VoiceOver.** Every view has a label. Decorative icons (section icons, placeholder symbols, swatches) are hidden with `accessibilityHidden(true)`. A placeholder or banner is one group labeled by its title.
+Decorative icons (section icons, placeholder symbols, swatches) are hidden with `accessibilityHidden(true)`. A placeholder or banner is one group labeled by its title.
 - **Large text on macOS 27.** Checked in build step 4 on macOS 27 with Xcode 27.0 (27A266a): `.dynamicTypeSize` does not change the size of any text style (`.body` stays 13 pt from `.xSmall` to `.accessibility5`, both through `Font.resolve(in:)` and in a rendered `Text`), and `@ScaledMetric` does not scale either. So there is no homemade scaling layer. The large text check becomes a narrow width check: every gallery page and its third preview ("Narrow width") render at 640 pt, the minimum content width of the main window (`GalleryLayout.narrowWidth`, from spec 0013; see [App shell](#app-shell)), with the longest labels and details, to prove labels are not cut and text wraps. In the Design Gallery window, use the Narrow Width toolbar toggle. `TypographyTests.textStylesIgnoreDynamicTypeSizeOnMacOS` guards this finding: if it fails, macOS now scales text styles, so switch the third preview to `.dynamicTypeSize(.accessibility3)` and update this paragraph.
 - **Checking in the real app.** Build Debug, open Window › Design Gallery, then change System Settings › Accessibility › Display (Increase contrast, Reduce transparency, Differentiate without color, Reduce motion) and the light or dark appearance. Spec 0012 lists what `/check verify` checks there.
 
@@ -799,8 +797,7 @@ Checked on macOS 27.0 (26A428) with Xcode 27.0 (27A266a), in the Debug app drive
 
 - `List(selection:)` in `.sidebar` style: Overview, Instances, Environments without a title, then Library (Catalog, Runtimes) and System (Operations, Diagnostics). Each row is a `Label` with `SectionIcon` and a native `.badge`.
 - The selection is `@SceneStorage("shell.section")`, Overview by default, so the system restores it per window.
-- Badges come only from loaded snapshots (`SidebarSection.badge(counts:isConnected:)`): no badge at zero or before a snapshot loaded. Instances keeps its count while the daemon is unreachable, read by VoiceOver as "3 instances, last known". Operations shows running and cancelling operations only while connected, with `.badgeProminence(.increased)`. The badges are native, not the mockup's blue capsule and red numbers.
-- `DaemonFooter` sits in the sidebar's bottom safe area: a `StatusLabel` in the `.row` context (`.callout`) and an icon only `SettingsLink` (`slider.horizontal.3`, help "Settings (⌘,)", VoiceOver "Settings", 24 × 24 pt hit target).
+- Badges come only from loaded snapshots (`SidebarSection.badge(counts:isConnected:)`): no badge at zero or before a snapshot loaded. Operations shows running and cancelling operations only while connected, with `.badgeProminence(.increased)`. The badges are native, not the mockup's blue capsule and red numbers.
 
 ### Daemon status
 
@@ -834,7 +831,7 @@ Spec 0022, `StacklyUI/Overview/`. A `ScrollView` on `surfaceWindow` with a 22 pt
 - **Cards**: Running, Stopped, and Failed (the Runtimes card joins with feature 18) in `LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12)])`. Each is a plain `Button` on `.cardSurface(radius: .large)` that opens Instances with the filter of the card: a 7 pt dot in the tone fill, the label in `.callout` `textSecondary`, the number in `.largeTitle.weight(.semibold).monospacedDigit()`, and a note line. Running counts `ready` and notes "{n} not ready" in the `caution` text tone; the Failed number is `critical` text above zero. Before the instance store loaded, a small `DelayedProgress` stands where the number goes, never a zero.
 - **Layout**: cards, then two columns at a content width of 820 pt or more (Needs Attention above Instances on the left, Operations 300 to 360 pt on the right), one column below that (Needs Attention, Instances, Operations). Section titles are `.headline`; each section is a card with a divider between its rows.
 - **Subtitle**: "{ready} running · {stopped} stopped", then " · {failed} failed", " · {notReady} not ready", and " · {unknown} unknown" for each above zero.
-- **Needs Attention** (`AttentionRules.items`, a pure function): at most one item per instance, from the first rule that matches. Items order by tone (critical, caution, neutral), then category (disk, operation, instance), then rule number, then name. Six show; "Show {n} More" opens the rest in place, then "Show Less". Each item is one button: the tone symbol, the title in `.body.weight(.semibold)`, the body in `.callout` `textSecondary`, and a chevron. VoiceOver reads "{Critical|Warning|Info}: {title}. {body}" with the hint "Opens {destination}." Until the instances, the operations, and the first disk reading have answered, the section shows a delayed spinner (operations that are unsupported or failed with nothing loaded do not wait: they are item O2), and after that "Nothing needs attention." when empty.
+- **Needs Attention** (`AttentionRules.items`, a pure function): at most one item per instance, from the first rule that matches. Items order by tone (critical, caution, neutral), then category (disk, operation, instance), then rule number, then name. Six show; "Show {n} More" opens the rest in place, then "Show Less". Each item is one button: the tone symbol, the title in `.body.weight(.semibold)`, the body in `.callout` `textSecondary`, and a chevron.
 
 | Rule | Condition | Tone | Title | Opens |
 | --- | --- | --- | --- | --- |
@@ -872,7 +869,7 @@ Spec 0022, `StacklyUI/Instances/`.
 
 Spec 0020, `StacklyUI/CreateInstance/`. A `StacklySheet` of at least 560 pt with a `.grouped` `Form` inside, the sheet's own scroll view around it, and the margin of the grouped form given back so its cards line up with the Preflight card.
 
-- **Order**: the Category segments (All, Databases, Messaging, Analytics, Cache, Proxy), Runtime, Name; Ports (one row per IP endpoint: Fixed or Automatic, then the number or "Assigned when the instance starts"); Settings from the daemon's schema; the closed Advanced group, which opens by itself when a field in it has an error; "Start after creating"; then the Preflight card (`CardSection` with a `CheckList`) and the equivalent command (`ConsoleBlock`). That is also the VoiceOver and keyboard order.
+- **Order**: the Category segments (All, Databases, Messaging, Analytics, Cache, Proxy), Runtime, Name; Ports (one row per IP endpoint: Fixed or Automatic, then the number or "Assigned when the instance starts"); Settings from the daemon's schema; the closed Advanced group, which opens by itself when a field in it has an error; "Start after creating"; then the Preflight card (`CardSection` with a `CheckList`) and the equivalent command (`ConsoleBlock`).
 - **Fields**: drawn from `FormField` alone, so there is no branch per provider: a secret is a `SecretField` (Generate by default, Enter, Copy from with the references of `secret.list` and the label "{Purpose} of “{name}”" for an instance of this window), a managed field is a read only row with a lock and "Set by Stackly", a field that cannot change later has the neutral "Set once" badge and the words "Can’t be changed after the instance is created.", and a kind this build does not know is a read only line. "Required" is written, never only a symbol.
 - **Errors**: a sentence with the critical symbol under the control. The text is written from the code and the bounds of the field (`FieldErrorText`), because the wire `message` is one fixed text per code. A taken Fixed port says "Fixed ports are never changed silently." and offers "Use {n}", which only the person's click applies.
 - **Preflight rows**: the status table of *Checklist* applies unchanged (`ok` passed, `caution` warning, `error` failed, an unknown status unrecognized); the symbol shape tells them apart, never only the color. Create is on only when the preflight of this very draft is ready; its footer reason follows the order of spec 0020 (*Footer*).
@@ -891,7 +888,7 @@ Spec 0020, `StacklyUI/CreateInstance/`. A `StacklySheet` of at least 560 pt with
 
 ### Close notice
 
-`CloseNotice` shows once per launch, on the first close of the main window that is not part of quitting: a borderless, non activating `NSPanel` at the bottom center of the window's screen with an opaque `.cardSurface(radius: .large)` card, "Stackly is still running" and "Closing the window doesn’t stop stacklyd or your instances. Click Stackly in the Dock to reopen it." (provisional until feature 32). It fades in and out with the 0.2 s crossfade, stays 4 seconds or until clicked, and its text is announced to VoiceOver. It is AppKit because SwiftUI has no presentation that outlives its window.
+`CloseNotice` shows once per launch, on the first close of the main window that is not part of quitting: a borderless, non activating `NSPanel` at the bottom center of the window's screen with an opaque `.cardSurface(radius: .large)` card, "Stackly is still running" and "Closing the window doesn’t stop stacklyd or your instances. Click Stackly in the Dock to reopen it." (provisional until feature 32). It is AppKit because SwiftUI has no presentation that outlives its window.
 
 
 ## Testing views
@@ -941,5 +938,5 @@ Every page and shell piece is checked from fixture data, with no `stacklyd` runn
 - Snapshots draw page content and the shell pieces that render on their own (banner, footer). The sidebar, toolbar, and glass are not captured; the window frame is only in the UI test screenshots.
 - Increase Contrast and Reduce Transparency in snapshots are pinned through underscored environment values that Apple does not document. A guard test fails when an SDK stops honoring them, and then the checks fall back to the manual list. System colors bridged from AppKit and text in `List` and `Table` rows keep their normal color in the HC variants.
 - `.inspector` hosts the page and the column content again and drops the pinned contrast there, so `.stacklyInspector` relays the fixture values in Debug builds (spec 0068, K15): the page inside a `ZStack` of its own, the column on its padded content inside the `ScrollView`. A relay written straight on the page is not enough, because it lands above the point where `.inspector` pins the value whenever the page sits under an `if`, a `switch`, an `AnyView`, or a modifier. The guard test in `RenderProbeTests` renders through `SnapshotRoot` and checks four main content places (a `ScrollView` page and a `GeometryReader` page, inspector open and closed) plus the column. A new component that hosts content again calls `relayFixtureAccessibility()` the same way and adds its place to that test; a page never relays on its own.
-- XCUITest on macOS cannot read keyboard focus or key equivalents, so Tab order, Space on a focused button, and duplicate shortcuts stay manual (duplicates are checked by spec 0069's own tests). The real system settings and the VoiceOver voice are manual too.
+- XCUITest on macOS cannot read keyboard focus or key equivalents, so Tab order, Space on a focused button, and duplicate shortcuts stay manual (duplicates are checked by spec 0069's own tests).
 - The UI tests do not compare screenshots pixel by pixel, and an audit of text over glass depends on the wallpaper.

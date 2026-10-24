@@ -68,17 +68,6 @@ struct OverviewRuntimesTests {
         #expect(RuntimesCardState.of(rig.runtimes) == nil)
     }
 
-    @Test func theCardIsSpokenWithItsNumberOrItsFailure() {
-        #expect(SummaryCard.spokenLabel(label: "Runtimes", count: 4, note: nil) == "Runtimes, 4")
-        #expect(SummaryCard.spokenLabel(label: "Runtimes", count: 0, note: nil) == "Runtimes, 0")
-        #expect(
-            SummaryCard.spokenLabel(label: "Runtimes", count: nil, note: nil)
-                == "Runtimes, loading")
-        #expect(
-            SummaryCard.spokenLabel(label: "Runtimes", count: nil, note: "Couldn’t load")
-                == "Runtimes, Couldn’t load")
-    }
-
     // MARK: - The titles
 
     @Test func anInstallIsNamedByTheInstallingRowOfItsOperation() async {
@@ -99,24 +88,6 @@ struct OverviewRuntimesTests {
             OverviewTitle.of(
                 FixtureScenario.operationCases[0], OperationTitle.RuntimeNames(store: nil))
                 == "Install runtime")
-    }
-
-    @Test func theRowOfAnInstallReadsItsTitleAndItsPercent() {
-        let install = OperationSnapshot.fixture(
-            number: 1, kind: .installRuntime, state: .running, stage: "download",
-            progress: .counted(CountedProgress(done: 42, total: 100)))
-        #expect(
-            OverviewOperationRow.spokenLabel(operation: install, title: "Install PostgreSQL 18.1")
-                == "Install PostgreSQL 18.1, Running, Download, 8 percent")
-    }
-
-    @Test func aLaterStageCountsTheStagesBeforeIt() {
-        let install = OperationSnapshot.fixture(
-            number: 1, kind: .installRuntime, state: .running, stage: "extract",
-            progress: .counted(CountedProgress(done: 50, total: 100)))
-        #expect(
-            OverviewOperationRow.spokenLabel(operation: install, title: "Install Valkey 8.1.4")
-                == "Install Valkey 8.1.4, Running, Extract, 50 percent")
     }
 
     @Test func anInstallThatStartedElsewhereGetsItsNameWhenTheStoreReadsAgain() async throws {

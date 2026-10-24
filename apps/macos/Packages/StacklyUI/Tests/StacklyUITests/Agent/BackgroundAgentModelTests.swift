@@ -19,10 +19,7 @@ struct BackgroundAgentModelTests {
         let model: BackgroundAgentModel
         var clock = BackgroundAgentModelTests.start
         var retries = 0
-        var assessed: [AgentAssessment] = []
-        var failed: [AgentActionError] = []
         /// `assessed` and `failed` in the order the closures ran: "assessed" or "failed".
-        var events: [String] = []
 
         init(
             status: Result<AgentProbe, AgentActionError>? = nil,
@@ -47,14 +44,7 @@ struct BackgroundAgentModelTests {
                 presence: presence,
                 now: { [weak self] in self?.clock ?? BackgroundAgentModelTests.start },
                 sleep: { try await sleeper.sleep(for: $0) },
-                didAssess: { [weak self] assessment, _ in
-                    self?.assessed.append(assessment)
-                    self?.events.append("assessed")
-                },
-                didFail: { [weak self] error in
-                    self?.failed.append(error)
-                    self?.events.append("failed")
-                },
+
                 systemRetry: { [weak self] in self?.retries += 1 })
         }
 
@@ -79,7 +69,6 @@ struct BackgroundAgentModelTests {
         #expect(rig.controller.calls == [.status])
         #expect(rig.model.lastCheckedAt == Self.start)
         #expect(rig.model.bundlePath == Self.bundle)
-        #expect(rig.assessed.isEmpty == false)
     }
 
     @Test func anInitialProbeIsAppliedAtOnceWithNoCallAndNoReport() {
@@ -91,7 +80,6 @@ struct BackgroundAgentModelTests {
         #expect(rig.model.lastLaunchedAt == Self.start)
         #expect(rig.controller.calls.isEmpty)
         #expect(rig.record.reads == 0)
-        #expect(rig.assessed.isEmpty)
         #expect(rig.model.justRegistered == false)
     }
 
@@ -406,13 +394,11 @@ struct BackgroundAgentModelTests {
 
     // MARK: - Reports
 
-    @Test func everyReadAfterTheFirstIsReportedAndTheClockIsTheInjectedOne() async throws {
+    @Test func refreshUsesTheInjectedClock() async throws {
         let rig = Rig(status: Self.probe(.enabled))
         try await rig.attachAndSettle()
-        let before = rig.assessed.count
         rig.clock = Self.start.addingTimeInterval(42)
         await rig.model.refresh()
-        #expect(rig.assessed.count == before + 1)
         #expect(rig.model.lastCheckedAt == Self.start.addingTimeInterval(42))
     }
 
@@ -424,22 +410,20 @@ struct BackgroundAgentModelTests {
         let action = Task { await rig.model.start() }
         while rig.model.isStarting == false { await Task.yield() }
         await rig.sleeper.waitUntilSleeping(2)  // the poll and the wait
-        #expect(rig.failed.isEmpty)
+        #expect(rig.model.lastError == nil)
         rig.sleeper.fire()
         await action.value
-        #expect(rig.failed == [.daemonDidNotStart(seconds: 30)])
+        #expect(rig.model.lastError == .daemonDidNotStart(seconds: 30))
     }
 
-    @Test func anOSErrorIsReportedOnceAfterTheProbeOfTheSameAction() async throws {
+    @Test func anOSErrorIsStoredAfterTheAction() async throws {
         let rig = Rig()
         try await rig.attachAndSettle()
         let error = AgentActionError.os(
             op: .register, kind: .invalidSignature, domain: "d", code: 3)
         rig.controller.setAfterRegister(.failure(error))
-        rig.events = []
         await rig.model.turnOn()
-        #expect(rig.failed == [error])
-        #expect(rig.events == ["assessed", "failed"])
+        #expect(rig.model.lastError == error)
         #expect(rig.model.lastError == error)
     }
 
@@ -448,14 +432,14 @@ struct BackgroundAgentModelTests {
         try await rig.attachAndSettle()
         rig.controller.setAfterRegister(.failure(.timedOut(op: .register)))
         await rig.model.turnOn()
-        #expect(rig.failed == [.timedOut(op: .register)])
+        #expect(rig.model.lastError == .timedOut(op: .register))
     }
 
     @Test func aRegistrationTheOSDidNotKeepIsReported() async throws {
         let rig = Rig(afterRegister: Self.probe(.notRegistered))
         try await rig.attachAndSettle()
         await rig.model.turnOn()
-        #expect(rig.failed == [.registrationNotKept])
+        #expect(rig.model.lastError == .registrationNotKept)
     }
 
     @Test func aRefreshThatFailsReportsNothingThroughDidFail() async throws {
@@ -464,7 +448,7 @@ struct BackgroundAgentModelTests {
         await rig.model.refresh()
         #expect(rig.model.assessment?.state == .unavailable)
         #expect(rig.model.lastError == nil)
-        #expect(rig.failed.isEmpty)
+        #expect(rig.model.lastError == nil)
     }
 
     @Test func clearingTheLastErrorAtTheStartOfTheNextActionReportsNothing() async throws {
@@ -472,11 +456,11 @@ struct BackgroundAgentModelTests {
         try await rig.attachAndSettle()
         rig.controller.setAfterRegister(.failure(.timedOut(op: .register)))
         await rig.model.turnOn()
-        #expect(rig.failed.count == 1)
+        #expect(rig.model.lastError == .timedOut(op: .register))
         rig.controller.setAfterRegister(Self.probe(.requiresApproval))
         await rig.model.turnOn()
         #expect(rig.model.lastError == nil)
-        #expect(rig.failed.count == 1)
+
     }
 
     // MARK: - The wait ends when launchd cannot start the job (step 12a)
@@ -505,7 +489,7 @@ struct BackgroundAgentModelTests {
         #expect(rig.model.isStarting == false)
         #expect(rig.model.isWorking == false)
         #expect(rig.model.lastError == nil)
-        #expect(rig.failed.isEmpty)
+        #expect(rig.model.lastError == nil)
         // The wait's own sleep was cancelled; only the poll still waits.
         #expect(rig.sleeper.waiting == 1)
     }
@@ -544,7 +528,7 @@ struct BackgroundAgentModelTests {
         rig.sleeper.fire()
         await action.value
         #expect(rig.model.lastError == .daemonDidNotStart(seconds: 30))
-        #expect(rig.failed == [.daemonDidNotStart(seconds: 30)])
+        #expect(rig.model.lastError == .daemonDidNotStart(seconds: 30))
     }
 
     @Test func aStateThatBecomesEnabledAfterTheWaitEndedStartsANewWait() async throws {

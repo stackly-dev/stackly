@@ -1,18 +1,12 @@
 import SwiftUI
 
 /// A list of changed lines (spec 0067, AC-17): config changes and drift.
-///
-/// Each line has a sign column that always shows ("+" or "−", empty for an unchanged
-/// line), so a change is never only a color. A changed line sits on a tint of its tone and
-/// has primary text; an unchanged line has secondary text and no tint. Text wraps and is
-/// selectable. Without lines the view shows `emptyText`. VoiceOver reads "Added: …",
-/// "Removed: …", or "Unchanged: …" per line.
+/// Each line has a sign column that always shows ("+" or "−", empty for an unchanged line), so a change is never only a color. A changed line sits on a tint of its tone and has primary text; an unchanged line has secondary text and no tint. Text wraps and is selectable. Without lines the view shows `emptyText`.
 public struct DiffView: View {
     private let lines: [DiffLine]
     private let emptyText: String
 
     /// Creates a diff view.
-    ///
     /// - Parameters:
     ///   - lines: The lines, in order.
     ///   - emptyText: What the view says when there are no lines, from the screen.
@@ -40,8 +34,7 @@ public struct DiffView: View {
         }
         .padding(Spacing.s8)
         .cardSurface()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AccessibilityID.Diff.list)
+
     }
 }
 
@@ -57,7 +50,7 @@ private struct DiffRow: View {
                 Text(line.kind.mark ?? "")
                     .foregroundStyle(markStyle)
             }
-            .accessibilityHidden(true)
+
             Text(line.text)
                 .foregroundStyle(textStyle)
                 .textSelection(.enabled)
@@ -68,8 +61,7 @@ private struct DiffRow: View {
         .padding(.vertical, 3)
         .padding(.horizontal, Spacing.s8)
         .modifier(DiffTint(tone: line.kind.tone, shape: shape))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(line.accessibilityLabel)
+
     }
 
     private var markStyle: AnyShapeStyle {

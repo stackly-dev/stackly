@@ -30,8 +30,7 @@ extension View {
 }
 
 extension Image {
-    /// Sizes an SF Symbol at `size` points, scaled relative to `textStyle` with
-    /// `@ScaledMetric`. Use it only for `Image(systemName:)` that needs its own size;
+    /// Sizes an SF Symbol at `size` points. Use it for symbols that need their own size;
     /// other symbols take the text style around them.
     public func stacklySymbol(size: CGFloat, relativeTo textStyle: Font.TextStyle) -> some View {
         modifier(ScaledSymbolSize(size: size, textStyle: textStyle))
@@ -44,10 +43,10 @@ extension Image {
 }
 
 private struct ScaledSymbolSize: ViewModifier {
-    @ScaledMetric private var size: CGFloat
+    private let size: CGFloat
 
     init(size: CGFloat, textStyle: Font.TextStyle) {
-        _size = ScaledMetric(wrappedValue: size, relativeTo: textStyle)
+        self.size = size
     }
 
     func body(content: Content) -> some View {

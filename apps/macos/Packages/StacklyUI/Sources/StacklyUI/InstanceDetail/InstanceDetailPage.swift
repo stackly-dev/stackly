@@ -5,7 +5,6 @@ import SwiftUI
 /// the navigation stack of the Instances page. The header and the rows of the summary come
 /// from the ``InstanceStore`` at once; the rows that need the detail wait for
 /// `instance.get_detail`.
-///
 /// The toolbar holds the main action of the instance and the More menu. An instance the
 /// store does not hold is looked up once; one the daemon does not know, or one that was
 /// removed while the page was open, shows "Instance Not Found" with a way back.
@@ -48,7 +47,7 @@ struct InstanceDetailPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(StacklyColor.surfaceWindow)
-        .accessibilityIdentifier(AccessibilityID.InstanceDetail.page)
+
         .task(id: id) { await locate() }
     }
 
@@ -108,8 +107,7 @@ struct InstanceDetailPage: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .accessibilityLabel("Tab")
-            .accessibilityIdentifier(AccessibilityID.InstanceDetail.tabs)
+
         }
     }
 
@@ -120,10 +118,7 @@ struct InstanceDetailPage: View {
             source: DuplicateSourceRef(id: summary.id, name: summary.name))
     }
 
-    /// The items of the More menu: Copy Connection String, then Duplicate… when the window
-    /// has the sheet for it (spec 0024 AC-13). Neither takes a shortcut here; the commands of
-    /// the Instance menu own them.
-    ///
+    /// The items of the More menu: Copy Connection String, then Duplicate… when the window has the sheet for it (spec 0024 AC-13).
     /// - Parameters:
     ///   - copyConnection: The Copy Connection String action.
     ///   - duplicate: Opens the sheet on an instance, or `nil` where the window has none.
@@ -184,7 +179,7 @@ struct InstanceDetailPage: View {
                         primaryAction: StateAction(
                             title: "Back to Instances", mutates: false, perform: back))
                 )
-                .accessibilityIdentifier(AccessibilityID.InstanceDetail.notFound)
+
             }
         }
         .pageChrome(title: "Instance")

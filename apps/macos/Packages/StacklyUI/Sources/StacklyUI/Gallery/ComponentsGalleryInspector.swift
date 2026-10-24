@@ -100,7 +100,7 @@
         var body: some View {
             GallerySection(
                 "InspectorPlaceholder",
-                note: "What the inspector says when nothing is selected. One VoiceOver group: "
+                note: "What the inspector shows when nothing is selected: "
                     + "the title, then the message."
             ) {
                 HStack(alignment: .top, spacing: Spacing.s14) {
@@ -155,7 +155,7 @@
                         .foregroundStyle(StacklyColor.textSecondary)
                     Spacer()
                     Button("Close") { dismiss() }
-                        .keyboardShortcut(.cancelAction)
+
                 }
                 Text(
                     "The page content fills the rest of the window; the inspector is on its right."

@@ -1,9 +1,6 @@
 import SwiftUI
 
-/// Shows a ``ViewState``: a delayed spinner, an empty or failed or unsupported
-/// placeholder, or the content, with stale and partial banners above empty and loaded
-/// content. Shape changes crossfade, and a change to failed is announced to VoiceOver.
-///
+/// Shows a ``ViewState``: a delayed spinner, an empty or failed or unsupported placeholder, or the content, with stale and partial banners above empty and loaded content.
 /// The content is never dimmed or replaced by a spinner during a refresh.
 public struct StateView<Value, Content: View>: View {
     @Environment(\.loadingDelay) private var loadingDelay
@@ -14,7 +11,6 @@ public struct StateView<Value, Content: View>: View {
     private let content: (Value) -> Content
 
     /// Creates a state view.
-    ///
     /// - Parameters:
     ///   - state: The state, from ``ViewState/resolve(unsupported:value:error:lastLoadedAt:isRefreshing:emptyContent:outdated:partial:)``.
     ///   - retry: Loads again, from the failed placeholder or the stale banner. Clear the
@@ -68,11 +64,7 @@ public struct StateView<Value, Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onChange(of: state.shape, initial: true) { _, shape in
-            if shape == .failed, case .failed(let failure) = state {
-                announce(failure.title)
-            }
-        }
+
     }
 }
 

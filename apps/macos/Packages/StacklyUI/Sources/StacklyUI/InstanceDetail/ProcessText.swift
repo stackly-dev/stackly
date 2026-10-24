@@ -5,7 +5,6 @@ import StacklyClient
 /// ``ReadinessText``, so the two never merge into one word.
 nonisolated public enum ProcessText {
     /// The process text.
-    ///
     /// - Parameter instance: The instance.
     /// - Returns: "Running (PID 4001)" with ", adopted" for a process the daemon found after
     ///   its own restart, or one word for the other lifecycle states.

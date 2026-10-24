@@ -30,9 +30,7 @@ struct OnboardingStepDots: View {
                         .transaction { $0.animation = nil }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(OnboardingFooter.stepSpoken(step))
-                .accessibilityIdentifier(AccessibilityID.Onboarding.step(step.number))
-                .accessibilityAddTraits(isCurrent ? .isSelected : [])
+
             }
         }
     }

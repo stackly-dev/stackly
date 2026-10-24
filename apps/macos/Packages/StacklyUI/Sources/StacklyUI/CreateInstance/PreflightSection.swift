@@ -16,7 +16,6 @@ enum PreflightMapping {
     }
 
     /// The rows of the card.
-    ///
     /// - Parameters:
     ///   - checks: The checks of the last preflight, in the daemon's order.
     ///   - failedKinds: The kinds of row the failed stage of a create points at; they show
@@ -61,10 +60,10 @@ struct PreflightSection: View {
             } else {
                 DelayedProgress()
                     .frame(maxWidth: .infinity, minHeight: 34)
-                    .accessibilityLabel("Checking the draft")
+
             }
         }
-        .accessibilityIdentifier(AccessibilityID.CreateInstance.preflight)
+
     }
 
     private var failure: some View {
@@ -73,7 +72,7 @@ struct PreflightSection: View {
                 .foregroundStyle(Tone.caution.text)
             Spacer(minLength: Spacing.s12)
             Button("Retry") { model.retryPreflight() }
-                .accessibilityIdentifier(AccessibilityID.CreateInstance.preflightRetry)
+
         }
     }
 }

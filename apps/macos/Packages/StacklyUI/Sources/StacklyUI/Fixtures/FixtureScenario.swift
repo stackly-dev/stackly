@@ -23,7 +23,6 @@
 
     /// A whole daemon world for the app and the tests: what the link reports and what the
     /// daemon answers, built only from the generated contract types (spec 0068).
-    ///
     /// The catalog of scenarios is ``all``; each is named by an ``ID`` that is also the
     /// value of `STACKLY_UI_SCENARIO`.
     public nonisolated struct FixtureScenario: Sendable {

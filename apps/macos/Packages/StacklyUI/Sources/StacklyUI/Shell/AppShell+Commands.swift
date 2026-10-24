@@ -11,11 +11,9 @@ extension AppShell {
 
     /// The actions the shell publishes with `.publishesCommands(.shell, …)` (spec 0069,
     /// *Penerbit*).
-    ///
     /// The section commands are always there and never change data. Reconnect is there only
     /// while there is no connection: busy while an attempt runs, and disabled with the same
     /// reason as the Diagnostics button while the app is misconfigured.
-    ///
     /// - Parameters:
     ///   - presentation: What the shell shows for the daemon's state.
     ///   - select: Shows a section, the same function the sidebar uses.

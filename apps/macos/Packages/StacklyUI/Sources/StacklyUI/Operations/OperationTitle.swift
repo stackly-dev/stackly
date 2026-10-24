@@ -21,7 +21,6 @@ nonisolated public enum OperationTitle {
 
         /// Reads the names the `RuntimeStore` holds: the installs that have not ended by the
         /// ID of their operation, and the runtimes by their ID. A `nil` store knows none.
-        ///
         /// - Parameter store: The store of feature 18, or `nil`.
         @MainActor public init(store: RuntimeStore?) {
             guard let store else {
@@ -42,7 +41,6 @@ nonisolated public enum OperationTitle {
     }
 
     /// The title of an operation.
-    ///
     /// - Parameters:
     ///   - operation: The operation.
     ///   - instanceNames: The names of the known instances by ID.

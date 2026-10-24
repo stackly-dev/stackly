@@ -1,8 +1,6 @@
 import Foundation
 import StacklyClient
 
-/// One row of the Runtimes table (spec 0018, *Halaman Runtimes*): the runtime and
-/// everything the columns and VoiceOver say about it, worked out once.
 struct RuntimeRowModel: Identifiable, Equatable {
     let summary: RuntimeSummary
     let tile: TileSpec
@@ -22,12 +20,9 @@ struct RuntimeRowModel: Identifiable, Equatable {
     var usedBy: String { RuntimeCopy.usedBy(summary.usedBy) }
     /// Why Remove is locked.
     var removeReason: String { RuntimeCopy.removeReason(of: summary) }
-    /// What VoiceOver reads for the row.
-    var spokenLabel: String { RuntimeCopy.spokenLabel(of: summary) }
 
     /// The rows of `runtimes`, each with the tile of the catalog provider that runs the
     /// same software, or a gray tile with the default mark of its name.
-    ///
     /// - Parameters:
     ///   - runtimes: The runtimes, in table order.
     ///   - catalog: The providers of the catalog, or `nil` while it is not loaded.

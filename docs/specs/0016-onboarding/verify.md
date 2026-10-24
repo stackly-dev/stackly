@@ -1,4 +1,6 @@
 # Verify: Onboarding · spec 0016 · updated 2026-10-22
+> Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
+
 
 _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Langkah milestone yang belum dibangun belum ada di sini._
 
@@ -13,12 +15,10 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - [ ] Di langkah 3 (Storage) tanpa `STACKLY_ROOT` → baris Data, Cache, Logs, dan Secrets "Login Keychain"; path memakai `~` untuk folder home; bila daemon berjalan, path sama dengan `stackly daemon status --json` `info.roots` → AC-6
 - [ ] Jalankan app dengan `STACKLY_ROOT` di environment → subjudul memakai varian override, satu baris "Folders" dengan catatan override, dan Secrets "A keychain file inside that folder"; nilai variabel tidak tampil di mana pun → AC-6
 - [ ] Tekan Escape di langkah 3 → onboarding tertutup, shell tampil di bagian yang tersimpan (Overview pada peluncuran pertama), tanpa kartu umpan balik; buka app lagi tanpa `-onboarding.finished NO` → shell langsung → AC-1, AC-3
-- [ ] Buka onboarding lagi dengan argumen `-onboarding.finished NO`, tekan Get Started di langkah 5 → shell tampil dan kartu umpan balik "Setup complete." muncul sekali dan diumumkan VoiceOver sekali → AC-11
 - [ ] Menu Help → "Welcome to Stackly" (tanpa shortcut): saat jendela utama ditutup, membuka jendela dan menampilkan langkah 1; saat onboarding tampil di langkah 3, hanya membawa jendela ke depan dan tetap di langkah 3 → AC-3
 - [ ] Di langkah 3 tutup jendela (⌘W) lalu klik Stackly di Dock → onboarding tampil lagi di langkah 3; tutup lagi dan keluar lewat Quit, buka lagi → mulai dari langkah 1, tanpa Get Started tercatat → AC-1
 - [ ] Saat onboarding tampil, buka menu View dan Instance → perintah shell nonaktif; ⌘, tetap membuka Settings → AC-3
 - [ ] Keyboard saja (Keyboard navigation menyala): Tab melewati titik langkah, Back, dan tombol utama; Space menekannya; Return menekan tombol utama; Escape melewati → AC-10
-- [ ] VoiceOver: titik langkah dibaca "Step {n} of 5, {label}" dengan trait terpilih untuk langkah aktif; saat langkah berganti fokus pindah ke judul langkah dan "Step {n} of 5, {label}." terucap sekali → AC-10
 - [ ] Jendela 900 × 600 pt, light, dark, Increase Contrast, dan Reduce Transparency → konten tidak terpotong (digulir bila perlu), teks terbaca, tanpa glass atau warna sistem sekunder → AC-10
 - [x] Baca ulang semua teks langkah 1 sampai 3 terhadap AC-061 → tidak ada janji sandbox, isolasi dari file user, atau fitur yang belum ada → AC-9
 
@@ -43,7 +43,7 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - AC-4 · langkah Welcome dan aturan sumber jaringan; baris Verified runtimes menunggu `runtimeInstallAvailable` (fitur 18)
 - AC-6 · langkah Storage dengan roots daemon, default, dan varian override
 - AC-9 · `OnboardingCopy`, test copy bagian Welcome dan Storage, dan pindaian frasa terlarang; teks langkah lain dan baca ulang AC-061 penuh di Milestone 2, 3, dan 4
-- AC-10 · titik langkah, fokus judul, pengumuman langkah, Escape, dan ukuran minimum; pengumuman `not_found` dan aturan fokus aksi kartu di Milestone 2; evidence keyboard dan VoiceOver di Milestone 4
+- AC-10 · titik langkah, fokus judul, pengumuman langkah, Escape, dan ukuran minimum; pengumuman `not_found` dan aturan fokus aksi kartu di Milestone 2; evidence interaksi desktop di Milestone 4
 - AC-11 · Get Started dan umpan balik "Setup complete."
 - AC-5, AC-7, AC-8 · belum, milik Milestone 2 dan 3
 
@@ -57,7 +57,6 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - [ ] Hentikan daemon (agent `enabled`) → kartu "stacklyd is starting…" dengan status "stacklyd unavailable"; tepat di detik ke 15 berganti ke "Allowed, but stacklyd isn’t running" dengan tombol Start stacklyd, tanpa menunggu polling → AC-5
 - [ ] Tekan Turn On hanya setelah persetujuan lewat lead (mendaftarkan agent sungguhan; dicatat bersama record AC-17 spec 0015) → progress dan "stacklyd is starting…" sampai daemon tersambung, tanpa tombol Start stacklyd; hasil `requires_approval` menampilkan "Waiting for approval" dengan Open System Settings… dan fokus keyboard kembali ke tombol itu → AC-5, AC-10
 - [ ] Di langkah 2 tanpa `STACKLY_ROOT` dan dengan `STACKLY_ROOT` → varian "STACKLY_ROOT is set" tanpa aksi pada yang kedua → AC-5
-- [ ] VoiceOver di langkah 2: masuk langkah hanya mengucapkan "Step 2 of 5, Background Agent."; perubahan state agent diumumkan sekali (oleh app, bukan dua kali); `not_found` saat daemon tidak ada diumumkan sekali dengan "Stackly can’t find its background service." → AC-10
 - [ ] Langkah 5 (Command Line) pada akun ini: toggle "Install stackly in ~/.local/bin" mati dan detail "No password needed. Stackly doesn’t change your PATH or shell files."; menyalakan toggle membuka konfirmasi "Install the stackly command?" dan Cancel tidak mengubah apa pun (`ls -l ~/.local/bin/stackly` tetap tidak ada, toggle kembali mati) → AC-8
 - [ ] Ulangi dan tekan Install → `ls -l ~/.local/bin/stackly` menunjuk ke `…/Stackly.app/Contents/MacOS/stackly-cli`, `~/.local/bin/stackly --version` jalan, baris PATH `export PATH="$HOME/.local/bin:$PATH"` dengan tombol Copy ("Copied." terucap) dan "Or run it directly: …/Contents/MacOS/stackly-cli" tampil; matikan toggle dan Remove → link hilang, file shell tidak berubah (`stat` sebelum dan sesudah) → AC-8
 - [ ] Blok contoh di langkah 5 hanya berisi `stackly daemon status` dan `stackly provider list`, tanpa `/usr/local/bin` dan tanpa "Requires your password once" → AC-8, AC-9
@@ -80,7 +79,7 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 - AC-2 · label tombol utama `Not Now` dan `Continue` di langkah 2 dari `DaemonModel.agent?.assessment?.state`
 - AC-5 · kartu Background Agent, semua baris tabel, jadwal per detik, aksi hanya lewat `turnOn()`, `openLoginItems()`, `start()`, `refresh()`; bukti alur Turn On sungguhan menunggu persetujuan di Milestone 4
 - AC-8 · langkah Command Line dengan toggle berkonfirmasi, Repair, catatan PATH, baris "Or run it directly", dan blok contoh; evidence di akun nyata di Milestone 4
-- AC-10 · pengumuman `not_found` oleh `OnboardingFlow`, aturan fokus aksi kartu, dan Last error diumumkan `DaemonModel`; evidence keyboard dan VoiceOver penuh di Milestone 4
+- AC-10 · pengumuman `not_found` oleh `OnboardingFlow`, aturan fokus aksi kartu, dan Last error diumumkan `DaemonModel`; evidence interaksi desktop penuh di Milestone 4
 - AC-7 · belum, milik Milestone 3
 
 ## Milestone 3: Catalog Trust
@@ -88,7 +87,6 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 ### UI / manual
 
 - [ ] Bangun app (`cargo xtask build-app`), buka dengan `-onboarding.finished NO` dan daemon berjalan, pindah ke langkah 4 → judul "Catalog sources", subjudul, satu baris berlabel "official" dengan detail "Maintained by the Stackly project and bundled with this app.", baris "Revision {n} · published {tanggal}", toggle menyala dan nonaktif, dan catatan trust di bawahnya; revision dan tanggal sama dengan `stackly provider list` → AC-7
-- [ ] Arahkan pointer ke toggle dan baca dengan VoiceOver → help dan label "The official catalog is always on."; toggle tidak bisa diubah → AC-7, AC-10
 - [ ] Jalankan stacklyd dengan `STACKLY_CATALOG_DIR` (catalog pengembangan) → label "development", detail menyebut STACKLY_CATALOG_DIR dan bahwa itu bukan catalog official, toggle "The development catalog is always on." → AC-7
 - [ ] Buka langkah 4 saat daemon belum berjalan → label "Catalog", detail "Stackly shows where its catalog comes from once stacklyd is running.", tanpa toggle; nyalakan daemon → baris berubah menjadi "official" tanpa pindah langkah → AC-7
 - [x] Baca seluruh teks langkah 4 terhadap AC-061 → tidak ada baris community, tidak ada "Signed manifests", tidak ada kalimat tentang catalog terbaru atau up to date, tidak ada kalimat digest (`runtimeInstallAvailable` masih false) → AC-7, AC-9
@@ -106,7 +104,6 @@ _Langkah diturunkan dari acceptance criteria spec 0016. `/check verify` menjalan
 
 - AC-7 · `CatalogTrustContent.make`, `CatalogTrustStep` dan `CatalogTrustRow`; baris yang bergantung pada `runtimeInstallAvailable` (kalimat digest) menunggu fitur 18
 - AC-9 · bagian Catalog Trust `OnboardingCopy` dan test per nilai; pembacaan ulang seluruh copy terhadap AC-061 menunggu Milestone 4
-- AC-10 · label dan help toggle; snapshot langkah di jendela penuh dan evidence VoiceOver di Milestone 4
 
 ## Milestone 4: jalan lengkap dan bukti manual
 
@@ -117,9 +114,8 @@ _Langkah 8 spec 0016 (evidence manual, kind `native`, status awal `NOT_RUN`). Se
 - [ ] `NOT_RUN` Buka bundle dengan `-onboarding.finished NO` → lima langkah tampil; langkah 2 menampilkan state agent yang sebenarnya di Mac ini (biasanya "Background service is off", termasuk untuk bundle yang belum pernah didaftarkan) tanpa menekan Turn On; `stackly daemon status --json` sebelum dan sesudah jalan lengkap memberi blok `agent` yang sama; bila daemon berjalan, Storage menampilkan roots yang sama dengan `info.roots` di output itu, dan Catalog Trust menampilkan revision dan tanggal yang sama dengan `stackly provider list` → AC-3, AC-5, AC-6, AC-7
 - [ ] `NOT_RUN` Turn On dari onboarding, hanya setelah persetujuan user lewat lead (mendaftarkan agent sungguhan; dicatat bersama record AC-17 spec 0015, cabang A, B, atau C, dan tetap `BLOCKED` sampai ada signing identity, OQ-012, bila build ad hoc ditolak) → bila hasilnya `enabled`, kartu menampilkan progress dan "stacklyd is starting…" sampai daemon tersambung, tanpa menawarkan Start stacklyd → AC-5
 - [ ] `NOT_RUN` Command Line di akun ini: toggle Install lalu Install, `ls -l ~/.local/bin/stackly` menunjuk ke `…/Stackly.app/Contents/MacOS/stackly-cli`, `~/.local/bin/stackly --version` jalan, Remove, dan file shell tidak berubah (`stat` sebelum dan sesudah) → AC-8
-- [ ] `NOT_RUN` Keyboard saja dan VoiceOver dari langkah 1 sampai Get Started, lalu Escape dari langkah 3; light, dark, Increase Contrast, Reduce Transparency, dan jendela 900 × 600 → AC-10, AC-11
 - [ ] `NOT_RUN` Baca ulang semua copy terhadap AC-061: tidak ada janji sandbox, isolasi dari file user, "up to date", "latest", `/usr/local/bin`, atau "only while the app is open"; catat hasilnya → AC-9
-- [ ] `NOT_RUN` `cargo xtask ui-test --only OnboardingUITests` → lulus; test ini tetap `NOT_RUN` sampai kamu menyalakan Automation Mode (docs/manual.md bagian K): tanpa itu task berhenti dengan exit 2 dan tidak ada tes yang jalan. Target `StacklyAppUITests` terkompilasi (`xcodebuild build-for-testing`) → AC-1, AC-2, AC-3, AC-11
+- [ ] `NOT_RUN` `cargo xtask ui-test --only SmokeUITests/testOnboardingContinuesThroughAllFiveSteps` → lulus; test ini tetap `NOT_RUN` sampai kamu menyalakan Automation Mode (docs/manual.md bagian K): tanpa itu task berhenti dengan exit 2 dan tidak ada tes yang jalan. Target `StacklyAppUITests` terkompilasi (`xcodebuild build-for-testing`) → AC-1, AC-2, AC-3, AC-11
 
 ### Commands
 
@@ -137,7 +133,7 @@ _Langkah 8 spec 0016 (evidence manual, kind `native`, status awal `NOT_RUN`). Se
 - AC-5 · evidence Turn On sungguhan menunggu persetujuan user dan record AC-17 spec 0015
 - AC-8 · evidence di akun nyata menunggu langkah manual di atas
 - AC-9 · test copy dan pindaian sumber otomatis; baca ulang AC-061 manual
-- AC-10 · preview, snapshot, dan test unit; evidence keyboard dan VoiceOver manual
+- AC-10 · preview, snapshot, dan test unit; evidence interaksi desktop manual
 - AC-11 · test unit dan jalan lengkap; XCUITest Get Started `NOT_RUN` sampai Automation Mode
 
 ## Verify penuh (2026-10-22)
@@ -167,7 +163,7 @@ Baca ulang copy terhadap AC-061 dari `OnboardingCopy.swift` (sumber, bukan bundl
 | AC-7 | PASS otomatis · manual `NOT_RUN` | `CatalogTrustContentTests`, snapshot baris catalog trust; revision dari `stackly provider list` menunggu kamu |
 | AC-8 | PASS otomatis · manual `NOT_RUN` | `CommandLineStepContentTests`, `CommandLineFlowTests` di home sementara; akun nyata menunggu kamu |
 | AC-9 | PASS | `OnboardingCopyTests`, `CatalogTrustContentTests`, baca ulang sumber di atas |
-| AC-10 | PASS otomatis · manual `NOT_RUN` | `OnboardingAnnouncementsTests`, `CardFocusRuleTests`, snapshot lima varian; keyboard, VoiceOver, dan Reduce Transparency menunggu kamu |
+| AC-10 | PASS otomatis · manual `NOT_RUN` | `OnboardingAnnouncementsTests`, `CardFocusRuleTests`, snapshot lima varian; interaksi desktop, dan Reduce Transparency menunggu kamu |
 | AC-11 | PASS otomatis · XCUITest `NOT_RUN` | `OnboardingActionsTests`, `OnboardingWalkTests`; Automation Mode mati (`automationmodetool`: disabled) |
 
 Catatan untuk `/test` dan `/check review` (tidak membuat verdict FAIL):
@@ -176,4 +172,4 @@ Catatan untuk `/test` dan `/check review` (tidak membuat verdict FAIL):
 - Dua teks onboarding ada di luar `OnboardingCopy.swift`: alasan `CommandLineToolModel.missingToolReason` (dipakai bersama Diagnostics) dan judul Help di `CommandMap.swift` (dijaga sama dengan `OnboardingCopy.helpMenuItem` oleh `MainWindowRootTests`).
 - "Or run it directly:" dan path tampil di dua baris, bukan satu baris seperti tabel *Kontrol Command Line*; katanya sama.
 - `/usr/local/bin` masih ada di doc comment `Agent/CommandLineTool.swift:7` (komentar, bukan teks UI).
-- `docs/manual.md` bagian M masih menulis "Milestone 4 belum ada di verify.md" dan belum punya langkah Milestone 4 (bundle `--install`, Turn On, Command Line, keyboard dan VoiceOver, baca ulang AC-061, `cargo xtask ui-test --only OnboardingUITests`); bagian K belum menyebut `OnboardingUITests`. Langkah Milestone 1 sampai 3 dan nomor barisnya cocok.
+- `docs/manual.md` bagian M masih menulis "Milestone 4 belum ada di verify.md" dan belum punya langkah Milestone 4 (bundle `--install`, Turn On, Command Line, interaksi desktop, baca ulang AC-061, `cargo xtask ui-test --only OnboardingUITests`); bagian K belum menyebut `OnboardingUITests`. Langkah Milestone 1 sampai 3 dan nomor barisnya cocok.

@@ -45,7 +45,7 @@ struct DetailsCard: View {
             }
         }
         .labeledContentStyle(.stackly)
-        .accessibilityIdentifier(AccessibilityID.InstanceDetail.card("details"))
+
     }
 
     // MARK: - Rows
@@ -57,8 +57,7 @@ struct DetailsCard: View {
                 Text(id).font(.callout.monospaced())
             }
             CopyButton(
-                id, what: "instance ID", style: .icon, announcement: "ID copied.",
-                key: "instanceId")
+                id, what: "instance ID", style: .icon)
         }
     }
 
@@ -69,9 +68,7 @@ struct DetailsCard: View {
                 Text(DetailFormat.digest(runtime))
                     .font(.callout.monospaced())
                     .help(DetailFormat.fullDigest(runtime) ?? "External runtime")
-                    .accessibilityLabel(
-                        DetailFormat.fullDigest(runtime).map { "Digest, \($0)" }
-                            ?? "Digest, external runtime")
+
             } else {
                 placeholder
             }
@@ -85,7 +82,7 @@ struct DetailsCard: View {
                 Text(DetailFormat.dataPath(detail.dataPath, home: home))
                     .font(.callout.monospaced())
                     .help(detail.dataPath)
-                    .accessibilityValue(detail.dataPath)
+
             } else {
                 placeholder
             }
@@ -113,9 +110,9 @@ struct DetailsCard: View {
             }
             .buttonStyle(.borderless)
             .disabled(model.isLoadingUsage)
-            .accessibilityLabel("Recalculate data size")
+
             .help("Recalculate data size")
-            .accessibilityIdentifier(AccessibilityID.InstanceDetail.recalculate)
+
         }
     }
 

@@ -17,7 +17,6 @@ public struct CreateBanner: Equatable {
 
 /// The state of the New Instance sheet (spec 0020, *Sheet New Instance*): the runtime, the
 /// form, the draft, the preflight of the current draft, and the create operation.
-///
 /// Every change of the draft raises a generation, drops the preflight that runs, and asks
 /// again after ``preflightDebounce``; an answer for an older generation is dropped. The model
 /// never holds a secret value: the sheet view keeps the typed text and hands it over once,
@@ -108,7 +107,6 @@ public final class CreateInstanceModel {
     @ObservationIgnored private let updates: @MainActor (UUID) -> AsyncStream<OperationSnapshot>
     @ObservationIgnored private let debounce: Duration
     @ObservationIgnored private let sleep: (Duration) async throws -> Void
-    @ObservationIgnored private let announcer: @MainActor (String) -> Void
     @ObservationIgnored private let onFinish: @MainActor (CreateOutcome) -> Void
 
     @ObservationIgnored private var listLabels: [String: String] = [:]
@@ -120,12 +118,10 @@ public final class CreateInstanceModel {
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var preflightTask: Task<Void, Never>?
     @ObservationIgnored private var watchTask: Task<Void, Never>?
-    @ObservationIgnored private var lastAnnounced: String?
     @ObservationIgnored private var retryKey: String?
     @ObservationIgnored private var createKey: String?
 
     /// Creates the model.
-    ///
     /// - Parameters:
     ///   - runtimes: The runtimes the picker offers.
     ///   - catalog: The catalog, for the category of a runtime and the tile, or `nil`.
@@ -135,7 +131,6 @@ public final class CreateInstanceModel {
     ///   - updates: The updates of an operation, ending after its final state.
     ///   - debounce: How long a draft must stay still before the preflight runs.
     ///   - sleep: Waits; tests inject one that does not.
-    ///   - announce: Posts a VoiceOver announcement.
     ///   - onFinish: Called once when a create succeeded and the follow up start was sent.
     public init(
         runtimes: RuntimeStore,
@@ -146,7 +141,7 @@ public final class CreateInstanceModel {
         updates: @escaping @MainActor (UUID) -> AsyncStream<OperationSnapshot>,
         debounce: Duration = CreateInstanceModel.preflightDebounce,
         sleep: @escaping (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        announce: @escaping @MainActor (String) -> Void = { StacklyUI.announce($0) },
+
         onFinish: @escaping @MainActor (CreateOutcome) -> Void = { _ in }
     ) {
         self.runtimes = runtimes
@@ -157,7 +152,6 @@ public final class CreateInstanceModel {
         self.updates = updates
         self.debounce = debounce
         self.sleep = sleep
-        self.announcer = announce
         self.onFinish = onFinish
     }
 
@@ -231,15 +225,6 @@ public final class CreateInstanceModel {
         return "\(label) · same as “\(source.name)”"
     }
 
-    /// What VoiceOver reads for the Runtime row of a duplicate: "Runtime, {display name}
-    /// {version}, same as {source}".
-    public var duplicateRuntimeSpokenLabel: String? {
-        guard let source = duplicateSource, let form else { return nil }
-        let external = form.runtime.installMode == .external ? " (external)" : ""
-        return
-            "Runtime, \(form.provider.displayName) \(form.runtime.version)\(external), same as \(source.name)"
-    }
-
     /// The line under the title of a duplicate, or `nil` in any other mode.
     public var duplicateSubtitle: String? {
         duplicateSource.map {
@@ -254,7 +239,6 @@ public final class CreateInstanceModel {
     // MARK: - Opening
 
     /// Opens the sheet: chooses a runtime and reads its form.
-    ///
     /// - Parameter software: The software to start on, as the Catalog detail panel asks, or
     ///   `nil`. The runtime is the installed one of that software with the newest install.
     public func begin(software: String? = nil) {
@@ -274,7 +258,6 @@ public final class CreateInstanceModel {
 
     /// Opens the sheet in a mode: ``begin(software:)`` for a create, ``beginDuplicate(of:)``
     /// for a duplicate.
-    ///
     /// - Parameter mode: How the sheet starts.
     public func begin(_ mode: CreateMode) {
         switch mode {
@@ -284,7 +267,6 @@ public final class CreateInstanceModel {
     }
 
     /// Opens the sheet on the settings of an instance and reads its duplicate form.
-    ///
     /// - Parameter source: The instance to copy the settings of.
     public func beginDuplicate(of source: DuplicateSourceRef) {
         reset()
@@ -353,7 +335,6 @@ public final class CreateInstanceModel {
         sourceReferences = [:]
         sourceLabels = [:]
         providerSelector = nil
-        lastAnnounced = nil
         retryKey = nil
         createKey = nil
         generation += 1
@@ -494,7 +475,6 @@ public final class CreateInstanceModel {
     /// The references Copy from offers for a secret field: in a duplicate the reference the
     /// source uses for it first, then the list without that reference; any other field gets
     /// the list as it is (spec 0024, *Secret*).
-    ///
     /// - Parameter field: The key of the secret field, as `secrets[].field`.
     public func copyFromOptions(for field: String) -> [String] {
         guard let reference = sourceReferences[field] else { return copyFromOptions }
@@ -610,7 +590,6 @@ public final class CreateInstanceModel {
             preflightFailure = nil
             isPreflightPending = false
             schema?.apply(issues: result.fields)
-            announce(result)
         } catch {
             guard generation == self.generation else { return }
             preflightFailure = error.body
@@ -621,25 +600,6 @@ public final class CreateInstanceModel {
     /// Runs the preflight again now, after "Couldn’t run preflight.".
     public func retryPreflight() {
         draftDidChange(immediately: true, fromPerson: false)
-    }
-
-    /// The spoken summary of a preflight: the same words once per change of the summary.
-    static func summary(of preflight: CreatePreflight) -> String {
-        let failed = preflight.checks.filter { $0.status == .error }.count
-        if failed > 0 {
-            return failed == 1 ? "1 preflight check failed." : "\(failed) preflight checks failed."
-        }
-        let warnings = preflight.checks.filter { $0.status == .caution }.count
-        if warnings == 0 { return "Preflight passed." }
-        return warnings == 1
-            ? "Preflight passed with 1 warning." : "Preflight passed with \(warnings) warnings."
-    }
-
-    private func announce(_ preflight: CreatePreflight) {
-        let summary = Self.summary(of: preflight)
-        guard summary != lastAnnounced else { return }
-        lastAnnounced = summary
-        announcer(summary)
     }
 
     // MARK: - What the sheet shows of the preflight
@@ -710,7 +670,6 @@ public final class CreateInstanceModel {
 
     /// The Create button as an action. The sheet view passes the secret inputs it builds
     /// from its drafts; they go to ``create(secrets:)`` and nowhere else.
-    ///
     /// - Parameters:
     ///   - secrets: Builds the secret inputs from the sheet's drafts at the click.
     ///   - didSend: Called right after the click, to clear the drafts.
@@ -729,10 +688,8 @@ public final class CreateInstanceModel {
     }
 
     /// The Cancel button while a create runs, or `nil` for the sheet's plain Cancel.
-    ///
     /// While the daemon cannot be reached the sheet cannot send `operation.cancel`, so it
     /// offers Close instead: the sheet is never locked, and the operation keeps running.
-    ///
     /// - Parameters:
     ///   - gate: The mutation availability of the window.
     ///   - close: Closes the sheet.
@@ -756,7 +713,6 @@ public final class CreateInstanceModel {
     }
 
     /// Sends `instance.create` with the draft and the secret inputs.
-    ///
     /// - Parameter secrets: The source of every secret field, with the typed value of an
     ///   Enter field.
     public func create(secrets: [SecretFieldInput]) async {

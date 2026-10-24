@@ -5,7 +5,6 @@ import StacklyClient
 /// The detail of the selected provider (spec 0017, *Layar Catalog (GUI)*): it calls
 /// `catalog.get_provider` when the selection changes and keeps each answer for the daemon
 /// instance, the provider, and the catalog revision it came from.
-///
 /// The catalog does not change while a daemon runs, so an answer stays valid until the
 /// store loads a snapshot again, which drops the cache. A provider that failed to load
 /// shows its failure with Retry.
@@ -36,7 +35,6 @@ public final class ProviderDetailModel {
     private var failures: [Key: FailureContent] = [:]
 
     /// Creates a model with an empty cache.
-    ///
     /// - Parameters:
     ///   - call: Sends one call to the daemon.
     ///   - serverInstance: The ID of the daemon instance the link talks to now, or `nil`

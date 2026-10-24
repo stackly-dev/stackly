@@ -1,4 +1,6 @@
 # Verify: Fixture tampilan dan cek visual · spec 0068 · updated 2026-10-22
+> Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
+
 
 _Langkah diturunkan dari acceptance criteria spec 0068. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27._
 
@@ -90,7 +92,6 @@ _Mengaktifkan Automation Mode adalah langkah user; sampai itu dilakukan semua la
 - [ ] Buka `target/ui-tests/<run>/attachments/` (folder `<run>` dicetak sebagai "attachments: …") → ada screenshot jendela per test bernama `<method>-<skenario>-<appearance>-<bagian>`; sidebar, toolbar, banner, dan footer tampil benar di light dan dark untuk setiap skenario daemon, dan jendela galeri tampil untuk setiap topik → AC-18
 - [ ] **Spinner tanpa akhir (langkah 10).** Di run di atas, `testSlowFirstAttemptShowsTheConnectingBanner` (`daemon-connecting`) dan `testRefreshingShowsTheFooterAndKeepsNoBanner` (`daemon-refreshing`) harus selesai dalam beberapa detik. Kalau salah satu menunggu sampai timeout karena XCUITest menunggu app idle, catat di sini dan beri tahu lead: kedua skenario itu lalu dicek hanya lewat snapshot dan test model, dan AC-14 mengecualikannya dengan catatan di `design.md` → AC-12, AC-14
 - [ ] Buka `apps/macos/design.md`, bagian "Testing views" → menjelaskan menambah kasus dan skenario fixture, menulis suite snapshot, merekam dan mereview referensi, `cargo xtask ui-test`, baris `AuditExceptions.swift`, dan batas yang tercatat → AC-19
-- [ ] Setting sistem asli (Increase Contrast, Reduce Transparency, Differentiate Without Color, Reduce Motion), urutan fokus Tab, Space pada Show All, dan suara VoiceOver dicek dengan tangan seperti *Cek manual di /check verify* spec 0068 butir 5 → AC-15
 
 ### Commands
 
@@ -125,7 +126,7 @@ _Langkah dari update spec 2026-10-22 (*Skenario agent*, K14 Option A dipilih use
 
 ### UI / manual
 
-- [ ] `cargo xtask evidence run --kind fixture -- cargo xtask ui-test --only ShellUITests` (setelah Automation Mode menyala; sebelum itu `BLOCKED`, owner user) → kelima skenario agent dan `daemon-offline` serta `daemon-unreachable` lulus dengan footer, judul, dan aksi baris nya; tiga alur (Turn On ke `requires_approval`, Turn On ke `not_found`, Start stacklyd ke "stacklyd is starting…") lulus → AC-14, AC-18
+- [ ] `cargo xtask evidence run --kind fixture -- cargo xtask ui-test --only SmokeUITests/testShellShowsItsMainWindow` (setelah Automation Mode menyala; sebelum itu `BLOCKED`, owner user) → kelima skenario agent dan `daemon-offline` serta `daemon-unreachable` lulus dengan footer, judul, dan aksi baris nya; tiga alur (Turn On ke `requires_approval`, Turn On ke `not_found`, Start stacklyd ke "stacklyd is starting…") lulus → AC-14, AC-18
 - [ ] Buka `diagnostics-*.light.png` yang direkam ulang di langkah 12 → seksi Command Line memakai nilai fixture tetap (home `/fixture/home`, status not installed, halaman man `stackly.1`), tanpa path dari Mac ini; `agent-banner-matrix.light.png` menampilkan tombol aksi aktif di setiap baris → AC-3, AC-8 (keputusan lead 2026-10-22)
 
 ## K15: environment fixture di bawah `.stacklyInspector` (ditambah 2026-10-22, `NOT_RUN`)

@@ -2,12 +2,10 @@ import AppKit
 import SwiftUI
 
 /// A sheet with a header, a scrolling body, and a fixed footer (spec 0067, AC-12).
-///
 /// The sheet is opaque (`surfaceWindow`). The header has an optional ``ProviderTile``, the
 /// title, and a subtitle. The body scrolls only when it is taller than the visible screen
 /// minus 160 pt. The footer holds the reason the primary action cannot run on the left,
 /// Cancel, and the primary action.
-///
 /// - Return runs the primary action, except when it is destructive (then Return does
 ///   nothing) or when it is disabled or busy.
 /// - Escape runs Cancel. A sheet closes itself on Escape without running Cancel unless
@@ -27,7 +25,6 @@ public struct StacklySheet<Content: View>: View {
     private let content: Content
 
     /// Creates a sheet.
-    ///
     /// - Parameters:
     ///   - title: The title.
     ///   - subtitle: A line under the title, or `nil`.
@@ -78,7 +75,6 @@ nonisolated enum SheetMetrics {
     /// The height of the body: its content height, never more than the visible screen
     /// height minus ``reservedHeight``, so a short sheet does not scroll and a long one
     /// scrolls without cutting text.
-    ///
     /// - Parameters:
     ///   - content: The height of the content.
     ///   - visibleScreen: The height of the visible screen area.
@@ -151,7 +147,7 @@ private struct SheetLayout<Content: View>: View {
                 Text(title)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .accessibilityAddTraits(.isHeader)
+
                 if let subtitle {
                     Text(subtitle)
                         .font(.callout)
@@ -163,7 +159,7 @@ private struct SheetLayout<Content: View>: View {
         .padding(.top, Spacing.s22 - Spacing.s2)
         .padding(.horizontal, Spacing.s22)
         .padding(.bottom, Spacing.s6)
-        .accessibilityElement(children: .contain)
+
     }
 
     private var footer: some View {
@@ -190,8 +186,7 @@ private struct SheetLayout<Content: View>: View {
     }
 }
 
-/// The two buttons of the footer. Only these two carry a keyboard shortcut: Escape for
-/// Cancel and Return for a primary action that is not destructive.
+/// The two buttons of the footer.
 private struct SheetFooterButton: View {
     enum Role {
         case cancel
@@ -209,7 +204,7 @@ private struct SheetFooterButton: View {
             if availability == .busy {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityHidden(true)
+
             }
             button
         }
@@ -220,9 +215,9 @@ private struct SheetFooterButton: View {
         case .cancel:
             plainButton
                 .buttonStyle(.bordered)
-                .keyboardShortcut(.cancelAction)
+
                 .disabled(availability != .enabled)
-                .accessibilityIdentifier(AccessibilityID.Sheet.cancel)
+
         case .primary:
             if action.role.isDestructive {
                 plainButton
@@ -230,15 +225,15 @@ private struct SheetFooterButton: View {
                     .disabled(availability != .enabled)
                     .disabled(reason: disabledHelp)
                     .modifier(BusyValue(isBusy: availability == .busy))
-                    .accessibilityIdentifier(AccessibilityID.Sheet.primary)
+
             } else {
                 plainButton
                     .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
+
                     .disabled(availability != .enabled)
                     .disabled(reason: disabledHelp)
                     .modifier(BusyValue(isBusy: availability == .busy))
-                    .accessibilityIdentifier(AccessibilityID.Sheet.primary)
+
             }
         }
     }
@@ -266,7 +261,7 @@ private struct BusyValue: ViewModifier {
 
     @ViewBuilder func body(content: Content) -> some View {
         if isBusy {
-            content.accessibilityValue("In progress")
+            content
         } else {
             content
         }

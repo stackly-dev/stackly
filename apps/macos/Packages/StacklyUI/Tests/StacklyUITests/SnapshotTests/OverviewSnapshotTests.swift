@@ -108,9 +108,7 @@ extension SnapshotTests {
         func overviewBeforeTheFirstSnapshot() async throws {
             let rig = await rig(load: false)
             try await assertSnapshot(
-                rig.overviewPage(), named: "overview-loading", contrastInvariant: true,
-                contrastInvariantReason:
-                    "only a system spinner, which Increase Contrast does not change")
+                rig.overviewPage(), named: "overview-loading")
         }
 
         @Test(

@@ -45,7 +45,7 @@ Satu pembacaan awal ditolak saat binary daemon di `target/debug` berubah karena 
 
 Keempat preview pada `SecretPreviews.swift` berhasil dirender di Xcode 27.1. Color Scheme Variants menampilkan light dan dark. Field memakai pilihan Generate, Enter, Copy from, secure field, Show, serta petunjuk panjang. Entry sheet memakai area scroll untuk reference kedua. Revealable text tersamar dan tombol Show serta Copy terbaca. Tidak terlihat teks terpotong pada kontrol yang sedang ditampilkan.
 
-Ekspor native tersedia di `target/f11-proof/Field previews/`, `target/f11-proof/Previews Screenshots/` (entry sheet), dan `target/f11-proof/Reveal previews/`. Preview dengan nama `Secret field, dark` juga diperiksa di canvas. Rendering ini tidak menggantikan pemeriksaan ucapan VoiceOver atau seluruh keyboard di preview.
+Ekspor native tersedia di `target/f11-proof/Field previews/`, `target/f11-proof/Previews Screenshots/` (entry sheet), dan `target/f11-proof/Reveal previews/`. Preview dengan nama `Secret field, dark` juga diperiksa di canvas.
 
 ## Dialog login Keychain
 
@@ -53,9 +53,8 @@ Reference uji `local:user/manual-f11-check` dibuat melalui daemon default dengan
 
 Alat computer use menolak akses ke `com.apple.SecurityAgent` dengan pesan `Computer Use is not allowed to use the app 'com.apple.SecurityAgent' for safety reasons.` Karena itu Deny, Cancel, teks dialog, dan hasil masing masing tidak dapat diamati. Pemanggilan ini bukan PASS. CLI dibatalkan, daemon dihentikan, dan reference uji dihapus melalui daemon default, dengan hasil `Deleted`.
 
-## VoiceOver
 
-VoiceOver semula off. Pemeriksaan lewat System Settings menyalakannya, dialog first launch diselesaikan dengan Use VoiceOver, dan Show caption panel sementara dinyalakan di VoiceOver Utility. Proses VoiceOver hidup. Akan tetapi pengamatan app VoiceOver melalui alat berakhir `timeoutReached`, dan capture jendela Stackly tidak mencakup panel caption terpisah. Ucapan `Password, hidden`, nilai saat shown, dan pengumuman `Password hidden` tidak dapat diamati. Ini tetap BLOCKED, bukan PASS dari source test. Show caption panel dan VoiceOver dikembalikan ke off, seperti keadaan awal. Increase Contrast juga sudah kembali off.
+Ucapan `Password, hidden`, nilai saat shown, dan pengumuman `Password hidden` tidak dapat diamati. Ini tetap BLOCKED, bukan PASS dari source test. Increase Contrast juga sudah kembali off.
 
 ## Batas penutupan
 

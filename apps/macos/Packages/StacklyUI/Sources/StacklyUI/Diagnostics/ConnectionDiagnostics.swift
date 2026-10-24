@@ -119,7 +119,6 @@ nonisolated public struct DiagnosticsRow: Hashable, Sendable, Identifiable {
 
 /// Everything the Connection section of Diagnostics shows. It is a pure value, so the
 /// rows and Copy Details can be tested without a daemon.
-///
 /// It never holds the value of `STACKLY_ROOT`.
 nonisolated public struct ConnectionDiagnostics: Hashable, Sendable {
     /// The daemon's state.
@@ -176,9 +175,7 @@ nonisolated public struct ConnectionDiagnostics: Hashable, Sendable {
 
     /// The rows of the Connection section, in order. A row without a value is left out,
     /// except Last error ("None") and Last connected ("Never").
-    ///
     /// Views pass the system values; tests pass fixed ones.
-    ///
     /// - Parameters:
     ///   - calendar: The calendar of the times.
     ///   - locale: The locale of the times.
@@ -234,7 +231,6 @@ nonisolated public struct ConnectionDiagnostics: Hashable, Sendable {
 
     /// The text Copy Details puts on the pasteboard: one `Label: value` line per row, the
     /// same rows the section shows.
-    ///
     /// - Parameter rows: The rows the section shows.
     public static func copyText(_ rows: [DiagnosticsRow]) -> String {
         rows.map { "\($0.label): \($0.value)" }.joined(separator: "\n")

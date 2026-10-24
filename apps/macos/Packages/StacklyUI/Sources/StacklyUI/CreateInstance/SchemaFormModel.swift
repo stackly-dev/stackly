@@ -126,7 +126,6 @@ nonisolated public struct ListItemDraft: Identifiable, Equatable, Sendable {
 }
 
 /// What the person chose for a secret field, without the typed value.
-///
 /// The typed text stays in the `@State` of the sheet view and nowhere else (spec 0011, *GUI*);
 /// the model only needs to know the source and whether what was typed fits the limits.
 nonisolated public struct SecretChoice: Equatable, Sendable {
@@ -150,7 +149,6 @@ nonisolated public struct SecretChoice: Equatable, Sendable {
 
 /// The settings form of the New Instance sheet, built from the `FormField` values of
 /// `instance.get_create_form` and nothing else (spec 0020, AC-21): no provider branch.
-///
 /// Every mutation tells ``onChange``, so the owner raises the draft generation and runs the
 /// preflight again. The model never holds a secret value.
 @Observable
@@ -178,7 +176,6 @@ public final class SchemaFormModel {
     @ObservationIgnored public var onChange: (() -> Void)?
 
     /// Creates the form with the defaults of the fields.
-    ///
     /// - Parameter fields: The settings fields of the create form.
     public init(fields: [FormField]) {
         self.fields = fields
@@ -294,7 +291,6 @@ public final class SchemaFormModel {
     }
 
     /// Records what the person chose for a secret field.
-    ///
     /// - Parameters:
     ///   - key: The field.
     ///   - choice: The source, the reference, and whether the typed text fits.
@@ -310,7 +306,6 @@ public final class SchemaFormModel {
     }
 
     /// The references Copy from offers for a secret field.
-    ///
     /// - Parameter key: The key of the field.
     public func copyFromOptions(for key: String) -> [String] {
         copyFromOptionsByField[key] ?? copyFromOptions
@@ -322,7 +317,6 @@ public final class SchemaFormModel {
     /// its source. A member the form has no field for, or a value of the wrong shape, is
     /// left out, and the preflight reports what is wrong. It tells nobody: the owner runs
     /// the first preflight itself.
-    ///
     /// - Parameter settings: The `settings` of a draft.
     public func load(settings: JSONObject) {
         for row in rows {
@@ -343,7 +337,6 @@ public final class SchemaFormModel {
     }
 
     /// Points Copy from of each secret field at a reference while the field still generates.
-    ///
     /// - Parameter references: The reference for each field key.
     public func preselectCopyFrom(_ references: [String: String]) {
         for (key, reference) in references {

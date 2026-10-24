@@ -2,12 +2,7 @@ import AppKit
 import SwiftUI
 
 /// The notice that tells the user Stackly keeps running after the main window closes.
-///
-/// It shows once per launch, on the first close of the main window that is not part of
-/// quitting: an opaque card in a borderless panel at the bottom center of the screen the
-/// window was on. It never activates the app, fades out after 4 seconds or when clicked,
-/// and its text is announced to VoiceOver. SwiftUI has no presentation that outlives its
-/// window, so the panel is AppKit.
+/// It shows once per launch, on the first close of the main window that is not part of quitting: an opaque card in a borderless panel at the bottom center of the screen the window was on. SwiftUI has no presentation that outlives its window, so the panel is AppKit.
 public final class CloseNotice {
     /// The title.
     static let title = "Stackly is still running"
@@ -39,7 +34,6 @@ public final class CloseNotice {
 
     /// Call it when the main window is about to close. It shows the notice the first time
     /// in this launch, unless the app is quitting.
-    ///
     /// - Parameters:
     ///   - isTerminating: Whether the window closes because the app quits.
     ///   - screen: The screen the window was on, or `nil` for the main screen.
@@ -50,7 +44,6 @@ public final class CloseNotice {
         hasShown = true
         if presentsPanel {
             show(on: screen ?? NSScreen.main)
-            announce("\(Self.title). \(Self.message)")
         }
         return true
     }
@@ -132,8 +125,7 @@ struct CloseNoticeCard: View {
         .cardSurface(radius: .large)
         .contentShape(Rectangle())
         .onTapGesture(perform: dismiss)
-        .accessibilityElement(children: .combine)
-        .accessibilityAction(named: "Dismiss", dismiss)
+
     }
 }
 

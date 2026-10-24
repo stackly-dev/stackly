@@ -13,14 +13,12 @@ extension NSPasteboard: PasteboardStore {}
 
 /// Writes a secret to the pasteboard so it stays on this Mac and clears itself (spec 0011,
 /// *Reveal dan copy*).
-///
 /// A copy asks for `prepareForNewContents(with: .currentHostOnly)`, so it never travels
 /// through Universal Clipboard, and adds the `org.nspasteboard.ConcealedType` and
 /// `org.nspasteboard.TransientType` markers that clipboard managers honor. It remembers the
 /// pasteboard's `changeCount`, and clears the pasteboard after 90 seconds or when the app
 /// quits, but only while the `changeCount` is still the one it wrote: something the person
 /// copied since stays.
-///
 /// One instance owns the pending clear, so a view that goes away does not cancel it. Use
 /// ``shared`` in the app.
 public final class ConcealedPasteboard {
@@ -43,7 +41,6 @@ public final class ConcealedPasteboard {
     private var clearTask: Task<Void, Never>?
 
     /// Creates a concealed pasteboard.
-    ///
     /// - Parameters:
     ///   - pasteboard: The pasteboard to write.
     ///   - delay: How long the value stays; 90 seconds by default.
@@ -81,7 +78,6 @@ public final class ConcealedPasteboard {
 
     /// Copies `text` and arms the clear. A second copy replaces the first and restarts the
     /// delay.
-    ///
     /// - Parameter text: The secret.
     public func copy(_ text: String) {
         write(text)
@@ -89,7 +85,6 @@ public final class ConcealedPasteboard {
 
     /// Copies `text` only when the pasteboard is still at `changeCount`, so a copy that
     /// finishes late never overwrites something the person copied after asking for it.
-    ///
     /// - Parameters:
     ///   - text: The secret.
     ///   - changeCount: The pasteboard's ``changeCount`` when the copy was asked for.

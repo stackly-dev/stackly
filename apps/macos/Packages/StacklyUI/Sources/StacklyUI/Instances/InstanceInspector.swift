@@ -3,7 +3,6 @@ import SwiftUI
 
 /// The inspector of the Instances page for one instance (spec 0022, *Inspector*): the
 /// header with the main action, the banner of a problem the person can fix, and the facts.
-///
 /// It builds only from the ``InstanceRowModel`` and the main action it is given, so a
 /// preview or a snapshot shows it without a store.
 struct InstanceInspector: View {
@@ -58,10 +57,10 @@ struct InstanceInspector: View {
             idRow
         }
         .labeledContentStyle(.stackly)
-        .accessibilityIdentifier(AccessibilityID.Instances.inspector)
+
         .task(id: row.id) { await model.openForInspector() }
         .onChange(of: summary, initial: true) { _, new in
-            model.observe(new, announcesReady: false)
+            model.observe(new)
         }
     }
 
@@ -174,8 +173,7 @@ struct InstanceInspector: View {
                 Text(id).font(.callout.monospaced())
             }
             CopyButton(
-                id, what: "instance ID", style: .icon, announcement: "ID copied.", key: "instanceId"
-            )
+                id, what: "instance ID", style: .icon)
         }
     }
 

@@ -4,7 +4,6 @@ import Observation
 /// The state of the `stackly` command and the three things the user can do about it:
 /// Install, Repair, and Remove (spec 0015, *GUI*). ``ShellRuntime`` owns it, and
 /// Diagnostics and the Command Line step of onboarding read it.
-///
 /// The three `request` methods only fill ``pendingPrompt``. Only the action button of the
 /// confirmation calls the tool, and Cancel changes nothing.
 @Observable
@@ -28,7 +27,6 @@ public final class CommandLineToolModel {
     @ObservationIgnored private let controller: any CommandLineToolControlling
 
     /// Creates the model.
-    ///
     /// - Parameters:
     ///   - controller: The tool.
     ///   - initialStatus: The status shown until the first ``refresh()``; a fixture gives

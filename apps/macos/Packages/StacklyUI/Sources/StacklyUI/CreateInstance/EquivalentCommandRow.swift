@@ -12,7 +12,7 @@ struct EquivalentCommandRow: View {
                 Text("Equivalent command")
                     .font(.headline)
                 ConsoleBlock(command: command)
-                    .accessibilityIdentifier(AccessibilityID.CreateInstance.command)
+
             }
         }
     }

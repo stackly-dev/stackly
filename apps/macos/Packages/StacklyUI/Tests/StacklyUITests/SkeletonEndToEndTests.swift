@@ -27,7 +27,7 @@ struct SkeletonEndToEndTests {
     func theInstanceStoreFollowsChangesAnotherClientMakes() async throws {
         try await SkeletonRig.run(recordsEvidence: true) { rig in
             let parts = ShellEndToEndTests.shell(
-                for: rig.daemon, announcements: ShellEndToEndTests.Announcements())
+                for: rig.daemon)
             let model = parts.runtime.model
             let trail = InstanceTrail()
             do {
@@ -108,7 +108,7 @@ struct SkeletonEndToEndTests {
             #expect(before.count == 3)
 
             let parts = ShellEndToEndTests.shell(
-                for: rig.daemon, announcements: ShellEndToEndTests.Announcements())
+                for: rig.daemon)
             let first = parts.runtime
             try await ShellEndToEndTests.waitUntilRefreshed(
                 first.model, "the shell to connect and refresh")
@@ -164,7 +164,7 @@ struct SkeletonEndToEndTests {
         try await SkeletonRig.run(recordsEvidence: true) { rig in
             let id = try await rig.create("locked")
             let parts = ShellEndToEndTests.shell(
-                for: rig.daemon, announcements: ShellEndToEndTests.Announcements())
+                for: rig.daemon)
             let model = parts.runtime.model
             do {
                 try await ShellEndToEndTests.waitUntilRefreshed(

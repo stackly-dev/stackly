@@ -4,7 +4,6 @@ import SwiftUI
 extension View {
     /// Presents the confirmation dialog for `item` while it is not `nil`: the only way
     /// Stackly asks the user to confirm an action.
-    ///
     /// The dialog is the native alert, as a sheet on this view's window (app modal when
     /// the view has no window). A destructive request gets a red action button, the
     /// critical style, and Cancel as the default button, so Return and Escape both
@@ -13,7 +12,6 @@ extension View {
     /// ``ConfirmationRequest/perform`` only if the user pressed the action button. A new
     /// request replaces the shown one; there is only one confirmation at a time. Setting
     /// `item` to `nil` closes the dialog without running the action.
-    ///
     /// - Parameter item: The request to confirm, or `nil` when there is none.
     public func stacklyConfirmation(item: Binding<ConfirmationRequest?>) -> some View {
         modifier(StacklyConfirmationModifier(request: item))
@@ -74,7 +72,6 @@ struct ConfirmationAnchor: NSViewRepresentable {
         presenter.anchor = view
     }
 
-    /// A view that takes no clicks and is hidden from VoiceOver.
     final class AnchorView: NSView {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
         override func isAccessibilityElement() -> Bool { false }

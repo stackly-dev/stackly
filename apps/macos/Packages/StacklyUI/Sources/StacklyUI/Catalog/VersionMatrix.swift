@@ -5,10 +5,7 @@ import SwiftUI
 /// `Grid` with the columns Version, macOS, Linux, and Windows, each cell a ``ToneBadge``
 /// whose help is the reason. Where the panel is too narrow for four columns, each version
 /// becomes a short list of its three OSes.
-///
-/// Every status is written, and the reason of every cell is also written in
-/// ``notes(of:)`` under the matrix, so nothing depends on color or on hover. VoiceOver
-/// reads each cell as "{OS}, {status}: {reason}".
+/// Every status is written, and the reason of every cell is also written in ``notes(of:)`` under the matrix, so nothing depends on color or on hover.
 struct VersionMatrix: View {
     /// The OS columns, in the order the daemon sends them.
     static let systems: [TargetOs] = [.macos, .linux, .windows]
@@ -22,7 +19,7 @@ struct VersionMatrix: View {
             grid
             stacked
         }
-        .accessibilityIdentifier(AccessibilityID.Catalog.matrix)
+
     }
 
     private var grid: some View {
@@ -96,8 +93,7 @@ struct VersionMatrix: View {
         if let support = version.support?.first(where: { $0.os == os }) {
             ToneBadge(CatalogAppearance.appearance(of: support.status))
                 .help(CatalogCopy.reasonText(for: support) ?? "")
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(CatalogCopy.spokenText(for: support))
+
         } else {
             Text("Not listed")
                 .font(.callout)

@@ -17,7 +17,7 @@ struct OnboardingCopyTests {
         #expect(OnboardingCopy.notNow == "Not Now")
         #expect(OnboardingCopy.getStarted == "Get Started")
         #expect(OnboardingFooter.stepText(.storage) == "Step 3 of 5 · Storage")
-        #expect(OnboardingFooter.announcement(.storage) == "Step 3 of 5, Storage.")
+
         #expect(OnboardingCopy.helpMenuItem == "Welcome to Stackly")
         #expect(OnboardingCopy.setupComplete == "Setup complete.")
     }
@@ -101,18 +101,6 @@ struct OnboardingCopyTests {
             OnboardingCopy.storageOverrideNote
                 == "STACKLY_ROOT is set, so stacklyd keeps data, cache, and logs inside that folder."
         )
-    }
-
-    @Test func theStepAnnouncementsAreTheTable() {
-        #expect(
-            OnboardingCopy.stepText(number: 2, label: "Background Agent")
-                == "Step 2 of 5 · Background Agent")
-        #expect(
-            OnboardingCopy.stepSpoken(number: 4, label: "Catalog Trust")
-                == "Step 4 of 5, Catalog Trust")
-        #expect(
-            OnboardingCopy.stepAnnouncement(number: 5, label: "Command Line")
-                == "Step 5 of 5, Command Line.")
     }
 
     // MARK: - The Background Agent card table (AC-9)
@@ -335,18 +323,6 @@ struct OnboardingCopyTests {
             ] {
                 #expect(code.contains(token) == false, "\(file.path) uses \(token)")
             }
-        }
-    }
-
-    @Test func onlyTheFlowAnnouncesAndNeverSetupComplete() throws {
-        for file in try Self.onboardingFiles() {
-            let code = file.codeLines.joined(separator: "\n")
-            if file.path.hasSuffix("/OnboardingFlow.swift") { continue }
-            #expect(code.contains("announce(") == false, "\(file.path) announces")
-        }
-        for file in try Self.onboardingFiles() {
-            let code = file.codeLines.joined(separator: "\n")
-            #expect(code.contains(#"announce("Setup complete.")"#) == false)
         }
     }
 

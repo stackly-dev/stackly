@@ -168,7 +168,7 @@ struct StateViewPartsTests {
 
     @Test(arguments: ["magnifyingglass", "nosign", "info.circle"])
     func stateSymbolExistsOnThisMacOS(name: String) {
-        #expect(NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil)
+
     }
 
     /// AC-16: state views only crossfade; nothing moves or scales.

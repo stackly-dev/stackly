@@ -2,7 +2,6 @@ import StacklyClient
 
 /// How a runtime state looks (spec 0018, *Status runtime*, and `apps/macos/design.md`): the
 /// label, tone, and symbol of every ``RuntimeState``.
-///
 /// The mapping is one exhaustive `switch` without `default`, so a state added to the
 /// protocol fails to compile until the table covers it. A state from a newer daemon
 /// (`unrecognized`) is "Unrecognized State", never guessed into another state.

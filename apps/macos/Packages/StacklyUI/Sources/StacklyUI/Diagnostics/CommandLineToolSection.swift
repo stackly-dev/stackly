@@ -23,14 +23,13 @@ struct CommandLineToolSection: View {
             VStack(alignment: .leading, spacing: Spacing.s8) {
                 Text("Command Line Tool")
                     .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
+
                 DiagnosticsCard(rows: facts.rows)
                 HStack(spacing: Spacing.s8) {
                     Text(CommandLineToolDiagnostics.pathLine)
                         .stacklyCode()
                     CopyButton(
-                        CommandLineToolDiagnostics.pathLine, what: "PATH line", style: .text,
-                        announcement: "Copied.")
+                        CommandLineToolDiagnostics.pathLine, what: "PATH line", style: .text)
                 }
                 .padding(.horizontal, Spacing.cardInsets.leading)
                 if let error = model.lastError {

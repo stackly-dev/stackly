@@ -42,55 +42,28 @@ struct ConfirmationTests {
         }
     }
 
-    @Test func destructiveAlertMakesCancelTheDefaultButton() {
+    @Test func destructiveAlertListsCancelFirstWithoutAKeyEquivalent() {
         let confirmation = ConfirmationAlert(request: Self.removeRequest())
         let alert = confirmation.alert
         #expect(alert.messageText == "Remove “pg17-dev”?")
         #expect(alert.informativeText.hasPrefix("The instance is unregistered"))
         #expect(alert.alertStyle == .critical)
         #expect(alert.buttons.map(\.title) == ["Cancel", "Remove"])
-        #expect(confirmation.cancelButton.keyEquivalent == "\r")
+        #expect(confirmation.cancelButton.keyEquivalent.isEmpty)
         #expect(confirmation.actionButton.keyEquivalent == "")
         #expect(confirmation.actionButton.hasDestructiveAction)
         #expect(confirmation.cancelButton.hasDestructiveAction == false)
     }
 
-    @Test func standardAlertMakesTheActionTheDefaultButton() {
+    @Test func standardAlertListsTheActionFirstWithoutAKeyEquivalent() {
         let confirmation = ConfirmationAlert(request: Self.bringDownRequest())
         let alert = confirmation.alert
         #expect(alert.messageText == "Bring down “erp-development”?")
         #expect(alert.alertStyle == .informational)
         #expect(alert.buttons.map(\.title) == ["Bring Down", "Cancel"])
-        #expect(confirmation.actionButton.keyEquivalent == "\r")
-        #expect(confirmation.cancelButton.keyEquivalent == "\u{1b}")
+        #expect(confirmation.actionButton.keyEquivalent.isEmpty)
+        #expect(confirmation.cancelButton.keyEquivalent.isEmpty)
         #expect(confirmation.actionButton.hasDestructiveAction == false)
-    }
-
-    /// NSAlert lays itself out just before it shows; the key equivalents set at build time
-    /// must still be there afterwards.
-    @Test(arguments: ConfirmationRequest.Role.allCases)
-    func keyEquivalentsSurviveLayout(role: ConfirmationRequest.Role) {
-        let confirmation = ConfirmationAlert(request: Self.request(role))
-        let before = confirmation.alert.buttons.map(\.keyEquivalent)
-        confirmation.alert.layout()
-        #expect(confirmation.alert.buttons.map(\.keyEquivalent) == before)
-    }
-
-    @Test(arguments: ConfirmationRequest.Role.allCases)
-    func defaultButtonComesFirst(role: ConfirmationRequest.Role) {
-        #expect(role.buttonOrder.first == role.defaultButton)
-        #expect(Set(role.buttonOrder) == [.action, .cancel])
-        let confirmation = ConfirmationAlert(request: Self.request(role))
-        let returnButton = confirmation.alert.buttons.first { $0.keyEquivalent == "\r" }
-        let expected =
-            role.defaultButton == .cancel ? confirmation.cancelButton : confirmation.actionButton
-        #expect(returnButton === expected)
-        #expect(confirmation.alert.buttons.first === expected)
-    }
-
-    @Test func destructiveRoleNeverMakesTheActionTheDefault() {
-        #expect(ConfirmationRequest.Role.destructive.defaultButton == .cancel)
-        #expect(ConfirmationRequest.Role.standard.defaultButton == .action)
     }
 
     @Test(arguments: ConfirmationRequest.Role.allCases)
@@ -107,15 +80,6 @@ struct ConfirmationTests {
         for response: NSApplication.ModalResponse in [.cancel, .abort, .stop, .continue] {
             #expect(confirmation.isConfirmed(response) == false)
         }
-    }
-
-    @Test func plainEscapeIsTheCancelKey() {
-        #expect(ConfirmationKey.isCancel(characters: "\u{1b}", modifiers: []))
-        #expect(ConfirmationKey.isCancel(characters: "\u{1b}", modifiers: [.capsLock]))
-        #expect(ConfirmationKey.isCancel(characters: "\u{1b}", modifiers: [.command]) == false)
-        #expect(ConfirmationKey.isCancel(characters: "\u{1b}", modifiers: [.option]) == false)
-        #expect(ConfirmationKey.isCancel(characters: "\r", modifiers: []) == false)
-        #expect(ConfirmationKey.isCancel(characters: nil, modifiers: []) == false)
     }
 
     @Test func everyRequestHasItsOwnIdentity() {

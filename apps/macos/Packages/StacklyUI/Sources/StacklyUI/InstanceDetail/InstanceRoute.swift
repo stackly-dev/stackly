@@ -7,7 +7,6 @@ nonisolated public struct InstanceRoute: Hashable, Sendable {
     public let id: UUID
 
     /// Creates the route of an instance.
-    ///
     /// - Parameter id: The instance.
     public init(_ id: UUID) {
         self.id = id

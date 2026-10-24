@@ -18,11 +18,9 @@ import SwiftUI
     let run: (@MainActor () -> Void)?
 
     /// Works out the state of a `shell` or `page` item.
-    ///
     /// A `system` row and a row of scope ``CommandScope/app`` do not come through here: the
     /// first has no item and the second is always on, so this returns an enabled item with
     /// nothing to run.
-    ///
     /// - Parameters:
     ///   - entry: The row of the command.
     ///   - shell: What the shell of the focused window published, or `nil`.

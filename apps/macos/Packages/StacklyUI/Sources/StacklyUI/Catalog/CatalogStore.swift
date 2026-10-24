@@ -3,7 +3,6 @@ import Observation
 import StacklyClient
 
 /// The provider catalog the daemon loaded (spec 0017, *Layar Catalog (GUI)*).
-///
 /// Its store loads `catalog.list_providers` in one page and keeps the daemon's display
 /// order, since the daemon sorts the entries once and the GUI shows them as they come. It
 /// also keeps the ``CatalogInfo`` of the last load. The catalog has no events and does not
@@ -24,7 +23,6 @@ public final class CatalogStore {
     @ObservationIgnored private let loaded: Loaded
 
     /// Creates an empty store.
-    ///
     /// - Parameters:
     ///   - call: Sends one call to the daemon.
     ///   - serverInstance: The ID of the daemon instance now, for the detail cache.
@@ -73,7 +71,6 @@ public final class CatalogStore {
     }
 
     /// The Catalog toolbar subtitle, or `nil` before the first snapshot.
-    ///
     /// - Parameters:
     ///   - locale: The locale of the date.
     ///   - calendar: The calendar of the date.

@@ -3,7 +3,6 @@ import StacklyClient
 
 /// Copies a connection string for a menu item or a command (spec 0021, AC-13): the Copy
 /// Connection String item of the More menu, and the command of the same name.
-///
 /// A string with a secret is revealed with `secret.reveal { purpose: copy }`, joined by
 /// ``ConnectionComposer``, and written by ``ConcealedPasteboard``; one without goes to the
 /// plain pasteboard. Nothing is revealed or written until this runs, and a reveal that
@@ -11,7 +10,6 @@ import StacklyClient
 @MainActor
 public enum ConnectionCopier {
     /// Copies `connection` and says how it went.
-    ///
     /// - Parameters:
     ///   - connection: The entry to copy.
     ///   - secrets: The secret methods.
@@ -65,7 +63,6 @@ extension ConnectionCopier {
     /// The Copy Connection String action of the More menu and of the command of the same
     /// name: it copies the first connection string, and is off with the reason when there is
     /// none or it cannot be copied. It changes no data, so the mutation gate leaves it on.
-    ///
     /// - Parameters:
     ///   - detail: The detail of the instance, or `nil` while it has not loaded.
     ///   - secrets: The secret methods.

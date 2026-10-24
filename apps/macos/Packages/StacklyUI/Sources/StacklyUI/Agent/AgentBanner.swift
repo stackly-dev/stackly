@@ -1,8 +1,6 @@
 import Foundation
 
-/// The window banner for the background agent while the daemon is unreachable (spec
-/// 0015, *Banner per state*). A pure function, so the banner, the Diagnostics hint, and
-/// the announcement of a loss always use the same words.
+/// The window banner for the background agent while the daemon is unreachable (spec 0015, *Banner per state*).
 nonisolated public enum AgentBanner {
     /// What the banner is built from.
     nonisolated public struct Input: Hashable, Sendable {

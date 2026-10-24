@@ -4,7 +4,6 @@
 
     /// An in-memory ``BackgroundAgentControlling`` for tests, previews, and fixtures: it
     /// never calls `SMAppService` (spec 0015, *GUI*).
-    ///
     /// `status()` answers `status`. `register()` and `relaunch()` answer `afterRegister`,
     /// and from then on `status()` answers it too; `unregister()` answers
     /// `.registration(.notRegistered, …)` and `status()` follows. Both answers can be
@@ -30,7 +29,6 @@
         private let state: Mutex<State>
 
         /// Creates the fake.
-        ///
         /// - Parameters:
         ///   - status: The answer of `status()` at first; a fresh install, `notFound`.
         ///   - afterRegister: The answer of `register()` and `relaunch()`, and of
@@ -158,7 +156,6 @@
         private let state: Mutex<(status: LaunchRecordStatus, reads: Int)>
 
         /// Creates the reader.
-        ///
         /// - Parameter status: What it answers.
         init(_ status: LaunchRecordStatus = .missing) {
             state = Mutex((status, 0))

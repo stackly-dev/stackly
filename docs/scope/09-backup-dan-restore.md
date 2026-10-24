@@ -48,7 +48,7 @@ Alur restore yang secara default membuat instance baru dengan endpoint baru: pre
 
 Halaman Backup & Restore di tab instance: scope dan mode backup, ukuran dan checksum, progress, konsistensi, tanggal restore terverifikasi, restore as new, dan overwrite eksplisit.
 
-**Done when:** semua aksi setara dengan CLI; backup yang belum lulus restore drill tidak ditandai recoverable; alur backup dan restore bisa diselesaikan dengan keyboard dan VoiceOver; tab Backups mengikuti mockup UI, termasuk state unsupported untuk provider tanpa capability backup dan konfirmasi Overwrite yang menyebut safety snapshot.
+**Done when:** semua aksi setara dengan CLI; backup yang belum lulus restore drill tidak ditandai recoverable; alur backup dan restore bisa diselesaikan dengan interaksi desktop; tab Backups mengikuti mockup UI, termasuk state unsupported untuk provider tanpa capability backup dan konfirmasi Overwrite yang menyebut safety snapshot.
 
 **Trace:** PAGE-11, BR-022, NFR-012
 

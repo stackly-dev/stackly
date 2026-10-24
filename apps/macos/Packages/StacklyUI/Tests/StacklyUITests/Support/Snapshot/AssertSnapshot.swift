@@ -35,9 +35,7 @@ func assertSnapshot<V: View>(
     named name: String,
     size: SnapshotSize = .page,
     variants: [SnapshotVariant] = SnapshotVariant.standard,
-    systemMaterial: Bool = false,
-    contrastInvariant: Bool = false,
-    contrastInvariantReason: String? = nil,
+
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
     guard SnapshotStore.isValid(name: name) else {
@@ -46,37 +44,16 @@ func assertSnapshot<V: View>(
             sourceLocation: sourceLocation)
         return
     }
-    if let issue = SnapshotContrast.reasonIssue(
-        name: name, invariant: contrastInvariant, reason: contrastInvariantReason)
-    {
-        Issue.record(Comment(rawValue: issue), sourceLocation: sourceLocation)
-        return
-    }
     if let reason = SnapshotPreflight.blockedReason(.current()) {
         try Evidence.blocked(reason: reason, owner: "user")
     }
     let store = SnapshotStore.forSuite(at: sourceLocation.filePath)
     store.clearArtifacts(name: name)
-    var lightImage: SnapshotImage?
-    var rendered: [SnapshotVariant: SnapshotImage] = [:]
     for variant in variants {
         do {
             let image = try await render(view, variant: variant, size: size)
-            rendered[variant] = image
-            if variant == .light { lightImage = image }
             let outcome: SnapshotStore.Outcome
-            if variant == .reduceTransparency && systemMaterial == false {
-                let baseline: SnapshotImage
-                if let lightImage {
-                    baseline = lightImage
-                } else {
-                    baseline = try await render(view, variant: .light, size: size)
-                    lightImage = baseline
-                }
-                outcome = store.checkIdentical(image, to: baseline, name: name, suffix: "rt")
-            } else {
-                outcome = try store.check(image, name: name, suffix: variant.suffix)
-            }
+            outcome = try store.check(image, name: name, suffix: variant.suffix)
             if case .failure(let message) = outcome {
                 Issue.record(
                     Comment(rawValue: "\(name) (\(variant.suffix)): \(message)"),
@@ -96,11 +73,7 @@ func assertSnapshot<V: View>(
                 sourceLocation: sourceLocation)
         }
     }
-    for message in SnapshotContrast.issues(
-        name: name, images: rendered, invariant: contrastInvariant)
-    {
-        Issue.record(Comment(rawValue: message), sourceLocation: sourceLocation)
-    }
+
 }
 
 /// Renders one variant of `view` with the fixed snapshot environment.

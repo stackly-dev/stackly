@@ -164,8 +164,7 @@ struct CommandLineFlowTests {
         let model = CommandLineToolModel(controller: tool)
         let link = ShellRuntimeTests.CountingLink()
         let daemon = DaemonModel(
-            link: link.handle, signals: nil, endpoint: nil, launchedAt: DaemonModelTests.launch,
-            announce: { _ in })
+            link: link.handle, signals: nil, endpoint: nil, launchedAt: DaemonModelTests.launch)
         let runtime = ShellRuntime(
             model: daemon, closeNotice: CloseNotice(presentsPanel: false), commandLineTool: model,
             onboardingStore: InMemoryOnboardingRecordStore())

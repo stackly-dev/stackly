@@ -23,7 +23,6 @@ public struct InstanceActionContext {
 extension InstanceActionContext {
     /// The context of a page: the card goes to the window's feedback center and Show
     /// Operations to the navigator, each only when the window has one.
-    ///
     /// - Parameters:
     ///   - feedbackCenter: The window's feedback center, or `nil`.
     ///   - navigator: The window's navigator, or `nil`.
@@ -41,7 +40,6 @@ extension InstanceActionContext {
 
 /// Start, Stop, and Retry for instances (spec 0022, *Aksi instance*): one per
 /// ``DaemonModel``, so a click survives a change of page.
-///
 /// A click marks the instance in flight at once, so a second click while the reply is on its
 /// way sends nothing. An accepted click stays pending until its operation reaches a final
 /// state. A key whose outcome is unknown is reused for the same action on the same instance
@@ -72,28 +70,23 @@ public final class InstanceActionModel {
     @ObservationIgnored private let updates: @MainActor (UUID) -> AsyncStream<OperationSnapshot>
     @ObservationIgnored private let readOperation: @MainActor (UUID) async -> OperationSnapshot?
     @ObservationIgnored private let now: () -> Date
-    @ObservationIgnored private let announce: @MainActor (String) -> Void
 
     /// Creates the model.
-    ///
     /// - Parameters:
     ///   - send: Sends one mutation with its idempotency key.
     ///   - updates: The updates of an operation, ending after its final state.
     ///   - readOperation: One `operation.get`, or `nil` when it fails.
     ///   - now: The wall clock.
-    ///   - announce: Posts a VoiceOver announcement.
     public init(
         send: @escaping @MainActor (Call, String) async -> MutationOutcome,
         updates: @escaping @MainActor (UUID) -> AsyncStream<OperationSnapshot>,
         readOperation: @escaping @MainActor (UUID) async -> OperationSnapshot?,
-        now: @escaping () -> Date = { Date() },
-        announce: @escaping @MainActor (String) -> Void = { StacklyUI.announce($0) }
+        now: @escaping () -> Date = { Date() }
     ) {
         self.send = send
         self.updates = updates
         self.readOperation = readOperation
         self.now = now
-        self.announce = announce
     }
 
     // MARK: - What the views read
@@ -110,7 +103,6 @@ public final class InstanceActionModel {
 
     /// The main action of an instance as a ``StacklyAction``: the button of a row, the
     /// button of the inspector, and the Start and Stop commands all read it.
-    ///
     /// - Parameters:
     ///   - summary: The instance.
     ///   - context: Where it reports.
@@ -133,7 +125,6 @@ public final class InstanceActionModel {
     // MARK: - Clicks
 
     /// Sends a click, unless one is in flight or pending for the instance.
-    ///
     /// - Returns: The task that runs until the click ended, or `nil` when nothing was sent.
     @discardableResult
     public func perform(
@@ -187,7 +178,6 @@ public final class InstanceActionModel {
                 clear(id)
                 return
             }
-            announce("\(verb.progressive) \(summary.name).")
             statuses[id] = .pending(verb, operationId: operation.id)
             await watch(
                 operation, instance: id, verb: verb, name: summary.name, context: context)
@@ -286,9 +276,7 @@ public final class InstanceActionModel {
 
     /// Ends every pending click whose operation is no longer active: it may have ended while
     /// the shell was away. One `operation.get` per click tells how it ended.
-    ///
     /// Call it when ``ShellSync/completedRounds`` changes.
-    ///
     /// - Parameters:
     ///   - activeOperations: The IDs ``OperationCenter/active`` holds now.
     ///   - names: The instance names by ID, for the feedback.

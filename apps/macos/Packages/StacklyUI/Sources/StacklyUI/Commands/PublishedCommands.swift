@@ -9,7 +9,6 @@ public enum CommandLevel: Hashable, Sendable {
 }
 
 /// The actions a window publishes for the menu bar (spec 0069).
-///
 /// A menu item does not own any logic: it reads the ``StacklyAction`` published here, and
 /// it is enabled exactly when the action is, with the gate of the publisher's own window.
 @MainActor public struct PublishedCommands {
@@ -54,11 +53,9 @@ extension FocusedValues {
 extension View {
     /// Publishes the actions the menu commands of `level` run, with this view's action host
     /// and window key state.
-    ///
     /// Put it inside `.actionHost()` and inside the environment values that set the
     /// mutation gate and the window key, so the commands read the gate and the key state of
     /// this window, not the defaults. Without an action host it publishes nothing.
-    ///
     /// - Parameters:
     ///   - level: Who publishes.
     ///   - actions: The actions by command.

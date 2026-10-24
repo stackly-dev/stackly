@@ -2,7 +2,6 @@ import StacklyClient
 
 /// The group an instance counts in on the Overview, in the Instances filter, and in
 /// `stackly instance list` (spec 0022, *Kelompok status instance*).
-///
 /// Only the lifecycle and the readiness state decide the group, never the process, the
 /// endpoints, or the restart budget, so an instance whose process lives but is not ready
 /// is never counted as running. The shared data file `protocols/fixtures/instance/groups.json`
@@ -20,7 +19,6 @@ nonisolated public enum InstanceGroup: String, CaseIterable, Hashable, Sendable 
     case unknown
 
     /// The group of a lifecycle and a readiness state.
-    ///
     /// - Parameters:
     ///   - lifecycle: The instance lifecycle.
     ///   - readiness: The readiness state.

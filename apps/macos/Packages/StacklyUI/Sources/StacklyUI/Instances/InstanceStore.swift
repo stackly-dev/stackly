@@ -4,11 +4,9 @@ import StacklyClient
 
 /// The instances the daemon manages, kept from snapshots plus `instance.` events (spec 0013,
 /// *Daftar instance sementara*).
-///
 /// Its store loads `instance.list` and follows `instance.state_changed`,
 /// `instance.health_changed`, and `instance.removed`. A retained instance never enters it,
 /// by any path, so the list, the badge, and the count never include one.
-///
 /// Two clocks order the changes (spec 0010): the row's `revision` orders whole summaries, and
 /// `statusSeq` orders the status fields (`readiness`, `health`, `blocker`, `restart`,
 /// `process`, `logsUnavailable`). `instance.health_changed` applies by `statusSeq` alone and
@@ -24,7 +22,6 @@ public final class InstanceStore {
     public let store: ResourceStore<InstanceSummary>
 
     /// Creates an empty store.
-    ///
     /// - Parameters:
     ///   - fetchPage: Fetches one page of instances.
     ///   - fetchOne: Fetches one instance, or `nil` when it is gone or retained.
@@ -51,7 +48,6 @@ public final class InstanceStore {
 
     /// A store that reads through `call`: `instance.list` for snapshots and `instance.get`
     /// for one instance.
-    ///
     /// - Parameters:
     ///   - call: Sends one call to the daemon.
     ///   - now: The wall clock.

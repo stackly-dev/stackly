@@ -4,17 +4,14 @@ import SwiftUI
 /// The Catalog screen (spec 0017, *Layar Catalog (GUI)*): a grid of provider cards with a
 /// category picker above it and a search field in the toolbar, and the chosen provider in
 /// the inspector.
-///
 /// The daemon decides every status and verdict; the page only shows the DTOs. Loading,
 /// failure, an unsupported daemon, an empty catalog, no search results, a stale catalog,
-/// and providers that failed validation all go through ``ViewState``. The page publishes
-/// Find to the menu bar, which focuses the search field, and keeps the chosen provider and
-/// whether the inspector is open per window.
+/// and providers that failed validation all go through ``ViewState``. The page keeps its
+/// provider selection and inspector visibility per window.
 public struct CatalogPage: View {
     @SceneStorage("catalog.selection") private var storedSelection = ""
     @SceneStorage("catalog.inspector") private var showsInspector = true
     @State private var filter = CatalogFilter()
-    @FocusState private var searchFocused: Bool
     @Environment(\.locale) private var locale
     @Environment(\.calendar) private var calendar
     @Environment(\.timeZone) private var timeZone
@@ -28,7 +25,6 @@ public struct CatalogPage: View {
     private let openDiagnostics: @MainActor () -> Void
 
     /// Creates the page.
-    ///
     /// - Parameters:
     ///   - catalog: The catalog store.
     ///   - runtimes: The runtime store, for "{n} installed" on a card and the Get column of
@@ -92,12 +88,12 @@ public struct CatalogPage: View {
             inspector(selected: visible.first { $0.provider == selected })
         }
         .searchable(text: $filter.query, prompt: "Search providers")
-        .searchFocused($searchFocused)
+
         .pageChrome(
             title: SidebarSection.catalog.title,
             subtitle: catalog.subtitle(locale: locale, calendar: calendar, timeZone: timeZone)
         )
-        .publishesCommands(.page(.catalog), [.find: findAction])
+
         .onChange(of: selected) { _, new in
             storedSelection = new ?? ""
         }
@@ -135,8 +131,7 @@ public struct CatalogPage: View {
             }
         }
         .labelsHidden()
-        .accessibilityLabel("Category")
-        .accessibilityIdentifier(AccessibilityID.Catalog.category)
+
     }
 
     private func grid(_ providers: [ProviderSummary], selected: String?) -> some View {
@@ -180,12 +175,6 @@ public struct CatalogPage: View {
         }
     }
 
-    private var findAction: StacklyAction {
-        StacklyAction(
-            id: CommandID.find.rawValue, title: CommandMap.entry(for: .find).title,
-            mutates: false, perform: { searchFocused = true })
-    }
-
     private func retry() {
         if hasConnection {
             Task { await catalog.store.refresh() }
@@ -197,7 +186,6 @@ public struct CatalogPage: View {
     // MARK: - State
 
     /// The state of the page: the fixed order of ``ViewState/resolve(unsupported:value:error:lastLoadedAt:isRefreshing:emptyContent:outdated:partial:)``.
-    ///
     /// The "Waiting for stacklyd" failure counts only while the store has no data. A stale
     /// catalog (180 days old) adds the outdated note with the date it was published, and
     /// providers that failed validation add the partial note.

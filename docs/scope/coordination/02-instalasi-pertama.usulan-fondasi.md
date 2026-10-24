@@ -1056,7 +1056,6 @@ Konflik dan resolusi:
 
 1. **Banner agent 0015 dan AC-9/AC-10 0013.** AC-9 mematok banner tanpa daemon sebagai "Can’t connect to stacklyd." dengan Reconnect dan Open Diagnostics, padahal kasus itu persis `ipc.endpoint_missing`.
    - Rekomendasi: baris state agent hanya mengganti judul, pesan, dan aksi untuk kedua kode. Footer ("stacklyd unavailable", critical), `MutationAvailability .blocked("stacklyd is unavailable.")`, dan awalan AC-10 tetap.
-   - Saat presence menjadi unreachable dengan kode itu, umumkan kalimat agent 0015 sebagai ganti "Can’t connect to stacklyd.", supaya VoiceOver hanya mendengar satu pengumuman per transisi (0015:319 punya pengumuman per state agent sendiri).
    - AC-9 dan cek manual 1 ditulis ulang untuk baris agent.
 2. **`MainWindowRoot` dari 0016 dan branch langkah 15.** Branch menjadikan `LiveShell(runtime:windowWillClose:)` konten Window, jadi `MainWindowRoot` menggantikan posisi `LiveShell` dan merender `OnboardingFlow` atau wiring `AppShell` dari `LiveShell`. Tulis ini setelah branch merge, supaya spec mendeskripsikan `LiveShell` dan bukan snippet usang `AppShell().environment(runtime.model)` di 0013:306.
 3. **Signature `ShellBootstrap.live` dari 0016 dan `assemble(...) -> LiveShellParts` internal milik branch.** Tambahkan `onboardingStore` dan Bool override ke keduanya. `live()` tetap satu-satunya pintu publik.

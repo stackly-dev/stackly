@@ -8,7 +8,7 @@ Journey PRD JOURNEY-04 (contoh environment ERP): import `stackly.yaml`, review t
 
 Schema `stackly.yaml` (versi, namespace, selector runtime, endpoint, settings, secret reference, dependency, ownership) dan plan yang menampilkan diff serta dampak tanpa efek samping. Termasuk halaman Environments untuk import, edit, validasi, dan preview plan.
 
-**Done when:** plan untuk manifest baru menampilkan install, create, dan start tanpa membuat file data, proses, perubahan trust, atau runtime; cycle, reference yang tidak ada, secret literal, dan konflik endpoint fixed ditolak sebelum ada mutasi; `stackly env validate` dan `plan` setara dengan GUI; halaman Environments bisa dipakai dengan keyboard dan VoiceOver; halaman Environments dan sheet plan mengikuti mockup UI: status environment, tabel service dengan selector, instance, versi, ownership, dan status, plan dengan kata kerja Create, Start, dan Keep, serta daftar environment di sidebar dengan hitungan ready.
+**Done when:** plan untuk manifest baru menampilkan install, create, dan start tanpa membuat file data, proses, perubahan trust, atau runtime; cycle, reference yang tidak ada, secret literal, dan konflik endpoint fixed ditolak sebelum ada mutasi; `stackly env validate` dan `plan` setara dengan GUI; halaman Environments bisa dipakai dengan interaksi desktop; halaman Environments dan sheet plan mengikuti mockup UI: status environment, tabel service dengan selector, instance, versi, ownership, dan status, plan dengan kata kerja Create, Start, dan Keep, serta daftar environment di sidebar dengan hitungan ready.
 
 **Trace:** REQ-020, REQ-028, VAL-013, VAL-014, PAGE-10, AC-020, AC-080 (bagian plan), NFR-012, JOURNEY-04
 

@@ -2,13 +2,11 @@ import SwiftUI
 
 /// The one window banner for the daemon's state, above every page: a ``StateBanner`` on
 /// the window surface with the banner's actions.
-///
 /// Its time follows the clock, the calendar, the locale, and the time zone of the
 /// environment, and updates every minute. While the background agent's row for an enabled
 /// agent is still under 15 seconds old, it updates every second, so the row changes at
 /// the 15th second. Reconnect shows a small spinner while an attempt runs. No action is
 /// gated, because none changes data.
-///
 /// With a ``DaemonModel`` in the environment, the banner shows the agent's row from
 /// ``DaemonModel/agentBannerInput`` whenever there is one, and `content` otherwise.
 public struct DaemonBanner: View {
@@ -24,7 +22,6 @@ public struct DaemonBanner: View {
     private let openDiagnostics: @MainActor () -> Void
 
     /// Creates the banner.
-    ///
     /// - Parameters:
     ///   - content: The banner from ``ShellPresentation/banner``.
     ///   - isReconnecting: Whether a connection attempt runs now.
@@ -45,7 +42,6 @@ public struct DaemonBanner: View {
     /// Whether the banner for `input` still changes at the 15th second, so a view that shows
     /// it redraws every second: true only for an enabled agent that is not starting and has
     /// been missing for less than ``AgentTiming/startGrace``.
-    ///
     /// - Parameters:
     ///   - input: What the banner is built from, or `nil` without an agent.
     ///   - now: The time now (`fixtureNow` when there is one).
@@ -88,9 +84,9 @@ public struct DaemonBanner: View {
             base: .window
         )
         // Only a critical banner is a new view when its title changes, so that it is
-        // announced again; the other rows keep the focus on the button just pressed.
+
         .id(shown.tone == .critical ? shown.title : "banner")
-        .accessibilityIdentifier(AccessibilityID.DaemonBanner.container)
+
     }
 
     private func stateAction(_ action: DaemonBannerAction, agent: BackgroundAgentModel?)

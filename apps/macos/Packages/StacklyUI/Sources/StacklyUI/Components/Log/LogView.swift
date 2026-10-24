@@ -2,13 +2,7 @@ import SwiftUI
 
 /// A scrolling log: one line per ``LogLine`` in monospace on the console surface
 /// (spec 0067, AC-16).
-///
-/// The time and source columns have the same minimum width in every row, taken from a
-/// hidden template, so the text lines up; a longer source shows in full and pushes the
-/// text of its own line. A warning or error line always has its symbol and its tone, not
-/// only while Differentiate Without Color is on. Text wraps and is selectable per line.
-/// VoiceOver reads each line as one element.
-///
+/// The time and source columns have the same minimum width in every row, taken from a hidden template, so the text lines up; a longer source shows in full and pushes the text of its own line. Text wraps and is selectable per line.
 /// With `follow` on, a new line scrolls the view to the last line. A scroll by the user
 /// that ends more than 24 pt above the bottom turns `follow` off; turning it on scrolls
 /// to the bottom. Scrolling back to the bottom does not turn it on again: the toggle
@@ -16,7 +10,7 @@ import SwiftUI
 public struct LogView: View {
     private let lines: [LogLine]
     @Binding private var follow: Bool
-    private let accessibilityLabel: String
+
     private let timeTemplate: String
     private let sourceTemplate: String
 
@@ -24,22 +18,18 @@ public struct LogView: View {
     @State private var distanceFromBottom: CGFloat = 0
 
     /// Creates a log view.
-    ///
     /// - Parameters:
     ///   - lines: The lines, oldest first.
     ///   - follow: Whether the view follows the newest line.
-    ///   - accessibilityLabel: The VoiceOver label of the list.
-    ///   - timeTemplate: Text as wide as the widest time, which sets the time column's
-    ///     minimum width.
-    ///   - sourceTemplate: Text as wide as the usual source, which sets the source
-    ///     column's minimum width.
+    ///   - timeTemplate: Text as wide as the widest time, which sets the time column's     minimum width.
+    ///   - sourceTemplate: Text as wide as the usual source, which sets the source     column's minimum width.
     public init(
-        _ lines: [LogLine], follow: Binding<Bool>, accessibilityLabel: String = "Log",
+        _ lines: [LogLine], follow: Binding<Bool>,
         timeTemplate: String = "00:00:00.000", sourceTemplate: String = "stderr"
     ) {
         self.lines = lines
         _follow = follow
-        self.accessibilityLabel = accessibilityLabel
+
         self.timeTemplate = timeTemplate
         self.sourceTemplate = sourceTemplate
     }
@@ -85,8 +75,7 @@ public struct LogView: View {
         }
         .background { Color.clear.consoleSurface() }
         .clipShape(RoundedRectangle(cornerRadius: Radius.medium.value))
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityIdentifier(AccessibilityID.Log.list)
+
     }
 
     /// Whether any line has a time, so the time column is drawn.
@@ -147,8 +136,7 @@ struct LogRow: View {
         }
         .padding(.vertical, Spacing.s2)
         .padding(.horizontal, Spacing.s14)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(line.accessibilityLabel)
+
     }
 
     /// A column as wide as its hidden template at least, and as wide as `text` when that
@@ -162,7 +150,7 @@ struct LogRow: View {
         .foregroundStyle(StacklyColor.textSecondary)
         .lineLimit(1)
         .fixedSize(horizontal: true, vertical: false)
-        .accessibilityHidden(true)
+
     }
 
     /// The symbol of a warning or error, or an empty box as wide as the symbol, so the
@@ -176,7 +164,7 @@ struct LogRow: View {
             }
         }
         .font(.callout)
-        .accessibilityHidden(true)
+
     }
 
     private var textStyle: AnyShapeStyle {

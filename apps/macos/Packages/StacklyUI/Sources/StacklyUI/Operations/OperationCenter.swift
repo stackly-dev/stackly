@@ -7,7 +7,6 @@ public typealias OperationSnapshot = OperationSummary
 
 /// The operations that have not ended, kept from snapshots plus `operation.` events
 /// (spec 0013, *Operation center*).
-///
 /// Its store loads `operation.list` with `activeOnly` and follows `operation.state_changed`
 /// and `operation.progress`. The running and cancelling operations give the Operations
 /// badge and subtitle. An operation that reaches a final state leaves ``active`` and stays
@@ -38,7 +37,6 @@ public final class OperationCenter {
     }
 
     /// Creates an empty center.
-    ///
     /// - Parameters:
     ///   - fetchPage: Fetches one page of the operations that have not ended.
     ///   - fetchOne: Fetches one operation, or `nil` when the daemon no longer knows it.
@@ -65,7 +63,6 @@ public final class OperationCenter {
 
     /// A center that reads through `call`: `operation.list` with `activeOnly` for
     /// snapshots and `operation.get` for one operation.
-    ///
     /// - Parameters:
     ///   - call: Sends one call to the daemon.
     ///   - now: The wall clock.
@@ -116,7 +113,6 @@ public final class OperationCenter {
     // MARK: - Following one operation
 
     /// The operation's current value, then every change, ending after its final state.
-    ///
     /// An operation the center does not hold is fetched with `operation.get`. The stream
     /// ends without a value when the daemon no longer knows the operation.
     public func updates(for id: UUID) -> AsyncStream<OperationSnapshot> {

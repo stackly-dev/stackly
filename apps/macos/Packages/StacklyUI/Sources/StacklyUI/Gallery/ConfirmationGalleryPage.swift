@@ -73,9 +73,6 @@
         }
     }
 
-    /// The Confirmation page of the design gallery: destructive and standard dialogs with
-    /// copy from the mockup, the result of the last one, and the keyboard behavior to
-    /// check in the real app.
     struct ConfirmationGalleryPage: View {
         @State private var request: ConfirmationRequest?
         @State private var pendingTitle: String?
@@ -86,13 +83,13 @@
                 GallerySection(
                     "Destructive",
                     note:
-                        "Red action button, caution badge, and Cancel as the default button: Return and Escape both cancel."
+                        "Red action button, caution badge, and an explicit Cancel button."
                 ) {
                     samples(of: .destructive)
                 }
                 GallerySection(
                     "Standard",
-                    note: "The action is the default button: Return runs it, Escape cancels."
+                    note: "The action and Cancel are native buttons."
                 ) {
                     samples(of: .standard)
                 }
@@ -106,15 +103,9 @@
                         .padding(Spacing.cardInsets)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .cardSurface()
-                        .accessibilityLabel("Last result: \(outcome)")
+
                 }
-                GallerySection(
-                    "Keyboard",
-                    note:
-                        "What to check with the real keyboard. Tab reaches the other button only while Keyboard navigation is on in System Settings › Keyboard; then Space presses it."
-                ) {
-                    keyboardTable
-                }
+
             }
             .stacklyConfirmation(item: $request)
             .onChange(of: request == nil) { _, isClosed in
@@ -138,31 +129,6 @@
         }
 
         /// The expected keys per role.
-        private var keyboardTable: some View {
-            Grid(alignment: .leading, horizontalSpacing: Spacing.s16, verticalSpacing: Spacing.s8) {
-                GridRow {
-                    Text("Role")
-                    Text("Return")
-                    Text("Escape")
-                }
-                .font(.headline)
-                GridRow {
-                    Text("Destructive")
-                    Text("Cancel; nothing runs")
-                    Text("Cancel; nothing runs")
-                }
-                GridRow {
-                    Text("Standard")
-                    Text("Runs the action")
-                    Text("Cancel; nothing runs")
-                }
-            }
-            .font(.body)
-            .padding(Spacing.cardInsets)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .cardSurface()
-        }
-
         /// Shows the dialog of `sample`, replacing any request still open.
         private func open(_ sample: ConfirmationSample) {
             pendingTitle = sample.title

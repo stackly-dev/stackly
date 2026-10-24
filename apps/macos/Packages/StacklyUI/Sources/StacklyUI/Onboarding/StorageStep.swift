@@ -1,11 +1,9 @@
 import SwiftUI
 
 /// The Storage step: where data, cache, logs, and secrets live (spec 0016, AC-6).
-///
 /// The folders come from the last daemon that answered, or from the macOS defaults before
 /// any did. The step reads; it creates nothing and shows no value of `STACKLY_ROOT`.
 struct StorageStep: View {
-    let focus: AccessibilityFocusState<Bool>.Binding
 
     @Environment(DaemonModel.self) private var model: DaemonModel?
 
@@ -16,7 +14,7 @@ struct StorageStep: View {
             rootOverride: model?.rootOverrideActive ?? false)
         VStack(spacing: Spacing.s14) {
             OnboardingStepHeader(
-                title: OnboardingCopy.storageTitle, subtitle: content.subtitle, focus: focus)
+                title: OnboardingCopy.storageTitle, subtitle: content.subtitle)
             CardSection {
                 ForEach(content.rows, id: \.label) { row in
                     LabeledContent(row.label) {

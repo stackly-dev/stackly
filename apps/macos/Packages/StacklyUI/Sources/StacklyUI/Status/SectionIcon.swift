@@ -51,14 +51,11 @@ nonisolated public enum SectionStyle: CaseIterable, Hashable, Sendable {
 }
 
 /// The icon of a section: its symbol in its color, taking the font around it.
-///
-/// It is decorative and hidden from VoiceOver, because the section label next to it
-/// carries the meaning. The app shell (spec 0013) places it in the sidebar.
+/// The app shell (spec 0013) places it in the sidebar.
 public struct SectionIcon: View {
     private let section: SectionStyle
 
     /// Creates a section icon.
-    ///
     /// - Parameter section: The section to draw.
     public init(_ section: SectionStyle) {
         self.section = section
@@ -68,6 +65,6 @@ public struct SectionIcon: View {
     public var body: some View {
         Image(systemName: section.symbol)
             .foregroundStyle(section.color)
-            .accessibilityHidden(true)
+
     }
 }

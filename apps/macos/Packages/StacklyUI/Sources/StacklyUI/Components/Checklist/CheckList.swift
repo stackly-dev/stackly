@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// The result of one check: the five statuses of the *Status checklist* table of spec 0067,
-/// each with a tone, a symbol, and a word VoiceOver reads, so no status is only a color.
-///
 /// A screen maps its own result (a preflight check, a doctor result) to a status.
 nonisolated public enum CheckStatus: Equatable, Sendable {
     /// The check passed.
@@ -39,16 +36,6 @@ nonisolated public enum CheckStatus: Equatable, Sendable {
         }
     }
 
-    /// The word VoiceOver reads for the status.
-    public var word: String {
-        switch self {
-        case .passed: "Passed"
-        case .warning: "Warning"
-        case .failed: "Failed"
-        case .pending: "Checking"
-        case .unrecognized: "Unrecognized status"
-        }
-    }
 }
 
 /// One row of a ``CheckList``.
@@ -65,7 +52,6 @@ public struct CheckItem: Identifiable {
     public var action: StacklyAction?
 
     /// Creates a row.
-    ///
     /// - Parameters:
     ///   - id: A stable key.
     ///   - status: The status.
@@ -83,12 +69,6 @@ public struct CheckItem: Identifiable {
         self.action = action
     }
 
-    /// What VoiceOver reads for the row: "{title}, {status}: {detail}", without the detail
-    /// when there is none.
-    public var accessibilityLabel: String {
-        guard let detail, !detail.isEmpty else { return "\(title), \(status.word)" }
-        return "\(title), \(status.word): \(detail)"
-    }
 }
 
 /// How a ``CheckList`` lays out its rows.
@@ -101,17 +81,12 @@ public enum CheckListLayout {
 }
 
 /// The rows of checks with a symbol, a title, and the detail in full (spec 0067, AC-13).
-///
-/// A screen wraps it in a ``CardSection``, for example titled "Preflight". The symbol
-/// shape differs per status, so Differentiate Without Color changes nothing. A `pending`
-/// row shows a small spinner only after 300 ms (or `loadingDelay`), so a quick check does not
-/// flash. VoiceOver reads each row as one element and its action as its own.
+/// A screen wraps it in a ``CardSection``, for example titled "Preflight". A `pending` row shows a small spinner only after 300 ms (or `loadingDelay`), so a quick check does not flash.
 public struct CheckList: View {
     private let items: [CheckItem]
     private let layout: CheckListLayout
 
     /// Creates a checklist.
-    ///
     /// - Parameters:
     ///   - items: The rows.
     ///   - layout: How the rows are laid out; adaptive by default.
@@ -173,9 +148,7 @@ private struct CheckRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(item.accessibilityLabel)
-            .accessibilityIdentifier(AccessibilityID.Checklist.row(item.id))
+
             if let action = item.action {
                 ActionButton(action)
                     .controlSize(.small)
@@ -185,12 +158,11 @@ private struct CheckRow: View {
         .animation(StacklyMotion.crossfadeAnimation, value: item.status)
     }
 
-    @ScaledMetric(relativeTo: .callout) private var symbolWidth: CGFloat = CheckSymbol.width
+    private let symbolWidth: CGFloat = CheckSymbol.width
 }
 
 /// The symbol of a status, or a delayed spinner for `pending`, in a box of fixed width so
 /// titles line up.
-///
 /// The delay is `loadingDelay` when the environment sets one, as for ``StateView``, and
 /// 300 ms otherwise. With a zero delay the spinner is part of the first frame, with no
 /// task and no transition: a spinner inserted after the first frame keeps changing in a
@@ -199,14 +171,13 @@ struct CheckSymbol: View {
     /// The width of the symbol box at the default text size.
     static let width: CGFloat = 18
 
-    @ScaledMetric(relativeTo: .callout) private var width: CGFloat = Self.width
+    private let width: CGFloat = Self.width
     @Environment(\.loadingDelay) private var loadingDelay
     @State private var delayElapsed = false
 
     let status: CheckStatus
 
     /// How long a `pending` row waits before its spinner shows.
-    ///
     /// - Parameter loadingDelay: The `loadingDelay` of the environment.
     /// - Returns: `loadingDelay`, or 300 ms when it is `nil`.
     static func spinnerDelay(loadingDelay: Duration?) -> Duration {
@@ -229,7 +200,7 @@ struct CheckSymbol: View {
             }
         }
         .frame(width: width)
-        .accessibilityHidden(true)
+
         .task(id: status) {
             delayElapsed = false
             guard status == .pending, delay != .zero else { return }

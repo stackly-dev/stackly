@@ -7,7 +7,6 @@ nonisolated public enum InstanceText {
     /// The port text of a row: per endpoint in DTO order, `:{port}` for a port, `auto` for a
     /// port the daemon assigns at start, and `socket` for a Unix socket, separated by a space.
     /// An instance without endpoints gets "—".
-    ///
     /// - Parameter endpoints: The endpoints of the summary.
     public static func ports(_ endpoints: [EndpointStatus]?) -> String {
         let parts = (endpoints ?? []).map(portPart)
@@ -17,36 +16,6 @@ nonisolated public enum InstanceText {
     private static func portPart(_ endpoint: EndpointStatus) -> String {
         if endpoint.transport == .unix { return "socket" }
         return endpoint.port.map { ":\($0)" } ?? "auto"
-    }
-
-    /// The port text VoiceOver reads: "port 5432", "ports 4222 and 8222", "socket", or
-    /// "automatic port". Different kinds are joined by a comma.
-    ///
-    /// - Parameter endpoints: The endpoints of the summary.
-    public static func spokenPorts(_ endpoints: [EndpointStatus]?) -> String {
-        let all = endpoints ?? []
-        var numbers: [UInt16] = []
-        var sockets = 0
-        var automatic = 0
-        for endpoint in all {
-            if endpoint.transport == .unix {
-                sockets += 1
-            } else if let port = endpoint.port {
-                numbers.append(port)
-            } else {
-                automatic += 1
-            }
-        }
-        var phrases: [String] = []
-        if numbers.isEmpty == false {
-            phrases.append(
-                (numbers.count == 1 ? "port " : "ports ") + list(numbers.map(String.init)))
-        }
-        if sockets > 0 { phrases.append(sockets == 1 ? "socket" : "\(sockets) sockets") }
-        if automatic > 0 {
-            phrases.append(automatic == 1 ? "automatic port" : "\(automatic) automatic ports")
-        }
-        return phrases.isEmpty ? "no endpoints" : phrases.joined(separator: ", ")
     }
 
     private static func list(_ items: [String]) -> String {
@@ -87,7 +56,6 @@ nonisolated public enum InstanceText {
 /// space, the smaller one padded (`12s`, `3m04s`, `1h02m`, `2d05h`).
 nonisolated public enum UptimeText {
     /// The uptime text.
-    ///
     /// - Parameters:
     ///   - startedAt: When the process started.
     ///   - now: The moment to count to; a fixed value in fixtures and tests.
@@ -111,7 +79,6 @@ nonisolated public enum UptimeText {
 /// "{n}h ago", or "{n}d ago".
 nonisolated public enum RelativeAge {
     /// The age text.
-    ///
     /// - Parameters:
     ///   - date: When it happened.
     ///   - now: The moment to count to.

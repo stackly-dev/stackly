@@ -4,10 +4,8 @@ import StacklyClient
 /// of the Instances page and later for the detail page. A pure function of the summary.
 nonisolated public enum ReadinessText {
     /// The readiness text.
-    ///
     /// Only an instance that is `running` or `recovering` has a readiness worth showing; any
     /// other instance gets "—".
-    ///
     /// - Parameter instance: The instance.
     public static func text(for instance: InstanceSummary) -> String {
         switch instance.lifecycle {

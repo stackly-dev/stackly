@@ -23,24 +23,6 @@ struct InstanceTextTests {
         #expect(InstanceText.ports(nil) == "—")
     }
 
-    @Test func portsAreSpokenInWords() {
-        #expect(InstanceText.spokenPorts([endpoint(port: 5432)]) == "port 5432")
-        #expect(
-            InstanceText.spokenPorts([endpoint(port: 4222), endpoint(port: 8222)])
-                == "ports 4222 and 8222")
-        #expect(
-            InstanceText.spokenPorts([endpoint(port: 1), endpoint(port: 2), endpoint(port: 3)])
-                == "ports 1, 2, and 3")
-        #expect(
-            InstanceText.spokenPorts([endpoint(transport: .unix, host: nil, port: nil)])
-                == "socket")
-        #expect(InstanceText.spokenPorts([endpoint(port: nil)]) == "automatic port")
-        #expect(
-            InstanceText.spokenPorts([endpoint(port: 5432), endpoint(port: nil)])
-                == "port 5432, automatic port")
-        #expect(InstanceText.spokenPorts(nil) == "no endpoints")
-    }
-
     @Test func theFirstPortIsANumberOnlyForAFixedOrBoundPort() {
         #expect(InstanceText.firstPort([endpoint(port: 5432)]) == 5432)
         #expect(InstanceText.firstPort([endpoint(port: nil)]) == nil)

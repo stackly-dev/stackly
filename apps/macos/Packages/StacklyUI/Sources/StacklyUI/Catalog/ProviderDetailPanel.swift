@@ -4,7 +4,6 @@ import SwiftUI
 /// The content of the inspector on the Catalog screen (spec 0017, *Layar Catalog (GUI)*):
 /// the header, the description, and, by the provider's state, the versions, the
 /// capabilities, and the key value rows.
-///
 /// The header, the description, and the reason come from the card's summary, so they show
 /// at once; the rest waits for `catalog.get_provider`. A planned provider has no matrix,
 /// no capability, and no button, only its note. An invalid one shows why it failed. The
@@ -58,7 +57,7 @@ struct ProviderDetailPanel: View {
                 ProgressView()
                     .controlSize(.small)
                     .frame(maxWidth: .infinity)
-                    .accessibilityLabel("Loading \(summary.displayName)")
+
             case .failed(let failure):
                 StateBanner(
                     tone: .critical, title: failure.title, message: failure.message,
@@ -69,7 +68,7 @@ struct ProviderDetailPanel: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("catalog.detail")
+
     }
 
     /// Why the last install of this provider did not start or did not finish: the daemon's
@@ -104,7 +103,6 @@ struct ProviderDetailPanel: View {
 
     /// The New Instance… action of the panel: off with a reason while no runtime of the
     /// software is installed.
-    ///
     /// - Parameters:
     ///   - installed: How many installed runtimes run the software of the provider.
     ///   - present: Opens the sheet on that software.
@@ -192,7 +190,7 @@ struct ProviderDetailPanel: View {
         CardSection("Capabilities") {
             CapabilityList(capabilities: detail.capabilities ?? [])
         }
-        .accessibilityIdentifier(AccessibilityID.Catalog.capabilities)
+
         CardSection {
             LabeledContent("License") {
                 licenseValue(facts)

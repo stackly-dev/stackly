@@ -5,7 +5,6 @@ import Foundation
 /// source. All three are `standard`: they change links Stackly made, not the user's data.
 public enum CommandLineToolPrompts {
     /// Install the command and the manual pages.
-    ///
     /// - Parameter perform: Runs when the user confirms.
     public static func install(perform: @escaping @MainActor () -> Void) -> ConfirmationRequest {
         ConfirmationRequest(
@@ -16,7 +15,6 @@ public enum CommandLineToolPrompts {
     }
 
     /// Point the links to this copy of Stackly.
-    ///
     /// - Parameter perform: Runs when the user confirms.
     public static func repair(perform: @escaping @MainActor () -> Void) -> ConfirmationRequest {
         ConfirmationRequest(
@@ -27,7 +25,6 @@ public enum CommandLineToolPrompts {
     }
 
     /// Remove the links Stackly made.
-    ///
     /// - Parameter perform: Runs when the user confirms.
     public static func remove(perform: @escaping @MainActor () -> Void) -> ConfirmationRequest {
         ConfirmationRequest(

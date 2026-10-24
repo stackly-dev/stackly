@@ -8,7 +8,6 @@ import SwiftUI
 /// the Catalog detail panel, and ⌘N) calls ``present(software:)``, and Duplicate… (spec 0024)
 /// calls ``presentDuplicate(of:)``, and the shell shows the
 /// sheet while ``isPresented`` is true.
-///
 /// The presenter owns the one ``CreateInstanceModel`` of the window, so a create that is
 /// running survives the sheet closing: the model keeps following the operation, and the
 /// shell hears of the end through ``finishHandler``.
@@ -30,7 +29,6 @@ public final class NewInstancePresenter {
     @ObservationIgnored public var finishHandler: (@MainActor (CreateOutcome) -> Void)?
 
     /// Creates a presenter around `model`.
-    ///
     /// - Parameter model: The model of the sheet. Its `onFinish` should call
     ///   ``finished(_:)``; ``makeModel(runtimes:catalog:instances:service:send:updates:)``
     ///   builds one that does.
@@ -39,7 +37,6 @@ public final class NewInstancePresenter {
     }
 
     /// Opens the sheet.
-    ///
     /// - Parameter software: The software to start on, or `nil` for the first runtime.
     public func present(software: String? = nil) {
         guard !isPresented else { return }
@@ -56,7 +53,6 @@ public final class NewInstancePresenter {
     }
 
     /// Opens the sheet on the settings of an instance (spec 0024).
-    ///
     /// - Parameter source: The instance to copy the settings of.
     public func presentDuplicate(of source: DuplicateSourceRef) {
         guard !isPresented else { return }
@@ -97,7 +93,6 @@ public final class NewInstancePresenter {
 
 extension NewInstancePresenter {
     /// Builds the presenter of a window over the shell's stores and the daemon.
-    ///
     /// - Parameters:
     ///   - runtimes: The runtimes the picker offers.
     ///   - catalog: The catalog, for the category and the tile.

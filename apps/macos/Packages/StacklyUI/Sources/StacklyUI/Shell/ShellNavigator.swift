@@ -33,7 +33,6 @@ public enum ShellDestination: Hashable, Sendable {
 }
 
 /// What the Instances page is asked to show: the filter, and an instance to select.
-///
 /// Every request is new even when its filter and selection equal the last one, so the page
 /// applies it again.
 public struct InstancesRequest: Equatable, Sendable {
@@ -46,7 +45,6 @@ public struct InstancesRequest: Equatable, Sendable {
 }
 
 /// What the Instances page is asked to open: the detail page of an instance (spec 0021).
-///
 /// Every request is new even for the same instance, so the page opens it again.
 public struct InstanceRequest: Equatable, Sendable {
     /// Tells one request from another.
@@ -56,7 +54,6 @@ public struct InstanceRequest: Equatable, Sendable {
 }
 
 /// The one way a page sends the person to another page of the window (spec 0022, *Navigasi*).
-///
 /// ``AppShell`` creates one per window, puts it in the environment, and mirrors
 /// ``section`` with its `@SceneStorage` in both directions, since `@SceneStorage` only
 /// lives in a view. A destination that is the Instances page also leaves an
@@ -75,7 +72,6 @@ public final class ShellNavigator {
     public private(set) var instancesResets = 0
 
     /// Creates a navigator.
-    ///
     /// - Parameter section: The section that shows first.
     public init(section: SidebarSection = .overview) {
         self.section = section
@@ -96,7 +92,6 @@ public final class ShellNavigator {
 
     /// Opens the detail page of an instance: the Instances page applies the request to its
     /// navigation stack, also when it was not showing yet.
-    ///
     /// - Parameter id: The instance.
     public func openInstance(_ id: UUID) {
         show(.instance(id))
@@ -132,7 +127,6 @@ public struct NewInstanceAction {
     private let action: @MainActor () -> Void
 
     /// Creates the action.
-    ///
     /// - Parameter action: Opens the sheet.
     public init(_ action: @escaping @MainActor () -> Void) {
         self.action = action
@@ -144,7 +138,6 @@ public struct NewInstanceAction {
     }
 
     /// The action as a ``StacklyAction``, for a toolbar button and an empty state.
-    ///
     /// - Parameter title: "New Instance" in the toolbar, "New Instance…" in an empty state.
     public func stacklyAction(title: String) -> StacklyAction {
         StacklyAction(

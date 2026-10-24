@@ -4,7 +4,6 @@ import Foundation
 /// without a view.
 nonisolated public enum OnboardingFooter {
     /// The label of the primary button.
-    ///
     /// - Parameters:
     ///   - step: The step on screen.
     ///   - agentState: The background agent's state, or `nil` while it is not read or the
@@ -29,12 +28,6 @@ nonisolated public enum OnboardingFooter {
         OnboardingCopy.stepText(number: step.number, label: step.label)
     }
 
-    /// What VoiceOver says for the step's dot and when the step changes, without a trailing
-    /// period.
-    public static func stepSpoken(_ step: OnboardingStep) -> String {
-        OnboardingCopy.stepSpoken(number: step.number, label: step.label)
-    }
-
     /// Whether the Back button shows: from the second step on.
     public static func showsBack(step: OnboardingStep) -> Bool {
         step != .welcome
@@ -42,9 +35,5 @@ nonisolated public enum OnboardingFooter {
 }
 
 extension OnboardingFooter {
-    /// What VoiceOver announces once when the step changes, such as
-    /// `Step 3 of 5, Storage.`
-    public static func announcement(_ step: OnboardingStep) -> String {
-        OnboardingCopy.stepAnnouncement(number: step.number, label: step.label)
-    }
+
 }

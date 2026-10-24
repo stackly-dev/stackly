@@ -13,7 +13,7 @@ nonisolated public enum OnboardingStep: Int, CaseIterable, Sendable {
     /// The `stackly` command in `~/.local/bin`.
     case commandLine
 
-    /// The step's label, as the footer and VoiceOver say it.
+    /// The visible name of this step.
     public var label: String {
         OnboardingCopy.stepLabels[rawValue]
     }

@@ -16,7 +16,6 @@ nonisolated public struct SecretNeed: Identifiable, Sendable, Equatable {
     public var id: String { reference }
 
     /// Creates a need.
-    ///
     /// - Parameters:
     ///   - reference: The reference.
     ///   - reason: Why it cannot be read.
@@ -40,10 +39,8 @@ nonisolated public struct SecretNeed: Identifiable, Sendable, Equatable {
     }
 
     /// The needs in a `secret.needs_secret` error, in the order the daemon sent them.
-    ///
     /// Items of another kind, and items without a reference, are skipped. A reason this
     /// build does not know reads as `.unrecognized`.
-    ///
     /// - Parameter error: The error body.
     public static func needs(in error: ErrorBody) -> [SecretNeed] {
         guard error.code == "secret.needs_secret" else { return [] }

@@ -1,7 +1,6 @@
 import Foundation
 
 /// The identity of a command in the menu bar of spec 0069.
-///
 /// The cases are declared in menu order, and the raw values never change after they are
 /// used: the UI tests of spec 0068 read them.
 nonisolated public enum CommandID: String, CaseIterable, Hashable, Sendable {
@@ -99,97 +98,7 @@ nonisolated public enum CommandKind: String, Hashable, Sendable {
     case button
     /// A menu `Toggle` with a checkmark.
     case toggle
-    /// An item SwiftUI or macOS creates itself; the map only keeps its shortcut.
     case system
-}
-
-/// The modifier keys of a shortcut. macOS has no modifier for the 🌐 key here, so a
-/// shortcut that needs it cannot be written (rule E of spec 0069).
-nonisolated public struct CommandModifiers: OptionSet, Hashable, Sendable {
-    /// The bits of the set.
-    public let rawValue: Int
-
-    /// Creates a set from its bits.
-    public init(rawValue: Int) {
-        self.rawValue = rawValue
-    }
-
-    /// ⌘.
-    public static let command = CommandModifiers(rawValue: 1 << 0)
-    /// ⇧.
-    public static let shift = CommandModifiers(rawValue: 1 << 1)
-    /// ⌥.
-    public static let option = CommandModifiers(rawValue: 1 << 2)
-    /// ⌃.
-    public static let control = CommandModifiers(rawValue: 1 << 3)
-
-    /// Every modifier that can be written.
-    public static let all: CommandModifiers = [.command, .shift, .option, .control]
-}
-
-/// A keyboard shortcut in the normal form the clash tests compare.
-///
-/// The key is one lowercase character (`"r"`, `"1"`, `"["`) or the name of a special key
-/// (`"tab"`, `"space"`, `"escape"`, `"return"`, `"delete"`, `"forwardDelete"`, `"up"`,
-/// `"down"`, `"left"`, `"right"`, `"f1"` to `"f12"`). Punctuation that needs ⇧ is stored as
-/// its base key with ⇧, so ⌘? is `"/"` with ⇧⌘.
-nonisolated public struct CommandShortcut: Hashable, Sendable {
-    /// The base key.
-    public let key: String
-    /// The modifiers, with ⇧ written out also for shifted punctuation.
-    public let modifiers: CommandModifiers
-
-    /// Pairs of a base punctuation key and the character ⇧ turns it into.
-    private static let shiftedPunctuation: [(base: String, shifted: String)] = [
-        ("/", "?"), ("[", "{"), ("]", "}"), ("\\", "|"), (";", ":"), (",", "<"), (".", ">"),
-        ("'", "\""), ("-", "_"), ("=", "+"), ("`", "~"),
-    ]
-
-    /// The character ⇧ turns a base punctuation key into, or `nil` for any other key.
-    static func shiftedCharacter(ofBaseKey key: String) -> Character? {
-        shiftedPunctuation.first { $0.base == key }.flatMap { $0.shifted.first }
-    }
-
-    /// The glyph or label a special key shows in a menu.
-    private static let specialKeyDisplay: [String: String] = [
-        "tab": "⇥", "space": "Space", "escape": "⎋", "return": "↩", "delete": "⌫",
-        "forwardDelete": "⌦", "up": "↑", "down": "↓", "left": "←", "right": "→",
-    ]
-
-    /// Creates a shortcut and brings it to its normal form: letters lowercase, shifted
-    /// punctuation as its base key with ⇧.
-    ///
-    /// - Parameters:
-    ///   - key: The key, or the shifted character such as `"?"`.
-    ///   - modifiers: The modifiers.
-    public init(_ key: String, _ modifiers: CommandModifiers) {
-        if let pair = Self.shiftedPunctuation.first(where: { $0.shifted == key }) {
-            self.key = pair.base
-            self.modifiers = modifiers.union(.shift)
-        } else {
-            self.key = key.count == 1 ? key.lowercased() : key
-            self.modifiers = modifiers
-        }
-    }
-
-    /// The shortcut as a menu shows it: modifiers in the order ⌃⌥⇧⌘, then the key in
-    /// capitals. Shifted punctuation shows as its shifted character without ⇧.
-    public var display: String {
-        var shown = modifiers
-        var keyText = Self.specialKeyDisplay[key] ?? key.uppercased()
-        if modifiers.contains(.shift),
-            let pair = Self.shiftedPunctuation.first(where: { $0.base == key })
-        {
-            shown.remove(.shift)
-            keyText = pair.shifted
-        }
-        var text = ""
-        if shown.contains(.control) { text += "⌃" }
-        if shown.contains(.option) { text += "⌥" }
-        if shown.contains(.shift) { text += "⇧" }
-        if shown.contains(.command) { text += "⌘" }
-        return text + keyText
-    }
 }
 
 /// Where a command is active.
@@ -224,46 +133,6 @@ nonisolated public enum CommandStatus: Hashable, Sendable {
     case planned
 }
 
-/// The standard meaning a shortcut has on macOS, so a row may reuse it for the same job.
-nonisolated public enum StandardMeaning: String, Hashable, Sendable {
-    /// New.
-    case new
-    /// Open.
-    case open
-    /// Duplicate.
-    case duplicate
-    /// Find.
-    case find
-    /// Find Next.
-    case findNext
-    /// Find Previous.
-    case findPrevious
-    /// Use Selection for Find.
-    case useSelectionForFind
-    /// Jump to Selection.
-    case jumpToSelection
-    /// Back.
-    case back
-    /// Forward.
-    case forward
-    /// Help.
-    case help
-    /// Save.
-    case save
-    /// Save As.
-    case saveAs
-    /// Print.
-    case print
-    /// Page Setup.
-    case pageSetup
-    /// Zoom In.
-    case zoomIn
-    /// Zoom Out.
-    case zoomOut
-    /// Actual Size.
-    case actualSize
-}
-
 /// One row of the command map: everything the menu and the clash tests know about a
 /// command.
 nonisolated public struct CommandEntry: Hashable, Identifiable, Sendable {
@@ -282,8 +151,7 @@ nonisolated public struct CommandEntry: Hashable, Identifiable, Sendable {
     public let title: String
     /// The second title of a command whose title changes, such as Hide Inspector.
     public let alternateTitle: String?
-    /// The shortcut, or `nil` when the command has none.
-    public let shortcut: CommandShortcut?
+
     /// Whether the command asks for input before it acts.
     public let needsInput: Bool
     /// Where the command is active.
@@ -294,10 +162,6 @@ nonisolated public struct CommandEntry: Hashable, Identifiable, Sendable {
     public let owner: Int
     /// Whether the menu builds the command yet.
     public let status: CommandStatus
-    /// The standard meaning of the shortcut, when the command uses one.
-    public let standardMeaning: StandardMeaning?
-    /// Why the command may use a shortcut that means something else on macOS.
-    public let exception: String?
 
     /// Creates a row.
     init(
@@ -308,14 +172,12 @@ nonisolated public struct CommandEntry: Hashable, Identifiable, Sendable {
         kind: CommandKind = .button,
         title: String,
         alternateTitle: String? = nil,
-        shortcut: CommandShortcut? = nil,
+
         needsInput: Bool = false,
         scope: CommandScope,
         requirements: Set<CommandRequirement> = [],
         owner: Int,
-        status: CommandStatus = .planned,
-        standardMeaning: StandardMeaning? = nil,
-        exception: String? = nil
+        status: CommandStatus = .planned
     ) {
         self.id = id
         self.menu = menu
@@ -324,25 +186,18 @@ nonisolated public struct CommandEntry: Hashable, Identifiable, Sendable {
         self.kind = kind
         self.title = title
         self.alternateTitle = alternateTitle
-        self.shortcut = shortcut
+
         self.needsInput = needsInput
         self.scope = scope
         self.requirements = requirements
         self.owner = owner
         self.status = status
-        self.standardMeaning = standardMeaning
-        self.exception = exception
     }
 }
 
-/// The single source of menu titles and shortcuts of Stackly (spec 0069).
-///
-/// A shortcut is written here and nowhere else; the unit tests refuse a clash with another
-/// row or with a macOS shortcut. The status of every row is `planned` until the build step
-/// that adds its `CommandItem` turns it into `built`.
+/// The status of every row is `planned` until the build step that adds its `CommandItem` turns it into `built`.
 nonisolated public enum CommandMap {
     /// The row of a command.
-    ///
     /// - Parameter id: The command.
     /// - Returns: Its row. The `switch` covers every case, so adding a ``CommandID`` fails
     ///   to compile until it has a row.
@@ -355,15 +210,14 @@ nonisolated public enum CommandMap {
         case .newInstance:
             CommandEntry(
                 id, menu: .file, group: 1, title: "New Instance…",
-                shortcut: CommandShortcut("n", .command), needsInput: true,
-                scope: .shell, requirements: [.daemon], owner: 20, status: .built,
-                standardMeaning: .new)
+                needsInput: true,
+                scope: .shell, requirements: [.daemon], owner: 20, status: .built)
         case .find:
             CommandEntry(
                 id, menu: .edit, submenu: .find, group: 1, title: "Find…",
-                shortcut: CommandShortcut("f", .command), needsInput: true,
+                needsInput: true,
                 scope: .page(Set(SidebarSection.allCases)), requirements: [.search],
-                owner: 69, status: .built, standardMeaning: .find)
+                owner: 69, status: .planned)
         case .showOverview:
             showSection(id, title: "Overview", key: "1")
         case .showInstances:
@@ -381,13 +235,13 @@ nonisolated public enum CommandMap {
         case .back:
             CommandEntry(
                 id, menu: .view, group: 2, title: "Back",
-                shortcut: CommandShortcut("[", .command), scope: instancesPage,
-                requirements: [.detail], owner: 21, status: .built, standardMeaning: .back)
+                scope: instancesPage,
+                requirements: [.detail], owner: 21, status: .built)
         case .toggleInspector:
             CommandEntry(
                 id, menu: .view, group: 3, title: "Show Inspector",
                 alternateTitle: "Hide Inspector",
-                shortcut: CommandShortcut("i", [.command, .option]), scope: instancesPage,
+                scope: instancesPage,
                 owner: 22, status: .built)
         case .sortInstancesByName:
             sortKey(id, title: "Name")
@@ -406,25 +260,22 @@ nonisolated public enum CommandMap {
         case .openInstance:
             CommandEntry(
                 id, menu: .instance, group: 1, title: "Open",
-                shortcut: CommandShortcut("o", .command), scope: instancesPage,
-                requirements: [.selection], owner: 21, status: .built, standardMeaning: .open)
+                scope: instancesPage,
+                requirements: [.selection], owner: 21, status: .built)
         case .startInstance:
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Start",
-                shortcut: CommandShortcut("r", .command), scope: instancesPage,
-                requirements: [.selection, .daemon], owner: 22, status: .built,
-                exception:
-                    "⌘R is Show Ruler in the Format menu; Stackly has no Format menu, ruler, or styled text"
-            )
+                scope: instancesPage,
+                requirements: [.selection, .daemon], owner: 22, status: .built)
         case .stopInstance:
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Stop",
-                shortcut: CommandShortcut("r", [.command, .shift]), scope: instancesPage,
+                scope: instancesPage,
                 requirements: [.selection, .daemon], owner: 22, status: .built)
         case .restartInstance:
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Restart",
-                shortcut: CommandShortcut("r", [.command, .option]), scope: instancesPage,
+                scope: instancesPage,
                 requirements: [.selection, .daemon], owner: 26)
         case .reloadInstance:
             CommandEntry(
@@ -433,17 +284,14 @@ nonisolated public enum CommandMap {
         case .copyConnectionString:
             CommandEntry(
                 id, menu: .instance, group: 3, title: "Copy Connection String",
-                shortcut: CommandShortcut("c", [.command, .shift]), scope: instancesPage,
-                requirements: [.selection], owner: 21, status: .built,
-                exception:
-                    "⇧⌘C is Show Colors in the Format menu; Stackly has no Format menu or color panel"
-            )
+                scope: instancesPage,
+                requirements: [.selection], owner: 21, status: .built)
         case .duplicateInstance:
             CommandEntry(
                 id, menu: .instance, group: 4, title: "Duplicate…",
-                shortcut: CommandShortcut("d", .command), needsInput: true,
+                needsInput: true,
                 scope: instancesPage, requirements: [.selection, .daemon], owner: 24,
-                status: .built, standardMeaning: .duplicate)
+                status: .built)
         case .removeInstance:
             CommandEntry(
                 id, menu: .instance, group: 4, title: "Remove…", needsInput: true,
@@ -451,8 +299,7 @@ nonisolated public enum CommandMap {
         case .stacklyHelp:
             CommandEntry(
                 id, menu: .help, group: 1, title: "Stackly Help",
-                shortcut: CommandShortcut("?", .command), scope: .app, owner: 66,
-                standardMeaning: .help)
+                scope: .app, owner: 66)
         case .welcome:
             CommandEntry(
                 id, menu: .help, group: 2, title: "Welcome to Stackly", scope: .app, owner: 16,
@@ -460,10 +307,8 @@ nonisolated public enum CommandMap {
         case .showMainWindow:
             CommandEntry(
                 id, menu: .window, group: 0, kind: .system, title: "Stackly",
-                shortcut: CommandShortcut("0", .command), scope: .app, owner: 69,
-                status: .built,
-                exception:
-                    "⌘0 is Actual Size; Stackly has no zoom, and Mail uses ⌘0 for its main window")
+                scope: .app, owner: 69,
+                status: .planned)
         }
     }
 
@@ -475,7 +320,6 @@ nonisolated public enum CommandMap {
     /// The built rows of a menu or submenu, as groups in group order. Inside a group the
     /// rows keep declaration order. Groups with no built row are left out, and so are
     /// `system` rows, which the menu builder does not render.
-    ///
     /// - Parameters:
     ///   - menu: The menu.
     ///   - submenu: The submenu, or `nil` for the menu itself.
@@ -497,17 +341,11 @@ nonisolated public enum CommandMap {
             .map(\.value)
     }
 
-    /// The text of a button's tooltip: the title and, in parentheses, the shortcut.
-    ///
-    /// - Parameters:
-    ///   - id: The command.
-    ///   - title: The title to show instead of the row's, for a command whose title changes.
-    /// - Returns: "Hide Inspector (⌥⌘I)", or the title alone when the command has no shortcut.
+    /// The visible command title, optionally overridden by the caller.
     public static func helpText(for id: CommandID, title: String? = nil) -> String {
         let row = entry(for: id)
         let shown = title ?? row.title
-        guard let shortcut = row.shortcut else { return shown }
-        return "\(shown) (\(shortcut.display))"
+        return shown
     }
 
     /// The Instances page only.
@@ -517,7 +355,7 @@ nonisolated public enum CommandMap {
     private static func showSection(_ id: CommandID, title: String, key: String) -> CommandEntry {
         CommandEntry(
             id, menu: .view, group: 1, title: title,
-            shortcut: CommandShortcut(key, .command), scope: .shell, owner: 69,
+            scope: .shell, owner: 69,
             status: .built)
     }
 

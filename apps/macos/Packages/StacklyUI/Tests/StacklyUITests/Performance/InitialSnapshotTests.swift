@@ -40,7 +40,7 @@ struct InitialSnapshotTests {
         let daemon = try ScriptedDaemon(instances: Self.hundredInstances())
         daemon.start()
         let parts = ShellBootstrap.assemble(
-            rootOverride: daemon.rootOverride, clientVersion: "0.1.0", announce: { _ in },
+            rootOverride: daemon.rootOverride, clientVersion: "0.1.0",
             closeNotice: CloseNotice(presentsPanel: false))
         let store = parts.runtime.model.instances.store
 

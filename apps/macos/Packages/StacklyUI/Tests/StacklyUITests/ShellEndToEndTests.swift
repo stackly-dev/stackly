@@ -14,17 +14,13 @@ import Testing
 /// as BLOCKED (with evidence) or cancelled.
 @Suite(.tags(.daemon), .timeLimit(.minutes(2)))
 struct ShellEndToEndTests {
-    /// The VoiceOver announcements a live shell posted.
-    final class Announcements {
-        var lines: [String] = []
-    }
 
     /// A live shell for `daemon`'s root, with a close notice that shows no panel.
-    static func shell(for daemon: LiveDaemon, announcements: Announcements) -> LiveShellParts {
+    static func shell(for daemon: LiveDaemon) -> LiveShellParts {
         ShellBootstrap.assemble(
             rootOverride: daemon.root,
             clientVersion: "0.1.0",
-            announce: { announcements.lines.append($0) },
+
             closeNotice: CloseNotice(presentsPanel: false))
     }
 
@@ -63,8 +59,7 @@ struct ShellEndToEndTests {
         ))
     func theShellWaitsForStacklydThenConnectsByItself() async throws {
         let daemon = try LiveDaemon(recordsEvidence: true)
-        let announcements = Announcements()
-        let parts = Self.shell(for: daemon, announcements: announcements)
+        let parts = Self.shell(for: daemon)
         let model = parts.runtime.model
 
         try await waitFor("the first attempt to fail", seconds: 20) {
@@ -95,8 +90,7 @@ struct ShellEndToEndTests {
         #expect(model.mutationAvailability == .available)
         #expect(model.lastDaemon?.info?.socketPath == daemon.endpoint.socketPath)
         #expect(model.sync.lastResnapshot == .noCursor)
-        #expect(
-            announcements.lines == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
+
         Evidence.actual(
             "unreachable with endpoint_missing, mutations not sent, then connected and refreshed after stacklyd started"
         )
@@ -115,8 +109,7 @@ struct ShellEndToEndTests {
     func aKilledDaemonLeavesTheLastKnownStateWithMutationsDisabled() async throws {
         let daemon = try LiveDaemon(recordsEvidence: true)
         try await daemon.start()
-        let announcements = Announcements()
-        let parts = Self.shell(for: daemon, announcements: announcements)
+        let parts = Self.shell(for: daemon)
         let model = parts.runtime.model
         try await Self.waitUntilRefreshed(model, "the shell to connect and refresh")
         let countsBefore = model.sidebarCounts
@@ -154,7 +147,7 @@ struct ShellEndToEndTests {
             calendar: .current, locale: .current, timeZone: .current)
         let values = Dictionary(uniqueKeysWithValues: rows.map { ($0.label, $0.value) })
         #expect(values["stacklyd"]?.hasSuffix("(last known)") == true)
-        #expect(announcements.lines == ["Can’t connect to stacklyd."])
+
         Evidence.actual(
             "unreachable with the last known time, gate blocked, mutation not sent, then connection_refused on the stale socket"
         )
@@ -172,8 +165,7 @@ struct ShellEndToEndTests {
     func aRestartedDaemonIsCaughtUpWithASnapshotFromTheCursor() async throws {
         let daemon = try LiveDaemon(recordsEvidence: true)
         try await daemon.start()
-        let announcements = Announcements()
-        let parts = Self.shell(for: daemon, announcements: announcements)
+        let parts = Self.shell(for: daemon)
         let model = parts.runtime.model
         try await Self.waitUntilRefreshed(model, "the shell to connect and refresh")
         let first = try #require(model.lastDaemon?.accepted.serverInstanceId)
@@ -200,8 +192,7 @@ struct ShellEndToEndTests {
         #expect(await parts.engine.cursor?.serverInstanceId == second)
         #expect(model.presentation.banner == nil)
         #expect(model.mutationAvailability == .available)
-        #expect(
-            announcements.lines == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
+
         Evidence.actual(
             "reconnected to a new serverInstanceId through a server_restarted gap and a full snapshot"
         )
@@ -220,7 +211,7 @@ struct ShellEndToEndTests {
     func closingTheWindowOrQuittingLeavesTheDaemonRunning() async throws {
         let daemon = try LiveDaemon(recordsEvidence: true)
         try await daemon.start()
-        let parts = Self.shell(for: daemon, announcements: Announcements())
+        let parts = Self.shell(for: daemon)
         let runtime = parts.runtime
         try await Self.waitUntilRefreshed(runtime.model, "the shell to connect and refresh")
         let connectedAt = runtime.model.lastConnectedAt

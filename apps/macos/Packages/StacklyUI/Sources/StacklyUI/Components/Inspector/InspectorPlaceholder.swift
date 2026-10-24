@@ -1,13 +1,11 @@
 import SwiftUI
 
-/// What an inspector shows when nothing is selected (spec 0067, AC-18): a title and a
-/// message in the middle of the column, read by VoiceOver as one group.
+/// The message shown when the inspector has no selection.
 public struct InspectorPlaceholder: View {
     let title: String
     let message: String?
 
     /// Creates a placeholder.
-    ///
     /// - Parameters:
     ///   - title: The title, "No Selection" by default.
     ///   - message: What to do, for example "Select an instance to see its details."
@@ -31,8 +29,7 @@ public struct InspectorPlaceholder: View {
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier(AccessibilityID.Inspector.placeholder)
+
     }
 }
 

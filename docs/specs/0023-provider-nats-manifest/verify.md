@@ -116,7 +116,6 @@ Penyimpangan dari spec, dicatat untuk lead dan architect:
 
 - [ ] `NOT_RUN` (langkah 12, butuh izin user) Sheet New Instance untuk NATS di app development dengan root sementara: pilih runtime NATS 2.15.1 yang terpasang, isi nama, dan lihat baris "Server name" terkunci (read only, tidak bisa diketik), toggle JetStream aktif, grup Advanced tertutup dengan tiga angka dan batas nya, dan dua baris endpoint Client (4222) dan Monitoring (8222) dengan pilihan Fixed atau Automatic. Biarkan Automatic, nyalakan "Start after creating", tekan Create → sheet mengikuti operasi sampai selesai, instance muncul di Instances → AC-13
 - [ ] `NOT_RUN` (langkah 12, butuh izin user) Buka halaman detail instance NATS itu → tab Summary menampilkan Process "Running" dan Readiness "Ready" sebagai dua baris terpisah, kartu Endpoints menunjuk port yang dipilih daemon, dan kartu Connection `nats://127.0.0.1:<port>`. Ulangi dengan JetStream dimatikan → readiness tetap "Ready" → AC-13
-- [ ] `NOT_RUN` (langkah 12, butuh izin user) Seluruh alur di atas dengan keyboard saja (Tab melewati nama, runtime, setiap baris form, Advanced, kedua baris endpoint, toggle Start after creating, Create, dan Cancel; Return membuka Advanced; Escape membatalkan) dan dengan VoiceOver (baris managed dibacakan sebagai read only dengan nilai nya, toggle JetStream sebagai switch, setiap batas integer dibacakan, pilihan Fixed atau Automatic berlabel per endpoint, dan hasil Create diumumkan) → AC-13
 
 ### Commands
 
@@ -187,5 +186,5 @@ Catatan untuk lead dan architect (bukan FAIL):
 
 ### Acceptance-criteria coverage
 
-- AC-13 · bagian CLI selesai di langkah 10 (`nats_journey`, PASS native); bagian form selesai di langkah 11 (fixture masih lolos kontrak Rust dan Swift, empat assertion baru); bagian GUI (sheet New Instance, Summary, keyboard, VoiceOver) `NOT_RUN`, tiga langkah manual di atas untuk `/check verify` dan user
+- AC-13 · bagian CLI selesai di langkah 10 (`nats_journey`, PASS native); bagian form selesai di langkah 11 (fixture masih lolos kontrak Rust dan Swift, empat assertion baru); bagian GUI (sheet New Instance, Summary, interaksi desktop) `NOT_RUN`, tiga langkah manual di atas untuk `/check verify` dan user
 - AC-14 · selesai di langkah 12: commit dasar, daftar commit, baris per commit terhadap allowlist, numstat per baris tabel, dan seam baris 4 tercatat di atas

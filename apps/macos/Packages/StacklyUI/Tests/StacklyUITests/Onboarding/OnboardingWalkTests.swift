@@ -20,7 +20,6 @@ struct OnboardingWalkTests {
         let home: CommandLineToolTests.Home
         let store = InMemoryOnboardingRecordStore()
         let feedback: FeedbackCenter
-        var spoken: [String] = []
         let homeBefore: Set<String>
         private var window: NSWindow?
 
@@ -33,19 +32,14 @@ struct OnboardingWalkTests {
                 rootOverrideActive: false, initialProbe: nil, initialLaunchRecord: .missing)
             let model = DaemonModel(
                 link: link.handle, signals: nil, endpoint: nil,
-                launchedAt: DaemonModelTests.launch, announce: { _ in }, agent: agent)
+                launchedAt: DaemonModelTests.launch, agent: agent)
             runtime = ShellRuntime(
                 model: model, closeNotice: CloseNotice(presentsPanel: false),
                 commandLineTool: CommandLineToolModel(controller: home.tool(for: bundle)),
                 onboardingStore: store)
-            let box = SpokenBox()
-            feedback = FeedbackCenter(announce: { box.texts.append($0) })
-            spokenBox = box
+            feedback = FeedbackCenter()
             homeBefore = home.paths()
         }
-
-        private let spokenBox: SpokenBox
-        var announcements: [String] { spokenBox.texts }
 
         /// Shows the onboarding in a window, as the main window does.
         func show() {
@@ -83,10 +77,6 @@ struct OnboardingWalkTests {
         }
     }
 
-    final class SpokenBox {
-        var texts: [String] = []
-    }
-
     // MARK: - Continue, Not Now, Back, the dots, and Get Started
 
     @Test func aFullWalkWithTheButtonsChangesNothingAndEndsInTheShell() async throws {
@@ -117,7 +107,7 @@ struct OnboardingWalkTests {
         OnboardingActions.primary(onboarding: onboarding, feedback: walk.feedback)
         #expect(onboarding.isPresented == false)
         #expect(walk.store.writes == 1)
-        #expect(walk.announcements == ["Setup complete."])
+
         walk.expectNoSideEffects("after Get Started")
     }
 
@@ -136,7 +126,7 @@ struct OnboardingWalkTests {
         #expect(onboarding.isPresented == false)
         #expect(walk.store.writes == 1)
         #expect(walk.feedback.current == nil)
-        #expect(walk.announcements.isEmpty)
+
         walk.expectNoSideEffects("Escape on \(step)")
     }
 

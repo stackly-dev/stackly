@@ -29,7 +29,6 @@ nonisolated public struct CapacityState: Equatable, Sendable {
 /// The space left on the disk that holds Stackly data, read through `storage.get_capacity`
 /// (spec 0022, *Kapasitas disk*). The daemon owns the level; this model never applies a
 /// threshold.
-///
 /// The Overview asks for a reading when it appears, every 60 seconds while it shows and the
 /// daemon is connected, and when a snapshot round completes. At most one call runs, and a
 /// reply older than the report held is ignored. The model belongs to ``DaemonModel``, so it
@@ -53,7 +52,6 @@ public final class CapacityModel {
     @ObservationIgnored private let sleep: @MainActor (Duration) async throws -> Void
 
     /// Creates a model that has not read anything.
-    ///
     /// - Parameters:
     ///   - read: Sends one call to the daemon.
     ///   - sleep: Waits; tests inject one that does not.
@@ -107,7 +105,6 @@ public final class CapacityModel {
     /// Reads the disk now and again every 60 seconds, for as long as the task runs and the
     /// daemon is connected. The page runs it with `.task(id:)` on the connected state, so it
     /// starts again when the daemon comes back.
-    ///
     /// - Parameter isConnected: Whether the presence is connected.
     public func poll(isConnected: @MainActor () -> Bool) async {
         while Task.isCancelled == false, isConnected() {

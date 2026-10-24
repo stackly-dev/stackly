@@ -1,10 +1,8 @@
 import SwiftUI
 
 /// Whether a delayed spinner is visible: hidden at first, visible once the delay passed.
-///
 /// ``DelayedProgress`` runs it in its task, so the spinner never flashes when data arrives
 /// within the delay. The sleep is injectable, so tests never wait for real time.
-///
 /// A zero delay is visible from the start and ``run()`` never sleeps: the spinner is part of
 /// the first frame, with no task and no transition. A spinner inserted after the first frame
 /// keeps changing in a snapshot window, so a snapshot of it would never settle (spec 0068).
@@ -22,7 +20,6 @@ final class DelayedVisibility {
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
 
     /// Creates a visibility that is hidden, or visible when the delay is zero.
-    ///
     /// - Parameters:
     ///   - delay: How long to wait before showing the spinner.
     ///   - sleep: Waits for a duration and throws when cancelled; `Task.sleep(for:)` by
@@ -59,12 +56,7 @@ final class DelayedVisibility {
 
 /// A centered `ProgressView` that appears only after 300 ms, so a fast load never
 /// flashes a spinner. ``StateView`` shows it for the `loading` shape.
-///
-/// The delay starts when the view appears. ``StateView`` inserts a new one each time the
-/// shape enters `loading`, so the delay starts over each time. The spinner keeps spinning
-/// under Reduce Motion. The delay is the one given, else `loadingDelay` of the environment,
-/// else 300 ms. With a zero delay (a snapshot window) the spinner is in the first frame,
-/// with no task and no transition.
+/// The delay starts when the view appears. ``StateView`` inserts a new one each time the shape enters `loading`, so the delay starts over each time. The delay is the one given, else `loadingDelay` of the environment, else 300 ms. With a zero delay (a snapshot window) the spinner is in the first frame, with no task and no transition.
 public struct DelayedProgress: View {
     @Environment(\.loadingDelay) private var loadingDelay
     private let delay: Duration?

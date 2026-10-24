@@ -6,7 +6,6 @@ import StacklyClient
 /// sentence from the code and the bounds of the field.
 nonisolated enum FieldErrorText {
     /// The text for a settings field.
-    ///
     /// - Parameters:
     ///   - error: The field error.
     ///   - field: The field the path names, or `nil`.
@@ -42,7 +41,6 @@ nonisolated enum FieldErrorText {
     }
 
     /// The text for the name.
-    ///
     /// - Parameters:
     ///   - error: The field error at `name`.
     ///   - name: The name of the draft.

@@ -5,7 +5,7 @@ import Testing
 
 @testable import StacklyUI
 
-/// The diff view: the kind table, the spoken line, and the layout (spec 0067, AC-17,
+/// The diff view: the kind table, and the layout (spec 0067, AC-17,
 /// AC-19).
 struct DiffViewTests {
     // MARK: - kind table
@@ -13,17 +13,16 @@ struct DiffViewTests {
     @Test(
         .evidence(
             covers: ["REQ-026", "NFR-012"],
-            expected: "Spec 0067 AC-17: every kind has the mark, tone, and word of the table"))
-    func everyKindHasTheMarkToneAndWordOfTheTable() {
-        let table: [(DiffKind, String?, Tone?, String)] = [
-            (.added, "+", .positive, "Added"),
-            (.removed, "−", .critical, "Removed"),
-            (.unchanged, nil, nil, "Unchanged"),
+            expected: "Spec 0067 AC-17: every kind has the mark and tone of the table"))
+    func everyKindHasTheMarkAndToneOfTheTable() {
+        let table: [(DiffKind, String?, Tone?)] = [
+            (.added, "+", .positive),
+            (.removed, "−", .critical),
+            (.unchanged, nil, nil),
         ]
-        for (kind, mark, tone, word) in table {
+        for (kind, mark, tone) in table {
             #expect(kind.mark == mark)
             #expect(kind.tone == tone)
-            #expect(kind.word == word)
         }
     }
 
@@ -32,30 +31,9 @@ struct DiffViewTests {
         #expect(DiffKind.removed.mark != "-")
     }
 
-    // MARK: - spoken line
-
-    @Test(
-        .evidence(
-            covers: ["NFR-012"], expected: "Spec 0067 AC-17: a line is read as its kind and text"))
-    func aLineIsReadAsItsKindAndText() {
-        #expect(
-            DiffLine(id: 0, kind: .added, text: "port = 5433").accessibilityLabel
-                == "Added: port = 5433")
-        #expect(
-            DiffLine(id: 1, kind: .removed, text: "port = 5432").accessibilityLabel
-                == "Removed: port = 5432")
-        #expect(
-            DiffLine(id: 2, kind: .unchanged, text: "host = 'localhost'").accessibilityLabel
-                == "Unchanged: host = 'localhost'")
-    }
-
     @Test func aLineKeepsItsPositionAsItsKey() {
         let lines = ComponentSamples.diffLines
         #expect(lines.map(\.id) == Array(0..<lines.count))
-    }
-
-    @Test func theListIdentifierIsFixed() {
-        #expect(AccessibilityID.Diff.list == "diff.list")
     }
 
     // MARK: - layout

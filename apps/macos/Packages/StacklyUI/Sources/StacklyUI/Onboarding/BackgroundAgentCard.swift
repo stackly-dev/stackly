@@ -8,8 +8,6 @@ struct BackgroundAgentCard: View {
     let content: BackgroundAgentStepContent
     /// Called when the action is pressed.
     var perform: (BackgroundAgentStepContent.Action) -> Void = { _ in }
-    /// Where the action button takes keyboard focus from the step.
-    var focus: FocusState<OnboardingFocusTarget?>.Binding?
 
     @Environment(\.loadingDelay) private var loadingDelay
 
@@ -38,7 +36,7 @@ struct BackgroundAgentCard: View {
             }
             .padding(Spacing.cardInsets)
             .cardSurface()
-            .accessibilityElement(children: .contain)
+
             if let error = content.lastError {
                 Label {
                     Text(error)
@@ -48,7 +46,7 @@ struct BackgroundAgentCard: View {
                 } icon: {
                     Image(systemName: Tone.critical.symbol)
                         .foregroundStyle(Tone.critical.fill)
-                        .accessibilityHidden(true)
+
                 }
                 .padding(.horizontal, Spacing.s4)
             }
@@ -65,7 +63,7 @@ struct BackgroundAgentCard: View {
                 .stacklySymbol(.bannerSymbol)
                 .foregroundStyle(tone.fill)
                 .frame(width: iconSize, height: iconSize)
-                .accessibilityHidden(true)
+
         }
     }
 
@@ -88,20 +86,7 @@ struct BackgroundAgentCard: View {
             Button(action.title) { perform(action) }
                 .buttonStyle(.bordered)
                 .disabled(reason: content.isWorking ? OnboardingCopy.working : nil)
-                .focusedIfAvailable(focus, equals: .cardAction)
-        }
-    }
-}
 
-extension View {
-    /// Binds focus to `value` when a binding is given.
-    @ViewBuilder fileprivate func focusedIfAvailable<V: Hashable>(
-        _ binding: FocusState<V?>.Binding?, equals value: V
-    ) -> some View {
-        if let binding {
-            focused(binding, equals: value)
-        } else {
-            self
         }
     }
 }

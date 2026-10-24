@@ -5,11 +5,9 @@ import SwiftUI
 /// the name, a port per endpoint, the settings the daemon's schema declares, "Start after
 /// creating", the preflight, and the equivalent command. Create goes on only when the
 /// preflight of this very draft is ready; the daemon decides everything it shows.
-///
 /// The sheet is built on ``StacklySheet``, so Return runs Create, Escape runs Cancel, and the
 /// footer says why Create is off. While the create operation runs the form is read only and
 /// the sheet shows its stages; Cancel then asks before it stops the operation.
-///
 /// The typed text of a secret lives in this view's `@State` and is cleared as soon as Create
 /// is clicked, and when the sheet goes away. The model only learns the source of each
 /// secret.
@@ -22,12 +20,10 @@ public struct NewInstanceSheet: View {
     @Environment(\.shellNavigator) private var navigator
 
     @State private var drafts: [String: SecretDraft] = [:]
-    @FocusState private var nameFocused: Bool
 
     private let model: CreateInstanceModel
 
     /// Creates the sheet over `model`.
-    ///
     /// - Parameter model: The model the owner of the sheet keeps. Call
     ///   ``CreateInstanceModel/begin(_:)`` before presenting.
     public init(model: CreateInstanceModel) {
@@ -54,17 +50,7 @@ public struct NewInstanceSheet: View {
         ) {
             content
         }
-        .onChange(of: model.schema.map(ObjectIdentifier.init)) {
-            clearDrafts()
-        }
-        .onChange(of: model.phase) { old, new in
-            if old != .editing, new == .editing { nameFocused = true }
-        }
-        .onAppear {
-            // The name is what the person types first; without this the first control of
-            // the form takes the focus.
-            if model.form != nil { nameFocused = true }
-        }
+
         .onDisappear { clearDrafts() }
     }
 
@@ -88,14 +74,14 @@ public struct NewInstanceSheet: View {
                         tone: banner.tone, title: banner.title, message: banner.message,
                         code: banner.code, base: .window
                     )
-                    .accessibilityIdentifier(AccessibilityID.CreateInstance.banner)
+
                 }
                 formArea
                 switch model.phase {
                 case .loadingForm:
                     DelayedProgress()
                         .frame(maxWidth: .infinity, minHeight: 60)
-                        .accessibilityLabel("Loading the form")
+
                 case .formFailed(let failure):
                     StatePlaceholder(
                         failure, size: .section,
@@ -130,9 +116,7 @@ public struct NewInstanceSheet: View {
                         LabeledContent("Runtime") {
                             Text(label)
                         }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(model.duplicateRuntimeSpokenLabel ?? label)
-                        .accessibilityIdentifier(AccessibilityID.CreateInstance.runtime)
+
                     }
                     if model.form != nil {
                         nameField
@@ -157,7 +141,7 @@ public struct NewInstanceSheet: View {
                                 .foregroundStyle(StacklyColor.textSecondary)
                         }
                     }
-                    .accessibilityIdentifier(AccessibilityID.CreateInstance.startAfterCreating)
+
                 }
             }
         }
@@ -176,7 +160,7 @@ public struct NewInstanceSheet: View {
             ForEach(CreateCategory.allCases, id: \.self) { Text($0.title) }
         }
         .pickerStyle(.segmented)
-        .accessibilityIdentifier(AccessibilityID.CreateInstance.category)
+
         Picker("Runtime", selection: runtime) {
             ForEach(model.visibleRuntimes, id: \.id) { runtime in
                 Text(CreateInstanceModel.label(of: runtime)).tag(UUID?.some(runtime.id))
@@ -185,16 +169,15 @@ public struct NewInstanceSheet: View {
                 Text("Choose a runtime").tag(UUID?.none)
             }
         }
-        .accessibilityIdentifier(AccessibilityID.CreateInstance.runtime)
+
     }
 
     private var nameField: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             TextField("Name", text: name)
-                .focused($nameFocused)
+
                 .autocorrectionDisabled()
-                .accessibilityIdentifier(AccessibilityID.CreateInstance.name)
-                .accessibilityHint(model.nameError ?? "")
+
             if let error = model.nameError {
                 Label(error, systemImage: Tone.critical.symbol)
                     .font(.callout)

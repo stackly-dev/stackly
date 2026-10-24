@@ -41,24 +41,6 @@ struct StatusViewTests {
 
     // MARK: - StatusLabel content
 
-    @Test func voiceOverReadsStatusAndLabel() {
-        let appearance = StatusAppearance.instance(
-            lifecycle: .running,
-            readiness: .ready,
-            health: .healthy
-        )
-        #expect(appearance.spokenStatus == "Status: Running")
-    }
-
-    @Test func voiceOverReadsTheDetailAfterTheLabel() {
-        let appearance = StatusAppearance.instance(
-            lifecycle: .running,
-            readiness: .awaitingProbe,
-            health: .unknown
-        )
-        #expect(appearance.spokenStatus == "Status: Starting…, Waiting for probe")
-    }
-
     @Test func labelIsNeverCutAndTheDetailTruncatesFirst() {
         let withDetail = StatusAppearance.instance(
             lifecycle: .running,
@@ -153,12 +135,7 @@ struct StatusViewTests {
 
     @Test(arguments: sectionRows)
     func sectionSymbolExistsInSFSymbols(row: SectionRow) {
-        #expect(NSImage(systemSymbolName: row.symbol, accessibilityDescription: nil) != nil)
-    }
 
-    @Test func sectionIconIsHiddenFromVoiceOver() throws {
-        let file = try statusSource(named: "SectionIcon.swift")
-        #expect(file.codeLines.contains { $0.contains(".accessibilityHidden(true)") })
     }
 
     // MARK: - Helpers

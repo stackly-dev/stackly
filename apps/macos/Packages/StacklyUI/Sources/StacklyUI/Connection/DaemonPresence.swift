@@ -90,7 +90,6 @@ enum ShellStatusMapping {
     }
 
     /// The shell status of `presence`.
-    ///
     /// - Parameters:
     ///   - presence: The presence.
     ///   - stable: The link state it came from, for `since` and the error.

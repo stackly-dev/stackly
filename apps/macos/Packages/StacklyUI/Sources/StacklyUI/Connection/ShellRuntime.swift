@@ -20,7 +20,6 @@ public final class ShellRuntime {
 
     /// Wraps `model`, starts it, and listens for the app becoming active and
     /// the Mac waking, which retry a lost connection.
-    ///
     /// - Parameters:
     ///   - model: The daemon model.
     ///   - closeNotice: The notice shown the first time the main window closes.
@@ -99,7 +98,6 @@ public enum ShellBootstrap {
     /// Builds the live shell: the socket path from `rootOverride` (the
     /// `STACKLY_ROOT` the app read once at launch), the link, the sync engine,
     /// and the model.
-    ///
     /// - Parameters:
     ///   - rootOverride: `STACKLY_ROOT`, or `nil` when it is not set.
     ///   - clientVersion: The bundle's `CFBundleShortVersionString`.
@@ -121,24 +119,19 @@ public enum ShellBootstrap {
 
     /// Builds the live shell and returns its link and sync engine too, for the end to
     /// end tests that stop them and read the cursor.
-    ///
     /// - Parameters:
     ///   - rootOverride: `STACKLY_ROOT`, or `nil` when it is not set.
     ///   - clientVersion: The bundle's `CFBundleShortVersionString`.
     ///   - now: The wall clock.
-    ///   - announce: Posts a VoiceOver announcement.
     ///   - closeNotice: The notice shown the first time the main window closes.
-    ///   - agentController: The OS side of the background agent, or `nil` for a shell
-    ///     without an agent (the banner then is the one of spec 0013). `live` gives
-    ///     ``SMAppServiceAgent``.
-    ///   - commandLineTool: The command line tool, or `nil` for a shell without one. `live`
-    ///     gives ``CommandLineTool``.
+    ///   - agentController: The OS side of the background agent, or `nil` for a shell     without an agent (the banner then is the one of spec 0013). `live` gives     ``SMAppServiceAgent``.
+    ///   - commandLineTool: The command line tool, or `nil` for a shell without one. `live`     gives ``CommandLineTool``.
     ///   - onboardingStore: Where the finished record of the onboarding lives.
     static func assemble(
         rootOverride: String?,
         clientVersion: String,
         now: @escaping @Sendable () -> Date = { Date() },
-        announce: @escaping (String) -> Void = { StacklyUI.announce($0) },
+
         closeNotice: CloseNotice = CloseNotice(),
         agentController: (any BackgroundAgentControlling)? = nil,
         commandLineTool: (any CommandLineToolControlling)? = nil,
@@ -166,7 +159,7 @@ public enum ShellBootstrap {
             endpoint: try? endpoint.get(),
             launchedAt: now(),
             now: now,
-            announce: announce,
+
             agent: agent)
         model.rootOverrideActive = rootOverrideActive
         return LiveShellParts(

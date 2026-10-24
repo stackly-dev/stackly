@@ -59,11 +59,10 @@ struct ShellStructureTests {
         )
 
         #expect(online.count == 3)
-        #expect(online.spokenValue == "3 instances")
+
         #expect(online.isProminent == false)
         #expect(offline.count == 3)
-        #expect(offline.spokenValue == "3 instances, last known")
-        #expect(one?.spokenValue == "1 instance")
+
     }
 
     @Test func operationsBadgeShowsOnlyWhileConnected() throws {
@@ -74,7 +73,7 @@ struct ShellStructureTests {
 
         #expect(online.count == 2)
         #expect(online.isProminent)
-        #expect(online.spokenValue == "2 running")
+
         #expect(SidebarSection.operations.badge(counts: counts, isConnected: false) == nil)
     }
 

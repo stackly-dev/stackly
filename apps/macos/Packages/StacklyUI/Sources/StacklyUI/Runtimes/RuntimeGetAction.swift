@@ -48,7 +48,6 @@ nonisolated enum RuntimeGetCell: Equatable {
 
     /// Decides the cell. The installed runtime wins over a running install, which wins over
     /// the button; the join key is the digest of the artifact (spec 0018).
-    ///
     /// - Parameters:
     ///   - version: The version of the row.
     ///   - host: This Mac.
@@ -73,7 +72,6 @@ nonisolated enum RuntimeGetCell: Equatable {
 
 /// The action column of the version matrix (spec 0018, *Kolom aksi Catalog*): Get, the
 /// progress of the install, or Installed, for the artifact built for this Mac.
-///
 /// Get is `runtime.install` with the digest the person saw. The progress is a small bar of
 /// 76 pt with the percent; it is a screen view, the one exception to the single builder of
 /// spec 0067, because `StagedProgress` has no size that small.
@@ -104,9 +102,7 @@ struct RuntimeGetAction: View {
                 .labelStyle(.titleAndIcon)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(Tone.positive.text)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(version.version), installed")
-                .accessibilityIdentifier(AccessibilityID.Runtimes.get(version.version))
+
         case .installing(let progress):
             miniProgress(progress)
         case .get(_, let sha256, let reason):
@@ -118,8 +114,7 @@ struct RuntimeGetAction: View {
             ActionButton(action, showsReason: false)
                 .controlSize(.small)
                 .help(reason ?? "Install \(source.displayName) \(version.version)")
-                .accessibilityLabel("Get \(source.displayName) \(version.version)")
-                .accessibilityIdentifier(AccessibilityID.Runtimes.get(version.version))
+
         }
     }
 
@@ -139,10 +134,7 @@ struct RuntimeGetAction: View {
                     .frame(width: Self.progressWidth)
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Install \(source.displayName) \(version.version)")
-        .accessibilityValue(progress.accessibilityValue)
-        .accessibilityIdentifier(AccessibilityID.Runtimes.get(version.version))
+
     }
 }
 

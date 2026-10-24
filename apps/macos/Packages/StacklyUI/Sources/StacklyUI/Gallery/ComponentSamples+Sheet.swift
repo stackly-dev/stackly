@@ -21,7 +21,6 @@
         /// The main action while the instance is being created.
         static let createBusyAction = StacklyAction(
             id: "sheet.create", title: "Create", mutates: true, isBusy: true, perform: {})
-        /// A destructive main action: bordered, red, with no Return shortcut.
         static let sheetRemoveAction = StacklyAction(
             id: "sheet.remove", title: "Remove…", role: .destructive(removeConfirmation),
             mutates: true, perform: {})

@@ -26,7 +26,7 @@ struct InstanceDetailCommandsTests {
     ) -> [CommandID: StacklyAction] {
         InstancesCommandActions.publish(
             showsInspector: true, toggleInspector: {}, sort: .default, setSort: { _ in },
-            focusSearch: {}, target: nil, open: open, back: back, copyConnection: copy
+            target: nil, open: open, back: back, copyConnection: copy
         ).actions
     }
 
@@ -58,22 +58,6 @@ struct InstanceDetailCommandsTests {
             #expect(entry.status == .built, "\(id)")
             #expect(entry.scope.includesInstances, "\(id)")
         }
-    }
-
-    @Test func theTooltipOfTheMainActionNamesItsShortcut() {
-        let start = action("start", title: "Start")
-        let retry = action("retry", title: "Retry")
-        let stop = action("stop", title: "Stop")
-        #expect(InstanceDetailPage.command(of: start) == .startInstance)
-        #expect(InstanceDetailPage.command(of: retry) == .startInstance)
-        #expect(InstanceDetailPage.command(of: stop) == .stopInstance)
-        #expect(
-            CommandMap.helpText(for: InstanceDetailPage.command(of: retry), title: "Retry")
-                == "Retry (⌘R)")
-        #expect(
-            CommandMap.helpText(for: InstanceDetailPage.command(of: stop), title: "Stop")
-                == "Stop (⇧⌘R)")
-        #expect(CommandMap.helpText(for: .openInstance, title: "Open") == "Open (⌘O)")
     }
 
     // MARK: - Models
@@ -110,23 +94,6 @@ struct InstanceDetailCommandsTests {
         #expect(model.detail == item.detail)
     }
 
-    @Test func theInspectorNeverAnnouncesReadiness() async {
-        let announced = Announcements()
-        let sleeper = ManualSleep()
-        let script = DetailScript(detail: item.detail)
-        let model = InstanceDetailModel(
-            instanceId: item.detail.instanceId, service: script.service,
-            sleep: { try await sleeper.sleep(for: $0) }, announce: { announced.items.append($0) })
-        let waiting = item.instance.testing(
-            readiness: InstanceReadiness(
-                state: .notReady, reason: "awaiting_probe", detail: nil,
-                observedAt: item.instance.readiness.observedAt))
-        model.observe(waiting, announcesReady: false)
-        model.observe(item.instance, announcesReady: false)
-
-        #expect(sleeper.waiting == 0)
-        #expect(announced.items.isEmpty)
-    }
 }
 
 extension CommandScope {

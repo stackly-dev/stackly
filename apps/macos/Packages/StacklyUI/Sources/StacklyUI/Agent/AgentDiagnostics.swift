@@ -52,7 +52,6 @@ nonisolated public struct AgentDiagnostics: Hashable, Sendable {
 
     /// The rows of the section, in order: State, What to do (when there is something to
     /// do), App, Label, Last launched by launchd, Last checked, and Last error.
-    ///
     /// Views pass the system values; tests pass fixed ones.
     public func rows(calendar: Calendar, locale: Locale, timeZone: TimeZone) -> [DiagnosticsRow] {
         func time(_ date: Date?) -> String {

@@ -117,10 +117,7 @@ extension SnapshotTests {
         func runtimesBeforeTheFirstSnapshot() async throws {
             let rig = await rig(load: false)
             try await assertSnapshot(
-                rig.runtimesPage(showsInspector: false), named: "runtimes-loading",
-                contrastInvariant: true,
-                contrastInvariantReason:
-                    "only a system spinner, which Increase Contrast does not change")
+                rig.runtimesPage(showsInspector: false), named: "runtimes-loading")
         }
 
         @Test(

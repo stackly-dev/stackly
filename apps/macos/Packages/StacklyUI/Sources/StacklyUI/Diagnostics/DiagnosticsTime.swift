@@ -4,9 +4,7 @@ import Foundation
 /// in the locale's style.
 nonisolated public enum DiagnosticsTime {
     /// Formats `date` with `Date.FormatStyle(date: .abbreviated, time: .standard)`.
-    ///
     /// Views pass the system calendar, locale, and time zone; tests pass fixed ones.
-    ///
     /// - Parameters:
     ///   - date: The time to show.
     ///   - calendar: The calendar of the date.

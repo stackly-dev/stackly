@@ -4,7 +4,6 @@
 
     /// An in-memory ``CommandLineToolControlling`` for tests, previews, and fixtures: it
     /// writes no file and reads no home (spec 0015, *Banner, pengumuman, dan environment*).
-    ///
     /// `install()` and `repair()` make the command and every manual page `installed`;
     /// `remove()` makes them `not_installed`. An error a test queued is thrown once, and
     /// the status stays.
@@ -33,7 +32,6 @@
         private let state: Mutex<State>
 
         /// Creates the fake.
-        ///
         /// - Parameters:
         ///   - home: The home the model writes paths against.
         ///   - bundledTool: The command in the bundle, or `nil` for a build without it.

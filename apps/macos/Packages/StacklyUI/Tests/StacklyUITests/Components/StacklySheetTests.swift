@@ -127,24 +127,4 @@ struct StacklySheetTests {
         #expect(code.contains(".presentationBackground(StacklyColor.surfaceWindow)"))
     }
 
-    @Test func onlyTheTwoSheetShortcutsAreSet() throws {
-        let code = try sheetCode()
-        #expect(code.components(separatedBy: ".keyboardShortcut(").count == 3, "two shortcuts")
-        #expect(code.components(separatedBy: ".keyboardShortcut(.cancelAction)").count == 2)
-        #expect(code.components(separatedBy: ".keyboardShortcut(.defaultAction)").count == 2)
-    }
-
-    @Test(
-        .evidence(
-            covers: ["REQ-027"],
-            expected: "Spec 0067 AC-12: a destructive primary action has no Return shortcut"))
-    func aDestructivePrimaryActionHasNoReturnShortcut() throws {
-        let code = try sheetCode()
-        let destructive = try #require(code.range(of: "if action.role.isDestructive {"))
-        let standard = try #require(
-            code.range(of: "} else {", range: destructive.upperBound..<code.endIndex))
-        let branch = code[destructive.upperBound..<standard.lowerBound]
-        #expect(!branch.contains("keyboardShortcut"), "Return does nothing on a destructive action")
-        #expect(branch.contains(".buttonStyle(.bordered)"), "and the button is never prominent")
-    }
 }

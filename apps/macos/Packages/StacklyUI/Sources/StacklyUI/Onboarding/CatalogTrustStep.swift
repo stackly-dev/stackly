@@ -1,11 +1,9 @@
 import SwiftUI
 
 /// The Catalog Trust step: where the catalog the daemon loaded comes from (spec 0016, AC-7).
-///
 /// It reads `CatalogStore.info`, `error`, and `unsupported` of the daemon model and calls
 /// nothing itself. The toggle is a statement, not a setting: it is always on and disabled.
 struct CatalogTrustStep: View {
-    let focus: AccessibilityFocusState<Bool>.Binding
 
     @Environment(DaemonModel.self) private var model: DaemonModel?
     @Environment(\.locale) private var locale
@@ -20,8 +18,7 @@ struct CatalogTrustStep: View {
             locale: locale, calendar: calendar, timeZone: timeZone)
         VStack(spacing: Spacing.s14) {
             OnboardingStepHeader(
-                title: OnboardingCopy.catalogTitle, subtitle: OnboardingCopy.catalogSubtitle,
-                focus: focus)
+                title: OnboardingCopy.catalogTitle, subtitle: OnboardingCopy.catalogSubtitle)
             CatalogTrustRow(content: content)
             Text(OnboardingCopy.catalogNote)
                 .font(.callout)
@@ -60,7 +57,7 @@ struct CatalogTrustRow: View {
                         .labelsHidden()
                         .disabled(true)
                         .help(toggle)
-                        .accessibilityLabel(toggle)
+
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

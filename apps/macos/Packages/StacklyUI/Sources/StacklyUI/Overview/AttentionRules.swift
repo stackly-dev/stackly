@@ -2,7 +2,6 @@ import Foundation
 import StacklyClient
 
 /// What Needs Attention knows of the operations (spec 0022, *Aturan Needs Attention*, 2026-10-22).
-///
 /// There is no case for operations that have not loaded: Needs Attention waits for them
 /// before it reads anything, so the rules never see that state.
 nonisolated public enum AttentionOperations: Sendable, Equatable {
@@ -19,13 +18,11 @@ nonisolated public enum AttentionOperations: Sendable, Equatable {
 
 /// The rules of Needs Attention (spec 0022, *Aturan Needs Attention*): a pure function of
 /// what the stores hold, so the same input gives the same items with the same IDs.
-///
 /// An instance gives at most one item, from the first rule (the smallest number) that
 /// matches. Items are ordered by tone (critical, caution, neutral), then by category (disk,
 /// operation, instance), then by rule number, then by the sort key of the rule.
 nonisolated public enum AttentionRules {
     /// The items.
-    ///
     /// - Parameters:
     ///   - instances: Every instance in the store.
     ///   - operations: What is known of the operations: the ones that have not ended (rule
@@ -74,7 +71,6 @@ nonisolated public enum AttentionRules {
     /// The banner the inspector shows for an instance: the item of rules I1 to I4, the
     /// problems a person can fix, or `nil` for an instance whose item comes from another
     /// rule or who has none.
-    ///
     /// - Parameters:
     ///   - instance: The instance.
     ///   - now: The clock.

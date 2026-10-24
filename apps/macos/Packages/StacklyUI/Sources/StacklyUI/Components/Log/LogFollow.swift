@@ -1,7 +1,6 @@
 import SwiftUI
 
 /// The rule that decides when a ``LogView`` stops following the newest line.
-///
 /// Kept apart from the view so the rule is tested without a scroll view.
 nonisolated enum LogFollow {
     /// How far above the bottom a scroll by the user may end before follow turns off:

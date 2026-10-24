@@ -446,8 +446,7 @@ struct ResourceStoreTests {
         #expect(model.sync.isSettled)
         #expect(model.sync.completedRounds == 2)
         #expect(model.presence == .connected(health: .ready))
-        #expect(
-            fixture.announced == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
+
         #expect(script.fetchCount == 2, "the Retry loads no second snapshot")
         #expect(store.snapshotWaiterCount == 0)
     }
@@ -479,8 +478,7 @@ struct ResourceStoreTests {
         #expect(model.sync.isSettled)
         #expect(model.sync.completedRounds == 2)
         #expect(model.presence == .connected(health: .ready))
-        #expect(
-            fixture.announced == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
+
         #expect(script.fetchCount == 2, "the Retry loads no second snapshot")
     }
 

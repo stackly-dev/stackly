@@ -12,7 +12,6 @@ nonisolated public enum DaemonHealthLevel: Hashable, Sendable {
 
 /// The daemon's state as the shell shows it: one case for each row of the daemon status
 /// table of spec 0013 ("Tampilan status daemon"), with the values that row's copy needs.
-///
 /// The connection model maps its presence to this enum and builds a ``ShellPresentation``
 /// from it. Every value here comes from the daemon or the connection, never from the UI.
 nonisolated public indirect enum ShellStatus: Hashable, Sendable {
@@ -148,7 +147,7 @@ nonisolated public struct DaemonBannerContent: Hashable, Sendable {
 
     /// The tone: informative, caution, or critical.
     public let tone: Tone
-    /// The title, which VoiceOver uses as the banner's label.
+    /// The title of the window banner.
     public let title: String
     /// The actions, in order.
     public let actions: [DaemonBannerAction]
@@ -163,9 +162,7 @@ nonisolated public struct DaemonBannerContent: Hashable, Sendable {
 
     /// The message. The time of the last known state uses
     /// ``StaleNote/formattedSince(now:calendar:locale:timeZone:)``.
-    ///
     /// Views pass the system values; tests pass fixed ones.
-    ///
     /// - Parameters:
     ///   - now: The current time.
     ///   - calendar: The calendar that decides what today is.
@@ -196,7 +193,6 @@ nonisolated public struct DaemonBannerContent: Hashable, Sendable {
 
 /// What the shell shows for a ``ShellStatus``: the footer status, the window banner, the
 /// mutation gate, and the placeholder for pages that have no data yet.
-///
 /// It is a pure value built from the daemon status table of spec 0013, so every row can
 /// be tested without a daemon.
 nonisolated public struct ShellPresentation: Hashable, Sendable {
@@ -215,7 +211,6 @@ nonisolated public struct ShellPresentation: Hashable, Sendable {
     public let isReconnecting: Bool
 
     /// Builds the presentation of a status.
-    ///
     /// - Parameters:
     ///   - status: The daemon's state.
     ///   - lastErrorCode: The code of the last connection error, shown in the page

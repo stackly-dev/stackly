@@ -15,7 +15,6 @@ struct InstanceActionModelTests {
         var read: OperationSnapshot?
         var reads: [UUID] = []
         var streams: [UUID: AsyncStream<OperationSnapshot>.Continuation] = [:]
-        var announcements: [String] = []
         var feedback: [Feedback] = []
         var clock = Date(timeIntervalSince1970: 1_000)
         var gate: CheckedContinuation<Void, Never>?
@@ -67,8 +66,7 @@ struct InstanceActionModelTests {
                 script.reads.append(id)
                 return script.read
             },
-            now: { script.clock },
-            announce: { script.announcements.append($0) })
+            now: { script.clock })
     }
 
     var context: InstanceActionContext {
@@ -144,24 +142,6 @@ struct InstanceActionModelTests {
     }
 
     // MARK: - Pending and the end of the operation
-
-    @Test func anAcceptedClickIsAnnouncedAndPendingUntilTheOperationEnds() async throws {
-        let model = makeModel()
-        let running = operation(.running)
-        script.outcomes = [.completed(Self.accepted(running))]
-        let task = try #require(model.perform(.start, for: instance, context: context))
-        try await waitUntil {
-            model.localStatus(for: instance.id) == .pending(.start, operationId: running.id)
-        }
-        #expect(script.announcements == ["Starting pg17-dev."])
-        #expect(model.primaryAction(for: instance).isBusy)
-        let continuation = try #require(script.streams[running.id])
-        continuation.yield(operation(.succeeded))
-        continuation.finish()
-        await task.value
-        #expect(model.localStatus(for: instance.id) == .none)
-        #expect(script.feedback.isEmpty)
-    }
 
     @Test func anOperationThatFailedShowsTheCardWithTheDaemonMessage() async throws {
         let model = makeModel()
@@ -245,7 +225,7 @@ struct InstanceActionModelTests {
         let task = try #require(model.perform(.start, for: instance, context: context))
         await task.value
         #expect(script.feedback.isEmpty)
-        #expect(script.announcements.isEmpty)
+
         #expect(model.localStatus(for: instance.id) == .none)
     }
 

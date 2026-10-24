@@ -198,11 +198,4 @@ struct DetailFormatTests {
         #expect(DetailFormat.missingReference(in: entry, secrets: []) == nil)
     }
 
-    @Test func aMaskedStringIsSpokenWithTheWordsPasswordHidden() throws {
-        let masked = try #require(try triple("postgresql").detail.connections.first?.masked)
-        #expect(
-            DetailFormat.spoken(masked: masked)
-                == "postgresql://postgres:password hidden@127.0.0.1:5432/postgres")
-        #expect(DetailFormat.spoken(masked: "nats://127.0.0.1:4222") == "nats://127.0.0.1:4222")
-    }
 }

@@ -91,7 +91,7 @@ struct NewInstancePresenterTests {
                 }
                 return stream
             },
-            debounce: .zero, sleep: { _ in }, announce: { _ in },
+            debounce: .zero, sleep: { _ in },
             onFinish: { presenter?.finished($0) })
         presenter = NewInstancePresenter(model: model)
         var heard: [CreateOutcome] = []

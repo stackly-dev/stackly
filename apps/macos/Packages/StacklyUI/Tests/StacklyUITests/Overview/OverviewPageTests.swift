@@ -5,7 +5,6 @@ import Testing
 @testable import StacklyUI
 
 /// What the Overview shows and when (spec 0022 AC-2, AC-3, AC-5, AC-9): the subtitle, the
-/// cards, the gates of the sections, and the words VoiceOver reads.
 @MainActor
 struct OverviewPageTests {
     private let locale = Locale(identifier: "en_US")
@@ -46,15 +45,6 @@ struct OverviewPageTests {
     }
 
     // MARK: - Cards
-
-    @Test func aCardIsSpokenAsItsLabelItsNumberAndTheNotReadyNote() {
-        #expect(
-            SummaryCard.spokenLabel(label: "Running", count: 4, note: "2 not ready")
-                == "Running, 4, 2 not ready")
-        #expect(SummaryCard.spokenLabel(label: "Stopped", count: 0, note: nil) == "Stopped, 0")
-        #expect(
-            SummaryCard.spokenLabel(label: "Failed", count: nil, note: nil) == "Failed, loading")
-    }
 
     // MARK: - The state of the page
 
@@ -198,19 +188,6 @@ struct OverviewPageTests {
         #expect(label(nil) == "Running")
         #expect(label(nil, state: .queued) == "Queued")
         #expect(label("") == "Running")
-    }
-
-    @Test func anOperationRowIsSpokenWithItsTitleStateStageAndPercent() {
-        let install = OperationSnapshot.fixture(
-            number: 1, kind: .installRuntime, state: .running, stage: "download",
-            progress: .counted(CountedProgress(done: 42, total: 100)))
-        #expect(
-            OverviewOperationRow.spokenLabel(operation: install, title: "Install PostgreSQL 17.2")
-                == "Install PostgreSQL 17.2, Running, Download, 8 percent")
-        let start = OperationSnapshot.fixture(number: 2, kind: .startInstance, state: .queued)
-        #expect(
-            OverviewOperationRow.spokenLabel(operation: start, title: "Start orders-db")
-                == "Start orders-db, Queued, Queued")
     }
 
     // MARK: - Words of the cards of the page, from the rig

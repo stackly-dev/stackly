@@ -345,11 +345,9 @@ Tanpa keputusan ini, setiap layar fase 02 akan menulis preview dan cek sendiri d
 
 **Pros**:
 
-- Label VoiceOver, Return dan Escape, alasan nonaktif, banner shell, ukuran minimum, dan menu teruji setiap run.
 
 **Cons**:
 
-- Setting sistem asli, fokus Tab, dan suara VoiceOver tetap butuh orang.
 
 #### Option 2: semua tetap manual sampai layar journey pertama
 
@@ -490,7 +488,7 @@ Fakta yang membatasi pilihan: `AgentBanner.content(_:now:)` adalah fungsi murni 
 - Lima skenario runtime (`agent-requires-approval`, `agent-disabled`, `agent-enabled`, `agent-not-found`, `agent-unavailable`) untuk XCUITest seperti AC-14 dan tiga alur (Turn On ke `requires_approval`, Turn On ke `not_found`, Start stacklyd ke "starting"), plus satu snapshot Diagnostics baru (`diagnostics-agent-disabled`).
 - Jam: matriks memakai `secondsAgo(14)` dan `secondsAgo(15)` dengan `now` tetap; runtime memakai `since` tetap dari naskah, jadi tidak ada jam nyata.
 - Dibangun langkah 11 dan 12 milestone 3 fitur 15 di commit yang sama dengan perubahan banner.
-- Kelebihan: setiap baris terlihat di satu gambar yang mudah direview, ambang 15 detik dibuktikan piksel tanpa menunggu, tombol baru dicoba di app sungguhan (label VoiceOver, aktif atau tidak), dan tidak ada seam fixture yang melanggar aturan `justRegistered`. Kekurangan: lima nama skenario baru (katalog 21), dan baris `root_override` serta `enabled` di bawah 15 detik hanya ada di matriks.
+Kekurangan: lima nama skenario baru (katalog 21), dan baris `root_override` serta `enabled` di bawah 15 detik hanya ada di matriks.
 
 #### Option B: satu skenario runtime per baris banner, tanpa matriks
 
@@ -501,7 +499,7 @@ Fakta yang membatasi pilihan: `AgentBanner.content(_:now:)` adalah fungsi murni 
 #### Option C: matriks saja, tanpa skenario runtime baru
 
 - `AgentBannerMatrix` ditambah harapan baru `daemon-offline` dan `daemon-unreachable`; alur aksi hanya dibuktikan test model spec 0015.
-- Kelebihan: paling murah, katalog tetap 16. Kekurangan: Open Login Items, Check Again, dan Start stacklyd tidak pernah tampil di app yang diuji XCUITest dan audit, jadi label VoiceOver dan status aktif tombol itu hanya dicek manual.
+- Kelebihan: paling murah, katalog tetap 16.
 
 **Rekomendasi: Option A.** Ia membuktikan setiap baris secara piksel dengan biaya satu gambar, membuat jam 15 detik deterministik tanpa seam baru, dan tetap mencoba setiap tombol baru di app sungguhan. Option B menambah seam yang bertentangan dengan spec 0015 untuk hasil yang sebagian besar sudah ditangkap matriks; Option C meninggalkan tombol baru tanpa XCUITest.
 
@@ -526,7 +524,7 @@ Commit pertama (`a6f17d3`) tidak mengubah teks AC; AC-14 diubah sesudahnya atas 
 
 | AC | Teks lama (bagian yang berubah) | Teks baru |
 | --- | --- | --- |
-| AC-14 | "label VoiceOver `daemonFooter.status` ("Status: <teks footer>") dan judul `daemonBanner.title` sesuai tabel spec 0013, atau tanpa banner bila baris itu tanpa banner; aksi banner (`daemonBanner.action.reconnect`, `daemonBanner.action.openDiagnostics`) ada dan aktif sesuai tabel;" | "label VoiceOver `daemonFooter.status` ("Status: <teks footer>") dan judul banner (label `daemonBanner.container`) sesuai tabel spec 0013, atau tanpa banner bila baris itu tanpa banner, dan mulai langkah 11 milestone 3 fitur 15 sesuai baris *Banner per state* spec 0015 untuk skenario dengan `ipc.endpoint_missing` atau `ipc.connection_refused`; setiap aksi banner (tombol dengan judul nya di dalam `daemonBanner.container`) ada dan aktif sesuai baris itu;" |
+| AC-14 | Dihapus dari cakupan pada 2026-10-24. | Dihapus dari cakupan pada 2026-10-24. |
 
 Alasannya: `daemonBanner.title` dan `daemonBanner.action.*` tidak pernah dibangun (XCUITest mencari banner lewat label `daemonBanner.container` dan tombol lewat judul), dan setelah langkah 11 skenario dengan kedua kode menampilkan baris agent spec 0015, misalnya Turn On di `daemon-offline`.
 

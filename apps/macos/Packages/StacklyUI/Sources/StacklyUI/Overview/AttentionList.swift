@@ -45,7 +45,7 @@ struct AttentionList: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(Tone.informative.text)
-        .accessibilityIdentifier(AccessibilityID.Overview.attentionToggle)
+
     }
 }
 
@@ -61,7 +61,7 @@ struct AttentionRow: View {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.s12) {
                 Image(systemName: item.tone.symbol)
                     .foregroundStyle(item.tone.fill)
-                    .accessibilityHidden(true)
+
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text(item.title)
                         .font(.body.weight(.semibold))
@@ -75,16 +75,13 @@ struct AttentionRow: View {
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(StacklyColor.decorative)
-                    .accessibilityHidden(true)
+
             }
             .padding(Spacing.rowInsets)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(item.spokenLabel)
-        .accessibilityHint(item.spokenHint)
-        .accessibilityIdentifier(AccessibilityID.Overview.attention(item.id))
+
     }
 }
 
@@ -98,7 +95,7 @@ struct SectionCard<Content: View>: View {
         VStack(alignment: .leading, spacing: Spacing.s6) {
             Text(title)
                 .font(.headline)
-                .accessibilityAddTraits(.isHeader)
+
             Group(subviews: content) { rows in
                 VStack(spacing: 0) {
                     ForEach(rows) { row in

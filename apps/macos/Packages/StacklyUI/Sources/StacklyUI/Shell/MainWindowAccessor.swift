@@ -3,7 +3,6 @@ import SwiftUI
 
 /// Reports when the window that hosts it is about to close, and hands the window to the
 /// ``MainWindowKey`` that follows its key state.
-///
 /// ``MainWindowRoot`` places it in the background of the main window's content, so the main
 /// window is known through this accessor, never through an identifier SwiftUI generates.
 struct MainWindowAccessor: NSViewRepresentable {

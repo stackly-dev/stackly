@@ -108,18 +108,6 @@ struct CatalogCopyTests {
         #expect(broken.metaLineText == "Failed validation")
     }
 
-    @Test func aMatrixCellIsSpokenWithItsOSStatusAndReason() throws {
-        let nats = try CatalogFixture.detail("nats")
-        let support = try #require(nats.versions?.first?.support)
-        #expect(
-            CatalogCopy.spokenText(for: support[0])
-                == "macOS, Unverified: Not tested on this Mac yet.")
-        #expect(
-            CatalogCopy.spokenText(for: support[1])
-                == "Linux, Unsupported: No Linux build in this catalog.")
-        #expect(
-            CatalogCopy.spokenText(for: support[2]).hasPrefix("Windows, Planned: "))
-    }
 }
 
 extension ProviderSummary {

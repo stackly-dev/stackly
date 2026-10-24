@@ -308,7 +308,6 @@ Fakta yang membatasi: GUI tidak pernah menautkan Rust, jadi apa pun yang dihitun
 
 **Pros**:
 
-- Konsisten dengan label status di semua layar ("Starting…" dan "Not Ready" selama probe belum berhasil), dan tetap memenuhi scope "status process dan readiness tampil terpisah" lewat dua baris yang dibacakan VoiceOver sebagai dua elemen.
 
 **Cons**:
 
@@ -363,7 +362,7 @@ Dijalankan 2026-10-20 oleh model lain (Sonnet, read only) atas draft `4e9de0c`, 
 | S6 | Bukti offline butuh server di dalam proses; definisi akses catalog | `stacklyd::server::start` dengan binary CLI asli; akses catalog berarti `CatalogState` daemon; GUI memakai tile abu tanpa catalog |
 | S7 | Label Restarts menyesatkan | "Restart attempts", tersembunyi saat 0 (Keputusan 5) |
 | S8 | Cache paket menyembunyikan perubahan folder pinned | cek stat `provider.yaml` setiap request |
-| S9 | VoiceOver membaca seluruh string sebagai password | bagian bukan secret dibacakan, "password hidden" di tempat `****`, pengumuman siap ditunda 2 detik |
+| S9 | Dihapus dari cakupan pada 2026-10-24. | bagian bukan secret dibacakan, "password hidden" di tempat `****`, pengumuman siap ditunda 2 detik |
 | S10 | Ada inti yang lebih sederhana | render di atas `PlanContext` dan resolver plan, tanpa settings (Keputusan 1) |
 | S11 | Kategori dan konflik flag CLI | `cli.connection_unavailable` menjadi `conflict`; `conflicts_with` clap; `--show-password` untuk entri tanpa secret; `inspect` membandingkan revision |
 | S12 | Pemicu muat ulang belum lengkap untuk config dan environment | dicatat sebagai milik fitur 29 dan 44 sampai 47 (Follow-up) |

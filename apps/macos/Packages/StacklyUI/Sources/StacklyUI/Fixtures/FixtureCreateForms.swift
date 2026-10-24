@@ -6,7 +6,6 @@
     /// (spec 0020, spec 0068): built from the generated contract types, with the values of
     /// the database runtime of the scenarios (runtime case 1) and the endpoints of
     /// ``FixtureCreate/portConflict``.
-    ///
     /// The values are data for a rig to answer with; the sheet attaches them to nothing.
     public nonisolated enum FixtureCreateForm {
         /// The form of runtime case 1: a client endpoint, an admin endpoint, a secret, two

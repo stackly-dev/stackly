@@ -22,8 +22,8 @@
             GallerySection(
                 "StacklySheet",
                 note: "An opaque sheet with a header, a body, and a fixed footer. The footer "
-                    + "writes why the main action cannot run. Return runs the main action "
-                    + "unless it is destructive; Escape runs Cancel. The last two buttons open "
+                    + "writes why the main action cannot run. The last two buttons open "
+                    + ""
                     + "real sheets."
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s22) {
@@ -84,7 +84,7 @@
                             minWidth: 560
                         ) {
                             Text(
-                                "Remove asks again, on top of this sheet. Return does nothing here."
+                                "Remove asks again, on top of this sheet."
                             )
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }

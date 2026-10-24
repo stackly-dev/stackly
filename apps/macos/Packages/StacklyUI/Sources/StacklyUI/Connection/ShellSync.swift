@@ -31,7 +31,6 @@ private struct EventObserver {
 
 /// Applies the sync engine's signals to the shell's stores, in one ordered
 /// loop on the main actor (spec 0013, *Sinkronisasi snapshot plus cursor*).
-///
 /// A resnapshot signal starts a new generation in every store; each store
 /// loads all pages and drops a result of an older generation. Events go to
 /// the stores that follow their kind. A reconnect that caught up loads a
@@ -73,12 +72,10 @@ public final class ShellSync {
     /// The events whose kind starts with `kindPrefix` (spec 0013, *ShellSync*, added by spec
     /// 0021): for a view that follows a kind without a store of its own, such as the detail
     /// page for `secret.`.
-    ///
     /// Each call returns a stream of its own. It yields the events that arrive after the call
     /// and stops being fed when the stream is dropped or `ShellSync` is stopped. It does not
     /// replay anything a snapshot or a reconnect missed; the observer reads its own state
     /// again after a resnapshot.
-    ///
     /// - Parameter kindPrefix: The start of the event kind, such as `secret.`.
     /// - Returns: The stream of events of that kind.
     public func events(kindPrefix: String) -> AsyncStream<Event> {

@@ -3,7 +3,6 @@ import SwiftUI
 
 /// The main window's content: the sidebar with its sections, badges, and daemon footer,
 /// the one daemon banner above every page, and the selected page.
-///
 /// It sets ``MutationAvailability`` for everything inside from the presentation, holds the
 /// one ``ActionHost`` of the window (so a confirmation shows once), and shows the feedback
 /// card of the window's ``FeedbackCenter`` under the page. The window itself (the
@@ -44,7 +43,6 @@ public struct AppShell: View {
     var onPublishCommands: (@MainActor (PublishedCommands) -> Void)?
 
     /// Creates the shell.
-    ///
     /// - Parameters:
     ///   - presentation: What the shell shows for the daemon's state.
     ///   - diagnostics: The Connection section of Diagnostics.
@@ -235,7 +233,7 @@ public struct AppShell: View {
                 reconnect: reconnect,
                 openDiagnostics: { select(.diagnostics) }
             )
-            // A new banner is a new view, so a new critical banner is announced again.
+
             .id(banner.title)
             // The split view also measures the banner at a tiny width, where its text would
             // wrap one character per line and push the columns out of the window.
@@ -389,7 +387,6 @@ private struct ShellSidebar: View {
     }
 }
 
-/// One sidebar row: the section icon and title, with the badge and its spoken value.
 private struct SidebarRow: View {
     let section: SidebarSection
     let badge: SidebarBadge?
@@ -402,12 +399,8 @@ private struct SidebarRow: View {
         }
         .badge(badge?.count ?? 0)
         .badgeProminence(badge?.isProminent == true ? .increased : .standard)
-        .accessibilityIdentifier(AccessibilityID.Sidebar.row(section))
-        if let badge {
-            label.accessibilityValue(badge.spokenValue)
-        } else {
-            label
-        }
+
+        label
     }
 }
 

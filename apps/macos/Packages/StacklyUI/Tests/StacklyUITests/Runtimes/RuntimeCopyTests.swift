@@ -4,7 +4,6 @@ import Testing
 
 @testable import StacklyUI
 
-/// The words of the Runtimes page (spec 0018 AC-17): the columns of a row, what VoiceOver
 /// reads, the status table, and the facts of the inspector.
 struct RuntimeCopyTests {
     private let postgres = FixtureRuntime.summaries[0]
@@ -60,15 +59,6 @@ struct RuntimeCopyTests {
                 RuntimeUser(instanceId: UUID(), name: "b", retained: true),
             ], dependentRuntimes: [])
         #expect(RuntimeCopy.removeReason(of: two) == "Used by 2 instances")
-    }
-
-    @Test func voiceOverReadsTheNameTheSourceTheStateAndWhoUsesIt() {
-        #expect(
-            RuntimeCopy.spokenLabel(of: postgres)
-                == "PostgreSQL 17.6, managed, installed, verified, used by pg17-dev")
-        #expect(
-            RuntimeCopy.spokenLabel(of: traefik)
-                == "Traefik 3.7.15, managed, installed, verified, unused")
     }
 
     @Test func theTitleOfAnInstallNamesTheSoftwareAndTheVersion() {

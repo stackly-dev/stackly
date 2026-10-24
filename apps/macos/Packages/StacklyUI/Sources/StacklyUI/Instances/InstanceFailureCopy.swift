@@ -4,7 +4,6 @@ import StacklyClient
 /// *Copy kegagalan*). A code this build does not list gets "Failed with {code}.".
 nonisolated public enum InstanceFailureCopy {
     /// The sentence for a failure.
-    ///
     /// - Parameters:
     ///   - failure: The last failure, or `nil` when the daemon sent none.
     ///   - restartBudget: The restart budget, for a crash loop.

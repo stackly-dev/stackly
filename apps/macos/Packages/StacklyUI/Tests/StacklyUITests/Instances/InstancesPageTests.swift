@@ -169,13 +169,13 @@ struct InstancesPageTests {
         }
         return InstancesCommandActions.publish(
             showsInspector: showsInspector, toggleInspector: {}, sort: sort, setSort: { _ in },
-            focusSearch: {}, target: target)
+            target: target)
     }
 
-    @Test func thePagePublishesFindTheInspectorAndSevenSortRows() {
+    @Test func thePagePublishesTheInspectorAndSevenSortRows() {
         let (actions, _) = published(selected: nil)
         for command in [
-            CommandID.find, .toggleInspector, .sortInstancesByName, .sortInstancesByProvider,
+            CommandID.toggleInspector, .sortInstancesByName, .sortInstancesByProvider,
             .sortInstancesByVersion, .sortInstancesByEndpoints, .sortInstancesByStatus,
             .sortInstancesAscending, .sortInstancesDescending,
         ] {
@@ -209,7 +209,7 @@ struct InstancesPageTests {
             showsInspector: true, toggleInspector: {},
             sort: InstanceSortComparator(.provider, order: .reverse),
             setSort: { applied.append($0) },
-            focusSearch: {}, target: nil)
+            target: nil)
         actions[.sortInstancesByStatus]?.perform()
         actions[.sortInstancesAscending]?.perform()
         #expect(
@@ -260,7 +260,7 @@ struct InstancesPageTests {
         let copy = StacklyAction(id: "copy", title: "Copy Connection String", mutates: false) {}
         let (actions, _) = InstancesCommandActions.publish(
             showsInspector: true, toggleInspector: {}, sort: .default, setSort: { _ in },
-            focusSearch: {}, target: nil, open: open, back: { backs += 1 }, copyConnection: copy)
+            target: nil, open: open, back: { backs += 1 }, copyConnection: copy)
         #expect(actions[.openInstance]?.id == "openInstance")
         #expect(actions[.copyConnectionString]?.id == "copyConnectionString")
         #expect(actions[.back]?.title == "Back")
@@ -272,18 +272,10 @@ struct InstancesPageTests {
     @Test func findIsNotPublishedWhileADetailPageIsOpen() {
         let (detail, _) = InstancesCommandActions.publish(
             showsInspector: true, toggleInspector: {}, sort: .default, setSort: { _ in },
-            focusSearch: {}, hasSearch: false, target: nil, back: {})
+            target: nil, back: {})
         #expect(detail[.find] == nil)
         #expect(detail[.back] != nil)
-        #expect(published(selected: nil).actions[.find] != nil)
-    }
-
-    @Test func theInspectorTooltipsNameTheShortcutsOfTheCommands() {
-        #expect(
-            CommandMap.helpText(for: .toggleInspector, title: "Hide Inspector")
-                == "Hide Inspector (⌥⌘I)")
-        #expect(CommandMap.helpText(for: .startInstance, title: "Retry") == "Retry (⌘R)")
-        #expect(CommandMap.helpText(for: .stopInstance, title: "Stop") == "Stop (⇧⌘R)")
+        #expect(published(selected: nil).actions[.find] == nil)
     }
 
     // MARK: - The words of the inspector

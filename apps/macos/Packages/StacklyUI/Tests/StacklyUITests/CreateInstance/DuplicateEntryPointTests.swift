@@ -25,7 +25,7 @@ struct DuplicateEntryPointTests {
     private func publish(duplicate: StacklyAction?) -> [CommandID: StacklyAction] {
         InstancesCommandActions.publish(
             showsInspector: true, toggleInspector: {}, sort: .default, setSort: { _ in },
-            focusSearch: {}, target: nil, duplicate: duplicate
+            target: nil, duplicate: duplicate
         ).actions
     }
 
@@ -84,14 +84,14 @@ struct DuplicateEntryPointTests {
         #expect(published[.duplicateInstance]?.mutates == true)
     }
 
-    @Test func theCommandIsBuiltInGroupFourOfTheInstanceMenuWithCommandD() {
+    @Test func theCommandIsBuiltInGroupFourOfTheInstanceMenu() {
         let entry = CommandMap.entry(for: .duplicateInstance)
         #expect(entry.status == .built)
         #expect(entry.menu == .instance)
         #expect(entry.group == 4)
-        #expect(entry.shortcut == CommandShortcut("d", .command))
+
         #expect(entry.scope == .page([.instances]))
-        #expect(CommandMap.helpText(for: .duplicateInstance) == "Duplicate… (⌘D)")
+        #expect(CommandMap.helpText(for: .duplicateInstance) == "Duplicate…")
     }
 
     // MARK: - The presenter

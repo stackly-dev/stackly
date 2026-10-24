@@ -1,7 +1,6 @@
 import Foundation
 
 /// A top level section of the main window's sidebar.
-///
 /// The raw value is what scene restoration stores, so it never changes.
 nonisolated public enum SidebarSection: String, CaseIterable, Hashable, Identifiable, Sendable {
     /// Overview.
@@ -58,12 +57,7 @@ nonisolated public enum SidebarSection: String, CaseIterable, Hashable, Identifi
     }
 
     /// The badge of the section, or `nil` when it has none.
-    ///
-    /// Instances shows the instance count of the last loaded snapshot, also while the
-    /// daemon is unreachable, read by VoiceOver as "last known". Operations shows the
-    /// running operations only while connected. A count of zero, a count that never
-    /// loaded, and every other section show no badge.
-    ///
+    /// Operations shows the running operations only while connected. A count of zero, a count that never loaded, and every other section show no badge.
     /// - Parameters:
     ///   - counts: The counts from the stores.
     ///   - isConnected: Whether the daemon is connected and every store refreshed.
@@ -71,17 +65,16 @@ nonisolated public enum SidebarSection: String, CaseIterable, Hashable, Identifi
         switch self {
         case .instances:
             guard let count = counts.instances, count > 0 else { return nil }
-            let spoken = Self.countText(count, singular: "instance", plural: "instances")
             return SidebarBadge(
                 count: count,
-                spokenValue: isConnected ? spoken : "\(spoken), last known",
+
                 isProminent: false
             )
         case .operations:
             guard isConnected, let count = counts.runningOperations, count > 0 else {
                 return nil
             }
-            return SidebarBadge(count: count, spokenValue: "\(count) running", isProminent: true)
+            return SidebarBadge(count: count, isProminent: true)
         case .overview, .environments, .catalog, .runtimes, .diagnostics:
             return nil
         }
@@ -136,12 +129,10 @@ nonisolated public struct SidebarCounts: Hashable, Sendable {
     }
 }
 
-/// A sidebar badge: the native count badge plus what VoiceOver reads for it.
+/// The native count badge and its prominence.
 nonisolated public struct SidebarBadge: Hashable, Sendable {
     /// The number on the badge, never zero.
     public let count: Int
-    /// What VoiceOver reads as the row's value, such as "3 instances, last known".
-    public let spokenValue: String
     /// Whether the badge uses the increased prominence (Operations).
     public let isProminent: Bool
 }

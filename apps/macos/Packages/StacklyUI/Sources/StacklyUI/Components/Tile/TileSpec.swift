@@ -12,7 +12,6 @@ nonisolated public struct TileSpec: Equatable, Sendable {
     public var name: String?
 
     /// Creates a tile spec.
-    ///
     /// - Parameters:
     ///   - mark: The catalog mark, or `nil` for the default mark.
     ///   - tile: The catalog color, or `nil` for gray.

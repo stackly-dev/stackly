@@ -174,13 +174,7 @@ struct InspectorTests {
 
     @Test func toggleUsesTheTrailingSidebarSymbol() {
         #expect(InspectorToggle.symbol == "sidebar.trailing")
-        #expect(
-            NSImage(systemSymbolName: InspectorToggle.symbol, accessibilityDescription: nil) != nil)
-    }
 
-    @Test func inspectorIdentifiersAreTheAgreedOnes() {
-        #expect(AccessibilityID.Inspector.toggle == "inspector.toggle")
-        #expect(AccessibilityID.Inspector.placeholder == "inspector.placeholder")
     }
 
     // MARK: - Header

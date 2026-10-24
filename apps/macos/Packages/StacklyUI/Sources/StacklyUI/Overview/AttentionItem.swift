@@ -9,14 +9,6 @@ nonisolated public enum AttentionDestination: Hashable, Sendable {
     /// The Diagnostics page.
     case diagnostics
 
-    /// The name VoiceOver reads in the hint "Opens {name}.".
-    var spokenName: String {
-        switch self {
-        case .instance: "the instance"
-        case .operations: "Operations"
-        case .diagnostics: "Diagnostics"
-        }
-    }
 }
 
 /// What kind of thing an item is about; it orders the items after their tone.
@@ -53,25 +45,6 @@ nonisolated public struct AttentionItem: Identifiable, Hashable, Sendable {
     /// The key that orders items of the same tone, category, and rule: the instance name,
     /// or the title of the operation.
     let sortKey: String
-
-    /// The word VoiceOver reads before the title: "Critical", "Warning", or "Info".
-    public var spokenLevel: String {
-        switch tone {
-        case .critical: "Critical"
-        case .caution: "Warning"
-        case .positive, .neutral, .informative: "Info"
-        }
-    }
-
-    /// What VoiceOver reads: "{level}: {title}. {message}".
-    public var spokenLabel: String {
-        "\(spokenLevel): \(title). \(message)"
-    }
-
-    /// The hint VoiceOver reads.
-    public var spokenHint: String {
-        "Opens \(destination.spokenName)."
-    }
 
     /// The number in the rule, for ordering: `I10` is 10.
     var ruleNumber: Int {

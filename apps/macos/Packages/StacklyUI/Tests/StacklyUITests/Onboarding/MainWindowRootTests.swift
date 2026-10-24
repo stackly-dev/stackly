@@ -12,8 +12,7 @@ struct MainWindowRootTests {
     private static func runtime(store: InMemoryOnboardingRecordStore) -> ShellRuntime {
         let link = ShellRuntimeTests.CountingLink()
         let model = DaemonModel(
-            link: link.handle, signals: nil, endpoint: nil, launchedAt: DaemonModelTests.launch,
-            announce: { _ in })
+            link: link.handle, signals: nil, endpoint: nil, launchedAt: DaemonModelTests.launch)
         return ShellRuntime(
             model: model, closeNotice: CloseNotice(presentsPanel: false), onboardingStore: store)
     }
@@ -94,12 +93,4 @@ struct MainWindowRootTests {
         #expect(runtime.onboarding.step == .catalogTrust)
     }
 
-    @Test func welcomeIsABuiltItemOfTheHelpMenuWithoutAShortcut() {
-        let entry = CommandMap.entry(for: .welcome)
-        #expect(entry.status == .built)
-        #expect(entry.menu == .help)
-        #expect(entry.title == "Welcome to Stackly")
-        #expect(entry.shortcut == nil)
-        #expect(entry.title == OnboardingCopy.helpMenuItem)
-    }
 }

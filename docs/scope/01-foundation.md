@@ -225,7 +225,6 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
     - [x] Implementasi dan regresi sentinel native diuji ulang pada 2026-10-24; bukti dialog login Keychain masih terhalang pembatasan akses alat ke SecurityAgent ([bukti](../reviews/2026-10-24-f11-native-followup.md)).
   - [x] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
   - [ ] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19, AC-24; build steps 9 to 11; needs features 12 and 13)
-    - [x] Entry, replace, reveal, penyembunyian, tenggat dan perlindungan clipboard, keyboard, Increase Contrast, preview, serta pemindaian root dan log diuji melalui GUI dan daemon nyata pada 2026-10-24; bukti ucapan VoiceOver masih terbuka ([bukti](../reviews/2026-10-24-f11-native-followup.md)).
 - [ ] Verify it: `/check verify secret store & redaction`
 - [x] Test it: `/test secret store & redaction`
 - [x] Review it (fresh model): `/check review secret store & redaction`

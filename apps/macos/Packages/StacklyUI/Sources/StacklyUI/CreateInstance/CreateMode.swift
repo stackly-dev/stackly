@@ -8,7 +8,6 @@ nonisolated public struct DuplicateSourceRef: Hashable, Sendable, Identifiable {
     public let name: String
 
     /// Creates a reference.
-    ///
     /// - Parameters:
     ///   - id: The ID of the source instance.
     ///   - name: Its name.

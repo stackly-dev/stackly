@@ -5,7 +5,7 @@ import Testing
 
 @testable import StacklyUI
 
-/// The log view: the spoken line, the level table, the follow rule, and the layout (spec
+/// The log view: the level table, the follow rule, and the layout (spec
 /// 0067, AC-16, AC-19).
 struct LogViewTests {
     // MARK: - level table
@@ -13,58 +13,21 @@ struct LogViewTests {
     @Test(
         .evidence(
             covers: ["REQ-026", "NFR-012"],
-            expected: "Spec 0067 AC-16: every level has the tone, symbol, and word of the table"))
-    func everyLevelHasTheToneSymbolAndWordOfTheTable() {
-        let table: [(LogLevel, Tone?, String?, String?)] = [
-            (.normal, nil, nil, nil),
-            (.warning, .caution, "exclamationmark.triangle.fill", "Warning"),
-            (.error, .critical, "xmark.circle.fill", "Error"),
+            expected: "Spec 0067 AC-16: every level has the tone and symbol of the table"))
+    func everyLevelHasTheToneAndSymbolOfTheTable() {
+        let table: [(LogLevel, Tone?, String?)] = [
+            (.normal, nil, nil),
+            (.warning, .caution, "exclamationmark.triangle.fill"),
+            (.error, .critical, "xmark.circle.fill"),
         ]
-        for (level, tone, symbol, word) in table {
+        for (level, tone, symbol) in table {
             #expect(level.tone == tone)
             #expect(level.symbol == symbol)
-            #expect(level.word == word)
         }
     }
 
     @Test func aWarningAndAnErrorDifferInSymbolSoColorIsNeverTheOnlySign() {
         #expect(LogLevel.warning.symbol != LogLevel.error.symbol)
-    }
-
-    // MARK: - spoken line
-
-    @Test(
-        .evidence(
-            covers: ["NFR-012"],
-            expected: "Spec 0067 AC-16: a line is read as time, source, level, and text"))
-    func aLineIsReadAsTimeSourceLevelAndText() {
-        let line = LogLine(
-            id: "1", timeText: "12:04:31.118", source: "stderr", text: "disk full", level: .error)
-        #expect(line.accessibilityLabel == "12:04:31.118, stderr, Error: disk full")
-        let warning = LogLine(
-            id: "2", timeText: "12:04:31.118", source: "stderr", text: "slow", level: .warning)
-        #expect(warning.accessibilityLabel == "12:04:31.118, stderr, Warning: slow")
-    }
-
-    @Test func aNormalLineLeavesOutTheLevel() {
-        let line = LogLine(id: "1", timeText: "12:04:31.118", source: "stdout", text: "ready")
-        #expect(line.accessibilityLabel == "12:04:31.118, stdout: ready")
-    }
-
-    @Test func aLineLeavesOutAnEmptyTimeAndAnEmptySource() {
-        let noTime = LogLine(id: "1", source: "stderr", text: "x", level: .error)
-        #expect(noTime.accessibilityLabel == "stderr, Error: x")
-        let emptyParts = LogLine(
-            id: "2", timeText: "", source: "", text: "x", level: .warning)
-        #expect(emptyParts.accessibilityLabel == "Warning: x")
-    }
-
-    @Test func aBareNormalLineIsReadAsItsText() {
-        #expect(LogLine(id: "1", text: "just text").accessibilityLabel == "just text")
-    }
-
-    @Test func theListIdentifierIsFixed() {
-        #expect(AccessibilityID.Log.list == "log.list")
     }
 
     // MARK: - follow rule

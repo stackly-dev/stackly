@@ -24,7 +24,7 @@ struct DependentsCard: View {
                 Text("—").foregroundStyle(StacklyColor.textSecondary)
             }
         }
-        .accessibilityIdentifier(AccessibilityID.InstanceDetail.card("dependents"))
+
     }
 }
 
@@ -35,6 +35,6 @@ struct DetailPending: View {
     var body: some View {
         DelayedProgress(delay: loadingDelay ?? DelayedVisibility.defaultDelay)
             .frame(width: 20, height: 20)
-            .accessibilityLabel("Loading")
+
     }
 }

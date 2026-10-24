@@ -4,7 +4,6 @@ import SwiftUI
 /// The main window's content in the running app: the onboarding until it is finished, then
 /// ``AppShell`` fed from the runtime's live ``DaemonModel`` (spec 0016, *Tampilan di jendela
 /// utama*).
-///
 /// It is the root view of the window, so it holds what belongs to the window and not to a
 /// screen: the window's one ``FeedbackCenter``, the New Instance sheet over the model's
 /// stores and link, the ``MainWindowKey`` that follows the key state, the capture of the
@@ -12,7 +11,6 @@ import SwiftUI
 /// to close, and the minimum size. They stay in place while the onboarding shows, so the
 /// close notice and the size rule hold there too. The model, the command line tool, and the
 /// feedback center reach both the onboarding and the shell through the environment.
-///
 /// The runtime, not the window, owns the models, so closing the window stops nothing and
 /// opening it again shows the same onboarding step.
 public struct MainWindowRoot: View {
@@ -25,7 +23,6 @@ public struct MainWindowRoot: View {
     private let windowWillClose: (NSWindow) -> Void
 
     /// Creates the content.
-    ///
     /// - Parameters:
     ///   - runtime: The shell runtime the app delegate holds for the whole launch.
     ///   - windowWillClose: Called with the main window right before it closes.

@@ -6,7 +6,6 @@
     /// answer `instance.preflight` gives when a fixed port is taken by another instance of
     /// this world, with the free port the daemon offers and the command that would do the
     /// same. The New Instance sheet of milestone 3 shows it as its blocked state.
-    ///
     /// Every value comes from the generated contract types and every ID from ``FixtureID``:
     /// the instance that holds the port is instance case 1, so the row names an instance
     /// the scenarios list. The value is data for a scenario to answer with; the sheet

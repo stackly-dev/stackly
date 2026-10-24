@@ -55,10 +55,8 @@
     /// answers the caller controls.
     @MainActor
     final class CreateRig {
-        /// What the model sent, announced, and reported, and what it waits on.
         final class Sink {
             var sent: [(call: Call, key: String)] = []
-            var announced: [String] = []
             var finished: [CreateOutcome] = []
             var watchers: [UUID: AsyncStream<OperationSnapshot>.Continuation] = [:]
             /// What `send` answers for a call; the default accepts a create and a start.
@@ -91,8 +89,6 @@
 
         /// Every mutation the model sent, with its key.
         var sent: [(call: Call, key: String)] { sink.sent }
-        /// What the model announced.
-        var announced: [String] { sink.announced }
         /// What the model reported when a create succeeded.
         var finished: [CreateOutcome] { sink.finished }
         /// What `send` answers for a call.
@@ -121,7 +117,7 @@
                     return stream
                 },
                 debounce: .zero, sleep: { _ in },
-                announce: { sink.announced.append($0) },
+
                 onFinish: { sink.finished.append($0) })
         }
 

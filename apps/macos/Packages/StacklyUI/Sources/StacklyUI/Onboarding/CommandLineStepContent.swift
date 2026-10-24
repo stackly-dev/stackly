@@ -29,7 +29,6 @@ struct CommandLineStepContent: Equatable {
     let isWorking: Bool
 
     /// Builds the content.
-    ///
     /// - Parameters:
     ///   - status: The status of the `stackly` command.
     ///   - bundledTool: The command inside the running bundle, or `nil` for a build without it.

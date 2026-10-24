@@ -5,7 +5,6 @@ import SwiftUI
 /// string of the provider, masked, with Show Password and Copy for a string with a secret and
 /// Copy alone for one without, then the notes that matter before the string is used, then
 /// one row per secret.
-///
 /// A string with a secret never holds its value here: Show and Copy go through
 /// ``RevealableSecretText``, which asks `secret.reveal` only when pressed.
 struct ConnectionCard: View {
@@ -23,7 +22,7 @@ struct ConnectionCard: View {
                 Text("—").foregroundStyle(StacklyColor.textSecondary)
             }
         }
-        .accessibilityIdentifier(AccessibilityID.InstanceDetail.card("connection"))
+
     }
 
     @ViewBuilder
@@ -84,9 +83,7 @@ struct ConnectionEntryRow: View {
                 .foregroundStyle(StacklyColor.textSecondary)
             entry
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(connection.title)
-        .accessibilityIdentifier(AccessibilityID.InstanceDetail.connection(connection.name))
+
     }
 
     @ViewBuilder private var entry: some View {
@@ -103,9 +100,7 @@ struct ConnectionEntryRow: View {
             } else {
                 RevealableSecretText(
                     masked, references: references, client: secrets,
-                    maskedLabel: DetailFormat.spoken(masked: masked),
-                    copyLabel: "Copy \(connection.title)",
-                    copyAnnouncement: "\(connection.title) copied.",
+
                     compose: ConnectionComposer.composer(for: connection.parts))
             }
         }
@@ -120,8 +115,7 @@ struct ConnectionEntryRow: View {
                 .textSelection(.enabled)
             Spacer(minLength: Spacing.s8)
             CopyButton(
-                masked, what: connection.title, style: .text,
-                announcement: "\(connection.title) copied.", key: "connection.\(connection.name)")
+                masked, what: connection.title, style: .text)
         }
     }
 
@@ -133,13 +127,13 @@ struct ConnectionEntryRow: View {
                 Text(masked)
                     .font(.callout.monospaced())
                     .foregroundStyle(StacklyColor.textSecondary)
-                    .accessibilityLabel(DetailFormat.spoken(masked: masked))
+
                 Spacer(minLength: Spacing.s8)
                 Button("Show") {}
-                    .accessibilityLabel("Show Password")
+
                     .disabled(true)
                 Button("Copy") {}
-                    .accessibilityLabel("Copy \(connection.title)")
+
                     .disabled(true)
             }
             DisabledReasonText(DetailFormat.missingValueReason(missing))

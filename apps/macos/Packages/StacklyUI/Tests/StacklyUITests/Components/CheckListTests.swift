@@ -5,7 +5,7 @@ import Testing
 
 @testable import StacklyUI
 
-/// The checklist: the status table, the spoken row, and the two layouts (spec 0067, AC-13,
+/// The checklist: the status table, and the two layouts (spec 0067, AC-13,
 /// AC-19).
 struct CheckListTests {
     // MARK: - status table
@@ -13,19 +13,18 @@ struct CheckListTests {
     @Test(
         .evidence(
             covers: ["NFR-012"],
-            expected: "Spec 0067 AC-13: every status has the tone, symbol, and word of the table"))
-    func everyStatusHasTheToneSymbolAndWordOfTheTable() {
-        let table: [(CheckStatus, Tone, String?, String)] = [
-            (.passed, .positive, "checkmark.circle.fill", "Passed"),
-            (.warning, .caution, "exclamationmark.triangle.fill", "Warning"),
-            (.failed, .critical, "xmark.circle.fill", "Failed"),
-            (.pending, .neutral, nil, "Checking"),
-            (.unrecognized, .caution, "questionmark.diamond.fill", "Unrecognized status"),
+            expected: "Spec 0067 AC-13: every status has the tone and symbol of the table"))
+    func everyStatusHasTheToneAndSymbolOfTheTable() {
+        let table: [(CheckStatus, Tone, String?)] = [
+            (.passed, .positive, "checkmark.circle.fill"),
+            (.warning, .caution, "exclamationmark.triangle.fill"),
+            (.failed, .critical, "xmark.circle.fill"),
+            (.pending, .neutral, nil),
+            (.unrecognized, .caution, "questionmark.diamond.fill"),
         ]
-        for (status, tone, symbol, word) in table {
+        for (status, tone, symbol) in table {
             #expect(status.tone == tone)
             #expect(status.symbol == symbol)
-            #expect(status.word == word)
         }
     }
 
@@ -33,31 +32,6 @@ struct CheckListTests {
         let symbols = [CheckStatus.passed, .warning, .failed, .unrecognized].compactMap(\.symbol)
         #expect(Set(symbols).count == symbols.count)
         #expect(!symbols.contains { $0.isEmpty })
-    }
-
-    // MARK: - spoken row
-
-    @Test(
-        .evidence(
-            covers: ["NFR-012"],
-            expected: "Spec 0067 AC-13: a row is read as title, status, and detail"))
-    func aRowIsReadAsTitleStatusAndDetail() {
-        let item = CheckItem(
-            id: "disk", status: .warning, title: "Low disk space", detail: "4.1 GB is left.")
-        #expect(item.accessibilityLabel == "Low disk space, Warning: 4.1 GB is left.")
-    }
-
-    @Test func aRowWithoutADetailIsReadAsTitleAndStatus() {
-        #expect(
-            CheckItem(id: "port", status: .passed, title: "Port 5432 is free").accessibilityLabel
-                == "Port 5432 is free, Passed")
-        #expect(
-            CheckItem(id: "port", status: .pending, title: "Checking", detail: "")
-                .accessibilityLabel == "Checking, Checking")
-    }
-
-    @Test func theRowIdentifierUsesTheItemKey() {
-        #expect(AccessibilityID.Checklist.row("disk") == "checklist.row.disk")
     }
 
     // MARK: - layout

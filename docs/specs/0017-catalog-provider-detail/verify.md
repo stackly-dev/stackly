@@ -1,4 +1,6 @@
 # Verify: Catalog dan provider detail · spec 0017 · updated 2026-10-20
+> Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
+
 
 _Langkah diturunkan dari acceptance criteria spec 0017. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27, pada commit bersih. Setiap milestone punya bagiannya sendiri, ditambahkan saat milestone itu dibangun. Setiap perubahan sementara pada file repo dikembalikan dengan `git checkout`, dan `git status` bersih sesudahnya._
 
@@ -85,7 +87,7 @@ Prasyarat untuk langkah yang memakai daemon asli: `cargo build -p stacklyd -p st
 
 ### UI / manual
 
-Langkah ini milik user: tidak ada yang mengubah setelan sistem, tetapi Differentiate Without Color, Increase Contrast, Reduce Transparency, dan VoiceOver hanya bisa dinyalakan user. Lead memasukkannya ke `docs/manual.md`. Hasilnya dicatat `native` dengan status `NOT_RUN` sampai dijalankan.
+Lead memasukkannya ke `docs/manual.md`. Hasilnya dicatat `native` dengan status `NOT_RUN` sampai dijalankan.
 
 - [ ] Buat catalog dev (`cargo xtask catalog build --out $STACKLY_ROOT/catalog`), jalankan `STACKLY_ROOT=$(mktemp -d) STACKLY_CATALOG_DIR=<folder itu> cargo run -q -p stacklyd`, buka app Debug (`cargo xtask build-app`), pilih Catalog (⌘4) → judul "Catalog", subjudul "Development catalog · updated {tanggal}", enam kartu planned (Pg, My, Na, Ch, Vk, Tr) redup tanpa opacity, picker bersegmen All, Databases, Messaging, Analytics, Cache, Proxy, dan tidak ada tombol Get, New Instance, atau Import Provider → AC-10
 - [ ] Ketik "post" di field "Search providers" lalu "POST", lalu "postgresql" → hanya kartu PostgreSQL tersisa, pilihan pindah ke kartu itu, dan panel detail menulis catatan planned "This provider isn’t available yet. It will appear here once packaging and tests pass." tanpa matrix, capability, atau tombol → AC-10
@@ -96,7 +98,6 @@ Langkah ini milik user: tidak ada yang mengubah setelan sistem, tetapi Different
 - [ ] Perkecil jendela ke 900 × 600 dengan inspector terbuka → grid satu kolom, picker kategori menjadi menu, tidak ada teks terpotong di kartu atau panel, inspector paling lebar 280 pt; matrix versi berubah menjadi daftar per OS → AC-10, AC-11
 - [ ] Hentikan `stacklyd` → banner jendela "Can’t connect to stacklyd." dan halaman Catalog menampilkan state tunggu; mulai lagi → catalog kembali tanpa memuat ulang app → AC-10
 - [ ] Nyalakan Full Keyboard Access (System Settings > Keyboard), lalu hanya dengan keyboard: Tab ke field pencarian, picker kategori, setiap kartu (Return atau Space memilih), dan isi panel detail termasuk link lisensi → semua dapat dicapai dan fokus terlihat → AC-11
-- [ ] Nyalakan VoiceOver (⌘F5): kartu dibaca "NATS Server, Messaging, Available", sel matrix "macOS, Unverified: Not tested on this Mac yet.", capability "Reload without restart, not supported" dan "Metrics, supported", tile tidak dibaca → AC-11
 - [ ] Nyalakan Differentiate Without Color → badge status menulis simbol tone di depan label dan tidak ada status yang hanya berbeda warna; nyalakan Increase Contrast dan Reduce Transparency, ulangi di light dan dark → semua teks terbaca, kartu planned tidak redup → AC-11
 - [ ] Atur jam Mac atau pakai catalog dengan `published_at` lebih dari 180 hari → banner "Showing the last known state from {tanggal}." dengan "The development catalog last updated {tanggal}." dan tidak ada teks "latest", "up to date", atau "newer catalog" di layar → AC-8, AC-10
 
@@ -104,7 +105,6 @@ Langkah ini milik user: tidak ada yang mengubah setelan sistem, tetapi Different
 
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CatalogAppearanceTests|CatalogCopyTests"` → label, tone, simbol, dan detail setiap `SupportStatus` dan `CatalogEntryState` termasuk `unrecognized`, setiap teks alasan, nama OS dan arsitektur, nilai asing, ukuran desimal, dan subjudul "Official · updated Oct 20, 2026"; `CatalogAppearance.swift` tanpa `default:` → AC-8, AC-12
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CatalogFilterTests|CatalogStoreTests|ProviderFactsTests"` → filter kategori, pencarian tanpa huruf besar dan diakritik, tidak ada segmen Testing, pilihan default dan pilihan yang tersaring, urutan daemon dan `CatalogInfo` setelah snapshot, store `unsupported` untuk daemon lama, cache detail per instance daemon, provider, dan revision (dibuang saat snapshot baru), Retry setelah gagal, dan baris License, Source, Download, Disk, Requires, Dependencies yang hanya membaca artefak host → AC-9, AC-10
-- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CatalogViewsTests|CatalogPageStateTests"` → catatan di bawah matrix, daftar capability dengan tiga baris dasar, label VoiceOver kartu dan sel, banner issue paling banyak lima, dan state halaman (loading, unsupported, failed, empty, no results dengan kutipan query, stale `.outdated` dengan `publishedAt` dan source, partial dengan ID entri invalid) → AC-8, AC-10, AC-11
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogSnapshotTests` → 10 test lulus tanpa `STACKLY_SNAPSHOT_RECORD`: available, unsupported, blocked, planned, invalid, no results, empty, outdated, failed, dan daemon tanpa method, masing masing light, dark, hc-light, hc-dark, narrow, dan Reduce Transparency identik dengan light → AC-10, AC-11
 - [ ] `cargo xtask ui-test --only <kelas menu>` (XCUITest menu spec 0068 AC-16) → item Edit > Find > Find… aktif di Catalog dan nonaktif di Overview untuk setiap skenario yang memuat catalog. Menunggu: tetap `NOT_RUN` sampai user menyalakan Automation Mode (`docs/manual.md` bagian K), exit 2 selama itu → AC-10, spec 0069 AC-10
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CommandMapTests|CommandSourceRuleTests"` → lulus: baris `find` sudah `built` di `CommandMap` (scope `.page(semua bagian)`, requirement `.search`, tercatat di tabel "Commands and shortcuts" `design.md`), dan halaman Catalog tidak memakai `keyboardShortcut` atau `CommandGroup` → AC-10
@@ -120,7 +120,7 @@ Langkah ini milik user: tidak ada yang mengubah setelan sistem, tetapi Different
 
 - AC-9: bagian GUI (view model Swift membaca fixture `protocols/fixtures/catalog/` yang sama dengan golden CLI: status per sel dan teks ukuran). Golden CLI dan perintah `stackly provider` ada di milestone 2.
 - AC-10: test filter, store, state halaman, snapshot, dan langkah UI manual. Subjudul, pencarian, picker, grid, panel detail, matrix, capability, baris key value, state planned dan invalid, hasil kosong, dan `ViewState.resolve`. Perintah Find lewat `.publishesCommands(.page(.catalog), …)`.
-- AC-11: label VoiceOver di test view model, tata letak tanpa pemotongan di snapshot narrow, dan langkah manual keyboard, VoiceOver, Differentiate Without Color, Increase Contrast. Kontras AA diperiksa snapshot hc-light dan hc-dark, tetapi pengukuran kontras dan Differentiate Without Color (yang tidak dirender snapshot, spec 0068 AC-5) tetap langkah manual.
+Kontras AA diperiksa snapshot hc-light dan hc-dark, tetapi pengukuran kontras dan Differentiate Without Color (yang tidak dirender snapshot, spec 0068 AC-5) tetap langkah manual.
 - AC-12: `CatalogAppearanceTests`, tabel di `apps/macos/design.md`, dan teks nilai asing di `CatalogCopyTests`.
 - AC-13: milestone 1.
 

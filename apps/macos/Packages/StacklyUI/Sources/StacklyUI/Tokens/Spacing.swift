@@ -57,10 +57,7 @@ nonisolated public enum Radius: Sendable, CaseIterable {
     }
 }
 
-/// A named default for a size that scales with a text style through `@ScaledMetric`.
-///
-/// Declare it in the view that uses it, for example
-/// `@ScaledMetric(.statusDot) private var dotSize`.
+/// A named default layout size.
 nonisolated public struct ScaledSize: Sendable, Hashable {
     /// The size in points at the default text size.
     public let base: CGFloat
@@ -80,13 +77,6 @@ nonisolated public struct ScaledSize: Sendable, Hashable {
     /// The minimum height of a custom row: 34 pt relative to `.body`. Rows never have a
     /// fixed height.
     public static let rowMinHeight = ScaledSize(base: 34, textStyle: .body)
-}
-
-extension ScaledMetric where Value == CGFloat {
-    /// Creates a scaled metric from a named ``ScaledSize``.
-    public init(_ size: ScaledSize) {
-        self.init(wrappedValue: size.base, relativeTo: size.textStyle)
-    }
 }
 
 /// The smallest custom hit target: 24 × 24 pt. Apply it with

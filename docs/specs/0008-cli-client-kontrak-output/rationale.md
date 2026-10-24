@@ -803,4 +803,3 @@ Spec ini diperiksa satu pass kritik read only oleh model lain (Sonnet 5.5) pada 
 ## Perubahan 2026-10-18 (rekonsiliasi lintas spec, ronde 2)
 
 Disetujui engineer: nama DTO mengikuti spec 0007 (`OperationSummary`, `OperationDetail`, `CancelReply` dengan `disposition`, sehingga cancel pada operasi yang sudah berakhir memberi exit 3 dari `disposition`, bukan dari error); error akhir diambil dari `failure.error` atau `recovery.error`; `--limit` paling banyak 200; perintah baru `operation resume` dan `operation abandon` (AC-15, abandon dengan konfirmasi destructive); timeout satu panggilan memakai `ipc.call_timeout` spec 0006, sama dengan GUI, menggantikan `cli.request_timeout`; `ClientInfo.interactive` diisi dari `Context`; fallback enum `unrecognized` dan `DaemonHealthStatus`; `Box<ErrorBody>`; `items` error ditampilkan di teks manusia.
-

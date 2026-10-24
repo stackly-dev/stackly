@@ -5,7 +5,6 @@
     /// The duplicate form of the New Instance sheet in the fixtures (spec 0024, spec 0068):
     /// the answer `instance.get_duplicate_form` gives for `pg17-dev`, instance case 1, built
     /// from the generated contract types over ``FixtureCreateForm/database``.
-    ///
     /// Every port asks `auto`, the secret generates, the settings are the ones the source
     /// changed, and the secret reference is the one Copy from offers first. The value is data
     /// for a rig to answer with; the sheet attaches it to nothing.

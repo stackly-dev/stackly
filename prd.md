@@ -393,7 +393,7 @@ Semua `REQ` di bagian ini berlaku untuk baseline macOS, kecuali pekerjaan Window
 | REQ-024 | **Shell SwiftUI dan state global** | GUI menyediakan navigasi, daemon connection status, operation center, loading/empty/error/stale/unsupported states, serta reconnect. Seluruh business mutation melalui API daemon. |
 | REQ-025 | **Runtime, instance, dan catalog UI** | Sediakan install wizard, create/duplicate-config instance, runtime list, instance list/detail, version/endpoint/auth summary, lifecycle actions, dan dependency warning. Duplicate-config membuat storage baru dan bukan clone data. |
 | REQ-026 | **Config, logs, environment dan recovery UI** | GUI menyediakan config diff/validation, logs, monitoring, environment preview/up/down, backup/restore progress, dan diagnostics. Tombol tidak boleh tersedia seolah capability unsupported sudah bekerja. |
-| REQ-027 | **Aksesibilitas dan interaksi desktop** | Dukung keyboard navigation, VoiceOver labels, Dynamic Type/ukuran teks yang relevan, light/dark mode, status selain warna, copy endpoint, menu bar status dasar, serta konfirmasi destructive action. Notifikasi opsional dan permission-aware. |
+Notifikasi opsional dan permission-aware. |
 
 ### CLI & provider
 
@@ -754,7 +754,7 @@ Angka berikut adalah **target engineering awal**, bukan hasil benchmark. Validas
 | NFR-009 | Security | Tidak ada unresolved critical/high finding pada distribusi, IPC, provider execution atau destructive operations sebelum stable |
 | NFR-010 | Portabilitas | Domain/protocol tidak mengimpor framework GUI atau API OS; target check dan fake-platform tests berjalan di CI |
 | NFR-011 | Observability | Semua operation/error memiliki correlation ID; metrics/log dipisah dari registry growth yang tak terkendali |
-| NFR-012 | Aksesibilitas | Critical journeys lulus keyboard/VoiceOver review; kontras/status/error tidak mengandalkan warna saja |
+| NFR-012 | Aksesibilitas | Critical journeys lulus interaksi desktop review; kontras/status/error tidak mengandalkan warna saja |
 | NFR-013 | Test quality | Target line coverage ≥80% pada core kritis sebagai sinyal, bukan pengganti AC/fault injection/recovery tests |
 | NFR-014 | Offline | Local lifecycle bekerja tanpa akun/cloud; catalog stale ditampilkan dengan waktu pembaruan terakhir |
 | NFR-015 | Distribusi | Clean-install, reinstall, upgrade, uninstall-retain-data dan approval-denied diuji pada setiap OS/arch yang diiklankan |
@@ -1430,7 +1430,7 @@ Nomor AC-001 sampai AC-054 berpasangan langsung dengan REQ bernomor sama. AC-081
 | AC-024 | Given daemon unreachable; when GUI dibuka; then UI tetap dapat menampilkan status koneksi dan retry/diagnostics tanpa menyatakan instance stopped atau menjalankan binary langsung. | REQ-024 |
 | AC-025 | Given duplicate instance config; when wizard diselesaikan; then ID, data path, secret policy, dan port baru tervalidasi; data lama tidak disalin tanpa fitur backup/restore. | REQ-025 |
 | AC-026 | Given provider tidak memiliki hot reload; when config berubah; then UI meminta controlled restart dan tidak menampilkan keberhasilan reload palsu. | REQ-026 |
-| AC-027 | Given navigasi keyboard dan VoiceOver; when pengguna membuat, menghentikan, dan memeriksa instance; then alur dapat diselesaikan tanpa informasi yang hanya tersedia lewat warna atau hover. | REQ-027 |
+| AC-027 | Given navigasi interaksi desktop; when pengguna membuat, menghentikan, dan memeriksa instance; then alur dapat diselesaikan tanpa informasi yang hanya tersedia lewat warna atau hover. | REQ-027 |
 
 ### CLI & provider (AC-028–034)
 
@@ -1572,7 +1572,7 @@ Tabel ini bukan status implementasi. Agent wajib menambahkan path kode, schema/A
 | REQ-024 | apps/macos, client-swift | AC-024 | NOT_RUN |
 | REQ-025 | apps/macos, schemas | AC-025 | NOT_RUN |
 | REQ-026 | apps/macos | AC-026 | NOT_RUN |
-| REQ-027 | apps/macos, accessibility | AC-027 | NOT_RUN |
+| REQ-027 | **Interaksi desktop** | Copy endpoint, menu bar status dasar, dan konfirmasi destructive action. Notifikasi opsional dan permission-aware. |
 | REQ-028 | apps/cli, IPC | AC-028 | NOT_RUN |
 | REQ-029 | provider-engine, schemas | AC-029 | NOT_RUN |
 | REQ-030 | provider-sdk, schema-tools | AC-030 | NOT_RUN |

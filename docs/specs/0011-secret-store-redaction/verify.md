@@ -1,4 +1,6 @@
 # Verify: secret store & redaction · spec 0011 · updated 2026-10-20
+> Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
+
 
 _Langkah ini diturunkan dari acceptance criteria spec 0011 untuk build step 0 (registry secret dan audit) dan step 4 dan 4a (core: `SecretWorker`, `SecretService`, hook operasi, `printable_only`, `Bind` dengan `classify_create_failure`). `/check verify` menjalankannya; `/test` mengunci yang tahan lama. Build step 5 (daemon) ada di bagian `## Milestone 4: Secret service through the daemon` di bawah; step 7 (suite sentinel) menambah ke bagian itu setelah dibangun._
 
@@ -130,14 +132,14 @@ _Build step 9 (`StacklyClient` dan `StacklyTestSupport`) dan step 10 (`StacklyUI
 ### UI / manual
 
 - [ ] Buka preview `Secret field`, `Secret field, dark`, `Secret entry sheet`, dan `Revealable secret text` di Xcode (`StacklyUI`, folder `Secrets/`) → Enter memakai field tersembunyi dengan tombol Show; Tab menjangkau picker, field, Show, dan Save; baris yang disimpan menampilkan Saved; teks tersamar berlabel `Password, hidden`; tampilan terbaca di light dan dark → AC-19
-- [ ] Step 11, record manual alur GUI: `evidence/manual/2026-10-20-spec-0011-step-11-secret-entry-and-reveal-flows.json` → ikuti `steps` di record itu di Mac ini: `stacklyd` sungguhan dengan `STACKLY_ROOT` sementara (keychain file), app Debug dari `cargo xtask build-app`, halaman **Secrets** di jendela Window > Design Gallery (hanya build Debug, tersambung ke `DaemonLink` sungguhan). Isi nilai lewat `SecretEntrySheet` dengan fixture credential (batas panjang menahan Save, Replace muncul bila nilai sudah ada), Show menyembunyikan lagi setelah 30 detik, lewat Hide, saat jendela ditutup, dan saat app tidak aktif, Copy mengosongkan pasteboard setelah 90 detik kecuali sudah berubah, VoiceOver membaca `Password, hidden`, semua kontrol terjangkau dan bisa dipakai dari keyboard, dan pemindaian `grep` atas root, log daemon, dan log app tidak menemukan prefix fixture; lalu isi `actual`, `status`, `reviewer`, `finishedAt` → AC-16, AC-19, AC-24 (REQ-016)
+- [ ] Step 11, record manual alur GUI: `evidence/manual/2026-10-20-spec-0011-step-11-secret-entry-and-reveal-flows.json` → ikuti `steps` di record itu di Mac ini: `stacklyd` sungguhan dengan `STACKLY_ROOT` sementara (keychain file), app Debug dari `cargo xtask build-app`, halaman **Secrets** di jendela Window > Design Gallery (hanya build Debug, tersambung ke `DaemonLink` sungguhan).
 - [x] Konfirmasi `stored_only` lewat sheet tidak bisa dipicu dari halaman Secrets (reference `local:debug/...` tidak dipakai resource mana pun); dialognya dibuktikan `SecretEntryModelTests` dan pratinjau, dan layar produk pertama yang punya reference milik instance (fitur 20 atau 21) membuktikannya di GUI → AC-19 (DEFERRED ke fitur 20/21, owner user, disetujui 2026-10-20; padanan otomatis SecretEntryModelTests lulus)
 
 ### Acceptance-criteria coverage
 
 - AC-18 · `SecretsClientTests`, `RevealedSecretTests`, `FixtureCredentialTests`
 - AC-19 · `SecretLimitsTests`, `SecretDraftTests`, `SecretNeedTests`, `SecretEntryModelTests`, `RevealModelTests` (30 detik), `ConcealedPasteboardTests` (90 detik), `SecretViewsAccessibilityTests`; AC-24 · `RevealModelTests` (semua atau tidak sama sekali)
-- Step 11: record manual kini `BLOCKED` setelah alur daemon nyata, clipboard, keyboard, kontras, serta pemindaian kebocoran dijalankan pada 2026-10-24. Ucapan VoiceOver belum dapat diamati. Rincian hasil parsial ada pada bagian pemeriksaan native lanjutan di bawah. Test step 9 dan 10 tetap bukti dengan `SecretsClient` palsu, terpisah dari pengamatan native tersebut.
+- Step 11: record manual kini `BLOCKED` setelah alur daemon nyata, clipboard, keyboard, kontras, serta pemindaian kebocoran dijalankan pada 2026-10-24. Rincian hasil parsial ada pada bagian pemeriksaan native lanjutan di bawah. Test step 9 dan 10 tetap bukti dengan `SecretsClient` palsu, terpisah dari pengamatan native tersebut.
 - Catatan: prefix `FixtureCredential` dicek terhadap konstanta Rust lewat teks `credential.rs`, sesuai keputusan 2026-10-20 di *Sisi Swift fixture credential* spec ini (tidak ada fixture prefix di `protocols/fixtures/`)
 
 ## Pemeriksaan native lanjutan, 2026-10-24
@@ -153,4 +155,3 @@ Hasil dan batas lengkap: [laporan pemeriksaan](../../reviews/2026-10-24-f11-nati
 - [x] Copy native menghasilkan URI lengkap, clipboard kosong setelah tenggat 90 detik, teks pengganti bertahan setelah 111 detik, dan keluar dari app membersihkan salinan yang belum berubah. → AC-19
 - [x] Periksa app dengan Increase Contrast native lalu kembalikan setting ke keadaan awal. → AC-19
 - [ ] Selesaikan Deny dan Cancel di SecurityAgent. Akses alat ditolak secara eksplisit, jangan ganti hasil ini dengan PASS dari keychain file. → AC-3
-- [ ] Amati ucapan VoiceOver untuk hidden, shown, dan pengumuman timer sebelum menutup record GUI. VoiceOver berhasil dimulai, tetapi capture output tidak tersedia, sehingga setting dipulihkan. → AC-19

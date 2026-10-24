@@ -4,7 +4,7 @@
 
 ## Context
 
-Fitur 69 di `docs/scope/ui-macos.md` meminta menu Stackly, File, Edit, View, Window, dan Help beserta peta shortcut, supaya setiap aksi utama di mockup UI bisa dijalankan tanpa mouse sesuai idiom macOS. Done when nya punya empat syarat: peta perintah ada sejak shell dan setiap fitur journey mendaftar di sana; shortcut tidak bentrok dengan shortcut sistem; perintah nonaktif tepat saat tombolnya nonaktif (daemon offline, operasi berjalan, capability unsupported); dan Help membuka dokumentasi pengguna fitur 66. Trace nya REQ-027, AC-027, dan NFR-012: alur membuat, menghentikan, dan memeriksa instance harus selesai dengan keyboard dan VoiceOver.
+Fitur 69 di `docs/scope/ui-macos.md` meminta menu Stackly, File, Edit, View, Window, dan Help beserta peta shortcut, supaya setiap aksi utama di mockup UI bisa dijalankan tanpa mouse sesuai idiom macOS. Done when nya punya empat syarat: peta perintah ada sejak shell dan setiap fitur journey mendaftar di sana; shortcut tidak bentrok dengan shortcut sistem; perintah nonaktif tepat saat tombolnya nonaktif (daemon offline, operasi berjalan, capability unsupported); dan Help membuka dokumentasi pengguna fitur 66. Trace nya REQ-027, AC-027, dan NFR-012: alur membuat, menghentikan, dan memeriksa instance harus selesai dengan interaksi desktop.
 
 Saat spec ini ditulis (2026-10-21), `main` punya shell spec 0013 (`StacklyApp` dengan scene `Window` utama, `Settings` placeholder, dan Design Gallery Debug; `AppShell` dengan pilihan sidebar di `@SceneStorage("shell.section")`; `DaemonModel.reconnect()`), dan pola state spec 0012 (`MutationAvailability`, `.mutationGated()`, `.disabled(reason:)`, `.stacklyConfirmation`). Belum ada `.commands`, `CommandGroup`, atau shortcut selain `.defaultAction` dan `.cancelAction` di `SecretEntrySheet`. Enam spec yang sudah diterima menunda bagian menu nya ke fitur 69: 0013 (Reconnect, pindah bagian), 0016 (Welcome to Stackly, perintah shell nonaktif saat onboarding), 0017 (⌘F di Catalog), 0020 (New Instance ⌘N, dengan `CommandGroup` sementara), 0021 (detail dan copy connection), dan 0022 (`InstancesCommands` untuk urutan, inspector ⌥⌘I, dan ⌘F). Sebagian akan dibangun sebelum fitur ini, sebagian sesudahnya, jadi urutan merge tidak bisa diandaikan.
 
@@ -27,7 +27,7 @@ Konsekuensi tidak memutuskan: setiap fitur menambah `CommandGroup` sendiri denga
 
 ### K3: tempat aksi instance
 
-- **Opsi 1 (dipilih): menu objek baru "Instance" di antara View dan Window.** Pro: tempat menu khusus app menurut HIG; aksi pada pilihan berkumpul seperti menu Message di Mail; VoiceOver dan Help search menemukannya dengan nama objeknya. Kontra: menambah satu menu di luar enam menu yang digambar mockup (dicatat sebagai selisih mockup).
+Kontra: menambah satu menu di luar enam menu yang digambar mockup (dicatat sebagai selisih mockup).
 - **Opsi 2: aksi instance di menu File.** Pro: tetap enam menu seperti mockup. Kontra: File menjadi campuran membuat sesuatu dan mengoperasikan pilihan, berlawanan dengan arti File di macOS.
 
 ### K4: pindah bagian
@@ -69,7 +69,7 @@ Konsekuensi tidak memutuskan: setiap fitur menambah `CommandGroup` sendiri denga
 
 ### K11: alasan nonaktif di menu utama
 
-- **Opsi 1 (dipilih): subtitle item menampilkan alasan bila action ada dan alasannya teks, mengikuti cek macOS 27 spec 0067.** Pro: sama dengan menu di dalam jendela (fitur 67); VoiceOver membaca alasan di tempat. Kontra: bergantung pada hasil cek platform; item yang nonaktif karena konteks tetap tanpa alasan.
+Kontra: bergantung pada hasil cek platform; item yang nonaktif karena konteks tetap tanpa alasan.
 - **Opsi 2: menu tanpa alasan.** Pro: menu lebih pendek. Kontra: pengguna menu tidak tahu kenapa New Instance mati; alasan hanya di banner halaman.
 
 ### K12: cek bentrok
@@ -97,7 +97,7 @@ Diputuskan saat menulis spec, dengan alasan dan runner up:
 - **Modifier sendiri (`CommandModifiers`), bukan `EventModifiers` SwiftUI, di peta.** Peta tetap `nonisolated` dan `Sendable` dan bisa dibaca target UI test fitur 68 tanpa SwiftUI; konversi ke `KeyboardShortcut` hanya di `CommandItem`. Runner up: `EventModifiers` langsung, yang menyeret SwiftUI ke data murni.
 - **`entry(for:)` sebagai `switch` lengkap.** Kompiler memastikan setiap `CommandID` punya baris, tanpa lookup yang bisa gagal. Runner up: kamus dengan `expect`, yang memindahkan kesalahan ke runtime.
 - **Urutan instance sebagai tujuh `CommandID` dengan `checked`.** Generik untuk item bertanda centang mana pun, tanpa tipe khusus fitur 22 di `PublishedCommands`. Runner up: satu binding `InstanceSort` di `PublishedCommands`.
-- **Judul generik ("Start", "Stop"), bukan "Start “pg17-dev”".** Mengikuti menu macOS yang bertindak pada pilihan (Finder, Mail); target terlihat di halaman. Runner up: judul bernama, yang lebih jelas di VoiceOver tetapi membuat menu berubah setiap pilihan berubah.
+- **Judul generik ("Start", "Stop"), bukan "Start “pg17-dev”".** Mengikuti menu macOS yang bertindak pada pilihan (Finder, Mail); target terlihat di halaman.
 - **Show Inspector dan Hide Inspector sebagai judul yang berganti.** Pola HIG untuk tampilkan dan sembunyikan (sama dengan Show Sidebar). Runner up: satu judul dengan centang.
 - **`SidebarCommands` dipakai, `ToolbarCommands` dan `InspectorCommands` tidak.** `InspectorCommands` membawa shortcut sendiri yang berbeda dengan ⌥⌘I yang sudah diputuskan spec 0022; toolbar Stackly tidak bisa diatur pengguna.
 - **Requirements di peta deskriptif.** Aturan aktif hanya satu (`resolve` atas action); requirements menjadi ekspektasi test penerbit dan fitur 68. Runner up: `resolve` juga mengevaluasi requirements, yang berarti aturan kedua yang bisa menyimpang dari action.

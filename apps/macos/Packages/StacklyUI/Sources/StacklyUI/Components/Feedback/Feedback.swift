@@ -4,7 +4,6 @@ import StacklyClient
 /// The result of an action shown to the person: a tone, a message, and optionally a
 /// detail, a code, and one action (spec 0067, AC-9 and AC-10). A ``FeedbackCenter`` shows
 /// it as a card under the page.
-///
 /// Use it only for the result of something the person did, never for a change that happens
 /// on its own. A failure is always also visible where it happened (Needs Attention, the
 /// item's banner, Operations), so the card is never the only record.
@@ -23,7 +22,6 @@ public struct Feedback: Identifiable {
     public var action: StacklyAction?
 
     /// Creates a feedback.
-    ///
     /// - Parameters:
     ///   - tone: The tone.
     ///   - message: The message.
@@ -78,7 +76,6 @@ public struct Feedback: Identifiable {
 
     /// A failure from the daemon: `critical`, with the daemon's message and hint as
     /// sentences and its error code.
-    ///
     /// - Parameter body: The error of a rejected call or of a failed operation
     ///   (`OperationFailureInfo.error`).
     public static func failure(_ body: ErrorBody) -> Feedback {
@@ -91,7 +88,6 @@ public struct Feedback: Identifiable {
     }
 
     /// The feedback of a mutation's outcome (spec 0067, *Pemetaan hasil mutasi*).
-    ///
     /// - Parameters:
     ///   - outcome: How the mutation ended.
     ///   - success: The feedback to show when it completed, or `nil` for none.

@@ -19,14 +19,14 @@ struct SummaryCard: View {
     var loadFailed = false
     let open: @MainActor () -> Void
 
-    @ScaledMetric(.statusDot) private var dotSize
+    private let dotSize = ScaledSize.statusDot.base
 
     var body: some View {
         Button(action: open) {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 HStack(spacing: Spacing.s6) {
                     Circle().fill(dot).frame(width: dotSize, height: dotSize)
-                        .accessibilityHidden(true)
+
                     Text(label)
                         .font(.callout)
                         .foregroundStyle(StacklyColor.textSecondary)
@@ -38,7 +38,7 @@ struct SummaryCard: View {
                         .foregroundStyle(Tone.caution.text)
                 } else {
                     // Keeps the cards the same height.
-                    Text(" ").font(.subheadline).accessibilityHidden(true)
+                    Text(" ").font(.subheadline)
                 }
             }
             .padding(Spacing.cardInsets)
@@ -47,10 +47,7 @@ struct SummaryCard: View {
             .contentShape(RoundedRectangle(cornerRadius: Radius.large.value))
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spokenLabel(label: label, count: count, note: note))
-        .accessibilityHint(hint)
-        .accessibilityIdentifier(AccessibilityID.Overview.card(kind.rawValue))
+
     }
 
     @ViewBuilder private var numberView: some View {
@@ -97,13 +94,6 @@ struct SummaryCard: View {
         }
     }
 
-    /// "Running, 4, 2 not ready", or just the label while the number has not loaded.
-    static func spokenLabel(label: String, count: Int?, note: String?) -> String {
-        guard let count else {
-            return note.map { "\(label), \($0)" } ?? "\(label), loading"
-        }
-        return [label, "\(count)", note].compactMap { $0 }.joined(separator: ", ")
-    }
 }
 
 /// What the Runtimes card shows (spec 0022, *Kartu ringkasan*).

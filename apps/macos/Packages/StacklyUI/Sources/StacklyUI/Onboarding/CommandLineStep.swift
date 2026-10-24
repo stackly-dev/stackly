@@ -2,13 +2,11 @@ import SwiftUI
 
 /// The Command Line step: its header, the row of the `stackly` command, and a block of
 /// example commands (spec 0016, AC-8).
-///
 /// The state is the `CommandLineToolModel` of the runtime, the same one Diagnostics reads. The
 /// switch and Repair… only ask for a confirmation; only the action button of that confirmation
 /// changes a file. Without the model the row and the PATH note are left out and the examples
 /// stay.
 struct CommandLineStep: View {
-    let focus: AccessibilityFocusState<Bool>.Binding
 
     @Environment(CommandLineToolModel.self) private var model: CommandLineToolModel?
 
@@ -16,13 +14,12 @@ struct CommandLineStep: View {
         VStack(spacing: Spacing.s14) {
             OnboardingStepHeader(
                 title: OnboardingCopy.commandLineTitle,
-                subtitle: OnboardingCopy.commandLineSubtitle, focus: focus)
+                subtitle: OnboardingCopy.commandLineSubtitle)
             if let model {
                 CommandLineRow(model: model)
             }
             ConsoleBlock(
-                text: OnboardingCopy.commandExamplesText,
-                accessibilityLabel: OnboardingCopy.commandExamplesLabel)
+                text: OnboardingCopy.commandExamplesText)
         }
     }
 

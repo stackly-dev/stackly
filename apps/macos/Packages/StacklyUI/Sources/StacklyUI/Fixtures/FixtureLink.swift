@@ -5,7 +5,6 @@
 
     /// A daemon link that plays a ``FixtureScenario``: it opens no socket, starts no
     /// process, and reads no environment (spec 0068).
-    ///
     /// Reads are answered from the scenario's data. A mutation is answered by the
     /// scenario's reply for that method, or fails with `ipc.not_connected` and nothing sent,
     /// exactly like the real app while it is not connected.

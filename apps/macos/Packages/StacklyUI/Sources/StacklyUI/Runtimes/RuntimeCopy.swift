@@ -1,9 +1,6 @@
 import Foundation
 import StacklyClient
 
-/// The words of the Runtimes page and its inspector (spec 0018, *Halaman Runtimes*): the
-/// columns of a row, what VoiceOver reads, and the facts of the inspector.
-///
 /// The daemon decides every state and support verdict; this type only says them. A value a
 /// newer daemon sends and this build does not know is written as neutral text.
 nonisolated public enum RuntimeCopy {
@@ -78,20 +75,6 @@ nonisolated public enum RuntimeCopy {
         return "Used by \(count) \(count == 1 ? "instance" : "instances")"
     }
 
-    /// What VoiceOver reads for a row: "{name}, managed, installed, verified, used by
-    /// {names}".
-    public static func spokenLabel(of runtime: RuntimeSummary) -> String {
-        var parts = [name(of: runtime), source(runtime.installMode).lowercased()]
-        let state = RuntimeAppearance.appearance(of: runtime.state).label
-        parts.append(state.lowercased())
-        if runtime.state == .installed, runtime.installMode == .managed {
-            parts.append("verified")
-        }
-        let users = usedBy(runtime.usedBy)
-        parts.append(users == "Unused" ? "unused" : "used by \(users)")
-        return parts.joined(separator: ", ")
-    }
-
     // MARK: - Inspector
 
     /// The Support row: the status and its reason, such as "Experimental: the runtime ran
@@ -103,7 +86,6 @@ nonisolated public enum RuntimeCopy {
 
     /// The record that decided the support: "Tested on macOS 27.0 (26A428), arm64, Oct 18,
     /// 2026: launch_agent, ready, stop".
-    ///
     /// - Parameters:
     ///   - record: The newest compatibility record.
     ///   - locale: The locale of the date.

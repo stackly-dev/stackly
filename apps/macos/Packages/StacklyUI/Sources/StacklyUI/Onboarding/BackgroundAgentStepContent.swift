@@ -50,7 +50,6 @@ nonisolated struct BackgroundAgentStepContent: Equatable {
     let lastError: String?
 
     /// Builds the content.
-    ///
     /// - Parameters:
     ///   - input: The input of the window banner (`DaemonModel.agentBannerInput`), so the
     ///     banner, the Diagnostics hint, and the card never differ.
@@ -71,7 +70,7 @@ nonisolated struct BackgroundAgentStepContent: Equatable {
     }
 
     /// Whether `a` and `b` are the same row of the table, whatever `isWorking` and the last
-    /// error say. The focus rule of the card reads it.
+    /// error show.
     static func isSameRow(_ a: BackgroundAgentStepContent, _ b: BackgroundAgentStepContent)
         -> Bool
     {

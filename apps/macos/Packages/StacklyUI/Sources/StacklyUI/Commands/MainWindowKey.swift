@@ -3,12 +3,7 @@ import Observation
 import SwiftUI
 
 /// Whether one main window is the key window (spec 0069, AC-4).
-///
-/// The focused value of a window is not enough to switch the shell commands off: a sheet or
-/// an alert sheet stays part of the same scene (checked on macOS 27, see `apps/macos/design.md`,
-/// Commands and shortcuts, P4). The view at the root of the window holds one of these, puts
-/// it in the environment, and ``MainWindowAccessor`` hands it the window. It listens to the
-/// notifications of that window only, so another window becoming key never changes it.
+/// The view at the root of the window holds one of these, puts it in the environment, and ``MainWindowAccessor`` hands it the window. It listens to the notifications of that window only, so another window becoming key never changes it.
 @MainActor @Observable public final class MainWindowKey {
     /// Whether the window is the key window. A sheet, an alert, Settings, or another window
     /// that is key makes it `false`.

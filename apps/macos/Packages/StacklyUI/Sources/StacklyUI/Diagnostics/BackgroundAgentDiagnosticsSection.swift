@@ -26,7 +26,7 @@ struct BackgroundAgentDiagnosticsSection: View {
         return VStack(alignment: .leading, spacing: Spacing.s8) {
             Text("Background Agent")
                 .font(.headline)
-                .accessibilityAddTraits(.isHeader)
+
             DiagnosticsCard(rows: rows)
             HStack(spacing: Spacing.s8) {
                 ForEach(actions, id: \.self) { action in

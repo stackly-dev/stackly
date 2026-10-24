@@ -10,7 +10,4 @@ nonisolated public enum AgentTiming {
     public static let pollInterval: Duration = .seconds(5)
     /// How long Turn On and Start stacklyd wait for the daemon to answer.
     public static let startWait: Duration = .seconds(30)
-    /// The longest an announcement waits for the first status after a loss: the 10 second
-    /// limit of a status call plus 2 seconds.
-    public static let announceWait: Duration = .seconds(12)
 }

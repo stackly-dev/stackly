@@ -40,8 +40,7 @@ struct ShellRuntimeTests {
     static func connectedRuntime() async throws -> (ShellRuntime, CountingLink) {
         let link = CountingLink()
         let model = DaemonModel(
-            link: link.handle, signals: nil, endpoint: nil, launchedAt: DaemonModelTests.launch,
-            announce: { _ in })
+            link: link.handle, signals: nil, endpoint: nil, launchedAt: DaemonModelTests.launch)
         let runtime = ShellRuntime(model: model, closeNotice: CloseNotice(presentsPanel: false))
         let connected = ConnectionState.connected(DaemonModelTests.daemon(.ready))
         link.push.yield(connected)

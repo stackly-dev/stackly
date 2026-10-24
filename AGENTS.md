@@ -75,7 +75,6 @@ Stored in `docs/specs/`. Format: `docs/specs/NNNN-slug/index.md`, with the reaso
 - Every public item in library crates and Swift packages has a doc comment. Code, comments, doc comments, test names, error messages, and commits are in English; scope, spec, and review docs stay in Indonesian. Commits follow `type(scope): subject`.
 - Tests come after each build (`/test`). Domain gets plain unit tests with no fakes. Core gets unit tests against `stackly-testkit` fakes, not mocked adapters. Adapters, daemon, and supervisor get integration tests in each crate's `tests/` against real systems, each with its own ephemeral test root, ports, and guards that reap child processes; never the real Application Support folder, never global state. Take the root from `stackly_testkit::TestRoot` and ports from `stackly_testkit::allocate_port`, and use only fixture credentials, never real ones.
 - Keep PRD IDs (`REQ`, `AC`, `NFR`, `OQ`, and the rest) stable in specs and tests. Test status starts at `NOT_RUN`, a fixture pass is not native runtime evidence, and missing hardware, binaries, or signing is recorded as `BLOCKED`.
-- UI meets WCAG AA contrast, has VoiceOver labels, works fully from the keyboard, and follows Dynamic Type.
 
 ## Tooling
 
@@ -112,3 +111,7 @@ MCP servers: GitHub MCP server (recommended), SQLite MCP pointed only at test ro
 - [clients/swift/AGENTS.md](clients/swift/AGENTS.md): `StacklyClient` package, generated contract types, fixture tests
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
+
+## Interaction policy
+
+The app uses native pointer controls and the regular light and dark palette. Custom screen reader support, keyboard navigation and shortcuts, accessibility display overrides, and UI test identifiers were removed at the user’s request on 2026-10-24. Preserve ordinary menu actions and native text editing.

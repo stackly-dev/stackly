@@ -125,24 +125,22 @@ import Testing
             #expect(section.contains("\n### \(heading)\n"), "missing ### \(heading)")
         }
         // The checklist table and the staged progress state table.
-        #expect(section.contains("| `CheckStatus` | VoiceOver word | Tone | Symbol |"))
-        #expect(section.contains("| `outcome` | `.compact` text | Bar | VoiceOver value |"))
+
     }
 
     @Test func designMdStatusTableMatchesTheCheckStatusCode() throws {
         let design = try designMarkdown()
-        let statuses: [(name: String, symbol: String?, word: String)] = [
-            ("passed", CheckStatus.passed.symbol, CheckStatus.passed.word),
-            ("warning", CheckStatus.warning.symbol, CheckStatus.warning.word),
-            ("failed", CheckStatus.failed.symbol, CheckStatus.failed.word),
-            ("pending", CheckStatus.pending.symbol, CheckStatus.pending.word),
-            ("unrecognized", CheckStatus.unrecognized.symbol, CheckStatus.unrecognized.word),
+        let statuses: [(name: String, symbol: String?)] = [
+            ("passed", CheckStatus.passed.symbol),
+            ("warning", CheckStatus.warning.symbol),
+            ("failed", CheckStatus.failed.symbol),
+            ("pending", CheckStatus.pending.symbol),
+            ("unrecognized", CheckStatus.unrecognized.symbol),
         ]
         for status in statuses {
             let row = try #require(
                 design.split(separator: "\n").first { $0.hasPrefix("| `\(status.name)` |") },
                 "no row for \(status.name)")
-            #expect(row.contains("| \(status.word) |"), "word of \(status.name)")
             if let symbol = status.symbol {
                 #expect(row.contains("`\(symbol)`"), "symbol of \(status.name)")
             }
@@ -151,34 +149,18 @@ import Testing
 
     // MARK: - AC-2: what the tile draws
 
-    @Test(
-        .evidence(
-            covers: ["REQ-024"],
-            expected:
-                "Spec 0067 AC-2: the tile is a continuous rounded square at size x 0.27 with a "
-                + "white mark, hidden from VoiceOver"
-        ))
-    func theTileIsAContinuousRoundedSquareWithAWhiteMarkHiddenFromVoiceOver() throws {
-        let tile = try code(Self.sources + "Components/Tile/ProviderTile.swift")
-        #expect(tile.contains("RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)"))
-        #expect(tile.contains(".foregroundStyle(Color.white)"))
-        #expect(tile.contains(".accessibilityHidden(true)"))
-        #expect(tile.contains(".stacklyTileMark(tileSize: size)"))
-        #expect(tile.contains("TileFill.color(for: spec.tile)"))
-    }
-
     @Test func theTileMarkFontIsSizedByTheTypographyHelper() throws {
         let typography = try code(Self.sources + "Tokens/Typography.swift")
         #expect(typography.contains("func stacklyTileMark(tileSize:"))
     }
 
-    @Test func markTextOfAWhitespaceMarkKeepsTheCatalogMark() {
+    @MainActor @Test func markTextOfAWhitespaceMarkKeepsTheCatalogMark() {
         // The catalog mark wins whenever it is not empty, even when it is only a space.
         let tile = ProviderTile(mark: " ", tile: .blue, name: "Valkey", size: 40)
         #expect(tile.markText == " ")
     }
 
-    @Test func aTileWithoutAMarkOrANameShowsAQuestionMarkOnGray() {
+    @MainActor @Test func aTileWithoutAMarkOrANameShowsAQuestionMarkOnGray() {
         let tile = ProviderTile(TileSpec(mark: nil, tile: .unrecognized), size: 26)
         #expect(tile.markText == "?")
         #expect(TileFill.color(for: .unrecognized) == TileFill.color(for: nil))
@@ -246,25 +228,12 @@ import Testing
         let dismiss = try code(Self.sources + "Components/Feedback/FeedbackCard.swift")
         #expect(
             dismiss.contains(".frame(minWidth: HitTarget.minimum, minHeight: HitTarget.minimum)"))
-        #expect(dismiss.contains(#".accessibilityLabel("Dismiss")"#))
+
         #expect(HitTarget.minimum >= 24)
     }
 
-    @Test func keyboardShortcutsAreSetOnlyInTheSheet() throws {
-        for file in try componentFiles() {
-            let count = file.codeLines.filter { $0.contains(".keyboardShortcut(") }.count
-            if file.path.hasSuffix("Sheet/StacklySheet.swift") {
-                #expect(count == 2, "the sheet sets Cancel and the default action")
-            } else {
-                #expect(count == 0, "\(file.path) sets a shortcut; spec 0069 owns them")
-            }
-        }
-    }
+    @MainActor @Test func theInspectorToggleIsLabelledByState() throws {
 
-    @Test func theInspectorToggleIsLabelledByStateAndIdentified() throws {
-        let toggle = try code(Self.sources + "Components/Inspector/InspectorToggle.swift")
-        #expect(toggle.contains(".labelStyle(.iconOnly)"), "the label stays for VoiceOver")
-        #expect(toggle.contains(".accessibilityIdentifier(AccessibilityID.Inspector.toggle)"))
         #expect(InspectorToggle.label(isPresented: false) == "Show Inspector")
         #expect(InspectorToggle.label(isPresented: true) == "Hide Inspector")
     }

@@ -3,9 +3,7 @@ import SwiftUI
 /// What a page or section shows instead of content: empty, failed, or unsupported. A
 /// symbol, a title, a message, an optional error code, and up to two native buttons,
 /// centered.
-///
-/// ``StateView`` shows it at page size. Use `.section` inside a card for a section that
-/// has its own state. VoiceOver reads it as one group labeled by its title.
+/// ``StateView`` shows it at page size. Use `.section` inside a card for a section that has its own state.
 public struct StatePlaceholder: View {
     /// The size of a placeholder.
     public enum Size: Sendable {
@@ -54,7 +52,6 @@ public struct StatePlaceholder: View {
     private let size: Size
 
     /// A placeholder for empty content: its symbol, title, message, and actions.
-    ///
     /// - Parameters:
     ///   - empty: The empty content, from ``EmptyContent/noData(symbol:title:message:primaryAction:secondaryAction:)``
     ///     or ``EmptyContent/noResults(query:message:clearFilters:)``.
@@ -65,7 +62,6 @@ public struct StatePlaceholder: View {
 
     /// A placeholder for a failed first load: the critical symbol, the title, the daemon's
     /// message and error code, Retry, and Open Diagnostics.
-    ///
     /// - Parameters:
     ///   - failure: The failure content.
     ///   - size: `.page` (default) or `.section`.
@@ -90,7 +86,6 @@ public struct StatePlaceholder: View {
 
     /// A placeholder for a capability that is not supported: the `nosign` symbol, the
     /// title, and the reason, with no action for the capability.
-    ///
     /// - Parameters:
     ///   - unsupported: The unsupported content.
     ///   - size: `.page` (default) or `.section`.
@@ -109,7 +104,7 @@ public struct StatePlaceholder: View {
             Image(systemName: content.symbol)
                 .stacklySymbol(size.symbolSize)
                 .foregroundStyle(content.symbolColor)
-                .accessibilityHidden(true)
+
             Text(content.title)
                 .font(size.titleFont)
                 .multilineTextAlignment(.center)
@@ -142,8 +137,7 @@ public struct StatePlaceholder: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, size.verticalPadding)
         .padding(.horizontal, size.horizontalPadding)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(content.title)
+
     }
 }
 
@@ -220,7 +214,6 @@ public struct InlineEmptyRow: View {
     private let text: String
 
     /// Creates the row.
-    ///
     /// - Parameter text: The sentence, such as "Nothing running.".
     public init(_ text: String) {
         self.text = text

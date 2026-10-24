@@ -1,5 +1,4 @@
 /// The lifecycle state of an instance, as the UI shows it: the ten states of spec 0004.
-///
 /// The app shell (spec 0013) maps the daemon's DTO to this enum with an exhaustive
 /// switch, so a new protocol state fails to compile until the status table covers it.
 nonisolated public enum LifecycleStatus: CaseIterable, Hashable, Sendable {
@@ -85,7 +84,6 @@ nonisolated public struct StatusDetail: Hashable, Sendable {
 }
 
 /// How a status looks: its label, tone, symbol, and at most one detail.
-///
 /// Build it from the status tables of spec 0012 with ``instance(lifecycle:readiness:health:)``
 /// or ``operation(state:partial:)``, and show it with ``StatusLabel`` or ``ToneBadge``. A new
 /// status set (for example runtime states) maps its states to the five tones by meaning,
@@ -96,7 +94,6 @@ nonisolated public struct StatusAppearance: Hashable, Sendable {
     public let label: String
     /// The tone of the status.
     public let tone: Tone
-    /// The SF Symbol that replaces the status dot while Differentiate Without Color is on.
     /// Each state has its own shape, so states of one tone stay apart without color.
     public let symbol: String
     /// The optional detail shown after the label.
@@ -111,11 +108,9 @@ nonisolated public struct StatusAppearance: Hashable, Sendable {
     }
 
     /// The appearance of an instance status, from the instance status table of spec 0012.
-    ///
     /// Readiness is read only while `lifecycle` is `running`, and health only while
     /// readiness is `ready`. "Running" is `positive` only when the instance is running
     /// and ready; running while awaiting the first probe shows "Starting…".
-    ///
     /// - Parameters:
     ///   - lifecycle: The lifecycle state.
     ///   - readiness: The effective readiness from the daemon.
@@ -159,10 +154,8 @@ nonisolated public struct StatusAppearance: Hashable, Sendable {
     }
 
     /// The appearance of an operation status, from the operation status table of spec 0012.
-    ///
     /// Operations show as a ``ToneBadge``, so the symbol is the tone symbol and there is no
     /// detail.
-    ///
     /// - Parameters:
     ///   - state: The operation state.
     ///   - partial: Whether a succeeded operation finished only in part. Ignored for every

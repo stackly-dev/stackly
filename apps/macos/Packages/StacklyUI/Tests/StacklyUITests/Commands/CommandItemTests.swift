@@ -28,31 +28,4 @@ struct CommandItemTests {
         #expect(GroupDivider.shows([], before: 2) == false)
     }
 
-    @Test func aLetterShortcutGoesToSwiftUIAsItIs() throws {
-        let shortcut = try #require(CommandShortcut("r", [.command, .shift]).keyboardShortcut)
-        #expect(shortcut.key == KeyEquivalent("r"))
-        #expect(shortcut.modifiers == [.command, .shift])
-    }
-
-    @Test func shiftedPunctuationGoesAsTheShiftedCharacterWithoutShift() throws {
-        let shortcut = try #require(CommandShortcut("?", .command).keyboardShortcut)
-        #expect(shortcut.key == KeyEquivalent("?"))
-        #expect(shortcut.modifiers == .command)
-    }
-
-    @Test func unshiftedPunctuationKeepsItsKey() throws {
-        let shortcut = try #require(CommandShortcut("[", .command).keyboardShortcut)
-        #expect(shortcut.key == KeyEquivalent("["))
-        #expect(shortcut.modifiers == .command)
-    }
-
-    @Test func everyShortcutInTheMapConverts() {
-        for entry in CommandMap.entries where entry.shortcut != nil {
-            #expect(entry.keyboardShortcut != nil, "\(entry.id)")
-        }
-    }
-
-    @Test func aRowWithoutAShortcutHasNoKeyboardShortcut() {
-        #expect(CommandMap.entry(for: .reconnect).keyboardShortcut == nil)
-    }
 }

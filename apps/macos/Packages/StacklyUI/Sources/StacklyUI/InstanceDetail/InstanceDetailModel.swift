@@ -2,10 +2,6 @@ import Foundation
 import Observation
 import StacklyClient
 
-/// What the detail page holds for one instance (spec 0021, *Tab Summary*): the detail and
-/// the data size the daemon last sent, whether each is loading or failed, and the timers
-/// that reload the detail and announce that the instance is ready.
-///
 /// The instance facts that change often (lifecycle, process, readiness) are not here; the
 /// page reads them from the ``InstanceStore`` summary and tells the model about each new
 /// one. The model reloads the detail when the summary's `revision` moves (after a pause of
@@ -17,9 +13,6 @@ public final class InstanceDetailModel {
     /// The pause before the detail reloads after a revision change: 250 ms
     /// (`DETAIL_RELOAD_DEBOUNCE`).
     public static let reloadDebounce: Duration = .milliseconds(250)
-    /// How long readiness must last before "is ready" is announced: 2 seconds
-    /// (`READY_ANNOUNCE_DELAY`).
-    public static let readyAnnounceDelay: Duration = .seconds(2)
 
     /// The instance this model is for.
     public let instanceId: UUID
@@ -41,42 +34,31 @@ public final class InstanceDetailModel {
 
     @ObservationIgnored private let service: InstanceDetailService
     @ObservationIgnored private let debounce: Duration
-    @ObservationIgnored private let readyDelay: Duration
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
-    @ObservationIgnored private let announce: @MainActor (String) -> Void
     @ObservationIgnored private var reloadTask: Task<Void, Never>?
-    @ObservationIgnored private var readyTask: Task<Void, Never>?
     @ObservationIgnored private var requests = 0
     @ObservationIgnored private var usageRequests = 0
     @ObservationIgnored private var observedRevision: UInt64?
-    @ObservationIgnored private var wasReady: Bool?
 
     /// Creates a model; nothing loads until ``open()``.
-    ///
     /// - Parameters:
     ///   - instanceId: The instance.
     ///   - service: The reads and the event stream.
     ///   - debounce: The pause before a reload after a revision change.
-    ///   - readyDelay: How long readiness must last before it is announced.
-    ///   - sleep: Waits for a duration and throws when cancelled; tests inject one that does
-    ///     not wait.
-    ///   - announce: Posts a VoiceOver announcement.
+    ///   - sleep: Waits for a duration and throws when cancelled; tests inject one that does     not wait.
     public init(
         instanceId: UUID,
         service: InstanceDetailService,
         debounce: Duration = InstanceDetailModel.reloadDebounce,
-        readyDelay: Duration = InstanceDetailModel.readyAnnounceDelay,
+
         sleep: @escaping @Sendable (Duration) async throws -> Void = {
             try await Task.sleep(for: $0)
-        },
-        announce: @escaping @MainActor (String) -> Void = { StacklyUI.announce($0) }
+        }
     ) {
         self.instanceId = instanceId
         self.service = service
         self.debounce = debounce
-        self.readyDelay = readyDelay
         self.sleep = sleep
-        self.announce = announce
     }
 
     // MARK: - What the views read
@@ -147,7 +129,6 @@ public final class InstanceDetailModel {
 
     /// Reads the data size. `refresh` skips the daemon's cache (Recalculate); `cachedOnly`
     /// never starts a measurement. The daemon refuses both together.
-    ///
     /// - Parameters:
     ///   - refresh: Whether to measure again.
     ///   - cachedOnly: Whether to answer from the daemon's cache only.
@@ -169,15 +150,9 @@ public final class InstanceDetailModel {
 
     // MARK: - Following the instance
 
-    /// Tells the model about the summary now: it reloads the detail after a pause when the
-    /// revision moved, and it announces that the instance is ready once readiness lasted
-    /// ``readyAnnounceDelay`` (never for an instance that was already ready on arrival).
-    ///
     /// - Parameters:
     ///   - summary: The summary in the instance store.
-    ///   - announcesReady: Whether readiness is announced. The detail page does; the inspector
-    ///     of the Instances page only keeps the detail current.
-    public func observe(_ summary: InstanceSummary, announcesReady: Bool = true) {
+    public func observe(_ summary: InstanceSummary) {
         if observedRevision != summary.revision {
             let first = observedRevision == nil
             observedRevision = summary.revision
@@ -185,16 +160,7 @@ public final class InstanceDetailModel {
                 scheduleReload()
             }
         }
-        guard announcesReady else { return }
-        let ready = summary.lifecycle == .running && summary.readiness.state == .ready
-        defer { wasReady = ready }
-        guard let wasReady else { return }
-        if ready == false {
-            readyTask?.cancel()
-            readyTask = nil
-        } else if wasReady == false {
-            scheduleReadyAnnouncement(name: summary.name)
-        }
+
     }
 
     private func scheduleReload() {
@@ -208,21 +174,6 @@ public final class InstanceDetailModel {
                 return
             }
             await self?.reload()
-        }
-    }
-
-    private func scheduleReadyAnnouncement(name: String) {
-        readyTask?.cancel()
-        let delay = readyDelay
-        let sleep = sleep
-        readyTask = Task { [weak self] in
-            do {
-                try await sleep(delay)
-            } catch {
-                return
-            }
-            guard let self, Task.isCancelled == false else { return }
-            announce("\(name) is ready.")
         }
     }
 
@@ -240,8 +191,6 @@ public final class InstanceDetailModel {
     /// Stops the timers: the page went away.
     public func close() {
         reloadTask?.cancel()
-        readyTask?.cancel()
         reloadTask = nil
-        readyTask = nil
     }
 }

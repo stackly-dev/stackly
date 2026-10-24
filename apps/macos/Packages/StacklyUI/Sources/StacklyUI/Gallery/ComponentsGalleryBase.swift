@@ -86,8 +86,7 @@
                                 Text("127.0.0.1:5432").font(.callout.monospaced())
                             }
                             CopyButton(
-                                "127.0.0.1:5432", what: "endpoint", style: .icon,
-                                announcement: "Address copied.")
+                                "127.0.0.1:5432", what: "endpoint", style: .icon)
                         }
                     }
                     CardSection(
@@ -125,7 +124,7 @@
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s12) {
                     HStack(spacing: Spacing.s22) {
-                        CopyButton("127.0.0.1:5432", what: "address", key: "gallery")
+                        CopyButton("127.0.0.1:5432", what: "address")
                         CopyButton("127.0.0.1:5432", what: "address", style: .icon)
                     }
                     HStack(spacing: Spacing.s22) {
@@ -152,7 +151,7 @@
                     ConsoleBlock(command: ComponentSamples.longCommand)
                     ConsoleBlock(
                         text: ComponentSamples.multilineText,
-                        accessibilityLabel: "Example",
+
                         copy: ConsoleCopy(what: "example")
                     )
                 }
@@ -202,8 +201,8 @@
             GallerySection(
                 "ActionMenu",
                 note: "The More button of a toolbar. A disabled item says why on a row of its "
-                    + "own right under it (macOS 27: the subtitle is drawn but not exposed to "
-                    + "VoiceOver, see design.md, Menus). The items are also the context menu of "
+                    + "own right under it. The items are also the context menu of "
+                    + ""
                     + "the box. A menu is checked by hand and by the XCUITest of feature 68."
             ) {
                 HStack(alignment: .center, spacing: Spacing.s22) {
@@ -230,7 +229,7 @@
                 "FeedbackCard",
                 note: "An opaque card under the page. Caution, critical, and any card with an "
                     + "action stay until dismissed; the others go after a few seconds, but not "
-                    + "while the pointer is over the card, keyboard focus is in it, or the app "
+                    + "while the pointer is over the card or the app "
                     + "is in the background."
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s8) {
@@ -245,7 +244,7 @@
     }
 
     /// Buttons that send feedback to a center of their own, and a small area with the
-    /// presenter, to try the timing, hover, and focus rules by hand.
+    /// presenter, to try the timing and hover rules by hand.
     private struct FeedbackLiveDemo: View {
         @State private var center = FeedbackCenter()
 

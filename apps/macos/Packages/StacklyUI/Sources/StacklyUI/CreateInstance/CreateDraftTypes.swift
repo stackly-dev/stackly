@@ -30,7 +30,6 @@ nonisolated public enum CreateCategory: CaseIterable, Hashable, Sendable {
 
     /// Whether a runtime of `category` shows under this filter. `testing` shows only under
     /// All, and so does a runtime the catalog does not know.
-    ///
     /// - Parameter category: The category of the runtime's provider, or `nil`.
     public func includes(_ category: ProviderCategory?) -> Bool {
         switch self {
@@ -88,7 +87,6 @@ nonisolated public struct EndpointDraft: Identifiable, Equatable, Sendable {
     }
 
     /// The row a form starts with: Fixed with the default port of the package.
-    ///
     /// - Parameter endpoint: An IP endpoint of the form.
     public init(_ endpoint: CreateEndpoint) {
         self.init(

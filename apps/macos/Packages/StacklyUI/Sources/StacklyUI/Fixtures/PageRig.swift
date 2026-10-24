@@ -166,7 +166,7 @@
                 send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
                 updates: { _ in AsyncStream { $0.finish() } },
                 readOperation: { _ in nil },
-                now: now, announce: { _ in })
+                now: now)
         }
 
         /// A failure the daemon answers when it cannot read its registry.

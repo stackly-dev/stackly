@@ -2,14 +2,7 @@ import StacklyClient
 import SwiftUI
 
 extension SchemaRow {
-    /// What VoiceOver reads for the field: the title, "required" in words, and "set once at
-    /// creation" for a field that cannot change later.
-    public var spokenLabel: String {
-        var label = field.title
-        if showsRequired { label += ", required" }
-        if isSetOnce { label += ", set once at creation" }
-        return label
-    }
+
 }
 
 /// The settings sections of the New Instance sheet, drawn from a ``SchemaFormModel`` and
@@ -35,7 +28,7 @@ struct SchemaFormSections: View {
                         SchemaFieldRow(schema: schema, row: row, draft: draft(row))
                     }
                 }
-                .accessibilityIdentifier(AccessibilityID.CreateInstance.advanced)
+
                 .onChange(of: schema.advancedHasIssue, initial: true) { _, hasIssue in
                     if hasIssue { advancedExpanded = true }
                 }
@@ -84,8 +77,7 @@ struct SchemaFieldRow: View {
                     .foregroundStyle(Tone.critical.text)
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AccessibilityID.CreateInstance.field(row.id))
+
     }
 
     private var errors: [String] { schema.errorTexts(for: row.id) }
@@ -106,18 +98,15 @@ struct SchemaFieldRow: View {
                 copyFromLabels: schema.copyFromLabels)
         case .text:
             TextField(title, text: text)
-                .accessibilityLabel(row.spokenLabel)
-                .accessibilityHint(errors.joined(separator: " "))
+
         case .integer:
             TextField(title, text: text)
                 .multilineTextAlignment(.trailing)
                 .monospacedDigit()
-                .accessibilityLabel(row.spokenLabel)
-                .accessibilityHint(errors.joined(separator: " "))
+
         case .toggle:
             Toggle(title, isOn: toggle)
-                .accessibilityLabel(row.spokenLabel)
-                .accessibilityHint(errors.joined(separator: " "))
+
         case .choice(let values):
             Picker(title, selection: text) {
                 if text.wrappedValue.isEmpty || !values.contains(text.wrappedValue) {
@@ -126,8 +115,7 @@ struct SchemaFieldRow: View {
                 ForEach(values, id: \.self) { Text($0).tag($0) }
             }
             .pickerStyle(.menu)
-            .accessibilityLabel(row.spokenLabel)
-            .accessibilityHint(errors.joined(separator: " "))
+
         case .list:
             SchemaListEditor(schema: schema, row: row)
         case .unrecognized:
@@ -193,12 +181,12 @@ struct SchemaListEditor: View {
                         Image(systemName: "minus.circle")
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("Remove \(row.field.title) item")
+
                     .disabled(!canRemove)
                 }
             }
             Button("Add") { schema.addItem(to: row.id) }
-                .accessibilityLabel("Add \(row.field.title) item")
+
                 .disabled(!canAdd)
         }
     }

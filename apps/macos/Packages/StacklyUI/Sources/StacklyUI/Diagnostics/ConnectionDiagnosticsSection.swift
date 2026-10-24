@@ -2,7 +2,6 @@ import SwiftUI
 
 /// The Connection section at the top of the Diagnostics page: a card with one row per fact
 /// about the connection to stacklyd, then Reconnect or Refresh, and Copy Details.
-///
 /// It opens even while the daemon is down. Reconnect shows while there is no connection,
 /// disabled with its reason while the app is misconfigured; Refresh shows while there is
 /// one. Copy Details copies exactly the rows on screen. Every value wraps, the socket path
@@ -22,7 +21,6 @@ public struct ConnectionDiagnosticsSection: View {
     private let refresh: @MainActor () -> Void
 
     /// Creates the section.
-    ///
     /// - Parameters:
     ///   - diagnostics: What to show.
     ///   - isReconnecting: Whether a connection attempt runs now: Reconnect is disabled and
@@ -64,7 +62,7 @@ public struct ConnectionDiagnosticsSection: View {
         VStack(alignment: .leading, spacing: Spacing.s8) {
             Text("Connection")
                 .font(.headline)
-                .accessibilityAddTraits(.isHeader)
+
             DiagnosticsCard(rows: rows)
             HStack(spacing: Spacing.s8) {
                 if presentation.hasConnection {
@@ -99,7 +97,7 @@ public struct ConnectionDiagnosticsSection: View {
                 ProgressView()
                     .controlSize(.small)
                     .transition(StacklyMotion.crossfade)
-                    .accessibilityLabel("Connecting")
+
             }
         }
     }
@@ -165,14 +163,6 @@ private struct DiagnosticsRowStyle: LabeledContentStyle {
             configuration.content
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // Selectable text keeps an outer accessibility element with the first value it
-        // showed, so the spoken element is built from the same label and value without it.
-        .accessibilityRepresentation {
-            HStack {
-                configuration.label
-                configuration.content
-            }
-            .accessibilityElement(children: .combine)
-        }
+
     }
 }

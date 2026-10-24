@@ -3,7 +3,6 @@ import StacklyClient
 
 /// The key value rows of the detail panel (spec 0017, *Layar Catalog (GUI)*): License,
 /// Source, Download, Disk, Requires, Dependencies, Publisher, Revision, and Trust.
-///
 /// License, Source, Download, Disk, Requires, and Dependencies read only the artifacts for
 /// this Mac, the ones whose OS and architecture equal the catalog's host. That filters
 /// what is shown; it never changes a status, which the daemon computes.
@@ -34,7 +33,6 @@ nonisolated struct ProviderFacts: Equatable {
     let trust: String
 
     /// Reads the rows from a provider detail.
-    ///
     /// - Parameters:
     ///   - detail: The detail the daemon sent.
     ///   - host: This Mac, from the catalog info.

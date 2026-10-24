@@ -46,7 +46,7 @@ struct CommandLineCard: View {
                 } icon: {
                     Image(systemName: Tone.critical.symbol)
                         .foregroundStyle(Tone.critical.fill)
-                        .accessibilityHidden(true)
+
                 }
                 .padding(.horizontal, Spacing.s4)
             }
@@ -81,7 +81,7 @@ struct CommandLineCard: View {
                     .stacklyCode()
                 CopyButton(
                     OnboardingCopy.commandLinePathLine, what: OnboardingCopy.commandLinePathWhat,
-                    style: .text, announcement: OnboardingCopy.copied)
+                    style: .text)
             }
             if let path = content.runDirectlyPath {
                 VStack(alignment: .leading, spacing: Spacing.s2) {

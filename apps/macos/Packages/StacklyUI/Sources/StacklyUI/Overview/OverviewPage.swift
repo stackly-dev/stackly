@@ -3,7 +3,6 @@ import SwiftUI
 
 /// The Overview (spec 0022, *Halaman Overview*): four cards, Needs Attention, the first
 /// instances, and the operations that run, in two columns when the page is wide enough.
-///
 /// Every number comes from the stores, through pure functions: ``InstanceCounts``,
 /// ``AttentionRules``, and ``OperationTitle``. No number shows before its store loaded, and
 /// a section that fails on its own never changes the shape of the page.
@@ -34,7 +33,6 @@ public struct OverviewPage: View {
     private let openDiagnostics: @MainActor () -> Void
 
     /// Creates the page.
-    ///
     /// - Parameters:
     ///   - instances: The instance store.
     ///   - catalog: The catalog, for the provider names and tiles, or `nil`.
@@ -226,14 +224,12 @@ public struct OverviewPage: View {
 
     /// What the operation center holds, read one way for the Operations section and for
     /// Needs Attention (spec 0022, 2026-10-22).
-    ///
     /// Unsupported comes first, also when the store still holds the data of an earlier daemon,
     /// because `ResourceStore` marks a store unsupported without dropping `loadedAt`. Loaded
     /// data wins over a later failed refresh. A failure with nothing loaded is `.failed`, and
     /// `nil` means the first answer has not come. The page does not read a failed snapshot again
     /// itself: `ShellSync` does on the next `.caughtUp`, and a snapshot that works clears both
     /// `error` and `unsupported`.
-    ///
     /// - Parameters:
     ///   - active: The operations that have not ended.
     ///   - loaded: Whether a snapshot ever loaded.
@@ -315,7 +311,6 @@ public struct OverviewPage: View {
     }
 
     /// The state of the page: the fixed order of ``ViewState/resolve(unsupported:value:error:lastLoadedAt:isRefreshing:emptyContent:outdated:partial:)``.
-    ///
     /// The page is never empty: the Instances section shows its own empty state.
     static func state(
         counts: InstanceCounts?, error: ErrorBody?, unsupported: Bool, waiting: FailureContent?,

@@ -14,8 +14,7 @@ nonisolated public enum ProviderMark {
     }
 }
 
-/// The fill of a tile by ``TileColor``: a system color, so macOS supplies the Increase
-/// Contrast variant (spec 0067, *Warna tile*).
+/// The system color used to fill a provider tile.
 nonisolated enum TileFill {
     /// The system color of `color`; gray for `nil`, `.gray`, and `.unrecognized`.
     static func color(for color: TileColor?) -> NSColor {

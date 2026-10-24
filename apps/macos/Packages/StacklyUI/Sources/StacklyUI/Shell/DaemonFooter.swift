@@ -1,14 +1,11 @@
 import SwiftUI
 
 /// The sidebar footer: the daemon status and the Settings button.
-///
-/// The status is a ``StatusLabel`` in the `.row` context, read by VoiceOver as
-/// "Status: stacklyd running". The Settings button opens the Settings scene, like ⌘,.
+/// The Settings button opens the Settings scene, like ⌘,.
 public struct DaemonFooter: View {
     private let status: StatusAppearance
 
     /// Creates the footer.
-    ///
     /// - Parameter status: The footer status from ``ShellPresentation/footer``.
     public init(status: StatusAppearance) {
         self.status = status
@@ -19,7 +16,7 @@ public struct DaemonFooter: View {
         HStack(spacing: Spacing.s8) {
             StatusLabel(status, context: .row)
                 .font(.callout)
-                .accessibilityIdentifier(AccessibilityID.DaemonFooter.status)
+
                 .frame(maxWidth: .infinity, alignment: .leading)
             SettingsLink {
                 Label("Settings", systemImage: "slider.horizontal.3")
@@ -30,7 +27,7 @@ public struct DaemonFooter: View {
             }
             .buttonStyle(.borderless)
             .help("Settings (⌘,)")
-            .accessibilityLabel("Settings")
+
         }
         .padding(
             EdgeInsets(

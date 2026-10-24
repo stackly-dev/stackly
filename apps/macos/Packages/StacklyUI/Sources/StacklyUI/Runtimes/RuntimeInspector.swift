@@ -3,7 +3,6 @@ import SwiftUI
 
 /// The inspector of the Runtimes page for one runtime (spec 0018, *Halaman Runtimes*): the
 /// header and the facts `stackly runtime inspect` prints.
-///
 /// The facts the list row carries show at once; the rest (path, sizes, signature, the
 /// executables, the dependencies, and the compatibility record) wait for `runtime.get`,
 /// and a runtime that failed to load shows its failure with Retry. The inspector is a
@@ -80,7 +79,7 @@ struct RuntimeInspector: View {
             }
         }
         .labeledContentStyle(.stackly)
-        .accessibilityIdentifier(AccessibilityID.Runtimes.inspector)
+
     }
 
     // MARK: - Pieces
@@ -91,7 +90,7 @@ struct RuntimeInspector: View {
             ProgressView()
                 .controlSize(.small)
                 .frame(maxWidth: .infinity)
-                .accessibilityLabel("Loading \(row.name)")
+
         case .failed(let failure):
             StateBanner(
                 tone: .critical, title: failure.title, message: failure.message,
@@ -134,7 +133,7 @@ struct RuntimeInspector: View {
                     .multilineTextAlignment(.trailing)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            CopyButton(text, what: what, style: .icon, key: key)
+            CopyButton(text, what: what, style: .icon)
         }
     }
 

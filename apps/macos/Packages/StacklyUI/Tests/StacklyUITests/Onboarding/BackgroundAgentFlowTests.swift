@@ -144,15 +144,4 @@ struct BackgroundAgentFlowTests {
         #expect(content.action == .openLoginItems)
     }
 
-    @Test func theLastErrorOfAFailedTurnOnIsAnnouncedByTheModelOnce() async throws {
-        let rig = Rig(initialProbe: DaemonModelAgentTests.fresh())
-        try await rig.push(DaemonModelTests.unreachable())
-        let error = AgentActionError.os(
-            op: .register, kind: .invalidSignature, domain: "d", code: 3)
-        rig.controller.setAfterRegister(.failure(error))
-        await rig.agent?.run(.turnOn)
-        let content = try #require(Self.card(rig))
-        #expect(content.lastError == "macOS rejected the signature of this build.")
-        #expect(rig.announced.filter { $0 == error.message }.count == 1)
-    }
 }

@@ -196,17 +196,6 @@ struct StacklyActionTests {
 
     // MARK: - source
 
-    @Test func theViewsStayNativeAndKeepKeyboardShortcutsToFeature69() throws {
-        let folder = "apps/macos/Packages/StacklyUI/Sources/StacklyUI/Components/Actions"
-        for name in try SourceTree.files(under: folder).filter({ $0.hasSuffix(".swift") }) {
-            let file = SourceFile(
-                path: name, text: try String(contentsOf: SourceTree.url(of: name), encoding: .utf8))
-            let code = file.codeLines.joined(separator: "\n")
-            #expect(code.contains("keyboardShortcut") == false, "\(name) sets a shortcut")
-            #expect(code.contains("onTapGesture") == false, "\(name) taps without a button")
-        }
-    }
-
     @Test(
         .evidence(
             covers: ["REQ-026"], expected: "Spec 0067 AC-7: a destructive button is never prominent"
@@ -220,8 +209,7 @@ struct StacklyActionTests {
         .codeLines.joined(separator: "\n")
         #expect(code.contains("prominence == .primary && !action.role.isDestructive"))
         #expect(code.contains("Button(role: action.role.isDestructive ? .destructive : nil"))
-        #expect(code.contains(".accessibilityValue(\"In progress\")"))
-        #expect(code.contains("AccessibilityID.Action.button(action.id)"))
+
     }
 
     @Test func theMenuUsesTheReasonPathTheStepOneCheckChose() {

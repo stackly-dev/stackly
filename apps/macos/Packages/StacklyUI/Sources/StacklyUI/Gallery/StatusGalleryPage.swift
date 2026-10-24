@@ -115,7 +115,7 @@
             Text(text)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(StacklyColor.textSecondary)
-                .accessibilityAddTraits(.isHeader)
+
         }
     }
 
@@ -126,9 +126,7 @@
             GallerySection(
                 "Instance Status",
                 note: "StatusLabel in the standard context (cards, banners, sheets, panels). "
-                    + "The label is never cut; the detail truncates first. The right column "
-                    + "shows the Differentiate Without Color look, which the system setting "
-                    + "turns on for every label."
+                    + "The label is never cut; the detail truncates first."
             ) {
                 Grid(
                     alignment: .leading, horizontalSpacing: Spacing.s16, verticalSpacing: Spacing.s8
@@ -136,16 +134,12 @@
                     GridRow {
                         ColumnHeading("Lifecycle, readiness, health")
                         ColumnHeading("Standard")
-                        ColumnHeading("Differentiate Without Color")
                     }
                     Divider()
                     ForEach(InstanceSample.all) { sample in
                         GridRow {
                             InputText(sample.input)
                             StatusLabel(sample.appearance)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            StatusLabel(sample.appearance)
-                                .environment(\.showsStatusSymbols, true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
@@ -160,7 +154,6 @@
 
     private struct RowContextSection: View {
         @State private var selection: InstanceSample.ID? = InstanceSample.all[9].id
-        @State private var showsSymbols = false
 
         var body: some View {
             GallerySection(
@@ -169,7 +162,6 @@
                     + "the primary color. Select a row and focus the list to see the dot and "
                     + "symbols turn primary too."
             ) {
-                Toggle("Show Differentiate Without Color look", isOn: $showsSymbols)
                 List(InstanceSample.all, selection: $selection) { sample in
                     HStack(spacing: Spacing.s12) {
                         Text(sample.input)
@@ -181,7 +173,6 @@
                     }
                 }
                 .listStyle(.inset)
-                .environment(\.showsStatusSymbols, showsSymbols)
                 .frame(height: 440)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.medium.value))
             }
@@ -194,9 +185,7 @@
         var body: some View {
             GallerySection(
                 "Operation Status",
-                note: "ToneBadge for every operation state. Turn on Increase Contrast to see "
-                    + "the 1 pt tone border. The right column shows the Differentiate Without "
-                    + "Color look, with the tone symbol in front of the label."
+                note: "ToneBadge for every operation state."
             ) {
                 Grid(
                     alignment: .leading, horizontalSpacing: Spacing.s16, verticalSpacing: Spacing.s8
@@ -204,15 +193,12 @@
                     GridRow {
                         ColumnHeading("Operation state")
                         ColumnHeading("Badge")
-                        ColumnHeading("Differentiate Without Color")
                     }
                     Divider()
                     ForEach(OperationSample.all) { sample in
                         GridRow {
                             InputText(sample.input)
                             ToneBadge(sample.appearance)
-                            ToneBadge(sample.appearance)
-                                .environment(\.showsStatusSymbols, true)
                         }
                     }
                 }
@@ -234,7 +220,7 @@
             GallerySection(
                 "Section Icons",
                 note: "SectionIcon draws each section's symbol in its system color. It is "
-                    + "hidden from VoiceOver; the section label carries the meaning."
+                    + "the section label carries the meaning."
             ) {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.s12) {
                     ForEach(SectionStyle.allCases, id: \.self) { section in

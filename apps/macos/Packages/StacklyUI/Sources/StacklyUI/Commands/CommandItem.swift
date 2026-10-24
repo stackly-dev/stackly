@@ -11,10 +11,6 @@ struct CommandContext {
     var appActions: [CommandID: @MainActor () -> Void] = [:]
 }
 
-/// One item of the menu bar, drawn from the row of its command in ``CommandMap``: title,
-/// shortcut, and kind come from the map and whether it is on comes from
-/// ``CommandItemState/resolve(_:shell:page:)`` (spec 0069, AC-1, AC-5).
-///
 /// When a disabled item has a reason of its own, the way the reason shows follows
 /// ``MenuReasonPath/current``: as a disabled item right under it.
 struct CommandItem: View {
@@ -22,7 +18,6 @@ struct CommandItem: View {
     private let context: CommandContext
 
     /// Creates the item.
-    ///
     /// - Parameters:
     ///   - id: The command.
     ///   - context: What the focused window published.
@@ -46,14 +41,14 @@ struct CommandItem: View {
         switch entry.kind {
         case .button:
             Button(state.title) { state.run?() }
-                .keyboardShortcut(entry.keyboardShortcut)
+
                 .disabled(state.isEnabled == false)
         case .toggle:
             Toggle(
                 state.title,
                 isOn: Binding(get: { state.isChecked }, set: { _ in state.run?() })
             )
-            .keyboardShortcut(entry.keyboardShortcut)
+
             .disabled(state.isEnabled == false)
         case .system:
             EmptyView()
@@ -72,7 +67,6 @@ struct GroupDivider: View {
     private let shown: Bool
 
     /// Creates the divider before `group`.
-    ///
     /// - Parameters:
     ///   - menu: The menu.
     ///   - submenu: The submenu, or `nil` for the menu itself.

@@ -42,7 +42,7 @@
         var body: some View {
             GallerySection(
                 "Color",
-                note: "Custom tokens hold light, dark, and high contrast values. Every other "
+                note: "Custom tokens hold light and dark values. Every other "
                     + "neutral is a system color."
             ) {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.s12) {
@@ -70,7 +70,7 @@
                             .strokeBorder(Color(nsColor: .separatorColor))
                     }
                     .frame(width: 44, height: 44)
-                    .accessibilityHidden(true)
+
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text(name)
                         .font(.body.weight(.semibold))
@@ -89,10 +89,8 @@
 
         private var hexValues: String {
             let values = [
-                token.components(scheme: .light, contrast: .standard),
-                token.components(scheme: .dark, contrast: .standard),
-                token.components(scheme: .light, contrast: .increased),
-                token.components(scheme: .dark, contrast: .increased),
+                token.components(scheme: .light),
+                token.components(scheme: .dark),
             ]
             return values.map(\.galleryHex).joined(separator: " ")
         }
@@ -105,7 +103,7 @@
                     .stacklySymbol(size: 22, relativeTo: .body)
                     .foregroundStyle(StacklyColor.decorative)
                     .frame(width: 44, height: 44)
-                    .accessibilityHidden(true)
+
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text("decorative")
                         .font(.body.weight(.semibold))
@@ -230,8 +228,7 @@
             GallerySection(
                 "Tones",
                 note: "Fill is a system color for dots, icons, and tints. Text colors pass AA "
-                    + "on plain surfaces and on their own tint. Turn on Increase Contrast to "
-                    + "see the high contrast text and the 1 pt borders."
+                    + "on plain surfaces and on their own tint."
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s12) {
                     ForEach(ToneSample.all, id: \.tone) { sample in
@@ -243,8 +240,8 @@
     }
 
     private struct ToneRow: View {
-        @ScaledMetric(.statusDot) private var dotSize
-        @ScaledMetric(.badgeHeight) private var badgeHeight
+        private let dotSize = ScaledSize.statusDot.base
+        private let badgeHeight = ScaledSize.badgeHeight.base
 
         let sample: ToneSample
 
@@ -254,10 +251,10 @@
                     Circle()
                         .fill(sample.tone.fill)
                         .frame(width: dotSize, height: dotSize)
-                        .accessibilityHidden(true)
+
                     Image(systemName: sample.tone.symbol)
                         .foregroundStyle(sample.tone.fill)
-                        .accessibilityHidden(true)
+
                     Text(verbatim: "\(sample.tone)")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(sample.tone.text)
@@ -296,7 +293,7 @@
                 Image(systemName: sample.tone.symbol)
                     .stacklySymbol(.bannerSymbol)
                     .foregroundStyle(sample.tone.fill)
-                    .accessibilityHidden(true)
+
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text(sample.bannerTitle)
                         .font(.body.weight(.semibold))
@@ -312,7 +309,7 @@
             .frame(minWidth: 220, maxWidth: .infinity, alignment: .leading)
             .padding(Spacing.s12)
             .toneSurface(sample.tone, on: base, strength: .banner)
-            .accessibilityElement(children: .combine)
+
         }
     }
 
@@ -511,7 +508,7 @@
                         Rectangle()
                             .fill(Tone.informative.fill)
                             .frame(width: value, height: 10)
-                            .accessibilityHidden(true)
+
                         Text("\(Int(value)) pt")
                             .font(.callout)
                             .stacklyNumeric()
@@ -538,7 +535,7 @@
                         Color.clear
                             .frame(width: 72, height: 48)
                             .cardSurface(radius: radius)
-                            .accessibilityHidden(true)
+
                         Text(verbatim: "Radius.\(radius) · \(Int(radius.value)) pt")
                             .font(.callout)
                             .foregroundStyle(StacklyColor.textSecondary)
@@ -566,7 +563,7 @@
         var body: some View {
             GallerySection(
                 "Scaled sizes",
-                note: "Named @ScaledMetric defaults. Custom hit targets are at least "
+                note: "Named layout sizes. Custom hit targets are at least "
                     + "\(Int(HitTarget.minimum)) × \(Int(HitTarget.minimum)) pt."
             ) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -583,7 +580,7 @@
     }
 
     private struct ScaledSizeRow: View {
-        @ScaledMetric private var scaled: CGFloat
+        private let scaled: CGFloat
 
         let name: String
         let size: ScaledSize
@@ -591,7 +588,7 @@
         init(name: String, size: ScaledSize) {
             self.name = name
             self.size = size
-            _scaled = ScaledMetric(size)
+            scaled = size.base
         }
 
         var body: some View {
@@ -600,7 +597,7 @@
                     .fill(Tone.informative.fill)
                     .frame(width: scaled, height: scaled)
                     .frame(width: 48)
-                    .accessibilityHidden(true)
+
                 Text("ScaledSize.\(name)")
                     .stacklyCode()
                 Text(
@@ -624,7 +621,7 @@
             GallerySection(
                 "Motion",
                 note: "Status changes, banners, and state changes crossfade in 0.2 s, also "
-                    + "under Reduce Motion. Nothing moves, slides, or scales."
+                    + "in the app. Nothing moves, slides, or scales."
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s12) {
                     Button(isBannerShown ? "Hide Banner" : "Show Banner") {

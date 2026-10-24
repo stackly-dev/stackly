@@ -11,7 +11,6 @@ public protocol OnboardingRecordStore: AnyObject {
 }
 
 /// The store of the running app: the `onboarding.finished` key of the app's `UserDefaults`.
-///
 /// Launch with `-onboarding.finished NO` to see the onboarding again without deleting
 /// anything.
 public final class UserDefaultsOnboardingRecordStore: OnboardingRecordStore {
@@ -21,7 +20,6 @@ public final class UserDefaultsOnboardingRecordStore: OnboardingRecordStore {
     private let defaults: UserDefaults
 
     /// Creates a store.
-    ///
     /// - Parameter defaults: The defaults to use, the app's standard ones by default.
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -47,7 +45,6 @@ public final class InMemoryOnboardingRecordStore: OnboardingRecordStore {
     public private(set) var writes = 0
 
     /// Creates a store.
-    ///
     /// - Parameter isFinished: The value to start with.
     public init(isFinished: Bool = false) {
         self.isFinished = isFinished

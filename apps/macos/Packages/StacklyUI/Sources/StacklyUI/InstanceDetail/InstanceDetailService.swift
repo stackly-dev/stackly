@@ -19,7 +19,6 @@ nonisolated public struct InstanceDetailService: Sendable {
     public var secrets: SecretsClient
 
     /// Creates a service.
-    ///
     /// - Parameters:
     ///   - detail: Reads the detail of one instance.
     ///   - usage: Reads the data size of one instance with `refresh` and `cachedOnly`.
@@ -41,7 +40,6 @@ nonisolated public struct InstanceDetailService: Sendable {
     }
 
     /// A service over the detail methods of a client.
-    ///
     /// - Parameters:
     ///   - client: The detail methods.
     ///   - secrets: The secret methods.
@@ -65,7 +63,6 @@ nonisolated public struct InstanceDetailService: Sendable {
 extension InstanceDetailService {
     /// The service of the running app: the reads go through the model's link, the events come
     /// from its ``ShellSync``, and the secret methods are its own.
-    ///
     /// - Parameter model: The daemon model of the window.
     static func live(_ model: DaemonModel) -> InstanceDetailService {
         InstanceDetailService(

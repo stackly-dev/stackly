@@ -19,7 +19,7 @@ struct LiveOperationCenterTests {
         let daemon = try LiveDaemon(recordsEvidence: false)
         try await daemon.start()
         let parts = ShellEndToEndTests.shell(
-            for: daemon, announcements: ShellEndToEndTests.Announcements())
+            for: daemon)
         let model = parts.runtime.model
         try await ShellEndToEndTests.waitUntilRefreshed(model, "the shell to connect and refresh")
         let probe = await model.read(

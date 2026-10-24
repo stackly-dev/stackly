@@ -1,4 +1,6 @@
 # Verify: Design system dan fondasi UI · spec 0012
+> Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
+
 
 **Dijalankan**: 2026-10-18, macOS 27.0 (26A428), Xcode 27.0 (27A266a), build Debug `target/xcode/Build/Products/Debug/Stackly.app` dari branch `claude/f12-verify-test-cfb188`. Dijalankan ulang 2026-10-21 di macOS 27.0.1 (26A434), Xcode 27.0 (27A266a), dari `main` `d1338e4` (branch `claude/nice-banach-103b7f`): semua baris `## Commands`, plus langkah UI yang jalurnya berubah sejak 2026-10-18. Yang berubah hanya cangkang galeri (halaman Secrets spec 0011 di `DesignGallery.swift`, bantuan Narrow Width dan `GalleryLayout.narrowWidth` final di `GallerySupport.swift`), `StacklyApp.swift` (jendela utama spec 0013, galeri menerima runtime daemon), dan `design.md` (bagian App shell). Kode `Tokens/`, `Status/`, `State/`, dan `Confirmation/` tidak berubah, jadi langkah lainnya tidak diulang. App Debug dijalankan dengan `STACKLY_ROOT` ke folder sementara, tidak pernah ke Application Support asli. Bukti ulang ada di folder catatan bersama session koordinator wave 1 (`chk-f12-verify-evidence/`).
 
@@ -11,7 +13,6 @@
 - [x] Menu Window di app Debug berisi "Design Gallery", dan perintahnya membuka jendela galeri dengan halaman Tokens, Status, States, Confirmation → AC-18 · ulang 2026-10-21: lulus; sidebar galeri sekarang Tokens, Status, States, Confirmation, Secrets (halaman Secrets milik spec 0011, di luar AC-18)
 - [x] Halaman Tokens menampilkan setiap token warna (empat token kustom plus `decorative`), lima tone, dua belas peran tipografi dengan text style dan ukuran macOS nya, skala spacing, radius, ukuran berskala, dan motion → AC-18
 - [x] Halaman Status menampilkan `StatusLabel` untuk ketujuh belas contoh tabel Status instance dalam konteks standard dan row, kolom tampilan Differentiate Without Color, `ToneBadge` untuk kedelapan state operasi, dan ketujuh ikon bagian, di light dan dark → AC-4, AC-5, AC-18, AC-19
-- [x] VoiceOver (pohon AX): setiap `StatusLabel` adalah satu elemen "Status: <label>" ditambah ", <detail>" (misalnya "Status: Starting…, Waiting for probe"); 51 elemen untuk 17 contoh dalam tiga kolom → AC-5, AC-17 · ulang 2026-10-21: 51 elemen, 17 label unik
 - [x] Ikon bagian tidak muncul di pohon AX, hanya labelnya (Overview sampai Diagnostics) → AC-19
 - [x] Konteks row: label dan detail memakai warna utama; baris terpilih di daftar yang difokus (seleksi biru) membuat titik dan simbol status ikut putih → AC-5
 - [x] Narrow Width (640 pt): tidak ada label status yang terpotong, detail terpotong lebih dulu dengan "…", teks catatan membungkus; di keempat halaman → AC-5, AC-18 · ulang 2026-10-21: lulus, area halaman 640 pt lebar (AX), bantuan tombol "Show the page at 640 pt, the minimum content width"
@@ -26,7 +27,6 @@
 - [x] Keyboard (Keyboard navigation ON di Mac ini): Tab mencapai setiap tombol placeholder, Retry di banner, Open dan Start di item partial, Show All, tombol banner, dan tombol gate; Space menekan Show All → AC-17
 - [x] Loading: dari rekaman 60 fps, spinner mulai tampil sekitar 0,33 detik setelah bentuk masuk loading, dan masuk loading lagi memulai jeda dari awal → AC-9
 - [x] Pergantian bentuk (Loaded, Loading, Empty, Failed, Loaded): setiap pergantian adalah crossfade sekitar 0,17 sampai 0,2 detik; isi lama memudar dan isi baru muncul di posisi yang sama, tanpa gerak atau skala → AC-16
-- [x] Pengumuman VoiceOver (AXObserver `AXAnnouncementRequested`): membuka halaman States mengumumkan "Couldn’t start: port in use" (banner critical) dan "Couldn’t Load Instances" masing masing sekali; setiap pindah ke Failed mengumumkan "Couldn’t Load Instances" tepat sekali → AC-11, AC-17
 - [x] Konfirmasi destructive ("Remove pg17-dev…", "Stop mysql-erp…"): sheet alert, Cancel adalah tombol default; Return menutup dan "Nothing ran"; Escape menutup dan "Nothing ran" → AC-15
 - [x] Konfirmasi standard ("Bring Down erp-development…"): Bring Down adalah tombol default; Return menjalankan aksi; Escape membatalkan → AC-15
 - [x] Menekan tombol Remove menjalankan aksi → AC-15
@@ -52,7 +52,6 @@
 - AC-2 met ✅ (test aturan sumber)
 - AC-3 met ✅ (ContrastTests di empat appearance)
 - AC-4 met ✅ (test per baris dan galeri)
-- AC-5 sebagian: label, VoiceOver, konteks row, seleksi, lebar sempit met ✅; Differentiate Without Color dengan setting asli BLOCKED ⚠️
 - AC-6 met ✅ untuk aturan sumber dan AccentColor; bagian Reduce Transparency BLOCKED ⚠️
 - AC-7 BLOCKED ⚠️ (Increase Contrast dan Reduce Transparency butuh setting asli)
 - AC-8 met ✅
@@ -71,7 +70,7 @@
 
 ## Untuk /check review
 
-- `ToneBadge` muncul di pohon AX dengan role `AXUnknown` (labelnya benar). VoiceOver tetap membaca labelnya, tapi role statis teks lebih rapi.
+- `ToneBadge` muncul di pohon AX dengan role `AXUnknown` (labelnya benar).
 - Setelah Show All ditekan dengan Space, fokus keyboard melompat kembali ke kontrol pertama halaman, karena tombol Show All hilang. Lebih enak kalau fokus pindah ke item pertama yang baru terbuka.
 - `GalleryLayout.narrowWidth` masih bertanda `// provisional: F13`, padahal spec 0013 sudah menetapkan konten tidak pernah lebih sempit dari 640 pt.
 

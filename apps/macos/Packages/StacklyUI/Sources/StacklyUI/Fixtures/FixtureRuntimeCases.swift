@@ -5,7 +5,6 @@
     /// The managed runtime cases of the fixtures (spec 0068 added by spec 0018): the
     /// runtimes `runtime.list` and `runtime.get` answer, the install that has not ended,
     /// and the artifact `runtime.resolve` names. Runtime external stays with feature 56.
-    ///
     /// Every value comes from the generated contract types, every time from
     /// ``FixtureClock``, and every ID from ``FixtureID``: a runtime case has the number of
     /// the instance case that uses it, so `usedBy` lines up with
@@ -90,7 +89,6 @@
 
         /// The detail of `summary`: the fixture detail with the summary, the digest, and the
         /// path of that runtime.
-        ///
         /// - Parameter summary: A runtime of the fixtures.
         public static func detail(of summary: RuntimeSummary) -> RuntimeDetail {
             let digest = summary.artifactSha256 ?? digest(0)

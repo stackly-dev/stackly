@@ -2,7 +2,6 @@ import SwiftUI
 
 /// The header of an inspector (spec 0067, AC-18): a 40 pt tile, the title, a subtitle, the
 /// status, and an optional row of actions, all in the middle of the column.
-///
 /// The title is `.title2.weight(.semibold)`. The texts are centered and wrap, so nothing is
 /// cut at the narrowest column. The tile is decoration, so the title always stands in text.
 /// The actions are usually ``ActionButton``s; they sit side by side when they fit and
@@ -15,7 +14,6 @@ public struct InspectorHeader<Actions: View>: View {
     private let actions: Actions
 
     /// Creates a header with actions.
-    ///
     /// - Parameters:
     ///   - title: The name of the selected item.
     ///   - subtitle: A second line, for example the provider and version.
@@ -46,7 +44,7 @@ public struct InspectorHeader<Actions: View>: View {
             Text(title)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(.primary)
-                .accessibilityAddTraits(.isHeader)
+
             if let subtitle {
                 Text(subtitle)
                     .font(.callout)
@@ -72,7 +70,6 @@ public struct InspectorHeader<Actions: View>: View {
 
 extension InspectorHeader where Actions == EmptyView {
     /// Creates a header without actions.
-    ///
     /// - Parameters:
     ///   - title: The name of the selected item.
     ///   - subtitle: A second line, for example the provider and version.

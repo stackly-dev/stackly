@@ -14,7 +14,7 @@ struct OverviewInstanceList: View {
     var body: some View {
         if rows.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.s6) {
-                Text("Instances").font(.headline).accessibilityAddTraits(.isHeader)
+                Text("Instances").font(.headline)
                 StatePlaceholder(
                     InstancesPage.noInstances(browseCatalog: browseCatalog, newInstance: nil),
                     size: .section
@@ -70,9 +70,7 @@ struct OverviewInstanceRow: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(row.spokenLabel)
-                .accessibilityIdentifier(AccessibilityID.Overview.instance(row.id))
+
                 ActionButton(action, showsReason: false)
                     .controlSize(.small)
                     .help(action.disabledReason ?? action.title)

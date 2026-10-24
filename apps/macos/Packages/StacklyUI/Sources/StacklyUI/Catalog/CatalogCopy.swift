@@ -4,7 +4,6 @@ import StacklyClient
 /// The words of the Catalog screen (spec 0017, *Copy* and *Nilai asing*): names of OSes,
 /// architectures, categories, and capabilities, the text of every reason, sizes, and the
 /// toolbar subtitle.
-///
 /// The daemon decides status, reason, and install verdict; this type only says them. A
 /// value a newer daemon sends and this build does not know is written as neutral text,
 /// never guessed into another value.
@@ -68,7 +67,6 @@ nonisolated public enum CatalogCopy {
     // MARK: - Reasons
 
     /// The sentence behind a status or a verdict.
-    ///
     /// - Parameters:
     ///   - reason: The reason the daemon sent.
     ///   - os: The OS the reason is about, for the "No {OS} build" sentence and the names
@@ -127,13 +125,6 @@ nonisolated public enum CatalogCopy {
         }
     }
 
-    /// What VoiceOver reads for a matrix cell: "{OS}, {status}: {reason}", or "{OS},
-    /// {status}" without a reason.
-    public static func spokenText(for cell: TargetSupport) -> String {
-        let head = "\(osName(cell.os)), \(CatalogAppearance.appearance(of: cell.status).label)"
-        return reasonText(for: cell).map { "\(head): \($0)" } ?? head
-    }
-
     // MARK: - Trust and source
 
     /// The Trust row of the detail panel.
@@ -156,7 +147,6 @@ nonisolated public enum CatalogCopy {
 
     /// The name of the catalog's source in the stale note: "the bundled catalog" or "the
     /// development catalog".
-    ///
     /// The names start in lowercase on purpose: `StaleNote` capitalizes the first letter
     /// when the name opens a sentence.
     public static func sourceName(_ source: CatalogSourceKind) -> String {
@@ -168,9 +158,7 @@ nonisolated public enum CatalogCopy {
     }
 
     /// The toolbar subtitle: "Official · updated Oct 20, 2026".
-    ///
     /// It always says when the catalog was published and never claims it is the newest.
-    ///
     /// - Parameters:
     ///   - info: The catalog the daemon loaded.
     ///   - locale: The locale of the date.
@@ -192,7 +180,6 @@ nonisolated public enum CatalogCopy {
 
     /// A byte count the way the CLI writes it: decimal SI, "6.8 MB", "48.1 MB", "1.2 GB".
     /// It is the `.file` style of `ByteCountFormatter`, in the digits of `locale`.
-    ///
     /// - Parameters:
     ///   - bytes: The size in bytes.
     ///   - locale: The locale of the digits.
@@ -207,7 +194,6 @@ nonisolated public enum CatalogCopy {
         "This provider isn’t available yet. It will appear here once packaging and tests pass."
 
     /// The meta line of a card, under the name.
-    ///
     /// - Parameter provider: The provider.
     public static func metaLine(of provider: ProviderSummary) -> String {
         switch provider.state {

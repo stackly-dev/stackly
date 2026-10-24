@@ -47,7 +47,6 @@ nonisolated public enum CatalogCategory: String, CaseIterable, Identifiable, Has
 }
 
 /// What the Catalog screen filters by: the category segment and the search text.
-///
 /// Neither is saved: a new window starts with All and an empty field.
 nonisolated public struct CatalogFilter: Equatable, Sendable {
     /// The chosen segment.
@@ -56,7 +55,6 @@ nonisolated public struct CatalogFilter: Equatable, Sendable {
     public var query: String
 
     /// Creates a filter.
-    ///
     /// - Parameters:
     ///   - category: The chosen segment, All by default.
     ///   - query: The search text, empty by default.
@@ -80,9 +78,7 @@ nonisolated public struct CatalogFilter: Equatable, Sendable {
     }
 
     /// The providers that pass, in the order given (the daemon's display order).
-    ///
     /// The search matches the display name or the ID, ignoring case and diacritics.
-    ///
     /// - Parameter providers: The providers to filter.
     public func apply(to providers: [ProviderSummary]) -> [ProviderSummary] {
         let needle = trimmedQuery
@@ -98,7 +94,6 @@ nonisolated public struct CatalogFilter: Equatable, Sendable {
 
     /// The provider the page selects: `selected` while it is visible, else the first
     /// visible one, else `nil`.
-    ///
     /// - Parameters:
     ///   - selected: The ID the user chose last, or `nil`.
     ///   - visible: The providers that pass the filter.

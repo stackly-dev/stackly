@@ -5,7 +5,6 @@
         /// Builds a shell that plays `scenario`: a ``DaemonModel`` over a ``FixtureLink`` and
         /// its signals, on the fixture clock. It never opens a socket, reads
         /// `STACKLY_ROOT`, starts a process, or writes defaults or a file (spec 0068).
-        ///
         /// - Parameter scenario: The scenario to play.
         /// - Returns: The runtime, already started.
         public static func fixture(_ scenario: FixtureScenario) -> ShellRuntime {

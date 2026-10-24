@@ -1,13 +1,11 @@
 import Foundation
 
 /// A request to confirm one action, shown by ``SwiftUI/View/stacklyConfirmation(item:)``.
-///
 /// Confirm an action that deletes or overwrites data, deletes a record or a runtime,
 /// kills a process without a graceful stop, or disturbs another owner. Start, stop, and
 /// restart without dependents, reload, copy, cancelling an operation, and cleaning up a
 /// cache that can be downloaded again run without one. `apps/macos/design.md`
 /// (Confirmation) lists every action and its role.
-///
 /// The copy follows fixed rules: the title is a question that names the object, in
 /// curly quotes when it is an identifier ("Remove “pg17-dev”?"); the message says what
 /// happens and then what stays safe ("Data is kept."); the action title is the verb from
@@ -38,7 +36,6 @@ public struct ConfirmationRequest {
     let id = UUID()
 
     /// Creates a confirmation request.
-    ///
     /// - Parameters:
     ///   - title: The question, naming the object.
     ///   - message: What happens, then what stays safe.
@@ -81,7 +78,6 @@ extension ConfirmationRequest {
     nonisolated static let genericActionTitles: Set<String> = ["ok", "okay", "yes"]
 
     /// Every way this request breaks the copy rules; empty when it follows them.
-    ///
     /// Tests of a screen call it on each request the screen builds.
     var copyProblems: [ConfirmationCopyProblem] {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)

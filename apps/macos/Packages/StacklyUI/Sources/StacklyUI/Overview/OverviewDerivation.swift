@@ -3,7 +3,6 @@ import StacklyClient
 
 /// The numbers and rows the Overview derives from the instances (spec 0022 AC-14: "model
 /// turunan halaman dihitung ulang hanya saat input nya berubah").
-///
 /// The page body runs again for any store it reads, such as the operation center. This
 /// keeps the last result and the input it came from, so an event that does not change an
 /// instance, the catalog, or the failed refetches gives the same value without grouping
@@ -31,7 +30,6 @@ final class OverviewDerivation {
     private var last: (input: Input, value: Value)?
 
     /// The value for the input: the one held when the input is the same, else a new one.
-    ///
     /// - Parameters:
     ///   - summaries: The instances.
     ///   - providers: The catalog, or `nil` before it loaded.

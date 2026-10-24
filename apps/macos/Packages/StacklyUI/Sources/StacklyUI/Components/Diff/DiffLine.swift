@@ -26,18 +26,9 @@ nonisolated public enum DiffKind: Equatable, Sendable {
         }
     }
 
-    /// The word VoiceOver reads before the text.
-    public var word: String {
-        switch self {
-        case .added: "Added"
-        case .removed: "Removed"
-        case .unchanged: "Unchanged"
-        }
-    }
 }
 
 /// One line of a ``DiffView``.
-///
 /// Feature 29 fills it from a config diff or a drift.
 nonisolated public struct DiffLine: Identifiable, Equatable, Sendable {
     /// The position of the line in the diff; it is the stable key.
@@ -48,7 +39,6 @@ nonisolated public struct DiffLine: Identifiable, Equatable, Sendable {
     public var text: String
 
     /// Creates a line.
-    ///
     /// - Parameters:
     ///   - id: The position of the line in the diff.
     ///   - kind: Added, removed, or unchanged.
@@ -59,9 +49,4 @@ nonisolated public struct DiffLine: Identifiable, Equatable, Sendable {
         self.text = text
     }
 
-    /// What VoiceOver reads for the line: "Added: {text}", "Removed: {text}", or
-    /// "Unchanged: {text}".
-    public var accessibilityLabel: String {
-        "\(kind.word): \(text)"
-    }
 }

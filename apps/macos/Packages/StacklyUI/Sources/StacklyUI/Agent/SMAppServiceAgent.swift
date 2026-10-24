@@ -5,7 +5,6 @@ import Synchronization
 /// The live ``BackgroundAgentControlling``: `SMAppService.agent(plistName:)` for the bundle
 /// the app runs from (spec 0015, *GUI*). It is the only file that imports
 /// `ServiceManagement`.
-///
 /// Each call checks the bundle first, like the Rust adapter: the bundle identifier, the
 /// LaunchAgent plist, and `stacklyd` must be there. The OS call runs off the main actor
 /// with a 10 second limit; a late answer is dropped and the OS call finishes on its own.

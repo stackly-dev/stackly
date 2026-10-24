@@ -259,7 +259,7 @@
                     StateFrame(
                         title: "Failed",
                         note: "The first load failed: the daemon's message and code, Retry, and "
-                            + "Open Diagnostics. VoiceOver announces it once.",
+                            + "Open Diagnostics.",
                         height: 340,
                         state: .resolve(
                             value: nil,
@@ -375,7 +375,7 @@
         var body: some View {
             GallerySection(
                 "Shape Changes",
-                note: "Shape changes crossfade in 0.2 s, also under Reduce Motion. Entering "
+                note: "Shape changes crossfade in 0.2 s. Entering "
                     + "Loading starts the 300 ms delay over."
             ) {
                 Picker("Shape", selection: $step) {
@@ -458,7 +458,7 @@
             GallerySection(
                 "Banners",
                 note: "StateBanner per tone: the tone symbol always shows, the body is callout "
-                    + "textSecondary, and the tint is opaque. A critical banner is announced "
+                    + "textSecondary, and the tint is opaque. A critical banner is shown "
                     + "once. The last one sits on the window base, like the shell's banner."
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s12) {

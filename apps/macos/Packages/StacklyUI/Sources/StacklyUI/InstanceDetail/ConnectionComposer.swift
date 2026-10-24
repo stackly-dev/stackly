@@ -4,7 +4,6 @@ import StacklyClient
 /// Joins the parts of a connection string with the secret values the person asked for (spec
 /// 0021, AC-3): text parts as they are, secret parts as the percent encoded value of their
 /// reference.
-///
 /// A pure function, written a second time in Rust (`stackly_protocol::instance::connection::
 /// compose`) for the CLI; both give the same string for every case of
 /// `protocols/fixtures/instance/connection-compose.json`. A value that is missing is an
@@ -19,7 +18,6 @@ nonisolated public enum ConnectionComposer {
     }
 
     /// Joins `parts`.
-    ///
     /// - Parameters:
     ///   - parts: The parts of one connection string, as the daemon sent them.
     ///   - values: The secret values by reference. A value nobody asked for is ignored.
@@ -48,7 +46,6 @@ nonisolated public enum ConnectionComposer {
     }
 
     /// The references the parts need, without repeats, in order.
-    ///
     /// - Parameter parts: The parts of one connection string.
     public static func references(in parts: [ConnectionPart]) -> [String] {
         var seen = Set<String>()
@@ -56,10 +53,8 @@ nonisolated public enum ConnectionComposer {
     }
 
     /// The function a ``RevealModel`` calls with the revealed values, over `parts`.
-    ///
     /// It captures the parts, which hold no value, and reads each revealed value only while
     /// it joins them.
-    ///
     /// - Parameter parts: The parts of one connection string.
     public static func composer(for parts: [ConnectionPart]) -> RevealModel.Compose {
         { revealed in

@@ -254,7 +254,7 @@ App Debug dijalankan dari Xcode dengan `STACKLY_ROOT=$R` di scheme Stackly. Peri
 8. `instance create broken ... --set-json failInit=true --wait`: gagal `supervisor.init_failed`, baris "broken" Failed; `operation abandon <op> --yes`.
 9. `instance create slow ... --set-json initDelayMs=20000` tanpa `--wait`; begitu `ps` menunjukkan `stackly-fake-server init`, `kill -9` daemon lalu jalankan lagi: satu baris "slow" Failed, `operation inspect <op>` `needs_recovery`; `operation abandon <op> --yes`.
 10. `instance stop <id> --wait`: baris berubah ke Stopped; `ps` tidak menunjukkan proses fake.
-11. Keyboard dan VoiceOver di daftar: setiap baris membacakan nama, provider dan versi, dan status.
+11. interaksi desktop di daftar: setiap baris membacakan nama, provider dan versi, dan status.
 12. Hentikan daemon, keluar dari app, lalu hapus folder `$R` kalau sudah selesai.
 
 ### Evidence

@@ -1,7 +1,6 @@
 import Foundation
 
 /// The shape of a page or section that loads data from the daemon.
-///
 /// Build it only with ``resolve(unsupported:value:error:lastLoadedAt:isRefreshing:emptyContent:outdated:partial:)``
 /// and show it with ``StateView``. The order of the shapes is fixed: unsupported, then
 /// failed (only before any data loaded), then loading, then empty, then loaded. Once data
@@ -20,17 +19,14 @@ public enum ViewState<Value> {
     case loaded(Value, notes: ContentNotes)
 
     /// Resolves the shape from what a screen's view model holds, in the fixed order:
-    ///
     /// 1. `unsupported` is set: `.unsupported`.
     /// 2. No `value` and an `error`: `.failed`.
     /// 3. No `value`: `.loading`.
     /// 4. `emptyContent(value)` returns content: `.empty`.
     /// 5. Otherwise: `.loaded`.
-    ///
     /// The notes of `.empty` and `.loaded` carry a stale note when a refresh failed
     /// (`value` and `error` both set; it wins over `outdated`) or when `outdated` is set,
     /// plus `partial` and `isRefreshing` as given.
-    ///
     /// - Parameters:
     ///   - unsupported: Why the capability is not supported, or `nil` when it is.
     ///   - value: The last data that loaded, before any filter. Keep it through refreshes
@@ -114,7 +110,6 @@ public struct StateAction {
     var isBusy: Bool
 
     /// Creates an action.
-    ///
     /// - Parameters:
     ///   - title: The button title, a verb.
     ///   - mutates: Whether the action changes data through the daemon. Copy,
@@ -169,7 +164,6 @@ public struct EmptyContent {
 
     /// Empty content for data that loaded and holds nothing, for example "No Instances"
     /// with Browse Catalog and New Instance….
-    ///
     /// - Parameters:
     ///   - symbol: The SF Symbol of the page or section.
     ///   - title: The title, such as "No Instances".
@@ -195,7 +189,6 @@ public struct EmptyContent {
 
     /// Empty content for a filter or search that left nothing: the `magnifyingglass`
     /// symbol, the title "No Results for “<query>”", and Clear Filters.
-    ///
     /// - Parameters:
     ///   - query: The search text or filter name, quoted in the title.
     ///   - message: A suggestion, such as "Check the spelling or try another status."
@@ -227,7 +220,6 @@ nonisolated public struct FailureContent: Hashable, Sendable {
     public var code: String?
 
     /// Creates failure content.
-    ///
     /// - Parameters:
     ///   - title: The screen's title.
     ///   - message: The daemon's message.
@@ -247,7 +239,6 @@ nonisolated public struct UnsupportedContent: Hashable, Sendable {
     public var reason: String
 
     /// Creates unsupported content.
-    ///
     /// - Parameters:
     ///   - title: The title.
     ///   - reason: The reason, shown as the message.
@@ -268,7 +259,6 @@ public struct ContentNotes {
     public var isRefreshing: Bool
 
     /// Creates notes.
-    ///
     /// - Parameters:
     ///   - stale: Why the content may be out of date, or `nil`.
     ///   - partial: The items that are not ready yet, or `nil`.
@@ -288,7 +278,6 @@ public struct PartialNote {
     public var items: [PartialItem]
 
     /// Creates a partial note.
-    ///
     /// - Parameters:
     ///   - summary: The summary.
     ///   - items: The items that are not ready.
@@ -311,7 +300,6 @@ public struct PartialItem: Identifiable {
     public var id: String { name }
 
     /// Creates an item.
-    ///
     /// - Parameters:
     ///   - name: The item's name, unique in its list.
     ///   - reason: Why the item is not ready.

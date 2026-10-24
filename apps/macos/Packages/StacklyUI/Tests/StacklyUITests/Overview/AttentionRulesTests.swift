@@ -302,14 +302,4 @@ struct AttentionRulesTests {
         #expect(all.first?.id == "disk")
     }
 
-    @Test func theSpokenLabelStartsWithTheLevel() throws {
-        let all = try items()
-        let critical = try #require(all.first { $0.tone == .critical })
-        #expect(critical.spokenLabel.hasPrefix("Critical: "))
-        let caution = try #require(all.first { $0.tone == .caution })
-        #expect(caution.spokenLabel.hasPrefix("Warning: "))
-        let neutral = try #require(all.first { $0.tone == .neutral })
-        #expect(neutral.spokenLabel.hasPrefix("Info: "))
-        #expect(critical.spokenHint.hasPrefix("Opens "))
-    }
 }

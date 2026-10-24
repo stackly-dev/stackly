@@ -15,7 +15,6 @@ nonisolated struct CatalogTrustContent: Equatable {
 
     /// Builds the row. The first matching case wins, so a catalog the daemon already
     /// reported stays on screen when a later refresh fails (spec 0012, AC-8).
-    ///
     /// - Parameters:
     ///   - info: The catalog the daemon loaded, or `nil` before the first snapshot.
     ///   - error: The error of the last snapshot.

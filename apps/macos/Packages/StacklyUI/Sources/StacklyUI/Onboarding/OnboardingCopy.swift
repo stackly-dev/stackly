@@ -1,8 +1,6 @@
 import Foundation
 
-/// Every piece of text the onboarding shows or announces (spec 0016, *Copy*). Views and
-/// announcements read from here and write no text of their own, so the copy test and the
-/// scan for forbidden phrases cover all of it.
+/// The visible text of the onboarding flow.
 nonisolated public enum OnboardingCopy {
     // MARK: - Steps and footer
 
@@ -14,16 +12,6 @@ nonisolated public enum OnboardingCopy {
     /// The footer text of a step, such as `Step 2 of 5 · Background Agent`.
     static func stepText(number: Int, label: String) -> String {
         "Step \(number) of \(stepLabels.count) · \(label)"
-    }
-
-    /// What VoiceOver says for a step, and the announcement when the step changes.
-    static func stepSpoken(number: Int, label: String) -> String {
-        "Step \(number) of \(stepLabels.count), \(label)"
-    }
-
-    /// What VoiceOver announces once when the step changes.
-    static func stepAnnouncement(number: Int, label: String) -> String {
-        stepSpoken(number: number, label: label) + "."
     }
 
     /// The label of the Back button.
@@ -184,7 +172,6 @@ nonisolated extension OnboardingCopy {
     static let agentUnavailableTitle = "Stackly couldn’t check its background service"
 
     /// The detail of that row.
-    ///
     /// - Parameter detail: What the model knows, such as "timed out", or `nil`.
     static func agentUnavailableDetail(_ detail: String?) -> String {
         detail.map { "macOS didn’t answer (\($0)). Check again in a moment." }
@@ -230,11 +217,9 @@ nonisolated extension OnboardingCopy {
     static let commandLinePathLine = #"export PATH="$HOME/.local/bin:$PATH""#
     /// What the Copy button of the PATH line names.
     static let commandLinePathWhat = "PATH line"
-    /// What VoiceOver says after the PATH line is copied.
     static let copied = "Copied."
     /// What introduces the path of the command inside the app.
     static let commandLineRunDirectly = "Or run it directly:"
-    /// The VoiceOver label of the example block.
     static let commandExamplesLabel = "Example commands"
     /// The commands of the example block; commands of later features join with them
     /// (spec 0016, *Fitur yang belum ada*).

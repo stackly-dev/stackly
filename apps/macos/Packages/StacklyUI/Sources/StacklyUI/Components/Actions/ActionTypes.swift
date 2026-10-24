@@ -1,7 +1,6 @@
 /// The copy of the confirmation an action asks for before it runs: the same three parts
 /// as a ``ConfirmationRequest``, without the role and the action, which
 /// ``StacklyAction`` adds.
-///
 /// The copy follows the confirmation rules of `apps/macos/design.md`: the title is a
 /// question naming the object, the message says what happens and what stays safe, and the
 /// action title is the verb from the title.
@@ -14,7 +13,6 @@ nonisolated public struct ActionConfirmation: Equatable, Sendable {
     public var actionTitle: String
 
     /// Creates the confirmation copy.
-    ///
     /// - Parameters:
     ///   - title: The question, naming the object.
     ///   - message: What happens, then what stays safe.
@@ -27,7 +25,6 @@ nonisolated public struct ActionConfirmation: Equatable, Sendable {
 }
 
 /// What kind of action it is, and the confirmation it carries.
-///
 /// A destructive action always carries a confirmation, so one without a dialog cannot be
 /// written.
 nonisolated public enum ActionRole: Equatable, Sendable {

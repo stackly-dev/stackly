@@ -12,7 +12,6 @@
 
     nonisolated extension InstanceSummary {
         /// An instance with the defaults of a stopped instance; pass what differs.
-        ///
         /// - Parameters:
         ///   - number: The case number, for the ID and the runtime ID.
         ///   - name: The instance name.
@@ -111,7 +110,6 @@
 
     nonisolated extension OperationSummary {
         /// An operation with the defaults of a queued one; pass what differs.
-        ///
         /// - Parameters:
         ///   - number: The case number, for the ID.
         ///   - kind: The operation kind.
@@ -238,7 +236,6 @@
     nonisolated extension DaemonHealth {
         /// A daemon health with `status`, healthy subsystems unless `degraded` names one, and
         /// zero counters.
-        ///
         /// - Parameters:
         ///   - status: The overall status.
         ///   - degraded: The name of one subsystem to report `degraded`.

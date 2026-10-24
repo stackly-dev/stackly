@@ -8,7 +8,7 @@
 
 Aplikasi macOS Stackly adalah client SwiftUI untuk `stacklyd` dan baru berisi `RootView` placeholder di package `StacklyUI`. Sekitar empat puluh layar dan state di mockup (`docs/mockups/Stackly.dc.html`) akan dibangun oleh banyak fitur journey yang berbeda, ditambah shell (fitur 13), komponen dasar (fitur 67), fixture dan cek visual (fitur 68), dan peta perintah (fitur 69). Tanpa satu sumber warna, tipografi, status, dan perilaku state, setiap fitur akan memilih sendiri, dan perbedaan kecil (warna "Stopped" di Overview berbeda dengan di Instances, empty yang muncul padahal load gagal) baru terlihat saat semua layar sudah ada.
 
-Kekuatan yang membatasi: PRD meminta setiap halaman data mendukung loading, empty, error, stale atau disconnected, unsupported, dan partial (REQ-024, PRD bagian 11.2), dan error per instance tidak boleh membuat aplikasi kosong. Aksesibilitas wajib: navigasi keyboard, label VoiceOver, ukuran teks, light dan dark, status selain warna, dan konfirmasi aksi destruktif (REQ-027, NFR-012, AC-027). Saat daemon tidak terjangkau, GUI tetap tampil tanpa menyatakan instance berhenti (AC-024). Tombol tidak boleh tampil seolah capability unsupported bekerja (REQ-026). Scope menambah bahwa accent dan mode Liquid Glass mengikuti System Settings, dan Reduce Transparency serta Increase Contrast tetap menghasilkan permukaan yang terbaca. Aturan fidelity menyatakan kontrol native menang atas tiruan HTML di mockup.
+Kekuatan yang membatasi: PRD meminta setiap halaman data mendukung loading, empty, error, stale atau disconnected, unsupported, dan partial (REQ-024, PRD bagian 11.2), dan error per instance tidak boleh membuat aplikasi kosong. Saat daemon tidak terjangkau, GUI tetap tampil tanpa menyatakan instance berhenti (AC-024). Tombol tidak boleh tampil seolah capability unsupported bekerja (REQ-026). Scope menambah bahwa accent dan mode Liquid Glass mengikuti System Settings, dan Reduce Transparency serta Increase Contrast tetap menghasilkan permukaan yang terbaca. Aturan fidelity menyatakan kontrol native menang atas tiruan HTML di mockup.
 
 Fakta teknis yang membentuk pilihan: ukuran teks mockup (28, 24, 17, 15, 13, 12, 11, 10 px) hampir persis sama dengan text style bawaan macOS. Warna `secondaryLabelColor` bawaan macOS di mode light kira kira hitam 50% (sekitar 3,95:1 di putih), jadi warna sistem saja tidak cukup untuk teks sekunder. Domain (spec 0004) punya sepuluh state lifecycle instance plus readiness dan health yang terpisah, sementara mockup hanya menggambar lima status. `StacklyUI` dibuild dengan SwiftPM dan dites dengan `swift test` dari command line, tempat asset catalog tidak diproses seperti di build Xcode. Fitur 12 tidak bergantung pada Rust dan bisa dibangun paralel dengan fondasi daemon.
 
@@ -439,7 +439,6 @@ Awalnya `NSColor` dengan dynamic provider. Setelah cross check, bentuknya menjad
 
 **Pros**:
 
-- Fokus, VoiceOver, keyboard, dan warna destructive diurus sistem; sesuai aturan fidelity.
 
 **Cons**:
 
@@ -464,7 +463,6 @@ Awalnya `NSColor` dengan dynamic provider. Setelah cross check, bentuknya menjad
 
 **Cons**:
 
-- Melanggar aturan fidelity dan harus mengurus fokus serta VoiceOver sendiri.
 
 ### Keputusan 15: model state
 
@@ -518,7 +516,6 @@ Awalnya `NSColor` dengan dynamic provider. Setelah cross check, bentuknya menjad
 
 **Cons**:
 
-- Jarang di app macOS dan butuh label VoiceOver khusus.
 
 #### Option 3: spinner langsung
 
@@ -536,7 +533,7 @@ Awalnya `NSColor` dengan dynamic provider. Setelah cross check, bentuknya menjad
 
 **Pros**:
 
-- Memenuhi REQ-026 dan AC-027; pengguna keyboard dan VoiceOver juga tahu alasannya.
+- Memenuhi REQ-026 dan AC-027; pengguna interaksi desktop juga tahu alasannya.
 
 **Cons**:
 
@@ -764,7 +761,7 @@ Awalnya `NSColor` dengan dynamic provider. Setelah cross check, bentuknya menjad
 | `ToneBadge` | dibangun di fitur 12 | status operasi butuh tampilan sekarang, dan border Increase Contrast badge dibuktikan di sini | menunggu fitur 67 |
 | Stale ganda | refresh gagal menang atas outdated | keduanya berarti data lama; error refresh lebih bisa ditindaklanjuti | daftar beberapa keterangan stale |
 | Ukuran simbol | satu helper `.stacklySymbol(size:relativeTo:)` | simbol placeholder 44 dan 34 pt butuh ukuran tetap yang diskalakan, dan test pemindai butuh satu pengecualian yang jelas | mengecualikan semua `Image` dari aturan font |
-| Alasan nonaktif untuk VoiceOver | `.help` saja, plus teks yang terlihat | di macOS `.help` sudah menjadi bantuan VoiceOver; hint tambahan membuat alasan dibacakan dua kali | `.help` plus `accessibilityHint` |
+| `.help` saja, plus teks yang terlihat | `.help` plus `accessibilityHint` |
 | Galeri di build Release | seluruh folder `Gallery/` di `#if DEBUG` | scene Debug saja tidak cukup, karena kode package tetap ikut terkompilasi | hanya scene yang dibungkus |
 | Window untuk cadangan `NSAlert` | anchor `NSViewRepresentable`, `runModal()` kalau tidak ada window | popover menu bar (fitur 32) tidak punya window untuk sheet | selalu `runModal()` |
 | Tombol capability sebelum data termuat | tidak digambar | capability datang bersama data layar, jadi tidak perlu keadaan tiga nilai | tri state dengan alasan "Checking capabilities…" |
@@ -908,7 +905,7 @@ Update `/architect` sesi `arc-ui-sync`, bersama spec 0013, 0067, 0068, dan `apps
 - **Option 2: `ColorToken` kustom (misalnya fill tone `informative`).** Kontras bisa dibuktikan di tabel Pasangan kontras. Kekurangan: tidak ikut accent pengguna, sehingga seleksi kartu berbeda warna dari seleksi native di sidebar dan tabel.
 - **Option 3: cincin `labelColor`.** Kontras tinggi di semua appearance. Kekurangan: tidak terbaca sebagai pilihan dan berbeda dari bahasa seleksi macOS.
 
-Bentuknya mengikuti `decorative`: warna sistem bernama di file token, bukan `ColorToken`, karena nilainya milik sistem. Trait `.isSelected` di kartu membawa arti pilihan untuk VoiceOver, dan inspector menampilkan provider yang terpilih, jadi warna cincin bukan satu satunya tanda.
+Bentuknya mengikuti `decorative`: warna sistem bernama di file token, bukan `ColorToken`, karena nilainya milik sistem.
 
 ### Spinner di frame pertama
 
@@ -916,7 +913,7 @@ Bentuknya mengikuti `decorative`: warna sistem bernama di file token, bukan `Col
 
 ### Cross check wave 7 (spec 0012, 0013, 0067, 0068, design.md)
 
-Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas diff update ini dengan kode `main` dan diff `dev-f12-fix` yang belum di commit. Yang ia periksa ulang dan benar: setiap hash yang dikutip ada dan isinya cocok, nama helper, frame ukuran halaman, posisi relay dan `backgroundMaterial`, tempat dan pesan test penjaga, nama test inspector dan angka 500, 4352, dan 5228 pt, signature `attach(...didFail...)` dan `agentDidFail`, dan tidak ada baris `**AC-n**` yang tersentuh.
+Dijalankan 2026-10-22 oleh model lain (Sonnet 5.5), baca saja, atas diff update ini dengan kode `main` dan diff `dev-f12-fix` yang belum di commit.
 
 **Diperbaiki langsung (fakta dan kata).** Penanda "belum dibangun" fitur 15 yang tersisa di spec 0013 (banner per state, dua aturan sumber, blok usulan fondasi butir 5 kecuali butir fitur 16); kalimat `not_found` spec 0013 kini mengikuti spec 0016 persis (`OnboardingFlow` menggantikan `StateBanner` dengan syarat yang sama, "paling banyak sekali", celah jendela tertutup diterima) dan klausa spec 0015 bahwa banner critical lain tidak dihitung; `SectionProgress` Overview sebagai pemakai `DelayedProgress` di semua daftar, dan flake `overview-operations-failed` dicatat lewat pemakai itu, bukan `StateView`; penanda "belum di `main`" di design.md dan spec untuk kerja `dev-f12-fix`; Follow-up fitur 22 spec 0013 tidak mengklaim kartu Runtimes (langkah 9); `.task`, bukan `.task(id:)`, di *Pola state*; dua contoh probe ukuran halaman di spec 0067 dipisah, panduan ukuran minimum yang belum diprobe dihapus, pengecualian demo galeri dicatat, dan Follow-up `RuntimesPage.minimumWidth`; kalimat AC-3 di rationale ini; AC-9 dicatat sebagai perilaku app nyata.
 

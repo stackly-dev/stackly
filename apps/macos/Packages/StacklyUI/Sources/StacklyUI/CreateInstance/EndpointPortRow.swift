@@ -4,7 +4,6 @@ import SwiftUI
 /// One endpoint of the draft (spec 0020, *Port*): the label "Port · {name}", Fixed or
 /// Automatic, the port or the note that it comes at start, and under it what the preflight
 /// found for the endpoint.
-///
 /// A taken Fixed port says so with a symbol and words and offers the free port the daemon
 /// found; the offer is applied only by the button, never on its own.
 struct EndpointPortRow: View {
@@ -21,18 +20,16 @@ struct EndpointPortRow: View {
                     .labelsHidden()
                     .pickerStyle(.segmented)
                     .fixedSize()
-                    .accessibilityIdentifier(
-                        AccessibilityID.CreateInstance.portMode(endpoint.name))
+
                     switch endpoint.mode {
                     case .fixed:
                         TextField("Port", text: portText)
                             .labelsHidden()
-                            .accessibilityLabel("Port, \(endpoint.name)")
+
                             .multilineTextAlignment(.trailing)
                             .monospacedDigit()
                             .frame(width: 84)
-                            .accessibilityIdentifier(
-                                AccessibilityID.CreateInstance.port(endpoint.name))
+
                     case .automatic:
                         Text("Assigned when the instance starts")
                             .font(.callout)
@@ -72,9 +69,7 @@ struct EndpointPortRow: View {
                         Button("Use \(String(suggested))") {
                             model.usePort(suggested, for: endpoint.name)
                         }
-                        .accessibilityLabel("Use port \(String(suggested))")
-                        .accessibilityIdentifier(
-                            AccessibilityID.CreateInstance.usePort(endpoint.name))
+
                     }
                 }
                 .font(.callout)

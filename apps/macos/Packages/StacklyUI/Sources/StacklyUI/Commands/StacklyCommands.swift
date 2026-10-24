@@ -2,11 +2,7 @@ import SwiftUI
 
 /// The menu bar of Stackly (spec 0069): the items the app adds to the menus SwiftUI and
 /// macOS build, in the places of the *Struktur menu* table.
-///
-/// Every item comes from ``CommandMap`` through ``CommandItem``, so a title or a shortcut is
-/// written in one place. The group SwiftUI builds for New Window, text editing, and Help are
-/// replaced, so the menus have no item Stackly cannot run. Add `.commands { … }` once, on the
-/// main window scene.
+/// The group SwiftUI builds for New Window, text editing, and Help are replaced, so the menus have no item Stackly cannot run. Add `.commands { … }` once, on the main window scene.
 public struct StacklyCommands: Commands {
     @FocusedValue(\.shellCommands) private var shell
     @FocusedValue(\.pageCommands) private var page
@@ -14,7 +10,6 @@ public struct StacklyCommands: Commands {
     private let appActions: [CommandID: @MainActor () -> Void]
 
     /// Creates the commands.
-    ///
     /// - Parameter runtime: The shell runtime the items that are always on act on.
     public init(runtime: ShellRuntime) {
         appActions = Self.appActions(runtime: runtime)
@@ -22,7 +17,6 @@ public struct StacklyCommands: Commands {
 
     /// The actions of the `app` scope items of kind `button`. They are always on, also with
     /// the main window closed.
-    ///
     /// Welcome to Stackly shows the onboarding at its first step and opens the main window,
     /// or brings it to the front (spec 0016, AC-3). Stackly Help joins with feature 66.
     static func appActions(runtime: ShellRuntime) -> [CommandID: @MainActor () -> Void] {
@@ -51,11 +45,8 @@ public struct StacklyCommands: Commands {
             CommandItem(.newInstance, context: context)
         }
         CommandGroup(replacing: .textEditing) {
-            Menu("Find") {
-                CommandItem(.find, context: context)
-            }
+
         }
-        SidebarCommands()
         CommandGroup(after: .sidebar) {
             Divider()
             CommandItem(.showOverview, context: context)

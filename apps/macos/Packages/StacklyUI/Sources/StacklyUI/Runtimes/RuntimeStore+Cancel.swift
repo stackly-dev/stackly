@@ -9,7 +9,6 @@ extension RuntimeStore {
     /// Cancel Install, in the context menu of an Installing row (spec 0018, *Halaman
     /// Runtimes*): `operation.cancel` with no confirmation, since nothing the install made
     /// is kept (spec 0012). It is disabled during Commit, the step that cannot be undone.
-    ///
     /// - Parameters:
     ///   - install: The install.
     ///   - stage: The stage the operation is in now, or `nil` when unknown.

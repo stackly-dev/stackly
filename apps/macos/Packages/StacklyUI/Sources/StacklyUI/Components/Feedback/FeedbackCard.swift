@@ -1,18 +1,14 @@
 import SwiftUI
 
-/// Whether the countdown of a card may run: the card is visible, the window is active, the
-/// pointer is not over the card, and keyboard focus is not in it (WCAG 2.2.1).
 nonisolated struct FeedbackHold: Equatable {
     /// The pointer is over the card.
     var isHovered: Bool
-    /// Keyboard focus is on a button of the card.
-    var isFocused: Bool
     /// The window is the key or the active window.
     var isWindowActive: Bool
 
     /// Whether the wait runs.
     var countsDown: Bool {
-        !isHovered && !isFocused && isWindowActive
+        !isHovered && isWindowActive
     }
 }
 
@@ -46,11 +42,6 @@ private struct FeedbackPresenter: ViewModifier {
 /// One feedback as an opaque card: the tone symbol, the message, the detail, the code, at
 /// most one action, and Dismiss.
 struct FeedbackCard: View {
-    /// The buttons that can hold keyboard focus.
-    private enum Field: Hashable {
-        case action
-        case dismiss
-    }
 
     /// What restarts the countdown task: a new card, or a change of whether it may run.
     private struct CountdownKey: Equatable {
@@ -58,10 +49,9 @@ struct FeedbackCard: View {
         let countsDown: Bool
     }
 
-    @ScaledMetric(.bannerSymbol) private var symbolSize
+    private let symbolSize = ScaledSize.bannerSymbol.base
     @Environment(\.controlActiveState) private var controlActiveState
     @State private var isHovered = false
-    @FocusState private var focus: Field?
 
     let feedback: Feedback
     let center: FeedbackCenter
@@ -69,7 +59,7 @@ struct FeedbackCard: View {
     private var hold: FeedbackHold {
         FeedbackHold(
             isHovered: isHovered,
-            isFocused: focus != nil,
+
             isWindowActive: controlActiveState == .key || controlActiveState == .active
         )
     }
@@ -79,13 +69,12 @@ struct FeedbackCard: View {
             Image(systemName: feedback.tone.symbol)
                 .stacklySymbol(.bannerSymbol)
                 .foregroundStyle(feedback.tone.fill)
-                .accessibilityHidden(true)
+
             texts
             if let action = feedback.action {
                 ActionButton(action, showsReason: false)
                     .controlSize(.small)
-                    .focused($focus, equals: .action)
-                    .accessibilityIdentifier(AccessibilityID.Feedback.action)
+
             }
             dismissButton
         }
@@ -108,8 +97,7 @@ struct FeedbackCard: View {
                 await center.countdown(feedback.id)
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AccessibilityID.Feedback.card)
+
     }
 
     /// The widest the card gets: 520 pt.
@@ -134,11 +122,7 @@ struct FeedbackCard: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(feedback.message)
-        .accessibilityValue(
-            [feedback.detail, feedback.code].compactMap { $0 }.joined(separator: " ")
-        )
+
     }
 
     private var dismissButton: some View {
@@ -150,10 +134,9 @@ struct FeedbackCard: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
-        .focused($focus, equals: .dismiss)
-        .accessibilityLabel("Dismiss")
+
         .help("Dismiss")
-        .accessibilityIdentifier(AccessibilityID.Feedback.dismiss)
+
     }
 }
 

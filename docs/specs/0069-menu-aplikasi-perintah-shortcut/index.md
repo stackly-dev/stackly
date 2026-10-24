@@ -1,4 +1,6 @@
 # 0069. Menu aplikasi, perintah, dan shortcut keyboard
+> Perubahan cakupan 2026-10-24: dukungan pembaca layar khusus, navigasi dan shortcut keyboard khusus, pengaturan tampilan aksesibilitas, dan identifier UI test dihapus atas permintaan pengguna. Ketentuan serta cek khusus kemampuan tersebut di dokumen ini tidak berlaku; nomor kriteria tetap stabil.
+
 
 **Date**: 2026-10-21
 **Status**: In Progress
@@ -14,13 +16,12 @@ Spec ini menetapkan menu bar Stackly (Stackly, File, Edit, View, Instance, Windo
 - Sebagai pengguna keyboard, saya ingin membuat, menghentikan, dan memeriksa instance lewat menu dan shortcut tanpa mouse, supaya alur harian tetap cepat.
 - Sebagai pengguna macOS, saya ingin menu dan shortcut Stackly mengikuti idiom macOS (⌘, untuk Settings, ⌘W, ⌘F, ⌘N) dan tidak menimpa shortcut sistem, supaya kebiasaan saya tetap berlaku.
 - Sebagai pengguna yang daemon nya mati, saya ingin Reconnect di menu, dan perintah yang mengubah data nonaktif seperti tombolnya, beserta alasannya.
-- Sebagai pengguna VoiceOver, saya ingin setiap perintah punya judul teks dan status nonaktif yang terbaca.
 - Sebagai pengembang fitur journey, saya ingin satu tempat untuk mendaftarkan perintah dengan judul, menu, dan shortcut, supaya bentrok ketahuan oleh test, bukan oleh pengguna.
 
 **Acceptance criteria** (ID lokal spec ini; ID PRD selalu tiga digit, misalnya AC-027):
 
 - **AC-1** (peta perintah): `CommandMap` di `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Commands/` (public, read only, `nonisolated`, `Sendable`) memberi tepat satu `CommandEntry` untuk setiap `CommandID` lewat `switch` yang lengkap, berisi menu, judul, judul alternatif, shortcut, `needsInput`, scope, requirements, fitur pemilik, status `built` atau `planned`, makna standar, dan alasan pengecualian, persis seperti tabel *Peta perintah*. Setiap item menu Stackly dibangun lewat `CommandItem(.id)` yang mengambil judul dan shortcut dari peta. Source rule test gagal kalau `.keyboardShortcut(` dengan argumen selain `.defaultAction`, `.cancelAction`, atau nilai dari `CommandMap`, atau `CommandGroup`, `CommandMenu`, atau `.commands`, muncul di luar folder `Commands/` dan `apps/macos/Stackly/StacklyApp.swift`; dan kalau sebuah `CommandID` berstatus `built` tidak dipakai tepat satu kali oleh `CommandItem` di `Commands/` (kecuali baris ber kind `system`: `showMainWindow` dipakai tepat satu kali oleh `.keyboardShortcut` scene di `StacklyApp.swift`), atau berstatus `planned` tetapi dipakai.
-- **AC-2** (tidak bentrok): Test unit atas `CommandMap` dan `SystemShortcuts` gagal kalau dua baris (built maupun planned) punya shortcut yang sama setelah dinormalisasi; kalau sebuah baris memakai shortcut di tabel *Shortcut yang diblok*; kalau baris memakai shortcut di tabel *Shortcut bermakna standar* tanpa `standardMeaning` yang sama dan tanpa `exception` berisi alasan; kalau baris memakai shortcut di tabel *Shortcut format standar* tanpa `exception` yang berisi alasan; kalau baris memakai kunci penyuntingan teks atau modifier 🌐 (aturan D dan E); dan kalau akhiran "…" pada judul tidak sama dengan `needsInput`. Probe accessibility di langkah 1 dan di cek manual 1 membuktikan di macOS 27 bahwa seluruh menu bar app, termasuk item yang ditambah sistem dan SwiftUI, tidak punya dua item dengan key equivalent yang sama, dan setiap baris built tampil dengan shortcut persis peta.
+Probe accessibility di langkah 1 dan di cek manual 1 membuktikan di macOS 27 bahwa seluruh menu bar app, termasuk item yang ditambah sistem dan SwiftUI, tidak punya dua item dengan key equivalent yang sama, dan setiap baris built tampil dengan shortcut persis peta.
 - **AC-3** (struktur menu): Menu bar berisi menu dan item di tabel *Struktur menu*, dalam urutan dan kelompok itu: Stackly (About, Settings… ⌘,, Reconnect to stacklyd, Services, Hide, Quit), File (New Instance… ⌘N, Close ⌘W), Edit (item edit sistem, lalu submenu Find dengan Find… ⌘F), View (item sidebar ⌃⌘S dari `SidebarCommands`, judulnya milik sistem; Overview ⌘1 sampai Diagnostics ⌘7, Back ⌘[, Show Inspector atau Hide Inspector ⌥⌘I, Sort Instances By, item tampilan sistem), Instance, Window (item sistem, Stackly ⌘0, Design Gallery di build Debug), dan Help (Welcome to Stackly, lalu Stackly Help ⌘? setelah fitur 66). Grup bawaan `.newItem`, `.textEditing`, dan `.help` diganti, jadi tidak ada "New Window", submenu Spelling and Grammar, Substitutions, Transformations, Speech, atau item "Stackly Help" bawaan yang memunculkan "Help isn’t available". Baris berstatus planned tidak tampil, dan menu Instance tampil sejak baris `.instance` pertama berstatus built. Item tidak pernah disembunyikan karena state; yang tidak berlaku sedang nonaktif.
 - **AC-4** (cakupan aktif): Perintah ber scope `.app` (Settings, Welcome to Stackly, Stackly Help, Window > Stackly, Quit) selalu bisa dipakai, juga saat jendela utama tertutup atau minimized, saat jendela lain aktif, dan saat onboarding tampil. Perintah ber scope `.shell` dan `.page` aktif hanya kalau `AppShell` menerbitkan `PublishedCommands` dengan `isWindowKey` true (dari `MainWindowKey.isKey` jendela itu: key window aplikasi adalah jendela utama itu sendiri, bukan sheet, dialog, Settings, Design Gallery, atau popover) (jadi tidak selama `MainWindowRoot` menampilkan onboarding); `.page(S)` juga butuh halaman yang tampil termasuk S. Saat sheet New Instance, sheet Enter Secret, atau dialog konfirmasi terbuka di jendela utama, ⌘1 sampai ⌘7, ⌘N, dan perintah Instance nonaktif.
 - **AC-5** (nonaktif sama dengan tombol): Item ber scope `.shell` atau `.page` aktif hanya kalau penerbit yang tepat menerbitkan `StacklyAction` untuk `CommandID` itu dan `action.availability(gate: host.gate)` milik spec 0067 sama dengan `.enabled`, dengan `host.gate` adalah `MutationAvailability` di environment penerbit (dibaca `.actionHost()`); `ActionButton` dan menu di dalam jendela memakai fungsi yang sama atas action yang sama. Jadi perintah yang `mutates` nonaktif saat daemon offline atau sedang dimulai, perintah yang `isBusy` nonaktif selama operasinya berjalan, dan perintah dengan `disabledReason` (capability unsupported, state yang tidak cocok) nonaktif. Subtitle mengikuti aturan menu spec 0067: `.disabled(reason, showsReason: true)` menampilkan `reason`, `.busy` menampilkan "In progress", dan `.disabled(showsReason: false)` (gate) tanpa subtitle karena banner jendela sudah menjelaskannya; semuanya sesuai hasil cek menu macOS 27 di spec 0067 milestone 1 langkah 1 (kalau subtitle tidak tampil di menu utama, item tanpa subtitle, dan alasan tetap terlihat di halaman). Test unit `CommandItemState.resolve` mencakup setiap kombinasi scope, key window, penerbit, gate, busy, dan alasan, dan `run` yang menolak saat state berubah sebelum dijalankan (key window hilang atau action tidak lagi `.enabled`).
@@ -33,7 +34,7 @@ Spec ini menetapkan menu bar Stackly (Stackly, File, Edit, View, Instance, Windo
 - **AC-12** (perintah halaman Instances di View): View > Back ⌘[ kembali dari detail ke tabel (aktif hanya saat detail terbuka); View > Show Inspector atau Hide Inspector ⌥⌘I membalik binding inspector yang sama dengan tombol toolbar (`.stacklyInspector(isPresented:)` spec 0067), dengan judul mengikuti state; View > Sort Instances By berisi Name, Provider, Version, Endpoints, Status, lalu Ascending dan Descending sebagai item bertanda centang untuk urutan yang aktif, memakai urutan tabel yang sama. Ketiganya menggantikan `InstancesCommands` spec 0022 dan aktif hanya saat Instances tampil di jendela utama yang key.
 - **AC-13** (Help, Welcome, jendela): Help > "Welcome to Stackly" (tanpa shortcut, scope `.app`) memanggil `OnboardingModel.present()` lalu `WindowOpener.openMain()` (spec 0016) dan menggantikan `CommandGroup(after: .help)` sementara. Tidak ada item "Stackly Help" sampai fitur 66 membangun baris `stacklyHelp` (⌘?, sudah dicadangkan); kolom pencarian Help milik sistem tetap ada. Window > Stackly ⌘0 membuka jendela utama, membawanya ke depan, atau mengembalikannya dari Dock kalau minimized, juga saat onboarding dan setelah jendela ditutup. Settings ⌘, tetap terbuka selama onboarding. Close ⌘W menutup key window; menutup jendela utama tetap memunculkan notice spec 0013.
 - **AC-14** (bantuan di tombol): Tooltip tombol toolbar yang punya padanan perintah ber shortcut memakai `CommandMap.helpText(for:)` ("{judul} ({shortcut})", misalnya "Hide Inspector (⌥⌘I)"), dan menu di dalam jendela (More, menu konteks) memakai judul dari peta tanpa memasang atau menampilkan shortcut.
-- **AC-15** (PRD AC-027, REQ-027, NFR-012): Alur membuat, menghentikan, dan memeriksa instance bisa diselesaikan hanya dengan keyboard lewat menu dan shortcut (⌘N lalu isi sheet dan Return; ⌘2, Tab ke tabel, panah, ⇧⌘R; ⌘O dan ⌘[), dan dengan VoiceOver setiap item menu dibacakan dengan judul teks, shortcut, dan status nonaktifnya (beserta alasan bila subtitle tampil). Dibuktikan sebagai evidence manual setelah fitur 20, 21, dan 22 dibangun; sebelum itu `NOT_RUN`.
+Dibuktikan sebagai evidence manual setelah fitur 20, 21, dan 22 dibangun; sebelum itu `NOT_RUN`.
 - **AC-16** (dokumentasi dan pemindahan): `apps/macos/design.md` mendapat bagian "Commands and shortcuts" yang memuat tabel peta (built dan planned), tabel shortcut sistem, aturan *Menambah perintah*, dan hasil probe langkah 1 beserta versi macOS dan Xcode. Setelah milestone 2 tidak ada `CommandGroup` atau `.commands` di luar `Commands/` dan `StacklyApp.swift`, dan `grep -rn "provisional: F69" apps/` kosong.
 
 ## Decision
@@ -52,9 +53,9 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang. Contohnya: `focu
 
 | ID PRD | Dipenuhi oleh |
 | --- | --- |
-| REQ-027 (keyboard navigation, VoiceOver labels, konfirmasi destructive) | AC-3 sampai AC-15 |
+| Dihapus dari cakupan pada 2026-10-24. | AC-3 sampai AC-15 |
 | AC-027 (buat, hentikan, periksa instance tanpa info yang hanya lewat warna atau hover) | AC-11, AC-15 |
-| NFR-012 (critical journeys lulus review keyboard dan VoiceOver) | AC-5, AC-15 |
+| NFR-012 (critical journeys lulus review interaksi desktop) | AC-5, AC-15 |
 
 ### Batas dengan spec lain
 
@@ -63,7 +64,7 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang. Contohnya: `focu
 | `StacklyAction` (id, title, symbol, role `ActionRole` dengan `.standard(confirmation:)` atau `.destructive(ActionConfirmation)`, mutates, disabledReason, isBusy, perform), `ActionAvailability` (`.enabled`, `.busy`, `.disabled(reason:showsReason:)`), `availability(gate:)`, `invoke(gate:present:)`, `ActionHost` (`gate`, `present`, `run(_:)`), `EnvironmentValues.actionHost`, `.actionHost()` di `AppShell` dan `StacklySheet`, `ActionButton`, `ActionMenu`, `ActionMenuItems`, cek subtitle menu di macOS 27 | spec 0067 milestone 1 |
 | `.stacklyInspector(isPresented:)` dan `InspectorToggle` | spec 0067 milestone 3 |
 | XCUITest menu berulang: setiap baris built ada di menu yang benar dengan judul yang sama, aktif atau nonaktif per skenario fixture (`connected-empty`, `connected-mixed`, `daemon-offline`, `onboarding`), dan smoke shortcut lewat `typeKey` | spec 0068 |
-| `CommandMap`, `SystemShortcuts`, `StacklyCommands`, `PublishedCommands`, `.publishesCommands`, `CommandItem`, `CommandItemState`, `MainWindowKey`, test peta, source rule, probe accessibility, bagian "Commands and shortcuts" di `design.md` | spec ini |
+| Dihapus dari cakupan pada 2026-10-24. | spec ini |
 | Scene, `AppShell`, `ShellRuntime`, `DaemonModel.reconnect()`, `ShellPresentation`, `MutationAvailability`, `.stacklyConfirmation` | spec 0013 dan 0012 (dipakai apa adanya, tambahan di *Usulan update untuk spec lain*) |
 | `MainWindowRoot`, `OnboardingModel.present()` | spec 0016 |
 | `newInstanceAction` dan sheet New Instance | spec 0020 |
@@ -135,7 +136,7 @@ Status di kolom terakhir adalah status yang ditulis langkah 2. Baris milik fitur
 
 ### Shortcut sistem yang dicadangkan
 
-`SystemShortcuts` di `Commands/SystemShortcuts.swift` memuat tabel A sampai C sebagai data (`SystemShortcut { shortcut, title, source, meaning }`) dan aturan D dan E sebagai fungsi. Sumber: tabel shortcut standar di Apple Human Interface Guidelines bagian Keyboards (HIG), daftar shortcut Mac di Apple Support "Mac keyboard shortcuts" (macOS), key binding standar AppKit untuk field teks (AppKit), dan perintah bawaan SwiftUI (SwiftUI). Daftar ini disusun dari pengetahuan saat spec ditulis; probe langkah 1 membandingkannya dengan menu nyata macOS 27, dan item sistem yang muncul di probe tetapi belum ada di tabel A ditambahkan di langkah itu (dicatat di `design.md`).
+Sumber: tabel shortcut standar di Apple Human Interface Guidelines bagian Keyboards (HIG), daftar shortcut Mac di Apple Support "Mac keyboard shortcuts" (macOS), key binding standar AppKit untuk field teks (AppKit), dan perintah bawaan SwiftUI (SwiftUI). Daftar ini disusun dari pengetahuan saat spec ditulis; probe langkah 1 membandingkannya dengan menu nyata macOS 27, dan item sistem yang muncul di probe tetapi belum ada di tabel A ditambahkan di langkah itu (dicatat di `design.md`).
 
 **A. Shortcut yang diblok** (tidak boleh dipakai baris mana pun):
 
@@ -236,7 +237,6 @@ nonisolated public enum CommandMenuID: String, CaseIterable, Sendable { case app
 nonisolated public enum CommandSubmenuID: String, CaseIterable, Sendable { case find, sortInstancesBy }
 nonisolated public enum CommandKind: String, Hashable, Sendable { case button, toggle, system }
 nonisolated public struct CommandModifiers: OptionSet, Hashable, Sendable { command, shift, option, control }
-nonisolated public struct CommandShortcut: Hashable, Sendable {
     public let key: String                   // kunci dasar, satu karakter huruf kecil: "r", "1", ",", "[", "/"
     public let modifiers: CommandModifiers   // ⇧ eksplisit, juga untuk tanda baca bershift ("?" = "/" dengan ⇧⌘)
     public var display: String               // "⇧⌘R", "⌘?"
@@ -253,7 +253,6 @@ nonisolated public struct CommandEntry: Hashable, Identifiable, Sendable {
     public let kind: CommandKind
     public let title: String
     public let alternateTitle: String?       // judul kedua untuk perintah yang judulnya berganti (Hide Inspector)
-    public let shortcut: CommandShortcut?
     public let needsInput: Bool              // judul berakhir "…"
     public let scope: CommandScope
     public let requirements: Set<CommandRequirement>
@@ -269,13 +268,9 @@ nonisolated public enum CommandMap {
     public static func helpText(for id: CommandID, title: String? = nil) -> String  // "Hide Inspector (⌥⌘I)", atau judul saja
 }
 
-// SystemShortcuts.swift
-nonisolated public struct SystemShortcut: Hashable, Sendable { shortcut: CommandShortcut, title: String, source: Source, meaning: StandardMeaning? }
-nonisolated public enum SystemShortcuts {
     public static let blocked: [SystemShortcut]      // tabel A
     public static let standard: [SystemShortcut]     // tabel B
     public static let formatting: [SystemShortcut]   // tabel C
-    public static func isTextEditingKey(_ shortcut: CommandShortcut) -> Bool  // aturan D
 }
 
 // MainWindowKey.swift: satu per jendela utama, bukan global.
@@ -334,7 +329,7 @@ public struct StacklyCommands: Commands {
 
 ### Model data
 
-Tidak ada tabel, file, kolom registry, atau preferensi baru, dan tidak ada state machine. `CommandMap` dan `SystemShortcuts` adalah data kode yang dikompilasi; `PublishedCommands` dan `MainWindowKey` hanya hidup di memori selama app berjalan. State yang dipulihkan sistem tetap `@SceneStorage` yang sudah ada.
+Tidak ada tabel, file, kolom registry, atau preferensi baru, dan tidak ada state machine. State yang dipulihkan sistem tetap `@SceneStorage` yang sudah ada.
 
 ### Penerbit
 
@@ -430,7 +425,7 @@ Dicatat sebagai evidence manual spec 0002 (kind `native`, status awal `NOT_RUN`)
 3. Onboarding (Help > Welcome to Stackly): ⌘1 dan ⌘N nonaktif, ⌘, dan ⌘0 tetap bekerja; setelah selesai, perintah shell aktif lagi (**AC-4**, **AC-13**).
 4. Hentikan `stacklyd`: New Instance… nonaktif tanpa subtitle (alasan gate ada di banner jendela), Reconnect to stacklyd aktif dan menyambung lagi setelah `stacklyd` jalan; saat terhubung Reconnect nonaktif (**AC-5**, **AC-8**, **AC-9**).
 5. Setelah fitur 20, 21, dan 22: ⌘N lalu isi sheet dan Return membuat instance; ⌘2, Tab ke tabel, panah, ⇧⌘R menghentikannya; ⌘R menjalankannya; ⌘O membuka detail; ⇧⌘C menyalin connection string; ⌘[ kembali; ⌥⌘I menyembunyikan dan menampilkan inspector; View > Sort Instances By mengurutkan; saat sheet New Instance terbuka ⌘1 dan ⌘R tidak melakukan apa pun (**AC-4**, **AC-9**, **AC-11**, **AC-12**, **AC-15**).
-6. VoiceOver: buka setiap menu dengan ⌃F2 (atau VO+M); setiap item terbaca dengan judul, shortcut, dan "dimmed" saat nonaktif; ⌘F di Instances dan Catalog memfokuskan field pencarian dan VoiceOver membacakannya (**AC-10**, **AC-15**; PRD AC-027).
+6.
 
 ## Build plan
 
@@ -439,7 +434,7 @@ Pendekatan proyek adalah Journey. Fitur ini jalur paralel UI: peta dan perintah 
 **Milestone 1: Peta perintah dan probe** (needs fitur 13 milestone 3 (shell, sudah selesai) di `ui-macos.md`; tidak menunggu fitur lain; bisa paralel dengan fitur 67 milestone 1)
 
 1. Probe di macOS 27 dan Xcode 27 di app Debug, lewat accessibility API dan tombol nyata, hasilnya (dengan nomor build) dicatat di `design.md` bagian "Commands and shortcuts": P1 dump menu bar app saat ini dengan key equivalent setiap item (item sistem dan SwiftUI), dibandingkan dengan tabel A, dan item baru ditambahkan ke tabel A; P2 `Window(...).keyboardShortcut` memberi Window > Stackly ⌘0 yang membuka jendela setelah ditutup dan mengembalikannya dari minimize; P3 hasil `CommandGroup(replacing:)` untuk `.newItem`, `.textEditing`, dan `.help` (apa yang hilang, kolom pencarian Help tetap) dan tempat `CommandMenu("Instance")`; P4 `focusedSceneValue` dari view di jendela utama terbaca di `Commands`, hilang saat Settings key, dan tetap ada saat sheet atau `NSAlert` sheet terbuka, sedangkan `NSApp.keyWindow` saat itu adalah window sheet; P3b dengan grup `.textEditing` bawaan dibiarkan, apakah Find… ⌘F bawaan memfokuskan field `.searchable` toolbar dan nonaktif di halaman tanpa pencarian; P5 `.searchFocused` memfokuskan field `.searchable` toolbar dari perintah menu; P6 ⌘R, ⇧⌘R, ⌥⌘R, ⌘O, dan ⌘D di field pencarian toolbar sampai ke menu tanpa mengubah teks, Button di `Commands` dengan judul yang berganti ikut berganti di menu, dan `KeyEquivalent("?")` dengan ⌘ tampil "⌘?"; P7 saat menu terbuka atau tepat sebelum key equivalent ditekan, state berubah (sheet terbuka, gate menjadi blocked): menu dihitung ulang, dan kalau belum, penjaga `run` menolak tanpa menjalankan action. Kalau sebuah probe gagal, berhenti dan kirim ke `/architect` dengan cadangan di *Cadangan probe*. Memenuhi **AC-2**, **AC-3**, **AC-4**, **AC-5**, **AC-10**, **AC-13**.
-2. `CommandMap.swift` (semua tipe dan semua baris *Peta perintah* dengan status awalnya), `SystemShortcuts.swift` (tabel A sampai C, aturan D dan E, ditambah item dari P1), test unit peta di `StacklyUITests/Commands/`, dan aturan baru di `SourceRuleTests` (`.keyboardShortcut` dengan kunci literal, `CommandGroup`, `CommandMenu`, `.commands`, `CommandID` built dipakai tepat sekali, planned tidak dipakai). Memenuhi **AC-1**, **AC-2**.
+2. Memenuhi **AC-1**, **AC-2**.
 
 **Milestone 2: Perintah shell** (after milestone 1; needs fitur 67 milestone 1 di `ui-macos.md` (`StacklyAction`, `ActionRole`, `ActionAvailability`, `availability(gate:)`, `invoke(gate:present:)`, `ActionHost`, `.actionHost()` terpasang di `AppShell` (langkah 6 dan 7 spec 0067), dan hasil cek subtitle menu (langkah 1 spec 0067)); after langkah 2 milestone 1 spec 0016 dan langkah 14 milestone 3 spec 0020 bila salah satunya sedang berjalan)
 
@@ -450,7 +445,7 @@ Pendekatan proyek adalah Journey. Fitur ini jalur paralel UI: peta dan perintah 
 **Milestone 3: Perintah halaman dan instance** (after milestone 2; needs fitur 22 milestone 3 (halaman Instances, `InstanceActionModel`, urutan, inspector) dan fitur 21 milestone 3 (detail, Open, Copy Connection String) di `02-instalasi-pertama.md`, fitur 17 milestone 3 (pencarian Catalog) di `02-instalasi-pertama.md`, dan fitur 67 milestone 3 (`.stacklyInspector`) di `ui-macos.md`. Halaman yang di merge setelah milestone 2 mendaftarkan perintahnya sendiri dengan aturan *Menambah perintah* (usulan update spec 0017, 0021, 0022), dan langkah 6 hanya mengerjakan yang belum terdaftar)
 
 6. Menu Instance (`CommandMenu("Instance")`) dan penerbit halaman: halaman Instances menerbitkan `find`, `toggleInspector`, tujuh baris urut, `openInstance`, `back`, `startInstance`, `stopInstance`, dan `copyConnectionString` sesuai *Penerbit*; Catalog menerbitkan `find`; `InstancesCommands` dihapus; baris terkait menjadi built; tooltip tombol inspector dan aksi utama lewat `helpText`; test penerbit Instances. Memenuhi **AC-10**, **AC-11**, **AC-12**, **AC-14**.
-7. Evidence manual milestone 3: cek manual 1, 5, dan 6 (keyboard saja dan VoiceOver untuk buat, hentikan, periksa). Memenuhi **AC-2**, **AC-15**.
+7. Memenuhi **AC-2**, **AC-15**.
 
 ### Cadangan probe
 
@@ -489,7 +484,6 @@ Pendekatan proyek adalah Journey. Fitur ini jalur paralel UI: peta dan perintah 
 
 **Neutral**:
 
-- Folder baru `Commands/` di `StacklyUI` dengan `CommandMap`, `SystemShortcuts`, `PublishedCommands`, `MainWindowKey`, `CommandItemState`, `CommandItem`, dan `StacklyCommands`; view akar jendela (`AppShell`, lalu `MainWindowRoot`) memegang `MainWindowKey`; `AppShell` mendapat `select(_:)` dengan hook `onReselect` dan satu `.publishesCommands`.
 - Bagian baru "Commands and shortcuts" di `apps/macos/design.md`.
 - Target UI test fitur 68 bergantung pada product `StacklyUI` untuk membaca peta.
 

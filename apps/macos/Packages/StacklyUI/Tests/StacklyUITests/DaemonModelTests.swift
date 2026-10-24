@@ -7,7 +7,6 @@ import Testing
 @testable import StacklyUI
 
 /// The daemon model with a fake link: presence, banner, gate, page
-/// placeholder, announcements, Diagnostics, and the mutation path (spec 0013
 /// AC-9, AC-10, AC-11, AC-19).
 @Suite(.timeLimit(.minutes(1)))
 struct DaemonModelTests {
@@ -42,13 +41,11 @@ struct DaemonModelTests {
         }
     }
 
-    /// One fixture: link, signals, model, announcements, and the one second
     /// timer the test fires.
     final class Fixture {
         let link = FakeLink()
         let signals: AsyncStream<SyncSignal>
         let signal: AsyncStream<SyncSignal>.Continuation
-        var announced: [String] = []
         var clock = DaemonModelTests.launch
         let slowTimer: AsyncStream<Void>
         let fireSlowTimer: AsyncStream<Void>.Continuation
@@ -67,8 +64,7 @@ struct DaemonModelTests {
                 now: { [unowned self] in clock },
                 sleep: { _ in
                     for await _ in timer { return }
-                },
-                announce: { [unowned self] in announced.append($0) })
+                })
             model.start()
         }
 
@@ -251,13 +247,12 @@ struct DaemonModelTests {
                 == "Actions are disabled until the daemon is reachable.")
         #expect(model.mutationAvailability.blockedReason == "stacklyd is unavailable.")
         #expect(model.presentation.pageFailure?.title == "Waiting for stacklyd")
-        #expect(fixture.announced == ["Can’t connect to stacklyd."])
 
         try await fixture.push(.connecting(attempt: 2))
         #expect(model.presence == .unreachable(lastKnownAt: nil))
         #expect(model.presentation.isReconnecting)
         try await fixture.push(Self.unreachable())
-        #expect(fixture.announced == ["Can’t connect to stacklyd."])
+
     }
 
     @Test func aMutationWhileNotConnectedIsNotSent() async throws {
@@ -292,7 +287,6 @@ struct DaemonModelTests {
             timeZone: .current)
         #expect(message?.hasPrefix("Showing the last known state from ") == true)
         #expect(model.mutationAvailability.blockedReason == "stacklyd is unavailable.")
-        #expect(fixture.announced == ["Can’t connect to stacklyd."])
 
         try await fixture.push(.connected(Self.daemon(.ready, at: 50)))
         #expect(model.presence == .refreshing)
@@ -301,8 +295,7 @@ struct DaemonModelTests {
         await fixture.send(.caughtUp)
         try await waitUntil { model.presence == .connected(health: .ready) }
         #expect(model.presentation.banner == nil)
-        #expect(
-            fixture.announced == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
+
     }
 
     @Test func aSnapshotDoneBeforeTheConnectedStateArrivesCountsForThatConnection()
@@ -321,18 +314,7 @@ struct DaemonModelTests {
         try await fixture.push(.connected(daemon))
         try await waitUntil { model.presence == .connected(health: .ready) }
         #expect(model.mutationAvailability == .available)
-        #expect(
-            fixture.announced == ["Can’t connect to stacklyd.", "Reconnected. State refreshed."])
-    }
 
-    @Test func aFailedManualReconnectIsAnnounced() async throws {
-        let fixture = Fixture()
-        try await fixture.push(Self.unreachable())
-        fixture.model.reconnect()
-        try await waitUntil { fixture.link.retries.withLock { $0 } == 1 }
-        try await fixture.push(.connecting(attempt: 2))
-        try await fixture.push(Self.unreachable(6))
-        #expect(fixture.announced == ["Can’t connect to stacklyd.", "Still unreachable."])
     }
 
     @Test func connectedMutationsRunWithTheirKeyAndKeepItWhenTheOutcomeIsUnknown() async throws {
@@ -527,8 +509,7 @@ struct DaemonModelTests {
         let endpoint = SocketEndpoint(runtimeRootBytes: Array(folder.utf8), rootOverride: true)
         let link = DaemonLink(endpoint: .success(endpoint), clientVersion: "0.1.0", pid: 1)
         let model = DaemonModel(
-            link: .live(link), signals: nil, endpoint: endpoint, launchedAt: Self.launch,
-            announce: { _ in })
+            link: .live(link), signals: nil, endpoint: endpoint, launchedAt: Self.launch)
         model.start()
         try await waitUntil { model.presence == .unreachable(lastKnownAt: nil) }
         #expect(model.lastError?.code == "ipc.endpoint_missing")

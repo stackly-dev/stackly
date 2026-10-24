@@ -3,7 +3,6 @@ import Foundation
 /// The OS side of the background agent, as the GUI sees it (spec 0015, *GUI*). The live
 /// one is ``SMAppServiceAgent``, the only file that imports `ServiceManagement`; tests,
 /// previews, and fixtures use ``FakeBackgroundAgentController``.
-///
 /// Every call runs off the main actor. `status()` never prompts and never changes the
 /// registration.
 nonisolated protocol BackgroundAgentControlling: Sendable {

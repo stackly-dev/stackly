@@ -25,7 +25,6 @@ nonisolated public struct InstanceSortComparator: SortComparator, Hashable, Send
     public var order: SortOrder
 
     /// Creates a comparator.
-    ///
     /// - Parameters:
     ///   - key: The column.
     ///   - order: The direction; ascending by default.

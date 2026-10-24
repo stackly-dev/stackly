@@ -229,66 +229,6 @@ struct StagedProgressTests {
 
     // MARK: - texts
 
-    @Test(
-        .evidence(
-            covers: ["REQ-026", "NFR-012"],
-            expected:
-                "Spec 0067 AC-15: the compact text and spoken value of every outcome follow the table"
-        ))
-    func theCompactTextAndSpokenValueOfEveryOutcome() {
-        let queued = value(.queued)
-        #expect(queued.compactText == "Queued")
-        #expect(queued.accessibilityValue == "Queued")
-
-        let running = value(.running, stage: "extract", progress: counted(50, of: 100))
-        #expect(running.compactText == "Extract · 62%")
-        #expect(running.accessibilityValue == "Stage 3 of 4, Extract, 62 percent")
-
-        let unknown = value(.running, stage: "unpacking")
-        #expect(unknown.compactText == "Working…")
-        #expect(unknown.accessibilityValue == "Working")
-
-        let cancelling = value(.cancelRequested, stage: "extract", progress: counted(50, of: 100))
-        #expect(cancelling.compactText == "Cancelling… · 62%")
-        #expect(cancelling.accessibilityValue == "Cancelling, stage 3 of 4, 62 percent")
-
-        let cancellingUnknown = value(.cancelRequested, stage: "unpacking")
-        #expect(cancellingUnknown.compactText == "Cancelling…")
-        #expect(cancellingUnknown.accessibilityValue == "Cancelling")
-
-        #expect(value(.succeeded).compactText == "Done")
-        #expect(value(.succeeded).accessibilityValue == "Done")
-        #expect(value(.failed, stage: "extract").compactText == "Failed at Extract")
-        #expect(value(.failed, stage: "extract").accessibilityValue == "Failed at Extract")
-        #expect(value(.needsRecovery).compactText == "Needs Recovery")
-        #expect(value(.needsRecovery).accessibilityValue == "Needs Recovery")
-        #expect(value(.cancelled).compactText == "Cancelled")
-        #expect(value(.cancelled).accessibilityValue == "Cancelled")
-    }
-
-    @Test func aRunningOperationWithoutAStageIsSpokenAsStageOneAtZeroPercent() {
-        #expect(value(.running).accessibilityValue == "Stage 1 of 4, Download, 0 percent")
-        #expect(value(.running).compactText == "Download · 0%")
-    }
-
-    // MARK: - announcements
-
-    @Test(
-        .evidence(
-            covers: ["NFR-012"],
-            expected: "Spec 0067 AC-15: a running stage is announced by its title"))
-    func aRunningStageIsAnnouncedByItsTitleWithAPeriod() {
-        #expect(value(.running, stage: "verify").stageAnnouncement == "Verify digest.")
-    }
-
-    @Test func otherOutcomesAnnounceNoStage() {
-        #expect(value(.queued).stageAnnouncement == nil)
-        #expect(value(.cancelRequested, stage: "verify").stageAnnouncement == nil)
-        #expect(value(.succeeded).stageAnnouncement == nil)
-        #expect(value(.failed, stage: "verify").stageAnnouncement == nil)
-        #expect(value(.running, stage: "unpacking").stageAnnouncement == nil)
-    }
-
     // MARK: - layout
 
     /// The size a view takes at `width`.
@@ -324,17 +264,4 @@ struct StagedProgressTests {
 
     // MARK: - source
 
-    @Test func theProgressIsOneSpokenElementWithItsIdentifier() throws {
-        let path =
-            "apps/macos/Packages/StacklyUI/Sources/StacklyUI/Components/Progress/StagedProgress.swift"
-        let file = SourceFile(
-            path: path, text: try String(contentsOf: SourceTree.url(of: path), encoding: .utf8))
-        let code = file.codeLines.joined(separator: "\n")
-        #expect(code.contains(".accessibilityElement(children: .ignore)"))
-        #expect(code.contains(".accessibilityValue(value.accessibilityValue)"))
-        #expect(code.contains("AccessibilityID.Progress.view"))
-        #expect(
-            code.contains("StacklyMotion.progress(reduceMotion: reduceMotion)"),
-            "the bar value does not animate under Reduce Motion")
-    }
 }

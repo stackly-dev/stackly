@@ -10,37 +10,23 @@ public enum StagedProgressLayout {
 
 /// The progress of an operation with stages: a bar, the stage that is running, and the
 /// outcome (spec 0067, AC-15).
-///
-/// The value comes from ``StagedProgressValue/from(operation:stages:)``. The whole view is
-/// one VoiceOver element, labeled `accessibilityLabel`, with the value of the *Teks
-/// progress* table. With `announcesStages` it says the title of each stage once when the
-/// running stage changes, not when the view first appears. Under Reduce Motion the bar
-/// value jumps instead of animating.
+/// The value comes from ``StagedProgressValue/from(operation:stages:)``.
 public struct StagedProgress: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let value: StagedProgressValue
     private let layout: StagedProgressLayout
-    private let accessibilityLabel: String
-    private let announcesStages: Bool
 
     /// Creates a staged progress.
-    ///
     /// - Parameters:
     ///   - value: What to show.
     ///   - layout: The compact line or the list of stages.
-    ///   - accessibilityLabel: The VoiceOver label of the view.
-    ///   - announcesStages: Whether VoiceOver hears the title of each stage as it starts.
     public init(
         _ value: StagedProgressValue,
-        layout: StagedProgressLayout,
-        accessibilityLabel: String = "Progress",
-        announcesStages: Bool = false
+        layout: StagedProgressLayout
     ) {
         self.value = value
         self.layout = layout
-        self.accessibilityLabel = accessibilityLabel
-        self.announcesStages = announcesStages
+
     }
 
     /// The view's content.
@@ -59,16 +45,8 @@ public struct StagedProgress: View {
                 }
             }
         }
-        .animation(StacklyMotion.progress(reduceMotion: reduceMotion), value: value.fraction)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(value.accessibilityValue)
-        .accessibilityIdentifier(AccessibilityID.Progress.view)
-        .onChange(of: value.runningIndex) {
-            if announcesStages, let announcement = value.stageAnnouncement {
-                announce(announcement)
-            }
-        }
+        .animation(StacklyMotion.progress(), value: value.fraction)
+
     }
 
     /// The compact line: the text, with a symbol once the operation ended.

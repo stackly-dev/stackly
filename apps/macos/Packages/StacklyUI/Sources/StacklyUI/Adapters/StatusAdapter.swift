@@ -2,7 +2,6 @@ import StacklyClient
 
 /// Maps the daemon's status DTOs to the UI status enums of spec 0012 (spec 0013,
 /// *Adapter DTO ke enum UI*).
-///
 /// Every mapping is one exhaustive `switch` over a closed protocol enum, without
 /// `default`, so a new protocol case fails to compile until the UI knows how to show it.
 /// The source rule test rejects `default:` anywhere in `Adapters/`.

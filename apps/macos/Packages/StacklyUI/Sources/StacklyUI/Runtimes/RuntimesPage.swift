@@ -4,14 +4,9 @@ import SwiftUI
 /// The Runtimes page (spec 0018, *Halaman Runtimes*): the installs that have not ended, a
 /// native table of the managed runtimes with a locked Remove button, and the chosen runtime
 /// in the inspector.
-///
 /// The page only reads the stores. Every state, count, and verdict is a pure function of the
 /// summaries the daemon sent. Loading, failure, an unsupported daemon, an empty list, a
 /// stale list, and a runtime that could not be read again all go through ``ViewState``.
-///
-/// In the 384 pt page column next to an open inspector the table drops the Source and
-/// Digest columns, whose values stay in the inspector and in what VoiceOver reads; the
-/// text wraps and nothing is cut.
 public struct RuntimesPage: View {
     /// The table width below which Source and Digest are not drawn (spec 0018, 2026-10-21).
     nonisolated static let sourceAndDigestMinWidth: CGFloat = 560
@@ -43,7 +38,6 @@ public struct RuntimesPage: View {
     private let openDiagnostics: @MainActor () -> Void
 
     /// Creates the page.
-    ///
     /// - Parameters:
     ///   - runtimes: The runtime store.
     ///   - catalog: The catalog, for the tiles of providers, or `nil`.
@@ -111,7 +105,7 @@ public struct RuntimesPage: View {
         ToolbarItem(placement: .primaryAction) {
             Button("Browse Catalog") { navigator?.show(.catalog) }
                 .help("Show the catalog of providers")
-                .accessibilityIdentifier(AccessibilityID.Action.button("browseCatalog"))
+
         }
     }
 
@@ -165,7 +159,7 @@ public struct RuntimesPage: View {
                         for: install, stage: operation?.stage, context: context))
             }
         }
-        .accessibilityIdentifier(AccessibilityID.Runtimes.installing)
+
     }
 
     // MARK: - Table
@@ -212,9 +206,7 @@ public struct RuntimesPage: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(row.spokenLabel)
-                .accessibilityIdentifier(AccessibilityID.Runtimes.row(row.id))
+
             }
             .width(min: 150, ideal: 170)
             if showsSourceAndDigest {
@@ -254,7 +246,7 @@ public struct RuntimesPage: View {
                 showsInspector = true
             }
         }
-        .accessibilityIdentifier(AccessibilityID.Runtimes.table)
+
     }
 
     private func selectionBinding(_ rows: [RuntimeRowModel]) -> Binding<UUID?> {
@@ -265,7 +257,6 @@ public struct RuntimesPage: View {
         }
     }
 
-    /// The Remove button, locked: it says why in its help and to VoiceOver.
     private func removeButton(_ row: RuntimeRowModel) -> some View {
         let action = StacklyAction(
             id: "removeRuntime", title: "Remove…", symbol: "trash",
@@ -278,8 +269,7 @@ public struct RuntimesPage: View {
         return ActionButton(action, showsReason: false)
             .labelStyle(.iconOnly)
             .controlSize(.small)
-            .accessibilityLabel("Remove \(row.name)")
-            .accessibilityHint(row.removeReason)
+
     }
 
     @ViewBuilder
@@ -308,7 +298,7 @@ public struct RuntimesPage: View {
             perform: {
                 guard let text else { return }
                 let confirmation = CopyConfirmation()
-                Task { await confirmation.copy(text, announcement: "\(what) copied.") }
+                Task { await confirmation.copy(text) }
             })
     }
 
@@ -380,7 +370,6 @@ public struct RuntimesPage: View {
     }
 
     /// The state of the page: the fixed order of ``ViewState/resolve(unsupported:value:error:lastLoadedAt:isRefreshing:emptyContent:outdated:partial:)``.
-    ///
     /// The "Waiting for stacklyd" failure counts only while the store has no data. An empty
     /// list with an install running is not empty: the Installing section shows.
     static func state(

@@ -2,12 +2,10 @@ import SwiftUI
 
 /// The input for one secret field: Generate (when the field allows it), Enter, or Copy
 /// from another reference (spec 0011, *GUI*).
-///
 /// Enter uses a native `SecureField`, with a button to show the typed text for a moment. The
 /// field takes the field's ``SecretLimits`` and tells the person what is wrong; the sheet or
 /// form that owns the draft keeps its main button off until
 /// ``SecretDraft/canSubmit(limits:)`` is true. The daemon checks the same limits again.
-///
 /// The typed value lives in the `draft` binding, which the owning view keeps in `@State`. The
 /// field adds no state of its own beyond whether the typed text is shown, and it hides the
 /// text again when the view goes away.
@@ -23,16 +21,12 @@ public struct SecretField: View {
     @State private var hasEdited = false
 
     /// Creates a secret field.
-    ///
     /// - Parameters:
-    ///   - title: The field's name, such as “Admin password”. VoiceOver reads it.
-    ///   - draft: What the person chose and typed. Keep it in `@State`.
+    ///   - title: The field's name, such as “Admin password”. Keep it in `@State`.
     ///   - limits: The field's `minLength`, `maxLength`, and `printableOnly`.
-    ///   - allowsGenerate: Whether Generate is offered. A field that cannot take a generated
-    ///     value passes `false`.
+    ///   - allowsGenerate: Whether Generate is offered. A field that cannot take a generated     value passes `false`.
     ///   - copyFromOptions: The references Copy from offers; Copy from is hidden when empty.
-    ///   - copyFromLabels: The words to show for a reference that has some, such as “Admin
-    ///     password of “pg17-dev””. A reference without a label shows as its own text.
+    ///   - copyFromLabels: The words to show for a reference that has some, such as “Admin     password of “pg17-dev””. A reference without a label shows as its own text.
     public init(
         _ title: String,
         draft: Binding<SecretDraft>,
@@ -68,7 +62,7 @@ public struct SecretField: View {
                     ForEach(sources, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityLabel("\(title), source")
+
             }
             switch draft.source {
             case .generate:
@@ -85,7 +79,7 @@ public struct SecretField: View {
                         Text(copyFromLabels[$0] ?? $0).tag(String?.some($0))
                     }
                 }
-                .accessibilityLabel("\(title), copy from")
+
             }
         }
         .onChange(of: draft.source) {
@@ -101,10 +95,10 @@ public struct SecretField: View {
             Group {
                 if showsTypedText {
                     TextField(title, text: $draft.text)
-                        .accessibilityLabel("\(title), shown")
+
                 } else {
                     SecureField(title, text: $draft.text)
-                        .accessibilityLabel(title)
+
                 }
             }
             .textFieldStyle(.roundedBorder)
@@ -113,7 +107,7 @@ public struct SecretField: View {
             Button(showsTypedText ? "Hide" : "Show") {
                 showsTypedText.toggle()
             }
-            .accessibilityLabel(showsTypedText ? "Hide \(title)" : "Show \(title)")
+
             .frame(minHeight: HitTarget.minimum)
         }
     }
@@ -123,7 +117,7 @@ public struct SecretField: View {
             Text(violation.message)
                 .font(.callout)
                 .foregroundStyle(Tone.critical.text)
-                .accessibilityLabel("\(title): \(violation.message)")
+
         } else if let lengthHint = limits.lengthHint {
             Text(lengthHint)
                 .font(.callout)

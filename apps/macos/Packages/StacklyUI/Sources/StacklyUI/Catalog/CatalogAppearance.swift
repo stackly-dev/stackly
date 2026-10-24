@@ -3,7 +3,6 @@ import StacklyClient
 /// How a catalog status looks (spec 0017, *Tone dan label*, and `apps/macos/design.md`):
 /// the label, tone, symbol, and detail of every ``SupportStatus`` and
 /// ``CatalogEntryState``.
-///
 /// Each mapping is one exhaustive `switch` without `default`, so a value added to the
 /// protocol fails to compile until the table covers it. A value from a newer daemon
 /// (`unrecognized`) is "Unrecognized State", never guessed into another status. Unsupported

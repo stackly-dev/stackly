@@ -41,8 +41,4 @@ struct LayoutTokenTests {
         #expect(HitTarget.minimum == 24)
     }
 
-    @Test func progressAnimationStopsUnderReduceMotion() {
-        #expect(StacklyMotion.progress(reduceMotion: true) == nil)
-        #expect(StacklyMotion.progress(reduceMotion: false) != nil)
-    }
 }

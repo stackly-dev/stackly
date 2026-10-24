@@ -8,41 +8,13 @@ nonisolated enum ConfirmationButton: Sendable {
     case cancel
 }
 
-/// The key equivalents a confirmation alert uses.
-nonisolated enum ConfirmationKey {
-    /// Return: presses the default button.
-    static let defaultButton = "\r"
-    /// Escape: presses Cancel.
-    static let cancel = "\u{1b}"
-    /// No key equivalent.
-    static let none = ""
-
-    /// Whether a key press is a plain Escape, which always presses Cancel.
-    ///
-    /// - Parameters:
-    ///   - characters: The event's `charactersIgnoringModifiers`.
-    ///   - modifiers: The event's modifier flags.
-    static func isCancel(characters: String?, modifiers: NSEvent.ModifierFlags) -> Bool {
-        let held = modifiers.intersection([.command, .option, .control, .shift])
-        return characters == cancel && held.isEmpty
-    }
-}
-
 extension ConfirmationRequest.Role {
-    /// The button Return presses. Escape always presses Cancel.
-    var defaultButton: ConfirmationButton {
-        switch self {
-        case .destructive: .cancel
-        case .standard: .action
-        }
-    }
 
-    /// The buttons in the order the alert adds them: the default button first, in the
-    /// default button's place at the trailing edge.
+    /// The buttons in their native alert order.
     var buttonOrder: [ConfirmationButton] {
-        switch defaultButton {
-        case .cancel: [.cancel, .action]
-        case .action: [.action, .cancel]
+        switch self {
+        case .destructive: [.cancel, .action]
+        case .standard: [.action, .cancel]
         }
     }
 
@@ -55,12 +27,7 @@ extension ConfirmationRequest.Role {
     }
 }
 
-/// The native alert for one confirmation request, built but not shown.
-///
-/// On macOS 27 a SwiftUI `confirmationDialog` cannot make Cancel both the default button
-/// and the Escape button of a destructive dialog: one button has one key equivalent. So
-/// Cancel takes Return as its key equivalent, and ``ConfirmationPresenter`` maps Escape
-/// to Cancel while the alert is open. See `apps/macos/design.md` (Confirmation).
+/// A native alert whose actions are chosen with its buttons.
 struct ConfirmationAlert {
     /// The alert.
     let alert: NSAlert
@@ -79,18 +46,17 @@ struct ConfirmationAlert {
         alert.alertStyle = request.role.alertStyle
         let actionButton: NSButton
         let cancelButton: NSButton
-        switch request.role.defaultButton {
-        case .cancel:
+        switch request.role {
+        case .destructive:
             cancelButton = alert.addButton(withTitle: "Cancel")
             actionButton = alert.addButton(withTitle: request.actionTitle)
-            cancelButton.keyEquivalent = ConfirmationKey.defaultButton
-            actionButton.keyEquivalent = ConfirmationKey.none
-        case .action:
+        case .standard:
             actionButton = alert.addButton(withTitle: request.actionTitle)
             cancelButton = alert.addButton(withTitle: "Cancel")
-            actionButton.keyEquivalent = ConfirmationKey.defaultButton
-            cancelButton.keyEquivalent = ConfirmationKey.cancel
         }
+        actionButton.keyEquivalent = ""
+        cancelButton.keyEquivalent = ""
+        alert.window.defaultButtonCell = nil
         actionButton.hasDestructiveAction = request.role == .destructive
         self.alert = alert
         self.actionButton = actionButton
@@ -113,7 +79,6 @@ final class ConfirmationPresenter {
     weak var anchor: NSView?
 
     private var shown: (id: UUID, alert: ConfirmationAlert)?
-    private var escapeMonitor: Any?
 
     /// The request shown now, if any.
     var shownID: UUID? { shown?.id }
@@ -125,9 +90,7 @@ final class ConfirmationPresenter {
         let confirmation = ConfirmationAlert(request: request)
         let id = request.id
         shown = (id, confirmation)
-        if confirmation.role.defaultButton == .cancel {
-            watchEscape(for: confirmation)
-        }
+
         if let window = anchor?.window {
             confirmation.alert.beginSheetModal(for: window) { [weak self] response in
                 MainActor.assumeIsolated {
@@ -144,7 +107,6 @@ final class ConfirmationPresenter {
     func close() {
         guard let shown else { return }
         self.shown = nil
-        stopWatchingEscape()
         let window = shown.alert.alert.window
         if let parent = window.sheetParent {
             parent.endSheet(window, returnCode: .cancel)
@@ -160,31 +122,7 @@ final class ConfirmationPresenter {
     ) {
         guard let shown, shown.id == id else { return }
         self.shown = nil
-        stopWatchingEscape()
         answer(shown.alert.isConfirmed(response))
     }
 
-    /// Makes Escape press Cancel while Cancel holds Return as its key equivalent.
-    private func watchEscape(for confirmation: ConfirmationAlert) {
-        let window = confirmation.alert.window
-        let cancel = confirmation.cancelButton
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
-            [weak window, weak cancel] event in
-            guard let window, event.window === window,
-                ConfirmationKey.isCancel(
-                    characters: event.charactersIgnoringModifiers,
-                    modifiers: event.modifierFlags
-                )
-            else { return event }
-            cancel?.performClick(nil)
-            return nil
-        }
-    }
-
-    private func stopWatchingEscape() {
-        if let escapeMonitor {
-            NSEvent.removeMonitor(escapeMonitor)
-        }
-        escapeMonitor = nil
-    }
 }

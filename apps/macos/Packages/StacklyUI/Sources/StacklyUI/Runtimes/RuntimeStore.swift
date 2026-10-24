@@ -68,7 +68,6 @@ public struct RuntimeInstallFailure: Equatable, Sendable {
 
 /// The managed runtimes the daemon holds, kept from snapshots plus `runtime.state_changed`
 /// events, and the installs that have not ended (spec 0018, *Halaman Runtimes*).
-///
 /// Its store loads `runtime.list` and refetches one runtime with `runtime.get` after each
 /// event, since the event carries no payload. The first page of a snapshot also names the
 /// installs that are running; ``installing`` keeps them, and follows the operation center
@@ -123,7 +122,6 @@ public final class RuntimeStore {
     @ObservationIgnored private var follower: Task<Void, Never>?
 
     /// Creates an empty store.
-    ///
     /// - Parameters:
     ///   - call: Sends one read to the daemon.
     ///   - send: Sends one mutation with its idempotency key.
@@ -195,7 +193,6 @@ public final class RuntimeStore {
 
     /// How many installed runtimes run `software`, the number of "{n} installed" on a
     /// Catalog card.
-    ///
     /// - Parameter software: `ProviderSummary.software`; `nil` counts nothing.
     public func installedCount(software: String?) -> Int {
         guard let software else { return 0 }
@@ -232,7 +229,6 @@ public final class RuntimeStore {
 
     /// Follows the operation center: an `install_runtime` operation that starts or ends,
     /// wherever it was started, reads `runtime.list` again so ``installing`` stays true.
-    ///
     /// - Parameter operations: The operation center of the shell.
     public func follow(_ operations: OperationCenter) {
         follower?.cancel()
@@ -268,10 +264,8 @@ public final class RuntimeStore {
     }
 
     /// Remembers an install the person started and follows its operation to its end.
-    ///
     /// When it ends, ``finishedInstalls`` gets a record, and a failure is kept for the
     /// Catalog detail panel.
-    ///
     /// - Parameters:
     ///   - operationId: The `install_runtime` operation the daemon accepted.
     ///   - provider: The provider ID, for the failure of the operation.
@@ -324,11 +318,9 @@ public final class RuntimeStore {
     /// The Get action of one artifact in the version matrix of the Catalog (spec 0018,
     /// *Kolom aksi Catalog*): `runtime.install` for `version` with the digest the person
     /// saw, so a catalog that moved on is refused rather than installed.
-    ///
     /// A click while an earlier one for the same artifact has no answer sends nothing. A
     /// key whose outcome was unknown is reused for five minutes, so a retry cannot start a
     /// second install.
-    ///
     /// - Parameters:
     ///   - provider: The provider ID.
     ///   - displayName: The name shown for the provider.

@@ -159,15 +159,6 @@ struct OperationsUnreadableTests {
         #expect(all.count > OverviewCopy.attentionLimit)
     }
 
-    @Test func o2IsReadAsInfoAndOpensOperations() throws {
-        let o2 = try #require(rules(.failed).first { $0.rule == "O2" })
-        #expect(
-            o2.spokenLabel
-                == "Info: Operations unavailable. Stackly couldn’t read operations. Any that need recovery are missing from this list."
-        )
-        #expect(o2.spokenHint == "Opens Operations.")
-    }
-
     // MARK: - The store
 
     /// An operation center whose snapshot waits for the test, then answers `result`.

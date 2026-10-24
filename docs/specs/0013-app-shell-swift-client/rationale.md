@@ -608,7 +608,7 @@ Update `/architect` sesi `arc-f1368-0015` setelah spec 0015 memutuskan G1 sampai
 | Peta package | `AgentBanner.swift` di folder `Agent/` | sama |
 | Model data | `SyncSignal.caughtUp` seperti yang dibangun; `ShellPresentation` tetap murni setelah fitur 15; `DaemonModel.unreachableCode` | butir log lead 3; spec 0015 *Banner, pengumuman, dan environment* |
 | Sinkronisasi snapshot plus cursor | langkah 2 `SyncEngine` dengan `.caughtUp`; `.caughtUp` di `ShellSync` dan arti `completedRounds` | kode `SyncEngine.swift`, `ShellSync.swift`, `DaemonModel.swift` di `main` |
-| Model shell | presence keluar dari `refreshing` juga lewat `.caughtUp`; titik sambung agent (parameter `agent:` di `DaemonModel.init` dengan `now`, `sleep`, dan `announce` yang sudah ada, `assemble(agentController:commandLineTool:)`, `ShellRuntime.init(model:closeNotice:commandLineTool:)`, `ShellBootstrap.fixture` tanpa `assemble`, `didResignActive()`, `didAssess`); urutan `update()` dan tabel pengumuman dengan pengumuman tertunda | usulan spec 0015 baris 0013 ketiga; G1 |
+| Model shell | Dihapus dari cakupan pada 2026-10-24. | usulan spec 0015 baris 0013 ketiga; G1 |
 | Tampilan status daemon | `bannerContent(now:)` = `AgentBanner.content(...) ?? presentation.banner`; jam 15 detik dan jadwal `TimelineView`; `DaemonBanner` dengan `DaemonModel` opsional dari environment; `.id` untuk critical; handler empat aksi | usulan spec 0015 baris 0013 pertama dan ketiga; G2 |
 | Shell jendela | `LiveShell` memasang `.environment(runtime.commandLineTool)`, dan `MainWindowRoot` membawa nya | G3 |
 | Diagnostics koneksi | `ConnectionDiagnostics.agentHint`, petunjuk dihitung saat render dengan `TimelineView` 1 detik, `rows(now:)`, kedua seksi baru membaca environment opsional | usulan spec 0015 baris 0013 pertama; G3 |
@@ -625,7 +625,6 @@ Update `/architect` sesi `arc-f1368-0015` setelah spec 0015 memutuskan G1 sampai
 **Keputusan kecil yang diambil update ini.**
 
 - `ConnectionDiagnostics.rows(...)` mendapat parameter `now:`, supaya petunjuk agent di baris What to do dan Copy Details berasal dari satu daftar baris yang sama (AC-12). Runner up: menghitung petunjuk agent hanya di view, yang membuat Copy Details berbeda dari baris yang tampil.
-- `AgentTiming.announceWait` ditulis 12 detik mengikuti *Banner, pengumuman, dan environment* spec 0015; tabel *Value sourcing* spec 0015 masih menulis 10 detik, dan selisih itu dikirim ke lead sebagai usulan untuk spec 0015.
 - Daftar file shell yang tidak boleh diubah sesi bersamaan ditambah `DaemonBanner.swift`, `ConnectionDiagnostics.swift`, `ConnectionDiagnosticsSection.swift`, dan `LiveShell.swift`, karena langkah 10 sampai 12 fitur 15 mengubahnya. `ShellBootstrap` ada di `ShellRuntime.swift`, yang sudah ada di daftar.
 
 **Ditunda atau tidak diterapkan.** Tidak ada butir sumber yang ditunda. Penanda "diterapkan" di *Usulan update untuk spec lain* spec 0015 milik lead scope 02, jadi teks penanda nya dikirim di laporan.
@@ -648,8 +647,8 @@ Update `/architect` sesi `arc-ui-sync`, bersama spec 0012, 0067, 0068, dan `apps
 
 | Butir | Perubahan | Sumber |
 | --- | --- | --- |
-| *Model shell di main actor*, titik sambung agent | `attach(presence:now:sleep:didAssess:didFail:systemRetry:)`, closure `didFail`, `DaemonModel.agentDidFail` mengumumkan `AgentActionError.message` | usulan spec 0016 dan spec 0015; `6f9b4672` |
-| *Model shell*, butir pengumuman VoiceOver | kalimat `not_found` "tidak diumumkan `DaemonModel`" menjadi bersyarat; dua kejadian agent baru di announcer | sama |
+| *Model shell di main actor*, titik sambung agent | Dihapus dari cakupan pada 2026-10-24. | usulan spec 0016 dan spec 0015; `6f9b4672` |
+| Dihapus dari cakupan pada 2026-10-24. | sama |
 | *Aksesibilitas*, butir "Tambahan fase 02" | kalimat "bukan `DaemonModel`" menjadi bersyarat: `StateBanner` saat baris agent tampil, `DaemonModel` saat tidak, `OnboardingFlow` spec 0016 selama onboarding | usulan spec 0016 |
 | *Key invariants*, butir "tepat satu pengumuman" | judul `not_found` diumumkan tepat satu sumber menurut syarat yang sama | usulan spec 0016 |
 | *Critical test scenarios* | baris langkah 12a | `6f9b4672` |

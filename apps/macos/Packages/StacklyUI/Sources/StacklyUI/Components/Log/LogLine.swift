@@ -16,8 +16,7 @@ nonisolated public enum LogLevel: Equatable, Sendable {
         }
     }
 
-    /// The SF Symbol of the level, or `nil` for an ordinary line. It is always drawn, not
-    /// only while Differentiate Without Color is on.
+    /// The SF Symbol of the level, or `nil` for an ordinary line.
     public var symbol: String? {
         switch self {
         case .normal: nil
@@ -26,18 +25,9 @@ nonisolated public enum LogLevel: Equatable, Sendable {
         }
     }
 
-    /// The word VoiceOver reads for the level, or `nil` for an ordinary line.
-    public var word: String? {
-        switch self {
-        case .normal: nil
-        case .warning: "Warning"
-        case .error: "Error"
-        }
-    }
 }
 
 /// One line of a ``LogView``.
-///
 /// Feature 27 fills it from the log stream and decides the time format and the level.
 nonisolated public struct LogLine: Identifiable, Equatable, Sendable {
     /// A stable key; the view follows and scrolls by it.
@@ -52,7 +42,6 @@ nonisolated public struct LogLine: Identifiable, Equatable, Sendable {
     public var level: LogLevel
 
     /// Creates a line.
-    ///
     /// - Parameters:
     ///   - id: A stable key.
     ///   - timeText: The formatted time, or `nil`.
@@ -70,14 +59,4 @@ nonisolated public struct LogLine: Identifiable, Equatable, Sendable {
         self.level = level
     }
 
-    /// What VoiceOver reads for the line: "{time}, {source}, {Error | Warning}: {text}".
-    /// An empty part and the ordinary level are left out, and a line with no part before
-    /// the text reads as the text alone.
-    public var accessibilityLabel: String {
-        let prefix = [timeText, source, level.word]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-        guard !prefix.isEmpty else { return text }
-        return "\(prefix.joined(separator: ", ")): \(text)"
-    }
 }

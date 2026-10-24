@@ -95,7 +95,7 @@ struct OnboardingModelTests {
     @Test func theFooterTextNamesTheStepAndTheCount() {
         #expect(OnboardingFooter.stepText(.welcome) == "Step 1 of 5 · Welcome")
         #expect(OnboardingFooter.stepText(.backgroundAgent) == "Step 2 of 5 · Background Agent")
-        #expect(OnboardingFooter.stepSpoken(.storage) == "Step 3 of 5, Storage")
+
     }
 
     @Test func backShowsFromTheSecondStepOn() {

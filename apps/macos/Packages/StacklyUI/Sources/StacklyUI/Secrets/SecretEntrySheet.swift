@@ -3,14 +3,12 @@ import SwiftUI
 
 /// The sheet that fills the references an action needs (spec 0011, *GUI*): start, env up, or
 /// restore stopped with `secret.needs_secret`.
-///
 /// Each reference gets a row with the reason it cannot be read, a ``SecretField``, and a Save
 /// button that sends `secret.set` in mode `create`. Generate is offered only for a reference
 /// whose `generateAllowed` is true. When a value exists already, the row offers Replace. When
 /// a replace changes only the stored copy, the sheet asks first: the password inside the
 /// database does not change. Once every row is saved, the main button repeats the action
 /// that stopped.
-///
 /// The typed values live in this view's `@State`, are cleared once sent, and are cleared when
 /// the sheet goes away.
 public struct SecretEntrySheet: View {
@@ -24,7 +22,6 @@ public struct SecretEntrySheet: View {
     @State private var confirmation: ConfirmationRequest?
 
     /// Creates the sheet.
-    ///
     /// - Parameters:
     ///   - needs: The references to fill, from ``SecretNeed/needs(in:)`` or a restore
     ///     preflight.
@@ -60,7 +57,7 @@ public struct SecretEntrySheet: View {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 Text("Secrets needed")
                     .font(.title2.bold())
-                    .accessibilityAddTraits(.isHeader)
+
                 Text(
                     "Fill these before you continue. Values go to your Keychain and are never shown again unless you ask."
                 )
@@ -87,13 +84,13 @@ public struct SecretEntrySheet: View {
                     clearDrafts()
                     onCancel()
                 }
-                .keyboardShortcut(.cancelAction)
+
                 Button(actionTitle) {
                     clearDrafts()
                     onContinue()
                 }
                 .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
+
                 .disabled(!model.allSaved)
                 .mutationGated()
             }
@@ -168,7 +165,7 @@ struct SecretEntryRow: View {
         VStack(alignment: .leading, spacing: Spacing.s8) {
             Text(row.need.reference)
                 .stacklyCode()
-                .accessibilityLabel("Secret \(row.need.reference)")
+
             Text(row.need.reasonText)
                 .font(.callout)
                 .foregroundStyle(StacklyColor.textSecondary)
@@ -183,7 +180,7 @@ struct SecretEntryRow: View {
         }
         .padding(Spacing.cardInsets)
         .background(StacklyColor.surfaceCard, in: .rect(cornerRadius: Radius.medium.value))
-        .accessibilityElement(children: .contain)
+
     }
 
     @ViewBuilder private var savedNote: some View {

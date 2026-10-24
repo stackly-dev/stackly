@@ -3,10 +3,7 @@ import SwiftUI
 
 /// A provider's tile: a rounded square in a system color with a bold white mark in the
 /// middle (spec 0067, AC-2).
-///
-/// The tile is decoration: it is hidden from VoiceOver and the provider name always
-/// stands in text next to it. The mark comes from the catalog, or from
-/// ``ProviderMark/defaultMark(for:)`` when there is none.
+/// The mark comes from the catalog, or from ``ProviderMark/defaultMark(for:)`` when there is none.
 public struct ProviderTile: View {
     /// 18 pt: the Instances table.
     public static let smallSize: CGFloat = 18
@@ -21,7 +18,6 @@ public struct ProviderTile: View {
     private let size: CGFloat
 
     /// Creates a tile from its parts.
-    ///
     /// - Parameters:
     ///   - mark: The catalog mark, or `nil` for the default mark of `name`.
     ///   - tile: The catalog color, or `nil` for gray.
@@ -32,7 +28,6 @@ public struct ProviderTile: View {
     }
 
     /// Creates a tile from a ``TileSpec``.
-    ///
     /// - Parameters:
     ///   - spec: The mark, color, and name.
     ///   - size: The side in points, for example ``mediumSize``.
@@ -60,7 +55,7 @@ public struct ProviderTile: View {
                 .padding(.horizontal, size * 0.08)
         }
         .frame(width: size, height: size)
-        .accessibilityHidden(true)
+
     }
 }
 

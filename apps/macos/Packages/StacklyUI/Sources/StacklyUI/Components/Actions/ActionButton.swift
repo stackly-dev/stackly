@@ -9,22 +9,11 @@ public enum ActionProminence {
 }
 
 /// The native button of a ``StacklyAction`` (spec 0067, AC-7).
-///
 /// A primary action is `.borderedProminent` and a secondary one `.bordered`. A destructive
 /// action is `role: .destructive` and `.bordered`, never prominent and never the default.
 /// It runs through the ``ActionHost`` of the window or sheet, so a confirmation shows once.
-///
-/// - Disabled for a reason of the action's own: the button is disabled with the reason as
-///   its help, and with `showsReason` the same reason shows as ``DisabledReasonText`` right
-///   under it. Pass `showsReason: false` for a toolbar button, and put the same
-///   ``DisabledReasonText`` in the page, the section footer, or the item's banner.
-/// - Blocked by the mutation gate: disabled with the gate's reason as its help only, because
-///   the window banner already writes it.
-/// - Busy: disabled, the title stays, a small spinner stands next to it, and VoiceOver
-///   reads the value "In progress".
-///
-/// An unsupported capability is a disabled button with a reason, never a hidden one. The
-/// button sets no keyboard shortcut; feature 69 owns them.
+/// - Disabled for a reason of the action's own: the button is disabled with the reason as   its help, and with `showsReason` the same reason shows as ``DisabledReasonText`` right   under it.
+/// An unsupported capability is a disabled button with a reason, never a hidden one.
 public struct ActionButton: View {
     @Environment(\.actionHost) private var host
     @Environment(\.mutationAvailability) private var gate
@@ -34,7 +23,6 @@ public struct ActionButton: View {
     private let showsReason: Bool
 
     /// Creates a button.
-    ///
     /// - Parameters:
     ///   - action: The action.
     ///   - prominence: How strongly the button stands out.
@@ -79,7 +67,7 @@ struct ActionButtonFace: View {
                     ProgressView()
                         .controlSize(.small)
                         .transition(StacklyMotion.crossfade)
-                        .accessibilityHidden(true)
+
                 }
             }
             if showsReason, case .disabled(let reason, true) = availability {
@@ -102,7 +90,7 @@ struct ActionButtonFace: View {
         .disabled(availability == .busy)
         .disabled(reason: disabledHelp)
         .modifier(BusyValue(isBusy: availability == .busy))
-        .accessibilityIdentifier(AccessibilityID.Action.button(action.id))
+
     }
 
     /// The reason that becomes the help of a disabled button: the action's own or the
@@ -129,7 +117,7 @@ private struct BusyValue: ViewModifier {
 
     @ViewBuilder func body(content: Content) -> some View {
         if isBusy {
-            content.accessibilityValue("In progress")
+            content
         } else {
             content
         }

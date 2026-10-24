@@ -3,11 +3,7 @@ import SwiftUI
 
 /// The card of one provider in the Catalog grid (spec 0017, *Layar Catalog (GUI)*): the
 /// tile, the name, the status badge, the meta line, and two lines of description.
-///
-/// The card is one button, so Tab reaches it and Return or Space chooses it. The chosen
-/// card has a ring. A planned provider reads in secondary text on a neutral tile, with no
-/// opacity that would lower the contrast. VoiceOver reads "{name}, {category}, {status}";
-/// the tile is decoration.
+/// The card is one native button. The chosen card has a ring. A planned provider reads in secondary text on a neutral tile, with no opacity that would lower the contrast.
 struct ProviderCard: View {
     let provider: ProviderSummary
     var installedCount = 0
@@ -68,17 +64,7 @@ struct ProviderCard: View {
             .contentShape(RoundedRectangle(cornerRadius: Radius.medium.value))
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spokenLabel(for: provider, installedCount: installedCount))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityIdentifier(AccessibilityID.Catalog.card(provider.provider))
-    }
 
-    /// What VoiceOver reads: "{name}, {category}, {status}".
-    static func spokenLabel(for provider: ProviderSummary, installedCount: Int = 0) -> String {
-        let category = CatalogCopy.categoryName(provider.category)
-        let status = status(of: provider, installedCount: installedCount).label
-        return "\(provider.displayName), \(category), \(status)"
     }
 
     /// The name, which wraps, and the badge on its right.

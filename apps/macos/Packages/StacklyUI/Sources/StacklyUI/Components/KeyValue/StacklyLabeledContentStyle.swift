@@ -2,12 +2,7 @@ import SwiftUI
 
 /// The style of a read only key value row (spec 0067, AC-3): the label in `.body`
 /// primary text and the value in `.body` ``StacklyColor/textSecondary``, selectable.
-///
-/// The row is one line with the value flush right when both fit. Otherwise the label sits
-/// above and the value wraps below it, flush left, never cut. VoiceOver reads the row as
-/// one element, "{label}, {value}" (checked in the running app, because a selectable value
-/// alone makes VoiceOver read the label only).
-///
+/// The row is one line with the value flush right when both fit. Otherwise the label sits above and the value wraps below it, flush left, never cut.
 /// Apply it to a ``CardSection`` whose rows are all read only, to an inspector, or to a
 /// single read only row inside a `Form`. Never apply it to a `Form` itself: the controls
 /// of a `Form` (field, picker, toggle) use the `LabeledContent` style inside it. A screen
@@ -38,15 +33,7 @@ public struct StacklyLabeledContentStyle: LabeledContentStyle {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // Selectable text breaks `.combine` (VoiceOver would read the label only), so the
-        // spoken element is built from the same label and value without the selection.
-        .accessibilityRepresentation {
-            HStack {
-                configuration.label
-                configuration.content
-            }
-            .accessibilityElement(children: .combine)
-        }
+
     }
 
     private func label(_ configuration: Configuration) -> some View {

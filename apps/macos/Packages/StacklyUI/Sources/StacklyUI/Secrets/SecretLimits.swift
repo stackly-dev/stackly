@@ -2,7 +2,6 @@ import Foundation
 
 /// The limits one secret value must meet, checked in the client to hold the main button
 /// back (spec 0011 AC-19). The daemon checks the same limits again and stays the judge.
-///
 /// The order is the daemon's (spec 0011 AC-22): the base rules of AC-7 first (not empty, no
 /// NUL, at most 65536 UTF-8 bytes), then the length of the field in characters, then, for a
 /// `printableOnly` field, control characters.
@@ -49,7 +48,6 @@ nonisolated public struct SecretLimits: Sendable, Equatable {
     }
 
     /// Creates limits.
-    ///
     /// - Parameters:
     ///   - minLength: The fewest characters, or `nil`.
     ///   - maxLength: The most characters, or `nil`.
@@ -61,7 +59,6 @@ nonisolated public struct SecretLimits: Sendable, Equatable {
     }
 
     /// The first rule `text` breaks, or `nil` when it fits.
-    ///
     /// - Parameter text: The value as typed.
     public func violation(for text: String) -> Violation? {
         if text.isEmpty { return .empty }

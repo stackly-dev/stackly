@@ -14,7 +14,6 @@ nonisolated enum InspectorMetrics {
 }
 
 /// The widest the inspector column can be for a window width (spec 0067, AC-18).
-///
 /// At the smallest window (900 pt) with the sidebar (236 pt) and the inspector open, the
 /// page column is 384 pt wide when the inspector is 280 pt. Below 1000 pt the column is
 /// therefore capped at 280 pt, so 384 pt stays the narrowest the page column gets; from
@@ -24,7 +23,6 @@ nonisolated public enum StacklyInspectorWidth {
     public static let compactWindowWidth: CGFloat = 1000
 
     /// The widest the inspector column can be at `windowWidth`.
-    ///
     /// - Parameter windowWidth: The width of the window, or `nil` when it is not known
     ///   (gallery, previews, sheets), which allows the full width.
     /// - Returns: 280 pt below ``compactWindowWidth``, otherwise 360 pt.
@@ -46,7 +44,6 @@ extension EnvironmentValues {
 extension View {
     /// Shows a native inspector column on the right of this view (spec 0067, AC-18) and
     /// puts an ``InspectorToggle`` in the toolbar.
-    ///
     /// The column is 240 pt wide at the least, 280 pt by default, and 360 pt at the most
     /// in a window 1000 pt wide or more, 280 pt at the most in a narrower one
     /// (``StacklyInspectorWidth``, from the window width in the environment).
@@ -57,15 +54,8 @@ extension View {
     /// content is drawn over the neighbouring views. The screen keeps the binding in `@SceneStorage("<page>.inspector")` with
     /// the inspector open by default (`apps/macos/design.md`, Components, Inspector). It
     /// is the only place that calls `.inspector(`.
-    ///
     /// Build the content from ``CardSection``, ``InspectorHeader``, ``InspectorPlaceholder``,
     /// ``StateBanner``, and ``ActionButton``.
-    ///
-    /// - Parameters:
-    ///   - isPresented: Whether the inspector is open.
-    ///   - help: The help of the toolbar toggle, for example with the shortcut; `nil` uses
-    ///     the toggle's label.
-    ///   - content: The inspector's content.
     public func stacklyInspector<C: View>(
         isPresented: Binding<Bool>,
         help: String? = nil,
@@ -88,7 +78,7 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .relayingFixtureAccessibilityInContainer()
+
             // The split view of `.inspector` measures the page at 0 × 0, where wrapping
             // text is thousands of points tall, and lays the page out at that height. The
             // page takes the size the column offers instead, open or closed.
@@ -110,7 +100,7 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
                     // surface, in the token colors. Like the relay, it reaches the content only
                     // here, inside the `ScrollView`.
                     .environment(\.backgroundMaterial, nil)
-                    .relayingFixtureAccessibility()
+
                 }
                 .onGeometryChange(for: CGFloat.self) {
                     $0.size.height
@@ -129,37 +119,5 @@ private struct StacklyInspectorModifier<Inspector: View>: ViewModifier {
                     InspectorToggle(isPresented: $isPresented, help: help)
                 }
             }
-    }
-}
-
-extension View {
-    /// Pins the fixture's accessibility values again inside the inspector, which holds its
-    /// content again and drops Increase Contrast there (spec 0068, K15). Release builds
-    /// return the view as it is.
-    ///
-    /// It is used on the padded column content inside its `ScrollView`. Further out, the
-    /// column content does not get the values (the probe of the spec).
-    fileprivate func relayingFixtureAccessibility() -> some View {
-        #if DEBUG
-            relayFixtureAccessibility()
-        #else
-            self
-        #endif
-    }
-
-    /// The relay of ``relayingFixtureAccessibility()`` for the main content, inside a
-    /// `ZStack` of its own that holds only this view, so it changes no layout. Release builds
-    /// return the view as it is.
-    ///
-    /// `.inspector` pins the system values again where it holds the main content. A relay
-    /// written straight on the content lands above that point whenever the page sits under
-    /// an `if`, a `switch`, an `AnyView`, or a modifier, as it always does in a snapshot,
-    /// and the page then reads standard contrast. Inside the container it lands below.
-    fileprivate func relayingFixtureAccessibilityInContainer() -> some View {
-        #if DEBUG
-            ZStack { relayFixtureAccessibility() }
-        #else
-            self
-        #endif
     }
 }

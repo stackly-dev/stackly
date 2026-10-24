@@ -77,7 +77,7 @@ extension SnapshotTests {
         func theFormWithAReadyPreflight() async throws {
             let rig = await ready()
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-ready", size: Self.size, systemMaterial: true)
+                sheet(rig), named: "new-instance-ready", size: Self.size)
         }
 
         @Test(
@@ -88,7 +88,7 @@ extension SnapshotTests {
         func theFormWithATakenPort() async throws {
             let rig = await ready(FixtureCreate.portConflict)
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-port-taken", size: Self.size, systemMaterial: true)
+                sheet(rig), named: "new-instance-port-taken", size: Self.size)
         }
 
         @Test(
@@ -99,7 +99,7 @@ extension SnapshotTests {
         func theFormWithAWarning() async throws {
             let rig = await ready(FixtureCreateForm.caution)
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-warning", size: Self.size, systemMaterial: true)
+                sheet(rig), named: "new-instance-warning", size: Self.size)
         }
 
         @Test(
@@ -125,8 +125,7 @@ extension SnapshotTests {
                 ], command: FixtureCreateForm.ready.command)
             let rig = await ready(preflight)
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-advanced-error", size: Self.size,
-                systemMaterial: true)
+                sheet(rig), named: "new-instance-advanced-error", size: Self.size)
         }
 
         @Test(
@@ -141,13 +140,12 @@ extension SnapshotTests {
             draft.copyFromReference = FixtureCreateForm.copyFromReference
             try await assertSnapshot(
                 sheet(rig, drafts: ["superuserPassword": draft]), named: "new-instance-copy-from",
-                size: Self.size, systemMaterial: true)
+                size: Self.size)
         }
 
         // MARK: - Duplicate
 
         // Spec 0024 AC-12 and the visual part of AC-14: the sheet at 560 pt without clipped
-        // text, in light, dark, and Increase Contrast. Keyboard and VoiceOver are manual
         // (docs/manual.md section U).
 
         /// A rig opened on the settings of `pg17-dev`, waiting for its first preflight.
@@ -175,7 +173,7 @@ extension SnapshotTests {
             await settle("the first preflight") { rig.model.currentPreflight != nil }
             await settle("the Copy from list") { !rig.model.copyFromOptions.isEmpty }
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-duplicate", size: Self.size, systemMaterial: true)
+                sheet(rig), named: "new-instance-duplicate", size: Self.size)
         }
 
         @Test(
@@ -192,7 +190,7 @@ extension SnapshotTests {
             draft.copyFromReference = FixtureCreateForm.copyFromReference
             try await assertSnapshot(
                 sheet(rig, drafts: ["superuserPassword": draft]),
-                named: "new-instance-duplicate-copy-from", size: Self.size, systemMaterial: true)
+                named: "new-instance-duplicate-copy-from", size: Self.size)
         }
 
         @Test(
@@ -206,8 +204,7 @@ extension SnapshotTests {
             let rig = await duplicate { $0.service.onDuplicate = { _ in await gate.wait() } }
             await settle("the form read") { gate.waiting == 1 }
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-duplicate-loading", size: Self.size,
-                systemMaterial: true)
+                sheet(rig), named: "new-instance-duplicate-loading", size: Self.size)
             gate.release(FixtureCreateDuplicate.pg17)
         }
 
@@ -230,8 +227,7 @@ extension SnapshotTests {
                 if case .formFailed = rig.model.phase { true } else { false }
             }
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-duplicate-failed", size: Self.size,
-                systemMaterial: true)
+                sheet(rig), named: "new-instance-duplicate-failed", size: Self.size)
         }
 
         // MARK: - The preflight card
@@ -359,7 +355,7 @@ extension SnapshotTests {
             rig.emit(CreateRig.operation(state: .running, stage: "layout", revision: 2))
             await settle("the stage") { rig.model.operation?.stage == "layout" }
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-creating", size: Self.size, systemMaterial: true)
+                sheet(rig), named: "new-instance-creating", size: Self.size)
         }
 
         @Test(
@@ -382,7 +378,7 @@ extension SnapshotTests {
             await settle("the form") { rig.model.phase == .editing }
             await settle("the preflight") { rig.model.currentPreflight != nil }
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-failed", size: Self.size, systemMaterial: true)
+                sheet(rig), named: "new-instance-failed", size: Self.size)
         }
 
         // MARK: - Without a form
@@ -395,8 +391,7 @@ extension SnapshotTests {
         func theSheetWithoutARuntime() async throws {
             let rig = await rig(runtimes: RuntimeListPage(items: [], next: nil, installing: []))
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-no-runtimes", size: Self.size, systemMaterial: true
-            )
+                sheet(rig), named: "new-instance-no-runtimes", size: Self.size)
         }
 
         @Test(
@@ -408,8 +403,7 @@ extension SnapshotTests {
             let rig = await ready()
             rig.model.selectCategory(.cache)
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-empty-category", size: Self.size,
-                systemMaterial: true)
+                sheet(rig), named: "new-instance-empty-category", size: Self.size)
         }
 
         @Test(
@@ -428,8 +422,7 @@ extension SnapshotTests {
                 if case .formFailed = rig.model.phase { true } else { false }
             }
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-form-failed", size: Self.size, systemMaterial: true
-            )
+                sheet(rig), named: "new-instance-form-failed", size: Self.size)
         }
 
         @Test(
@@ -442,7 +435,7 @@ extension SnapshotTests {
             let rig = await rig { $0.service.onForm = { _ in await gate.wait() } }
             await settle("the form read") { gate.waiting == 1 }
             try await assertSnapshot(
-                sheet(rig), named: "new-instance-loading", size: Self.size, systemMaterial: true)
+                sheet(rig), named: "new-instance-loading", size: Self.size)
             gate.release(FixtureCreateForm.database)
         }
     }

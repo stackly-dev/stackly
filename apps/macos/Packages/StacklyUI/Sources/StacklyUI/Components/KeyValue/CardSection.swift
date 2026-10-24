@@ -3,7 +3,6 @@ import SwiftUI
 /// A titled card of rows (spec 0067, AC-3): an optional `.headline` title with an
 /// accessory on its right, then a ``SwiftUI/View/cardSurface(radius:)`` card holding every
 /// subview of the content as one row, then an optional footer.
-///
 /// Each subview is one row, set apart by a divider inset 14 pt from the left, with 11 pt
 /// above and below and 14 pt at the sides, and at least ``ScaledSize/rowMinHeight`` high.
 /// A `ForEach` makes one row per element; a row made of several views is wrapped in an
@@ -11,7 +10,7 @@ import SwiftUI
 /// ``StacklyLabeledContentStyle`` on the section when every row is read only. A button in
 /// a row, such as ``CopyButton``, stands next to the `LabeledContent`, not inside it.
 public struct CardSection<Accessory: View, Footer: View, Content: View>: View {
-    @ScaledMetric(.rowMinHeight) private var rowMinHeight
+    private let rowMinHeight = ScaledSize.rowMinHeight.base
 
     private let title: String?
     private let accessory: Accessory
@@ -19,7 +18,6 @@ public struct CardSection<Accessory: View, Footer: View, Content: View>: View {
     private let content: Content
 
     /// Creates a section with an accessory and a footer.
-    ///
     /// - Parameters:
     ///   - title: The title, or `nil` for a card without one.
     ///   - accessory: The view on the right of the title, for example a button.
@@ -59,7 +57,7 @@ public struct CardSection<Accessory: View, Footer: View, Content: View>: View {
                 Text(title)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                    .accessibilityAddTraits(.isHeader)
+
             }
             Spacer(minLength: Spacing.s12)
             accessory
@@ -86,7 +84,6 @@ public struct CardSection<Accessory: View, Footer: View, Content: View>: View {
 
 extension CardSection where Accessory == EmptyView, Footer == EmptyView {
     /// Creates a section with a title and rows.
-    ///
     /// - Parameters:
     ///   - title: The title, or `nil` for a card without one.
     ///   - content: The rows, one per subview.
@@ -97,7 +94,6 @@ extension CardSection where Accessory == EmptyView, Footer == EmptyView {
 
 extension CardSection where Accessory == EmptyView, Footer == Text {
     /// Creates a section with a title, rows, and a text footer.
-    ///
     /// - Parameters:
     ///   - title: The title, or `nil` for a card without one.
     ///   - footer: The footnote under the card.
@@ -113,7 +109,6 @@ extension CardSection where Accessory == EmptyView, Footer == Text {
 
 extension CardSection where Footer == EmptyView {
     /// Creates a section with a title, an accessory on its right, and rows.
-    ///
     /// - Parameters:
     ///   - title: The title, or `nil` for a card without one.
     ///   - accessory: The view on the right of the title, for example a button.

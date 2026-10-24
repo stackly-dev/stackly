@@ -26,20 +26,14 @@ nonisolated struct ToneSurfaceStyle: ShapeStyle {
 
     func resolve(in environment: EnvironmentValues) -> Color.Resolved {
         let baseColor = base.color.components(
-            scheme: environment.colorScheme,
-            contrast: environment.colorSchemeContrast
-        )
+            scheme: environment.colorScheme)
         let fill = SRGBColor(tone.fill.resolve(in: environment))
         return baseColor.mixed(with: fill, fraction: strength.fraction).resolved
     }
 }
 
 extension View {
-    /// Draws an opaque tone tint behind the view: the `base` surface with the tone fill
-    /// mixed in at 16% (`.badge`, in a capsule) or 12% (`.banner`, in a rounded
-    /// rectangle with ``Radius/medium`` corners). While Increase Contrast is on, it adds
-    /// a 1 pt border in the tone fill.
-    ///
+    /// Draws an opaque tone tint behind the view: the `base` surface with the tone fill mixed in at 16% (`.badge`, in a capsule) or 12% (`.banner`, in a rounded rectangle with ``Radius/medium`` corners).
     /// A tone surface never sits on glass or on a system background, and only text of
     /// the same tone, `.primary`, or ``StacklyColor/textSecondary`` goes on it.
     public func toneSurface(
@@ -50,8 +44,7 @@ extension View {
         modifier(DefaultToneSurfaceModifier(tone: tone, base: base, strength: strength))
     }
 
-    /// Draws an opaque tone tint behind the view in `shape`, with the same colors and
-    /// Increase Contrast border as ``toneSurface(_:on:strength:)``.
+    /// Draws an opaque tone tint inside the supplied shape.
     public func toneSurface<S: InsettableShape>(
         _ tone: Tone,
         on base: SurfaceToken = .card,
@@ -62,8 +55,7 @@ extension View {
     }
 
     /// Draws a custom card behind the view: ``StacklyColor/surfaceCard`` with `radius`
-    /// corners and a hairline `separatorColor` border that becomes 1 pt while Increase
-    /// Contrast is on. It adds no padding; use ``Spacing/cardInsets`` for the content.
+    /// corners and a hairline separator border. It adds no padding.
     public func cardSurface(radius: Radius = .medium) -> some View {
         modifier(CardSurfaceModifier(radius: radius))
     }
@@ -90,7 +82,6 @@ private struct DefaultToneSurfaceModifier: ViewModifier {
 }
 
 private struct ToneSurfaceModifier<S: InsettableShape>: ViewModifier {
-    @Environment(\.colorSchemeContrast) private var contrast
 
     let tone: Tone
     let base: SurfaceToken
@@ -101,15 +92,11 @@ private struct ToneSurfaceModifier<S: InsettableShape>: ViewModifier {
         content
             .background(shape.fill(ToneSurfaceStyle(tone: tone, base: base, strength: strength)))
             .overlay {
-                if contrast == .increased {
-                    shape.strokeBorder(tone.fill, lineWidth: 1)
-                }
             }
     }
 }
 
 private struct CardSurfaceModifier: ViewModifier {
-    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.displayScale) private var displayScale
 
     let radius: Radius
@@ -121,7 +108,7 @@ private struct CardSurfaceModifier: ViewModifier {
             .overlay {
                 shape.strokeBorder(
                     Color(nsColor: .separatorColor),
-                    lineWidth: contrast == .increased ? 1 : 1 / displayScale
+                    lineWidth: 1 / displayScale
                 )
             }
     }

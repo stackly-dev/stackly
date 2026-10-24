@@ -4,7 +4,6 @@ import SwiftUI
 /// The Welcome step: the app icon, the title, and what Stackly is, without promising
 /// anything this build does not have (spec 0016, AC-4).
 struct WelcomeStep: View {
-    let focus: AccessibilityFocusState<Bool>.Binding
     /// The app icon; a test or a snapshot passes a fixed image.
     let icon: NSImage
 
@@ -16,10 +15,10 @@ struct WelcomeStep: View {
             Image(nsImage: icon)
                 .resizable()
                 .frame(width: Self.iconSize, height: Self.iconSize)
-                .accessibilityHidden(true)
+
             OnboardingStepHeader(
                 title: OnboardingCopy.welcomeTitle, subtitle: OnboardingCopy.welcomeSubtitle,
-                style: .welcome, focus: focus)
+                style: .welcome)
             VStack(alignment: .leading, spacing: Spacing.s16) {
                 row(OnboardingCopy.isolatedInstances) {
                     SectionIcon(.instances)
@@ -32,7 +31,7 @@ struct WelcomeStep: View {
                 row(OnboardingCopy.noAccount) {
                     Image(systemName: "laptopcomputer")
                         .foregroundStyle(StacklyColor.textSecondary)
-                        .accessibilityHidden(true)
+
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -60,6 +59,6 @@ struct WelcomeStep: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .accessibilityElement(children: .combine)
+
     }
 }

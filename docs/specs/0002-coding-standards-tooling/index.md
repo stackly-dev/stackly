@@ -1,4 +1,6 @@
 # 0002. Evidence test, pemisahan test native, dan baseline benchmark
+> Perubahan cakupan 2026-10-24: dukungan pembaca layar khusus, navigasi dan shortcut keyboard khusus, pengaturan tampilan aksesibilitas, dan identifier UI test dihapus atas permintaan pengguna. Ketentuan serta cek khusus kemampuan tersebut di dokumen ini tidak berlaku; nomor kriteria tetap stabil.
+
 
 **Date**: 2026-10-17
 **Status**: Accepted
@@ -431,7 +433,7 @@ Aturan pindaian `evidence check`:
 
 - `cargo xtask codegen --check` dan `cargo deny check` tidak menulis evidence.
 - Test tanpa PRD ID tidak menulis record.
-- UI test XCUITest (XCTest) memakai helper `StacklyXCTestSupport` dari [spec 0068](../0068-fixture-tampilan-cek-visual/index.md) (diputuskan 2026-10-21, fitur 68): `XCTestCase.evidence(covers:expected:)` di baris pertama test, `XCTEvidence.actual` dan `XCTEvidence.blocked` (melempar `XCTSkip`, tercatat `BLOCKED`), format record yang sama dengan trait `.evidence` lewat target internal `StacklyEvidenceCore`, `kind` selalu `fixture`, dan variabel evidence yang sampai ke runner lewat awalan `TEST_RUNNER_` yang diisi `cargo xtask ui-test`. Review GUI yang tidak bisa diotomatiskan (setting sistem asli, fokus Tab, suara VoiceOver) tetap memakai record manual.
+- UI test XCUITest (XCTest) memakai helper `StacklyXCTestSupport` dari [spec 0068](../0068-fixture-tampilan-cek-visual/index.md) (diputuskan 2026-10-21, fitur 68): `XCTestCase.evidence(covers:expected:)` di baris pertama test, `XCTEvidence.actual` dan `XCTEvidence.blocked` (melempar `XCTSkip`, tercatat `BLOCKED`), format record yang sama dengan trait `.evidence` lewat target internal `StacklyEvidenceCore`, `kind` selalu `fixture`, dan variabel evidence yang sampai ke runner lewat awalan `TEST_RUNNER_` yang diisi `cargo xtask ui-test`.
 - Fuzz target dan benchmark baru menulis record setelah fitur 63 dan 64 memutuskan field tambahannya (sebagai field opsional `v1`, atau `v2`).
 
 ## Consequences

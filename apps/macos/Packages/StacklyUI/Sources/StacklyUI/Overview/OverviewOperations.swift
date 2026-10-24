@@ -29,7 +29,7 @@ struct OverviewOperations: View {
             }
         case .failed(_, let retry):
             VStack(alignment: .leading, spacing: Spacing.s6) {
-                Text("Operations").font(.headline).accessibilityAddTraits(.isHeader)
+                Text("Operations").font(.headline)
                 StatePlaceholder(
                     FailureContent(
                         title: "Couldn’t Load Operations",
@@ -41,7 +41,7 @@ struct OverviewOperations: View {
             }
         case .unsupported:
             VStack(alignment: .leading, spacing: Spacing.s6) {
-                Text("Operations").font(.headline).accessibilityAddTraits(.isHeader)
+                Text("Operations").font(.headline)
                 StatePlaceholder(
                     UnsupportedContent(
                         title: "Operations Unavailable",
@@ -98,16 +98,13 @@ struct OverviewOperationRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spokenLabel(operation: operation, title: title))
-        .accessibilityIdentifier(AccessibilityID.Overview.operation(operation.id))
+
     }
 
     @ViewBuilder private var progress: some View {
         if let stages = OperationStages.definitions(for: operation.kind) {
             StagedProgress(
-                StagedProgressValue.from(operation: operation, stages: stages), layout: .compact,
-                accessibilityLabel: title)
+                StagedProgressValue.from(operation: operation, stages: stages), layout: .compact)
         } else {
             HStack(spacing: Spacing.s8) {
                 Text(OperationStages.label(for: operation))
@@ -115,22 +112,9 @@ struct OverviewOperationRow: View {
                     .foregroundStyle(StacklyColor.textSecondary)
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityHidden(true)
+
             }
         }
     }
 
-    /// "{title}, {state}, {stage}" and ", {percent} percent" when the operation has stages.
-    static func spokenLabel(operation: OperationSnapshot, title: String) -> String {
-        let state = StatusAdapter.appearance(of: operation).label
-        var parts = [title, state]
-        if let stages = OperationStages.definitions(for: operation.kind) {
-            let value = StagedProgressValue.from(operation: operation, stages: stages)
-            parts.append(value.currentTitle)
-            if let percent = value.percent { parts.append("\(percent) percent") }
-        } else {
-            parts.append(OperationStages.label(for: operation))
-        }
-        return parts.joined(separator: ", ")
-    }
 }

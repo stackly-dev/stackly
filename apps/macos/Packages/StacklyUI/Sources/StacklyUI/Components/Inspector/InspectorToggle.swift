@@ -1,19 +1,12 @@
 import SwiftUI
 
 /// The toolbar button that shows and hides the inspector (spec 0067, AC-18).
-///
-/// Its label is "Show Inspector" or "Hide Inspector" for the binding, its symbol is
-/// `sidebar.trailing`, and VoiceOver reads the label. ``SwiftUI/View/stacklyInspector(isPresented:help:content:)``
-/// puts it in the toolbar; spec 0069 binds the View menu command to the same binding.
+/// ``SwiftUI/View/stacklyInspector(isPresented:help:content:)`` puts it in the toolbar; spec 0069 binds the View menu command to the same binding.
 public struct InspectorToggle: View {
     @Binding private var isPresented: Bool
     private let help: String?
 
     /// Creates the toggle.
-    ///
-    /// - Parameters:
-    ///   - isPresented: Whether the inspector is open.
-    ///   - help: The tooltip, for example with the shortcut; `nil` uses the label.
     public init(isPresented: Binding<Bool>, help: String? = nil) {
         _isPresented = isPresented
         self.help = help
@@ -41,7 +34,7 @@ public struct InspectorToggle: View {
                 .labelStyle(.iconOnly)
         }
         .help(Self.helpText(isPresented: isPresented, help: help))
-        .accessibilityIdentifier(AccessibilityID.Inspector.toggle)
+
     }
 }
 

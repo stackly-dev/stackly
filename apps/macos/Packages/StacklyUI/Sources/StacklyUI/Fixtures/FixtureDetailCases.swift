@@ -5,7 +5,6 @@
     /// The detail of the fixture instances (spec 0068 as extended by spec 0021): what
     /// `instance.get_detail` and `instance.get_data_usage` answer for each instance case, built
     /// only from the generated contract types.
-    ///
     /// The values follow the contract fixtures of `protocols/fixtures/instance/`: PostgreSQL
     /// gets a `uri` and a `socket` string with the password as a secret part, NATS gets a `uri`
     /// without a secret, and the other providers describe no connection string. A case that
@@ -15,7 +14,6 @@
         public static let home = "/Users/stackly-fixture"
 
         /// The detail of `summary`.
-        ///
         /// - Parameters:
         ///   - summary: The instance.
         ///   - packageReadable: Whether the pinned package can be read; `false` gives the detail
@@ -165,7 +163,6 @@
     /// menunggu DTO*, answered by spec 0021): an instance that ended `failed` with the code
     /// `endpoint_in_use` and the output of the process, and the operation and the error the
     /// daemon gave for the click.
-    ///
     /// Like ``FixtureCreate`` it is data for a page rig or a scenario to answer with; it joins
     /// no scenario by itself, so the instance counts of the existing scenarios stay.
     public nonisolated enum FixtureStartConflict {

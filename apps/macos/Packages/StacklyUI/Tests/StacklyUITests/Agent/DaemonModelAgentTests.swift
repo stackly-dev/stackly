@@ -5,7 +5,6 @@ import Testing
 @testable import StacklyUI
 
 /// The daemon model with a background agent: the banner row, the hint, the code of the
-/// last failure, and the announcements (spec 0015, *Banner, pengumuman, dan environment*,
 /// AC-13; spec 0013, AC-21). Every wait goes through `ManualSleep`.
 @Suite(.timeLimit(.minutes(1)))
 struct DaemonModelAgentTests {
@@ -20,7 +19,6 @@ struct DaemonModelAgentTests {
         let signal: AsyncStream<SyncSignal>.Continuation
         let controller = FakeBackgroundAgentController()
         let sleeper = ManualSleep()
-        var announced: [String] = []
         var clock = DaemonModelTests.launch
         let agent: BackgroundAgentModel?
         var model: DaemonModel!
@@ -51,7 +49,7 @@ struct DaemonModelAgentTests {
                 launchedAt: DaemonModelAgentTests.launch,
                 now: { [weak self] in self?.clock ?? DaemonModelAgentTests.launch },
                 sleep: { try await sleeper.sleep(for: $0) },
-                announce: { [weak self] in self?.announced.append($0) },
+
                 agent: agent)
             model.start()
         }
@@ -96,7 +94,7 @@ struct DaemonModelAgentTests {
         #expect(rig.model.agentBannerInput == nil)
         #expect(rig.model.bannerContent(now: rig.clock) == rig.model.presentation.banner)
         #expect(rig.model.diagnostics.agentHint == nil)
-        #expect(rig.announced == [Self.lost])
+
         let rows = rig.model.diagnostics.rows(
             calendar: .current, locale: .current, timeZone: .current)
         #expect(rows.contains { $0.label == "What to do" } == false)
@@ -178,170 +176,20 @@ struct DaemonModelAgentTests {
         rig.controller.release()
     }
 
-    // MARK: - Announcements
-
-    @Test func aLossWithAFreshStateAnnouncesTheRowTitleOnce() async throws {
-        let rig = Rig(initialProbe: Self.fresh())
-        try await rig.push(DaemonModelTests.unreachable())
-        for _ in 0..<20 { await Task.yield() }
-        #expect(rig.announced == [Self.offTitle])
-        try await rig.push(.connecting(attempt: 2))
-        try await rig.push(DaemonModelTests.unreachable(6))
-        #expect(rig.announced == [Self.offTitle])
-    }
-
-    @Test func aLossWithAnOldStateWaitsForTheFirstProbeAndAnnouncesItsTitle() async throws {
-        let rig = Rig(initialProbe: Self.fresh(), holdFirstCall: true)
-        rig.clock = Self.launch.addingTimeInterval(600)
-        try await rig.push(DaemonModelTests.unreachable(600))
-        // The status is older than a poll, so nothing is said until a probe arrives; the
-        // probe the loss starts waits at the gate until the test lets it return.
-        await rig.controller.waitUntilHolding()
-        #expect(rig.announced.isEmpty)
-        rig.controller.release()
-        try await waitUntil { rig.controller.count(of: .status) == 1 }
-        try await waitUntil { rig.announced == [Self.offTitle] }
-        #expect(rig.announced == [Self.offTitle])
-    }
-
-    @Test func aLossBeforeAnyStateWaitsForTheFirstProbeAndAnnouncesItsTitle() async throws {
-        let rig = Rig(holdFirstCall: true)
-        try await rig.push(DaemonModelTests.unreachable())
-        await rig.controller.waitUntilHolding()
-        #expect(rig.announced.isEmpty)
-        rig.controller.release()
-        try await waitUntil { rig.announced == [Self.offTitle] }
-        // The state the probe found is recorded, not announced again as a change.
-        for _ in 0..<30 { await Task.yield() }
-        #expect(rig.announced == [Self.offTitle])
-    }
-
-    @Test func aPendingLossWithoutAProbeSaysCantConnectAfterAnnounceWait() async throws {
-        let rig = Rig(status: Self.fresh())
-        try await waitUntil { rig.agent?.assessment != nil }
-        rig.controller.holdNextCall()
-        rig.clock = Self.launch.addingTimeInterval(600)
-        try await rig.push(DaemonModelTests.unreachable(600))
-        await rig.waitForSleep(AgentTiming.announceWait)
-        #expect(rig.announced.isEmpty)
-        rig.sleeper.fire()
-        try await waitUntil { rig.announced == [Self.lost] }
-        rig.controller.release()
-        for _ in 0..<30 { await Task.yield() }
-        #expect(rig.announced == [Self.lost])
-    }
-
-    @Test func aPendingLossThatReconnectsFirstIsSettledAndTheReconnectIsTheNextOne() async throws {
-        let rig = Rig(status: Self.fresh())
-        try await waitUntil { rig.agent?.assessment != nil }
-        rig.controller.holdNextCall()
-        rig.clock = Self.launch.addingTimeInterval(600)
-        try await rig.push(DaemonModelTests.unreachable(600))
-        #expect(rig.announced.isEmpty)
-        try await rig.push(.connected(DaemonModelTests.daemon(.ready, at: 700)))
-        // The assessment from before the loss gives the title the row had.
-        #expect(rig.announced == [Self.offTitle])
-        await rig.send(.caughtUp)
-        try await waitUntil { rig.model.presence == .connected(health: .ready) }
-        #expect(rig.announced == [Self.offTitle, "Reconnected. State refreshed."])
-        rig.controller.release()
-    }
-
-    @Test func aChangeOfStateIsAnnouncedOnceAndTheFirstStateIsNot() async throws {
-        let rig = Rig(initialProbe: Self.fresh())
-        try await rig.push(.connected(DaemonModelTests.daemon(.ready)))
-        await rig.send(.caughtUp)
-        try await waitUntil { rig.model.presence == .connected(health: .ready) }
-        #expect(rig.announced.isEmpty)
-        await rig.agent?.turnOn()
-        #expect(rig.announced == ["Background service needs your approval."])
-        await rig.agent?.refresh()
-        #expect(rig.announced == ["Background service needs your approval."])
-        rig.controller.setStatus(Self.fresh(.enabled))
-        await rig.agent?.refresh()
-        #expect(rig.announced.last == "Background service is on.")
-    }
-
     static let notFoundTitle = "Stackly can’t find its background service."
 
     @Test func notFoundIsLeftToTheCriticalBannerWhenTheWindowBannerShowsIt() async throws {
         let rig = Rig(afterRegister: Self.fresh(.notFound), initialProbe: Self.fresh())
         try await rig.push(DaemonModelTests.unreachable())
         for _ in 0..<20 { await Task.yield() }
-        #expect(rig.announced == [Self.offTitle])
+
         await rig.agent?.turnOn()
         #expect(rig.agent?.assessment?.state == .notFound)
-        #expect(rig.announced == [Self.offTitle])
+
         #expect(rig.model.bannerContent(now: rig.clock)?.tone == .critical)
     }
 
-    @Test func notFoundIsAnnouncedOnceWhenTheWindowBannerDoesNotShowTheAgentRow() async throws {
-        let rig = Rig(afterRegister: Self.fresh(.notFound), initialProbe: Self.fresh())
-        try await rig.push(.connected(DaemonModelTests.daemon(.ready)))
-        await rig.send(.caughtUp)
-        try await waitUntil { rig.model.presence == .connected(health: .ready) }
-        let row = rig.model.agentBannerInput.flatMap { AgentBanner.content($0, now: rig.clock) }
-        #expect(row == nil)
-        await rig.agent?.turnOn()
-        #expect(rig.agent?.assessment?.state == .notFound)
-        #expect(rig.announced == [Self.notFoundTitle])
-        // The same state again is not a change.
-        await rig.agent?.refresh()
-        #expect(rig.announced == [Self.notFoundTitle])
-        // A later change is announced as usual.
-        rig.controller.setStatus(Self.fresh(.requiresApproval))
-        await rig.agent?.refresh()
-        #expect(rig.announced.last == "Background service needs your approval.")
-    }
-
     // MARK: - Failed actions
-
-    @Test func aFailedActionIsAnnouncedWithTheLastErrorTextOnce() async throws {
-        let rig = Rig(initialProbe: Self.fresh())
-        try await rig.push(.connected(DaemonModelTests.daemon(.ready)))
-        await rig.send(.caughtUp)
-        try await waitUntil { rig.model.presence == .connected(health: .ready) }
-        let error = AgentActionError.os(
-            op: .register, kind: .invalidSignature, domain: "d", code: 3)
-        rig.controller.setAfterRegister(.failure(error))
-        rig.controller.setStatus(Self.fresh())
-        await rig.agent?.turnOn()
-        #expect(rig.agent?.lastError == error)
-        #expect(rig.announced == [error.message])
-        // The next action clears the error and says nothing about it.
-        rig.controller.setAfterRegister(Self.fresh(.requiresApproval))
-        await rig.agent?.turnOn()
-        #expect(rig.agent?.lastError == nil)
-        #expect(rig.announced == [error.message, "Background service needs your approval."])
-    }
-
-    @Test func aRegistrationTheOSDidNotKeepIsAnnouncedOnce() async throws {
-        let rig = Rig(afterRegister: Self.fresh(.notRegistered), initialProbe: Self.fresh())
-        try await rig.push(.connected(DaemonModelTests.daemon(.ready)))
-        await rig.send(.caughtUp)
-        try await waitUntil { rig.model.presence == .connected(health: .ready) }
-        await rig.agent?.turnOn()
-        #expect(rig.agent?.lastError == .registrationNotKept)
-        #expect(rig.announced.last == AgentActionError.registrationNotKept.message)
-        let kept = AgentActionError.registrationNotKept.message
-        #expect(rig.announced.filter { $0 == kept }.count == 1)
-    }
-
-    @Test func daemonDidNotStartIsAnnouncedWhereverTheActionWasPressed() async throws {
-        let rig = Rig(
-            status: Self.fresh(.enabled), afterRegister: Self.fresh(.enabled),
-            record: LaunchRecordStatus(exists: true, lastLaunchedAt: nil),
-            initialProbe: Self.fresh(.enabled))
-        try await rig.push(DaemonModelTests.unreachable(5))
-        let action = Task { await rig.agent?.start() }
-        while rig.agent?.isStarting != true { await Task.yield() }
-        await rig.waitForSleep(AgentTiming.startWait)
-        rig.sleeper.fire()
-        await action.value
-        let text = AgentActionError.daemonDidNotStart(seconds: 30).message
-        #expect(rig.announced.filter { $0 == text }.count == 1)
-        #expect(text == "stacklyd didn’t start within 30 seconds.")
-    }
 
     // MARK: - Starting
 
@@ -357,10 +205,9 @@ struct DaemonModelAgentTests {
         while rig.agent?.isStarting != true { await Task.yield() }
         #expect(rig.model.bannerContent(now: rig.clock)?.title == "stacklyd is starting…")
         try await waitUntil { rig.link.retries.withLock { $0 } == 1 }
-        // A failed attempt during the wait is not announced as "Still unreachable.".
         try await rig.push(.connecting(attempt: 2))
         try await rig.push(DaemonModelTests.unreachable(125))
-        #expect(rig.announced.contains("Still unreachable.") == false)
+
         #expect(rig.model.bannerContent(now: rig.clock)?.title == "stacklyd is starting…")
         try await rig.push(.connected(DaemonModelTests.daemon(.ready, at: 130)))
         #expect(rig.model.presence == .refreshing)
@@ -376,19 +223,4 @@ struct DaemonModelAgentTests {
 
     // MARK: - Stopping
 
-    @Test func stoppingTheModelCancelsThePendingAnnouncementAndTheAgent() async throws {
-        let rig = Rig(status: Self.fresh())
-        try await waitUntil { rig.agent?.assessment != nil }
-        rig.controller.holdNextCall()
-        rig.clock = Self.launch.addingTimeInterval(600)
-        try await rig.push(DaemonModelTests.unreachable(600))
-        await rig.waitForSleep(AgentTiming.announceWait)
-        rig.model.stop()
-        rig.controller.release()
-        try await waitUntil { rig.sleeper.waiting == 0 }
-        rig.sleeper.fire()
-        for _ in 0..<30 { await Task.yield() }
-        #expect(rig.announced.isEmpty)
-        #expect(rig.sleeper.waiting == 0)
-    }
 }

@@ -2,7 +2,6 @@ import SwiftUI
 
 /// Opens the main window again from AppKit code, such as the app delegate when the user
 /// clicks Stackly in the Dock after closing the window.
-///
 /// SwiftUI opens a `Window` scene only through the `openWindow` environment action, so
 /// ``MainWindowRoot`` captures that action here when it appears. The captured action keeps
 /// working after the main window closed (checked on macOS 27, see `apps/macos/design.md`,
@@ -27,7 +26,6 @@ public final class WindowOpener {
     }
 
     /// Opens the main window, or brings it to the front when it is open.
-    ///
     /// - Returns: `false` when no action was captured yet, so nothing opened.
     @discardableResult
     public func openMain() -> Bool {

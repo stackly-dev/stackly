@@ -5,13 +5,11 @@ import Observation
 public enum OnboardingFinish: Sendable, Equatable {
     /// The Get Started button on the last step.
     case getStarted
-    /// Escape, or the VoiceOver escape action, on any step.
     case skipped
 }
 
 /// Whether the onboarding shows in the main window, and at which step (spec 0016, *State
 /// onboarding*).
-///
 /// The runtime owns it, so closing and opening the window again shows the same step. Moving
 /// between steps changes nothing else; the one thing written is the record, and only by
 /// ``finish(_:)``.
@@ -25,7 +23,6 @@ public final class OnboardingModel {
     @ObservationIgnored private let store: any OnboardingRecordStore
 
     /// Creates the model. The onboarding shows unless the store says it is finished.
-    ///
     /// - Parameter store: Where the finished record lives.
     public init(store: any OnboardingRecordStore) {
         self.store = store
@@ -57,7 +54,6 @@ public final class OnboardingModel {
 
     /// Closes the onboarding and records that it is finished. Nothing happens while it is
     /// hidden.
-    ///
     /// - Parameter reason: How it was closed. Both reasons write the same record.
     public func finish(_ reason: OnboardingFinish) {
         guard isPresented else { return }

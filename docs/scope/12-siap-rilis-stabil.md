@@ -2,7 +2,7 @@
 
 [Kembali ke index](index.md)
 
-Bukan journey pengguna, tapi pekerjaan yang membuat baseline layak disebut stabil: review keamanan, uji kegagalan dan performa, bukti per acceptance criteria, dan runbook. Aksesibilitas tidak diaudit belakangan di sini; ia sudah menjadi Done when di layar journey kritis. Release gate G1 sampai G6 menunggu fase ini. Pilot internal (G7, usulan minimal 3 pengguna selama 10 hari kerja) dijalankan setelah fitur 66 selesai dan bukan fitur build.
+Bukan journey pengguna, tapi pekerjaan yang membuat baseline layak disebut stabil: review keamanan, uji kegagalan dan performa, bukti per acceptance criteria, dan runbook. Release gate G1 sampai G6 menunggu fase ini. Pilot internal (G7, usulan minimal 3 pengguna selama 10 hari kerja) dijalankan setelah fitur 66 selesai dan bukan fitur build.
 
 ### 63. Security review & fuzzing · needs a decision · GA
 
@@ -28,7 +28,7 @@ Harness untuk crash daemon dan provider, restart daemon terencana, daemon ganda,
 
 Agregasi evidence yang sudah dikumpulkan sejak foundation (format laporan dari fitur 2, compatibility record dari fitur 18): traceability dari REQ ke AC ke test, dan release report yang menahan rilis kalau test wajib gagal atau `BLOCKED`.
 
-**Done when:** satu restore test wajib yang `BLOCKED` membuat report menyatakan belum stable ready tanpa mengubah statusnya jadi `PASS`; versi di luar matrix tetap `UNVERIFIED`; laporan fixture dibedakan dari laporan integrasi runtime nyata; evidence pada commit selain release candidate dijalankan ulang, bukan diberi label ulang; evidence AC-027 mencatat hasil review keyboard dan VoiceOver per journey kritis.
+**Done when:** satu restore test wajib yang `BLOCKED` membuat report menyatakan belum stable ready tanpa mengubah statusnya jadi `PASS`; versi di luar matrix tetap `UNVERIFIED`; laporan fixture dibedakan dari laporan integrasi runtime nyata; evidence pada commit selain release candidate dijalankan ulang, bukan diberi label ulang; evidence AC-027 mencatat hasil review interaksi desktop per journey kritis.
 
 **Trace:** REQ-051, BR-025, AC-027, AC-051, NFR-012, gate G1 sampai G6, PRD bagian 28, 31, 32.2, 34, dan 36
 

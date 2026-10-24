@@ -20,7 +20,6 @@ nonisolated struct StorageContent: Equatable {
     let rows: [Row]
 
     /// Builds the content.
-    ///
     /// - Parameters:
     ///   - roots: The roots the last known daemon reported, or `nil` before any answered.
     ///   - home: The user's home folder, for the defaults and for writing `~`.

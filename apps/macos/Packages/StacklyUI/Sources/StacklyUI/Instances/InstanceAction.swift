@@ -11,7 +11,6 @@ nonisolated public enum InstanceVerb: String, Hashable, Sendable {
     /// "start" or "stop", for the copy of a feedback card.
     var word: String { rawValue }
 
-    /// "Starting" or "Stopping", for the announcement and the busy button.
     var progressive: String {
         switch self {
         case .start: "Starting"
@@ -75,7 +74,6 @@ nonisolated public struct InstanceAction: Equatable, Sendable {
         "Initialization failed. Remove this instance and create it again."
 
     /// What the main action of `summary` is.
-    ///
     /// - Parameters:
     ///   - summary: The instance.
     ///   - local: What this window knows about its own click.

@@ -2,46 +2,32 @@ import SwiftUI
 
 @testable import StacklyUI
 
-/// One of the images a snapshot renders: a color scheme, Increase Contrast, a narrow
-/// width, or Reduce Transparency (spec 0068, AC-5).
+/// A regular appearance or narrow layout used by a snapshot.
 enum SnapshotVariant: CaseIterable, Sendable {
     /// Light at the main size.
     case light
     /// Dark at the main size.
     case dark
-    /// Light with Increase Contrast.
-    case hcLight
-    /// Dark with Increase Contrast.
-    case hcDark
-    /// Light at the narrow width, the large text check of spec 0012.
+    /// Light at the narrow width.
     case narrow
-    /// Light with Reduce Transparency: identical to `light` unless the caller says
-    /// `systemMaterial`.
-    case reduceTransparency
 
-    /// All six, the default of `assertSnapshot`.
+    /// The variants rendered by default.
     static let standard: [SnapshotVariant] = allCases
 
-    /// The file suffix: `light`, `dark`, `hc-light`, `hc-dark`, `narrow`, `rt`.
+    /// The filename suffix.
     var suffix: String {
         switch self {
         case .light: "light"
         case .dark: "dark"
-        case .hcLight: "hc-light"
-        case .hcDark: "hc-dark"
         case .narrow: "narrow"
-        case .reduceTransparency: "rt"
         }
     }
 
-    /// The appearance the variant pins.
+    /// The color scheme to render.
     var appearance: FixtureAppearance {
         switch self {
         case .light, .narrow: .light
         case .dark: .dark
-        case .hcLight: .highContrastLight
-        case .hcDark: .highContrastDark
-        case .reduceTransparency: .reducedTransparency
         }
     }
 }

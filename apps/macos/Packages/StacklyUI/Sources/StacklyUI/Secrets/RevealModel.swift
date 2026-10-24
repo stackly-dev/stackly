@@ -5,14 +5,12 @@ import StacklyClient
 /// The state behind ``RevealableSecretText``: it reveals one or more references through
 /// the daemon, shows the composed text for a while, and copies it to the pasteboard
 /// (spec 0011 AC-19, AC-24, *Reveal dan copy*).
-///
 /// Reveal is all or nothing. Show and Copy ask the daemon for every reference, one after
 /// the other; one failure cancels the action, shows and copies nothing, and drops the values
 /// already received. The values live in a local dictionary for the length of one call to
 /// `compose`; only the composed text of Show is kept, until Hide, 30 seconds, the view going
 /// away, or the app becoming inactive. The model is owned by the view's `@State`, so it goes
 /// with the view.
-///
 /// Hiding and cancelling are different things. Those four exits only conceal what is on
 /// screen. A Show that still waits for the daemon when one of them comes in (for example the
 /// app turns inactive because a Keychain dialog opened) drops its value and ends in
@@ -67,7 +65,6 @@ public final class RevealModel {
     @ObservationIgnored private var flight = 0
 
     /// Creates a model.
-    ///
     /// - Parameters:
     ///   - references: The references to reveal. A repeated reference counts once.
     ///   - reveal: Reveals one reference for a purpose.
@@ -113,7 +110,6 @@ public final class RevealModel {
 
     /// Reveals every reference for `.copy`, composes the text, and copies it with
     /// ``ConcealedPasteboard``. Nothing is copied when any reveal or the composition fails.
-    ///
     /// Hide, the 30 second limit, and the app becoming inactive do not cancel a Copy that
     /// waits for the daemon: it shows nothing, so there is nothing to conceal. When the person
     /// copied something else after pressing Copy, the late value is not written and the phase

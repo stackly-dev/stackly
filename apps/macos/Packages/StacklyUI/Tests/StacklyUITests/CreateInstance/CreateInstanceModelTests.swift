@@ -224,27 +224,6 @@ struct CreateInstanceModelTests {
         await settle("the reply") { rig.model.createDisabledReason == nil }
     }
 
-    // MARK: - Announcements
-
-    @Test func theSummaryIsAnnouncedOnlyWhenItChanges() async {
-        let rig = await editing()
-        #expect(rig.announced == ["Preflight passed."])
-        rig.model.setName("orders-db")
-        await settle("a preflight") { rig.service.preflightCalls.count == 2 }
-        await Task.yield()
-        #expect(rig.announced == ["Preflight passed."])
-
-        rig.service.onPreflight = { _ in FixtureCreateForm.caution }
-        rig.model.setName("orders-two")
-        await settle("the warning") { rig.announced.count == 2 }
-        #expect(rig.announced.last == "Preflight passed with 1 warning.")
-
-        rig.service.onPreflight = { _ in FixtureCreate.portConflict }
-        rig.model.setName("orders-three")
-        await settle("the failure") { rig.announced.count == 3 }
-        #expect(rig.announced.last == "1 preflight check failed.")
-    }
-
     // MARK: - Copy from
 
     @Test func copyFromKeepsPresentAndUnknownReferencesAndDropsTheRest() async {

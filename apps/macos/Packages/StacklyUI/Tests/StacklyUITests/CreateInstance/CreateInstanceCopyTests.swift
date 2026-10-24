@@ -5,7 +5,7 @@ import Testing
 @testable import StacklyUI
 
 /// The words and the small rules of the New Instance sheet (spec 0020 AC-20 to AC-22): the
-/// field error table, the preflight status mapping, the labels VoiceOver reads, and the
+
 /// pieces of the draft that need no view.
 struct CreateInstanceCopyTests {
     private func field(
@@ -84,7 +84,7 @@ struct CreateInstanceCopyTests {
         let taken = items.first { $0.id == "endpoint.postgres" }
         #expect(taken?.status == .failed)
         #expect(taken?.detail == "In use by pg17-dev")
-        #expect(taken?.accessibilityLabel == "Endpoint 127.0.0.1:5432, Failed: In use by pg17-dev")
+
     }
 
     @Test func aSecretRowReadsStoredOnceTheSecretsStageIsDone() {
@@ -103,15 +103,6 @@ struct CreateInstanceCopyTests {
     }
 
     // MARK: - Labels
-
-    @Test func aFieldIsReadAsItsTitleRequiredAndSetOnce() throws {
-        let form = try contractForm("postgresql")
-        let schema = SchemaFormModel(fields: form.fields)
-        let password = try #require(schema.row("superuserPassword"))
-        #expect(password.spokenLabel == "Superuser password, required, set once at creation")
-        let log = try #require(schema.row("logStatement"))
-        #expect(log.spokenLabel == "Log statements")
-    }
 
     @Test func theCategoryFilterLeavesTheTestingCategoryToAll() {
         #expect(CreateCategory.all.includes(.testing))
@@ -134,15 +125,6 @@ struct CreateInstanceCopyTests {
         #expect(CreateInstanceModel.isReserved("local:stackly/internal"))
         #expect(CreateInstanceModel.isReserved("local:instance/abc/password") == false)
         #expect(CreateInstanceModel.isReserved("local:user/stackly") == false)
-    }
-
-    @Test func theSummaryNamesFailuresAndWarningsInTheWordsOfTheSpec() {
-        func summary(_ preflight: CreatePreflight) -> String {
-            CreateInstanceModel.summary(of: preflight)
-        }
-        #expect(summary(FixtureCreateForm.ready) == "Preflight passed.")
-        #expect(summary(FixtureCreateForm.caution) == "Preflight passed with 1 warning.")
-        #expect(summary(FixtureCreate.portConflict) == "1 preflight check failed.")
     }
 
     // MARK: - The draft
@@ -173,25 +155,6 @@ struct CreateInstanceCopyTests {
         draft.mode = .automatic
         draft.portText = "abc"
         #expect(draft.hasInvalidPort == false)
-    }
-
-    @Test func theIdentifiersFollowTheScopePartKeyPattern() {
-        let ids = [
-            AccessibilityID.CreateInstance.category, AccessibilityID.CreateInstance.runtime,
-            AccessibilityID.CreateInstance.name,
-            AccessibilityID.CreateInstance.portMode("client"),
-            AccessibilityID.CreateInstance.port("client"),
-            AccessibilityID.CreateInstance.usePort("client"),
-            AccessibilityID.CreateInstance.field("jetstream"),
-            AccessibilityID.CreateInstance.advanced,
-            AccessibilityID.CreateInstance.startAfterCreating,
-            AccessibilityID.CreateInstance.preflight,
-            AccessibilityID.CreateInstance.preflightRetry,
-            AccessibilityID.CreateInstance.command, AccessibilityID.CreateInstance.progress,
-            AccessibilityID.CreateInstance.banner,
-        ]
-        #expect(Set(ids).count == ids.count)
-        #expect(ids.allSatisfy { $0.hasPrefix("createInstance.") && !$0.contains(" ") })
     }
 
     @Test func theDraftOfTheNatsFormHasItsTwoPortRowsAndNoUnixRow() async throws {

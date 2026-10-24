@@ -2,20 +2,15 @@ import SwiftUI
 
 /// A banner on a tone tint: the tone symbol, a title, an optional message and code block,
 /// an optional list of items, and up to three native buttons.
-///
-/// Use it for an error, warning, or note about one item (a failed instance, a port
-/// conflict, config drift), next to that item, while the rest of the page stays as it is.
-/// ``StateView`` also uses it for stale and partial notes. A critical banner is announced
-/// to VoiceOver once when it appears.
+/// Use it for an error, warning, or note about one item (a failed instance, a port conflict, config drift), next to that item, while the rest of the page stays as it is. ``StateView`` also uses it for stale and partial notes.
 public struct StateBanner: View {
     /// How many items show before "and N more" with Show All.
     static let visibleItemLimit = 5
     /// The most actions a banner shows.
     static let actionLimit = 3
 
-    @ScaledMetric(.bannerSymbol) private var symbolSize
+    private let symbolSize = ScaledSize.bannerSymbol.base
     @State private var showsAllItems = false
-    @State private var hasAnnounced = false
 
     private let tone: Tone
     private let title: String
@@ -26,16 +21,7 @@ public struct StateBanner: View {
     private let base: SurfaceToken
 
     /// Creates a banner.
-    ///
-    /// - Parameters:
-    ///   - tone: The tone: its symbol, tint, and announcement (critical only).
-    ///   - title: The title, in semibold. VoiceOver uses it as the banner's label.
-    ///   - message: The body text in `.callout` ``StacklyColor/textSecondary``, or `nil`.
-    ///   - code: A code block on ``StacklyColor/surfaceConsole``, or `nil`.
-    ///   - items: Items to list; five show, then "and N more" with Show All.
-    ///   - actions: Up to three native buttons. An action that mutates is disabled while
-    ///     ``MutationAvailability`` is `.blocked`.
-    ///   - base: The surface the tint is mixed onto: `.card` (default) or `.window`.
+    /// An action that mutates is disabled while     ``MutationAvailability`` is `.blocked`.   - base: The surface the tint is mixed onto: `.card` (default) or `.window`.
     public init(
         tone: Tone,
         title: String,
@@ -62,7 +48,7 @@ public struct StateBanner: View {
                 .stacklySymbol(.bannerSymbol)
                 .foregroundStyle(tone.fill)
                 .frame(width: symbolSize)
-                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: Spacing.s6) {
                 Text(title)
                     .font(.body.weight(.semibold))
@@ -95,13 +81,7 @@ public struct StateBanner: View {
                 top: Spacing.s12, leading: Spacing.s14, bottom: Spacing.s12, trailing: Spacing.s14)
         )
         .toneSurface(tone, on: base, strength: .banner)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
-        .onAppear {
-            guard tone == .critical, hasAnnounced == false else { return }
-            hasAnnounced = true
-            announce(title)
-        }
+
     }
 
     private var itemList: some View {
@@ -124,7 +104,7 @@ public struct StateBanner: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.link)
-                    .accessibilityHint("Shows \(split.hiddenCount) more items")
+
                 }
             }
         }

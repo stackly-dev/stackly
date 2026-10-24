@@ -3,7 +3,6 @@ import Foundation
 /// Why loaded content may be out of date: a failed refresh, or data the daemon reports as
 /// outdated. ``StateView`` shows it as a caution banner above the content, which is never
 /// dimmed.
-///
 /// A daemon that cannot be reached is not a stale note: the app shell shows one banner for
 /// the whole window and sets ``MutationAvailability``.
 nonisolated public struct StaleNote: Hashable, Sendable {
@@ -21,7 +20,6 @@ nonisolated public struct StaleNote: Hashable, Sendable {
     public var reason: Reason
 
     /// Creates a stale note.
-    ///
     /// - Parameters:
     ///   - since: When the content was last known to be current.
     ///   - reason: Why the content may be out of date.
@@ -32,7 +30,6 @@ nonisolated public struct StaleNote: Hashable, Sendable {
 
     /// The stale note for a view model's inputs: a failed refresh when there is an error
     /// next to loaded data (it wins over `outdated`), else the outdated note, else `nil`.
-    ///
     /// Call it only when data has loaded.
     init?(error: FailureContent?, lastLoadedAt: Date?, outdated: (since: Date, source: String)?) {
         if let error {
@@ -47,9 +44,7 @@ nonisolated public struct StaleNote: Hashable, Sendable {
 
     /// The time of ``since`` for the banner: the short time in the locale's style (14:02
     /// in a 24 hour locale, 2:02 PM in en_US), plus the short date when it is not today.
-    ///
     /// Views pass the system values; tests pass fixed ones.
-    ///
     /// - Parameters:
     ///   - now: The current time.
     ///   - calendar: The calendar that decides what today is.
@@ -82,7 +77,6 @@ nonisolated public struct StaleNote: Hashable, Sendable {
 
     /// The banner message: "Couldn’t refresh: <message>." for a failed refresh, or
     /// "<source> last updated <time>." for outdated data.
-    ///
     /// The outdated sentence always starts with a capital letter, so a `source` such as
     /// "the bundled catalog" reads "The bundled catalog last updated …"; only its first
     /// character changes.

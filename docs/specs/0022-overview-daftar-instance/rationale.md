@@ -4,7 +4,7 @@
 
 ## Context
 
-Fitur 22 di `docs/scope/02-instalasi-pertama.md` membawa dua halaman yang dilihat pengguna setiap kali membuka Stackly: Overview (PAGE-02) dan Instances (PAGE-03), plus `stackly instance list` dan `inspect` untuk paritas CLI (REQ-028). Done when meminta kedua halaman menangani loading, empty, error, stale, dan partial, error di satu instance tidak mengosongkan layar, ringkasan tidak dihitung dari PID saja, peringatan kapasitas memakai sumber yang terdefinisi (ruang disk) atau tampil unavailable sampai fitur 28, layar bisa dipakai dengan keyboard dan VoiceOver, dan tampilan mengikuti mockup (Needs Attention yang menautkan ke layar perbaikan, filter status, tabel yang bisa diurutkan, inspector yang bisa disembunyikan, dan hasil filter kosong).
+Fitur 22 di `docs/scope/02-instalasi-pertama.md` membawa dua halaman yang dilihat pengguna setiap kali membuka Stackly: Overview (PAGE-02) dan Instances (PAGE-03), plus `stackly instance list` dan `inspect` untuk paritas CLI (REQ-028). Done when meminta kedua halaman menangani loading, empty, error, stale, dan partial, error di satu instance tidak mengosongkan layar, ringkasan tidak dihitung dari PID saja, peringatan kapasitas memakai sumber yang terdefinisi (ruang disk) atau tampil unavailable sampai fitur 28, layar bisa dipakai dengan interaksi desktop, dan tampilan mengikuti mockup (Needs Attention yang menautkan ke layar perbaikan, filter status, tabel yang bisa diurutkan, inspector yang bisa disembunyikan, dan hasil filter kosong).
 
 Kontrak yang tersedia sudah banyak tetapi belum lengkap. Spec 0010 memberi `InstanceSummary` dengan lifecycle, desired state, readiness, health, proses, restart, blocker, dan endpoint sebagai field terpisah, `instance.list` berhalaman, `instance.get`, start dan stop, serta event berurutan lewat `statusSeq`. Spec 0013 memberi `InstanceStore`, `OperationCenter`, `ResourceStore`, jalur mutasi, gate, dan aturan presence saat daemon mati, plus daftar instance sementara dan `UnbuiltPage` Overview yang harus diganti fitur ini. Spec 0012 memberi palet status, `ViewState`, dan pola banner. Spec 0017 dan 0018 memberi nama tampil dan tile provider serta store runtime. Yang tidak ada: field ownership di summary (registry punya kolom `instances.ownership`, tetapi artinya asal data: `created`, kelak `restored` dan `adopted`), referensi environment (fitur 44 belum ada), ukuran dan path data, method apa pun yang melaporkan ruang disk ke client, judul operasi yang bisa dibaca manusia, dan perintah CLI `instance list` atau `inspect` (spec 0010 hanya mengasumsikan fitur 14 membangun `get`).
 
@@ -18,7 +18,6 @@ Batasan lain: GUI tidak pernah menghitung status sendiri dari sumber selain DTO 
 - **Opsi 2: kartu menghitung semua lifecycle aktif, seperti mockup yang menggabungkan starting.** Pro: angka kartu sama dengan baris filter. Kontra: instance yang crash loop di `recovering` atau readiness nya gagal ikut dihitung Running, persis yang dilarang PAGE-02.
 - **Opsi 3: kartu bernama Ready dan filter Ready hanya yang siap.** Pro: konsisten penuh. Kontra: mengubah copy mockup, dan instance yang sedang starting hanya terlihat di All.
 
-Opsi 1 dipilih karena kejujuran angka utama adalah inti PAGE-02 dan Done when, sementara selisih dengan baris filter dijelaskan oleh keterangan yang terlihat dan dibacakan VoiceOver.
 
 ### Keputusan 2: di mana aturan kelompok dihitung
 
@@ -75,7 +74,7 @@ Opsi 1 dipilih; doc comment dan *Kepemilikan* membedakan dua arti itu secara eks
 
 ### Keputusan 10: umpan balik aksi sebelum fitur 67
 
-- **Opsi 1 (dipilih): `ActionFeedbackBanner` sementara di atas konten halaman, memakai `StateBanner` spec 0012 dan copy spec 0013.** Pro: penolakan daemon tidak pernah hilang diam diam, diumumkan VoiceOver, dan mudah diganti. Kontra: kode sementara.
+Kontra: kode sementara.
 - **Opsi 2: menunggu fitur 67.** Kontra: tombol aksi tanpa umpan balik kegagalan melanggar spec 0012 (error per item terlihat).
 
 ### Keputusan 11: halaman di `stackly instance list`
@@ -107,7 +106,6 @@ Opsi 1 dipilih; doc comment dan *Kepemilikan* membedakan dua arti itu secara eks
 ### Keputusan 16: pengurutan lewat keyboard
 
 - **Opsi 1 (dipilih): perintah menu View "Sort Instances By" yang hanya aktif di Instances, dipindah ke peta fitur 69 saat ada.** Pro: header `Table` macOS tidak bisa difokus dengan Tab, sedangkan menu bar selalu bisa dicapai keyboard. Kontra: kode perintah sebelum fitur 69.
-- **Opsi 2: hanya header tabel.** Kontra: pengguna keyboard tanpa VoiceOver tidak bisa mengurutkan (NFR-012).
 
 ### Keputusan 17: nama tampil dan tile provider
 
@@ -200,8 +198,8 @@ Dari `docs/scope/coordination/post-alignment/post-0022.md` (workflow lead `wf_fa
 
 **Opsi.**
 
-- **Opsi 1 (dipilih): item kegagalan O2 di daftar, seperti S4.** Item `operations` neutral "Operations unavailable" ke Operations, dengan isi yang menyebut bahwa operasi yang perlu recovery hilang dari daftar ini; item instance dan disk tetap tampil. Pro: satu bentuk dengan S4 (sumber yang gagal menjadi item neutral), tidak ada komponen atau pola fokus baru, label VoiceOver dan urutan fokus ikut aturan item yang sudah ada, dan "Nothing needs attention." tidak pernah tampil saat operasi tidak terbaca karena daftar tidak pernah kosong. Kontra: kegagalan baca Stackly bercampur dengan masalah lingkungan pengguna, dan dengan lebih dari enam item O2 bisa berada di balik Show More (diimbangi placeholder seksi Operations yang selalu terlihat).
-- **Opsi 2: item instance dan disk dengan catatan di bawah daftar.** Satu baris catatan "Operations couldn’t be read…" di luar daftar item. Pro: memisahkan masalah lingkungan dari kegagalan baca, dan catatan selalu terlihat walau ada Show More. Kontra: elemen baru di kartu seksi dengan aturan fokus, VoiceOver, dan snapshot sendiri; perlu kalimat gabungan saat daftar kosong ("Nothing needs attention." akan bohong); dan S4 tetap item, jadi dua sumber yang gagal tampil dengan dua cara berbeda.
+- **Opsi 1 (dipilih): item kegagalan O2 di daftar, seperti S4.** Item `operations` neutral "Operations unavailable" ke Operations, dengan isi yang menyebut bahwa operasi yang perlu recovery hilang dari daftar ini; item instance dan disk tetap tampil. Kontra: kegagalan baca Stackly bercampur dengan masalah lingkungan pengguna, dan dengan lebih dari enam item O2 bisa berada di balik Show More (diimbangi placeholder seksi Operations yang selalu terlihat).
+- **Opsi 2: item instance dan disk dengan catatan di bawah daftar.** Satu baris catatan "Operations couldn’t be read…" di luar daftar item. Pro: memisahkan masalah lingkungan dari kegagalan baca, dan catatan selalu terlihat walau ada Show More.
 - **Opsi 3: tetap progress (keadaan sekarang).** Pro: tidak ada perubahan. Kontra: progress tanpa akhir, bertentangan dengan AC-5, dan menyembunyikan masalah instance yang sudah diketahui.
 
 **Keputusan.** Opsi 1. Bentuknya sama dengan S4, yang sudah disetujui untuk kegagalan sumber lain di daftar yang sama, dan perubahan kodenya kecil (`AttentionRules`, `OverviewPage` di folder `Overview/`, `AttentionList` hanya doc comment). Runner up: opsi 2, yang lebih baik hanya kalau kegagalan baca perlu selalu terlihat di atas lipatan Show More; placeholder seksi Operations sudah memenuhi kebutuhan itu.
@@ -211,7 +209,7 @@ Dari `docs/scope/coordination/post-alignment/post-0022.md` (workflow lead `wf_fa
 - *Tone neutral*, sama dengan S4: item ini melaporkan bahwa Stackly tidak bisa membaca, bukan masalah di lingkungan pengguna. Runner up: `caution`, karena O1 yang hilang bisa critical; ditolak supaya dua sumber yang gagal punya satu tone.
 - *Unsupported juga O2*, dengan isi sendiri ("This version of stacklyd doesn’t list operations. …"), sama dengan S4 yang punya versi unsupported. Keadaan ini sebelumnya juga menahan seksi selamanya (snapshot `overview-operations-unsupported`).
 - *Isi tetap tanpa pesan daemon*, berbeda dengan S4 yang memakai pesan daemon: S4 satu satunya tempat kegagalan disk tampil di Overview, sedangkan kegagalan operasi sudah tampil di placeholder seksi Operations, jadi O2 cukup menyebut akibatnya bagi daftar ini.
-- *Tanpa tombol Retry di item*: setiap item adalah satu tombol navigasi (`AttentionRow`), dan kontrol kedua di dalamnya mengubah pola fokus dan VoiceOver semua item. Retry tetap di placeholder seksi Operations.
+Retry tetap di placeholder seksi Operations.
 - *O2 tetap tampil selama snapshot operasi diulang*: `ResourceStore` menyimpan `error` sampai snapshot berhasil, jadi item tidak berkedip kembali ke progress. Snapshot yang berhasil menghapus O2 dan memunculkan O1 kalau ada.
 - *Satu fungsi keadaan untuk dua seksi*: `OverviewPage.operationsState` (unsupported, ada data, error, belum termuat) dipakai `operationsContent` dan `attentionItems`, supaya urutan itu tidak hidup di dua salinan. Operasi yang gagal dengan data lama tetap memakai data itu tanpa O2 (aturan AC-5); unsupported menang atas data lama, sama dengan kode seksi Operations yang sudah ada.
 - *Pengulangan otomatis saat `completedRounds` berubah (dihapus 2026-10-22; catatan di akhir butir ini)*: tanpa itu O2 bisa tertinggal di layar setelah koneksi pulih, karena pemulihan lewat cursor (`.caughtUp`) tidak mengulang store yang gagal. Pengulangan dipasang di `.task(id: completedRounds)` Overview yang sudah ada, di samping `capacity.refresh()`, jadi tidak ada file shell yang berubah. Runner up: `ShellSync` mengulang setiap store yang gagal saat `.caughtUp`; itu lebih umum tetapi milik spec 0013 (lead ui-macos), jadi dicatat sebagai bahan untuk pemilik spec itu, bukan diubah di sini. *(Dihapus 2026-10-22 di `28cbe678`: runner up itu kini berlaku di spec 0013, karena `ShellSync` memuat ulang store yang gagal sekali pada `.caughtUp` (`.caughtUp` varian ii) dan snapshot yang berhasil membersihkan `error` dan `unsupported` (`9ee06a25`). Pengulangan di Overview tidak diperlukan lagi, jadi tidak ada dua jalan muat ulang untuk store yang sama; test `o2GoesAwayWhenShellSyncLoadsTheFailedStoreAgainOnCaughtUp` menggantikan penjagaan review atas panggilan itu. AC-3 tidak berubah.)*

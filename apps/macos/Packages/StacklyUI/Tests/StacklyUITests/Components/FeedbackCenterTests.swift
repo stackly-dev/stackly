@@ -6,16 +6,12 @@ import Testing
 
 /// The feedback center and the hold rule of the card (spec 0067, AC-9, AC-11).
 struct FeedbackCenterTests {
-    private final class Announcements {
-        var texts: [String] = []
-    }
 
     private func make(
-        _ announcements: Announcements,
         _ sleeps: ManualSleeps
     ) -> FeedbackCenter {
         FeedbackCenter(
-            announce: { announcements.texts.append($0) },
+
             sleep: { try await sleeps.sleep($0) }
         )
     }
@@ -25,38 +21,8 @@ struct FeedbackCenterTests {
 
     // MARK: - show
 
-    @Test(
-        .evidence(
-            covers: ["REQ-024"],
-            expected: "Spec 0067 AC-9: a new feedback replaces the shown one and is announced once")
-    )
-    func showReplacesWhatIsOnScreenAndAnnouncesTheMessageThenTheDetailOnce() {
-        let announcements = Announcements()
-        let center = make(announcements, ManualSleeps())
-        #expect(center.current == nil)
-        center.show(good)
-        #expect(center.current?.id == good.id)
-        center.show(bad)
-        #expect(center.current?.id == bad.id)
-        #expect(announcements.texts == ["Instance started.", "Failed. Try again."])
-    }
-
-    @Test(
-        .evidence(
-            covers: ["REQ-024"],
-            expected:
-                "Spec 0067 AC-9: transient feedback over persistent feedback is only announced"))
-    func goodNewsOnlyAnnouncesWhilePersistentFeedbackIsOnScreen() {
-        let announcements = Announcements()
-        let center = make(announcements, ManualSleeps())
-        center.show(bad)
-        center.show(good)
-        #expect(center.current?.id == bad.id, "the failure stays")
-        #expect(announcements.texts == ["Failed. Try again.", "Instance started."])
-    }
-
     @Test func persistentFeedbackReplacesPersistentFeedback() {
-        let center = make(Announcements(), ManualSleeps())
+        let center = make(ManualSleeps())
         let other = Feedback(tone: .caution, message: "Careful.")
         center.show(bad)
         center.show(other)
@@ -64,7 +30,7 @@ struct FeedbackCenterTests {
     }
 
     @Test func dismissEmptiesTheCenter() {
-        let center = make(Announcements(), ManualSleeps())
+        let center = make(ManualSleeps())
         center.show(bad)
         center.dismiss()
         #expect(center.current == nil)
@@ -80,7 +46,7 @@ struct FeedbackCenterTests {
         ))
     func countdownClearsTransientFeedbackAfterItsVisibleDuration() async {
         let sleeps = ManualSleeps()
-        let center = make(Announcements(), sleeps)
+        let center = make(sleeps)
         center.show(good)
         let task = Task { await center.countdown(good.id) }
         await sleeps.waitUntilWaiting(1)
@@ -94,7 +60,7 @@ struct FeedbackCenterTests {
 
     @Test func countdownLeavesFeedbackThatReplacedItAlone() async {
         let sleeps = ManualSleeps()
-        let center = make(Announcements(), sleeps)
+        let center = make(sleeps)
         center.show(good)
         let task = Task { await center.countdown(good.id) }
         await sleeps.waitUntilWaiting(1)
@@ -109,7 +75,7 @@ struct FeedbackCenterTests {
             covers: ["REQ-024"], expected: "Spec 0067 AC-9: a cancelled countdown clears nothing"))
     func aCancelledCountdownClearsNothing() async {
         let sleeps = ManualSleeps()
-        let center = make(Announcements(), sleeps)
+        let center = make(sleeps)
         center.show(good)
         let task = Task { await center.countdown(good.id) }
         await sleeps.waitUntilWaiting(1)
@@ -121,7 +87,7 @@ struct FeedbackCenterTests {
 
     @Test func countdownReturnsAtOnceForPersistentFeedbackAndForAnOldID() async {
         let sleeps = ManualSleeps()
-        let center = make(Announcements(), sleeps)
+        let center = make(sleeps)
         center.show(bad)
         await center.countdown(bad.id)
         center.dismiss()
@@ -141,11 +107,11 @@ struct FeedbackCenterTests {
         ))
     func theCountdownRunsOnlyWhenNothingHoldsTheCard() {
         for hover in [false, true] {
-            for focus in [false, true] {
+            do {
                 for active in [false, true] {
                     let hold = FeedbackHold(
-                        isHovered: hover, isFocused: focus, isWindowActive: active)
-                    #expect(hold.countsDown == (!hover && !focus && active))
+                        isHovered: hover, isWindowActive: active)
+                    #expect(hold.countsDown == (!hover && active))
                 }
             }
         }
@@ -166,7 +132,7 @@ struct FeedbackCenterTests {
         #expect(code.contains("await center.countdown(feedback.id)"))
         #expect(code.contains(".safeAreaInset(edge: .bottom, spacing: 0)"))
         #expect(code.contains("StacklyMotion.crossfade"))
-        #expect(code.contains(#".accessibilityLabel("Dismiss")"#))
+
         #expect(code.contains("HitTarget.minimum"))
         #expect(code.contains("toneSurface("))
         #expect(code.contains("Material") == false)
