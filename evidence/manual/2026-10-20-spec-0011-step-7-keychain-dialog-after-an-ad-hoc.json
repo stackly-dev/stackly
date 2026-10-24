@@ -15,11 +15,11 @@
     "file": null,
     "line": null
   },
-  "status": "NOT_RUN",
+  "status": "BLOCKED",
   "expected": "After rebuilding stacklyd with ad hoc signing, a user action (secret.reveal from an interactive client) on an item made by the earlier build shows the Keychain dialog, while a background trigger (a start that needs the secret, a client that cannot show a dialog) gets secret.needs_secret or secret.store_access_denied without any dialog, and the observed behavior is noted for each",
-  "actual": null,
-  "reason": null,
-  "owner": null,
+  "actual": "2026-10-24: created a disposable generated reference on the default login Keychain, revision 1, exit 0. Restarted stacklyd from a copy with a different ad hoc signing identifier and launched an interactive reveal. The call waited for native authorization. Computer use explicitly refused access to com.apple.SecurityAgent, so no Deny or Cancel action, dialog wording, or resulting error is claimed. Cancelled the client, stopped the daemon, and deleted the disposable reference. See docs/reviews/2026-10-24-f11-native-followup.md.",
+  "reason": "The computer use tool refuses access to com.apple.SecurityAgent for safety reasons. A GUI login session exists, but the required authorization dialog cannot be inspected or controlled with the available permitted interface.",
+  "owner": "Native Keychain dialog verification with an authorized interactive operator",
   "subjects": [],
   "steps": [
     "In a Terminal at the repo root, build both binaries: `cargo build -q -p stacklyd -p stackly-cli`.",
@@ -33,12 +33,12 @@
     "Cleanup: `cargo run -q -p stackly-cli -- secret delete local:user/manual-keychain-check`, then `security delete-generic-password -s stackly-secret -a user/manual-keychain-check` (ignore 'could not be found'), then Ctrl-C the daemon in Terminal A.",
     "Write down the macOS version and the exact dialog wording and button labels you saw."
   ],
-  "reviewer": null,
-  "startedAt": "2026-10-20T06:46:51.418311Z",
-  "finishedAt": null,
+  "reviewer": "Codex",
+  "startedAt": "2026-10-24T05:32:24.000Z",
+  "finishedAt": "2026-10-24T05:47:02.656Z",
   "evidencePath": "evidence/manual/2026-10-20-spec-0011-step-7-keychain-dialog-after-an-ad-hoc.json",
   "context": {
-    "sourceCommit": "1cc86edd8e44f53ac1ab4421c05de64094b698de",
+    "sourceCommit": "2c149a8630d63239dc4d8fea598826b995c69226",
     "sourceDirty": true,
     "runId": null,
     "runKind": null,
@@ -46,8 +46,8 @@
     "host": {
       "os": "macos",
       "arch": "aarch64",
-      "osVersion": "27.0",
-      "osBuild": "26A428",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
       "hardwareModel": "Mac13,1",
       "chip": "Apple M1 Max",
       "memoryBytes": 34359738368,
@@ -57,11 +57,11 @@
     },
     "baseline": {
       "matches": true,
-      "osBuildMatches": true
+      "osBuildMatches": false
     },
     "toolchain": {
       "rustc": "1.99.1",
-      "xcode": "27.0 (27A266a)",
+      "xcode": "27.1 (27A9275)",
       "swift": "6.4"
     }
   }

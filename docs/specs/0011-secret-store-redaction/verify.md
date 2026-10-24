@@ -67,7 +67,7 @@ _Build step 5, protokol 1.7. Semua test memakai `FakeSecretStore` di belakang `S
 - [x] `cargo test -p stacklyd --test secret_sentinel` → 3 test lulus terhadap `stacklyd` sungguhan dengan `STACKLY_ROOT` ke `TestRoot` (keychain file) dan relay perekam frame (`apps/daemon/tests/common/frame_tap.rs`) antara klien dan socket: fixture credential hanya ada di permintaan `secret.set` dengan input `value` dan di respons `secret.reveal`, tidak di frame error (conflict, tidak ditemukan, revision salah, reference tidak valid, NUL, 65537 byte, delete dua kali), frame event `secret.changed`, balasan list dan status, log daemon pada level debug, stderr, maupun byte registry beserta WAL; keychain file dikunci dengan `security lock-keychain` lalu `secret.reveal` dan `secret.set` upsert menjawab `secret.store_locked` dalam kurang dari satu detik, `secret.status` tetap `present`, dan `daemon.get_info` melaporkan `locked`; item yang dibuat ulang dengan `security add-generic-password -T /usr/bin/true` menjawab `secret.store_access_denied` dengan `byUser` false dalam kurang dari satu detik → AC-3, AC-13, AC-14, AC-16
 - [x] `cargo test -p stacklyd --test server secret_log` → writer log yang lewat `Redactor` milik daemon menyamarkan nilai yang diisi, nilai lama setelah replace, dan nilai bangkitan (diambil lewat reveal) di pesan, field, dan field span pada level error, warn, info, debug, dan trace, juga pola `postgres://admin:<nilai>@` dan `POSTGRES_PASSWORD=`; baris tanpa rahasia lewat utuh → AC-13
 - [x] `cargo test -p stacklyd --test operations secret_intent` → di daemon yang berjalan, operasi yang mencatat `record_secret_intent` untuk reference instance, menyimpan nilai, lalu gagal berakhir `failed` dengan catatan `secret_ref` `compensated` dan item hilang dari store, tanpa kompensator yang didaftarkan test (kompensator milik `stacklyd`) → spec 0007 hook fitur 11, AC-10 (kompensasi)
-- [x] `cargo xtask evidence check` → lulus; ketiga test sentinel dan dua test lain di atas menulis evidence `fixture` dengan `covers` AC-016, REQ-016, BR-018 (dan REQ-016, BR-018 untuk log dan kompensator), dan dua record manual step 7 ada berstatus `NOT_RUN` sampai diisi → AC-16
+- [x] `cargo xtask evidence check` → lulus; ketiga test sentinel dan dua test lain di atas menulis evidence `fixture` dengan `covers` AC-016, REQ-016, BR-018 (dan REQ-016, BR-018 untuk log dan kompensator), dan dua record manual step 7 kini berstatus `BLOCKED` karena akses alat ke SecurityAgent ditolak (pemeriksaan lanjutan 2026-10-24) → AC-16
 - [x] `cargo test -p stacklyd` → seluruh suite daemon tetap lulus
 - [x] `cargo xtask check-deps` dan `cargo test -p xtask` → lulus; `stacklyd` `ipc::secret` masuk `EXPOSE_ALLOWED` di commit yang sama dengan pemanggilan `expose()` pertamanya → AC-15
 
@@ -137,5 +137,20 @@ _Build step 9 (`StacklyClient` dan `StacklyTestSupport`) dan step 10 (`StacklyUI
 
 - AC-18 · `SecretsClientTests`, `RevealedSecretTests`, `FixtureCredentialTests`
 - AC-19 · `SecretLimitsTests`, `SecretDraftTests`, `SecretNeedTests`, `SecretEntryModelTests`, `RevealModelTests` (30 detik), `ConcealedPasteboardTests` (90 detik), `SecretViewsAccessibilityTests`; AC-24 · `RevealModelTests` (semua atau tidak sama sekali)
-- Step 11: record manual `NOT_RUN` menunggu dijalankan di Mac ini untuk AC-16, AC-19, dan AC-24 terhadap daemon sungguhan; test step 9 dan 10 memakai `SecretsClient` palsu dan tidak menyentuh daemon
+- Step 11: record manual kini `BLOCKED` setelah alur daemon nyata, clipboard, keyboard, kontras, serta pemindaian kebocoran dijalankan pada 2026-10-24. Ucapan VoiceOver belum dapat diamati. Rincian hasil parsial ada pada bagian pemeriksaan native lanjutan di bawah. Test step 9 dan 10 tetap bukti dengan `SecretsClient` palsu, terpisah dari pengamatan native tersebut.
 - Catatan: prefix `FixtureCredential` dicek terhadap konstanta Rust lewat teks `credential.rs`, sesuai keputusan 2026-10-20 di *Sisi Swift fixture credential* spec ini (tidak ada fixture prefix di `protocols/fixtures/`)
+
+## Pemeriksaan native lanjutan, 2026-10-24
+
+Hasil dan batas lengkap: [laporan pemeriksaan](../../reviews/2026-10-24-f11-native-followup.md). Record langkah 7 dan 11 sekarang `BLOCKED` dengan hasil parsial yang diamati, bukan `NOT_RUN`. Checkbox gabungan di atas tetap terbuka.
+
+- [x] Ulangi build app, 106 test Rust terkait dan 108 test Swift terkait, `check-deps`, `codegen --check`, serta validasi evidence. Satu known issue Swift adalah assertion negatif yang sengaja ditangkap. → AC-2, AC-3, AC-5, AC-9, AC-12, AC-13, AC-14, AC-16, AC-18, AC-19, AC-20, AC-24
+- [x] Render keempat preview Xcode dan tinjau light serta dark, ekspor gambar field, entry sheet, dan reveal text ke `target/f11-proof/`. Pemeriksaan visual ini belum menutup seluruh butir aksesibilitas preview di atas. → AC-19
+- [x] Jalankan entry, validasi panjang, Save, status present, konflik, dan Replace melalui GUI dengan daemon nyata serta keychain file sementara. → AC-19
+- [x] Jalankan Show, Hide, penyembunyian otomatis, perpindahan fokus, dan tutup lalu buka Gallery. → AC-19, AC-24
+- [x] Jalankan keyboard untuk picker sumber (Right lalu Space), secure field, Show, Hide, Save, Replace, Done, reveal, Copy, Delete beserta konfirmasi, dan Escape untuk membatalkan. → AC-19
+- [x] Pindai sembilan file root termasuk registry dan WAL, log daemon, stdout dan stderr app, serta Unified Logging 412622 byte, tanpa prefix fixture. → AC-16
+- [x] Copy native menghasilkan URI lengkap, clipboard kosong setelah tenggat 90 detik, teks pengganti bertahan setelah 111 detik, dan keluar dari app membersihkan salinan yang belum berubah. → AC-19
+- [x] Periksa app dengan Increase Contrast native lalu kembalikan setting ke keadaan awal. → AC-19
+- [ ] Selesaikan Deny dan Cancel di SecurityAgent. Akses alat ditolak secara eksplisit, jangan ganti hasil ini dengan PASS dari keychain file. → AC-3
+- [ ] Amati ucapan VoiceOver untuk hidden, shown, dan pengumuman timer sebelum menutup record GUI. VoiceOver berhasil dimulai, tetapi capture output tidak tersedia, sehingga setting dipulihkan. → AC-19
