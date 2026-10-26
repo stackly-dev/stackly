@@ -1,0 +1,308 @@
+{
+  "schema": "stackly.f11-keychain-correlation/v1",
+  "sourceCommit": "252e35d130e3867681aca825bc62da05edbf9077",
+  "status": "PASS",
+  "cases": [
+    {
+      "label": "initial B",
+      "reference": "local:user/f11-dialog-fcca168f48d6",
+      "clientPid": 25493,
+      "reportedAction": "no dialog",
+      "osDecision": "always_allow",
+      "cli": {
+        "phase": "deny",
+        "startedAt": "2026-10-25T01:32:42.864835+00:00",
+        "finishedAt": "2026-10-25T01:32:47.773515+00:00",
+        "elapsedSeconds": 4.908,
+        "exitCode": 0,
+        "type": "result",
+        "errorCode": null,
+        "category": null,
+        "details": null,
+        "valueReturned": true
+      },
+      "securityd": [
+        {
+          "timestamp": "2026-10-25 08:32:42.891861+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "displaying keychain prompt for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-b/stacklyd(25493); ACL: <AclValidationContext(action:24)SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-dialog-fcca168f48d6)>]>]OBJECT[<ObjectAcl[ENTRY()[<AclEntry[tag:]AUTH[35]SUBJECT[<ThresholdAclSubject(1 of 2)[AnyAclSubject][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-dialog-fcca168f48d6)>]>]>] ENTRY()[<AclEntry[tag:]AUTH[24]AUTH[28]AUTH[37]AUTH[38]AUTH[59]AUTH[115]SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdha<\u2026>"
+        },
+        {
+          "timestamp": "2026-10-25 08:32:47.724430+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "user approved 'always allow' for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-b/stacklyd(25493)"
+        },
+        {
+          "timestamp": "2026-10-25 08:32:47.726816+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "user approved 'allow' for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-b/stacklyd(25493)"
+        }
+      ],
+      "audit": [
+        {
+          "at": "2026-10-25T01:32:47.744286000Z",
+          "action": "secret.reveal",
+          "result": "succeeded",
+          "details": {
+            "clientKind": "cli",
+            "peerUid": "502",
+            "purpose": "show",
+            "reference": "local:user/f11-dialog-fcca168f48d6"
+          }
+        }
+      ]
+    },
+    {
+      "label": "initial C",
+      "reference": "local:user/f11-dialog-fcca168f48d6",
+      "clientPid": 48839,
+      "reportedAction": "Deny",
+      "osDecision": "always_allow",
+      "cli": {
+        "phase": "deny",
+        "identity": "identity-c",
+        "stdinIsTTY": true,
+        "stderrIsTTY": true,
+        "startedAt": "2026-10-25T04:53:03.002681+00:00",
+        "finishedAt": "2026-10-25T04:53:35.427427+00:00",
+        "elapsedSeconds": 32.425,
+        "exitCode": 0,
+        "type": "result",
+        "errorCode": null,
+        "category": null,
+        "details": null,
+        "valueReturned": true
+      },
+      "securityd": [
+        {
+          "timestamp": "2026-10-25 11:53:03.024550+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "displaying keychain prompt for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-c/stacklyd(48839); ACL: <AclValidationContext(action:24)SUBJECT[<ThresholdAclSubject(1 of 3)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-b/stacklyd][requirement:cdhash H\"d8714007e8af28c7e9df8293fc0c3fba381a9ba3\"]>][<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-dialog-fcca168f48d6)>]>]OBJECT[<ObjectAcl[ENTRY()[<AclEntry[tag:]AUTH[35]SUBJECT[<ThresholdAclSubject(1 of 2)[AnyAclSubject][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-dialog-fcca168f48d6)>]>]>] ENTRY()[<AclEntry[tag:]AUTH[24]AUTH[28]AUTH[37]AUTH[38]AUTH<\u2026>"
+        },
+        {
+          "timestamp": "2026-10-25 11:53:35.391007+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "user approved 'always allow' for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-c/stacklyd(48839)"
+        },
+        {
+          "timestamp": "2026-10-25 11:53:35.393292+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "user approved 'allow' for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-c/stacklyd(48839)"
+        }
+      ],
+      "audit": [
+        {
+          "at": "2026-10-25T04:53:35.411075000Z",
+          "action": "secret.reveal",
+          "result": "succeeded",
+          "details": {
+            "clientKind": "cli",
+            "peerUid": "502",
+            "purpose": "show",
+            "reference": "local:user/f11-dialog-fcca168f48d6"
+          }
+        }
+      ]
+    },
+    {
+      "label": "fresh D Escape",
+      "reference": "local:user/f11-escape-fcca168f48d6",
+      "clientPid": 72560,
+      "reportedAction": "Escape",
+      "osDecision": "denied",
+      "cli": {
+        "reference": "local:user/f11-escape-fcca168f48d6",
+        "phase": "cancel",
+        "identity": "identity-d",
+        "stdinIsTTY": true,
+        "stderrIsTTY": true,
+        "startedAt": "2026-10-25T18:00:08.507378+00:00",
+        "finishedAt": "2026-10-25T18:00:59.547888+00:00",
+        "elapsedSeconds": 51.04,
+        "exitCode": 4,
+        "type": "result",
+        "errorCode": "secret.store_access_denied",
+        "category": "unauthorized",
+        "details": [
+          {
+            "key": "byUser",
+            "value": "true"
+          }
+        ],
+        "valueReturned": false
+      },
+      "securityd": [
+        {
+          "timestamp": "2026-10-26 01:00:08.525153+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "displaying keychain prompt for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-d/stacklyd(72560); ACL: <AclValidationContext(action:24)SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]OBJECT[<ObjectAcl[ENTRY()[<AclEntry[tag:]AUTH[24]AUTH[28]AUTH[37]AUTH[38]AUTH[59]AUTH[115]SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]>] ENTRY()[<AclEntry[tag:]AUTH[35]SU<\u2026>"
+        },
+        {
+          "timestamp": "2026-10-26 01:00:59.530795+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "user did not approve 'allow' for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-d/stacklyd(72560): CssmError: CSSM Exception: 225 unknown error 225=e1"
+        },
+        {
+          "timestamp": "2026-10-26 01:00:59.531069+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "acleval",
+          "eventMessage": "ObjectAcl REJECTS access using ACL: <ObjectAcl[ENTRY()[<AclEntry[tag:]AUTH[24]AUTH[28]AUTH[37]AUTH[38]AUTH[59]AUTH[115]SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]>] ENTRY()[<AclEntry[tag:]AUTH[35]SUBJECT[<ThresholdAclSubject(1 of 2)[AnyAclSubject][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]>] ENTRY(___INTEGRITY___)[<AclEntry[tag:___INTEGRITY___]AUTH[65539]SUBJECT[<PartitionAclSubject((null))>]>] ENTRY(___PARTITION___)[<AclEntry[tag:___PARTITION___]AUTH[65538]SUBJECT[<PartitionAclSubject({\n    Partitions =     (\n        \"cdhash:b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"\n    );\n})>]>] ]>"
+        }
+      ],
+      "audit": [
+        {
+          "at": "2026-10-25T18:00:59.531304000Z",
+          "action": "secret.reveal",
+          "result": "failed",
+          "details": {
+            "clientKind": "cli",
+            "errorCode": "secret.store_access_denied",
+            "peerUid": "502",
+            "purpose": "show",
+            "reference": "local:user/f11-escape-fcca168f48d6"
+          }
+        }
+      ]
+    },
+    {
+      "label": "fresh D Deny",
+      "reference": "local:user/f11-escape-fcca168f48d6",
+      "clientPid": 72560,
+      "reportedAction": "Deny",
+      "osDecision": "denied",
+      "cli": {
+        "reference": "local:user/f11-escape-fcca168f48d6",
+        "phase": "deny",
+        "identity": "identity-d",
+        "stdinIsTTY": true,
+        "stderrIsTTY": true,
+        "startedAt": "2026-10-25T18:01:35.158933+00:00",
+        "finishedAt": "2026-10-25T18:02:20.594979+00:00",
+        "elapsedSeconds": 45.435,
+        "exitCode": 4,
+        "type": "result",
+        "errorCode": "secret.store_access_denied",
+        "category": "unauthorized",
+        "details": [
+          {
+            "key": "byUser",
+            "value": "true"
+          }
+        ],
+        "valueReturned": false
+      },
+      "securityd": [
+        {
+          "timestamp": "2026-10-26 01:01:35.226890+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "displaying keychain prompt for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-d/stacklyd(72560); ACL: <AclValidationContext(action:24)SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]OBJECT[<ObjectAcl[ENTRY()[<AclEntry[tag:]AUTH[24]AUTH[28]AUTH[37]AUTH[38]AUTH[59]AUTH[115]SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]>] ENTRY()[<AclEntry[tag:]AUTH[35]SU<\u2026>"
+        },
+        {
+          "timestamp": "2026-10-26 01:02:20.559758+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "kcacl",
+          "eventMessage": "user did not approve 'allow' for /Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-d/stacklyd(72560): CssmError: CSSM Exception: 225 unknown error 225=e1"
+        },
+        {
+          "timestamp": "2026-10-26 01:02:20.560226+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "acleval",
+          "eventMessage": "ObjectAcl REJECTS access using ACL: <ObjectAcl[ENTRY()[<AclEntry[tag:]AUTH[24]AUTH[28]AUTH[37]AUTH[38]AUTH[59]AUTH[115]SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]>] ENTRY()[<AclEntry[tag:]AUTH[35]SUBJECT[<ThresholdAclSubject(1 of 2)[AnyAclSubject][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]>] ENTRY(___INTEGRITY___)[<AclEntry[tag:___INTEGRITY___]AUTH[65539]SUBJECT[<PartitionAclSubject((null))>]>] ENTRY(___PARTITION___)[<AclEntry[tag:___PARTITION___]AUTH[65538]SUBJECT[<PartitionAclSubject({\n    Partitions =     (\n        \"cdhash:b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"\n    );\n})>]>] ]>"
+        }
+      ],
+      "audit": [
+        {
+          "at": "2026-10-25T18:02:20.569245000Z",
+          "action": "secret.reveal",
+          "result": "failed",
+          "details": {
+            "clientKind": "cli",
+            "errorCode": "secret.store_access_denied",
+            "peerUid": "502",
+            "purpose": "show",
+            "reference": "local:user/f11-escape-fcca168f48d6"
+          }
+        }
+      ]
+    },
+    {
+      "label": "fresh D noninteractive",
+      "reference": "local:user/f11-escape-fcca168f48d6",
+      "clientPid": 72560,
+      "reportedAction": "none",
+      "osDecision": "noninteractive_denied",
+      "cli": {
+        "reference": "local:user/f11-escape-fcca168f48d6",
+        "phase": "noninteractive",
+        "identity": "identity-d",
+        "stdinIsTTY": false,
+        "stderrIsTTY": false,
+        "startedAt": "2026-10-25T18:04:30.107372+00:00",
+        "finishedAt": "2026-10-25T18:04:30.164757+00:00",
+        "elapsedSeconds": 0.057,
+        "exitCode": 4,
+        "type": "result",
+        "errorCode": "secret.store_access_denied",
+        "category": "unauthorized",
+        "details": [
+          {
+            "key": "byUser",
+            "value": "false"
+          }
+        ],
+        "valueReturned": false
+      },
+      "securityd": [
+        {
+          "timestamp": "2026-10-26 01:04:30.153980+0700",
+          "processID": 587,
+          "subsystem": "com.apple.securityd",
+          "category": "acleval",
+          "eventMessage": "ObjectAcl REJECTS access using ACL: <ObjectAcl[ENTRY()[<AclEntry[tag:]AUTH[24]AUTH[28]AUTH[37]AUTH[38]AUTH[59]AUTH[115]SUBJECT[<ThresholdAclSubject(1 of 2)[<CodeSignatureAclSubject[legacyHash:9b826f9d3efec3026e3aa5528aa095d59aa10c00][path:/Users/ojiepermana/Development/ojiepermana/Stackly/target/f11-keychain-proof/identity-a/stacklyd][requirement:cdhash H\"b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"]>][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]>] ENTRY()[<AclEntry[tag:]AUTH[35]SUBJECT[<ThresholdAclSubject(1 of 2)[AnyAclSubject][<KeychainPromptAclSubject(flags: 0x0, desc:Stackly local:user/f11-escape-fcca168f48d6)>]>]>] ENTRY(___INTEGRITY___)[<AclEntry[tag:___INTEGRITY___]AUTH[65539]SUBJECT[<PartitionAclSubject((null))>]>] ENTRY(___PARTITION___)[<AclEntry[tag:___PARTITION___]AUTH[65538]SUBJECT[<PartitionAclSubject({\n    Partitions =     (\n        \"cdhash:b0f257ad9fdb48b0877703b56c34c2bf07b88c28\"\n    );\n})>]>] ]>"
+        }
+      ],
+      "audit": [
+        {
+          "at": "2026-10-25T18:04:30.154090000Z",
+          "action": "secret.reveal",
+          "result": "failed",
+          "details": {
+            "clientKind": "cli",
+            "errorCode": "secret.store_access_denied",
+            "peerUid": "502",
+            "purpose": "show",
+            "reference": "local:user/f11-escape-fcca168f48d6"
+          }
+        }
+      ]
+    }
+  ],
+  "negativeControl": "PASS: corrupting the fresh Deny CLI outcome to exit 0/valueReturned true is rejected",
+  "binarySha256": {
+    "identity-a": "47402154519d766b9e5457242b682d4862d46cba846c09dc9c638dd9c7c72eec",
+    "identity-b": "0c07725723393c84153b15f74bdc2fe2240bebde9dffbd3564accf245812565d",
+    "identity-c": "337934e1e372f7ae3265444fa4610ea8a408b82dae6ae70ff8a373520f83e89f",
+    "identity-d": "c2ddbc6d247d7cdeea120a98e006293e9cc926e22531a3a095d395fe570cfc30"
+  }
+}

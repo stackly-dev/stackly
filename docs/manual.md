@@ -42,25 +42,17 @@ Urutan yang aku sarankan: E dulu karena paling singkat, lalu A, lalu B. Setelah 
 
 Untuk F11 langkah 7 (AC-3). Record: `evidence/manual/2026-10-20-spec-0011-step-7-deny-and-cancel-on-the-login-ke.json` dan `evidence/manual/2026-10-20-spec-0011-step-7-keychain-dialog-after-an-ad-hoc.json`.
 
-Bagian ini memakai root default (`~/Library/Application Support/Stackly`, dibuat bila belum ada), dan item uji masuk ke login Keychain. Langkah 7 menghapusnya lagi.
+Bagian ini memakai root default (`~/Library/Application Support/Stackly`) dan login Keychain. Gunakan reference unik milik pengujian, misalnya `local:user/manual-keychain-<suffix>`. Nilainya harus dummy yang dibangkitkan, tanpa menyalin secret asli. Hentikan hanya daemon uji yang kamu jalankan; bila daemon lain memakai socket default, siapkan pergantiannya dahulu.
 
-1. Bangun daemon dan CLI: `cargo build -q -p stacklyd -p stackly-cli`
-2. Di Terminal A, jalankan `cargo run -q -p stacklyd` dan biarkan tetap jalan.
-3. Di Terminal B, jalankan `cargo run -q -p stackly-cli -- secret set local:user/manual-keychain-check --generate`. Perintah harus berakhir dengan exit 0. Catat bila muncul dialog.
-4. Di Terminal A, tekan Ctrl-C, lalu jalankan `touch apps/daemon/src/main.rs && cargo build -q -p stacklyd && cargo run -q -p stacklyd`. Build ulang ini mengubah tanda tangan ad hoc, sehingga Keychain bertanya lagi.
-5. Di Terminal B, jalankan `cargo run -q -p stackly-cli -- secret reveal local:user/manual-keychain-check` sebanyak tiga kali:
-   1. Saat dialog muncul, klik Deny.
-   2. Saat dialog muncul, klik Cancel atau tekan Escape.
-   3. Tambahkan `</dev/null | cat` di akhir perintah. Perintah harus langsung gagal, tanpa dialog.
+1. Bangun `cargo build -q -p stacklyd -p stackly-cli`. Salin `target/debug/stacklyd` ke `target/keychain-proof/a/stacklyd` setelah membuat foldernya. Jalankan salinan A langsung di Terminal A dengan `STACKLY_ROOT` tidak disetel. Jalankan CLI yang sudah dibangun (`target/debug/stackly`) di Terminal B untuk `secret set <reference> --generate`. Catat present, revision, waktu, dan PID daemon.
+2. Hentikan A. Buat varian berbeda dengan `cargo rustc -p stacklyd --bin stacklyd -- -C opt-level=2`, lalu salin ke `target/keychain-proof/b/stacklyd`. Catat SHA256, metadata `codesign -dv --verbose=4`, dan PID salinan B yang dijalankan langsung. Jangan memakai `cargo run` sesudah membangun varian, karena perintah itu dapat membangun identitas lain. `touch` sumber atau mengganti identifier tanda tangan saja tidak menjamin item belum mempercayai binary.
+3. **Preflight wajib sebelum dialog:** jalankan CLI yang sudah dibangun untuk reveal reference itu dengan stdin dari `/dev/null` dan stderr ke file, agar klien noninteractive. Tangkap status keluar proses CLI langsung (jangan memakai exit code `cat` di ujung pipe). Ringkas stdout menjadi exit code, error, detail `byUser`, dan boolean ada nilai; jangan simpan atau cetak nilainya. Hasil harus exit 4, `secret.store_access_denied`, `byUser=false`, tanpa nilai, tanpa dialog. Bila berhasil, item sudah dipercaya dan percobaan itu belum bisa membuktikan Deny. Gunakan item uji baru yang dibuat A atau varian B yang berbeda, lalu ulangi preflight.
+4. Untuk permintaan interaktif, stdin dan stderr CLI harus TTY. Catat waktu mulai/selesai, PID daemon pembaca, reference, dan hasil CLI tanpa nilai. Pengguna menekan **Deny** pada dialog; permintaan berikutnya dibatalkan dengan **Cancel** bila tersedia, atau **Escape**. Keduanya harus exit 4, `secret.store_access_denied`, `byUser=true`, tanpa nilai. **Always Allow** adalah pemberian izin, bukan pembatalan, dan menambah kepercayaan untuk pembacaan berikutnya. Bila itu terpilih, buat item uji baru dan ulangi preflight.
+5. Cocokkan setiap jendela waktu dengan Unified Logging dari `securityd`: prompt untuk path/PID daemon dan item yang sama, lalu keputusan persetujuan atau penolakan. Contoh pengambilan terbatas: `/usr/bin/log show --start '<waktu lokal mulai>' --end '<waktu lokal selesai>' --style json --predicate 'process == "securityd"'`. Simpan hanya event item/path uji. Cocokkan pula satu audit `secret.reveal` dan hasil CLI dalam jendela tersebut. Catatan tindakan pengguna tetap dicatat terpisah; bila berbeda dari keputusan OS, telusuri sebelum memberi verdict. Jangan mengotomasi tombol SecurityAgent.
+6. Ulangi preflight noninteractive. `secret status <reference>` dan `secret list` harus segera berhasil tanpa dialog atau nilai, tetap present dengan revision yang sama. Startup instance diuji terpisah oleh suite supervisor/skeleton.
+7. Bersihkan melalui `target/debug/stackly secret delete <reference>`, pastikan reference hilang dari list, lalu hentikan daemon uji. Jangan menghapus item Keychain atau proses lain.
 
-   Setiap kali, catat teks dialog, tombolnya, exit code, dan kode error yang tercetak.
-6. Jalankan `cargo run -q -p stackly-cli -- secret status local:user/manual-keychain-check`, lalu `cargo run -q -p stackly-cli -- secret list`. Keduanya harus berjalan tanpa dialog dan menampilkan status `present`.
-7. Bersihkan:
-   - `cargo run -q -p stackly-cli -- secret delete local:user/manual-keychain-check`
-   - `security delete-generic-password -s stackly-secret -a user/manual-keychain-check` (abaikan pesan "could not be found")
-   - Ctrl-C daemon di Terminal A.
-
-**Yang dikirim:** hasil langkah 3, 5.1, 5.2, 5.3, dan 6, plus versi macOS.
+**Yang dicatat:** versi macOS, identitas binary, waktu/PID/reference, pengamatan teks dan tombol yang benar benar terlihat, keputusan OS, audit, serta hasil CLI yang diringkas. Jangan mengarang teks dialog yang tidak tercatat. Contoh korelasi tanpa nilai tersedia pada [diagnosis F11](reviews/2026-10-26-f11-keychain-diagnosis.md).
 
 ## B. Alur GUI secret
 
@@ -101,12 +93,12 @@ Langkah 1 sampai 11 memakai root sementara dengan keychain file, jadi login Keyc
     - Ctrl-C daemon di Terminal A.
     - `rm -rf $ROOT $ROOT.daemon.log`
 12. Opsional: dialog Keychain asli (langkah 22 di record). Langkah ini memakai login Keychain dan folder Application Support yang asli, jadi jalankan hanya bila kamu tidak keberatan ada item `stackly-secret` sementara di sana.
-    1. Di Terminal A, bangun ulang supaya tanda tangan ad hoc berubah dan Keychain bertanya lagi: `touch apps/daemon/src/main.rs && cargo build -q -p stacklyd`. Lalu jalankan daemon tanpa `STACKLY_ROOT`: `cargo run -q -p stacklyd`.
+    1. Siapkan binary A dan B serta item unik seperti bagian A. Jalankan A tanpa `STACKLY_ROOT`; pergantian identitas baru dilakukan setelah item disimpan. Jangan menganggap `touch` atau build ulang pasti memunculkan dialog.
     2. Di Terminal B, buka app tanpa `STACKLY_ROOT`: `target/xcode/Build/Products/Debug/Stackly.app/Contents/MacOS/Stackly`. Buka Window > Design Gallery > Secrets, buka entry sheet, pilih Generate untuk `local:debug/gallery/password`, lalu Save. Klik Allow bila dialog muncul.
-    3. Hentikan daemon, lalu ulangi touch, build, dan start seperti 12.1, supaya pembacaan berikutnya memunculkan dialog lagi.
+    3. Hentikan A, jalankan salinan B langsung, lalu pastikan preflight noninteractive bagian A ditolak sebelum mencoba GUI. Bila item sudah dipercaya, gunakan item uji baru dan ulangi persiapan.
     4. Klik Show di baris connection string. Saat dialog Keychain muncul, Stackly kehilangan fokus. Setelah kamu klik Allow, nilai tidak boleh tampil sendiri, dan baris menampilkan teks merah `Hidden because Stackly went to the background. Press Show to try again.` Klik Show lagi; nilai harus tampil tanpa dialog.
-    5. Ulangi build sekali lagi, lalu klik Copy. Selagi dialog masih terbuka, jalankan `echo something-else | pbcopy` di Terminal B, lalu klik Allow. Baris harus menampilkan pesan merah `Not copied because the clipboard changed. Press Copy to try again.`, dan `pbpaste` tetap `something-else`.
-    6. Ulangi build sekali lagi, klik Copy, lalu klik Allow tanpa menyentuh clipboard. Harus muncul `Copied. The clipboard clears in 90 seconds.`, dan `pbpaste` menampilkan URI lengkap.
+    5. Siapkan lagi item dan binary pembaca yang lulus preflight penolakan bagian A, lalu klik Copy. Selagi dialog masih terbuka, jalankan `echo something-else | pbcopy` di Terminal B, lalu klik Allow. Baris harus menampilkan pesan merah `Not copied because the clipboard changed. Press Copy to try again.`, dan `pbpaste` tetap `something-else`.
+    6. Siapkan lagi item dan binary pembaca yang lulus preflight penolakan bagian A, klik Copy, lalu klik Allow tanpa menyentuh clipboard. Harus muncul `Copied. The clipboard clears in 90 seconds.`, dan `pbpaste` menampilkan URI lengkap.
     7. Bersihkan: Delete Reference…, konfirmasi, keluar dari app, hentikan daemon, lalu pastikan Keychain Access tidak menyimpan item `stackly-secret` yang tersisa. Bila dialog ternyata tidak membuat app kehilangan fokus di Mac ini, catat saja itu.
 
 **Yang dikirim:** versi macOS, waktu terukur untuk cek 30 detik dan 90 detik, serta nomor dan apa yang terlihat untuk setiap langkah yang tidak sesuai. Untuk langkah 12, kirim hasilnya atau tulis "12 dilewati".

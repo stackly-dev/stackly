@@ -55,8 +55,8 @@ _Build step 5, protokol 1.7. Semua test memakai `FakeSecretStore` di belakang `S
 
 - [x] Buka `protocols/error-codes.json` → area `secret` milik spec 0011 punya 13 kode persis seperti tabel *Kode error di wire*: kategori, `retryable` false semua, `details` (`secret.invalid_value` mendaftar `field`, `minLength`, `maxLength`, `reason`, `omitted`), dan `items` untuk `secret.needs_secret` (`reference`), `secret.conflict` (`use`), dan `secret.confirmation_required` (`effect`) dengan `max` 100 → AC-21
 - [x] Buka `protocols/contract-versions.json` dan `crates/protocol/src/version.rs` → entri 1.7 ada, `ProtocolVersion::CURRENT` 1.7 atau lebih baru; `ResourceKind` punya `secret`, `DaemonInfo` punya `secretStore`, dan `EventKind` punya `secret.changed` di `StacklyProtocol.swift` → AC-14, AC-21
-- [ ] Step 7, record manual Deny dan Cancel: `evidence/manual/2026-10-20-spec-0011-step-7-deny-and-cancel-on-the-login-ke.json` → ikuti `steps` di record itu di Mac ini (daemon di root default, item di login Keychain dibuat build lama, `secret reveal` dari Terminal interaktif; Deny, lalu Cancel atau Escape), catat kode error `secret.*`, exit code, dan label dialog, lalu isi `actual`, `status`, `reviewer`, `finishedAt`; jangan `BLOCKED` kecuali memang tidak ada sesi GUI → AC-3 (REQ-016)
-- [ ] Step 7, record manual dialog setelah build ulang ad hoc: `evidence/manual/2026-10-20-spec-0011-step-7-keychain-dialog-after-an-ad-hoc.json` → ikuti `steps` di record itu: aksi pengguna (client interaktif) memunculkan dialog, client yang tidak bisa menampilkan dialog (`</dev/null | cat`) gagal seketika tanpa dialog, `secret status` dan `secret list` tanpa dialog; bagian start yang butuh secret dicatat "not covered" sampai fitur 10 → AC-3 (REQ-016)
+- [x] Step 7, Deny dan Cancel: record `evidence/manual/2026-10-20-spec-0011-step-7-deny-and-cancel-on-the-login-ke.json` PASS setelah korelasi OS, audit, dan CLI. C awal tercatat Always Allow oleh securityd, sehingga hasil suksesnya bukan penolakan yang dilewati aplikasi. Deny dan Escape D pada item baru sama sama memiliki nonapproval serta ACL reject, audit gagal, exit 4, `secret.store_access_denied`, `byUser=true`, tanpa nilai. Laporan pengguna yang berbeda tetap disimpan dalam [diagnosis](../../reviews/2026-10-26-f11-keychain-diagnosis.md) → AC-3
+- [x] Step 7, dialog setelah perubahan binary ad hoc: record `evidence/manual/2026-10-20-spec-0011-step-7-keychain-dialog-after-an-ad-hoc.json` PASS melalui item login Keychain yang dibuat binary A dan dibaca binary D yang berbeda. Noninteractive ditolak seketika dengan `byUser=false`; interaktif memunculkan dialog dan pembatalan terbaru ditolak dengan `byUser=true`; status/list present tanpa nilai atau dialog. Start instance tidak dicakup dalam record manual ini, sesuai pemisahan langkah asal → AC-3
 
 ### Commands
 
@@ -69,7 +69,7 @@ _Build step 5, protokol 1.7. Semua test memakai `FakeSecretStore` di belakang `S
 - [x] `cargo test -p stacklyd --test secret_sentinel` → 3 test lulus terhadap `stacklyd` sungguhan dengan `STACKLY_ROOT` ke `TestRoot` (keychain file) dan relay perekam frame (`apps/daemon/tests/common/frame_tap.rs`) antara klien dan socket: fixture credential hanya ada di permintaan `secret.set` dengan input `value` dan di respons `secret.reveal`, tidak di frame error (conflict, tidak ditemukan, revision salah, reference tidak valid, NUL, 65537 byte, delete dua kali), frame event `secret.changed`, balasan list dan status, log daemon pada level debug, stderr, maupun byte registry beserta WAL; keychain file dikunci dengan `security lock-keychain` lalu `secret.reveal` dan `secret.set` upsert menjawab `secret.store_locked` dalam kurang dari satu detik, `secret.status` tetap `present`, dan `daemon.get_info` melaporkan `locked`; item yang dibuat ulang dengan `security add-generic-password -T /usr/bin/true` menjawab `secret.store_access_denied` dengan `byUser` false dalam kurang dari satu detik → AC-3, AC-13, AC-14, AC-16
 - [x] `cargo test -p stacklyd --test server secret_log` → writer log yang lewat `Redactor` milik daemon menyamarkan nilai yang diisi, nilai lama setelah replace, dan nilai bangkitan (diambil lewat reveal) di pesan, field, dan field span pada level error, warn, info, debug, dan trace, juga pola `postgres://admin:<nilai>@` dan `POSTGRES_PASSWORD=`; baris tanpa rahasia lewat utuh → AC-13
 - [x] `cargo test -p stacklyd --test operations secret_intent` → di daemon yang berjalan, operasi yang mencatat `record_secret_intent` untuk reference instance, menyimpan nilai, lalu gagal berakhir `failed` dengan catatan `secret_ref` `compensated` dan item hilang dari store, tanpa kompensator yang didaftarkan test (kompensator milik `stacklyd`) → spec 0007 hook fitur 11, AC-10 (kompensasi)
-- [x] `cargo xtask evidence check` → lulus; ketiga test sentinel dan dua test lain di atas menulis evidence `fixture` dengan `covers` AC-016, REQ-016, BR-018 (dan REQ-016, BR-018 untuk log dan kompensator), dan dua record manual step 7 kini berstatus `BLOCKED` karena akses alat ke SecurityAgent ditolak (pemeriksaan lanjutan 2026-10-24) → AC-16
+- [x] `cargo xtask evidence check` → lulus; ketiga test sentinel dan dua test lain di atas menulis evidence `fixture` dengan `covers` AC-016, REQ-016, BR-018 (dan REQ-016, BR-018 untuk log dan kompensator), dan dua record manual step 7 PASS setelah tindakan pengguna dan korelasi securityd pada 2026-10-26 (BLOCKED pada 2026-10-24 tetap riwayat) → AC-16
 - [x] `cargo test -p stacklyd` → seluruh suite daemon tetap lulus
 - [x] `cargo xtask check-deps` dan `cargo test -p xtask` → lulus; `stacklyd` `ipc::secret` masuk `EXPOSE_ALLOWED` di commit yang sama dengan pemanggilan `expose()` pertamanya → AC-15
 
@@ -144,7 +144,7 @@ _Build step 9 (`StacklyClient` dan `StacklyTestSupport`) dan step 10 (`StacklyUI
 
 ## Pemeriksaan native lanjutan, 2026-10-24
 
-Hasil dan batas lengkap: [laporan pemeriksaan](../../reviews/2026-10-24-f11-native-followup.md). Record langkah 7 dan 11 sekarang `BLOCKED` dengan hasil parsial yang diamati, bukan `NOT_RUN`. Checkbox gabungan di atas tetap terbuka.
+Hasil dan batas lengkap: [laporan pemeriksaan](../../reviews/2026-10-24-f11-native-followup.md). Saat pemeriksaan tersebut, record langkah 7 dan 11 `BLOCKED` dengan hasil parsial yang diamati. Status terkini digantikan bukti GUI 24 Oktober dan diagnosis Keychain 26 Oktober di bawah; riwayat lama tetap disimpan.
 
 - [x] Ulangi build app, 106 test Rust terkait dan 108 test Swift terkait, `check-deps`, `codegen --check`, serta validasi evidence. Satu known issue Swift adalah assertion negatif yang sengaja ditangkap. → AC-2, AC-3, AC-5, AC-9, AC-12, AC-13, AC-14, AC-16, AC-18, AC-19, AC-20, AC-24
 - [x] Render keempat preview Xcode dan tinjau light serta dark, ekspor gambar field, entry sheet, dan reveal text ke `target/f11-proof/`. Pemeriksaan visual ini belum menutup seluruh butir aksesibilitas preview di atas. → AC-19
@@ -154,12 +154,23 @@ Hasil dan batas lengkap: [laporan pemeriksaan](../../reviews/2026-10-24-f11-nati
 - [x] Pindai sembilan file root termasuk registry dan WAL, log daemon, stdout dan stderr app, serta Unified Logging 412622 byte, tanpa prefix fixture. → AC-16
 - [x] Copy native menghasilkan URI lengkap, clipboard kosong setelah tenggat 90 detik, teks pengganti bertahan setelah 111 detik, dan keluar dari app membersihkan salinan yang belum berubah. → AC-19
 - [x] Periksa app dengan Increase Contrast native lalu kembalikan setting ke keadaan awal. → AC-19
-- [ ] Selesaikan Deny dan Cancel di SecurityAgent. Akses alat ditolak secara eksplisit, jangan ganti hasil ini dengan PASS dari keychain file. → AC-3
+- [x] Penelusuran Deny awal selesai: securityd mencatat Always Allow untuk C pada PID/path serta jendela permintaan yang sama; audit sukses dan ACL bertambah sesuai keputusan OS. Deny/Escape baru ditolak konsisten. Perbaikan prosedur mewajibkan preflight penolakan dan korelasi OS sebelum verdict. → AC-3
 
 ## Rekonsiliasi kebijakan interaksi terbaru
 
 - [x] Bangun bundle Debug dari revisi `7e044b14`, jalankan 77 test Swift terkait, lalu buktikan entry, Replace, Show, Hide, timer, expiry dan perlindungan clipboard, quit, penghapusan, palette light dan dark, serta scan root dan log dengan daemon nyata. Record GUI cakupan terbaru PASS. → AC-16, AC-19, AC-24
 - [x] Pisahkan pemeriksaan interaksi yang dicabut (RETIRED) dari pemeriksaan keamanan Keychain yang masih berlaku. Record lama tetap historis dan tidak diubah menjadi PASS.
-- [ ] Dua bukti dialog login Keychain pada langkah 7 tetap BLOCKED karena pembatasan akses alat ke SecurityAgent. Build it dan Verify it F11 tetap terbuka. → AC-3
+- [x] Langkah 7 ditutup setelah diagnosis OS: record ad hoc dan Deny/Cancel PASS, pengujian ulang native sudah dicocokkan dengan audit/CLI, dan regresi terkait lulus. → AC-3
 
 Rincian: [rekonsiliasi kebijakan dan bukti GUI](../../reviews/2026-10-24-f11-interaction-policy-followup.md).
+
+## Dialog dengan bantuan pengguna, 26 Oktober 2026
+
+Tindakan dialog dilakukan pengguna dan hasil CLI dicatat tanpa nilai secret. Riwayat FAIL awal tetap ada pada [catatan percobaan](../../reviews/2026-10-25-f11-keychain-dialog-probe.md). [Diagnosis OS](../../reviews/2026-10-26-f11-keychain-diagnosis.md) menjelaskan C sebagai pemberian izin yang dicatat securityd, bukan penolakan OS. Deny dan Escape D mempunyai penolakan OS, audit gagal, serta CLI tanpa nilai. Kedua record langkah 7 kini PASS; teks dialog yang tidak diberikan tidak dikarang.
+
+## Verifikasi ulang dan penutupan, 26 Oktober 2026
+
+- [x] Korelasi lima permintaan dengan waktu berzona, PID/path, item, satu audit per reveal, dan hasil CLI lulus. Kontrol negatif yang mengubah Deny menjadi sukses dengan nilai ditolak oleh `python3 docs/reviews/evidence/verify_f11_keychain.py`. → AC-3, AC-9
+- [x] 184 test Rust unik dan 96 test Swift terkait lulus. Lima test adapter nyata dijalankan tanpa filter; satu known issue Swift merupakan assertion negatif fixture yang disengaja. `check-deps` dan `codegen --check` lulus. → AC-1 sampai AC-24 pada batas fondasi yang dipetakan di atas
+- [x] `cargo xtask evidence check` lulus: 63 record manual, baseline valid, 801 file Rust dan 517 file Swift mengikuti aturan. Bukti native dialog tetap terpisah dari fixture.
+- [x] Build it, milestone daemon, dan Verify it F11 ditutup. Bukti GUI pointer yang sudah lulus tetap berlaku, interaksi yang dicabut tetap RETIRED, dan follow-up consumer serta identity development nyata di spec tetap milik fitur berikutnya. Tidak ada perubahan kode runtime.

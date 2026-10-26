@@ -206,7 +206,7 @@ Komponen di dalam daemon yang menjalankan executable terverifikasi dengan argv e
 - [x] Review it (fresh model): `/check review process supervisor`
 - [x] Document it: `/document process supervisor`
 
-### 11. Secret store & redaction · in-progress · GA
+### 11. Secret store & redaction · done · GA
 
 Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu terapkan masking yang sama di GUI, CLI, log, diagnostics, dan export. Reveal atau copy secret selalu butuh aksi eksplisit.
 
@@ -217,16 +217,16 @@ Simpan secret di Keychain dan hanya reference di SQLite atau manifest, lalu tera
 **Pointer:** spec [0011](../specs/0011-secret-store-redaction/index.md) · code in `crates/domain/src/secret/`, `crates/platform/`, `crates/platform-macos/src/secret*`, `crates/core/src/secret/`, `crates/storage/`, `crates/testkit/`, `crates/protocol/src/secret.rs`, `apps/daemon/src/ipc/secret.rs`, `apps/daemon/src/secrets.rs`, `apps/daemon/src/log_sink/`, `apps/cli/src/secret_input.rs`, `apps/cli/src/commands/secret.rs`
 
 - [x] Design it (spec): `/architect secret store & redaction`
-- [ ] Build it: `/develop secret store & redaction`
+- [x] Build it: `/develop secret store & redaction`
   - [x] Secret port, references, and Keychain adapter: `SecretRef`, `SecretStore`, `FakeSecretStore`, and `MacosSecretStore` with the `OSStatus` spike (spec 0011 AC-1 to AC-4, AC-6, AC-7; build steps 1 to 3; needs features 4 and 5)
   - [x] Secret registry and core service: the secret migration and the registry ops spec 0005 designs for this feature (reference insert, update, observe, delete, and restore, `ReplaceSecretUses`, `InsertAuditEvent`, and the secret and audit reads), then `SecretWorker`, `put`, reveal, delete, `resolve_for_start`, `Redactor`, delivery rules, and the `check-deps` allowlist (spec 0011 AC-4 to AC-6, AC-8 to AC-13, AC-15, AC-20; build steps 0, 4, and 6; does not need feature 6; step 0 needs step 1 and never runs at the same time as spec 0010 step 2a, in either order, because both touch the same registry files; step 4 needs steps 0 and 2; step 6 can run as its own session)
   - [x] Phase 02 core rules: `printable_only` on `SecretFieldRule`, `reason` on `secret.invalid_value`, `put(Bind)` with a field that reads and checks, store errors that carry their reference, and `classify_create_failure` (spec 0011 AC-22, AC-23; build step 4a; in the step 5 session or its own core session, always before spec 0010 step 13 and spec 0020 milestone 1 step 3)
-  - [ ] Secret service through the daemon: IPC handlers, `codes::secret` and the error mapping, the redacting log writer, `Redactor` on envelopes and events, and the daemon sentinel suite (spec 0011 AC-3, AC-5, AC-7, AC-8, AC-9, AC-11, AC-13, AC-14, AC-16, AC-21, AC-22; build steps 5 and 7; needs feature 6 and the two milestones above)
-    - [x] Implementasi dan regresi sentinel native diuji ulang pada 2026-10-24; bukti dialog login Keychain masih terhalang pembatasan akses alat ke SecurityAgent ([bukti](../reviews/2026-10-24-f11-native-followup.md)).
+  - [x] Secret service through the daemon: IPC handlers, `codes::secret` and the error mapping, the redacting log writer, `Redactor` on envelopes and events, and the daemon sentinel suite (spec 0011 AC-3, AC-5, AC-7, AC-8, AC-9, AC-11, AC-13, AC-14, AC-16, AC-21, AC-22; build steps 5 and 7; needs feature 6 and the two milestones above)
+    - [x] Bukti dialog dengan tindakan pengguna dan diagnosis securityd pada 2026-10-26 selesai. C awal tercatat Always Allow, Deny/Escape D ditolak tanpa nilai, kedua record langkah 7 PASS, 184 test Rust serta 96 test Swift lulus. Prosedur uji dan klasifikasi bukti diperbaiki; tidak ditemukan bug runtime ([diagnosis dan batas penutupan](../reviews/2026-10-26-f11-keychain-diagnosis.md)).
   - [x] CLI secret commands and secure input: `stackly secret list`, `status`, `set`, `reveal`, `delete` (spec 0011 AC-16, AC-17; build step 8; needs feature 8)
   - [x] Swift client and GUI secret flows: `FixtureCredential`, `RevealedSecret`, `SecretField`, `SecretEntrySheet`, `RevealableSecretText` (spec 0011 AC-18, AC-19, AC-24; build steps 9 to 11; needs features 12 and 13)
     - [x] Cakupan GUI pointer setelah pencabutan interaksi khusus diverifikasi melalui build terbaru, 77 test terkait, dan alur native; record GUI baru PASS, record lama tetap riwayat ([bukti](../reviews/2026-10-24-f11-interaction-policy-followup.md)).
-- [ ] Verify it: `/check verify secret store & redaction`
+- [x] Verify it: `/check verify secret store & redaction`
 - [x] Test it: `/test secret store & redaction`
 - [x] Review it (fresh model): `/check review secret store & redaction`
 - [x] Document it: `/document secret store & redaction`

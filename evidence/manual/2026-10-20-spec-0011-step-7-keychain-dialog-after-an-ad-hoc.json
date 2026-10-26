@@ -15,30 +15,34 @@
     "file": null,
     "line": null
   },
-  "status": "BLOCKED",
+  "status": "PASS",
   "expected": "After rebuilding stacklyd with ad hoc signing, a user action (secret.reveal from an interactive client) on an item made by the earlier build shows the Keychain dialog, while a background trigger (a start that needs the secret, a client that cannot show a dialog) gets secret.needs_secret or secret.store_access_denied without any dialog, and the observed behavior is noted for each",
-  "actual": "2026-10-24: created a disposable generated reference on the default login Keychain, revision 1, exit 0. Restarted stacklyd from a copy with a different ad hoc signing identifier and launched an interactive reveal. The call waited for native authorization. Computer use explicitly refused access to com.apple.SecurityAgent, so no Deny or Cancel action, dialog wording, or resulting error is claimed. Cancelled the client, stopped the daemon, and deleted the disposable reference. See docs/reviews/2026-10-24-f11-native-followup.md.",
-  "reason": "The computer use tool refuses access to com.apple.SecurityAgent for safety reasons. A GUI login session exists, but the required authorization dialog cannot be inspected or controlled with the available permitted interface.",
-  "owner": "Native Keychain dialog verification with an authorized interactive operator",
-  "subjects": [],
-  "steps": [
-    "In a Terminal at the repo root, build both binaries: `cargo build -q -p stacklyd -p stackly-cli`.",
-    "Terminal A: start the daemon on the DEFAULT root (no STACKLY_ROOT, so it uses the login Keychain, and it creates ~/Library/Application Support/Stackly if absent): `cargo run -q -p stacklyd`. Leave it running.",
-    "Terminal B (a real Terminal, nothing piped, so the client is interactive): `cargo run -q -p stackly-cli -- secret set local:user/manual-keychain-check --generate`. Expect exit 0; note whether any Keychain dialog appeared (none is expected for the build that made the item).",
-    "Terminal A: press Ctrl-C to stop the daemon. Then `touch apps/daemon/src/main.rs && cargo build -q -p stacklyd` (a new ad hoc build, so a new code identity), and start it again with `cargo run -q -p stacklyd`.",
-    "Terminal B: `cargo run -q -p stackly-cli -- secret reveal local:user/manual-keychain-check`. Note whether the Keychain dialog appears for the item made by the earlier build, and what it says. Click Deny.",
-    "Terminal B, a client that cannot show a dialog: `cargo run -q -p stackly-cli -- secret reveal local:user/manual-keychain-check </dev/null | cat`. Expect no dialog and an immediate failure; note the error code, whether the detail byUser is false, and the exit code.",
-    "Terminal B: `cargo run -q -p stackly-cli -- secret status local:user/manual-keychain-check` and `cargo run -q -p stackly-cli -- secret list`. Expect no dialog and the reference listed as present (the probe never reads the value). Note it.",
-    "Not covered here: a start that needs the secret (needs instances, feature 10). Write 'not covered' for that part.",
-    "Cleanup: `cargo run -q -p stackly-cli -- secret delete local:user/manual-keychain-check`, then `security delete-generic-password -s stackly-secret -a user/manual-keychain-check` (ignore 'could not be found'), then Ctrl-C the daemon in Terminal A.",
-    "Write down the macOS version and the exact dialog wording and button labels you saw."
+  "actual": "Native proof with the user handling the dialogs. Binary A created a generated item in the default login Keychain. Binary D was built from the same source using cargo rustc -p stacklyd --bin stacklyd -- -C opt-level=2, copied separately, and signed ad hoc with a distinct identifier. A fresh item created by A was not trusted by D: the noninteractive reveal failed in 0.032 seconds with exit 4, secret.store_access_denied, byUser=false, no value. The user confirmed that interactive requests displayed dialogs for the Stackly test item; Escape and a subsequent Deny each returned exit 4, secret.store_access_denied, byUser=true, no value. A noninteractive read after Deny still failed in 0.057 seconds with byUser=false. secret status and secret list returned immediately with exit 0, status present, revision 1, backend macos_keychain, target login, without a value or a dialog wait. This manual check does not cover an instance start, as the original steps explicitly separate that scenario. Initial B and C were separately correlated with securityd Always Allow events, successful audit rows, and successful CLI responses. This corrects the earlier inference that B was silently trusted merely because of signing metadata, and resolves the initial human-reported C Deny mismatch. The fresh D denial/cancellation results remain independently PASS. Both disposable references were deleted, list was empty, and the test daemon stopped. Full diagnosis and exact sanitized OS events are in docs/reviews/2026-10-26-f11-keychain-diagnosis.md and docs/reviews/evidence/2026-10-26-f11-keychain-correlation.json.",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "stacklyd",
+      "version": "0.1.0",
+      "digest": "c2ddbc6d247d7cdeea120a98e006293e9cc926e22531a3a095d395fe570cfc30",
+      "source": "managed"
+    }
   ],
-  "reviewer": "Codex",
-  "startedAt": "2026-10-24T05:32:24.000Z",
-  "finishedAt": "2026-10-24T05:47:02.656Z",
+  "steps": [
+    "Build stacklyd and stackly-cli. Copy the original daemon to an identity-a path and run that exact binary on the default root with STACKLY_ROOT unset. Use a unique disposable reference and secret set --generate; never capture the value in the evidence.",
+    "Stop only the test daemon. Build a distinct variant with cargo rustc -p stacklyd --bin stacklyd -- -C opt-level=2, copy it to identity-d, record its SHA256 and signing metadata, and run the copy directly. Do not cargo run after building the variant, since it may rebuild another identity.",
+    "Before any dialog, use the already built CLI noninteractively: stdin /dev/null and stderr redirected, stdout summarized without its value, capturing the CLI exit status directly. Require exit 4, secret.store_access_denied, byUser=false, no value. Success means the item is already trusted and this setup cannot prove denial. Touching a source file or changing a signing identifier alone is not a trust precondition.",
+    "With stdin and stderr attached to a real TTY, record the request start/end, reader daemon PID and exact reference. Request reveal. The human clicks Deny; repeat with Cancel or Escape. Each must return exit 4, secret.store_access_denied, byUser=true, no value. Always Allow is a grant, never a cancellation. Record observed wording and buttons without inventing missing text.",
+    "Correlate each request with securityd prompt and decision for that daemon PID/path and item, the one secret.reveal audit row in the request window, and the sanitized CLI result. Keep the human report separately. Resolve conflicting observations before assigning the final verdict.",
+    "Repeat the noninteractive rejection, then status and list: no prompt or value, present revision unchanged. Instance-start evidence belongs to the separate supervisor and skeleton tests.",
+    "Delete only the owned test reference through the daemon, confirm it is absent from list, and stop the test daemon. See docs/manual.md section A for the full procedure."
+  ],
+  "reviewer": "Codex, with dialog actions confirmed by the user",
+  "startedAt": "2026-10-25T01:31:33.033Z",
+  "finishedAt": "2026-10-25T18:16:55.480767Z",
   "evidencePath": "evidence/manual/2026-10-20-spec-0011-step-7-keychain-dialog-after-an-ad-hoc.json",
   "context": {
-    "sourceCommit": "2c149a8630d63239dc4d8fea598826b995c69226",
+    "sourceCommit": "252e35d130e3867681aca825bc62da05edbf9077",
     "sourceDirty": true,
     "runId": null,
     "runKind": null,
