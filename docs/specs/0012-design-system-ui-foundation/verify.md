@@ -1,6 +1,30 @@
 # Verify: Design system dan fondasi UI · spec 0012
 > Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
 
+## Hasil terkini, 28 Oktober 2026
+
+**PASS untuk cakupan aktif.** Run 27 Oktober pada `501a107f` memeriksa seluruh kriteria aktif dan meninggalkan kekurangan bukti AC-5 serta AC-16. Run lanjutan 28 Oktober membuktikan AC-5, lalu menemukan pergeseran halaman saat Hide Banner pada AC-16. Setelah perbaikan di `TokensGalleryPage.swift`, rekaman ulang light dan dark dengan konten 640 pt membuktikan banner memudar tanpa menggeser halaman. Bukti kriteria lain dari run 27 Oktober tetap berlaku karena kode foundation lainnya tidak berubah. Atas persetujuan pengguna pada 28 Oktober, fitur 12 ditandai done dan status spec menjadi Accepted.
+
+Lingkungan: macOS 27.0.1 (26A434), Xcode 27.1 (27A9275), Apple Silicon. App Debug benar benar dijalankan dengan `STACKLY_UI_SCENARIO=connected-empty` dan `STACKLY_UI_APPEARANCE=light`, lalu `dark`. Ini bukti UI dengan data fixture, tanpa koneksi daemon atau proses provider. Cek tampilan aksesibilitas khusus tetap RETIRED.
+
+### Cek yang selesai
+
+- [x] AC-5: native List pada host public API yang menautkan objek `StacklyUI` dari build app menampilkan pilihan biru dengan indikator, label, dan detail putih setelah List mendapat fokus. Bukti `native-list-focused.png` dan empat render kelima tone pada light, dark, standard, serta increased, di `/tmp/stackly-f12-followup-20261028/`. Detail yang terpotong lebih dulu pada konten sempit dibuktikan run 27 Oktober.
+- [x] AC-16: test regresi `GalleryMotionTests.hidingTheBannerPreservesItsLayoutSize` gagal dengan selisih tinggi tepat 39 pt pada lebar 320, 640, dan 1044 pt sebelum perbaikan. Setelah perbaikan, ukuran terlihat dan tersembunyi sama pada ketiga lebar.
+- [x] AC-16: pada Tokens light, gulir sampai paling bawah lalu klik Hide Banner dan Show Banner empat kali. Rekaman native berisi 807 frame. Pencocokan panel pada 59 frame selama dan di sekitar empat transisi menemukan pergeseran vertikal 0 px pada resolusi pencocokan 3 px. Banner tetap memudar sekitar 0,2 detik, dengan interval frame median 16,67 ms.
+- [x] AC-16: ulangi pada dark dengan Narrow Width aktif (konten 640 pt). Rekaman berisi 809 frame. Pencocokan pada 61 frame selama dan di sekitar empat transisi menemukan pergeseran vertikal 0 px pada resolusi pencocokan 3 px. Tidak ada gerak atau perubahan skala yang terlihat.
+- [x] AC-16: bukti perubahan status dan bentuk state dari run lanjutan 28 Oktober tetap berlaku. `gallery-transitions.mov` membuktikan enam pergantian Empty, Failed, dan Loaded; `status-transitions.mov` membuktikan empat pergantian StatusLabel. Kode Status, State, dan token Motion tidak berubah dalam perbaikan ini.
+- [x] `cargo xtask build-app` selesai dengan exit 0, build Debug berhasil.
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'GalleryMotionTests|GallerySnapshotTests|LayoutTokenTests|StatusViewTests|StateViewPartsTests|SourceRuleTests'` selesai dengan exit 0, 60 test dalam delapan suite lulus. Seluruh snapshot galeri light, dark, dan narrow lulus tanpa merekam ulang referensi.
+- [x] `xcrun swift-format lint --strict` untuk file sumber dan test yang berubah, serta `git diff --check`, lulus.
+
+### Bukti dan penutupan
+
+Bukti run awal: `/tmp/stackly-f12-verify-20261027/report.md`. Bukti AC-5 dan penemuan kegagalan AC-16: `/tmp/stackly-f12-followup-20261028/report.md`. Bukti perbaikan: `/tmp/stackly-f12-debug-20261028/`, terutama `regression-before.log`, `tests-after.log`, `gallery-banner.mov`, `position-measurements.json`, `banner-motion-fixed.png`, dan rekaman serta pengukuran di subfolder `dark/`. Rekaman hanya mencakup jendela galeri, tanpa audio. Pengukuran memakai timestamp frame aktual, bukan waktu tunggu alat UI.
+
+AC-5 dan AC-16 kini PASS. Tidak ada surface aktif yang belum dibangun atau penghambat verifikasi yang tersisa. Kotak Verify it fitur 12 pada `docs/scope/ui-macos.md` dicentang. Riwayat BLOCKED berikut berlaku pada run lamanya, bukan hasil terkini.
+
+## Riwayat run 18 sampai 22 Oktober 2026
 
 **Dijalankan**: 2026-10-18, macOS 27.0 (26A428), Xcode 27.0 (27A266a), build Debug `target/xcode/Build/Products/Debug/Stackly.app` dari branch `claude/f12-verify-test-cfb188`. Dijalankan ulang 2026-10-21 di macOS 27.0.1 (26A434), Xcode 27.0 (27A266a), dari `main` `d1338e4` (branch `claude/nice-banach-103b7f`): semua baris `## Commands`, plus langkah UI yang jalurnya berubah sejak 2026-10-18. Yang berubah hanya cangkang galeri (halaman Secrets spec 0011 di `DesignGallery.swift`, bantuan Narrow Width dan `GalleryLayout.narrowWidth` final di `GallerySupport.swift`), `StacklyApp.swift` (jendela utama spec 0013, galeri menerima runtime daemon), dan `design.md` (bagian App shell). Kode `Tokens/`, `Status/`, `State/`, dan `Confirmation/` tidak berubah, jadi langkah lainnya tidak diulang. App Debug dijalankan dengan `STACKLY_ROOT` ke folder sementara, tidak pernah ke Application Support asli. Bukti ulang ada di folder catatan bersama session koordinator wave 1 (`chk-f12-verify-evidence/`).
 

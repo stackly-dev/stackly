@@ -625,23 +625,27 @@
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s12) {
                     Button(isBannerShown ? "Hide Banner" : "Show Banner") {
-                        withAnimation(StacklyMotion.crossfadeAnimation) {
-                            isBannerShown.toggle()
-                        }
+                        isBannerShown.toggle()
                     }
-                    ZStack(alignment: .topLeading) {
-                        Color.clear.frame(height: 1)
-                        if isBannerShown {
-                            Text("The last known state is from 14:02.")
-                                .font(.body.weight(.semibold))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(Spacing.s12)
-                                .toneSurface(.caution, on: .window, strength: .banner)
-                                .transition(StacklyMotion.crossfade)
-                        }
-                    }
+                    GalleryMotionBanner(isShown: isBannerShown)
                 }
             }
+        }
+    }
+
+    /// The motion sample's banner, including the space it occupies in the page.
+    struct GalleryMotionBanner: View {
+        let isShown: Bool
+
+        var body: some View {
+            // Keep the sample's height so hiding it cannot move a page scrolled to its bottom.
+            Text("The last known state is from 14:02.")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.s12)
+                .toneSurface(.caution, on: .window, strength: .banner)
+                .opacity(isShown ? 1 : 0)
+                .animation(StacklyMotion.crossfadeAnimation, value: isShown)
         }
     }
 
