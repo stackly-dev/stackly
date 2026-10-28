@@ -116,12 +116,12 @@ public struct AppShell: View {
                 DaemonFooter(status: presentation.footer)
             }
         } detail: {
-            page
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(StacklyColor.surfaceWindow)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    bannerArea
-                }
+            ShellPageLayout(page: page, banner: bannerArea)
+                // The nested navigation stack's toolbar backdrop otherwise follows the
+                // page down and blurs its controls below the banner.
+                .toolbarBackgroundVisibility(
+                    presentation.banner == nil ? .automatic : .hidden, for: .windowToolbar
+                )
                 .feedbackPresenter()
                 .navigationSplitViewColumnWidth(
                     min: Self.contentMinWidth,
@@ -327,6 +327,23 @@ public struct AppShell: View {
                 reconnect: reconnect,
                 refresh: refreshDiagnostics
             )
+        }
+    }
+}
+
+/// Keeps the window banner outside the page's native navigation and inspector containers.
+struct ShellPageLayout<Page: View, Banner: View>: View {
+    let page: Page
+    let banner: Banner
+
+    var body: some View {
+        // Native inspector containers drop an ancestor's safe area inset, even when
+        // closed. Reserve the banner's height in the layout instead of the safe area.
+        VStack(spacing: 0) {
+            banner
+            page
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(StacklyColor.surfaceWindow)
         }
     }
 }
