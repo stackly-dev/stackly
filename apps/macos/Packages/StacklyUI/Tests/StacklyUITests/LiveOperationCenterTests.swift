@@ -4,9 +4,8 @@ import Testing
 
 @testable import StacklyUI
 
-/// The live operation center against a real `stacklyd` (spec 0013 AC-18). It cancels
-/// with the reason while the daemon answers `operation.list` with
-/// `request.unknown_method`, which is the case until the feature 7 handlers land.
+/// The live operation center against a real `stacklyd` (spec 0013 AC-13 and AC-18):
+/// snapshots, events from another client, and updates through completion.
 @Suite(.tags(.daemon), .timeLimit(.minutes(1)))
 struct LiveOperationCenterTests {
     /// What a stream of operation updates gave, and whether it ended.
@@ -25,15 +24,11 @@ struct LiveOperationCenterTests {
         let probe = await model.read(
             .operationList(
                 ListOperationsParams(activeOnly: true, resource: nil, limit: nil, before: nil)))
-        if case .failure(let error) = probe, error.body.code == "request.unknown_method" {
-            // An older daemon: the center says nothing rather than a false zero.
-            #expect(model.operations.store.unsupported)
-            #expect(model.operations.subtitle == nil)
+        guard case .success(.operationList) = probe else {
+            Issue.record("operation.list failed or returned the wrong reply: \(probe)")
             await parts.shutDown()
             await daemon.stop()
-            try Test.cancel(
-                "operation.list answered request.unknown_method: this stacklyd has no feature 7 operation handlers yet"
-            )
+            return
         }
         try await waitFor("the operation snapshot", seconds: 20) {
             model.operations.runningCount != nil
@@ -58,5 +53,69 @@ struct LiveOperationCenterTests {
         #expect(collected.values.isEmpty)
         await parts.shutDown()
         await daemon.stop()
+    }
+
+    @Test func anotherClientsOperationUpdatesTheBadgeAndFinishesItsStream() async throws {
+        try await SkeletonRig.run(recordsEvidence: false) { rig in
+            let parts = ShellEndToEndTests.shell(for: rig.daemon)
+            let model = parts.runtime.model
+            let center = model.operations
+            let collected = Collected()
+            var watchedID: UUID?
+            var watcher: Task<Void, Never>?
+            let didApply = center.store.didApply
+            defer {
+                center.store.didApply = didApply
+                watcher?.cancel()
+            }
+            do {
+                try await ShellEndToEndTests.waitUntilRefreshed(model, "the shell to refresh")
+                let rounds = model.sync.completedRounds
+                let loadedAt = center.store.loadedAt
+
+                // Register at the running event itself, before the final event can
+                // arrive. No delay in the fake provider decides the test's order.
+                center.store.didApply = { change in
+                    didApply?(change)
+                    guard case .changed(let operation) = change,
+                        operation.state == .running, watchedID == nil
+                    else { return }
+                    watchedID = operation.id
+                    #expect(center.active.contains { $0.id == operation.id })
+                    #expect(center.runningCount == 1)
+                    #expect(center.subtitle == "1 running")
+                    #expect(model.sidebarCounts.runningOperations == 1)
+                    let stream = center.updates(for: operation.id)
+                    watcher = Task {
+                        for await value in stream { collected.values.append(value) }
+                        collected.ended = true
+                    }
+                }
+
+                _ = try await rig.create("observed")
+                let operationID = try #require(rig.startedOperations.last)
+                #expect(watchedID == operationID)
+                try await waitFor("the operation stream to finish", seconds: 20) {
+                    collected.ended
+                }
+                #expect(collected.values.first?.state == .running)
+                #expect(collected.values.last?.state == .succeeded)
+                #expect(collected.values.allSatisfy { $0.id == operationID })
+                for (earlier, later) in zip(collected.values, collected.values.dropFirst()) {
+                    #expect(earlier.revision < later.revision)
+                }
+                #expect(center.active.isEmpty)
+                #expect(center.recent.contains { $0.id == operationID && $0.state == .succeeded })
+                #expect(center.runningCount == 0)
+                #expect(center.subtitle == "No running operations")
+                #expect(model.sidebarCounts.runningOperations == 0)
+                #expect(model.sync.completedRounds == rounds)
+                #expect(center.store.loadedAt == loadedAt)
+            } catch {
+                await parts.shutDown()
+                throw error
+            }
+            await parts.shutDown()
+        }
     }
 }
