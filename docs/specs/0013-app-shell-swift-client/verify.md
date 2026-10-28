@@ -111,3 +111,26 @@ _Langkah dari update spec 2026-10-22 (titik sambung agent spec 0015 di shell). J
 
 - [ ] Ulang cek 1 dengan `STACKLY_ROOT` sementara dan tanpa `stacklyd` → footer "stacklyd unavailable" dan placeholder "Waiting for stacklyd" seperti dulu, banner "STACKLY_ROOT is set." dengan pesan "The background service only runs the default Stackly folder. Start stacklyd yourself for this folder." dan aksi Reconnect serta Open Diagnostics, banner tidak berkedip selama beberapa percobaan, dan Diagnostics What to do memakai judul dan pesan yang sama → AC-9, AC-12
 - [ ] Ulang cek 9 → What to do untuk `ipc.endpoint_missing` memakai teks baris `root_override`, bukan "Start it with stacklyd", dan hilang setelah tersambung; seksi Background Agent dan Command Line tampil di bawah Connection → AC-12
+
+## Penutupan build 2026-10-28
+
+_Hasil `/develop` pada branch `feat/app-shell-swift-client-completion`. Implementasi dan perubahan scope dicatat di `8da088b5`. Run penuh client dan UI memakai baseline `2bbe40ca`; run terfokus berikutnya memakai perubahan `LiveOperationCenterTests` yang masuk `8da088b5`. Daemon, fake server, CLI, dan contoh `skeleton_seed` dibangun sebelum test integrasi. Setiap test daemon memakai root sementara miliknya sendiri. Bagian ini mencatat pemeriksaan build, bukan penutupan Verify it._
+
+### Commands dan hasil
+
+- [x] `swift test --package-path clients/swift` → 224 test di 32 suite lulus, termasuk kontrak, transport, koneksi, sinkronisasi, dan integrasi daemon → AC-1 sampai AC-8, AC-20, AC-23.
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → 1.407 test di 141 suite lulus pada baseline, dengan 6 known issue dari pemeriksaan kegagalan snapshot yang disengaja di `SnapshotHelperTests`. Run ini selesai sebelum satu test operasi baru ditambahkan; hasil test baru dicatat pada baris berikutnya → cakupan otomatis shell, store, adapter, mutasi, snapshot, dan integrasi pada AC-7 sampai AC-19, AC-21 sampai AC-23; tidak menggantikan cek manual.
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter LiveOperationCenterTests` → 2 test lulus terhadap `stacklyd` asli. Snapshot kosong menghasilkan badge nol dan subjudul "No running operations"; ID operasi yang tidak dikenal mengakhiri stream tanpa nilai. `operation.list` yang gagal atau membalas dengan tipe salah kini menggagalkan test, bukan membatalkannya karena prasyarat fitur 7 lama → AC-13, AC-18.
+- [x] `LiveOperationCenterTests.anotherClientsOperationUpdatesTheBadgeAndFinishesItsStream` → operasi create dari client kedua masuk ke `active` saat running, badge menjadi 1 dan subjudul "1 running". Stream menerima running sampai succeeded dengan revision yang meningkat, lalu berakhir. Operasi keluar dari `active`, masuk `recent`, badge kembali 0, dan subjudul kembali "No running operations". Jumlah putaran sinkronisasi dan waktu snapshot store tidak berubah. Pengamatan dipasang saat event running diterapkan, tanpa sleep untuk mengatur urutan → AC-8, AC-13, AC-18.
+- [x] `cargo xtask build-app` → Debug app berhasil dibangun dengan signature ad hoc; hasil ini bukan bukti build atau signing Release.
+- [x] `cargo xtask check-deps` → 13 crate mengikuti aturan dependency, unsafe, dan source.
+- [x] `cargo xtask codegen --check` → 20 file generated sesuai sumber kontrak.
+- [x] `cargo xtask evidence check` → 63 record manual, baseline, 801 file Rust, dan 518 file Swift valid.
+- [x] `xcrun swift-format lint --strict apps/macos/Packages/StacklyUI/Tests/StacklyUITests/LiveOperationCenterTests.swift` serta `git diff --check` → lulus.
+
+### Batas bukti dan langkah berikutnya
+
+- [ ] Restorasi pilihan sidebar setelah Quit dan peluncuran ulang → `NOT_RUN` pada putaran ini → AC-13.
+- [ ] Ulang pemeriksaan pointer di app terbaru, termasuk sidebar, banner, Settings, Diagnostics, tutup jendela, dan buka kembali → `NOT_RUN` pada putaran ini → AC-9 sampai AC-15, bagian layout AC-21.
+
+Build it dan milestone penyambungan fitur 13 sudah dicentang di scope. Verify it tetap terbuka, fitur tetap `in-progress`, dan spec tetap `In Progress`. Cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test tidak berlaku sesuai perubahan scope 2026-10-24. Bukti lama di atas tetap merupakan riwayat pada revisi asalnya.
