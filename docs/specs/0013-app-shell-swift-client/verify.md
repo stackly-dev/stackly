@@ -1,8 +1,8 @@
-# Verify: App shell SwiftUI & Swift client · spec 0013 · updated 2026-10-21
+# Verify: App shell SwiftUI & Swift client · spec 0013 · updated 2026-10-28
 > Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
 
 
-_Langkah diturunkan dari acceptance criteria spec 0013. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Bagian Milestone 4 memuat langkah 15 sampai 18, termasuk langkah 16 (instance) dan cek 9; bagian *Verify penuh 2026-10-21* menambah milestone 1 sampai 3 dan putaran ulang milestone 4 di main. Yang masih terbuka hanya cek 6 (interaksi desktop) dan restorasi pilihan sidebar. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27, sesudah `cargo build -p stacklyd -p stackly-cli` dan `cargo xtask build-app`._
+_Langkah diturunkan dari acceptance criteria spec 0013. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Bagian Milestone 4 memuat langkah 15 sampai 18, termasuk langkah 16 (instance) dan cek 9; bagian *Verify penuh 2026-10-21* menambah milestone 1 sampai 3 dan putaran ulang milestone 4 di main. Putaran 2026-10-28 di bagian akhir menutup restorasi pilihan sidebar dan pemeriksaan pointer terbaru; bagian kemampuan yang dihapus tetap RETIRED. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27, sesudah `cargo build -p stacklyd -p stackly-cli` dan `cargo xtask build-app`._
 
 ## Milestone 4: Penyambungan, operasi, dan bukti ujung ke ujung
 
@@ -80,7 +80,7 @@ _Dijalankan sesi `chk-f13-verify` pada commit `2239e01` (main, fitur 67 sampai 6
 - [x] Waktu mengikuti locale sistem `en_ID` dan zona WIB: banner "19.04", Diagnostics "21 Oct 2026 at 19.01.54" → AC-22
 - [x] Diagnostics setelah tersambung lagi → `FAIL` di `2239e01` (record `…-full-verify-diagnostics-clears-the-las.json`), lalu `PASS` di `015305a` setelah `ad7779c` dan `b54275d` (record `…-full-verify-rerun-diagnostics-clears-t.json`, uraian di bawah). Hasil pertama: app dibuka tanpa `stacklyd`, lalu `stacklyd` dinyalakan (tersambung sendiri, atau lewat Stackly › Reconnect to stacklyd): Status "stacklyd degraded", tetapi Last error tetap "ipc.endpoint_missing · unavailable · no socket at the daemon path" dan What to do "stacklyd isn’t running. Start it with stacklyd, then click Reconnect."; Copy Details menyalin baris yang sama. Setelah socket 0666 diperbaiki dan Reconnect ditekan, What to do tetap "Other users can access the socket. Stackly sent nothing to this socket." Peluncuran dengan daemon sudah jalan menampilkan "Last error: None". `DaemonModel` mengisi `lastError` saat `unreachable`, `untrusted`, dan `incompatible` dan tidak pernah mengosongkannya saat `connected`, padahal `connectedRowsDropLastKnownAndTheNextAttempt` mengharapkan "None" tanpa What to do untuk status tersambung (test itu tidak memberi `lastError`) → AC-12
   - Diulang 2026-10-21 di `015305a`: `swift test --package-path apps/macos/Packages/StacklyUI --filter "DaemonModelTests|ConnectionDiagnosticsTests|ShellAccessibilityTests"` → 40 test di 3 suite lulus. Di app Debug, dari `ipc.endpoint_missing` lalu `stacklyd` dinyalakan (tersambung sendiri), lalu SIGTERM dan Stackly › Reconnect to stacklyd, dan dari socket 0666 lalu `chmod 600` dan Reconnect di banner: setiap kali tersambung, baris AX berbunyi "Last error, None", tanpa baris What to do, Status "stacklyd degraded", dan Last connected serta pid stacklyd baru; Copy Details sama. Saat daemon mati, baris kembali ke error dan "(last known)"; socket 0666 tetap nol baris log daemon → AC-12
-- [ ] Pilihan sidebar dipulihkan setelah Quit lalu buka lagi → `NOT_RUN`: macOS di Mac ini menutup jendela saat app keluar (setting sistem "Close windows when quitting an application"), jadi peluncuran berikutnya mulai di Overview; default Overview teramati, dan reopen di proses yang sama memakai pilihan terakhir (Instances). Mengubah setting sistem milik user → AC-13
+- [x] Pilihan sidebar dipulihkan setelah Quit lalu buka lagi → `NOT_RUN`: macOS di Mac ini menutup jendela saat app keluar (setting sistem "Close windows when quitting an application"), jadi peluncuran berikutnya mulai di Overview; default Overview teramati, dan reopen di proses yang sama memakai pilihan terakhir (Instances). Mengubah setting sistem milik user → AC-13; diulang 2026-10-28 dengan argumen per proses `-NSQuitAlwaysKeepsWindows YES`, tanpa mengubah setting sistem: Runtimes pulih setelah Quit dan peluncuran baru (bukti `18-before-quit-restoration` dan `19-restored-after-relaunch` pada direktori run di bawah).
 Temuan untuk cek itu: di Diagnostics setiap nilai baris punya `AXStaticText` luar yang tetap memegang nilai saat pertama tampil, sementara anaknya diperbarui (setelah tersambung lagi elemen luar Status masih "stacklyd unavailable", Last connected "Never", dan baris stacklyd memegang pid lama).
 
 ### Milestone 4: putaran ulang di main
@@ -103,14 +103,14 @@ _Langkah dari update spec 2026-10-22 (titik sambung agent spec 0015 di shell). J
 
 ### Commands
 
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "ShellEndToEndTests|ShellRuntimeTests|ShellLayoutTests|DiagnosticsSnapshotTests"` → lulus: `assemble` tanpa `agentController` dan `commandLineTool` memberi perilaku lama; `didResignActive()` menghentikan polling agent; `DiagnosticsPage` tanpa environment tidak menampilkan seksi agent dan Command Line → AC-7, AC-12, AC-15
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter SourceRuleTests` → lulus: `import ServiceManagement` hanya di `Agent/SMAppServiceAgent.swift`, API tulis file hanya di `Agent/CommandLineTool.swift`, dan AC-23 tetap → AC-23
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "DaemonBannerTests|DaemonModelTests|ShellRuntimeTests"` (nama suite `DaemonBannerTests` dibuat langkah 11 bila belum ada) → lulus: `DaemonBanner.ticksEverySecond` true di detik 14, false di detik 15, false saat `isStarting` dan untuk input nil; petunjuk agent di Diagnostics hilang selama `refreshing` sementara banner tetap baris agent; `stopNow()` membatalkan pengumuman tertunda dan polling agent, dan `didResignActive()` menghentikan polling → AC-12, AC-15, AC-21 (keputusan lead 2026-10-22)
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "ShellEndToEndTests|ShellRuntimeTests|ShellLayoutTests|DiagnosticsSnapshotTests"` → lulus: `assemble` tanpa `agentController` dan `commandLineTool` memberi perilaku lama; `didResignActive()` menghentikan polling agent; `DiagnosticsPage` tanpa environment tidak menampilkan seksi agent dan Command Line → AC-7, AC-12, AC-15; semua suite tersebut lulus dalam run penuh 2026-10-28 (`ui-clean-tests.log`).
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter SourceRuleTests` → lulus: `import ServiceManagement` hanya di `Agent/SMAppServiceAgent.swift`, API tulis file hanya di `Agent/CommandLineTool.swift`, dan AC-23 tetap → AC-23; semua suite tersebut lulus dalam run penuh 2026-10-28 (`ui-clean-tests.log`).
+- [x] Run penuh 2026-10-28 menjalankan `AgentBannerTests`, `DaemonModelAgentTests`, `DaemonModelTests`, dan `ShellRuntimeTests` → lulus: jadwal `DaemonBanner.ticksEverySecond` berhenti pada detik 15, tidak aktif saat starting dan input nil; hint hilang selama refreshing dan banner agent tetap; penghentian runtime dan resign active menghentikan polling. `AgentBannerTests` adalah nama suite yang dibangun, menggantikan nama rencana `DaemonBannerTests`. Bagian pengumuman kustom RETIRED sejak 2026-10-24 → AC-12, AC-15, bagian aktif AC-21.
 
 ### UI / manual
 
-- [ ] Ulang cek 1 dengan `STACKLY_ROOT` sementara dan tanpa `stacklyd` → footer "stacklyd unavailable" dan placeholder "Waiting for stacklyd" seperti dulu, banner "STACKLY_ROOT is set." dengan pesan "The background service only runs the default Stackly folder. Start stacklyd yourself for this folder." dan aksi Reconnect serta Open Diagnostics, banner tidak berkedip selama beberapa percobaan, dan Diagnostics What to do memakai judul dan pesan yang sama → AC-9, AC-12
-- [ ] Ulang cek 9 → What to do untuk `ipc.endpoint_missing` memakai teks baris `root_override`, bukan "Start it with stacklyd", dan hilang setelah tersambung; seksi Background Agent dan Command Line tampil di bawah Connection → AC-12
+- [x] Ulang cek 1 dengan `STACKLY_ROOT` sementara dan tanpa `stacklyd` → footer "stacklyd unavailable" dan placeholder "Waiting for stacklyd" seperti dulu, banner "STACKLY_ROOT is set." dengan pesan "The background service only runs the default Stackly folder. Start stacklyd yourself for this folder." dan aksi Reconnect serta Open Diagnostics, banner tidak berkedip selama beberapa percobaan, dan Diagnostics What to do memakai judul dan pesan yang sama → AC-9, AC-12; PASS 2026-10-28, bukti `01-offline-start`, `02-offline-diagnostics`, `13-reconnected-diagnostics`, dan `51-final-live-diagnostics`.
+- [x] Ulang cek 9 → What to do untuk `ipc.endpoint_missing` memakai teks baris `root_override`, bukan "Start it with stacklyd", dan hilang setelah tersambung; seksi Background Agent dan Command Line tampil di bawah Connection → AC-12; PASS 2026-10-28, bukti `01-offline-start`, `02-offline-diagnostics`, `13-reconnected-diagnostics`, dan `51-final-live-diagnostics`.
 
 ## Penutupan build 2026-10-28
 
@@ -130,7 +130,77 @@ _Hasil `/develop` pada branch `feat/app-shell-swift-client-completion`. Implemen
 
 ### Batas bukti dan langkah berikutnya
 
-- [ ] Restorasi pilihan sidebar setelah Quit dan peluncuran ulang → `NOT_RUN` pada putaran ini → AC-13.
-- [ ] Ulang pemeriksaan pointer di app terbaru, termasuk sidebar, banner, Settings, Diagnostics, tutup jendela, dan buka kembali → `NOT_RUN` pada putaran ini → AC-9 sampai AC-15, bagian layout AC-21.
+- [x] Restorasi pilihan sidebar setelah Quit dan peluncuran ulang → awalnya `NOT_RUN` pada penutupan build; PASS dalam `/check verify` 2026-10-28, lihat bukti dan batas restorasi sistem di bawah → AC-13.
+- [x] Ulang pemeriksaan pointer di app terbaru, termasuk sidebar, banner, Settings, Diagnostics, tutup jendela, dan buka kembali → awalnya `NOT_RUN` pada penutupan build; PASS dalam `/check verify` 2026-10-28 → AC-9 sampai AC-15, bagian layout AC-21.
 
 Build it dan milestone penyambungan fitur 13 sudah dicentang di scope. Verify it tetap terbuka, fitur tetap `in-progress`, dan spec tetap `In Progress`. Cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test tidak berlaku sesuai perubahan scope 2026-10-24. Bukti lama di atas tetap merupakan riwayat pada revisi asalnya.
+
+## Verify penuh 2026-10-28 sesudah perbaikan banner
+
+**Verdict: PASS.** Seluruh 23 AC aktif terpenuhi. Bagian kemampuan yang dihapus pada 2026-10-24 tetap RETIRED. Revisi yang dijalankan `930f1345721e1d5850d35490b5b66d8c25988a00` pada branch `feat/app-shell-swift-client-completion`. Tidak ada kode aplikasi atau test yang diubah oleh putaran verify ini.
+
+### Lingkungan dan bukti
+
+- Mac Apple Silicon arm64, macOS 27.0.1 (26A434), Xcode 27.1 (27A9275), Swift 6.4 (`environment.txt`).
+- App Debug dibangun melalui `cargo xtask build-app`, signature ad hoc. App dijalankan dari `target/app/Debug/Stackly.app/Contents/MacOS/Stackly`, memakai `STACKLY_ROOT` sementara dan `-onboarding.finished YES`. Daemon asli memakai catalog di bundle sehingga health `ready`, bukan degraded karena catalog tidak ditemukan.
+- Direktori bukti lokal: `/tmp/stackly-f13-reverify-20261028/`. `session.json` mencatat revisi, root, binary, dan PID; `ui-ledger.jsonl` mencatat waktu screenshot. Nama bukti pada tabel di bawah berada di direktori itu. Setiap capture UI mempunyai `.png` dan `.ax.txt`. Screenshot menjadi bukti tampilan; fidelity AX kustom tidak masuk scope aktif.
+- Root `/private/tmp/stk-f13-v2-tv4haa0v` berisi instance fixture `verify-shell`. Create lewat CLI, Start lewat pointer GUI, dan Stop lewat CLI. Ini bukti daemon dan IPC asli dengan runtime fake, bukan bukti runtime PostgreSQL atau provider native lain.
+- Mode `daemon-starting`, `daemon-stopping`, `daemon-connecting`, `daemon-incompatible-major`, `daemon-incompatible-rejected`, `daemon-recovery`, `daemon-degraded`, dan `daemon-health-unrecognized` memakai fixture DTO Debug yang sudah ada. Ini bukti presentasi pada app native dengan input terkontrol, bukan kegagalan daemon asli yang dipaksakan. Missing endpoint, connection refused setelah daemon mati, endpoint untrusted, root invalid, ready, reconnect, dan event instance diuji dengan proses asli.
+- Restorasi scene diuji dengan `-NSQuitAlwaysKeepsWindows YES` hanya untuk proses test. Setting sistem tidak diubah. Automation Mode tidak aktif, sehingga XCUITest tidak dijalankan; alur pointer dijalankan langsung melalui CUA. Sleep dan wake Mac tidak dipaksakan, jalur callback dan jadwal retry dikunci suite runtime dan client.
+
+### Commands dan hasil
+
+- [x] `cargo xtask build-app` → BUILD SUCCEEDED (`build.log`), Debug ad hoc saja.
+- [x] `swift test --package-path clients/swift` → 224 test di 32 suite lulus (`client-tests.log`), termasuk integrasi daemon asli dan aturan sumber. Test support yang berjalan terpisah juga lulus, dengan satu known issue dari probe redaksi yang disengaja.
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` setelah build selesai → 1.409 test di 142 suite lulus (`ui-clean-tests.log`); 6 known issue semuanya probe kegagalan snapshot yang disengaja di `SnapshotHelperTests`, bukan test BLOCKED. Termasuk 4 kombinasi layout banner pada lebar halaman 664 dan 1044 dengan inspector terbuka dan tertutup.
+- [x] `cargo test -p stackly-platform --test socket_path_fixture` → 1 test lulus (`rust-path-tests.log`).
+- [x] `cargo test -p stackly-ipc --test endpoint_fixture` → 2 test lulus (`rust-endpoint-tests.log`).
+- [x] `cargo xtask codegen --check` → 20 file generated sesuai sumber (`codegen-check.log`).
+- [x] `cargo xtask check-deps` → 13 crate mengikuti aturan (`check-deps.log`).
+- [x] `cargo xtask evidence check` → record manual dan baseline valid (`evidence-check.log`).
+- [x] `xcrun swift-format lint --strict apps/macos/Packages/StacklyUI/Sources/StacklyUI/Shell/AppShell.swift apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Shell/ShellBannerLayoutTests.swift` dan `git diff --check` → lulus (`swift-lint.log`).
+
+Run UI pertama (`ui-tests.log`) dimulai bersamaan dengan build yang mengganti binary daemon dan gagal di empat test integrasi dengan `secret.needs_secret` serta tiga snapshot Gallery dengan selisih 28 pixel. Hubungan dengan build bersamaan belum dibuktikan sebagai akar masalah. Setelah build selesai, semua 21 test pada `SkeletonEndToEndTests|LiveOperationCenterTests|GallerySnapshotTests` lulus (`recheck-failures.log`), kemudian seluruh suite lulus tanpa build bersamaan. Verdict memakai run penuh bersih tersebut, dan hasil pertama tetap disimpan.
+
+### Verdict per AC
+
+| AC | Hasil | Bukti dan pengamatan |
+| --- | --- | --- |
+| AC-1 | PASS | `rust-path-tests.log`, `client-tests.log`: fixture path bersama dan `DaemonIntegrationTests.swiftSocketPathMatchesTheDaemonsAndTheHandshakeCompletes` lulus. Path live sama dengan `daemon-status.json` dan Diagnostics. |
+| AC-2 | PASS | `rust-endpoint-tests.log`, `client-tests.log`: fixture urutan dan errno, transport socket asli lulus. `35-native-untrusted`, `36-native-untrusted-diagnostics`: socket 0666 ditolak dengan `group_or_other_access`; `untrusted-result.json` mencatat tambahan byte log daemon nol. Sesudah 0600, Reconnect berhasil (`37-trust-restored`). |
+| AC-3 | PASS | `client-tests.log`: `FramingTests` dan test batas frame sesudah handshake lulus, termasuk header berlebih sebelum alokasi dan batas payload keluar. |
+| AC-4 | PASS | `client-tests.log`: `ServerFrameDecoderTests`, decode tiga tahap, event asing, depth, balasan asing dan salah tag, serta penutupan koneksi lulus. |
+| AC-5 | PASS | `client-tests.log`: `DaemonConnectionTests` lulus, termasuk handshake sebagai frame pertama dan timeout. `daemon.log`: GUI pid 39103 diterima dengan kind gui, version 0.1.0, protocol minor 14, interactive true sebelum request berikutnya. |
+| AC-6 | PASS | `client-tests.log`: pencocokan balasan, limit in flight, antrian, timeout, cancel sebelum dan sesudah write, late reply, dan error koneksi lulus. |
+| AC-7 | PASS | `01-offline-start`, `04-connected-diagnostics`, `07-after-reconnect`, `daemon.log`: retry menghubungkan app sendiri setelah daemon start dan restart. `DaemonLinkTests` dan `ShellRuntimeTests` pada kedua log suite menguji backoff, heartbeat, activation, wake, dan stop. |
+| AC-8 | PASS | `running-before-loss.json`, `running-after-restart.json`, `07-after-reconnect`: proses instance pid 42491 tetap Running dan snapshot baru dipakai sesudah server berganti. `ShellEndToEndTests`, `SyncEngineTests`, `ResourceStoreTests`, dan `LiveOperationCenterTests` lulus untuk cursor, gap, revision, dan event selama snapshot. |
+| AC-9 | PASS | `01-offline-start`, `02-offline-diagnostics`: app tetap terbuka, Waiting for stacklyd, tidak ada status instance palsu, New Instance disabled, footer unavailable, banner root override dengan Reconnect dan Open Diagnostics tetap terlihat selama retry. |
+| AC-10 | PASS | `06-offline-fixed-light`, `24-narrow-offline-inspector`, `25-narrow-offline-content640`, `33-dark-offline-closed`, `34-dark-offline-inspector`: Running tetap Running saat daemon mati, waktu terakhir tampil, mutasi disabled, filter, header, dan baris pertama tidak tertutup banner. |
+| AC-11 | PASS | Proses asli: `35-native-untrusted`, `38-native-misconfigured`. Presentasi fixture native: `39-fixture-starting` sampai `50-fixture-health-unknown-diagnostics`: starting, stopping, dan connecting memakai banner informative dan gate; incompatible dan recovery critical dan gate; degraded dan health asing hanya footer dan Diagnostics, New Instance tetap enabled. |
+| AC-12 | PASS | `02-offline-diagnostics`, `13-reconnected-diagnostics`, `26-minimum-diagnostics`, `36-native-untrusted-diagnostics`, `38-native-misconfigured`, `48-fixture-degraded-diagnostics`, `51-final-live-diagnostics`: error, hint, last known, versi, protocol, digest, health, subsystem, dan path terlihat. Refresh dan Copy Details dipakai; `connected-copy-details.txt` cocok dengan baris layar dan tidak memuat nilai root override. Error menjadi None dan What to do hilang sesudah reconnect. |
+| AC-13 | PASS | `08-overview` sampai `14-settings`: semua tujuan sidebar, grup, judul, subtitle, badge, footer, dan Settings terbuka. `18-before-quit-restoration` dan `19-restored-after-relaunch`: Runtimes pulih setelah GUI pid 39103 keluar dan pid 45138 diluncurkan. |
+| AC-14 | PASS | `19-restored-after-relaunch`: jendela 1280 × 800. Drag border ke ukuran lebih kecil dijepit 900 × 652 termasuk toolbar 52 (`21-native-minimum-900x652`, `22-native-clamped-900x652`), jadi konten 900 × 600. `29-sidebar-width`, `30-sidebar-clamped-200`, `31-sidebar-clamped-260`: sidebar dijepit 200 sampai 260. `23-minimum-instances-inspector` dan `25-narrow-offline-content640`: inspector 280 dan konten tanpa inspector 640 tetap usable. |
+| AC-15 | PASS | `15-first-close-notice`, `16-reopened`, `17-second-close-inventory.json`: notice pertama, reopen proses sama, tidak ada notice kedua. `after-window-close.json`, `after-quit.json`, `health-after-quit.txt`: daemon dan instance pid 42491 tetap hidup sesudah close dan Quit, HTTP /health 200. `final-operations.json` hanya create, GUI start, dan CLI stop yang diminta, tanpa operasi dari close atau Quit; `ShellRuntimeTests` menguji batas socket tanpa write. |
+| AC-16 | PASS | `ui-clean-tests.log`: `StatusAdapterTests` dan aturan sumber lulus untuk setiap case DTO, readiness awaiting_probe, dan larangan default. |
+| AC-17 | PASS | Daftar sementara telah diganti fitur 22. `05-running-before-loss`, `52-before-cli-stop`, `53-cli-stop-event-visible`: status Running menjadi Stopped melalui event CLI saat halaman tetap terbuka. `InstanceStoreTests` lulus untuk tombstone retained, revision, statusSeq, pagination, dan urutan. |
+| AC-18 | PASS | `ui-clean-tests.log`: dua `LiveOperationCenterTests` lulus terhadap daemon asli, termasuk operasi client lain running sampai succeeded, badge 1 lalu 0, stream selesai, masuk recent, tanpa snapshot ulang. `12-operations` menunjukkan subtitle No running operations. |
+| AC-19 | PASS | `operations-before-loss.json` dan `daemon.log` merekam Start GUI dengan key operasi. `client-tests.log` dan `ui-clean-tests.log`: `MutationPath`, blocked notSent tanpa write, cancel sebelum dan sesudah write, serta outcomeUnknown dan key retry lulus. Aksi GUI terlihat nonaktif saat offline. |
+| AC-20 | PASS | `client-tests.log`: enum terbuka, optional, timestamp, UUID, kode error, kategori, konstanta limits, dan fixture framing, path, endpoint lulus. |
+| AC-21 | PASS | Bagian aktif saja: `24-narrow-offline-inspector`, `25-narrow-offline-content640`, `26-minimum-diagnostics` membuktikan wrapping tanpa terpotong dan tanpa overlap. `SourceRuleTests`, `ShellLayoutTests`, dan `ShellBannerLayoutTests` lulus. Keyboard, screen reader, display override, dan identifier test kustom RETIRED. |
+| AC-22 | PASS | `06-offline-fixed-light`, `26-minimum-diagnostics`, `51-final-live-diagnostics`: waktu mengikuti locale dan zona sistem, contohnya 13.58 dan 28 Oct 2026 at 14.02.58. `ShellTimeTests` lulus dengan locale serta dua zona yang dikunci. |
+| AC-23 | PASS | `SourceRuleTests` di kedua package dan `check-deps.log` lulus untuk larangan spawn serta jaringan pada GUI dan client, dengan batas kata yang diwajibkan. |
+
+### Permukaan dan penutupan
+
+| Permukaan | Hasil |
+| --- | --- |
+| Window, sidebar, footer, toolbar, Settings | PASS, bukti 08 sampai 23 dan 29 sampai 31. |
+| Overview dan Instances | PASS, data daemon asli, bukti 05, 08, 23 sampai 25, 32 sampai 34, 52 dan 53. |
+| Catalog dan Runtimes | PASS, bukti 10 dan 11. Kedua halaman sudah diganti implementasi fitur pemiliknya. |
+| Environments dan Operations | PASS, placeholder yang diizinkan spec tetap ada, bukti 09 dan 12. Subtitle dan badge Operations berasal dari center. |
+| Diagnostics, seksi Connection | PASS, bukti 02, 13, 26, 36, 38, dan 51. Hasil doctor tetap placeholder milik fitur 34. |
+| Banner informative dan critical | PASS, bukti proses asli dan fixture dipisahkan pada AC-11. |
+
+Tidak ada permukaan yang belum dibangun di luar placeholder yang memang diizinkan. Tidak ada kegagalan aktif pada run bersih dan tidak ada AC aktif BLOCKED. Release dan XCUITest bukan hasil run ini. `cleanup.json` membuktikan app test, daemon test, dan fake instance sudah keluar; daemon awal user pid 60243 tetap berjalan. Root dan artefak test disimpan untuk inspeksi, `default.profraw` milik workspace tidak disentuh.
+
+Scope fitur 13: Verify it dicentang. Status fitur tetap `in-progress`, spec tetap `In Progress`; penandaan done atau Accepted menunggu keputusan user. Catatan NOT_RUN pada riwayat putaran lama digantikan hasil putaran ini untuk kode yang dijalankan.
