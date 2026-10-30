@@ -137,4 +137,61 @@
             .scrollDisabled(true)
         }
     }
+
+    /// The body of the long sample sheet: four groups of settings, taller than the cap of
+    /// `StacklySheet` on any screen the app runs on, so the body scrolls under a fixed
+    /// header and footer.
+    struct SheetSampleLongForm: View {
+        /// The groups and their settings, after the shape of a provider's settings form.
+        static let groups: [(title: String, settings: [String])] = [
+            (
+                "Connection",
+                [
+                    "Listen address", "Port", "Max connections", "Socket directory",
+                    "Superuser reserved connections", "TCP keepalive idle",
+                    "TCP keepalive interval",
+                    "Authentication timeout",
+                ]
+            ),
+            (
+                "Memory",
+                [
+                    "Shared buffers", "Work memory", "Maintenance work memory",
+                    "Effective cache size", "Temp buffers", "Huge pages", "Autovacuum work memory",
+                    "Logical decoding work memory",
+                ]
+            ),
+            (
+                "Write ahead log",
+                [
+                    "WAL level", "WAL buffers", "Checkpoint timeout",
+                    "Max WAL size", "Min WAL size", "Checkpoint completion target",
+                    "Synchronous commit", "Full page writes",
+                ]
+            ),
+            (
+                "Logging",
+                [
+                    "Log destination", "Log directory", "Log file name",
+                    "Log rotation age", "Log rotation size", "Log min duration", "Log line prefix",
+                    "Log statement",
+                ]
+            ),
+        ]
+
+        var body: some View {
+            Form {
+                ForEach(Self.groups, id: \.title) { group in
+                    Section(group.title) {
+                        ForEach(group.settings, id: \.self) { setting in
+                            LabeledContent(setting, value: "Default")
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .scrollDisabled(true)
+        }
+    }
 #endif

@@ -17,14 +17,15 @@
     struct SheetGallerySection: View {
         @State private var isPresented = false
         @State private var isRemovePresented = false
+        @State private var isLongPresented = false
 
         var body: some View {
             GallerySection(
                 "StacklySheet",
                 note: "An opaque sheet with a header, a body, and a fixed footer. The footer "
-                    + "writes why the main action cannot run. The last two buttons open "
-                    + ""
-                    + "real sheets."
+                    + "writes why the main action cannot run. The last three buttons open "
+                    + "real sheets; the long one scrolls its body under a fixed header and "
+                    + "footer."
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s22) {
                     framed(
@@ -73,6 +74,17 @@
                     HStack(spacing: Spacing.s12) {
                         Button("Open Sheet") { isPresented = true }
                         Button("Open Remove Sheet") { isRemovePresented = true }
+                        Button("Open Long Sheet") { isLongPresented = true }
+                    }
+                    .sheet(isPresented: $isLongPresented) {
+                        StacklySheet(
+                            title: "New Instance", subtitle: ComponentSamples.sheetSubtitle,
+                            tile: ComponentSamples.sheetTile,
+                            primary: StacklyAction(
+                                id: "sheet.create", title: "Create", mutates: true,
+                                perform: { isLongPresented = false }),
+                            minWidth: 560
+                        ) { SheetSampleLongForm() }
                     }
                     .sheet(isPresented: $isRemovePresented) {
                         StacklySheet(
@@ -120,6 +132,13 @@
 #if DEBUG
     // MARK: - Checklist
 
+    /// Widths the gallery samples are drawn at.
+    enum ComponentsGalleryWidth {
+        /// A width inside the inspector's range (280 to 360 pt), where adaptive layouts
+        /// turn to one column and stages wrap.
+        static let inspector: CGFloat = 320
+    }
+
     /// The CheckList section: every status, a row with an action, a long detail, and both
     /// layouts.
     struct CheckListGallerySection: View {
@@ -129,7 +148,7 @@
                 note: "A symbol, a title, and the detail in full. The shape of the symbol "
                     + "differs per status, so color is never the only sign. The checking row "
                     + "shows its spinner after 300 ms. Adaptive is two columns in a sheet and "
-                    + "one in a narrow width; single is always one."
+                    + "one in an inspector; single is always one."
             ) {
                 VStack(alignment: .leading, spacing: Spacing.s22) {
                     CardSection("Preflight · adaptive") {
@@ -137,6 +156,11 @@
                             .padding(.vertical, Spacing.s4)
                     }
                     .frame(maxWidth: 560)
+                    CardSection("Preflight · adaptive, inspector width") {
+                        CheckList(ComponentSamples.checkItems)
+                            .padding(.vertical, Spacing.s4)
+                    }
+                    .frame(maxWidth: ComponentsGalleryWidth.inspector)
                     CardSection("Preflight · single") {
                         CheckList(
                             ComponentSamples.checkItems + [ComponentSamples.longDetailItem],
@@ -174,6 +198,12 @@
                         labeled(sample.name) {
                             StagedProgress(sample.value, layout: .stages)
                         }
+                    }
+                    if let first = ComponentSamples.stagesProgress.first {
+                        labeled("\(first.name), inspector width") {
+                            StagedProgress(first.value, layout: .stages)
+                        }
+                        .frame(maxWidth: ComponentsGalleryWidth.inspector, alignment: .leading)
                     }
                 }
             }

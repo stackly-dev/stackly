@@ -103,6 +103,11 @@ struct FeedbackCard: View {
     /// The widest the card gets: 520 pt.
     static let maxWidth: CGFloat = 520
 
+    /// The narrowest the text column gets: 200 pt. A split view asks the detail column for
+    /// its size at a width near zero, where text with a fixed vertical size is hundreds of
+    /// points tall; through the bottom inset that height would become the window's.
+    static let textMinWidth: CGFloat = 200
+
     private var texts: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(feedback.message)
@@ -120,6 +125,7 @@ struct FeedbackCard: View {
                     .textSelection(.enabled)
             }
         }
+        .frame(minWidth: Self.textMinWidth, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
 

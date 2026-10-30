@@ -21,7 +21,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | File | Fase | Fitur | Status |
 | --- | --- | --- | --- |
 | [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 11 done, 1 in-progress |
-| [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 1 done, 4 in-progress |
+| [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 2 done, 3 in-progress |
 | [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 8 in-progress, 1 done |
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 done |
 | [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 planned |
@@ -104,7 +104,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 64 | Fault injection, recovery & soak | Siap rilis stabil | planned |
 | 65 | Quality gates & release report | Siap rilis stabil | planned |
 | 66 | Runbook & dokumentasi pengguna | Siap rilis stabil | planned |
-| 67 | Komponen dasar Stackly | Foundation | in-progress |
+| 67 | Komponen dasar Stackly | Foundation | done |
 | 68 | Fixture tampilan & cek visual | Foundation | in-progress |
 | 69 | Menu aplikasi, perintah & shortcut keyboard | Foundation | in-progress |
 | 70 | Buka instance di aplikasi klien | Kerja harian | planned |
