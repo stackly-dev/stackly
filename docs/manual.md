@@ -107,6 +107,8 @@ Langkah 1 sampai 11 memakai root sementara dengan keychain file, jadi login Keyc
 
 Untuk F14 langkah 10 (AC-001, AC-013, AC-029, spec 0014 AC-16). Record: `evidence/manual/2026-10-20-walking-skeleton-through-the-cli-and-gui.json`.
 
+_Catatan 2026-10-30:_ Claude Code sudah mencoba bagian C dan D sebagai pra-run (bukan review). Pengamatannya ada di `actual` record yang masih `NOT_RUN`, dan capture jendela per langkah ada di `target/evidence-0014/`. Kamu meninjau capture itu dan menerimanya sebagai reviewer AC-16 pada 2026-10-30; record kini `PASS`.
+
 Bagian ini memakai root sementara, jadi login Keychain tidak disentuh. Siapkan tiga terminal: A untuk perintah, B untuk daemon, dan C untuk app.
 
 1. Terminal A: `cargo build -p stacklyd -p stackly-cli -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && cargo xtask build-app`

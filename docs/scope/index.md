@@ -20,8 +20,8 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 
 | File | Fase | Fitur | Status |
 | --- | --- | --- | --- |
-| [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 11 done, 1 in-progress |
-| [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 2 done, 3 in-progress |
+| [01-foundation.md](01-foundation.md) | Foundation dan Skeleton | 1 sampai 11, 14 | 12 done |
+| [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 3 done, 2 in-progress |
 | [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 8 in-progress, 1 done |
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 done |
 | [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 planned |
@@ -50,8 +50,8 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 10 | Process supervisor | Foundation | done |
 | 11 | Secret store & redaction | Foundation | done |
 | 12 | Design system & UI foundation | Foundation | done |
-| 13 | App shell SwiftUI & Swift client | Foundation | in-progress |
-| 14 | Walking skeleton | Skeleton | in-progress |
+| 13 | App shell SwiftUI & Swift client | Foundation | done |
+| 14 | Walking skeleton | Skeleton | done |
 | 15 | Background agent & CLI install | Instalasi pertama | in-progress |
 | 16 | Onboarding | Instalasi pertama | in-progress |
 | 17 | Catalog & provider detail | Instalasi pertama | in-progress |
