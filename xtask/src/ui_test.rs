@@ -17,8 +17,14 @@ const SCHEME: &str = "Stackly";
 const DERIVED_DATA: &str = "target/xcode";
 const RUNS_DIR: &str = "target/ui-tests";
 const TEST_TARGET: &str = "StacklyAppUITests";
-/// The text `automationmodetool` prints when the mode is on.
-const AUTOMATION_ENABLED: &str = "Automation Mode is enabled";
+/// Texts of `automationmodetool` that mean a UI test run can enter Automation Mode without a
+/// prompt: the mode is on, or the user allowed it without authentication. macOS turns the mode
+/// on only while a test session runs, so outside a run the first line says "disabled" even on
+/// a ready Mac, and the second line decides.
+const AUTOMATION_READY: [&str; 2] = [
+    "Automation Mode is enabled",
+    "does not require user authentication to enable Automation Mode",
+];
 /// The variables of the evidence run that reach the test runner.
 const FORWARDED: [&str; 2] = ["STACKLY_EVIDENCE_DIR", "STACKLY_EVIDENCE_KIND"];
 /// Exit code for a Mac that is not ready: Automation Mode off or unknown, or a locked screen.
@@ -158,7 +164,7 @@ fn preflight(host: &Host, environment: &std::collections::HashMap<String, String
         );
     }
     match &host.automation_output {
-        Some(output) if output.contains(AUTOMATION_ENABLED) => {}
+        Some(output) if AUTOMATION_READY.iter().any(|text| output.contains(text)) => {}
         other => {
             let shown = other
                 .as_deref()
@@ -342,7 +348,20 @@ mod tests {
     }
 
     #[test]
-    fn every_reading_but_enabled_stops_with_exit_two_and_shows_the_tool_text() {
+    fn a_mac_that_allows_automation_without_authentication_runs_the_tests() {
+        let allowed = Host {
+            automation_output: Some(
+                "Automation Mode is disabled.\nThis device does not require user authentication \
+                 to enable Automation Mode.\n"
+                    .to_string(),
+            ),
+            ..ready_host()
+        };
+        assert_eq!(preflight(&allowed, &environment(&[])), Verdict::Ready);
+    }
+
+    #[test]
+    fn every_reading_but_enabled_or_allowed_stops_with_exit_two_and_shows_the_tool_text() {
         let disabled = Host {
             automation_output: Some(
                 "Automation Mode is disabled.\nThis device requires user authentication to \
