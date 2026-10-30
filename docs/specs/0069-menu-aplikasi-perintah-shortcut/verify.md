@@ -1,4 +1,4 @@
-# Verify: Menu aplikasi, perintah & shortcut keyboard · spec 0069 · updated 2026-10-31
+# Verify: Menu aplikasi, perintah & shortcut keyboard · spec 0069 · updated 2026-10-31 (verify PASS)
 > Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
 
 
@@ -9,7 +9,7 @@ _Langkah diturunkan dari acceptance criteria spec 0069. `/check verify` menjalan
 ### UI / manual
 
 - [x] Buka `apps/macos/design.md` bagian "Commands and shortcuts" → tabel hasil probe P1 sampai P7 dan P3b memuat versi macOS 27.0.1 (26A434) dan Xcode 27.0 (27A266a), dan setiap baris punya hasil dan akibatnya untuk spec → AC-2, AC-3
-- [ ] Ulangi probe P2 sampai P7 dan P3b di app stand in atau di app Stackly setelah milestone 2 → semuanya sama dengan hasil di `design.md`; kalau macOS atau Xcode naik versi, catat versi baru → AC-2, AC-3, AC-10
+- [ ] Ulangi probe P2 sampai P7 dan P3b di app stand in atau di app Stackly setelah milestone 2 → semuanya sama dengan hasil di `design.md`; kalau macOS atau Xcode naik versi, catat versi baru → AC-2, AC-3, AC-10 (RETIRED 2026-10-24: probe ini menguji key equivalent)
 
 ### Commands
 
@@ -46,10 +46,10 @@ Langkah build 3 sampai 5 dari spec 0069. `newInstance` (menunggu langkah 14 spec
 
 - [x] Bangun app Debug (`cargo xtask build-app`), jalankan `target/debug/stacklyd` dengan `STACKLY_ROOT` ke folder sementara dan app dengan root yang sama, dump semua menu lewat accessibility API (`AXMenuItemCmdChar`, `AXMenuItemCmdModifiers`) saat jendela utama key → Stackly berisi About, Settings… ⌘,, Reconnect to stacklyd, Services, Hide, Quit; Edit berisi Find ▸ Find… ⌘F tanpa Spelling, Substitutions, Transformations, atau Speech; View berisi item sidebar lalu Overview ⌘1 sampai Diagnostics ⌘7; Window berisi Stackly ⌘0; Help hanya kolom pencarian sistem; tidak ada "New Window", tidak ada Stackly Help bawaan, tidak ada dua key equivalent yang sama → AC-2, AC-3 (record check 1, PASS; File dan Instance belum tampil karena baris plannednya)
 - [x] Dengan jendela utama key tekan ⌘1 sampai ⌘7 → bagian sidebar berganti satu per satu; ⌘W menutup jendela utama dan notice tampil; ⌘0 membukanya lagi; ⌘M lalu ⌘0 mengembalikannya; ⌘, membuka Settings, lalu ⌘2 tidak melakukan apa pun sampai ⌘0 mengembalikan jendela utama → AC-4, AC-7, AC-13 (record check 2, PASS)
-- [ ] Help > Welcome to Stackly: ⌘1 dan ⌘N nonaktif selama onboarding, ⌘, dan ⌘0 tetap bekerja, dan sesudah onboarding perintah shell aktif lagi → AC-4, AC-13 (record check 3, `NOT_RUN`: baris `welcome` planned sampai langkah 2 milestone 1 spec 0016 di merge)
+- [x] Help > Welcome to Stackly: ⌘1 dan ⌘N nonaktif selama onboarding, ⌘, dan ⌘0 tetap bekerja, dan sesudah onboarding perintah shell aktif lagi → AC-4, AC-13 (record check 3, `NOT_RUN`: baris `welcome` planned sampai langkah 2 milestone 1 spec 0016 di merge) (2026-10-31: diulang dengan pointer, lihat *Hasil /check verify fitur 69*)
 - [x] Hentikan `stacklyd` → Reconnect to stacklyd aktif tanpa subtitle dan banner jendela menjelaskan alasannya; jalankan `stacklyd` lagi lalu pilih Reconnect → jendela tersambung dan item nonaktif lagi → AC-5, AC-8 (record check 4, PASS)
-- [ ] Dengan `stacklyd` berhenti, File > New Instance… (⌘N) nonaktif tanpa subtitle; saat onboarding dan saat jendela utama bukan key window juga nonaktif → AC-5, AC-9 (record check 4b, `NOT_RUN`: baris `newInstance` planned sampai langkah 14 spec 0020 di merge)
-- [ ] Ulangi probe P4 (sheet dan `NSAlert` sheet terbuka di jendela utama), P5 (`.searchFocused`), P6 (⌘R, ⇧⌘R, ⌥⌘R, ⌘O, ⌘D, ⌘1, ⌘[ di field pencarian), dan P7 (state berubah sekitar penekanan tombol) di app Stackly → belum bisa: shell belum punya sheet, `.searchable`, atau perintah halaman. Yang sudah diulang di app Stackly: P2 (⌘0 membuka jendela sesudah ⌘W dan dari minimize), P3 (File tanpa New Window, Edit tanpa submenu ejaan, Help tanpa item bawaan, Instance belum tampil), P3b (tidak berlaku, rencana tetap), dan bagian P4 untuk Settings dan jendela lain (⌘2 nonaktif saat Settings key). Sisanya jatuh ke milestone 3 langkah 7 dan ke fitur 20 (sheet) → AC-2, AC-3, AC-10
+- [x] Dengan `stacklyd` berhenti, File > New Instance… (⌘N) nonaktif tanpa subtitle; saat onboarding dan saat jendela utama bukan key window juga nonaktif → AC-5, AC-9 (record check 4b, `NOT_RUN`: baris `newInstance` planned sampai langkah 14 spec 0020 di merge) (2026-10-31: diulang dengan pointer, lihat *Hasil /check verify fitur 69*)
+- [ ] Ulangi probe P4 (sheet dan `NSAlert` sheet terbuka di jendela utama), P5 (`.searchFocused`), P6 (⌘R, ⇧⌘R, ⌥⌘R, ⌘O, ⌘D, ⌘1, ⌘[ di field pencarian), dan P7 (state berubah sekitar penekanan tombol) di app Stackly → belum bisa: shell belum punya sheet, `.searchable`, atau perintah halaman. Yang sudah diulang di app Stackly: P2 (⌘0 membuka jendela sesudah ⌘W dan dari minimize), P3 (File tanpa New Window, Edit tanpa submenu ejaan, Help tanpa item bawaan, Instance belum tampil), P3b (tidak berlaku, rencana tetap), dan bagian P4 untuk Settings dan jendela lain (⌘2 nonaktif saat Settings key). Sisanya jatuh ke milestone 3 langkah 7 dan ke fitur 20 (sheet) → AC-2, AC-3, AC-10 (RETIRED 2026-10-24 untuk P5 sampai P7 dan key equivalent; bagian pointer P4, sheet di jendela utama mematikan perintah, PASS 2026-10-31)
 
 ### Commands
 
@@ -126,3 +126,24 @@ Langkah build 7 (evidence interaksi desktop untuk PRD AC-027) dijalankan di app 
 - AC-12 · `InstancesPageTests` (urut, inspector, Back) dan `InstanceDetailCommandsTests`, ditambah `InstanceCommandsUITests` di app nyata
 - AC-15 (PRD AC-027) · `InstanceCommandsUITests`, 8 PASS di run evidence fixture 2026-10-31; cek keyboard nya RETIRED sejak 2026-10-24
 - AC-14 · `InstancesPageTests`, `InstanceDetailCommandsTests`, dan `CommandMapTests` (`helpText`)
+
+## Hasil /check verify fitur 69 · 2026-10-31 · PASS
+
+Diperiksa di macOS 27.0.1 (26A434), Xcode 27.1 (27A9275), Apple M1 Max, dari `main` di `d9602317`, dengan Automation Mode menyala. Cek keyboard (key equivalent, shortcut, probe P2 sampai P7 sebagai event tombol) berstatus RETIRED sejak perubahan cakupan 2026-10-24, jadi setiap perintah dibuktikan lewat menu dengan pointer di app Debug nyata di atas skenario fixture. Ini evidence fixture, bukan evidence runtime native.
+
+- Run evidence di `main`: `cargo xtask evidence run --kind fixture --out target/evidence/f69-verify-InstanceCommandsUITests -- cargo xtask ui-test --only InstanceCommandsUITests` → 8 PASS, 0 FAIL; `... f69-verify-MenuUITests -- ... --only MenuUITests` → 5 PASS, 0 FAIL (setiap baris built ada di menu yang benar dan aktif sesuai scope di `connected-empty`, `connected-mixed`, dan `daemon-offline`).
+- Probe pointer sementara (suite `ZZVerifyF69UITests` di scratch, dihapus sesudahnya, tidak di commit; log di scratchpad sesi `verify.log`, `verify2.log`, `verify3.log`):
+  - View > Overview sampai Diagnostics mengganti judul jendela ke setiap bagian; View > Instances saat detail `pg17-dev` terbuka kembali ke tabel ("Instances – 11 instances") → AC-7.
+  - Saat Settings key dan saat Design Gallery key, View > Overview dan File > New Instance… nonaktif, sedangkan Settings… dan Welcome to Stackly tetap aktif → AC-4.
+  - File > New Instance… membuka sheet; selama sheet terbuka View > Overview, New Instance…, dan Instance > Start nonaktif, Settings… tetap aktif → AC-4, AC-9.
+  - Skenario `onboarding`: View > Overview dan New Instance… nonaktif, Settings… dan Welcome to Stackly aktif; Help > Welcome to Stackly di `connected-mixed` menampilkan onboarding dan perintah shell mati → AC-4, AC-13.
+  - Window > Stackly membuka jendela utama lagi setelah ditutup, dan mengembalikannya dari minimize (sesudahnya View > Overview aktif lagi) → AC-13.
+  - Instance > Duplicate… untuk `pg17-dev` membuka sheet duplicate yang sama dengan item More ("Settings copied from “pg17-dev”…"); Instance > Stop dan tombol Stop baris memberi hasil yang sama di fixture (tombol tetap "Stop", tanpa sheet atau dialog) → AC-6.
+- Perintah: `swift test --package-path apps/macos/Packages/StacklyUI --filter "CommandMapTests|CommandSourceRuleTests|CommandItemStateTests|CommandItemTests|MainWindowKeyTests|ShellCommandsTests|ShellStructureTests|InstancesPageTests|InstanceDetailCommandsTests"` → 108 test di 9 suite lulus; `grep -rn "provisional: F69" apps/` kosong; tidak ada `CommandGroup`, `CommandMenu`, atau `.commands` di luar `Commands/` dan `StacklyApp.swift`; `cargo xtask evidence check` bersih → AC-1, AC-5, AC-16.
+- Catatan, bukan kegagalan: di fixture, Stop tidak mengubah state instance lewat jalur mana pun, jadi AC-6 untuk aksi yang mengubah data hanya dibuktikan setara antara menu dan tombol, plus `CommandItemStateTests` (run lewat host). Belum ada perintah destruktif yang built (Remove menunggu fitur 54), jadi dialog konfirmasi dari menu belum bisa diamati. Tombol Cancel sheet New Instance tidak hittable di probe karena posisinya di luar layar; itu batas probe, bukan perilaku app.
+
+### Acceptance-criteria coverage (fitur 69)
+
+- Met: AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8 (`MenuUITests` offline dan terhubung, plus record check 4 milestone 2), AC-9, AC-11, AC-12, AC-13, AC-14 (`helpText` kini memberi judul saja; bagian shortcut nya RETIRED), AC-15 (PRD AC-027), AC-16.
+- RETIRED: AC-2 (key equivalent) dan AC-10 (Find, `find` kembali `planned`), serta bagian keyboard dari AC-3, AC-6, AC-13, dan AC-14.
+
