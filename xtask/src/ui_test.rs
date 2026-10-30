@@ -20,11 +20,19 @@ const TEST_TARGET: &str = "StacklyAppUITests";
 /// Texts of `automationmodetool` that mean a UI test run can enter Automation Mode without a
 /// prompt: the mode is on, or the user allowed it without authentication. macOS turns the mode
 /// on only while a test session runs, so outside a run the first line says "disabled" even on
-/// a ready Mac, and the second line decides.
+/// a ready Mac, and the second line decides. Compared in lowercase, because macOS 27 prints
+/// "DOES NOT REQUIRE" in capitals.
 const AUTOMATION_READY: [&str; 2] = [
-    "Automation Mode is enabled",
-    "does not require user authentication to enable Automation Mode",
+    "automation mode is enabled",
+    "does not require user authentication to enable automation mode",
 ];
+/// Where the UI test runner may write, relative to the home folder. Xcode always signs the macOS
+/// XCUITest runner with App Sandbox and a read only exception for `/`, whatever the target sets,
+/// so the runner cannot write to `STACKLY_EVIDENCE_DIR` itself. It writes its records to a
+/// staging folder in its own container, and the task moves them to the run folder afterwards.
+/// The container name is the test target's bundle ID plus `.xctrunner`.
+const RUNNER_STAGING: &str =
+    "Library/Containers/com.ojiepermana.stackly.uitests.xctrunner/Data/tmp/stackly-evidence";
 /// The variables of the evidence run that reach the test runner.
 const FORWARDED: [&str; 2] = ["STACKLY_EVIDENCE_DIR", "STACKLY_EVIDENCE_KIND"];
 /// Exit code for a Mac that is not ready: Automation Mode off or unknown, or a locked screen.
@@ -164,7 +172,10 @@ fn preflight(host: &Host, environment: &std::collections::HashMap<String, String
         );
     }
     match &host.automation_output {
-        Some(output) if AUTOMATION_READY.iter().any(|text| output.contains(text)) => {}
+        Some(output)
+            if AUTOMATION_READY
+                .iter()
+                .any(|text| output.to_lowercase().contains(text)) => {}
         other => {
             let shown = other
                 .as_deref()
@@ -232,9 +243,11 @@ fn xcodebuild_args(options: &Options, result_bundle: &str) -> Vec<String> {
     .collect()
 }
 
-/// The `TEST_RUNNER_` copies of the evidence variables that are set, in a fixed order.
+/// The `TEST_RUNNER_` copies of the evidence variables that are set, in a fixed order. The
+/// runner gets `staging` as its evidence folder, since it cannot write to the run folder.
 fn runner_environment(
     environment: &std::collections::HashMap<String, String>,
+    staging: Option<&Path>,
 ) -> Vec<(String, String)> {
     FORWARDED
         .iter()
@@ -242,9 +255,48 @@ fn runner_environment(
             environment
                 .get(*name)
                 .filter(|value| !value.is_empty())
-                .map(|value| (format!("TEST_RUNNER_{name}"), value.clone()))
+                .map(|value| match staging {
+                    Some(staging) if *name == "STACKLY_EVIDENCE_DIR" => {
+                        staging.to_string_lossy().into_owned()
+                    }
+                    _ => value.clone(),
+                })
+                .map(|value| (format!("TEST_RUNNER_{name}"), value))
         })
         .collect()
+}
+
+/// Moves the finished records the runner wrote in `staging` to the `records` folder of the run,
+/// skipping the `.tmp` file of a record that was never finished, then removes `staging`.
+fn collect_staged_records(staging: &Path, run_dir: &Path) -> Result<usize> {
+    let staged = staging.join("records");
+    let records = run_dir.join("records");
+    std::fs::create_dir_all(&records)
+        .with_context(|| format!("cannot create {}", records.display()))?;
+    let mut moved = 0;
+    if staged.is_dir() {
+        for entry in std::fs::read_dir(&staged)
+            .with_context(|| format!("cannot read {}", staged.display()))?
+        {
+            let path = entry?.path();
+            if path.extension().is_none_or(|extension| extension != "json") {
+                continue;
+            }
+            let Some(name) = path.file_name() else {
+                continue;
+            };
+            let target = records.join(name);
+            if std::fs::rename(&path, &target).is_err() {
+                std::fs::copy(&path, &target).with_context(|| {
+                    format!("cannot copy {} to {}", path.display(), target.display())
+                })?;
+            }
+            moved += 1;
+        }
+    }
+    std::fs::remove_dir_all(staging)
+        .with_context(|| format!("cannot remove {}", staging.display()))?;
+    Ok(moved)
 }
 
 /// The folder of one run, named by the UTC time.
@@ -262,12 +314,37 @@ fn execute(
     std::fs::create_dir_all(&folder)
         .with_context(|| format!("cannot create {}", folder.display()))?;
     let bundle = folder.join("result.xcresult");
+    let run_dir = environment
+        .get("STACKLY_EVIDENCE_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from);
+    let staging = match &run_dir {
+        Some(_) => {
+            let home = environment
+                .get("HOME")
+                .context("HOME is not set, so the runner staging folder cannot be found")?;
+            let name = folder.file_name().context("the run folder has no name")?;
+            let staging = Path::new(home).join(RUNNER_STAGING).join(name);
+            std::fs::create_dir_all(&staging)
+                .with_context(|| format!("cannot create {}", staging.display()))?;
+            Some(staging)
+        }
+        None => None,
+    };
     let status = Command::new("xcodebuild")
         .current_dir(root)
         .args(xcodebuild_args(options, &bundle.to_string_lossy()))
-        .envs(runner_environment(environment))
+        .envs(runner_environment(environment, staging.as_deref()))
         .status()
         .context("cannot run xcodebuild; install Xcode 27 and select it with `xcode-select`")?;
+    // Collect also after a failed run, because a failing test still wrote its record.
+    if let (Some(staging), Some(run_dir)) = (&staging, &run_dir) {
+        let moved = collect_staged_records(staging, run_dir)?;
+        println!(
+            "evidence: moved {moved} record(s) from the runner to {}",
+            run_dir.display()
+        );
+    }
     // Export also after a failed run, because the screenshots of a failure matter most.
     if bundle.exists() {
         let attachments = folder.join("attachments");
@@ -351,7 +428,7 @@ mod tests {
     fn a_mac_that_allows_automation_without_authentication_runs_the_tests() {
         let allowed = Host {
             automation_output: Some(
-                "Automation Mode is disabled.\nThis device does not require user authentication \
+                "Automation Mode is disabled.\nThis device DOES NOT REQUIRE user authentication \
                  to enable Automation Mode.\n"
                     .to_string(),
             ),
@@ -452,7 +529,7 @@ mod tests {
             ("OTHER", "x"),
         ]);
         assert_eq!(
-            runner_environment(&env),
+            runner_environment(&env, None),
             vec![
                 (
                     "TEST_RUNNER_STACKLY_EVIDENCE_DIR".to_string(),
@@ -464,7 +541,62 @@ mod tests {
                 ),
             ]
         );
-        assert!(runner_environment(&environment(&[("STACKLY_EVIDENCE_DIR", "")])).is_empty());
+        assert!(runner_environment(&environment(&[("STACKLY_EVIDENCE_DIR", "")]), None).is_empty());
+    }
+
+    #[test]
+    fn the_runner_gets_the_staging_folder_instead_of_the_run_folder() {
+        let env = environment(&[
+            ("STACKLY_EVIDENCE_DIR", "/e"),
+            ("STACKLY_EVIDENCE_KIND", "native"),
+        ]);
+        assert_eq!(
+            runner_environment(&env, Some(Path::new("/staging"))),
+            vec![
+                (
+                    "TEST_RUNNER_STACKLY_EVIDENCE_DIR".to_string(),
+                    "/staging".to_string()
+                ),
+                (
+                    "TEST_RUNNER_STACKLY_EVIDENCE_KIND".to_string(),
+                    "native".to_string()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn staged_records_move_to_the_run_folder_and_the_staging_folder_goes_away() {
+        let staging = tempfile::tempdir().expect("a temporary staging folder");
+        let run = tempfile::tempdir().expect("a temporary run folder");
+        let staged = staging.path().join("records");
+        std::fs::create_dir_all(&staged).unwrap();
+        std::fs::write(staged.join("a.json"), "{}").unwrap();
+        std::fs::write(staged.join("b.json"), "{}").unwrap();
+        std::fs::write(staged.join("c.json.tmp"), "{").unwrap();
+
+        assert_eq!(
+            collect_staged_records(staging.path(), run.path()).unwrap(),
+            2
+        );
+        let mut names: Vec<_> = std::fs::read_dir(run.path().join("records"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["a.json", "b.json"]);
+        assert!(!staging.path().exists());
+    }
+
+    #[test]
+    fn a_runner_that_wrote_nothing_still_leaves_no_staging_folder() {
+        let staging = tempfile::tempdir().expect("a temporary staging folder");
+        let run = tempfile::tempdir().expect("a temporary run folder");
+        assert_eq!(
+            collect_staged_records(staging.path(), run.path()).unwrap(),
+            0
+        );
+        assert!(!staging.path().exists());
     }
 
     #[test]
