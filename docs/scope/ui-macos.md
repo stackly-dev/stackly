@@ -66,7 +66,7 @@ Bahasa visual native macOS dari mockup UI dan pola state yang dipakai semua laya
 - [x] Verify it: `/check verify design system & UI foundation`
 - [x] Test it: `/test design system & UI foundation`
 
-### 13. App shell SwiftUI & Swift client · in-progress
+### 13. App shell SwiftUI & Swift client · done
 
 Shell aplikasi macOS dengan navigasi PRD bagian 11.1 dalam bentuk shell mockup UI, status koneksi daemon, operation center, reconnect, dan Swift client yang dibangkitkan dari schema atau fixture yang sama dengan Rust. Semua mutasi lewat API daemon.
 
