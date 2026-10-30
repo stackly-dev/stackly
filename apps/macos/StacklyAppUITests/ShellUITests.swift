@@ -305,13 +305,29 @@ final class ShellUITests: XCTestCase {
     /// Checks that `window` offers exactly `actions` among the banner actions, all enabled.
     private func expectActions(_ actions: [String], in window: XCUIElement) throws {
         for action in Self.allActions {
-            let button = window.buttons[action]
             if actions.contains(action) {
-                XCTAssertTrue(button.waitForExistence(timeout: 5), "the banner has no \(action)")
-                XCTAssertTrue(button.isEnabled, "\(action) is disabled")
+                XCTAssertTrue(
+                    window.buttons.matching(identifier: action).firstMatch
+                        .waitForExistence(timeout: 5),
+                    "the banner has no \(action)")
+                let buttons = bannerButtons(action, in: window)
+                XCTAssertEqual(buttons.count, 1, "the banner should offer \(action) once")
+                XCTAssertTrue(buttons.allSatisfy(\.isEnabled), "\(action) is disabled")
             } else {
-                XCTAssertFalse(button.exists, "the banner should not offer \(action)")
+                XCTAssertTrue(
+                    bannerButtons(action, in: window).isEmpty,
+                    "the banner should not offer \(action)")
             }
+        }
+    }
+
+    /// The buttons titled `action` outside the page. The banner sits above the page in the
+    /// detail column, and a page state such as "Couldn't Load" draws its own Open Diagnostics
+    /// inside the page's scroll view, so a button inside a scroll view is not the banner's.
+    private func bannerButtons(_ action: String, in window: XCUIElement) -> [XCUIElement] {
+        let pages = window.scrollViews.allElementsBoundByIndex.map(\.frame)
+        return window.buttons.matching(identifier: action).allElementsBoundByIndex.filter {
+            button in !pages.contains { $0.contains(button.frame) }
         }
     }
 
@@ -338,12 +354,14 @@ final class ShellUITests: XCTestCase {
             part: "instances")
     }
 
-    /// The texts of the instance table cells, sorted.
+    /// The texts of the instance list cells, sorted. The list is an outline next to the
+    /// sidebar outline, and a static text carries its words in `value`.
     private func instanceTexts(in app: XCUIApplication) throws -> [String] {
-        let table = app.mainWindow.tables.firstMatch
+        let table = app.mainWindow.outlines
+            .matching(NSPredicate(format: "label != %@", "Sidebar")).firstMatch
         XCTAssertTrue(table.waitForExistence(timeout: 5), "no instance table")
         XCTAssertTrue(table.staticTexts["pg17-dev"].waitForExistence(timeout: 5), "no rows")
-        return table.staticTexts.allElementsBoundByIndex.map(\.label).sorted()
+        return table.staticTexts.allElementsBoundByIndex.compactMap { $0.value as? String }.sorted()
     }
 
     // MARK: - Minimum size
