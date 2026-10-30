@@ -39,10 +39,9 @@ final class MenuUITests: XCTestCase {
         let app = launch(.connectedEmpty)
         app.menuBars.menuBarItems["Stackly"].click()
         app.menuBars.menuItems["Settings…"].click()
-        let settings = app.windows.matching(NSPredicate(format: "title CONTAINS 'Settings'"))
-        XCTAssertTrue(settings.firstMatch.waitForExistence(timeout: 5), "no Settings window")
+        XCTAssertTrue(app.settingsWindow.waitForExistence(timeout: 5), "no Settings window")
         attachScreenshot(
-            of: settings.firstMatch, scenario: .connectedEmpty, appearance: .light,
+            of: app.settingsWindow, scenario: .connectedEmpty, appearance: .light,
             part: "settings")
     }
 
@@ -52,8 +51,7 @@ final class MenuUITests: XCTestCase {
         let button = app.mainWindow.buttons["Settings"]
         XCTAssertTrue(button.waitForExistence(timeout: 5), "no Settings button in the footer")
         button.click()
-        let settings = app.windows.matching(NSPredicate(format: "title CONTAINS 'Settings'"))
-        XCTAssertTrue(settings.firstMatch.waitForExistence(timeout: 5), "no Settings window")
+        XCTAssertTrue(app.settingsWindow.waitForExistence(timeout: 5), "no Settings window")
     }
 
     // MARK: - Map

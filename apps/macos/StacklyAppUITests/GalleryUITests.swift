@@ -49,10 +49,11 @@ final class GalleryUITests: XCTestCase {
         XCTAssertTrue(sheet.waitForDisappearance(), "the dialog did not close")
     }
 
-    /// Whether the Last Result card shows a text that contains `text`.
+    /// Whether the Last Result card shows a text that contains `text`. A static text carries
+    /// its words in `value`, not `label`.
     private func lastResultContains(_ app: XCUIApplication, _ text: String) -> Bool {
         app.galleryWindow.staticTexts
-            .matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+            .matching(NSPredicate(format: "value CONTAINS %@", text)).firstMatch
             .waitForExistence(timeout: 5)
     }
 
@@ -90,8 +91,8 @@ final class GalleryUITests: XCTestCase {
         try evidence(
             covers: ["AC-027"], expected: "Show All reveals the items a banner hides")
         let app = openGallery(topic: "States")
-        let showAll = app.galleryWindow.buttons.matching(identifier: "Show All")
-        XCTAssertTrue(showAll.firstMatch.waitForExistence(timeout: 5), "no Show All button")
+        let showAll = app.galleryWindow.links.matching(identifier: "Show All")
+        XCTAssertTrue(showAll.firstMatch.waitForExistence(timeout: 5), "no Show All link")
         let before = showAll.count
         showAll.firstMatch.click()
         let gone = NSPredicate { _, _ in showAll.count == before - 1 }

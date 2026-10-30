@@ -2,15 +2,22 @@ import StacklyUI
 import XCTest
 
 extension XCUIApplication {
-    /// The main window: the one window with a sidebar that is not the design gallery.
+    /// The main window, found by the id of its `Window` scene. Its title follows the selected
+    /// section, so it cannot be found by title.
     var mainWindow: XCUIElement {
-        windows.matching(NSPredicate(format: "title != %@", "Design Gallery"))
-            .containing(.outline, identifier: nil).firstMatch
+        windows.matching(identifier: "main").firstMatch
     }
 
-    /// The design gallery window, found by its title.
+    /// The design gallery window, found by the id of its `Window` scene. Its title is the
+    /// selected topic, not "Design Gallery".
     var galleryWindow: XCUIElement {
-        windows["Design Gallery"]
+        windows.matching(identifier: "design-gallery").firstMatch
+    }
+
+    /// The Settings window. macOS titles it after the selected pane, such as "General", so it
+    /// is found by the id SwiftUI gives the `Settings` scene.
+    var settingsWindow: XCUIElement {
+        windows.matching(identifier: "com_apple_SwiftUI_Settings_window").firstMatch
     }
 }
 
@@ -52,7 +59,8 @@ extension XCTestCase {
 
     /// Clicks the row titled `title` in the sidebar of `window`.
     func select(_ title: String, in window: XCUIElement) {
-        let row = window.outlines.firstMatch.staticTexts[title]
+        let sidebar = window.outlines.matching(NSPredicate(format: "label == %@", "Sidebar"))
+        let row = sidebar.firstMatch.staticTexts[title]
         XCTAssertTrue(row.waitForExistence(timeout: 5), "no sidebar row \(title)")
         row.click()
     }
