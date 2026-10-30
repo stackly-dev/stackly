@@ -116,30 +116,6 @@ struct SnapshotStore: Sendable {
                 + "\(diffURL.path(percentEncoded: false))")
     }
 
-    /// Checks that `image` is pixel for pixel the same as `baseline`, the `light` render,
-    /// which Reduce Transparency must not change; failures use the artifact suffix `rt`.
-    func checkIdentical(
-        _ image: SnapshotImage, to baseline: SnapshotImage, name: String, suffix: String
-    ) -> Outcome {
-        guard image.width == baseline.width, image.height == baseline.height else {
-            let actual = writeActual(image, name: name, suffix: suffix)
-            return .failure(
-                "\(suffix) differs in size from light, \(image.width) × \(image.height) px "
-                    + "against \(baseline.width) × \(baseline.height) px; actual at \(actual)")
-        }
-        let difference = image.difference(from: baseline)
-        guard difference.pixelCount > 0 else { return .match }
-        let actual = writeActual(image, name: name, suffix: suffix)
-        let diffURL = failureURL(name: name, suffix: suffix, kind: "diff")
-        try? Self.diffImage(reference: baseline, difference: difference).pngData().write(
-            to: diffURL)
-        return .failure(
-            "\(suffix) differs from light in \(difference.pixelCount) px, largest channel "
-                + "difference \(difference.largest) of 255; use systemMaterial: true for a view "
-                + "that draws a system material; actual at \(actual), diff at "
-                + "\(diffURL.path(percentEncoded: false))")
-    }
-
     private func write(_ png: Data, to url: URL, then message: String) throws -> Outcome {
         let path = url.path(percentEncoded: false)
         guard png.count <= Self.maximumReferenceBytes else {

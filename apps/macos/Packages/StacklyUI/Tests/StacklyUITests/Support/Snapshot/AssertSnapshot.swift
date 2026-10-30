@@ -10,22 +10,13 @@ import Testing
 ///
 /// Each variant renders in a ``SnapshotWindow`` with the fixed environment: locale
 /// `en_US`, time zone UTC, the Gregorian calendar, `fixtureNow`, no loading delay, the
-/// window background, and the four accessibility settings pinned by `fixtureAppearance`.
-/// Reduce Transparency is checked to equal `light` unless `systemMaterial` is true, which
-/// gives it a reference of its own.
+/// window background, and the color scheme from `fixtureAppearance`.
 ///
 /// - Parameters:
 ///   - view: The view to render.
 ///   - name: The snapshot name: lowercase ASCII letters, digits, and `-`.
 ///   - size: The canvas.
 ///   - variants: The variants to render.
-///   - systemMaterial: Whether the view draws a system material that Reduce Transparency
-///     changes.
-///   - contrastInvariant: Whether the view has nothing that reacts to Increase Contrast, so
-///     `hc-light` and `hc-dark` may equal `light` and `dark`. Without it, an identical
-///     pair is an issue; with it, a pair that differs is (``SnapshotContrast``).
-///   - contrastInvariantReason: One sentence on why the view does not react to Increase
-///     Contrast; required with `contrastInvariant`, and reported to the lead.
 ///   - sourceLocation: The suite file, which decides where the references live.
 /// - Throws: The cancellation of a test that is `BLOCKED`, or a render error other than
 ///   a failed check, which is recorded as an issue.
@@ -35,7 +26,6 @@ func assertSnapshot<V: View>(
     named name: String,
     size: SnapshotSize = .page,
     variants: [SnapshotVariant] = SnapshotVariant.standard,
-
     sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
     guard SnapshotStore.isValid(name: name) else {
@@ -73,7 +63,6 @@ func assertSnapshot<V: View>(
                 sourceLocation: sourceLocation)
         }
     }
-
 }
 
 /// Renders one variant of `view` with the fixed snapshot environment.
