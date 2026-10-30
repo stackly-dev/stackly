@@ -17,6 +17,8 @@ public final class ShellRuntime {
     /// Whether the onboarding shows in the main window and at which step (spec 0016).
     public let onboarding: OnboardingModel
     private var observers: [any NSObjectProtocol] = []
+    private let activity: ShellActivity
+    private var activityToken: (any NSObjectProtocol)?
 
     /// Wraps `model`, starts it, and listens for the app becoming active and
     /// the Mac waking, which retry a lost connection.
@@ -26,15 +28,21 @@ public final class ShellRuntime {
     ///   - commandLineTool: The command line tool model, or `nil`.
     ///   - onboardingStore: Where the finished record of the onboarding lives; the app's
     ///     `UserDefaults` by default.
+    ///   - activity: Keeps the app out of App Nap while it runs; the process's own by default.
     public init(
         model: DaemonModel, closeNotice: CloseNotice = CloseNotice(),
         commandLineTool: CommandLineToolModel? = nil,
-        onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore()
+        onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore(),
+        activity: ShellActivity = .process
     ) {
         self.model = model
         self.closeNotice = closeNotice
         self.commandLineTool = commandLineTool
         onboarding = OnboardingModel(store: onboardingStore)
+        self.activity = activity
+        // App Nap starves a hidden app under load: it then learns of a lost or new daemon
+        // and applies events tens of seconds late, past the waits of spec 0013.
+        activityToken = activity.begin()
         model.start()
         observers.append(
             NotificationCenter.default.addObserver(
@@ -84,6 +92,10 @@ public final class ShellRuntime {
     /// the daemon.
     public func willTerminate() {
         model.stopNow()
+        if let activityToken {
+            activity.end(activityToken)
+            self.activityToken = nil
+        }
     }
 
     /// The main window is about to close: show the notice the first time,
@@ -91,6 +103,35 @@ public final class ShellRuntime {
     public func mainWindowWillClose(isTerminating: Bool, screen: NSScreen?) {
         closeNotice.mainWindowWillClose(isTerminating: isTerminating, screen: screen)
     }
+}
+
+/// The activity that keeps the shell out of App Nap, so the link, the heartbeat, and the
+/// events keep their pace while the window is hidden. It allows idle system sleep.
+nonisolated public struct ShellActivity: Sendable {
+    /// The options the shell's activity uses.
+    public static let options: ProcessInfo.ActivityOptions = .userInitiatedAllowingIdleSystemSleep
+
+    /// Starts the activity and returns its token.
+    public var begin: @Sendable () -> any NSObjectProtocol
+    /// Ends the activity of a token from ``begin``.
+    public var end: @Sendable (any NSObjectProtocol) -> Void
+
+    /// Creates an activity from closures.
+    public init(
+        begin: @escaping @Sendable () -> any NSObjectProtocol,
+        end: @escaping @Sendable (any NSObjectProtocol) -> Void
+    ) {
+        self.begin = begin
+        self.end = end
+    }
+
+    /// The process's activity through `ProcessInfo`.
+    public static let process = ShellActivity(
+        begin: {
+            ProcessInfo.processInfo.beginActivity(
+                options: options, reason: "Stackly follows stacklyd and its instances")
+        },
+        end: { ProcessInfo.processInfo.endActivity($0) })
 }
 
 /// The one door from the app target into the shell.

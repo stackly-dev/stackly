@@ -79,4 +79,38 @@ struct ShellRuntimeTests {
         runtime.didWake()
         try await waitUntil { link.retries.withLock { $0 } == 2 }
     }
+
+    /// App Nap starved a hidden app under load for tens of seconds after a daemon restart
+    /// (/check verify walking skeleton, 2026-10-30): the runtime holds one activity for its
+    /// whole life and ends that same one when the app quits.
+    @Test func theRuntimeStaysOutOfAppNapUntilTheAppQuits() {
+        let begun = Mutex<[ObjectIdentifier]>([])
+        let ended = Mutex<[ObjectIdentifier]>([])
+        let activity = ShellActivity(
+            begin: {
+                let token = NSObject()
+                begun.withLock { $0.append(ObjectIdentifier(token)) }
+                return token
+            },
+            end: { token in ended.withLock { $0.append(ObjectIdentifier(token)) } })
+        let model = DaemonModel(
+            link: CountingLink().handle, signals: nil, endpoint: nil,
+            launchedAt: DaemonModelTests.launch)
+        let runtime = ShellRuntime(
+            model: model, closeNotice: CloseNotice(presentsPanel: false), activity: activity)
+        #expect(begun.withLock { $0.count } == 1)
+        #expect(ended.withLock { $0 }.isEmpty)
+        runtime.mainWindowWillClose(isTerminating: false, screen: nil)
+        #expect(ended.withLock { $0 }.isEmpty, "closing the window ended the activity")
+        runtime.willTerminate()
+        runtime.willTerminate()
+        #expect(ended.withLock { $0 } == begun.withLock { $0 })
+    }
+
+    @Test func theActivityKeepsAppNapAwayButLetsTheMacSleep() {
+        let options = ShellActivity.options
+        #expect(options.contains(.userInitiatedAllowingIdleSystemSleep))
+        #expect(options.contains(.idleSystemSleepDisabled) == false)
+        #expect(options.contains(.idleDisplaySleepDisabled) == false)
+    }
 }
