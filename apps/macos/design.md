@@ -901,7 +901,7 @@ Every page and shell piece is checked from fixture data, with no `stacklyd` runn
 - A **case** is one DTO in a scenario, such as an instance in one state. Add it in `FixtureScenario+Cases.swift` with the next number for its `kind`, so its UUID never changes, and add its row to the case table of the spec that owns the screen. Add the test that maps it to its label, tone, and detail next to the existing ones in `FixtureScenarioTests`.
 - A **scenario** is a whole daemon world named by a `FixtureScenario.ID` (kebab case raw value). Add the `case`, build it in `FixtureScenario+Cases.swift` with its connection script and `expectedPresence`, and the catalog test picks it up. The same raw value is what `STACKLY_UI_SCENARIO` takes, so the Debug app and the UI tests play it unchanged.
 - A feature that adds a DTO, a screen, or a gallery page adds its cases, scenario, snapshot suite, and UI test in the same commit. A call the scenario does not answer fails as `notSent` with `ipc.not_connected`, like the real app offline.
-- Only `Fixtures/FixtureAppearance.swift` and the test folders may set an underscored environment value (`_colorSchemeContrast`, `_accessibility…`). Time-relative views read `fixtureNow` and `loadingDelay` from the environment, never `Date.now`.
+- Never set an underscored environment value (`_colorSchemeContrast`, `_accessibility…`); `SourceRuleTests` rejects one outside `Fixtures/FixtureAppearance.swift`, which sets only the color scheme. Time-relative views read `fixtureNow` and `loadingDelay` from the environment, never `Date.now`.
 
 ### Snapshot suites
 
@@ -918,12 +918,12 @@ Every page and shell piece is checked from fixture data, with no `stacklyd` runn
   }
   ```
 
-- `assertSnapshot` renders five files per name: `light`, `dark`, `hc-light`, `hc-dark`, and `narrow` (640 pt). Reduce Transparency must equal `light` unless the call passes `systemMaterial: true`. Use `.fitting(width: 1044, narrowWidth: 640)` for a page that has its own height and `.page` for one that fills the window. A page that needs a model renders from `settledRuntime(_:)`, never from a runtime that is still loading.
+- `assertSnapshot` renders three files per name: `light`, `dark`, and `narrow` (640 pt). Use `.fitting(width: 1044, narrowWidth: 640)` for a page that has its own height and `.page` for one that fills the window. A page that needs a model renders from `settledRuntime(_:)`, never from a runtime that is still loading.
 - Every top level `struct <Name>Page: View` outside `Gallery/` must be named in a file of `SnapshotTests/`; `SourceRuleTests` fails otherwise. Give a gallery page its content as a separate view so the suite renders it without the outer `ScrollView`.
 - The reference PNGs sit in `SnapshotTests/__Snapshots__/<SuiteFile>/<name>.<variant>.png` and are committed. A PNG over 1 MB is refused.
 - To record: run the suite with `STACKLY_SNAPSHOT_RECORD=1`. A missing reference is written and the test fails with "recorded <path>, review and commit"; a changed one is rewritten and the test still fails with "re-recorded". Run it again without the variable and it passes. A run under `cargo xtask evidence run` never writes a reference.
 - To review: `cargo xtask snapshot review [--base <rev>]` writes `target/snapshot-review/index.html` and prints its path. It lists every PNG added, changed, or deleted since the merge base, with the old and new image and, for a failed run, the `actual` and `diff` images from `target/snapshot-failures/`. Look at every changed image before you commit it.
-- Snapshots stop as `BLOCKED` (owner: user) without a login session or while Increase Contrast, Reduce Transparency, Differentiate Without Color, or Reduce Motion is on in System Settings, because AppKit controls follow those settings. Turn the setting off for the run.
+- Snapshots stop as `BLOCKED` (owner: user) without a GUI login session.
 
 ### UI tests
 
@@ -936,6 +936,5 @@ Every page and shell piece is checked from fixture data, with no `stacklyd` runn
 ### Limits
 
 - Snapshots draw page content and the shell pieces that render on their own (banner, footer). The sidebar, toolbar, and glass are not captured; the window frame is only in the UI test screenshots.
-- Increase Contrast and Reduce Transparency in snapshots are pinned through underscored environment values that Apple does not document. A guard test fails when an SDK stops honoring them, and then the checks fall back to the manual list. System colors bridged from AppKit and text in `List` and `Table` rows keep their normal color in the HC variants.
-- `.inspector` hosts the page and the column content again and drops the pinned contrast there, so `.stacklyInspector` relays the fixture values in Debug builds (spec 0068, K15): the page inside a `ZStack` of its own, the column on its padded content inside the `ScrollView`. A relay written straight on the page is not enough, because it lands above the point where `.inspector` pins the value whenever the page sits under an `if`, a `switch`, an `AnyView`, or a modifier. The guard test in `RenderProbeTests` renders through `SnapshotRoot` and checks four main content places (a `ScrollView` page and a `GeometryReader` page, inspector open and closed) plus the column. A new component that hosts content again calls `relayFixtureAccessibility()` the same way and adds its place to that test; a page never relays on its own.
+- Snapshots cover the light and dark color schemes and the narrow width only. They do not check Increase Contrast, Reduce Transparency, or other accessibility display settings, which left the fixtures on 2026-10-24.
 - The UI tests do not compare screenshots pixel by pixel.
