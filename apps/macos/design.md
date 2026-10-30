@@ -705,7 +705,7 @@ An item is never hidden because of state: one that does not apply is disabled. A
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `reconnect` | Stackly | 1 | Reconnect to stacklyd | | shell | 69 | built |
 | `newInstance` | File | 1 | New Instance… | ⌘N | shell | 20 | built |
-| `find` | Edit ▸ Find | 1 | Find… | ⌘F | page (all) | 69 | built |
+| `find` | Edit ▸ Find | 1 | Find… | ⌘F | page (all) | 69 | planned |
 | `showOverview` to `showDiagnostics` | View | 1 | Overview, Instances, Environments, Catalog, Runtimes, Operations, Diagnostics | ⌘1 to ⌘7 | shell | 69 | built |
 | `back` | View | 2 | Back | ⌘[ | page (Instances) | 21 | built |
 | `toggleInspector` | View | 3 | Show Inspector or Hide Inspector | ⌥⌘I | page (Instances) | 22 | built |
@@ -718,7 +718,7 @@ An item is never hidden because of state: one that does not apply is disabled. A
 | `removeInstance` | Instance | 4 | Remove… | none | page (Instances) | 54 | planned |
 | `stacklyHelp` | Help | 1 | Stackly Help | ⌘? | app | 66 | planned |
 | `welcome` | Help | 2 | Welcome to Stackly | | app | 16 | built |
-| `showMainWindow` | Window | | Stackly (system item of the `Window` scene) | ⌘0 | app | 69 | built |
+| `showMainWindow` | Window | | Stackly (system item of the `Window` scene) | ⌘0 | app | 69 | planned |
 
 Three shortcuts reuse a macOS shortcut with another meaning, each with a written reason in the map: ⌘R (Show Ruler, no Format menu), ⇧⌘C (Show Colors, no Format menu), and ⌘0 (Actual Size, no zoom).
 
@@ -739,7 +739,7 @@ Table A may never be used. Table B may be used for the same meaning only, or wit
 1. The main action stays a button in the window (toolbar, inspector, row) built on `StacklyAction`. The menu command is the second way to it, never the only one.
 2. Place it: new or imported things in File; navigation, view, and order in View; actions on the selected instance in Instance; app level actions (daemon, update) in Stackly; documentation in Help. Another object (environment, runtime, operation) gets no menu of its own until it has at least three actions on a common selection.
 3. Give it a shortcut only if people use it often and it never destroys data (not Remove, Purge, Force Stop, Stop All Services, Overwrite). Prefer ⌘ with a letter that means the thing, then ⇧⌘ for the opposite, then ⌥⌘ for a variant. Table A, rule D, and rule E never; table B only with the same meaning; table C only with a reason written in the map.
-4. Register it: add or change the row in `CommandMap` (set `status: .built`), add one `CommandItem(.id, context:)` in `StacklyCommands`, publish a `StacklyAction` from the page with `.publishesCommands(.page(section), …)` (or from `AppShell` for the shell scope), and update the tables above. The map tests and the source rules run by themselves.
+4. Register it: add or change the row in `CommandMap` (set `status: .built`), add one `CommandItem(.id, context:)` in `StacklyCommands`, publish a `StacklyAction` from the page with `.publishesCommands(.page(section), …)` (or from `AppShell` for the shell scope), and update the tables above. The map tests and the source rules run by themselves. A page with a `NavigationStack` publishes the same commands again on its `navigationDestination` content: on macOS 27 a pushed page does not see the value published around the stack, so the menu turns every page command off there (found by `InstanceCommandsUITests`, 2026-10-31).
 5. The menus inside the window (More, context menus) use the same action and title without a shortcut, and a toolbar button's tooltip comes from `CommandMap.helpText(for:)`.
 
 A command is on exactly when the window that published it is the key window and `action.availability(gate:)` is `.enabled`. Settings, the design gallery, a sheet, an alert, and onboarding switch the shell and page commands off by construction; the `app` scope items stay on.

@@ -103,7 +103,7 @@ Kumpulan view SwiftUI yang dipakai ulang oleh semua layar journey, supaya tiap l
 - [x] Verify it: `/check verify komponen dasar Stackly`
 - [x] Test it: `/test komponen dasar Stackly`
 
-### 68. Fixture tampilan & cek visual · in-progress
+### 68. Fixture tampilan & cek visual · done
 
 Data contoh dari mockup UI dijadikan fixture Swift untuk Xcode Previews dan snapshot, supaya tiap layar bisa dicek di semua state, tampilan, dan pengaturan aksesibilitas tanpa daemon nyata. Aksesibilitas dicek per layar saat layar itu dibangun, bukan diaudit di akhir.
 
@@ -119,7 +119,7 @@ Data contoh dari mockup UI dijadikan fixture Swift untuk Xcode Previews dan snap
   - [x] XCUITest and audits: target `StacklyAppUITests`, the Debug scenario mode in `AppDelegate` and `StacklyApp`, `cargo xtask ui-test`, the shell, gallery, menu and audit tests with screenshots, and the Testing views section in design.md (spec 0068 AC-12 to AC-19; after milestones 1 and 2; the menu test after spec 0069 `CommandMap` is on main; running needs Automation Mode enabled by the user)
   - [x] Fixture environment under the inspector (K15): `fixtureAccessibility` and `relayFixtureAccessibility()` in `FixtureAppearance.swift`, the relay in `.stacklyInspector`, the guard test in three places, the `StaleNote` capital letter (spec 0012), and the re-recorded Catalog references (20 HC PNGs and three `catalog-outdated`) (spec 0068 AC-5, AC-7, spec 0012 AC-12; Build plan *Tambahan 2026-10-22 (K15)*; one ui-macos developer, one commit; after the lead answers the K15 gaps; needs feature 17 Catalog suite, already on `main`)
 - [x] Verify it: `/check verify fixture tampilan & cek visual` (2026-10-31: PASS; UI suite 36 PASS, 0 FAIL)
-- [ ] Test it: `/test fixture tampilan & cek visual`
+- [x] Test it: `/test fixture tampilan & cek visual` (2026-10-31: fixture, snapshot, source rule, xtask, and XCTest evidence suites pass; one test added for AC-12)
 
 ### 69. Menu aplikasi, perintah & shortcut keyboard · in-progress
 
@@ -132,8 +132,8 @@ Menu Stackly, File, Edit, View, Window, dan Help beserta peta shortcut, supaya s
 **Pointer:** spec [0069](../specs/0069-menu-aplikasi-perintah-shortcut/index.md) · code in `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Commands/`
 
 - [x] Design it (spec): `/architect menu aplikasi, perintah & shortcut keyboard`
-- [ ] Build it: `/develop menu aplikasi, perintah & shortcut keyboard`
+- [x] Build it: `/develop menu aplikasi, perintah & shortcut keyboard` (2026-10-31: page and instance commands proven in the real app with the pointer, `InstanceCommandsUITests` 8 PASS in a fixture evidence run; keyboard checks retired since 2026-10-24)
   - [x] Shell commands: `PublishedCommands`, `.publishesCommands`, per window `MainWindowKey`, `CommandItemState` with the run guard, `StacklyCommands` with Reconnect, New Instance, Find, ⌘1 to ⌘7, ⌘0, and Help, `AppShell.select(_:)`, moving every `// provisional: F69` group into the map, the `design.md` section, and manual evidence (spec 0069 AC-3 to AC-10, AC-13, AC-16; after milestone 1; needs feature 67 milestone 1 (`StacklyAction`, `ActionHost`, `.actionHost()` in `AppShell`, menu subtitle check) in `ui-macos.md`; after feature 16 milestone 1 step 2 and feature 20 milestone 3 step 14 in `02-instalasi-pertama.md` when either is running, since they share `StacklyApp.swift` and `AppShell.swift`)
-  - [ ] Page and instance commands: the Instance menu, Instances page commands (Open, Start, Stop, Copy Connection String, Back, inspector, sort, Find), Catalog Find, removal of `InstancesCommands`, and desktop interaction evidence for PRD AC-027 (spec 0069 AC-10 to AC-12, AC-14, AC-15; after milestone 2; needs feature 22 milestone 3, feature 21 milestone 3, and feature 17 milestone 3 in `02-instalasi-pertama.md`, and feature 67 milestone 3 in `ui-macos.md`; pages merged after milestone 2 register their own commands)
+  - [x] Page and instance commands: the Instance menu, Instances page commands (Open, Start, Stop, Copy Connection String, Back, inspector, sort, Find), Catalog Find, removal of `InstancesCommands`, and desktop interaction evidence for PRD AC-027 (spec 0069 AC-10 to AC-12, AC-14, AC-15; after milestone 2; needs feature 22 milestone 3, feature 21 milestone 3, and feature 17 milestone 3 in `02-instalasi-pertama.md`, and feature 67 milestone 3 in `ui-macos.md`; pages merged after milestone 2 register their own commands) (2026-10-31: done; Find and Catalog Find retired with the shortcuts on 2026-10-24, `find` is `planned` again; fixed the detail page losing every page command in the menu)
 - [ ] Verify it: `/check verify menu aplikasi, perintah & shortcut keyboard`
 - [ ] Test it: `/test menu aplikasi, perintah & shortcut keyboard`
