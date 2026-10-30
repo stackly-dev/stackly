@@ -156,7 +156,12 @@ public struct InstancesPage: View {
                 InstanceDetailPage(
                     id: route.id, instances: instances, catalog: catalog, actions: actions,
                     model: models.model(for: route.id), service: models.detailService,
-                    back: { path.removeAll() })
+                    back: { path.removeAll() }
+                )
+                // On macOS 27 a pushed page does not see the value published around the
+                // stack, so the menu would turn every page command off on the detail page.
+                // The same commands are published again from inside it.
+                .publishesCommands(.page(.instances), commands.actions, checked: commands.checked)
             }
         }
         .stacklyInspector(
