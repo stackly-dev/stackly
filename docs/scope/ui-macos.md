@@ -118,7 +118,7 @@ Data contoh dari mockup UI dijadikan fixture Swift untuk Xcode Previews dan snap
   - [x] XCTest evidence helper: internal target `StacklyEvidenceCore`, product `StacklyXCTestSupport`, and the new `evidence check` scan rule (spec 0068 AC-10, AC-11; can run in parallel with milestone 1)
   - [x] XCUITest and audits: target `StacklyAppUITests`, the Debug scenario mode in `AppDelegate` and `StacklyApp`, `cargo xtask ui-test`, the shell, gallery, menu and audit tests with screenshots, and the Testing views section in design.md (spec 0068 AC-12 to AC-19; after milestones 1 and 2; the menu test after spec 0069 `CommandMap` is on main; running needs Automation Mode enabled by the user)
   - [x] Fixture environment under the inspector (K15): `fixtureAccessibility` and `relayFixtureAccessibility()` in `FixtureAppearance.swift`, the relay in `.stacklyInspector`, the guard test in three places, the `StaleNote` capital letter (spec 0012), and the re-recorded Catalog references (20 HC PNGs and three `catalog-outdated`) (spec 0068 AC-5, AC-7, spec 0012 AC-12; Build plan *Tambahan 2026-10-22 (K15)*; one ui-macos developer, one commit; after the lead answers the K15 gaps; needs feature 17 Catalog suite, already on `main`)
-- [ ] Verify it: `/check verify fixture tampilan & cek visual`
+- [x] Verify it: `/check verify fixture tampilan & cek visual` (2026-10-31: PASS; UI suite 36 PASS, 0 FAIL)
 - [ ] Test it: `/test fixture tampilan & cek visual`
 
 ### 69. Menu aplikasi, perintah & shortcut keyboard · in-progress
