@@ -105,7 +105,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 65 | Quality gates & release report | Siap rilis stabil | planned |
 | 66 | Runbook & dokumentasi pengguna | Siap rilis stabil | planned |
 | 67 | Komponen dasar Stackly | Foundation | done |
-| 68 | Fixture tampilan & cek visual | Foundation | in-progress |
+| 68 | Fixture tampilan & cek visual | Foundation | done |
 | 69 | Menu aplikasi, perintah & shortcut keyboard | Foundation | in-progress |
 | 70 | Buka instance di aplikasi klien | Kerja harian | planned |
 

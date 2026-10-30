@@ -24,6 +24,16 @@ struct FixtureScenarioTests {
         #expect(FixtureScenario(.connectedMixed).id == .connectedMixed)
     }
 
+    // covers: AC-12. `AppDelegate` exits 64 when this lookup finds nothing, so a name
+    // that is only close to a real one must not match.
+    @Test(arguments: [
+        "", "unknown", "Connected-Empty", "CONNECTED-MIXED", "connected_empty", " connected-empty",
+        "connected-empty ", "connectedEmpty",
+    ])
+    func aScenarioNameMatchesOnlyExactly(_ name: String) {
+        #expect(FixtureScenario.ID(rawValue: name) == nil)
+    }
+
     @Test func onlyOnboardingHasNoExpectedPresence() {
         for scenario in FixtureScenario.all {
             #expect((scenario.expectedPresence == nil) == (scenario.id == .onboarding))
