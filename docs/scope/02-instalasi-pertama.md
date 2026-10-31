@@ -80,7 +80,7 @@ Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke st
   - [x] Native proof: native install tests through the daemon from the xtask spike cache (no network) for every available line whose provider package exists: NATS and Traefik, PostgreSQL 17 and 18 after spec 0019 step 4 (package) and step 7 (`runtime.versionCheck`), and MySQL, ClickHouse, and Valkey recorded `BLOCKED` `no provider package (features 40 to 43)`; a broken signature binary run through `spawn_main` (K7); no quarantine on installed files, no developer tools spawned, the `runtime spike --cleanup` extension, then `nats_installs_from_the_network` after your approval, and 10 minute fuzz runs with manual evidence (spec 0018 AC-5, AC-6, AC-12, AC-19, AC-20; build steps 16, 16a, and 17; needs milestone 3, and spec 0019 steps 4 and 7 for the PostgreSQL tests; step 16a needs your approval for the network run; the fuzz runs (step 17) can run as their own parallel session right after milestone 1)
 - [x] Verify it: `/check verify install runtime managed` · PASS 2026-10-31 on main `cccc08cc`, GUI steps run on screen; fixes `30a4c9c4` (compatibility records) and `5ac758a1` (Get button reason)
 - [x] Test it: `/test install runtime managed` · 2026-10-31, gaps after the verify fixes `30a4c9c4` and `5ac758a1`
-- [ ] Review it (fresh model): `/check review install runtime managed`
+- [x] Review it (fresh model): `/check review install runtime managed` · 2026-10-31, `docs/reviews/2026-10-31-f18-install-runtime-managed.md`: Blocker 0, Major 1 fixed in two rounds (`16642a50`, `5d9d7fc4`) and confirmed (`ee0688eb`); 20 Minor and 19 Nit left open
 - [ ] Document it: `/document install runtime managed`
 
 ### 19. Provider PostgreSQL · done

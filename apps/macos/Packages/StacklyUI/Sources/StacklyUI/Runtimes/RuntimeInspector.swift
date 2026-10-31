@@ -111,7 +111,7 @@ struct RuntimeInspector: View {
                 .font(.callout)
                 .foregroundStyle(StacklyColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if let record = detail?.compatibility?.first {
+            if let record = RuntimeCopy.decidingRecord(of: summary, in: detail?.compatibility) {
                 Text(
                     RuntimeCopy.recordText(
                         record, locale: locale, calendar: calendar, timeZone: timeZone)
