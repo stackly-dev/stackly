@@ -573,7 +573,6 @@ async fn register(
     pinned: Option<stackly_domain::ProviderRevisionRecord>,
     now: jiff::Timestamp,
 ) -> Result<Instance, WorkError> {
-    let _ = deps;
     let handle = ctx
         .record_custom_intent(INSTANCE_REGISTRATION, registration_key(id), None)
         .await?;
@@ -640,6 +639,7 @@ async fn register(
         }
         Err(other) => return Err(other),
     }
+    deps.supervisor.note_created(&instance);
     ctx.confirm_created(handle).await?;
     Ok(instance)
 }

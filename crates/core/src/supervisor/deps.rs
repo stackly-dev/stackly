@@ -303,11 +303,20 @@ impl Supervisor {
             .excerpt_of(id, self.deps().config.failure_excerpt_lines)
     }
 
+    /// Records an instance a create just registered, so it reads `unknown`
+    /// with reason `never_observed` until it first runs (spec 0004), not
+    /// `daemon_restarted` as an instance loaded at daemon start does.
+    pub fn note_created(&self, instance: &Instance) {
+        self.actor(instance.id()).note_created(instance);
+    }
+
     /// Returns the status of `id` as read now: readiness and health through
     /// `effective`, so a value older than
     /// [`readiness_max_age`](SupervisorConfig::readiness_max_age) reads as
     /// `unknown` with reason `stale`. An instance the supervisor has not
-    /// touched yet reads as `unknown` with reason `daemon_restarted`.
+    /// touched yet reads as `unknown` with reason `daemon_restarted`, one a
+    /// create registered (see [`note_created`](Self::note_created)) with
+    /// reason `never_observed`.
     #[must_use]
     pub fn status(&self, id: InstanceId) -> InstanceStatus {
         self.actor(id).snapshot(

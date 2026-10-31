@@ -1,10 +1,11 @@
 //! `instance.create` (spec 0010 K1, K12, K14, and spec 0020): the refusals
 //! the method gives, the replay of a repeated key, and the operation that
-//! ends `failed` with everything it made undone when its init fails.
+//! ends `failed` with everything it made undone when its init fails, and
+//! the readiness a created instance reads before its first start.
 
 use serde_json::json;
 use stackly_protocol::codes::{instance, operation};
-use stackly_protocol::instance::PortRequest;
+use stackly_protocol::instance::{InstanceHealthState, InstanceReadinessState, PortRequest};
 use stackly_protocol::operation::OperationState;
 use stackly_testkit::allocate_port;
 use stackly_testkit::evidence::{Kind, evidence};
@@ -214,6 +215,38 @@ async fn an_init_that_fails_is_compensated_and_leaves_neither_instance_nor_name(
         )
         .await;
     ev.pass();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_created_instance_that_never_started_reads_unknown_with_reason_never_observed() {
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+
+    let id = api.create_ready("fresh", json!({})).await;
+
+    // Spec 0004: a new instance reads `never_observed` until it first runs;
+    // `daemon_restarted` is for instances loaded when the daemon started.
+    let got = api.get(id).await.expect("the created instance can be read");
+    let page = api.list(Default::default()).await;
+    let listed = page
+        .items
+        .iter()
+        .find(|item| item.id == id)
+        .expect("the list holds the created instance");
+    for summary in [&got, listed] {
+        assert_eq!(summary.readiness.state, InstanceReadinessState::Unknown);
+        assert_eq!(summary.readiness.reason, "never_observed", "{summary:?}");
+        assert_eq!(summary.health.state, InstanceHealthState::Unknown);
+        assert_eq!(summary.health.reason, "never_observed", "{summary:?}");
+    }
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
