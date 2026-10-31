@@ -5452,7 +5452,8 @@ public struct RuntimeDetail: Codable, Sendable, Equatable {
 	public let artifact: ArtifactInfo?
 	/// The artifact's executables, relative to the runtime folder.
 	public let executables: [String]?
-	/// Its compatibility records, newest first.
+	/// Its compatibility records: the record that decided the support first,
+	/// then the rest newest first by `testedAt`.
 	public let compatibility: [CompatibilityRecordView]?
 
 	public init(summary: RuntimeSummary, path: String, artifact: ArtifactInfo?, executables: [String]?, compatibility: [CompatibilityRecordView]?) {

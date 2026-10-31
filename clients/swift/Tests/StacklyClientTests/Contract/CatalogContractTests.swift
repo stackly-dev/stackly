@@ -72,7 +72,7 @@ struct CatalogContractTests {
         #expect(detail.capabilities?.first { $0.capability == .reload }?.supported == false)
         let version = try #require(detail.versions?.first)
         #expect(version.support?.map(\.os) == [.macos, .linux, .windows])
-        #expect(version.support?.map(\.status) == [.unverified, .unsupported, .planned])
+        #expect(version.support?.map(\.status) == [.supported, .unsupported, .planned])
         #expect(version.install == InstallVerdict(installable: true, reason: nil))
         let artifact = try #require(version.artifacts?.first)
         #expect(artifact.sha256?.count == 64)

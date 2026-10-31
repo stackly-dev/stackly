@@ -2,7 +2,7 @@ import Foundation
 import StacklyClient
 import Testing
 
-/// The detail DTOs of protocol 1.14 from the shared fixtures (spec 0021
+/// The detail DTOs of protocol 1.15 from the shared fixtures (spec 0021
 /// AC-17): the four detail triples decode with consistent connection
 /// strings, the frames carry the same values, and foreign values of the open
 /// enums read as `.unrecognized`.

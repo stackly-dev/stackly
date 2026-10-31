@@ -18,7 +18,7 @@ use stackly_core::operation::{
     BeginRequest, BusyPolicy, NoOpReply, OperationError, Origin, Precheck, PrecheckOutcome,
 };
 use stackly_core::provider::VersionArtifact;
-use stackly_core::runtime::compatibility::support_status;
+use stackly_core::runtime::compatibility::{SupportVerdict, support_status};
 use stackly_core::runtime::download::DownloadPolicy;
 use stackly_core::runtime::install::{InstallDeps, InstallInput, install_runtime_work};
 use stackly_core::runtime::resolve::resolve;
@@ -251,8 +251,16 @@ pub fn get(core: &DaemonCore, params: GetRuntimeParams) -> HandlerFuture<'_, Box
             ),
             InstallMode::External { root, .. } => (root.display().to_string(), None),
         };
+        // The record behind the summary's support: the catalog's verdict when
+        // the artifact is still listed, else the registry copy's own rule.
+        let deciding = match catalog_verdict(catalog.as_deref(), runtime, &host) {
+            Some(verdict) => verdict.record,
+            None => artifact.and_then(|artifact| {
+                map::runtime::registry_deciding_record(&artifact.compatibility, &host)
+            }),
+        };
         Ok(Box::new(map::runtime::runtime_detail(
-            summary, path, artifact,
+            summary, path, artifact, deciding,
         )))
     })
 }
@@ -355,6 +363,16 @@ fn catalog_support(
     stackly_protocol::catalog::SupportStatus,
     stackly_protocol::catalog::SupportReason,
 )> {
+    catalog_verdict(catalog, runtime, host).map(|verdict| map::runtime::verdict_support(&verdict))
+}
+
+/// The verdict on a runtime whose artifact is still in the catalog, with the
+/// record that decided it.
+fn catalog_verdict<'a>(
+    catalog: Option<&'a stackly_core::catalog::CatalogState>,
+    runtime: &Runtime,
+    host: &HostFacts,
+) -> Option<SupportVerdict<'a>> {
     let catalog = loaded_catalog(catalog)?;
     let InstallMode::Managed { artifact_sha256 } = runtime.install() else {
         return None;
@@ -374,13 +392,12 @@ fn catalog_support(
             )
         });
         if let Some(artifact) = found {
-            let verdict = support_status(
+            return Some(support_status(
                 artifact,
                 artifact.compatibility(),
                 Some(provider.package.key()),
                 host,
-            );
-            return Some(map::runtime::verdict_support(&verdict));
+            ));
         }
     }
     None
