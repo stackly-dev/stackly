@@ -84,10 +84,26 @@ nonisolated public enum RuntimeCopy {
         return "\(status): \(CatalogCopy.reasonText(runtime.supportReason))"
     }
 
+    /// The record that decided the support of `runtime`, which `runtime.get` sends first.
+    ///
+    /// Only the two tested reasons rest on a record. For another reason the first record is
+    /// merely the newest one, so no record is shown under the badge.
+    /// - Parameters:
+    ///   - runtime: The runtime whose support the record explains.
+    ///   - records: The compatibility records of `runtime.get`.
+    public static func decidingRecord(
+        of runtime: RuntimeSummary, in records: [CompatibilityRecordView]?
+    ) -> CompatibilityRecordView? {
+        switch runtime.supportReason {
+        case .providerTested, .runtimeTested: records?.first
+        default: nil
+        }
+    }
+
     /// The record that decided the support: "Tested on macOS 27.0 (26A428), arm64, Oct 18,
     /// 2026: launch_agent, ready, stop".
     /// - Parameters:
-    ///   - record: The newest compatibility record.
+    ///   - record: The record that decided the support.
     ///   - locale: The locale of the date.
     ///   - calendar: The calendar of the date.
     ///   - timeZone: The time zone of the date.

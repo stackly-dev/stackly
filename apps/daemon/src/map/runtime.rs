@@ -180,15 +180,18 @@ pub fn runtime_summary(
 /// The detail of a runtime: its summary, folder, and what the registry
 /// kept of the artifact it came from.
 ///
-/// `deciding` is the record that decided the summary's support. The records
-/// go out with it first and the rest newest first by `tested_at`, so a
-/// client that shows the first one shows the record behind the badge; records
-/// tested at the same time keep their catalog order.
+/// `records` are the compatibility records to send: the catalog's while it
+/// still lists the artifact, else the registry copy's. `deciding` is the
+/// record of that slice (matched by identity, not by value) that decided the
+/// summary's support. The records go out with it first and the rest newest
+/// first by `tested_at`, so a client that shows the first one shows the
+/// record behind the badge; records tested at the same time keep their order.
 #[must_use]
 pub fn runtime_detail(
     summary: RuntimeSummary,
     path: String,
     artifact: Option<&ArtifactRecord>,
+    records: &[CompatibilityRecordRow],
     deciding: Option<&CompatibilityRecordRow>,
 ) -> RuntimeDetail {
     let info = artifact.map(artifact_info);
@@ -205,8 +208,13 @@ pub fn runtime_detail(
         .unwrap_or_default();
     let compatibility = artifact
         .map(|artifact| {
-            let mut rows: Vec<_> = artifact.compatibility.iter().collect();
-            rows.sort_by_key(|row| (Some(*row) != deciding, Reverse(row.tested_at)));
+            let mut rows: Vec<_> = records.iter().collect();
+            rows.sort_by_key(|row| {
+                (
+                    !deciding.is_some_and(|deciding| std::ptr::eq(*row, deciding)),
+                    Reverse(row.tested_at),
+                )
+            });
             rows.into_iter()
                 .map(|row| compatibility_view(row, artifact))
                 .collect()
@@ -369,22 +377,20 @@ pub fn registry_support(
     }
 }
 
-/// The record that decides [`registry_support`]: the newest passing runtime
-/// record for this host.
+/// The record that decides [`registry_support`]: the first passing runtime
+/// record for this host, the rule `support_status` applies to the catalog's.
 #[must_use]
 pub fn registry_deciding_record<'a>(
     rows: &'a [CompatibilityRecordRow],
     host: &HostFacts,
 ) -> Option<&'a CompatibilityRecordRow> {
-    rows.iter()
-        .filter(|row| {
-            row.scope == CompatibilityScope::Runtime
-                && row.result == CompatibilityResult::Pass
-                && row.os == host.target.os()
-                && row.arch == host.target.arch()
-                && row.os_version.major() == host.os_version.major()
-        })
-        .max_by_key(|row| row.tested_at)
+    rows.iter().find(|row| {
+        row.scope == CompatibilityScope::Runtime
+            && row.result == CompatibilityResult::Pass
+            && row.os == host.target.os()
+            && row.arch == host.target.arch()
+            && row.os_version.major() == host.os_version.major()
+    })
 }
 
 /// The install of an unfinished `install_runtime` operation.

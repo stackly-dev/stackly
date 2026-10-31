@@ -86,6 +86,24 @@ struct RuntimeCopyTests {
             text == "Tested on macOS 27.0 (26A428), arm64, Oct 15, 2026: launch_agent, ready, stop")
     }
 
+    @Test func onlyATestedSupportShowsTheRecordThatDecidedIt() throws {
+        let records = try #require(FixtureRuntime.detail.compatibility)
+        func summary(_ reason: SupportReason) -> RuntimeSummary {
+            RuntimeSummary(
+                id: postgres.id, revision: 1, software: "postgresql", displayName: "PostgreSQL",
+                version: "17.6", line: "17", target: postgres.target, installMode: .managed,
+                state: .installed, artifactSha256: postgres.artifactSha256, installedAt: nil,
+                lastVerifiedAt: nil, support: .unverified, supportReason: reason, usedBy: [],
+                dependentRuntimes: [])
+        }
+        #expect(RuntimeCopy.decidingRecord(of: summary(.providerTested), in: records) == records[0])
+        #expect(RuntimeCopy.decidingRecord(of: summary(.runtimeTested), in: records) == records[0])
+        for reason in [SupportReason.untested, .fixtureOnly, .requiresNewerOs, .noBuildForArch] {
+            #expect(RuntimeCopy.decidingRecord(of: summary(reason), in: records) == nil)
+        }
+        #expect(RuntimeCopy.decidingRecord(of: summary(.runtimeTested), in: nil) == nil)
+    }
+
     @Test func theSignatureRowSaysTheKindsAndTheMachOFiles() throws {
         let signature = try #require(FixtureRuntime.detail.artifact?.signature)
         #expect(RuntimeCopy.signatureText(signature) == "Ad hoc · 210 Mach-O files")
