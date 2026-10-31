@@ -121,7 +121,7 @@ Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, a
   - [x] Register in one registry transaction: `Registry::commit_guarded` with `GuardView`, `GuardDecision`, and `Guarded` in the domain port, built in `SqliteRegistry` (one job on the registry thread), `FakeRegistry`, the conformance suite (`guarded.rs`), and `FaultyRegistry`; `OperationContext::commit_guarded`; `register` and `recheck` with no `expected_generation` and no retries (`REGISTER_RETRY_LIMIT` removed); core tests through `FaultyRegistry` guarded commit hooks, a daemon test of three rounds of five creates released behind a Keychain dialog, and `create_perf` requiring five of five to succeed (spec 0020 AC-10, AC-11, AC-24; build steps 19 and 20; spec 0020 update 2026-10-22, Keputusan 21; after step 16 on `main`; the new AC-10 text approved by the user 2026-10-22; does not wait for the spec 0005, 0007, and 0010 updates or milestone 3)
 - [x] Verify it: `/check verify create instance` · PASS 2026-10-31 (`04e9ce69`), GUI steps run on screen with PostgreSQL 18.6 and 17.11 from the spike cache; keyboard steps out of scope (removed 2026-10-24)
 - [x] Test it: `/test create instance` · 2026-10-31, `tst-f20-test` (`ffee4fa1`): AC-1 to AC-25 mapped to existing tests, AC-26 log check added
-- [ ] Review it (fresh model): `/check review create instance`
+- [x] Review it (fresh model): `/check review create instance` · 2026-10-31, `docs/reviews/2026-10-31-f20-create-instance.md`: Blocker 0, Major 2 fixed (`3a7f3999`, `56c8cae5`) and confirmed (`99a60e6e`); 23 Minor and 38 Nit left open
 - [ ] Document it: `/document create instance`
 
 ### 21. Start, readiness & connection · done
