@@ -721,6 +721,7 @@ public final class CreateInstanceModel {
         else { return }
         phase = .submitting
         banner = nil
+        schema.forgetTypedSecrets()
         let key = retryKey ?? MutationPath.newKey()
         createKey = key
         let params = CreateInstanceParams(

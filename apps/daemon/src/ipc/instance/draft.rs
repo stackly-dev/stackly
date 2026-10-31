@@ -82,7 +82,7 @@ pub(super) fn from_preflight(params: &PreflightCreateParams) -> CreateDraft {
             })
             .collect(),
         secret_values: Vec::new(),
-        start: false,
+        start: params.start,
     }
 }
 

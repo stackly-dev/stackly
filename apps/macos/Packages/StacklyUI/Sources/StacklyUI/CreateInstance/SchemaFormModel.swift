@@ -305,6 +305,15 @@ public final class SchemaFormModel {
         if sourceChanged { onChange?() }
     }
 
+    /// Marks every Enter secret as not typed. The view forgets the typed text once Create is
+    /// sent, so the model stops claiming the text fits: Create stays off until it is typed again,
+    /// while the source and the reference stay what the person chose.
+    public func forgetTypedSecrets() {
+        for (key, choice) in secretChoices where choice.source == .enter && choice.isValid {
+            secretChoices[key]?.isValid = false
+        }
+    }
+
     /// The references Copy from offers for a secret field.
     /// - Parameter key: The key of the field.
     public func copyFromOptions(for key: String) -> [String] {

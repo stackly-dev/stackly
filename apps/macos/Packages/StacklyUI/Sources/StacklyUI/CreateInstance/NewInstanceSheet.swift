@@ -52,6 +52,8 @@ public struct NewInstanceSheet: View {
         }
 
         .onDisappear { clearDrafts() }
+        // A new form starts every secret on its own choice, so the old typed text goes.
+        .onChange(of: model.schema.map(ObjectIdentifier.init)) { clearDrafts() }
     }
 
     // MARK: - Content

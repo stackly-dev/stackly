@@ -193,6 +193,40 @@ async fn a_preflight_judges_a_draft_ready_and_writes_nothing() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_preflight_with_start_ends_the_equivalent_command_with_start() {
+    let ev = evidence!(
+        covers = ["REQ-008"],
+        kind = Kind::Fixture,
+        expected = "a preflight that asks for start carries an equivalent command ending in --start, and the same draft without start does not",
+    );
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+
+    let plain = api
+        .preflight(api.preflight_params("demo", json!({})))
+        .await
+        .expect("a preflight is answered");
+    let mut params = api.preflight_params("demo", json!({}));
+    params.start = true;
+    let started = api
+        .preflight(params)
+        .await
+        .expect("a preflight with start is answered");
+
+    assert!(!plain.command.contains("--start"), "{}", plain.command);
+    assert!(started.command.ends_with(" --start"), "{}", started.command);
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+    ev.pass();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn preflight_and_create_give_a_bad_draft_the_same_code_and_the_same_fields() {
     let ev = evidence!(
         covers = ["AC-028"],
