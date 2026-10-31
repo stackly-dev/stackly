@@ -184,3 +184,19 @@ async fn a_new_instance_reads_unknown_with_reason_daemon_restarted_until_probed(
     assert_eq!(status.status_seq, 0);
     assert!(status.process.is_none());
 }
+
+#[tokio::test]
+async fn an_instance_the_supervisor_has_not_touched_reports_the_restart_policy() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&Spec::default());
+
+    let restart = rig.sup.status(id).restart;
+
+    // Spec 0010, *Restart policy*: 5 attempts in a sliding window of 5
+    // minutes, from the policy constants, not zero.
+    assert_eq!(restart.attempts, 0);
+    assert_eq!(restart.budget, 5);
+    assert_eq!(restart.window_seconds, 300);
+    assert_eq!(restart.next_attempt_at, None);
+    assert!(!restart.exhausted);
+}

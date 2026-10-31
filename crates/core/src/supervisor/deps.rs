@@ -286,6 +286,7 @@ impl Supervisor {
             Arc::new(InstanceActor::new(
                 id,
                 self.shared.deps.platform.clock().now(),
+                &self.shared.deps.config,
             ))
         }))
     }
