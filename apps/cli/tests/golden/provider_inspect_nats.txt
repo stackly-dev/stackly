@@ -19,8 +19,8 @@ Cold backup             supported
 Online backup           not supported
 Logical backup          not supported
 
-VERSION  MACOS                  LINUX                   WINDOWS                                                    INSTALL
-2.15.1   unverified (untested)  unsupported (no_build)  planned (Windows builds are planned for a later release.)  yes
+VERSION  MACOS                        LINUX                   WINDOWS                                                    INSTALL
+2.15.1   supported (provider_tested)  unsupported (no_build)  planned (Windows builds are planned for a later release.)  yes
 
 ARTIFACT                   TARGET         STATUS     DOWNLOAD  DISK  MIN OS  LICENSE     SOURCE
 nats-2.15.1-macos-aarch64  macos/aarch64  available  6.8 MB    -     13.0    Apache-2.0  github.com/nats-io
